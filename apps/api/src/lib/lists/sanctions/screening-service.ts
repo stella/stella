@@ -402,6 +402,7 @@ export const screenSanctionsSubject = async ({
       }),
     );
   }
+  // db-await-in-loop: one concurrent read per sanctions source (a small fixed set); each list's index is cached per edition, so a warm screening reads nothing
   const lists = await Promise.all(
     freshness.value.map(
       async (sourceFreshness) =>
