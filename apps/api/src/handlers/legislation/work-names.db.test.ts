@@ -111,7 +111,7 @@ afterAll(async () => {
 
 describe("ingestion", () => {
   test("writes the names a version's title states, and rewrites them when it changes", async () => {
-    const stored = await processLegislationDocument(
+    const result = await processLegislationDocument(
       input(
         "2012/90",
         "90/2012 Sb., o obchodních společnostech a družstvech (zákon o obchodních korporacích)",
@@ -120,9 +120,10 @@ describe("ingestion", () => {
       scopedDb,
       { corpus },
     );
-    if (stored.type !== "stored") {
-      return panic(`expected a stored version, got ${stored.type}`);
-    }
+    const stored =
+      result.type === "stored"
+        ? result
+        : panic(`expected a stored version, got ${result.type}`);
 
     expect(await namesOf([stored.id])).toEqual([
       {

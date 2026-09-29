@@ -47,7 +47,10 @@ const FIRST_CLAUSE_END = /[,;]/u;
  * an act's name), and for a key too long to index.
  */
 export const legislationNameMatchKey = (text: string): string | null => {
-  const tokens = text.normalize("NFC").toLowerCase().match(WORD_TOKEN) ?? [];
+  const tokens = Array.from(
+    text.normalize("NFC").toLowerCase().matchAll(WORD_TOKEN),
+    (match) => match[0],
+  );
   // A bare number, or no word at all, names no act.
   if (tokens.every((token) => DIGITS_ONLY.test(token))) {
     return null;
@@ -361,14 +364,14 @@ export const syncLegislationWorkNamesTx = async (
     subjects.map((subject) => subject.id),
   );
   const plan = planLegislationWorkNames(subjects, stored);
+  // Derived from the stored titles alone and rewritten with them, so the
+  // version write these rows follow is the one a trail would record.
   if (plan.deleteIds.length > 0) {
-    // audit: skip — derived search names of public legislation, not user state
     await tx
       .delete(legislationWorkNames)
       .where(inArray(legislationWorkNames.id, plan.deleteIds));
   }
   if (plan.inserts.length > 0) {
-    // audit: skip — derived search names of public legislation, not user state
     await tx
       .insert(legislationWorkNames)
       .values(plan.inserts)
@@ -539,5 +542,12 @@ export const readNamedLegislationWorks = async (
   const byKey = new Map(
     chosen.map((work) => [legislationWorkRefKey(work), work]),
   );
-  return [...byKey.keys()].toSorted().flatMap((key) => byKey.get(key) ?? []);
+  const ordered: NamedLegislationWork[] = [];
+  for (const key of [...byKey.keys()].toSorted()) {
+    const work = byKey.get(key);
+    if (work !== undefined) {
+      ordered.push(work);
+    }
+  }
+  return ordered;
 };

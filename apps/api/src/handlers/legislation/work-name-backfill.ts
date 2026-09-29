@@ -16,7 +16,7 @@ import {
  * Walks `legislation_documents` by id, one page per transaction. Each page is
  * compared with the names stored for it (`planLegislationWorkNames`); a
  * report only counts the difference, an apply writes it. The version rows are
- * only read. Converges: a page already up to date plans no change, so a run
+ * only read (an apply locks them shared; see below). Converges: a page already up to date plans no change, so a run
  * repeated over the same rows writes nothing.
  */
 
@@ -44,7 +44,7 @@ export const backfillLegislationWorkNamesPage = async ({
   apply,
 }: BackfillLegislationWorkNamesPageOptions): Promise<LegislationWorkNameBackfillPage> =>
   await db(async (tx) => {
-    const subjects = await tx
+    const page = tx
       .select({
         id: legislationDocuments.id,
         country: legislationDocuments.country,
@@ -54,6 +54,15 @@ export const backfillLegislationWorkNamesPage = async ({
       .where(after === null ? undefined : gt(legislationDocuments.id, after))
       .orderBy(asc(legislationDocuments.id))
       .limit(pageSize);
+    // An apply holds the page's versions shared, in id order, until its names
+    // are written. Ingestion rewrites a version's names in the transaction
+    // that updates the version row, so a retitle either commits before this
+    // read (and the page reads the new title) or waits for this page to
+    // commit (and then rewrites the names itself): the backfill can never
+    // write names for a title that is no longer stored. Ingestion locks one
+    // version row, then its names; this page locks versions, then names, so
+    // the two cannot wait on each other in a cycle.
+    const subjects = apply ? await page.for("share") : await page;
     const last = subjects.at(-1);
     if (last === undefined) {
       return {
