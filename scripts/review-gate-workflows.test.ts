@@ -145,8 +145,14 @@ describe("the publisher", () => {
 // group's evaluation must never be replaced by anything: until the next
 // sweep, nothing else evaluates that commit.
 describe("the publisher's concurrency", () => {
-  const [job, ...others] = Object.values(publisher.jobs);
-  const concurrency = isRecord(job?.concurrency) ? job.concurrency : {};
+  const [job] = Object.values(publisher.jobs);
+  // Workflow-level, as every pull request workflow's is
+  // (scripts/workflow-concurrency.test.ts): a run joins it before the job's
+  // `if:` is read, so each alternative must hold for every event, including
+  // the ones the job then skips.
+  const concurrency = isRecord(publisher.concurrency)
+    ? publisher.concurrency
+    : {};
   const group = concurrency["group"];
   // In order: the first alternative that holds wins, and `&&` binds tighter
   // than `||`, so each alternative is one condition and its key.
@@ -154,51 +160,43 @@ describe("the publisher's concurrency", () => {
     typeof group === "string"
       ? group
           .replaceAll(/\s+/gu, " ")
+          .replace(/^review-gate-\$\{\{ /u, "")
+          .replace(/ \}\}$/u, "")
           .split("||")
           .map((part) => part.trim())
       : [];
   const OWN_GROUP = "format('run-{0}', github.run_id)";
 
-  test("is set on the one job, never on the workflow", () => {
-    expect(others).toEqual([]);
-    expect(publisher.concurrency).toBeUndefined();
+  test("is set on the workflow, never on the job", () => {
     expect(typeof group).toBe("string");
-  });
-
-  // Its pull_request_target run is listed among the pull request's checks,
-  // so another event for the same head cancelling it reads as failed CI.
-  test("never lets another run cancel a pull request event's run", () => {
-    expect(alternatives[0]).toEndWith(
-      `github.event_name == 'pull_request_target' && ${OWN_GROUP}`,
-    );
+    expect(concurrency["cancel-in-progress"]).toBe(true);
+    expect(job?.concurrency).toBeUndefined();
   });
 
   // GitHub replaces even a pending run when another joins its group, whatever
-  // cancel-in-progress says, so only a group of its own keeps it.
-  test("never lets another run replace or cancel a merge group's evaluation", () => {
-    expect(alternatives[1]).toBe(
+  // cancel-in-progress says, so only a group of its own keeps a run. The own
+  // groups come first, ahead of every key another event could share.
+  test("gives every run that must finish a group of its own", () => {
+    expect(alternatives.slice(0, 4)).toEqual([
+      // Listed among the pull request's checks, where cancelled reads as failed.
+      `github.event_name == 'pull_request_target' && ${OWN_GROUP}`,
+      // The group commit's only evaluation until the next sweep.
       `github.event.workflow_run.event == 'merge_group' && ${OWN_GROUP}`,
-    );
-  });
-
-  // Every app's statuses and check runs reach the job, and only the script
-  // can tell a reviewer's from the rest, so none of them may share a group:
-  // a no-op from any app would otherwise replace a pending evaluation.
-  test("never lets a status or check run replace or cancel another run", () => {
-    expect(alternatives[2]).toBe(
+      // Every app's statuses and check runs arrive, and only the script can
+      // tell a reviewer's from the rest: a no-op must never replace a run.
       `contains(fromJSON('["status","check_run"]'), github.event_name) && ${OWN_GROUP}`,
-    );
-    // Ahead of every key such an event could share with another run.
-    expect(alternatives[3]).toBe("github.event.workflow_run.head_sha");
-    expect(group).not.toContain("github.event.sha");
-    expect(group).not.toContain("github.event.check_run.head_sha");
+      // The sweep, the fallback for every group, never cut short mid-pass.
+      `github.event_name == 'schedule' && ${OWN_GROUP}`,
+    ]);
   });
 
-  test("never cancels the sweep, the fallback for every group", () => {
-    expect(alternatives.at(-1)).toBe("'sweep' }}");
-    expect(concurrency["cancel-in-progress"]).toMatch(
-      /^\$\{\{ github\.event_name != 'schedule' \}\}$/u,
-    );
+  test("shares a group only between runs that re-read what they replace", () => {
+    expect(alternatives.slice(4)).toEqual([
+      "github.event.workflow_run.head_sha",
+      "github.event.issue.number",
+      "inputs.pr",
+      OWN_GROUP,
+    ]);
   });
 
   // Reviewer names live only in .github/review-gate.yml: the workflow must
