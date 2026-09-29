@@ -590,6 +590,7 @@ export const validateMessage = async ({
       message,
       persistedMessage,
       resume,
+      tools,
     });
     if (Result.isError(partsResult)) {
       return Result.err(partsResult.error);
@@ -722,10 +723,12 @@ const validateIncomingChatParts = ({
   message,
   persistedMessage,
   resume,
+  tools,
 }: {
   message: RawIncomingMessage;
   persistedMessage: ValidateMessageInput["persistedMessage"];
   resume: AgUiResume | undefined;
+  tools: ChatToolMap;
 }): Result<ValidatedIncomingChatParts, HandlerError<400>> => {
   const validatedParts: ChatPart[] = [];
   for (const part of message.parts) {
@@ -760,6 +763,7 @@ const validateIncomingChatParts = ({
       incomingParts: validatedParts,
       persistedParts,
       resume,
+      tools,
     });
     if (Result.isError(continuationResult)) {
       return Result.err(continuationResult.error);
@@ -863,10 +867,12 @@ const validateContinuationToolCallIntegrity = ({
   incomingParts,
   persistedParts,
   resume,
+  tools,
 }: {
   incomingParts: readonly ChatPart[];
   persistedParts: readonly ChatPart[];
   resume: AgUiResume | undefined;
+  tools: ChatToolMap;
 }): Result<
   ReadonlyMap<string, ValidatedContinuationToolCall>,
   HandlerError<400>
@@ -892,6 +898,7 @@ const validateContinuationToolCallIntegrity = ({
     const validatedCallResult = validateContinuationToolCallTransition({
       canonicalCall,
       incomingCall,
+      tool: tools[canonicalCall.name],
     });
     if (Result.isError(validatedCallResult)) {
       return Result.err(validatedCallResult.error);
@@ -1055,12 +1062,28 @@ const canonicalToolCallBase = (
   };
 };
 
+/**
+ * The continuation's input compared under the placeholder rule of the tool's
+ * own schema, so a `null` a nullable field admits is a value, not absence.
+ * A call with no known schema (a tool this request does not register, or one
+ * without an input schema) keeps the schema-blind fold of every `null`.
+ */
+const withContinuationInputFolded = (
+  tool: ChatTool | undefined,
+  value: unknown,
+): unknown =>
+  tool?.inputSchema === undefined
+    ? withNullsOmitted(value)
+    : withToolInputPlaceholdersOmitted(tool.inputSchema, value);
+
 const validateContinuationToolCallTransition = ({
   canonicalCall,
   incomingCall,
+  tool,
 }: {
   canonicalCall: ChatToolCallPart;
   incomingCall: ChatToolCallPart;
+  tool: ChatTool | undefined;
 }): Result<ValidatedContinuationToolCall, HandlerError<400>> => {
   if (incomingCall.state === canonicalCall.state) {
     return Result.ok({
@@ -1071,8 +1094,8 @@ const validateContinuationToolCallTransition = ({
   if (
     incomingCall.name !== canonicalCall.name ||
     !deepEquals(
-      withNullsOmitted(incomingCall.input),
-      withNullsOmitted(canonicalCall.input),
+      withContinuationInputFolded(tool, incomingCall.input),
+      withContinuationInputFolded(tool, canonicalCall.input),
     )
   ) {
     return invalidContinuationToolCall();

@@ -132,9 +132,33 @@ const suggestChangesTools = {
   suggest_changes: {
     name: "suggest_changes",
     description: "Propose document edits for review",
+    // The optionals a strict provider schema widens with `null`, declared as
+    // the real tool declares them: absent allowed, `null` refused.
     inputSchema: toTanStackToolSchema(
       v.looseObject({
-        operations: v.array(v.looseObject({ type: v.string() })),
+        documentVersion: v.optional(v.looseObject({})),
+        operations: v.array(
+          v.looseObject({
+            type: v.string(),
+            comment: v.optional(v.string()),
+            moveId: v.optional(v.string()),
+            precondition: v.optional(v.looseObject({})),
+          }),
+        ),
+      }),
+    ),
+  },
+} satisfies ChatToolMap;
+/** A client tool with a field that holds `null` and one that refuses it. */
+const noteTools = {
+  set_note: {
+    name: "set_note",
+    description: "Set a note",
+    inputSchema: toTanStackToolSchema(
+      v.strictObject({
+        label: v.optional(v.string()),
+        note: v.nullable(v.string()),
+        query: v.string(),
       }),
     ),
   },
@@ -1432,6 +1456,104 @@ describe("validateMessage", () => {
     });
 
     expect(Result.isOk(result)).toBe(true);
+  });
+
+  describe("a continuation's input is folded by its tool's schema", () => {
+    const continueSetNote = async ({
+      canonicalInput,
+      echoedInput,
+    }: {
+      canonicalInput: Record<string, unknown>;
+      echoedInput: Record<string, unknown>;
+    }) => {
+      const id = chatMessageId("msg_set_note_continuation");
+      const callId = "call_set_note";
+      const output = { ok: true };
+      const persistedContent = chatMessageContentFromMessage(
+        toPersistableChatMessage({
+          id,
+          role: "assistant",
+          parts: [
+            {
+              type: "tool-call",
+              id: callId,
+              name: "set_note",
+              arguments: JSON.stringify(canonicalInput),
+              input: canonicalInput,
+              state: "input-complete",
+            },
+          ],
+        }),
+      );
+      return await validateMessageWithPersistence({
+        message: {
+          id,
+          role: "assistant",
+          parts: [
+            {
+              type: "tool-call",
+              id: callId,
+              name: "set_note",
+              arguments: JSON.stringify(echoedInput),
+              input: echoedInput,
+              output,
+              state: "complete",
+            },
+            {
+              type: "tool-result",
+              toolCallId: callId,
+              content: JSON.stringify(output),
+              state: "complete",
+            },
+          ],
+        },
+        persistedMessage: { role: "assistant", content: persistedContent },
+        resume: [
+          {
+            interruptId: `client_tool_${callId}`,
+            payload: output,
+            status: "resolved",
+          },
+        ],
+        safeDb: noDbReads,
+        threadId: chatThreadId("thread_set_note_continuation"),
+        tools: noteTools,
+        userId: userId("user_set_note_continuation"),
+      });
+    };
+
+    test("a null a nullable field holds is the same call when echoed", async () => {
+      const input = { note: null, query: "scope" };
+      const result = await continueSetNote({
+        canonicalInput: input,
+        echoedInput: input,
+      });
+
+      expect(Result.isOk(result)).toBe(true);
+    });
+
+    test("dropping a null a nullable field holds is a changed call", async () => {
+      const result = await continueSetNote({
+        canonicalInput: { note: null, query: "scope" },
+        echoedInput: { query: "scope" },
+      });
+
+      if (Result.isOk(result)) {
+        throw new Error("expected the changed call to be refused");
+      }
+      expect(result.error.message).toBe(
+        "Chat continuation does not match its awaited interaction",
+      );
+    });
+
+    test("a null the field refuses still reads as absent", async () => {
+      const result = await continueSetNote({
+        canonicalInput: { note: "kept", query: "scope" },
+        echoedInput: { label: null, note: "kept", query: "scope" },
+      });
+
+      expect(Result.isOk(result)).toBe(true);
+    });
   });
 
   test("allows only an unchanged second pending approval to continue", async () => {
