@@ -983,7 +983,15 @@
       "searchFiles": "Buscar archivos",
       "searchMatters": "Buscar asuntos",
       "searchMcpServers": "Buscar servidores MCP...",
-      "searchSkills": "Buscar habilidades"
+      "searchSkills": "Buscar habilidades",
+      "skillNeeds": {
+        "browserExtension": "Conecta la extensión del navegador para usar esta habilidad",
+        "document": "Abre un documento para usar esta habilidad",
+        "matter": "Inicia un chat en un asunto para usar esta habilidad",
+        "rawSendMode": "No disponible en chats anonimizados",
+        "reviewEdits": "Cambia las ediciones a revisión manual para usar esta habilidad",
+        "webSearch": "Activa la búsqueda web para usar esta habilidad"
+      }
     },
     "contextMeter": {
       "attachments": "Documentos adjuntos",
@@ -1068,6 +1076,10 @@
       "loadError": "Error al cargar elementos"
     },
     "messageTimestampToday": "Hoy, {time}",
+    "mockModel": {
+      "description": "Respuestas predefinidas del modelo simulado local",
+      "label": "IA simulada"
+    },
     "modelSelector": {
       "autoDescription": "Elige automáticamente el modelo y el nivel de razonamiento.",
       "autoLabel": "Automático",

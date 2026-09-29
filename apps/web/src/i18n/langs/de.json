@@ -983,7 +983,15 @@
       "searchFiles": "Dateien suchen",
       "searchMatters": "Akten suchen",
       "searchMcpServers": "MCP-Server suchen...",
-      "searchSkills": "Skills suchen"
+      "searchSkills": "Skills suchen",
+      "skillNeeds": {
+        "browserExtension": "Verbinden Sie die Browsererweiterung, um diesen Skill zu nutzen",
+        "document": "Öffnen Sie ein Dokument, um diesen Skill zu nutzen",
+        "matter": "Starten Sie einen Chat in einer Akte, um diesen Skill zu nutzen",
+        "rawSendMode": "In anonymisierten Chats nicht verfügbar",
+        "reviewEdits": "Stellen Sie Bearbeitungen auf manuelle Prüfung um, um diesen Skill zu nutzen",
+        "webSearch": "Schalten Sie die Websuche ein, um diesen Skill zu nutzen"
+      }
     },
     "contextMeter": {
       "attachments": "Angehängte Dokumente",
@@ -1068,6 +1076,10 @@
       "loadError": "Einträge konnten nicht geladen werden"
     },
     "messageTimestampToday": "Heute, {time}",
+    "mockModel": {
+      "description": "Vorgefertigte Antworten des lokalen Simulationsmodells",
+      "label": "Simulierte KI"
+    },
     "modelSelector": {
       "autoDescription": "Wählt Modell und Denkaufwand automatisch aus.",
       "autoLabel": "Automatisch",

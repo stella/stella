@@ -186,6 +186,7 @@ import {
   useChatAnonymized,
 } from "@/lib/chat-anonymized-store";
 import {
+  CHAT_EDIT_MODE_OPTION_ID,
   type DocxEditSafety,
   docxEditRepresentationForSelection,
   resolveActiveDocxEditModeState,
@@ -202,6 +203,7 @@ import {
 } from "@/lib/chat-thread-ref";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { detached } from "@/lib/detached";
+import { fileOverlaySkillDocument } from "@/lib/prompts/chat-skill-availability.logic";
 import {
   matchReservedChatCommand,
   runReservedChatCommand,
@@ -2645,6 +2647,26 @@ const FileChatOverlayInner = ({
           }}
           onNewThread={newThreadAction}
           reservedCommands={{ hasPersistedThread: hasMessages }}
+          skillChat={{
+            contextMatterIds: contextMatterIds ?? UNSEEDED_CONTEXT_MATTER_IDS,
+            ...fileOverlaySkillDocument({
+              activeFile,
+              editMode: activeDocxEditModeState,
+              hasActiveDraft: activeDraft !== undefined,
+            }),
+            ...(activeDocxEditModeState.type === "selectable"
+              ? {
+                  onReviewEdits: () => {
+                    setEditModeOptionId(CHAT_EDIT_MODE_OPTION_ID.manual);
+                  },
+                }
+              : {}),
+            threadRef,
+            webSearch: {
+              available: data.webSearchAvailable,
+              enabled: data.webSearchEnabled,
+            },
+          }}
           skillsOrganizationId={activeOrganizationId}
           emptyPlaceholder={
             <FileChatEmptyPlaceholder

@@ -983,7 +983,15 @@
       "searchFiles": "Otsi faile",
       "searchMatters": "Otsi toimikuid",
       "searchMcpServers": "Otsi MCP-servereid...",
-      "searchSkills": "Otsi oskusi"
+      "searchSkills": "Otsi oskusi",
+      "skillNeeds": {
+        "browserExtension": "Selle oskuse kasutamiseks ühendage brauserilaiendus",
+        "document": "Selle oskuse kasutamiseks avage dokument",
+        "matter": "Selle oskuse kasutamiseks alustage vestlust toimikus",
+        "rawSendMode": "Pole anonüümitud vestlustes saadaval",
+        "reviewEdits": "Selle oskuse kasutamiseks lülitage muudatused käsitsi ülevaatamisele",
+        "webSearch": "Selle oskuse kasutamiseks lülitage veebiotsing sisse"
+      }
     },
     "contextMeter": {
       "attachments": "Manustatud dokumendid",
@@ -1068,6 +1076,10 @@
       "loadError": "Üksuste laadimine ebaõnnestus"
     },
     "messageTimestampToday": "Täna, {time}",
+    "mockModel": {
+      "description": "Valmisvastused kohalikult simuleeritud mudelilt",
+      "label": "Simuleeritud AI"
+    },
     "modelSelector": {
       "autoDescription": "Valib mudeli ja arutlustaseme automaatselt.",
       "autoLabel": "Automaatne",

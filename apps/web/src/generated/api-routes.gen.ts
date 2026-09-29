@@ -2,7 +2,7 @@
 // WebApiContract in apps/api/src/eden-contract.ts. Do not edit.
 // Regenerate: bun --filter @stll/api gen:web-api-types
 import type { toolApprovalCapability as __symbol0 } from "../../node_modules/@tanstack/ai/dist/esm/activities/chat/tools/tool-definition.js";
-import type { AgendaItemWireFields as stll_api_contract_AgendaItemWireFields, ChatThreadOrigin as stll_api_contract_ChatThreadOrigin, ContactImportIssueCode as stll_api_contract_ContactImportIssueCode, DocumentReferenceMatch as stll_api_contract_DocumentReferenceMatch, EmailAttachmentDescriptor as stll_api_contract_EmailAttachmentDescriptor, EmailCitationBlock as stll_api_contract_EmailCitationBlock, SafeId as stll_api_contract_SafeId, SavedSearchCriteria as stll_api_contract_SavedSearchCriteria, SearchTotal as stll_api_contract_SearchTotal, TemplateRecipeDefinition as stll_api_contract_TemplateRecipeDefinition } from "@stll/api-contract";
+import type { AgendaItemWireFields as stll_api_contract_AgendaItemWireFields, ChatSkillContextNeed as stll_api_contract_ChatSkillContextNeed, ChatThreadOrigin as stll_api_contract_ChatThreadOrigin, ContactImportIssueCode as stll_api_contract_ContactImportIssueCode, DocumentReferenceMatch as stll_api_contract_DocumentReferenceMatch, EmailAttachmentDescriptor as stll_api_contract_EmailAttachmentDescriptor, EmailCitationBlock as stll_api_contract_EmailCitationBlock, SafeId as stll_api_contract_SafeId, SavedSearchCriteria as stll_api_contract_SavedSearchCriteria, SearchTotal as stll_api_contract_SearchTotal, TemplateRecipeDefinition as stll_api_contract_TemplateRecipeDefinition } from "@stll/api-contract";
 import type { CompareNode as stll_conditions_CompareNode, ConditionNode as stll_conditions_ConditionNode, GroupNode as stll_conditions_GroupNode, PredicateNode as stll_conditions_PredicateNode } from "@stll/conditions";
 import type { FolioAgentApplyOperationsSummary as stll_folio_agents_FolioAgentApplyOperationsSummary, FolioAgentBlock as stll_folio_agents_FolioAgentBlock, FolioAgentChange as stll_folio_agents_FolioAgentChange, FolioAgentComment as stll_folio_agents_FolioAgentComment, FolioAgentDocumentOutline as stll_folio_agents_FolioAgentDocumentOutline, FolioAgentScopedFindTextResult as stll_folio_agents_FolioAgentScopedFindTextResult, FolioAgentSectionRead as stll_folio_agents_FolioAgentSectionRead } from "@stll/folio-agents";
 import type { CompareChange as stll_folio_core_CompareChange, CompareCompatibility as stll_folio_core_CompareCompatibility, CompareUnsupportedPart as stll_folio_core_CompareUnsupportedPart, CompareVerification as stll_folio_core_CompareVerification } from "@stll/folio-core";
@@ -7641,12 +7641,27 @@ export type WebRoutes = {
         get: {
           body: Record<never, never>;
           params: T5e3ac29766;
-          query: Record<never, never>;
+          query: {
+            anonymized?: false | true;
+            document?: "template" | "file" | "draft";
+            workspaceId?: T9e07a7d6cd;
+            documentId?: Tf742ada503;
+            fileFieldId?: T6993bee61f;
+            contextMatterIds?: Array<T9e07a7d6cd>;
+            editApplyMode?: "auto" | "manual";
+            browserExtension?: false | true;
+            webSearch?: false | true;
+          };
           headers: Record<never, never>;
           response: {
             200: {
               unavailable: Array<{
                 missingTools: ReadonlyArray<string>;
+                skillId: string;
+              }>;
+              unavailableHere: Array<{
+                missingTools: ReadonlyArray<string>;
+                needs: ReadonlyArray<stll_api_contract_ChatSkillContextNeed>;
                 skillId: string;
               }>;
             };
@@ -17479,6 +17494,7 @@ export type WebRoutes = {
               orgConfigured: Tfddd645dc8;
               available: Tfddd645dc8;
               deferredServiceTierAvailable: Tfddd645dc8;
+              mockAnswers: Tfddd645dc8;
             };
             400: T9a51b7d2bc;
             401: T9a51b7d2bc;

@@ -491,6 +491,20 @@ export const GENERATORS = [
     after: [],
   },
   {
+    id: "us-reporters",
+    outputs: [
+      "packages/api-contract/src/us-reporter-editions.generated.ts",
+      "packages/api-contract/src/us-reporters.LICENSE",
+    ],
+    inputs: ["scripts/generate-us-reporters.ts"],
+    write: ["bun", "scripts/generate-us-reporters.ts", "--write"],
+    check: null,
+    unchecked:
+      "Fetched from a pinned upstream commit over the network; a manual upgrade tool outside CI",
+    autofix: false,
+    after: [],
+  },
+  {
     id: "snowball",
     outputs: [
       "apps/api/src/lib/legal-search/morphology/snowball/*.gen.ts",

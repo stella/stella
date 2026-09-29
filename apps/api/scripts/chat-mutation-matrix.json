@@ -997,6 +997,20 @@
       "oracle": "chat.provider.transcript-settled"
     },
     {
+      "id": "skill-menu-follows-edit-mode",
+      "fix": "#4086",
+      "behaviour": "The composer's skill availability decides over the chat's own edit mode, as a send does, instead of assuming an open document always queues edits for review.",
+      "status": "active",
+      "file": "src/handlers/chat/skill-availability/offered-tools.ts",
+      "search": "    editApplyMode: chatContext.editApplyMode,",
+      "replace": "    editApplyMode: CHAT_EDIT_APPLY_MODE.manual,",
+      "scenario": {
+        "file": "src/handlers/chat/skill-availability/send-parity.integration.test.ts",
+        "test": "an anonymized global chat over a file, in the default edit mode"
+      },
+      "oracle": "chat.skills.menu-matches-send"
+    },
+    {
       "id": "stored-result-content-stable",
       "fix": "#4007",
       "behaviour": "The result that closes a call of a turn that already ended exists only for the model and is rebuilt on every request, so it reads the same each time instead of changing an earlier turn's result.",

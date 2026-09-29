@@ -134,7 +134,7 @@
     }
   },
   "audit-skip-directives": {
-    "count": 262,
+    "count": 264,
     "files": {
       "apps/api/src/handlers/bilingual-translations/create-run.ts": 1,
       "apps/api/src/handlers/case-law/analysis/generate.ts": 2,
@@ -192,7 +192,7 @@
       "apps/api/src/handlers/entities/placements/suggest.ts": 1,
       "apps/api/src/handlers/entities/publish-folio-collab-version.ts": 1,
       "apps/api/src/handlers/fields/upsert.ts": 1,
-      "apps/api/src/handlers/legislation/ingestion.ts": 3,
+      "apps/api/src/handlers/legislation/ingestion.ts": 4,
       "apps/api/src/handlers/legislation/search-index.ts": 2,
       "apps/api/src/handlers/legislation/slug-backfill.ts": 1,
       "apps/api/src/handlers/lists/generation-candidates/commit-settled-run.ts": 1,
@@ -259,6 +259,7 @@
       "apps/api/src/lib/scheduler/tasks/case-law-redaction-tombstone-backfill.ts": 2,
       "apps/api/src/lib/scheduler/tasks/corpus-index-job-detail-backfill.ts": 1,
       "apps/api/src/lib/scheduler/tasks/flow-run-orphan-reconcile.ts": 1,
+      "apps/api/src/lib/scheduler/tasks/legislation-expression-id-backfill.ts": 1,
       "apps/api/src/lib/scheduler/tasks/search-chat-index.ts": 1,
       "apps/api/src/lib/scheduler/tasks/search-projection-repair.ts": 1,
       "apps/api/src/lib/scheduler/tasks/search-semantic-timestamps.ts": 2,

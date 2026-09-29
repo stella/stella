@@ -983,7 +983,15 @@
       "searchFiles": "Hľadať súbory",
       "searchMatters": "Hľadať spisy",
       "searchMcpServers": "Hľadať MCP servery...",
-      "searchSkills": "Hľadať zručnosti"
+      "searchSkills": "Hľadať zručnosti",
+      "skillNeeds": {
+        "browserExtension": "Na túto zručnosť pripojte rozšírenie prehliadača",
+        "document": "Na túto zručnosť otvorte dokument",
+        "matter": "Na túto zručnosť založte chat v spise",
+        "rawSendMode": "Nie je k dispozícii v anonymizovaných chatoch",
+        "reviewEdits": "Na túto zručnosť prepnite úpravy na ručnú kontrolu",
+        "webSearch": "Na túto zručnosť zapnite vyhľadávanie na webe"
+      }
     },
     "contextMeter": {
       "attachments": "Pripojené dokumenty",
@@ -1068,6 +1076,10 @@
       "loadError": "Nepodarilo sa načítať položky"
     },
     "messageTimestampToday": "Dnes, {time}",
+    "mockModel": {
+      "description": "Vopred pripravené odpovede lokálneho simulovaného modelu",
+      "label": "Simulovaná AI"
+    },
     "modelSelector": {
       "autoDescription": "Automaticky vyberie model a úroveň uvažovania.",
       "autoLabel": "Automaticky",

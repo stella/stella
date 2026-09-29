@@ -31225,7 +31225,7 @@ export const generatedRouteMap: RouteNode = {
                 ],
                 capabilityId: "organization-settings.ai-availability.get",
                 description:
-                  "Report whether AI is usable in this organization: whether the deployment provides a model, whether the organization has configured its own provider, whether either of those makes AI available at all, and whether the reduced-cost deferred service tier can be used. Booleans only, so any member may read it.",
+                  "Report whether AI is usable in this organization: whether the deployment provides a model, whether the organization has configured its own provider, whether either of those makes AI available at all, whether the reduced-cost deferred service tier can be used, and whether a local development stack answers with canned replies instead of a model. Booleans only, so any member may read it.",
                 access: "read",
                 flags: [],
                 inputOnly: [],

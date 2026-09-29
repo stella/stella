@@ -987,6 +987,14 @@ type Messages = {
       "searchMatters": "Search matters";
       "searchMcpServers": "Search MCP servers...";
       "searchSkills": "Search skills";
+      "skillNeeds": {
+        "browserExtension": "Connect the browser extension to use this skill";
+        "document": "Open a document to use this skill";
+        "matter": "Start a chat in a matter to use this skill";
+        "rawSendMode": "Not available in anonymized chats";
+        "reviewEdits": "Switch edits to manual review to use this skill";
+        "webSearch": "Turn on web search to use this skill";
+      };
     };
     "contextMeter": {
       "attachments": "Attached documents";
@@ -1071,6 +1079,10 @@ type Messages = {
       "loadError": "Failed to load items";
     };
     "messageTimestampToday": "Today, {time}";
+    "mockModel": {
+      "description": "Canned replies from the local mock model";
+      "label": "Mock AI";
+    };
     "modelSelector": {
       "autoDescription": "Automatically chooses the model and effort.";
       "autoLabel": "Auto";

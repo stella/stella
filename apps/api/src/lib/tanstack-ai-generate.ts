@@ -71,7 +71,7 @@ import { tanStackCacheControl } from "@/api/lib/tanstack-ai-caching";
 import {
   getTanStackTextModelById,
   getTanStackTextModelForRole,
-  isMockTextAdapterActive,
+  isMockTextAdapter,
 } from "@/api/lib/tanstack-ai-models";
 import type {
   ResolvedTanStackTextModel,
@@ -674,15 +674,21 @@ const isRetryableServiceTierFallbackError = (error: unknown): boolean => {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
-const structuredOutputProjectionOptions = (
-  provider: string,
-): ProviderSafeJsonSchemaProjectionOptions =>
+const structuredOutputProjectionOptions = ({
+  mock,
+  provider,
+}: {
+  mock: boolean;
+  provider: string;
+}): ProviderSafeJsonSchemaProjectionOptions =>
   providerSafeJsonSchemaOptionsForTanStackProvider(
     provider,
-    isMockTextAdapterActive() ? "mock-structured-output" : "structured-output",
+    mock ? "mock-structured-output" : "structured-output",
   );
 
 type StructuredOutputWireJsonSchemaOptions = {
+  /** Whether the local mock answers the request instead of `provider`. */
+  mock: boolean;
   outputSchema: v.GenericSchema;
   provider: TanStackAIProvider;
 };
@@ -693,13 +699,14 @@ type StructuredOutputWireJsonSchemaOptions = {
  * request against anything else would drift from what the provider compiles.
  */
 export const structuredOutputWireJsonSchema = ({
+  mock,
   outputSchema,
   provider,
 }: StructuredOutputWireJsonSchemaOptions): unknown =>
   convertSchemaToJsonSchema(
     toTanStackValibotSchema(
       outputSchema,
-      structuredOutputProjectionOptions(provider),
+      structuredOutputProjectionOptions({ mock, provider }),
     ),
     { forStructuredOutput: true },
   );
@@ -720,7 +727,7 @@ const guardStructuredOutputBudget = ({
 }): void => {
   // The mock adapter answers locally: no provider compiles the grammar, and
   // its projection deliberately keeps keywords the wire schema drops.
-  if (isMockTextAdapterActive()) {
+  if (isMockTextAdapter(model.adapter)) {
     return;
   }
 
@@ -728,6 +735,7 @@ const guardStructuredOutputBudget = ({
     provider: model.provider,
     modelId: model.modelId,
     schema: structuredOutputWireJsonSchema({
+      mock: false,
       outputSchema,
       provider: model.provider,
     }),
@@ -754,7 +762,10 @@ export const generateTanStackObjectForRole = async <
   guardStructuredOutputBudget({ model, outputSchema });
   const tanStackOutputSchema = toTanStackValibotSchema(
     outputSchema,
-    structuredOutputProjectionOptions(model.provider),
+    structuredOutputProjectionOptions({
+      mock: isMockTextAdapter(model.adapter),
+      provider: model.provider,
+    }),
   );
 
   const output = await withStandardServiceTierFallback({
@@ -844,7 +855,10 @@ const streamTanStackStructuredOutput = async function* <
   guardStructuredOutputBudget({ model, outputSchema });
   const tanStackOutputSchema = toTanStackValibotSchema(
     outputSchema,
-    structuredOutputProjectionOptions(model.provider),
+    structuredOutputProjectionOptions({
+      mock: isMockTextAdapter(model.adapter),
+      provider: model.provider,
+    }),
   );
 
   const stream = iterateWithStandardServiceTierFallback({

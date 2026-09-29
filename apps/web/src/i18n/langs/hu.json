@@ -983,7 +983,15 @@
       "searchFiles": "Fájlok keresése",
       "searchMatters": "Ügyek keresése",
       "searchMcpServers": "MCP-kiszolgálók keresése...",
-      "searchSkills": "Készségek keresése"
+      "searchSkills": "Készségek keresése",
+      "skillNeeds": {
+        "browserExtension": "A készség használatához csatlakoztassa a böngészőbővítményt",
+        "document": "A készség használatához nyisson meg egy dokumentumot",
+        "matter": "A készség használatához indítson csevegést egy ügyben",
+        "rawSendMode": "Anonimizált csevegésekben nem érhető el",
+        "reviewEdits": "A készség használatához állítsa a szerkesztéseket kézi ellenőrzésre",
+        "webSearch": "A készség használatához kapcsolja be a webes keresést"
+      }
     },
     "contextMeter": {
       "attachments": "Csatolt dokumentumok",
@@ -1068,6 +1076,10 @@
       "loadError": "Az elemek betöltése sikertelen"
     },
     "messageTimestampToday": "Ma, {time}",
+    "mockModel": {
+      "description": "Előre megírt válaszok a helyi szimulált modelltől",
+      "label": "Szimulált AI"
+    },
     "modelSelector": {
       "autoDescription": "Automatikusan választja ki a modellt és a gondolkodási szintet.",
       "autoLabel": "Automatikus",

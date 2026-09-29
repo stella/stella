@@ -983,7 +983,15 @@
       "searchFiles": "Meklēt failus",
       "searchMatters": "Meklēt lietas",
       "searchMcpServers": "Meklēt MCP serverus...",
-      "searchSkills": "Meklēt prasmes"
+      "searchSkills": "Meklēt prasmes",
+      "skillNeeds": {
+        "browserExtension": "Lai izmantotu šo prasmi, pievienojiet pārlūka paplašinājumu",
+        "document": "Lai izmantotu šo prasmi, atveriet dokumentu",
+        "matter": "Lai izmantotu šo prasmi, sāciet tērzēšanu lietā",
+        "rawSendMode": "Nav pieejams anonimizētās tērzēšanās",
+        "reviewEdits": "Lai izmantotu šo prasmi, pārslēdziet labojumus uz manuālu pārskatīšanu",
+        "webSearch": "Lai izmantotu šo prasmi, ieslēdziet meklēšanu tīmeklī"
+      }
     },
     "contextMeter": {
       "attachments": "Pievienotie dokumenti",
@@ -1068,6 +1076,10 @@
       "loadError": "Neizdevās ielādēt vienumus"
     },
     "messageTimestampToday": "Šodien, {time}",
+    "mockModel": {
+      "description": "Iepriekš sagatavotas lokālā simulētā modeļa atbildes",
+      "label": "Simulēts AI"
+    },
     "modelSelector": {
       "autoDescription": "Automātiski izvēlas modeli un spriešanas līmeni.",
       "autoLabel": "Automātiski",
