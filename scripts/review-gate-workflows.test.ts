@@ -78,15 +78,72 @@ const DEFAULT_BRANCH_TRIGGERS = [
   "workflow_dispatch",
 ];
 
+// The triggers that carry a reviewer's own report, each needed exactly when
+// some configured reviewer reports that way: without one, that reviewer is
+// heard only by the sweep; with one no reviewer needs, every run is a no-op
+// that still waits for a runner.
+const SIGNAL_TRIGGERS: Record<string, boolean> = {
+  status: config.reviewers.some(({ done }) => done.commitStatus !== null),
+  check_run: config.reviewers.some(({ done }) => done.checkRun !== null),
+};
+
 describe("the publisher", () => {
   // Both directions: an added trigger could run a pull request's own
   // definition, and a dropped one silently stops pushes, the relay, or the
   // sweep that applies timeouts and catches resolved threads.
   test("runs on exactly the triggers that execute the default branch's definition", () => {
     expect(Object.keys(publisher.on).toSorted()).toEqual(
-      DEFAULT_BRANCH_TRIGGERS.toSorted(),
+      DEFAULT_BRANCH_TRIGGERS.filter(
+        (trigger) => SIGNAL_TRIGGERS[trigger] !== false,
+      ).toSorted(),
     );
   });
+
+  test.each(Object.entries(SIGNAL_TRIGGERS))(
+    "has the %s trigger exactly when a configured reviewer reports that way",
+    (trigger, needed) => {
+      expect(Object.hasOwn(publisher.on, trigger)).toBe(needed);
+    },
+  );
+
+  // The dispatch step's `case` arms, label list to command. A trigger is only
+  // heard if its own arm reads its payload, so arms and triggers are held
+  // together here rather than trusted to be edited in step.
+  const dispatchArms = new Map(
+    Object.values(publisher.jobs)
+      .flatMap((job) => job.steps)
+      .flatMap((step) =>
+        step.run?.includes('case "$EVENT_NAME"') === true ? [step.run] : [],
+      )
+      .flatMap((script) =>
+        [...script.matchAll(/^\s*([a-z_|*]+)\) (.+?) ;;$/gmu)].map(
+          (match): [string, string] => [match[1] ?? "", match[2] ?? ""],
+        ),
+      ),
+  );
+  const armFor = (event: string): string | undefined =>
+    [...dispatchArms].find(([labels]) =>
+      labels.split("|").includes(event),
+    )?.[1];
+
+  test("dispatches every trigger by name and fails any other event", () => {
+    expect(
+      [...dispatchArms.keys()]
+        .filter((labels) => labels !== "*")
+        .flatMap((labels) => labels.split("|"))
+        .toSorted(),
+    ).toEqual(Object.keys(publisher.on).toSorted());
+    expect(armFor("*")).toContain("exit 1");
+  });
+
+  test.each(Object.entries(SIGNAL_TRIGGERS).filter(([, needed]) => needed))(
+    "reads each %s event as a reviewer signal on its commit",
+    (trigger) => {
+      expect(armFor(trigger)).toMatch(
+        /^bun scripts\/review-gate-github\.ts sha "\$\w+" --signal "\$\w+"$/u,
+      );
+    },
+  );
 
   test("publishes only from the default branch ref", () => {
     for (const job of Object.values(publisher.jobs)) {
@@ -182,9 +239,9 @@ describe("the publisher's concurrency", () => {
       `github.event_name == 'pull_request_target' && ${OWN_GROUP}`,
       // The group commit's only evaluation until the next sweep.
       `github.event.workflow_run.event == 'merge_group' && ${OWN_GROUP}`,
-      // Every app's statuses and check runs arrive, and only the script can
-      // tell a reviewer's from the rest: a no-op must never replace a run.
-      `contains(fromJSON('["status","check_run"]'), github.event_name) && ${OWN_GROUP}`,
+      // Every app's statuses arrive, and only the script can tell a
+      // reviewer's from the rest: a no-op must never replace a run.
+      `github.event_name == 'status' && ${OWN_GROUP}`,
       // The sweep, the fallback for every group, never cut short mid-pass.
       `github.event_name == 'schedule' && ${OWN_GROUP}`,
     ]);
