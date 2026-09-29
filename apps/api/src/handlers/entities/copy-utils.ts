@@ -433,7 +433,7 @@ export const copyFileObjects = async (
           cause: copied.error,
         }),
       )
-    : copied;
+    : Result.ok(copied.value);
 };
 
 /**

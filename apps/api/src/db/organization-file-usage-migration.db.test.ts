@@ -51,22 +51,25 @@ test("the file usage migration creates the indexes declared by the live schema",
     for (const table of [organizationFileUsage, organizationFileObjects]) {
       const config = getTableConfig(table);
       const expected = config.indexes
-        .map(({ config: index }) => ({
-          name: index.name,
-          columns: index.columns.map((column) => {
-            expect(column instanceof SQL).toBe(false);
-            if (column instanceof SQL) {
-              throw new TypeError("Expected a column index");
-            }
-            return column.name;
-          }),
-          predicate: normalizePredicate(
-            index.where ? dialect.sqlToQuery(index.where).sql : null,
-          ),
-        }))
-        .toSorted((left, right) =>
-          (left.name ?? "") < (right.name ?? "") ? -1 : 1,
-        );
+        .map(({ config: index }) => {
+          if (typeof index.name !== "string") {
+            throw new TypeError("Expected an explicitly named index");
+          }
+          return {
+            name: index.name,
+            columns: index.columns.map((column) => {
+              expect(column instanceof SQL).toBe(false);
+              if (!("name" in column) || typeof column.name !== "string") {
+                throw new TypeError("Expected a column index");
+              }
+              return column.name;
+            }),
+            predicate: normalizePredicate(
+              index.where ? dialect.sqlToQuery(index.where).sql : null,
+            ),
+          };
+        })
+        .toSorted((left, right) => (left.name < right.name ? -1 : 1));
       const actual = await database.query<{
         name: string;
         columns: string[];

@@ -27,6 +27,8 @@ const writeCommands = new Set([
 const ledgerCalls = new Set([
   "writeOrganizationFile",
   "copyOrganizationFile",
+  "copyOrganizationFiles",
+  "writeOrganizationFiles",
   "storeOcrSearchablePdfDerivative",
 ]);
 
@@ -72,23 +74,23 @@ const exemptions = {
 // function that already calls the ledger. Updating a count requires review of
 // that file's new write site and key classification.
 const expectedWriteCounts = {
-  "scripts/backfill-image-thumbnails.ts": 2,
+  "scripts/backfill-image-thumbnails.ts": 1,
   "scripts/seed-dev.ts": 2,
   "scripts/seed-email-viewer-demo.ts": 1,
   "scripts/seed-templates.ts": 2,
   "src/handlers/chat/export/create.ts": 1,
-  "src/handlers/chat/fork/create.ts": 2,
+  "src/handlers/chat/fork/create.ts": 1,
   "src/handlers/chat/upload-files.ts": 2,
   "src/handlers/entities/checkpoint-desktop-edit-session.ts": 2,
   "src/handlers/entities/checkpoint-folio-collab-room.ts": 2,
-  "src/handlers/entities/copy-utils.ts": 2,
+  "src/handlers/entities/copy-utils.ts": 1,
   "src/handlers/entities/finalize-desktop-edit-session.ts": 2,
   "src/handlers/entities/publish-folio-collab-version.ts": 2,
   "src/handlers/entities/upload.ts": 2,
   "src/handlers/reports/report-export-queue.ts": 1,
   "src/handlers/style-sets/storage.ts": 2,
   "src/handlers/uploads/update.ts": 2,
-  "src/handlers/workspaces/duplicate.ts": 2,
+  "src/handlers/workspaces/duplicate.ts": 1,
   "src/lib/document-processing-queue.ts": 1,
   "src/lib/entities/create-from-buffer.ts": 2,
   "src/lib/entity-versions/create-entity-version-from-buffer.ts": 2,
@@ -159,62 +161,275 @@ const isFlagOff = (node: ts.Node): boolean => {
   return false;
 };
 
-const ledgerCallback = (
-  node: ts.Node,
-  ast: ts.SourceFile,
-  imports: ReadonlyMap<string, string>,
-): boolean => {
-  let current = node.parent;
-  while (!ts.isSourceFile(current)) {
-    if (ts.isFunctionLike(current)) {
-      const fn = current;
-      const parent = fn.parent;
+// Follow only values supplied to ledger inputs. A nearby ledger call cannot
+// account for an unrelated callback, collection, or shadowed declaration.
+type StorageCallback =
+  | ts.ArrowFunction
+  | ts.FunctionExpression
+  | ts.FunctionDeclaration;
+
+const collectCallbackFlow = (ast: ts.SourceFile) => {
+  const bindings: (
+    | ts.VariableDeclaration
+    | ts.ParameterDeclaration
+    | ts.FunctionDeclaration
+  )[] = [];
+  const calls: ts.CallExpression[] = [];
+  const collect = (candidate: ts.Node) => {
+    if (
+      ts.isVariableDeclaration(candidate) ||
+      ts.isParameter(candidate) ||
+      ts.isFunctionDeclaration(candidate)
+    ) {
+      bindings.push(candidate);
+    }
+    if (ts.isCallExpression(candidate)) {
+      calls.push(candidate);
+    }
+    ts.forEachChild(candidate, collect);
+  };
+  collect(ast);
+  const scopeOf = (binding: (typeof bindings)[number]) => {
+    let scope = binding.parent;
+    while (
+      !ts.isBlock(scope) &&
+      !ts.isSourceFile(scope) &&
+      !(ts.isParameter(binding) && ts.isFunctionLike(scope))
+    ) {
+      scope = scope.parent;
+    }
+    return scope;
+  };
+  const resolve = (identifier: ts.Identifier) => {
+    let scope: ts.Node | undefined = identifier.parent;
+    while (scope) {
+      const currentScope = scope;
+      const found = bindings.find(
+        (binding) =>
+          binding.name &&
+          ts.isIdentifier(binding.name) &&
+          binding.name.text === identifier.text &&
+          scopeOf(binding) === currentScope,
+      );
+      if (found) {
+        return found;
+      }
+      scope = scope.parent;
+    }
+    return undefined;
+  };
+  return { calls, resolve };
+};
+
+const returnedValues = (
+  fn: ts.ArrowFunction | ts.FunctionExpression | ts.FunctionDeclaration,
+) => {
+  const values: ts.Expression[] = [];
+  if (!fn.body) {
+    return values;
+  }
+  if (!ts.isBlock(fn.body)) {
+    return [fn.body];
+  }
+  const visit = (candidate: ts.Node) => {
+    if (ts.isReturnStatement(candidate) && candidate.expression) {
+      values.push(candidate.expression);
+      return;
+    }
+    if (ts.isFunctionLike(candidate)) {
+      return;
+    }
+    ts.forEachChild(candidate, visit);
+  };
+  visit(fn.body);
+  return values;
+};
+
+type CallbackTraceOptions = {
+  ast: ts.SourceFile;
+  flow: ReturnType<typeof collectCallbackFlow>;
+  target: StorageCallback;
+};
+
+const createCallbackMatcher = ({
+  flow: { resolve },
+  target,
+}: CallbackTraceOptions) => {
+  const referencesFunction = (value: ts.Node): boolean => {
+    if (value === target) {
+      return true;
+    }
+    if (ts.isIdentifier(value)) {
+      const binding = resolve(value);
+      return (
+        binding === target ||
+        (binding !== undefined &&
+          ts.isVariableDeclaration(binding) &&
+          binding.initializer === target)
+      );
+    }
+    return false;
+  };
+  const callbackUsesTarget = (value: ts.Node): boolean => {
+    if (referencesFunction(value)) {
+      return true;
+    }
+    if (!ts.isArrowFunction(value) && !ts.isFunctionExpression(value)) {
+      return false;
+    }
+    let used = false;
+    const visit = (candidate: ts.Node) => {
       if (
-        ts.isPropertyAssignment(parent) &&
-        (parent.name.getText(ast) === "write" ||
-          parent.name.getText(ast) === "copy") &&
-        ts.isObjectLiteralExpression(parent.parent) &&
-        ts.isCallExpression(parent.parent.parent) &&
-        ledgerCalls.has(invokedName(parent.parent.parent, imports) ?? "")
+        ts.isCallExpression(candidate) &&
+        referencesFunction(candidate.expression)
+      ) {
+        used = true;
+      }
+      if (ts.isFunctionLike(candidate)) {
+        return;
+      }
+      ts.forEachChild(candidate, visit);
+    };
+    visit(value.body);
+    return used;
+  };
+  return callbackUsesTarget;
+};
+
+const traceLedgerInputs = (options: CallbackTraceOptions) => {
+  const {
+    ast,
+    flow: { calls, resolve },
+  } = options;
+  const visited = new Set<ts.Node>();
+  const callbackUsesTarget = createCallbackMatcher(options);
+  const propertyCarriesCallback = (property: ts.ObjectLiteralElementLike) => {
+    if (ts.isShorthandPropertyAssignment(property)) {
+      if (property.name.text === "inputs") {
+        return carriesCallback(property.name);
+      }
+      return (
+        (property.name.text === "copy" ||
+          property.name.text === "write" ||
+          property.name.text === "writePdf") &&
+        callbackUsesTarget(property.name)
+      );
+    }
+    if (!ts.isPropertyAssignment(property)) {
+      return false;
+    }
+    const name = property.name.getText(ast);
+    if (name === "copy" || name === "write" || name === "writePdf") {
+      return callbackUsesTarget(property.initializer);
+    }
+    return name === "inputs" && carriesCallback(property.initializer);
+  };
+  const carriesCallback = (value: ts.Node): boolean => {
+    if (visited.has(value)) {
+      return false;
+    }
+    visited.add(value);
+    if (
+      ts.isParenthesizedExpression(value) ||
+      ts.isAwaitExpression(value) ||
+      ts.isSpreadElement(value)
+    ) {
+      return carriesCallback(value.expression);
+    }
+    if (ts.isIdentifier(value)) {
+      const binding = resolve(value);
+      if (!binding) {
+        return false;
+      }
+      if (ts.isFunctionDeclaration(binding)) {
+        return returnedValues(binding).some(carriesCallback);
+      }
+      if (
+        ts.isVariableDeclaration(binding) &&
+        binding.initializer &&
+        carriesCallback(binding.initializer)
       ) {
         return true;
       }
-      if (ts.isVariableDeclaration(parent) && ts.isIdentifier(parent.name)) {
-        const callbackName = parent.name.text;
-        let passedToLedger = false;
-        const visit = (candidate: ts.Node) => {
-          if (
-            ts.isCallExpression(candidate) &&
-            ledgerCalls.has(invokedName(candidate, imports) ?? "") &&
-            candidate.arguments.some(
-              (arg) =>
-                ts.isObjectLiteralExpression(arg) &&
-                arg.properties.some(
-                  (property) =>
-                    (ts.isPropertyAssignment(property) &&
-                      (property.name.getText(ast) === "write" ||
-                        property.name.getText(ast) === "copy") &&
-                      ts.isIdentifier(property.initializer) &&
-                      property.initializer.text === callbackName) ||
-                    (ts.isShorthandPropertyAssignment(property) &&
-                      property.name.text === callbackName &&
-                      ((callbackName === "writePdf" &&
-                        invokedName(candidate, imports) ===
-                          "storeOcrSearchablePdfDerivative") ||
-                        callbackName === "write" ||
-                        callbackName === "copy")),
-                ),
-            )
-          ) {
-            passedToLedger = true;
-          }
-          ts.forEachChild(candidate, visit);
-        };
-        visit(parent.parent.parent.parent);
-        return passedToLedger;
+      return calls.some(
+        (call) =>
+          ts.isPropertyAccessExpression(call.expression) &&
+          call.expression.name.text === "push" &&
+          ts.isIdentifier(call.expression.expression) &&
+          resolve(call.expression.expression) === binding &&
+          call.arguments.some(carriesCallback),
+      );
+    }
+    if (ts.isPropertyAccessExpression(value)) {
+      return value.name.text === "value" && carriesCallback(value.expression);
+    }
+    if (ts.isArrayLiteralExpression(value)) {
+      return value.elements.some(carriesCallback);
+    }
+    if (ts.isObjectLiteralExpression(value)) {
+      return value.properties.some(propertyCarriesCallback);
+    }
+    if (ts.isArrowFunction(value) || ts.isFunctionExpression(value)) {
+      return returnedValues(value).some(carriesCallback);
+    }
+    if (
+      !ts.isCallExpression(value) ||
+      !ts.isPropertyAccessExpression(value.expression)
+    ) {
+      return false;
+    }
+    const { expression: receiver, name } = value.expression;
+    if (name.text === "map" || name.text === "flatMap") {
+      const callback = value.arguments.at(0);
+      return callback !== undefined && carriesCallback(callback);
+    }
+    if (
+      ts.isIdentifier(receiver) &&
+      ((receiver.text === "Result" &&
+        (name.text === "ok" || name.text === "all")) ||
+        (receiver.text === "Promise" && name.text === "all"))
+    ) {
+      const input = value.arguments.at(0);
+      return input !== undefined && carriesCallback(input);
+    }
+    return false;
+  };
+  return carriesCallback;
+};
+
+type LedgerCallbackContext = {
+  ast: ts.SourceFile;
+  imports: ReadonlyMap<string, string>;
+  flow: ReturnType<typeof collectCallbackFlow>;
+};
+
+const ledgerCallback = (
+  node: ts.Node,
+  { ast, imports, flow }: LedgerCallbackContext,
+): boolean => {
+  let ancestor = node.parent;
+  while (!ts.isSourceFile(ancestor)) {
+    if (
+      ts.isArrowFunction(ancestor) ||
+      ts.isFunctionExpression(ancestor) ||
+      ts.isFunctionDeclaration(ancestor)
+    ) {
+      const target = ancestor;
+      if (
+        flow.calls.some(
+          (call) =>
+            ledgerCalls.has(invokedName(call, imports) ?? "") &&
+            call.arguments.some(
+              (argument, index) =>
+                index === 0 &&
+                traceLedgerInputs({ ast, flow, target })(argument),
+            ),
+        )
+      ) {
+        return true;
       }
     }
-    current = current.parent;
+    ancestor = ancestor.parent;
   }
   return false;
 };
@@ -270,6 +485,7 @@ const scan = (file: string, source: string): WriteSite[] => {
     ts.forEachChild(node, visitAliases);
   };
   visitAliases(ast);
+  const flow = collectCallbackFlow(ast);
   const ordinals = new Map<string, number>();
   const sites: WriteSite[] = [];
   const visit = (node: ts.Node) => {
@@ -288,7 +504,7 @@ const scan = (file: string, source: string): WriteSite[] => {
           name,
           ordinal,
           operation: node.getText(ast).replace(/\s+/gu, " "),
-          ledgerBound: ledgerCallback(node, ast, imports),
+          ledgerBound: ledgerCallback(node, { ast, imports, flow }),
           flagOff: isFlagOff(node),
         });
       }
@@ -366,6 +582,125 @@ describe("durable organization file writes", () => {
       { ledgerBound: false, name: "getS3.write" },
       { ledgerBound: false, name: "writeS3ObjectWithRetry" },
       { ledgerBound: false, name: "getS3.write" },
+    ]);
+  });
+
+  test("recognizes returned copy callbacks flowing through prepared batches", () => {
+    const source = `
+      const prepareFile = async (file) => Result.ok({
+        copy: async () => await copyObject(file.source, file.target),
+      });
+      const prepared = [];
+      for (let start = 0; start < files.length; start += 4) {
+        prepared.push(...(await Promise.all(files.slice(start, start + 4).map(prepareFile))));
+      }
+      const inputs = Result.all(prepared);
+      await copyOrganizationFiles({ inputs: inputs.value });
+    `;
+    expect(scan("src/example.ts", source)).toMatchObject([
+      { ledgerBound: true },
+    ]);
+    expect(
+      scan(
+        "src/example.ts",
+        source.replace("inputs: inputs.value", "inputs: unrelated"),
+      ),
+    ).toMatchObject([{ ledgerBound: false }]);
+  });
+
+  test("recognizes returned mapped copy inputs and rejects producer-side writes", () => {
+    const source = `
+      const inputs = ready.value.flatMap((file) => {
+        const objects = [file];
+        return objects.map((object) => {
+          copyObject(object.source, object.unaccounted);
+          return { copy: async () => await copyObject(object.source, object.target) };
+        });
+      });
+      await copyOrganizationFiles({ inputs });
+    `;
+    expect(scan("src/example.ts", source)).toMatchObject([
+      { ledgerBound: false },
+      { ledgerBound: true },
+    ]);
+  });
+
+  test("recognizes a shared callback inside mapped writes and its flag-off path", () => {
+    const source = `
+      const write = async (file) => await writeS3ObjectWithRetry({ key: file.key });
+      if (env.FEATURE_FILE_USAGE_LIMITS) {
+        await writeOrganizationFiles(files.map((file) => ({ write: async () => await write(file) })));
+      } else {
+        for (const file of files) { await write(file); }
+      }
+      await writeS3ObjectWithRetry({ key: unrelated });
+    `;
+    expect(scan("src/example.ts", source)).toMatchObject([
+      { ledgerBound: true },
+      { ledgerBound: false },
+    ]);
+    expect(
+      scan(
+        "src/example.ts",
+        source.replace("await write(file) })))", "await unrelated(file) })))"),
+      ),
+    ).toMatchObject([{ ledgerBound: false }, { ledgerBound: false }]);
+  });
+
+  test("rejects shadowed producers and unrelated same-scope collections", () => {
+    const source = `
+      const prepareFile = async () => Result.ok({ copy: async () => await copyObject(source, target) });
+      const detached = [];
+      detached.push(...(await Promise.all(files.map(prepareFile))));
+      const prepared = [];
+      {
+        const prepareFile = async () => Result.ok({ copy: async () => await copyObject(source, otherTarget) });
+        prepared.push(...(await Promise.all(files.map(prepareFile))));
+      }
+      await copyOrganizationFiles({ inputs: Result.all(prepared).value });
+    `;
+    expect(scan("src/example.ts", source)).toMatchObject([
+      { ledgerBound: false },
+      { ledgerBound: true },
+    ]);
+  });
+
+  test("rejects a nested callback that is never invoked by the ledger writer", () => {
+    const source = `
+      const write = async () => await writeS3ObjectWithRetry({ key });
+      await writeOrganizationFiles(files.map(() => ({ write: async () => {
+        const unused = async () => await write();
+        return unrelated();
+      } })));
+    `;
+    expect(scan("src/example.ts", source)).toMatchObject([
+      { ledgerBound: false },
+    ]);
+  });
+
+  test("rejects writes carried by metadata and shadowed callback parameters", () => {
+    const source = `
+      const write = async () => await writeS3ObjectWithRetry({ key: detached });
+      await writeOrganizationFiles(files.map((write) => ({ write: async () => await write() })));
+      await copyOrganizationFiles({ inputs: [{
+        copy: async () => await copyObject(source, target),
+        metadata: async () => await copyObject(source, unaccounted),
+      }] });
+      await copyOrganizationFiles({ inputs: copyObject(source, eager) });
+      await copyOrganizationFiles({ inputs: files.map(() => unrelated, {
+        copy: async () => await copyObject(source, unusedThisArg),
+      }) });
+      await copyOrganizationFiles({ inputs: unrelated }, {
+        copy: async () => await copyObject(source, unusedSecondArgument),
+      });
+    `;
+    expect(scan("src/example.ts", source)).toMatchObject([
+      { ledgerBound: false },
+      { ledgerBound: true },
+      { ledgerBound: false },
+      { ledgerBound: false },
+      { ledgerBound: false },
+      { ledgerBound: false },
     ]);
   });
 

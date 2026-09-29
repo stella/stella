@@ -244,7 +244,7 @@ const backfillChatFilePage = async (
       catch: (cause) => cause,
     });
   })();
-  if (Result.isError(written)) {
+  if (written.status === "error") {
     await deleteThumbnailsBestEffort(
       prepared.map((thumbnail) => thumbnail.thumbnailKey),
     );

@@ -236,20 +236,11 @@ type UserFileCopyOutcome =
   | { kind: "copied"; copy: UserFileCopy; missingThumbnail: boolean }
   | { kind: "source-object-missing"; fileId: SafeId<"userFile"> };
 
-const copyUserFiles = async ({
-  copiedS3Keys,
-  files,
-  fileUsageDb,
-  organizationId,
-  userId,
-}: {
-  copiedS3Keys: string[];
-  files: SourceUserFileRow[];
-  fileUsageDb?: Parameters<typeof copyOrganizationFiles>[0]["db"];
-  organizationId: SafeId<"organization">;
-  userId: SafeId<"user">;
-}): Promise<Result<UserFileCopyOutcome[], HandlerError<409 | 500 | 503>>> => {
-  const staged = files.map((file) => {
+const stageUserFileCopies = (
+  files: SourceUserFileRow[],
+  userId: SafeId<"user">,
+) =>
+  files.map((file) => {
     const newFileId = createSafeId<"userFile">();
     const copiedThumbnailFileId =
       file.thumbnailFileId === null ? null : Bun.randomUUIDv7();
@@ -272,6 +263,21 @@ const copyUserFiles = async ({
             }),
     };
   });
+
+const copyUserFiles = async ({
+  copiedS3Keys,
+  files,
+  fileUsageDb,
+  organizationId,
+  userId,
+}: {
+  copiedS3Keys: string[];
+  files: SourceUserFileRow[];
+  fileUsageDb?: Parameters<typeof copyOrganizationFiles>[0]["db"];
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+}): Promise<Result<UserFileCopyOutcome[], HandlerError<409 | 500 | 503>>> => {
+  const staged = stageUserFileCopies(files, userId);
   const prepareFile = async (copy: (typeof staged)[number]) => {
     const thumbnailSource =
       copy.source.thumbnailFileId === null
@@ -435,7 +441,7 @@ const copyUserFiles = async ({
     const deleted = await deleteOrganizationFilesWithSignal(
       unusedThumbnailKeys,
       AbortSignal.timeout(10_000),
-      { fileUsageDb },
+      fileUsageDb === undefined ? {} : { fileUsageDb },
     );
     if (Result.isError(deleted)) {
       return Result.err(deleted.error);
@@ -482,7 +488,7 @@ const rollbackCopiedS3Keys = async (
       await deleteOrganizationFilesWithSignal(
         copiedS3Keys,
         AbortSignal.timeout(10_000),
-        { fileUsageDb },
+        fileUsageDb === undefined ? {} : { fileUsageDb },
       ),
     catch: (cause) =>
       new HandlerError({
