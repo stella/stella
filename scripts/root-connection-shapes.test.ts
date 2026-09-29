@@ -596,6 +596,20 @@ describe("modules that reach an owner-level handle", () => {
     expect([importsOf(mixed), typesOf(mixed)]).toEqual([1, 1]);
   });
 
+  test("an indexed import type counts the member it selects", () => {
+    for (const [line, expected] of [
+      ['export type Db = typeof import("@/api/db/root")["rootDb"];', 1],
+      ['export type Db = (typeof import("@/api/db/root"))["rlsDb"];', 1],
+      ['export type Tx = import("@/api/db/root")["Transaction"];', 0],
+    ] as const) {
+      expect([line, typesOf(line), importsOf(line)]).toEqual([
+        line,
+        expected,
+        0,
+      ]);
+    }
+  });
+
   test("the shared transaction type alone does not count", () => {
     for (const line of [
       'import type { Transaction } from "@/api/db/root";',

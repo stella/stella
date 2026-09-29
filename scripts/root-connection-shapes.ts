@@ -610,6 +610,7 @@ export const countRootConnectionShapes = (
 //   - a named import or re-export:     import { rootDb } / export { rlsDb as x }
 //   - a destructured dynamic import:   const { rootDb } = await import(...)
 //   - an import type query:            typeof import("@/api/db/root").rootDb
+//                                      typeof import("@/api/db/root")["rootDb"]
 //
 // A form that reaches the whole module counts both handles: a namespace import
 // or re-export (`import * as root`, `export *`, `export * as root`), an
@@ -662,8 +663,9 @@ const dynamicImportHandles = (call: ts.CallExpression): number => {
   return HANDLES_PER_MODULE;
 };
 
-// The handles an import type names: its qualifier's first name, or the whole
-// module when it names none.
+// The handles an import type names: its qualifier's first name, the string
+// index that selects a member (`import("…")["rootDb"]`), or the whole module
+// when it names neither.
 const importTypeHandles = (node: ts.ImportTypeNode): number => {
   let head = node.qualifier;
   while (head !== undefined && ts.isQualifiedName(head)) {
@@ -671,6 +673,19 @@ const importTypeHandles = (node: ts.ImportTypeNode): number => {
   }
   if (head !== undefined) {
     return isRootConnectionExport(head.text) ? 1 : 0;
+  }
+  let selected: ts.Node = node;
+  while (ts.isParenthesizedTypeNode(selected.parent)) {
+    selected = selected.parent;
+  }
+  const access = selected.parent;
+  if (
+    ts.isIndexedAccessTypeNode(access) &&
+    access.objectType === selected &&
+    ts.isLiteralTypeNode(access.indexType) &&
+    ts.isStringLiteral(access.indexType.literal)
+  ) {
+    return isRootConnectionExport(access.indexType.literal.text) ? 1 : 0;
   }
   return HANDLES_PER_MODULE;
 };
