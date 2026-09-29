@@ -135,7 +135,7 @@ const sanitizeInput = (
  */
 export const LEGISLATION_WRITER_CONTRACT = "expression-v1";
 
-const declareWriterContract = async (tx: Transaction): Promise<void> => {
+export const declareWriterContract = async (tx: Transaction): Promise<void> => {
   await tx.execute(
     sql`SELECT set_config('stella.legislation_writer_contract', ${LEGISLATION_WRITER_CONTRACT}, true)`,
   );
