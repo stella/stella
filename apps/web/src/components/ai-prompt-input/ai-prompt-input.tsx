@@ -1,7 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { getRouteApi } from "@tanstack/react-router";
 import type { AnyExtension } from "@tiptap/core";
 import History from "@tiptap/extension-history";
 import Paragraph from "@tiptap/extension-paragraph";
@@ -38,11 +37,10 @@ import {
 } from "@/components/prompt-editor.logic";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { skillsOptions } from "@/lib/knowledge/queries";
 import { useChatUnavailableSkillIds } from "@/lib/prompts/use-chat-unavailable-skills";
-
-const protectedRouteApi = getRouteApi("/_protected");
 
 /**
  * How the controlled string `value` round-trips through the editor.
@@ -114,9 +112,7 @@ export const AIPromptInput = ({
   aiEditAction,
   className,
 }: AIPromptInputProps) => {
-  const activeOrganizationId = protectedRouteApi.useRouteContext({
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const {
     data: skillPages,
     fetchNextPage: fetchNextSkillPage,

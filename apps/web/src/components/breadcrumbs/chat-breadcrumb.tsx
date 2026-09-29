@@ -1,5 +1,4 @@
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { getRouteApi } from "@tanstack/react-router";
 
 import { BreadcrumbItem } from "@stll/ui/breadcrumb";
 
@@ -11,10 +10,9 @@ import {
   groupedChatThreadsOptions,
   mergeGroupedChatThreadPages,
 } from "@/features/chat/queries";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
-
-const protectedRoute = getRouteApi("/_protected");
 
 // Thread-title crumb for chat routes. Reuses the grouped-threads list already
 // primed by the sidebar / threads sheet (a lightweight query that never
@@ -38,9 +36,7 @@ export const ChatBreadcrumb = ({
   threadId: string;
   workspaceId?: string | undefined;
 }) => {
-  const activeOrganizationId = protectedRoute.useRouteContext({
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const { data: groupedThread } = useInfiniteQuery({
     ...groupedChatThreadsOptions({ activeOrganizationId }),
     select: (data) => selectThreadTitleSummary(data.pages, threadId),

@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
-import { getRouteApi } from "@tanstack/react-router";
 
 import type { api } from "@/lib/api";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import {
   templateDetailOptions,
   templateFillDiscoverOptions,
@@ -28,14 +28,10 @@ type TemplateFillSchema =
   | { state: "error" }
   | { state: "ready"; fileName: string; schema: DiscoverData };
 
-const protectedRouteApi = getRouteApi("/_protected");
-
 export const useTemplateFillSchema = (
   templateId: string,
 ): TemplateFillSchema => {
-  const activeOrganizationId = protectedRouteApi.useRouteContext({
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
 
   const detailOptions = templateDetailOptions(activeOrganizationId, templateId);
   const { data: detailData, isError: detailError } = useQuery(detailOptions);
