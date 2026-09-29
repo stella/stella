@@ -27,6 +27,7 @@ const C = "20260929000200_runner_c";
 const CREATE_PROBE =
   "CREATE TABLE migration_probe (event text NOT NULL);--> statement-breakpoint\n" +
   "INSERT INTO migration_probe (event) VALUES ('A');";
+const REWRITTEN_CREATE_PROBE = `-- alias rewrite in a newer bundle\n${CREATE_PROBE}`;
 const INSERT_B = "INSERT INTO migration_probe (event) VALUES ('B');";
 const INSERT_C = "INSERT INTO migration_probe (event) VALUES ('C');";
 const CREATE_PROBE_B = `CREATE TABLE migration_probe (event text NOT NULL);--> statement-breakpoint\n${INSERT_B}`;
@@ -411,13 +412,13 @@ if (!runPostgresTests || databaseUrl === undefined) {
       });
     });
 
-    test("a stale bundle no-ops only when it has nothing pending, and startup accepts it", async () => {
+    test("rollback across an alias rewrite and a newer migration no-ops, starts, or refuses pending SQL", async () => {
       await withBundle(
         [{ name: A, sql: CREATE_PROBE }],
         async (olderFolder) => {
           await withBundle(
             [
-              { name: A, sql: CREATE_PROBE },
+              { name: A, sql: REWRITTEN_CREATE_PROBE },
               { name: B, sql: INSERT_B },
             ],
             async (newerFolder) => {
@@ -444,6 +445,8 @@ if (!runPostgresTests || databaseUrl === undefined) {
                         status: "stale_bundle_noop",
                         unknownCount: 1,
                         newestUnknownName: B,
+                        mismatchCount: 1,
+                        mismatchedNames: [A],
                       });
                       expect(stdout.mock.calls).toHaveLength(1);
                       const noopLine = String(stdout.mock.calls.at(0)?.at(0));
@@ -453,21 +456,48 @@ if (!runPostgresTests || databaseUrl === undefined) {
                         level: "warn",
                         unknownCount: 1,
                         newestUnknownName: B,
+                        unknownNames: [B],
+                        mismatchCount: 1,
+                        mismatchedNames: [A],
                       });
                     } finally {
                       stdout.mockRestore();
                     }
                     expect(onlineRuns).toBe(0);
-                    await assertMigrationHistory({
-                      context: "startup",
-                      migrationsDir: olderFolder,
-                      queryAppliedRows: async () =>
-                        (await ledgerRows(observer)).map(({ name, hash }) => ({
-                          name,
-                          hash,
-                        })),
-                      remedy: "Run migrations",
-                    });
+                    const startupStdout = spyOn(
+                      process.stdout,
+                      "write",
+                    ).mockImplementation(() => true);
+                    try {
+                      await assertMigrationHistory({
+                        context: "startup",
+                        migrationsDir: olderFolder,
+                        queryAppliedRows: async () =>
+                          (await ledgerRows(observer)).map(
+                            ({ name, hash }) => ({
+                              name,
+                              hash,
+                            }),
+                          ),
+                        remedy: "Run migrations",
+                      });
+                      expect(startupStdout.mock.calls).toHaveLength(1);
+                      expect(
+                        JSON.parse(
+                          String(startupStdout.mock.calls.at(0)?.at(0)),
+                        ),
+                      ).toEqual({
+                        event: "migrate.ledger_ahead",
+                        level: "warn",
+                        unknownCount: 1,
+                        newestUnknownName: B,
+                        unknownNames: [B],
+                        mismatchCount: 1,
+                        mismatchedNames: [A],
+                      });
+                    } finally {
+                      startupStdout.mockRestore();
+                    }
 
                     const stderr = spyOn(
                       process.stderr,
@@ -492,6 +522,9 @@ if (!runPostgresTests || databaseUrl === undefined) {
                         level: "error",
                         unknownCount: 1,
                         newestUnknownName: B,
+                        unknownNames: [B],
+                        mismatchCount: 1,
+                        mismatchedNames: [A],
                       });
                     } finally {
                       stderr.mockRestore();

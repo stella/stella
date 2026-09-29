@@ -7,7 +7,10 @@ import { getMigrationsToRun } from "drizzle-orm/migrator.utils";
 import { migrate as pgCoreMigrate } from "drizzle-orm/pg-core";
 
 import migrationAliasInventory from "../lib/db/migration-alias-inventory.json";
-import { assertMigrationHistory } from "../lib/db/migration-history";
+import {
+  assertMigrationHistory,
+  LEDGER_AHEAD_NAME_LIMIT,
+} from "../lib/db/migration-history";
 import {
   planLedgerAdoption,
   validateLedger,
@@ -33,32 +36,38 @@ type StaleBundleDecision =
   | {
       status: "stale_bundle_noop" | "stale_bundle_refused";
       unknownCount: number;
-      newestUnknownName: string;
+      newestUnknownName: string | null;
+      unknownNames: readonly string[];
+      mismatchCount: number;
+      mismatchedNames: readonly string[];
     };
 
-// Provisional option A: one policy boundary for a runner using an older bundle.
-export const decideStaleBundleOptionA = (
+// One policy boundary for receipts an older bundle cannot explain.
+export const decideLedgerAheadPolicy = (
   violations: ReturnType<typeof validateLedger>,
 ): StaleBundleDecision => {
   const unknown = violations.filter(
     (violation) => violation.type === "unknown-name",
   );
-  if (unknown.length === 0) {
+  const mismatched = violations.filter(
+    (violation) => violation.type === "hash-mismatch",
+  );
+  if (unknown.length === 0 && mismatched.length === 0) {
     return { status: "ready" };
   }
-  const newestUnknownName = unknown
-    .map(({ name }) => name)
-    .toSorted()
-    .at(-1);
-  if (newestUnknownName === undefined) {
-    panic("Missing unknown migration name");
-  }
+  const unknownNames = [...new Set(unknown.map(({ name }) => name))].toSorted();
+  const mismatchedNames = [
+    ...new Set(mismatched.map(({ name }) => name)),
+  ].toSorted();
   return {
-    status: unknown.some(({ pending }) => pending)
+    status: [...unknown, ...mismatched].some(({ pending }) => pending)
       ? "stale_bundle_refused"
       : "stale_bundle_noop",
     unknownCount: unknown.length,
-    newestUnknownName,
+    newestUnknownName: unknownNames.at(-1) ?? null,
+    unknownNames: unknownNames.slice(0, LEDGER_AHEAD_NAME_LIMIT),
+    mismatchCount: mismatched.length,
+    mismatchedNames: mismatchedNames.slice(0, LEDGER_AHEAD_NAME_LIMIT),
   };
 };
 
@@ -169,12 +178,12 @@ const preflightAndAdopt = async ({
       inventory: migrationAliasInventory,
     });
     const otherViolations = violations.filter(
-      ({ type }) => type !== "unknown-name",
+      ({ type }) => type !== "unknown-name" && type !== "hash-mismatch",
     );
     if (otherViolations.length > 0) {
       panic(`Migration preflight: ${JSON.stringify(otherViolations)}`);
     }
-    const staleBundle = decideStaleBundleOptionA(violations);
+    const staleBundle = decideLedgerAheadPolicy(violations);
     if (staleBundle.status !== "ready") {
       return staleBundle;
     }
@@ -310,10 +319,15 @@ export const runMigrations = async ({
         level: preflight.status === "stale_bundle_refused" ? "error" : "warn",
         unknownCount: preflight.unknownCount,
         newestUnknownName: preflight.newestUnknownName,
+        unknownNames: preflight.unknownNames,
+        mismatchCount: preflight.mismatchCount,
+        mismatchedNames: preflight.mismatchedNames,
       };
       if (preflight.status === "stale_bundle_refused") {
         process.stderr.write(`${JSON.stringify(event)}\n`);
-        panic("Migration preflight: stale bundle has pending SQL");
+        panic(
+          `Migration preflight: stale bundle has pending SQL${preflight.mismatchCount > 0 ? " (hash-mismatch)" : ""}`,
+        );
       }
       process.stdout.write(`${JSON.stringify(event)}\n`);
       return preflight;

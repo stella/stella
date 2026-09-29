@@ -137,6 +137,7 @@ describe("migration ledger adoption", () => {
       rowId: 1,
       name: A,
       hash: "other",
+      pending: false,
     });
     expect(
       validateLedger({
@@ -159,6 +160,7 @@ describe("migration ledger adoption", () => {
       rowId: 1,
       name: A,
       hash: "orphan",
+      pending: false,
     });
   });
 

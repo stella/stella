@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import fc from "fast-check";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -10,6 +10,7 @@ import {
   assertMigrationHistory,
   findUnappliedMigrations,
   REWRITTEN_MIGRATION_HISTORIES,
+  summarizeLedgerAhead,
 } from "./migration-history";
 
 const MIGRATIONS_DIR = nodePath.resolve(import.meta.dir, "../../../drizzle");
@@ -144,7 +145,7 @@ describe("migration history invariant", () => {
     ).toEqual([]);
   });
 
-  test("allows an older bundle to start with extra newer ledger rows", async () => {
+  test("allows startup after a newer alias rewrite and a newer migration, with one raw event", async () => {
     const migrationsDir = mkdtempSync(
       nodePath.join(tmpdir(), "stella-startup-migrations-"),
     );
@@ -152,19 +153,53 @@ describe("migration history invariant", () => {
       const name = "20260929000000_bundled";
       const sqlText = "SELECT 1;";
       const hash = new Bun.CryptoHasher("sha256").update(sqlText).digest("hex");
+      const rewrittenHash = new Bun.CryptoHasher("sha256")
+        .update(`-- rewritten\n${sqlText}`)
+        .digest("hex");
+      const newerName = "20260930000000_newer";
       const folder = nodePath.join(migrationsDir, name);
       mkdirSync(folder);
       writeFileSync(nodePath.join(folder, "migration.sql"), sqlText);
-
-      await assertMigrationHistory({
-        context: "startup",
-        migrationsDir,
-        queryAppliedRows: async () => [
-          { name, hash },
-          { name: "20260930000000_newer", hash: "newer-hash" },
-        ],
-        remedy: "No remedy.",
+      const appliedRows = [
+        { name, hash: rewrittenHash },
+        { name: newerName, hash: "newer-hash" },
+      ];
+      expect(hash).not.toBe(rewrittenHash);
+      expect(
+        summarizeLedgerAhead({
+          appliedRows,
+          localMigrations: [{ name, hash }],
+        }),
+      ).toEqual({
+        unknownCount: 1,
+        newestUnknownName: newerName,
+        unknownNames: [newerName],
+        mismatchCount: 1,
+        mismatchedNames: [name],
       });
+      const stdout = spyOn(process.stdout, "write").mockImplementation(
+        () => true,
+      );
+      try {
+        await assertMigrationHistory({
+          context: "startup",
+          migrationsDir,
+          queryAppliedRows: async () => appliedRows,
+          remedy: "No remedy.",
+        });
+        expect(stdout.mock.calls).toHaveLength(1);
+        expect(JSON.parse(String(stdout.mock.calls.at(0)?.at(0)))).toEqual({
+          event: "migrate.ledger_ahead",
+          level: "warn",
+          unknownCount: 1,
+          newestUnknownName: newerName,
+          unknownNames: [newerName],
+          mismatchCount: 1,
+          mismatchedNames: [name],
+        });
+      } finally {
+        stdout.mockRestore();
+      }
     } finally {
       rmSync(migrationsDir, { recursive: true, force: true });
     }

@@ -98,6 +98,47 @@ type FindUnappliedMigrationsOptions = {
   localMigrations: LocalMigration[];
 };
 
+export const LEDGER_AHEAD_NAME_LIMIT = 20;
+
+const acceptedHashesFor = ({
+  name,
+  hash,
+}: LocalMigration): readonly string[] => {
+  const supportedHistory = REWRITTEN_MIGRATION_HISTORIES[name];
+  return supportedHistory?.currentHash === hash
+    ? [hash, ...supportedHistory.priorHashes]
+    : [hash];
+};
+
+export const summarizeLedgerAhead = ({
+  appliedRows,
+  localMigrations,
+}: FindUnappliedMigrationsOptions) => {
+  const bundledByName = new Map(
+    localMigrations.map((migration) => [migration.name, migration]),
+  );
+  const unknown: string[] = [];
+  const mismatched: string[] = [];
+  for (const { name, hash } of appliedRows) {
+    if (name === null) {
+      continue;
+    }
+    const bundled = bundledByName.get(name);
+    if (bundled === undefined) {
+      unknown.push(name);
+    } else if (!acceptedHashesFor(bundled).includes(hash)) {
+      mismatched.push(name);
+    }
+  }
+  return {
+    unknownCount: unknown.length,
+    newestUnknownName: unknown.toSorted().at(-1) ?? null,
+    unknownNames: [...new Set(unknown)].toSorted(),
+    mismatchCount: mismatched.length,
+    mismatchedNames: [...new Set(mismatched)].toSorted(),
+  };
+};
+
 export const findUnappliedMigrations = ({
   appliedRows,
   localMigrations,
@@ -131,11 +172,7 @@ export const findUnappliedMigrations = ({
   };
 
   return localMigrations.filter(({ hash, name }) => {
-    const supportedHistory = REWRITTEN_MIGRATION_HISTORIES[name];
-    const acceptedHashes =
-      supportedHistory?.currentHash === hash
-        ? [hash, ...supportedHistory.priorHashes]
-        : [hash];
+    const acceptedHashes = acceptedHashesFor({ hash, name });
     const namedHashes = hashesByName.get(name);
     if (namedHashes !== undefined) {
       return !acceptedHashes.some((candidate) => namedHashes.has(candidate));
@@ -192,10 +229,33 @@ export const assertMigrationHistory = async ({
   }
 
   const appliedRows = await queryAppliedRows();
+  const ahead = summarizeLedgerAhead({ appliedRows, localMigrations });
+  if (
+    context === "startup" &&
+    (ahead.unknownCount > 0 || ahead.mismatchCount > 0)
+  ) {
+    process.stdout.write(
+      `${JSON.stringify({
+        event: "migrate.ledger_ahead",
+        level: "warn",
+        unknownCount: ahead.unknownCount,
+        newestUnknownName: ahead.newestUnknownName,
+        unknownNames: ahead.unknownNames.slice(0, LEDGER_AHEAD_NAME_LIMIT),
+        mismatchCount: ahead.mismatchCount,
+        mismatchedNames: ahead.mismatchedNames.slice(
+          0,
+          LEDGER_AHEAD_NAME_LIMIT,
+        ),
+      })}\n`,
+    );
+  }
   const unapplied = findUnappliedMigrations({
     appliedRows,
     localMigrations,
-  });
+  }).filter(
+    ({ name }) =>
+      context !== "startup" || !ahead.mismatchedNames.includes(name),
+  );
   if (unapplied.length === 0) {
     return;
   }

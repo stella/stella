@@ -139,7 +139,13 @@ type LedgerViolation =
       candidateNames: readonly string[];
     }
   | { type: "unknown-name"; rowId: number; name: string; pending: boolean }
-  | { type: "hash-mismatch"; rowId: number; name: string; hash: string };
+  | {
+      type: "hash-mismatch";
+      rowId: number;
+      name: string;
+      hash: string;
+      pending: boolean;
+    };
 
 export const validateLedger = ({
   receipts,
@@ -219,6 +225,7 @@ export const validateLedger = ({
         rowId: receipt.id,
         name: receipt.name,
         hash: receipt.hash,
+        pending,
       });
     }
   }

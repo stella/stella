@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 
 import { validateLedger } from "../lib/db/migration-ledger";
-import { decideStaleBundleOptionA } from "./migration-runner";
+import { decideLedgerAheadPolicy } from "./migration-runner";
 
 const A = "20260929100000_first";
 const B = "20260929110000_second";
@@ -20,7 +20,7 @@ const receipt = (id: number, name: string, hash: string) => ({
   created_at: id,
 });
 
-test("option A refuses stale bundles with pending SQL and no-ops otherwise", () => {
+test("ledger-ahead policy refuses pending SQL and no-ops otherwise", () => {
   const applied = receipt(1, A, "first");
   const newer = receipt(2, NEWER, "newer");
   const pending = validateLedger({
@@ -28,10 +28,13 @@ test("option A refuses stale bundles with pending SQL and no-ops otherwise", () 
     bundle,
     inventory: [],
   });
-  expect(decideStaleBundleOptionA(pending)).toEqual({
+  expect(decideLedgerAheadPolicy(pending)).toEqual({
     status: "stale_bundle_refused",
     unknownCount: 1,
     newestUnknownName: NEWER,
+    unknownNames: [NEWER],
+    mismatchCount: 0,
+    mismatchedNames: [],
   });
 
   const complete = validateLedger({
@@ -44,13 +47,16 @@ test("option A refuses stale bundles with pending SQL and no-ops otherwise", () 
     bundle,
     inventory: [],
   });
-  expect(decideStaleBundleOptionA(complete)).toEqual({
+  expect(decideLedgerAheadPolicy(complete)).toEqual({
     status: "stale_bundle_noop",
     unknownCount: 2,
     newestUnknownName: NEWEST,
+    unknownNames: [NEWER, NEWEST],
+    mismatchCount: 0,
+    mismatchedNames: [],
   });
   expect(
-    decideStaleBundleOptionA(
+    decideLedgerAheadPolicy(
       validateLedger({
         receipts: [applied, receipt(3, B, "second")],
         bundle,
@@ -58,4 +64,42 @@ test("option A refuses stale bundles with pending SQL and no-ops otherwise", () 
       }),
     ),
   ).toEqual({ status: "ready" });
+});
+
+test("an alias rewrite ahead of this bundle joins an unknown migration in the rollback decision", () => {
+  const newerLedger = [receipt(1, A, "h2"), receipt(2, NEWER, "newer")];
+  const olderA = { name: A, hash: "h1", folderMillis: 1, sql: ["SELECT 1;"] };
+  const olderBundle = [olderA];
+  expect(
+    decideLedgerAheadPolicy(
+      validateLedger({
+        receipts: newerLedger,
+        bundle: olderBundle,
+        inventory: [],
+      }),
+    ),
+  ).toEqual({
+    status: "stale_bundle_noop",
+    unknownCount: 1,
+    newestUnknownName: NEWER,
+    unknownNames: [NEWER],
+    mismatchCount: 1,
+    mismatchedNames: [A],
+  });
+  expect(
+    decideLedgerAheadPolicy(
+      validateLedger({
+        receipts: newerLedger,
+        bundle: [
+          olderA,
+          { name: B, hash: "second", folderMillis: 2, sql: ["SELECT 2;"] },
+        ],
+        inventory: [],
+      }),
+    ),
+  ).toMatchObject({
+    status: "stale_bundle_refused",
+    unknownCount: 1,
+    mismatchCount: 1,
+  });
 });
