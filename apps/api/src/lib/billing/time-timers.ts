@@ -55,18 +55,22 @@ type ReadOwnedTimerOptions = {
   tx: Transaction;
   owner: TimerOwner;
   id: SafeId<"timeTimer">;
+  lock?: "update" | "advisory";
 };
 export const readOwnedTimer = async ({
   tx,
   owner,
   id,
+  lock = "update",
 }: ReadOwnedTimerOptions) => {
-  const [timer] = await tx
+  const query = tx
     .select()
     .from(timeTimers)
     .where(and(ownedTimers(owner), eq(timeTimers.id, id)))
-    .limit(1)
-    .for("update");
+    .limit(1);
+  // Admin completion has DELETE permission only; the owner advisory lock
+  // serializes its read with every timer mutation without an UPDATE policy.
+  const [timer] = lock === "update" ? await query.for("update") : await query;
   return timer;
 };
 

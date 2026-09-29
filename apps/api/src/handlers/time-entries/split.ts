@@ -3,6 +3,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
+import { guardRunningTimeEntries } from "@/api/handlers/time-entries/running";
 import { apportionSplitDurations } from "@/api/handlers/time-entries/split-durations";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -44,7 +45,14 @@ const splitEntry = createSafeHandler(
     access: "write",
     body: splitEntryBodySchema,
   },
-  async function* ({ safeDb, session, workspaceId, body, recordAuditEvent }) {
+  async function* ({
+    safeDb,
+    session,
+    user,
+    workspaceId,
+    body,
+    recordAuditEvent,
+  }) {
     const totalPercentage = body.splits.reduce(
       (sum, s) => sum + s.percentage,
       0,
@@ -158,6 +166,15 @@ const splitEntry = createSafeHandler(
     // advisory lock to prevent TOCTOU on the workspace limit.
     const txResult = yield* Result.await(
       safeDb(async (tx) => {
+        const runningError = await guardRunningTimeEntries({
+          tx,
+          workspaceId,
+          ids: [body.id],
+          actorUserId: user.id,
+        });
+        if (runningError) {
+          return { ok: false as const, error: runningError };
+        }
         const netNew = body.splits.length - 1;
         if (netNew > 0) {
           await tx.execute(
@@ -287,6 +304,9 @@ const splitEntry = createSafeHandler(
     );
 
     if (!txResult.ok) {
+      if ("error" in txResult) {
+        return Result.err(txResult.error);
+      }
       return Result.err(
         new HandlerError({
           status: 400,

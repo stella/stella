@@ -3,6 +3,7 @@ import { and, eq, inArray, ne } from "drizzle-orm";
 import { t } from "elysia";
 
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
+import { guardRunningTimeEntries } from "@/api/handlers/time-entries/running";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
@@ -62,7 +63,14 @@ const batchDelete = createSafeHandler(
     access: "write",
     body: batchDeleteBodySchema,
   },
-  async function* ({ safeDb, session, workspaceId, body, recordAuditEvent }) {
+  async function* ({
+    safeDb,
+    session,
+    user,
+    workspaceId,
+    body,
+    recordAuditEvent,
+  }) {
     const { ids } = body;
     const policy = yield* Result.await(
       readTimePolicy({
@@ -75,6 +83,15 @@ const batchDelete = createSafeHandler(
     // Wrapped in a transaction for atomicity.
     const updated = yield* Result.await(
       safeDb(async (tx) => {
+        const runningError = await guardRunningTimeEntries({
+          tx,
+          workspaceId,
+          ids,
+          actorUserId: user.id,
+        });
+        if (runningError) {
+          return { type: "policy" as const, error: runningError, rows: [] };
+        }
         const candidates = await tx
           .select({
             dateWorked: timeEntries.dateWorked,

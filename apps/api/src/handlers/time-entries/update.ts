@@ -7,6 +7,7 @@ import { BILLING_STATUS } from "@stll/api-contract";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { timeEntries } from "@/api/db/schema";
+import { guardRunningTimeEntries } from "@/api/handlers/time-entries/running";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -290,6 +291,15 @@ export const updateTimeEntryHandler = async function* ({
 
   const updated = yield* Result.await(
     safeDb(async (tx) => {
+      const runningError = await guardRunningTimeEntries({
+        tx,
+        workspaceId,
+        ids: [body.id],
+        actorUserId: actor.userId,
+      });
+      if (runningError) {
+        return runningError;
+      }
       const rows = await tx
         .update(timeEntries)
         .set(updates)
@@ -343,6 +353,9 @@ export const updateTimeEntryHandler = async function* ({
     }),
   );
 
+  if (HandlerError.is(updated)) {
+    return Result.err(updated);
+  }
   if (!updated) {
     return Result.err(
       new HandlerError({

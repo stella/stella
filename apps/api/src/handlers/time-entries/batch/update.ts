@@ -3,6 +3,7 @@ import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
+import { guardRunningTimeEntries } from "@/api/handlers/time-entries/running";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
@@ -154,7 +155,14 @@ const batchUpdate = createSafeHandler(
     access: "write",
     body: batchUpdateBodySchema,
   },
-  async function* ({ safeDb, session, workspaceId, body, recordAuditEvent }) {
+  async function* ({
+    safeDb,
+    session,
+    user,
+    workspaceId,
+    body,
+    recordAuditEvent,
+  }) {
     const { ids, action } = body;
     const policy = yield* Result.await(
       readTimePolicy({
@@ -173,6 +181,15 @@ const batchUpdate = createSafeHandler(
       case "approve": {
         const rows = yield* Result.await(
           safeDb(async (tx) => {
+            const runningError = await guardRunningTimeEntries({
+              tx,
+              workspaceId,
+              ids,
+              actorUserId: user.id,
+            });
+            if (runningError) {
+              return { type: "policy" as const, error: runningError, rows: [] };
+            }
             const blockers = await tx
               .select({
                 billable: timeEntries.billable,
@@ -247,6 +264,15 @@ const batchUpdate = createSafeHandler(
       case "revert_to_draft": {
         const rows = yield* Result.await(
           safeDb(async (tx) => {
+            const runningError = await guardRunningTimeEntries({
+              tx,
+              workspaceId,
+              ids,
+              actorUserId: user.id,
+            });
+            if (runningError) {
+              return { type: "policy" as const, error: runningError, rows: [] };
+            }
             const candidates = await tx
               .select({
                 dateWorked: timeEntries.dateWorked,
@@ -288,6 +314,15 @@ const batchUpdate = createSafeHandler(
       case "mark_billable": {
         const result = yield* Result.await(
           safeDb(async (tx) => {
+            const runningError = await guardRunningTimeEntries({
+              tx,
+              workspaceId,
+              ids,
+              actorUserId: user.id,
+            });
+            if (runningError) {
+              return { type: "policy" as const, error: runningError, rows: [] };
+            }
             const candidates = await tx
               .select({
                 currency: timeEntries.currency,
@@ -448,6 +483,15 @@ const batchUpdate = createSafeHandler(
       case "mark_non_billable": {
         const rows = yield* Result.await(
           safeDb(async (tx) => {
+            const runningError = await guardRunningTimeEntries({
+              tx,
+              workspaceId,
+              ids,
+              actorUserId: user.id,
+            });
+            if (runningError) {
+              return { type: "policy" as const, error: runningError, rows: [] };
+            }
             const candidates = await tx
               .select({
                 dateWorked: timeEntries.dateWorked,

@@ -4,6 +4,8 @@ import { authMacro, permissionMacro } from "@/api/lib/auth";
 import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
 import { createStandardApiRateLimitOptions } from "@/api/lib/rate-limit/standard-api";
 
+import adminList from "./admin/list";
+import adminStop from "./admin/stop";
 import confirm from "./confirm";
 import discard from "./discard";
 import list from "./list";
@@ -20,6 +22,15 @@ export const timeTimersRoute = new Elysia({ prefix: "/v1/time-timers" })
   .get("/", list.handler, {
     query: list.config.query,
     permissions: list.config.permissions,
+  })
+  .get("/admin", adminList.handler, {
+    query: adminList.config.query,
+    permissions: adminList.config.permissions,
+  })
+  .post("/admin/:id/stop", adminStop.handler, {
+    params: adminStop.config.params,
+    body: adminStop.config.body,
+    permissions: adminStop.config.permissions,
   })
   .post("/start", start.handler, {
     body: start.config.body,

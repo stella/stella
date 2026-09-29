@@ -19,6 +19,7 @@ import {
   SIGNAL_SEVERITY,
 } from "@stll/api-contract/signals";
 
+import { member } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawResearchAnswers,
@@ -106,6 +107,8 @@ import listSignals from "@/api/handlers/signals/list";
 import readTaskById from "@/api/handlers/tasks/get";
 import getTemplate from "@/api/handlers/templates/get";
 import readTimeEntryById from "@/api/handlers/time-entries/get";
+import listAdminTimers from "@/api/handlers/time-timers/admin/list";
+import stopAdminTimer from "@/api/handlers/time-timers/admin/stop";
 import listMyTimeTimers from "@/api/handlers/time-timers/list";
 import readUserFileContent from "@/api/handlers/user-files/read-content";
 import readUserFileThumbnail from "@/api/handlers/user-files/read-thumbnail";
@@ -236,6 +239,12 @@ const documentTranslationSourceFileB = toSafeId<"userFile">(
 );
 const workObligationEntityB = toSafeId<"entity">(
   "22222222-2222-4222-8222-222222222250",
+);
+const adminTimeTimerB = toSafeId<"timeTimer">(
+  "22222222-2222-4222-8222-222222222273",
+);
+const stopTimeTimerB = toSafeId<"timeTimer">(
+  "22222222-2222-4222-8222-222222222274",
 );
 const timeTimerB = toSafeId<"timeTimer">(
   "22222222-2222-4222-8222-222222222260",
@@ -919,6 +928,63 @@ const isolationCases: IsolationCase[] = [
       await runHandler(listMyTimeTimers, sameUserWorkspaceB, { query: {} }),
     expectDenied: (result) => expectPageExcludesId(result, timeTimerB),
     expectPositive: (result) => expectPageContainsId(result, timeTimerB),
+  },
+  {
+    name: "admin timer listing across organizations",
+    runAAgainstB: async ({ ids: testIds }) =>
+      await runHandler(
+        listAdminTimers,
+        createWorkspaceContext({
+          activeWorkspaceIds: [testIds.wsA1],
+          organizationId: testIds.orgA,
+          userId: testIds.userAdmin,
+          workspaceId: testIds.wsA1,
+        }),
+        { query: {} },
+      ),
+    runBPositive: async ({ ids: testIds }) =>
+      await runHandler(
+        listAdminTimers,
+        createWorkspaceContext({
+          activeWorkspaceIds: [testIds.wsB1],
+          organizationId: testIds.orgB,
+          userId: testIds.userAdmin,
+          workspaceId: testIds.wsB1,
+        }),
+        { query: {} },
+      ),
+    expectDenied: (result) => expectPageExcludesId(result, adminTimeTimerB),
+    expectPositive: (result) => expectPageContainsId(result, adminTimeTimerB),
+  },
+  {
+    name: "admin timer stop across organizations",
+    runAAgainstB: async ({ ids: testIds }) =>
+      await runHandler(
+        stopAdminTimer,
+        createWorkspaceContext({
+          activeWorkspaceIds: [testIds.wsA1],
+          organizationId: testIds.orgA,
+          userId: testIds.userAdmin,
+          workspaceId: testIds.wsA1,
+        }),
+        { params: { id: stopTimeTimerB }, body: { timezoneId: "UTC" } },
+      ),
+    runBPositive: async ({ ids: testIds }) =>
+      await runHandler(
+        stopAdminTimer,
+        createWorkspaceContext({
+          activeWorkspaceIds: [testIds.wsB1],
+          organizationId: testIds.orgB,
+          userId: testIds.userAdmin,
+          workspaceId: testIds.wsB1,
+        }),
+        { params: { id: stopTimeTimerB }, body: { timezoneId: "UTC" } },
+      ),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) => {
+      expect(getStatusCode(result)).toBeNull();
+      expect(result).toHaveProperty("id");
+    },
   },
   {
     name: "rate table entries list",
@@ -1908,6 +1974,37 @@ beforeAll(async () => {
     status: WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
     ownerUserId: ids.userB1,
   });
+  await testDb.insert(member).values({
+    id: Bun.randomUUIDv7(),
+    organizationId: ids.orgB,
+    userId: ids.userAdmin,
+    role: "admin",
+    createdAt: new Date(),
+  });
+  await testDb.insert(timeTimers).values([
+    {
+      id: adminTimeTimerB,
+      organizationId: ids.orgB,
+      userId: ids.userA1,
+      workspaceId: ids.wsB1,
+      description: "Research",
+      state: "running",
+      startedAt: new Date(),
+      lastResumedAt: new Date(),
+      accumulatedSeconds: 300,
+    },
+    {
+      id: stopTimeTimerB,
+      organizationId: ids.orgB,
+      userId: ids.userB1,
+      workspaceId: ids.wsB1,
+      description: "Research",
+      state: "running",
+      startedAt: new Date(),
+      lastResumedAt: new Date(),
+      accumulatedSeconds: 300,
+    },
+  ]);
   await testDb.insert(timeTimers).values({
     id: timeTimerB,
     organizationId: ids.orgB,

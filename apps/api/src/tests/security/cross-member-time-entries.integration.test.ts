@@ -7,13 +7,16 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { ElysiaCustomStatusResponse } from "elysia/error";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
+  auditLogs,
+  organizationSettings,
+  timeTimers,
   entities,
   TIME_ENTRY_SOURCE,
   timeEntries,
@@ -27,8 +30,20 @@ import batchUpdate from "@/api/handlers/time-entries/batch/update";
 import deleteTimeEntryById from "@/api/handlers/time-entries/delete";
 import splitEntry from "@/api/handlers/time-entries/split";
 import updateTimeEntryById from "@/api/handlers/time-entries/update";
+import adminListTimers from "@/api/handlers/time-timers/admin/list";
+import adminStopTimer from "@/api/handlers/time-timers/admin/stop";
 import confirmTimer from "@/api/handlers/time-timers/confirm";
+import discardTimer from "@/api/handlers/time-timers/discard";
+import listTimers from "@/api/handlers/time-timers/list";
+import pauseTimer from "@/api/handlers/time-timers/pause";
+import resumeTimer from "@/api/handlers/time-timers/resume";
+import updateTimer from "@/api/handlers/time-timers/update";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  createBackgroundAuditRecorder,
+} from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -193,11 +208,11 @@ const readSplitSuccessors = async (id: SafeId<"timeEntry">) =>
 
 // ── Handler contexts ───────────────────────────────────
 
-const contextFor = (name: ActorName) => {
+const contextFor = (name: ActorName, recordAuditEvent = noopAuditRecorder) => {
   const actor = actors[name];
   const workspaceIds = [workspaceId];
   return {
-    createAuditRecorder: () => noopAuditRecorder,
+    createAuditRecorder: () => recordAuditEvent,
     getActiveWorkspaceIds: async () => workspaceIds,
     getAccessibleWorkspaces: async () =>
       workspaceIds.map((id) => ({ id, status: "active" as const })),
@@ -209,7 +224,7 @@ const contextFor = (name: ActorName) => {
     orgAIConfig: null,
     orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
     promptCachingEnabled: false,
-    recordAuditEvent: noopAuditRecorder,
+    recordAuditEvent,
     request: new Request(`https://example.test/workspaces/${workspaceId}`),
     route: "/security/cross-member-time-entries",
     safeDb: createSafeDb(testDb, workspaceIds, organizationId, actor.userId),
@@ -230,7 +245,8 @@ type DeleteCtx = Parameters<typeof deleteTimeEntryById.handler>[0];
 type BatchUpdateCtx = Parameters<typeof batchUpdate.handler>[0];
 type BatchDeleteCtx = Parameters<typeof batchDelete.handler>[0];
 type SplitCtx = Parameters<typeof splitEntry.handler>[0];
-type ConfirmTimerCtx = Parameters<typeof confirmTimer.handler>[0];
+type ConfirmCtx = Parameters<typeof confirmTimer.handler>[0];
+type AdminStopCtx = Parameters<typeof adminStopTimer.handler>[0];
 
 /** The failure status of a handler result, or null when it succeeded. */
 const statusOf = (result: unknown): number | null =>
@@ -407,31 +423,414 @@ describe("time entry changes between members of one organization", () => {
   });
 });
 
-// ── Timer ──────────────────────────────────────────────
+// ── Timers ────────────────────────────────────────────
 
-const seedTimer = async (owner: ActorName) => {
+type SeedTimerOptions = {
+  owner?: ActorName;
+  matterId?: SafeId<"workspace"> | null;
+  description?: string | null;
+  state?: "running" | "paused";
+  legacyId?: SafeId<"timeEntry">;
+};
+const seedTimer = async ({
+  owner = "timekeeper",
+  matterId = workspaceId,
+  description = ORIGINAL_NARRATIVE,
+  state = "running",
+  legacyId,
+}: SeedTimerOptions = {}) => {
   const id = createSafeId<"timeTimer">();
-  const startedAt = new Date(Date.now() - 30 * 60_000);
   await testDb.insert(timeTimers).values({
     id,
     organizationId,
-    workspaceId,
     userId: actors[owner].userId,
-    description: ORIGINAL_NARRATIVE,
-    state: "running",
-    startedAt,
-    lastResumedAt: startedAt,
+    workspaceId: matterId,
+    description,
+    state,
+    legacyTimeEntryId: legacyId,
+    startedAt: new Date(Date.now() - 180_000),
     accumulatedSeconds: 0,
+    lastResumedAt: state === "running" ? new Date(Date.now() - 180_000) : null,
   });
   return id;
 };
-
 const readTimer = async (id: SafeId<"timeTimer">) =>
   await testDb.query.timeTimers.findFirst({ where: { id: { eq: id } } });
+const adminRecorder = (actor: "admin" | "owner") =>
+  createBackgroundAuditRecorder({
+    organizationId,
+    workspaceId,
+    userId: actors[actor].userId,
+    execution: {
+      performer: { type: "user", id: actors[actor].userId },
+      trigger: { type: "direct" },
+    },
+  });
+const stopAs = async ({
+  actor,
+  id,
+  narrative,
+}: {
+  actor: ActorName;
+  id: SafeId<"timeTimer">;
+  narrative?: string;
+}) =>
+  await adminStopTimer.handler(
+    asTestRaw<AdminStopCtx>({
+      ...contextFor(
+        actor,
+        actor === "admin" || actor === "owner"
+          ? adminRecorder(actor)
+          : noopAuditRecorder,
+      ),
+      params: { id },
+      body: { timezoneId: "UTC", narrative },
+    }),
+  );
+
+const runningBatchActions = {
+  approve: { action: "approve", status: BILLING_STATUS.DRAFT, billable: true },
+  revert_to_draft: {
+    action: "revert_to_draft",
+    status: BILLING_STATUS.APPROVED,
+    billable: true,
+  },
+  mark_billable: {
+    action: "mark_billable",
+    status: BILLING_STATUS.DRAFT,
+    billable: false,
+  },
+  mark_non_billable: {
+    action: "mark_non_billable",
+    status: BILLING_STATUS.DRAFT,
+    billable: true,
+  },
+} as const satisfies Record<
+  BatchUpdateCtx["body"]["action"],
+  {
+    action: BatchUpdateCtx["body"]["action"];
+    status: typeof BILLING_STATUS.DRAFT | typeof BILLING_STATUS.APPROVED;
+    billable: boolean;
+  }
+>;
+
+const runningOperations = [
+  ...entryOperations.filter((operation) => operation.name !== "batch update"),
+  ...Object.values(runningBatchActions).map(({ action, status, billable }) => ({
+    name: `batch ${action}`,
+    prepare: async (id: SafeId<"timeEntry">) => {
+      await testDb
+        .update(timeEntries)
+        .set({ status, billable })
+        .where(eq(timeEntries.id, id));
+    },
+    run: async (actor: ActorName, id: SafeId<"timeEntry">) =>
+      await batchUpdate.handler(
+        asTestRaw<BatchUpdateCtx>({
+          ...contextFor(actor),
+          body: { ids: [id], action },
+        }),
+      ),
+  })),
+];
+
+type RunningEntryCase = {
+  kind: "direct" | "migrated";
+  operation: (typeof runningOperations)[number];
+};
+
+const assertRunningEntryRefusal = async ({
+  kind,
+  operation,
+}: RunningEntryCase) => {
+  const entryId = await seedEntry({
+    owner: "timekeeper",
+    running: kind === "direct",
+  });
+  const timerId =
+    kind === "migrated" ? await seedTimer({ legacyId: entryId }) : null;
+  if (kind === "migrated") {
+    await testDb
+      .update(timeEntries)
+      .set({ source: TIME_ENTRY_SOURCE.TIMER })
+      .where(eq(timeEntries.id, entryId));
+  }
+  if ("prepare" in operation) {
+    await operation.prepare(entryId);
+  }
+  const before = await readEntry(entryId);
+  const result = await operation.run("admin", entryId);
+  expect(result).toMatchObject({
+    code: 409,
+    response: { error: "running_timer" },
+  });
+  expect(await readEntry(entryId)).toEqual(before);
+  expect(await readSplitSuccessors(entryId)).toHaveLength(0);
+  if (timerId) {
+    await testDb.delete(timeTimers).where(eq(timeTimers.id, timerId));
+  }
+  await testDb.delete(timeEntries).where(eq(timeEntries.id, entryId));
+};
+
+const runningEntryCases = (["direct", "migrated"] as const).flatMap((kind) =>
+  runningOperations.map((operation) => ({
+    kind,
+    operation,
+    name: `${operation.name} refuses another member's ${kind} running entry`,
+  })),
+);
+
+describe("running time belongs to its timekeeper until an admin ends it", () => {
+  test.each(runningEntryCases)("$name", assertRunningEntryRefusal);
+
+  test.each(["update", "delete"] as const)(
+    "the timekeeper keeps their own running-entry %s behavior",
+    async (name) => {
+      const id = await seedEntry({ owner: "timekeeper", running: true });
+      const operation = entryOperations.find(
+        (candidate) => candidate.name === name,
+      );
+      expect(operation).toBeDefined();
+      if (!operation) {
+        throw new Error(`Missing operation ${name}`);
+      }
+      expect(statusOf(await operation.run("timekeeper", id))).toBeNull();
+      await operation.expectApplied(id);
+      await testDb.delete(timeEntries).where(eq(timeEntries.id, id));
+    },
+  );
+});
+
+describe("admin ending a member's timer", () => {
+  test.each(["admin", "owner"] as const)(
+    "%s ends into the timekeeper's draft with actor audit and convergent replay",
+    async (actor) => {
+      const id = await seedTimer();
+      const result = await stopAs({ actor, id });
+      if (statusOf(result) !== null || !("id" in result)) {
+        throw new Error(`Admin stop failed: ${JSON.stringify(result)}`);
+      }
+      expect(await readTimer(id)).toBeUndefined();
+      expect(await readEntry(result.id)).toMatchObject({
+        userId: actors.timekeeper.userId,
+        status: BILLING_STATUS.DRAFT,
+        source: TIME_ENTRY_SOURCE.TIMER,
+        narrative: ORIGINAL_NARRATIVE,
+      });
+      const events = await testDb
+        .select()
+        .from(auditLogs)
+        .where(
+          and(
+            eq(auditLogs.resourceId, id),
+            eq(auditLogs.resourceType, AUDIT_RESOURCE_TYPE.TIME_TIMER),
+          ),
+        );
+      expect(events).toHaveLength(1);
+      expect(events.at(0)).toMatchObject({
+        userId: actors[actor].userId,
+        performerId: actors[actor].userId,
+        action: AUDIT_ACTION.DELETE,
+        changes: {
+          endedByAdmin: { old: null, new: actors[actor].userId },
+          ownerId: {
+            old: actors.timekeeper.userId,
+            new: actors.timekeeper.userId,
+          },
+          narrativeFromAdmin: { old: null, new: false },
+        },
+      });
+      expect(await stopAs({ actor, id })).toEqual(result);
+      expect(await stopAs({ actor, id })).toEqual(result);
+      expect(
+        await testDb
+          .select()
+          .from(auditLogs)
+          .where(eq(auditLogs.resourceId, id)),
+      ).toHaveLength(1);
+      expect(
+        statusOf(
+          await entryOperations
+            .find((operation) => operation.name === "update")
+            ?.run(actor, result.id),
+        ),
+      ).toBeNull();
+      expect(
+        statusOf(
+          await entryOperations
+            .find((operation) => operation.name === "delete")
+            ?.run(actor, result.id),
+        ),
+      ).toBeNull();
+      expect(await readEntry(result.id)).toBeNull();
+    },
+  );
+
+  test("required narrative refusal keeps timer running; supplied narrative records provenance", async () => {
+    await testDb.insert(organizationSettings).values({
+      id: createSafeId<"organizationSettings">(),
+      organizationId,
+      timeNarrativeRequired: true,
+    });
+    const id = await seedTimer({ description: " " });
+    const before = await readTimer(id);
+    expect(await stopAs({ actor: "admin", id })).toMatchObject({
+      code: 400,
+      response: { error: "narrative_required" },
+    });
+    expect(await readTimer(id)).toEqual(before);
+    const result = await stopAs({
+      actor: "admin",
+      id,
+      narrative: "Research completed",
+    });
+    if (statusOf(result) !== null || !("id" in result)) {
+      throw new Error(`Admin stop failed: ${JSON.stringify(result)}`);
+    }
+    expect(await readEntry(result.id)).toMatchObject({
+      narrative: "Research completed",
+      userId: actors.timekeeper.userId,
+    });
+    const event = await testDb.query.auditLogs.findFirst({
+      where: { resourceId: { eq: id } },
+    });
+    expect(event).toMatchObject({
+      changes: { narrativeFromAdmin: { old: null, new: true } },
+    });
+  });
+
+  test("a supplied narrative does not replace a nonblank timer description", async () => {
+    const id = await seedTimer();
+    const result = await stopAs({
+      actor: "admin",
+      id,
+      narrative: "Alternative narrative",
+    });
+    if (statusOf(result) !== null || !("id" in result)) {
+      throw new Error(`Admin stop failed: ${JSON.stringify(result)}`);
+    }
+    expect(await readEntry(result.id)).toMatchObject({
+      narrative: ORIGINAL_NARRATIVE,
+    });
+  });
+
+  test.each(["missing matter", "paused"] as const)(
+    "admin end refuses %s without a partial transition",
+    async (reason) => {
+      const id = await seedTimer(
+        reason === "missing matter" ? { matterId: null } : { state: "paused" },
+      );
+      const before = await readTimer(id);
+      expect(statusOf(await stopAs({ actor: "admin", id }))).not.toBeNull();
+      expect(await readTimer(id)).toEqual(before);
+      await testDb.delete(timeTimers).where(eq(timeTimers.id, id));
+    },
+  );
+
+  test("plain members cannot list or end another member's timer", async () => {
+    const id = await seedTimer();
+    const before = await readTimer(id);
+    const listed = await adminListTimers.handler(
+      asTestRaw<Parameters<typeof adminListTimers.handler>[0]>({
+        ...contextFor("colleague"),
+        query: {},
+      }),
+    );
+    expect(statusOf(listed)).toBe(403);
+    expect(statusOf(await stopAs({ actor: "colleague", id }))).toBe(403);
+    const ownList = await listTimers.handler(
+      asTestRaw<Parameters<typeof listTimers.handler>[0]>({
+        ...contextFor("colleague"),
+        query: {},
+      }),
+    );
+    expect(ownList).toMatchObject({ items: [] });
+    expect(await readTimer(id)).toEqual(before);
+    await testDb.delete(timeTimers).where(eq(timeTimers.id, id));
+  });
+
+  test("admin visibility does not grant owner timer actions", async () => {
+    const id = await seedTimer();
+    const before = await readTimer(id);
+    expect(
+      await updateTimer.handler(
+        asTestRaw<Parameters<typeof updateTimer.handler>[0]>({
+          ...contextFor("admin"),
+          params: { id },
+          body: { description: "Edited" },
+        }),
+      ),
+    ).toMatchObject({ code: 404 });
+    expect(
+      await discardTimer.handler(
+        asTestRaw<Parameters<typeof discardTimer.handler>[0]>({
+          ...contextFor("admin"),
+          params: { id },
+        }),
+      ),
+    ).toMatchObject({ code: 404 });
+    expect(
+      await confirmTimer.handler(
+        asTestRaw<ConfirmCtx>({
+          ...contextFor("admin"),
+          params: { id },
+          body: { timezoneId: "UTC" },
+        }),
+      ),
+    ).toMatchObject({ code: 404 });
+    expect(
+      await pauseTimer.handler(
+        asTestRaw<Parameters<typeof pauseTimer.handler>[0]>({
+          ...contextFor("admin"),
+          params: { id },
+        }),
+      ),
+    ).toMatchObject({ code: 404 });
+    expect(
+      await resumeTimer.handler(
+        asTestRaw<Parameters<typeof resumeTimer.handler>[0]>({
+          ...contextFor("admin"),
+          params: { id },
+        }),
+      ),
+    ).toMatchObject({ code: 404 });
+    expect(await readTimer(id)).toEqual(before);
+    await testDb.delete(timeTimers).where(eq(timeTimers.id, id));
+  });
+
+  test("ending a migrated running timer replaces its entry and permits later admin edits", async () => {
+    const legacyId = await seedEntry({ owner: "timekeeper", running: true });
+    const id = await seedTimer({ legacyId });
+    const result = await stopAs({ actor: "admin", id });
+    if (statusOf(result) !== null || !("id" in result)) {
+      throw new Error(`Admin stop failed: ${JSON.stringify(result)}`);
+    }
+    expect(await readEntry(legacyId)).toBeNull();
+    expect(await readTimer(id)).toBeUndefined();
+    expect(await readEntry(result.id)).toMatchObject({
+      timerStartedAt: null,
+      userId: actors.timekeeper.userId,
+    });
+    expect(
+      statusOf(
+        await entryOperations
+          .find((operation) => operation.name === "update")
+          ?.run("admin", result.id),
+      ),
+    ).toBeNull();
+    expect(
+      statusOf(
+        await entryOperations
+          .find((operation) => operation.name === "delete")
+          ?.run("admin", result.id),
+      ),
+    ).toBeNull();
+  });
+});
 
 const confirmTimerAs = async (actor: ActorName, id: SafeId<"timeTimer">) =>
   await confirmTimer.handler(
-    asTestRaw<ConfirmTimerCtx>({
+    asTestRaw<ConfirmCtx>({
       ...contextFor(actor),
       params: { id },
       body: { timezoneId: "UTC" },
@@ -442,7 +841,7 @@ describe("confirming a timer in a matter shared by several members", () => {
   test.each(["colleague", "admin", "owner"] as const)(
     "%s cannot confirm the timekeeper's timer",
     async (actor) => {
-      const id = await seedTimer("timekeeper");
+      const id = await seedTimer({ owner: "timekeeper" });
       const before = await readTimer(id);
       expect(statusOf(await confirmTimerAs(actor, id))).toBe(404);
       expect(await readTimer(id)).toEqual(before);
@@ -451,8 +850,8 @@ describe("confirming a timer in a matter shared by several members", () => {
   );
 
   test("a colleague confirms only their own timer while the timekeeper's runs", async () => {
-    const timekeeperTimer = await seedTimer("timekeeper");
-    const colleagueTimer = await seedTimer("colleague");
+    const timekeeperTimer = await seedTimer({ owner: "timekeeper" });
+    const colleagueTimer = await seedTimer({ owner: "colleague" });
     const before = await readTimer(timekeeperTimer);
     const result = await confirmTimerAs("colleague", colleagueTimer);
     expect(statusOf(result)).toBeNull();
@@ -469,7 +868,7 @@ describe("confirming a timer in a matter shared by several members", () => {
   });
 
   test("the timekeeper can confirm their own timer", async () => {
-    const id = await seedTimer("timekeeper");
+    const id = await seedTimer({ owner: "timekeeper" });
     const result = await confirmTimerAs("timekeeper", id);
     expect(statusOf(result)).toBeNull();
     if (!("id" in result)) {

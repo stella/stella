@@ -7,6 +7,7 @@ import {
 } from "@stll/api-contract";
 import type { TimeEntrySuggestionEvidence } from "@stll/api-contract/time-entry-types";
 import { VAT_TREATMENTS } from "@stll/invoicing";
+import { ORGANIZATION_MANAGEMENT_ROLES } from "@stll/permissions";
 
 import {
   EXPENSE_CATEGORIES,
@@ -141,6 +142,29 @@ const TIME_TIMER_CURRENT_MEMBER_CHECK = sql`EXISTS (
     AND ${member.userId} = "time_timers"."user_id"
 )`;
 
+const TIME_TIMER_ADMIN_ROLE_SQL_VALUES = ORGANIZATION_MANAGEMENT_ROLES.map(
+  (role) => sql.raw(`'${role}'`),
+);
+
+const timerOrganizationAdminCheck = (
+  tableName: "time_timers" | "time_timer_confirmations",
+) => sql`(
+  ${sql.identifier(tableName)}."organization_id" = (SELECT current_setting('app.organization_id', true))
+  AND EXISTS (
+    SELECT 1 FROM ${member}
+    WHERE ${member.organizationId} = (SELECT current_setting('app.organization_id', true))
+      AND ${member.userId} = (SELECT current_setting('app.user_id', true))
+      AND ${member.role} IN (${sql.join(TIME_TIMER_ADMIN_ROLE_SQL_VALUES, sql`, `)})
+  )
+)`;
+
+const TIME_TIMER_ADMIN_CHECK = sql`(
+  ${timerOrganizationAdminCheck("time_timers")} AND "time_timers"."state" = 'running'
+)`;
+const TIME_TIMER_CONFIRMATION_ADMIN_CHECK = timerOrganizationAdminCheck(
+  "time_timer_confirmations",
+);
+
 export const timeTimers = p.pgTable(
   "time_timers",
   {
@@ -196,6 +220,16 @@ export const timeTimers = p.pgTable(
       sql`(${table.state} = 'running') = (${table.lastResumedAt} IS NOT NULL)`,
     ),
     ...userOrganizationPolicies(),
+    p.pgPolicy("organization_admin_select", {
+      for: "select",
+      to: stella,
+      using: TIME_TIMER_ADMIN_CHECK,
+    }),
+    p.pgPolicy("organization_admin_delete", {
+      for: "delete",
+      to: stella,
+      using: TIME_TIMER_ADMIN_CHECK,
+    }),
     p.pgPolicy("current_member", {
       as: "restrictive",
       for: "all",
@@ -229,6 +263,16 @@ export const timeTimerConfirmations = p.pgTable(
       .on(table.organizationId, table.userId),
     p.index("time_timer_confirmations_entry_idx").on(table.timeEntryId),
     ...userOrganizationPolicies(),
+    p.pgPolicy("organization_admin_select", {
+      for: "select",
+      to: stella,
+      using: TIME_TIMER_CONFIRMATION_ADMIN_CHECK,
+    }),
+    p.pgPolicy("organization_admin_insert", {
+      for: "insert",
+      to: stella,
+      withCheck: TIME_TIMER_CONFIRMATION_ADMIN_CHECK,
+    }),
   ],
 );
 
