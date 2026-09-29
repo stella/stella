@@ -59,20 +59,29 @@ const COMMENT_START = /\/\/\s*sql-perf-allow\b/iu;
 // operator; the parameter is `$n` or a template placeholder, with a cast.
 // Bounded repeats keep a long token from making the scan backtrack.
 const KEYSET_PARAMETER = String.raw`(\$\d{1,4}|__SQL_EXPR_\d{1,4}__)`;
+// In a migration's routine body the cursor is also a PL/pgSQL variable or a
+// record field (`job."cursor_id"`).
+const MIGRATION_KEYSET_PARAMETER = String.raw`(?<![\w."$])(\$\d{1,4}|[a-z_]\w{0,62}(?:\."?[a-z_]\w{0,62}"?)?)`;
 const KEYSET_CAST = String.raw`(?:\s{0,64}::\s{0,64}[a-z_]\w{0,63}(?:\[\])?)?`;
 const KEYSET_COLUMN = String.raw`(?:__SQL_EXPR_\d{1,4}__|[a-z_"][\w."]{0,255})`;
 const KEYSET_RANGE = String.raw`\s{0,64}(?:<=|>=|<|>)\s{0,64}`;
 const KEYSET_NULL = String.raw`\s{1,64}IS\s{1,64}NULL`;
-const OPTIONAL_KEYSETS = [
+const optionalKeysetPatterns = (parameter: string): RegExp[] => [
   new RegExp(
-    String.raw`${KEYSET_PARAMETER}${KEYSET_CAST}${KEYSET_NULL}\s{1,64}OR\s{1,64}\(?\s{0,64}${KEYSET_COLUMN}${KEYSET_RANGE}${KEYSET_PARAMETER}${KEYSET_CAST}`,
+    String.raw`${parameter}${KEYSET_CAST}${KEYSET_NULL}\s{1,64}OR\s{1,64}\(?\s{0,64}${KEYSET_COLUMN}${KEYSET_RANGE}${parameter}${KEYSET_CAST}`,
     "giu",
   ),
   new RegExp(
-    String.raw`${KEYSET_COLUMN}${KEYSET_RANGE}${KEYSET_PARAMETER}${KEYSET_CAST}\)?\s{1,64}OR\s{1,64}${KEYSET_PARAMETER}${KEYSET_CAST}${KEYSET_NULL}`,
+    String.raw`${KEYSET_COLUMN}${KEYSET_RANGE}${parameter}${KEYSET_CAST}\)?\s{1,64}OR\s{1,64}${parameter}${KEYSET_CAST}${KEYSET_NULL}`,
     "giu",
   ),
 ];
+const OPTIONAL_KEYSETS = optionalKeysetPatterns(KEYSET_PARAMETER);
+const MIGRATION_OPTIONAL_KEYSETS = optionalKeysetPatterns(
+  MIGRATION_KEYSET_PARAMETER,
+);
+const MIGRATION_COMMENT = /--\s*sql-perf-allow:(.*)$/iu;
+const MIGRATION_COMMENT_START = /--\s*sql-perf-allow\b/iu;
 
 type TemplateParts = {
   sql: string;
@@ -169,6 +178,16 @@ const sqlWithoutLiterals = (text: string): string =>
     .replace(SQL_STRING, (literal) => " ".repeat(literal.length))
     .replace(/--[^\n]*/gu, (comment) => " ".repeat(comment.length))
     .replace(/\/\*[\s\S]*?\*\//gu, (comment) => " ".repeat(comment.length));
+
+/**
+ * Migration text with comments and string literals blanked in one pass, in
+ * the order they appear, so an apostrophe in a comment opens no string.
+ * Dollar-quoted routine bodies stay: they hold the statements to read.
+ */
+const migrationSqlWithoutLiterals = (text: string): string =>
+  text.replace(/--[^\n]*|\/\*[\s\S]*?\*\/|'(?:''|[^'])*'/gu, (hidden) =>
+    hidden.replace(/[^\n]/gu, " "),
+  );
 
 const textOfTemplate = (node: ts.TemplateLiteral): string =>
   ts.isNoSubstitutionTemplateLiteral(node) ? node.text : node.head.text;
@@ -891,6 +910,83 @@ const optionalKeysetOffsets = (
         : [];
     }),
   );
+};
+
+export type SqlPerfMigrationHit = { line: number; column: number };
+
+/**
+ * Optional keyset bounds in a migration, statement by statement (routine
+ * bodies included): in a statement with a LIMIT, a cursor that is `$n`, a
+ * PL/pgSQL variable or a record field, tested for NULL and compared in the
+ * same predicate. A `-- sql-perf-allow: <reason>` comment on the line of a hit
+ * or the line above it allows that hit.
+ */
+export const analyzeMigrationSqlPerf = (source: string) => {
+  const visible = migrationSqlWithoutLiterals(source);
+  const place = (offset: number): SqlPerfMigrationHit => {
+    const before = source.slice(0, offset);
+    return {
+      line: before.split("\n").length,
+      column: offset - before.lastIndexOf("\n"),
+    };
+  };
+  const rawHits: SqlPerfMigrationHit[] = [];
+  let start = 0;
+  for (const statement of visible.split(";")) {
+    if (/\bLIMIT\b/iu.test(statement)) {
+      for (const pattern of MIGRATION_OPTIONAL_KEYSETS) {
+        for (const match of statement.matchAll(pattern)) {
+          if (match[1] !== undefined && match[1] === match[2]) {
+            rawHits.push(place(start + match.index));
+          }
+        }
+      }
+    }
+    start += statement.length + 1;
+  }
+  const comments = source.split("\n").flatMap((text, index) =>
+    MIGRATION_COMMENT_START.test(text)
+      ? [
+          {
+            line: index + 1,
+            reason: MIGRATION_COMMENT.exec(text)?.[1]?.trim() ?? "",
+            used: false,
+          },
+        ]
+      : [],
+  );
+  const hits = rawHits.filter((hit) => {
+    const comment = comments.find(
+      (entry) =>
+        (entry.line === hit.line || entry.line === hit.line - 1) &&
+        REASON.test(entry.reason),
+    );
+    if (comment === undefined) {
+      return true;
+    }
+    comment.used = true;
+    return false;
+  });
+  const commentErrors: SqlPerfCommentError[] = comments.flatMap((comment) => {
+    if (!REASON.test(comment.reason)) {
+      return [
+        {
+          line: comment.line,
+          message:
+            "sql-perf-allow requires small table <name>, index <name>, or bounded by <description>.",
+        },
+      ];
+    }
+    return comment.used
+      ? []
+      : [
+          {
+            line: comment.line,
+            message: "sql-perf-allow suppresses no SQL performance finding.",
+          },
+        ];
+  });
+  return { hits, commentErrors };
 };
 
 /** A string or untagged template: SQL text whose `$n` are parameters. */

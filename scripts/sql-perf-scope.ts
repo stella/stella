@@ -20,6 +20,22 @@ export const SQL_PERF_LINT_EXCLUDES = [
   ...EXCLUDED_PREFIXES.map((prefix) => `${prefix}**`),
 ];
 
+/**
+ * Migrations the SQL performance check reads: those from this timestamp on.
+ * Earlier migrations are applied history, and editing one would change its
+ * checksum on every live database.
+ */
+const SQL_PERF_MIGRATION_CUTOFF = "20260929180100";
+
+export const SQL_PERF_MIGRATION_FILES = "apps/api/drizzle/*/migration.sql";
+
+/** Repo-relative path, forward slashes. */
+export const isSqlPerfMigration = (file: string): boolean => {
+  const timestamp =
+    /^apps\/api\/drizzle\/(\d{14})_[^/]+\/migration\.sql$/u.exec(file)?.[1];
+  return timestamp !== undefined && timestamp >= SQL_PERF_MIGRATION_CUTOFF;
+};
+
 /** Repo-relative path, forward slashes. */
 export const isSqlPerfSource = (file: string): boolean => {
   if (!ROOTS.some((root) => file.startsWith(root))) {
