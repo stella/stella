@@ -2,15 +2,19 @@ import { Result } from "better-result";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { t } from "elysia";
 
-import { applyMarkupCents, prorateHourlyCents } from "@stll/money";
-
 import {
   BILLING_STATUS,
   expenses,
   INVOICE_STATUS,
-  invoices,
   timeEntries,
 } from "@/api/db/schema";
+import {
+  ATTACHED_ENTRY_LINE_VAT,
+  expenseLineDraft,
+  insertInvoiceLines,
+  recalculateInvoiceTotals,
+  timeEntryLineDraft,
+} from "@/api/handlers/invoices/invoice-lines";
 import { lockInvoiceInStatus } from "@/api/handlers/invoices/lock-invoice";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -19,7 +23,7 @@ import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { cents } from "@/api/lib/money";
+import type { CentsAmount } from "@/api/lib/money";
 
 import {
   INVOICE_ENTRIES_MODIFIED_MESSAGE,
@@ -98,9 +102,10 @@ const addEntries = createSafeHandler(
   {
     description:
       "Attach approved, billable, not-yet-invoiced time entries and expenses " +
-      "to a draft invoice, marking them billed and recomputing the invoice " +
-      "total. Every entry must match the invoice currency, because an " +
-      "invoice is single-currency and nothing is converted. Only draft " +
+      "to a draft invoice as invoice lines without VAT, marking them billed " +
+      "and recomputing the invoice totals. Every entry must match the " +
+      "invoice currency, because an invoice is single-currency and nothing " +
+      "is converted. Only draft " +
       "invoices accept entries, and a concurrent change to the same entries " +
       "fails with a retryable conflict rather than attaching part of the " +
       "set.",
@@ -109,7 +114,14 @@ const addEntries = createSafeHandler(
     params: invoiceParamsSchema,
     body: addEntriesBodySchema,
   },
-  async function* ({ safeDb, workspaceId, params, body, recordAuditEvent }) {
+  async function* ({
+    safeDb,
+    session,
+    workspaceId,
+    params,
+    body,
+    recordAuditEvent,
+  }) {
     if (
       (body.timeEntryIds?.length ?? 0) === 0 &&
       (body.expenseIds?.length ?? 0) === 0
@@ -285,7 +297,13 @@ const addEntries = createSafeHandler(
         return { ok: false as const };
       }
 
-      let attachedTimeEntries: { id: SafeId<"timeEntry"> }[] = [];
+      let attachedTimeEntries: {
+        id: SafeId<"timeEntry">;
+        billedMinutes: number;
+        rateAtEntry: CentsAmount;
+        narrative: string;
+        invoiceNarrative: string | null;
+      }[] = [];
       if (timeEntryIds && timeEntryIds.length > 0) {
         attachedTimeEntries = await tx
           .update(timeEntries)
@@ -307,14 +325,26 @@ const addEntries = createSafeHandler(
               eq(timeEntries.currency, invoiceCheck.currency),
             ),
           )
-          .returning({ id: timeEntries.id });
+          .returning({
+            id: timeEntries.id,
+            billedMinutes: timeEntries.billedMinutes,
+            rateAtEntry: timeEntries.rateAtEntry,
+            narrative: timeEntries.narrative,
+            invoiceNarrative: timeEntries.invoiceNarrative,
+          });
 
         if (attachedTimeEntries.length !== timeEntryIds.length) {
           throw new InvoiceEntriesModifiedConcurrentlyError();
         }
       }
 
-      let attachedExpenses: { id: SafeId<"expense"> }[] = [];
+      let attachedExpenses: {
+        id: SafeId<"expense">;
+        amount: CentsAmount;
+        markup: number;
+        description: string;
+        invoiceDescription: string | null;
+      }[] = [];
       if (expenseIds && expenseIds.length > 0) {
         attachedExpenses = await tx
           .update(expenses)
@@ -333,62 +363,34 @@ const addEntries = createSafeHandler(
               eq(expenses.currency, invoiceCheck.currency),
             ),
           )
-          .returning({ id: expenses.id });
+          .returning({
+            id: expenses.id,
+            amount: expenses.amount,
+            markup: expenses.markup,
+            description: expenses.description,
+            invoiceDescription: expenses.invoiceDescription,
+          });
 
         if (attachedExpenses.length !== expenseIds.length) {
           throw new InvoiceEntriesModifiedConcurrentlyError();
         }
       }
 
-      const allTimeEntries = await tx
-        .select({
-          billedMinutes: timeEntries.billedMinutes,
-          rateAtEntry: timeEntries.rateAtEntry,
-        })
-        .from(timeEntries)
-        .where(
-          and(
-            eq(timeEntries.invoiceId, params.invoiceId),
-            eq(timeEntries.workspaceId, workspaceId),
+      const scope = { invoiceId: params.invoiceId, workspaceId };
+      await insertInvoiceLines(
+        tx,
+        { ...scope, organizationId: session.activeOrganizationId },
+        [
+          ...attachedTimeEntries.map((entry) =>
+            timeEntryLineDraft(entry, ATTACHED_ENTRY_LINE_VAT),
           ),
-        );
-
-      const allExpenses = await tx
-        .select({
-          amount: expenses.amount,
-          markup: expenses.markup,
-        })
-        .from(expenses)
-        .where(
-          and(
-            eq(expenses.invoiceId, params.invoiceId),
-            eq(expenses.workspaceId, workspaceId),
+          ...attachedExpenses.map((expense) =>
+            expenseLineDraft(expense, ATTACHED_ENTRY_LINE_VAT),
           ),
-        );
-
-      let totalAmount = 0;
-      for (const entry of allTimeEntries) {
-        totalAmount += prorateHourlyCents({
-          billedMinutes: entry.billedMinutes,
-          hourlyRateCents: entry.rateAtEntry,
-        });
-      }
-      for (const expense of allExpenses) {
-        totalAmount += applyMarkupCents({
-          amountCents: expense.amount,
-          markupPercent: expense.markup,
-        });
-      }
-
-      await tx
-        .update(invoices)
-        .set({ totalAmount: cents(totalAmount), updatedAt: now })
-        .where(
-          and(
-            eq(invoices.id, params.invoiceId),
-            eq(invoices.workspaceId, workspaceId),
-          ),
-        );
+        ],
+      );
+      const totals = await recalculateInvoiceTotals(tx, scope, now);
+      const totalAmount = totals.grossAmountMinor;
 
       await recordAuditEvent(
         tx,

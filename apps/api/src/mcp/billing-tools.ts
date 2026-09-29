@@ -8,6 +8,7 @@ import { roles } from "@stll/permissions";
 import { member, user } from "@/api/db/auth-schema";
 import { invoices, timeEntries } from "@/api/db/schema";
 import { INVOICE_DETAIL_RELATIONS } from "@/api/handlers/invoices/invoice-detail";
+import { invoiceTotals } from "@/api/handlers/invoices/invoice-lines";
 import { deleteTimeEntryHandler } from "@/api/handlers/time-entries/delete";
 import { createTimeEntryHandler } from "@/api/handlers/time-entries/time-entry-insert";
 import { updateTimeEntryHandler } from "@/api/handlers/time-entries/update";
@@ -198,6 +199,11 @@ type InvoiceExpenseTextItem = {
   entity: { name: string };
 };
 
+type InvoiceLineTextItem = {
+  description: string;
+  unit: string | null;
+};
+
 /** Full shape `list_invoices`'s detail branch redacts, one invoice deep. */
 type InvoiceDetailTextPayload = {
   invoice: {
@@ -205,6 +211,7 @@ type InvoiceDetailTextPayload = {
     notes: string | null;
     timeEntries: readonly InvoiceTimeEntryTextItem[];
     expenses: readonly InvoiceExpenseTextItem[];
+    lines: readonly InvoiceLineTextItem[];
   };
 };
 
@@ -293,6 +300,24 @@ const invoiceDetailTextFieldSpecs = (
     read: (item) => item.entity.name,
     apply: (item, value) => {
       item.entity.name = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "invoice.lines[].description",
+    items: (payload) => payload.invoice.lines,
+    scope: () => workspaceId,
+    read: (item) => item.description,
+    apply: (item, value) => {
+      item.description = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "invoice.lines[].unit",
+    items: (payload) => payload.invoice.lines,
+    scope: () => workspaceId,
+    read: (item) => item.unit,
+    apply: (item, value) => {
+      item.unit = value;
     },
   }),
 ];
@@ -1247,6 +1272,10 @@ const handleListInvoicesTool: TypedMcpToolHandler<
     if (!invoiceRow) {
       return notFoundResult("Invoice not found or not accessible");
     }
+    const totals = invoiceTotals(invoiceRow.lines);
+    if (totals.isErr()) {
+      return internalFailureResult(totals.error);
+    }
 
     const invoice = {
       id: invoiceRow.id,
@@ -1297,6 +1326,10 @@ const handleListInvoicesTool: TypedMcpToolHandler<
           entity: { id: entity.id, name: entity.name },
         };
       }),
+      lines: invoiceRow.lines.map(
+        ({ releasedAt: _releasedAt, ...line }) => line,
+      ),
+      totals: totals.value,
     };
 
     const textFields = runTextFieldSpecs(

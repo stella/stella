@@ -1214,7 +1214,10 @@ export const LIST_INVOICES_LIST_PROJECTION = v.strictObject({
   nextCursor: v.nullable(passthroughId()),
 });
 
-/** list_invoices, detail branch: one invoice with its time entries and expenses. */
+/**
+ * list_invoices, detail branch: one invoice with its lines and totals, and its
+ * attached time entries and expenses.
+ */
 export const LIST_INVOICES_DETAIL_PROJECTION = v.strictObject({
   invoice: v.strictObject({
     id: passthroughId(),
@@ -1268,6 +1271,38 @@ export const LIST_INVOICES_DETAIL_PROJECTION = v.strictObject({
         entity: invoiceLineEntityProjection(),
       }),
     ),
+    lines: v.array(
+      v.strictObject({
+        id: passthroughId(),
+        position: v.number(),
+        description: v.string(),
+        quantity: v.string(),
+        unit: v.nullable(v.string()),
+        unitPrice: v.number(),
+        vatRateBps: v.number(),
+        vatTreatment: v.string(),
+        netAmount: v.number(),
+        vatAmount: v.number(),
+        grossAmount: v.number(),
+        source: v.string(),
+        timeEntryId: v.nullable(passthroughId()),
+        expenseId: v.nullable(passthroughId()),
+      }),
+    ),
+    totals: v.strictObject({
+      netAmountMinor: v.number(),
+      vatAmountMinor: v.number(),
+      grossAmountMinor: v.number(),
+      vatBreakdown: v.array(
+        v.strictObject({
+          vatRateBps: v.number(),
+          vatTreatment: v.string(),
+          netAmountMinor: v.number(),
+          vatAmountMinor: v.number(),
+          grossAmountMinor: v.number(),
+        }),
+      ),
+    }),
   }),
 });
 

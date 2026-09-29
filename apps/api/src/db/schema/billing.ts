@@ -1,10 +1,12 @@
 import {
+  INVOICE_LINE_SOURCES,
   INVOICE_STATUS,
   INVOICE_STATUSES,
   TIME_ENTRY_SUGGESTION_STATUSES,
   type InvoiceStatus,
 } from "@stll/api-contract";
 import type { TimeEntrySuggestionEvidence } from "@stll/api-contract/time-entry-types";
+import { VAT_TREATMENTS } from "@stll/invoicing";
 
 import {
   EXPENSE_CATEGORIES,
@@ -433,9 +435,30 @@ export const invoices = p.pgTable(
       .text("status", { enum: INVOICE_STATUSES })
       .notNull()
       .default("draft"),
+    // The issue date.
     invoiceDate: p.date("invoice_date").notNull(),
+    taxableSupplyDate: p.date("taxable_supply_date"),
     dueDate: p.date("due_date"),
     currency: p.varchar({ length: 3 }).notNull(),
+    sellerProfileId: safeUuid<"sellerProfile">("seller_profile_id").references(
+      () => sellerProfiles.id,
+    ),
+    // Buyer as it should read on the document, copied when set so a later
+    // contact edit does not rewrite an invoice.
+    buyerName: p.varchar("buyer_name", { length: 512 }),
+    buyerRegistrationId: p.varchar("buyer_registration_id", { length: 64 }),
+    buyerVatId: p.varchar("buyer_vat_id", { length: 64 }),
+    buyerAddressLine1: p.varchar("buyer_address_line_1", { length: 512 }),
+    buyerAddressLine2: p.varchar("buyer_address_line_2", { length: 512 }),
+    buyerCity: p.varchar("buyer_city", { length: 256 }),
+    buyerPostalCode: p.varchar("buyer_postal_code", { length: 32 }),
+    buyerCountry: p.varchar("buyer_country", { length: 128 }),
+    // Totals over the invoice lines, from `calculateDocumentTotals`
+    // (`@stll/invoicing`); `totalAmount` is the gross.
+    // SAFETY: literal zero is a valid minor-unit integer default.
+    netAmount: centsColumn("net_amount").notNull().default(unsafeCents(0)),
+    // SAFETY: literal zero is a valid minor-unit integer default.
+    vatAmount: centsColumn("vat_amount").notNull().default(unsafeCents(0)),
     // SAFETY: literal zero is a valid minor-unit integer default.
     totalAmount: centsColumn("total_amount").notNull().default(unsafeCents(0)),
     notes: p.text(),
@@ -456,5 +479,109 @@ export const invoices = p.pgTable(
       .uniqueIndex("invoices_ws_number_uidx")
       .on(table.workspaceId, table.invoiceNumber),
     ...wsOrganizationPolicies("invoices"),
+  ],
+);
+
+const VAT_TREATMENT_SQL_VALUES = VAT_TREATMENTS.map((treatment) =>
+  sql.raw(`'${treatment}'`),
+);
+const INVOICE_LINE_SOURCE_SQL_VALUES = INVOICE_LINE_SOURCES.map((source) =>
+  sql.raw(`'${source}'`),
+);
+
+/**
+ * One line of an invoice. `netAmount` is authoritative: quantity times unit
+ * price for a manual line, the entry's own billed amount for a time entry or
+ * an expense. VAT and gross come from `calculateDocumentTotals`
+ * (`@stll/invoicing`) and are stored with the line.
+ *
+ * A time entry or expense is billed by at most one line whose invoice is not
+ * void. Voiding an invoice stamps `releasedAt` on its lines, which keeps them
+ * on the voided document and takes them out of the partial unique indexes,
+ * so the entry can be billed again.
+ */
+export const invoiceLines = p.pgTable(
+  "invoice_lines",
+  {
+    id: pUuid<"invoiceLine">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    workspaceId: safeWorkspaceId("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    invoiceId: safeUuid<"invoice">("invoice_id")
+      .notNull()
+      .references(() => invoices.id, { onDelete: "cascade" }),
+    position: p.integer().notNull(),
+    description: p.text().notNull(),
+    quantity: p.numeric({ precision: 18, scale: 4 }).notNull(),
+    unit: p.varchar({ length: 32 }),
+    unitPrice: centsColumn("unit_price").notNull(),
+    vatRateBps: p.integer("vat_rate_bps").notNull(),
+    vatTreatment: p.text("vat_treatment", { enum: VAT_TREATMENTS }).notNull(),
+    netAmount: centsColumn("net_amount").notNull(),
+    vatAmount: centsColumn("vat_amount").notNull(),
+    grossAmount: centsColumn("gross_amount").notNull(),
+    source: p.text("source", { enum: INVOICE_LINE_SOURCES }).notNull(),
+    timeEntryId: safeUuid<"timeEntry">("time_entry_id").references(
+      () => timeEntries.id,
+    ),
+    expenseId: safeUuid<"expense">("expense_id").references(() => expenses.id),
+    releasedAt: timestamptz("released_at"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p
+      .foreignKey({
+        columns: [table.workspaceId, table.organizationId],
+        foreignColumns: [workspaces.id, workspaces.organizationId],
+        name: "invoice_lines_workspace_organization_fk",
+      })
+      .onDelete("cascade"),
+    p
+      .index("invoice_lines_invoice_position_idx")
+      .on(table.invoiceId, table.position, table.id),
+    p.index("invoice_lines_time_entry_idx").on(table.timeEntryId),
+    p.index("invoice_lines_expense_idx").on(table.expenseId),
+    p
+      .uniqueIndex("invoice_lines_time_entry_billed_uidx")
+      .on(table.timeEntryId)
+      .where(
+        sql`${table.timeEntryId} IS NOT NULL AND ${table.releasedAt} IS NULL`,
+      ),
+    p
+      .uniqueIndex("invoice_lines_expense_billed_uidx")
+      .on(table.expenseId)
+      .where(
+        sql`${table.expenseId} IS NOT NULL AND ${table.releasedAt} IS NULL`,
+      ),
+    p.check(
+      "invoice_lines_source_check",
+      sql`${table.source} in (${sql.join(INVOICE_LINE_SOURCE_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "invoice_lines_source_reference_check",
+      sql`(${table.source} = 'manual' AND ${table.timeEntryId} IS NULL AND ${table.expenseId} IS NULL) OR (${table.source} = 'time_entry' AND ${table.timeEntryId} IS NOT NULL AND ${table.expenseId} IS NULL) OR (${table.source} = 'expense' AND ${table.expenseId} IS NOT NULL AND ${table.timeEntryId} IS NULL)`,
+    ),
+    p.check(
+      "invoice_lines_vat_treatment_check",
+      sql`${table.vatTreatment} in (${sql.join(VAT_TREATMENT_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "invoice_lines_vat_rate_check",
+      sql`${table.vatRateBps} between 0 and 10000`,
+    ),
+    p.check(
+      "invoice_lines_amounts_check",
+      sql`${table.quantity} >= 0 AND ${table.unitPrice} >= 0 AND ${table.netAmount} >= 0 AND ${table.vatAmount} >= 0 AND ${table.grossAmount} = ${table.netAmount} + ${table.vatAmount}`,
+    ),
+    p.check("invoice_lines_position_check", sql`${table.position} >= 0`),
+    p.check(
+      "invoice_lines_description_check",
+      sql`length(${table.description}) between 1 and 10000`,
+    ),
+    ...wsOrganizationPolicies("invoice_lines"),
   ],
 );

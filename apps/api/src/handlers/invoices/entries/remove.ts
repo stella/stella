@@ -2,15 +2,14 @@ import { Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 import { t } from "elysia";
 
-import { applyMarkupCents, prorateHourlyCents } from "@stll/money";
-
 import {
   BILLING_STATUS,
   expenses,
   INVOICE_STATUS,
-  invoices,
+  invoiceLines,
   timeEntries,
 } from "@/api/db/schema";
+import { recalculateInvoiceTotals } from "@/api/handlers/invoices/invoice-lines";
 import { lockInvoiceInStatus } from "@/api/handlers/invoices/lock-invoice";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -18,7 +17,6 @@ import type { AuditEvent } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { cents } from "@/api/lib/money";
 
 const removeEntriesBodySchema = t.Object({
   timeEntryIds: t.Optional(
@@ -90,10 +88,12 @@ const buildDetachEvents = (params: {
 const removeEntries = createSafeHandler(
   {
     description:
-      "Detach time entries and expenses from a draft invoice, returning them " +
-      "to approved, unbilled status and recomputing the invoice total. " +
+      "Detach time entries and expenses from a draft invoice, removing their " +
+      "invoice lines, returning them to approved, unbilled status, and " +
+      "recomputing the invoice totals. " +
       "Reversible: the same entries can be attached again with " +
-      "invoices.entries.add, and nothing is deleted. Only draft invoices may " +
+      "invoices.entries.add, and the entries themselves are kept. Only " +
+      "draft invoices may " +
       "be changed, and ids that are not on this invoice are skipped without " +
       "an error.",
     permissions: { invoice: ["update"] },
@@ -199,55 +199,37 @@ const removeEntries = createSafeHandler(
             .returning({ id: expenses.id });
         }
 
-        const remainingTimeEntries = await tx
-          .select({
-            billedMinutes: timeEntries.billedMinutes,
-            rateAtEntry: timeEntries.rateAtEntry,
-          })
-          .from(timeEntries)
-          .where(
-            and(
-              eq(timeEntries.invoiceId, params.invoiceId),
-              eq(timeEntries.workspaceId, workspaceId),
-            ),
-          );
-
-        const remainingExpenses = await tx
-          .select({
-            amount: expenses.amount,
-            markup: expenses.markup,
-          })
-          .from(expenses)
-          .where(
-            and(
-              eq(expenses.invoiceId, params.invoiceId),
-              eq(expenses.workspaceId, workspaceId),
-            ),
-          );
-
-        let totalAmount = 0;
-        for (const entry of remainingTimeEntries) {
-          totalAmount += prorateHourlyCents({
-            billedMinutes: entry.billedMinutes,
-            hourlyRateCents: entry.rateAtEntry,
-          });
+        const detachedTimeEntryIds = detachedTimeEntries.map((row) => row.id);
+        if (detachedTimeEntryIds.length > 0) {
+          await tx
+            .delete(invoiceLines)
+            .where(
+              and(
+                eq(invoiceLines.invoiceId, params.invoiceId),
+                eq(invoiceLines.workspaceId, workspaceId),
+                inArray(invoiceLines.timeEntryId, detachedTimeEntryIds),
+              ),
+            );
         }
-        for (const expense of remainingExpenses) {
-          totalAmount += applyMarkupCents({
-            amountCents: expense.amount,
-            markupPercent: expense.markup,
-          });
+        const detachedExpenseIds = detachedExpenses.map((row) => row.id);
+        if (detachedExpenseIds.length > 0) {
+          await tx
+            .delete(invoiceLines)
+            .where(
+              and(
+                eq(invoiceLines.invoiceId, params.invoiceId),
+                eq(invoiceLines.workspaceId, workspaceId),
+                inArray(invoiceLines.expenseId, detachedExpenseIds),
+              ),
+            );
         }
 
-        await tx
-          .update(invoices)
-          .set({ totalAmount: cents(totalAmount), updatedAt: now })
-          .where(
-            and(
-              eq(invoices.id, params.invoiceId),
-              eq(invoices.workspaceId, workspaceId),
-            ),
-          );
+        const totals = await recalculateInvoiceTotals(
+          tx,
+          { invoiceId: params.invoiceId, workspaceId },
+          now,
+        );
+        const totalAmount = totals.grossAmountMinor;
 
         await recordAuditEvent(
           tx,

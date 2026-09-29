@@ -2,8 +2,6 @@ import { Result } from "better-result";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { t } from "elysia";
 
-import { prorateHourlyCents } from "@stll/money";
-
 import { abortableTx } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
@@ -11,12 +9,17 @@ import {
   invoices,
   timeEntries,
 } from "@/api/db/schema";
+import {
+  ATTACHED_ENTRY_LINE_VAT,
+  insertInvoiceLines,
+  recalculateInvoiceTotals,
+  timeEntryLineDraft,
+} from "@/api/handlers/invoices/invoice-lines";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tCurrencyCode, tSafeId } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import { cents } from "@/api/lib/money";
 import { PG_ERROR } from "@/api/lib/pg-error";
 
 import {
@@ -72,8 +75,6 @@ const createInvoice = createSafeHandler(
         tx
           .select({
             id: timeEntries.id,
-            billedMinutes: timeEntries.billedMinutes,
-            rateAtEntry: timeEntries.rateAtEntry,
             status: timeEntries.status,
             billable: timeEntries.billable,
             currency: timeEntries.currency,
@@ -127,14 +128,6 @@ const createInvoice = createSafeHandler(
       );
     }
 
-    let totalAmount = 0;
-    for (const entry of entries) {
-      totalAmount += prorateHourlyCents({
-        billedMinutes: entry.billedMinutes,
-        hourlyRateCents: entry.rateAtEntry,
-      });
-    }
-
     const now = new Date();
     const expectedCount = entries.length;
 
@@ -149,7 +142,6 @@ const createInvoice = createSafeHandler(
           dueDate: body.dueDate ?? null,
           reference: body.reference ?? null,
           currency: body.currency,
-          totalAmount: cents(totalAmount),
           notes: body.notes ?? null,
           status: INVOICE_STATUS.DRAFT,
         })
@@ -185,12 +177,29 @@ const createInvoice = createSafeHandler(
             eq(timeEntries.currency, body.currency),
           ),
         )
-        .returning({ id: timeEntries.id });
+        .returning({
+          id: timeEntries.id,
+          billedMinutes: timeEntries.billedMinutes,
+          rateAtEntry: timeEntries.rateAtEntry,
+          narrative: timeEntries.narrative,
+          invoiceNarrative: timeEntries.invoiceNarrative,
+        });
 
       const linkedCount = updated.length;
       if (linkedCount !== expectedCount) {
         throw new InvoiceEntriesModifiedConcurrentlyError();
       }
+
+      const scope = { invoiceId: created.id, workspaceId };
+      await insertInvoiceLines(
+        tx,
+        { ...scope, organizationId: session.activeOrganizationId },
+        updated.map((entry) =>
+          timeEntryLineDraft(entry, ATTACHED_ENTRY_LINE_VAT),
+        ),
+      );
+      const totals = await recalculateInvoiceTotals(tx, scope, now);
+      const totalAmount = totals.grossAmountMinor;
 
       await recordAuditEvent(tx, [
         {
