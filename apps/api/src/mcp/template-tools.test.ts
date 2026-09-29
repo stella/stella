@@ -1154,9 +1154,10 @@ describe("MCP template tools", () => {
         }),
       }),
     );
-    expect(loadOrgAIConfigMock).toHaveBeenCalledWith(
-      toSafeId<"organization">("org_1"),
-    );
+    expect(loadOrgAIConfigMock).toHaveBeenCalledWith({
+      organizationId: toSafeId<"organization">("org_1"),
+      userId: toSafeId<"user">("user_1"),
+    });
     // The same per-condition shape fill_template reports, so an agent that
     // learned one reads the other.
     expect(parseToolPayload(result)).toEqual({

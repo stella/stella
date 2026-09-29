@@ -222,6 +222,14 @@ export const MODEL_RATES = {
     outputPerMTok: 1_400_000,
     cachedInputPerMTok: 17_500,
   },
+  // models.dev: anthropic:claude-sonnet-5-5
+  "claude-sonnet-5-5": {
+    kind: "flat",
+    inputPerMTok: 200_000,
+    outputPerMTok: 1_000_000,
+    cachedInputPerMTok: 20_000,
+    cachedWriteInputPerMTok: 250_000,
+  },
   // models.dev: anthropic:claude-sonnet-5
   "claude-sonnet-5": {
     kind: "flat",
@@ -359,18 +367,21 @@ export const MODEL_RATES = {
     kind: "flat",
     inputPerMTok: 50_000,
     outputPerMTok: 150_000,
+    cachedInputPerMTok: 5000,
   },
   // models.dev: mistral:mistral-medium-latest
   "mistral-medium-latest": {
     kind: "flat",
     inputPerMTok: 150_000,
     outputPerMTok: 750_000,
+    cachedInputPerMTok: 15_000,
   },
   // models.dev: mistral:mistral-small-latest
   "mistral-small-latest": {
     kind: "flat",
     inputPerMTok: 15_000,
     outputPerMTok: 60_000,
+    cachedInputPerMTok: 1500,
   },
   // models.dev: google:gemini-2.5-flash
   "gemini-2.5-flash": {

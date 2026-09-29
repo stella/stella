@@ -22,6 +22,7 @@ import type { EditorView } from "prosemirror-view";
 import { useTranslations } from "use-intl";
 import { v7 as uuidv7 } from "uuid";
 
+import { CHAT_SKILL_DOCUMENT } from "@stll/api-contract";
 import {
   DOCX_SUGGEST_CHANGES_OPTIONS_BY_SURFACE,
   DOCX_SUGGESTION_SURFACE,
@@ -1499,6 +1500,16 @@ const TemplateStudioChatInner = ({
           onNewThread={hasMessages ? startNewThread : null}
           queueWhileGenerating
           sendDisabledReason={editorReady ? undefined : "editor-loading"}
+          skillChat={{
+            document: { kind: CHAT_SKILL_DOCUMENT.template },
+            // Pinned like the transport's `getEditApplyMode`.
+            editApplyMode: CHAT_EDIT_APPLY_MODE.manual,
+            threadRef,
+            webSearch: {
+              available: data.webSearchAvailable,
+              enabled: data.webSearchEnabled,
+            },
+          }}
           skillsOrganizationId={activeOrganizationId}
           status={isGenerating ? "generating" : "idle"}
           threadHasMessages={hasMessages}

@@ -983,7 +983,15 @@
       "searchFiles": "Hledat soubory",
       "searchMatters": "Hledat spisy",
       "searchMcpServers": "Hledat MCP servery...",
-      "searchSkills": "Hledat dovednosti"
+      "searchSkills": "Hledat dovednosti",
+      "skillNeeds": {
+        "browserExtension": "Pro tuto dovednost připojte rozšíření prohlížeče",
+        "document": "Pro tuto dovednost otevřete dokument",
+        "matter": "Pro tuto dovednost založte chat ve spisu",
+        "rawSendMode": "Není k dispozici v anonymizovaných chatech",
+        "reviewEdits": "Pro tuto dovednost přepněte úpravy na ruční kontrolu",
+        "webSearch": "Pro tuto dovednost zapněte vyhledávání na webu"
+      }
     },
     "contextMeter": {
       "attachments": "Připojené dokumenty",

@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { templateFills } from "@/api/db/schema";
+import { memberAIAccessError } from "@/api/lib/ai-config-response";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
   assertUsageAvailableForHandler,
@@ -91,6 +92,7 @@ const fillTemplateToWorkspace = createSafeHandler(
     params,
     body,
     orgAIConfig,
+    orgAIConfigStatus,
     recordAuditEvent,
   }) {
     const organizationId = session.activeOrganizationId;
@@ -163,12 +165,15 @@ const fillTemplateToWorkspace = createSafeHandler(
     };
 
     // The fill service runs this only when the manifest declares AI fields,
-    // before any model call, so a deterministic fill never spends AI quota.
-    // Gated on a usable provider — org BYOK or the deployment's instance
-    // provider — because the generators below run the fast model in either
-    // case, so an instance-provider fill must still be quota-checked. A null
-    // org config flows through to the metering layer (instance-provider rate).
-    const assertUsageAvailable =
+    // before any model call, so a deterministic fill never spends AI quota
+    // and stays open to every member. A member the organization does not
+    // admit to AI work is refused here, whichever key would serve the
+    // fields. The usage check is gated on a usable provider — org BYOK or
+    // the deployment's instance provider — because the generators below run
+    // the fast model in either case, so an instance-provider fill must still
+    // be quota-checked. A null org config flows through to the metering
+    // layer (instance-provider rate).
+    const checkUsage =
       orgAIConfig || hasTanStackInstanceProvider()
         ? async () =>
             await assertUsageAvailableForHandler({
@@ -180,6 +185,13 @@ const fillTemplateToWorkspace = createSafeHandler(
               safeDb,
             })
         : undefined;
+    const accessError = memberAIAccessError(orgAIConfigStatus);
+    const assertUsageAvailable:
+      | (() => Promise<HandlerError<402 | 403 | 500> | null>)
+      | undefined =
+      accessError === null
+        ? checkUsage
+        : async () => await Promise.resolve(accessError);
 
     const filled = yield* Result.await(
       Result.tryPromise({
@@ -205,8 +217,9 @@ const fillTemplateToWorkspace = createSafeHandler(
     );
 
     if ("usageRejection" in filled) {
-      // The preflight rejected the AI fill (over quota / no entitlement);
-      // surface the framework's exact 402/500 error body unchanged.
+      // The preflight rejected the AI fill (over quota / no entitlement, or
+      // a member not admitted to AI work); surface the framework's exact
+      // 402/403/500 error body unchanged.
       return Result.err(filled.usageRejection);
     }
 

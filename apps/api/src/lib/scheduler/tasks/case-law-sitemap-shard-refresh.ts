@@ -15,9 +15,15 @@ export const refreshCaseLawSitemapShardsTask: SchedulerTask = async ({
   if (signal.aborted) {
     panic("SchedulerAborted");
   }
-  const { largestShard, shards } = await refreshCaseLawSitemapShards(db);
+  const { largestShard, pages, shards } = await refreshCaseLawSitemapShards(
+    db,
+    {
+      signal,
+    },
+  );
   logger.info("scheduler.case_law_sitemap_shards_refreshed", {
     "caseLawSitemap.largestShard": largestShard,
+    "caseLawSitemap.pages": pages,
     "caseLawSitemap.shards": shards,
   });
 };

@@ -983,7 +983,15 @@
       "searchFiles": "Rechercher des fichiers",
       "searchMatters": "Rechercher des dossiers",
       "searchMcpServers": "Rechercher des serveurs MCP...",
-      "searchSkills": "Rechercher des compétences"
+      "searchSkills": "Rechercher des compétences",
+      "skillNeeds": {
+        "browserExtension": "Connectez l'extension du navigateur pour utiliser cette compétence",
+        "document": "Ouvrez un document pour utiliser cette compétence",
+        "matter": "Démarrez une conversation dans un dossier pour utiliser cette compétence",
+        "rawSendMode": "Indisponible dans les conversations anonymisées",
+        "reviewEdits": "Passez les modifications en révision manuelle pour utiliser cette compétence",
+        "webSearch": "Activez la recherche web pour utiliser cette compétence"
+      }
     },
     "contextMeter": {
       "attachments": "Documents joints",
