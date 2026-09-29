@@ -191,15 +191,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Release tags are cut from main, so the staging build cache
-          # (refreshed by every deploy-staging run) is warm for arm64.
-          # Read-only here: release builds must not mutate the staging ref.
+          # Staging deploys only on demand, so its build cache can be stale.
+          # Releases keep their own cache scope warm across tags, and still
+          # read the staging cache (never write it) when a recent staging
+          # deploy refreshed it.
           - runner: ubuntu-24.04-arm
             platform: linux/arm64
-            cache_from_tag: buildcache-staging
-            cache_to_tag: ""
-          # No continuous amd64 build exists, so releases keep their own
-          # cache scope warm across tags.
+            cache_from_tag: buildcache-release-arm64
+            cache_to_tag: buildcache-release-arm64
           - runner: ubuntu-latest
             platform: linux/amd64
             cache_from_tag: buildcache-release-amd64
@@ -260,7 +259,9 @@ jobs:
           file: apps/api/Dockerfile
           platforms: ${{ matrix.platform }}
           outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.cache_from_tag }}
+          cache-from: |
+            type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.cache_from_tag }}
+            ${{ matrix.platform == 'linux/arm64' && format('type=registry,ref={0}/{1}:buildcache-staging', env.REGISTRY, env.IMAGE_NAME) || '' }}
           cache-to: ${{ matrix.cache_to_tag != '' && format('type=registry,ref={0}/{1}:{2},mode=max', env.REGISTRY, env.IMAGE_NAME, matrix.cache_to_tag) || '' }}
           build-args: |
             STELLA_VERSION=${{ needs.resolve.outputs.version }}
