@@ -82,6 +82,10 @@ import {
   readCaseLawSourceNames,
 } from "@/api/lib/case-law/decision-search-facets";
 import {
+  decisionSearchCategorySql,
+  decisionHasLegalSentenceSql,
+} from "@/api/lib/case-law/decision-search-metadata-sql";
+import {
   decisionDatedFilterSql,
   decisionSortKeySql,
 } from "@/api/lib/case-law/decision-search-order-sql";
@@ -320,6 +324,21 @@ export const caseLawSearchPlan = ({
 
   // Optional filters on the decisions table
   const courtFilter = body.court ? sql`AND d.court = ${body.court}` : sql``;
+  const courtListFilter = body.courts
+    ? sql`AND d.court IN (${sql.join(
+        body.courts.map((court) => sql`${court}`),
+        sql`, `,
+      )})`
+    : sql``;
+  const categoryFilter =
+    body.category === undefined
+      ? sql``
+      : sql`AND ${decisionSearchCategorySql(sql`d.metadata`)} = ${body.category}`;
+  const legalSentenceFilter =
+    body.hasLegalSentence === undefined
+      ? sql``
+      : sql`AND ${decisionHasLegalSentenceSql(sql`d.metadata`)} = ${body.hasLegalSentence}`;
+  const metadataFilters = sql`${categoryFilter} ${legalSentenceFilter}`;
   const countryFilter = sql`AND d.country = ${body.country}`;
   const dateFromFilter = body.dateFrom
     ? sql`AND d.decision_date >= ${body.dateFrom}`
@@ -365,6 +384,8 @@ export const caseLawSearchPlan = ({
   const allFilters = sql`
     ${datedFilter}
     ${courtFilter}
+    ${courtListFilter}
+    ${metadataFilters}
     ${countryFilter}
     ${dateFromFilter}
     ${dateToFilter}
@@ -525,6 +546,7 @@ export const caseLawSearchPlan = ({
     ${facetFrom}
     WHERE ${ftsSearch.predicate}
       ${datedFilter}
+      ${metadataFilters}
       ${countryFilter}
       ${dateFromFilter}
       ${dateToFilter}
@@ -544,6 +566,8 @@ export const caseLawSearchPlan = ({
     ${facetFrom}
     WHERE ${ftsSearch.predicate}
       ${courtFilter}
+      ${courtListFilter}
+      ${metadataFilters}
       ${countryFilter}
       ${typeFilter}
       ${sourceFilter}
@@ -560,6 +584,8 @@ export const caseLawSearchPlan = ({
     WHERE ${ftsSearch.predicate}
       ${datedFilter}
       ${courtFilter}
+      ${courtListFilter}
+      ${metadataFilters}
       ${countryFilter}
       ${dateFromFilter}
       ${dateToFilter}
@@ -577,6 +603,8 @@ export const caseLawSearchPlan = ({
     WHERE ${ftsSearch.predicate}
       ${datedFilter}
       ${courtFilter}
+      ${courtListFilter}
+      ${metadataFilters}
       ${countryFilter}
       ${dateFromFilter}
       ${dateToFilter}
@@ -593,6 +621,8 @@ export const caseLawSearchPlan = ({
     WHERE ${ftsSearch.predicate}
       ${datedFilter}
       ${courtFilter}
+      ${courtListFilter}
+      ${metadataFilters}
       ${countryFilter}
       ${dateFromFilter}
       ${dateToFilter}
@@ -881,6 +911,7 @@ const buildCorpusIndexQuery = ({
     legalAlternatives,
     filters: {
       court: body.court,
+      courts: body.courts,
       courtPartitions: courtPartitionsForCourtFilter(contract, body.court),
       dateFrom: body.dateFrom,
       dateTo: body.dateTo,
@@ -909,7 +940,7 @@ const bodyWithoutFacetFilter = (
   // are different types, and only the first is a body.
   switch (facet) {
     case "court": {
-      const { court: _court, ...withoutCourt } = body;
+      const { court: _court, courts: _courts, ...withoutCourt } = body;
       return withoutCourt;
     }
     case "decisionType": {
@@ -1153,6 +1184,9 @@ type CaseLawSearchRowFilterBody = Pick<
   SearchDecisionsBody,
   | "country"
   | "court"
+  | "courts"
+  | "category"
+  | "hasLegalSentence"
   | "dateFrom"
   | "dateTo"
   | "decisionType"
@@ -1173,6 +1207,19 @@ export const caseLawSearchRowFilters = (
   ];
   if (body.court) {
     filters.push(eq(caseLawDecisions.court, body.court));
+  }
+  if (body.courts !== undefined) {
+    filters.push(inArray(caseLawDecisions.court, body.courts));
+  }
+  if (body.category !== undefined) {
+    filters.push(
+      sql`${decisionSearchCategorySql(caseLawDecisions.metadata)} = ${body.category}`,
+    );
+  }
+  if (body.hasLegalSentence !== undefined) {
+    filters.push(
+      sql`${decisionHasLegalSentenceSql(caseLawDecisions.metadata)} = ${body.hasLegalSentence}`,
+    );
   }
   filters.push(eq(caseLawDecisions.country, body.country));
   if (body.dateFrom) {
@@ -1647,7 +1694,13 @@ const readCaseLawSearchFacets = async ({
   timeDbRead,
   totalQuery,
 }: ReadCaseLawSearchFacetsOptions): Promise<CaseLawSearchFacetsRead | null> => {
-  if (queryFor === null) {
+  // These predicates apply to live Postgres candidates, not corpus fields.
+  // Engine aggregations cannot count the resulting set truthfully.
+  if (
+    queryFor === null ||
+    body.category !== undefined ||
+    body.hasLegalSentence !== undefined
+  ) {
     return null;
   }
   // Read ahead of the aggregations, and failing closed: source policy is an
