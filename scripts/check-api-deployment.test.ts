@@ -157,6 +157,13 @@ describe("API deployment health receipt", () => {
       }
       expect(configuration).not.toMatch(/AWS_|DB_|ECR_|SECRET|TOKEN/gu);
     }
+
+    expect(staging).toContain('"VITE_PUBLIC_KNOWLEDGE_ENABLED": "true"');
+    expect(staging).toContain(
+      '"VITE_PUBLIC_KNOWLEDGE_INDEXING_ENABLED": "false"',
+    );
+    expect(staging).toContain('"VITE_SEO_INDEXABLE": "false"');
+    expect(production).not.toContain('"VITE_PUBLIC_KNOWLEDGE_ENABLED"');
   });
 
   test("release promotion preserves the full online-migration window", async () => {

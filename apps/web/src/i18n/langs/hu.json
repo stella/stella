@@ -532,6 +532,20 @@
     "noActiveTimer": "Nincs aktív időmérő",
     "noEntries": "Nincsenek időbejegyzések ebben az időszakban",
     "nonBillable": "Nem számlázható",
+    "quickEntry": {
+      "entrySaved": "Időbejegyzés mentve",
+      "expenseSaved": "Költség mentve",
+      "expenseTitle": "Költség hozzáadása",
+      "futureDate": "Válassza a mai napot vagy egy korábbi dátumot.",
+      "invalidDate": "Válasszon érvényes munkavégzési dátumot.",
+      "minimumUnit": "Az időt a legkisebb elszámolási egységre kerekítjük felfelé.",
+      "narrativeRequired": "Az idő mentése előtt adjon meg egy leírást.",
+      "outsideEditWindow": "Ez a dátum kívül esik a szerkesztési határidőn.",
+      "periodLocked": "Ez a hónap zárolva van.",
+      "saveAndAddExpense": "Mentés és költség hozzáadása",
+      "saveAndNew": "Mentés és új bejegyzés",
+      "viewDay": "Nap megtekintése"
+    },
     "rates": {
       "addRate": "Díjszabás hozzáadása",
       "createRateTable": "Díjtáblázat létrehozása",

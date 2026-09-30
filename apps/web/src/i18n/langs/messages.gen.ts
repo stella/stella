@@ -535,6 +535,20 @@ type Messages = {
     "noActiveTimer": "No active timer";
     "noEntries": "No time entries for this period";
     "nonBillable": "Non-billable";
+    "quickEntry": {
+      "entrySaved": "Time entry saved";
+      "expenseSaved": "Expense saved";
+      "expenseTitle": "Add expense";
+      "futureDate": "Choose today or an earlier date.";
+      "invalidDate": "Choose a valid work date.";
+      "minimumUnit": "Time is rounded up to the minimum billing unit.";
+      "narrativeRequired": "Add a description before saving time.";
+      "outsideEditWindow": "This date is outside the editing window.";
+      "periodLocked": "This month is locked.";
+      "saveAndAddExpense": "Save and add expense";
+      "saveAndNew": "Save and add another";
+      "viewDay": "View day";
+    };
     "rates": {
       "addRate": "Add rate";
       "createRateTable": "Create rate table";

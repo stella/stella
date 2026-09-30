@@ -532,6 +532,20 @@
     "noActiveTimer": "Sin temporizador activo",
     "noEntries": "No hay registros de tiempo para este período",
     "nonBillable": "No facturable",
+    "quickEntry": {
+      "entrySaved": "Registro de tiempo guardado",
+      "expenseSaved": "Gasto guardado",
+      "expenseTitle": "Añadir gasto",
+      "futureDate": "Elige hoy o una fecha anterior.",
+      "invalidDate": "Elige una fecha de trabajo válida.",
+      "minimumUnit": "El tiempo se redondea hacia arriba a la unidad mínima de facturación.",
+      "narrativeRequired": "Añade una descripción antes de guardar el tiempo.",
+      "outsideEditWindow": "Esta fecha queda fuera del plazo de edición.",
+      "periodLocked": "Este mes está bloqueado.",
+      "saveAndAddExpense": "Guardar y añadir gasto",
+      "saveAndNew": "Guardar y añadir otra entrada",
+      "viewDay": "Ver día"
+    },
     "rates": {
       "addRate": "Añadir tarifa",
       "createRateTable": "Crear tabla de tarifas",

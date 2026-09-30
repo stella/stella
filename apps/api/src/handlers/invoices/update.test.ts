@@ -49,6 +49,9 @@ describe("updateInvoice currency integrity", () => {
                     {
                       id: toSafeId<"invoice">("inv_test"),
                       status: INVOICE_STATUS.DRAFT,
+                      documentType: "invoice",
+                      originalInvoiceId: null,
+                      finalizedAt: null,
                       currency: "USD",
                       dueDate: null,
                       invoiceDate: "2026-06-14",

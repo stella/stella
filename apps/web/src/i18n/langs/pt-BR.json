@@ -532,6 +532,20 @@
     "noActiveTimer": "Nenhum temporizador ativo",
     "noEntries": "Nenhuma entrada de tempo para este período",
     "nonBillable": "Não faturável",
+    "quickEntry": {
+      "entrySaved": "Registro de tempo salvo",
+      "expenseSaved": "Despesa salva",
+      "expenseTitle": "Adicionar despesa",
+      "futureDate": "Escolha hoje ou uma data anterior.",
+      "invalidDate": "Escolha uma data de trabalho válida.",
+      "minimumUnit": "O tempo é arredondado para cima conforme a unidade mínima de faturamento.",
+      "narrativeRequired": "Adicione uma descrição antes de salvar o tempo.",
+      "outsideEditWindow": "Esta data está fora do prazo de edição.",
+      "periodLocked": "Este mês está bloqueado.",
+      "saveAndAddExpense": "Salvar e adicionar despesa",
+      "saveAndNew": "Salvar e adicionar outra entrada",
+      "viewDay": "Ver dia"
+    },
     "rates": {
       "addRate": "Adicionar taxa",
       "createRateTable": "Criar tabela de taxas",

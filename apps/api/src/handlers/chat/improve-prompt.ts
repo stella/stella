@@ -14,6 +14,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 
 const config = {
+  actionAdmission: "handler",
   permissions: { chat: ["create"] },
   mcp: { type: "internal", reason: "assistant_chat" },
   body: t.Object({
@@ -33,6 +34,7 @@ const IMPROVE_PROMPT_MAX_OUTPUT_TOKENS = 4096;
 const improvePrompt = createSafeRootHandler(
   config,
   async function* ({
+    actionSignal,
     body,
     orgAIConfig,
     promptCachingEnabled,
@@ -85,7 +87,7 @@ const improvePrompt = createSafeRootHandler(
           );
           return await generateTanStackTextForRole({
             abortSignal: AbortSignal.any([
-              request.signal,
+              actionSignal ?? request.signal,
               AbortSignal.timeout(IMPROVE_PROMPT_TIMEOUT_MS),
             ]),
             analytics: aiAnalytics,

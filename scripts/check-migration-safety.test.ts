@@ -4,6 +4,8 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { propertyConfig } from "@stll/property-testing";
+
 type CheckerResult = {
   exitCode: number | null;
   stderr: string;
@@ -642,7 +644,7 @@ describe("check-migration-safety", () => {
               );
             },
           ),
-          { numRuns: 30 },
+          propertyConfig({ numRuns: 30 }),
         );
       },
       PROPERTY_TEST_TIMEOUT_MS,
@@ -664,7 +666,7 @@ describe("check-migration-safety", () => {
               expect(result.exitCode).toBe(1);
             },
           ),
-          { numRuns: 20 },
+          propertyConfig({ numRuns: 20 }),
         );
       },
       PROPERTY_TEST_TIMEOUT_MS,

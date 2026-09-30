@@ -532,6 +532,20 @@
     "noActiveTimer": "Nav aktīva taimeris",
     "noEntries": "Šim periodam nav laika ierakstu",
     "nonBillable": "Neapmaksājams",
+    "quickEntry": {
+      "entrySaved": "Laika ieraksts saglabāts",
+      "expenseSaved": "Izdevums saglabāts",
+      "expenseTitle": "Pievienot izdevumu",
+      "futureDate": "Izvēlieties šodienu vai agrāku datumu.",
+      "invalidDate": "Izvēlieties derīgu darba datumu.",
+      "minimumUnit": "Laiks tiek noapaļots uz augšu līdz minimālajai norēķinu vienībai.",
+      "narrativeRequired": "Pirms laika saglabāšanas pievienojiet aprakstu.",
+      "outsideEditWindow": "Šis datums ir ārpus rediģēšanas termiņa.",
+      "periodLocked": "Šis mēnesis ir bloķēts.",
+      "saveAndAddExpense": "Saglabāt un pievienot izdevumu",
+      "saveAndNew": "Saglabāt un pievienot vēl vienu",
+      "viewDay": "Skatīt dienu"
+    },
     "rates": {
       "addRate": "Pievienot likmi",
       "createRateTable": "Izveidot likmju tabulu",

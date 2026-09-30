@@ -532,6 +532,20 @@
     "noActiveTimer": "Nėra aktyvaus laikmačio",
     "noEntries": "Šiam laikotarpiui laiko įrašų nėra",
     "nonBillable": "Neapmokamas",
+    "quickEntry": {
+      "entrySaved": "Laiko įrašas išsaugotas",
+      "expenseSaved": "Išlaida išsaugota",
+      "expenseTitle": "Pridėti išlaidą",
+      "futureDate": "Pasirinkite šiandieną arba ankstesnę datą.",
+      "invalidDate": "Pasirinkite galiojančią darbo datą.",
+      "minimumUnit": "Laikas apvalinamas į didesnę pusę iki mažiausio atsiskaitymo vieneto.",
+      "narrativeRequired": "Prieš išsaugodami laiką pridėkite aprašymą.",
+      "outsideEditWindow": "Ši data nepatenka į redagavimo terminą.",
+      "periodLocked": "Šis mėnuo užrakintas.",
+      "saveAndAddExpense": "Išsaugoti ir pridėti išlaidą",
+      "saveAndNew": "Išsaugoti ir pridėti kitą įrašą",
+      "viewDay": "Peržiūrėti dieną"
+    },
     "rates": {
       "addRate": "Pridėti įkainį",
       "createRateTable": "Sukurti įkainių lentelę",

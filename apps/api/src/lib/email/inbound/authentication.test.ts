@@ -135,6 +135,33 @@ describe("mail authentication trust boundary", () => {
   });
 });
 
+test("local authentication bounds adversarial From header parsing", async () => {
+  const verifier = createLocalMailVerifier(() => ({
+    resolve: async () => [],
+    cancel: () => {},
+  }));
+  const from = ` >${">[x][x]".repeat(40_000)}`;
+  const raw = Buffer.from(
+    `From:${from}\r\nTo: recipient@example.net\r\n\r\nBody`,
+  );
+  const started = performance.now();
+  await verifier({
+    raw,
+    fromAddress: "member@example.com",
+    envelope: {
+      mailFrom: "member@example.com",
+      recipients: ["token@inbound.example.com"],
+      remoteIp: "192.0.2.1",
+      helo: "mail.example.com",
+    },
+  }).then(
+    () => null,
+    (error: unknown) => error,
+  );
+  const elapsed = performance.now() - started;
+  expect(elapsed).toBeLessThan(1000);
+});
+
 test("local verification uses SMTP envelope and DNS, ignoring forged authentication headers", async () => {
   let cancelled = 0;
   const verifier = createLocalMailVerifier(() => ({

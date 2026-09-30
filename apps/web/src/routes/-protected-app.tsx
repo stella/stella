@@ -58,6 +58,7 @@ import type { InspectorTab } from "@/components/inspector/inspector-tabs-store";
 import { inspectorPaneWidthStorageKey } from "@/components/inspector/pane-width-storage";
 import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog";
 import { NotificationBell } from "@/components/notification-bell";
+import { QuickEntry } from "@/components/quick-entry";
 import { AIAvailabilityProvider } from "@/components/require-ai-key";
 import { SelfhostUpdateBanner } from "@/components/selfhost-update-banner";
 import { ShortcutEchoHud } from "@/components/shortcut-echo-hud";
@@ -268,6 +269,7 @@ export const ProtectedAppFrame = ({
                     moves between their two slots instead of being rebuilt
                     when the document and the review trade panes. */}
                 <DocxEditorHost />
+                <QuickEntry />
                 <CreateMatterDialog />
                 <AttachedTemplateUploadDialog />
                 <DocumentReferenceUploadDialog />
