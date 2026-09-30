@@ -1,7 +1,6 @@
-export type CatalogueKind = "skill" | "mcp" | "native-tool";
-export type CatalogueCost = "free" | "paid";
-export type CatalogueSetup = "none" | "account" | "api-key";
-export type CatalogueInstallState = "installed" | "available" | "unavailable";
+import type { CatalogueCost, CatalogueSetup } from "@stll/catalogue";
+
+type CatalogueInstallState = "installed" | "available" | "unavailable";
 
 type CommonFields = {
   slug: string;
@@ -73,7 +72,7 @@ export type CatalogueNativeTool = CommonFields & {
   documentationUrl?: string | undefined;
 };
 
-export type CatalogueEntry =
+export type CatalogueDisplayEntry =
   | CatalogueSkill
   | CatalogueMcp
   | CatalogueNativeTool;
@@ -89,7 +88,9 @@ export type CatalogueEntry =
  * MCP and skill entries fully drop from `installState === "installed"`
  * on remove, so the simple state check is enough.
  */
-export const isEffectivelyInstalled = (entry: CatalogueEntry): boolean => {
+export const isEffectivelyInstalled = (
+  entry: CatalogueDisplayEntry,
+): boolean => {
   if (entry.installState !== "installed") {
     return false;
   }

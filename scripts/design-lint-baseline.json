@@ -201,8 +201,6 @@
     "apps/web/src/routes/_protected.contacts/-components/add-contact-method-form.tsx": 1,
     "apps/web/src/routes/_protected.contacts/-components/editable-row.tsx": 7,
     "apps/web/src/routes/_protected.contacts/index.tsx": 6,
-    "apps/web/src/routes/_protected.settings/-components/account/cli-card.tsx": 1,
-    "apps/web/src/routes/_protected.settings/-components/account/mcp-server-card.tsx": 1,
     "apps/web/src/routes/_protected.settings/-components/account/sessions-card.tsx": 3,
     "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx": 1,
     "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx": 3,

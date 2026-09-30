@@ -52,6 +52,7 @@ type ValibotMcpToolDefinition<TDefinition extends ValibotMcpToolInput> = Omit<
 > & {
   inputSchema: McpToolInputSchema;
   inputSchemaSource: TDefinition["inputSchema"];
+  inputSchemaProjectionWaiver: JsonSchemaProjectionWaiver | undefined;
 };
 
 const appendGuidance = (
@@ -775,6 +776,7 @@ export const defineValibotMcpTool = <
       inputNormalization,
     ),
     inputSchemaSource: inputSchema,
+    inputSchemaProjectionWaiver: jsonSchemaProjectionWaiver,
   };
 };
 

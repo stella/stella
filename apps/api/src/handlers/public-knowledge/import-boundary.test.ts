@@ -19,6 +19,7 @@ const allowedModules = new Set([
   "handlers/public-knowledge/routes.ts",
   "lib/observability/response-status.ts",
   "lib/array.ts",
+  "lib/docx-archive.ts",
   "lib/docx/block-directives.ts",
   "lib/docx/discover-clause-slots.ts",
   "lib/docx/discover-placeholders.ts",
