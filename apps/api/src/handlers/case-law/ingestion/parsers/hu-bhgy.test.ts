@@ -285,12 +285,12 @@ describe("reading a document folio handed over", () => {
         {
           type: "mathEquation",
           display: "inline",
-          ommlXml: "<m:oMath />",
+          ommlXml: "<m:oMath><m:r><m:t>math </m:t></m:r></m:oMath>",
           plainText: "math ",
         },
         {
           type: "preservedInline",
-          xml: "<w:proofErr />",
+          xml: "<opaque><w:r><w:t>preserved </w:t></w:r></opaque>",
           text: "preserved ",
         },
         {
@@ -307,16 +307,14 @@ describe("reading a document folio handed over", () => {
             },
             {
               type: "preservedInline",
-              xml: "<w:proofErr />",
+              xml: "<opaque><w:r><w:t>link three</w:t></w:r></opaque>",
               text: "link three",
             },
           ],
         },
       ],
     };
-    const parsed = parseDocument(
-      bodyOf([paragraphOf({ text: "Indokolás" }), paragraph]),
-    );
+    const parsed = parseDocument(bodyOf([paragraph]));
 
     expect(parsed.fulltext).toContain(
       "before field simple inserted moved controlled wrapped math preserved link one link two link three",
