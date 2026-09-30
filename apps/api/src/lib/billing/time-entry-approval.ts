@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, asc, eq, getTableColumns, inArray, ne, or } from "drizzle-orm";
+import { and, asc, eq, getColumns, inArray, ne, or } from "drizzle-orm";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 
@@ -131,7 +131,7 @@ export const approveTimeEntryBatch = async ({
     }
     const rows = await tx
       .select({
-        ...getTableColumns(timeEntries),
+        ...getColumns(timeEntries),
         running: timeEntryIsRunning(),
       })
       .from(timeEntries)

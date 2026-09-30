@@ -140,8 +140,13 @@ const listApprovalQueue = createSafeRootHandler(
     const memberId = query.member ? brandPersistedUserId(query.member) : null;
     const validatedMember = memberId
       ? yield* Result.await(
-          safeDb((tx) =>
-            validateOrgUserId(tx, memberId, session.activeOrganizationId),
+          safeDb(
+            async (tx) =>
+              await validateOrgUserId(
+                tx,
+                memberId,
+                session.activeOrganizationId,
+              ),
           ),
         )
       : null;
