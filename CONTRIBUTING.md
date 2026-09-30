@@ -22,6 +22,14 @@ desktop app alongside web and API, or `bun run dev:all` for the raw
 Turborepo fan-out. Web-facing modes auto-open the app in your browser;
 pass `--no-browser` to skip that.
 
+For production-style cookie-authenticated browser requests (including image
+thumbnails), run `STELLA_DEV_SAME_ORIGIN_API=1 bun run agent:up` or
+`STELLA_DEV_SAME_ORIGIN_API=1 bun run dev`. The runner sets the app origin,
+browser `/api` URL, and Vite proxy target together using this checkout's ports;
+server requests still use the API port directly. These computed values override
+`.env` and `.env.local` URLs. If a stack is already running, stop it with
+`bun run agent:down` before enabling the opt-in.
+
 See the [README](README.md) for the full tech stack and project
 structure.
 
