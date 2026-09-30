@@ -21,9 +21,11 @@ export const dbTestBatchSize = (propertyOnly: boolean) =>
  * neighbours. Each runs in a process of its own, whatever its class (see
  * `splitSoloTests`).
  */
-export const SOLO_TEST_PATHS: ReadonlySet<string> = new Set(
-  Object.values(RECORDED_CONVERSATION_SUITES),
-);
+export const SOLO_TEST_PATHS: ReadonlySet<string> = new Set([
+  ...Object.values(RECORDED_CONVERSATION_SUITES),
+  // The 20,000-entry corpus plus PGlite leaves no room for another DB suite.
+  "src/handlers/sanctions/public-routes.db.test.ts",
+]);
 
 /**
  * Move each solo file out of its composed batch into a batch of its own. The
