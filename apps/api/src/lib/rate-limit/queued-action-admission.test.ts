@@ -53,7 +53,9 @@ describe("queued action admission", () => {
         },
       });
 
-      await expect(operation).rejects.toBeInstanceOf(DelayedError);
+      expect(await operation.catch((error: unknown) => error)).toBeInstanceOf(
+        DelayedError,
+      );
       expect(ran).toBe(false);
       expect(delays).toHaveLength(1);
       expect(delays.at(0)?.timestamp).toBeGreaterThan(1234);
@@ -97,15 +99,15 @@ describe("queued action admission", () => {
     const previous = env.FEATURE_ACTION_ADMISSION;
     env.FEATURE_ACTION_ADMISSION = false;
     try {
-      await expect(
-        runQueuedKickoff({
+      expect(
+        await runQueuedKickoff({
           organizationId,
           userId,
           actionKind: QUEUED_ACTION_KIND.flow,
           logicalPhaseId: "manual-run:request-1",
           run: async () => "completed",
         }),
-      ).resolves.toBe("completed");
+      ).toBe("completed");
     } finally {
       env.FEATURE_ACTION_ADMISSION = previous;
     }
@@ -121,8 +123,8 @@ describe("queued action admission", () => {
       });
     };
 
-    await expect(
-      runQueuedKickoff({
+    expect(
+      await runQueuedKickoff({
         organizationId,
         userId,
         actionKind: QUEUED_ACTION_KIND.extraction,
@@ -130,7 +132,7 @@ describe("queued action admission", () => {
         admission,
         run: async () => "accepted",
       }),
-    ).resolves.toBe("accepted");
+    ).toBe("accepted");
 
     expect(calls).toHaveLength(1);
     expect(calls.at(0)).toMatchObject({
@@ -163,8 +165,8 @@ describe("queued action admission", () => {
         },
       });
     try {
-      await expect(
-        runQueuedKickoff({
+      expect(
+        await runQueuedKickoff({
           organizationId,
           userId,
           actionKind: QUEUED_ACTION_KIND.flow,
@@ -175,8 +177,8 @@ describe("queued action admission", () => {
             await reservePeriod();
             enqueued = true;
           },
-        }),
-      ).rejects.toBeInstanceOf(ActionAdmissionError);
+        }).catch((error: unknown) => error),
+      ).toBeInstanceOf(ActionAdmissionError);
       expect(enqueued).toBe(false);
     } finally {
       env.FEATURE_ACTION_ADMISSION = previous;
@@ -224,7 +226,7 @@ describe("queued action admission", () => {
     ).toBe(false);
 
     finishPlanningAndEnqueue.resolve(undefined);
-    await expect(operation).resolves.toBe("enqueued");
+    expect(await operation).toBe("enqueued");
     expect(
       calls.filter((args) => args.at(0)?.includes('redis.call("ZREM",')),
     ).toHaveLength(1);

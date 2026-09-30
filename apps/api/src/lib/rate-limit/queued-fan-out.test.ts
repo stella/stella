@@ -151,7 +151,7 @@ describe("queued fan-out admission ownership", () => {
     expect(releases).toBe(0);
 
     finishSiblingCleanup.resolve();
-    await expect(fanOut).rejects.toBe(firstFailure);
+    expect(await fanOut.catch((error: unknown) => error)).toBe(firstFailure);
     expect(releases).toBe(1);
 
     const third = await withActionAdmission({

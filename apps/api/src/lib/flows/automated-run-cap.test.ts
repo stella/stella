@@ -232,7 +232,7 @@ describe("insertAutomatedFlowRunWithinCap", () => {
 
     const operation = attemptStart(definitionId, reservePeriod, runId);
 
-    await expect(operation).rejects.toMatchObject({
+    expect(await operation.catch((error: unknown) => error)).toMatchObject({
       _tag: "HandlerError",
       status: 429,
       message: "Action period limit reached",
