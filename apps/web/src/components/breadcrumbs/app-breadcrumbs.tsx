@@ -170,6 +170,12 @@ export const AppBreadcrumbs = () => {
       </BreadcrumbLink>,
     ),
     defineBreadcrumb(
+      ["/settings/organization/vat-rates"],
+      <BreadcrumbLink to="/settings/organization/vat-rates">
+        {t("billing.vatRates.title")}
+      </BreadcrumbLink>,
+    ),
+    defineBreadcrumb(
       ["/settings/organization/matter-numbering"],
       <BreadcrumbLink to="/settings/organization/matter-numbering">
         {t("settings.organization.matterNumbering")}

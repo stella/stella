@@ -3,6 +3,7 @@ import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import {
+  BanknoteIcon,
   BrainIcon,
   FlaskConicalIcon,
   GaugeIcon,
@@ -21,6 +22,7 @@ import type { LucideIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { env } from "@/env";
+import { useTimeBillingPreviewEnabled } from "@/hooks/use-time-billing-preview";
 import type { TranslationKey } from "@/i18n/types";
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
@@ -28,6 +30,7 @@ import { betaFeaturesAvailable } from "@/lib/beta-features";
 import { useKeyboardShortcutsDialogStore } from "@/lib/keyboard-shortcuts-dialog-store";
 import { managementRoles } from "@/lib/organization/consts";
 import { pageTitle } from "@/lib/page-title";
+import { isBillingSettingsAccessible } from "@/routes/_protected.settings/-components/organization/billing-settings.logic";
 
 export const Route = createFileRoute("/_protected/settings")({
   head: () => ({
@@ -44,6 +47,7 @@ type NavTo =
   | "/settings/account/beta"
   | "/settings/organization/members"
   | "/settings/organization/matter-numbering"
+  | "/settings/organization/vat-rates"
   | "/settings/organization/document-types"
   | "/settings/organization/ai"
   | "/settings/organization/anonymization"
@@ -110,6 +114,11 @@ const ORGANIZATION_SECTION = {
       icon: UsersIcon,
     },
     {
+      to: "/settings/organization/vat-rates",
+      labelKey: "billing.vatRates.title",
+      icon: BanknoteIcon,
+    },
+    {
       to: "/settings/organization/matter-numbering",
       labelKey: "settings.organization.matterNumbering",
       icon: HashIcon,
@@ -172,8 +181,19 @@ function SettingsLayout() {
         items: [...accountItems, BETA_NAV_ITEM],
       } as const)
     : ({ ...ACCOUNT_SECTION, items: accountItems } as const);
+  const billingAccessible = isBillingSettingsAccessible({
+    previewEnabled: useTimeBillingPreviewEnabled(),
+    role,
+  });
+  const organizationSection = {
+    ...ORGANIZATION_SECTION,
+    items: ORGANIZATION_SECTION.items.filter(
+      (item) =>
+        item.to !== "/settings/organization/vat-rates" || billingAccessible,
+    ),
+  };
   const sections = showOrganization
-    ? [accountSection, ORGANIZATION_SECTION]
+    ? [accountSection, organizationSection]
     : [accountSection];
 
   return (

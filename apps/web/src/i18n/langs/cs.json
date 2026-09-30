@@ -581,6 +581,27 @@
     "timerActive": "Časovač běží",
     "timesheets": "Výkazy práce",
     "total": "Celkem",
+    "vatRates": {
+      "add": "Přidat sazbu DPH",
+      "archiveConfirm": "Archivovat tuto sazbu DPH? Nebude již dostupná pro nové doklady.",
+      "code": "Kód sazby",
+      "current": "Aktuální sazba",
+      "description": "Spravujte sazby a období jejich platnosti.",
+      "edit": "Upravit sazbu DPH",
+      "empty": "Žádné sazby DPH.",
+      "future": "Budoucí sazba",
+      "invalidPeriod": "Vyberte platná data s koncem po začátku.",
+      "invalidRate": "Zadejte nezápornou procentní sazbu s nejvýše dvěma desetinnými místy.",
+      "name": "Označení sazby",
+      "openEnded": "Bez koncového data",
+      "overlap": "Období platnosti pro stejný kód sazby se nesmějí překrývat.",
+      "past": "Dřívější sazba",
+      "periodHelp": "Počáteční datum je zahrnuto; koncové datum není zahrnuto. Pro období bez konce ponechte koncové datum prázdné.",
+      "rate": "Procentní sazba DPH",
+      "title": "Sazby DPH",
+      "validFrom": "Platí od",
+      "validTo": "Platí do"
+    },
     "writeOff": "Odepsat"
   },
   "caseLaw": {

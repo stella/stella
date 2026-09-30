@@ -78,6 +78,7 @@ import { Route as ProtectedSettingsOrganizationDocumentTypesRouteImport } from '
 import { Route as ProtectedSettingsOrganizationMatterNumberingRouteImport } from './routes/_protected.settings/organization.matter-numbering'
 import { Route as ProtectedSettingsOrganizationMembersRouteImport } from './routes/_protected.settings/organization.members'
 import { Route as ProtectedSettingsOrganizationUsageRouteImport } from './routes/_protected.settings/organization.usage'
+import { Route as ProtectedSettingsOrganizationVatRatesRouteImport } from './routes/_protected.settings/organization.vat-rates'
 import { Route as ProtectedWorkspacesWorkspaceIdIndexRouteImport } from './routes/_protected.workspaces/$workspaceId/index'
 import { Route as ProtectedWorkspacesWorkspaceIdViewIdRouteRouteImport } from './routes/_protected.workspaces/$workspaceId/$viewId.route'
 import { Route as ProtectedWorkspacesWorkspaceIdCorrespondenceRouteImport } from './routes/_protected.workspaces/$workspaceId/correspondence'
@@ -474,6 +475,12 @@ const ProtectedSettingsOrganizationUsageRoute =
     path: '/usage',
     getParentRoute: () => ProtectedSettingsOrganizationRouteRoute,
   } as any)
+const ProtectedSettingsOrganizationVatRatesRoute =
+  ProtectedSettingsOrganizationVatRatesRouteImport.update({
+    id: '/vat-rates',
+    path: '/vat-rates',
+    getParentRoute: () => ProtectedSettingsOrganizationRouteRoute,
+  } as any)
 const ProtectedWorkspacesWorkspaceIdIndexRoute =
   ProtectedWorkspacesWorkspaceIdIndexRouteImport.update({
     id: '/',
@@ -711,6 +718,7 @@ export interface FileRoutesByFullPath {
   '/settings/organization/matter-numbering': typeof ProtectedSettingsOrganizationMatterNumberingRoute
   '/settings/organization/members': typeof ProtectedSettingsOrganizationMembersRoute
   '/settings/organization/usage': typeof ProtectedSettingsOrganizationUsageRoute
+  '/settings/organization/vat-rates': typeof ProtectedSettingsOrganizationVatRatesRoute
   '/workspaces/$workspaceId/correspondence': typeof ProtectedWorkspacesWorkspaceIdCorrespondenceRouteWithChildren
   '/workspaces/$workspaceId/expenses': typeof ProtectedWorkspacesWorkspaceIdExpensesRoute
   '/workspaces/$workspaceId/invoices': typeof ProtectedWorkspacesWorkspaceIdInvoicesRouteWithChildren
@@ -800,6 +808,7 @@ export interface FileRoutesByTo {
   '/settings/organization/matter-numbering': typeof ProtectedSettingsOrganizationMatterNumberingRoute
   '/settings/organization/members': typeof ProtectedSettingsOrganizationMembersRoute
   '/settings/organization/usage': typeof ProtectedSettingsOrganizationUsageRoute
+  '/settings/organization/vat-rates': typeof ProtectedSettingsOrganizationVatRatesRoute
   '/workspaces/$workspaceId/correspondence': typeof ProtectedWorkspacesWorkspaceIdCorrespondenceRouteWithChildren
   '/workspaces/$workspaceId/expenses': typeof ProtectedWorkspacesWorkspaceIdExpensesRoute
   '/workspaces/$workspaceId/invoices': typeof ProtectedWorkspacesWorkspaceIdInvoicesRouteWithChildren
@@ -900,6 +909,7 @@ export interface FileRoutesById {
   '/_protected/settings/organization/matter-numbering': typeof ProtectedSettingsOrganizationMatterNumberingRoute
   '/_protected/settings/organization/members': typeof ProtectedSettingsOrganizationMembersRoute
   '/_protected/settings/organization/usage': typeof ProtectedSettingsOrganizationUsageRoute
+  '/_protected/settings/organization/vat-rates': typeof ProtectedSettingsOrganizationVatRatesRoute
   '/_protected/workspaces/$workspaceId/correspondence': typeof ProtectedWorkspacesWorkspaceIdCorrespondenceRouteWithChildren
   '/_protected/workspaces/$workspaceId/expenses': typeof ProtectedWorkspacesWorkspaceIdExpensesRoute
   '/_protected/workspaces/$workspaceId/invoices': typeof ProtectedWorkspacesWorkspaceIdInvoicesRouteWithChildren
@@ -1000,6 +1010,7 @@ export interface FileRouteTypes {
     | '/settings/organization/matter-numbering'
     | '/settings/organization/members'
     | '/settings/organization/usage'
+    | '/settings/organization/vat-rates'
     | '/workspaces/$workspaceId/correspondence'
     | '/workspaces/$workspaceId/expenses'
     | '/workspaces/$workspaceId/invoices'
@@ -1089,6 +1100,7 @@ export interface FileRouteTypes {
     | '/settings/organization/matter-numbering'
     | '/settings/organization/members'
     | '/settings/organization/usage'
+    | '/settings/organization/vat-rates'
     | '/workspaces/$workspaceId/correspondence'
     | '/workspaces/$workspaceId/expenses'
     | '/workspaces/$workspaceId/invoices'
@@ -1188,6 +1200,7 @@ export interface FileRouteTypes {
     | '/_protected/settings/organization/matter-numbering'
     | '/_protected/settings/organization/members'
     | '/_protected/settings/organization/usage'
+    | '/_protected/settings/organization/vat-rates'
     | '/_protected/workspaces/$workspaceId/correspondence'
     | '/_protected/workspaces/$workspaceId/expenses'
     | '/_protected/workspaces/$workspaceId/invoices'
@@ -1725,6 +1738,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProtectedSettingsOrganizationUsageRouteImport
       parentRoute: typeof ProtectedSettingsOrganizationRouteRoute
     }
+    '/_protected/settings/organization/vat-rates': {
+      id: '/_protected/settings/organization/vat-rates'
+      path: '/vat-rates'
+      fullPath: '/settings/organization/vat-rates'
+      preLoaderRoute: typeof ProtectedSettingsOrganizationVatRatesRouteImport
+      parentRoute: typeof ProtectedSettingsOrganizationRouteRoute
+    }
     '/_protected/workspaces/$workspaceId/': {
       id: '/_protected/workspaces/$workspaceId/'
       path: '/'
@@ -2073,6 +2093,7 @@ interface ProtectedSettingsOrganizationRouteRouteChildren {
   ProtectedSettingsOrganizationMatterNumberingRoute: typeof ProtectedSettingsOrganizationMatterNumberingRoute
   ProtectedSettingsOrganizationMembersRoute: typeof ProtectedSettingsOrganizationMembersRoute
   ProtectedSettingsOrganizationUsageRoute: typeof ProtectedSettingsOrganizationUsageRoute
+  ProtectedSettingsOrganizationVatRatesRoute: typeof ProtectedSettingsOrganizationVatRatesRoute
   ProtectedSettingsOrganizationIndexRoute: typeof ProtectedSettingsOrganizationIndexRoute
 }
 
@@ -2093,6 +2114,8 @@ const ProtectedSettingsOrganizationRouteRouteChildren: ProtectedSettingsOrganiza
       ProtectedSettingsOrganizationMembersRoute,
     ProtectedSettingsOrganizationUsageRoute:
       ProtectedSettingsOrganizationUsageRoute,
+    ProtectedSettingsOrganizationVatRatesRoute:
+      ProtectedSettingsOrganizationVatRatesRoute,
     ProtectedSettingsOrganizationIndexRoute:
       ProtectedSettingsOrganizationIndexRoute,
   }
@@ -2280,3 +2303,12 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { createStart } from '@tanstack/react-start'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+  }
+}

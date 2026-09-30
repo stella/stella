@@ -581,6 +581,27 @@
     "timerActive": "Timer läuft",
     "timesheets": "Zeiterfassung",
     "total": "Gesamt",
+    "vatRates": {
+      "add": "Umsatzsteuersatz hinzufügen",
+      "archiveConfirm": "Diesen Umsatzsteuersatz archivieren? Er steht dann für neue Belege nicht mehr zur Verfügung.",
+      "code": "Steuersatzcode",
+      "current": "Aktueller Steuersatz",
+      "description": "Verwalten Sie Steuersätze und ihre Gültigkeitszeiträume.",
+      "edit": "Umsatzsteuersatz bearbeiten",
+      "empty": "Keine Umsatzsteuersätze.",
+      "future": "Künftiger Steuersatz",
+      "invalidPeriod": "Wählen Sie gültige Daten mit einem Enddatum nach dem Anfangsdatum.",
+      "invalidRate": "Geben Sie einen nicht negativen Prozentsatz mit höchstens zwei Nachkommastellen ein.",
+      "name": "Steuersatzbezeichnung",
+      "openEnded": "Kein Enddatum",
+      "overlap": "Gültigkeitszeiträume mit demselben Steuersatzcode dürfen sich nicht überschneiden.",
+      "past": "Früherer Steuersatz",
+      "periodHelp": "Das Anfangsdatum ist eingeschlossen; das Enddatum ist ausgeschlossen. Lassen Sie das Enddatum für einen offenen Zeitraum leer.",
+      "rate": "Umsatzsteuer in Prozent",
+      "title": "Umsatzsteuersätze",
+      "validFrom": "Gültig ab",
+      "validTo": "Gültig bis"
+    },
     "writeOff": "Abschreiben"
   },
   "caseLaw": {

@@ -581,6 +581,27 @@
     "timerActive": "Időmérő fut",
     "timesheets": "Munkaidő-nyilvántartás",
     "total": "Összesen",
+    "vatRates": {
+      "add": "Áfakulcs hozzáadása",
+      "archiveConfirm": "Archiválja ezt az áfakulcsot? Új bizonylatokhoz többé nem lesz elérhető.",
+      "code": "Áfakulcs kódja",
+      "current": "Jelenlegi áfakulcs",
+      "description": "Kezelje az áfakulcsokat és érvényességi időszakaikat.",
+      "edit": "Áfakulcs szerkesztése",
+      "empty": "Nincsenek áfakulcsok.",
+      "future": "Jövőbeli áfakulcs",
+      "invalidPeriod": "Válasszon érvényes dátumokat, ahol a záró dátum későbbi a kezdő dátumnál.",
+      "invalidRate": "Adjon meg nem negatív százalékot legfeljebb két tizedesjeggyel.",
+      "name": "Áfakulcs megnevezése",
+      "openEnded": "Nincs záró dátum",
+      "overlap": "Az azonos áfakulcskódhoz tartozó érvényességi időszakok nem fedhetik egymást.",
+      "past": "Korábbi áfakulcs",
+      "periodHelp": "A kezdő dátum az időszak része; a záró dátum már nem. Nyitott időszakhoz hagyja üresen a záró dátumot.",
+      "rate": "Áfa százalékban",
+      "title": "Áfakulcsok",
+      "validFrom": "Érvényes ettől",
+      "validTo": "Érvényes eddig"
+    },
     "writeOff": "Leírás"
   },
   "caseLaw": {

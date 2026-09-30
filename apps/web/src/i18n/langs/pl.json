@@ -581,6 +581,27 @@
     "timerActive": "Timer uruchomiony",
     "timesheets": "Karta czasu pracy",
     "total": "Razem",
+    "vatRates": {
+      "add": "Dodaj stawkę VAT",
+      "archiveConfirm": "Zarchiwizować tę stawkę VAT? Nie będzie już dostępna dla nowych dokumentów.",
+      "code": "Kod stawki",
+      "current": "Bieżąca stawka",
+      "description": "Zarządzaj stawkami i okresami ich obowiązywania.",
+      "edit": "Edytuj stawkę VAT",
+      "empty": "Brak stawek VAT.",
+      "future": "Przyszła stawka",
+      "invalidPeriod": "Wybierz prawidłowe daty z końcem późniejszym niż początek.",
+      "invalidRate": "Wprowadź nieujemną wartość procentową z najwyżej dwoma miejscami po przecinku.",
+      "name": "Etykieta stawki",
+      "openEnded": "Bez daty końcowej",
+      "overlap": "Okresy obowiązywania tego samego kodu stawki nie mogą się nakładać.",
+      "past": "Poprzednia stawka",
+      "periodHelp": "Data początkowa jest włączona; data końcowa jest wyłączona. Pozostaw datę końcową pustą, aby okres był otwarty.",
+      "rate": "Procent VAT",
+      "title": "Stawki VAT",
+      "validFrom": "Obowiązuje od",
+      "validTo": "Obowiązuje do"
+    },
     "writeOff": "Umorz"
   },
   "caseLaw": {

@@ -581,6 +581,27 @@
     "timerActive": "Taimer käib",
     "timesheets": "Tööajatabelid",
     "total": "Kokku",
+    "vatRates": {
+      "add": "Lisa käibemaksumäär",
+      "archiveConfirm": "Kas arhiveerida see käibemaksumäär? Seda ei saa enam uute dokumentide jaoks kasutada.",
+      "code": "Määra kood",
+      "current": "Praegune määr",
+      "description": "Hallake määrasid ja nende kehtivusaegu.",
+      "edit": "Muuda käibemaksumäära",
+      "empty": "Käibemaksumäärasid pole.",
+      "future": "Tulevane määr",
+      "invalidPeriod": "Valige kehtivad kuupäevad, mille lõpp on pärast algust.",
+      "invalidRate": "Sisestage mittenegatiivne protsent kuni kahe komakohaga.",
+      "name": "Määra nimetus",
+      "openEnded": "Lõppkuupäev puudub",
+      "overlap": "Sama määra koodi kehtivusajad ei tohi kattuda.",
+      "past": "Varasem määr",
+      "periodHelp": "Alguskuupäev on kaasatud; lõppkuupäev ei ole kaasatud. Jätke lõppkuupäev tühjaks, kui periood on avatud.",
+      "rate": "Käibemaksuprotsent",
+      "title": "Käibemaksumäärad",
+      "validFrom": "Kehtib alates",
+      "validTo": "Kehtib kuni"
+    },
     "writeOff": "Mahakandmine"
   },
   "caseLaw": {

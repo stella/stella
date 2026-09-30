@@ -581,6 +581,27 @@
     "timerActive": "Taimeris darbojas",
     "timesheets": "Darba laika uzskaite",
     "total": "Kopā",
+    "vatRates": {
+      "add": "Pievienot PVN likmi",
+      "archiveConfirm": "Arhivēt šo PVN likmi? Tā vairs nebūs pieejama jauniem dokumentiem.",
+      "code": "Likmes kods",
+      "current": "Pašreizējā likme",
+      "description": "Pārvaldiet likmes un to derīguma periodus.",
+      "edit": "Rediģēt PVN likmi",
+      "empty": "Nav PVN likmju.",
+      "future": "Nākamā likme",
+      "invalidPeriod": "Izvēlieties derīgus datumus, kur beigas ir pēc sākuma.",
+      "invalidRate": "Ievadiet nenegatīvu procentuālo vērtību ar ne vairāk kā divām zīmēm aiz komata.",
+      "name": "Likmes nosaukums",
+      "openEnded": "Bez beigu datuma",
+      "overlap": "Viena likmes koda derīguma periodi nedrīkst pārklāties.",
+      "past": "Iepriekšējā likme",
+      "periodHelp": "Sākuma datums ir iekļauts; beigu datums nav iekļauts. Atvērtam periodam atstājiet beigu datumu tukšu.",
+      "rate": "PVN procentuālā likme",
+      "title": "PVN likmes",
+      "validFrom": "Spēkā no",
+      "validTo": "Spēkā līdz"
+    },
     "writeOff": "Norakstīt"
   },
   "caseLaw": {

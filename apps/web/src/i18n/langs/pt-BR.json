@@ -581,6 +581,27 @@
     "timerActive": "Temporizador em execução",
     "timesheets": "Planilhas de horas",
     "total": "Total",
+    "vatRates": {
+      "add": "Adicionar alíquota de IVA",
+      "archiveConfirm": "Arquivar esta alíquota de IVA? Ela não estará mais disponível para novos documentos.",
+      "code": "Código da alíquota",
+      "current": "Alíquota vigente",
+      "description": "Gerencie as alíquotas e seus períodos de validade.",
+      "edit": "Editar alíquota de IVA",
+      "empty": "Nenhuma alíquota de IVA.",
+      "future": "Alíquota futura",
+      "invalidPeriod": "Escolha datas válidas com a data final posterior à inicial.",
+      "invalidRate": "Insira um percentual não negativo com no máximo duas casas decimais.",
+      "name": "Nome da alíquota",
+      "openEnded": "Sem data final",
+      "overlap": "Os períodos de validade do mesmo código de alíquota não podem se sobrepor.",
+      "past": "Alíquota anterior",
+      "periodHelp": "A data inicial está incluída; a data final está excluída. Deixe a data final em branco para um período aberto.",
+      "rate": "Percentual de IVA",
+      "title": "Alíquotas de IVA",
+      "validFrom": "Válida desde",
+      "validTo": "Válida até"
+    },
     "writeOff": "Dar baixa"
   },
   "caseLaw": {
