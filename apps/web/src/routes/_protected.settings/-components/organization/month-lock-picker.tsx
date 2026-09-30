@@ -42,7 +42,9 @@ export const MonthLockPicker = ({
         disabled={disabled}
         value={month}
         onValueChange={(next) => {
-          if (next === null) {return;}
+          if (next === null) {
+            return;
+          }
           onChange(`${year.padStart(4, "0")}-${next}`);
         }}
       >
@@ -97,7 +99,9 @@ export const MonthLockPicker = ({
         onChange={(event) => {
           const nextYear = event.target.value;
           setYear(nextYear);
-          if (month !== null) {onChange(`${nextYear.padStart(4, "0")}-${month}`);}
+          if (month !== null) {
+            onChange(`${nextYear.padStart(4, "0")}-${month}`);
+          }
         }}
       />
     </div>
