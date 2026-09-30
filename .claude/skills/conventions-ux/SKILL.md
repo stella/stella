@@ -196,6 +196,15 @@ through Folio gains one it does not have.
   Tools, yet people look for them under Connections), list it there too
   as a read-mostly row that links to its one source of truth. Don't copy
   the management UI.
+- **Write for a lawyer who has never heard of MCP.** The first path names
+  the tools people already use (Claude, ChatGPT) and asks for at most one
+  thing to copy. Protocol names, server variants, CLI commands and developer
+  tools (Cursor, Codex) live behind a folded "Developer access" section,
+  never in the default view.
+- **Setup steps have one source.** Product copy, onboarding and copied agent
+  instructions point to the same guide (one docs page, one shared component
+  such as `AssistantSetup`); they never carry their own step lists that can
+  drift.
 - **One-time setup is rows with copy buttons**, placed below the live
   state: server URLs, CLI commands, keys. No stacks of paragraphs and
   read-only inputs. Copy confirms in place (the icon turns into a check).
