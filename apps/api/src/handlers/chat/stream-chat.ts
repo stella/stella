@@ -31,10 +31,7 @@ import type { UsageEventLane } from "@/api/db/schema";
 import { setSharedLockTimeout } from "@/api/db/shared-pool-timeouts";
 import { env } from "@/api/env";
 import { modelAcceptsDocumentAttachment } from "@/api/handlers/chat/attachment-modality";
-import {
-  chunkCarriesAnswer,
-  runProducedAnswer,
-} from "@/api/handlers/chat/attempt-answer";
+import { chunkCarriesAnswer } from "@/api/handlers/chat/attempt-answer";
 import {
   applyChatPartPersistenceBudget,
   attachTerminalTurnOutcome,
@@ -1529,7 +1526,7 @@ type ProcessServerChatStreamProps = {
   flushPendingSource?: (() => PublicStreamChunk[]) | undefined;
   getResponseMessage: () => ChatMessage | null;
   /** The history the run starts from: the messages it may continue. */
-  initialMessages?: readonly ChatMessage[] | undefined;
+  initialMessages: readonly ChatMessage[];
   mapMessageId: MessageIdMapper;
   onFinish: (event: StreamChatFinishEvent) => Promise<void> | void;
   processor: ChatStreamProcessor;
@@ -1796,7 +1793,8 @@ type AdmissionLossOutcomeOptions = Pick<
   "getRestorableCheckpoint" | "getResponseMessage" | "processor"
 > & {
   deferredRunFinishedChunks: readonly PublicStreamChunk[];
-  initialMessages: readonly ChatMessage[];
+  /** Whether the run streamed an answer (see `processServerChatStream`). */
+  producedAnswer: boolean;
   toolCallsWithCompleteInput: ReadonlySet<string>;
 };
 
@@ -1804,8 +1802,8 @@ const resolveAdmissionLossOutcome = ({
   deferredRunFinishedChunks,
   getRestorableCheckpoint,
   getResponseMessage,
-  initialMessages,
   processor,
+  producedAnswer,
   toolCallsWithCompleteInput,
 }: AdmissionLossOutcomeOptions): ChatTurnOutcome => {
   const originalInteraction = getAwaitingUserInteraction(
@@ -1837,7 +1835,7 @@ const resolveAdmissionLossOutcome = ({
     finishReasonOf(lastFinish) !== "tool_calls" &&
     getAwaitingUserInteraction(response) === null
   ) {
-    return runProducedAnswer({ initialMessages, responseMessage: response })
+    return producedAnswer
       ? { type: "completed" }
       : { type: "failed", error: "empty_completion" };
   }
@@ -1864,12 +1862,13 @@ type StreamSettlementOptions = Pick<
   | "onFinish"
   | "processor"
 > & {
-  initialMessages: readonly ChatMessage[];
   runSignal: AbortSignal;
   deferredRunFinishedChunks: PublicStreamChunk[];
   rawArgumentsByIncompleteToolCallId: Map<string, string>;
   toolCallsWithCompleteInput: Set<string>;
   getUsage: () => TokenUsage | undefined;
+  /** Whether the run streamed an answer (see `processServerChatStream`). */
+  getProducedAnswer: () => boolean;
   terminal: { state: "open" | "settled" };
 };
 
@@ -1880,7 +1879,6 @@ const createStreamSettlement = ({
   flushPendingSource,
   getRestorableCheckpoint,
   getResponseMessage,
-  initialMessages,
   mapMessageId,
   onFinish,
   processor,
@@ -1888,6 +1886,7 @@ const createStreamSettlement = ({
   rawArgumentsByIncompleteToolCallId,
   toolCallsWithCompleteInput,
   getUsage,
+  getProducedAnswer,
   terminal,
 }: StreamSettlementOptions) => {
   const admissionLost = () =>
@@ -1908,8 +1907,8 @@ const createStreamSettlement = ({
       deferredRunFinishedChunks,
       getRestorableCheckpoint,
       getResponseMessage,
-      initialMessages,
       processor,
+      producedAnswer: getProducedAnswer(),
       toolCallsWithCompleteInput,
     });
   const terminalize = async ({
@@ -1931,18 +1930,17 @@ const createStreamSettlement = ({
     if (flushProcessor) {
       finalizeResponseProcessor(processor);
     }
-    // An empty completion is a provider outcome: the model produced no
-    // persistable part. A run that carried a complete tool call cannot be
-    // one; losing that call between the stream and the persistence
-    // processor is a defect in this pipeline, so it must not be graded as
-    // an anticipated provider state.
+    // An empty completion is a provider outcome: the model streamed no
+    // answer. A run that streamed one cannot be one; losing that answer
+    // between the stream and the persistence processor is a defect in this
+    // pipeline, so it must not be graded as an anticipated provider state.
     if (
       (outcome.type === "completed" || outcome.type === "awaiting-user") &&
-      toolCallsWithCompleteInput.size > 0 &&
+      getProducedAnswer() &&
       (getResponseMessage()?.parts.length ?? 0) === 0
     ) {
       panic(
-        "Persistence processor dropped an assistant turn that carried a complete tool call",
+        "Persistence processor dropped an assistant turn that streamed an answer",
       );
     }
     const responseMessage = CUT_SHORT_OUTCOME[outcome.type]
@@ -1957,9 +1955,9 @@ const createStreamSettlement = ({
     const terminalResponseMessage =
       checkpoint === undefined
         ? createTerminalResponseMessage({
-            initialMessages,
             mapMessageId,
             outcome,
+            producedAnswer: getProducedAnswer(),
             responseMessage,
             usage: getUsage(),
           })
@@ -2086,7 +2084,7 @@ export const processServerChatStream = async function* ({
   deadlineSignal,
   flushPendingSource,
   getResponseMessage,
-  initialMessages = [],
+  initialMessages,
   mapMessageId,
   onFinish,
   processor,
@@ -2094,6 +2092,12 @@ export const processServerChatStream = async function* ({
 }: ProcessServerChatStreamProps): AsyncIterable<PublicStreamChunk> {
   const deferredRunFinishedChunks: PublicStreamChunk[] = [];
   const runState = { cancelled: false };
+  // Whether the run streamed an answer (`chunkCarriesAnswer`): the one
+  // measure of an empty run, read here from the chunks the persistence
+  // processor is fed and in the attempt middleware from the chunks the model
+  // sends. A continuation's message already holds the call the user
+  // answered; the chunks hold only what this run added.
+  let producedAnswer = false;
   const rawArgumentsByIncompleteToolCallId = new Map<string, string>();
   const toolCallsWithCompleteInput = new Set<string>();
   let usage: TokenUsage | undefined;
@@ -2117,7 +2121,6 @@ export const processServerChatStream = async function* ({
     flushPendingSource,
     getRestorableCheckpoint,
     getResponseMessage,
-    initialMessages,
     mapMessageId,
     onFinish,
     processor,
@@ -2125,6 +2128,7 @@ export const processServerChatStream = async function* ({
     rawArgumentsByIncompleteToolCallId,
     toolCallsWithCompleteInput,
     getUsage: () => usage,
+    getProducedAnswer: () => producedAnswer,
     terminal,
   });
   // Whether the client has been told which message this turn writes.
@@ -2160,6 +2164,7 @@ export const processServerChatStream = async function* ({
         sourceChunk,
         rawArgumentsByIncompleteToolCallId,
       );
+      producedAnswer ||= chunkCarriesAnswer(sourceChunk);
       if (sourceChunk.type === EventType.TOOL_CALL_END) {
         toolCallsWithCompleteInput.add(sourceChunk.toolCallId);
       }
@@ -2351,30 +2356,34 @@ const processTurnForPersistence = ({
 };
 
 type FinishResponseMessageProps = {
-  initialMessages: readonly ChatMessage[];
   mapMessageId: MessageIdMapper;
   outcome: ChatTurnOutcome;
+  /** Whether the run streamed an answer (see `processServerChatStream`). */
+  producedAnswer: boolean;
   responseMessage: ChatMessage | null;
   usage: TokenUsage | undefined;
 };
 
 const createTerminalResponseMessage = ({
-  initialMessages,
   mapMessageId,
   outcome,
+  producedAnswer,
   responseMessage,
   usage,
 }: FinishResponseMessageProps): PersistableTerminalAssistantMessage => {
-  // A turn that waits on the user holds the call it waits on, so only a
-  // completion can have answered nothing. A continuation's message already
-  // holds the call the user answered; what counts is what this run added.
-  if (
-    outcome.type === "completed" &&
-    !runProducedAnswer({ initialMessages, responseMessage })
-  ) {
+  if (outcome.type === "completed" && !producedAnswer) {
     throw new ChatEmptyCompletionError({
       message: CHAT_EMPTY_COMPLETION_MESSAGE,
     });
+  }
+  // A turn waits on the user only for a call its message holds
+  // (`drainedRunOutcome` reads the interaction off that message), so a
+  // waiting turn without a message is a defect here, not a provider outcome.
+  if (
+    outcome.type === "awaiting-user" &&
+    (responseMessage === null || responseMessage.parts.length === 0)
+  ) {
+    panic("A turn awaiting the user holds no message to wait on");
   }
 
   // A turn that failed before its first part still spent what the provider
