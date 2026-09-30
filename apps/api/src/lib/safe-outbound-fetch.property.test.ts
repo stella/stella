@@ -9,6 +9,7 @@ import {
 } from "@stll/property-testing";
 
 import {
+  OUTBOUND_IPV6_POLICY,
   parseSafeOutboundUrl,
   SafeOutboundFetchError,
   validateOutboundFetchTarget,
@@ -120,44 +121,56 @@ test(
   propertyTestTimeout(5000),
 );
 
+const IPV6_ADDRESS_SPACE = 2n ** 128n;
+const staticPrefixes = OUTBOUND_IPV6_POLICY.filter(
+  ({ verdict }) => verdict === "block" || verdict === "allow",
+);
+
+const hostFromNumericAddress = (address: bigint): string => {
+  const hexadecimal = address.toString(16).padStart(32, "0");
+  return Array.from({ length: 8 }, (_, index) =>
+    hexadecimal.slice(index * 4, index * 4 + 4),
+  ).join(":");
+};
+
+const policyForNumericAddress = (address: bigint) =>
+  OUTBOUND_IPV6_POLICY.filter(
+    ({ prefix, length }) =>
+      address >= prefix && address < prefix + 2n ** BigInt(128 - length),
+  )
+    .toSorted((left, right) => right.length - left.length)
+    .at(0);
+
+const nativeGlobalAddress = fc
+  .bigInt({
+    min: 0x20_00_00_00_00_00_00_00_00_00_00_00_00_00_00_00n,
+    max: 0x3f_ff_ff_ff_ff_ff_ff_ff_ff_ff_ff_ff_ff_ff_ff_ffn,
+  })
+  .filter((address) => policyForNumericAddress(address) === undefined);
+
 test(
-  "outbound input handling follows local prefix policy",
+  "outbound input handling follows prefix policy",
   () => {
     fc.assert(
       fc.property(
-        fc.array(fc.integer({ min: 0, max: 0xff_ff }), {
-          minLength: 8,
-          maxLength: 8,
-        }),
-        (parts) => {
-          const suffix = parts
-            .slice(3)
-            .map((part) => part.toString(16))
-            .join(":");
-          const hosts = [
-            `64:ff9b:1:${suffix}`,
-            `::${parts.at(6)?.toString(16)}:${parts.at(7)?.toString(16)}`,
-            ...["fe80", "febf", "fc00", "fdff", "ff00", "ffff", "0100"].map(
-              (prefix) =>
-                `${prefix}:${parts
-                  .slice(1)
-                  .map((part) => part.toString(16))
-                  .join(":")}`,
-            ),
-            `2001:db8:${parts
-              .slice(2)
-              .map((part) => part.toString(16))
-              .join(":")}`,
-            `2001:2:${parts
-              .slice(2)
-              .map((part) => part.toString(16))
-              .join(":")}`,
-          ];
-          for (const host of hosts) {
-            for (const spelling of spellings(host)) {
+        fc.bigInt({ min: 0n, max: IPV6_ADDRESS_SPACE - 1n }),
+        (entropy) => {
+          for (const { prefix, length } of staticPrefixes) {
+            const hostBits = 2n ** BigInt(128 - length);
+            const address = prefix + (entropy % hostBits);
+            const effective = policyForNumericAddress(address);
+            expect(effective).toBeDefined();
+            if (
+              effective?.verdict !== "block" &&
+              effective?.verdict !== "allow"
+            ) {
+              // Embedding policies are exercised with public and restricted IPv4 generators.
+              continue;
+            }
+            for (const host of spellings(hostFromNumericAddress(address))) {
               expect(
-                Result.isError(parseSafeOutboundUrl(`https://[${spelling}]/`)),
-              ).toBe(true);
+                Result.isOk(parseSafeOutboundUrl(`https://[${host}]/`)),
+              ).toBe(effective.verdict === "allow");
             }
           }
         },
@@ -167,6 +180,83 @@ test(
   },
   propertyTestTimeout(5000),
 );
+
+test(
+  "outbound input handling preserves native public addresses",
+  () => {
+    fc.assert(
+      fc.property(nativeGlobalAddress, (address) => {
+        for (const host of spellings(hostFromNumericAddress(address))) {
+          expect(Result.isOk(parseSafeOutboundUrl(`https://[${host}]/`))).toBe(
+            true,
+          );
+        }
+      }),
+      propertyConfig({ seed: propertySeed() }),
+    );
+  },
+  propertyTestTimeout(5000),
+);
+
+test(
+  "outbound input handling preserves public embedded addresses",
+  () => {
+    fc.assert(
+      fc.property(publicAddress, ([a, b, c, d]) => {
+        const high = (a * 256 + b).toString(16);
+        const low = (c * 256 + d).toString(16);
+        const invertedHigh = ((255 - a) * 256 + 255 - b).toString(16);
+        const invertedLow = ((255 - c) * 256 + 255 - d).toString(16);
+        const hosts = [
+          `64:ff9b::${high}:${low}`,
+          `2002:${high}:${low}::1`,
+          `2001:0:808:808:0:0:${invertedHigh}:${invertedLow}`,
+        ];
+        for (const host of hosts) {
+          for (const spelling of spellings(host)) {
+            expect(
+              Result.isOk(parseSafeOutboundUrl(`https://[${spelling}]/`)),
+            ).toBe(true);
+          }
+        }
+      }),
+      propertyConfig({ seed: propertySeed() }),
+    );
+  },
+  propertyTestTimeout(5000),
+);
+
+test("outbound input handling follows adjacent prefix policy", () => {
+  for (const { prefix, length } of OUTBOUND_IPV6_POLICY) {
+    const hostBits = 2n ** BigInt(128 - length);
+    for (const address of [
+      prefix - 1n,
+      prefix,
+      prefix + hostBits - 1n,
+      prefix + hostBits,
+    ]) {
+      if (address < 0n || address >= IPV6_ADDRESS_SPACE) {
+        continue;
+      }
+      const effective = policyForNumericAddress(address);
+      if (
+        effective !== undefined &&
+        effective.verdict !== "allow" &&
+        effective.verdict !== "block"
+      ) {
+        continue;
+      }
+      expect(
+        Result.isOk(
+          parseSafeOutboundUrl(`https://[${hostFromNumericAddress(address)}]/`),
+        ),
+      ).toBe(effective === undefined || effective.verdict === "allow");
+    }
+  }
+  for (const host of ["2001:200::", "100:0:0:2::", "3fff:1000::"]) {
+    expect(Result.isOk(parseSafeOutboundUrl(`https://[${host}]/`))).toBe(true);
+  }
+});
 
 test(
   "outbound input handling rejects credential and local host shapes",
