@@ -13,6 +13,7 @@ import {
   SANCTIONS_MONITORING_BATCH_SIZE,
 } from "@/api/lib/lists/sanctions/monitoring-diff";
 import { SANCTIONS_MARK_LEASE_MS } from "@/api/lib/lists/sanctions/monitoring-drain";
+import { lockSanctionsMonitoring } from "@/api/lib/lists/sanctions/monitoring-lock";
 import { prepareMonitoringContacts } from "@/api/lib/lists/sanctions/monitoring-screen";
 import { sanctionsSourceIds } from "@/api/lib/lists/sanctions/source-config";
 import { commitReplaySafeIngestionBatch } from "@/api/lib/replay-safe-ingestion";
@@ -105,6 +106,7 @@ export const advanceSanctionsMonitoringBackfill = async ({
     items: results,
     checkpoint,
     persistItems: async (tx, items) => {
+      await lockSanctionsMonitoring(tx, organizationId);
       checkpoint.transition = "hold";
       const job = (
         await tx
