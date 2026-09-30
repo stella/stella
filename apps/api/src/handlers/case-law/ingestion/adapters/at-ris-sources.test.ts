@@ -12,7 +12,7 @@ import { AT_VERG_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-ve
 import { AT_VFGH_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-vfgh";
 import { AT_VWGH_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-vwgh";
 
-import { requireReconciliation } from "./test-utils";
+import { requireReconciliation, storedRawReparseInputOf } from "./test-utils";
 
 const SOURCES = [
   {
@@ -224,6 +224,9 @@ describe("Austrian official RIS court sources", () => {
       const result = await adapter.fetchPage(null, {});
       expect(result.isOk()).toBe(true);
       const decision = result.unwrap().decisions.at(0);
+      if (decision === undefined) {
+        throw new TypeError(`Expected fixture decision for ${source.key}`);
+      }
       expect(decision?.sourceDocumentId).toBe(id);
       expect(decision?.caseNumber).toBe(caseNumber);
       expect(decision?.court).toBe(court);
@@ -234,6 +237,12 @@ describe("Austrian official RIS court sources", () => {
       expect(
         urls.filter((url) => new URL(url).pathname.startsWith("/Dokumente/")),
       ).toEqual([documentUrl(source.application, id, "xml")]);
+
+      const reparse = adapter.reparseStoredRaw;
+      const requestsBeforeReplay = urls.length;
+      const replayed = await reparse(storedRawReparseInputOf(decision));
+      expect(replayed).toEqual({ type: "parsed", result: decision });
+      expect(urls).toHaveLength(requestsBeforeReplay);
     }
   });
 

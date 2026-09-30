@@ -2,7 +2,9 @@ import { describe, expect, it } from "bun:test";
 
 import {
   decodeSourceRawEnvelope,
+  encodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  STORED_RAW_REPARSE_REJECTION,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { readGzipJson } from "@/api/lib/gzip-json";
 import { isRecord } from "@/api/lib/type-guards";
@@ -16,7 +18,11 @@ import {
   atRisPreviousMonth,
   createAtCourtsAdapter,
 } from "./at-courts";
-import { rejectionOf, requireReconciliation } from "./test-utils";
+import {
+  rejectionOf,
+  requireReconciliation,
+  storedRawReparseInputOf,
+} from "./test-utils";
 
 const SOURCE_ID = "JJT_20260115_OGH0002_0010OB00001_26A0000_000";
 const SECOND_SOURCE_ID = "JJT_20260115_OGH0002_0010OB00001_26A0000_001";
@@ -268,6 +274,9 @@ describe("Austrian RIS adapter", () => {
     const firstPage = collected.unwrap();
     expect(firstPage.decisions).toHaveLength(1);
     const decision = firstPage.decisions[0];
+    if (decision === undefined) {
+      throw new TypeError("Expected the listed RIS decision");
+    }
     expect(decision?.sourceDocumentId).toBe(SOURCE_ID);
     expect(decision?.caseNumber).toBe(CASE_NUMBER);
     expect(decision?.ecli).toMatch(/^ECLI:AT:OGH0002:/u);
@@ -293,6 +302,12 @@ describe("Austrian RIS adapter", () => {
     // Provenance cites the listing this page was read from, not the
     // per-decision document fetch that followed it.
     expect(firstPage.sourceUrl).toBe(urls[0]);
+
+    const reparse = adapter.reparseStoredRaw;
+    const requestsBeforeReplay = urls.length;
+    const replayed = await reparse(storedRawReparseInputOf(decision));
+    expect(replayed).toEqual({ type: "parsed", result: decision });
+    expect(urls).toHaveLength(requestsBeforeReplay);
 
     const verified = await adapter.fetchPage(firstPage.nextCursor, {});
     expect(verified.isOk()).toBe(true);
@@ -661,6 +676,9 @@ describe("Austrian RIS adapter", () => {
     const adapter = createAtCourtsAdapter({ request, sleep: async () => {} });
 
     const decision = (await adapter.fetchPage(null, {})).unwrap().decisions[0];
+    if (decision === undefined) {
+      throw new TypeError("Expected the listed RIS decision");
+    }
 
     const headnoteQuery = urls.find((url) => isHeadnoteQuery(url));
     expect(
@@ -677,6 +695,140 @@ describe("Austrian RIS adapter", () => {
     expect(
       decodeSourceRawEnvelope(decision?.sourceRaw ?? "")?.["headnote-listing"],
     ).toContain(HEADNOTE_ID);
+
+    const reparse = adapter.reparseStoredRaw;
+    const requestsBeforeReplay = urls.length;
+    const replayed = await reparse(storedRawReparseInputOf(decision));
+    expect(replayed).toEqual({ type: "parsed", result: decision });
+    expect(urls).toHaveLength(requestsBeforeReplay);
+  });
+
+  it("rejects missing or malformed stored payloads and mismatched identities", async () => {
+    const xml = await fixtureXml();
+    const { request, urls } = queuedRequest([
+      listingResponse([listingItem()]),
+      new Response(xml),
+    ]);
+    const adapter = createAtCourtsAdapter({ request, sleep: async () => {} });
+    const decision = (await adapter.fetchPage(null, {})).unwrap().decisions[0];
+    if (decision === undefined) {
+      throw new TypeError("Expected the listed RIS decision");
+    }
+    const reparse = adapter.reparseStoredRaw;
+
+    const stored = storedRawReparseInputOf(decision);
+    const expectedIncomplete = {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
+    };
+    expect(await reparse({ ...stored, raw: new Uint8Array() })).toMatchObject(
+      expectedIncomplete,
+    );
+    expect(
+      await reparse({
+        ...stored,
+        raw: new TextEncoder().encode("not-json"),
+      }),
+    ).toMatchObject(expectedIncomplete);
+    expect(
+      await reparse({ ...stored, sourceDocumentId: SECOND_SOURCE_ID }),
+    ).toMatchObject({
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH,
+    });
+
+    const parts = decodeSourceRawEnvelope(decision.sourceRaw ?? "");
+    const listing = parts?.["listing"];
+    if (listing === undefined) {
+      throw new TypeError("The captured RIS envelope has no listing part");
+    }
+    const withoutDocument = encodeSourceRawEnvelope({ listing });
+    const requestsBeforeReplay = urls.length;
+    for (const wrongListing of [
+      listing.replace('"Applikation":"Justiz"', '"Applikation":"Vfgh"'),
+      JSON.stringify(listingItem(SOURCE_ID, "AUSL")),
+    ]) {
+      expect(
+        await reparse({
+          ...stored,
+          raw: new TextEncoder().encode(
+            encodeSourceRawEnvelope({
+              listing: wrongListing,
+              "document-xml": xml,
+            }),
+          ),
+        }),
+      ).toMatchObject({
+        type: "rejected",
+        rejection: STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH,
+      });
+    }
+    expect(
+      await reparse({
+        ...stored,
+        raw: new TextEncoder().encode(
+          encodeSourceRawEnvelope({
+            listing,
+            "document-xml":
+              "<NotADecision>Malformed document payload</NotADecision>".repeat(
+                3,
+              ),
+          }),
+        ),
+      }),
+    ).toMatchObject({
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+    });
+    expect(
+      await reparse({
+        ...stored,
+        raw: new TextEncoder().encode(withoutDocument),
+      }),
+    ).toMatchObject({
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+    });
+    expect(urls).toHaveLength(requestsBeforeReplay);
+  });
+
+  it("replays the stored pre-envelope RIS JSON shape", async () => {
+    const xml = await fixtureXml();
+    const { request, urls } = queuedRequest([
+      listingResponse([listingItem()]),
+      new Response(xml),
+    ]);
+    const adapter = createAtCourtsAdapter({ request, sleep: async () => {} });
+    const decision = (await adapter.fetchPage(null, {})).unwrap().decisions[0];
+    if (decision === undefined) {
+      throw new TypeError("Expected the listed RIS decision");
+    }
+    const reparse = adapter.reparseStoredRaw;
+
+    const parts = decodeSourceRawEnvelope(decision.sourceRaw ?? "");
+    const listing = parts?.["listing"];
+    const documentXml = parts?.["document-xml"];
+    if (listing === undefined || documentXml === undefined) {
+      throw new TypeError("The captured RIS envelope is incomplete");
+    }
+    const legacyRaw = JSON.stringify({
+      listing: JSON.parse(listing),
+      documentXml,
+    });
+    const requestsBeforeReplay = urls.length;
+    const replayed = await reparse({
+      ...storedRawReparseInputOf(decision),
+      raw: new TextEncoder().encode(legacyRaw),
+      contentType: "application/json",
+    });
+    expect(replayed.type).toBe("parsed");
+    if (replayed.type !== "parsed") {
+      return;
+    }
+    expect(replayed.result.documentAst).toEqual(decision.documentAst);
+    expect(replayed.result.fulltext).toBe(decision.fulltext);
+    expect(replayed.result.metadata).toEqual(decision.metadata);
+    expect(urls).toHaveLength(requestsBeforeReplay);
   });
 
   it("rebuilds every recorded page row that the host move left listing-only", async () => {

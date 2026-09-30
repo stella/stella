@@ -15,7 +15,6 @@ import { type Element, isTag } from "domhandler";
 import * as slimdom from "slimdom";
 
 import type { OpinionType } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/vocabulary";
-import { buildValidationHtml } from "@/api/lib/legal-search/parsers/validate-ast";
 
 import {
   type BodyVocabulary,
@@ -268,9 +267,6 @@ export const parseHarvardXml = ({
         backlinkCharacters: source.backlinkCharacters,
         unknownConstructs,
       },
-      validationHtml: buildValidationHtml(
-        source.paragraphs.map((paragraph) => Bun.escapeHTML(paragraph)),
-      ),
     },
   };
 };

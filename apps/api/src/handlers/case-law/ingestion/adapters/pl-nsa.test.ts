@@ -1063,7 +1063,7 @@ describe("the deciding court comes from the record", () => {
   });
 });
 
-describe("the document is checked against the dataset's own text", () => {
+describe("the publisher's full rendering owns the document text", () => {
   const input = {
     caseNumber: "II FSK 1/20",
     court: "Naczelny Sąd Administracyjny",
@@ -1082,20 +1082,19 @@ describe("the document is checked against the dataset's own text", () => {
     },
   };
 
-  test("text the sections carry passes", () => {
+  test("the full rendering is authoritative even when sections hold its text", () => {
     const parsed = parsePlNsaDecision({
       ...input,
       reference:
         "SENTENCJA\n\nNaczelny Sąd Administracyjny oddala skargę kasacyjną.",
     });
-    expect(parsed.validation.ok).toBe(true);
+    expect(parsed.textSource).toBe("full-text");
   });
 
   const REASONS =
     "Wojewódzki sąd rozpoznał skargę podatnika na interpretację indywidualną organu i uznał, że wnioskodawca prawidłowo ustalił przychód, a organ błędnie zastosował przepisy ustawy o podatku dochodowym od osób fizycznych w brzmieniu obowiązującym w dacie zdarzenia, co przesądziło o uchyleniu zaskarżonego aktu.";
 
   test("text only the full rendering carries is kept, from the rendering", () => {
-    const error = spyOn(logger, "error");
     const parsed = parsePlNsaDecision({
       ...input,
       reference: [
@@ -1107,12 +1106,6 @@ describe("the document is checked against the dataset's own text", () => {
     });
     expect(parsed.textSource).toBe("full-text");
     expect(parsed.fulltext).toContain(REASONS);
-    expect(parsed.validation.ok).toBe(true);
-    expect(error).not.toHaveBeenCalledWith(
-      "case_law.ingestion.ast_content_lost",
-      expect.anything(),
-    );
-    error.mockRestore();
   });
 
   test("with every section empty, the rendering is the document", () => {
@@ -1126,8 +1119,7 @@ describe("the document is checked against the dataset's own text", () => {
     expect(parsed.documentAst).not.toBeNull();
   });
 
-  test("with no text anywhere, the check still runs and reports it", () => {
-    const error = spyOn(logger, "error");
+  test("with no text anywhere, the parser returns an empty document", () => {
     const parsed = parsePlNsaDecision({
       ...input,
       sections: { thesis: null, sentence: null, reasons: null, dissent: null },
@@ -1135,15 +1127,13 @@ describe("the document is checked against the dataset's own text", () => {
     });
     expect(parsed.documentAst).toBeNull();
     expect(parsed.textSource).toBe("none");
-    expect(parsed.validation.issues.length).toBeGreaterThan(0);
-    error.mockRestore();
+    expect(parsed.fulltext).toBeUndefined();
   });
 
-  test("sections that hold everything are used as sections", () => {
+  test("sections are used when the publisher has no full rendering", () => {
     const parsed = parsePlNsaDecision({
       ...input,
-      reference:
-        "SENTENCJA\n\nNaczelny Sąd Administracyjny oddala skargę kasacyjną.",
+      reference: null,
     });
     expect(parsed.textSource).toBe("sections");
   });

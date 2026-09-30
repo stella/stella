@@ -18,12 +18,6 @@ import type {
   ParagraphRole,
 } from "@/api/handlers/case-law/document-ast";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
-import {
-  buildValidationHtml,
-  validateAndLog,
-  validateAst,
-} from "@/api/lib/legal-search/parsers/validate-ast";
-import type { ValidationResult } from "@/api/lib/legal-search/parsers/validate-ast";
 
 /** Publisher recorded on the AST. */
 const PL_NSA_SOURCE_SYSTEM = "orzeczenia.nsa.gov.pl";
@@ -81,17 +75,15 @@ type ParsePlNsaDecisionInput = {
   statutes: readonly string[];
   sections: PlNsaSectionTexts;
   /**
-   * The dataset's own rendering of the whole decision (`full_text`), which
-   * the document is checked against. Absent, the section columns are the
-   * only statement of the text and the check reads them.
+   * The dataset's authoritative full rendering (`full_text`). When absent
+   * or empty, the section columns supply the document text.
    */
   reference: string | null;
 };
 
 /**
- * Where the document's text was taken from: the four section columns, or —
- * where they lose text the dataset's full rendering carries, or are empty —
- * that rendering itself, as plain paragraphs (rule 10: never drop text).
+ * Where the document's text was taken from: the publisher's full rendering
+ * when present, otherwise its four section columns.
  */
 type PlNsaTextSource = "sections" | "full-text" | "none";
 
@@ -100,8 +92,6 @@ type ParsePlNsaDecisionOutput = {
   documentAst: DocumentAst | null;
   fulltext: string | undefined;
   sections: DecisionSection[];
-  /** The completeness check of the document as returned; it always runs. */
-  validation: ValidationResult;
   textSource: PlNsaTextSource;
 };
 
@@ -112,9 +102,6 @@ const plNsaParagraphs = (text: string): string[] =>
     .split(/\n{2,}/u)
     .map((paragraph) => paragraph.replaceAll(" ", " ").trim())
     .filter((paragraph) => paragraph.length > 0);
-
-const escapeHtml = (text: string): string =>
-  text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 
 type Built = { blocks: Block[]; sections: DecisionSection[] };
 
@@ -182,29 +169,17 @@ const fromReference = (paragraphs: readonly string[]): Built => ({
 export const parsePlNsaDecision = (
   input: ParsePlNsaDecisionInput,
 ): ParsePlNsaDecisionOutput => {
-  const structured = fromSections(input.sections);
-  // The reference is the dataset's own full rendering where it states one,
-  // so text the sections do not carry reads as lost rather than passing a
-  // check of the input against itself.
+  // The publisher's full rendering is the authoritative text when available.
   const referenceParagraphs =
-    input.reference === null
-      ? structured.blocks.flatMap((block) =>
-          block.type === "paragraph" ? [block.plainText] : [],
-        )
-      : plNsaParagraphs(input.reference);
-  const referenceHtml = buildValidationHtml(
-    referenceParagraphs.map(escapeHtml),
-  );
-
-  const sectionsHoldEverything =
-    structured.blocks.length > 0 &&
-    validateAst(referenceHtml, structured.blocks).ok;
-  const fallBack = !sectionsHoldEverything && referenceParagraphs.length > 0;
-  const chosen = fallBack ? fromReference(referenceParagraphs) : structured;
+    input.reference === null ? [] : plNsaParagraphs(input.reference);
+  const chosen =
+    referenceParagraphs.length > 0
+      ? fromReference(referenceParagraphs)
+      : fromSections(input.sections);
   let textSource: PlNsaTextSource = "none";
-  if (fallBack) {
+  if (referenceParagraphs.length > 0) {
     textSource = "full-text";
-  } else if (structured.blocks.length > 0) {
+  } else if (chosen.blocks.length > 0) {
     textSource = "sections";
   }
 
@@ -224,25 +199,11 @@ export const parsePlNsaDecision = (
         ]
       : chosen.blocks;
 
-  // Run on every path, the empty one included: a row that yields no text is
-  // the case this signal exists to report.
-  const validation = validateAndLog(
-    {
-      parser: "pl-nsa",
-      caseNumber: input.caseNumber,
-      language: "pl",
-      url: input.sourceUrl,
-    },
-    referenceHtml,
-    blocks,
-  );
-
   if (blocks.length === 0) {
     return {
       documentAst: null,
       fulltext: undefined,
       sections: [],
-      validation,
       textSource,
     };
   }
@@ -269,7 +230,6 @@ export const parsePlNsaDecision = (
     },
     fulltext: blocks.map((block) => block.plainText).join("\n\n"),
     sections: chosen.sections,
-    validation,
     textSource,
   };
 };

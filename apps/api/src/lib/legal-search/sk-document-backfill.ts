@@ -77,18 +77,10 @@ import type {
 } from "@/api/lib/legal-search/corpus-pack-batch";
 import {
   corpusMirrorColumns,
-  corpusPayloadDisposition,
   EMPTY_CORPUS_CONTENT_HASHES,
-  TRIMMED_CORPUS_PAYLOAD_COLUMNS,
 } from "@/api/lib/legal-search/corpus-storage";
-import type {
-  CorpusPayloadColumns,
-  WriteCorpusResult,
-} from "@/api/lib/legal-search/corpus-storage";
-import {
-  ADAPTER_KEYS,
-  PARSER_VERSIONS,
-} from "@/api/lib/legal-search/ingestion-constants";
+import type { WriteCorpusResult } from "@/api/lib/legal-search/corpus-storage";
+import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import {
   isUnreadablePdfError,
@@ -101,6 +93,11 @@ import {
   MAX_DOCUMENT_FETCH_ATTEMPTS,
 } from "@/api/lib/legal-search/sk-document-parking-sql";
 import type { PendingDocumentTierLoaders } from "@/api/lib/legal-search/sk-document-queue";
+import type { DeferredRawStorage } from "@/api/lib/legal-search/text-retention/deferred-document";
+import {
+  prepareDeferredDocument,
+  applyDeferredDocumentTx,
+} from "@/api/lib/legal-search/text-retention/deferred-document";
 import { logger } from "@/api/lib/observability/logger";
 import { pgErrorFields } from "@/api/lib/pg-error";
 import { isRecord } from "@/api/lib/type-guards";
@@ -272,6 +269,7 @@ export const fetchPdfBytes = async ({
 };
 
 export type BackfilledDocument = {
+  rawBytes?: Uint8Array;
   fulltext: string;
   documentAst: DocumentAst;
   sections: ReturnType<typeof segmentDecision>;
@@ -321,6 +319,7 @@ export const parsePendingDocument = async (
   }
 
   return {
+    rawBytes: pdfBytes,
     fulltext,
     documentAst: sanitized.documentAst,
     sections: segmentDecision(fulltext),
@@ -710,6 +709,8 @@ export type StoreBackfilledDocumentOptions = {
    * client the batch would never call. Production passes nothing.
    */
   transfer?: CorpusTransfer | null;
+  /** Captured raw storage seam; tests can retain PDFs without a bucket. */
+  rawStorage?: DeferredRawStorage;
   /**
    * Storage mode this store settles under. Production passes nothing;
    * tests set it for the same reason they inject the writer, so the
@@ -810,10 +811,21 @@ export const storeBackfilledDocument = async ({
   document,
   scopedDb,
   transfer = corpusBackfillTransfer(),
+  rawStorage,
   mode = corpusStorageMode,
   claimedSourceHash,
 }: StoreBackfilledDocumentOptions): Promise<"stored" | "superseded"> => {
   const sections = document.sections.length > 0 ? document.sections : null;
+  const validation = await prepareDeferredDocument({
+    decisionId: decision.id,
+    scopedDb,
+    rawBytes: document.rawBytes,
+    rawStorage,
+    payload: { text: document.fulltext, ast: document.documentAst, sections },
+  });
+  if (validation === null) {
+    return "superseded";
+  }
   const ownerPredicate = and(
     eq(caseLawDecisions.id, decision.id),
     isNull(caseLawDecisions.redactedAt),
@@ -828,12 +840,6 @@ export const storeBackfilledDocument = async ({
       : holdsClaimedSource(claimedSourceHash),
   );
 
-  const storedPayloadColumns = {
-    fulltext: document.fulltext,
-    documentAst: document.documentAst,
-    sections,
-  } satisfies CorpusPayloadColumns;
-
   const applyStoredPayload = async (
     tx: Transaction,
     written: WriteCorpusResult | null,
@@ -845,23 +851,13 @@ export const storeBackfilledDocument = async ({
     // after it left it. The disposition is decided from the confirmed
     // write, so a corpus failure (which never reaches this callback) still
     // leaves the columns as the only copy.
-    const payloadColumns =
-      corpusPayloadDisposition({ mode, written }) === "trim"
-        ? TRIMMED_CORPUS_PAYLOAD_COLUMNS
-        : storedPayloadColumns;
-    // audit: skip — queue backfill of public case-law text; no user action
-    const applied = await tx
-      .update(caseLawDecisions)
-      .set({
-        ...payloadColumns,
-        parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
-        ...corpusMirrorColumns({
-          status: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
-          written,
-        }),
-      })
-      .where(ownerPredicate)
-      .returning({ id: caseLawDecisions.id });
+    const applied = await applyDeferredDocumentTx(tx, {
+      decisionId: decision.id,
+      validation,
+      ownerPredicate,
+      mode,
+      written,
+    });
     if (applied.length > 0 && projectionLock !== null) {
       await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
         lock: projectionLock,
@@ -985,7 +981,11 @@ const writeFetchBookkeeping = async (
   // audit: skip — queue bookkeeping on public case-law rows; no user action
   await tx
     .update(caseLawDecisions)
-    .set({ ...set, updatedAt: sql`${caseLawDecisions.updatedAt}` })
+    .set({
+      documentFetchRequestedAt: set.documentFetchRequestedAt,
+      documentFetchAttempts: set.documentFetchAttempts,
+      updatedAt: sql`${caseLawDecisions.updatedAt}`,
+    })
     .where(where)
     .returning({ id: caseLawDecisions.id });
 

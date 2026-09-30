@@ -1,14 +1,5 @@
 import { panic, Result } from "better-result";
-import {
-  and,
-  asc,
-  desc,
-  eq,
-  isNotNull,
-  isNull,
-  sql,
-  type SQL,
-} from "drizzle-orm";
+import { and, asc, desc, eq, isNull, sql, type SQL } from "drizzle-orm";
 
 import type { DecisionPrimaryReferenceType } from "@stll/legal-ast/decision-identifier";
 
@@ -47,6 +38,13 @@ import type { CorpusPayload } from "@/api/lib/legal-search/corpus-storage";
 import { decisionReplayIdentity } from "@/api/lib/legal-search/decision-language-identity";
 import { parsePrimaryReferenceType } from "@/api/lib/legal-search/decision-primary-reference";
 import { storedCaseNumberOf } from "@/api/lib/legal-search/ingestion-normalization";
+import {
+  assessRawPayload,
+  type PayloadAssessment,
+} from "@/api/lib/legal-search/text-retention/validation";
+
+import { resolveValidationSourceKey } from "./pipeline/text-validation";
+import { loadValidationSnapshot } from "./pipeline/validation-snapshot";
 
 /**
  * Re-parse decisions a source already ingested, from the raw payload stored
@@ -142,7 +140,7 @@ export type ReplayDecisionRow = {
    */
   contentHash: string | null;
   parserVersion: number | null;
-  sourceRawS3Key: string;
+  sourceRawS3Key: string | null;
   sourceRawContentType: string | null;
   corpusMirrorStatus: (typeof CASE_LAW_CORPUS_MIRROR_STATUS)[keyof typeof CASE_LAW_CORPUS_MIRROR_STATUS];
 };
@@ -234,7 +232,6 @@ const replayableRows = (
   and(
     eq(caseLawDecisions.sourceId, sourceId),
     replayScopePredicate(scope),
-    isNotNull(caseLawDecisions.sourceRawS3Key),
     isNull(caseLawDecisions.redactedAt),
   );
 
@@ -323,9 +320,7 @@ export const selectReplayPage = async ({
       .limit(limit),
   );
 
-  return rows.filter(
-    (row): row is ReplayDecisionRow => row.sourceRawS3Key !== null,
-  );
+  return rows;
 };
 
 export type ReplayabilitySplit = {
@@ -375,6 +370,7 @@ export const countReplayability = async ({
 export type ReplayCapability =
   | {
       type: "supported";
+      sourceKey?: string;
       reparse: NonNullable<SourceAdapter["reparseStoredRaw"]>;
     }
   | { type: "unsupported"; adapterKey: string };
@@ -389,7 +385,11 @@ export type ReplayCapability =
 export const replayCapability = (adapter: SourceAdapter): ReplayCapability =>
   adapter.reparseStoredRaw === undefined
     ? { type: "unsupported", adapterKey: adapter.key }
-    : { type: "supported", reparse: adapter.reparseStoredRaw };
+    : {
+        type: "supported",
+        sourceKey: adapter.key,
+        reparse: adapter.reparseStoredRaw,
+      };
 
 export type ReplayRowReport = {
   id: SafeId<"caseLawDecision">;
@@ -399,6 +399,7 @@ export type ReplayRowReport = {
   /** Present on `rejected`, `retryable` and `missing-payload`. */
   detail?: string | undefined;
   rejection?: StoredRawReparseRejection | undefined;
+  retention?: { stored: PayloadAssessment; regenerated?: PayloadAssessment };
 };
 
 export type ReplayRunReport = {
@@ -487,6 +488,9 @@ const storedInputFor = (
 });
 
 type ReplayRowOptions = {
+  sourceKey?: string | undefined;
+  rawBinaryCache: Map<string, Uint8Array>;
+  readBinary: StoredRawReader;
   row: ReplayDecisionRow;
   /** The payload this replay read, as stored. */
   raw: Uint8Array;
@@ -738,6 +742,9 @@ const replayWouldChangeRow = async ({
  * did not: the payload the parser derives from it did.
  */
 const replayRow = async ({
+  sourceKey,
+  rawBinaryCache,
+  readBinary,
   row,
   raw,
   reparsed,
@@ -806,8 +813,38 @@ const replayRow = async ({
   });
 
   if (sourceLease === null) {
+    const snapshot = await loadValidationSnapshot({
+      scopedDb,
+      decisionId: row.id,
+    });
+    const key = await resolveValidationSourceKey({
+      scopedDb,
+      sourceId,
+      sourceKey,
+    });
+    const source =
+      key === undefined
+        ? null
+        : {
+            raw,
+            contentType: row.sourceRawContentType,
+            sourceKey: key,
+            binaryCache: rawBinaryCache,
+            readBinary,
+          };
+    const stored = await assessRawPayload({
+      source,
+      payload: snapshot?.payload ?? { text: null, ast: null, sections: null },
+      parserVersion: row.parserVersion ?? 0,
+    });
+    const regenerated = await assessRawPayload({
+      source,
+      payload: caseLawCanonicalPayload(reparsed.result),
+      parserVersion: reparsed.result.parserVersion ?? 0,
+    });
     return {
       ...base,
+      retention: { stored, regenerated },
       outcome: changed
         ? REPLAY_ROW_OUTCOME.WOULD_APPLY
         : REPLAY_ROW_OUTCOME.UNCHANGED,
@@ -825,6 +862,8 @@ const replayRow = async ({
   });
 
   const processed = await processDecision({
+    sourceKey,
+    rawBinaryCache,
     // The payload travels with the result, always, whatever the adapter put
     // in it. The pipeline writes the row's raw-payload pointer from the
     // result it is handed, so a result that carried no payload would clear
@@ -895,20 +934,51 @@ const replayOneRow = async ({
   sourceLease,
   withdraw,
 }: ReplayOneRowOptions): Promise<ReplayRowReport> => {
-  const raw = await readStoredRaw(row.sourceRawS3Key);
+  const raw =
+    row.sourceRawS3Key === null
+      ? null
+      : await readStoredRaw(row.sourceRawS3Key);
   if (raw === null) {
+    const snapshot = await loadValidationSnapshot({
+      scopedDb,
+      decisionId: row.id,
+    });
+    const stored = await assessRawPayload({
+      source: null,
+      payload: snapshot?.payload ?? { text: null, ast: null, sections: null },
+      parserVersion: row.parserVersion ?? 0,
+    });
     return {
       id: row.id,
       caseNumber: row.caseNumber,
       language: row.language,
       outcome: REPLAY_ROW_OUTCOME.MISSING_PAYLOAD,
-      detail: row.sourceRawS3Key,
+      detail: row.sourceRawS3Key ?? "no_raw",
+      retention: { stored },
     };
   }
+  const rawBinaryCache = new Map<string, Uint8Array>();
+  const readBinary: StoredRawReader = async (location) => {
+    const cached = rawBinaryCache.get(location);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const bytes = await readStoredRaw(location);
+    if (bytes !== null) {
+      rawBinaryCache.set(location, bytes);
+    }
+    return bytes;
+  };
   return await replayRow({
+    sourceKey: capability.sourceKey,
+    rawBinaryCache,
+    readBinary,
     row,
     raw,
-    reparsed: await capability.reparse(storedInputFor(row, raw)),
+    reparsed: await capability.reparse({
+      ...storedInputFor(row, raw),
+      readBinary,
+    }),
     rejectionPolicy,
     scopedDb,
     sourceId,

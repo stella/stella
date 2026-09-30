@@ -14,6 +14,7 @@ import {
   isPersistableSourceDocumentId,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
+  STORED_RAW_REPARSE_REJECTION,
   sourceTotalProbeFailed,
   sourceTotalRead,
 } from "@/api/handlers/case-law/ingestion/adapter";
@@ -23,6 +24,8 @@ import type {
   ReconciliationSlicePage,
   ReconciliationSlicePageOptions,
   SourceAdapter,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   AT_RIS_APPLICATIONS,
@@ -36,6 +39,7 @@ import {
   AT_RIS_DOCUMENT_ORIGINS,
   fetchAtRisWithRetry,
 } from "@/api/handlers/case-law/ingestion/adapters/at-ris-throttle";
+import { readAtStoredRawListing } from "@/api/handlers/case-law/ingestion/adapters/at-stored-raw";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import type { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
@@ -1243,6 +1247,62 @@ export const assembleAtRisDecision = (
   };
 };
 
+type ReparseAtRisStoredRawOptions = {
+  source: AtRisSourceDefinition;
+  stored: StoredRawReparseInput;
+};
+
+const reparseAtRisStoredRaw = ({
+  source,
+  stored,
+}: ReparseAtRisStoredRawOptions): StoredRawReparseOutcome => {
+  const read = readAtStoredRawListing({
+    adapterKey: source.key,
+    stored,
+    part: AT_RIS_PART.LISTING,
+    identityOf: (listing) => identityOf(source, listing).sourceDocumentId,
+  });
+  if (read.type === "rejected") {
+    return read;
+  }
+  const application = nestedRecord(
+    read.listing,
+    "Data",
+    "Metadaten",
+    "Technisch",
+  )?.["Applikation"];
+  if (
+    application !== source.application ||
+    isExcludedItem(source, read.listing)
+  ) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH,
+      detail: "the stored listing does not belong to this RIS source",
+    };
+  }
+  const documentXml = read.parts[AT_RIS_PART.DOCUMENT_XML];
+  if (documentXml === undefined || documentXml.length < MIN_DOCUMENT_LENGTH) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+      detail: "the stored payload holds no complete decision XML",
+    };
+  }
+  const result = assembleAtRisDecision(source, read.listing, {
+    documentXml,
+    headnoteListing: read.parts[AT_RIS_PART.HEADNOTE_LISTING],
+  });
+  if (result.isListingOnly) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+      detail: "the stored XML could not produce a decision",
+    };
+  }
+  return { type: "parsed", result };
+};
+
 type FetchListingOptions = {
   cursor: string | null;
   dependencies: AtRisDependencies;
@@ -1410,6 +1470,7 @@ const buildReconciliationDecision = async (
 
 type AtRisSourceAdapter<TKey extends AtRisAdapterKey> = SourceAdapter & {
   readonly key: TKey;
+  readonly reparseStoredRaw: NonNullable<SourceAdapter["reparseStoredRaw"]>;
 };
 
 /**
@@ -1421,8 +1482,8 @@ type AtRisSourceAdapter<TKey extends AtRisAdapterKey> = SourceAdapter & {
 const createAdapter = <const TKey extends AtRisAdapterKey>(
   source: AtRisSourceDefinition & { readonly key: TKey },
   dependencies: AtRisDependencies,
-): AtRisSourceAdapter<TKey> =>
-  defineSourceAdapter({
+): AtRisSourceAdapter<TKey> => ({
+  ...defineSourceAdapter({
     key: source.key,
     sourceSurfaces: atRisSourceSurfaces(source.key),
     sourceFields: atRisFieldInventory(profileOf(source)),
@@ -1628,7 +1689,9 @@ const createAdapter = <const TKey extends AtRisAdapterKey>(
         },
         catch: adapterCatch(source.key, cursor),
       }),
-  });
+  }),
+  reparseStoredRaw: (stored) => reparseAtRisStoredRaw({ source, stored }),
+});
 
 export const createAtCourtsAdapter = (
   dependencies: Partial<AtRisDependencies> = {},

@@ -1198,7 +1198,6 @@ export const assemblePlNsaDecision = ({
       officialCollection: row.official_collection ?? undefined,
       glossInformation: row.glosa_information ?? undefined,
       textSections: sectionPresence(row),
-      textComplete: parsed.validation.ok,
       textSource: parsed.textSource,
       dataset: {
         ...snapshotPart,

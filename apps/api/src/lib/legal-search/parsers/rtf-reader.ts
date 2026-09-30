@@ -20,7 +20,7 @@
  *
  * What it does not recognise, it reports: `warnings` names every control word
  * outside the dialect, so an unhandled construct reaches the parse signal
- * (`validate-ast.ts`) instead of disappearing. Nothing is dropped silently.
+ * at the ingestion boundary instead of disappearing. Nothing is dropped silently.
  */
 
 import { panic } from "better-result";

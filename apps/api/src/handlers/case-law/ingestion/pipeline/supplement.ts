@@ -13,7 +13,7 @@ import {
   judgmentOwnsSupplementRaw,
   keepSupplementStandalone,
   placeSupplementTx,
-  supplementContent,
+  assessStagedSupplement,
   supplementJudgmentReadFailed,
 } from "@/api/handlers/case-law/ingestion/pipeline/supplement-placement";
 import type { SupplementPlacement } from "@/api/handlers/case-law/ingestion/pipeline/supplement-placement";
@@ -191,7 +191,12 @@ export const processSupplement = async ({
   // decision's own write opens it; see `openRawSourceWriteWindow`.
   const rawWriteWindow = openRawSourceWriteWindow();
 
-  const content = supplementContent(supplement, document);
+  const stage = await assessStagedSupplement({
+    supplement,
+    document,
+    sourceId,
+    scopedDb,
+  });
   const placed = await scopedDb(
     async (tx) =>
       await placeSupplementTx(tx, {
@@ -200,7 +205,7 @@ export const processSupplement = async ({
         sourceDocumentId,
         supplement,
         observedAt,
-        content,
+        stage,
       }),
   );
   if (placed.type === "erased") {

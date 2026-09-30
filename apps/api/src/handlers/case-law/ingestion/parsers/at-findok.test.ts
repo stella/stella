@@ -30,7 +30,6 @@ describe("Austrian Findok XML parser", () => {
     });
     expect(parsed.fulltext).toContain("Entscheidungsgründe");
     expect(parsed.fulltext).toContain("Rechtliche Würdigung");
-    expect(parsed.validationIssues).toEqual([]);
   });
 
   it("rejects an envelope without decision XHTML", () => {

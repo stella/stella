@@ -8,6 +8,7 @@ import {
   parseCorpusLocation,
 } from "@/api/lib/legal-search/corpus-location";
 import {
+  decodeSourceRawEnvelope,
   decodeSourceRawEnvelopeObjects,
   withSourceRawObjects,
 } from "@/api/lib/legal-search/ingestion-types";
@@ -393,10 +394,49 @@ export const homeRawPayloadObjects = ({
   payload: Uint8Array | string;
   owner: RawDocumentOwner;
 }): Result<HomedRawPayload, RawSourceObjectUnhomeableError> => {
-  if (typeof payload !== "string") {
+  const decoded =
+    typeof payload === "string"
+      ? Result.ok(payload)
+      : Result.try(() =>
+          new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(
+            payload,
+          ),
+        );
+  // Binary files and legacy non-envelope payloads remain exact bytes. A valid
+  // replay envelope may arrive as bytes and still needs its files rehomed.
+  if (
+    Result.isError(decoded) ||
+    decodeSourceRawEnvelope(decoded.value) === null
+  ) {
     return Result.ok({ payload, copies: [] });
   }
-  const named = Object.entries(decodeSourceRawEnvelopeObjects(payload));
+  const text = decoded.value;
+  const objects = decodeSourceRawEnvelopeObjects(text);
+  const parsed = Result.try((): unknown => JSON.parse(text));
+  if (Result.isError(parsed)) {
+    return panic("A decoded raw envelope stopped being valid JSON");
+  }
+  if (
+    typeof parsed.value === "object" &&
+    parsed.value !== null &&
+    "objects" in parsed.value
+  ) {
+    const declared = parsed.value.objects;
+    if (
+      typeof declared !== "object" ||
+      declared === null ||
+      Array.isArray(declared) ||
+      Object.keys(declared).length !== Object.keys(objects).length
+    ) {
+      return Result.err(
+        new RawSourceObjectUnhomeableError({
+          message: "Raw envelope has malformed binary references",
+          location: "raw-envelope",
+        }),
+      );
+    }
+  }
+  const named = Object.entries(objects);
   const copies: RawObjectCopy[] = [];
   const homed: Record<string, SourceRawObjectRef> = {};
   for (const [part, ref] of named) {
@@ -426,13 +466,95 @@ export const homeRawPayloadObjects = ({
     copies.length === 0
       ? { payload, copies }
       : {
-          payload: withSourceRawObjects(
-            payload,
-            homed satisfies SourceRawObjects,
-          ),
+          payload: withSourceRawObjects(text, homed satisfies SourceRawObjects),
           copies,
         },
   );
+};
+
+type ConfirmedRawRelocationOptions = {
+  owner: RawDocumentOwner & { family: typeof RAW_SOURCE_FAMILY.CASE_LAW };
+  writtenKey: string;
+  contentType: string | null;
+} & (
+  | { type: "copy"; storedKey: string }
+  | { type: "write"; previousPayload: Uint8Array; payload: Uint8Array | string }
+);
+
+/** Repoint raw storage only after proving the publisher payload is unchanged. */
+export const confirmedRawRelocationColumns = (
+  options: ConfirmedRawRelocationOptions,
+) => {
+  const { owner, writtenKey, contentType } = options;
+  switch (options.type) {
+    case "copy": {
+      const digest = options.storedKey.slice(
+        options.storedKey.lastIndexOf("/") + 1,
+      );
+      if (
+        !SHA256_HEX.test(digest) ||
+        writtenKey !== rawDocumentPayloadKey(owner, digest)
+      ) {
+        return panic("Raw relocation changed a copied payload digest");
+      }
+      break;
+    }
+    case "write": {
+      if (
+        writtenKey !== rawSourcePayloadKey({ owner, data: options.payload })
+      ) {
+        return panic("Raw relocation pointer does not identify its payload");
+      }
+      if (sha256Of(options.previousPayload) === sha256Of(options.payload)) {
+        break;
+      }
+      const previous = Result.try(() =>
+        new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(
+          options.previousPayload,
+        ),
+      );
+      if (Result.isError(previous) || typeof options.payload !== "string") {
+        return panic("Raw relocation changed a non-envelope payload");
+      }
+      const previousParts = decodeSourceRawEnvelope(previous.value);
+      const nextParts = decodeSourceRawEnvelope(options.payload);
+      if (
+        previousParts === null ||
+        nextParts === null ||
+        Object.keys(previousParts).length !== Object.keys(nextParts).length ||
+        Object.entries(previousParts).some(
+          ([part, text]) => nextParts[part] !== text,
+        )
+      ) {
+        return panic("Raw relocation changed publisher text parts");
+      }
+      const previousObjects = decodeSourceRawEnvelopeObjects(previous.value);
+      const nextObjects = decodeSourceRawEnvelopeObjects(options.payload);
+      if (
+        Object.keys(previousObjects).length !== Object.keys(nextObjects).length
+      ) {
+        return panic("Raw relocation changed publisher binary parts");
+      }
+      for (const [part, previousRef] of Object.entries(previousObjects)) {
+        const nextRef = nextObjects[part];
+        if (
+          nextRef === undefined ||
+          nextRef.sha256 !== previousRef.sha256 ||
+          nextRef.byteLength !== previousRef.byteLength ||
+          nextRef.contentType !== previousRef.contentType ||
+          classifyCaseLawRawKey(nextRef.location, owner) !==
+            RAW_KEY_OWNERSHIP.OWN
+        ) {
+          return panic("Raw relocation changed publisher binary content");
+        }
+      }
+      break;
+    }
+    default:
+      options satisfies never;
+      return panic("Unhandled raw relocation type");
+  }
+  return { sourceRawS3Key: writtenKey, sourceRawContentType: contentType };
 };
 
 class RawSourceObjectCopyError extends TaggedError("RawSourceObjectCopyError")<{

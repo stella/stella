@@ -28,10 +28,6 @@ import {
   inlinesToPlainText,
   walkInlines,
 } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
-import {
-  validateAndLog,
-  type ValidationResult,
-} from "@/api/lib/legal-search/parsers/validate-ast";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 
 export const PL_TK_ORIGIN = "https://ipo.trybunal.gov.pl";
@@ -936,27 +932,10 @@ type ParsePlTkTextInput = {
   textHtml: string;
 };
 
-/**
- * Check the blocks against the text they were built from. The reference is
- * the portal's own markup, so text the builder failed to emit shows up as
- * lost content rather than being absent from both sides.
- */
-export const validatePlTkBlocks = (
-  caseNumber: string,
-  textHtml: string,
-  blocks: Block[],
-): ValidationResult =>
-  validateAndLog(
-    { parser: "pl-tk", caseNumber },
-    `<body>${textHtml}</body>`,
-    blocks,
-  );
-
 export const parsePlTkText = (
   input: ParsePlTkTextInput,
 ): { documentAst: DocumentAst; fulltext: string } => {
   const blocks = buildBlocks(input.textHtml);
-  validatePlTkBlocks(input.caseNumber, input.textHtml, blocks);
   return {
     documentAst: {
       version: 1,

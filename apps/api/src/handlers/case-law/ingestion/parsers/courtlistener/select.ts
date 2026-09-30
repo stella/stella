@@ -4,8 +4,8 @@
  * Columns are tried in a fixed precedence, structural XML first. A column is
  * dispatched on the structure it holds, not its name: `html_with_citations`
  * may hold Harvard XML, a preformatted body or HTML. An unusable candidate
- * is recorded and the next one tried; a parsed candidate must also pass the
- * shared content-retention check. A candidate needing assets or a spent
+ * is recorded and the next one tried. The pipeline certifies the selected
+ * final payload. A candidate needing assets or a spent
  * budget ends the selection: a lower column would stand in for text it does
  * not hold.
  */
@@ -14,7 +14,7 @@ import { panic } from "better-result";
 
 import type { OpinionRow } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/snapshot-columns";
 import type { OpinionType } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/vocabulary";
-import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
+import { COURTLISTENER_TEXT_FORMATS } from "@/api/lib/legal-search/text-retention/source-formats";
 
 import {
   type FormatInput,
@@ -32,16 +32,7 @@ import {
 } from "./outcome";
 import { parsePlainText, parsePreformatted } from "./plain-text";
 
-/** Text columns in precedence order. `xml_scan` is never text: see below. */
-export const COURTLISTENER_TEXT_FORMATS = [
-  "xml_harvard",
-  "html_with_citations",
-  "html_lawbox",
-  "html_columbia",
-  "html_anon_2020",
-  "html",
-  "plain_text",
-] as const satisfies readonly (keyof OpinionRow)[];
+export { COURTLISTENER_TEXT_FORMATS } from "@/api/lib/legal-search/text-retention/source-formats";
 
 type CourtListenerTextFormat = (typeof COURTLISTENER_TEXT_FORMATS)[number];
 
@@ -130,30 +121,6 @@ export type OpinionTextSelection =
       readonly attempts: readonly CandidateAttempt[];
     };
 
-const RESIDUE = "MARKUP_RESIDUE";
-
-/** Why the retention check refused a parse, or `null` when it passed. */
-const retentionFailure = (
-  row: OpinionRow,
-  text: ParsedOpinionText,
-): TextCandidateUnusable | null => {
-  const result = validateAndLog(
-    {
-      parser: "courtlistener",
-      caseNumber: `cl-opinion:${row.id}`,
-      language: "en",
-    },
-    text.validationHtml,
-    text.units.flatMap(({ blocks }) => [...blocks]),
-  );
-  if (result.ok) {
-    return null;
-  }
-  return result.issues.some(({ code }) => code === RESIDUE)
-    ? TEXT_CANDIDATE_UNUSABLE.MARKUP_RESIDUE
-    : TEXT_CANDIDATE_UNUSABLE.CONTENT_LOSS;
-};
-
 /**
  * The first usable column of `row`, or why there is none. Scan-layout XML
  * holds positioned glyphs, not text: where it is all that is left, the
@@ -186,22 +153,17 @@ export const selectOpinionText = ({
     );
     switch (parsed.status) {
       case "parsed": {
-        const refused = retentionFailure(row, parsed.text);
-        if (refused === null) {
-          budget.blocks += parsed.text.units.reduce(
-            (sum, { blocks }) => sum + blocks.length,
-            0,
-          );
-          return {
-            status: "parsed",
-            format,
-            structure,
-            text: parsed.text,
-            attempts,
-          };
-        }
-        attempts.push({ format, structure, reason: refused });
-        break;
+        budget.blocks += parsed.text.units.reduce(
+          (sum, { blocks }) => sum + blocks.length,
+          0,
+        );
+        return {
+          status: "parsed",
+          format,
+          structure,
+          text: parsed.text,
+          attempts,
+        };
       }
       case "unusable":
         attempts.push({ format, structure, reason: parsed.reason });

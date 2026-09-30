@@ -179,11 +179,9 @@ type ReportStoredDocumentQualityOptions = {
  * Report a stored decision with no text, text without structure, or markup
  * that survived into its text.
  *
- * Parsers report their own quality through `validateAndLog`, but a
- * source whose parser never runs reports nothing at all. Emit the
- * same signal here so every stored decision is accounted for, and
- * split the severity the same way: no text is an error, text without
- * structure is a warning. A refresh that preserves the stored document
+ * Pipeline quality reporting accounts for every stored decision,
+ * including source payloads stored without parsing: no text is an error,
+ * text without structure is a warning. A refresh that preserves the stored document
  * reports nothing: it did not store an empty decision, it left a full
  * one alone, and these errors are what an operator sweeps for.
  */
@@ -218,11 +216,8 @@ const reportStoredDocumentQuality = ({
     }
   }
 
-  // Same reasoning for markup that survived into the text: a parser
-  // reports its own blocks through `validateAndLog`, so this covers the
-  // decisions no parser produced — the source's payload stored verbatim
-  // as the document. Skipped where a stored document is being preserved,
-  // which stores no text of its own.
+  // Fulltext-only payloads need the same markup-residue signal as structured
+  // documents. A refresh preserving the stored document writes no new text.
   const storedResidue =
     preserveStoredDocument ||
     pendingMirrorPayload !== null ||

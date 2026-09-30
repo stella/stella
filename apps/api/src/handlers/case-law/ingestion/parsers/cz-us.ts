@@ -58,10 +58,6 @@ import type {
   Inline,
   ParagraphRole,
 } from "@/api/handlers/case-law/document-ast";
-import {
-  buildValidationHtml,
-  validateAndLog,
-} from "@/api/lib/legal-search/parsers/validate-ast";
 
 import {
   inlinesToPlainText,
@@ -129,12 +125,6 @@ export const parseUsDecisionHtml = (
   // all text without whitespace between sections, creating
   // phantom words like "tarifu.ii.skutkové" that aren't in
   // the AST. Using per-line <p> tags preserves word boundaries.
-  const validationHtml = buildValidationHtml(lines.map((l) => l.plainText));
-  validateAndLog(
-    { parser: "cz-us", caseNumber: input.caseNumber },
-    validationHtml,
-    blocks,
-  );
 
   const fulltext = blocks
     .flatMap((b) => (b.plainText ? [b.plainText] : []))
@@ -357,7 +347,7 @@ const rtfGroupEnd = (rtf: string, start: number): number | undefined => {
  * An unbalanced group is not skipped: its closing brace is missing, so
  * where it ends is a guess and dropping to the end of the source would drop
  * the rest of the decision with it. What leaks instead is markup, which
- * `validateAndLog`'s MARKUP_RESIDUE reports.
+ * the pipeline’s MARKUP_RESIDUE reports.
  */
 const skippedGroupEnd = (rtf: string, open: number): number | undefined => {
   const head = rtfGroupHead(rtf, open);

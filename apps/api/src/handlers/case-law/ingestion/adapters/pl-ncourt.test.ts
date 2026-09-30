@@ -10,6 +10,7 @@
 import { panic, Result } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 
+import type { Block } from "@/api/handlers/case-law/document-ast";
 import { decodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
@@ -39,24 +40,28 @@ import {
 import type { PlNcourtBuild } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt";
 import { PL_NCOURT_COURT_NAMES } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt-courts";
 import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
-import {
-  readPlNcourtContent,
-  validatePlNcourtDocument,
-} from "@/api/handlers/case-law/ingestion/parsers/pl-ncourt";
+import { readPlNcourtContent } from "@/api/handlers/case-law/ingestion/parsers/pl-ncourt";
+import type { PlNcourtContent } from "@/api/handlers/case-law/ingestion/parsers/pl-ncourt";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
-import {
-  AST_BOUNDARY_WHITESPACE,
-  AST_CONTENT_LOST,
-  AST_STRUCTURE_DEGRADED,
-  buildValidationHtml,
-  validateAst,
-} from "@/api/lib/legal-search/parsers/validate-ast";
-import {
-  resetLogSinkForTesting,
-  setLogSinkForTesting,
-} from "@/api/lib/observability/logger";
+import { compareRetention } from "@/api/lib/legal-search/text-retention/compare";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+type DocumentRetentionOptions = { content: PlNcourtContent; blocks: Block[] };
+const documentRetention = ({ content, blocks }: DocumentRetentionOptions) => {
+  const checked = compareRetention({
+    source: content.comparisonParagraphs.join(" "),
+    output: blocks.map((block) => block.plainText).join(" "),
+  });
+  expect(checked.isOk()).toBe(true);
+  if (checked.isErr()) {
+    throw checked.error;
+  }
+  if (checked.value.status !== "assessed") {
+    return panic("Nonempty XML fixture yielded empty retention source");
+  }
+  return checked.value;
+};
 
 const FIXTURES = new URL("__fixtures__/", import.meta.url);
 
@@ -942,12 +947,7 @@ describe("the document", () => {
       statutes: [],
       documentId: "I ACa 1/13",
     }).documentAst.blocks;
-    const validation = validatePlNcourtDocument(
-      { parser: "pl-ncourt", caseNumber: "I ACa 1/13" },
-      content,
-      blocks,
-    );
-    expect(validation.issues.map((issue) => issue.code)).toEqual([]);
+    expect(documentRetention({ content, blocks }).defect).toBeNull();
   });
 
   test("the root's attributes and every statute link are kept", async () => {
@@ -979,17 +979,13 @@ describe("the document", () => {
       statutes: [],
       documentId: LIST_DOC,
     }).documentAst.blocks;
-    const subject = { parser: "pl-ncourt", caseNumber: LIST_DOC };
-    const codes = (checked: typeof blocks) =>
-      validatePlNcourtDocument(subject, content, checked).issues.map(
-        (issue) => issue.code,
-      );
-    expect(codes(blocks)).not.toContain("CONTENT_LOSS");
-    // A rendering that lost half the document is caught by the XML, which
-    // the parser's own check against that rendering could not do.
-    expect(codes(blocks.slice(0, Math.floor(blocks.length / 2)))).toContain(
-      "CONTENT_LOSS",
-    );
+    expect(documentRetention({ content, blocks }).defect).toBeNull();
+    expect(
+      documentRetention({
+        content,
+        blocks: blocks.slice(0, Math.floor(blocks.length / 2)),
+      }).defect,
+    ).toBe("text_loss_suspected");
   });
 
   test("XML line breaks reclassify glued source words without changing the AST", () => {
@@ -1013,38 +1009,9 @@ describe("the document", () => {
     expect(content.sourceParagraphs.at(0)).toContain("wyraz0w");
     expect(content.comparisonParagraphs.at(0)).toContain("wyraz0 w");
     expect(parsed.fulltext).toContain("wyraz0\nw");
-    expect(
-      validateAst(
-        buildValidationHtml(content.sourceParagraphs),
-        blocks,
-      ).issues.map((issue) => issue.code),
-    ).toContain("MISSING_WORDS");
-
-    const events: string[] = [];
-    setLogSinkForTesting(({ message }) => {
-      events.push(message);
-    });
-    const result = (() => {
-      try {
-        return validatePlNcourtDocument(
-          { parser: "pl-ncourt", caseNumber: "I C 1/2026" },
-          content,
-          blocks,
-        );
-      } finally {
-        resetLogSinkForTesting();
-      }
-    })();
-    expect(result.stats.boundaryWhitespaceWords).toHaveLength(20);
-    expect(result.issues.map((issue) => issue.code)).toContain(
-      "BOUNDARY_WHITESPACE",
-    );
-    expect(result.issues.map((issue) => issue.code)).not.toContain(
-      "MISSING_WORDS",
-    );
-    expect(events).toContain(AST_BOUNDARY_WHITESPACE);
-    expect(events).toContain(AST_STRUCTURE_DEGRADED);
-    expect(events).not.toContain(AST_CONTENT_LOST);
+    const checked = documentRetention({ content, blocks });
+    expect(checked.missingWords).toBe(0);
+    expect(checked.defect).toBeNull();
   });
 
   test("a missing sentence still fails after an XML boundary is reconciled", () => {
@@ -1070,14 +1037,9 @@ describe("the document", () => {
       documentId: "loss-test",
     }).documentAst.blocks;
     expect(blocks).toHaveLength(2);
-    const result = validatePlNcourtDocument(
-      { parser: "pl-ncourt", caseNumber: "I C 2/2026" },
-      content,
-      blocks.slice(0, 1),
-    );
-    expect(result.issues.map((issue) => issue.code)).toContain("MISSING_WORDS");
-    expect(result.issues.map((issue) => issue.code)).toContain("CONTENT_LOSS");
-    expect(result.stats.missingWords).toHaveLength(20);
+    const result = documentRetention({ content, blocks: blocks.slice(0, 1) });
+    expect(result.defect).toBe("text_loss_suspected");
+    expect(result.missingWords).toBe(20);
   });
 
   test("bold and italic in the XML stay bold and italic in the document", async () => {

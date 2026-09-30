@@ -53,11 +53,8 @@ type SourceTextRecipe =
       readonly part: string;
       /** The UOKiK producer appends `-2`, `-3`, etc. to its first object name. */
       readonly multiplicity: "single" | "numbered-family";
-    }
-  | {
-      readonly type: "unretained";
-      readonly part: string;
-      readonly reason: string;
+      /** Explicit direct-byte cutover for a deferred document captured without an envelope. */
+      readonly directContentType?: string;
     };
 
 type SourceFormatBranch =
@@ -74,6 +71,17 @@ type SourceFormatBranch =
 export type SourceFormat = {
   readonly branches: readonly [SourceFormatBranch, ...SourceFormatBranch[]];
 };
+
+/** Transport precedence shared with parsing; scan XML requires assets rather than a text oracle. */
+export const COURTLISTENER_TEXT_FORMATS = [
+  "xml_harvard",
+  "html_with_citations",
+  "html_lawbox",
+  "html_columbia",
+  "html_anon_2020",
+  "html",
+  "plain_text",
+] as const;
 
 const RIS_FORMAT = {
   branches: [
@@ -150,10 +158,10 @@ export const ADAPTER_SOURCE_FORMATS = {
       {
         format: TEXT_FORMAT.PDF,
         recipe: {
-          type: "unretained",
-          part: "document",
-          reason:
-            "The deferred document fetch and backfill do not retain the PDF bytes in the current raw envelope.",
+          type: "object",
+          part: "document-file",
+          multiplicity: "single",
+          directContentType: "application/pdf",
         },
       },
     ],

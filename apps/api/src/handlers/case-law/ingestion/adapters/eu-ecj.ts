@@ -1004,22 +1004,13 @@ const parseManifestation = (
 ): ParsedManifestation => {
   try {
     const parsed = parseEcjDecisionHtml(input);
-    // A parse that lost source text is worse than no parse: the reader
-    // renders the AST, so the missing paragraphs would be invisible.
-    // Fall through to the stripped-text fallback, which keeps
-    // everything, and let the ERROR the validator already logged say
-    // which decision needs the parser fixed.
-    const lostContent = parsed.validationIssues.some(
-      (code) => code === "CONTENT_LOSS" || code === "MISSING_WORDS",
-    );
     // An unmatched layout is not a page: the whole body is the document
     // and its text is the Court's, so rule 10 keeps it exactly as before.
     // Only a page built out of the publisher's chrome is refused, and
     // only in the fallback below.
     if (
       parsed.boundary !== "page-chrome" &&
-      parsed.documentAst.blocks.length > 0 &&
-      !lostContent
+      parsed.documentAst.blocks.length > 0
     ) {
       return {
         documentAst: parsed.documentAst,

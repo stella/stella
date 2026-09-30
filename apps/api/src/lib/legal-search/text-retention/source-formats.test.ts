@@ -45,6 +45,7 @@ import {
   IMPORT_SOURCE_FORMATS,
   type SourceFormat,
 } from "./source-formats";
+import { readSourceTextBaseline } from "./source-input";
 import { TEXT_FORMAT } from "./types";
 
 /** Real adapter builders, including all twelve Austrian registrations. */
@@ -120,7 +121,7 @@ describe("registered source text transports", () => {
         ...Object.keys(decision.sourceRawObjects ?? {}),
       ]);
       const captured = format.branches.filter(({ recipe }) => {
-        if (recipe.type === "unretained" || !capturedNames.has(recipe.part)) {
+        if (!capturedNames.has(recipe.part)) {
           return false;
         }
         if (recipe.type === "envelope-base64") {
@@ -128,17 +129,18 @@ describe("registered source text transports", () => {
         }
         return true;
       });
-      const gaps = format.branches.filter(
-        ({ recipe }) => recipe.type === "unretained",
-      );
-      expect(captured.length + gaps.length).toBeGreaterThan(0);
-      for (const { recipe } of gaps) {
-        if (recipe.type !== "unretained") {
-          continue;
-        }
-        expect(recipe.reason.trim().length).toBeGreaterThan(0);
-        expect(capturedNames.has(recipe.part)).toBe(false);
+      if (key === ADAPTER_KEYS.SK_COURTS) {
+        // Historic listing/detail captures predate deferred PDF retention.
+        expect(captured).toHaveLength(0);
+        const result = await readSourceTextBaseline({
+          raw: new TextEncoder().encode(raw),
+          contentType: decision.sourceRawContentType ?? null,
+          sourceKey: key,
+        });
+        expect(result.isErr() && result.error.reason).toBe("unavailable");
+        return;
       }
+      expect(captured.length).toBeGreaterThan(0);
     });
   }
 

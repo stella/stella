@@ -28,10 +28,6 @@ import type {
   ParagraphRole,
 } from "@/api/handlers/case-law/document-ast";
 import { ParseXmlError } from "@/api/lib/errors/tagged-errors";
-import {
-  buildValidationHtml,
-  validateAndLog,
-} from "@/api/lib/legal-search/parsers/validate-ast";
 
 import { appendTextInline, inlinesToPlainText } from "./shared-inlines";
 
@@ -51,7 +47,6 @@ export type ParsePlUodoDecisionInput = {
 export type ParsePlUodoDecisionOutput = {
   documentAst: DocumentAst;
   fulltext: string;
-  validationIssues: string[];
   /** Unexpected element names, or #text/#cdata for stray text nodes. */
   unmappedMarkup: string[];
 };
@@ -573,31 +568,6 @@ export const parsePlUodoDecisionXml = (
     );
   }
 
-  const validation = validateAndLog(
-    {
-      parser: "pl-uodo",
-      caseNumber: input.caseNumber,
-      language: "pl",
-      url: input.sourceUrl,
-    },
-    buildValidationHtml(sourceTextsOf($, root)),
-    state.blocks,
-  );
-  // Text the source prints that the document does not hold is a failed
-  // parse, not a shorter decision: the adapter keeps the body verbatim and
-  // stores the row without a document, so nothing incomplete is published
-  // and a parser fix replays it.
-  if (!validation.ok) {
-    return Result.err(
-      new ParseXmlError({
-        message: `the parse lost source text: ${validation.issues
-          .map((issue) => issue.code)
-          .join(", ")}`,
-        cause: undefined,
-      }),
-    );
-  }
-
   return Result.ok({
     documentAst: {
       version: 1,
@@ -619,7 +589,6 @@ export const parsePlUodoDecisionXml = (
       blocks: state.blocks,
     },
     fulltext: state.blocks.map((block) => block.plainText).join("\n\n"),
-    validationIssues: validation.issues.map((issue) => issue.code),
     unmappedMarkup: [...state.unmapped],
   });
 };

@@ -5,10 +5,6 @@ import { type AnyNode, type Element, isTag, isText } from "domhandler";
 
 import type { Block, DocumentAst } from "@/api/handlers/case-law/document-ast";
 import { ParseXmlError } from "@/api/lib/errors/tagged-errors";
-import {
-  buildValidationHtml,
-  validateAndLog,
-} from "@/api/lib/legal-search/parsers/validate-ast";
 
 export type ParseFindokDecisionInput = {
   caseNumber: string;
@@ -31,7 +27,6 @@ export type ParseFindokDecisionOutput = {
   envelope: FindokEnvelopeFields;
   statutes: string[];
   subjectCodes: string[];
-  validationIssues: string[];
 };
 
 /**
@@ -183,7 +178,6 @@ export const parseFindokDecisionXml = (
   }
 
   const blocks: Block[] = [];
-  const validationParts: string[] = [];
   let blockIndex = 0;
   const appendParagraph = (text: string): void => {
     if (text === "") {
@@ -241,8 +235,8 @@ export const parseFindokDecisionXml = (
   for (const xhtml of xhtmlSegments) {
     const document = cheerio.load(xhtml);
     const body = document("body").first();
-    const validationText = normalizedText(body.text());
-    if (body.length === 0 || validationText === "") {
+    const bodyText = normalizedText(body.text());
+    if (body.length === 0 || bodyText === "") {
       return Result.err(
         new ParseXmlError({
           message: "Findok embedded XHTML has no decision text",
@@ -250,7 +244,6 @@ export const parseFindokDecisionXml = (
         }),
       );
     }
-    validationParts.push(validationText);
 
     body.contents().each((_, node) => {
       appendNode(node, document);
@@ -271,16 +264,6 @@ export const parseFindokDecisionXml = (
   const statutes = distinctTexts(envelope, "Grundk ngesamt_erf");
   const subjectCodes = distinctTexts(envelope, "Grundk matnr_erf");
   const betreff = optionalText(envelope, "Grundk > betreff");
-  const validation = validateAndLog(
-    {
-      parser: "at-findok",
-      caseNumber: input.caseNumber,
-      language: "de",
-      url: input.sourceUrl,
-    },
-    buildValidationHtml(validationParts),
-    blocks,
-  );
   return Result.ok({
     betreff,
     envelope: envelopeFields(envelope),
@@ -308,6 +291,5 @@ export const parseFindokDecisionXml = (
     fulltext: blocks.map((block) => block.plainText).join("\n\n"),
     keywords,
     statutes,
-    validationIssues: validation.issues.map((issue) => issue.code),
   });
 };

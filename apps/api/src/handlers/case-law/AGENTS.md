@@ -144,20 +144,18 @@ Individual adapters should NOT sanitize. The pipeline applies
 chars) to ALL fields including `sourceRaw`. This ensures
 consistency and prevents PostgreSQL text column rejections.
 
-### 6. Validate every parser with validateAndLog
+### 6. Certify retention at the persistence boundary
 
-Every parser MUST call `validateAndLog()` after producing
-blocks. The validator checks:
+Parsers return document content, never a retention certificate. The ingestion
+pipeline extracts source text independently and checks the final sanitized
+AST, fulltext and sections that will be persisted. Its verdict belongs to
+that exact payload, including unchanged-content updates and empty decisions.
 
-- Content retention (>90% of source text preserved)
-- Missing meaningful words (<15 allowed)
-- Structural integrity (at least one heading, no empty AST)
-- Inline/plainText consistency
-- Duplicate and tiny block detection
-
-If the validator flags content loss, investigate the source
-— you're probably using the wrong endpoint or missing a
-section. Don't suppress the warning.
+Every adapter declares its source representation and document boundaries.
+Unsupported input, exhausted bounds and an absent PDF text layer are explicit
+uncheckable outcomes; none counts as a clean parse. Preserve stored raw source
+so a parser fix can replay it. Treat suspected text loss as an actionable
+defect rather than suppressing or compensating for it with generated headings.
 
 ### 7. Anonymization must be preserved
 
@@ -226,9 +224,9 @@ still walked for content.
 A decision shown with a flat structure is visibly imperfect and a user
 can still read and cite it. A decision missing a paragraph looks
 complete and is wrong, and neither the reader nor the AI pipeline has
-any way to know. `validateAndLog`'s CONTENT_LOSS and MISSING_WORDS are
-the completeness guard and must be treated as errors; heading levels
-and section boundaries are fidelity and may carry a known tail.
+any way to know. The pipeline's independent source-retention verdict
+is the completeness guard; heading levels and section boundaries are
+fidelity and may carry a known tail.
 
 ### 11. Emit a parse signal every stored decision is covered by
 
@@ -254,9 +252,9 @@ decisions worth re-ingesting after a parser fix; `sourceRaw` in S3
 means most can be re-parsed without touching the court's site.
 
 `ast_missing`, `decision_empty` and `ast_markup_residue` come from the
-pipeline as well as from a parser, so they also cover sources whose parser
-never runs — which is the case that would otherwise be silent, since a
-parser that is not called cannot report anything.
+pipeline, so they also cover sources whose parser never runs. Parser
+outputs carry content and diagnostics, while the final persisted-payload
+retention verdict belongs to the pipeline.
 
 Residue outranks content loss when both fire, and the log line carries
 every code either way: retention is measured over text that includes the
@@ -724,7 +722,7 @@ When adding a new country adapter:
 4. **Extract ALL metadata** — every field the API exposes goes
    into `IngestionResult.metadata`
 5. **Write a parser** (if HTML/JSON structure allows) — produce
-   `DocumentAst` blocks; call `validateAndLog()`
+   `DocumentAst` blocks and declare the independent source-text recipe
 6. **Register** in `adapters/index.ts` and
    `adapter-registry-lazy.ts`
 7. **Add adapter key** to `consts.ts` `ADAPTER_KEYS`
@@ -783,7 +781,7 @@ case-law/
 │       ├── cz-regional.ts # Regional structured JSON parser
 │       ├── eu-ecj.ts      # CJEU Cellar XHTML parser (all languages)
 │       ├── eu-ecj-formex.ts  # Formex reader; test oracle only
-│       └── validate-ast.ts # AST content-loss validator
+│       └── validate-ast.ts # AST structural diagnostics
 ├── polarity/              # Citation polarity classification
 └── matter-links/          # Link decisions to matters
 ```

@@ -1,11 +1,14 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
-import { withSourceRawObjects } from "@/api/handlers/case-law/ingestion/adapter";
+import type { SafeId } from "@/api/lib/branded-types";
+import {
+  decodeSourceRawEnvelopeObjects,
+  withSourceRawObjects,
+} from "@/api/lib/legal-search/ingestion-types";
 import type {
   IngestionResult,
   SourceRawObjectRef,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type { SafeId } from "@/api/lib/branded-types";
+} from "@/api/lib/legal-search/ingestion-types";
 import {
   copyRawObject,
   homeRawPayloadObjects,
@@ -51,7 +54,7 @@ type SourceRawPayloadPlan = {
  * stored as the payload itself, which is the shape every adapter wrote
  * before parts existed and the one `LEGACY_RAW_SHAPES` describes.
  */
-const planSourceRawPayload = ({
+export const planSourceRawPayload = ({
   result,
   sourceId,
   decisionId,
@@ -60,6 +63,9 @@ const planSourceRawPayload = ({
     return { payload: result.sourceRawBytes, files: [] };
   }
   if (result.sourceRaw === undefined) {
+    if (Object.keys(result.sourceRawObjects ?? {}).length > 0) {
+      return panic("Captured binary files require a raw envelope");
+    }
     return undefined;
   }
   const files = Object.entries(result.sourceRawObjects ?? {}).map(
@@ -79,10 +85,10 @@ const planSourceRawPayload = ({
   const payload =
     files.length === 0
       ? result.sourceRaw
-      : withSourceRawObjects(
-          result.sourceRaw,
-          Object.fromEntries(files.map(({ part, ref }) => [part, ref])),
-        );
+      : withSourceRawObjects(result.sourceRaw, {
+          ...decodeSourceRawEnvelopeObjects(result.sourceRaw),
+          ...Object.fromEntries(files.map(({ part, ref }) => [part, ref])),
+        });
   // A payload that is not an envelope cannot name the files, and a file
   // nothing names is one no reader would ever look for.
   if (files.length > 0 && payload === result.sourceRaw) {
@@ -91,7 +97,9 @@ const planSourceRawPayload = ({
       caseNumber: result.caseNumber,
       files: files.length,
     });
-    return { payload, files: [] };
+    return panic(
+      "Captured binary files cannot be stored without a valid envelope",
+    );
   }
   return { payload, files };
 };
@@ -110,6 +118,12 @@ type WriteOwnedRawPayloadOptions = {
   onWriteStart?: () => void;
 };
 
+export type PreparedRawPayload = {
+  key: string;
+  payload: Uint8Array;
+  binaryCache: Map<string, Uint8Array>;
+};
+
 /**
  * Store an observation's payload and the files it names under one
  * decision's prefix, answering its key, or undefined when the observation
@@ -126,8 +140,23 @@ export const writeOwnedRawPayload = async ({
   window,
   onWriteStart,
 }: WriteOwnedRawPayloadOptions): Promise<
-  Result<string | undefined, RawSourceWriteFailure>
+  Result<PreparedRawPayload | undefined, RawSourceWriteFailure>
 > => {
+  // Validate existing references before adding files can replace their map.
+  const original = result.sourceRawBytes ?? result.sourceRaw;
+  if (original !== undefined) {
+    const checked = homeRawPayloadObjects({
+      payload: original,
+      owner: {
+        family: RAW_SOURCE_FAMILY.CASE_LAW,
+        sourceId,
+        documentId: ownerId,
+      },
+    });
+    if (checked.isErr()) {
+      return checked;
+    }
+  }
   const plan = planSourceRawPayload({ result, sourceId, decisionId: ownerId });
   if (plan === undefined) {
     return Result.ok(undefined);
@@ -177,12 +206,27 @@ export const writeOwnedRawPayload = async ({
   }
   // Failing here holds the page cursor; see `rawWriteFailed` and
   // `writeRawSourcePayload` for why that is safe.
-  return await writeCaseLawRawPayload({
+  const written = await writeCaseLawRawPayload({
     owner,
     window,
     data: homed.value.payload,
     contentType,
     storedKey,
     storedContentType,
+  });
+  if (written.isErr()) {
+    return written;
+  }
+  const binaryCache = new Map<string, Uint8Array>();
+  for (const file of plan.files) {
+    binaryCache.set(file.ref.location, file.bytes);
+  }
+  return Result.ok({
+    key: written.value,
+    payload:
+      typeof homed.value.payload === "string"
+        ? new TextEncoder().encode(homed.value.payload)
+        : homed.value.payload,
+    binaryCache,
   });
 };

@@ -10,7 +10,6 @@ import {
   wrappedErrorDetail,
 } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import type { ProcessResult } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
-import { writeOwnedRawPayload } from "@/api/handlers/case-law/ingestion/pipeline/raw-payload";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { errorSystemFields } from "@/api/lib/errors/utils";
@@ -22,6 +21,10 @@ import type {
   RawSourceWriteFailure,
   RawSourceWriteWindow,
 } from "@/api/lib/legal-search/raw-source-storage";
+import {
+  writeOwnedRawPayload,
+  type PreparedRawPayload,
+} from "@/api/lib/legal-search/text-retention/retained-raw";
 import { logger } from "@/api/lib/observability/logger";
 import { pgErrorFields } from "@/api/lib/pg-error";
 
@@ -84,6 +87,7 @@ export const recordAbandonedRawWrite = async ({
 
 /** The raw-source pointer the row write records. */
 export type SourceRawArtifact = {
+  preparedRaw: PreparedRawPayload | null;
   s3UploadFailed: boolean;
   sourceRawContentType: string | null;
   sourceRawS3Key: string | null;
@@ -120,6 +124,7 @@ export const acquireSourceRawArtifact = async ({
 
   if (preservesExistingDetail && existing !== undefined) {
     return acquired({
+      preparedRaw: null,
       s3UploadFailed: false,
       sourceRawS3Key: existing.sourceRawS3Key,
       sourceRawContentType: existing.sourceRawContentType,
@@ -164,6 +169,7 @@ export const acquireSourceRawArtifact = async ({
     // would never trigger again and the stale raw source could never
     // be corrected through normal ingestion.
     return acquired({
+      preparedRaw: null,
       s3UploadFailed: true,
       sourceRawS3Key: existing.sourceRawS3Key,
       sourceRawContentType: existing.sourceRawContentType,
@@ -177,7 +183,7 @@ export const acquireSourceRawArtifact = async ({
    * failure between them lands nothing twice.
    */
   const writeRaw = async (): Promise<
-    Result<string | undefined, RawSourceWriteFailure>
+    Result<PreparedRawPayload | undefined, RawSourceWriteFailure>
   > =>
     await writeOwnedRawPayload({
       result,
@@ -199,13 +205,15 @@ export const acquireSourceRawArtifact = async ({
     }
     return written.value === undefined
       ? acquired({
+          preparedRaw: null,
           s3UploadFailed: false,
           sourceRawS3Key: null,
           sourceRawContentType: null,
         })
       : acquired({
           s3UploadFailed: false,
-          sourceRawS3Key: written.value,
+          sourceRawS3Key: written.value.key,
+          preparedRaw: written.value,
           sourceRawContentType: rawContentType,
         });
   } catch (error) {

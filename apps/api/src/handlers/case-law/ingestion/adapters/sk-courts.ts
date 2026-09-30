@@ -11,6 +11,7 @@ import {
 import {
   backlogSurface,
   decodeSourceRawEnvelope,
+  decodeSourceRawEnvelopeObjects,
   defineSourceAdapter,
   EMPTY_AST,
   encodeSourceRawEnvelope,
@@ -31,6 +32,7 @@ import type {
   ReconciliationSlicePage,
   ReconciliationSlicePageOptions,
   SourceFieldDisposition,
+  SourceRawObjectRef,
   SourceRawParts,
   SourceSurfaceCensus,
   SourceSurfaceDisposition,
@@ -54,6 +56,7 @@ import {
   parseCeDate,
   toOptionalValue,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
 import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
@@ -61,8 +64,13 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { DOCUMENT_DELIVERY } from "@/api/lib/legal-search/ingestion-types";
+import {
+  isUnreadablePdfError,
+  parseSkDecisionPdf,
+} from "@/api/lib/legal-search/parsers/sk-courts";
 import { restrictSkCourtDocumentUrl } from "@/api/lib/legal-search/sk-court-document-url";
 import type { SkDocumentFetch } from "@/api/lib/legal-search/sk-document-backfill";
+import { readCapturedBinary } from "@/api/lib/legal-search/text-retention/source-input";
 import { logger } from "@/api/lib/observability/logger";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -1314,6 +1322,135 @@ const storedPart = <T>(
   return isShape(parsed) ? parsed : null;
 };
 
+const SK_STORED_DOCUMENT_PART = "document-file";
+type StoredRejection = Extract<StoredRawReparseOutcome, { type: "rejected" }>;
+
+const storedDocumentReference = (
+  rawText: string,
+): Result<SourceRawObjectRef | undefined, StoredRejection> => {
+  const envelope = Result.try((): unknown => JSON.parse(rawText)).unwrapOr(
+    null,
+  );
+  const references = decodeSourceRawEnvelopeObjects(rawText);
+  if (
+    isRecord(envelope) &&
+    "objects" in envelope &&
+    (!isRecord(envelope.objects) ||
+      Object.keys(envelope.objects).length !== Object.keys(references).length)
+  ) {
+    return Result.err({
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.RAW_FIDELITY_LOST,
+      detail: "stored binary references are malformed",
+    });
+  }
+  const ref = references[SK_STORED_DOCUMENT_PART];
+  if (ref === undefined) {
+    return Result.ok(undefined);
+  }
+  if (!/^application\/pdf(?:;|$)/iu.test(ref.contentType)) {
+    return Result.err({
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.UNSUPPORTED_CONTENT,
+      detail: "stored document-file is not a PDF",
+    });
+  }
+  return Result.ok(ref);
+};
+
+type ReparseSkStoredDocumentOptions = {
+  stored: StoredRawReparseInput;
+  decision: IngestionResult;
+  rawText: string;
+};
+const reparseSkStoredDocument = async ({
+  stored,
+  decision,
+  rawText,
+}: ReparseSkStoredDocumentOptions): Promise<StoredRawReparseOutcome> => {
+  const reference = storedDocumentReference(rawText);
+  if (reference.isErr()) {
+    return reference.error;
+  }
+  const preserved = {
+    ...decision,
+    sourceRawBytes: stored.raw,
+    sourceRawContentType:
+      stored.contentType ??
+      (decodeSourceRawEnvelope(rawText) === null
+        ? "application/json"
+        : SOURCE_RAW_ENVELOPE_CONTENT_TYPE),
+  };
+  const ref = reference.value;
+  if (ref === undefined) {
+    return { type: "parsed", result: preserved };
+  }
+  if (stored.readBinary === undefined) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.UNSUPPORTED_CONTENT,
+      detail: "stored PDF replay requires an object reader",
+    };
+  }
+  const read = await readCapturedBinary({ ref, readBinary: stored.readBinary });
+  if (read.isErr()) {
+    if (read.error.cause !== undefined) {
+      throw read.error;
+    }
+    return {
+      type: "rejected",
+      rejection:
+        read.error.reason === "unavailable"
+          ? STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT
+          : STORED_RAW_REPARSE_REJECTION.RAW_FIDELITY_LOST,
+      detail: read.error.message,
+    };
+  }
+  const bytes = read.value;
+  const parsed = await Result.tryPromise({
+    try: () =>
+      parseSkDecisionPdf({
+        pdfBytes: bytes,
+        caseNumber: decision.caseNumber,
+        ecli: decision.ecli,
+        court: decision.court,
+        decisionDate: decision.decisionDate,
+        decisionType: decision.decisionType,
+      }),
+    catch: (cause) => cause,
+  });
+  if (parsed.isErr()) {
+    if (!isUnreadablePdfError(parsed.error)) {
+      throw parsed.error;
+    }
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+      detail: "stored document-file PDF is unreadable",
+    };
+  }
+  if (
+    parsed.value.fulltext.trim() === "" ||
+    parsed.value.documentAst.blocks.length === 0
+  ) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+      detail: "stored PDF has no readable decision text",
+    };
+  }
+  return {
+    type: "parsed",
+    result: {
+      ...preserved,
+      documentDelivery: DOCUMENT_DELIVERY.INLINE,
+      documentAst: parsed.value.documentAst,
+      fulltext: parsed.value.fulltext,
+      sections: sectionsFromAst(parsed.value.documentAst.blocks),
+    },
+  };
+};
+
 /**
  * Rebuild a decision from the responses already stored for it.
  *
@@ -1323,9 +1460,9 @@ const storedPart = <T>(
  * are recoverable without asking the publisher again precisely because that
  * record was kept, which is the whole argument for storing it.
  */
-const reparseStoredRaw = (
+const reparseStoredRaw = async (
   stored: StoredRawReparseInput,
-): StoredRawReparseOutcome => {
+): Promise<StoredRawReparseOutcome> => {
   if (
     stored.contentType !== null &&
     !SK_COURTS_REPARSABLE_CONTENT_TYPES.has(stored.contentType)
@@ -1337,10 +1474,8 @@ const reparseStoredRaw = (
     };
   }
 
-  const parts = skCourtsStoredRawParts(
-    new TextDecoder().decode(stored.raw),
-    stored.contentType,
-  );
+  const rawText = new TextDecoder().decode(stored.raw);
+  const parts = skCourtsStoredRawParts(rawText, stored.contentType);
   const item = storedPart(parts?.["listing"], isSkApiItem);
   if (item === null) {
     return {
@@ -1368,7 +1503,7 @@ const reparseStoredRaw = (
       detail: `stored payload states ${decision.caseNumber}`,
     };
   }
-  return { type: "parsed", result: decision };
+  return await reparseSkStoredDocument({ stored, decision, rawText });
 };
 
 // ── Source surfaces ──────────────────────────────────────
@@ -1378,8 +1513,8 @@ const reparseStoredRaw = (
  * keeps it.
  *
  * The listing row and the detail record are both kept, each verbatim. The
- * document file is fetched by a separate walk that keeps no part of it, so it
- * is the one surface of this source that is read and thrown away. The rest are
+ * document file is fetched by the deferred walk and retained as a referenced
+ * binary beside the listing envelope. Stored replay reads that same PDF. The rest are
  * service-wide: a schema, registries, code lists, a hearing calendar and a
  * mirror this project is not the publisher of.
  */
@@ -1403,10 +1538,7 @@ const SK_COURTS_SOURCE_SURFACES = {
   surfaces: {
     listing: storedSourceSurface("listing"),
     detail: storedSourceSurface("detail"),
-    document: backlogSurface(
-      ADAPTER_KEYS.SK_COURTS,
-      "binary part; envelope object references not yet available",
-    ),
+    document: storedSourceSurface(SK_STORED_DOCUMENT_PART),
     openapi: excludedSourceSurface(
       "the service's own schema: the field list an inventory is written from, not a payload about any one decision",
     ),

@@ -696,6 +696,7 @@ export const LEGACY_RAW_SHAPES = {
  * alike, and only the adapter knows how to decode its own.
  */
 export type StoredRawReparseInput = {
+  readBinary?: StoredRawReader;
   raw: Uint8Array;
   /** Media type recorded with the payload; null on rows stored without one. */
   contentType: string | null;

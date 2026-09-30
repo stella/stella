@@ -1,8 +1,8 @@
 import { Result } from "better-result";
 
 import { envBase } from "@/api/env-base";
-import { StoredRawReadError } from "@/api/handlers/case-law/ingestion/adapter";
-import type { StoredRawResultReader } from "@/api/handlers/case-law/ingestion/adapter";
+import { StoredRawReadError } from "@/api/lib/legal-search/ingestion-types";
+import type { StoredRawResultReader } from "@/api/lib/legal-search/ingestion-types";
 import { LIMITS } from "@/api/lib/limits";
 import {
   isMissingS3ObjectError,

@@ -64,10 +64,6 @@ import type {
   PdfSegment,
   PdfSpan,
 } from "@/api/lib/legal-search/parsers/libpdf-utils";
-import {
-  buildValidationHtml,
-  validateAndLog,
-} from "@/api/lib/legal-search/parsers/validate-ast";
 
 // ── Public API ─────────────────────────────────────────────
 
@@ -147,13 +143,6 @@ export const parseSkDecisionPdf = async (
       plainText: title,
     });
   }
-
-  const validationHtml = buildValidationHtml(filtered.map((l) => l.text));
-  validateAndLog(
-    { parser: "sk-courts", caseNumber: input.caseNumber },
-    validationHtml,
-    blocks,
-  );
 
   const fulltext = blocks
     .flatMap((b) => (b.plainText ? [b.plainText] : []))

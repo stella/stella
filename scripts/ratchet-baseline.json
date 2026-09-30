@@ -1053,7 +1053,6 @@
       "apps/api/src/scripts/eu-ecj-census.ts": 1,
       "apps/api/src/scripts/eu-ecj-refetch.ts": 2,
       "apps/api/src/scripts/normalize-case-numbers.ts": 1,
-      "apps/api/src/scripts/repair-case-law-jsonb.ts": 1,
       "apps/api/src/scripts/repair-cz-ns-court.ts": 2,
       "apps/api/src/scripts/repair-publisher-absent-text.ts": 2
     }

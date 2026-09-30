@@ -16,6 +16,7 @@ import {
   excludedSourceSurface,
   isPersistableSourceDocumentId,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  STORED_RAW_REPARSE_REJECTION,
   sourceTotalRead,
   storedSourceSurface,
 } from "@/api/handlers/case-law/ingestion/adapter";
@@ -29,11 +30,14 @@ import type {
   SourceRawParts,
   SourceSurfaceCensus,
   SourceSurfaceDisposition,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   fetchAtFindokWithRetry,
   FINDOK_REQUEST_INTERVAL_MS,
 } from "@/api/handlers/case-law/ingestion/adapters/at-findok-throttle";
+import { readAtStoredRawListing } from "@/api/handlers/case-law/ingestion/adapters/at-stored-raw";
 import type { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   adapterCatch,
@@ -811,6 +815,68 @@ export const assembleAtFindokDecision = (
   };
 };
 
+const storedManifestItem = (
+  listing: Record<string, unknown>,
+  contentType: string | null,
+): FindokManifestItem | undefined => {
+  if (contentType === SOURCE_RAW_ENVELOPE_CONTENT_TYPE) {
+    return manifestItem(listing);
+  }
+  // Historical wrappers saved the normalized item beside its original row.
+  const item = listing["item"];
+  return manifestItem(isRecord(item) ? item["raw"] : undefined);
+};
+
+const reparseAtFindokStoredRaw = (
+  stored: StoredRawReparseInput,
+): StoredRawReparseOutcome => {
+  const read = readAtStoredRawListing({
+    adapterKey: ADAPTER_KEYS.AT_FINDOK,
+    stored,
+    part: FINDOK_PART.LISTING,
+    identityOf: (listing) =>
+      storedManifestItem(listing, stored.contentType)?.dokumentId,
+  });
+  if (read.type === "rejected") {
+    return read;
+  }
+  const item = storedManifestItem(read.listing, stored.contentType);
+  const collection =
+    stored.contentType === SOURCE_RAW_ENVELOPE_CONTENT_TYPE
+      ? stored.metadata["collection"]
+      : read.listing["collection"];
+  if (item === undefined || (collection !== "bfg" && collection !== "ufs")) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
+      detail: "the stored listing names no valid Findok collection or item",
+    };
+  }
+  const documentXml = read.parts[FINDOK_PART.DOCUMENT_XML];
+  if (documentXml === undefined) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+      detail: "the stored payload holds no decision XML",
+    };
+  }
+  const result = assembleAtFindokDecision(
+    { collection, item },
+    {
+      documentXml,
+      headnoteXml: read.parts[FINDOK_PART.HEADNOTE_XML],
+    },
+  );
+  if (result.isListingOnly) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+      detail: "the stored XML could not produce a decision",
+    };
+  }
+  return { type: "parsed", result };
+};
+
 const listReconciliationPage = async (
   loadManifest: ManifestLoader,
   { slice, page, signal }: ReconciliationSlicePageOptions,
@@ -1115,135 +1181,178 @@ const listFindokSourceFields = (parts: SourceRawParts): readonly string[] => {
 
 export const createAtFindokAdapter = (
   dependencyOverrides: Partial<AtFindokDependencies> = {},
-): SourceAdapter & { readonly key: typeof ADAPTER_KEYS.AT_FINDOK } => {
+): SourceAdapter & {
+  readonly key: typeof ADAPTER_KEYS.AT_FINDOK;
+  readonly reparseStoredRaw: NonNullable<SourceAdapter["reparseStoredRaw"]>;
+} => {
   const dependencies = { ...DEFAULT_DEPENDENCIES, ...dependencyOverrides };
   const loadManifest = createManifestLoader(dependencies);
-  return defineSourceAdapter({
-    key: ADAPTER_KEYS.AT_FINDOK,
-    sourceSurfaces: AT_FINDOK_SOURCE_SURFACES,
-    sourceFields: {
-      status: "declared",
-      fields: FINDOK_SOURCE_FIELDS,
-      listSourceFields: listFindokSourceFields,
-    },
-    language: LANGUAGE,
-    minRequestIntervalMs: FINDOK_REQUEST_INTERVAL_MS,
-    pageTimeoutMs: 10 * 60_000,
-    maxCycleMs: 15 * 60_000,
-    maxSyncPages: 1,
-
-    reconciliation: {
-      firstSlice: `${COLLECTIONS.ufs.firstYear}-ufs`,
-      sliceOf: tipSlice,
-      nextSlice: (slice) => atFindokNextSlice(slice, dependencies.now()),
-      previousSlice: atFindokPreviousSlice,
-      tipWindowDays: 3,
-      listSlicePage: async (options) =>
-        await listReconciliationPage(loadManifest, options),
-      buildDecision: async (
-        value,
-        signal,
-      ): Promise<ReconciliationBuildOutcome> => {
-        const payload = parseListingPayload(value);
-        if (payload === undefined) {
-          return { type: "unkeyable" };
-        }
-        if (payload.item.sourceDocumentIdRepairAliases === undefined) {
-          return { type: "detail-unavailable" };
-        }
-        const decision = await buildDecision({
-          cursor: null,
-          dependencies,
-          payload,
-          signal,
-        });
-        if (decision.isListingOnly !== true) {
-          return { type: "built", decision };
-        }
-        const status = decision.metadata["detailStatus"];
-        if (status === "detail-http-404" || status === "detail-http-410") {
-          return { type: "detail-unavailable" };
-        }
-        throw new AdapterFetchError({
-          message: `Findok reconciliation could not build detail: ${String(status)}`,
-          adapterKey: ADAPTER_KEYS.AT_FINDOK,
-          cursor: null,
-        });
+  return {
+    ...defineSourceAdapter({
+      key: ADAPTER_KEYS.AT_FINDOK,
+      sourceSurfaces: AT_FINDOK_SOURCE_SURFACES,
+      sourceFields: {
+        status: "declared",
+        fields: FINDOK_SOURCE_FIELDS,
+        listSourceFields: listFindokSourceFields,
       },
-    },
+      language: LANGUAGE,
+      minRequestIntervalMs: FINDOK_REQUEST_INTERVAL_MS,
+      pageTimeoutMs: 10 * 60_000,
+      maxCycleMs: 15 * 60_000,
+      maxSyncPages: 1,
 
-    async getTotalCount(signal) {
-      try {
-        const ufs = await loadManifest("ufs", signal);
-        const bfg = await loadManifest("bfg", signal);
-        return sourceTotalRead(ufs.items.length + bfg.items.length);
-      } catch (error) {
-        return { type: "probe-failed", errorTag: errorTag(error) };
-      }
-    },
+      reconciliation: {
+        firstSlice: `${COLLECTIONS.ufs.firstYear}-ufs`,
+        sliceOf: tipSlice,
+        nextSlice: (slice) => atFindokNextSlice(slice, dependencies.now()),
+        previousSlice: atFindokPreviousSlice,
+        tipWindowDays: 3,
+        listSlicePage: async (options) =>
+          await listReconciliationPage(loadManifest, options),
+        buildDecision: async (
+          value,
+          signal,
+        ): Promise<ReconciliationBuildOutcome> => {
+          const payload = parseListingPayload(value);
+          if (payload === undefined) {
+            return { type: "unkeyable" };
+          }
+          if (payload.item.sourceDocumentIdRepairAliases === undefined) {
+            return { type: "detail-unavailable" };
+          }
+          const decision = await buildDecision({
+            cursor: null,
+            dependencies,
+            payload,
+            signal,
+          });
+          if (decision.isListingOnly !== true) {
+            return { type: "built", decision };
+          }
+          const status = decision.metadata["detailStatus"];
+          if (status === "detail-http-404" || status === "detail-http-410") {
+            return { type: "detail-unavailable" };
+          }
+          throw new AdapterFetchError({
+            message: `Findok reconciliation could not build detail: ${String(status)}`,
+            adapterKey: ADAPTER_KEYS.AT_FINDOK,
+            cursor: null,
+          });
+        },
+      },
 
-    fetchPage: async (cursor, _config, signal) =>
-      await Result.tryPromise({
-        try: async () => {
-          const state = decodeCursor(cursor, dependencies.now());
-          if (state === undefined) {
-            throw new AdapterFetchError({
-              message: `Invalid Findok cursor: ${cursor ?? "(none)"}`,
-              adapterKey: ADAPTER_KEYS.AT_FINDOK,
-              cursor,
-            });
-          }
-          const parts = sliceParts(state.slice);
-          if (parts === undefined) {
-            panic("validated Findok cursor has an invalid slice");
-          }
-          const manifest = await loadManifest(parts.collection, signal);
-          if (
-            state.snapshotId !== null &&
-            state.snapshotId !== manifest.snapshotId
-          ) {
-            return {
-              decisions: [],
-              nextCursor: encodeCursor(cursorForSlice(state.slice)),
-            };
-          }
-          const allItems = itemsForSlice(manifest, parts.year);
-          const expectedTotal = state.total ?? allItems.length;
-          if (expectedTotal !== allItems.length) {
-            return {
-              decisions: [],
-              nextCursor: encodeCursor(cursorForSlice(state.slice)),
-            };
-          }
-          if (allItems.length === 0) {
-            const next = atFindokNextSlice(state.slice, dependencies.now());
-            const nextState = cursorForSlice(
-              next ?? tipSlice(dependencies.now()),
-            );
-            return {
-              decisions: [],
-              nextCursor: encodeCursor(nextState),
-            };
-          }
-          const totalPages = Math.ceil(allItems.length / CRAWL_PAGE_SIZE);
-          if (state.page >= totalPages) {
-            throw new AdapterFetchError({
-              message: "Findok cursor points past the manifest's last page",
-              adapterKey: ADAPTER_KEYS.AT_FINDOK,
-              cursor,
-            });
-          }
-          const pageItems = allItems.slice(
-            state.page * CRAWL_PAGE_SIZE,
-            (state.page + 1) * CRAWL_PAGE_SIZE,
-          );
-          const digest = listingDigest(state.digest, pageItems);
-          if (state.phase === CURSOR_PHASE.VERIFY) {
-            if (state.page + 1 < totalPages) {
+      async getTotalCount(signal) {
+        try {
+          const ufs = await loadManifest("ufs", signal);
+          const bfg = await loadManifest("bfg", signal);
+          return sourceTotalRead(ufs.items.length + bfg.items.length);
+        } catch (error) {
+          return { type: "probe-failed", errorTag: errorTag(error) };
+        }
+      },
+
+      fetchPage: async (cursor, _config, signal) =>
+        await Result.tryPromise({
+          try: async () => {
+            const state = decodeCursor(cursor, dependencies.now());
+            if (state === undefined) {
+              throw new AdapterFetchError({
+                message: `Invalid Findok cursor: ${cursor ?? "(none)"}`,
+                adapterKey: ADAPTER_KEYS.AT_FINDOK,
+                cursor,
+              });
+            }
+            const parts = sliceParts(state.slice);
+            if (parts === undefined) {
+              panic("validated Findok cursor has an invalid slice");
+            }
+            const manifest = await loadManifest(parts.collection, signal);
+            if (
+              state.snapshotId !== null &&
+              state.snapshotId !== manifest.snapshotId
+            ) {
               return {
                 decisions: [],
+                nextCursor: encodeCursor(cursorForSlice(state.slice)),
+              };
+            }
+            const allItems = itemsForSlice(manifest, parts.year);
+            const expectedTotal = state.total ?? allItems.length;
+            if (expectedTotal !== allItems.length) {
+              return {
+                decisions: [],
+                nextCursor: encodeCursor(cursorForSlice(state.slice)),
+              };
+            }
+            if (allItems.length === 0) {
+              const next = atFindokNextSlice(state.slice, dependencies.now());
+              const nextState = cursorForSlice(
+                next ?? tipSlice(dependencies.now()),
+              );
+              return {
+                decisions: [],
+                nextCursor: encodeCursor(nextState),
+              };
+            }
+            const totalPages = Math.ceil(allItems.length / CRAWL_PAGE_SIZE);
+            if (state.page >= totalPages) {
+              throw new AdapterFetchError({
+                message: "Findok cursor points past the manifest's last page",
+                adapterKey: ADAPTER_KEYS.AT_FINDOK,
+                cursor,
+              });
+            }
+            const pageItems = allItems.slice(
+              state.page * CRAWL_PAGE_SIZE,
+              (state.page + 1) * CRAWL_PAGE_SIZE,
+            );
+            const digest = listingDigest(state.digest, pageItems);
+            if (state.phase === CURSOR_PHASE.VERIFY) {
+              if (state.page + 1 < totalPages) {
+                return {
+                  decisions: [],
+                  nextCursor: encodeCursor({
+                    ...state,
+                    digest,
+                    page: state.page + 1,
+                    snapshotId: manifest.snapshotId,
+                    total: expectedTotal,
+                  }),
+                };
+              }
+              if (digest !== state.expectedDigest) {
+                return {
+                  decisions: [],
+                  nextCursor: encodeCursor(cursorForSlice(state.slice)),
+                };
+              }
+              const next = atFindokNextSlice(state.slice, dependencies.now());
+              return {
+                decisions: [],
+                nextCursor: encodeCursor(
+                  cursorForSlice(next ?? tipSlice(dependencies.now())),
+                ),
+              };
+            }
+
+            const decisions = await Array.fromAsync(
+              pageItems,
+              async (item) =>
+                await buildDecision({
+                  cursor,
+                  dependencies,
+                  payload: { collection: parts.collection, item },
+                  signal,
+                }),
+            );
+            const collected = state.collected + decisions.length;
+            if (state.page + 1 < totalPages) {
+              return {
+                decisions,
                 nextCursor: encodeCursor({
                   ...state,
+                  collected,
                   digest,
                   page: state.page + 1,
                   snapshotId: manifest.snapshotId,
@@ -1251,62 +1360,25 @@ export const createAtFindokAdapter = (
                 }),
               };
             }
-            if (digest !== state.expectedDigest) {
-              return {
-                decisions: [],
-                nextCursor: encodeCursor(cursorForSlice(state.slice)),
-              };
-            }
-            const next = atFindokNextSlice(state.slice, dependencies.now());
-            return {
-              decisions: [],
-              nextCursor: encodeCursor(
-                cursorForSlice(next ?? tipSlice(dependencies.now())),
-              ),
-            };
-          }
-
-          const decisions = await Array.fromAsync(
-            pageItems,
-            async (item) =>
-              await buildDecision({
-                cursor,
-                dependencies,
-                payload: { collection: parts.collection, item },
-                signal,
-              }),
-          );
-          const collected = state.collected + decisions.length;
-          if (state.page + 1 < totalPages) {
             return {
               decisions,
               nextCursor: encodeCursor({
-                ...state,
                 collected,
-                digest,
-                page: state.page + 1,
+                digest: START_DIGEST,
+                expectedDigest: digest,
+                page: 0,
+                phase: CURSOR_PHASE.VERIFY,
+                slice: state.slice,
                 snapshotId: manifest.snapshotId,
                 total: expectedTotal,
               }),
             };
-          }
-          return {
-            decisions,
-            nextCursor: encodeCursor({
-              collected,
-              digest: START_DIGEST,
-              expectedDigest: digest,
-              page: 0,
-              phase: CURSOR_PHASE.VERIFY,
-              slice: state.slice,
-              snapshotId: manifest.snapshotId,
-              total: expectedTotal,
-            }),
-          };
-        },
-        catch: adapterCatch(ADAPTER_KEYS.AT_FINDOK, cursor),
-      }),
-  });
+          },
+          catch: adapterCatch(ADAPTER_KEYS.AT_FINDOK, cursor),
+        }),
+    }),
+    reparseStoredRaw: reparseAtFindokStoredRaw,
+  };
 };
 
 export const atFindokAdapter = createAtFindokAdapter();

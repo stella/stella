@@ -1,5 +1,4 @@
 import type { Block } from "@/api/handlers/case-law/document-ast";
-import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
 
 import { parseHeadmatter } from "./html";
 import type { TextBudget } from "./outcome";
@@ -86,15 +85,7 @@ export const composeFrontMatter = ({
         reason,
       };
     }
-    const added = parsed.text.units.flatMap((unit) => [...unit.blocks]);
-    const validation = validateAndLog(
-      { parser: "courtlistener", caseNumber: `cl-${field}`, language: "en" },
-      parsed.text.validationHtml,
-      added,
-    );
-    if (!validation.ok) {
-      return { status: "held", reason: "no-usable-text" };
-    }
+    const added = parsed.text.units.flatMap((unit) => unit.blocks);
     if (field !== "headmatter") {
       const visible = added.map((block) => block.plainText).join("\n\n");
       textFields[field] = visible;

@@ -5,7 +5,11 @@ import { createCaseLawDecisionSlug } from "@stll/api-contract/case-law-decision-
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
-import { caseLawDecisionIdentifiers, caseLawDecisions } from "@/api/db/schema";
+import {
+  caseLawDecisionIdentifiers,
+  caseLawDecisions,
+  caseLawDecisionSupplements,
+} from "@/api/db/schema";
 import { lockCitationGraph } from "@/api/handlers/case-law/citation-resolution";
 import {
   CASE_LAW_DECISION_SLUG_ALLOCATION_ATTEMPTS,
@@ -39,6 +43,42 @@ import { lockActiveCorpusProjectionSourceByIdTx } from "@/api/lib/legal-search/c
 import { markListingOnly } from "@/api/lib/legal-search/ingestion-normalization";
 import { logger } from "@/api/lib/observability/logger";
 import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
+import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
+
+const pointRetainedSupplementRawTx = async (
+  tx: Transaction,
+  write: DecisionRowWrite,
+) => {
+  const retained = write.retainedSupplements.filter(
+    (part) => part.preparedRaw !== null,
+  );
+  if (retained.length === 0) {
+    return;
+  }
+  const cases = retained.map(
+    ({ supplement, preparedRaw }) =>
+      sql`WHEN ${supplement.sourceDocumentId} THEN ${preparedRaw?.key}`,
+  );
+  // audit: skip — background ingestion; copies were retained before this winning document write
+  await tx
+    .update(caseLawDecisionSupplements)
+    .set({
+      sourceRawS3Key: sqlCaseFragment({
+        branches: cases,
+        operand: sql`${caseLawDecisionSupplements.sourceDocumentId}`,
+        fallback: sql`${caseLawDecisionSupplements.sourceRawS3Key}`,
+      }),
+    })
+    .where(
+      and(
+        eq(caseLawDecisionSupplements.sourceId, write.sourceId),
+        sql`${caseLawDecisionSupplements.sourceDocumentId} IN (${sql.join(
+          retained.map(({ supplement }) => sql`${supplement.sourceDocumentId}`),
+          sql`, `,
+        )})`,
+      ),
+    );
+};
 
 /** The row a decision nothing stored yet is inserted as. */
 const insertedRowValues = (
@@ -251,6 +291,7 @@ const writeDecisionRow = async (
         .returning({ id: caseLawDecisions.id });
 
       if (updated.length > 0 && composition !== null) {
+        await pointRetainedSupplementRawTx(tx, write);
         const merged = {
           sourceId,
           decisionId: existing.id,
@@ -344,6 +385,7 @@ const writeDecisionRow = async (
 
     const insertedId = await insertDecisionRowTx(tx, write, slugLadder);
     if (composedSupplements.length > 0) {
+      await pointRetainedSupplementRawTx(tx, write);
       await markSupplementsMerged(tx, {
         sourceId,
         decisionId: insertedId,

@@ -19,8 +19,6 @@ import {
   type ParentNode,
 } from "domhandler";
 
-import { buildValidationHtml } from "@/api/lib/legal-search/parsers/validate-ast";
-
 import {
   type BodyVocabulary,
   conservesText,
@@ -585,9 +583,6 @@ const parseHtml =
           unknownConstructs,
           noteSpanDefects: spanDefects,
         },
-        validationHtml: buildValidationHtml(
-          source.paragraphs.map((paragraph) => Bun.escapeHTML(paragraph)),
-        ),
       },
     };
   };

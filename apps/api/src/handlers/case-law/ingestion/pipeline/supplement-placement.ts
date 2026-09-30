@@ -2,6 +2,7 @@ import { Result, panic } from "better-result";
 import { and, eq, isNotNull, isNull } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
+import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisionSupplements, caseLawDecisions } from "@/api/db/schema";
 import type {
   DecisionSupplement,
@@ -16,10 +17,6 @@ import {
   SUPPLEMENT_RETRY_REASON,
   wrappedErrorDetail,
 } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
-import {
-  RAW_OBJECT_COPY_TIMEOUT_MS,
-  writeOwnedRawPayload,
-} from "@/api/handlers/case-law/ingestion/pipeline/raw-payload";
 import { SUPPLEMENT_JUDGMENT_READ_FAILED } from "@/api/handlers/case-law/ingestion/pipeline/supplement-types";
 import type {
   ProcessSupplementOptions,
@@ -36,7 +33,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/supplement-composition";
 import type { SupplementTargetKey } from "@/api/handlers/case-law/ingestion/supplement-composition";
 import { captureError } from "@/api/lib/analytics/capture";
-import type { SafeId } from "@/api/lib/branded-types";
+import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { errorSystemFields } from "@/api/lib/errors/utils";
 import {
   classifyCaseLawRawKey,
@@ -45,7 +42,21 @@ import {
   RAW_SOURCE_FAMILY,
 } from "@/api/lib/legal-search/raw-source-storage";
 import type { RawSourceWriteWindow } from "@/api/lib/legal-search/raw-source-storage";
+import {
+  RAW_OBJECT_COPY_TIMEOUT_MS,
+  planSourceRawPayload,
+  writeOwnedRawPayload,
+} from "@/api/lib/legal-search/text-retention/retained-raw";
+import {
+  assessRawPayload,
+  type PayloadAssessment,
+} from "@/api/lib/legal-search/text-retention/validation";
 import { logger } from "@/api/lib/observability/logger";
+
+import {
+  readValidationBinary,
+  resolveValidationSourceKey,
+} from "./text-validation";
 
 /** One supplement's placement: its options and what they resolve to. */
 export type SupplementPlacement = Required<
@@ -70,7 +81,7 @@ type SupplementJudgmentRow = {
 };
 
 /** The supplement row's content, as this observation states it. */
-export const supplementContent = (
+const supplementContent = (
   supplement: DecisionSupplement,
   document: IngestionResult,
 ) => ({
@@ -88,13 +99,92 @@ export const supplementContent = (
   metadata: document.metadata,
 });
 
+const STAGED_SUPPLEMENT_ASSESSED = Symbol("assessed staged supplement");
+
+type AssessedSupplementStage = {
+  readonly [STAGED_SUPPLEMENT_ASSESSED]: true;
+  content: ReturnType<typeof supplementContent>;
+  assessment: PayloadAssessment;
+};
+
+type AssessStagedSupplementOptions = {
+  supplement: DecisionSupplement;
+  document: IngestionResult;
+  sourceId: SafeId<"caseLawSource">;
+  scopedDb: ScopedDb;
+};
+
+/** Staging evidence is separate from the later owner's retained final tuple. */
+export const assessStagedSupplement = async ({
+  supplement,
+  document,
+  sourceId,
+  scopedDb,
+}: AssessStagedSupplementOptions): Promise<AssessedSupplementStage> => {
+  const content = supplementContent(supplement, document);
+  const sourceKey = await resolveValidationSourceKey({ sourceId, scopedDb });
+  // This transient id models reference addresses only. It reserves no row,
+  // starts no object write, and is never persisted as a source fingerprint.
+  const plannedRaw = planSourceRawPayload({
+    result: document,
+    sourceId,
+    decisionId: createSafeId(),
+  });
+  const binaryCache = new Map<string, Uint8Array>();
+  for (const file of plannedRaw?.files ?? []) {
+    binaryCache.set(file.ref.location, file.bytes);
+  }
+  const source =
+    plannedRaw === undefined || sourceKey === undefined
+      ? null
+      : {
+          raw:
+            typeof plannedRaw.payload === "string"
+              ? new TextEncoder().encode(plannedRaw.payload)
+              : plannedRaw.payload,
+          contentType: document.sourceRawContentType ?? null,
+          sourceKey,
+          binaryCache,
+          readBinary: readValidationBinary,
+        };
+  const assessment = await assessRawPayload({
+    source,
+    payload: {
+      text: content.fulltext,
+      ast: content.documentAst,
+      sections: null,
+    },
+    parserVersion: document.parserVersion ?? 0,
+  });
+  const { verdict } = assessment;
+  if (
+    verdict.status === "unavailable" ||
+    (verdict.status === "assessed" && verdict.defect !== null)
+  ) {
+    logger.warn("case_law.ingestion.text_retention", {
+      sourceId,
+      sourceDocumentId: document.sourceDocumentId,
+      phase: "staged-supplement",
+      status: verdict.status,
+      ...(verdict.status === "unavailable"
+        ? { reason: verdict.reason }
+        : {
+            retainedRatio: verdict.retainedRatio,
+            missingWords: verdict.missingWords,
+            missingCharacters: verdict.missingCharacters,
+          }),
+    });
+  }
+  return { content, assessment, [STAGED_SUPPLEMENT_ASSESSED]: true };
+};
+
 type PlaceSupplementOptions = {
   key: SupplementTargetKey;
   sourceId: SafeId<"caseLawSource">;
   sourceDocumentId: string;
   supplement: DecisionSupplement;
   observedAt: Date;
-  content: ReturnType<typeof supplementContent>;
+  stage: AssessedSupplementStage;
 };
 
 /**
@@ -111,9 +201,10 @@ export const placeSupplementTx = async (
     sourceDocumentId,
     supplement,
     observedAt,
-    content,
+    stage,
   }: PlaceSupplementOptions,
 ) => {
+  const { content } = stage;
   await lockSupplementTarget(tx, key);
   const erasedOwn = (
     await tx
@@ -370,7 +461,7 @@ export const judgmentOwnsSupplementRaw = async (
   const pointed = await Result.tryPromise({
     try: async () =>
       await pointSupplementRawAt(placement, {
-        key: writtenKey,
+        key: writtenKey.key,
         contentType: rawContentType,
       }),
     catch: (cause) => cause,

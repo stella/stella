@@ -20,7 +20,10 @@ import {
   recordAbandonedRawWrite,
   withSourceRawRetry,
 } from "@/api/handlers/case-law/ingestion/pipeline/decision-raw";
-import type { RawWriteState } from "@/api/handlers/case-law/ingestion/pipeline/decision-raw";
+import type {
+  RawWriteState,
+  SourceRawArtifact,
+} from "@/api/handlers/case-law/ingestion/pipeline/decision-raw";
 import {
   isConcurrentIdentityInsert,
   writeDecisionRowWithSlug,
@@ -51,10 +54,22 @@ import {
   composeDecisionWithSupplements,
   type StoredSupplement,
 } from "@/api/handlers/case-law/ingestion/supplement-composition";
+import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { openRawSourceWriteWindow } from "@/api/lib/legal-search/raw-source-storage";
 import { logger } from "@/api/lib/observability/logger";
+
+import type { IngestionResult } from "../adapter";
+import type { ObservationShape } from "./decision-existing";
+import type { DecisionIdentity, ObservedDecision } from "./decision-identity";
+import { retainSupplementRaw } from "./supplement-raw-retention";
+import {
+  assessStoredDecision,
+  logRetentionAssessment,
+  resolveValidationSourceKey,
+  validateDecisionPlan,
+} from "./text-validation";
 
 type SettleRowWriteStatusOptions = {
   scopedDb: ScopedDb;
@@ -125,6 +140,129 @@ const settleRowWriteStatus = async ({
   }
 };
 
+type PrepareDecisionRowOptions = Pick<
+  ProcessDecisionAttemptOptions,
+  | "sourceId"
+  | "scopedDb"
+  | "sourceKey"
+  | "judges"
+  | "corpus"
+  | "polarityRules"
+  | "observedAt"
+  | "observationOrder"
+> & {
+  identity: DecisionIdentity;
+  observation: ObservedDecision;
+  result: IngestionResult;
+  shape: ObservationShape;
+  rawArtifact: SourceRawArtifact;
+  rawWrites: RawWriteState;
+  composedSupplements: StoredSupplement[];
+};
+
+const prepareDecisionRow = async ({
+  sourceId,
+  scopedDb,
+  sourceKey,
+  judges,
+  corpus,
+  polarityRules,
+  observedAt,
+  observationOrder,
+  identity,
+  observation,
+  result,
+  shape,
+  rawArtifact,
+  rawWrites,
+  composedSupplements,
+}: PrepareDecisionRowOptions) => {
+  const { existing, decisionId } = identity;
+  const planned = await planDecisionWrite({
+    result,
+    existing,
+    decisionId,
+    sourceId,
+    scopedDb,
+    corpus,
+    incomingCarriesDocument: shape.incomingCarriesDocument,
+    polarityRules,
+  });
+  if (planned.isErr()) {
+    return Result.err(planned.error);
+  }
+  const unvalidatedPlan = planned.value;
+  if ("status" in unvalidatedPlan) {
+    return Result.ok(RECONCILE_CONTENTION);
+  }
+  const retained = await Result.tryPromise({
+    try: async () =>
+      await retainSupplementRaw({
+        supplements: composedSupplements,
+        input: observation.observed,
+        sourceId,
+        decisionId,
+        rawWrites,
+      }),
+    catch: (cause) => cause,
+  });
+  if (retained.isErr()) {
+    captureError(retained.error, {
+      sourceId,
+      decisionId,
+      step: "retainSupplementRaw",
+    });
+    return Result.ok({
+      status: PROCESS_DECISION_STATUS.RETRYABLE,
+      inserted: false,
+      reason: PROCESS_DECISION_RETRY_REASON.SOURCE_RAW_WRITE,
+    } as const);
+  }
+  const retainedSupplements = retained.value;
+  const plan = await validateDecisionPlan({
+    scopedDb,
+    decisionId,
+    readBytes: corpus.readBytes,
+    judgment: observation.observed,
+    retainedSupplements,
+    plan: unvalidatedPlan,
+    rawArtifact,
+    sourceKey: await resolveValidationSourceKey({
+      sourceId,
+      scopedDb,
+      sourceKey,
+    }),
+  });
+  if (plan.corpusPlan.type !== "preserve-stored") {
+    logRetentionAssessment({
+      assessment: plan.assessment,
+      sourceId,
+      decisionId,
+    });
+  }
+  const write: DecisionRowWrite = {
+    ...identity,
+    persistedDecisionDate: observation.persistedDecisionDate,
+    sourceId,
+    decisionId,
+    result: plan.preparedResult,
+    composedSupplements,
+    retainedSupplements,
+    observedAt,
+    observationOrder,
+    shape,
+    plan,
+    rawArtifact,
+    rawWrites,
+    judges,
+  };
+  const rowWrite = await writeDecisionRowWithSlug(scopedDb, write);
+  if (Result.isError(rowWrite)) {
+    return Result.err(rowWrite.error);
+  }
+  return Result.ok({ write, writeStatus: rowWrite.value });
+};
+
 /**
  * One pass over a decision: resolve its identity, settle what an existing
  * row makes of it, store its raw payload, plan and write its row, then queue
@@ -133,6 +271,8 @@ const settleRowWriteStatus = async ({
  */
 const runDecisionAttempt = async ({
   input,
+  sourceKey,
+  rawBinaryCache,
   judges,
   sourceId,
   scopedDb,
@@ -180,19 +320,6 @@ const runDecisionAttempt = async ({
   );
   const shape = classifyObservation({ result, existing });
 
-  const existingPolicyOutcome = await resolveExistingDecisionPolicy({
-    scopedDb,
-    existing,
-    result,
-    shape,
-    observedAt,
-    observationOrder,
-    refresh,
-  });
-  if (existingPolicyOutcome !== null) {
-    return existingPolicyOutcome;
-  }
-
   const sourceRawArtifact = await acquireSourceRawArtifact({
     result,
     existing,
@@ -212,47 +339,61 @@ const runDecisionAttempt = async ({
     return sourceRawArtifact.outcome;
   }
   const rawArtifact = sourceRawArtifact.artifact;
+  if (rawArtifact.preparedRaw !== null && rawBinaryCache !== undefined) {
+    for (const [location, bytes] of rawBinaryCache) {
+      rawArtifact.preparedRaw.binaryCache.set(location, bytes);
+    }
+  }
+
+  const existingPolicyOutcome = await resolveExistingDecisionPolicy({
+    scopedDb,
+    existing,
+    result,
+    shape,
+    observedAt,
+    observationOrder,
+    refresh,
+  });
+  if (existingPolicyOutcome !== null) {
+    if (
+      existing !== undefined &&
+      existingPolicyOutcome.status === PROCESS_DECISION_STATUS.COMPLETE
+    ) {
+      await assessStoredDecision({
+        scopedDb,
+        decisionId,
+        sourceId,
+        sourceKey: await resolveValidationSourceKey({
+          sourceId,
+          scopedDb,
+          sourceKey,
+        }),
+        rawArtifact,
+        readBytes: corpus.readBytes,
+      });
+    }
+    return existingPolicyOutcome;
+  }
 
   const attempted = await Result.tryPromise({
-    try: async () => {
-      const planned = await planDecisionWrite({
-        result,
-        existing,
-        decisionId,
+    try: async () =>
+      await prepareDecisionRow({
         sourceId,
         scopedDb,
+        sourceKey,
+        judges,
         corpus,
-        incomingCarriesDocument: shape.incomingCarriesDocument,
         polarityRules,
-      });
-      if (planned.isErr()) {
-        return Result.err(planned.error);
-      }
-      const plan = planned.value;
-      if ("status" in plan) {
-        return Result.ok(RECONCILE_CONTENTION);
-      }
-      const write: DecisionRowWrite = {
-        ...identity,
-        persistedDecisionDate: observation.persistedDecisionDate,
-        sourceId,
-        decisionId,
-        result: plan.preparedResult,
-        composedSupplements,
         observedAt,
         observationOrder,
+        identity,
+        observation,
+        result,
         shape,
-        plan,
         rawArtifact,
         rawWrites,
-        judges,
-      };
-      const rowWrite = await writeDecisionRowWithSlug(scopedDb, write);
-      if (Result.isError(rowWrite)) {
-        return Result.err(rowWrite.error);
-      }
-      return Result.ok({ write, writeStatus: rowWrite.value });
-    },
+        composedSupplements,
+      }),
     catch: (cause) => cause,
   });
   const rowWrite = attempted.andThen((outcome) => outcome);
@@ -279,7 +420,7 @@ const runDecisionAttempt = async ({
       decisionId,
       sourceId,
     });
-    return RECONCILE_CONTENTION;
+    return rowWrite.value;
   }
   const { write, writeStatus } = rowWrite.value;
 

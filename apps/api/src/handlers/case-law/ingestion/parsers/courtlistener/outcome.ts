@@ -43,8 +43,6 @@ export const TEXT_CANDIDATE_UNUSABLE = {
   MISSING_OPINION: "missing-opinion",
   /** Markup whose visible text is empty, such as a script-only body. */
   NO_VISIBLE_TEXT: "no-visible-text",
-  CONTENT_LOSS: "content-loss",
-  MARKUP_RESIDUE: "markup-residue",
   /** Some source text did not reach the blocks, in order and in full. */
   TEXT_NOT_CONSERVED: "text-not-conserved",
 } as const;
@@ -91,11 +89,6 @@ export type TextCounts = {
 export type ParsedOpinionText = {
   readonly units: readonly TextUnit[];
   readonly counts: TextCounts;
-  /**
-   * The source as the content-retention check reads it: the same markup
-   * with only the declared removals taken out.
-   */
-  readonly validationHtml: string;
 };
 
 export type FormatParse =

@@ -20,6 +20,9 @@ import { synchronizeLockedCorpusProjectionDesiredStateTx } from "@/api/lib/legal
 import type { ActiveCorpusProjectionSourceLock } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { logger } from "@/api/lib/observability/logger";
 
+import type { RetainedSupplementRaw } from "./supplement-raw-retention";
+import type { ValidatedDecisionPlan } from "./text-validation";
+
 /** Everything one decision's row write reads, decided before it runs. */
 export type DecisionRowWrite = Omit<DecisionIdentity, "decisionId"> &
   Pick<ObservedDecision, "persistedDecisionDate"> & {
@@ -28,10 +31,11 @@ export type DecisionRowWrite = Omit<DecisionIdentity, "decisionId"> &
     /** The observation composed with the supplements its document takes in. */
     result: IngestionResult;
     composedSupplements: StoredSupplement[];
+    retainedSupplements: RetainedSupplementRaw;
     observedAt: Date;
     observationOrder: bigint;
     shape: ObservationShape;
-    plan: DecisionWritePlan;
+    plan: ValidatedDecisionPlan;
     rawArtifact: SourceRawArtifact;
     rawWrites: RawWriteState;
     judges: CaseLawJudgeDependencies;

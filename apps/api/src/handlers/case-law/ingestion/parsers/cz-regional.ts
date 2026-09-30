@@ -28,10 +28,6 @@ import type {
   Inline,
 } from "@/api/handlers/case-law/document-ast";
 import { hasInlineChildren } from "@/api/handlers/case-law/document-ast";
-import {
-  buildValidationHtml,
-  validateAndLog,
-} from "@/api/lib/legal-search/parsers/validate-ast";
 
 // ── Types for the finaldoc JSON ────────────────────────────
 
@@ -228,26 +224,6 @@ export const parseRegionalDecision = (
   const fulltext = blocks
     .flatMap((b) => (b.plainText ? [b.plainText] : []))
     .join("\n\n");
-
-  // Build validation HTML from the structured sections so word
-  // boundaries match the AST. Using the plain text fallbacks
-  // (verdictText/justificationText) caused false positives:
-  // adjacent section text was concatenated without whitespace
-  // (e.g., "zamítá.II." -> word "zamítá.ii" missing from AST).
-  const allParagraphs = [
-    ...input.header,
-    ...input.verdict,
-    ...input.justification,
-    ...input.information,
-  ];
-  const validationHtml = buildValidationHtml(
-    allParagraphs.map((para) => para.texts.map((s) => s.text).join("")),
-  );
-  validateAndLog(
-    { parser: "cz-regional", caseNumber: input.caseNumber },
-    validationHtml,
-    blocks,
-  );
 
   const ast: DocumentAst = {
     version: 1,

@@ -213,10 +213,6 @@ describe("parseEcjDecisionHtml", () => {
     // reads the fallback boundary as "this response is not a decision", so
     // this is what says no published document can take that path.
     expect(parsed.boundary).toBe("converter");
-    // CONTENT_LOSS and MISSING_WORDS from the shared validator are the
-    // real completeness guard: they compare the AST's words against the
-    // source document's, so text dropped anywhere shows up here.
-    expect(parsed.validationIssues).toEqual([]);
 
     // ── Fidelity ─────────────────────────────────────────────
     // Structure the parser recovered on top of that text. Wrong shape
@@ -423,7 +419,6 @@ describe("parseEcjDecisionHtml", () => {
       // Completeness is measured against the decision, not the page. An
       // issue here would read as a lost-content parse and send a correct
       // AST down the caller's fallback, which stores the page's text.
-      expect(parsedPage.validationIssues).toEqual([]);
 
       // That fallback takes the same boundary without parsing, so it
       // cannot store the page either.
@@ -685,7 +680,7 @@ describe("parseEcjDecisionHtml", () => {
       "</div></body></html>",
     ].join("");
 
-    const { documentAst, fulltext, validationIssues } = parseEcjDecisionHtml({
+    const { documentAst, fulltext } = parseEcjDecisionHtml({
       caseNumber: "C-1/00",
       ecli: undefined,
       court: "Court of Justice",
@@ -703,8 +698,6 @@ describe("parseEcjDecisionHtml", () => {
         ),
     );
     expect(dropped.map(([name]) => name)).toEqual([]);
-    expect(validationIssues).not.toContain("CONTENT_LOSS");
-    expect(validationIssues).not.toContain("MISSING_WORDS");
 
     // `<br>` is the tag whose meaning is not in its contents, so a
     // walker that reads contents sees nothing in it and the lines on

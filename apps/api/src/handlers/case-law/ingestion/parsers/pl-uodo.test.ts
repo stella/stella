@@ -149,7 +149,7 @@ describe("a short decision", () => {
 
   test("keeps every text the source prints, in order", async () => {
     const xml = await Bun.file(SHORT_DECISION).text();
-    const { fulltext, validationIssues } = await parse(SHORT_DECISION);
+    const { fulltext } = await parse(SHORT_DECISION);
 
     let from = 0;
     for (const text of sourceTexts(xml)) {
@@ -157,7 +157,6 @@ describe("a short decision", () => {
       expect(at, text.slice(0, 60)).toBeGreaterThanOrEqual(0);
       from = at + text.length;
     }
-    expect(validationIssues).toEqual([]);
   });
 
   test("an enumerated point opens with the marker the source prints", async () => {
@@ -224,10 +223,9 @@ describe("a long decision", () => {
 
   test("keeps every text the source prints", async () => {
     const xml = await Bun.file(LONG_DECISION).text();
-    const { fulltext, validationIssues } = await parse(LONG_DECISION);
+    const { fulltext } = await parse(LONG_DECISION);
     const missing = sourceTexts(xml).filter((text) => !fulltext.includes(text));
     expect(missing).toEqual([]);
-    expect(validationIssues).toEqual([]);
   });
 });
 
@@ -279,7 +277,6 @@ describe("what the parse is measured against", () => {
     }
     expect(parsed.value.fulltext).toContain("zdanie w elemencie bez reguły");
     expect(plUodoSourceTexts(xml)).toContain("zdanie w elemencie bez reguły");
-    expect(parsed.value.validationIssues).toEqual([]);
   });
 });
 
@@ -327,7 +324,6 @@ describe("containers and text this reader has no rule for", () => {
         listDepth: 1,
       });
       expect(parsed.unmappedMarkup).toEqual(["xUnknown"]);
-      expect(parsed.validationIssues).toEqual([]);
     },
   );
 
@@ -371,7 +367,6 @@ describe("containers and text this reader has no rule for", () => {
       "ostatni tekst",
     ]);
     expect(parsed.unmappedMarkup).toEqual(["xText", "#text", "xUnknown"]);
-    expect(parsed.validationIssues).toEqual([]);
   });
 
   test("stray children in gloss containers and glosses keep their text", () => {

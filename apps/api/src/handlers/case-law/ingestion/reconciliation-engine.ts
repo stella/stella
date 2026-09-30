@@ -55,7 +55,6 @@ import {
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
-import { readStoredRawFromS3 } from "@/api/handlers/case-law/ingestion/pipeline/stored-raw";
 import { processSupplement } from "@/api/handlers/case-law/ingestion/pipeline/supplement";
 import type {
   FailedSliceCandidate,
@@ -109,6 +108,7 @@ import {
   selectDueReconciliationItems,
   selectTrackedIdentityKeys,
 } from "@/api/lib/legal-search/reconciliation-store";
+import { readStoredRawFromS3 } from "@/api/lib/legal-search/text-retention/stored-raw";
 import { logger } from "@/api/lib/observability/logger";
 import { pgErrorFields } from "@/api/lib/pg-error";
 

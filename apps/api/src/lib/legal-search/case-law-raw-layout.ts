@@ -14,6 +14,7 @@ import {
 } from "@/api/lib/legal-search/ingestion-types";
 import {
   classifyCaseLawRawKey,
+  confirmedRawRelocationColumns,
   copyRawObject,
   rawDocumentPayloadKey,
   homeRawPayloadObjects,
@@ -284,6 +285,7 @@ const reconcileRawRow = async ({
     signal,
     plan: {
       type: "write",
+      previousPayload: storedBytes,
       payload: copies.length === 0 ? storedBytes : homing.value.payload,
       copies,
     },
@@ -311,6 +313,7 @@ type MovePayloadOptions = {
     | {
         /** An envelope rewritten to name its files' new addresses. */
         type: "write";
+        previousPayload: Uint8Array;
         payload: Uint8Array | string;
         copies: RawObjectCopy[];
       };
@@ -392,6 +395,24 @@ const movePayload = async ({
     return panic("Raw layout wrote a payload under an unexpected key");
   }
 
+  const relocated =
+    plan.type === "copy"
+      ? confirmedRawRelocationColumns({
+          type: "copy",
+          storedKey,
+          writtenKey,
+          owner,
+          contentType: row.sourceRawContentType,
+        })
+      : confirmedRawRelocationColumns({
+          type: "write",
+          previousPayload: plan.previousPayload,
+          payload: plan.payload,
+          writtenKey,
+          owner,
+          contentType: row.sourceRawContentType,
+        });
+
   const moved = await scopedDb(async (tx) => {
     const current = (
       await tx
@@ -423,7 +444,7 @@ const movePayload = async ({
     await tx
       .update(caseLawDecisions)
       .set({
-        sourceRawS3Key: writtenKey,
+        ...relocated,
         updatedAt: sql`${caseLawDecisions.updatedAt}`,
       })
       .where(eq(caseLawDecisions.id, row.id));

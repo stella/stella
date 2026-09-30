@@ -9,10 +9,6 @@ import type {
   ParagraphRole,
 } from "@/api/handlers/case-law/document-ast";
 import { ParseXmlError } from "@/api/lib/errors/tagged-errors";
-import {
-  buildValidationHtml,
-  validateAndLog,
-} from "@/api/lib/legal-search/parsers/validate-ast";
 
 export type ParseRisDecisionInput = {
   sourceDocumentId: string;
@@ -39,7 +35,6 @@ export type ParseRisDecisionOutput = {
   documentAst: DocumentAst;
   fulltext: string;
   sections: RisDocumentSections;
-  validationIssues: string[];
 };
 
 const normalizedText = (text: string): string =>
@@ -149,10 +144,10 @@ export const parseRisDecisionXml = (
     );
   }
 
-  const validationContent = content.clone();
-  validationContent.find("kzinhalt, fzinhalt").remove();
-  const validationText = normalizedText(validationContent.text());
-  if (validationText === "") {
+  const bodyContent = content.clone();
+  bodyContent.find("kzinhalt, fzinhalt").remove();
+  const bodyText = normalizedText(bodyContent.text());
+  if (bodyText === "") {
     return Result.err(
       new ParseXmlError({
         message: "RIS XML nutzdaten element has no decision text",
@@ -252,17 +247,6 @@ export const parseRisDecisionXml = (
     );
   }
 
-  const validation = validateAndLog(
-    {
-      parser: "at-ris",
-      caseNumber: input.caseNumber,
-      language: "de",
-      url: input.sourceUrl,
-    },
-    buildValidationHtml([validationText]),
-    blocks,
-  );
-
   return Result.ok({
     documentAst: {
       version: 1,
@@ -290,6 +274,5 @@ export const parseRisDecisionXml = (
         printed.join("\n\n"),
       ]),
     ),
-    validationIssues: validation.issues.map((issue) => issue.code),
   });
 };

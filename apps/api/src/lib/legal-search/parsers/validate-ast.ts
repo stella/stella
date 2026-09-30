@@ -1,10 +1,9 @@
 /**
  * AST sanity checker.
  *
- * Every parser MUST call `validateAst` after producing blocks.
- * It checks for content loss, structural anomalies, and
- * formatting issues. Violations are logged as warnings;
- * in tests, the result can be asserted.
+ * Legacy structural and formatting diagnostics. Source retention is
+ * certified by the ingestion pipeline against the final persisted payload;
+ * parsers must not certify their own filtered source views.
  */
 
 import * as cheerio from "cheerio";

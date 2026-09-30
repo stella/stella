@@ -57,15 +57,9 @@ import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import type { DecisionJudgeInput } from "@/api/lib/legal-search/ingestion-types";
-import {
-  buildValidationHtml,
-  validateAndLog,
-} from "@/api/lib/legal-search/parsers/validate-ast";
 
 /** Publisher recorded on the AST, so a stored document names where it came from. */
 const HU_BHGY_SOURCE_SYSTEM = "eakta.birosag.hu";
-
-const HU_BHGY_PARSER = "hu-bhgy";
 
 // ── The document as lines ────────────────────────────────
 
@@ -1240,17 +1234,6 @@ export const parseHuBhgyDecision = (
     .map(({ plainText }) => plainText.trim())
     .filter((text) => text.length > 0)
     .join("\n\n");
-
-  validateAndLog(
-    {
-      parser: HU_BHGY_PARSER,
-      caseNumber: input.listedCaseNumber,
-      language: "hu",
-      url: input.sourceUrl,
-    },
-    buildValidationHtml(lineTexts),
-    blocks,
-  );
 
   decisionDate ??= softBreakDate;
   const documentDocket = huDocketFrom(lineTexts);

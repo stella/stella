@@ -11,8 +11,8 @@
  * The specific leak is always a parser bug and is fixed there. This is the
  * class-level guard: one cheap scan over the text every source produces, so
  * the next parser — in any jurisdiction, for any format — cannot introduce
- * the same defect silently. It runs inside `validateAndLog` for parsed
- * decisions and from the pipeline for sources whose parser never runs.
+ * the same defect silently. The pipeline checks the final payload, including
+ * sources whose parser never runs.
  *
  * Each rule also states the Postgres pattern that finds decisions already
  * stored with that residue; the sweep in

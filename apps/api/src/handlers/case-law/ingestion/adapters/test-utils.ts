@@ -29,8 +29,10 @@
 import { fetchWithTimeout } from "@stll/fetch";
 
 import type {
+  IngestionResult,
   SourceAdapter,
   SourceReconciliation,
+  StoredRawReparseInput,
 } from "@/api/handlers/case-law/ingestion/adapter";
 
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
@@ -194,3 +196,23 @@ export const rejectionOf = async (
     () => null,
     (error: unknown) => error,
   );
+
+/** The row fields the pipeline persists from an ingestion result. */
+export const storedRawReparseInputOf = (
+  decision: IngestionResult,
+): StoredRawReparseInput => ({
+  raw:
+    decision.sourceRawBytes ??
+    new TextEncoder().encode(decision.sourceRaw ?? ""),
+  contentType: decision.sourceRawContentType ?? null,
+  caseNumber: decision.caseNumber,
+  sourceDocumentId: decision.sourceDocumentId ?? null,
+  language: decision.language,
+  court: decision.court,
+  ecli: decision.ecli ?? null,
+  decisionDate: decision.decisionDate ?? null,
+  decisionType: decision.decisionType ?? null,
+  sourceUrl: decision.sourceUrl ?? null,
+  documentUrl: decision.documentUrl ?? null,
+  metadata: decision.metadata,
+});

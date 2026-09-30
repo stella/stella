@@ -52,7 +52,6 @@ import type {
   ParagraphRole,
 } from "@/api/handlers/case-law/document-ast";
 import { hasInlineChildren } from "@/api/handlers/case-law/document-ast";
-import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 
 import {
@@ -96,12 +95,6 @@ export type ParseEcjDecisionOutput = {
    * than from the Court's own output.
    */
   boundary: EcjDocumentBoundary;
-  /**
-   * Codes of the issues `validateAndLog` raised, empty on a clean
-   * parse. Returned rather than only logged so callers can assert on
-   * content retention without re-walking the source document.
-   */
-  validationIssues: string[];
 };
 
 export const parseEcjDecisionHtml = (
@@ -111,17 +104,6 @@ export const parseEcjDecisionHtml = (
   const { boundary, root: $document } = ecjDocumentRoot($);
   const blocks = buildBlocks($, $document);
   const keywords = extractKeywords($document);
-
-  const validation = validateAndLog(
-    {
-      parser: "eu-ecj",
-      caseNumber: input.caseNumber,
-      language: input.language,
-      url: input.sourceUrl,
-    },
-    documentSource($, $document, input.html),
-    blocks,
-  );
 
   return {
     documentAst: {
@@ -146,7 +128,6 @@ export const parseEcjDecisionHtml = (
     fulltext: toFulltext(blocks),
     keywords,
     boundary,
-    validationIssues: validation.issues.map((issue) => issue.code),
   };
 };
 

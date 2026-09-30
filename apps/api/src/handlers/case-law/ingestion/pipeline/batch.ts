@@ -559,6 +559,7 @@ export const applyDecisionBatch = async ({
           // db-await-in-loop: per-decision ingest pipeline: identity locks, corpus write, upsert, citations, ordered per observation
           await processDecision({
             input,
+            sourceKey: context.adapterKey,
             sourceId,
             scopedDb,
             observedAt: observation.observedAt,

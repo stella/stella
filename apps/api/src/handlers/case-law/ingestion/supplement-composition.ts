@@ -136,6 +136,8 @@ export const selectSupplementJudgment = <
 
 /** One supplement as stored, with what composing it needs. */
 export type StoredSupplement = {
+  sourceRawS3Key?: string | null;
+  sourceRawContentType?: string | null;
   sourceDocumentId: string;
   kind: DecisionSupplementKind;
   fulltext: string | null;
@@ -169,6 +171,8 @@ export const lockSupplementTarget = async (
 };
 
 const STORED_SUPPLEMENT_COLUMNS = {
+  sourceRawS3Key: caseLawDecisionSupplements.sourceRawS3Key,
+  sourceRawContentType: caseLawDecisionSupplements.sourceRawContentType,
   sourceDocumentId: caseLawDecisionSupplements.sourceDocumentId,
   kind: caseLawDecisionSupplements.kind,
   fulltext: caseLawDecisionSupplements.fulltext,
@@ -335,6 +339,8 @@ export const selectComposableSupplements = async (
         documentAst,
         sourceHash,
         sourceUrl,
+        sourceRawS3Key,
+        sourceRawContentType,
       }) => ({
         sourceDocumentId,
         kind,
@@ -342,6 +348,8 @@ export const selectComposableSupplements = async (
         documentAst,
         sourceHash,
         sourceUrl,
+        sourceRawS3Key,
+        sourceRawContentType,
       }),
     );
 };
@@ -425,7 +433,8 @@ export const sameSupplementVersions = (
     return (
       other !== undefined &&
       supplement.sourceDocumentId === other.sourceDocumentId &&
-      supplement.sourceHash === other.sourceHash
+      supplement.sourceHash === other.sourceHash &&
+      supplement.sourceRawS3Key === other.sourceRawS3Key
     );
   });
 

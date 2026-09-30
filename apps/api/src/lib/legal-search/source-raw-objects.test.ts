@@ -8,7 +8,7 @@
  * and a packed address later are one shape and one reader.
  */
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { envBase } from "@/api/env-base";
@@ -20,6 +20,8 @@ import {
   withSourceRawObjects,
 } from "@/api/lib/legal-search/ingestion-types";
 import {
+  confirmedRawRelocationColumns,
+  homeRawPayloadObjects,
   openRawSourceWriteWindow,
   RAW_SOURCE_FAMILY,
   rawSourcePayloadKey,
@@ -278,5 +280,166 @@ describe("storing a publisher's raw payload", () => {
     expect(
       fake.objects.get(`${envBase.S3_BUCKET}/${key}`)?.contentType,
     ).toMatch(/^text\/html\b/u);
+  });
+});
+
+describe("verified raw pointer relocation", () => {
+  const owner = {
+    family: RAW_SOURCE_FAMILY.CASE_LAW,
+    sourceId: SOURCE_ID,
+    documentId: "relocation-decision",
+  } as const;
+  const bytes = (payload: string) => new TextEncoder().encode(payload);
+
+  test("preserves all source parts and binary descriptors while their locations move", () => {
+    const previous = encodeSourceRawEnvelope(
+      { document: "Alpha repeated repeated", metadata: '{"case":1}' },
+      { pdf: A_REFERENCE },
+    );
+    const homed = homeRawPayloadObjects({ payload: previous, owner });
+    if (Result.isError(homed)) {
+      throw homed.error;
+    }
+    expect(homed.value.payload).not.toBe(previous);
+    const writtenKey = rawSourcePayloadKey({
+      owner,
+      data: homed.value.payload,
+    });
+    expect(
+      confirmedRawRelocationColumns({
+        type: "write",
+        owner,
+        writtenKey,
+        contentType: "application/json",
+        previousPayload: bytes(previous),
+        payload: homed.value.payload,
+      }),
+    ).toEqual({
+      sourceRawS3Key: writtenKey,
+      sourceRawContentType: "application/json",
+    });
+  });
+
+  test("byte replay envelopes rehome their files, while unchanged payload bytes stay exact", () => {
+    const previous = bytes(
+      encodeSourceRawEnvelope({ document: "Retained" }, { pdf: A_REFERENCE }),
+    );
+    const homed = homeRawPayloadObjects({ payload: previous, owner });
+    expect(Result.isOk(homed)).toBe(true);
+    if (Result.isOk(homed)) {
+      expect(homed.value.copies).toHaveLength(1);
+      expect(typeof homed.value.payload).toBe("string");
+      const writtenKey = rawSourcePayloadKey({
+        owner,
+        data: homed.value.payload,
+      });
+      expect(
+        confirmedRawRelocationColumns({
+          type: "write",
+          owner,
+          writtenKey,
+          contentType: null,
+          previousPayload: previous,
+          payload: homed.value.payload,
+        }).sourceRawS3Key,
+      ).toBe(writtenKey);
+    }
+    for (const payload of [
+      bytes(encodeSourceRawEnvelope({ document: "No files" })),
+      bytes("%PDF binary"),
+      new Uint8Array([0xff, 0x00]),
+    ]) {
+      const unchanged = homeRawPayloadObjects({ payload, owner });
+      expect(Result.isOk(unchanged)).toBe(true);
+      if (Result.isOk(unchanged)) {
+        expect(unchanged.value.payload).toBe(payload);
+        expect(unchanged.value.copies).toHaveLength(0);
+      }
+    }
+    const malformed = homeRawPayloadObjects({
+      payload: bytes(
+        JSON.stringify({
+          version: 1,
+          parts: { document: "Retained" },
+          objects: { pdf: { location: "legacy" } },
+        }),
+      ),
+      owner,
+    });
+    expect(Result.isError(malformed)).toBe(true);
+    if (Result.isError(malformed)) {
+      expect(malformed.error.message).toBe(
+        "Raw envelope has malformed binary references",
+      );
+    }
+  });
+
+  test("rejects every changed text part and every changed binary content descriptor", () => {
+    const parts = { document: "Judgment text", metadata: "Publisher metadata" };
+    const previous = encodeSourceRawEnvelope(parts, { pdf: A_REFERENCE });
+    const homed = homeRawPayloadObjects({ payload: previous, owner });
+    if (Result.isError(homed) || typeof homed.value.payload !== "string") {
+      panic("Expected a homed text envelope");
+    }
+    const objects = decodeSourceRawEnvelopeObjects(homed.value.payload);
+    const mutations = [
+      ...Object.keys(parts).map((part) =>
+        encodeSourceRawEnvelope({ ...parts, [part]: "Changed" }, objects),
+      ),
+      encodeSourceRawEnvelope({ document: parts.document }, objects),
+      encodeSourceRawEnvelope(parts, {}),
+      ...[
+        { ...A_REFERENCE, sha256: "b".repeat(64) },
+        { ...A_REFERENCE, byteLength: A_REFERENCE.byteLength + 1 },
+        { ...A_REFERENCE, contentType: "text/plain" },
+      ].map((ref) => encodeSourceRawEnvelope(parts, { pdf: ref })),
+    ];
+    for (const payload of mutations) {
+      const writtenKey = rawSourcePayloadKey({ owner, data: payload });
+      expect(() =>
+        confirmedRawRelocationColumns({
+          type: "write",
+          owner,
+          writtenKey,
+          contentType: "application/json",
+          previousPayload: bytes(previous),
+          payload,
+        }),
+      ).toThrow(/Raw relocation changed publisher/u);
+    }
+  });
+
+  test("copy pointers retain the source digest and rewritten pointers identify the written bytes", () => {
+    const previous = "Exact bytes";
+    const writtenKey = rawSourcePayloadKey({ owner, data: previous });
+    const digest = writtenKey.slice(writtenKey.lastIndexOf("/") + 1);
+    expect(
+      confirmedRawRelocationColumns({
+        type: "copy",
+        owner,
+        storedKey: `case-law/raw/legacy/${digest}`,
+        writtenKey,
+        contentType: null,
+      }),
+    ).toEqual({ sourceRawS3Key: writtenKey, sourceRawContentType: null });
+    expect(() =>
+      confirmedRawRelocationColumns({
+        type: "copy",
+        owner,
+        storedKey: `case-law/raw/legacy/${"b".repeat(64)}`,
+        writtenKey,
+        contentType: null,
+      }),
+    ).toThrow("Raw relocation changed a copied payload digest");
+    expect(() =>
+      confirmedRawRelocationColumns({
+        type: "write",
+        owner,
+        writtenKey: "wrong-key",
+        contentType: null,
+        previousPayload: bytes(previous),
+        payload: previous,
+      }),
+    ).toThrow("Raw relocation pointer does not identify its payload");
   });
 });

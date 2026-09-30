@@ -39,11 +39,11 @@ import {
   type AdapterKey,
   type ImportSourceKey,
 } from "@/api/lib/legal-search/ingestion-constants";
-
 import {
   ADAPTER_SOURCE_FORMATS,
   IMPORT_SOURCE_FORMATS,
-} from "../text-retention/source-formats";
+} from "@/api/lib/legal-search/text-retention/source-formats";
+
 import { courtListenerImport } from "./courtlistener/import";
 import { checkedSourceRegistrations } from "./source-registrations";
 

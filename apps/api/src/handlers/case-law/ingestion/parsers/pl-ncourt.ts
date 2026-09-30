@@ -18,19 +18,8 @@
  * sentence.
  */
 
-import { panic } from "better-result";
 import * as cheerio from "cheerio";
 import { type AnyNode, type Element, isCDATA, isTag, isText } from "domhandler";
-
-import type { Block } from "@/api/handlers/case-law/document-ast";
-import {
-  buildValidationHtml,
-  validateAndLog,
-} from "@/api/lib/legal-search/parsers/validate-ast";
-import type {
-  ValidationResult,
-  ValidationSubject,
-} from "@/api/lib/legal-search/parsers/validate-ast";
 
 import { ANONYMIZED_CLASS } from "./shared-inlines";
 
@@ -441,35 +430,4 @@ const sourceParagraphsOf = (root: Element) => {
   };
   walk(root);
   return { source, comparison };
-};
-
-/**
- * Check a parsed document against the text the XML states, and log what it
- * lost. The parser checks itself against the HTML it was given; that HTML is
- * rendered here, so only the XML can say whether the rendering kept every
- * sentence.
- */
-export const validatePlNcourtDocument = (
-  subject: ValidationSubject,
-  content: PlNcourtContent,
-  blocks: Block[],
-): ValidationResult => {
-  const seen = new Set<string>();
-  const comparisonParts: string[] = [];
-  for (const [index, source] of content.sourceParagraphs.entries()) {
-    if (seen.has(source)) {
-      continue;
-    }
-    seen.add(source);
-    comparisonParts.push(
-      content.comparisonParagraphs[index] ??
-        panic("Missing pl-ncourt comparison paragraph"),
-    );
-  }
-  return validateAndLog(
-    subject,
-    buildValidationHtml(content.sourceParagraphs.map(escapeHtml)),
-    blocks,
-    { wordComparisonText: comparisonParts.join(" ") },
-  );
 };

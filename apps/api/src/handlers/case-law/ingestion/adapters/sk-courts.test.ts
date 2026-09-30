@@ -15,15 +15,20 @@
  * written to match the code.
  */
 
+import { PDF } from "@libpdf/core";
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
   decodeSourceRawEnvelope,
+  encodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@/api/handlers/case-law/ingestion/adapter";
-import type { StoredRawReparseOutcome } from "@/api/handlers/case-law/ingestion/adapter";
+import type {
+  StoredRawReader,
+  StoredRawReparseOutcome,
+} from "@/api/handlers/case-law/ingestion/adapter";
 import {
   skCourtsAdapter,
   SK_COURTS_SOURCE_FIELD_PATHS,
@@ -161,7 +166,11 @@ const TRANSFERRED_FILE_ID =
 
 const TRANSFERRED_FILE_DOCKET = "7C/221/1991";
 
-type StoredDecision = { sourceRaw: string; sourceRawContentType: string };
+type StoredDecision = {
+  sourceRaw: string;
+  sourceRawContentType: string;
+  readBinary?: StoredRawReader;
+};
 
 const storedDecision = async (
   sourceDocumentId: string,
@@ -191,11 +200,12 @@ const storedDecision = async (
   };
 };
 
-const reparse = (
+const reparse = async (
   stored: StoredDecision,
   caseNumber: string,
-): StoredRawReparseOutcome => {
-  const outcome = skCourtsAdapter.reparseStoredRaw?.({
+): Promise<StoredRawReparseOutcome> => {
+  const outcome = await skCourtsAdapter.reparseStoredRaw?.({
+    readBinary: stored.readBinary,
     raw: new TextEncoder().encode(stored.sourceRaw),
     contentType: stored.sourceRawContentType,
     caseNumber,
@@ -212,9 +222,7 @@ const reparse = (
   if (outcome === undefined) {
     return panic("sk-courts declares no reparseStoredRaw");
   }
-  return outcome instanceof Promise
-    ? panic("sk-courts reparseStoredRaw must answer without I/O")
-    : outcome;
+  return outcome;
 };
 
 describe("a stored record reaches the targets the inventory declares", () => {
@@ -226,13 +234,13 @@ describe("a stored record reaches the targets the inventory declares", () => {
     expect(stored.sourceRawContentType).toBe("application/json");
     expect(decodeSourceRawEnvelope(stored.sourceRaw)).toBeNull();
 
-    const outcome = reparse(stored, TRANSFERRED_FILE_DOCKET);
+    const outcome = await reparse(stored, TRANSFERRED_FILE_DOCKET);
 
     expect(outcome.type).toBe("parsed");
   });
 
   test("the three fields the adapter used to discard land in metadata", async () => {
-    const outcome = reparse(
+    const outcome = await reparse(
       await storedDecision(TRANSFERRED_FILE_ID),
       TRANSFERRED_FILE_DOCKET,
     );
@@ -254,7 +262,7 @@ describe("a stored record reaches the targets the inventory declares", () => {
   });
 
   test("the record's other labelled fields keep their targets", async () => {
-    const outcome = reparse(
+    const outcome = await reparse(
       await storedDecision(TRANSFERRED_FILE_ID),
       TRANSFERRED_FILE_DOCKET,
     );
@@ -282,27 +290,22 @@ describe("a stored record reaches the targets the inventory declares", () => {
     expect(outcome.result.judges).toBeUndefined();
   });
 
-  test("re-parsing writes the envelope, whatever shape it read", async () => {
-    const outcome = reparse(
-      await storedDecision(TRANSFERRED_FILE_ID),
-      TRANSFERRED_FILE_DOCKET,
-    );
+  test("re-parsing preserves the originally captured raw bytes", async () => {
+    const stored = await storedDecision(TRANSFERRED_FILE_ID);
+    const outcome = await reparse(stored, TRANSFERRED_FILE_DOCKET);
     if (outcome.type !== "parsed") {
-      throw new Error(
-        `the stored record did not re-parse: ${outcome.type === "rejected" ? outcome.detail : outcome.type}`,
-      );
+      return panic("The stored listing did not parse");
     }
-
     expect(outcome.result.sourceRawContentType).toBe(
-      SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+      stored.sourceRawContentType,
     );
-    const parts = decodeSourceRawEnvelope(outcome.result.sourceRaw ?? "");
-
-    expect(Object.keys(parts ?? {}).toSorted()).toEqual(["detail", "listing"]);
+    expect(outcome.result.sourceRawBytes).toEqual(
+      new TextEncoder().encode(stored.sourceRaw),
+    );
   });
 
   test("a payload naming another decision is refused", async () => {
-    const outcome = reparse(
+    const outcome = await reparse(
       await storedDecision(TRANSFERRED_FILE_ID),
       "9C/1/2026",
     );
@@ -313,8 +316,8 @@ describe("a stored record reaches the targets the inventory declares", () => {
     });
   });
 
-  test("a payload this adapter never wrote is refused, not guessed at", () => {
-    const outcome = reparse(
+  test("a payload this adapter never wrote is refused, not guessed at", async () => {
+    const outcome = await reparse(
       { sourceRaw: "<html></html>", sourceRawContentType: "text/html" },
       TRANSFERRED_FILE_DOCKET,
     );
@@ -327,13 +330,13 @@ describe("a stored record reaches the targets the inventory declares", () => {
 });
 
 describe("the census and the registry agree about this adapter", () => {
-  test("its two recorded surfaces are the parts the envelope carries", () => {
+  test("its recorded surfaces include the retained document file", () => {
     const { surfaces } = skCourtsAdapter.sourceSurfaces;
     const recorded = Object.entries(surfaces).flatMap(([, disposition]) =>
       disposition.disposition === "stored" ? [disposition.part] : [],
     );
 
-    expect(recorded.toSorted()).toEqual(["detail", "listing"]);
+    expect(recorded.toSorted()).toEqual(["detail", "document-file", "listing"]);
   });
 
   test("the surfaces still on the backlog name why", () => {
@@ -343,7 +346,132 @@ describe("the census and the registry agree about this adapter", () => {
         disposition.disposition === "backlog" ? [surface] : [],
     );
 
-    expect(backlog.toSorted()).toEqual(["bulk-dump", "document"]);
+    expect(backlog.toSorted()).toEqual(["bulk-dump"]);
     expect(skCourtsAdapter.key).toBe(ADAPTER_KEYS.SK_COURTS);
+  });
+});
+
+type StoredPdfOptions = { bytes: Uint8Array; readBinary?: StoredRawReader };
+const storedPdf = async ({
+  bytes,
+  readBinary,
+}: StoredPdfOptions): Promise<StoredDecision> => {
+  const original = await storedDecision(TRANSFERRED_FILE_ID);
+  const wrapper: unknown = JSON.parse(original.sourceRaw);
+  if (
+    !isRecord(wrapper) ||
+    !isRecord(wrapper["listItem"]) ||
+    !isRecord(wrapper["detail"])
+  ) {
+    return panic("Captured legacy listing wrapper has changed");
+  }
+  return {
+    sourceRaw: encodeSourceRawEnvelope(
+      {
+        listing: JSON.stringify(wrapper["listItem"]),
+        detail: JSON.stringify(wrapper["detail"]),
+      },
+      {
+        "document-file": {
+          location: "captured/sk/document.pdf",
+          sha256: new Bun.CryptoHasher("sha256").update(bytes).digest("hex"),
+          byteLength: bytes.byteLength,
+          contentType: "application/pdf",
+        },
+      },
+    ),
+    sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+    readBinary,
+  };
+};
+
+describe("stored PDF replay without publisher requests", () => {
+  test("verified PDF restores content and preserves listing metadata and exact raw envelope", async () => {
+    const pdf = PDF.create();
+    pdf
+      .addPage()
+      .drawText("Stored ruling text retained for replay.", { x: 40, y: 500 });
+    const bytes = await pdf.save();
+    const reads: string[] = [];
+    const captured = await storedPdf({
+      bytes,
+      readBinary: async (key) => {
+        reads.push(key);
+        return bytes;
+      },
+    });
+    const outcome = await reparse(captured, TRANSFERRED_FILE_DOCKET);
+    expect(outcome.type).toBe("parsed");
+    if (outcome.type !== "parsed") {
+      return panic("Verified PDF did not replay");
+    }
+    expect(reads).toEqual(["captured/sk/document.pdf"]);
+    expect(outcome.result.fulltext).toContain(
+      "Stored ruling text retained for replay.",
+    );
+    if (!("blocks" in outcome.result.documentAst)) {
+      return panic("Verified PDF replay produced no document AST");
+    }
+    expect(outcome.result.documentAst.blocks.length).toBeGreaterThan(0);
+    expect(outcome.result.sections?.length).toBeGreaterThan(0);
+    expect(outcome.result.metadata["originCaseNumber"]).toBe("7C/221/1991");
+    expect(outcome.result.documentDelivery).toBe("inline");
+    expect(outcome.result.sourceRawBytes).toEqual(
+      new TextEncoder().encode(captured.sourceRaw),
+    );
+  });
+
+  test("absent reader, missing object and mismatched bytes yield explicit failures", async () => {
+    const bytes = new TextEncoder().encode("captured PDF bytes");
+    const unavailable = await reparse(
+      await storedPdf({ bytes }),
+      TRANSFERRED_FILE_DOCKET,
+    );
+    expect(unavailable).toMatchObject({
+      type: "rejected",
+      rejection: "unsupported-content",
+    });
+    const missing = await reparse(
+      await storedPdf({ bytes, readBinary: async () => null }),
+      TRANSFERRED_FILE_DOCKET,
+    );
+    expect(missing).toMatchObject({
+      type: "rejected",
+      rejection: "no-document",
+    });
+    const changed = await reparse(
+      await storedPdf({
+        bytes,
+        readBinary: async () => new TextEncoder().encode("altered PDF bytes!"),
+      }),
+      TRANSFERRED_FILE_DOCKET,
+    );
+    expect(changed).toMatchObject({
+      type: "rejected",
+      rejection: "raw-fidelity-lost",
+    });
+  });
+
+  test("malformed object references cannot become metadata-only success", async () => {
+    const captured = await storedPdf({ bytes: Uint8Array.of(1) });
+    const envelope: unknown = JSON.parse(captured.sourceRaw);
+    if (!isRecord(envelope)) {
+      return panic("Stored PDF fixture is not an envelope");
+    }
+    const malformed = await reparse(
+      {
+        sourceRaw: JSON.stringify({
+          version: 1,
+          parts: envelope["parts"],
+          objects: { "document-file": { location: "missing-fields" } },
+        }),
+        sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+      },
+      TRANSFERRED_FILE_DOCKET,
+    );
+    expect(malformed).toMatchObject({
+      type: "rejected",
+      rejection: "raw-fidelity-lost",
+    });
   });
 });

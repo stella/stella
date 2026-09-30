@@ -99,6 +99,9 @@ export type DecisionRefresh =
 
 export type ProcessDecisionAttemptOptions = {
   input: IngestionResult;
+  /** Known by a batch; omitted callers resolve it with one indexed source lookup. */
+  sourceKey?: string | undefined;
+  rawBinaryCache?: Map<string, Uint8Array> | undefined;
   judges: CaseLawJudgeDependencies;
   sourceId: SafeId<"caseLawSource">;
   scopedDb: ScopedDb;

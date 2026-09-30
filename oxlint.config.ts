@@ -273,6 +273,15 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-direct-pdf-save.fixture.ts", [
     "no-direct-pdf-save/no-direct-pdf-save",
   ]),
+  fixtureRuleOverride("no-parser-text-validation.fixture.ts", [
+    "no-parser-text-validation/no-parser-text-validation",
+  ]),
+  fixtureRuleOverride("no-direct-case-law-text-write.fixture.seed-case-law.ts", [
+    "no-direct-case-law-text-write/no-direct-case-law-text-write",
+  ]),
+  fixtureRuleOverride("no-direct-case-law-text-write.fixture.ts", [
+    "no-direct-case-law-text-write/no-direct-case-law-text-write",
+  ]),
   fixtureRuleOverride("no-direct-template-version-write.fixture.ts", [
     "no-direct-template-version-write/no-direct-template-version-write",
   ]),
@@ -883,6 +892,8 @@ export default defineConfig({
     "scanned-file-boundary/scanned-file-boundary": "error",
     "no-raw-zip-load/no-raw-zip-load": "error",
     "no-direct-property-table-write/no-direct-property-table-write": "error",
+    "no-parser-text-validation/no-parser-text-validation": "error",
+    "no-direct-case-law-text-write/no-direct-case-law-text-write": "error",
     "no-direct-template-version-write/no-direct-template-version-write":
       "error",
     "no-condition-combinator-outside-conditions/no-condition-combinator-outside-conditions":
@@ -1243,6 +1254,8 @@ export default defineConfig({
     "./.oxlint-plugins/no-raw-zip-load.ts",
     "./.oxlint-plugins/no-direct-property-table-write.ts",
     "./.oxlint-plugins/no-direct-template-version-write.ts",
+    "./.oxlint-plugins/no-parser-text-validation.ts",
+    "./.oxlint-plugins/no-direct-case-law-text-write.ts",
     "./.oxlint-plugins/no-direct-pdf-save.ts",
     "./.oxlint-plugins/no-condition-combinator-outside-conditions.ts",
     "./.oxlint-plugins/no-direct-buffer-cleanup-intent-delete.ts",

@@ -16,7 +16,6 @@ import * as cheerio from "cheerio";
 import { type AnyNode, isTag, isText } from "domhandler";
 
 import type { Inline } from "@/api/handlers/case-law/document-ast";
-import { buildValidationHtml } from "@/api/lib/legal-search/parsers/validate-ast";
 
 import { conservesText, createUnitBuilder, graphicsIn } from "./blocks";
 import type { FormatInput } from "./harvard-xml";
@@ -122,18 +121,10 @@ const inlinesOf = (lines: readonly string[]): Inline[] =>
       : [{ type: "line-break" }, { type: "text", text: line }],
   );
 
-const escapeParagraphs = (text: string): string =>
-  buildValidationHtml(
-    text.split(/\n[ \t\f]*\n/u).map((part) => Bun.escapeHTML(part)),
-  );
-
 const parseLayoutText = (
   { budget, prefix, rowType }: FormatInput,
   source: string,
-  {
-    publisherLinks,
-    visibleText,
-  }: { publisherLinks: number; visibleText: string },
+  { publisherLinks }: { publisherLinks: number },
 ): FormatParse => {
   const text = source.replace(/\r\n?/gu, "\n");
   const paginationCharacters = text.match(FORM_FEED)?.length ?? 0;
@@ -178,7 +169,6 @@ const parseLayoutText = (
         backlinkCharacters: 0,
         unknownConstructs: {},
       },
-      validationHtml: escapeParagraphs(visibleText),
     },
   };
 };
@@ -188,7 +178,6 @@ export const parsePlainText = (input: FormatInput): FormatParse =>
     ? { status: "unusable", reason: TEXT_CANDIDATE_UNUSABLE.BLANK }
     : parseLayoutText(input, input.text, {
         publisherLinks: 0,
-        visibleText: input.text,
       });
 
 /** The elements a preformatted body is made of: text runs and citation links. */
@@ -243,16 +232,11 @@ export const parsePreformatted = (input: FormatInput): FormatParse | null => {
   if (Object.keys(graphics).length > 0) {
     return { status: "requires-assets", graphics };
   }
-  // The retention check reads the source through cheerio's own text, not
-  // through the walk above.
-  const visible = cheerio.load(input.text, null, false);
-  visible("script, style").remove();
   return parseLayoutText(
     input,
     $.root().contents().toArray().map(textOf).join(""),
     {
       publisherLinks: $("a[href]").length,
-      visibleText: visible.root().text(),
     },
   );
 };

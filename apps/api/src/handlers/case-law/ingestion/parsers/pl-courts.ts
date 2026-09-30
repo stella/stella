@@ -21,10 +21,6 @@ import type {
   TableCell,
 } from "@/api/handlers/case-law/document-ast";
 import { stripHtml } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import {
-  buildValidationHtml,
-  validateAndLog,
-} from "@/api/lib/legal-search/parsers/validate-ast";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 import { includes } from "@/api/lib/type-guards";
 
@@ -502,27 +498,11 @@ export const parsePlDecisionContent = (
     const $ = cheerio.load(input.content);
     const root = $("body").length > 0 ? $("body") : $.root();
     parseChildren($, state, root);
-    validateAndLog(
-      { parser: "pl-courts", caseNumber: input.caseNumber },
-      input.content,
-      state.blocks,
-    );
   } else {
     const normalizedContent = normalizeLegacyPlainText(
       stripHtml(input.content),
     );
     parsePlainText(state, normalizedContent);
-    const paragraphs = normalizedContent
-      .split(/\n{2,}/u)
-      .flatMap((paragraph) => {
-        const normalized = normalizeWhitespace(paragraph);
-        return normalized ? [normalized] : [];
-      });
-    validateAndLog(
-      { parser: "pl-courts", caseNumber: input.caseNumber },
-      buildValidationHtml(paragraphs),
-      state.blocks,
-    );
   }
 
   const fulltext = state.blocks

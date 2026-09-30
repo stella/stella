@@ -37,7 +37,6 @@ import type {
   DocumentAst,
   Inline,
 } from "@/api/handlers/case-law/document-ast";
-import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
 
 import {
   inlinesToPlainText,
@@ -72,12 +71,6 @@ export const parseNssDecisionHtml = (
   const $ = cheerio.load(input.html);
   const chunks = extractChunks($);
   const blocks = classifyChunks(chunks);
-
-  validateAndLog(
-    { parser: "cz-nss", caseNumber: input.caseNumber, url: input.sourceUrl },
-    input.html,
-    blocks,
-  );
 
   const fulltext = blocks
     .flatMap((b) => (b.plainText ? [b.plainText] : []))
