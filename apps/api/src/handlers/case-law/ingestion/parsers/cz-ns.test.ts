@@ -491,3 +491,47 @@ describe("parseNsDecisionHtml", () => {
     });
   });
 });
+
+describe("source table text retention", () => {
+  test("keeps every metadata cell and caption without inferring labels", () => {
+    const { source } = extractNsMetadata(
+      cheerio.load(`<table id="box-table-a">
+      <caption>Metadata caption</caption>
+      <tr><th>Soud:</th><td>Named court</td><td>Extra value</td></tr>
+      <tr><td>Unknown label</td><td>Unknown value</td></tr>
+      <tr><th>Standalone header</th></tr>
+    </table>`),
+    );
+    expect(source["metadataTable"]).toEqual({
+      captions: ["Metadata caption"],
+      rows: [
+        [
+          { type: "header", text: "Soud:" },
+          { type: "data", text: "Named court" },
+          { type: "data", text: "Extra value" },
+        ],
+        [
+          { type: "data", text: "Unknown label" },
+          { type: "data", text: "Unknown value" },
+        ],
+        [{ type: "header", text: "Standalone header" }],
+      ],
+    });
+  });
+
+  test("keeps body captions and header cells in source order", () => {
+    const result = parseNsDecisionHtml(
+      baseInput(`<html><body>
+      <table id="box-table-a"></table>
+      <table><caption>Body caption</caption><tr><th>Column heading</th><td>First cell</td><td>Last cell</td></tr></table>
+    </body></html>`),
+    );
+    expect(result.fulltext).toBe(
+      "Body caption\n\nColumn heading\tFirst cell\tLast cell",
+    );
+    const table = result.documentAst.blocks.find(
+      (block) => block.type === "table",
+    );
+    expect(table?.rows.at(0)?.at(0)?.header).toBe(true);
+  });
+});
