@@ -20,13 +20,13 @@ import {
 } from "@stll/ui/select";
 import { Textarea } from "@stll/ui/textarea";
 
+import { majorUnitInput } from "@/components/billing/amount-input.logic";
 import { DEFAULT_CURRENCY } from "@/components/billing/format-currency";
+import { MatterCombobox } from "@/components/billing/matter-combobox";
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { detached } from "@/lib/detached";
 import { localISODate } from "@/lib/local-iso-date";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
-import { majorUnitInput } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/amount-input.logic";
-import { MatterCombobox } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/matter-combobox";
 
 export type ExpenseFormValues = {
   matterId: string;

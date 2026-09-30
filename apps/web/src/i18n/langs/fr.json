@@ -521,6 +521,20 @@
     "noActiveTimer": "Aucun chronomètre actif",
     "noEntries": "Aucune entrée de temps pour cette période",
     "nonBillable": "Non facturable",
+    "quickEntry": {
+      "entrySaved": "Entrée de temps enregistrée",
+      "expenseSaved": "Dépense enregistrée",
+      "expenseTitle": "Ajouter une dépense",
+      "futureDate": "Choisissez aujourd’hui ou une date antérieure.",
+      "invalidDate": "Choisissez une date de travail valide.",
+      "minimumUnit": "Le temps est arrondi au supérieur selon l’unité minimale de facturation.",
+      "narrativeRequired": "Ajoutez une description avant d’enregistrer le temps.",
+      "outsideEditWindow": "Cette date est hors du délai de modification.",
+      "periodLocked": "Ce mois est verrouillé.",
+      "saveAndAddExpense": "Enregistrer et ajouter une dépense",
+      "saveAndNew": "Enregistrer et ajouter une entrée",
+      "viewDay": "Voir la journée"
+    },
     "rates": {
       "addRate": "Ajouter un tarif",
       "createRateTable": "Créer un barème",

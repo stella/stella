@@ -1,4 +1,5 @@
 import { Result, TaggedError } from "better-result";
+import { AsyncLocalStorage } from "node:async_hooks";
 
 import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -148,6 +149,15 @@ type AdmissionTiming = {
   schedule: (callback: () => void, delayMs: number) => () => void;
 };
 
+type AdmissionScope = {
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+  signal: AbortSignal;
+  status: "active" | "settled";
+};
+
+const admissionScope = new AsyncLocalStorage<AdmissionScope>();
+
 const defaultTiming: AdmissionTiming = {
   now: () => performance.now(),
   schedule: (callback, delayMs) => {
@@ -156,7 +166,11 @@ const defaultTiming: AdmissionTiming = {
   },
 };
 
-/** The disabled branch never opens Valkey or reads admission configuration. */
+/**
+ * The disabled branch never opens Valkey or reads admission configuration.
+ * Nested admission must be awaited: same-caller work shares the parent's lease
+ * and signal only until that parent settles. Detached execution needs a fresh scope.
+ */
 export const withActionAdmission = async <T>({
   organizationId,
   userId,
@@ -173,6 +187,23 @@ export const withActionAdmission = async <T>({
   if (!enabled) {
     return await Result.tryPromise({
       try: async () => await run(new AbortController().signal),
+      catch: (error: unknown) => error,
+    });
+  }
+
+  const inherited = admissionScope.getStore();
+  if (
+    inherited?.status === "active" &&
+    inherited.organizationId === organizationId &&
+    inherited.userId === userId
+  ) {
+    return await Result.tryPromise({
+      try: async () => {
+        inherited.signal.throwIfAborted();
+        const value = await run(inherited.signal);
+        inherited.signal.throwIfAborted();
+        return value;
+      },
       catch: (error: unknown) => error,
     });
   }
@@ -313,15 +344,23 @@ export const withActionAdmission = async <T>({
   }
 
   let outcome: Result<T, unknown>;
+  const scope: AdmissionScope = {
+    organizationId,
+    userId,
+    signal: controller.signal,
+    status: "active",
+  };
   try {
     outcome = await Result.tryPromise({
-      try: async () => {
-        controller.signal.throwIfAborted();
-        return await run(controller.signal);
-      },
+      try: async () =>
+        await admissionScope.run(scope, async () => {
+          controller.signal.throwIfAborted();
+          return await run(controller.signal);
+        }),
       catch: (error: unknown) => error,
     });
   } finally {
+    scope.status = "settled";
     stopped = true;
     cancelScheduled();
     await Promise.resolve(renewal);

@@ -8,17 +8,17 @@ import { Dialog, DialogPopup } from "@stll/ui/dialog";
 import { PlusIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
+import { ExpenseForm } from "@/components/billing/expense-form";
+import type { ExpenseFormValues } from "@/components/billing/expense-form";
 import { formatCurrencyAmount } from "@/components/billing/format-currency";
-import { expensesOptions } from "@/lib/workspaces/queries/expenses";
-import { ExpenseForm } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/expense-form";
-import type { ExpenseFormValues } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/expense-form";
-import { ExpenseRow } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/expense-row";
-import { useMatterNameMap } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/matter-name-map";
 import {
   useCreateExpense,
   useDeleteExpense,
   useUpdateExpense,
-} from "@/routes/_protected.workspaces/$workspaceId/-mutations/expenses";
+} from "@/lib/workspaces/mutations/expenses";
+import { expensesOptions } from "@/lib/workspaces/queries/expenses";
+import { ExpenseRow } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/expense-row";
+import { useMatterNameMap } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/matter-name-map";
 
 type ExpenseListViewProps = {
   workspaceId: string;
