@@ -617,6 +617,40 @@ jobs:
           docker ps --all --quiet --filter "ancestor=$AGENT_ENGINE_DOCKER_IMAGE" | xargs --no-run-if-empty docker rm --force
           docker network rm "$AGENT_ENGINE_DOCKER_NETWORK" 2>/dev/null || true
 
+  # Parser versions must advance whenever an adapter's parser inputs change.
+  # This guard reads Git history and needs no dependency installation.
+  parser-version-guard:
+    needs: ci-plan
+    if: >-
+      needs.ci-plan.outputs.trusted == 'true'
+      || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+
+      - name: Check parser version guard
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          bun test scripts/check-parser-versions.test.ts
+          bun scripts/check-parser-versions.ts
+
   # The repository guards. The suites this job used to run serially after them
   # are ci-tests and ci-browser, which run as separate jobs so they overlap
   # instead of queueing behind one another. The three share nothing but the
@@ -3577,6 +3611,7 @@ jobs:
       [
         ci-plan,
         agent-sandbox-docker,
+        parser-version-guard,
         ci-checks,
         ci-browser,
         ci-tests,
@@ -3645,6 +3680,7 @@ jobs:
             "marketing-screenshots": "marketing_screenshots_required",
             "migration-upgrade-rehearsal": "migration_rehearsal_required",
             "mobile-build": "mobile_build_required",
+            "parser-version-guard": null,
             "release-typecheck": "release_typecheck_required",
             "service-suites": "package_checks_required",
             "stack-redaction-browsers": "stack_redaction_browsers_required",
@@ -3656,7 +3692,7 @@ jobs:
           # Jobs a fast-depth run must also see succeed once their scope is
           # planned; any other job may skip there.
           FAST_REQUIRED: >-
-            ["api-image-smoke", "web-image-smoke"]
+            ["api-image-smoke", "parser-version-guard", "web-image-smoke"]
         run: |
           # The plan skips a draft pull request, and every job with it. The
           # event's draft flag can be stale: a push to a draft followed by
@@ -3725,10 +3761,11 @@ jobs:
                 echo "::error::CI checks failed: $failed"
                 exit 1
               fi
-              # A planned fast-required job that skipped checked nothing.
+              # Fast-required jobs must run when their scope is planned;
+              # scope-less jobs are always planned.
               skipped=$(jq -r --argjson plan "$PLAN" --argjson scopes "$JOB_SCOPES" --argjson required "$FAST_REQUIRED" '
                 [to_entries[] | .key as $job | select($required | index($job))
-                  | select($plan[$scopes[$job]] == "true" and .value.result == "skipped")
+                  | select(($scopes[$job] == null or $plan[$scopes[$job]] == "true") and .value.result == "skipped")
                   | "\($job) (planned, skipped)"]
                 | join(", ")' <<< "$NEEDS")
               if [[ -n "$skipped" ]]; then
