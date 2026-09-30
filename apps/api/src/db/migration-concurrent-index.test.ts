@@ -36,6 +36,7 @@ const CUSTOM_BOUNDED_TYPE_CHANGE_MIGRATIONS = new Set([
 // Fingerprinting the complete statement makes comments, quoting tricks, and
 // dynamically assembled commands unable to bypass migration safety checks.
 const APPROVED_PROCEDURAL_STATEMENTS = new Set([
+  "20261003122400_public_sanctions_reader/migration.sql:6cc0fbb1310629fc3b2e4e6ac47e0cdb64c91fed912aada50d7c9e4631dd3c05",
   "20260429220500_global-search-unaccent/migration.sql:6eab967f03d9401b8f0791d81603f9540ac19fb872df5404f9b66ffff431d589",
   "20260429220500_global-search-unaccent/migration.sql:fe14433fc2fcc398e1d4efcd301f325a8f6e76705c158cd829b17fb9bb7f8797",
   "20260429220500_global-search-unaccent/migration.sql:2d8e7507916a4d6160ec2edebc72136c1b814cd55e2d766021ed5bbc25b5fd10",

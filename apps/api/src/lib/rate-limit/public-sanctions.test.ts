@@ -8,6 +8,7 @@ import {
   createRedisRateLimitRequestKey,
   RedisRateLimitContext,
 } from "@/api/lib/rate-limit/redis-context";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import { createPublicSanctionsRateLimitOptions } from "./public-sanctions";
 
@@ -223,5 +224,18 @@ describe("anonymous sanctions search rate limiting", () => {
         await missing.context.kill();
       }
     });
+  }
+});
+
+test("production sanctions rate limiting fails closed on Redis failure", async () => {
+  const options = createPublicSanctionsRateLimitOptions();
+  try {
+    expect(options.context).toBeInstanceOf(RedisRateLimitContext);
+    // Inspect the actual factory's policy without connecting to an ambient Redis.
+    expect(
+      asTestRaw<{ failurePolicy: string }>(options.context).failurePolicy,
+    ).toBe("fail_closed");
+  } finally {
+    await options.context.kill();
   }
 });

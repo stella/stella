@@ -184,6 +184,8 @@ describe("anonymous sanctions search", () => {
   });
 
   test("refuses excess public screenings before database work and releases capacity", async () => {
+    const analytics = installRecordingAnalytics();
+    const logger = installRecordingLogger();
     const maximum = API_RATE_LIMITS.publicSanctionsSearch.maxConcurrent;
     const held = Promise.withResolvers();
     const allStarted = Promise.withResolvers();
@@ -216,6 +218,16 @@ describe("anonymous sanctions search", () => {
         request({ type: "organization", name: "Private Admission Sentinel" }),
       );
       expect(rejected.status).toBe(503);
+      expect(rejected.headers.get("cache-control")).toBe("no-store");
+      expect(analytics.exceptions()).toHaveLength(0);
+      expect(
+        logger.records.some(
+          (record) => record.message === "sanctions.search.busy",
+        ),
+      ).toBe(true);
+      expect(JSON.stringify(logger.records)).not.toContain(
+        "Private Admission Sentinel",
+      );
       expect(performance.now() - began).toBeLessThan(50);
       expect(await rejected.text()).not.toContain("Private Admission Sentinel");
       expect(validateRole.mock.calls).toHaveLength(maximum);
@@ -231,6 +243,8 @@ describe("anonymous sanctions search", () => {
     } finally {
       held.resolve(undefined);
       await Promise.all(requests);
+      logger.restore();
+      analytics.restore();
     }
   });
 
@@ -370,20 +384,48 @@ describe("anonymous sanctions search", () => {
     }
   });
 
-  test("has no direct logger or failure-sink logging", async () => {
+  test("uses bounded busy logging and never captures identities directly", async () => {
     const source = await Bun.file(new URL("search.ts", import.meta.url)).text();
     const imports = new Bun.Transpiler({ loader: "ts" })
       .scan(source)
       .imports.map(({ path }) => path);
-    expect(imports).not.toContain("@/api/lib/observability/logger");
     expect(
       imports.some(
         (path) => path.includes("analytics") || path.includes("failure-sink"),
       ),
     ).toBe(false);
     const code = new Bun.Transpiler({ loader: "ts" }).transformSync(source);
-    expect(code).not.toMatch(/console\.|logger\.|observeFailure\(/u);
+    expect(code).not.toMatch(/console\.|observeFailure\(/u);
     expect(code).not.toMatch(/cause\s*[,}:]/u);
     expect(source).toContain("createSafePublicHandler");
   });
+});
+
+test("public identity responses are never cached, including validation and server errors", async () => {
+  const { app } = appWith(clearScreen());
+  for (const subject of [
+    { type: "organization", name: "Example" },
+    { type: "organization", name: "---" },
+    { type: "organization" },
+  ]) {
+    const response = await app.handle(request(subject));
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect([200, 400, 422]).toContain(response.status);
+  }
+  for (let index = 0; index < 20; index += 1) {
+    await app.handle(request({ type: "organization", name: "Example" }));
+  }
+  const limited = await app.handle(
+    request({ type: "organization", name: "Example" }),
+  );
+  expect(limited.status).toBe(429);
+  expect(limited.headers.get("cache-control")).toBe("no-store");
+  const failed = appWith(async () => {
+    throw new TypeError("Matcher unavailable");
+  }).app;
+  const error = await failed.handle(
+    request({ type: "organization", name: "Example" }),
+  );
+  expect(error.status).toBe(500);
+  expect(error.headers.get("cache-control")).toBe("no-store");
 });

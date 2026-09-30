@@ -20,6 +20,9 @@ export const createPublicSanctionsRoute = (
       ? publicSanctionsSearch
       : createPublicSanctionsSearchHandler(options);
   return new Elysia({ prefix: "/sanctions" })
+    .onRequest(({ set }) => {
+      set.headers["cache-control"] = "no-store";
+    })
     .use(
       rateLimit(
         options?.rateLimitOptions ?? createPublicSanctionsRateLimitOptions(),

@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { t } from "elysia";
+import { status, t } from "elysia";
 import type { Static } from "elysia";
 
 import { isCountryCode } from "@stll/country-codes";
@@ -19,6 +19,7 @@ import {
   SANCTIONS_SUBJECT_ERROR_MESSAGES,
 } from "@/api/lib/lists/sanctions/screening-service";
 import type { SanctionsScreeningSubject } from "@/api/lib/lists/sanctions/screening-service";
+import { logger } from "@/api/lib/observability/logger";
 import { sanctionsPublicReadDb } from "@/api/lib/root-scoped-db";
 
 const bodySchema = t.Object(
@@ -146,9 +147,12 @@ export const createPublicSanctionsSearchHandler = ({
         activePublicScreenings >=
         API_RATE_LIMITS.publicSanctionsSearch.maxConcurrent
       ) {
-        return Result.err(
-          new HandlerError({
-            status: 503,
+        // Expected admission refusal: record only the bounded capacity, never identity.
+        logger.warn("sanctions.search.busy", {
+          maxConcurrent: API_RATE_LIMITS.publicSanctionsSearch.maxConcurrent,
+        });
+        return Result.ok(
+          status(503, {
             code: "service_unavailable",
             message: "Sanctions screening is busy; try again shortly",
           }),
