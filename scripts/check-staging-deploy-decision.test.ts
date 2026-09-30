@@ -339,8 +339,8 @@ describe("staging readiness cutover", () => {
     expect(workflow).not.toContain("      - name: Verify staging readiness\n");
     expect(stagingSetup).toContain("const READINESS_TIMEOUT_MS = 1_200_000;");
     expect(stagingSetup).toContain("const READINESS_STABLE_SAMPLES = 3;");
-    expect(stagingSetup).toContain(`url: \`\${API_URL}/ready\`,`);
-    expect(stagingSetup).not.toContain(`url: \`\${API_URL}/health\`,`);
+    expect(stagingSetup).toContain(`url: \`\${STAGING_API_URL}/ready\`,`);
+    expect(stagingSetup).not.toContain(`url: \`\${STAGING_API_URL}/health\`,`);
   });
 });
 
