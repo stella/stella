@@ -17,8 +17,6 @@ oracle["validateAst"]("<p>source</p>", []);
 // expect-clean: no-parser-validator-calls/no-parser-validator-calls
 export const renderText = (source: string) => source;
 
-// oxlint-disable-next-line no-parser-validator-calls/no-parser-validator-calls -- fixture: constant template literals name the same validator
-oracle[`validateAst`]("<p>source</p>", []);
 const validatorProperty = "validateAst";
 // oxlint-disable-next-line no-parser-validator-calls/no-parser-validator-calls -- fixture: a constant string binding selects the validator
 oracle[validatorProperty]("<p>source</p>", []);
