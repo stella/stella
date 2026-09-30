@@ -10425,7 +10425,7 @@ export type WebRoutes = {
             query: Record<never, never>;
             headers: Record<never, never>;
             response: {
-              200: T078a62f137;
+              200: Tf08a9b25af;
               400: T9a51b7d2bc;
               401: T9a51b7d2bc;
               402: T9a51b7d2bc;
@@ -34160,77 +34160,6 @@ type T0779b152b5 = {
   trigger?: "manual" | "onClassified";
 };
 
-type T078a62f137 = {
-  documentAst: {
-    version: 1;
-    source: T9d8da34b19;
-    metadata: Tb41431d9b3;
-    blocks: Array<{
-      id: string;
-      anchorId: string;
-      type: "heading";
-      level: T83854980c8;
-      role?: "decision-title" | "section-heading" | undefined;
-      inlines: Array<Ta4c2166933>;
-      plainText: string;
-    } | {
-      id: string;
-      anchorId: string;
-      type: "paragraph";
-      role?: "apparatus" | "argumentation" | "case-number" | "closing" | "counsel" | "dissent" | "front-matter" | "headnotes" | "history" | "holding" | "intro" | "panel" | "parties" | "quote" | "signature" | "summary" | "syllabus" | "unknown" | undefined;
-      note?: T8bbaf16642 | undefined;
-      listDepth?: 1 | 2 | 3 | 4 | undefined;
-      number?: number | undefined;
-      inlines: Array<Ta4c2166933>;
-      plainText: string;
-    } | {
-      id: string;
-      anchorId: string;
-      type: "table";
-      role?: "metadata-table" | "related-proceedings" | undefined;
-      rows: Array<Array<{
-        inlines: Array<Ta4c2166933>;
-        plainText: string;
-        colSpan?: number | undefined;
-        rowSpan?: number | undefined;
-        header?: true | undefined;
-      }>>;
-      plainText: string;
-    } | {
-      id: string;
-      anchorId: string;
-      type: "image";
-      src: string;
-      alt?: string | undefined;
-      width?: number | undefined;
-      height?: number | undefined;
-      plainText: string;
-    }>;
-  } | T3f8f92c9e4 | null;
-  fulltext: Tbe0400fa4c;
-  sections: Tb9db08c163;
-  sourceUrl: Tbe0400fa4c;
-  documentUrl: Tbe0400fa4c;
-  createdAt: string;
-  updatedAt: string;
-  citationCaseCount: T588d0ee653;
-  allowsDerivedAi: Tfddd645dc8;
-  expressionKind: Tbf853c76ba;
-  windowDisposition: T152fa670a3;
-  windowDispositionBasis: Tc750daff47;
-  eli: string;
-  slug: Tbe0400fa4c;
-  title: string;
-  country: string;
-  language: string;
-  documentType: Tbe0400fa4c;
-  status: string;
-  effectiveDate: Tbe0400fa4c;
-  versionValidFrom: Tbe0400fa4c;
-  versionValidTo: Tbe0400fa4c;
-  id: Tfc8a750351;
-};
-
 type T07b521aaca = {
   baseVersionNumber: number;
   downloadUrl: string;
@@ -38587,6 +38516,7 @@ type Ta0e1c4f807 = T12163e1f6a | {
       id: string;
       role?: "metadata-table" | "related-proceedings" | undefined;
       anchorId: string;
+      note?: T8bbaf16642 | undefined;
       plainText: string;
     } & {
       rows: Array<Array<{
@@ -38917,7 +38847,7 @@ type Tad027ba68a = {
 
 type Tad12f531bb = "held" | "included";
 
-type Tada6067f00 = T078a62f137 | T279717e2be;
+type Tada6067f00 = Tf08a9b25af | T279717e2be;
 
 type Tae4c134ba8 = "active" | "awaiting_acknowledgement" | "cancelled" | "completed" | "unassigned";
 
@@ -40793,6 +40723,78 @@ type Tf058fe611e = Tf742ada503 | null;
 type Tf089417a99 = {
   text: string;
   source: "inline";
+};
+
+type Tf08a9b25af = {
+  documentAst: {
+    version: 1;
+    source: T9d8da34b19;
+    metadata: Tb41431d9b3;
+    blocks: Array<{
+      id: string;
+      anchorId: string;
+      type: "heading";
+      level: T83854980c8;
+      role?: "decision-title" | "section-heading" | undefined;
+      inlines: Array<Ta4c2166933>;
+      plainText: string;
+    } | {
+      id: string;
+      anchorId: string;
+      type: "paragraph";
+      role?: "apparatus" | "argumentation" | "case-number" | "closing" | "counsel" | "dissent" | "front-matter" | "headnotes" | "history" | "holding" | "intro" | "panel" | "parties" | "quote" | "signature" | "summary" | "syllabus" | "unknown" | undefined;
+      note?: T8bbaf16642 | undefined;
+      listDepth?: 1 | 2 | 3 | 4 | undefined;
+      number?: number | undefined;
+      inlines: Array<Ta4c2166933>;
+      plainText: string;
+    } | {
+      id: string;
+      anchorId: string;
+      type: "table";
+      role?: "metadata-table" | "related-proceedings" | undefined;
+      note?: T8bbaf16642 | undefined;
+      rows: Array<Array<{
+        inlines: Array<Ta4c2166933>;
+        plainText: string;
+        colSpan?: number | undefined;
+        rowSpan?: number | undefined;
+        header?: true | undefined;
+      }>>;
+      plainText: string;
+    } | {
+      id: string;
+      anchorId: string;
+      type: "image";
+      src: string;
+      alt?: string | undefined;
+      width?: number | undefined;
+      height?: number | undefined;
+      plainText: string;
+    }>;
+  } | T3f8f92c9e4 | null;
+  fulltext: Tbe0400fa4c;
+  sections: Tb9db08c163;
+  sourceUrl: Tbe0400fa4c;
+  documentUrl: Tbe0400fa4c;
+  createdAt: string;
+  updatedAt: string;
+  citationCaseCount: T588d0ee653;
+  allowsDerivedAi: Tfddd645dc8;
+  expressionKind: Tbf853c76ba;
+  windowDisposition: T152fa670a3;
+  windowDispositionBasis: Tc750daff47;
+  eli: string;
+  slug: Tbe0400fa4c;
+  title: string;
+  country: string;
+  language: string;
+  documentType: Tbe0400fa4c;
+  status: string;
+  effectiveDate: Tbe0400fa4c;
+  versionValidFrom: Tbe0400fa4c;
+  versionValidTo: Tbe0400fa4c;
+  id: Tfc8a750351;
 };
 
 type Tf1da61a84f = {
