@@ -1,5 +1,8 @@
 import { useTranslations } from "use-intl";
 
+const isUnknownList = (value: unknown): value is readonly unknown[] =>
+  Array.isArray(value);
+
 /**
  * The fields a template tool could not fill with real values: in anonymized
  * mode it reports each field whose value kept a placeholder that could not be
@@ -10,7 +13,7 @@ export const unrestoredFieldsOf = (output: unknown): string[] => {
     return [];
   }
   const fields: unknown = Reflect.get(output, "unrestoredFields");
-  return Array.isArray(fields)
+  return isUnknownList(fields)
     ? fields.filter((field): field is string => typeof field === "string")
     : [];
 };

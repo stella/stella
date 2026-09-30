@@ -6,12 +6,16 @@ import {
   restoreTextFromBoundary,
 } from "@/api/handlers/chat/third-party-boundary";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
-import { captureError } from "@/api/lib/analytics/capture";
 import { AI_FIELD_GENERATION_FAILURE_MESSAGE } from "@/api/lib/docx/resolve-ai-fields";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import type { AiFillCollaborators } from "@/api/lib/templates/template-fill-service";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
-const PREPARE_FAILED = { feature: "templates.fill.prepare" } as const;
+const PREPARE_FAILED_SINK = failureSink({
+  event: "templates.fill.prepare_failed",
+  expected: [],
+});
 
 const prepareOptionalText = async (
   boundary: ChatThirdPartyBoundary,
@@ -87,7 +91,7 @@ export const templateAiCollaboratorsForBoundary = ({
               return Result.ok({ ...input, documentText, prompt, values });
             });
             if (Result.isError(prepared)) {
-              captureError(prepared.error, PREPARE_FAILED);
+              observeFailure(prepared.error, { sink: PREPARE_FAILED_SINK });
               return {
                 type: "failed",
                 reason: "generation-failed",
@@ -117,7 +121,7 @@ export const templateAiCollaboratorsForBoundary = ({
               return Result.ok({ ...input, prompt, values });
             });
             if (Result.isError(prepared)) {
-              captureError(prepared.error, PREPARE_FAILED);
+              observeFailure(prepared.error, { sink: PREPARE_FAILED_SINK });
               // An undecided condition excludes its block, as when the model
               // cannot answer.
               return undefined;
@@ -156,7 +160,7 @@ export const templateAiCollaboratorsForBoundary = ({
               return Result.ok({ ...input, label, occurrences, prompt, stub });
             });
             if (Result.isError(prepared)) {
-              captureError(prepared.error, PREPARE_FAILED);
+              observeFailure(prepared.error, { sink: PREPARE_FAILED_SINK });
               // An unadapted stub keeps the user's value, as when the model
               // cannot answer.
               return undefined;

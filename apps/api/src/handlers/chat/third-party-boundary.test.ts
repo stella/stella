@@ -175,7 +175,7 @@ const STORED_PART_CENSUS = {
   "tool-call": {
     type: "tool-call",
     id: "call_census",
-    name: "search_documents",
+    name: "mcp__test__search_documents",
     arguments: JSON.stringify({ query: STORED_PART_VALUE }),
     state: "input-complete",
     input: { query: STORED_PART_VALUE },
@@ -2030,10 +2030,6 @@ describe("anonymization placeholders across a thread's requests", () => {
               arguments: JSON.stringify(fill),
               input: fill,
               state: "complete",
-              output: {
-                status: "success",
-                snapshot: { text: "Signatory: Dana Novotná", title: "Form" },
-              },
             },
             {
               type: "tool-result",

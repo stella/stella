@@ -197,7 +197,7 @@ const STORED_PART_WIRE = {
     part: {
       type: "tool-call",
       id: "call_stored_1",
-      name: "search_documents",
+      name: "mcp__test__search_documents",
       arguments: JSON.stringify({ query: PLANTED["tool-call"] }),
       input: { query: PLANTED["tool-call"] },
       output: { signedBy: PLANTED["tool-result"] },

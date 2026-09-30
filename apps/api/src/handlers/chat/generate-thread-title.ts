@@ -22,10 +22,17 @@ import {
   readThreadStoredContentSendModeOnTx,
   THREAD_STORED_CONTENT_SEND_MODE,
 } from "@/api/lib/chat/thread-stored-content-send-mode";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 
 const TITLE_GENERATION_TIMEOUT_MS = 10_000;
+
+const SEND_MODE_READ_FAILED_SINK = failureSink({
+  event: "chat.thread_title.send_mode_read_failed",
+  expected: [],
+});
 
 type GenerateThreadTitleProps = {
   initialTitle: string;
@@ -74,7 +81,7 @@ export const generateThreadTitle = async ({
     async (tx) => await readThreadStoredContentSendModeOnTx({ threadId, tx }),
   );
   if (Result.isError(sendMode)) {
-    captureError(sendMode.error, { threadId });
+    observeFailure(sendMode.error, { sink: SEND_MODE_READ_FAILED_SINK });
     return;
   }
   if (sendMode.value === THREAD_STORED_CONTENT_SEND_MODE.anonymized) {

@@ -40,6 +40,7 @@ import type {
   ChatUITools,
   SuggestChangesApplyOutput,
 } from "@/components/chat/chat-ui-tools";
+import { findMcpConnectorIconHref } from "@/components/chat/mcp-connector-icon";
 import { SpawnSubagentsSubtaskList } from "@/components/chat/spawn-subagents-card";
 import { getSpawnSubagentsCallStatus } from "@/components/chat/spawn-subagents-card.logic";
 import {
@@ -73,7 +74,6 @@ import type { DocxEditRepresentation } from "@/lib/chat-edit-mode";
 import { DOCX_EDIT_REPRESENTATION } from "@/lib/chat-edit-mode";
 import { detached } from "@/lib/detached";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
-import { sanitizeHref } from "@/lib/sanitize-href";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 
 type UpdateEntityFieldsInput = ChatUITools["update-entity-fields"]["input"];
@@ -1138,14 +1138,14 @@ const BrowserControlInputSummary = ({
             {t("chat.approval.browser.question")}
           </p>
           <p className="text-muted-foreground mt-0.5 text-xs">
-            {t("chat.approval.browser.description")}
-          </p>
-          {/* The browser receives the values below as they are, whatever
-              the send mode: anonymized mode covers only what the model
-              sees. Stated on every card, since the mode can change while
-              an approval is pending. */}
-          <p className="mt-1 text-xs font-medium">
-            {t("chat.approval.browser.realValues")}
+            {t("chat.approval.browser.description")}{" "}
+            {/* The browser receives the values below as they are, whatever
+                the send mode: anonymized mode covers only what the model
+                sees. Stated on every pending card, since the mode can change
+                while it waits. */}
+            <strong className="text-foreground font-medium">
+              {t("chat.approval.browser.realValues")}
+            </strong>
           </p>
         </div>
       )}
@@ -1208,33 +1208,3 @@ const ToolApprovalLeadingIcon = ({
 
   return <PencilIcon className="text-muted-foreground size-4 shrink-0" />;
 };
-
-const findMcpConnectorIconHref = ({
-  connectorSlug,
-  connectors,
-}: {
-  connectorSlug: string;
-  connectors: {
-    iconUrl: string | null;
-    slug: string;
-    url: string;
-  }[];
-}): string | undefined => {
-  const connector = connectors.find(
-    (item) => sanitizeMcpToolNamePart(item.slug) === connectorSlug,
-  );
-  if (!connector) {
-    return undefined;
-  }
-
-  const iconHref = connector.iconUrl ?? fallbackIconUrl(connector.url);
-  return iconHref === undefined ? undefined : sanitizeHref(iconHref);
-};
-
-const sanitizeMcpToolNamePart = (value: string): string =>
-  value.replace(/[^a-zA-Z0-9_-]/gu, "_");
-
-const fallbackIconUrl = (rawUrl: string): string | undefined =>
-  URL.canParse("/favicon.ico", rawUrl)
-    ? new URL("/favicon.ico", rawUrl).toString()
-    : undefined;
