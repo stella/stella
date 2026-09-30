@@ -37,7 +37,7 @@ const COMPANY_ID_LABELS = {
 } as const satisfies Record<SanctionsCompanyIdCountry, string>;
 
 /** Who the caller asked to screen, as the counterparty check reads it. */
-export type SanctionsCheckSubject =
+type SanctionsCheckSubject =
   | {
       type: "company-id";
       value: string;

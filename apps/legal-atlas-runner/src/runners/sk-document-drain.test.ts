@@ -585,6 +585,31 @@ describe("sk document drain", () => {
       attempted: 1,
       failed: 1,
       lastError: failure,
+      lastErrorDiagnostic: { kind: "unknown" },
     });
+  });
+
+  test("safe HTTP diagnostics belong only to their report window", async () => {
+    const failure = Object.assign(new Error("private URL and response body"), {
+      httpStatus: 429,
+    });
+    const run = await runDrain({
+      queue: queueOf(["doc-1", "doc-2", "doc-3"]),
+      respond: ({ caseNumber }) => {
+        if (caseNumber === "doc-1") {
+          throw failure;
+        }
+        return OUTCOMES.filled;
+      },
+      polls: 3,
+      timing: { ...TIMING, summaryIntervalMs: 1 },
+    });
+    expect(run.summaries.at(0)?.lastErrorDiagnostic).toEqual({
+      kind: "rate-limited",
+      httpStatus: 429,
+      httpStatusClass: "4xx",
+    });
+    expect(run.summaries).toHaveLength(2);
+    expect(run.summaries.at(1)?.lastErrorDiagnostic).toBeUndefined();
   });
 });
