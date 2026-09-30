@@ -28,6 +28,7 @@ export const RANK = {
   appeal: { tier: 2, tierLabel: "appeal", weight: 5 },
   "procurement-review": { tier: 1, tierLabel: "procurement-review", weight: 3 },
   district: { tier: 1, tierLabel: "district", weight: 2 },
+  administrative: { tier: 1, tierLabel: "administrative", weight: 3 },
   "administrative-labour": {
     tier: 1,
     tierLabel: "administrative-labour",

@@ -62,6 +62,7 @@ const FULL_SEED = migrationPath(
   "20260918210100_case_law_court_weight_seed_hun",
 );
 const USA_SEED = migrationPath("20260927200200_case_law_court_weight_seed_usa");
+const SVK_SEED = migrationPath("20261003122700_case_law_court_weight_seed_svk");
 
 type TestDb = ReturnType<typeof drizzle>;
 
@@ -129,6 +130,7 @@ test("the seed migrations apply, reconcile stale rows, and are idempotent", asyn
   ]);
   await applyMigration(db, FULL_SEED);
   await applyMigration(db, USA_SEED);
+  await applyMigration(db, SVK_SEED);
   const first = await db.select().from(caseLawCourtWeights);
   expect(first).toHaveLength(COURT_WEIGHT_SEED.length);
   expect(
@@ -151,7 +153,7 @@ test("the seed migrations apply, reconcile stale rows, and are idempotent", asyn
   expect(first.filter((row) => row.country === "USA")).toHaveLength(
     USA_ROWS.length,
   );
-  // Together the two leave exactly the declaration, and applying them again
+  // Together the migrations leave exactly the declaration; applying them again
   // changes no row of it.
   const logical = (
     rows: readonly (typeof caseLawCourtWeights.$inferSelect)[],
@@ -169,8 +171,45 @@ test("the seed migrations apply, reconcile stale rows, and are idempotent", asyn
   expect(logical(first)).toEqual(declared);
   await applyMigration(db, FULL_SEED);
   await applyMigration(db, USA_SEED);
+  await applyMigration(db, SVK_SEED);
   const second = await db.select().from(caseLawCourtWeights);
   expect(logical(second)).toEqual(declared);
+  await client.close();
+}, 60_000);
+
+test("the Slovak seed replaces the legacy apex pattern without changing another jurisdiction", async () => {
+  const client = await createTestPglite();
+  const db = drizzle({ client });
+  await applyMigration(db, FULL_SEED);
+  await applyMigration(db, USA_SEED);
+  const before = await readRegistry(db);
+  expect(
+    before
+      .filter((row) => row.country === "SVK")
+      .map((row) => row.courtPattern),
+  ).toContain("najvyšší");
+
+  await applyMigration(db, SVK_SEED);
+  const after = await readRegistry(db);
+  expect(after.filter((row) => row.country !== "SVK")).toEqual(
+    before.filter((row) => row.country !== "SVK"),
+  );
+  expect(
+    after
+      .filter((row) => row.country === "SVK")
+      .map(({ country, courtPattern, tier, tierLabel, weight }) => ({
+        country,
+        courtPattern,
+        tier,
+        tierLabel,
+        weight,
+      })),
+  ).toEqual(
+    COURT_WEIGHT_SEED.filter((row) => row.country === "SVK").toSorted(byKey),
+  );
+
+  await applyMigration(db, SVK_SEED);
+  expect(await readRegistry(db)).toEqual(after);
   await client.close();
 }, 60_000);
 

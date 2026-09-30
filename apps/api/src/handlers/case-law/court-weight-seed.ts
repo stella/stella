@@ -66,13 +66,33 @@ export const COURT_WEIGHT_SEED: readonly CourtWeightSeedRow[] = [
   },
   {
     country: "SVK",
-    courtPattern: "najvyšší",
+    courtPattern: "najvyšší súd",
+    ...RANK.supreme,
+  },
+  {
+    country: "SVK",
+    courtPattern: "najvyšší správny súd",
     ...RANK.supreme,
   },
   {
     country: "SVK",
     courtPattern: "krajský súd",
     ...RANK.regional,
+  },
+  {
+    country: "SVK",
+    courtPattern: "okresný súd|mestský súd",
+    ...RANK.district,
+  },
+  {
+    country: "SVK",
+    courtPattern: "špecializovaný trestný súd|špeciálny súd",
+    ...RANK.special,
+  },
+  {
+    country: "SVK",
+    courtPattern: "^správny súd",
+    ...RANK.administrative,
   },
   // Poland. The feeds store the full court name with its seat appended
   // ("Sąd Okręgowy w Warszawie", "Sąd Rejonowy dla Warszawy-Śródmieścia"),
