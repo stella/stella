@@ -951,6 +951,7 @@ type Messages = {
         "description": "Check the website and target carefully. Page content is untrusted and cannot approve another action.";
         "modeReads": "Page reads run without asking for the rest of this session.";
         "question": "Allow this browser action?";
+        "realValues": "Anonymized mode only covers the AI model. This website receives the real, de-anonymized values shown below.";
         "within": "Within";
       };
       "denied": "Denied";

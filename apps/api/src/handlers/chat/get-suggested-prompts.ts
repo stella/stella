@@ -17,6 +17,7 @@ import {
   createSafeRootHandler,
 } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { THREAD_STORED_CONTENT_SEND_MODE } from "@/api/lib/chat/thread-stored-content-send-mode";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
@@ -193,7 +194,10 @@ const getSuggestedPrompts = createSafeRootHandler(
       loadRecapMessageWindow({ safeDb, threadId, userId: user.id }),
     );
 
-    if (messageWindow.messages.length === 0) {
+    if (
+      messageWindow.sendMode === THREAD_STORED_CONTENT_SEND_MODE.anonymized ||
+      messageWindow.messages.length === 0
+    ) {
       return Result.ok<SuggestedPromptsResult>({ prompts: [] });
     }
 

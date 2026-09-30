@@ -565,6 +565,7 @@ export const ChatThreadPage = ({
           value={{
             activeOrganizationId,
             alwaysApprovedTools,
+            anonymized,
             conversationApprovedTools,
             handleAllowInConversation,
             handleAlwaysAllow,

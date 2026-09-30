@@ -46,6 +46,7 @@ const renderWithProviders = (children: ReactNode) =>
               value={{
                 activeOrganizationId: "test-active-organization",
                 alwaysApprovedTools: new Set(),
+                anonymized: false,
                 conversationApprovedTools: new Set(),
                 handleAllowInConversation: () => {},
                 handleAlwaysAllow: () => {},

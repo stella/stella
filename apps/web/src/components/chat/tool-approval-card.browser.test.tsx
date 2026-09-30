@@ -17,7 +17,7 @@ import messages from "@/i18n/langs/en.json";
 
 const noop = () => undefined;
 
-const renderCard = (part: unknown) => {
+const renderCard = (part: unknown, { anonymized = false } = {}) => {
   if (!isApprovalPart(part)) {
     throw new Error("Expected a browser approval part");
   }
@@ -28,6 +28,7 @@ const renderCard = (part: unknown) => {
           value={{
             activeOrganizationId: "org-1",
             alwaysApprovedTools: new Set(),
+            anonymized,
             conversationApprovedTools: new Set(),
             handleAllowInConversation: noop,
             handleAlwaysAllow: noop,
@@ -61,6 +62,26 @@ describe("browser approval card", () => {
     expect(renderCard(browserPart(readPage, "approval-requested"))).toContain(
       browserQuestion,
     );
+  });
+
+  test("says the website receives real values in anonymized mode", () => {
+    const fillForm = {
+      action: "fill",
+      page: { revision: "revision-1", url: "https://example.com/form" },
+      target: { name: "Signatory", ref: "e:0:1", role: "textbox" },
+      value: "Dana Novotná",
+    };
+    const realValues = messages.chat.approval.browser.realValues;
+
+    const anonymizedMarkup = renderCard(
+      browserPart(fillForm, "approval-requested"),
+      { anonymized: true },
+    );
+    expect(anonymizedMarkup).toContain(realValues);
+    expect(anonymizedMarkup).toContain("Dana Novotná");
+    expect(
+      renderCard(browserPart(fillForm, "approval-requested")),
+    ).not.toContain(realValues);
   });
 
   test("a past browser action no longer asks", () => {

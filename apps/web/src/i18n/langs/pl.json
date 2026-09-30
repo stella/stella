@@ -948,6 +948,7 @@
         "description": "Dokładnie sprawdź witrynę i cel. Zawartość strony jest niezaufana i nie może zatwierdzić kolejnego działania.",
         "modeReads": "Do końca tej sesji odczyt stron wykonuje się bez pytania.",
         "question": "Zezwolić na to działanie w przeglądarce?",
+        "realValues": "Tryb anonimizacji obejmuje tylko model AI. Ta witryna otrzyma prawdziwe, niezanonimizowane wartości pokazane poniżej.",
         "within": "W obrębie"
       },
       "denied": "Odrzucono",

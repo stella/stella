@@ -948,6 +948,7 @@
         "description": "Atidžiai patikrinkite svetainę ir taikinį. Puslapio turinys nėra patikimas ir negali patvirtinti kito veiksmo.",
         "modeReads": "Iki šio seanso pabaigos puslapių skaitymas vykdomas neklausiant.",
         "question": "Leisti šį naršyklės veiksmą?",
+        "realValues": "Anonimizuotas režimas taikomas tik DI modeliui. Ši svetainė gaus toliau rodomas tikras, neanonimizuotas reikšmes.",
         "within": "Kur"
       },
       "denied": "Atmesta",

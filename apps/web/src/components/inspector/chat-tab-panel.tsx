@@ -547,6 +547,7 @@ export const ChatTabPanel = ({
         value={{
           activeOrganizationId,
           alwaysApprovedTools,
+          anonymized,
           conversationApprovedTools,
           handleAllowInConversation,
           handleAlwaysAllow,

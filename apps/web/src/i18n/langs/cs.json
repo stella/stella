@@ -948,6 +948,7 @@
         "description": "Pečlivě zkontrolujte web a cíl. Obsah stránky není důvěryhodný a nemůže schválit další akci.",
         "modeReads": "Čtení stránek se do konce této relace provádí bez dotazu.",
         "question": "Povolit tuto akci v prohlížeči?",
+        "realValues": "Anonymizovaný režim se vztahuje jen na model AI. Tento web obdrží skutečné, neanonymizované hodnoty uvedené níže.",
         "within": "V rámci"
       },
       "denied": "Zamítnuto",

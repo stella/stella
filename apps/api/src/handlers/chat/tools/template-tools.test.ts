@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
+import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
+
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import { createChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { toSafeId } from "@/api/lib/branded-types";
+import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import {
   createTemplateAuthoringTools,
@@ -55,6 +59,7 @@ describe("createTemplateTools", () => {
       safeDb: stubSafeDb,
       organizationId: orgId,
       userId,
+      thirdPartyBoundary: { type: "raw" },
     });
     expect(tools[LIST_TEMPLATES_TOOL_NAME]).toBeDefined();
     expect(tools[DESCRIBE_TEMPLATE_TOOL_NAME]).toBeDefined();
@@ -71,6 +76,7 @@ describe("createTemplateTools", () => {
       safeDb: stubSafeDb,
       organizationId: orgId,
       userId,
+      thirdPartyBoundary: { type: "raw" },
     });
     expect(SUGGEST_TEMPLATE_FIELDS_TOOL_NAME in tools).toBe(false);
   });
@@ -89,6 +95,7 @@ describe("createTemplateTools", () => {
       safeDb: stubSafeDb,
       organizationId: orgId,
       userId,
+      thirdPartyBoundary: { type: "raw" },
     });
     // SAFETY: invoke the tool's execute directly with a stub call context.
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion
@@ -112,7 +119,65 @@ describe("createTemplateAuthoringTools", () => {
       safeDb: stubSafeDb,
       organizationId: orgId,
       userId,
+      thirdPartyBoundary: { type: "raw" },
     });
     expect(tools[SUGGEST_TEMPLATE_FIELDS_TOOL_NAME]).toBeDefined();
+  });
+
+  test("prepares the nested request for the send mode and restores its suggestions", async () => {
+    const anonymizeFields = async ({ fields }: { fields: string[] }) => {
+      const redactionMap = new Map<string, string>();
+      const anonymized = fields.map((field) => {
+        if (!field.includes("Dana Novotná")) {
+          return field;
+        }
+        redactionMap.set("[PERSON_1]", "Dana Novotná");
+        return field.replaceAll("Dana Novotná", "[PERSON_1]");
+      });
+      return {
+        entityCount: redactionMap.size,
+        fields: anonymized,
+        redactionMap,
+      };
+    };
+    const thirdPartyBoundary = createChatThirdPartyBoundary({
+      anonymizeFields,
+      anonymizationScopeId: "workspace-A",
+      organizationId: orgId,
+      scopedDb: createScopedDbMock({}).scopedDb,
+      sendMode: CHAT_SEND_MODE.anonymized,
+      threadRestorations: [],
+    });
+    const sentTexts: string[] = [];
+    const tools = createTemplateAuthoringTools({
+      orgAIConfig: null,
+      safeDb: stubSafeDb,
+      organizationId: orgId,
+      userId,
+      thirdPartyBoundary,
+      dependencies: {
+        suggestTemplateFields: async ({ documentText }) => {
+          sentTexts.push(documentText);
+          return [{ fieldPath: "party.name", literalText: "[PERSON_1]" }];
+        },
+      },
+    });
+    // SAFETY: invoke the tool's execute directly with a stub call context.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    const execute = tools[SUGGEST_TEMPLATE_FIELDS_TOOL_NAME]
+      .execute as unknown as (
+      input: { instructions: string | null; text: string },
+      options: unknown,
+    ) => Promise<unknown>;
+
+    const result = await execute(
+      { instructions: null, text: "Signed by Dana Novotná." },
+      {},
+    );
+
+    expect(sentTexts).toEqual(["Signed by [PERSON_1]."]);
+    expect(result).toEqual({
+      suggestions: [{ fieldPath: "party.name", literalText: "Dana Novotná" }],
+    });
   });
 });

@@ -948,6 +948,7 @@
         "description": "Vérifiez attentivement le site web et la cible. Le contenu de la page n’est pas fiable et ne peut pas autoriser une autre action.",
         "modeReads": "La lecture des pages s’exécute sans confirmation jusqu’à la fin de cette session.",
         "question": "Autoriser cette action dans le navigateur ?",
+        "realValues": "Le mode anonymisé ne s’applique qu’au modèle d’IA. Ce site web reçoit les valeurs réelles, non anonymisées, affichées ci-dessous.",
         "within": "Dans"
       },
       "denied": "Refusé",

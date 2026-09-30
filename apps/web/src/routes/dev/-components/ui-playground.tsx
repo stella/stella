@@ -1636,6 +1636,7 @@ function SharedChatRendererSample() {
           value={{
             activeOrganizationId: "dev-active-organization",
             alwaysApprovedTools: new Set(),
+            anonymized: false,
             conversationApprovedTools: new Set(),
             handleAllowInConversation: () => {
               /* no-op in playground */

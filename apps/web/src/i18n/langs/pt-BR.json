@@ -948,6 +948,7 @@
         "description": "Confira com atenção o site e o destino. O conteúdo da página não é confiável e não pode aprovar outra ação.",
         "modeReads": "A leitura de páginas é executada sem perguntar até o fim desta sessão.",
         "question": "Permitir esta ação no navegador?",
+        "realValues": "O modo anonimizado se aplica apenas ao modelo de IA. Este site recebe os valores reais, sem anonimização, mostrados abaixo.",
         "within": "Dentro de"
       },
       "denied": "Negado",

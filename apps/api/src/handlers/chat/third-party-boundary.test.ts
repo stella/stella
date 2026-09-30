@@ -5,6 +5,7 @@ import fc from "fast-check";
 import * as v from "valibot";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
+import { BROWSER_CONTROL_TOOL_NAME } from "@stll/api-contract/browser-control";
 import { propertyConfig, propertySeed } from "@stll/property-testing";
 
 import { TEXT_PLAIN_MIME_TYPE } from "@/api/handlers/chat/attachment-validation";
@@ -12,13 +13,18 @@ import {
   createChatAttachmentPart,
   getChatAttachmentUrl,
   isChatAttachmentPart,
+  isProviderVisibleChatPart,
   toChatMessageContent,
 } from "@/api/handlers/chat/chat-message-parts";
 import {
   applyChatToolPolicy,
   CHAT_TOOL_POLICY_KIND,
 } from "@/api/handlers/chat/tools/tool-policy";
-import type { ChatMessage } from "@/api/handlers/chat/types";
+import type {
+  ChatMessage,
+  ChatPart,
+  PersistableChatPartType,
+} from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { toDataUrl } from "@/api/lib/data-url";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
@@ -106,6 +112,109 @@ const createRawBoundary = () => {
     sendMode: CHAT_SEND_MODE.rawOverride,
     threadRestorations: [],
   });
+};
+
+const STORED_PART_VALUE = "Jan Novák";
+
+const textDataUrl = (text: string) =>
+  toDataUrl(Buffer.from(text, "utf-8"), TEXT_PLAIN_MIME_TYPE);
+
+/** One stored part per part type, each carrying `STORED_PART_VALUE` in the
+ *  content the provider would read. Typed over the part union, so a new part
+ *  type fails typecheck until it has an entry here. */
+const STORED_PART_CENSUS = {
+  audio: {
+    type: "audio",
+    source: {
+      type: "url",
+      value: `https://example.test/${STORED_PART_VALUE}.mp3`,
+      mimeType: "audio/mpeg",
+    },
+  },
+  document: createChatAttachmentPart({
+    filename: "notes.txt",
+    mimeType: TEXT_PLAIN_MIME_TYPE,
+    url: textDataUrl(`Notes on ${STORED_PART_VALUE}.`),
+  }),
+  image: createChatAttachmentPart({
+    filename: `${STORED_PART_VALUE}.png`,
+    mimeType: "image/png",
+    url: "data:image/png;base64,iVBORw0KGgo=",
+  }),
+  "structured-output": {
+    type: "structured-output",
+    status: "complete",
+    raw: JSON.stringify({ party: STORED_PART_VALUE }),
+    data: { party: STORED_PART_VALUE },
+  },
+  subagent: {
+    type: "subagent",
+    subagent: {
+      id: "subagent-run-1",
+      name: "research",
+      status: "finished",
+      messages: [
+        {
+          id: "subagent-msg-1",
+          role: "assistant",
+          parts: [{ type: "text", content: STORED_PART_VALUE }],
+        },
+      ],
+    },
+  },
+  text: { type: "text", content: `Ask ${STORED_PART_VALUE}.` },
+  thinking: { type: "thinking", content: `${STORED_PART_VALUE} signed.` },
+  "tool-call": {
+    type: "tool-call",
+    id: "call_census",
+    name: "search_documents",
+    arguments: JSON.stringify({ query: STORED_PART_VALUE }),
+    state: "input-complete",
+    input: { query: STORED_PART_VALUE },
+  },
+  "tool-result": {
+    type: "tool-result",
+    toolCallId: "call_census",
+    content: JSON.stringify({ text: `Signed by ${STORED_PART_VALUE}` }),
+    state: "complete",
+  },
+  "ui-resource": {
+    type: "ui-resource",
+    resource: {
+      uri: "ui://widget",
+      mimeType: "text/html;profile=mcp-app",
+      text: `<p>${STORED_PART_VALUE}</p>`,
+    },
+    toolCallId: "call_census",
+    toolName: "widget",
+  },
+  video: {
+    type: "video",
+    source: {
+      type: "url",
+      value: `https://example.test/${STORED_PART_VALUE}.mp4`,
+      mimeType: "video/mp4",
+    },
+  },
+} as const satisfies {
+  [Type in PersistableChatPartType]: Extract<ChatPart, { type: Type }>;
+};
+
+const DATA_URL_TEXT = /data:text\/plain;base64,(?<payload>[A-Za-z0-9+/=]+)/gu;
+
+/** What a provider would read from prepared messages: the serialized parts
+ *  plus the decoded text of inline text attachments. A refusal sends nothing. */
+const providerViewOf = (
+  prepared: Awaited<ReturnType<typeof prepareMessagesForThirdParty>>,
+): string => {
+  if (Result.isError(prepared)) {
+    return "";
+  }
+  const serialized = JSON.stringify(prepared.value);
+  const decoded = [...serialized.matchAll(DATA_URL_TEXT)].map((match) =>
+    Buffer.from(match.groups?.["payload"] ?? "", "base64").toString("utf-8"),
+  );
+  return [serialized, ...decoded].join("\n");
 };
 
 describe("chat third-party anonymization boundary", () => {
@@ -495,6 +604,156 @@ describe("chat third-party anonymization boundary", () => {
       input: { query: "[PERSON_1]" },
       output: { text: "[CUSTOM_1] notes" },
     });
+  });
+
+  test("prepares a stored structured output for the send mode", async () => {
+    const boundary = createBoundary();
+    const stored = {
+      type: "structured-output",
+      status: "complete",
+      raw: JSON.stringify({ party: "Jan Novák", note: "Secret" }),
+      data: { party: "Jan Novák", note: "Secret" },
+      partial: { party: "Jan Novák" },
+      reasoning: "Jan Novák signed.",
+    } satisfies ChatMessage["parts"][number];
+
+    const prepared = await prepareMessagesForThirdParty({
+      boundary,
+      messages: [{ id: "msg_1", role: "assistant", parts: [stored] }],
+    });
+
+    expect(Result.isOk(prepared)).toBe(true);
+    if (Result.isError(prepared)) {
+      throw prepared.error;
+    }
+    const part = prepared.value.at(0)?.parts.at(0);
+    if (part?.type !== "structured-output") {
+      throw new TypeError("Expected a prepared structured output");
+    }
+    expect(JSON.parse(part.raw)).toEqual({
+      party: "[PERSON_1]",
+      note: "[CUSTOM_1]",
+    });
+    expect(part.data).toEqual({ party: "[PERSON_1]", note: "[CUSTOM_1]" });
+    expect(part.partial).toEqual({ party: "[PERSON_1]" });
+    expect(part.reasoning).toBe("[PERSON_1] signed.");
+    expect(JSON.stringify(prepared.value)).not.toContain("Jan Novák");
+  });
+
+  test("prepares a streaming or failed structured output as text", async () => {
+    const boundary = createBoundary();
+    const prepared = await prepareMessagesForThirdParty({
+      boundary,
+      messages: [
+        {
+          id: "msg_1",
+          role: "assistant",
+          parts: [
+            {
+              type: "structured-output",
+              status: "error",
+              raw: '{"party":"Jan Novák',
+              errorMessage: "Invalid output for Secret",
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(Result.isOk(prepared)).toBe(true);
+    if (Result.isError(prepared)) {
+      throw prepared.error;
+    }
+    expect(prepared.value.at(0)?.parts.at(0)).toEqual({
+      type: "structured-output",
+      status: "error",
+      raw: '{"party":"[PERSON_1]',
+      errorMessage: "Invalid output for [CUSTOM_1]",
+    });
+  });
+
+  test("every stored part type is prepared for the send mode", async () => {
+    for (const [partType, part] of Object.entries(STORED_PART_CENSUS)) {
+      const messages: ChatMessage[] = [
+        { id: `msg_${partType}`, role: "assistant", parts: [part] },
+      ];
+      const raw = await prepareMessagesForThirdParty({
+        boundary: createRawBoundary(),
+        messages,
+      });
+      const anonymized = await prepareMessagesForThirdParty({
+        boundary: createBoundary(),
+        messages,
+      });
+
+      // The fixture reaches the boundary: raw mode sends every
+      // model-visible part as stored.
+      expect(Result.isOk(raw)).toBe(true);
+      expect(providerViewOf(raw).includes(STORED_PART_VALUE)).toBe(
+        isProviderVisibleChatPart(part),
+      );
+      // Anonymized mode sends it prepared, or not at all.
+      expect(providerViewOf(anonymized)).not.toContain(STORED_PART_VALUE);
+    }
+  });
+
+  test("replays a raw-mode-only tool's stored calls only in raw mode", async () => {
+    const messages: ChatMessage[] = [
+      {
+        id: "msg_1",
+        role: "assistant",
+        parts: [
+          { type: "text", content: "Checked the counterparty." },
+          {
+            type: "tool-call",
+            id: "call_check",
+            name: "counterparty_check",
+            arguments: JSON.stringify({ name: "Acme s.r.o." }),
+            state: "complete",
+          },
+          {
+            type: "tool-result",
+            toolCallId: "call_check",
+            content: JSON.stringify({ findings: ["born 1970-01-01"] }),
+            state: "complete",
+          },
+        ],
+      },
+      {
+        id: "msg_2",
+        role: "assistant",
+        parts: [
+          {
+            type: "tool-result",
+            toolCallId: "call_review",
+            name: "review_folder_consistency",
+            content: "Two documents disagree.",
+            state: "complete",
+          },
+        ],
+      },
+    ];
+
+    const raw = await prepareMessagesForThirdParty({
+      boundary: createRawBoundary(),
+      messages,
+    });
+    const anonymized = await prepareMessagesForThirdParty({
+      boundary: createBoundary(),
+      messages,
+    });
+
+    if (Result.isError(raw) || Result.isError(anonymized)) {
+      throw new TypeError("Expected both boundaries to prepare the history");
+    }
+    expect(raw.value.flatMap((message) => message.parts)).toHaveLength(4);
+    expect(anonymized.value).toEqual([
+      {
+        id: "msg_1",
+        role: "assistant",
+        parts: [{ type: "text", content: "Checked the counterparty." }],
+      },
+    ]);
   });
 
   test("anonymizes JSON tool-result content before provider replay", async () => {
@@ -1699,6 +1958,97 @@ const createThreadBoundary = (
 };
 
 describe("anonymization placeholders across a thread's requests", () => {
+  // The test anonymizer does not recognise this name; only the thread's
+  // earlier mapping does.
+  const EARLIER = { placeholder: "[PERSON_1]", original: "Dana Novotná" };
+
+  test("replaces a value mapped earlier even where it is not recognised again", async () => {
+    const boundary = createThreadBoundary([EARLIER]);
+
+    const prepared = await prepareTextForThirdParty({
+      boundary,
+      text: "Send it to Dana Novotná and Alice, not to Dana Novotnáová.",
+    });
+
+    if (Result.isError(prepared) || boundary.type !== "anonymized") {
+      throw new TypeError("Expected anonymization to succeed");
+    }
+    expect(prepared.value).toBe(
+      "Send it to [PERSON_1] and [PERSON_2], not to Dana Novotnáová.",
+    );
+    expect(deanonymizeFromBoundary({ boundary, text: prepared.value })).toBe(
+      "Send it to Dana Novotná and Alice, not to Dana Novotnáová.",
+    );
+  });
+
+  test("an approved call's resumed payload keeps earlier mappings", async () => {
+    const boundary = createThreadBoundary([EARLIER]);
+
+    const prepared = await prepareUnknownForThirdParty({
+      boundary,
+      value: { output: { signedBy: "Dana Novotná", status: "sent" } },
+    });
+
+    if (Result.isError(prepared)) {
+      throw prepared.error;
+    }
+    expect(prepared.value).toEqual({
+      output: { signedBy: "[PERSON_1]", status: "sent" },
+    });
+  });
+
+  test("a browser call's real values stay placeholders in the model's history", async () => {
+    // The browser receives real values: its stored call and the page it
+    // returns carry them back into the thread.
+    const boundary = createThreadBoundary([EARLIER]);
+    const fill = {
+      action: "fill",
+      page: { revision: "revision-1", url: "https://example.test/form" },
+      target: { name: "Signatory", ref: "e1", role: "textbox" },
+      value: "Dana Novotná",
+    };
+
+    const prepared = await prepareMessagesForThirdParty({
+      boundary,
+      messages: [
+        {
+          id: "msg_1",
+          role: "assistant",
+          parts: [
+            {
+              type: "tool-call",
+              id: "call_browser",
+              name: BROWSER_CONTROL_TOOL_NAME,
+              arguments: JSON.stringify(fill),
+              input: fill,
+              state: "complete",
+              output: {
+                status: "success",
+                snapshot: { text: "Signatory: Dana Novotná", title: "Form" },
+              },
+            },
+            {
+              type: "tool-result",
+              toolCallId: "call_browser",
+              content: JSON.stringify({
+                status: "success",
+                snapshot: { text: "Signatory: Dana Novotná", title: "Form" },
+              }),
+              state: "complete",
+            },
+          ],
+        },
+      ],
+    });
+
+    if (Result.isError(prepared)) {
+      throw prepared.error;
+    }
+    const modelView = JSON.stringify(prepared.value);
+    expect(modelView).not.toContain("Dana Novotná");
+    expect(modelView).toContain("[PERSON_1]");
+  });
+
   test("a later request keeps earlier names and numbers new ones after them", async () => {
     const boundary = createThreadBoundary([
       { placeholder: "[PERSON_1]", original: "Alice" },

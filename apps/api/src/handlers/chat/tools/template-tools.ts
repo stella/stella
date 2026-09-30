@@ -1,7 +1,13 @@
 import { toolDefinition } from "@tanstack/ai";
+import { Result } from "better-result";
 import * as v from "valibot";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import {
+  deanonymizeFromBoundary,
+  prepareTextForThirdParty,
+} from "@/api/handlers/chat/third-party-boundary";
+import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -18,6 +24,7 @@ import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedTemplateId } from "@/api/lib/safe-id-boundaries";
 import { recordTemplateFill } from "@/api/lib/templates/record-use";
 import { suggestTemplateFields } from "@/api/lib/templates/suggest-template-fields";
+import type { SuggestedTemplateField } from "@/api/lib/templates/suggest-template-fields";
 import {
   describeStoredTemplate,
   fillStoredTemplate,
@@ -82,6 +89,12 @@ type CreateTemplateToolsArgs = {
   orgAIConfig: OrgAIConfig | null;
   /** Records the EXECUTE audit event for a fill when present. */
   recordAuditEvent?: AuditRecorder | undefined;
+  /**
+   * The chat turn's boundary. AI-drafted fields send the filled values to the
+   * model with no anonymization step, so an anonymized turn leaves them for
+   * the user to provide.
+   */
+  thirdPartyBoundary: ChatThirdPartyBoundary;
 };
 
 type TemplateAiAnalyticsArgs = {
@@ -133,6 +146,7 @@ export const createTemplateTools = ({
   userId,
   orgAIConfig,
   recordAuditEvent,
+  thirdPartyBoundary,
 }: CreateTemplateToolsArgs) => {
   // Model-backed collaborators for the manifest's AI fields, shared with the
   // web fill routes so AI placeholders behave identically: a generator for
@@ -227,7 +241,7 @@ export const createTemplateTools = ({
         scopedDb,
         organizationId,
         requiredFields: "enforce",
-        aiCollaborators,
+        ...(thirdPartyBoundary.type === "raw" ? { aiCollaborators } : {}),
       });
       if ("requiredFieldsRejection" in result) {
         // A required, non-AI-fillable field was omitted or empty: reject
@@ -271,6 +285,8 @@ type CreateTemplateAuthoringToolsArgs = {
   userId: SafeId<"user">;
   /** Org AI config from the chat turn; see `createTemplateTools`. */
   orgAIConfig: OrgAIConfig | null;
+  /** The chat turn's boundary, which prepares the nested suggestion request. */
+  thirdPartyBoundary: ChatThirdPartyBoundary;
   dependencies?: TemplateAuthoringToolDependencies | undefined;
 };
 
@@ -289,11 +305,35 @@ const defaultTemplateAuthoringToolDependencies = {
  * role into template authoring, so callers gate it behind a `template:
  * ["create"]` grant rather than the broader `["use"]`.
  */
+const restoreSuggestion = (
+  boundary: ChatThirdPartyBoundary,
+  suggestion: SuggestedTemplateField,
+): SuggestedTemplateField => {
+  const restore = (text: string) => deanonymizeFromBoundary({ boundary, text });
+  return {
+    ...suggestion,
+    literalText: restore(suggestion.literalText),
+    ...(suggestion.label === undefined
+      ? {}
+      : { label: restore(suggestion.label) }),
+    ...(suggestion.exampleValue === undefined
+      ? {}
+      : { exampleValue: restore(suggestion.exampleValue) }),
+    ...(suggestion.aiPrompt === undefined
+      ? {}
+      : { aiPrompt: restore(suggestion.aiPrompt) }),
+    ...(suggestion.hint === undefined
+      ? {}
+      : { hint: restore(suggestion.hint) }),
+  };
+};
+
 export const createTemplateAuthoringTools = ({
   safeDb,
   organizationId,
   userId,
   orgAIConfig,
+  thirdPartyBoundary,
   dependencies = defaultTemplateAuthoringToolDependencies,
 }: CreateTemplateAuthoringToolsArgs) => {
   const aiAnalytics = buildTemplateAiAnalytics({
@@ -337,6 +377,27 @@ export const createTemplateAuthoringTools = ({
         }),
       ),
     }).server(async ({ text, instructions }) => {
+      // The tool receives the turn's real values. Its nested request is
+      // prepared by the turn's boundary like the turn itself, and the
+      // suggestions come back with those values restored, so the boundary
+      // prepares them once more on their way back to the model.
+      const documentText = await prepareTextForThirdParty({
+        boundary: thirdPartyBoundary,
+        text,
+      });
+      const preparedInstructions = await prepareTextForThirdParty({
+        boundary: thirdPartyBoundary,
+        text: instructions ?? "",
+      });
+      // The tool runtime reports a failed call by the error its execute
+      // function throws.
+      if (Result.isError(documentText)) {
+        throw documentText.error;
+      }
+      if (Result.isError(preparedInstructions)) {
+        throw preparedInstructions.error;
+      }
+
       // suggestTemplateFields rejects on a call failure (BYOK
       // misconfiguration, provider outage, timeout); capture the original
       // for telemetry, then throw a sanitized, stable message instead of
@@ -344,13 +405,18 @@ export const createTemplateAuthoringTools = ({
       // names, quota details) that must not reach the model verbatim.
       try {
         const suggestions = await dependencies.suggestTemplateFields({
-          documentText: text,
-          instructions: instructions ?? undefined,
+          documentText: documentText.value,
+          instructions:
+            instructions === null ? undefined : preparedInstructions.value,
           orgAIConfig: orgAIConfig ?? null,
           organizationId,
           aiAnalytics,
         });
-        return { suggestions };
+        return {
+          suggestions: suggestions.map((suggestion) =>
+            restoreSuggestion(thirdPartyBoundary, suggestion),
+          ),
+        };
       } catch (error) {
         aiAnalytics.captureError(error);
         throw new ChatToolError({

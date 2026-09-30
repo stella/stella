@@ -22,6 +22,12 @@ import type { ChatSendMessageOptions } from "@/features/chat/chat-runtime";
  */
 type ChatApprovalContextValue = {
   activeOrganizationId: string;
+  /**
+   * Whether the thread sends to the model in anonymized mode. Tools that run
+   * on the user's side (the browser) still receive the real values, and the
+   * approval card says so.
+   */
+  anonymized: boolean;
   handleAllowInConversation: (
     id: string,
     toolName: ApprovalToolName,
