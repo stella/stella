@@ -721,7 +721,7 @@ const buildBlocks = (
   );
 
   for (const [index, child] of children.entries()) {
-    visitChild($, builder, $(child), index, lastPointIndex);
+    visitChild({ $, builder, $el: $(child), index, lastPointIndex });
   }
 
   return builder.blocks;
@@ -738,13 +738,21 @@ const classListOf = (el: cheerio.Cheerio<AnyNode>): string[] =>
       name.startsWith(CLASS_PREFIX) ? name.slice(CLASS_PREFIX.length) : name,
     );
 
-const visitChild = (
-  $: cheerio.CheerioAPI,
-  builder: BlockBuilder,
-  $el: cheerio.Cheerio<AnyNode>,
-  index: number,
-  lastPointIndex: number,
-): void => {
+type VisitChildOptions = {
+  $: cheerio.CheerioAPI;
+  builder: BlockBuilder;
+  $el: cheerio.Cheerio<AnyNode>;
+  index: number;
+  lastPointIndex: number;
+};
+
+const visitChild = ({
+  $,
+  builder,
+  $el,
+  index,
+  lastPointIndex,
+}: VisitChildOptions): void => {
   const node = $el.get(0);
   const tag = tagNameOf(node);
   const classes = classListOf($el);
