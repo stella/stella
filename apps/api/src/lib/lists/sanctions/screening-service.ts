@@ -390,7 +390,7 @@ const screenList = async ({
   };
 };
 
-export type ScreenSanctionsSubjectProps = {
+type ScreenSanctionsSubjectProps = {
   /** Any handle that may read the global sanctions tables. */
   db: SanctionsReadDb;
   subject: SanctionsScreeningSubject;

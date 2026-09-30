@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -5,6 +6,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  checkMergeHold,
+  MergeHoldReadError,
   evaluateMergeBar,
   evaluateQueuePlacement,
   formatQueuePlacementFailure,
@@ -51,6 +54,7 @@ const runMigrationGateway = (
     executable,
     `#!/bin/sh
 case "$*" in
+  'variable get STELLA_MERGE_HOLD --repo '*) printf '%s\\n' 'variable STELLA_MERGE_HOLD was not found' >&2; exit 1;;
   *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
   *'api graphql'*) printf '%s\\n' "$FIXTURE_PULL_REQUEST";;
   *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}}]';;
@@ -135,6 +139,7 @@ if [ "$1 $2" = 'pr merge' ]; then
 fi
 [ "$GH_TOKEN" = read-fixture ] || exit 93
 case "$*" in
+  'variable get STELLA_MERGE_HOLD --repo '*) printf '%s\\n' 'variable STELLA_MERGE_HOLD was not found' >&2; exit 1;;
   *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
   *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"Overlay check"}]}}]';;
   *check-runs*) printf '1\\tOverlay check\\tcompleted\\tsuccess\\n';;
@@ -199,6 +204,7 @@ esac
       executable,
       `#!/bin/sh
 case "$*" in
+  'variable get STELLA_MERGE_HOLD --repo '*) printf '%s\\n' 'variable STELLA_MERGE_HOLD was not found' >&2; exit 1;;
   *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}},{"type":"merge_queue","parameters":{}}]';;
   *'api graphql'*) printf '%s\\n' '${response}';;
   *) exit 99;;
@@ -236,7 +242,7 @@ esac
     { queuedAt: 3, exitCode: 1, output: "behind #4101, #4102" },
     { queuedAt: 1, exitCode: 0, output: "verified first in the queue" },
   ])(
-    "a release jump is verified against the queue read after enqueueing: position $queuedAt",
+    "a release jump stays exempt from a hold and is verified after enqueueing: position $queuedAt",
     ({ queuedAt, exitCode, output }) => {
       const directory = mkdtempSync(path.join(tmpdir(), "merge-bar-jump-"));
       const executable = path.join(directory, "gh");
@@ -282,6 +288,12 @@ esac
         executable,
         `#!/bin/sh
 case "$*" in
+  'variable get STELLA_MERGE_HOLD --repo '*) printf '%s\\n' 'release pending';;
+  'pr list '*)
+    case "$*" in
+      *--jq*) printf '%s\\n' '123';;
+      *) printf '%s\\n' '[{"number":123,"title":"chore: release v0.9.42","isDraft":false,"isCrossRepository":false}]';;
+    esac;;
   *enqueuePullRequest*) printf '%s\\n' '{"data":{"enqueuePullRequest":{"mergeQueueEntry":{"position":1}}}}';;
   *'mergeQueue(branch'*) printf '%s\\n' '${queue}';;
   *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
@@ -352,6 +364,7 @@ esac
         executable,
         `#!/bin/sh
 case "$*" in
+  'variable get STELLA_MERGE_HOLD --repo '*) printf '%s\\n' 'variable STELLA_MERGE_HOLD was not found' >&2; exit 1;;
   *'pr merge'*|*enqueuePullRequest*) exit 98;;
   *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
   *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}},{"type":"merge_queue","parameters":{}}]';;
@@ -1275,4 +1288,146 @@ describe("release pull requests jump the merge queue", () => {
       }),
     ).toBe(false);
   });
+});
+
+describe("repository merge hold", () => {
+  test.each([
+    { checkedByWorkflow: "1", githubActions: "true", expectedReads: 0 },
+    { checkedByWorkflow: "1", githubActions: undefined, expectedReads: 1 },
+    { checkedByWorkflow: undefined, githubActions: "true", expectedReads: 1 },
+    { checkedByWorkflow: "0", githubActions: "true", expectedReads: 1 },
+    { checkedByWorkflow: "1", githubActions: "false", expectedReads: 1 },
+  ])(
+    "workflow hold checks require both flags: %j",
+    ({ checkedByWorkflow, githubActions, expectedReads }) => {
+      let variableReads = 0;
+      let releaseReads = 0;
+      const result = checkMergeHold({
+        checkedByWorkflow,
+        githubActions,
+        readVariable: () => {
+          variableReads += 1;
+          return Result.ok("release pending");
+        },
+        readIsRelease: () => {
+          releaseReads += 1;
+          return Result.ok(false);
+        },
+      });
+      expect(variableReads).toBe(expectedReads);
+      expect(releaseReads).toBe(expectedReads);
+      expect(result.isOk()).toBe(expectedReads === 0);
+      if (result.isOk()) {
+        expect(result.value).toEqual({ source: "workflow" });
+      } else {
+        expect(result.error.message).toBe("MERGE HOLD: release pending");
+      }
+    },
+  );
+
+  test.each([null, ""])(
+    "an absent or empty hold allows ordinary pull requests: %j",
+    (reason) => {
+      let releaseReads = 0;
+      const result = checkMergeHold({
+        readVariable: () => Result.ok(reason),
+        readIsRelease: () => {
+          releaseReads += 1;
+          return Result.ok(false);
+        },
+      });
+      expect(result.isOk()).toBe(true);
+      expect(releaseReads).toBe(0);
+    },
+  );
+
+  test.each(["release pending", " "])(
+    "a non-empty hold refuses ordinary pull requests: %j",
+    (reason) => {
+      const result = checkMergeHold({
+        readVariable: () => Result.ok(reason),
+        readIsRelease: () => Result.ok(false),
+      });
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error.message).toBe(`MERGE HOLD: ${reason}`);
+      }
+    },
+  );
+
+  test("a recognized release remains allowed during a hold", () => {
+    const result = checkMergeHold({
+      readVariable: () => Result.ok("release pending"),
+      readIsRelease: () => Result.ok(true),
+    });
+    expect(result.isOk()).toBe(true);
+  });
+
+  test("a variable read error refuses even a release", () => {
+    const error = new MergeHoldReadError({
+      message: "variable read unavailable",
+    });
+    const result = checkMergeHold({
+      readVariable: () => Result.err(error),
+      readIsRelease: () => Result.ok(true),
+    });
+    expect(result.isErr() && result.error).toBe(error);
+  });
+
+  test("a release recognition error refuses while a hold is active", () => {
+    const error = new MergeHoldReadError({ message: "listing unavailable" });
+    const result = checkMergeHold({
+      readVariable: () => Result.ok("release pending"),
+      readIsRelease: () => Result.err(error),
+    });
+    expect(result.isErr() && result.error).toBe(error);
+  });
+
+  test.each([{ arguments: [] }, { arguments: ["--jump"] }])(
+    "the CLI refuses a hold before merge writes: $arguments",
+    ({ arguments: extraArguments }) => {
+      const directory = mkdtempSync(path.join(tmpdir(), "merge-bar-hold-"));
+      const executable = path.join(directory, "gh");
+      writeFileSync(
+        executable,
+        `#!/bin/sh
+case "$*" in
+  'variable get STELLA_MERGE_HOLD --repo '*) printf '%s\\n' 'release pending';;
+  'pr list '*)
+    case "$*" in
+      *--jq*) printf '\\n';;
+      *) printf '%s\\n' '[]';;
+    esac;;
+  *) echo 'unexpected GitHub operation' >&2; exit 99;;
+esac
+`,
+      );
+      chmodSync(executable, 0o700);
+      try {
+        const result = Bun.spawnSync({
+          cmd: [
+            process.execPath,
+            fileURLToPath(new URL("merge-bar.ts", import.meta.url)),
+            "123",
+            ...extraArguments,
+          ],
+          env: {
+            ...process.env,
+            PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        });
+        expect(result.exitCode).toBe(1);
+        expect(result.stderr.toString()).toContain(
+          "MERGE HOLD: release pending",
+        );
+        expect(result.stderr.toString()).not.toContain(
+          "unexpected GitHub operation",
+        );
+      } finally {
+        rmSync(directory, { recursive: true, force: true });
+      }
+    },
+  );
 });

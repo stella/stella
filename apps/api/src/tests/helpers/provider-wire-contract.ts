@@ -16,8 +16,10 @@ import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-sc
 import { getTemperatureForRole } from "@/api/lib/ai-config";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { chatToolMapToArray } from "@/api/lib/chat/chat-tool-types";
+import { withRunToolCallIds } from "@/api/lib/chat/provider-stream-contract";
 import { projectChatToolSchemasForProvider } from "@/api/lib/chat/provider-tool-projection";
 import { streamChatChunks } from "@/api/lib/chat/tanstack-chat-runtime";
+import { ToolCallIdLedger } from "@/api/lib/chat/unique-tool-call-ids";
 import {
   chatTurnOutputTokens,
   mergeGenerationOptions,
@@ -206,7 +208,9 @@ const prepareWireRequest = ({
     provider,
   });
   return {
-    adapter,
+    // Bound to a run's ledger as a chat turn binds it, so the request shape
+    // each cassette pins is the one a chat run sends.
+    adapter: withRunToolCallIds(adapter, new ToolCallIdLedger([])),
     messages: [
       { role: "user" as const, content: scenarioPrompt(provider, scenario) },
     ],

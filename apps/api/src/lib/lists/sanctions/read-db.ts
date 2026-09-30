@@ -4,6 +4,7 @@ import { sql } from "drizzle-orm";
 import { stellaPublicSanctionsReader } from "@/api/db/rls";
 import type { Transaction } from "@/api/db/root";
 import type { RlsDatabase } from "@/api/db/scoped";
+import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
 
 export type SanctionsReadTransaction = Pick<Transaction, "select" | "execute">;
 
@@ -17,7 +18,7 @@ export type SanctionsPublicReadDb = SanctionsReadDb & {
   [PUBLIC_SANCTIONS_READ_DB]: true;
   validateRole: () => Promise<Result<void, SanctionsPublicRoleError>>;
 };
-const PUBLIC_SANCTIONS_STATEMENT_TIMEOUT = "10s";
+const PUBLIC_SANCTIONS_STATEMENT_TIMEOUT_MS = 10_000;
 
 export class SanctionsPublicRoleError extends TaggedError(
   "SanctionsPublicRoleError",
@@ -35,8 +36,11 @@ export const createSanctionsPublicReadDb = <
     await database.transaction(async (tx) => {
       await tx.execute(sql`SELECT
         set_config('role', ${stellaPublicSanctionsReader.name}, true),
-        set_config('transaction_read_only', 'on', true),
-        set_config('statement_timeout', ${PUBLIC_SANCTIONS_STATEMENT_TIMEOUT}, true)`);
+        set_config('transaction_read_only', 'on', true)`);
+      await setSharedStatementTimeout(
+        tx,
+        PUBLIC_SANCTIONS_STATEMENT_TIMEOUT_MS,
+      );
       return await fn(tx);
     });
   let validation: Promise<Result<void, SanctionsPublicRoleError>> | undefined;

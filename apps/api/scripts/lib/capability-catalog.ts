@@ -177,6 +177,7 @@ export const DOMAIN_ACTION_VERBS = [
   "reorder",
   "replace",
   "resolve",
+  "return",
   "restore",
   "resume",
   "retry",

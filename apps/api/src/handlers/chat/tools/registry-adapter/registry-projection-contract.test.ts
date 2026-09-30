@@ -1179,6 +1179,8 @@ const CONTRACT_CORPUS = {
             {
               id: uid(45),
               invoiceNumber: "INV-1",
+              documentType: "invoice",
+              originalInvoiceId: null,
               reference: "Acme January",
               status: "draft",
               invoiceDate: "2026-01-01",
@@ -1202,6 +1204,8 @@ const CONTRACT_CORPUS = {
               id: uid(46),
               workspaceId: WS,
               invoiceNumber: "INV-2",
+              documentType: "invoice",
+              originalInvoiceId: null,
               reference: "Acme February",
               status: "draft",
               invoiceDate: "2026-02-01",
@@ -1406,6 +1410,7 @@ const CONTRACT_CORPUS = {
       buildArgs: () => ({ decision_ids: [uid(54)] }),
       setup: () => {
         readGatedDecisionWithDocumentMock.mockResolvedValue({
+          hasDocument: true,
           documentPending: false,
           documentReadFailed: false,
           documentUnavailable: false,
