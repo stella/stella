@@ -140,8 +140,10 @@ const anchorInputSchema = v.pipe(
     "Anchor of the provision in the publisher's own scheme. read_statute's " +
       "outline lists a consolidation's provision anchors (par_1729); a " +
       "subdivision of one of them is accepted too and narrows the answer to " +
-      "that subdivision (par_1729-odst_1, par_1729-odst_2-pism_a). Anchors " +
-      "are not derivable from a section number.",
+      "that subdivision (par_1729-odst_1, par_1729-odst_2-pism_a). Czech " +
+      "e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and " +
+      "-pism_<letter>. Schemes vary by publisher and consolidation; use " +
+      "read_statute's outline to confirm an anchor.",
   ),
 );
 

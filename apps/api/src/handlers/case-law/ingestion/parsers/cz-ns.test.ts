@@ -395,6 +395,36 @@ describe("parseNsDecisionHtml", () => {
   });
 
   describe("related proceedings table", () => {
+    test.each([1, 2, 4])("normalizes repeated complaint values while preserving source text (%i copies)", (copies) => {
+      const date = Array.from({ length: copies }, () => "05/25/2022").join("<br><br>");
+      const docket = Array.from({ length: copies }, () => "IV.ÚS 1381/22").join("<br><br>");
+      const html = `<table id="box-table-a"><tr><td colspan="2">Podána ústavní stížnost
+        <table><tr><td>datum podání</td><td>spisová značka</td></tr>
+        <tr><td>${date}</td><td>${docket}</td></tr></table></td></tr></table>`;
+      const { source } = extractNsMetadata(cheerio.load(html));
+      const row = source.ustavniStiznost?.at(0);
+      expect(row?.["datum podání"]).toEqual({
+        type: "date", value: "2022-05-25",
+        sourceValue: Array.from({ length: copies }, () => "05/25/2022").join("\n\n"),
+        defects: copies > 1 ? ["duplicated-value"] : [],
+      });
+      expect(row?.["spisová značka"]).toMatchObject({ type: "text", value: "IV.ÚS 1381/22" });
+    });
+
+    test.each([
+      ["02/30/2022", "invalid-date"],
+      ["05/25/2022<br>05/26/2022", "conflicting-values"],
+      ["unknown", "invalid-date"],
+    ])("leaves an unresolved source date intact: %s", (date, defect) => {
+      const html = `<table id="box-table-a"><tr><td colspan="2">Podána ústavní stížnost
+        <table><tr><td>datum podání</td></tr><tr><td>${date}</td></tr></table>
+        </td></tr><tr><td>Datum rozhodnutí:</td><td>05/27/2022</td></tr></table>`;
+      const { source } = extractNsMetadata(cheerio.load(html));
+      expect(source.ustavniStiznost?.at(0)?.["datum podání"]).toEqual({
+        type: "unresolved-date", sourceValue: date.replace("<br>", "\n"), defects: [defect],
+      });
+    });
+
     test("extracts ústavní stížnost table", () => {
       const html = `<html><body>
         <table id="box-table-a"><tbody>
