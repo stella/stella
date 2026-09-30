@@ -69,6 +69,15 @@ export const INVOICE_BILLING_PURPOSE = {
   FLAT_FEE: "flat_fee",
 } as const;
 
+const INVOICE_ATTACHMENT_VALUES = [
+  INVOICE_ATTACHMENT.CHARGED,
+  INVOICE_ATTACHMENT.COVERED,
+] as const;
+const INVOICE_BILLING_PURPOSE_VALUES = [
+  INVOICE_BILLING_PURPOSE.ORDINARY,
+  INVOICE_BILLING_PURPOSE.FLAT_FEE,
+] as const;
+
 export const timeEntries = p.pgTable(
   "time_entries",
   {
@@ -125,7 +134,7 @@ export const timeEntries = p.pgTable(
     }),
     invoiceAttachment: p
       .text("invoice_attachment", {
-        enum: [INVOICE_ATTACHMENT.CHARGED, INVOICE_ATTACHMENT.COVERED],
+        enum: INVOICE_ATTACHMENT_VALUES,
       })
       .notNull()
       .default(INVOICE_ATTACHMENT.CHARGED),
@@ -139,7 +148,7 @@ export const timeEntries = p.pgTable(
     p.check(
       "time_entries_invoice_attachment_check",
       sql`${table.invoiceAttachment} IN (${sql.join(
-        table.invoiceAttachment.enumValues.map((value) => sql`${value}`),
+        INVOICE_ATTACHMENT_VALUES.map((value) => sql`${value}`),
         sql`, `,
       )})`,
     ),
@@ -912,7 +921,7 @@ export const invoices = p.pgTable(
     p.check(
       "invoices_billing_mode_check",
       sql`${table.billingMode} IN (${sql.join(
-        table.billingMode.enumValues.map((value) => sql`${value}`),
+        BILLING_ARRANGEMENT_MODES.map((value) => sql`${value}`),
         sql`, `,
       )}) AND ((${table.billingMode} = 'hourly' AND ${table.flatFeeAmount} IS NULL) OR (${table.billingMode} = 'flat_fee' AND ${table.flatFeeAmount} >= 0 AND ${table.flatFeeAmount} IS NOT NULL))`,
     ),
@@ -983,10 +992,7 @@ export const invoiceLines = p.pgTable(
       .references(() => invoices.id, { onDelete: "cascade" }),
     billingPurpose: p
       .text("billing_purpose", {
-        enum: [
-          INVOICE_BILLING_PURPOSE.ORDINARY,
-          INVOICE_BILLING_PURPOSE.FLAT_FEE,
-        ],
+        enum: INVOICE_BILLING_PURPOSE_VALUES,
       })
       .notNull()
       .default(INVOICE_BILLING_PURPOSE.ORDINARY),
@@ -1018,7 +1024,7 @@ export const invoiceLines = p.pgTable(
     p.check(
       "invoice_lines_billing_purpose_check",
       sql`${table.billingPurpose} IN (${sql.join(
-        table.billingPurpose.enumValues.map((value) => sql`${value}`),
+        INVOICE_BILLING_PURPOSE_VALUES.map((value) => sql`${value}`),
         sql`, `,
       )}) AND (${table.billingPurpose} <> 'flat_fee' OR ${table.source} = 'manual')`,
     ),

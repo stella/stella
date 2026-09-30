@@ -376,17 +376,20 @@ A compound action is a nested resource: `clauses.categories.create`, not
 
 ## rates
 
-| Capability             | Access             | Scope                | Feature              | Reachable via                                             |
-| ---------------------- | ------------------ | -------------------- | -------------------- | --------------------------------------------------------- |
-| `rates.create`         | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability rates create`         |
-| `rates.delete`         | write, destructive | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability rates delete`         |
-| `rates.entries.create` | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability rates entries-create` |
-| `rates.entries.delete` | write, destructive | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability rates entries-delete` |
-| `rates.entries.list`   | read               | stella:read          | FEATURE_TIME_BILLING | generic invoke → `stella capability rates entries-list`   |
-| `rates.entries.update` | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability rates entries-update` |
-| `rates.list`           | read               | stella:read          | FEATURE_TIME_BILLING | generic invoke → `stella capability rates list`           |
-| `rates.resolve`        | read               | stella:read          | FEATURE_TIME_BILLING | curated tool `resolve_rate`                               |
-| `rates.update`         | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability rates update`         |
+| Capability                      | Access             | Scope                | Feature              | Reachable via                                                      |
+| ------------------------------- | ------------------ | -------------------- | -------------------- | ------------------------------------------------------------------ |
+| `rates.arrangement.get`         | read               | stella:read          | FEATURE_TIME_BILLING | generic invoke → `stella capability rates arrangement-get`         |
+| `rates.arrangement.summary.get` | read               | stella:read          | FEATURE_TIME_BILLING | generic invoke → `stella capability rates arrangement-summary-get` |
+| `rates.arrangement.update`      | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability rates arrangement-update`      |
+| `rates.create`                  | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability rates create`                  |
+| `rates.delete`                  | write, destructive | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability rates delete`                  |
+| `rates.entries.create`          | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability rates entries-create`          |
+| `rates.entries.delete`          | write, destructive | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability rates entries-delete`          |
+| `rates.entries.list`            | read               | stella:read          | FEATURE_TIME_BILLING | generic invoke → `stella capability rates entries-list`            |
+| `rates.entries.update`          | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability rates entries-update`          |
+| `rates.list`                    | read               | stella:read          | FEATURE_TIME_BILLING | generic invoke → `stella capability rates list`                    |
+| `rates.resolve`                 | read               | stella:read          | FEATURE_TIME_BILLING | curated tool `resolve_rate`                                        |
+| `rates.update`                  | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability rates update`                  |
 
 ## reports
 

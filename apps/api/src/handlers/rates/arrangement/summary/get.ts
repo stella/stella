@@ -9,7 +9,7 @@ import { evaluateBillingCap } from "@/api/lib/billing/arrangements.logic";
 const readMatterBillingSummary = createSafeHandler(
   {
     description:
-      "Read matter time billing usage: non-void invoice time-line net reservations (including drafts) plus approved unbilled client time, in one currency. Amounts are exact decimal minor-unit strings. Currency mismatch makes cap status unavailable; null means no arrangement, configure one with rates.arrangement.set. remainingInvoiceCapAmount excludes approved unbilled work; remainingWipCapAmount includes it. No events are emitted by reads.",
+      "Read matter time billing usage: non-void invoice time-line net reservations (including drafts) plus approved unbilled client time, in one currency. Amounts are exact decimal minor-unit strings. Currency mismatch makes cap status unavailable; the summary field is null when no arrangement exists; configure one with rates.arrangement.update. remainingInvoiceCapAmount excludes approved unbilled work; remainingWipCapAmount includes it. No events are emitted by reads.",
     permissions: { rate: ["read"] },
     mcp: { type: "capability", reason: "billing_admin" },
     access: "read",
@@ -77,7 +77,7 @@ const readMatterBillingSummary = createSafeHandler(
         return { status: "below_threshold", ...capAmounts } as const;
       }),
     );
-    return Result.ok(summary);
+    return Result.ok({ summary });
   },
 );
 

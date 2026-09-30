@@ -78,6 +78,7 @@ if (!databaseUrl || !runPostgres) {
           id: organizationId,
           name: "Rate test organization",
           slug: organizationId,
+          createdAt: new Date(),
         });
         await firstDb.insert(member).values({
           id: mintAuthProviderIdValue(),
@@ -177,6 +178,7 @@ if (!databaseUrl || !runPostgres) {
               user: { id: userId },
               safeDb,
               recordAuditEvent,
+              createAuditRecorder: () => recordAuditEvent,
               body: { name, currency: "USD", isDefault: true },
             }),
           );
@@ -226,6 +228,7 @@ if (!databaseUrl || !runPostgres) {
               user: { id: userId },
               safeDb,
               recordAuditEvent,
+              createAuditRecorder: () => recordAuditEvent,
               body: { id, isDefault: true },
             }),
           );

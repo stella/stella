@@ -14,7 +14,7 @@ import { tCurrencyCode, tMinorUnitAmount } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
 
-const setBillingArrangement = createSafeHandler(
+const updateBillingArrangement = createSafeHandler(
   {
     description:
       "Set the matter's current billing arrangement in integer minor currency units. Hourly supports an optional positive cap and alert threshold in basis points; flat fee supplies one amount. Refused for mixed-currency existing charged work or a cap below reserved invoice time. Changes do not change invoice snapshots.",
@@ -62,7 +62,7 @@ const setBillingArrangement = createSafeHandler(
             new HandlerError({
               status: 409,
               code: "billing_arrangement_stale",
-              hint: "Call rates.arrangement.get, then retry rates.arrangement.set with the returned revision.",
+              hint: "Call rates.arrangement.get, then retry rates.arrangement.update with the revision from the returned arrangement field.",
               message: "Billing arrangement changed; reload and try again",
             }),
           );
@@ -76,7 +76,7 @@ const setBillingArrangement = createSafeHandler(
             new HandlerError({
               status: 409,
               code: "billing_currency_mismatch",
-              hint: "Call rates.arrangement.summary and rates.arrangement.get; align the existing charged work currency before retrying rates.arrangement.set.",
+              hint: "Call rates.arrangement.summary.get and rates.arrangement.get; align the existing charged work currency before retrying rates.arrangement.update.",
               message: "Existing charged work uses a different currency",
             }),
           );
@@ -90,7 +90,7 @@ const setBillingArrangement = createSafeHandler(
             new HandlerError({
               status: 409,
               code: "billing_cap_below_reserved",
-              hint: "Call rates.arrangement.summary, then retry rates.arrangement.set with a cap at least as large as billedAmount.",
+              hint: "Call rates.arrangement.summary.get, then retry rates.arrangement.update with a cap at least as large as summary.billedAmount.",
               message: "Billing cap is below reserved invoice time",
             }),
           );
@@ -172,4 +172,4 @@ const setBillingArrangement = createSafeHandler(
   },
 );
 
-export default setBillingArrangement;
+export default updateBillingArrangement;

@@ -1039,10 +1039,12 @@ const isolationCases: IsolationCase[] = [
       }),
     runBPositive: async ({ workspaceB }) =>
       await runHandler(getBillingArrangement, workspaceB, {}),
-    expectDenied: (result) => expect(result).toBeNull(),
+    expectDenied: (result) => expect(result).toEqual({ arrangement: null }),
     expectPositive: (result) => {
       expect(getStatusCode(result)).toBeNull();
-      expect(result).toMatchObject({ mode: "hourly", currency: "USD" });
+      expect(result).toMatchObject({
+        arrangement: { mode: "hourly", currency: "USD" },
+      });
     },
   },
   {

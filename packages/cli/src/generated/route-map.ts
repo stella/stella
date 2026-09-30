@@ -24689,7 +24689,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "invoices", "create"],
                 capabilityId: "invoices.create",
                 description:
-                  "Create a draft invoice from approved, billable, not-yet-invoiced time entries in a matter, marking them billed and setting the total from their billed minutes and recorded rates. Every entry must already carry the invoice currency, since nothing is converted, and the optional invoice number must not already be in use. An omitted number is allocated from the document type’s default series at finalize. Credit notes require an original finalized, sent, or paid invoice in the same matter. Pass empty timeEntryIds for a draft with manual lines. Expenses are added afterwards with invoices.entries.add.",
+                  "Create a draft invoice from approved, not-yet-invoiced client time entries in a matter, marking them billed. Hourly invoices require billable entries in the invoice currency and calculate time charges from their billed minutes and recorded rates; nothing is converted. The optional invoice number must not already be in use. An omitted number is allocated from the document type’s default series at finalize. Credit notes require an original finalized, sent, or paid invoice in the same matter. A flat-fee matter snapshots its agreed fee as one protected manual line; selected approved client entries are covered without time charges. Hourly matters reserve time charges against any cap and refuse an excess without write-down. Pass empty timeEntryIds for a draft with manual lines. Expenses are added afterwards with invoices.entries.add.",
                 access: "write",
                 flags: [
                   {
@@ -25500,7 +25500,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "invoices", "lines-update"],
                 capabilityId: "invoices.lines.update",
                 description:
-                  "Change one line of a draft invoice and recompute its totals. Any line takes a new description, VAT rate, or VAT treatment; quantity, unit, and unit price change only on a manual line, because a time entry or expense line takes its amount from the entry. Omitted fields stay unchanged. Only draft invoices can be edited.",
+                  "Change one line of a draft invoice and recompute its totals. Any line takes a new description, VAT rate, or VAT treatment; quantity, unit, and unit price change only on a manual line, because a time entry or expense line takes its amount from the entry. A flat-fee line keeps its snapshotted quantity, unit, and price; its description and VAT may change. Omitted fields stay unchanged. Only draft invoices can be edited.",
                 access: "write",
                 flags: [
                   {
@@ -39131,6 +39131,213 @@ export const generatedRouteMap: RouteNode = {
         rates: {
           kind: "route",
           children: {
+            "arrangement-get": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "rates", "arrangement-get"],
+                capabilityId: "rates.arrangement.get",
+                description:
+                  "Read the matter's current hourly or flat-fee billing arrangement. The arrangement field is null for the existing hourly rate-table behavior; call rates.arrangement.update to configure it. Issued invoices retain their own snapshots.",
+                access: "read",
+                flags: [
+                  {
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      properties: {
+                        matterId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["matterId"],
+                    },
+                  },
+                },
+              },
+            },
+            "arrangement-summary-get": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "rates", "arrangement-summary-get"],
+                capabilityId: "rates.arrangement.summary.get",
+                description:
+                  "Read matter time billing usage: non-void invoice time-line net reservations (including drafts) plus approved unbilled client time, in one currency. Amounts are exact decimal minor-unit strings. Currency mismatch makes cap status unavailable; the summary field is null when no arrangement exists; configure one with rates.arrangement.update. remainingInvoiceCapAmount excludes approved unbilled work; remainingWipCapAmount includes it. No events are emitted by reads.",
+                access: "read",
+                flags: [
+                  {
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      properties: {
+                        matterId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["matterId"],
+                    },
+                  },
+                },
+              },
+            },
+            "arrangement-update": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "rates", "arrangement-update"],
+                capabilityId: "rates.arrangement.update",
+                description:
+                  "Set the matter's current billing arrangement in integer minor currency units. Hourly supports an optional positive cap and alert threshold in basis points; flat fee supplies one amount. Refused for mixed-currency existing charged work or a cap below reserved invoice time. Changes do not change invoice snapshots.",
+                access: "write",
+                flags: [
+                  {
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                ],
+                inputOnly: ["body"],
+                paginated: false,
+                destructive: false,
+                scope: "billing_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      anyOf: [
+                        {
+                          additionalProperties: false,
+                          type: "object",
+                          required: ["mode", "currency"],
+                          properties: {
+                            mode: {
+                              const: "hourly",
+                              type: "string",
+                            },
+                            currency: {
+                              minLength: 3,
+                              maxLength: 3,
+                              pattern: "^[A-Z]{3}$",
+                              type: "string",
+                            },
+                            revision: {
+                              minimum: 1,
+                              type: "integer",
+                            },
+                          },
+                        },
+                        {
+                          additionalProperties: false,
+                          type: "object",
+                          required: [
+                            "mode",
+                            "currency",
+                            "capAmount",
+                            "alertThresholdBps",
+                          ],
+                          properties: {
+                            mode: {
+                              const: "hourly",
+                              type: "string",
+                            },
+                            currency: {
+                              minLength: 3,
+                              maxLength: 3,
+                              pattern: "^[A-Z]{3}$",
+                              type: "string",
+                            },
+                            revision: {
+                              minimum: 1,
+                              type: "integer",
+                            },
+                            capAmount: {
+                              minimum: 1,
+                              maximum: 9007199254740991,
+                              type: "integer",
+                            },
+                            alertThresholdBps: {
+                              minimum: 1,
+                              maximum: 10000,
+                              type: "integer",
+                            },
+                          },
+                        },
+                        {
+                          additionalProperties: false,
+                          type: "object",
+                          required: ["mode", "currency", "flatFeeAmount"],
+                          properties: {
+                            mode: {
+                              const: "flat_fee",
+                              type: "string",
+                            },
+                            currency: {
+                              minLength: 3,
+                              maxLength: 3,
+                              pattern: "^[A-Z]{3}$",
+                              type: "string",
+                            },
+                            revision: {
+                              minimum: 1,
+                              type: "integer",
+                            },
+                            flatFeeAmount: {
+                              minimum: 0,
+                              maximum: 9007199254740991,
+                              type: "integer",
+                            },
+                          },
+                        },
+                      ],
+                    },
+                    params: {
+                      type: "object",
+                      properties: {
+                        matterId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["matterId"],
+                    },
+                  },
+                },
+              },
+            },
             create: {
               kind: "capability-leaf",
               spec: {
@@ -39286,7 +39493,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "rates", "entries-create"],
                 capabilityId: "rates.entries.create",
                 description:
-                  "Add one rate line to a rate table: an hourly rate in integer minor currency units, effective from a date and optionally until another. Pass userId for a person-specific rate or omit it for the table's fallback rate. Refused when the date range overlaps an existing line for the same user, when userId is not a member of the organization, or when the table is at its line limit.",
+                  "Add one rate line to a rate table: an hourly rate in integer minor currency units, effective from a date and optionally until another. Pass userId for a person-specific rate, role for an organization-role rate, or omit both for the table fallback. Set at most one selector. Refused when dates overlap a line for the same selector or userId is not an organization member, or when the table is at its line limit.",
                 access: "write",
                 flags: [
                   {
@@ -39346,7 +39553,7 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "effectiveTo",
                   },
                 ],
-                inputOnly: [],
+                inputOnly: ["body.role"],
                 paginated: false,
                 destructive: false,
                 scope: "billing_write",
@@ -39365,6 +39572,38 @@ export const generatedRouteMap: RouteNode = {
                               minLength: 1,
                               maxLength: 128,
                               type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                        role: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              anyOf: [
+                                {
+                                  const: "owner",
+                                  type: "string",
+                                },
+                                {
+                                  const: "admin",
+                                  type: "string",
+                                },
+                                {
+                                  const: "member",
+                                  type: "string",
+                                },
+                                {
+                                  const: "intern",
+                                  type: "string",
+                                },
+                                {
+                                  const: "external",
+                                  type: "string",
+                                },
+                              ],
                             },
                             {
                               type: "null",
@@ -39424,7 +39663,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "rates", "entries-delete"],
                 capabilityId: "rates.entries.delete",
                 description:
-                  "Delete a single user's rate line (hourly rate and effective dates) from a rate table, leaving the table and its other lines in place. Use rates.delete to remove the whole table instead.",
+                  "Delete one person, role, or table-default rate line (hourly rate and effective dates) from a rate table, leaving the table and its other lines in place. Use rates.delete to remove the whole table instead.",
                 access: "write",
                 flags: [
                   {
@@ -39506,7 +39745,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "rates", "entries-list"],
                 capabilityId: "rates.entries.list",
                 description:
-                  "List the rate lines of one rate table, earliest effective-from first, with cursor pagination. Each line carries the hourly rate in minor currency units, its effective dates, and the user it applies to (null for the table's fallback rate). A rate table that does not exist in this matter returns an empty page rather than an error.",
+                  "List the rate lines of one rate table, earliest effective-from first, with cursor pagination. Each line carries the hourly rate in minor currency units, its effective dates, and its person or organization role selector (both null for the table fallback). A rate table that does not exist in this matter returns an empty page rather than an error.",
                 access: "read",
                 flags: [
                   {
@@ -39584,7 +39823,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "rates", "entries-update"],
                 capabilityId: "rates.entries.update",
                 description:
-                  "Change one rate line's hourly rate or effective dates in a rate table. Changing the dates re-checks for overlap against the other lines for the same user and is refused on a conflict; the user a line applies to cannot be changed here.",
+                  "Change one rate line's hourly rate or effective dates in a rate table. Changing the dates re-checks for overlap against the other lines for the same person, role, or table default and is refused on a conflict; the selector a line applies to cannot be changed here.",
                 access: "write",
                 flags: [
                   {
@@ -39774,7 +40013,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "rates", "resolve"],
                 capabilityId: "rates.resolve",
                 description:
-                  "Resolve the effective hourly rate for a user on a given date in a matter, using the matter's default rate table (user-specific rate first, then the table default). Returns the hourly rate in integer minor currency units (e.g. cents) and the currency, or nulls when no rate applies.",
+                  "Resolve the effective hourly rate for a user on a given date in a matter, using the matter's default rate table (user-specific rate first, then the organization role, then the table default). Returns the hourly rate in integer minor currency units (e.g. cents) and the currency, or nulls when no rate applies.",
                 access: "read",
                 flags: [
                   {

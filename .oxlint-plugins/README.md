@@ -293,5 +293,6 @@ implies a hazard that is gone.
    `bash scripts/lint-oxlint-fixtures.sh`.
 
 - [`require-running-entry-guard`](./require-running-entry-guard.ts) (`require-running-entry-guard`): requires an awaited running-entry guard and an early refusal in the same transaction before updating or deleting time entries; timer consumption and local fixture reset are scoped exceptions.
+- [`require-billing-cap-crossings`](./require-billing-cap-crossings.ts) (`require-billing-cap-crossings`): requires an awaited canonical cap-crossing reconciliation after time-entry updates and deletes on the same transaction.
 
 - [no-parser-validator-calls](./no-parser-validator-calls.ts): `no-parser-validator-calls` confines text-retention validation to the ingestion pipeline, with a shrinking legacy import/call ledger.

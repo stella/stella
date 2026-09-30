@@ -8423,6 +8423,8 @@ export type WebRoutes = {
                 dueDate: Tbe0400fa4c;
                 currency: string;
                 totalAmount: stll_money_CentsAmount;
+                billingMode: T5d6b40be30;
+                flatFeeAmount: Ta0c1d202e7;
                 createdAt: string;
                 updatedAt: string;
               }>;
@@ -8484,6 +8486,7 @@ export type WebRoutes = {
                   netAmount: stll_money_CentsAmount;
                   vatAmount: stll_money_CentsAmount;
                   grossAmount: stll_money_CentsAmount;
+                  billingPurpose: ("flat_fee" | "ordinary");
                 }>;
                 totals: T5a0acd1281;
                 paidAt: Tbe0400fa4c;
@@ -8513,6 +8516,8 @@ export type WebRoutes = {
                 buyerPostalCode: Tbe0400fa4c;
                 buyerCountry: Tbe0400fa4c;
                 organizationId: Tb1d68817ba;
+                billingMode: T5d6b40be30;
+                flatFeeAmount: Ta0c1d202e7;
                 timeEntries: Array<{
                   status: T96f3e623c3;
                   id: T4e3529b6dc;
@@ -8523,6 +8528,7 @@ export type WebRoutes = {
                   rateAtEntry: stll_money_CentsAmount;
                   invoiceNarrative: Tbe0400fa4c;
                   workItemId: Tf058fe611e;
+                  invoiceAttachment: ("charged" | "covered");
                   workItem: {
                     name: string;
                     id: Tf742ada503;
@@ -17082,6 +17088,181 @@ export type WebRoutes = {
     });
     rates: (T43ff0c9596 & {
       ":workspaceId": {
+        arrangement: {
+          get: {
+            body: Record<never, never>;
+            params: Td055ec64b6;
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                arrangement: (T5f2ef9d7c9 | T0229ac3bb0 | T8a1bea8de6 | null);
+              };
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: Tddfcdef857;
+              404: T98724a80a4;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: (T9a51b7d2bc | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    } & {
+      ":workspaceId": {
+        arrangement: {
+          put: {
+            body: {
+              revision?: number;
+              mode: "hourly";
+              currency: string;
+            } | {
+              revision?: number;
+              mode: "hourly";
+              currency: string;
+              capAmount: number;
+              alertThresholdBps: number;
+            } | {
+              revision?: number;
+              mode: "flat_fee";
+              currency: string;
+              flatFeeAmount: number;
+            };
+            params: Td055ec64b6;
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: (T5f2ef9d7c9 | T0229ac3bb0 | T8a1bea8de6);
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: Tddfcdef857;
+              404: T98724a80a4;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: (T9a51b7d2bc | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    } & {
+      ":workspaceId": {
+        summary: {
+          get: {
+            body: Record<never, never>;
+            params: {
+              workspaceId: string;
+            };
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                summary: {
+                  readonly status: "currency_mismatch";
+                  readonly currency: string;
+                  readonly mismatchCount: string;
+                  readonly capStatus: "unavailable";
+                } | {
+                  readonly currency: string;
+                  readonly billedAmount: string;
+                  readonly approvedAmount: string;
+                  readonly totalAmount: string;
+                  readonly status: "uncapped";
+                  readonly mismatchCount?: never;
+                  readonly capStatus?: never;
+                } | {
+                  readonly capAmount: string;
+                  readonly remainingWipCapAmount: string;
+                  readonly remainingInvoiceCapAmount: string;
+                  readonly alertThresholdBps: number;
+                  readonly currency: string;
+                  readonly billedAmount: string;
+                  readonly approvedAmount: string;
+                  readonly totalAmount: string;
+                  readonly status: "cap_reached";
+                  readonly mismatchCount?: never;
+                  readonly capStatus?: never;
+                } | {
+                  readonly capAmount: string;
+                  readonly remainingWipCapAmount: string;
+                  readonly remainingInvoiceCapAmount: string;
+                  readonly alertThresholdBps: number;
+                  readonly currency: string;
+                  readonly billedAmount: string;
+                  readonly approvedAmount: string;
+                  readonly totalAmount: string;
+                  readonly status: "threshold_reached";
+                  readonly mismatchCount?: never;
+                  readonly capStatus?: never;
+                } | {
+                  readonly capAmount: string;
+                  readonly remainingWipCapAmount: string;
+                  readonly remainingInvoiceCapAmount: string;
+                  readonly alertThresholdBps: number;
+                  readonly currency: string;
+                  readonly billedAmount: string;
+                  readonly approvedAmount: string;
+                  readonly totalAmount: string;
+                  readonly status: "below_threshold";
+                  readonly mismatchCount?: never;
+                  readonly capStatus?: never;
+                } | null;
+              };
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: Tddfcdef857;
+              404: T98724a80a4;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: (T9a51b7d2bc | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    } & {
+      ":workspaceId": {
         get: {
           body: Record<never, never>;
           params: T78cf7de591;
@@ -17310,6 +17491,7 @@ export type WebRoutes = {
                   items: Array<{
                     id: T5535a308b3;
                     userId: Tbe0400fa4c;
+                    role: ("admin" | "external" | "intern" | "member" | "owner" | null);
                     hourlyRate: stll_money_CentsAmount;
                     effectiveFrom: string;
                     effectiveTo: Tbe0400fa4c;
@@ -17352,6 +17534,7 @@ export type WebRoutes = {
           entries: {
             put: {
               body: {
+                role?: "admin" | "external" | "intern" | "member" | "owner" | null;
                 userId?: string | null;
                 effectiveTo?: string | null;
                 hourlyRate: number;
@@ -34442,6 +34625,15 @@ type T01e71ad247 = {
   sha256Hex: string;
 };
 
+type T0229ac3bb0 = {
+  mode: "hourly";
+  currency: string;
+  revision: number;
+  flatFeeAmount?: never;
+  capAmount?: never;
+  alertThresholdBps?: never;
+};
+
 type T02cfa8674d = string | {
   code?: string;
   message: string;
@@ -37372,6 +37564,8 @@ type T5cb2c9d717 = {
 
 type T5d1f5ab5f2 = Tb532bdabe3 | null;
 
+type T5d6b40be30 = "flat_fee" | "hourly";
+
 type T5de736febe = {
   readonly input: T8136384b1e;
   readonly output: T12519395d5;
@@ -37395,6 +37589,15 @@ type T5ed75bc2cc = string & valibot_Brand<"SafeId"> & {
 
 type T5eefd06bf2 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "contactExtractionUpload";
+};
+
+type T5f2ef9d7c9 = {
+  mode: "flat_fee";
+  currency: string;
+  flatFeeAmount: stll_money_CentsAmount;
+  revision: number;
+  capAmount?: never;
+  alertThresholdBps?: never;
 };
 
 type T5fcbd957c4 = {
@@ -38412,6 +38615,15 @@ type T89f3fe155f = {
   items: Array<T09dc0536e6>;
   nextCursor: Tbe0400fa4c;
   limit: number;
+};
+
+type T8a1bea8de6 = {
+  mode: "hourly";
+  currency: string;
+  capAmount: stll_money_CentsAmount;
+  alertThresholdBps: number;
+  revision: number;
+  flatFeeAmount?: never;
 };
 
 type T8ab40ae369 = {
@@ -40244,6 +40456,10 @@ type Td00a89251b = {
   input?: unknown;
   state: Tfafd241922;
   output?: T21d4acdd13 | T81a87f67e2 | T6b4b00e15b | Te458e3a8a0;
+};
+
+type Td055ec64b6 = {
+  workspaceId: string;
 };
 
 type Td0c9b180ad = {

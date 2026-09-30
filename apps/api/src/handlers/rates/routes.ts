@@ -3,8 +3,8 @@ import Elysia from "elysia";
 import { RESOURCE_TYPE } from "@stll/api-contract";
 
 import readBillingArrangement from "@/api/handlers/rates/arrangement/get";
-import setBillingArrangement from "@/api/handlers/rates/arrangement/set";
-import readMatterBillingSummary from "@/api/handlers/rates/arrangement/summary";
+import readMatterBillingSummary from "@/api/handlers/rates/arrangement/summary/get";
+import setBillingArrangement from "@/api/handlers/rates/arrangement/update";
 import createRateTable from "@/api/handlers/rates/create";
 import deleteRateTable from "@/api/handlers/rates/delete";
 import createRateEntry from "@/api/handlers/rates/entries/create";

@@ -78,6 +78,7 @@ if (!databaseUrl || !runPostgres) {
           id: organizationId,
           name: "Billing test organization",
           slug: organizationId,
+          createdAt: new Date(),
         });
         await firstDb.insert(member).values({
           id: mintAuthProviderIdValue(),

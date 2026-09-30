@@ -34,8 +34,8 @@ import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 import getArrangement from "./get";
-import setArrangement from "./set";
-import getSummary from "./summary";
+import getSummary from "./summary/get";
+import setArrangement from "./update";
 
 setDefaultTimeout(120_000);
 let db: TestDatabase;
@@ -95,16 +95,20 @@ const set = async (
       user: { id: ids.userAdmin },
       safeDb: safeDb(),
       recordAuditEvent: audit(),
+      createAuditRecorder: audit,
       body,
     }),
   );
-const summary = async () =>
-  await getSummary.handler(
+const summary = async () => {
+  const response = await getSummary.handler(
     createTestHandlerContext<Parameters<typeof getSummary.handler>[0]>({
       workspaceId,
       safeDb: safeDb(),
     }),
   );
+  if (!("summary" in response)) {panic("Billing summary request was refused");}
+  return response.summary;
+};
 const refreshCrossings = async () =>
   await safeDb()(
     async (tx) =>
@@ -144,7 +148,7 @@ test("missing billing arrangements preserve the existing hourly default without 
       safeDb: safeDb(),
     }),
   );
-  expect(result).toBeNull();
+  expect(result).toEqual({ arrangement: null });
   expect(await summary()).toBeNull();
 });
 
@@ -243,7 +247,7 @@ test("another organization cannot read or replace an arrangement under a foreign
         safeDb: foreign,
       }),
     ),
-  ).toBeNull();
+  ).toEqual({ arrangement: null });
   const result = await setArrangement.handler(
     createTestHandlerContext<Parameters<typeof setArrangement.handler>[0]>({
       workspaceId,
@@ -261,7 +265,7 @@ test("another organization cannot read or replace an arrangement under a foreign
         safeDb: safeDb(),
       }),
     ),
-  ).toMatchObject(capped);
+  ).toMatchObject({ arrangement: capped });
 });
 
 test("an audit failure rolls back crossing state and its audit rows together", async () => {
@@ -297,7 +301,10 @@ test("GET configuration can be resent unchanged and stale revisions are refused"
   const context = createTestHandlerContext<
     Parameters<typeof getArrangement.handler>[0]
   >({ workspaceId, safeDb: safeDb() });
-  const readback = await getArrangement.handler(context);
+  const response = await getArrangement.handler(context);
+  if (!("arrangement" in response))
+    {panic("Billing arrangement request was refused");}
+  const readback = response.arrangement;
   expect(readback).not.toBeNull();
   if (!readback) {
     panic("Configured arrangement unexpectedly missing");
