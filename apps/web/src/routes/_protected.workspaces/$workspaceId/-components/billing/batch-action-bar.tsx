@@ -14,7 +14,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 import {
   useBatchDeleteTimeEntries,
   useBatchUpdateTimeEntries,
-} from "@/routes/_protected.workspaces/$workspaceId/-mutations/time-entries";
+} from "@/lib/workspaces/mutations/time-entries";
 
 type BatchActionBarProps = {
   workspaceId: string;

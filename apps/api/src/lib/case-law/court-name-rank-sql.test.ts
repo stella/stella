@@ -13,10 +13,8 @@ import {
   flattenCourtWeightEntries,
 } from "@/api/lib/case-law/court-weights";
 
-// Every jurisdiction ranked by name (AUT, CZE, EU, HUN, POL, SVK) evaluates
-// exactly the SQL it did before directory courts were ranked by id: the
-// snapshots were taken from the name renderers' output before that change,
-// and the full renderers hand every non-directory row to that text unchanged.
+// Snapshots pin the name renderers' SQL for the current seed. The full
+// renderers must hand every non-directory row to that same text unchanged.
 test("the name rank SQL renders byte for byte as before", () => {
   const map = courtWeightMapFromSeed();
   const nameTier = courtNameTierSql({
