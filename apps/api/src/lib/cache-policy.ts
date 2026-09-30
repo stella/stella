@@ -5,6 +5,8 @@ import { resolveResponseStatus } from "@/api/lib/observability/response-status";
 
 export const CACHE_CONTROL_HEADER = "Cache-Control";
 export const PRIVATE_CACHE_CONTROL = "private, no-store";
+export const SSE_CACHE_CONTROL = "private, no-cache, no-store, no-transform";
+export const SSE_MEDIA_TYPE = "text/event-stream";
 export const PRAGMA_NO_CACHE = "no-cache";
 
 export type CachePolicy =
@@ -32,13 +34,20 @@ export const applyResponseCachePolicy = ({
 }: ApplyResponseCachePolicyOptions) => {
   requestPolicies.set(set, cache);
   const status = resolveResponseStatus({ response, set });
-  const value =
+  const contentType =
+    response instanceof Response
+      ? response.headers.get("content-type")
+      : new Headers(set.headers).get("content-type");
+  const isEventStream =
+    contentType?.split(";").at(0)?.trim().toLowerCase() === SSE_MEDIA_TYPE;
+  const cacheControl =
     cache.kind === "public" &&
     !privateResponses.has(set) &&
     status >= 200 &&
     status < 300
       ? `public, max-age=${cache.maxAge}${cache.swr === undefined ? "" : `, stale-while-revalidate=${cache.swr}`}`
       : PRIVATE_CACHE_CONTROL;
+  const value = isEventStream ? SSE_CACHE_CONTROL : cacheControl;
 
   // Record initializers append differently-cased names, unlike Headers.set().
   set.headers = Object.fromEntries(

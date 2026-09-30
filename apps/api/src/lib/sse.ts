@@ -11,7 +11,8 @@ import { SSE_HEARTBEAT_FRAME } from "@stll/api-contract/sse-heartbeat";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   CACHE_CONTROL_HEADER,
-  PRIVATE_CACHE_CONTROL,
+  SSE_CACHE_CONTROL,
+  SSE_MEDIA_TYPE,
 } from "@/api/lib/cache-policy";
 import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
 import { LIMITS } from "@/api/lib/limits";
@@ -120,14 +121,11 @@ const HEARTBEAT_CHUNK = encoder.encode(SSE_HEARTBEAT_FRAME);
 // one a library produced. Both are the same writer, so an event stream cannot
 // be served without it.
 
-const SSE_MEDIA_TYPE = "text/event-stream";
-
 /**
- * Streams use the same private cache policy as other API responses;
- * `x-accel-buffering` also prevents buffering by reverse proxies.
+ * Streams forbid transformation; `x-accel-buffering` also prevents buffering.
  */
 const SSE_HEADERS = {
-  [CACHE_CONTROL_HEADER]: PRIVATE_CACHE_CONTROL,
+  [CACHE_CONTROL_HEADER]: SSE_CACHE_CONTROL,
   connection: "keep-alive",
   "content-type": SSE_MEDIA_TYPE,
   "x-accel-buffering": "no",

@@ -98,6 +98,28 @@ describe("response cache policy", () => {
     ).toBe("private, no-store");
   });
 
+  test("event streams preserve their directives through final mapping", () => {
+    for (const contentType of [
+      "text/event-stream",
+      "text/event-stream; charset=utf-8",
+    ]) {
+      for (const cache of [{ kind: "none" } as const, publicPolicy]) {
+        const set = createSet();
+        const response = new Response("data: example\n\n", {
+          headers: { "Content-Type": contentType },
+        });
+        applyResponseCachePolicy({ cache, response, set });
+        const mapped = finalizeResponseCachePolicy({ response, set });
+        expect(mapped.headers.get("cache-control")).toBe(
+          "private, no-cache, no-store, no-transform",
+        );
+        expect(new Headers(set.headers).get("cache-control")).toBe(
+          "private, no-cache, no-store, no-transform",
+        );
+      }
+    }
+  });
+
   test("late errors revoke an earlier successful public policy", () => {
     const set = createSet();
     applyResponseCachePolicy({
@@ -161,7 +183,7 @@ describe("response cache policy", () => {
       .onAfterHandle(({ set }) => {
         set.status = 500;
       })
-      .onMapResponse(({ responseValue, set }) =>
+      .mapResponse(({ responseValue, set }) =>
         finalizeResponseCachePolicy({ response: responseValue, set }),
       )
       .get("/", ({ set }) => {
@@ -177,7 +199,7 @@ describe("response cache policy", () => {
   test("Elysia emits one header for raw responses and early replies", async () => {
     const app = new Elysia()
       .onRequest(({ set }) => setSecurityHeaders(set))
-      .onMapResponse(({ responseValue, set }) =>
+      .mapResponse(({ responseValue, set }) =>
         finalizeResponseCachePolicy({ response: responseValue, set }),
       )
       .get("/private", () => new Response("example"))
@@ -186,11 +208,19 @@ describe("response cache policy", () => {
         applyResponseCachePolicy({ cache: publicPolicy, response, set });
         return response;
       })
+      .get(
+        "/stream",
+        () =>
+          new Response("data: example\n\n", {
+            headers: { "Content-Type": "text/event-stream" },
+          }),
+      )
       .get("/missing", () => status(404, "missing"));
     for (const [path, expected] of [
       ["/private", "private, no-store"],
       ["/public", "public, max-age=300, stale-while-revalidate=60"],
       ["/missing", "private, no-store"],
+      ["/stream", "private, no-cache, no-store, no-transform"],
     ]) {
       const response = await app.handle(new Request(`http://localhost${path}`));
       expect(response.headers.get("cache-control")).toBe(expected);

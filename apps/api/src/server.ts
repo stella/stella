@@ -347,7 +347,7 @@ const api = new Elysia()
   )
   .onError((context) => answerRequestError(context))
   .onAfterHandle(async (context) => await completeRequest(context))
-  .onMapResponse(({ responseValue, set }) =>
+  .mapResponse(({ responseValue, set }) =>
     finalizeResponseCachePolicy({ response: responseValue, set }),
   )
   .use(authUiRoute)
