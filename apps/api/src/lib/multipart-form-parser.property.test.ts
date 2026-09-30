@@ -106,15 +106,14 @@ test(
           const field = body["files"];
           const files = Array.isArray(field) ? field : [field];
           expect(files).toHaveLength(contents.length);
-          for (const [index, file] of files.entries()) {
+          for (const [index, expected] of contents.entries()) {
+            const file = files.at(index);
             expect(file).toBeInstanceOf(File);
             if (typeof file !== "object" || file === null) {
               return;
             }
             expect(file.name).toBe(`file-${index}.bin`);
-            expect(new Uint8Array(await file.arrayBuffer())).toEqual(
-              contents.at(index),
-            );
+            expect(new Uint8Array(await file.arrayBuffer())).toEqual(expected);
           }
         },
       ),
