@@ -1,6 +1,9 @@
 import { panic } from "better-result";
 
-import { isEffectivelyInstalled, type CatalogueEntry } from "./catalogue-types";
+import {
+  isEffectivelyInstalled,
+  type CatalogueDisplayEntry,
+} from "@/lib/knowledge/catalogue-types";
 
 /**
  * How the catalogue's Remove action treats an entry: not offered, done at once
@@ -10,7 +13,9 @@ import { isEffectivelyInstalled, type CatalogueEntry } from "./catalogue-types";
  */
 export type CatalogueRemoval = "none" | "immediate" | "confirm";
 
-export const catalogueRemoval = (entry: CatalogueEntry): CatalogueRemoval => {
+export const catalogueRemoval = (
+  entry: CatalogueDisplayEntry,
+): CatalogueRemoval => {
   if (!isEffectivelyInstalled(entry) || entry.isLocked) {
     return "none";
   }

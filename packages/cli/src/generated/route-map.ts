@@ -716,7 +716,8 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["case-law", "read"],
             toolName: "read_case_law_decision",
-            description: "Read case-law decisions by id.",
+            description:
+              "Read decisions by `decision_ids[]`, answered in input order: `found` carries a decision, `not_found` and `pending` carry a message.",
             flags: [
               {
                 flag: "--decision-ids",
@@ -726,6 +727,22 @@ export const generatedRouteMap: RouteNode = {
                 description:
                   "The decisions to read, at most 20 per call. Each id is answered on its own, so one unknown id does not sink the rest.",
                 required: true,
+              },
+              {
+                flag: "--include",
+                prop: "include",
+                kind: "enum-array",
+                enum: [
+                  "details",
+                  "metadata",
+                  "textFields",
+                  "source",
+                  "citations",
+                ],
+                repeatable: true,
+                description:
+                  "Optional fields to return: details (court, dates, identifiers and URLs), metadata, textFields (abstract, headnote, legalSentence, summary), source, citations (both directions). Omit for all on the cursor-less window and only unfinished citation pages on continuations. An empty list returns text and identity only. Pass selected fields again with a cursor to request them on that window. Use a JSON array of strings; a single string is read as a one-item list.",
+                required: false,
               },
             ],
             inputOnly: [],
@@ -758,6 +775,24 @@ export const generatedRouteMap: RouteNode = {
                   maxLength: 512,
                   description:
                     "Opaque cursor from a previous call to read the next window of one decision's text and citations. Accepted only alongside a single decision id.",
+                },
+                include: {
+                  type: "array",
+                  items: {
+                    enum: [
+                      "details",
+                      "metadata",
+                      "textFields",
+                      "source",
+                      "citations",
+                    ],
+                    type: "string",
+                  },
+                  description:
+                    "Optional fields to return: details (court, dates, identifiers and URLs), metadata, textFields (abstract, headnote, legalSentence, summary), source, citations (both directions). Omit for all on the cursor-less window and only unfinished citation pages on continuations. An empty list returns text and identity only. Pass selected fields again with a cursor to request them on that window. Use a JSON array of strings; a single string is read as a one-item list.",
+                  "x-stella-agent-input": {
+                    kind: "string-list",
+                  },
                 },
               },
             },
@@ -3618,7 +3653,7 @@ export const generatedRouteMap: RouteNode = {
                         minLength: 1,
                         maxLength: 256,
                         description:
-                          "Anchor of the provision in the publisher's own scheme. read_statute's outline lists a consolidation's provision anchors (par_1729); a subdivision of one of them is accepted too and narrows the answer to that subdivision (par_1729-odst_1, par_1729-odst_2-pism_a). Anchors are not derivable from a section number.",
+                          "Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision. Other publishers may use different schemes.",
                       },
                       as_of: {
                         type: "string",
@@ -3670,7 +3705,7 @@ export const generatedRouteMap: RouteNode = {
                 kind: "string",
                 repeatable: false,
                 description:
-                  "Anchor of the provision in the publisher's own scheme. read_statute's outline lists a consolidation's provision anchors (par_1729); a subdivision of one of them is accepted too and narrows the answer to that subdivision (par_1729-odst_1, par_1729-odst_2-pism_a). Anchors are not derivable from a section number.",
+                  "Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision. Other publishers may use different schemes.",
                 required: true,
               },
               {
@@ -3710,7 +3745,7 @@ export const generatedRouteMap: RouteNode = {
                   minLength: 1,
                   maxLength: 256,
                   description:
-                    "Anchor of the provision in the publisher's own scheme. read_statute's outline lists a consolidation's provision anchors (par_1729); a subdivision of one of them is accepted too and narrows the answer to that subdivision (par_1729-odst_1, par_1729-odst_2-pism_a). Anchors are not derivable from a section number.",
+                    "Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision. Other publishers may use different schemes.",
                 },
                 language: {
                   type: "string",
@@ -50177,7 +50212,7 @@ export const generatedRouteMap: RouteNode = {
                 ],
                 capabilityId: "time-entries.approval-queue.list",
                 description:
-                  "List draft time entries awaiting the signed-in user's approval in accessible matters. Owners/admins also see drafts without an assigned approver. Optionally filter work dates (from/to, YYYY-MM-DD), timekeeper (member), and matter. Returns logged durationMinutes separately from adjusted billedMinutes and the last return comment. Follow nextCursor for the next bounded page.",
+                  "List draft time entries awaiting the signed-in user's approval, including internal work and accessible client matters. Owners/admins also see drafts without an assigned approver. Optionally filter work dates (from/to, YYYY-MM-DD), timekeeper (member), and matter. Returns logged durationMinutes separately from adjusted billedMinutes and the last return comment. Follow nextCursor for the next bounded page.",
                 access: "read",
                 flags: [
                   {
@@ -50724,7 +50759,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "time-entries", "csv-export"],
                 capabilityId: "time-entries.csv.export",
                 description:
-                  "Export a matter's time entries as CSV text, one row per entry with date, timekeeper name, work item, minutes, rate, amount, billable flag, status, task and activity codes, and narratives. Filter by date-worked range, status, and work item. Unlike the LEDES export this includes non-billable and written-off entries; the row count is capped.",
+                  "Export a matter's client time entries as CSV text, one row per entry with date, timekeeper name, activity group, work item, minutes, rate, amount, billable flag, status, task and activity codes, and narratives. Filter by date-worked range, status, and work item. Unlike the LEDES export this includes non-billable and written-off entries; the row count is capped.",
                 access: "read",
                 flags: [
                   {
@@ -50944,13 +50979,126 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
+            "internal-create": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "time-entries", "internal-create"],
+                capabilityId: "time-entries.internal.create",
+                description:
+                  "Record internal work for yourself in the active organization without a matter. Requires work date (YYYY-MM-DD), IANA timezoneId, positive whole durationMinutes, and narrative. Internal work has no billable value; monthly locks, edit windows, and narrative policy still apply. Returns the entry id and activityGroup. Internal entries await administrator approval when no approver is assigned.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--date-worked",
+                    prop: "dateWorked",
+                    required: true,
+                    part: "body",
+                    partPath: "dateWorked",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--timezone-id",
+                    prop: "timezoneId",
+                    required: true,
+                    part: "body",
+                    partPath: "timezoneId",
+                  },
+                  {
+                    kind: "int",
+                    min: 1,
+                    repeatable: false,
+                    flag: "--duration-minutes",
+                    prop: "durationMinutes",
+                    required: true,
+                    part: "body",
+                    partPath: "durationMinutes",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--narrative",
+                    prop: "narrative",
+                    required: true,
+                    part: "body",
+                    partPath: "narrative",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--narrative-language",
+                    prop: "narrativeLanguage",
+                    required: false,
+                    part: "body",
+                    partPath: "narrativeLanguage",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "billing_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      additionalProperties: false,
+                      type: "object",
+                      required: [
+                        "dateWorked",
+                        "timezoneId",
+                        "durationMinutes",
+                        "narrative",
+                      ],
+                      properties: {
+                        dateWorked: {
+                          format: "date",
+                          type: "string",
+                        },
+                        timezoneId: {
+                          minLength: 1,
+                          maxLength: 64,
+                          type: "string",
+                        },
+                        durationMinutes: {
+                          minimum: 1,
+                          type: "integer",
+                        },
+                        narrative: {
+                          maxLength: 10000,
+                          type: "string",
+                        },
+                        narrativeLanguage: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              minLength: 2,
+                              maxLength: 64,
+                              pattern: "^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$",
+                              description:
+                                "BCP-47 language tag, or null when unspecified",
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
             "ledes-export": {
               kind: "capability-leaf",
               spec: {
                 commandPath: ["capability", "time-entries", "ledes-export"],
                 capabilityId: "time-entries.ledes.export",
                 description:
-                  "Export a matter's time entries as a LEDES 1998B e-billing file. Only billable, charged, not-written-off entries are included, so the selection is narrower than the CSV export of the same filters. Refused when an included entry has no effective rate, or when the selection spans more than one currency, which the format cannot represent.",
+                  "Export a matter's client time entries as a LEDES 1998B e-billing file. Only billable, charged, not-written-off entries are included, so the selection is narrower than the CSV export of the same filters. Refused when an included entry has no effective rate, or when the selection spans more than one currency, which the format cannot represent.",
                 access: "read",
                 flags: [
                   {
@@ -51255,7 +51403,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "time-entries", "me-list"],
                 capabilityId: "time-entries.me.list",
                 description:
-                  "List the signed-in user's time entries for one work date across matters in the active organization. Returns only matters the caller can still access, with a cursor for the next page.",
+                  "List the signed-in user's client and internal time entries for one work date in the active organization. Client rows include an accessible matter; internal rows have no matter. Follow the cursor for the next page.",
                 access: "read",
                 flags: [
                   {
@@ -51674,7 +51822,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "time-entries", "summary-get"],
                 capabilityId: "time-entries.summary.get",
                 description:
-                  "Summarize time in the current matter for a bounded date range; team scope requires time-entry approval access.",
+                  "Summarize client time in the current matter for a bounded date range; team scope requires time-entry approval access.",
                 access: "read",
                 flags: [
                   {
@@ -52122,7 +52270,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "time-timers", "confirm"],
                 capabilityId: "time-timers.confirm",
                 description:
-                  "Confirm your timer into a draft time entry and remove it. Assign a matter with update first. Rounds billed minutes to the organization's minimum unit and enforces narrative and monthly locks. Retry with the same timer ID to get the original entry ID without creating another entry. timezoneId is an IANA timezone for the work date; timers without an effective rate default to non-billable.",
+                  "Confirm your timer into a draft time entry and remove it. For client work, assign a matter with update first. Request activityGroup internal only for a timer without a matter; internal entries have zero billed minutes and cannot be billable. Rounds client billed minutes to the organization's minimum unit and enforces narrative and monthly locks. Retry with the same timer ID to get the original entry ID without creating another entry. timezoneId is an IANA timezone for the work date; timers without an effective rate default to non-billable.",
                 access: "write",
                 flags: [
                   {
@@ -52153,7 +52301,7 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "billable",
                   },
                 ],
-                inputOnly: [],
+                inputOnly: ["body.activityGroup"],
                 paginated: false,
                 destructive: false,
                 scope: "billing_write",
@@ -52172,6 +52320,18 @@ export const generatedRouteMap: RouteNode = {
                         },
                         billable: {
                           type: "boolean",
+                        },
+                        activityGroup: {
+                          anyOf: [
+                            {
+                              const: "client",
+                              type: "string",
+                            },
+                            {
+                              const: "internal",
+                              type: "string",
+                            },
+                          ],
                         },
                       },
                     },

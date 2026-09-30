@@ -7,12 +7,13 @@
  * split tags are detected correctly.
  */
 
-import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
 import { compareCodeUnit } from "@stll/collation";
 import { scanMarkers } from "@stll/template-conditions";
 import type { FilterCall } from "@stll/template-conditions";
+
+import { loadDocx } from "@/api/lib/docx-archive";
 
 import { paragraphText, templateContentPartPaths, W_NS } from "./ooxml";
 import type { DiscoveredPlaceholder } from "./types";
@@ -71,8 +72,7 @@ const scanParagraphs = (
 export const discoverPlaceholders = async (
   docxBuffer: Buffer,
 ): Promise<DiscoveredPlaceholder[]> => {
-  // oxlint-disable-next-line no-raw-zip-load/no-raw-zip-load -- unbounded archive read predating loadDocxArchive; frozen by the rule budget
-  const zip = await JSZip.loadAsync(docxBuffer);
+  const zip = await loadDocx(docxBuffer);
   const counts = new Map<string, number>();
 
   for (const path of templateContentPartPaths(Object.keys(zip.files))) {

@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 3.2.0
+
+### Minor Changes
+
+- [#4202](https://github.com/stella/stella/pull/4202) [`56105aa`](https://github.com/stella/stella/commit/56105aa4b3d38771991adb7c18b4d796ec5a76a7) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add time entry approval queue, batch approval, and return capabilities.
+
 ## 3.1.0
 
 ### Minor Changes
