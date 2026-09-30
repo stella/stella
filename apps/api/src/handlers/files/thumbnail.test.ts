@@ -8,13 +8,33 @@ import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
 import { createFileKey } from "@/api/lib/files/utils";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
-import { readFileThumbnail } from "./thumbnail";
+import thumbnailEndpoint from "./thumbnail";
 
 const organizationId = toSafeId<"organization">("org_file_thumbnail");
 const workspaceId = toSafeId<"workspace">("ws_file_thumbnail");
 const fieldId = toSafeId<"field">("field_file_thumbnail");
 const entityId = toSafeId<"entity">("entity_file_thumbnail");
 const thumbnailFileId = "7d0f3c1e-9f7c-4c52-9a3d-0f1c2b3a4d5e";
+
+type ThumbnailContext = Parameters<typeof thumbnailEndpoint.handler>[0];
+
+const readFileThumbnail = async ({
+  recordAuditEvent,
+  scopedDb,
+}: Pick<ThumbnailContext, "recordAuditEvent" | "scopedDb">) =>
+  await thumbnailEndpoint.handler(
+    asTestRaw<ThumbnailContext>({
+      memberRole: { role: "owner" },
+      params: { fieldId, workspaceId },
+      recordAuditEvent,
+      request: new Request("https://example.test/files/thumbnail"),
+      route: "/v1/workspaces/:workspaceId/files/thumbnail/:fieldId",
+      scopedDb,
+      session: { activeOrganizationId: organizationId },
+      user: { id: toSafeId<"user">("user_file_thumbnail") },
+      workspaceId,
+    }),
+  );
 
 const fileContent = (overrides: Record<string, unknown> = {}) => ({
   type: "file",
@@ -67,11 +87,8 @@ describe("matter file thumbnail", () => {
     const { events, recordAuditEvent } = recordingAudit();
 
     const response = await readFileThumbnail({
-      fieldId,
-      organizationId,
       recordAuditEvent,
       scopedDb: scopedDbAnswering([{ content: fileContent(), entityId }]),
-      workspaceId,
     });
 
     expect(response).toBeInstanceOf(Response);
@@ -108,11 +125,8 @@ describe("matter file thumbnail", () => {
     const { events, recordAuditEvent } = recordingAudit();
 
     const response = await readFileThumbnail({
-      fieldId,
-      organizationId,
       recordAuditEvent,
       scopedDb: scopedDbAnswering([]),
-      workspaceId,
     });
 
     expectStatus(response, 404);
@@ -127,13 +141,10 @@ describe("matter file thumbnail", () => {
     const { events, recordAuditEvent } = recordingAudit();
 
     const response = await readFileThumbnail({
-      fieldId,
-      organizationId,
       recordAuditEvent,
       scopedDb: scopedDbAnswering([
         { content: fileContent(overrides), entityId },
       ]),
-      workspaceId,
     });
 
     expectStatus(response, 404);
@@ -144,13 +155,10 @@ describe("matter file thumbnail", () => {
     const { events, recordAuditEvent } = recordingAudit();
 
     const response = await readFileThumbnail({
-      fieldId,
-      organizationId,
       recordAuditEvent,
       scopedDb: scopedDbAnswering([
         { content: { type: "text", value: "Smlouva" }, entityId },
       ]),
-      workspaceId,
     });
 
     expectStatus(response, 404);

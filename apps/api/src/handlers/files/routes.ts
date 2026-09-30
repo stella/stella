@@ -18,7 +18,7 @@ import {
 } from "@/api/handlers/files/ocr-export";
 import officeCitationEndpoint from "@/api/handlers/files/office-citation";
 import { readScrubbedDownload } from "@/api/handlers/files/scrubbed-download";
-import { readFileThumbnail } from "@/api/handlers/files/thumbnail";
+import readFileThumbnailEndpoint from "@/api/handlers/files/thumbnail";
 import { updateDocumentProperties } from "@/api/handlers/files/update-document-properties";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
@@ -271,37 +271,6 @@ export const scrubbedDownloadEndpoint = createSafeHandler(
       Result.tryPromise(
         async () =>
           await readScrubbedDownload({
-            fieldId,
-            organizationId: session.activeOrganizationId,
-            recordAuditEvent,
-            scopedDb,
-            workspaceId,
-          }),
-      ),
-    );
-
-    return Result.ok(response);
-  },
-);
-
-export const readFileThumbnailEndpoint = createSafeHandler(
-  {
-    permissions: { workspace: ["read"] },
-    mcp: { type: "internal", reason: "upload_mechanics" },
-    access: "read",
-    params: workspaceParams({ fieldId: tSafeId("field") }),
-  } satisfies WorkspaceHandlerConfig,
-  async function* ({
-    params: { fieldId },
-    scopedDb,
-    session,
-    workspaceId,
-    recordAuditEvent,
-  }) {
-    const response = yield* Result.await(
-      Result.tryPromise(
-        async () =>
-          await readFileThumbnail({
             fieldId,
             organizationId: session.activeOrganizationId,
             recordAuditEvent,
