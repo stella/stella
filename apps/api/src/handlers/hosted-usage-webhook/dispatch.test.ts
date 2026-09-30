@@ -30,7 +30,10 @@ import {
   assertUsageAvailable,
   getRemainingUsageUnits,
 } from "@/api/lib/usage/usage-ledger";
-import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -172,6 +175,222 @@ const readSeatAssignments = async (tx: Transaction, fx: Fixture) =>
     .select({ userId: usageSeatAssignments.userId })
     .from(usageSeatAssignments)
     .where(eq(usageSeatAssignments.organizationId, fx.organizationId));
+
+const missFirstEntitlementLookup = (tx: Transaction) => {
+  // Model a creation committing between the external-ID and account reads:
+  // only the first entitlement lookup misses; subsequent reads use real rows.
+  let missed = false;
+  const wrapQuery = (query: object, readsEntitlements = false): object =>
+    new Proxy(query, {
+      get(target, property) {
+        const value = Reflect.get(target, property);
+        if (typeof value !== "function") {
+          return value;
+        }
+        return (...args: unknown[]) => {
+          const entitlementQuery =
+            readsEntitlements ||
+            (property === "from" && args.at(0) === usageEntitlements);
+          if (property === "for" && entitlementQuery && !missed) {
+            missed = true;
+            return Promise.resolve([]);
+          }
+          const result = Reflect.apply(value, target, args);
+          return typeof result === "object" && result !== null
+            ? wrapQuery(result, entitlementQuery)
+            : result;
+        };
+      },
+    });
+  const interceptedTx = new Proxy(tx, {
+    get(target, property) {
+      const value = Reflect.get(target, property);
+      if (typeof value !== "function") {
+        return value;
+      }
+      return (...args: unknown[]) => {
+        const result = Reflect.apply(value, target, args);
+        return property === "select" ? wrapQuery(result) : result;
+      };
+    },
+  });
+  return { tx: interceptedTx, didMiss: () => missed };
+};
+
+describe("same-generation account fallback", () => {
+  test("an existing unversioned replacement survives old unversioned creation and revocation", async () => {
+    for (const order of [
+      ["creation", "revocation"],
+      ["revocation", "creation"],
+    ] as const) {
+      await withRolledBackTx(async (tx) => {
+        const fx = await setupFixture(tx);
+        const replacementId = `provider_ent_${Bun.randomUUIDv7()}`;
+        await handleHostedEntitlementUpsert({
+          tx,
+          eventId: `evt_${Bun.randomUUIDv7()}`,
+          payload: buildEntitlementPayload(fx, {
+            id: replacementId,
+            occurred_at: "2026-07-02T10:00:00.000Z",
+          }),
+        });
+        for (const event of [...order, ...order]) {
+          if (event === "creation") {
+            await handleHostedEntitlementUpsert({
+              tx,
+              eventId: `evt_${Bun.randomUUIDv7()}`,
+              payload: buildEntitlementPayload(fx, {
+                occurred_at: "2026-07-01T10:00:00.000Z",
+              }),
+            });
+            continue;
+          }
+          await handleUsageEntitlementStatusChange({
+            tx,
+            eventKind: "revoked",
+            eventId: `evt_${Bun.randomUUIDv7()}`,
+            payload: buildEntitlementPayload(fx, {
+              occurred_at: "2026-07-03T10:00:00.000Z",
+            }),
+          });
+        }
+        const rows = await tx
+          .select({
+            externalId: usageEntitlements.hostedEntitlementExternalId,
+            status: usageEntitlements.status,
+            createdAt: usageEntitlements.hostedEntitlementCreatedAt,
+            occurredAt: usageEntitlements.hostedLastEventAt,
+          })
+          .from(usageEntitlements)
+          .where(eq(usageEntitlements.organizationId, fx.organizationId));
+        expect(rows.at(0)).toEqual({
+          externalId: replacementId,
+          status: "active",
+          createdAt: null,
+          occurredAt: new Date("2026-07-02T10:00:00.000Z"),
+        });
+      });
+    }
+  });
+
+  test("cancellation and revocation apply after the external lookup misses a concurrent creation", async () => {
+    for (const eventKind of ["canceled", "revoked"] as const) {
+      await withRolledBackTx(async (tx) => {
+        const fx = await setupFixture(tx);
+        await handleHostedEntitlementUpsert({
+          tx,
+          eventId: `evt_${Bun.randomUUIDv7()}`,
+          payload: buildEntitlementPayload(fx, {
+            created_at: PERIOD_START.toISOString(),
+            occurred_at: "2026-07-01T10:00:00.000Z",
+          }),
+        });
+        const raced = missFirstEntitlementLookup(tx);
+        const outcome = await handleUsageEntitlementStatusChange({
+          tx: raced.tx,
+          eventKind,
+          eventId: `evt_${Bun.randomUUIDv7()}`,
+          payload: buildEntitlementPayload(fx, {
+            occurred_at: "2026-07-02T10:00:00.000Z",
+          }),
+        });
+        expect(raced.didMiss()).toBe(true);
+        expect(outcome.kind).toBe("applied");
+        const rows = await tx
+          .select({
+            status: usageEntitlements.status,
+            cancelAtPeriodEnd: usageEntitlements.cancelAtPeriodEnd,
+            createdAt: usageEntitlements.hostedEntitlementCreatedAt,
+            occurredAt: usageEntitlements.hostedLastEventAt,
+          })
+          .from(usageEntitlements)
+          .where(eq(usageEntitlements.organizationId, fx.organizationId));
+        expect(rows.at(0)).toEqual({
+          status: eventKind === "revoked" ? "cancelled" : "active",
+          cancelAtPeriodEnd: eventKind === "canceled",
+          createdAt: PERIOD_START,
+          occurredAt: new Date("2026-07-02T10:00:00.000Z"),
+        });
+      });
+    }
+  });
+
+  test("terminal snapshots apply to the same generation found through the account", async () => {
+    for (const status of ["canceled", "unpaid", "incomplete_expired"]) {
+      await withRolledBackTx(async (tx) => {
+        const fx = await setupFixture(tx);
+        await handleHostedEntitlementUpsert({
+          tx,
+          eventId: `evt_${Bun.randomUUIDv7()}`,
+          payload: buildEntitlementPayload(fx, {
+            created_at: PERIOD_START.toISOString(),
+            occurred_at: "2026-07-01T10:00:00.000Z",
+          }),
+        });
+        const raced = missFirstEntitlementLookup(tx);
+        const outcome = await handleHostedEntitlementUpsert({
+          tx: raced.tx,
+          eventId: `evt_${Bun.randomUUIDv7()}`,
+          payload: buildEntitlementPayload(fx, {
+            status,
+            occurred_at: "2026-07-02T10:00:00.000Z",
+          }),
+        });
+        expect(raced.didMiss()).toBe(true);
+        expect(outcome.kind).toBe("applied");
+        const rows = await tx
+          .select({
+            status: usageEntitlements.status,
+            createdAt: usageEntitlements.hostedEntitlementCreatedAt,
+            occurredAt: usageEntitlements.hostedLastEventAt,
+          })
+          .from(usageEntitlements)
+          .where(eq(usageEntitlements.organizationId, fx.organizationId));
+        expect(rows.at(0)).toEqual({
+          status: status === "unpaid" ? "past_due" : "cancelled",
+          createdAt: PERIOD_START,
+          occurredAt: new Date("2026-07-02T10:00:00.000Z"),
+        });
+      });
+    }
+  });
+
+  test("an unversioned same-generation account fallback preserves known clocks", async () => {
+    await withRolledBackTx(async (tx) => {
+      const fx = await setupFixture(tx);
+      const occurredAt = new Date("2026-07-01T10:00:00.000Z");
+      await handleHostedEntitlementUpsert({
+        tx,
+        eventId: `evt_${Bun.randomUUIDv7()}`,
+        payload: buildEntitlementPayload(fx, {
+          created_at: PERIOD_START.toISOString(),
+          occurred_at: occurredAt.toISOString(),
+        }),
+      });
+      const raced = missFirstEntitlementLookup(tx);
+      const outcome = await handleHostedEntitlementUpsert({
+        tx: raced.tx,
+        eventId: `evt_${Bun.randomUUIDv7()}`,
+        payload: buildEntitlementPayload(fx),
+      });
+      expect(raced.didMiss()).toBe(true);
+      expect(outcome.kind).toBe("applied");
+      const rows = await tx
+        .select({
+          externalId: usageEntitlements.hostedEntitlementExternalId,
+          createdAt: usageEntitlements.hostedEntitlementCreatedAt,
+          occurredAt: usageEntitlements.hostedLastEventAt,
+        })
+        .from(usageEntitlements)
+        .where(eq(usageEntitlements.organizationId, fx.organizationId));
+      expect(rows.at(0)).toEqual({
+        externalId: fx.hostedEntitlementExternalId,
+        createdAt: PERIOD_START,
+        occurredAt,
+      });
+    });
+  });
+});
 
 describe("dispatch — handleHostedEntitlementUpsert", () => {
   test("creates entitlement and allocates policy units by seat count on a fresh event", async () => {
@@ -367,7 +586,10 @@ describe("dispatch — handleHostedEntitlementUpsert", () => {
       const fx = await setupFixture(tx);
       const first = await handleHostedEntitlementUpsert({
         tx,
-        payload: buildEntitlementPayload(fx),
+        payload: buildEntitlementPayload(fx, {
+          created_at: PERIOD_START.toISOString(),
+          occurred_at: "2026-07-02T00:00:00.000Z",
+        }),
         eventId: "evt_external_ref_seed",
       });
       expect(first.kind).toBe("applied");
@@ -377,6 +599,8 @@ describe("dispatch — handleHostedEntitlementUpsert", () => {
         tx,
         payload: buildEntitlementPayload(fx, {
           id: nextExternalId,
+          created_at: "2026-07-02T00:00:00.000Z",
+          occurred_at: "2026-07-02T00:00:00.000Z",
           quantity: 5,
           status: "trialing",
         }),
@@ -406,8 +630,8 @@ describe("dispatch — handleHostedEntitlementUpsert", () => {
         organizationId: fx.organizationId,
         asOf: new Date(PERIOD_START.getTime() + 1000),
       });
-      // Still one periodic allocation for this local entitlement and period.
-      expect(balance).toBe(3000);
+      // One periodic allocation plus the added capacity prorated from July 2.
+      expect(balance).toBe(4935);
     });
   });
 
@@ -1567,4 +1791,219 @@ describe("hosted lifecycle convergence", () => {
       }
     }
   });
+});
+
+describe("hosted generation ownership", () => {
+  test("replacement access survives a superseded termination in every versioned delivery order", async () => {
+    const orders = [
+      ["initial", "replacement", "termination"],
+      ["initial", "termination", "replacement"],
+      ["replacement", "initial", "termination"],
+      ["replacement", "termination", "initial"],
+      ["termination", "initial", "replacement"],
+      ["termination", "replacement", "initial"],
+    ] as const;
+    for (const order of orders) {
+      await withRolledBackTx(async (tx) => {
+        const fx = await setupFixture(tx);
+        const nextId = `provider_ent_${Bun.randomUUIDv7()}`;
+        for (const event of [...order, ...order]) {
+          switch (event) {
+            case "initial":
+              await handleHostedEntitlementUpsert({
+                tx,
+                eventId: `evt_${Bun.randomUUIDv7()}`,
+                payload: buildEntitlementPayload(fx, {
+                  created_at: PERIOD_START.toISOString(),
+                  occurred_at: "2026-07-01T10:00:00.000Z",
+                }),
+              });
+              break;
+            case "replacement":
+              await handleHostedEntitlementUpsert({
+                tx,
+                eventId: `evt_${Bun.randomUUIDv7()}`,
+                payload: buildEntitlementPayload(fx, {
+                  id: nextId,
+                  created_at: "2026-07-02T00:00:00.000Z",
+                  occurred_at: "2026-07-02T10:00:00.000Z",
+                }),
+              });
+              break;
+            case "termination":
+              await handleUsageEntitlementStatusChange({
+                tx,
+                eventKind: "revoked",
+                eventId: `evt_${Bun.randomUUIDv7()}`,
+                payload: buildEntitlementPayload(fx, {
+                  status: "unpaid",
+                  created_at: PERIOD_START.toISOString(),
+                  occurred_at: "2026-07-03T10:00:00.000Z",
+                }),
+              });
+              break;
+            default:
+              event satisfies never;
+          }
+        }
+        // The replacement must own its event clock as well as the external ID.
+        const update = await handleHostedEntitlementUpsert({
+          tx,
+          eventId: `evt_${Bun.randomUUIDv7()}`,
+          payload: buildEntitlementPayload(fx, {
+            id: nextId,
+            created_at: "2026-07-02T00:00:00.000Z",
+            occurred_at: "2026-07-02T11:00:00.000Z",
+          }),
+        });
+        expect(update.kind).toBe("applied");
+        const rows = await tx
+          .select({
+            externalId: usageEntitlements.hostedEntitlementExternalId,
+            status: usageEntitlements.status,
+            occurredAt: usageEntitlements.hostedLastEventAt,
+          })
+          .from(usageEntitlements)
+          .where(eq(usageEntitlements.organizationId, fx.organizationId));
+        expect(rows.at(0)).toEqual({
+          externalId: nextId,
+          status: "active",
+          occurredAt: new Date("2026-07-02T11:00:00.000Z"),
+        });
+      });
+    }
+  });
+
+  test("existing unversioned mappings fence superseded terminal events in either delivery order", async () => {
+    for (const order of [
+      ["replacement", "termination"],
+      ["termination", "replacement"],
+    ] as const) {
+      for (const eventKind of ["canceled", "revoked"] as const) {
+        await withRolledBackTx(async (tx) => {
+          const fx = await setupFixture(tx);
+          const nextId = `provider_ent_${Bun.randomUUIDv7()}`;
+          await handleHostedEntitlementUpsert({
+            tx,
+            eventId: `evt_${Bun.randomUUIDv7()}`,
+            payload: buildEntitlementPayload(fx, {
+              occurred_at: "2026-07-01T10:00:00.000Z",
+            }),
+          });
+          for (const event of [...order, ...order]) {
+            if (event === "replacement") {
+              await handleHostedEntitlementUpsert({
+                tx,
+                eventId: `evt_${Bun.randomUUIDv7()}`,
+                payload: buildEntitlementPayload(fx, {
+                  id: nextId,
+                  created_at: "2026-07-02T00:00:00.000Z",
+                  occurred_at: "2026-07-02T10:00:00.000Z",
+                }),
+              });
+              continue;
+            }
+            await handleUsageEntitlementStatusChange({
+              tx,
+              eventKind,
+              eventId: `evt_${Bun.randomUUIDv7()}`,
+              payload: buildEntitlementPayload(fx, {
+                created_at: PERIOD_START.toISOString(),
+                occurred_at: "2026-07-03T10:00:00.000Z",
+              }),
+            });
+          }
+          const rows = await tx
+            .select({
+              externalId: usageEntitlements.hostedEntitlementExternalId,
+              status: usageEntitlements.status,
+              cancelAtPeriodEnd: usageEntitlements.cancelAtPeriodEnd,
+            })
+            .from(usageEntitlements)
+            .where(eq(usageEntitlements.organizationId, fx.organizationId));
+          expect(rows.at(0)).toEqual({
+            externalId: nextId,
+            status: "active",
+            cancelAtPeriodEnd: false,
+          });
+        });
+      }
+    }
+  });
+
+  test("an unknown incoming generation never displaces a known mapping", async () => {
+    await withRolledBackTx(async (tx) => {
+      const fx = await setupFixture(tx);
+      await handleHostedEntitlementUpsert({
+        tx,
+        eventId: `evt_${Bun.randomUUIDv7()}`,
+        payload: buildEntitlementPayload(fx, {
+          created_at: PERIOD_START.toISOString(),
+          occurred_at: "2026-07-01T10:00:00.000Z",
+        }),
+      });
+      const analytics = installRecordingAnalytics();
+      try {
+        const result = await handleHostedEntitlementUpsert({
+          tx,
+          eventId: `evt_${Bun.randomUUIDv7()}`,
+          payload: buildEntitlementPayload(fx, {
+            id: `provider_ent_${Bun.randomUUIDv7()}`,
+            occurred_at: "2026-07-03T10:00:00.000Z",
+          }),
+        });
+        expect(result.kind).toBe("ignored");
+        expect(analytics.exceptions()).toHaveLength(1);
+        const rows = await tx
+          .select({ externalId: usageEntitlements.hostedEntitlementExternalId })
+          .from(usageEntitlements)
+          .where(eq(usageEntitlements.organizationId, fx.organizationId));
+        expect(rows.at(0)?.externalId).toBe(fx.hostedEntitlementExternalId);
+      } finally {
+        analytics.restore();
+      }
+    });
+  });
+});
+
+test("terminal snapshots cannot replace an unversioned current mapping", async () => {
+  for (const status of ["canceled", "unpaid", "incomplete_expired"]) {
+    await withRolledBackTx(async (tx) => {
+      const fx = await setupFixture(tx);
+      await handleHostedEntitlementUpsert({
+        tx,
+        eventId: `evt_${Bun.randomUUIDv7()}`,
+        payload: buildEntitlementPayload(fx, {
+          occurred_at: "2026-07-02T10:00:00.000Z",
+        }),
+      });
+      const logs = installRecordingLogger();
+      try {
+        const result = await handleHostedEntitlementUpsert({
+          tx,
+          eventId: `evt_${Bun.randomUUIDv7()}`,
+          payload: buildEntitlementPayload(fx, {
+            id: `provider_ent_${Bun.randomUUIDv7()}`,
+            status,
+            occurred_at: "2026-07-03T10:00:00.000Z",
+          }),
+        });
+        expect(result.kind).toBe("ignored");
+        expect(logs.at("INFO")).toHaveLength(1);
+        const rows = await tx
+          .select({
+            externalId: usageEntitlements.hostedEntitlementExternalId,
+            status: usageEntitlements.status,
+          })
+          .from(usageEntitlements)
+          .where(eq(usageEntitlements.organizationId, fx.organizationId));
+        expect(rows.at(0)).toEqual({
+          externalId: fx.hostedEntitlementExternalId,
+          status: "active",
+        });
+      } finally {
+        logs.restore();
+      }
+    });
+  }
 });

@@ -24,7 +24,6 @@ import {
   usageSeatAssignments,
 } from "@/api/db/schema";
 import type { UsageEntitlementStatus, UsagePolicyKind } from "@/api/db/schema";
-import { captureError } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
@@ -32,6 +31,9 @@ import type {
   HostedUsageEntitlementPayload,
 } from "@/api/lib/hosted-usage-provider/event-schemas";
 import { recordWebhookAuditEvent } from "@/api/lib/hosted-usage-provider/webhook-store";
+import { failureSink } from "@/api/lib/observability/failure";
+import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { parseAuthProviderId } from "@/api/lib/safe-id-boundaries";
 import {
   lockAssignmentCapacity,
@@ -129,6 +131,17 @@ class HostedEventOrderingConflict extends TaggedError(
   message: string;
 }> {}
 
+const orderingConflict = failureSink({
+  event: "usage_provider.webhook.ordering_conflict",
+  expected: [],
+});
+
+const TERMINAL_PROVIDER_STATUSES = new Set([
+  "canceled",
+  "unpaid",
+  "incomplete_expired",
+]);
+
 type StaleProviderEventParams = {
   existing: ExistingEntitlement;
   payload: HostedUsageEntitlementPayload;
@@ -140,6 +153,51 @@ const isStaleProviderEvent = ({
   payload,
   occurredAt,
 }: StaleProviderEventParams): boolean => {
+  // Creation identifies an external generation; modification time orders
+  // only the events inside that generation.
+  if (payload.id !== existing.hostedEntitlementExternalId) {
+    const createdAt =
+      payload.created_at === undefined ? null : new Date(payload.created_at);
+    if (
+      createdAt !== null &&
+      existing.hostedEntitlementCreatedAt !== null &&
+      createdAt.getTime() !== existing.hostedEntitlementCreatedAt.getTime()
+    ) {
+      return createdAt < existing.hostedEntitlementCreatedAt;
+    }
+    if (
+      createdAt !== null &&
+      existing.hostedEntitlementCreatedAt === null &&
+      occurredAt !== null &&
+      existing.hostedLastEventAt !== null &&
+      occurredAt.getTime() !== existing.hostedLastEventAt.getTime()
+    ) {
+      return occurredAt < existing.hostedLastEventAt;
+    }
+    observeFailure(
+      new HostedEventOrderingConflict({
+        message:
+          "Hosted event generation is ambiguous; operator reconciliation required",
+      }),
+      {
+        sink: orderingConflict,
+        ctx: {
+          source: "usage_provider.webhook.ordering",
+          entityId: existing.id,
+        },
+      },
+    );
+    // An unversioned incoming generation cannot displace a known one.
+    // Existing unversioned rows retain their event-clock fallback only when
+    // that clock distinguishes the events.
+    return (
+      existing.hostedEntitlementCreatedAt !== null ||
+      occurredAt === null ||
+      existing.hostedLastEventAt === null ||
+      occurredAt.getTime() === existing.hostedLastEventAt.getTime() ||
+      occurredAt < existing.hostedLastEventAt
+    );
+  }
   if (occurredAt === null || existing.hostedLastEventAt === null) {
     return false;
   }
@@ -147,30 +205,6 @@ const isStaleProviderEvent = ({
   const lastTime = existing.hostedLastEventAt.getTime();
   if (eventTime !== lastTime) {
     return eventTime < lastTime;
-  }
-  // An object's modification time cannot identify which external generation
-  // owns the account when two subscriptions emit at the same instant.
-  if (payload.id !== existing.hostedEntitlementExternalId) {
-    const createdAt =
-      payload.created_at === undefined ? null : new Date(payload.created_at);
-    if (
-      createdAt === null ||
-      existing.hostedEntitlementCreatedAt === null ||
-      createdAt.getTime() === existing.hostedEntitlementCreatedAt.getTime()
-    ) {
-      captureError(
-        new HostedEventOrderingConflict({
-          message:
-            "Hosted event generation is ambiguous; operator reconciliation required",
-        }),
-        {
-          source: "usage_provider.webhook.ordering",
-          entitlementId: existing.id,
-        },
-      );
-      return true;
-    }
-    return createdAt < existing.hostedEntitlementCreatedAt;
   }
   // At equal versions, terminal/cancellation facts dominate an active replay.
   return (
@@ -310,6 +344,9 @@ export const handleHostedEntitlementUpsert = async ({
   // mapped, the local row owns the org id, so a renewal/update that arrives
   // without metadata must still apply — requiring it up front would silently
   // drop the new period and skip the periodic allocation.
+  if (payload.created_at === undefined) {
+    logger.warn("usage_provider.webhook.missing_generation", { eventId });
+  }
   const metadataOrganizationId = payload.metadata?.organization_id ?? null;
 
   const policy = await resolvePolicyByHostedPolicyRef(
@@ -455,6 +492,21 @@ export const handleHostedEntitlementUpsert = async ({
           reason: "metadata organization_id mismatches local account mapping",
         };
       }
+      const replacesExternalId =
+        payload.id !== existingByAccountRef.hostedEntitlementExternalId;
+      if (
+        replacesExternalId &&
+        TERMINAL_PROVIDER_STATUSES.has(payload.status)
+      ) {
+        logger.info("usage_provider.webhook.superseded", {
+          entityId: existingByAccountRef.id,
+          eventId,
+        });
+        return {
+          kind: "ignored",
+          reason: "terminal event for a superseded external entitlement",
+        };
+      }
       if (
         isStaleProviderEvent({
           existing: existingByAccountRef,
@@ -467,6 +519,9 @@ export const handleHostedEntitlementUpsert = async ({
           reason: "stale provider event (does not supersede current state)",
         };
       }
+      const previousCreatedAt = replacesExternalId
+        ? null
+        : existingByAccountRef.hostedEntitlementCreatedAt;
       ownerOrganizationId = existingByAccountRef.organizationId;
       previousRow = existingByAccountRef;
       await tx
@@ -486,10 +541,14 @@ export const handleHostedEntitlementUpsert = async ({
           hostedEntitlementExternalId: payload.id,
           hostedEntitlementCreatedAt:
             payload.created_at === undefined
-              ? null
+              ? previousCreatedAt
               : new Date(payload.created_at),
           cancelAtPeriodEnd: payload.cancel_at_period_end ?? false,
-          ...lastEventPatch(existingByAccountRef, occurredAt),
+          // A replacement owns its own event clock, even when the previous
+          // generation was modified more recently.
+          ...(replacesExternalId
+            ? { hostedLastEventAt: occurredAt }
+            : lastEventPatch(existingByAccountRef, occurredAt)),
         })
         .where(eq(usageEntitlements.id, existingByAccountRef.id));
       await recordWebhookAuditEvent({
@@ -708,17 +767,37 @@ export const handleUsageEntitlementStatusChange = async ({
   eventId,
   eventKind,
 }: UsageEntitlementStatusUpdateParams): Promise<DispatchOutcome> => {
-  const existing = await findEntitlementByHostedExternalId(tx, payload.id);
+  let existing = await findEntitlementByHostedExternalId(tx, payload.id);
   if (!existing) {
-    return await handleHostedEntitlementUpsert({
+    const current = await findEntitlementByHostedAccountRef(
       tx,
-      eventId,
-      payload: {
-        ...payload,
-        status: eventKind === "revoked" ? "canceled" : payload.status,
-        cancel_at_period_end: eventKind === "canceled",
-      },
-    });
+      payload.account_ref,
+    );
+    if (current && current.hostedEntitlementExternalId !== payload.id) {
+      logger.info("usage_provider.webhook.superseded", {
+        entityId: current.id,
+        eventId,
+      });
+      return {
+        kind: "ignored",
+        reason: "terminal event for a superseded external entitlement",
+      };
+    }
+    if (!current) {
+      return await handleHostedEntitlementUpsert({
+        tx,
+        eventId,
+        payload: {
+          ...payload,
+          status: eventKind === "revoked" ? "canceled" : payload.status,
+          cancel_at_period_end: eventKind === "canceled",
+        },
+      });
+    }
+    existing = current;
+  }
+  if (payload.created_at === undefined) {
+    logger.warn("usage_provider.webhook.missing_generation", { eventId });
   }
   if (existing.source !== "hosted") {
     return {
