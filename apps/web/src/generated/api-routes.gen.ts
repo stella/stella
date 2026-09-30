@@ -12289,7 +12289,7 @@ export type WebRoutes = {
             post: {
               body: {
                 name?: string;
-                layout?: Tebc5a69b82 | T49708f9c20 | T2998ce6505 | T2fed70772e | T0bdd08f6e7 | T6e5891caeb | T1edc2e9811;
+                layout?: Tebc5a69b82 | T49708f9c20 | T2998ce6505 | T2fed70772e | T0bdd08f6e7 | T6e5891caeb | T1edc2e9811 | Tce646e0ddf;
                 templateProperties?: Array<{
                   role?: "document-type-classifier" | null;
                   dependencies?: Array<{
@@ -24255,7 +24255,7 @@ export type WebRoutes = {
         patch: {
           body: {
             name?: string;
-            layout?: Tebc5a69b82 | T49708f9c20 | T2998ce6505 | T2fed70772e | T0bdd08f6e7 | T6e5891caeb | T1edc2e9811;
+            layout?: Tebc5a69b82 | T49708f9c20 | T2998ce6505 | T2fed70772e | T0bdd08f6e7 | T6e5891caeb | T1edc2e9811 | Tce646e0ddf;
           };
           params: T34252d475f;
           query: Record<never, never>;
@@ -37476,7 +37476,7 @@ type T64c3504dad = {
   skillName: string;
 };
 
-type T64f30e502a = "avt" | "calendar" | "filesystem" | "kanban" | "overview" | "table" | "timeline";
+type T64f30e502a = "avt" | "calendar" | "correspondence" | "filesystem" | "kanban" | "overview" | "table" | "timeline";
 
 type T64f82fc86d = {
   bold: Tfddd645dc8;
@@ -38981,7 +38981,7 @@ type Ta2adf01c0a = {
   source: string;
 };
 
-type Ta2bfcf8544 = Tebc5a69b82 | T49708f9c20 | T2998ce6505 | T2fed70772e | T0bdd08f6e7 | T6e5891caeb | T1edc2e9811;
+type Ta2bfcf8544 = Tebc5a69b82 | T49708f9c20 | T2998ce6505 | T2fed70772e | T0bdd08f6e7 | T6e5891caeb | T1edc2e9811 | Tce646e0ddf;
 
 type Ta307d8fb8c = {
   readonly type: "present";
@@ -40157,6 +40157,15 @@ type Tcde02c03e1 = {
 };
 
 type Tcdfc93c4d1 = "event" | "fact" | "issue" | "requirement" | "task" | null;
+
+type Tce646e0ddf = {
+  filters: Array<stll_conditions_ConditionNode>;
+  sorts: Array<T4c703c7179>;
+  hiddenProperties: Array<string>;
+  calculations: Array<T4a5707509f>;
+  version: 1;
+  type: "correspondence";
+};
 
 type Tcf1688e82d = {
   id: string;

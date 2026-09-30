@@ -19062,6 +19062,42 @@ export const generatedRouteMap: RouteNode = {
                                 },
                               },
                             },
+                            {
+                              additionalProperties: false,
+                              type: "object",
+                              required: [
+                                "type",
+                                "version",
+                                "filters",
+                                "sorts",
+                                "hiddenProperties",
+                              ],
+                              properties: {
+                                type: {
+                                  const: "correspondence",
+                                  type: "string",
+                                },
+                                version: {
+                                  const: 1,
+                                  type: "number",
+                                },
+                                filters: {
+                                  $ref: "#/$defs/s_8b4b71586106",
+                                },
+                                sorts: {
+                                  $ref: "#/$defs/s_a2912d7bfae3",
+                                },
+                                hiddenProperties: {
+                                  type: "array",
+                                  items: {
+                                    type: "string",
+                                  },
+                                },
+                                calculations: {
+                                  $ref: "#/$defs/s_d21ba6521546",
+                                },
+                              },
+                            },
                           ],
                         },
                       },
@@ -20861,6 +20897,42 @@ export const generatedRouteMap: RouteNode = {
                                       type: "null",
                                     },
                                   ],
+                                },
+                              },
+                            },
+                            {
+                              additionalProperties: false,
+                              type: "object",
+                              required: [
+                                "type",
+                                "version",
+                                "filters",
+                                "sorts",
+                                "hiddenProperties",
+                              ],
+                              properties: {
+                                type: {
+                                  const: "correspondence",
+                                  type: "string",
+                                },
+                                version: {
+                                  const: 1,
+                                  type: "number",
+                                },
+                                filters: {
+                                  $ref: "#/$defs/s_8b4b71586106",
+                                },
+                                sorts: {
+                                  $ref: "#/$defs/s_a2912d7bfae3",
+                                },
+                                hiddenProperties: {
+                                  type: "array",
+                                  items: {
+                                    type: "string",
+                                  },
+                                },
+                                calculations: {
+                                  $ref: "#/$defs/s_d21ba6521546",
                                 },
                               },
                             },
@@ -53404,6 +53476,42 @@ export const generatedRouteMap: RouteNode = {
                                 },
                               },
                             },
+                            {
+                              additionalProperties: false,
+                              type: "object",
+                              required: [
+                                "type",
+                                "version",
+                                "filters",
+                                "sorts",
+                                "hiddenProperties",
+                              ],
+                              properties: {
+                                type: {
+                                  const: "correspondence",
+                                  type: "string",
+                                },
+                                version: {
+                                  const: 1,
+                                  type: "number",
+                                },
+                                filters: {
+                                  $ref: "#/$defs/s_8b4b71586106",
+                                },
+                                sorts: {
+                                  $ref: "#/$defs/s_a2912d7bfae3",
+                                },
+                                hiddenProperties: {
+                                  type: "array",
+                                  items: {
+                                    type: "string",
+                                  },
+                                },
+                                calculations: {
+                                  $ref: "#/$defs/s_d21ba6521546",
+                                },
+                              },
+                            },
                           ],
                         },
                       },
@@ -54032,7 +54140,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "views", "convert"],
                 capabilityId: "views.convert",
                 description:
-                  "Convert one view of a matter to another layout type (table, filesystem, kanban, calendar, timeline, or avt: document verification against a list's facts, where legal lists are enabled), carrying over as much of its filters and sorts as the target layout supports. Converting to overview, or to the layout the view already has, is refused. Use views.update to change a view's name or the details of its current layout.",
+                  "Convert one view of a matter to another layout type (table, filesystem, kanban, calendar, timeline, or avt: document verification against a list's facts, where legal lists are enabled), carrying over as much of its filters and sorts as the target layout supports. Converting to overview or correspondence, or to the layout the view already has, is refused. Use views.update to change a view's name or the details of its current layout.",
                 access: "write",
                 flags: [
                   {
@@ -54063,6 +54171,7 @@ export const generatedRouteMap: RouteNode = {
                       "calendar",
                       "timeline",
                       "avt",
+                      "correspondence",
                     ],
                     repeatable: false,
                     flag: "--target-type",
@@ -54095,6 +54204,7 @@ export const generatedRouteMap: RouteNode = {
                             "calendar",
                             "timeline",
                             "avt",
+                            "correspondence",
                           ],
                         },
                       },
@@ -54129,7 +54239,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "views", "create"],
                 capabilityId: "views.create",
                 description:
-                  "Add a view (a tab) to a matter with a name and a layout. Duplicate sorts and multiple kind filters are refused, the columns the layout needs are created when your role may create columns, and references to columns that do not exist are dropped. A matter may hold only one overview view, and a fixed maximum of views in total.",
+                  "Add a view (a tab) to a matter with a name and a layout. Duplicate sorts and multiple kind filters are refused, the columns the layout needs are created when your role may create columns, and references to columns that do not exist are dropped. A matter may hold only one overview view and one correspondence view, and a fixed maximum of views in total.",
                 access: "write",
                 flags: [
                   {
@@ -54549,6 +54659,42 @@ export const generatedRouteMap: RouteNode = {
                                       type: "null",
                                     },
                                   ],
+                                },
+                              },
+                            },
+                            {
+                              additionalProperties: false,
+                              type: "object",
+                              required: [
+                                "type",
+                                "version",
+                                "filters",
+                                "sorts",
+                                "hiddenProperties",
+                              ],
+                              properties: {
+                                type: {
+                                  const: "correspondence",
+                                  type: "string",
+                                },
+                                version: {
+                                  const: 1,
+                                  type: "number",
+                                },
+                                filters: {
+                                  $ref: "#/$defs/s_8b4b71586106",
+                                },
+                                sorts: {
+                                  $ref: "#/$defs/s_a2912d7bfae3",
+                                },
+                                hiddenProperties: {
+                                  type: "array",
+                                  items: {
+                                    type: "string",
+                                  },
+                                },
+                                calculations: {
+                                  $ref: "#/$defs/s_d21ba6521546",
                                 },
                               },
                             },
@@ -55939,6 +56085,42 @@ export const generatedRouteMap: RouteNode = {
                                       type: "null",
                                     },
                                   ],
+                                },
+                              },
+                            },
+                            {
+                              additionalProperties: false,
+                              type: "object",
+                              required: [
+                                "type",
+                                "version",
+                                "filters",
+                                "sorts",
+                                "hiddenProperties",
+                              ],
+                              properties: {
+                                type: {
+                                  const: "correspondence",
+                                  type: "string",
+                                },
+                                version: {
+                                  const: 1,
+                                  type: "number",
+                                },
+                                filters: {
+                                  $ref: "#/$defs/s_8b4b71586106",
+                                },
+                                sorts: {
+                                  $ref: "#/$defs/s_a2912d7bfae3",
+                                },
+                                hiddenProperties: {
+                                  type: "array",
+                                  items: {
+                                    type: "string",
+                                  },
+                                },
+                                calculations: {
+                                  $ref: "#/$defs/s_d21ba6521546",
                                 },
                               },
                             },
