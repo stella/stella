@@ -244,28 +244,49 @@ export const listPublicDecisionLanguageAlternates = async ({
   if (languageGroupKey === null) {
     return [];
   }
-  const rows = await readPublicDecisionLanguageAlternatesQuery(tx, [
-    languageGroupKey,
-  ]);
-  const alternates =
-    groupPublicDecisionLanguageAlternates(rows).alternatesFor(languageGroupKey);
-  if (alternates.length === 0) {
-    return [];
-  }
-  // Only a single decision's capped language group inspects payload presence;
-  // collection reads keep their existing metadata-only projection.
-  const presence = await tx
-    .select({ id: caseLawDecisions.id, hasDocument: rowHoldsDocument })
+  // Only this single-group detail query inspects payload presence. Rank it
+  // before language deduplication so a textless duplicate cannot hide text.
+  const versions = tx
+    .select({
+      id: caseLawDecisions.id,
+      caseNumber: caseLawDecisions.caseNumber,
+      slug: caseLawDecisions.slug,
+      country: caseLawDecisions.country,
+      court: caseLawDecisions.court,
+      decisionDate: caseLawDecisions.decisionDate,
+      language: caseLawDecisions.language,
+      hasDocument: rowHoldsDocument.as("has_document"),
+      languageRank: sql<number>`row_number() over (
+        partition by ${normalizedLanguageSql}
+        order by ${rowHoldsDocument} desc, ${caseLawDecisions.id}
+      )`.as("language_rank"),
+    })
     .from(caseLawDecisions)
+    .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
     .where(
-      inArray(
-        caseLawDecisions.id,
-        alternates.map((alternate) => alternate.id),
+      and(
+        eq(caseLawDecisions.languageGroupKey, languageGroupKey),
+        inArray(caseLawDecisions.country, [...PUBLIC_CASE_LAW_COUNTRIES]),
+        redistributableCaseLawSource,
+        publishedCaseLawDecision,
+        sql`${normalizedLanguageSql} ~ ${ROUTE_LANGUAGE_PATTERN}`,
       ),
     )
+    .as("detail_versions");
+  const rows = await tx
+    .select({
+      id: versions.id,
+      caseNumber: versions.caseNumber,
+      slug: versions.slug,
+      country: versions.country,
+      court: versions.court,
+      decisionDate: versions.decisionDate,
+      language: versions.language,
+      hasDocument: versions.hasDocument,
+    })
+    .from(versions)
+    .where(eq(versions.languageRank, 1))
+    .orderBy(asc(versions.language), asc(versions.id))
     .limit(LIMITS.caseLawLanguageAlternatesPerGroupMax);
-  const byId = new Map(presence.map((row) => [row.id, row.hasDocument]));
-  return alternates.map((alternate) =>
-    ({ ...alternate, hasDocument: byId.get(alternate.id) === true,}),
-  );
+  return rows.length < 2 ? [] : rows;
 };

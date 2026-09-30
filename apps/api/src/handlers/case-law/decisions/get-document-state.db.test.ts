@@ -20,6 +20,10 @@ import {
 } from "@/api/handlers/case-law/decisions/get";
 import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import {
+  listPublicDecisionLanguageAlternates,
+  readPublicDecisionLanguageAlternatesQuery,
+} from "@/api/lib/case-law/language-alternates";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import {
   corpusKeys,
@@ -49,7 +53,7 @@ if (!databaseUrl || !runPostgresTests) {
         .insert(caseLawDecisions)
         .values({
           sourceId,
-          caseNumber: `state-${fulltext === null ? "null" : fulltext.length}-${suffix}`,
+          caseNumber: `state-${created.length}-${suffix}`,
           court: "Synthetic court",
           country: "CZE",
           language: "cs",
@@ -170,6 +174,45 @@ if (!databaseUrl || !runPostgresTests) {
         );
         expect(row?.hasDocument).toBe(expected);
       }
+    });
+
+    test("detail alternates prefer a document while collection alternates retain ID order", async () => {
+      const ids = [
+        await insertDecision(null),
+        await insertDecision("Document"),
+      ].toSorted();
+      const lowId = ids.at(0) ?? panic("Expected the first duplicate");
+      const highId = ids.at(1) ?? panic("Expected the second duplicate");
+      const englishId = await insertDecision("English document");
+      const languageGroupKey = `detail-alternates-${suffix}`;
+      await db
+        .update(caseLawDecisions)
+        .set({ languageGroupKey, fulltext: "" })
+        .where(eq(caseLawDecisions.id, lowId));
+      await db
+        .update(caseLawDecisions)
+        .set({ languageGroupKey, fulltext: "Document" })
+        .where(eq(caseLawDecisions.id, highId));
+      await db
+        .update(caseLawDecisions)
+        .set({ languageGroupKey, language: "en" })
+        .where(eq(caseLawDecisions.id, englishId));
+      const collection = await caseLawPublicReadDb(
+        async (tx) =>
+          await readPublicDecisionLanguageAlternatesQuery(tx, [
+            languageGroupKey,
+          ]),
+      );
+      expect(collection.find((row) => row.language === "cs")?.id).toBe(lowId);
+      const detail = await caseLawPublicReadDb(
+        async (tx) =>
+          await listPublicDecisionLanguageAlternates({ tx, languageGroupKey }),
+      );
+      expect(detail.find((row) => row.language === "cs")).toMatchObject({
+        id: highId,
+        hasDocument: true,
+      });
+      expect(detail).toHaveLength(2);
     });
   });
 }
