@@ -763,7 +763,7 @@ test("Slovak compatibility preserves all baseline leaves and the actual leaf cei
           if (candidateGroup === group) {
             continue;
           }
-          expect(candidateGroup).toStartWith(`${group.slice(0, -1)  } OR `);
+          expect(candidateGroup).toStartWith(`${group.slice(0, -1)} OR `);
           const extra = fieldLeaves(candidateGroup).filter(
             (leaf) => !fieldLeaves(group).includes(leaf),
           );
