@@ -50,6 +50,8 @@ import {
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import readBilingualRun from "@/api/handlers/bilingual-translations/read-run";
 import readBillingCodes from "@/api/handlers/billing-codes/list";
+import listWipClients from "@/api/handlers/billing/wip/clients/list";
+import listWip from "@/api/handlers/billing/wip/list";
 import lookupResearchAnswers from "@/api/handlers/case-law/research/answers-lookup";
 import exportChatMessage from "@/api/handlers/chat/export/create";
 import forkChatThread from "@/api/handlers/chat/fork/create";
@@ -1058,6 +1060,58 @@ const isolationCases: IsolationCase[] = [
     expectDenied: expectEmptyPage,
     expectPositive: (result, { ids: testIds }) =>
       expectPageContainsId(result, testIds.expenseB1),
+  },
+  {
+    name: "WIP matter list",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(listWip, workspaceA, {
+        query: { matterId: testIds.wsB1, asOf: "2026-10-01", limit: 25 },
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(listWip, workspaceB, {
+        query: { matterId: testIds.wsB1, asOf: "2026-10-01", limit: 25 },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result, { ids: testIds }) => {
+      expect(getStatusCode(result)).toBeNull();
+      expect(result).toMatchObject({
+        items: [
+          {
+            matterId: testIds.wsB1,
+            currencies: [
+              { currency: "USD", expenseAmount: "100", totalAmount: "100" },
+            ],
+          },
+        ],
+        totalsByCurrency: [{ currency: "USD", totalAmount: "100" }],
+      });
+    },
+  },
+  {
+    name: "WIP client list",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(listWipClients, workspaceA, {
+        query: { clientId: testIds.contactB, asOf: "2026-10-01", limit: 25 },
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(listWipClients, workspaceB, {
+        query: { clientId: testIds.contactB, asOf: "2026-10-01", limit: 25 },
+      }),
+    expectDenied: (result) =>
+      expect(result).toMatchObject({ items: [], totalsByCurrency: [] }),
+    expectPositive: (result, { ids: testIds }) => {
+      expect(getStatusCode(result)).toBeNull();
+      expect(result).toMatchObject({
+        items: [
+          {
+            clientId: testIds.contactB,
+            currencies: [
+              { currency: "USD", expenseAmount: "100", totalAmount: "100" },
+            ],
+          },
+        ],
+      });
+    },
   },
   {
     name: "billing code list",

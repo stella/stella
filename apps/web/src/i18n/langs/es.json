@@ -494,6 +494,7 @@
     "invoices": {
       "addEntries": "Añadir registros",
       "confirmDelete": "Esta acción eliminará definitivamente este borrador de factura y desvinculará todos los registros. No se puede deshacer.",
+      "confirmUndoPaid": "¿Devolver esta factura al estado enviada y eliminar los datos de pago registrados?",
       "confirmVoid": "Anular esta factura desvinculará todos los registros de tiempo y gastos, devolviendo a su estado anterior.",
       "createInvoice": "Crear factura",
       "dueDate": "Fecha de vencimiento",
@@ -508,6 +509,8 @@
       "noEntries": "No hay registros vinculados a esta factura",
       "noInvoices": "Aún no hay facturas",
       "paidAt": "Pagada el",
+      "paymentDate": "Fecha de pago",
+      "paymentInvalidAmount": "Introduzca un importe válido no negativo.",
       "removeEntries": "Eliminar registros",
       "send": "Enviar",
       "statuses": {
@@ -519,6 +522,7 @@
       },
       "totalAmount": "Importe total",
       "totalEntries": "{count, plural, one {# registro} other {# registros}}",
+      "undoPaid": "Deshacer el pago",
       "void": "Anular"
     },
     "loading": "Cargando...",
@@ -605,6 +609,19 @@
     "timerActive": "Temporizador en marcha",
     "timesheets": "Hojas de horas",
     "total": "Total",
+    "wip": {
+      "currencyTotals": "Totales por moneda",
+      "days0To30": "0–30 días",
+      "days31To60": "31–60 días",
+      "days61To90": "61–90 días",
+      "daysOver90": "Más de 90 días",
+      "description": "Tiempo aprobado y gastos facturables que aún no se han facturado.",
+      "empty": "No hay trabajo pendiente de facturar.",
+      "expenseValue": "Gastos: {amount}",
+      "timeValue": "Tiempo: {amount}",
+      "title": "Trabajo pendiente de facturar",
+      "unpriced": "Registros de tiempo sin tarifa: {count}"
+    },
     "writeOff": "Cancelar"
   },
   "caseLaw": {

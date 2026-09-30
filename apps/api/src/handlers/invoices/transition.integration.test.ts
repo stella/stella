@@ -260,6 +260,13 @@ const seedInvoice = async ({
     invoiceDate: "2026-06-23",
     currency: "USD",
     status,
+    ...(status === INVOICE_STATUS.PAID
+      ? {
+          paidAt: new Date("2026-06-23T00:00:00Z"),
+          paidDate: "2026-06-23",
+          paidAmount: cents(0),
+        }
+      : {}),
   });
   return invoiceId;
 };

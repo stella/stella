@@ -494,6 +494,7 @@
     "invoices": {
       "addEntries": "Pridať záznamy",
       "confirmDelete": "Týmto natrvalo odstránite tento koncept faktúry a odpojíte všetky záznamy. Túto akciu nie je možné vrátiť späť.",
+      "confirmUndoPaid": "Vrátiť faktúru do stavu odoslané a odstrániť zaznamenané údaje o platbe?",
       "confirmVoid": "Zrušením tejto faktúry sa odpoja všetky časové záznamy a výdavky a vrátia sa do predchádzajúceho stavu.",
       "createInvoice": "Vytvoriť faktúru",
       "dueDate": "Dátum splatnosti",
@@ -508,6 +509,8 @@
       "noEntries": "K tejto faktúre nie sú pripojené žiadne záznamy",
       "noInvoices": "Zatiaľ žiadne faktúry",
       "paidAt": "Uhradená",
+      "paymentDate": "Dátum platby",
+      "paymentInvalidAmount": "Zadajte platnú nezápornú sumu.",
       "removeEntries": "Odstrániť záznamy",
       "send": "Odoslať",
       "statuses": {
@@ -519,6 +522,7 @@
       },
       "totalAmount": "Celková čiastka",
       "totalEntries": "{count, plural, one {# záznam} few {# záznamy} other {# záznamov}}",
+      "undoPaid": "Zrušiť platbu",
       "void": "Zrušiť"
     },
     "loading": "Načítava sa...",
@@ -605,6 +609,19 @@
     "timerActive": "Časovač beží",
     "timesheets": "Výkaz práce",
     "total": "Celkom",
+    "wip": {
+      "currencyTotals": "Súčty podľa meny",
+      "days0To30": "0–30 dní",
+      "days31To60": "31–60 dní",
+      "days61To90": "61–90 dní",
+      "daysOver90": "Viac ako 90 dní",
+      "description": "Schválený čas a účtovateľné výdavky, ktoré ešte neboli vyfakturované.",
+      "empty": "Žiadna nevyfakturovaná práca.",
+      "expenseValue": "Výdavky: {amount}",
+      "timeValue": "Čas: {amount}",
+      "title": "Nevyfakturovaná práca",
+      "unpriced": "Časové záznamy bez sadzby: {count}"
+    },
     "writeOff": "Odpísať"
   },
   "caseLaw": {

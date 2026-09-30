@@ -30,6 +30,12 @@ export const CAPABILITY_DISPATCH = {
   "billing-codes.update": {
     load: async () => await import("@/api/handlers/billing-codes/update"),
   },
+  "billing.wip.clients.list": {
+    load: async () => await import("@/api/handlers/billing/wip/clients/list"),
+  },
+  "billing.wip.list": {
+    load: async () => await import("@/api/handlers/billing/wip/list"),
+  },
   "case-law.analysis.generate": {
     load: async () => await import("@/api/handlers/case-law/analysis/generate"),
   },

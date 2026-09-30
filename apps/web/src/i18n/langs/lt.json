@@ -494,6 +494,7 @@
     "invoices": {
       "addEntries": "Pridėti įrašus",
       "confirmDelete": "Tai visam laikui ištrins šią sąskaitos juodraštį ir atsies visus įrašus. Šio veiksmo negalima atšaukti.",
+      "confirmUndoPaid": "Grąžinti sąskaitą į išsiųstos būseną ir pašalinti įrašytus mokėjimo duomenis?",
       "confirmVoid": "Panaikinus šią sąskaitą, bus atsieti visi laiko įrašai ir išlaidos, grąžinant juos į ankstesnę būseną.",
       "createInvoice": "Sukurti sąskaitą",
       "dueDate": "Mokėjimo terminas",
@@ -508,6 +509,8 @@
       "noEntries": "Nėra įrašų, susietų su šia sąskaita",
       "noInvoices": "Sąskaitų dar nėra",
       "paidAt": "Apmokėta",
+      "paymentDate": "Mokėjimo data",
+      "paymentInvalidAmount": "Įveskite galiojančią neneigiamą sumą.",
       "removeEntries": "Pašalinti įrašus",
       "send": "Siųsti",
       "statuses": {
@@ -519,6 +522,7 @@
       },
       "totalAmount": "Bendra suma",
       "totalEntries": "{count, plural, one {# įrašas} few {# įrašai} many {# įrašo} other {# įrašų}}",
+      "undoPaid": "Atšaukti mokėjimą",
       "void": "Panaikinti"
     },
     "loading": "Kraunama...",
@@ -605,6 +609,19 @@
     "timerActive": "Laikmatis veikia",
     "timesheets": "Darbo laiko apskaita",
     "total": "Iš viso",
+    "wip": {
+      "currencyTotals": "Sumos pagal valiutą",
+      "days0To30": "0–30 dienų",
+      "days31To60": "31–60 dienų",
+      "days61To90": "61–90 dienų",
+      "daysOver90": "Daugiau nei 90 dienų",
+      "description": "Patvirtintas laikas ir apmokestinamos išlaidos, už kuriuos dar neišrašyta sąskaita.",
+      "empty": "Nėra darbo, už kurį dar neišrašyta sąskaita.",
+      "expenseValue": "Išlaidos: {amount}",
+      "timeValue": "Laikas: {amount}",
+      "title": "Neišrašytos sąskaitos už darbą",
+      "unpriced": "Laiko įrašai be tarifo: {count}"
+    },
     "writeOff": "Nurašyti"
   },
   "caseLaw": {

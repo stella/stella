@@ -1363,6 +1363,8 @@ describe("MCP anonymization canary corpus", () => {
     "list_invoices (list mode) anonymizes invoice reference",
     async (tool) => {
       const referenceSeed = mkSeed(tool, 0);
+      const paymentNoteSeed = mkSeed(tool, 1);
+      const paymentReferenceSeed = mkSeed(tool, 2);
       const tx = {
         select: () =>
           chainableRows([
@@ -1372,11 +1374,16 @@ describe("MCP anonymization canary corpus", () => {
               documentType: "invoice",
               originalInvoiceId: null,
               reference: referenceSeed,
-              status: "draft",
+              status: "paid",
               invoiceDate: "2026-01-01",
               dueDate: "2026-02-01",
               currency: "EUR",
               totalAmount: 1000,
+              paidAt: new Date("2026-01-15T00:00:00Z"),
+              paidDate: "2026-01-15",
+              paidAmount: 1000,
+              paymentNote: paymentNoteSeed,
+              paymentReference: paymentReferenceSeed,
               createdAtCursor: new Date("2026-01-01"),
             },
           ]),
@@ -1395,8 +1402,16 @@ describe("MCP anonymization canary corpus", () => {
       });
       const result = await finalize(context, response);
 
-      expectNoSeedLeak(result, [referenceSeed]);
-      expectSeedsQueuedForAnonymization([referenceSeed]);
+      expectNoSeedLeak(result, [
+        referenceSeed,
+        paymentNoteSeed,
+        paymentReferenceSeed,
+      ]);
+      expectSeedsQueuedForAnonymization([
+        referenceSeed,
+        paymentNoteSeed,
+        paymentReferenceSeed,
+      ]);
     },
   );
 
@@ -1405,6 +1420,8 @@ describe("MCP anonymization canary corpus", () => {
     async (tool) => {
       const referenceSeed = mkSeed(tool, 1);
       const notesSeed = mkSeed(tool, 2);
+      const paymentNoteSeed = mkSeed(tool, 19);
+      const paymentReferenceSeed = mkSeed(tool, 20);
       const teNarrativeSeed = mkSeed(tool, 3);
       const teInvoiceNarrativeSeed = mkSeed(tool, 4);
       const teEntityNameSeed = mkSeed(tool, 5);
@@ -1433,7 +1450,7 @@ describe("MCP anonymization canary corpus", () => {
               documentType: "invoice",
               originalInvoiceId: null,
               reference: referenceSeed,
-              status: "draft",
+              status: "paid",
               invoiceDate: "2026-01-01",
               dueDate: "2026-02-01",
               currency: "EUR",
@@ -1444,7 +1461,11 @@ describe("MCP anonymization canary corpus", () => {
               taxableSupplyDate: "2026-01-01",
               sellerProfileId: null,
               ...buyerSeeds,
-              paidAt: null,
+              paidAt: new Date("2026-01-15T00:00:00Z"),
+              paidDate: "2026-01-15",
+              paidAmount: 2000,
+              paymentNote: paymentNoteSeed,
+              paymentReference: paymentReferenceSeed,
               createdAt: new Date("2026-01-01"),
               updatedAt: new Date("2026-01-01"),
               timeEntries: [
@@ -1517,6 +1538,8 @@ describe("MCP anonymization canary corpus", () => {
       const seeds = [
         referenceSeed,
         notesSeed,
+        paymentNoteSeed,
+        paymentReferenceSeed,
         teNarrativeSeed,
         teInvoiceNarrativeSeed,
         teEntityNameSeed,

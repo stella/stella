@@ -1243,6 +1243,11 @@ export const LIST_INVOICES_LIST_PROJECTION = v.strictObject({
       dueDate: v.nullable(v.string()),
       currency: v.string(),
       totalAmount: v.number(),
+      paidAt: v.nullable(v.string()),
+      paidDate: v.nullable(v.string()),
+      paidAmount: v.nullable(v.number()),
+      paymentNote: v.nullable(v.string()),
+      paymentReference: v.nullable(v.string()),
     }),
   ),
   // Opaque `[createdAt, id]` cursor, not UUID-formatted.
@@ -1279,6 +1284,10 @@ export const LIST_INVOICES_DETAIL_PROJECTION = v.strictObject({
     buyerPostalCode: v.nullable(v.string()),
     buyerCountry: v.nullable(v.string()),
     paidAt: v.nullable(v.string()),
+    paidDate: v.nullable(v.string()),
+    paidAmount: v.nullable(v.number()),
+    paymentNote: v.nullable(v.string()),
+    paymentReference: v.nullable(v.string()),
     createdAt: v.string(),
     updatedAt: v.string(),
     timeEntries: v.array(

@@ -3,12 +3,17 @@ import { and, asc, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { invoices } from "@/api/db/schema";
+import type { INVOICE_SUMMARY_OMITTED_COLUMNS } from "@/api/handlers/invoices/invoice-detail";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
+import type {
+  UnprojectedColumns,
+  UnbackedProjectionKeys,
+} from "@/api/lib/projection-totality";
 import { brandPersistedInvoiceId } from "@/api/lib/safe-id-boundaries";
 
 const readInvoicesQuerySchema = t.Object({
@@ -82,6 +87,11 @@ const readInvoices = createSafeHandler(
             dueDate: invoices.dueDate,
             currency: invoices.currency,
             totalAmount: invoices.totalAmount,
+            paidAt: invoices.paidAt,
+            paidDate: invoices.paidDate,
+            paidAmount: invoices.paidAmount,
+            paymentNote: invoices.paymentNote,
+            paymentReference: invoices.paymentReference,
             createdAt: invoices.createdAt,
             createdAtCursor: invoiceCursor.cursorValue.as("created_at_cursor"),
             updatedAt: invoices.updatedAt,
@@ -92,6 +102,20 @@ const readInvoices = createSafeHandler(
           .limit(limit + 1),
       ),
     );
+
+    type SummaryRow = Omit<(typeof rows)[number], "createdAtCursor">;
+    type MissingSummaryColumn = UnprojectedColumns<
+      typeof invoices.$inferSelect,
+      SummaryRow,
+      (typeof INVOICE_SUMMARY_OMITTED_COLUMNS)[number]
+    >;
+    type ExtraSummaryColumn = UnbackedProjectionKeys<
+      typeof invoices.$inferSelect,
+      SummaryRow,
+      (typeof INVOICE_SUMMARY_OMITTED_COLUMNS)[number]
+    >;
+    true satisfies MissingSummaryColumn extends never ? true : never;
+    true satisfies ExtraSummaryColumn extends never ? true : never;
 
     const page = createCursorPage({
       rows,
@@ -113,6 +137,11 @@ const readInvoices = createSafeHandler(
         dueDate: row.dueDate,
         currency: row.currency,
         totalAmount: row.totalAmount,
+        paidAt: row.paidAt?.toISOString() ?? null,
+        paidDate: row.paidDate,
+        paidAmount: row.paidAmount,
+        paymentNote: row.paymentNote,
+        paymentReference: row.paymentReference,
         createdAt: row.createdAt.toISOString(),
         updatedAt: row.updatedAt.toISOString(),
       })),

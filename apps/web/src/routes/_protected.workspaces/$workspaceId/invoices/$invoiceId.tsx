@@ -3,6 +3,7 @@ import { Suspense, useState } from "react";
 import { useForm, useSelector } from "@tanstack/react-form";
 import {
   useMutation,
+  useQuery,
   useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query";
@@ -44,10 +45,13 @@ import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { formatCurrencyAmount } from "@/components/billing/format-currency";
+import { InvoicePaymentDialog } from "@/components/billing/invoice-payment-dialog";
 import { DatePickerPopover } from "@/components/date-picker-popover";
+import type { WebApiRoutes } from "@/generated/api-routes.gen";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
+import { roleOptions } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { ensureRouteQueryData } from "@/lib/react-query";
@@ -213,6 +217,7 @@ const InvoiceDetail = ({
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [editOpen, setEditOpen] = useState(false);
+  const [paymentOpen, setPaymentOpen] = useState(false);
 
   const { data: invoice } = useSuspenseQuery(
     invoiceByIdOptions(workspaceId, invoiceId),
@@ -236,7 +241,7 @@ const InvoiceDetail = ({
   type TransitionAction =
     | "finalize"
     | "send"
-    | "mark_paid"
+    | "undo_paid"
     | "void"
     | "revert_to_draft";
 
@@ -338,6 +343,8 @@ const InvoiceDetail = ({
         <div className="flex items-center gap-2">
           <InvoiceActions
             invoiceStatus={invoiceStatus}
+            documentType={invoice.documentType}
+            onPay={() => setPaymentOpen(true)}
             onDelete={() => deleteMutation.mutate()}
             onEdit={() => setEditOpen(true)}
             onTransition={(action) => transitionMutation.mutate(action)}
@@ -367,7 +374,37 @@ const InvoiceDetail = ({
             )}
           />
         )}
+        {invoice.paidDate && (
+          <InfoCell
+            label={t("billing.invoices.paymentDate")}
+            value={invoice.paidDate}
+          />
+        )}
+        {invoice.paidAmount !== null && (
+          <InfoCell
+            label={t("billing.amount")}
+            value={formatCurrencyAmount(invoice.paidAmount, invoice.currency)}
+          />
+        )}
+        {invoice.paymentReference && (
+          <InfoCell
+            label={t("common.reference")}
+            value={invoice.paymentReference}
+          />
+        )}
       </div>
+      {invoice.paymentNote && (
+        <p className="text-sm whitespace-pre-wrap">{invoice.paymentNote}</p>
+      )}
+      <InvoicePaymentDialog
+        workspaceId={workspaceId}
+        invoiceId={invoiceId}
+        amount={invoice.totalAmount}
+        currency={invoice.currency}
+        open={paymentOpen}
+        onOpenChange={setPaymentOpen}
+        onPaid={invalidateAll}
+      />
 
       {/* Notes */}
       {invoice.notes && (
@@ -567,13 +604,17 @@ const InfoCell = ({ label, value }: { label: string; value: string }) => (
 
 const InvoiceActions = ({
   invoiceStatus,
+  documentType,
+  onPay,
   onTransition,
   onEdit,
   onDelete,
 }: {
   invoiceStatus: InvoiceStatus;
+  documentType: WebApiRoutes["invoices"][":workspaceId"][":invoiceId"]["get"]["response"][200]["documentType"];
+  onPay: () => void;
   onTransition: (
-    action: "finalize" | "send" | "mark_paid" | "void" | "revert_to_draft",
+    action: "finalize" | "send" | "undo_paid" | "void" | "revert_to_draft",
   ) => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -582,6 +623,8 @@ const InvoiceActions = ({
   const rootT = useTranslations();
   const canUpdateInvoice = usePermissions({ invoice: ["update"] });
   const canDeleteInvoice = usePermissions({ invoice: ["delete"] });
+  const { data: role } = useQuery(roleOptions);
+  const canUndoPaid = role === "owner" || role === "admin";
 
   switch (invoiceStatus) {
     case "draft":
@@ -655,12 +698,8 @@ const InvoiceActions = ({
     case "sent":
       return (
         <>
-          {canUpdateInvoice && (
-            <Button
-              onClick={() => onTransition("mark_paid")}
-              size="sm"
-              variant="outline"
-            >
+          {canUpdateInvoice && documentType !== "credit_note" && (
+            <Button onClick={onPay} size="sm" variant="outline">
               <CheckIcon className="size-3.5" />
               {t("markPaid")}
             </Button>
@@ -680,15 +719,28 @@ const InvoiceActions = ({
       );
     case "paid":
       return canUpdateInvoice ? (
-        <ConfirmAction
-          description={t("confirmVoid")}
-          onConfirm={() => onTransition("void")}
-        >
-          <Button size="sm" variant="destructive">
-            <XCircleIcon className="size-3.5" />
-            {t("void")}
-          </Button>
-        </ConfirmAction>
+        <>
+          {canUndoPaid && (
+            <ConfirmAction
+              description={t("confirmUndoPaid")}
+              onConfirm={() => onTransition("undo_paid")}
+            >
+              <Button size="sm" variant="outline">
+                <UndoIcon className="size-3.5" />
+                {t("undoPaid")}
+              </Button>
+            </ConfirmAction>
+          )}
+          <ConfirmAction
+            description={t("confirmVoid")}
+            onConfirm={() => onTransition("void")}
+          >
+            <Button size="sm" variant="destructive">
+              <XCircleIcon className="size-3.5" />
+              {t("void")}
+            </Button>
+          </ConfirmAction>
+        </>
       ) : null;
     case "void":
       return null;

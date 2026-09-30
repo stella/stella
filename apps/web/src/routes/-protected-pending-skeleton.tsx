@@ -26,6 +26,7 @@ const STATIC_NAV_ITEMS = getWorkspacePrimaryNavItems({
   includePublicLaw: false,
   includePublicTools: false,
   includeTimesheets: false,
+  includeBilling: false,
   publicKnowledge: false,
 });
 const NAV_LABEL_WIDTHS = ["w-14", "w-10", "w-16", "w-20", "w-16"] as const;

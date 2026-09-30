@@ -494,6 +494,7 @@
     "invoices": {
       "addEntries": "Tételek hozzáadása",
       "confirmDelete": "Ezzel véglegesen törlődik ez a számlatervezet, és az összes tétel kapcsolata megszűnik. Ez a művelet nem vonható vissza.",
+      "confirmUndoPaid": "Visszaállítja a számlát elküldött állapotba, és törli a rögzített fizetési adatokat?",
       "confirmVoid": "A számla érvénytelenítésével az összes időbejegyzés és kiadás leválik, és visszakerül az előző státuszba.",
       "createInvoice": "Számla létrehozása",
       "dueDate": "Fizetési határidő",
@@ -508,6 +509,8 @@
       "noEntries": "Nincs ehhez a számlához kapcsolt tétel",
       "noInvoices": "Még nincsenek számlák",
       "paidAt": "Fizetve",
+      "paymentDate": "Fizetés dátuma",
+      "paymentInvalidAmount": "Adjon meg érvényes, nem negatív összeget.",
       "removeEntries": "Tételek eltávolítása",
       "send": "Küldés",
       "statuses": {
@@ -519,6 +522,7 @@
       },
       "totalAmount": "Végösszeg",
       "totalEntries": "{count, plural, one {# tétel} other {# tétel}}",
+      "undoPaid": "Fizetés visszavonása",
       "void": "Érvénytelenítés"
     },
     "loading": "Betöltés...",
@@ -605,6 +609,19 @@
     "timerActive": "Időmérő fut",
     "timesheets": "Munkaidő-nyilvántartás",
     "total": "Összesen",
+    "wip": {
+      "currencyTotals": "Összegek pénznemenként",
+      "days0To30": "0–30 nap",
+      "days31To60": "31–60 nap",
+      "days61To90": "61–90 nap",
+      "daysOver90": "90 napnál régebbi",
+      "description": "Jóváhagyott idő és számlázható költségek, amelyeket még nem számláztak ki.",
+      "empty": "Nincs ki nem számlázott munka.",
+      "expenseValue": "Költségek: {amount}",
+      "timeValue": "Idő: {amount}",
+      "title": "Ki nem számlázott munka",
+      "unpriced": "Díjtétel nélküli időbejegyzések: {count}"
+    },
     "writeOff": "Leírás"
   },
   "caseLaw": {

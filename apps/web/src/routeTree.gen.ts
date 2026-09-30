@@ -44,6 +44,7 @@ import { Route as SitemapsToolsDotxmlRouteImport } from './routes/sitemaps/tools
 import { Route as ToolsIndexRouteImport } from './routes/tools/index'
 import { Route as ToolsSlugRouteImport } from './routes/tools/$slug'
 import { Route as ToolsContributeRouteImport } from './routes/tools/contribute'
+import { Route as ProtectedBillingWipRouteImport } from './routes/_protected.billing.wip'
 import { Route as ProtectedChatIndexRouteImport } from './routes/_protected.chat/index'
 import { Route as ProtectedChatThreadIdRouteImport } from './routes/_protected.chat/$threadId'
 import { Route as ProtectedChatNewRouteImport } from './routes/_protected.chat_.new'
@@ -281,6 +282,11 @@ const ToolsContributeRoute = ToolsContributeRouteImport.update({
   id: '/contribute',
   path: '/contribute',
   getParentRoute: () => ToolsRouteRoute,
+} as any)
+const ProtectedBillingWipRoute = ProtectedBillingWipRouteImport.update({
+  id: '/billing/wip',
+  path: '/billing/wip',
+  getParentRoute: () => ProtectedRoute,
 } as any)
 const ProtectedChatIndexRoute = ProtectedChatIndexRouteImport.update({
   id: '/',
@@ -686,6 +692,7 @@ export interface FileRoutesByFullPath {
   '/tools/': typeof ToolsIndexRoute
   '/settings/organization': typeof ProtectedSettingsOrganizationRouteRouteWithChildren
   '/workspaces/$workspaceId': typeof ProtectedWorkspacesWorkspaceIdRouteRouteWithChildren
+  '/billing/wip': typeof ProtectedBillingWipRoute
   '/chat/$threadId': typeof ProtectedChatThreadIdRoute
   '/chat/new': typeof ProtectedChatNewRoute
   '/contacts/$contactId': typeof ProtectedContactsContactIdRoute
@@ -777,6 +784,7 @@ export interface FileRoutesByTo {
   '/knowledge': typeof KnowledgeIndexRoute
   '/law': typeof LawIndexRoute
   '/tools': typeof ToolsIndexRoute
+  '/billing/wip': typeof ProtectedBillingWipRoute
   '/chat/$threadId': typeof ProtectedChatThreadIdRoute
   '/chat/new': typeof ProtectedChatNewRoute
   '/contacts/$contactId': typeof ProtectedContactsContactIdRoute
@@ -877,6 +885,7 @@ export interface FileRoutesById {
   '/tools/': typeof ToolsIndexRoute
   '/_protected/settings/organization': typeof ProtectedSettingsOrganizationRouteRouteWithChildren
   '/_protected/workspaces/$workspaceId': typeof ProtectedWorkspacesWorkspaceIdRouteRouteWithChildren
+  '/_protected/billing/wip': typeof ProtectedBillingWipRoute
   '/_protected/chat/$threadId': typeof ProtectedChatThreadIdRoute
   '/_protected/chat_/new': typeof ProtectedChatNewRoute
   '/_protected/contacts/$contactId': typeof ProtectedContactsContactIdRoute
@@ -978,6 +987,7 @@ export interface FileRouteTypes {
     | '/tools/'
     | '/settings/organization'
     | '/workspaces/$workspaceId'
+    | '/billing/wip'
     | '/chat/$threadId'
     | '/chat/new'
     | '/contacts/$contactId'
@@ -1069,6 +1079,7 @@ export interface FileRouteTypes {
     | '/knowledge'
     | '/law'
     | '/tools'
+    | '/billing/wip'
     | '/chat/$threadId'
     | '/chat/new'
     | '/contacts/$contactId'
@@ -1168,6 +1179,7 @@ export interface FileRouteTypes {
     | '/tools/'
     | '/_protected/settings/organization'
     | '/_protected/workspaces/$workspaceId'
+    | '/_protected/billing/wip'
     | '/_protected/chat/$threadId'
     | '/_protected/chat_/new'
     | '/_protected/contacts/$contactId'
@@ -1499,6 +1511,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/tools/contribute'
       preLoaderRoute: typeof ToolsContributeRouteImport
       parentRoute: typeof ToolsRouteRoute
+    }
+    '/_protected/billing/wip': {
+      id: '/_protected/billing/wip'
+      path: '/billing/wip'
+      fullPath: '/billing/wip'
+      preLoaderRoute: typeof ProtectedBillingWipRouteImport
+      parentRoute: typeof ProtectedRoute
     }
     '/_protected/chat/': {
       id: '/_protected/chat/'
@@ -2245,6 +2264,7 @@ interface ProtectedRouteChildren {
   ProtectedSettingsRouteRoute: typeof ProtectedSettingsRouteRouteWithChildren
   ProtectedTimeRoute: typeof ProtectedTimeRoute
   ProtectedWorkspacesWorkspaceIdRouteRoute: typeof ProtectedWorkspacesWorkspaceIdRouteRouteWithChildren
+  ProtectedBillingWipRoute: typeof ProtectedBillingWipRoute
   ProtectedChatNewRoute: typeof ProtectedChatNewRoute
   ProtectedContactsContactIdRoute: typeof ProtectedContactsContactIdRoute
   ProtectedContactsImportRoute: typeof ProtectedContactsImportRoute
@@ -2261,6 +2281,7 @@ const ProtectedRouteChildren: ProtectedRouteChildren = {
   ProtectedTimeRoute: ProtectedTimeRoute,
   ProtectedWorkspacesWorkspaceIdRouteRoute:
     ProtectedWorkspacesWorkspaceIdRouteRouteWithChildren,
+  ProtectedBillingWipRoute: ProtectedBillingWipRoute,
   ProtectedChatNewRoute: ProtectedChatNewRoute,
   ProtectedContactsContactIdRoute: ProtectedContactsContactIdRoute,
   ProtectedContactsImportRoute: ProtectedContactsImportRoute,
@@ -2303,3 +2324,12 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { createStart } from '@tanstack/react-start'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+  }
+}

@@ -494,6 +494,7 @@
     "invoices": {
       "addEntries": "Add entries",
       "confirmDelete": "This will permanently delete this draft invoice and unlink all entries. This action cannot be undone.",
+      "confirmUndoPaid": "Return this invoice to sent and remove its recorded payment details?",
       "confirmVoid": "Voiding this invoice will unlink all time entries and expenses, reverting them to their previous status.",
       "createInvoice": "Create invoice",
       "dueDate": "Due date",
@@ -508,6 +509,8 @@
       "noEntries": "No entries linked to this invoice",
       "noInvoices": "No invoices yet",
       "paidAt": "Paid at",
+      "paymentDate": "Payment date",
+      "paymentInvalidAmount": "Enter a valid non-negative amount.",
       "removeEntries": "Remove entries",
       "send": "Send",
       "statuses": {
@@ -519,6 +522,7 @@
       },
       "totalAmount": "Total amount",
       "totalEntries": "{count, plural, one {# entry} other {# entries}}",
+      "undoPaid": "Undo payment",
       "void": "Void"
     },
     "loading": "Loading...",
@@ -605,6 +609,19 @@
     "timerActive": "Timer running",
     "timesheets": "Timesheets",
     "total": "Total",
+    "wip": {
+      "currencyTotals": "Totals by currency",
+      "days0To30": "0–30 days",
+      "days31To60": "31–60 days",
+      "days61To90": "61–90 days",
+      "daysOver90": "Over 90 days",
+      "description": "Approved time and billable expenses not yet invoiced.",
+      "empty": "No unbilled work.",
+      "expenseValue": "Expenses: {amount}",
+      "timeValue": "Time: {amount}",
+      "title": "Unbilled work",
+      "unpriced": "Unpriced time entries: {count}"
+    },
     "writeOff": "Write off"
   },
   "caseLaw": {

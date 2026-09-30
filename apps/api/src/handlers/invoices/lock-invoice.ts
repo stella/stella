@@ -54,6 +54,11 @@ export const lockInvoiceInStatus = async (
       sellerProfileId: invoices.sellerProfileId,
       taxableSupplyDate: invoices.taxableSupplyDate,
       totalAmount: invoices.totalAmount,
+      paidAt: invoices.paidAt,
+      paidDate: invoices.paidDate,
+      paidAmount: invoices.paidAmount,
+      paymentNote: invoices.paymentNote,
+      paymentReference: invoices.paymentReference,
     })
     .from(invoices)
     .where(

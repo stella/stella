@@ -7,7 +7,10 @@ import { roles } from "@stll/permissions";
 
 import { member, user } from "@/api/db/auth-schema";
 import { invoices, timeEntries } from "@/api/db/schema";
-import { INVOICE_DETAIL_RELATIONS } from "@/api/handlers/invoices/invoice-detail";
+import {
+  INVOICE_DETAIL_RELATIONS,
+  INVOICE_SUMMARY_OMITTED_COLUMNS,
+} from "@/api/handlers/invoices/invoice-detail";
 import { readInvoiceTotals } from "@/api/handlers/invoices/invoice-lines";
 import { deleteTimeEntryHandler } from "@/api/handlers/time-entries/delete";
 import { updateTimeEntryHandler } from "@/api/handlers/time-entries/update";
@@ -40,6 +43,10 @@ import {
   isDateOnlyPaginationCursorPart,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import type {
+  UnprojectedColumns,
+  UnbackedProjectionKeys,
+} from "@/api/lib/projection-totality";
 import {
   brandPersistedEntityId,
   brandPersistedInvoiceId,
@@ -166,8 +173,15 @@ const TIME_ENTRY_DETAIL_TEXT_FIELD_PATHS = deriveTextFieldPaths(
 
 // --- list_invoices text-field specs --------------------------------------
 
-/** Shape `list_invoices`'s list branch redacts: one field, per item. */
-type InvoiceReferenceTextItem = { reference: string | null };
+/** Authored invoice summary fields share the matter redaction scope. */
+const INVOICE_PAYMENT_TEXT_FIELDS = [
+  "paymentNote",
+  "paymentReference",
+] as const;
+type InvoiceReferenceTextItem = { reference: string | null } & Record<
+  (typeof INVOICE_PAYMENT_TEXT_FIELDS)[number],
+  string | null
+>;
 
 const INVOICE_LIST_TEXT_FIELD_PATH = "invoices[].reference";
 
@@ -185,6 +199,18 @@ const invoiceListTextFieldSpecs = (
       item.reference = value;
     },
   }),
+  ...INVOICE_PAYMENT_TEXT_FIELDS.map((field) =>
+    defineTextFieldSpec({
+      path: `invoices[].${field}`,
+      items: (payload: { invoices: readonly InvoiceReferenceTextItem[] }) =>
+        payload.invoices,
+      scope: () => workspaceId,
+      read: (item: InvoiceReferenceTextItem) => item[field],
+      apply: (item: InvoiceReferenceTextItem, value) => {
+        item[field] = value;
+      },
+    }),
+  ),
 ];
 
 type InvoiceTimeEntryTextItem = {
@@ -220,7 +246,10 @@ type InvoiceBuyerTextField = (typeof INVOICE_BUYER_TEXT_FIELDS)[number];
 
 /** Full shape `list_invoices`'s detail branch redacts, one invoice deep. */
 type InvoiceDetailTextPayload = {
-  invoice: Record<InvoiceBuyerTextField, string | null> & {
+  invoice: Record<
+    InvoiceBuyerTextField | (typeof INVOICE_PAYMENT_TEXT_FIELDS)[number],
+    string | null
+  > & {
     reference: string | null;
     notes: string | null;
     timeEntries: readonly InvoiceTimeEntryTextItem[];
@@ -256,6 +285,17 @@ const invoiceDetailTextFieldSpecs = (
       item.notes = value;
     },
   }),
+  ...INVOICE_PAYMENT_TEXT_FIELDS.map((field) =>
+    defineTextFieldSpec({
+      path: `invoice.${field}`,
+      items: (payload: InvoiceDetailTextPayload) => [payload.invoice],
+      scope: () => workspaceId,
+      read: (item: InvoiceDetailTextPayload["invoice"]) => item[field],
+      apply: (item: InvoiceDetailTextPayload["invoice"], value) => {
+        item[field] = value;
+      },
+    }),
+  ),
   ...INVOICE_BUYER_TEXT_FIELDS.map((field) =>
     defineTextFieldSpec({
       path: `invoice.${field}`,
@@ -1267,6 +1307,123 @@ const readInvoiceDetail = async ({
     }),
   );
 
+const projectInvoiceDetail = (
+  invoiceRow: NonNullable<Awaited<ReturnType<typeof readInvoiceDetail>>>,
+  workspaceId: SafeId<"workspace">,
+) => {
+  const totals = readInvoiceTotals(invoiceRow);
+  if (totals.isErr()) {
+    return internalFailureResult(totals.error);
+  }
+
+  const invoice = {
+    id: invoiceRow.id,
+    // Detail mode may be reached by invoice_id alone (no matter_id), so carry
+    // the resolved owning workspace on the invoice; the chat ref-mediation
+    // layer reads it to mint the line items' entity refs.
+    workspaceId,
+    invoiceNumber: invoiceRow.invoiceNumber,
+    documentType: invoiceRow.documentType,
+    originalInvoiceId: invoiceRow.originalInvoiceId,
+    reference: invoiceRow.reference,
+    status: invoiceRow.status,
+    invoiceDate: invoiceRow.invoiceDate,
+    taxableSupplyDate: invoiceRow.taxableSupplyDate,
+    dueDate: invoiceRow.dueDate,
+    currency: invoiceRow.currency,
+    totalAmount: invoiceRow.totalAmount,
+    notes: invoiceRow.notes,
+    sellerProfileId: invoiceRow.sellerProfileId,
+    buyerName: invoiceRow.buyerName,
+    buyerRegistrationId: invoiceRow.buyerRegistrationId,
+    buyerVatId: invoiceRow.buyerVatId,
+    buyerAddressLine1: invoiceRow.buyerAddressLine1,
+    buyerAddressLine2: invoiceRow.buyerAddressLine2,
+    buyerCity: invoiceRow.buyerCity,
+    buyerPostalCode: invoiceRow.buyerPostalCode,
+    buyerCountry: invoiceRow.buyerCountry,
+    paidAt: invoiceRow.paidAt?.toISOString() ?? null,
+    paidDate: invoiceRow.paidDate,
+    paidAmount: invoiceRow.paidAmount,
+    paymentNote: invoiceRow.paymentNote,
+    paymentReference: invoiceRow.paymentReference,
+    createdAt: invoiceRow.createdAt.toISOString(),
+    updatedAt: invoiceRow.updatedAt.toISOString(),
+    timeEntries: invoiceRow.timeEntries.map((te) => {
+      const workItem = te.workItem;
+      return {
+        id: te.id,
+        entityId: te.workItemId,
+        dateWorked: te.dateWorked,
+        billedMinutes: te.billedMinutes,
+        rateAtEntry: te.rateAtEntry,
+        currency: te.currency,
+        narrative: te.narrative,
+        invoiceNarrative: te.invoiceNarrative,
+        status: te.status,
+        entity: workItem ? { id: workItem.id, name: workItem.name } : null,
+      };
+    }),
+    expenses: invoiceRow.expenses.map((ex) => {
+      const entity =
+        ex.matter ?? panic("Invoiced expense has no matter entity");
+      return {
+        id: ex.id,
+        entityId: ex.matterId,
+        dateIncurred: ex.dateIncurred,
+        amount: ex.amount,
+        currency: ex.currency,
+        category: ex.category,
+        description: ex.description,
+        invoiceDescription: ex.invoiceDescription,
+        billable: ex.billable,
+        markup: ex.markup,
+        entity: { id: entity.id, name: entity.name },
+      };
+    }),
+    lines: invoiceRow.lines.map(({ releasedAt: _releasedAt, ...line }) => line),
+    totals: totals.value,
+  };
+
+  // Scope comes from authorized detail lookup; finalization history and
+  // persisted line/VAT subtotals are not part of the agent document payload.
+  const DETAIL_OMITTED = [
+    "organizationId",
+    "finalizedAt",
+    "netAmount",
+    "vatAmount",
+  ] as const satisfies readonly (keyof typeof invoices.$inferSelect)[];
+  type DetailRow = Omit<
+    typeof invoice,
+    "timeEntries" | "expenses" | "lines" | "totals"
+  >;
+  type MissingDetailColumn = UnprojectedColumns<
+    typeof invoices.$inferSelect,
+    DetailRow,
+    (typeof DETAIL_OMITTED)[number]
+  >;
+  type ExtraDetailColumn = UnbackedProjectionKeys<
+    typeof invoices.$inferSelect,
+    DetailRow,
+    (typeof DETAIL_OMITTED)[number]
+  >;
+  true satisfies MissingDetailColumn extends never ? true : never;
+  true satisfies ExtraDetailColumn extends never ? true : never;
+
+  const textFields = runTextFieldSpecs(
+    invoiceDetailTextFieldSpecs(workspaceId),
+    { invoice },
+  );
+
+  return {
+    egress: "structured" as const,
+    payload: { invoice } satisfies v.InferInput<
+      typeof LIST_INVOICES_DETAIL_PROJECTION
+    >,
+    textFields,
+  };
+};
+
 const handleListInvoicesTool: TypedMcpToolHandler<
   v.InferInput<typeof LIST_INVOICES_PROJECTION>
 > = async ({ args, context }) => {
@@ -1298,90 +1455,7 @@ const handleListInvoicesTool: TypedMcpToolHandler<
     if (!invoiceRow) {
       return notFoundResult("Invoice not found or not accessible");
     }
-    const totals = readInvoiceTotals(invoiceRow);
-    if (totals.isErr()) {
-      return internalFailureResult(totals.error);
-    }
-
-    const invoice = {
-      id: invoiceRow.id,
-      // Detail mode may be reached by invoice_id alone (no matter_id), so carry
-      // the resolved owning workspace on the invoice; the chat ref-mediation
-      // layer reads it to mint the line items' entity refs.
-      workspaceId,
-      invoiceNumber: invoiceRow.invoiceNumber,
-      documentType: invoiceRow.documentType,
-      originalInvoiceId: invoiceRow.originalInvoiceId,
-      reference: invoiceRow.reference,
-      status: invoiceRow.status,
-      invoiceDate: invoiceRow.invoiceDate,
-      taxableSupplyDate: invoiceRow.taxableSupplyDate,
-      dueDate: invoiceRow.dueDate,
-      currency: invoiceRow.currency,
-      totalAmount: invoiceRow.totalAmount,
-      notes: invoiceRow.notes,
-      sellerProfileId: invoiceRow.sellerProfileId,
-      buyerName: invoiceRow.buyerName,
-      buyerRegistrationId: invoiceRow.buyerRegistrationId,
-      buyerVatId: invoiceRow.buyerVatId,
-      buyerAddressLine1: invoiceRow.buyerAddressLine1,
-      buyerAddressLine2: invoiceRow.buyerAddressLine2,
-      buyerCity: invoiceRow.buyerCity,
-      buyerPostalCode: invoiceRow.buyerPostalCode,
-      buyerCountry: invoiceRow.buyerCountry,
-      paidAt: invoiceRow.paidAt?.toISOString() ?? null,
-      createdAt: invoiceRow.createdAt.toISOString(),
-      updatedAt: invoiceRow.updatedAt.toISOString(),
-      timeEntries: invoiceRow.timeEntries.map((te) => {
-        const workItem = te.workItem;
-        return {
-          id: te.id,
-          entityId: te.workItemId,
-          dateWorked: te.dateWorked,
-          billedMinutes: te.billedMinutes,
-          rateAtEntry: te.rateAtEntry,
-          currency: te.currency,
-          narrative: te.narrative,
-          invoiceNarrative: te.invoiceNarrative,
-          status: te.status,
-          entity: workItem ? { id: workItem.id, name: workItem.name } : null,
-        };
-      }),
-      expenses: invoiceRow.expenses.map((ex) => {
-        const entity =
-          ex.matter ?? panic("Invoiced expense has no matter entity");
-        return {
-          id: ex.id,
-          entityId: ex.matterId,
-          dateIncurred: ex.dateIncurred,
-          amount: ex.amount,
-          currency: ex.currency,
-          category: ex.category,
-          description: ex.description,
-          invoiceDescription: ex.invoiceDescription,
-          billable: ex.billable,
-          markup: ex.markup,
-          entity: { id: entity.id, name: entity.name },
-        };
-      }),
-      lines: invoiceRow.lines.map(
-        ({ releasedAt: _releasedAt, ...line }) => line,
-      ),
-      totals: totals.value,
-    };
-
-    const textFields = runTextFieldSpecs(
-      invoiceDetailTextFieldSpecs(workspaceId),
-      { invoice },
-    );
-
-    return {
-      egress: "structured",
-      payload: { invoice } satisfies v.InferInput<
-        typeof LIST_INVOICES_DETAIL_PROJECTION
-      >,
-      textFields,
-    };
+    return projectInvoiceDetail(invoiceRow, workspaceId);
   }
 
   // List mode. matter_id is guaranteed present by the schema.
@@ -1414,6 +1488,11 @@ const handleListInvoicesTool: TypedMcpToolHandler<
         dueDate: invoices.dueDate,
         currency: invoices.currency,
         totalAmount: invoices.totalAmount,
+        paidAt: invoices.paidAt,
+        paidDate: invoices.paidDate,
+        paidAmount: invoices.paidAmount,
+        paymentNote: invoices.paymentNote,
+        paymentReference: invoices.paymentReference,
         createdAtCursor: invoicePageCursor.cursorValue.as("created_at_cursor"),
       })
       .from(invoices)
@@ -1441,8 +1520,31 @@ const handleListInvoicesTool: TypedMcpToolHandler<
   });
 
   const invoiceList = page.items.map(
-    ({ createdAtCursor: _createdAtCursor, ...invoice }) => invoice,
+    ({ createdAtCursor: _createdAtCursor, ...invoice }) => ({
+      ...invoice,
+      paidAt: invoice.paidAt?.toISOString() ?? null,
+    }),
   );
+
+  // The opaque cursor replaces raw persistence timestamps in agent summaries.
+  const LIST_OMITTED = [
+    ...INVOICE_SUMMARY_OMITTED_COLUMNS,
+    "createdAt",
+    "updatedAt",
+  ] as const satisfies readonly (keyof typeof invoices.$inferSelect)[];
+  type ListRow = (typeof invoiceList)[number];
+  type MissingListColumn = UnprojectedColumns<
+    typeof invoices.$inferSelect,
+    ListRow,
+    (typeof LIST_OMITTED)[number]
+  >;
+  type ExtraListColumn = UnbackedProjectionKeys<
+    typeof invoices.$inferSelect,
+    ListRow,
+    (typeof LIST_OMITTED)[number]
+  >;
+  true satisfies MissingListColumn extends never ? true : never;
+  true satisfies ExtraListColumn extends never ? true : never;
 
   const textFields = runTextFieldSpecs(invoiceListTextFieldSpecs(workspaceId), {
     invoices: invoiceList,

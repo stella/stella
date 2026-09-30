@@ -8727,6 +8727,219 @@ export const generatedRouteMap: RouteNode = {
             },
           },
         },
+        billing: {
+          kind: "route",
+          children: {
+            "wip-clients-list": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "billing", "wip-clients-list"],
+                capabilityId: "billing.wip.clients.list",
+                description:
+                  "List complete client WIP totals across accessible matters, grouped by currency with aged buckets and no FX conversion. Amounts are exact minor-unit integer strings. A row with clientId and clientName null is the explicit unassigned-client bucket. Future work dates have age zero; asOf pins aging, not a historical snapshot. WIP is live and can change between requests. totalsByCurrency covers the matching scope independently of the client page. Reuse asOf and filters with nextCursor. Use billing.wip.list to inspect matter totals or filter matterId for one matter.",
+                access: "read",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    required: false,
+                    part: "query",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--client-id",
+                    prop: "clientId",
+                    required: false,
+                    part: "query",
+                    partPath: "clientId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--currency",
+                    prop: "currency",
+                    required: false,
+                    part: "query",
+                    partPath: "currency",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    description:
+                      "UTC calendar day for aging; reuse the response asOf on subsequent pages.",
+                    flag: "--as-of",
+                    prop: "asOf",
+                    required: false,
+                    part: "query",
+                    partPath: "asOf",
+                  },
+                ],
+                inputOnly: [],
+                paginated: true,
+                paginationPart: "query",
+                itemsKey: "items",
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    query: {
+                      type: "object",
+                      properties: {
+                        matterId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        clientId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        currency: {
+                          minLength: 3,
+                          maxLength: 3,
+                          pattern: "^[A-Z]{3}$",
+                          type: "string",
+                        },
+                        asOf: {
+                          format: "date",
+                          description:
+                            "UTC calendar day for aging; reuse the response asOf on subsequent pages.",
+                          type: "string",
+                        },
+                        limit: {
+                          minimum: 1,
+                          maximum: 50,
+                          type: "integer",
+                        },
+                        cursor: {
+                          maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "wip-list": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "billing", "wip-list"],
+                capabilityId: "billing.wip.list",
+                description:
+                  "List approved, unbilled client time at its recorded resolved rates and unbilled billable expenses, by accessible matter. Amounts and aged buckets are exact minor-unit integer strings, with no FX conversion. Expense values include recorded markup. Future work dates have age zero; asOf pins aging, not a historical snapshot. WIP is live and can change between requests. totalsByCurrency covers the entire matching scope, independent of the matter page. unpricedTimeEntryCount explicitly identifies entries without a priced snapshot. Reuse asOf and filters with nextCursor; use billing.wip.clients.list for complete client totals. Filter matterId for a per-matter view.",
+                access: "read",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    required: false,
+                    part: "query",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--client-id",
+                    prop: "clientId",
+                    required: false,
+                    part: "query",
+                    partPath: "clientId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--currency",
+                    prop: "currency",
+                    required: false,
+                    part: "query",
+                    partPath: "currency",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    description:
+                      "UTC calendar day for aging; reuse the response asOf on subsequent pages.",
+                    flag: "--as-of",
+                    prop: "asOf",
+                    required: false,
+                    part: "query",
+                    partPath: "asOf",
+                  },
+                ],
+                inputOnly: [],
+                paginated: true,
+                paginationPart: "query",
+                itemsKey: "items",
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    query: {
+                      type: "object",
+                      properties: {
+                        matterId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        clientId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        currency: {
+                          minLength: 3,
+                          maxLength: 3,
+                          pattern: "^[A-Z]{3}$",
+                          type: "string",
+                        },
+                        asOf: {
+                          format: "date",
+                          description:
+                            "UTC calendar day for aging; reuse the response asOf on subsequent pages.",
+                          type: "string",
+                        },
+                        limit: {
+                          minimum: 1,
+                          maximum: 50,
+                          type: "integer",
+                        },
+                        cursor: {
+                          maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
         "case-law": {
           kind: "route",
           children: {
@@ -25782,7 +25995,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "invoices", "transition"],
                 capabilityId: "invoices.transition",
                 description:
-                  "Move an invoice through finalize, send, mark_paid, void, or revert_to_draft. Finalize assigns an omitted number from the document type's default series, using the issue date; configure a default number series first. Manual numbers and numbers kept after reverting to draft are preserved. A credit note must reference an eligible original and cannot exceed its total. Voiding releases attached entries and clears the paid timestamp.",
+                  "Move an invoice through finalize, send, mark_paid, undo_paid, void, or revert_to_draft. mark_paid accepts paidDate (UTC today by default), paidAmountMinor (full total by default), and optional note/reference. Only full payment is supported; credit notes cannot record client payments. An identical payment resend succeeds without repeating audit events. Only organization owners/admins may undo_paid; this returns paid invoices to sent and clears payment details. Finalize assigns an omitted number from the document type's default series, using the issue date; configure a default number series first. Manual numbers and numbers kept after reverting to draft are preserved. A credit note must reference an eligible original and cannot exceed its total. Voiding releases attached entries and clears payment details while retaining them in the audit trail.",
                 access: "write",
                 flags: [
                   {
@@ -25803,24 +26016,8 @@ export const generatedRouteMap: RouteNode = {
                     part: "params",
                     partPath: "invoiceId",
                   },
-                  {
-                    kind: "enum",
-                    enum: [
-                      "finalize",
-                      "send",
-                      "mark_paid",
-                      "void",
-                      "revert_to_draft",
-                    ],
-                    repeatable: false,
-                    flag: "--action",
-                    prop: "action",
-                    required: true,
-                    part: "body",
-                    partPath: "action",
-                  },
                 ],
-                inputOnly: [],
+                inputOnly: ["body"],
                 paginated: false,
                 destructive: false,
                 scope: "billing_write",
@@ -25829,21 +26026,80 @@ export const generatedRouteMap: RouteNode = {
                   additionalProperties: false,
                   properties: {
                     body: {
-                      type: "object",
-                      required: ["action"],
-                      properties: {
-                        action: {
-                          default: "finalize",
-                          type: "string",
-                          enum: [
-                            "finalize",
-                            "send",
-                            "mark_paid",
-                            "void",
-                            "revert_to_draft",
-                          ],
+                      anyOf: [
+                        {
+                          additionalProperties: false,
+                          type: "object",
+                          required: ["action"],
+                          properties: {
+                            action: {
+                              const: "mark_paid",
+                              type: "string",
+                            },
+                            paidDate: {
+                              format: "date",
+                              type: "string",
+                            },
+                            paidAmountMinor: {
+                              minimum: 0,
+                              maximum: 9007199254740991,
+                              type: "integer",
+                            },
+                            note: {
+                              nullable: true,
+                              anyOf: [
+                                {
+                                  maxLength: 2000,
+                                  type: "string",
+                                },
+                                {
+                                  type: "null",
+                                },
+                              ],
+                            },
+                            reference: {
+                              nullable: true,
+                              anyOf: [
+                                {
+                                  maxLength: 256,
+                                  type: "string",
+                                },
+                                {
+                                  type: "null",
+                                },
+                              ],
+                            },
+                          },
                         },
-                      },
+                        {
+                          additionalProperties: false,
+                          type: "object",
+                          required: ["action"],
+                          properties: {
+                            action: {
+                              const: "undo_paid",
+                              type: "string",
+                            },
+                          },
+                        },
+                        {
+                          additionalProperties: false,
+                          type: "object",
+                          required: ["action"],
+                          properties: {
+                            action: {
+                              default: "finalize",
+                              type: "string",
+                              enum: [
+                                "finalize",
+                                "send",
+                                "void",
+                                "revert_to_draft",
+                              ],
+                            },
+                          },
+                        },
+                      ],
                     },
                     params: {
                       type: "object",

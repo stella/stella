@@ -148,6 +148,12 @@ export const timeEntries = p.pgTable(
     p.index("time_entries_ws_status_idx").on(table.workspaceId, table.status),
     p.index("time_entries_invoice_idx").on(table.invoiceId),
     p
+      .index("time_entries_org_workspace_wip_idx")
+      .on(table.organizationId, table.workspaceId, table.dateWorked)
+      .where(
+        sql`${table.activityGroup} = 'client' AND ${table.status} = 'approved' AND ${table.invoiceId} IS NULL AND ${table.billable} AND NOT ${table.noCharge}`,
+      ),
+    p
       .index("time_entries_approval_queue_idx")
       .on(
         table.organizationId,
@@ -801,6 +807,12 @@ export const expenses = p.pgTable(
       .index("expenses_ws_user_date_idx")
       .on(table.workspaceId, table.userId, table.dateIncurred),
     p.index("expenses_invoice_idx").on(table.invoiceId),
+    p
+      .index("expenses_org_workspace_wip_idx")
+      .on(table.organizationId, table.workspaceId, table.dateIncurred)
+      .where(
+        sql`${table.invoiceId} IS NULL AND ${table.billable} AND ${table.status} IN ('draft', 'approved')`,
+      ),
     p.check("expenses_amount_positive_check", sql`${table.amount} > 0`),
     ...wsOrganizationPolicies("expenses"),
   ],
@@ -861,10 +873,20 @@ export const invoices = p.pgTable(
     totalAmount: centsColumn("total_amount").notNull().default(unsafeCents(0)),
     notes: p.text(),
     paidAt: timestamptz("paid_at"),
+    paidDate: p.date("paid_date"),
+    paidAmount: centsColumn("paid_amount"),
+    paymentNote: p.text("payment_note"),
+    paymentReference: p.varchar("payment_reference", { length: 256 }),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
+    // Nullable coherent metadata keeps old mark_paid/void tasks compatible
+    // during rollout; the new handler owns payment status and clears all fields.
+    p.check(
+      "invoices_payment_state_check",
+      sql`(${table.paidDate} IS NULL AND ${table.paidAmount} IS NULL AND ${table.paymentNote} IS NULL AND ${table.paymentReference} IS NULL) OR (${table.paidDate} IS NOT NULL AND ${table.paidAmount} IS NOT NULL AND ${table.paidAmount} = ${table.totalAmount})`,
+    ),
     p
       .foreignKey({
         columns: [table.workspaceId, table.organizationId],

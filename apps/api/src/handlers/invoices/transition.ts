@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, eq, inArray, isNull, ne } from "drizzle-orm";
-import { t } from "elysia";
+import { type Static, t } from "elysia";
 
 import type { Transaction } from "@/api/db/root";
 import { resultTx } from "@/api/db/safe-db";
@@ -16,7 +16,11 @@ import type { InvoiceStatus } from "@/api/db/schema";
 import { lockInvoiceInStatus } from "@/api/handlers/invoices/lock-invoice";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import type { AuditRecorder, AuditEvent } from "@/api/lib/audit-log";
+import type {
+  AuditRecorder,
+  AuditEvent,
+  FieldDiffs,
+} from "@/api/lib/audit-log";
 import {
   allocateNumber,
   findDefaultNumberSeries,
@@ -28,13 +32,23 @@ import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { PG_ERROR } from "@/api/lib/pg-error";
 
 import { validateInvoiceDocument } from "./document-type";
+import {
+  EMPTY_INVOICE_PAYMENT,
+  invoicePaymentAuditChanges,
+  prepareInvoicePayment,
+  tMarkInvoicePaid,
+  tUndoInvoicePaid,
+} from "./invoice-payment";
 
-type TransitionAction =
-  | "finalize"
-  | "send"
-  | "mark_paid"
-  | "void"
-  | "revert_to_draft";
+const transitionInvoiceBodySchema = t.Union([
+  tMarkInvoicePaid,
+  tUndoInvoicePaid,
+  t.Object(
+    { action: t.UnionEnum(["finalize", "send", "void", "revert_to_draft"]) },
+    { additionalProperties: false },
+  ),
+]);
+type TransitionAction = Static<typeof transitionInvoiceBodySchema>["action"];
 
 const TRANSITIONS = {
   finalize: {
@@ -46,8 +60,12 @@ const TRANSITIONS = {
     to: INVOICE_STATUS.SENT,
   },
   mark_paid: {
-    from: [INVOICE_STATUS.SENT],
+    from: [INVOICE_STATUS.SENT, INVOICE_STATUS.PAID],
     to: INVOICE_STATUS.PAID,
+  },
+  undo_paid: {
+    from: [INVOICE_STATUS.PAID, INVOICE_STATUS.SENT],
+    to: INVOICE_STATUS.SENT,
   },
   void: {
     from: [INVOICE_STATUS.FINALIZED, INVOICE_STATUS.SENT, INVOICE_STATUS.PAID],
@@ -62,21 +80,12 @@ const TRANSITIONS = {
   { from: InvoiceStatus[]; to: InvoiceStatus }
 >;
 
-const transitionInvoiceBodySchema = t.Object({
-  action: t.UnionEnum([
-    "finalize",
-    "send",
-    "mark_paid",
-    "void",
-    "revert_to_draft",
-  ]),
-});
-
 const invoiceParamsSchema = workspaceParams({ invoiceId: tSafeId("invoice") });
 
 const buildVoidEvents = (params: {
   invoiceId: SafeId<"invoice">;
   previousStatus: InvoiceStatus;
+  paymentChanges: FieldDiffs;
   revertedTimeEntries: { id: SafeId<"timeEntry"> }[];
   revertedExpenses: { id: SafeId<"expense"> }[];
 }): AuditEvent[] => {
@@ -87,6 +96,7 @@ const buildVoidEvents = (params: {
       resourceId: params.invoiceId,
       changes: {
         status: { old: params.previousStatus, new: INVOICE_STATUS.VOID },
+        ...params.paymentChanges,
       },
     },
   ];
@@ -126,6 +136,7 @@ type ReleaseInvoiceEntriesOptions = {
   invoiceId: SafeId<"invoice">;
   workspaceId: SafeId<"workspace">;
   previousStatus: InvoiceStatus;
+  paymentChanges: FieldDiffs;
   now: Date;
   recordAuditEvent: AuditRecorder;
 };
@@ -135,6 +146,7 @@ const releaseInvoiceEntries = async (
     invoiceId,
     workspaceId,
     previousStatus,
+    paymentChanges,
     now,
     recordAuditEvent,
     actorUserId,
@@ -198,6 +210,7 @@ const releaseInvoiceEntries = async (
     buildVoidEvents({
       invoiceId,
       previousStatus,
+      paymentChanges,
       revertedTimeEntries,
       revertedExpenses,
     }),
@@ -205,15 +218,62 @@ const releaseInvoiceEntries = async (
   return Result.ok(undefined);
 };
 
+type FinalizeInvoiceOptions = {
+  invoice: NonNullable<Awaited<ReturnType<typeof lockInvoiceInStatus>>>;
+  workspaceId: SafeId<"workspace">;
+  now: Date;
+};
+const prepareFinalizedInvoice = async (
+  tx: Transaction,
+  { invoice, workspaceId, now }: FinalizeInvoiceOptions,
+) => {
+  const valid = await validateInvoiceDocument(tx, {
+    invoiceId: invoice.id,
+    workspaceId,
+    documentType: invoice.documentType,
+    originalInvoiceId: invoice.originalInvoiceId,
+    currency: invoice.currency,
+    totalAmount: invoice.totalAmount,
+  });
+  if (valid.isErr()) {
+    return Result.err(valid.error);
+  }
+  const finalizedAt = invoice.finalizedAt ?? now;
+  if (invoice.invoiceNumber !== null) {
+    return Result.ok({ finalizedAt });
+  }
+  const series = await findDefaultNumberSeries(tx, invoice.documentType);
+  if (!series) {
+    return Result.err(
+      new HandlerError({
+        status: 409,
+        message: "No default number series configured for this document type",
+        hint: "Create or update a number series with this documentType and isDefault=true, then finalize again.",
+      }),
+    );
+  }
+  const number = await allocateNumber(
+    tx,
+    series.id,
+    new Date(`${invoice.invoiceDate}T00:00:00Z`),
+  );
+  return number.map(({ number: invoiceNumber }) => ({
+    finalizedAt,
+    invoiceNumber,
+  }));
+};
+
 const transitionInvoice = createSafeHandler(
   {
     description:
-      "Move an invoice through finalize, send, mark_paid, void, or revert_to_draft. " +
+      "Move an invoice through finalize, send, mark_paid, undo_paid, void, or revert_to_draft. " +
+      "mark_paid accepts paidDate (UTC today by default), paidAmountMinor (full total by default), and optional note/reference. Only full payment is supported; credit notes cannot record client payments. " +
+      "An identical payment resend succeeds without repeating audit events. Only organization owners/admins may undo_paid; this returns paid invoices to sent and clears payment details. " +
       "Finalize assigns an omitted number from the document type's default series, " +
       "using the issue date; configure a default number series first. Manual numbers " +
       "and numbers kept after reverting to draft are preserved. A credit note must " +
       "reference an eligible original and cannot exceed its total. Voiding releases " +
-      "attached entries and clears the paid timestamp.",
+      "attached entries and clears payment details while retaining them in the audit trail.",
     permissions: { invoice: ["update"] },
     mcp: { type: "capability", reason: "billing_admin" },
     params: invoiceParamsSchema,
@@ -226,6 +286,7 @@ const transitionInvoice = createSafeHandler(
     params,
     body,
     recordAuditEvent,
+    memberRole,
   }) {
     const transition = TRANSITIONS[body.action];
     const now = new Date();
@@ -256,6 +317,28 @@ const transitionInvoice = createSafeHandler(
             }),
           );
         }
+        const payment =
+          body.action === "mark_paid" || body.action === "undo_paid"
+            ? prepareInvoicePayment({
+                invoice: existing,
+                body,
+                memberRole,
+                now,
+              })
+            : Result.ok({
+                type: "update",
+                fields: body.action === "void" ? EMPTY_INVOICE_PAYMENT : {},
+              } as const);
+        if (payment.isErr()) {
+          return Result.err(payment.error);
+        }
+        if (payment.value.type === "replay") {
+          return Result.ok({ id: existing.id });
+        }
+        const paymentChanges = invoicePaymentAuditChanges(
+          existing,
+          payment.value.fields,
+        );
         if (body.action === "void" || body.action === "revert_to_draft") {
           const credit = await tx
             .select({ id: invoices.id })
@@ -281,54 +364,21 @@ const transitionInvoice = createSafeHandler(
         const set: Partial<typeof invoices.$inferInsert> = {
           status: transition.to,
           updatedAt: now,
+          ...payment.value.fields,
         };
-        if (body.action === "mark_paid") {
-          set.paidAt = now;
-        }
-        if (body.action === "void") {
-          set.paidAt = null;
-        }
         if (body.action === "revert_to_draft") {
           set.finalizedAt = existing.finalizedAt ?? now;
         }
         if (body.action === "finalize") {
-          const valid = await validateInvoiceDocument(tx, {
-            invoiceId: existing.id,
+          const finalized = await prepareFinalizedInvoice(tx, {
+            invoice: existing,
             workspaceId,
-            documentType: existing.documentType,
-            originalInvoiceId: existing.originalInvoiceId,
-            currency: existing.currency,
-            totalAmount: existing.totalAmount,
+            now,
           });
-          if (valid.isErr()) {
-            return Result.err(valid.error);
+          if (finalized.isErr()) {
+            return Result.err(finalized.error);
           }
-          set.finalizedAt = existing.finalizedAt ?? now;
-          if (existing.invoiceNumber === null) {
-            const series = await findDefaultNumberSeries(
-              tx,
-              existing.documentType,
-            );
-            if (!series) {
-              return Result.err(
-                new HandlerError({
-                  status: 409,
-                  message:
-                    "No default number series configured for this document type",
-                  hint: "Create or update a number series with this documentType and isDefault=true, then finalize again.",
-                }),
-              );
-            }
-            const number = await allocateNumber(
-              tx,
-              series.id,
-              new Date(`${existing.invoiceDate}T00:00:00Z`),
-            );
-            if (number.isErr()) {
-              return Result.err(number.error);
-            }
-            set.invoiceNumber = number.value.number;
-          }
+          Object.assign(set, finalized.value);
         }
         const updated = await tx
           .update(invoices)
@@ -356,6 +406,7 @@ const transitionInvoice = createSafeHandler(
             invoiceId: row.id,
             workspaceId,
             previousStatus: existing.status,
+            paymentChanges,
             now,
             recordAuditEvent,
           });
@@ -370,6 +421,7 @@ const transitionInvoice = createSafeHandler(
             changes: {
               status: { old: existing.status, new: transition.to },
               action: { old: null, new: body.action },
+              ...paymentChanges,
               ...(set.invoiceNumber !== undefined
                 ? {
                     invoiceNumber: {

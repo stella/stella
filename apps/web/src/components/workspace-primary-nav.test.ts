@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { getWorkspacePrimaryNavItems } from "@/components/workspace-primary-nav";
 
 const ALL_GATES_OPEN = {
+  includeBilling: true,
   includeInbox: true,
   includePublicLaw: true,
   includePublicTools: true,
@@ -43,6 +44,7 @@ describe("workspace primary nav", () => {
       "inbox",
       "matters",
       "timesheets",
+      "billing",
       "caseLaw",
       "tools",
       "knowledge",
@@ -59,6 +61,7 @@ describe("workspace primary nav", () => {
     expect(navIds({ includePublicLaw: false })).toContain("inbox");
     expect(navIds({ includePublicTools: false })).toContain("inbox");
     expect(navIds({ includeTimesheets: false })).not.toContain("timesheets");
+    expect(navIds({ includeBilling: false })).not.toContain("billing");
   });
 
   test("leaves the ungated entries alone when every gate closes", () => {
@@ -68,6 +71,7 @@ describe("workspace primary nav", () => {
         includePublicLaw: false,
         includePublicTools: false,
         includeTimesheets: false,
+        includeBilling: false,
       }),
     ).toEqual(["search", "chat", "matters", "knowledge", "contacts"]);
   });

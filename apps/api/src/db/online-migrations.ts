@@ -69,6 +69,24 @@ type OnlineIndex = RequiredMigrationIndex & {
 export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   {
     createSql:
+      'CREATE INDEX CONCURRENTLY "time_entries_org_workspace_wip_idx" ON public."time_entries" USING btree ("organization_id", "workspace_id", "date_worked") WHERE "activity_group" = \'client\' AND "status" = \'approved\' AND "invoice_id" IS NULL AND "billable" AND NOT "no_charge"',
+    definitionBody:
+      "ON public.time_entries USING btree (organization_id, workspace_id, date_worked) WHERE ((activity_group = 'client'::text) AND (status = 'approved'::text) AND (invoice_id IS NULL) AND billable AND (NOT no_charge))",
+    isUnique: false,
+    name: "time_entries_org_workspace_wip_idx",
+    tableName: "time_entries",
+  },
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "expenses_org_workspace_wip_idx" ON public."expenses" USING btree ("organization_id", "workspace_id", "date_incurred") WHERE "invoice_id" IS NULL AND "billable" AND "status" IN (\'draft\', \'approved\')',
+    definitionBody:
+      "ON public.expenses USING btree (organization_id, workspace_id, date_incurred) WHERE ((invoice_id IS NULL) AND billable AND (status = ANY (ARRAY['draft'::text, 'approved'::text])))",
+    isUnique: false,
+    name: "expenses_org_workspace_wip_idx",
+    tableName: "expenses",
+  },
+  {
+    createSql:
       'CREATE INDEX CONCURRENTLY "time_entries_org_status_date_id_idx" ON public."time_entries" USING btree ("organization_id", "status", "date_worked", "id")',
     definitionBody:
       "ON public.time_entries USING btree (organization_id, status, date_worked, id)",

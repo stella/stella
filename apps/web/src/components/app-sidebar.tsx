@@ -182,6 +182,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const inboxPreviewEnabled = useInboxPreviewEnabled();
   const timeBillingPreviewEnabled = useTimeBillingPreviewEnabled();
   const canReadTimeEntries = usePermissions({ timeEntry: ["read"] });
+  const canReadBillingMatters = usePermissions({ workspace: ["read"] });
   const showTimesheetLink = timeBillingPreviewEnabled && canReadTimeEntries;
   const primaryNavItems = getWorkspacePrimaryNavItems({
     includeInbox: inboxPreviewEnabled,
@@ -190,6 +191,8 @@ export const AppSidebar = (props: AppSidebarProps) => {
     // nav; signed-in users manage tools via /knowledge/tools instead.
     includePublicTools: false,
     includeTimesheets: showTimesheetLink,
+    includeBilling:
+      timeBillingPreviewEnabled && canReadTimeEntries && canReadBillingMatters,
     publicKnowledge: isPublicKnowledgeEnabled(),
   });
   const user = useAuthenticatedUser();
@@ -497,6 +500,12 @@ export const AppSidebar = (props: AppSidebarProps) => {
           navigate({ to: "/time", search: { date: localISODate() } }),
           "app-sidebar.navigate",
         );
+      },
+      contextMenu: {},
+    },
+    billing: {
+      action: () => {
+        detached(navigate({ to: "/billing/wip" }), "app-sidebar.navigate");
       },
       contextMenu: {},
     },

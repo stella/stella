@@ -175,6 +175,7 @@ const formatGeneratedArtifact = async (
  */
 const DOMAIN_SCOPE: Record<string, string> = {
   "audit-logs": "stella:admin_read",
+  billing: "stella:billing_write",
   "billing-codes": "stella:billing_write",
   // Corpus reads (decision analysis, ingestion status, matter-link list)
   // alongside matter-link create/delete, which link a global decision into a
@@ -454,6 +455,7 @@ const ROUTE_HOOK_WAIVERS: Record<string, string> = {};
  * tool family cannot leave its sibling capabilities un-gated.
  */
 const DOMAIN_FEATURE: Record<string, string> = {
+  billing: "FEATURE_TIME_BILLING",
   "billing-codes": "FEATURE_TIME_BILLING",
   "case-law": "FEATURE_PUBLIC_LAW",
   expenses: "FEATURE_TIME_BILLING",

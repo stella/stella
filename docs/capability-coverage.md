@@ -25,6 +25,13 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | ----------------- | ------ | ----------------- | ------- | ----------------------------- |
 | `audit-logs.list` | read   | stella:admin_read | —       | curated tool `list_audit_log` |
 
+## billing
+
+| Capability                 | Access | Scope       | Feature              | Reachable via                                                 |
+| -------------------------- | ------ | ----------- | -------------------- | ------------------------------------------------------------- |
+| `billing.wip.clients.list` | read   | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability billing wip-clients-list` |
+| `billing.wip.list`         | read   | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability billing wip-list`         |
+
 ## billing-codes
 
 | Capability             | Access             | Scope                | Feature              | Reachable via                                             |

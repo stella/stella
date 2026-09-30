@@ -494,6 +494,7 @@
     "invoices": {
       "addEntries": "Pievienot ierakstus",
       "confirmDelete": "Tas neatgriezeniski dzēsīs šo rēķina melnrakstu un atsaistīs visus ierakstus. Šo darbību nevar atcelt.",
+      "confirmUndoPaid": "Atgriezt rēķinu nosūtīta rēķina statusā un noņemt reģistrētos maksājuma datus?",
       "confirmVoid": "Anulējot šo rēķinu, tiks atsaistīti visi laika ieraksti un izdevumi, atgriežot tos iepriekšējā statusā.",
       "createInvoice": "Izveidot rēķinu",
       "dueDate": "Apmaksas termiņš",
@@ -508,6 +509,8 @@
       "noEntries": "Nav ierakstu, kas saistīti ar šo rēķinu",
       "noInvoices": "Rēķinu vēl nav",
       "paidAt": "Apmaksāts",
+      "paymentDate": "Maksājuma datums",
+      "paymentInvalidAmount": "Ievadiet derīgu nenegatīvu summu.",
       "removeEntries": "Noņemt ierakstus",
       "send": "Sūtīt",
       "statuses": {
@@ -519,6 +522,7 @@
       },
       "totalAmount": "Kopējā summa",
       "totalEntries": "{count, plural, zero {# ierakstu} one {# ieraksts} other {# ieraksti}}",
+      "undoPaid": "Atcelt maksājumu",
       "void": "Anulēt"
     },
     "loading": "Ielādē...",
@@ -605,6 +609,19 @@
     "timerActive": "Taimeris darbojas",
     "timesheets": "Darba laika uzskaite",
     "total": "Kopā",
+    "wip": {
+      "currencyTotals": "Kopsummas pēc valūtas",
+      "days0To30": "0–30 dienas",
+      "days31To60": "31–60 dienas",
+      "days61To90": "61–90 dienas",
+      "daysOver90": "Vairāk nekā 90 dienas",
+      "description": "Apstiprināts laiks un apmaksājami izdevumi, par kuriem vēl nav izrakstīts rēķins.",
+      "empty": "Nav darba, par kuru vēl jāizraksta rēķins.",
+      "expenseValue": "Izdevumi: {amount}",
+      "timeValue": "Laiks: {amount}",
+      "title": "Darbs bez izrakstīta rēķina",
+      "unpriced": "Laika ieraksti bez likmes: {count}"
+    },
     "writeOff": "Norakstīt"
   },
   "caseLaw": {

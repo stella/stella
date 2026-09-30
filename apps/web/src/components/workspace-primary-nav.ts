@@ -2,6 +2,7 @@ import type { ComponentType } from "react";
 
 import {
   BlocksIcon,
+  BanknoteIcon,
   InboxIcon,
   LibraryBigIcon,
   MessageSquareIcon,
@@ -16,6 +17,7 @@ import type { TranslationKey } from "@/i18n/types";
 
 type WorkspacePrimaryRoute =
   | "/chat"
+  | "/billing/wip"
   | "/contacts"
   | "/inbox"
   | "/knowledge"
@@ -81,6 +83,14 @@ export const WORKSPACE_PRIMARY_NAV_ITEMS = [
     to: "/time",
   },
   {
+    icon: BanknoteIcon,
+    id: "billing",
+    audience: "authenticated",
+    kind: "route",
+    labelKey: "billing.wip.title",
+    to: "/billing/wip",
+  },
+  {
     icon: CaseLawIcon,
     id: "caseLaw",
     audience: "public",
@@ -136,12 +146,14 @@ type WorkspacePrimaryNavEntry =
 
 export const getWorkspacePrimaryNavItems = ({
   includeInbox,
+  includeBilling,
   includePublicLaw,
   includePublicTools,
   includeTimesheets,
   publicKnowledge,
 }: {
   includeInbox: boolean;
+  includeBilling: boolean;
   includePublicLaw: boolean;
   includePublicTools: boolean;
   includeTimesheets: boolean;
@@ -160,6 +172,9 @@ export const getWorkspacePrimaryNavItems = ({
     }
     if (item.id === "timesheets") {
       return includeTimesheets ? [item] : [];
+    }
+    if (item.id === "billing") {
+      return includeBilling ? [item] : [];
     }
     if (item.id === "knowledge" && publicKnowledge) {
       return [PUBLIC_KNOWLEDGE_NAV_ITEM];

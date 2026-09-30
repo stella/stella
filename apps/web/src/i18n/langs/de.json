@@ -494,6 +494,7 @@
     "invoices": {
       "addEntries": "Einträge hinzufügen",
       "confirmDelete": "Dieser Rechnungsentwurf wird endgültig gelöscht und alle verknüpften Einträge werden getrennt. Diese Aktion kann nicht rückgängig gemacht werden.",
+      "confirmUndoPaid": "Diese Rechnung auf „Gesendet“ zurücksetzen und die erfassten Zahlungsdaten entfernen?",
       "confirmVoid": "Das Stornieren dieser Rechnung trennt alle Zeiteinträge und Ausgaben und setzt sie auf ihren vorherigen Status zurück.",
       "createInvoice": "Rechnung erstellen",
       "dueDate": "Fälligkeitsdatum",
@@ -508,6 +509,8 @@
       "noEntries": "Keine Einträge mit dieser Rechnung verknüpft",
       "noInvoices": "Noch keine Rechnungen",
       "paidAt": "Bezahlt am",
+      "paymentDate": "Zahlungsdatum",
+      "paymentInvalidAmount": "Geben Sie einen gültigen, nicht negativen Betrag ein.",
       "removeEntries": "Einträge entfernen",
       "send": "Senden",
       "statuses": {
@@ -519,6 +522,7 @@
       },
       "totalAmount": "Gesamtbetrag",
       "totalEntries": "{count, plural, one {# Eintrag} other {# Einträge}}",
+      "undoPaid": "Zahlung rückgängig machen",
       "void": "Stornieren"
     },
     "loading": "Laden...",
@@ -605,6 +609,19 @@
     "timerActive": "Timer läuft",
     "timesheets": "Zeiterfassung",
     "total": "Gesamt",
+    "wip": {
+      "currencyTotals": "Summen nach Währung",
+      "days0To30": "0–30 Tage",
+      "days31To60": "31–60 Tage",
+      "days61To90": "61–90 Tage",
+      "daysOver90": "Über 90 Tage",
+      "description": "Genehmigte Zeiten und abrechenbare Auslagen, die noch nicht in Rechnung gestellt wurden.",
+      "empty": "Keine nicht abgerechneten Leistungen.",
+      "expenseValue": "Auslagen: {amount}",
+      "timeValue": "Zeit: {amount}",
+      "title": "Nicht abgerechnete Leistungen",
+      "unpriced": "Zeiteinträge ohne Stundensatz: {count}"
+    },
     "writeOff": "Abschreiben"
   },
   "caseLaw": {

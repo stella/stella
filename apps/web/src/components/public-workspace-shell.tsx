@@ -225,6 +225,7 @@ const PublicSidebar = ({
     includePublicLaw: isPublicLawSsrRouteEnabled(),
     includePublicTools: isPublicToolsRouteEnabled(),
     includeTimesheets: false,
+    includeBilling: false,
     publicKnowledge: isPublicKnowledgeEnabled(),
   });
 

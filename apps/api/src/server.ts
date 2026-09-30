@@ -25,6 +25,7 @@ import {
 import { authUiRoute } from "@/api/handlers/auth/ui-routes";
 import { bilingualTranslationsRoute } from "@/api/handlers/bilingual-translations/routes";
 import { billingCodesRoute } from "@/api/handlers/billing-codes/routes";
+import { billingRoute } from "@/api/handlers/billing/routes";
 import { caseLawRoute } from "@/api/handlers/case-law/routes";
 import { catalogueRoute } from "@/api/handlers/catalogue/routes";
 import { reapOwnerlessChatTurnOnTx } from "@/api/handlers/chat/chat-turn-persistence";
@@ -490,6 +491,7 @@ const api = new Elysia()
       .use(templatePacksRoute)
       .use(templateRecipesRoute)
       .use(timeEntriesRoute)
+      .use(billingRoute)
       .use(billingCodesRoute)
       .use(ratesRoute)
       .use(expensesRoute)

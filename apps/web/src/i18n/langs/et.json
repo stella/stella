@@ -494,6 +494,7 @@
     "invoices": {
       "addEntries": "Lisa kirjed",
       "confirmDelete": "See kustutab selle arvemustandiga jäädavalt ja tühistab kõigi kirjete sidumise. Toimingut ei saa tagasi võtta.",
+      "confirmUndoPaid": "Taastada arve saadetud olek ja eemaldada salvestatud makseandmed?",
       "confirmVoid": "Arve tühistamine eemaldab kõik seotud ajakirjed ja kulud ning taastab nende eelmise oleku.",
       "createInvoice": "Loo arve",
       "dueDate": "Tähtaeg",
@@ -508,6 +509,8 @@
       "noEntries": "Selle arvega pole kirjeid seotud",
       "noInvoices": "Arveid pole veel",
       "paidAt": "Tasutud",
+      "paymentDate": "Makse kuupäev",
+      "paymentInvalidAmount": "Sisestage kehtiv mittenegatiivne summa.",
       "removeEntries": "Eemalda kirjed",
       "send": "Saada",
       "statuses": {
@@ -519,6 +522,7 @@
       },
       "totalAmount": "Kogusumma",
       "totalEntries": "{count, plural, one {# kirje} other {# kirjet}}",
+      "undoPaid": "Võta makse tagasi",
       "void": "Tühista"
     },
     "loading": "Laadimine...",
@@ -605,6 +609,19 @@
     "timerActive": "Taimer käib",
     "timesheets": "Tööajatabelid",
     "total": "Kokku",
+    "wip": {
+      "currencyTotals": "Summad valuutade kaupa",
+      "days0To30": "0–30 päeva",
+      "days31To60": "31–60 päeva",
+      "days61To90": "61–90 päeva",
+      "daysOver90": "Üle 90 päeva",
+      "description": "Kinnitatud aeg ja arveldatavad kulud, mille eest pole veel arvet esitatud.",
+      "empty": "Arveldamata tööd pole.",
+      "expenseValue": "Kulud: {amount}",
+      "timeValue": "Aeg: {amount}",
+      "title": "Arveldamata töö",
+      "unpriced": "Hinnata ajakirjed: {count}"
+    },
     "writeOff": "Mahakandmine"
   },
   "caseLaw": {

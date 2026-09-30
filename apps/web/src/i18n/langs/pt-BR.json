@@ -494,6 +494,7 @@
     "invoices": {
       "addEntries": "Adicionar entradas",
       "confirmDelete": "Esta ação excluirá permanentemente este rascunho de fatura e desvinculará todas as entradas. Esta ação não pode ser desfeita.",
+      "confirmUndoPaid": "Retornar esta fatura ao estado enviada e remover os dados de pagamento registrados?",
       "confirmVoid": "A anulação desta fatura desvinculará todos os lançamentos de tempo e despesas, revertendo-os ao status anterior.",
       "createInvoice": "Criar fatura",
       "dueDate": "Data de vencimento",
@@ -508,6 +509,8 @@
       "noEntries": "Nenhuma entrada vinculada a esta fatura",
       "noInvoices": "Ainda não há faturas",
       "paidAt": "Pago em",
+      "paymentDate": "Data do pagamento",
+      "paymentInvalidAmount": "Insira um valor válido não negativo.",
       "removeEntries": "Remover entradas",
       "send": "Enviar",
       "statuses": {
@@ -519,6 +522,7 @@
       },
       "totalAmount": "Valor total",
       "totalEntries": "{count, plural, one {# entrada} many {# entradas} other {# entradas}}",
+      "undoPaid": "Desfazer pagamento",
       "void": "Anular"
     },
     "loading": "Carregando...",
@@ -605,6 +609,19 @@
     "timerActive": "Temporizador em execução",
     "timesheets": "Planilhas de horas",
     "total": "Total",
+    "wip": {
+      "currencyTotals": "Totais por moeda",
+      "days0To30": "0–30 dias",
+      "days31To60": "31–60 dias",
+      "days61To90": "61–90 dias",
+      "daysOver90": "Mais de 90 dias",
+      "description": "Tempo aprovado e despesas faturáveis que ainda não foram faturados.",
+      "empty": "Nenhum trabalho não faturado.",
+      "expenseValue": "Despesas: {amount}",
+      "timeValue": "Tempo: {amount}",
+      "title": "Trabalho não faturado",
+      "unpriced": "Registros de tempo sem tarifa: {count}"
+    },
     "writeOff": "Dar baixa"
   },
   "caseLaw": {

@@ -1220,7 +1220,6 @@
     "workspaces.overview.getStarted",
     "workspaces.overview.openTasks",
     "workspaces.overview.uploaded",
-    "workspaces.parties.noClient",
     "workspaces.parties.removeClient",
     "workspaces.parties.removePartyConfirm",
     "workspaces.parties.setClient",

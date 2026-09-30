@@ -494,6 +494,7 @@
     "invoices": {
       "addEntries": "Ajouter des entrées",
       "confirmDelete": "Cette action supprimera définitivement ce brouillon de facture et dissociera toutes les entrées. Elle est irréversible.",
+      "confirmUndoPaid": "Remettre cette facture à l’état envoyé et supprimer les informations de paiement enregistrées ?",
       "confirmVoid": "L'annulation de cette facture dissociera toutes les entrées de temps et dépenses, qui retrouveront leur statut antérieur.",
       "createInvoice": "Créer une facture",
       "dueDate": "Date d'échéance",
@@ -508,6 +509,8 @@
       "noEntries": "Aucune entrée liée à cette facture",
       "noInvoices": "Aucune facture",
       "paidAt": "Payée le",
+      "paymentDate": "Date de paiement",
+      "paymentInvalidAmount": "Saisissez un montant valide supérieur ou égal à zéro.",
       "removeEntries": "Retirer les entrées",
       "send": "Envoyer",
       "statuses": {
@@ -519,6 +522,7 @@
       },
       "totalAmount": "Montant total",
       "totalEntries": "{count, plural, one {# entrée} other {# entrées}}",
+      "undoPaid": "Annuler le paiement",
       "void": "Annuler"
     },
     "loading": "Chargement...",
@@ -605,6 +609,19 @@
     "timerActive": "Chronomètre en cours",
     "timesheets": "Feuilles de temps",
     "total": "Total",
+    "wip": {
+      "currencyTotals": "Totaux par devise",
+      "days0To30": "0–30 jours",
+      "days31To60": "31–60 jours",
+      "days61To90": "61–90 jours",
+      "daysOver90": "Plus de 90 jours",
+      "description": "Temps approuvé et frais facturables qui n’ont pas encore été facturés.",
+      "empty": "Aucun travail non facturé.",
+      "expenseValue": "Frais : {amount}",
+      "timeValue": "Temps : {amount}",
+      "title": "Travail non facturé",
+      "unpriced": "Entrées de temps sans tarif : {count}"
+    },
     "writeOff": "Abandon de créance"
   },
   "caseLaw": {

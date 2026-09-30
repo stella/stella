@@ -494,6 +494,7 @@
     "invoices": {
       "addEntries": "Dodaj wpisy",
       "confirmDelete": "Spowoduje to trwałe usunięcie wersji roboczej faktury i odłączenie wszystkich wpisów. Tej operacji nie można cofnąć.",
+      "confirmUndoPaid": "Przywrócić fakturę do stanu wysłana i usunąć zapisane dane płatności?",
       "confirmVoid": "Unieważnienie faktury spowoduje odłączenie wszystkich wpisów czasu i wydatków oraz przywrócenie ich do poprzedniego statusu.",
       "createInvoice": "Utwórz fakturę",
       "dueDate": "Termin płatności",
@@ -508,6 +509,8 @@
       "noEntries": "Brak wpisów powiązanych z tą fakturą",
       "noInvoices": "Brak faktur",
       "paidAt": "Zapłacono",
+      "paymentDate": "Data płatności",
+      "paymentInvalidAmount": "Wprowadź prawidłową kwotę nieujemną.",
       "removeEntries": "Usuń wpisy",
       "send": "Wyślij",
       "statuses": {
@@ -519,6 +522,7 @@
       },
       "totalAmount": "Kwota łączna",
       "totalEntries": "{count, plural, one {# wpis} few {# wpisy} many {# wpisów} other {# wpisu}}",
+      "undoPaid": "Cofnij płatność",
       "void": "Unieważnij"
     },
     "loading": "Ładowanie...",
@@ -605,6 +609,19 @@
     "timerActive": "Timer uruchomiony",
     "timesheets": "Karta czasu pracy",
     "total": "Razem",
+    "wip": {
+      "currencyTotals": "Sumy według waluty",
+      "days0To30": "0–30 dni",
+      "days31To60": "31–60 dni",
+      "days61To90": "61–90 dni",
+      "daysOver90": "Ponad 90 dni",
+      "description": "Zatwierdzony czas i wydatki podlegające rozliczeniu, które nie zostały jeszcze zafakturowane.",
+      "empty": "Brak niezafakturowanej pracy.",
+      "expenseValue": "Wydatki: {amount}",
+      "timeValue": "Czas: {amount}",
+      "title": "Praca niezafakturowana",
+      "unpriced": "Wpisy czasu bez stawki: {count}"
+    },
     "writeOff": "Umorz"
   },
   "caseLaw": {
