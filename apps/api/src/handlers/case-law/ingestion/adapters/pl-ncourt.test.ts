@@ -687,6 +687,19 @@ describe("fields the API adds later", () => {
 const withoutWhitespace = (text: string): string => text.replace(/\s+/gu, "");
 
 describe("the document", () => {
+  test("a line break keeps its nested text and CDATA", () => {
+    const content =
+      readPlNcourtContent(
+        "<xPart><xBlock><xText>Before<xBRx>after <![CDATA[inside]]><xBx> bold</xBx></xBRx><xBRx/></xText></xBlock></xPart>",
+      ) ?? panic("the document did not read");
+    expect(content.html).toBe(
+      "<p>Before<br/>after inside<strong> bold</strong><br/></p>",
+    );
+    expect(content.sourceParagraphs).toEqual(["Beforeafter inside bold"]);
+    expect(content.comparisonParagraphs).toEqual(["Before after inside bold"]);
+    expect(content.unmappedMarkup).toEqual([]);
+  });
+
   test.each([PAIR, LIST_DOC, TABLE_DOC])(
     "%s reads to the blocks and text the API's own HTML rendering reads to",
     async (id) => {
