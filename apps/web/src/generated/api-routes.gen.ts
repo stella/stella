@@ -28681,7 +28681,7 @@ export type WebRoutes = {
         headers: Record<never, never>;
         response: {
           200: {
-            id: T9e07a7d6cd;
+            id: any;
           };
           400: T9a51b7d2bc;
           401: T9a51b7d2bc;
@@ -29848,7 +29848,7 @@ export type WebRoutes = {
             headers: Record<never, never>;
             response: {
               200: {
-                workspaceId: T9e07a7d6cd;
+                workspaceId: any;
               };
               400: T9a51b7d2bc;
               401: T9a51b7d2bc;
