@@ -1,5 +1,7 @@
 import { panic } from "better-result";
 
+import { redisConnectionConfig } from "@stll/redis-config";
+
 import { env } from "./env";
 import { createCollabServer } from "./server";
 
@@ -17,6 +19,15 @@ const startCollabServer = async () => {
   if (redisUrl === undefined) {
     panic("STELLA_COLLAB_REDIS_URL is required in redis mode.");
   }
+
+  const { mode } = redisConnectionConfig({
+    url: redisUrl,
+    settings: env,
+    rejectUnauthorized: env.REDIS_TLS_REJECT_UNAUTHORIZED,
+  });
+  process.stderr.write(
+    `${JSON.stringify({ event: "redis.connection.mode", mode })}\n`,
+  );
 
   return await createCollabServer({
     apiUrl: env.STELLA_API_URL,

@@ -6,6 +6,7 @@ import {
   CHAT_TURN_ID_HEADER,
   STELLA_API_VERSION_PREFIX,
 } from "@stll/api-contract";
+import { redisConnectionConfig } from "@stll/redis-config";
 
 import { initApiBackgroundWorkers } from "@/api/api-background-workers";
 import { env } from "@/api/env";
@@ -602,6 +603,15 @@ const startS3RefreshLoop = () => {
 // schema mirror — must yield the fully constructed `api` without any of
 // these side effects (no DB, no Redis, no listen).
 const startServer = async (): Promise<void> => {
+  if (envBase.REDIS_URL !== undefined) {
+    const { mode } = redisConnectionConfig({
+      url: envBase.REDIS_URL,
+      settings: envBase,
+      rejectUnauthorized: envBase.REDIS_TLS_REJECT_UNAUTHORIZED,
+    });
+    logger.info("redis.connection.mode", { mode });
+  }
+
   startMemoryPressureHandler();
 
   // Start the SSE keep-alive heartbeat and cross-instance Redis subscriber
