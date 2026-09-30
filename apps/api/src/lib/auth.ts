@@ -109,6 +109,7 @@ import {
 } from "@/api/lib/permission-authorization";
 import { createAuthRateLimitStorage } from "@/api/lib/rate-limit/auth-storage";
 import type { RateLimitContext } from "@/api/lib/rate-limit/rate-limit";
+import { TENANT_ACTION_DETAIL } from "@/api/lib/rate-limit/tenant-action-boundary";
 import { memoizePerRequest } from "@/api/lib/request-memo";
 import {
   brandPersistedOrganizationId,
@@ -2170,6 +2171,7 @@ const validateAuthResolutionCache = new WeakMap<
 
 export const authMacro = new Elysia({ name: "authMacro" }).macro({
   validateAuth: {
+    detail: { [TENANT_ACTION_DETAIL]: true },
     async resolve({ params, query, status, request, server }) {
       const initialWorkspaceId = readInitialWorkspaceId(params, query);
       const result = await memoizePerRequest(

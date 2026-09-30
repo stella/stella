@@ -24,6 +24,13 @@ import {
   actionAdmissionRefusal,
   withActionAdmission,
 } from "@/api/lib/rate-limit/action-admission";
+import {
+  actionSizeErrorResponse,
+  boundActionJsonResponse,
+  boundActionRequest,
+  getActionSizePolicy,
+  withTenantActionSizePolicy,
+} from "@/api/lib/rate-limit/action-size-limits";
 import { isEventStreamResponse, withSseHeartbeat } from "@/api/lib/sse";
 import { mcpActionPeriodIdentity } from "@/api/mcp/action-admission-identity";
 import {
@@ -142,6 +149,7 @@ const requiredScopesForTool = (
 
 type McpServerDependencies = {
   admitAction?: typeof withActionAdmission;
+  actionSizePolicy?: typeof getActionSizePolicy;
   authenticateMcpRequest: (
     token: string,
     options: { mode: McpMode },
@@ -624,6 +632,7 @@ const retryableToolErrorResult = (mode: McpMode): CallToolResult =>
 
 export const createMcpHttpRequestHandler = ({
   admitAction = withActionAdmission,
+  actionSizePolicy = getActionSizePolicy,
   authenticateMcpRequest,
   captureError,
   getMcpToolDefinition,
@@ -1068,9 +1077,46 @@ export const createMcpHttpRequestHandler = ({
       });
     }
 
-    // A declared length is refused from the header alone, before the token
-    // costs a verification.
-    if (declaredBodyLength(incomingRequest) === "too_large") {
+    const configuredPolicy = actionSizePolicy();
+    if (Result.isError(configuredPolicy)) {
+      return withMcpCors(
+        actionSizeErrorResponse(configuredPolicy.error),
+        undefined,
+        mode,
+      );
+    }
+    const policy = configuredPolicy.value;
+    const completeResponse = async (
+      response: Response,
+      session?: McpSession,
+    ) => {
+      const bounded =
+        policy === undefined
+          ? response
+          : await boundActionJsonResponse(response, policy.responseBytes);
+      return withMcpCors(bounded, session, mode);
+    };
+    let framedRequest = incomingRequest;
+    if (policy !== undefined) {
+      const bounded = await boundActionRequest(
+        incomingRequest,
+        policy.requestBytes,
+      );
+      if (Result.isError(bounded)) {
+        return withMcpCors(
+          actionSizeErrorResponse(bounded.error, policy.responseBytes),
+          undefined,
+          mode,
+        );
+      }
+      framedRequest = bounded.value;
+    }
+
+    // Preserve the existing transport frame limit while admission is disabled.
+    if (
+      policy === undefined &&
+      declaredBodyLength(incomingRequest) === "too_large"
+    ) {
       return payloadTooLargeResponse();
     }
 
@@ -1110,10 +1156,9 @@ export const createMcpHttpRequestHandler = ({
       // unauthenticated probe still receives the 401 + `WWW-Authenticate` that
       // drives OAuth discovery.
       if (incomingRequest.method === "DELETE") {
-        return withMcpCors(
+        return await completeResponse(
           sessionOperationUnsupportedResponse(),
           session,
-          mode,
         );
       }
 
@@ -1121,7 +1166,10 @@ export const createMcpHttpRequestHandler = ({
       // without one is refused from the headers alone, so it cannot hold
       // connections and buffers open by streaming a body that is discarded
       // anyway.
-      const frame = await withCappedRequestBody(incomingRequest);
+      const frame =
+        policy === undefined
+          ? await withCappedRequestBody(incomingRequest)
+          : { request: framedRequest, status: "within_limit" as const };
       if (frame.status === "too_large") {
         return withMcpCors(payloadTooLargeResponse(), session, mode);
       }
@@ -1134,23 +1182,30 @@ export const createMcpHttpRequestHandler = ({
         token,
       };
       const legacyRequest = await isLegacyRequest(request);
-      const response = legacyRequest
-        ? await serveLegacyRequest({
-            authInfo,
-            clientIp,
-            mode,
-            request,
-            session,
-          })
-        : await handlerForMode(mode).fetch(request, { authInfo });
+      const dispatch = async () =>
+        legacyRequest
+          ? await serveLegacyRequest({
+              authInfo,
+              clientIp,
+              mode,
+              request,
+              session,
+            })
+          : await handlerForMode(mode).fetch(request, { authInfo });
+      const response =
+        policy === undefined
+          ? await dispatch()
+          : await withTenantActionSizePolicy(policy, dispatch);
 
       // `createMcpHandler` owns and catches modern exchange failures. Restore
       // the public retry contract the outer catch provides on the legacy leg.
       if (!legacyRequest && response.status >= 500) {
-        return retryableServerErrorResponse();
+        return policy === undefined
+          ? retryableServerErrorResponse()
+          : await completeResponse(retryableServerErrorResponse(), session);
       }
 
-      return withMcpCors(response, session, mode);
+      return await completeResponse(response, session);
     } catch (error) {
       if (error instanceof McpOrganizationAccessError) {
         return accessDeniedResponse({ denial: "organization_forbidden", mode });

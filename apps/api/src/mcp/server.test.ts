@@ -27,6 +27,7 @@ import {
 import type { ServerAnalyticsCaptureParams } from "@/api/lib/analytics/server-analytics";
 import { runWithRequestId } from "@/api/lib/observability/request-context";
 import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
+import type { getActionSizePolicy } from "@/api/lib/rate-limit/action-size-limits";
 import { recordMcpSessionInitialized } from "@/api/mcp/client-identity";
 import {
   MCP_ALL_RESOURCE_SCOPES,
@@ -55,6 +56,9 @@ import {
 import type { ToolScope } from "@/api/mcp/tool-types";
 import { readTestJson } from "@/api/tests/helpers/test-tool-set";
 
+const actionSizePolicyMock = mock((): ReturnType<typeof getActionSizePolicy> =>
+  Result.ok(undefined),
+);
 const authenticateMcpRequestMock = mock();
 const captureErrorMock = mock();
 const resolveMcpSessionContextMock = mock();
@@ -74,6 +78,7 @@ const listMcpResourcesMock = mock((): Resource[] => []);
 const readMcpResourceMock = mock((): ReadResourceResult => ({ contents: [] }));
 
 const handleMcpHttpRequest = createMcpHttpRequestHandler({
+  actionSizePolicy: actionSizePolicyMock,
   authenticateMcpRequest: authenticateMcpRequestMock,
   captureError: (error, context) => {
     captureErrorMock(error, context);
@@ -182,6 +187,8 @@ type McpJsonRpcError = {
 
 describe("handleMcpHttpRequest", () => {
   beforeEach(() => {
+    actionSizePolicyMock.mockReset();
+    actionSizePolicyMock.mockImplementation(() => Result.ok(undefined));
     authenticateMcpRequestMock.mockReset();
     captureErrorMock.mockReset();
     getMcpToolDefinitionMock.mockReset();
@@ -1373,6 +1380,8 @@ describe("handleMcpHttpRequest", () => {
 
 describe("MCP transport conformance", () => {
   beforeEach(() => {
+    actionSizePolicyMock.mockReset();
+    actionSizePolicyMock.mockImplementation(() => Result.ok(undefined));
     authenticateMcpRequestMock.mockReset();
     captureErrorMock.mockReset();
     listMcpToolsMock.mockReset();
@@ -1544,6 +1553,74 @@ describe("MCP transport conformance", () => {
     // and this endpoint reads bearer tokens, never cookies.
     expect(response.headers.get("Access-Control-Allow-Origin")).toBe("*");
     expect(response.headers.get("Access-Control-Allow-Credentials")).toBeNull();
+  });
+
+  test("refuses actual oversized frames before authentication even with a smaller declared length", async () => {
+    actionSizePolicyMock.mockReturnValue(
+      Result.ok({
+        pageSize: 10,
+        requestBytes: 32,
+        responseBytes: 512,
+      }),
+    );
+    const oversized = "é".repeat(20);
+    for (const declaredLength of [undefined, "1"]) {
+      const headers = new Headers({
+        authorization: "Bearer token",
+        "content-type": "application/json",
+      });
+      if (declaredLength !== undefined) {
+        headers.set("content-length", declaredLength);
+      }
+      const response = await handleMcpHttpRequest(
+        new Request("http://localhost/mcp", {
+          body: oversized,
+          headers,
+          method: "POST",
+        }),
+      );
+      expect(response.status).toBe(413);
+      expect(authenticateMcpRequestMock).not.toHaveBeenCalled();
+      expect(resolveMcpSessionContextMock).not.toHaveBeenCalled();
+    }
+  });
+
+  test("bounds serialized UTF-8 JSON-RPC envelopes on modern and legacy transports", async () => {
+    authenticateSession();
+    actionSizePolicyMock.mockReturnValue(
+      Result.ok({
+        pageSize: 10,
+        requestBytes: 2000,
+        responseBytes: 512,
+      }),
+    );
+    const tools = [
+      {
+        description: "😀".repeat(100),
+        inputSchema: { properties: {}, type: "object" },
+        name: "list_matters",
+      },
+    ];
+    const serialized = JSON.stringify({
+      id: 1,
+      jsonrpc: "2.0",
+      result: { tools },
+    });
+    expect(serialized.length).toBeLessThan(512);
+    expect(new TextEncoder().encode(serialized).length).toBeGreaterThan(512);
+    listMcpToolsMock.mockResolvedValue(tools);
+    for (const protocolVersion of [undefined, MODERN_PROTOCOL_VERSION]) {
+      const request = toolsListRequest();
+      if (protocolVersion !== undefined) {
+        request.headers.set("mcp-protocol-version", protocolVersion);
+      }
+      const response = await handleMcpHttpRequest(request);
+      expect(response.status).toBe(413);
+      expect((await response.arrayBuffer()).byteLength).toBeLessThanOrEqual(
+        512,
+      );
+      expect(response.headers.get("access-control-allow-origin")).toBe("*");
+    }
   });
 
   test("refuses an oversized declared body before authenticating or parsing", async () => {

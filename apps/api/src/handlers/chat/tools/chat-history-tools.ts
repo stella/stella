@@ -26,6 +26,7 @@ import {
 import { readChatThreadNames } from "@/api/lib/chat/thread-names";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
 import { buildSearchTsQuery } from "@/api/lib/search/query";
 
@@ -206,7 +207,8 @@ export const createChatHistoryTools = ({
         "Search earlier persisted messages in this same chat thread. Use this when compacted context may omit a detail, prior instruction, cited source, or unresolved task. Follow up with expand-chat-history when exact surrounding context matters.",
       inputSchema: toTanStackToolSchema(searchChatHistoryInputSchema),
       outputSchema: toTanStackToolSchema(searchChatHistoryOutputSchema),
-    }).server(async ({ query, limit }) => {
+    }).server(async ({ query, limit: requestedLimit }) => {
+      const limit = normalizeTenantPageLimit(requestedLimit);
       const normalizedQuery = query.trim();
       if (!normalizedQuery) {
         return raiseChatToolError(
