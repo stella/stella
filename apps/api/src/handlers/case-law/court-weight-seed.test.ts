@@ -299,6 +299,18 @@ describe("court weight seed", () => {
       );
       expect(matches, court).toHaveLength(1);
       expect(matches.at(0), court).toMatchObject({ tierLabel, tier });
+      if (tierLabel !== "supreme") {
+        continue;
+      }
+      for (const space of ["  ", "\u00a0"]) {
+        const spaced = court.replaceAll(" ", () => space);
+        expect(spaced).not.toBe(court);
+        const spacedMatches = seededCourtWeightEntries("SVK").filter((entry) =>
+          entry.pattern.test(spaced),
+        );
+        expect(spacedMatches, spaced).toHaveLength(1);
+        expect(spacedMatches.at(0), spaced).toMatchObject({ tierLabel, tier });
+      }
     }
   });
 

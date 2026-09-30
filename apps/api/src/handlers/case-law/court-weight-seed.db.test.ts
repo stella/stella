@@ -177,41 +177,82 @@ test("the seed migrations apply, reconcile stale rows, and are idempotent", asyn
   await client.close();
 }, 60_000);
 
-test("the Slovak seed replaces the legacy apex pattern without changing another jurisdiction", async () => {
-  const client = await createTestPglite();
-  const db = drizzle({ client });
-  await applyMigration(db, FULL_SEED);
-  await applyMigration(db, USA_SEED);
-  const before = await readRegistry(db);
-  expect(
-    before
-      .filter((row) => row.country === "SVK")
-      .map((row) => row.courtPattern),
-  ).toContain("najvyšší");
+test.each(["legacy-only", "replacement-preseeded"])(
+  "the Slovak seed reconciles %s without changing another jurisdiction",
+  async (state) => {
+    const client = await createTestPglite();
+    const db = drizzle({ client });
+    await applyMigration(db, FULL_SEED);
+    await applyMigration(db, USA_SEED);
+    if (state === "replacement-preseeded") {
+      await db.insert(caseLawCourtWeights).values(
+        COURT_WEIGHT_SEED.filter(
+          (row) => row.country === "SVK" && row.tierLabel === "supreme",
+        ).map((row) => ({
+          id: createSafeId<"caseLawCourtWeight">(),
+          country: row.country,
+          courtPattern: row.courtPattern,
+          tier: row.tier,
+          tierLabel: row.tierLabel,
+          weight: row.weight,
+        })),
+      );
+    }
+    const before = await readRegistry(db);
+    expect(
+      before
+        .filter((row) => row.country === "SVK")
+        .map((row) => row.courtPattern),
+    ).toContain("najvyšší");
 
-  await applyMigration(db, SVK_SEED);
-  const after = await readRegistry(db);
-  expect(after.filter((row) => row.country !== "SVK")).toEqual(
-    before.filter((row) => row.country !== "SVK"),
-  );
-  expect(
-    after
-      .filter((row) => row.country === "SVK")
-      .map(({ country, courtPattern, tier, tierLabel, weight }) => ({
-        country,
-        courtPattern,
-        tier,
-        tierLabel,
-        weight,
-      })),
-  ).toEqual(
-    COURT_WEIGHT_SEED.filter((row) => row.country === "SVK").toSorted(byKey),
-  );
+    await applyMigration(db, SVK_SEED);
+    const after = await readRegistry(db);
+    const preseeded = before.filter(
+      (row) => row.country === "SVK" && row.courtPattern !== "najvyšší",
+    );
+    for (const row of preseeded) {
+      expect(after.find((candidate) => candidate.id === row.id)).toEqual(row);
+    }
+    expect(after.filter((row) => row.country !== "SVK")).toEqual(
+      before.filter((row) => row.country !== "SVK"),
+    );
+    expect(
+      after
+        .filter((row) => row.country === "SVK")
+        .map(({ country, courtPattern, tier, tierLabel, weight }) => ({
+          country,
+          courtPattern,
+          tier,
+          tierLabel,
+          weight,
+        })),
+    ).toEqual(
+      COURT_WEIGHT_SEED.filter((row) => row.country === "SVK").toSorted(byKey),
+    );
 
-  await applyMigration(db, SVK_SEED);
-  expect(await readRegistry(db)).toEqual(after);
-  await client.close();
-}, 60_000);
+    const apexNames = [
+      "Najvyšší súd Slovenskej republiky",
+      "Najvyšší správny súd Slovenskej republiky",
+    ].flatMap((court) =>
+      [" ", "  ", "\u00a0"].map((space) => court.replaceAll(" ", () => space)),
+    );
+    const { tier, weight } = rankSql(courtWeightMapFromSeed());
+    const names = sql.join(
+      apexNames.map((court) => sql`('SVK', ${court}, NULL::text)`),
+      sql`, `,
+    );
+    const ranked = await db.execute<{ tier: number; weight: number }>(
+      sql`SELECT (${tier})::int AS tier, (${weight})::int AS weight
+        FROM (VALUES ${names}) AS d(country, court, court_id)`,
+    );
+    expect(ranked.rows).toEqual(apexNames.map(() => ({ tier: 3, weight: 8 })));
+
+    await applyMigration(db, SVK_SEED);
+    expect(await readRegistry(db)).toEqual(after);
+    await client.close();
+  },
+  60_000,
+);
 
 test("the USA seed writes no row of another jurisdiction", async () => {
   const client = await createTestPglite();

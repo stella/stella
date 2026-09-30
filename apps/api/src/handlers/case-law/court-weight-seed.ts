@@ -58,7 +58,8 @@ export const COURT_WEIGHT_SEED: readonly CourtWeightSeedRow[] = [
     courtPattern: "vrchní soud|krajský soud|městský soud",
     ...RANK.regional,
   },
-  // Slovakia
+  // Slovakia. PostgreSQL \s excludes NBSP; include it explicitly for parity
+  // with JavaScript whitespace matching on publisher-stated court names.
   {
     country: "SVK",
     courtPattern: "ústavný súd",
@@ -66,12 +67,12 @@ export const COURT_WEIGHT_SEED: readonly CourtWeightSeedRow[] = [
   },
   {
     country: "SVK",
-    courtPattern: "najvyšší súd",
+    courtPattern: "najvyšší[\\s\u00a0]+súd",
     ...RANK.supreme,
   },
   {
     country: "SVK",
-    courtPattern: "najvyšší správny súd",
+    courtPattern: "najvyšší[\\s\u00a0]+správny[\\s\u00a0]+súd",
     ...RANK.supreme,
   },
   {
