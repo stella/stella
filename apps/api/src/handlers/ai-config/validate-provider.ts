@@ -17,7 +17,9 @@ const MAX_PROBE_ERROR_DETAIL_LEN = 200;
 export const validateProviderBody = t.Object({
   provider: t.UnionEnum(TANSTACK_AI_PROVIDERS),
   apiKey: t.String({ minLength: 1, maxLength: 512 }),
-  region: t.Optional(t.Union([t.Literal("global"), t.Literal("eu"), t.Literal("ch")])),
+  region: t.Optional(
+    t.Union([t.Literal("global"), t.Literal("eu"), t.Literal("ch")]),
+  ),
 });
 
 const config = {

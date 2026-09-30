@@ -19399,7 +19399,7 @@ export type WebRoutes = {
       "validate-provider": {
         post: {
           body: {
-            region?: "global";
+            region?: "ch" | "eu" | "global";
             provider: T4b83723412;
             apiKey: string;
           };
