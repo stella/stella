@@ -1,5 +1,14 @@
 import { panic } from "better-result";
-import { and, asc, eq, getColumns, inArray, isNotNull, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  getColumns,
+  getTableName,
+  inArray,
+  isNotNull,
+  sql,
+} from "drizzle-orm";
 
 import {
   INVOICE_LINE_SOURCE,
@@ -90,10 +99,20 @@ type BillingUsageProjectionOptions = {
 };
 
 const billingUsageProjection = ({
-  workspaceId,
-  currency,
+  workspaceId: workspace,
+  currency: currencyValue,
   excludeInvoiceId,
 }: BillingUsageProjectionOptions) => {
+  // Drizzle unqualifies direct Column chunks in single-table SELECT projections.
+  // Schema-derived identifiers preserve outer references inside correlated subqueries.
+  const workspaceId =
+    typeof workspace === "string"
+      ? workspace
+      : sql`${sql.identifier(getTableName(workspace.table))}.${sql.identifier(workspace.name)}`;
+  const currency =
+    typeof currencyValue === "string"
+      ? currencyValue
+      : sql`${sql.identifier(getTableName(currencyValue.table))}.${sql.identifier(currencyValue.name)}`;
   // PostgreSQL numeric arithmetic prevents intermediate product/sum overflow;
   // half-up integer division matches prorateHourlyCents per entry, not after summing.
   const legacyCondition = sql`e.workspace_id = ${workspaceId} AND e.activity_group = ${TIME_ENTRY_ACTIVITY_GROUP.CLIENT} AND e.invoice_attachment = 'charged' AND i.workspace_id = ${workspaceId} AND i.status <> ${INVOICE_STATUS.VOID} ${excludeInvoiceId ? sql`AND i.id <> ${excludeInvoiceId}` : sql``} AND NOT EXISTS (SELECT 1 FROM ${invoiceLines} l WHERE l.invoice_id = i.id AND l.time_entry_id = e.id AND l.source = ${INVOICE_LINE_SOURCE.TIME_ENTRY} AND l.released_at IS NULL)`;

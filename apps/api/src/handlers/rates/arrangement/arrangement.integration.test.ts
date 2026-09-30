@@ -72,6 +72,9 @@ const cleanup = async () => {
     .delete(auditLogs)
     .where(inArray(auditLogs.workspaceId, testWorkspaceIds));
   await db
+    .delete(invoiceLines)
+    .where(inArray(invoiceLines.workspaceId, testWorkspaceIds));
+  await db
     .delete(timeEntries)
     .where(inArray(timeEntries.workspaceId, testWorkspaceIds));
   await db
@@ -280,7 +283,10 @@ test("another organization cannot read or replace an arrangement under a foreign
       body: { mode: "flat_fee", currency: "USD", flatFeeAmount: 1 },
     }),
   );
-  expect(result).toMatchObject({ code: 400 });
+  expect(result).toMatchObject({
+    code: 404,
+    response: { message: "Workspace not found" },
+  });
   expect(
     await getArrangement.handler(
       createTestHandlerContext<Parameters<typeof getArrangement.handler>[0]>({
@@ -300,7 +306,62 @@ test("batched matter reconciliation keeps currencies separate and emits each upw
       capAmount: cents(capped.capAmount),
     })),
   );
-  await seedApproved(10_000);
+  await seedApproved(8000);
+  const reservations = [
+    { workspaceId, amount: 2000 },
+    { workspaceId: secondWorkspaceId, amount: 1000 },
+  ].map(({ workspaceId: matterId, amount }) => ({
+    workspaceId: matterId,
+    amount,
+    invoiceId: createSafeId<"invoice">(),
+    entryId: createSafeId<"timeEntry">(),
+  }));
+  await db.insert(invoices).values(
+    reservations.map((reservation) => ({
+      id: reservation.invoiceId,
+      workspaceId: reservation.workspaceId,
+      organizationId: ids.orgA,
+      invoiceDate: "2026-10-04",
+      currency: "USD",
+      status: "draft" as const,
+    })),
+  );
+  await db.insert(timeEntries).values(
+    reservations.map((reservation) => ({
+      id: reservation.entryId,
+      workspaceId: reservation.workspaceId,
+      organizationId: ids.orgA,
+      invoiceId: reservation.invoiceId,
+      userId: ids.userAdmin,
+      dateWorked: "2026-10-04",
+      timezoneId: "UTC",
+      durationMinutes: 60,
+      billedMinutes: 60,
+      rateAtEntry: cents(reservation.amount),
+      currency: "USD",
+      narrative: "Reserved client work",
+      status: "billed" as const,
+      billable: true,
+    })),
+  );
+  await db.insert(invoiceLines).values(
+    reservations.map((reservation) => ({
+      invoiceId: reservation.invoiceId,
+      workspaceId: reservation.workspaceId,
+      organizationId: ids.orgA,
+      position: 0,
+      description: "Reserved client work",
+      quantity: "1.0000",
+      unitPrice: cents(reservation.amount),
+      netAmount: cents(reservation.amount),
+      vatAmount: cents(0),
+      grossAmount: cents(reservation.amount),
+      vatRateBps: 0,
+      vatTreatment: "not_vat_payer" as const,
+      source: "time_entry" as const,
+      timeEntryId: reservation.entryId,
+    })),
+  );
   const secondEntryId = createSafeId<"timeEntry">();
   await db.insert(timeEntries).values({
     id: secondEntryId,
@@ -350,9 +411,13 @@ test("batched matter reconciliation keeps currencies separate and emits each upw
     .from(auditLogs)
     .where(inArray(auditLogs.workspaceId, testWorkspaceIds));
   expect(events).toHaveLength(3);
-  expect(events.filter((row) => row.workspaceId === workspaceId)).toHaveLength(
-    2,
+  const firstCrossings = events.filter(
+    (row) => row.workspaceId === workspaceId,
   );
+  expect(firstCrossings).toHaveLength(2);
+  expect(
+    firstCrossings.every((row) => row.metadata?.["usedAmount"] === "10000"),
+  ).toBe(true);
   expect(
     events.find((row) => row.workspaceId === secondWorkspaceId)?.metadata,
   ).toMatchObject({ event: "billing_currency_mismatch" });
@@ -371,12 +436,18 @@ test("batched matter reconciliation keeps currencies separate and emits each upw
     capState: "below",
     crossingSequence: 1,
   });
+  const finalEvents = await db
+    .select()
+    .from(auditLogs)
+    .where(inArray(auditLogs.workspaceId, testWorkspaceIds));
+  expect(finalEvents).toHaveLength(4);
   expect(
-    await db
-      .select()
-      .from(auditLogs)
-      .where(inArray(auditLogs.workspaceId, testWorkspaceIds)),
-  ).toHaveLength(4);
+    finalEvents.find(
+      (row) =>
+        row.workspaceId === secondWorkspaceId &&
+        row.metadata?.["event"] === "billing_cap_crossed",
+    )?.metadata,
+  ).toMatchObject({ usedAmount: "9000", boundary: "threshold" });
 });
 
 test("an audit failure rolls back crossing state and its audit rows together", async () => {

@@ -54,6 +54,18 @@ const updateBillingArrangement = createSafeHandler(
     const outcome = yield* Result.await(
       safeDb(async (tx) => {
         const previous = await lockBillingArrangement(tx, workspaceId);
+        const matter = await tx.query.workspaces.findFirst({
+          where: {
+            id: { eq: workspaceId },
+            organizationId: { eq: session.activeOrganizationId },
+          },
+          columns: { id: true },
+        });
+        if (!matter) {
+          return Result.err(
+            new HandlerError({ status: 404, message: "Workspace not found" }),
+          );
+        }
         if (
           body.revision !== undefined &&
           body.revision !== previous?.revision
