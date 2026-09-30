@@ -700,7 +700,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "3.0.0",
+      "version": "3.1.0",
       "bin": {
         "stella": "./dist/cli.js",
       },
@@ -775,12 +775,15 @@
       "name": "@stll/docx-utils",
       "version": "0.1.2",
       "dependencies": {
+        "better-result": "catalog:",
         "jszip": "catalog:",
         "slimdom": "^4.3.5",
       },
       "devDependencies": {
+        "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
+        "fast-check": "catalog:",
         "tsdown": "catalog:",
       },
     },
@@ -1058,7 +1061,7 @@
     },
     "packages/text-normalize": {
       "name": "@stll/text-normalize",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "devDependencies": {
         "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
