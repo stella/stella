@@ -75,15 +75,22 @@ export const timePolicyPatch = ({ original, next }: TimePolicyPatchOptions) =>
       : { timeNarrativeRequired: next.timeNarrativeRequired }),
   }) satisfies WebApiRoutes["organization-settings"]["post"]["body"];
 
-export const timePolicyErrorKey = (error: unknown): TranslationKey | null => {
+const TIME_POLICY_REFUSALS = {
+  invalid_time_minimum_unit:
+    "settings.organization.timePolicy.invalidMinimumUnit",
+  invalid_time_locked_month:
+    "settings.organization.timePolicy.invalidLockedMonth",
+} as const satisfies Record<string, TranslationKey>;
+
+export const timePolicyErrorKey = (error: unknown) => {
   if (!APIError.is(error)) {
     return null;
   }
   switch (error.code) {
     case "invalid_time_minimum_unit":
-      return "settings.organization.timePolicy.invalidMinimumUnit";
+      return TIME_POLICY_REFUSALS.invalid_time_minimum_unit;
     case "invalid_time_locked_month":
-      return "settings.organization.timePolicy.invalidLockedMonth";
+      return TIME_POLICY_REFUSALS.invalid_time_locked_month;
     default:
       return null;
   }

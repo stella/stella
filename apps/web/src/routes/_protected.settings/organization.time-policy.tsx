@@ -12,7 +12,11 @@ export const Route = createFileRoute(
 )({
   beforeLoad: () => {
     if (!isTimeBillingRouteEnabled()) {
-      throw redirect({ to: "/settings/organization/members", replace: true });
+      redirect({
+        to: "/settings/organization/members",
+        replace: true,
+        throw: true,
+      });
     }
   },
   loader: async ({ context }) => {
