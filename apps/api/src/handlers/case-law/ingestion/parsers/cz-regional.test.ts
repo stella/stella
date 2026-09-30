@@ -530,3 +530,68 @@ describe("parseRegionalDecision", () => {
     });
   });
 });
+
+describe("section text fallback", () => {
+  test("keeps each flat section when its structured section is absent or textless", () => {
+    for (const empty of [[], [makePara("  ")]]) {
+      for (const absentSection of ["verdict", "justification"]) {
+        const { fulltext, documentAst } = parseRegionalDecision(
+          baseInput({
+            header: [makePara("Intro text")],
+            verdict:
+              absentSection === "verdict"
+                ? empty
+                : [makePara("Structured verdict")],
+            justification:
+              absentSection === "justification"
+                ? empty
+                : [makePara("Structured reasoning")],
+            verdictText: "Flat verdict",
+            justificationText: "Flat reasoning",
+            information: [makePara("Closing information")],
+          }),
+        );
+        const verdict =
+          absentSection === "verdict" ? "Flat verdict" : "Structured verdict";
+        const reasoning =
+          absentSection === "justification"
+            ? "Flat reasoning"
+            : "Structured reasoning";
+        expect(fulltext.split(verdict)).toHaveLength(2);
+        expect(fulltext.split(reasoning)).toHaveLength(2);
+        expect(fulltext.indexOf(verdict)).toBeLessThan(
+          fulltext.indexOf(reasoning),
+        );
+        expect(fulltext.indexOf(reasoning)).toBeLessThan(
+          fulltext.indexOf("Closing information"),
+        );
+        expect(
+          documentAst.blocks.some(
+            (block) =>
+              block.plainText === verdict &&
+              "role" in block &&
+              block.role === "holding",
+          ),
+        ).toBe(true);
+        expect(fulltext).not.toContain(
+          absentSection === "verdict" ? "Flat reasoning" : "Flat verdict",
+        );
+      }
+    }
+  });
+
+  test("keeps both flat sections in the AST when only the header is structured", () => {
+    const { fulltext, documentAst } = parseRegionalDecision(
+      baseInput({
+        header: [makePara("Intro text")],
+        verdictText: "Flat verdict",
+        justificationText: "Flat reasoning",
+      }),
+    );
+    expect(fulltext).toContain("Flat verdict");
+    expect(fulltext).toContain("Flat reasoning");
+    expect(documentAst.blocks.map((block) => block.plainText)).toContain(
+      "Flat reasoning",
+    );
+  });
+});

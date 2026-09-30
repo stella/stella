@@ -1371,6 +1371,12 @@
     "count": 0,
     "files": {}
   },
+  "parser-validator-call-ledger-entries": {
+    "count": 42,
+    "files": {
+      "scripts/parser-validator-call-ledger.json": 42
+    }
+  },
   "internal-module-mock-ledger-entries": {
     "count": 0,
     "files": {}

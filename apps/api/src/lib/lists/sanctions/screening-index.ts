@@ -180,7 +180,7 @@ export type SanctionsIndexCache = {
   refresh: (props: CacheProps) => Promise<void>;
 };
 
-export type CreateSanctionsIndexCacheOptions = {
+type CreateSanctionsIndexCacheOptions = {
   build?: BuildSanctionsIndex | undefined;
   failureMemoMs?: number | undefined;
   nowMs?: (() => number) | undefined;

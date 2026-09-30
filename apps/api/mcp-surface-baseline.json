@@ -85,8 +85,8 @@
       "documents": {"title": 14, "description": 402, "inputSchema": 1112, "outputSchema": 392, "annotations": 92, "payloadUtf8Bytes": 2111}
     },
     "list_invoices": {
-      "anonymized": {"title": 13, "description": 408, "inputSchema": 655, "outputSchema": 2446, "annotations": 91, "payloadUtf8Bytes": 3711},
-      "default": {"title": 13, "description": 408, "inputSchema": 655, "outputSchema": 2446, "annotations": 91, "payloadUtf8Bytes": 3711}
+      "anonymized": {"title": 13, "description": 468, "inputSchema": 655, "outputSchema": 2780, "annotations": 91, "payloadUtf8Bytes": 4105},
+      "default": {"title": 13, "description": 468, "inputSchema": 655, "outputSchema": 2780, "annotations": 91, "payloadUtf8Bytes": 4105}
     },
     "list_matters": {
       "anonymized": {"title": 12, "description": 348, "inputSchema": 677, "outputSchema": 1577, "annotations": 90, "payloadUtf8Bytes": 2801},
@@ -241,9 +241,9 @@
       "law": {"title": 15, "description": 803, "inputSchema": 3237, "outputSchema": 2209, "annotations": 93, "payloadUtf8Bytes": 6457}
     },
     "search_legislation": {
-      "anonymized": {"title": 18, "description": 530, "inputSchema": 2064, "outputSchema": 1041, "annotations": 96, "payloadUtf8Bytes": 3852},
-      "default": {"title": 18, "description": 530, "inputSchema": 2064, "outputSchema": 1041, "annotations": 96, "payloadUtf8Bytes": 3852},
-      "law": {"title": 18, "description": 530, "inputSchema": 2064, "outputSchema": 1041, "annotations": 96, "payloadUtf8Bytes": 3852}
+      "anonymized": {"title": 18, "description": 530, "inputSchema": 2065, "outputSchema": 1041, "annotations": 96, "payloadUtf8Bytes": 3853},
+      "default": {"title": 18, "description": 530, "inputSchema": 2065, "outputSchema": 1041, "annotations": 96, "payloadUtf8Bytes": 3853},
+      "law": {"title": 18, "description": 530, "inputSchema": 2065, "outputSchema": 1041, "annotations": 96, "payloadUtf8Bytes": 3853}
     },
     "set_field_value": {
       "default": {"title": 15, "description": 441, "inputSchema": 2771, "outputSchema": 76, "annotations": 117, "payloadUtf8Bytes": 3520},

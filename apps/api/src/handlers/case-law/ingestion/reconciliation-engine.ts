@@ -76,9 +76,9 @@ import {
   listReconciliationSlice,
   MAX_SLICE_PAGES,
 } from "@/api/handlers/case-law/ingestion/slice-listing";
-import { rowHoldsDocument } from "@/api/handlers/case-law/stored-payload";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decisionAbsorptionSql } from "@/api/lib/case-law/decision-absorption";
+import { rowHoldsDocument } from "@/api/lib/case-law/stored-payload";
 import {
   errorFingerprint,
   errorSystemFields,

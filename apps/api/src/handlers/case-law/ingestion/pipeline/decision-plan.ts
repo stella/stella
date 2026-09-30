@@ -47,11 +47,11 @@ import type { ExistingDecision } from "@/api/handlers/case-law/ingestion/pipelin
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import { RECONCILE_CONTENTION } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
+import type { SafeId } from "@/api/lib/branded-types";
 import {
   corpusCarriesDocument,
   payloadCarriesDocument,
-} from "@/api/handlers/case-law/stored-payload";
-import type { SafeId } from "@/api/lib/branded-types";
+} from "@/api/lib/case-law/stored-payload";
 import {
   corpusMirrorColumns,
   corpusPayloadDisposition,
