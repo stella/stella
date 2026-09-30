@@ -24,15 +24,14 @@ const lint = async (source: string) => {
   );
   temporaryDirectories.push(directory);
   const configPath = path.join(directory, "oxlint.config.ts");
+  const pluginPath = path.join(
+    REPOSITORY_ROOT,
+    ".oxlint-plugins/require-running-entry-guard.ts",
+  );
   await Bun.write(
     configPath,
     `export default ${JSON.stringify({
-      jsPlugins: [
-        path.join(
-          REPOSITORY_ROOT,
-          ".oxlint-plugins/require-running-entry-guard.ts",
-        ),
-      ],
+      jsPlugins: [pluginPath],
       categories: { correctness: "off" },
       rules: { [`${RULE_NAME}/${RULE_NAME}`]: "error" },
     })};\n`,

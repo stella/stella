@@ -18,6 +18,7 @@ export const guarded = async () => {
   }
   // expect-clean: require-running-entry-guard/require-running-entry-guard
   tx.update(timeEntries);
+  return null;
 };
 
 export const rawMissing = () => {
