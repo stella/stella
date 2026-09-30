@@ -6,7 +6,7 @@
  */
 
 import { Result, TaggedError } from "better-result";
-import { existsSync } from "node:fs";
+import { statSync } from "node:fs";
 import path from "node:path";
 
 import { GENERATED_TEMPLATE_PACKS } from "./packs.gen";
@@ -78,11 +78,13 @@ export const createTemplatePackCatalogue = ({
   const available = packs.filter(
     (pack) =>
       pack.templates.length > 0 &&
-      pack.templates.every((template) =>
-        existsSync(
+      pack.templates.every((template) => {
+        const file = statSync(
           path.join(contentRoot, PACKS_DIRECTORY, pack.id, template.file),
-        ),
-      ),
+          { throwIfNoEntry: false },
+        );
+        return file !== undefined && file.isFile() && file.size > 0;
+      }),
   );
   const packsById = new Map(available.map((pack) => [pack.id, pack] as const));
 

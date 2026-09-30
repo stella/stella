@@ -3,7 +3,10 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { publicKnowledgeSource } from "@/features/knowledge/public/public-knowledge";
-import { catalogueTemplateOptions } from "@/features/knowledge/public/public-knowledge-queries";
+import {
+  catalogueTemplateOptions,
+  catalogueTemplatesOptions,
+} from "@/features/knowledge/public/public-knowledge-queries";
 import { KnowledgeStatusMessage } from "@/features/knowledge/views/knowledge-status-message";
 import { TemplateCatalogueDetailView } from "@/features/knowledge/views/templates/template-catalogue-detail-view";
 import { detached } from "@/lib/detached";
@@ -33,6 +36,13 @@ export const Route = createFileRoute(
     }
   },
   loader: async ({ context, params }) => {
+    const catalogue = await ensureRouteQueryData(
+      context.queryClient,
+      catalogueTemplatesOptions(),
+    );
+    if (catalogue.length === 0) {
+      return { displayName: null };
+    }
     const template = await ensureRouteQueryData(
       context.queryClient,
       catalogueTemplateOptions(params.packId, params.templateId),
@@ -50,7 +60,7 @@ export const Route = createFileRoute(
       crawlAllowed: isPublicKnowledgeCrawlAllowed(),
       path: `/knowledge/templates/catalogue/${params.packId}/${params.templateId}`,
       title:
-        loaderData === undefined
+        loaderData === undefined || loaderData.displayName === null
           ? pageTitle("navigation.knowledge")
           : `${loaderData.displayName} · ${pageTitle("navigation.knowledge")}`,
       type: "article",
@@ -59,6 +69,24 @@ export const Route = createFileRoute(
 });
 
 function CatalogueTemplatePage() {
+  const t = useTranslations();
+  const { available, status } =
+    publicKnowledgeSource.useCatalogueTemplatesAvailable();
+  if (status !== "success") {
+    return (
+      <KnowledgeStatusMessage>
+        {t(
+          status === "error"
+            ? "knowledge.catalogue.unavailable"
+            : "common.loading",
+        )}
+      </KnowledgeStatusMessage>
+    );
+  }
+  return available ? <AvailableCatalogueTemplatePage /> : null;
+}
+
+function AvailableCatalogueTemplatePage() {
   const t = useTranslations();
   const packId = Route.useParams({ select: (params) => params.packId });
   const templateId = Route.useParams({ select: (params) => params.templateId });

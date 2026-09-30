@@ -1,9 +1,13 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import nodePath from "node:path";
 import * as v from "valibot";
 
 import {
   createBundledTemplatePackCatalogue,
+  createTemplatePackCatalogue,
   TemplatePackContentError,
 } from "@stll/template-packs";
 import {
@@ -104,6 +108,57 @@ describe("public knowledge routes", () => {
       }
     });
   });
+
+  test.each(["missing", "empty", "zero-byte", "directory"] as const)(
+    "unavailable template content returns an empty public list (%s)",
+    async (state) => {
+      const fixture =
+        FIXTURE_TEMPLATE_PACKS.at(0) ?? panic("Fixture pack missing");
+      const publicPack = { ...fixture, publicDisplay: true };
+      expect(
+        createFixtureTemplatePackCatalogue([publicPack]).list(),
+      ).toHaveLength(1);
+      const directory = mkdtempSync(
+        nodePath.join(tmpdir(), "public-template-content-"),
+      );
+      const contentRoot = nodePath.join(directory, "content");
+      try {
+        if (state !== "missing") {
+          mkdirSync(nodePath.join(contentRoot, "packs"), { recursive: true });
+        }
+        if (state === "zero-byte" || state === "directory") {
+          for (const template of publicPack.templates) {
+            const file = nodePath.join(
+              contentRoot,
+              "packs",
+              publicPack.id,
+              template.file,
+            );
+            mkdirSync(nodePath.dirname(file), { recursive: true });
+            if (state === "directory") {
+              mkdirSync(file, { recursive: true });
+            } else {
+              writeFileSync(file, "");
+            }
+          }
+        }
+        const catalogue = createTemplatePackCatalogue({
+          packs: [publicPack],
+          contentRoot,
+        });
+        const route = createPublicKnowledgeRoute(() => catalogue);
+        await withFeature(true, async () => {
+          const response = await route.handle(
+            new Request("http://localhost/public/knowledge/template-packs"),
+          );
+          expect(response.status).toBe(200);
+          expect(await response.json()).toEqual({ items: [] });
+        });
+      } finally {
+        rmSync(directory, { recursive: true, force: true });
+      }
+    },
+  );
 
   test("two preview requests scan and render the static bytes once", async () => {
     await withFeature(true, async () => {
