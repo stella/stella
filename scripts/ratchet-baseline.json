@@ -656,7 +656,7 @@
     }
   },
   "try-catch-outside-boundary": {
-    "count": 360,
+    "count": 359,
     "files": {
       "apps/api/src/handlers/ai-autocomplete/stream.ts": 1,
       "apps/api/src/handlers/case-law/analysis/generate.ts": 1,
