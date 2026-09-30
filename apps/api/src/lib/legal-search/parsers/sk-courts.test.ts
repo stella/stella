@@ -134,7 +134,7 @@ describe("PDF source line retention", () => {
         text: "123",
         segments: [{ text: "123" }],
         bold: true,
-        fontSize: 10,
+        fontSize: 11,
         pageIndex: 0,
       },
     ];
@@ -154,7 +154,7 @@ describe("PDF byte fixture text retention", () => {
     const pdf = PDF.create();
     const page = pdf.addPage({ size: "letter" });
     for (const [index, text] of texts.entries()) {
-      page.drawText(text, { x: 70, y: 700 - index * 20, fontSize: 10 });
+      page.drawText(text, { x: 70, y: 700 - index * 20, size: 10 });
     }
     return await parseSkDecisionPdf({
       pdfBytes: await pdf.save(),
