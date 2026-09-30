@@ -237,7 +237,9 @@ const createAdmissionExecutor = ({
         const reply = await send(budget, args);
         const storeNow =
           script === ACQUIRE_SCRIPT ? staleActionPeriodTime(reply) : null;
-        if (budget === null || storeNow === null) {return reply;}
+        if (budget === null || storeNow === null) {
+          return reply;
+        }
 
         // A stale window has not reserved anything. Retry once using store time,
         // with the original lease and logical phase, never after another failure.
@@ -250,8 +252,12 @@ const createAdmissionExecutor = ({
           },
           nowMs: storeNow,
         });
-        if (Result.isError(refreshed)) {throw refreshed.error;}
-        if (refreshed.value === null) {return -2;}
+        if (Result.isError(refreshed)) {
+          throw refreshed.error;
+        }
+        if (refreshed.value === null) {
+          return -2;
+        }
         return await send(refreshed.value, [
           ...args.slice(0, 4),
           ...actionPeriodArguments(refreshed.value),

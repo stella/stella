@@ -129,17 +129,21 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
           },
           redis: {
             send: async (command, args) => {
-              if (!args.at(0)?.includes("ZREMRANGEBYSCORE"))
-                {return await client.send(command, args);}
+              if (!args.at(0)?.includes("ZREMRANGEBYSCORE")) {
+                return await client.send(command, args);
+              }
               acquisitions.push(args);
-              if (acquisitions.length === 1)
-                {await Bun.sleep(
+              if (acquisitions.length === 1) {
+                await Bun.sleep(
                   Math.max(0, Number(args.at(10)) - Date.now()) + 20,
-                );}
+                );
+              }
               const reply = await client.send(command, args);
               if (acquisitions.length === 2) {
                 const key = args.at(4);
-                if (!key) {throw new Error("Missing retry period key");}
+                if (!key) {
+                  throw new Error("Missing retry period key");
+                }
                 acceptedCount = await client.send("HGET", [key, "count"]);
               }
               return reply;
@@ -156,7 +160,9 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
         expect(second?.at(8)).toBe(first?.at(8));
         expect(second?.at(12)).toBe(first?.at(12));
         const oldKey = first?.at(4);
-        if (!oldKey) {throw new Error("Missing old period key");}
+        if (!oldKey) {
+          throw new Error("Missing old period key");
+        }
         expect(await client.send("EXISTS", [oldKey])).toBe(0);
       });
     });

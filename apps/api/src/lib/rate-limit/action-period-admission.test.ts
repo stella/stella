@@ -79,7 +79,9 @@ describe("period admission boundary", () => {
       let nestedRan = false;
       const redis = {
         send: async (_command: string, args: string[]) => {
-          if (args.at(0)?.includes("ZREMRANGEBYSCORE")) {acquisitions += 1;}
+          if (args.at(0)?.includes("ZREMRANGEBYSCORE")) {
+            acquisitions += 1;
+          }
           return 1;
         },
       };
@@ -106,7 +108,9 @@ describe("period admission boundary", () => {
           }),
       });
       expect(Result.isOk(outer)).toBe(true);
-      if (Result.isOk(outer)) {expectUnavailable(outer.value);}
+      if (Result.isOk(outer)) {
+        expectUnavailable(outer.value);
+      }
       expect(nestedRan).toBe(false);
       expect(acquisitions).toBe(1);
     }
@@ -123,7 +127,9 @@ describe("period admission boundary", () => {
       periodIdentity,
       redis: {
         send: async (_command, args) => {
-          if (!args.at(0)?.includes("ZREMRANGEBYSCORE")) {return 1;}
+          if (!args.at(0)?.includes("ZREMRANGEBYSCORE")) {
+            return 1;
+          }
           acquisitions.push(args);
           return acquisitions.length === 1 ? [-3, Number(args.at(10))] : 1;
         },
