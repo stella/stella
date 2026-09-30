@@ -1453,30 +1453,11 @@ export const invokedCapabilityConsumesServices = async (args: unknown) => {
   if (!loaded.ok) {
     return Result.err(loaded.result);
   }
-  const validated = validateInvokeInput({
-    endpoint: loaded.endpoint,
+  return classifyValidatedCapabilityServiceInput({
+    config: loaded.endpoint.config,
     entry,
     publicInput: parsed.output.input ?? {},
   });
-  if (validated.status === "invalid") {
-    return Result.err(validated.result);
-  }
-  const exposure = loaded.endpoint.config.mcp;
-  if (
-    !isRecord(exposure) ||
-    !isServiceClassification(exposure["consumesServices"])
-  ) {
-    return panic("Capability has no service classification");
-  }
-  const classifier = exposure["consumesServices"];
-  if (typeof classifier !== "function") {
-    return panic("Capability classification differs from its catalog");
-  }
-  const consumesServices = classifier(validated);
-  if (typeof consumesServices !== "boolean") {
-    return panic("Capability service classification must return a boolean");
-  }
-  return Result.ok(consumesServices);
 };
 
 const invokeCapabilityHandler = async ({
@@ -1663,18 +1644,18 @@ const invokeCapabilityHandler = async ({
  *   and REST routes carry their own limits).
  */
 type ValidateInvokeInputOptions = {
-  endpoint: EndpointDefinition;
-  entry: CatalogEntry;
+  config: EndpointConfig;
+  entry: Pick<CatalogEntry, "handlerKind" | "transport">;
   publicInput: InvokeInput;
 };
 
 const validateInvokeInput = ({
-  endpoint,
+  config,
   entry,
   publicInput,
 }: ValidateInvokeInputOptions) => {
   const isWorkspace = entry.handlerKind === "workspace";
-  const advertised = advertisedSchemas(endpoint.config);
+  const advertised = advertisedSchemas(config);
   // The public field names go back to the internal ones here, before anything
   // reads the input, so the rest of this function is the REST boundary verbatim.
   // A refusal (the caller sent an internal spelling) is reported before
@@ -1767,6 +1748,34 @@ const validateInvokeInput = ({
   };
 };
 
+export const classifyValidatedCapabilityServiceInput = ({
+  config,
+  entry,
+  publicInput,
+}: ValidateInvokeInputOptions) => {
+  const validated = validateInvokeInput({ config, entry, publicInput });
+  if (validated.status === "invalid") {
+    return Result.err(validated.result);
+  }
+  const exposure = config.mcp;
+  if (
+    !isRecord(exposure) ||
+    exposure["type"] !== "capability" ||
+    !isServiceClassification(exposure["consumesServices"])
+  ) {
+    return panic("Capability has no service classification");
+  }
+  const classifier = exposure["consumesServices"];
+  if (typeof classifier !== "function") {
+    return panic("Capability classification differs from its catalog");
+  }
+  const consumesServices = classifier(validated);
+  if (typeof consumesServices !== "boolean") {
+    return panic("Capability service classification must return a boolean");
+  }
+  return Result.ok(consumesServices);
+};
+
 const executeInvoke = async ({
   context,
   entry,
@@ -1787,7 +1796,11 @@ const executeInvoke = async ({
   const endpoint = loaded.endpoint;
 
   const isWorkspace = entry.handlerKind === "workspace";
-  const validated = validateInvokeInput({ endpoint, entry, publicInput });
+  const validated = validateInvokeInput({
+    config: endpoint.config,
+    entry,
+    publicInput,
+  });
   if (validated.status === "invalid") {
     return validated.result;
   }
