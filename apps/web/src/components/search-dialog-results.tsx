@@ -328,6 +328,15 @@ export const SearchRecents = ({
                 <DocumentIcon
                   className="text-muted-foreground size-4 shrink-0"
                   mimeType={file.mimeType}
+                  thumbnail={
+                    file.fileFieldId && file.mimeType.startsWith("image/")
+                      ? {
+                          fieldId: file.fileFieldId,
+                          workspaceId: file.workspaceId,
+                          hasThumbnail: true,
+                        }
+                      : undefined
+                  }
                 />
               ) : (
                 <FileTextIcon className="text-muted-foreground size-4 shrink-0" />
@@ -463,6 +472,17 @@ export const SearchHitIcon = ({ hit }: { hit: GlobalSearchHit }) => {
           className="text-muted-foreground mt-0.5 size-4 shrink-0"
           kind={hit.type}
           mimeType={hit.mimeType}
+          thumbnail={
+            hit.type === "document" &&
+            hit.fileFieldId &&
+            hit.mimeType?.startsWith("image/")
+              ? {
+                  fieldId: hit.fileFieldId,
+                  workspaceId: hit.workspaceId,
+                  hasThumbnail: true,
+                }
+              : undefined
+          }
         />
       );
     case "matter":
