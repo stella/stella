@@ -30,7 +30,6 @@ import { panic } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import type { AdapterKey } from "@/api/handlers/case-law/consts";
 import {
   backlogSurface,
   decodeSourceRawEnvelope,
@@ -41,7 +40,11 @@ import type {
   LegacyRawShape,
   SourceSurfaceDisposition,
 } from "@/api/handlers/case-law/ingestion/adapter";
-import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
+import {
+  getSourceRegistration,
+  listSourceRegistrations,
+  type SourceRegistrationKey,
+} from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import baseline from "@/api/handlers/case-law/ingestion/adapters/source-surface-backlog-baseline.json";
 import { readGzipJson } from "@/api/lib/gzip-json";
 import {
@@ -75,6 +78,9 @@ import {
   type EnrolledAdapterFixture,
 } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 
+import { courtListenerConformanceFixture } from "./courtlistener/conformance-fixture";
+import { COURTLISTENER_IMPORT_KEY } from "./courtlistener/map";
+
 const originalFetch = globalThis.fetch;
 
 afterEach(() => {
@@ -96,7 +102,7 @@ afterEach(() => {
 type SurfaceEvidence =
   | { readonly kind: "built"; readonly fixture: () => EnrolledAdapterFixture }
   | { readonly kind: "page-recording"; readonly file: string }
-  | { readonly kind: "shared-path"; readonly with: AdapterKey }
+  | { readonly kind: "shared-path"; readonly with: SourceRegistrationKey }
   | { readonly kind: "none"; readonly reason: string };
 
 /**
@@ -111,6 +117,9 @@ const atRisEvidence = (
 ];
 
 const SURFACE_EVIDENCE = {
+  [COURTLISTENER_IMPORT_KEY]: [
+    { kind: "built", fixture: courtListenerConformanceFixture },
+  ],
   [ADAPTER_KEYS.CZ_NS]: [
     { kind: "built", fixture: czNsFixture },
     { kind: "page-recording", file: "cz-ns-page.json.gz" },
@@ -164,7 +173,7 @@ const SURFACE_EVIDENCE = {
     { kind: "built", fixture: plUokikFixture },
     { kind: "built", fixture: plUokikRulingFixture },
   ],
-} as const satisfies Record<AdapterKey, readonly SurfaceEvidence[]>;
+} as const satisfies Record<SourceRegistrationKey, readonly SurfaceEvidence[]>;
 
 // ── Reading a stored raw back into part names ────────────
 
@@ -202,7 +211,7 @@ const legacyPartNames = (
  * so both count as evidence.
  */
 const storedNamesOf = (
-  adapter: AdapterKey,
+  adapter: SourceRegistrationKey,
   raw: string,
   contentType: string | null,
 ): readonly string[] => {
@@ -220,7 +229,7 @@ const storedNamesOf = (
 
 /** Every decision of a committed page recording, as the crawl stored it. */
 const pageRecordingNames = async (
-  adapter: AdapterKey,
+  adapter: SourceRegistrationKey,
   file: string,
 ): Promise<readonly string[]> => {
   const recording: unknown = await readGzipJson(new URL(file, FIXTURES_DIR));
@@ -247,7 +256,7 @@ const pageRecordingNames = async (
 };
 
 const evidenceNames = async (
-  adapter: AdapterKey,
+  adapter: SourceRegistrationKey,
 ): Promise<readonly string[]> => {
   const names = new Set<string>();
   const add = (found: readonly string[]) => {
@@ -286,16 +295,19 @@ const evidenceNames = async (
 
 // ── The declarations ─────────────────────────────────────
 
-const DECLARED_ADAPTER_KEYS = Object.values(ADAPTER_KEYS);
+const DECLARED_ADAPTER_KEYS = listSourceRegistrations().map(
+  ({ source }) => source.key,
+);
 
 const BACKLOG_BASELINE: Readonly<Record<string, readonly string[]>> =
   baseline.backlog;
 
-const adapterFor = (key: AdapterKey) =>
-  getAdapter(key) ?? panic(`${key} is declared but not registered`);
+const adapterFor = (key: SourceRegistrationKey) =>
+  getSourceRegistration(key)?.source ??
+  panic(`${key} is declared but not registered`);
 
 const surfacesOf = (
-  key: AdapterKey,
+  key: SourceRegistrationKey,
 ): readonly (readonly [string, SourceSurfaceDisposition])[] =>
   Object.entries(adapterFor(key).sourceSurfaces.surfaces);
 
