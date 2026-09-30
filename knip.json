@@ -4,7 +4,6 @@
     ".": {
       "entry": [
         "scripts/*.ts",
-        "i18n-unused.config.js",
         "oxlint.config.ts",
         "oxlint.design.config.ts"
       ],
@@ -15,10 +14,8 @@
         "eslint-plugin-drizzle",
         "oxlint-tsgolint",
         "ultracite",
-        "i18n-unused",
         "oxlint",
-        "squawk-cli",
-        "vite"
+        "squawk-cli"
       ],
       "ignoreBinaries": ["scripts/dev.sh"]
     },
