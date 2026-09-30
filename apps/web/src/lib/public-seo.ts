@@ -10,6 +10,7 @@ type PublicAlternateLink = {
 export type PublicHeadInput = {
   alternateLinks?: readonly PublicAlternateLink[];
   crawlAllowed: boolean;
+  indexing?: "default" | "noindex";
   description?: string | null;
   jsonLd?: JsonLdObject | null;
   path: `/${string}`;
@@ -52,6 +53,7 @@ export const createPublicHead = ({
   crawlAllowed,
   description,
   jsonLd,
+  indexing = "default",
   path,
   title,
   type,
@@ -65,11 +67,12 @@ export const createPublicHead = ({
       href: link.href,
     })),
   ];
+  const robots = crawlAllowed ? PUBLIC_ROBOTS : PRIVATE_ROBOTS;
   const meta: PublicMeta[] = [
     { title },
     {
       name: "robots",
-      content: crawlAllowed ? PUBLIC_ROBOTS : PRIVATE_ROBOTS,
+      content: indexing === "noindex" ? "noindex" : robots,
     },
     { property: "og:title", content: title },
     { property: "og:type", content: type },

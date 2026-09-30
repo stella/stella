@@ -1,3 +1,16 @@
+import { parseDocumentAst } from "@stll/legal-ast/document-ast";
+
+import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
+
+export const hasDecisionText = (
+  decision: Pick<PublicCaseLawDecision, "documentAst" | "fulltext">,
+): boolean =>
+  Boolean(decision.fulltext?.trim()) ||
+  (parseDocumentAst(decision.documentAst)?.blocks.some(
+    (block) => block.plainText.trim().length > 0,
+  ) ??
+    false);
+
 /**
  * Why a decision is on screen without its text.
  *

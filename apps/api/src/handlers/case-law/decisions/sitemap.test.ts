@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
+import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
@@ -51,6 +52,7 @@ beforeAll(
       {
         id: createSafeId<"caseLawDecision">(),
         sourceId,
+        fulltext: "Published decision text",
         caseNumber: "1 Cdo 1/2020",
         court: "Nejvyšší soud",
         country: "CZE",
@@ -60,6 +62,7 @@ beforeAll(
       {
         id: createSafeId<"caseLawDecision">(),
         sourceId,
+        fulltext: "Published decision text",
         caseNumber: "2 Cdo 2/2020",
         court: "Nejvyšší soud",
         country: "CZE",
@@ -69,6 +72,7 @@ beforeAll(
       {
         id: createSafeId<"caseLawDecision">(),
         sourceId,
+        fulltext: "Published decision text",
         caseNumber: "3 Cdo 3/2021",
         court: "Nejvyšší soud",
         country: "CZE",
@@ -80,6 +84,7 @@ beforeAll(
         // the literal that previously got bound as a parameter.
         id: createSafeId<"caseLawDecision">(),
         sourceId,
+        fulltext: "Published decision text",
         caseNumber: "4 Cdo 4/undated",
         court: "Nejvyšší soud",
         country: "CZE",
@@ -89,6 +94,7 @@ beforeAll(
       {
         id: createSafeId<"caseLawDecision">(),
         sourceId,
+        fulltext: "Published decision text",
         caseNumber: "synthetic-hidden",
         court: "Synthetic Court",
         country: "XAA",
@@ -130,4 +136,30 @@ test("the public list read stays inside the country boundary", async () => {
     expect(listed.items).toHaveLength(4);
     expect(listed.items.every((item) => item.country === country)).toBe(true);
   }
+});
+
+test("textless detailed decisions enter sitemap shards only after text arrives", async () => {
+  const id = createSafeId<"caseLawDecision">();
+  await db.insert(caseLawDecisions).values({
+    id,
+    sourceId,
+    caseNumber: "Text pending",
+    court: "Nejvyšší soud",
+    country: "CZE",
+    language: "cs",
+    decisionDate: "2030-03-01",
+    fulltext: "",
+  });
+  const query = { bucket: "all", country: "cze", month: "03", year: "2030" };
+  const empty = await listSitemapShardDecisionsHandler(query, caseLawDb);
+  expect(empty).toMatchObject({ items: [] });
+  await db
+    .update(caseLawDecisions)
+    .set({ fulltext: "Published decision" })
+    .where(eq(caseLawDecisions.id, id));
+  const filled = await listSitemapShardDecisionsHandler(query, caseLawDb);
+  if (!("items" in filled)) {
+    panic("Expected a readable sitemap shard");
+  }
+  expect(filled.items.map((item) => item.id)).toEqual([id]);
 });

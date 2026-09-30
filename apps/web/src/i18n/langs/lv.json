@@ -837,6 +837,7 @@
         "publishedOnWeb": "Publicēts tīmeklī"
       },
       "statutes": "Piemērojamie tiesību akti",
+      "textNotYetAvailable": "Tiesa nav publicējusi nolēmuma tekstu, vai tas šeit vēl nav pieejams.",
       "textPending": "Nolēmuma teksts vēl tiek saņemts",
       "textReadFailed": "Nolēmuma tekstu neizdevās ielādēt",
       "textUnavailable": "Šim nolēmumam teksts nav pieejams"

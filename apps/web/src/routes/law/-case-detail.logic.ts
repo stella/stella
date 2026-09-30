@@ -15,6 +15,7 @@ import {
   isPublicCaseLawCountry,
   publicCaseLawCountryFromParam,
 } from "@/features/case-law/case-law-jurisdiction";
+import { hasDecisionText } from "@/features/case-law/components/case-viewer/decision-body-state.logic";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import {
   decisionCitationsInfiniteOptions,
@@ -396,6 +397,7 @@ export const createPublicCaseLawDecisionHead = async ({
   const canonicalUrl = createPublicLawCanonicalUrl(path);
 
   return createPublicLawHead({
+    indexing: hasDecisionText(decision) ? "default" : "noindex",
     alternateLinks: createDecisionAlternateLinks(decision),
     description: buildDescription(decision),
     jsonLd: await createCaseLawDecisionJsonLd({

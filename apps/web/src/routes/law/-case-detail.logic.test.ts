@@ -7,8 +7,12 @@ import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readine
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import { decisionBySlugOptions } from "@/features/case-law/queries/decisions";
+import { createPublicLawHead } from "@/lib/public-law-seo";
 import { toSafeId } from "@/lib/safe-id";
-import { loadPublicCaseLawDecisionRoute } from "@/routes/law/-case-detail.logic";
+import {
+  createPublicCaseLawDecisionHead,
+  loadPublicCaseLawDecisionRoute,
+} from "@/routes/law/-case-detail.logic";
 
 const ABSENT_TEXT_FIELD = {
   reason: "not_published",
@@ -81,6 +85,39 @@ const PUBLISHED_DECISION = {
   ...UNPUBLISHED_DECISION,
   country: PUBLIC_COUNTRY,
 } satisfies DecisionBySlug;
+
+test("textless decision heads stay noindex until the text arrives", async () => {
+  for (const country of ["CZE", "SVK", "POL"]) {
+    const params = {
+      country: country.toLowerCase(),
+      court: "synthetic-court",
+      slug: "synthetic-decision",
+    };
+    const decision = { ...PUBLISHED_DECISION, country };
+    const emptyHead = await createPublicCaseLawDecisionHead({
+      decision,
+      params,
+    });
+    expect(emptyHead.meta.at(1)).toEqual(
+      createPublicLawHead({
+        indexing: "noindex",
+        path: "/law/cases",
+        title: "Test",
+        type: "article",
+      }).meta.at(1),
+    );
+    const textHead = await createPublicCaseLawDecisionHead({
+      decision: { ...decision, fulltext: "Published judgment" },
+      params,
+    });
+    const existingHead = createPublicLawHead({
+      path: "/law/cases",
+      title: "Test",
+      type: "article",
+    });
+    expect(textHead.meta.at(1)).toEqual(existingHead.meta.at(1));
+  }
+});
 
 describe("public case-law decision route readiness", () => {
   test("rejects a route outside the generated country list", () => {

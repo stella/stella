@@ -837,6 +837,7 @@
         "publishedOnWeb": "Zveřejněno na webu"
       },
       "statutes": "Dotčené předpisy",
+      "textNotYetAvailable": "Soud text rozhodnutí nezveřejnil, nebo zde zatím není dostupný.",
       "textPending": "Text rozhodnutí se stále načítá",
       "textReadFailed": "Text rozhodnutí se nepodařilo načíst",
       "textUnavailable": "K tomuto rozhodnutí není k dispozici text"

@@ -837,6 +837,7 @@
         "publishedOnWeb": "Publié sur le web"
       },
       "statutes": "Textes applicables",
+      "textNotYetAvailable": "La juridiction n’a pas publié le texte de la décision, ou celui-ci n’est pas encore disponible ici.",
       "textPending": "Le texte de la décision est en cours de récupération",
       "textReadFailed": "Le texte de la décision n'a pas pu être chargé",
       "textUnavailable": "Aucun texte n'est disponible pour cette décision"

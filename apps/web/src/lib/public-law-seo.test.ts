@@ -26,6 +26,30 @@ const {
 } = await import("@/lib/public-law-seo");
 
 describe("public law SEO", () => {
+  test("textless pages explicitly emit noindex without changing the default head", () => {
+    const input = {
+      crawlAllowed: true,
+      path: "/law/cases",
+      title: "Case law",
+      type: "article",
+    } as const;
+    const ordinary = createPublicLawHead(input);
+    const textless = createPublicLawHead({ ...input, indexing: "noindex" });
+    expect(textless.meta).toContainEqual({
+      name: "robots",
+      content: "noindex",
+    });
+    expect(
+      textless.meta.filter(
+        (meta) => !("name" in meta && meta.name === "robots"),
+      ),
+    ).toEqual(
+      ordinary.meta.filter(
+        (meta) => !("name" in meta && meta.name === "robots"),
+      ),
+    );
+    expect(textless.links).toEqual(ordinary.links);
+  });
   test("builds absolute canonical URLs from the public app origin", () => {
     expect(createPublicLawCanonicalUrl("/law/cases")).toBe(
       "http://localhost:3000/law/cases",

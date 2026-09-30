@@ -13,6 +13,7 @@ import {
   caseLawSitemapShards,
   caseLawSources,
 } from "@/api/db/schema";
+import { rowHoldsDocument } from "@/api/handlers/case-law/stored-payload";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type {
   CaseLawPublicReadDb,
@@ -154,6 +155,7 @@ export const readSitemapDecisionAlternates = async (
         inArray(caseLawDecisions.country, [...PUBLIC_CASE_LAW_COUNTRIES]),
         redistributableCaseLawSource,
         publishedCaseLawDecision,
+        rowHoldsDocument,
       ),
     )
     .orderBy(asc(caseLawDecisions.language), asc(caseLawDecisions.id))
@@ -180,6 +182,7 @@ export const sitemapShardDecisionsQuery = (
       and(
         redistributableCaseLawSource,
         publishedCaseLawDecision,
+        rowHoldsDocument,
         ...conditions,
       ),
     )

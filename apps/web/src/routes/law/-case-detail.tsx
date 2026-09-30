@@ -19,6 +19,7 @@ import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-sto
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
 import Tooltip from "@/components/tooltip";
+import { hasDecisionText } from "@/features/case-law/components/case-viewer/decision-body-state.logic";
 import { buildDecisionFacts } from "@/features/case-law/components/case-viewer/decision-facts.logic";
 import { DecisionWorkspace } from "@/features/case-law/components/case-viewer/decision-workspace";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
@@ -29,6 +30,7 @@ import {
   extractId,
   type PublicCaseLawDecision,
 } from "@/routes/law/-case-detail.logic";
+import { PublicDecisionTextNotice } from "@/routes/law/-components/public-decision-text-notice";
 
 const AuthenticatedCaseLawWorkspace = lazy(async () => {
   const module = await import("@/components/authenticated-case-law-workspace");
@@ -73,6 +75,7 @@ export function PublicDecisionViewer({
     );
   });
 
+  const hasText = hasDecisionText(decision);
   const originalUrl =
     buildDecisionFacts({
       decisionType: decision.decisionType,
@@ -158,36 +161,38 @@ export function PublicDecisionViewer({
           }
         />
       </ChromeHeaderActions>
-      {authStatus.isAuthenticated ? (
-        <Suspense
-          fallback={
-            <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-              <DecisionWorkspace
-                aiMode="gated"
-                decision={decision}
-                decisionId={decisionId}
-                initialAnchorId={initialAnchorId}
-                initialSearchQuery={initialSearchQuery}
-              />
-            </div>
-          }
-        >
-          <AuthenticatedCaseLawWorkspace
+      {!hasText && <PublicDecisionTextNotice sourceUrl={originalUrl} />}
+      {hasText &&
+        (authStatus.isAuthenticated ? (
+          <Suspense
+            fallback={
+              <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+                <DecisionWorkspace
+                  aiMode="gated"
+                  decision={decision}
+                  decisionId={decisionId}
+                  initialAnchorId={initialAnchorId}
+                  initialSearchQuery={initialSearchQuery}
+                />
+              </div>
+            }
+          >
+            <AuthenticatedCaseLawWorkspace
+              decision={decision}
+              decisionId={decisionId}
+              initialAnchorId={initialAnchorId}
+              initialSearchQuery={initialSearchQuery}
+              user={authStatus.user}
+            />
+          </Suspense>
+        ) : (
+          <GuestDecisionWorkspace
             decision={decision}
             decisionId={decisionId}
             initialAnchorId={initialAnchorId}
             initialSearchQuery={initialSearchQuery}
-            user={authStatus.user}
           />
-        </Suspense>
-      ) : (
-        <GuestDecisionWorkspace
-          decision={decision}
-          decisionId={decisionId}
-          initialAnchorId={initialAnchorId}
-          initialSearchQuery={initialSearchQuery}
-        />
-      )}
+        ))}
     </main>
   );
 }
