@@ -24,7 +24,7 @@ const startCollabServer = async () => {
     url: redisUrl,
     settings: env,
     rejectUnauthorized: env.REDIS_TLS_REJECT_UNAUTHORIZED,
-  });
+  }).unwrap("Redis connection configuration must be valid.");
   process.stderr.write(
     `${JSON.stringify({ event: "redis.connection.mode", mode })}\n`,
   );

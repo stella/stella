@@ -21,12 +21,16 @@ describe("Redis connection policy", () => {
     expect(v.parse(redisSettingsSchema, {}).REDIS_CONNECTION_ENFORCED).toBe(
       false,
     );
-    expect(redisConnectionConfig({ url, rejectUnauthorized: false })).toEqual({
+    expect(
+      redisConnectionConfig({ url, rejectUnauthorized: false }).unwrap(),
+    ).toEqual({
       mode: "configured",
       url,
       tls: { rejectUnauthorized: false },
     });
-    expect(redisConnectionConfig({ url: "redis://localhost:6379" })).toEqual({
+    expect(
+      redisConnectionConfig({ url: "redis://localhost:6379" }).unwrap(),
+    ).toEqual({
       mode: "configured",
       url: "redis://localhost:6379",
       tls: undefined,
@@ -40,7 +44,7 @@ describe("Redis connection policy", () => {
         REDIS_USERNAME: "service",
         REDIS_PASSWORD: "example@value",
       },
-    });
+    }).unwrap();
     const parsed = new URL(configured.url);
     expect(decodeURIComponent(parsed.username)).toBe("service");
     expect(decodeURIComponent(parsed.password)).toBe("example@value");
@@ -55,23 +59,26 @@ describe("Redis connection policy", () => {
       "REDIS_TLS_SERVER_NAME",
     ] as const) {
       for (const value of [undefined, ""]) {
-        expect(() =>
-          redisConnectionConfig({
-            url,
-            settings: { ...settings, [field]: value },
-          }),
-        ).toThrow(RedisConfigurationError);
+        const result = redisConnectionConfig({
+          url,
+          settings: { ...settings, [field]: value },
+        });
+        expect(result.isErr()).toBe(true);
+        if (result.isErr()) {
+          expect(result.error).toBeInstanceOf(RedisConfigurationError);
+        }
       }
     }
-    expect(() =>
-      redisConnectionConfig({ url: "redis://localhost:6379", settings }),
-    ).toThrow(RedisConfigurationError);
-    expect(() =>
-      redisConnectionConfig({
-        url,
-        settings: { ...settings, REDIS_USERNAME: "default" },
-      }),
-    ).toThrow(RedisConfigurationError);
+    for (const options of [
+      { url: "redis://localhost:6379", settings },
+      { url, settings: { ...settings, REDIS_USERNAME: "default" } },
+    ]) {
+      const result = redisConnectionConfig(options);
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error).toBeInstanceOf(RedisConfigurationError);
+      }
+    }
   });
 
   test("applies the enforced certificate policy", () => {
@@ -79,7 +86,7 @@ describe("Redis connection policy", () => {
       url,
       settings,
       rejectUnauthorized: false,
-    });
+    }).unwrap();
     expect(config.mode).toBe("enforced");
     expect(config.tls).toEqual({
       ca: "example-ca",
@@ -100,7 +107,21 @@ describe("Redis connection policy", () => {
           REDIS_TLS_CA_PEM: "example-ca",
           REDIS_TLS_SERVER_NAME: "redis.example.test",
         },
-      }).mode,
+      }).unwrap().mode,
     ).toBe("enforced");
   });
+});
+
+test("reports invalid URL settings as configuration errors", () => {
+  for (const invalidUrl of [
+    "invalid",
+    "rediss://service:%ZZ@redis.example.test",
+  ]) {
+    const result = redisConnectionConfig({ url: invalidUrl });
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error).toBeInstanceOf(RedisConfigurationError);
+      expect(result.error.message).toBe("Redis connection URL must be valid.");
+    }
+  }
 });

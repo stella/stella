@@ -18,6 +18,10 @@ export const redisConnectionOptions = ({
   rejectUnauthorized = envBase.REDIS_TLS_REJECT_UNAUTHORIZED,
   settings = envBase,
 }: RedisConnectionOptions): RedisOptions => {
-  const { tls } = redisConnectionConfig({ url, settings, rejectUnauthorized });
+  const { tls } = redisConnectionConfig({
+    url,
+    settings,
+    rejectUnauthorized,
+  }).unwrap("Redis connection configuration must be valid.");
   return tls === undefined ? {} : { tls };
 };

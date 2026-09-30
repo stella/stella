@@ -1,4 +1,4 @@
-import { TaggedError } from "better-result";
+import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 export const redisSettingsSchema = v.object({
@@ -32,51 +32,71 @@ export const redisConnectionConfig = ({
   url,
   settings = {},
   rejectUnauthorized = true,
-}: RedisConnectionConfigOptions) => {
-  const parsed = new URL(url);
-  const username =
-    settings.REDIS_USERNAME ?? decodeURIComponent(parsed.username);
-  const password =
-    settings.REDIS_PASSWORD ?? decodeURIComponent(parsed.password);
-  if (settings.REDIS_USERNAME !== undefined) {
-    parsed.username = settings.REDIS_USERNAME;
-  }
-  if (settings.REDIS_PASSWORD !== undefined) {
-    parsed.password = settings.REDIS_PASSWORD;
-  }
+}: RedisConnectionConfigOptions) =>
+  Result.gen(function* () {
+    const { parsed, username, password } = yield* Result.try({
+      try: () => {
+        const connectionUrl = new URL(url);
+        return {
+          parsed: connectionUrl,
+          username:
+            settings.REDIS_USERNAME ??
+            decodeURIComponent(connectionUrl.username),
+          password:
+            settings.REDIS_PASSWORD ??
+            decodeURIComponent(connectionUrl.password),
+        };
+      },
+      catch: () =>
+        new RedisConfigurationError({
+          message: "Redis connection URL must be valid.",
+        }),
+    });
+    if (settings.REDIS_USERNAME !== undefined) {
+      parsed.username = settings.REDIS_USERNAME;
+    }
+    if (settings.REDIS_PASSWORD !== undefined) {
+      parsed.password = settings.REDIS_PASSWORD;
+    }
 
-  if (!settings.REDIS_CONNECTION_ENFORCED) {
-    return {
-      mode: "configured" as const,
+    if (!settings.REDIS_CONNECTION_ENFORCED) {
+      return Result.ok({
+        mode: "configured" as const,
+        url: parsed.toString(),
+        tls: parsed.protocol === "rediss:" ? { rejectUnauthorized } : undefined,
+      });
+    }
+    if (parsed.protocol !== "rediss:") {
+      return Result.err(
+        new RedisConfigurationError({
+          message: "Redis connection requires a TLS URL.",
+        }),
+      );
+    }
+    if (username.trim() === "" || username === "default" || password === "") {
+      return Result.err(
+        new RedisConfigurationError({
+          message: "Redis connection requires service credentials.",
+        }),
+      );
+    }
+    const ca = settings.REDIS_TLS_CA_PEM;
+    const serverName = settings.REDIS_TLS_SERVER_NAME;
+    if (
+      ca === undefined ||
+      ca.trim() === "" ||
+      serverName === undefined ||
+      serverName.trim() === ""
+    ) {
+      return Result.err(
+        new RedisConfigurationError({
+          message: "Redis connection requires CA and server name settings.",
+        }),
+      );
+    }
+    return Result.ok({
+      mode: "enforced" as const,
       url: parsed.toString(),
-      tls: parsed.protocol === "rediss:" ? { rejectUnauthorized } : undefined,
-    };
-  }
-  if (parsed.protocol !== "rediss:") {
-    throw new RedisConfigurationError({
-      message: "Redis connection requires a TLS URL.",
+      tls: { ca, serverName, rejectUnauthorized: true as const },
     });
-  }
-  if (username.trim() === "" || username === "default" || password === "") {
-    throw new RedisConfigurationError({
-      message: "Redis connection requires service credentials.",
-    });
-  }
-  const ca = settings.REDIS_TLS_CA_PEM;
-  const serverName = settings.REDIS_TLS_SERVER_NAME;
-  if (
-    ca === undefined ||
-    ca.trim() === "" ||
-    serverName === undefined ||
-    serverName.trim() === ""
-  ) {
-    throw new RedisConfigurationError({
-      message: "Redis connection requires CA and server name settings.",
-    });
-  }
-  return {
-    mode: "enforced" as const,
-    url: parsed.toString(),
-    tls: { ca, serverName, rejectUnauthorized: true as const },
-  };
-};
+  });

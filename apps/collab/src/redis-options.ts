@@ -20,7 +20,7 @@ export const collabRedisConnectionOptions = ({
     url: redisUrl,
     settings,
     rejectUnauthorized,
-  });
+  }).unwrap("Redis connection configuration must be valid.");
   const url = new URL(config.url);
   const options: Omit<RedisOptions, "replyMapping"> = {
     host: url.hostname.replace(/^\[|\]$/gu, ""),

@@ -97,7 +97,9 @@ class ConfiguredRedisClient
   readonly url: string;
 
   constructor(url: string, overrides?: RedisClientOverrides) {
-    const config = redisConnectionConfig({ url, settings: envBase });
+    const config = redisConnectionConfig({ url, settings: envBase }).unwrap(
+      "Redis connection configuration must be valid.",
+    );
     super(config.url, redisClientOptions(url, overrides));
     this.url = url;
     // Register one owned dispatcher on each of Bun's native `onconnect` /

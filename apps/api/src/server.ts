@@ -610,7 +610,7 @@ const startServer = async (): Promise<void> => {
       url: envBase.REDIS_URL,
       settings: envBase,
       rejectUnauthorized: envBase.REDIS_TLS_REJECT_UNAUTHORIZED,
-    });
+    }).unwrap("Redis connection configuration must be valid.");
     logger.info("redis.connection.mode", { mode });
   }
 
