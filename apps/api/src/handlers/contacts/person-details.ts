@@ -1,16 +1,8 @@
-import { t } from "elysia";
-
 import { isCountryCode } from "@stll/country-codes";
 
 import type { DateOfBirth } from "@/api/lib/business-registries/date-of-birth";
+import { MAX_CONTACT_NATIONALITY_CODES } from "@/api/lib/business-registries/nationality-codes";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-
-export const MAX_CONTACT_NATIONALITY_CODES = 250;
-
-export const nationalityCodesSchema = t.Array(
-  t.String({ pattern: "^[A-Z]{2}$" }),
-  { maxItems: MAX_CONTACT_NATIONALITY_CODES, uniqueItems: true },
-);
 
 export const dateOfBirthFromColumns = ({
   dateOfBirthYear: year,

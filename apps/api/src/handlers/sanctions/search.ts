@@ -5,10 +5,11 @@ import type { Static } from "elysia";
 import { isCountryCode } from "@stll/country-codes";
 import { hasExcessQueryTokens, MAX_QUERY_TOKENS } from "@stll/sanctions";
 
-import { nationalityCodesSchema } from "@/api/handlers/contacts/person-details";
 import { createSafePublicHandler } from "@/api/lib/api-handlers";
+import type { SafeHandlerGenerator } from "@/api/lib/api-handlers";
 import { dateOfBirthSchema } from "@/api/lib/business-registries/date-of-birth";
 import { personDateOfBirth } from "@/api/lib/business-registries/entity-checks";
+import { nationalityCodesSchema } from "@/api/lib/business-registries/nationality-codes";
 import { resolveSanctionsNameSubject } from "@/api/lib/business-registries/sanctions-check";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
@@ -17,6 +18,7 @@ import type { SanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
 import { SANCTIONS_SUBJECT_ERROR_MESSAGES } from "@/api/lib/lists/sanctions/screening-service";
 import type {
   screenSanctionsSubject,
+  SanctionsScreening,
   SanctionsScreeningSubject,
 } from "@/api/lib/lists/sanctions/screening-service";
 import { logger } from "@/api/lib/observability/logger";
@@ -115,6 +117,20 @@ const screeningUnavailable = () =>
     message: "Could not screen the sanctions lists",
   });
 
+/**
+ * An expected admission refusal, answered as a response rather than a
+ * `HandlerError`: a 5xx error is reported as a fault, and this is capacity.
+ */
+const screeningBusy = () =>
+  status(503, {
+    code: "service_unavailable",
+    message: "Sanctions screening is busy; try again shortly",
+  });
+
+type PublicSanctionsSearchResult =
+  | SanctionsScreening
+  | ReturnType<typeof screeningBusy>;
+
 // CPU admission is per API process, shared by all mounted public handlers.
 let activePublicScreenings = 0;
 
@@ -129,7 +145,9 @@ export const createPublicSanctionsSearchHandler = ({
       mcp: { type: "covered", by: "check_counterparty" },
       body: bodySchema,
     },
-    async function* ({ body }) {
+    async function* ({
+      body,
+    }): SafeHandlerGenerator<PublicSanctionsSearchResult> {
       const subject = yield* screeningSubject(body);
       if (
         hasExcessQueryTokens(
@@ -149,12 +167,7 @@ export const createPublicSanctionsSearchHandler = ({
         logger.warn("sanctions.search.busy", {
           maxConcurrent: API_RATE_LIMITS.publicSanctionsSearch.maxConcurrent,
         });
-        return Result.ok(
-          status(503, {
-            code: "service_unavailable",
-            message: "Sanctions screening is busy; try again shortly",
-          }),
-        );
+        return Result.ok(screeningBusy());
       }
       activePublicScreenings += 1;
       try {

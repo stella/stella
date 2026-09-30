@@ -646,7 +646,7 @@ test("repeated normalized query tokens keep exact-name equality", () => {
     ]);
     const result = screen(
       exactIndex,
-      entityType === undefined ? { name } : { name, entityType },
+      { name, entityType },
       { cutoff: DEFAULT_CUTOFF },
     ).unwrap();
     expect(result.possibleMatches.at(0)?.evidence.nameScore).toBe(1);

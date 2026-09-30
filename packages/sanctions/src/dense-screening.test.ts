@@ -130,9 +130,7 @@ test("dense common names screen normally within the warm work bound", () => {
     ["Global Trading Company Limited", "organisation"],
   ] as const) {
     // Warm the JIT separately; index construction is outside the query budget.
-    screen(index, entityType === undefined ? { name } : { name, entityType }, {
-      cutoff: DEFAULT_CUTOFF,
-    });
+    screen(index, { name, entityType }, { cutoff: DEFAULT_CUTOFF });
     for (const kind of [entityType, undefined]) {
       const started = performance.now();
       const result = screen(
