@@ -44,6 +44,7 @@ import {
   findRemovedInputIssues,
   normalizeInputAtBoundary,
 } from "@/api/mcp/input-normalization";
+import { plainRecord } from "@/api/mcp/input-schemas";
 import {
   declaresInternalField,
   INTERNAL_FIELD_NAME,
@@ -1142,16 +1143,7 @@ const filelessFieldRefusal = (
 };
 
 const invokeInputPartSchema = (description: string) =>
-  v.optional(
-    v.pipe(
-      v.record(
-        v.string(),
-        v.unknown(),
-        (issue) => `Expected an object, got ${typeof issue.input}`,
-      ),
-      v.description(description),
-    ),
-  );
+  v.optional(v.pipe(plainRecord(v.unknown()), v.description(description)));
 
 const INVOKE_INPUT_PARTS = {
   body: invokeInputPartSchema(
