@@ -78,6 +78,23 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   },
   {
     createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "invoices_id_workspace_unique" ON public."invoices" USING btree ("id", "workspace_id")',
+    definitionBody: "ON public.invoices USING btree (id, workspace_id)",
+    isUnique: true,
+    name: "invoices_id_workspace_unique",
+    tableName: "invoices",
+  },
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "invoices_ws_original_idx" ON public."invoices" USING btree ("workspace_id", "original_invoice_id")',
+    definitionBody:
+      "ON public.invoices USING btree (workspace_id, original_invoice_id)",
+    isUnique: false,
+    name: "invoices_ws_original_idx",
+    tableName: "invoices",
+  },
+  {
+    createSql:
       'CREATE INDEX CONCURRENTLY "case_law_decisions_provision_scope_cursor_idx" ON public."case_law_decisions" USING btree ("country", "language", "id")',
     definitionBody:
       "ON public.case_law_decisions USING btree (country, language, id)",
