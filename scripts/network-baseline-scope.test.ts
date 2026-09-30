@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  chmodSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -278,6 +279,7 @@ type WorkflowJob = {
   outputs?: Record<string, string>;
   steps: readonly {
     id?: string;
+    if?: string;
     name?: string;
     uses?: string;
     run?: string;
@@ -330,6 +332,94 @@ describe("network baseline workflows", () => {
         }
       }
     }
+  });
+
+  test.each([
+    { queued: false, moved: false, expected: "ready=true", exitCode: 0 },
+    { queued: true, moved: false, expected: "ready=false", exitCode: 0 },
+    { queued: false, moved: true, expected: "", exitCode: 1 },
+    { queued: true, moved: true, expected: "", exitCode: 1 },
+  ])("queue delivery: %j", ({ queued, moved, expected, exitCode }) => {
+    const jobs = readWorkflowJobs("network-baseline-deliver.yml");
+    const deliver = jobs["deliver"] ?? expect.unreachable("deliver job");
+    const gate =
+      deliver.steps.find(({ id }) => id === "queue") ??
+      expect.unreachable("queue gate");
+    const directory = mkdtempSync(path.join(os.tmpdir(), "baseline-queue-"));
+    const head = "a".repeat(40);
+    const output = path.join(directory, "output");
+    const summary = path.join(directory, "summary");
+    const response = path.join(directory, "response.json");
+    const gh = path.join(directory, "gh");
+    try {
+      writeFileSync(output, "");
+      writeFileSync(summary, "");
+      writeFileSync(
+        response,
+        JSON.stringify({
+          data: {
+            repository: {
+              pullRequest: {
+                headRefOid: moved ? "b".repeat(40) : head,
+                mergeQueueEntry: queued ? { id: "entry" } : null,
+              },
+            },
+          },
+        }),
+      );
+      writeFileSync(gh, '#!/bin/sh\ncat "$QUEUE_RESPONSE"\n');
+      chmodSync(gh, 0o755);
+      const result = Bun.spawnSync(
+        ["bash", "-c", gate.run ?? expect.unreachable("queue script")],
+        {
+          env: {
+            ...process.env,
+            PATH: `${directory}:${process.env["PATH"] ?? ""}`,
+            REPOSITORY: "stella/stella",
+            PR_NUMBER: "1",
+            RECORDED_HEAD: head,
+            QUEUE_RESPONSE: response,
+            GITHUB_OUTPUT: output,
+            GITHUB_STEP_SUMMARY: summary,
+          },
+        },
+      );
+      expect(result.exitCode).toBe(exitCode);
+      expect(readFileSync(output, "utf-8").trim()).toBe(expected);
+      if (queued && !moved) {
+        expect(readFileSync(summary, "utf-8")).toContain(
+          "recording label is retained",
+        );
+      }
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  test("only an unqueued delivery can mint a write token, commit and clear its label", () => {
+    const jobs = readWorkflowJobs("network-baseline-deliver.yml");
+    const deliver = jobs["deliver"] ?? expect.unreachable("deliver job");
+    const gateIndex = deliver.steps.findIndex(({ id }) => id === "queue");
+    for (const id of ["app-token", "commit"]) {
+      const index = deliver.steps.findIndex((step) => step.id === id);
+      expect(index).toBeGreaterThan(gateIndex);
+      expect(deliver.steps.at(index)?.if).toContain(
+        "steps.queue.outputs.ready == 'true'",
+      );
+    }
+    const cleanup = deliver.steps.find(
+      ({ name }) => name === "Remove recording label",
+    );
+    expect(cleanup?.if).toBe("always() && steps.commit.outcome == 'success'");
+    for (const name of ["deliver", "remove-label-after-failure"]) {
+      expect(jobs[name]?.permissions).toMatchObject({
+        issues: "write",
+        "pull-requests": "write",
+      });
+    }
+    const token = deliver.steps.find(({ id }) => id === "app-token");
+    expect(token?.with?.["permission-contents"]).toBe("write");
+    expect(token?.with).not.toHaveProperty("permission-pull-requests");
   });
 
   test("a delivered commit opens a budget review thread", () => {

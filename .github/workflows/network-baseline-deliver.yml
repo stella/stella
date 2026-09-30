@@ -28,7 +28,7 @@ jobs:
       actions: read
       contents: read
       issues: write
-      pull-requests: read
+      pull-requests: write
     outputs:
       pr: ${{ steps.pr.outputs.pr }}
       committed: ${{ steps.commit.outputs.operation == 'committed' }}
@@ -239,8 +239,33 @@ jobs:
             echo "$delimiter"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Create CI-triggering app token
+      - name: Wait cleanly for a queued pull request
         if: steps.pr.outputs.push-allowed == 'true'
+        id: queue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ steps.pr.outputs.pr }}
+          RECORDED_HEAD: ${{ steps.artifact.outputs.head }}
+        run: |
+          set -euo pipefail
+          state=$(gh api graphql \
+            -f query='query($owner:String!,$repo:String!,$number:Int!){repository(owner:$owner,name:$repo){pullRequest(number:$number){headRefOid mergeQueueEntry{id}}}}' \
+            -f owner="${REPOSITORY%%/*}" -f repo="${REPOSITORY#*/}" -F number="$PR_NUMBER")
+          if ! jq -e --arg head "$RECORDED_HEAD" '.data.repository.pullRequest | has("mergeQueueEntry") and .headRefOid == $head' <<< "$state" > /dev/null; then
+            echo "::error::The pull request head moved before baseline delivery"
+            exit 1
+          fi
+          if jq -e '.data.repository.pullRequest.mergeQueueEntry != null' <<< "$state" > /dev/null; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Baseline delivery waits while #$PR_NUMBER is queued; rerun this delivery after it leaves the queue."
+            echo "Baseline delivery for #$PR_NUMBER is waiting for the merge queue. The recording label is retained; rerun this delivery after the PR leaves the queue." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create CI-triggering app token
+        if: steps.pr.outputs.push-allowed == 'true' && steps.queue.outputs.ready == 'true'
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
@@ -251,7 +276,7 @@ jobs:
       # The API signs the commit. append checks that the branch still points
       # at the recorded head, so a concurrent push cannot receive stale data.
       - name: Commit baseline to same-repository pull request
-        if: steps.pr.outputs.push-allowed == 'true'
+        if: steps.pr.outputs.push-allowed == 'true' && steps.queue.outputs.ready == 'true'
         id: commit
         uses: stella/.github/.github/actions/signed-commit@aff5017c264acce5a2bcdf15876da08835e6de70
         with:
@@ -267,7 +292,7 @@ jobs:
             budget change.
 
       - name: Remove recording label
-        if: always() && steps.pr.outcome == 'success'
+        if: always() && steps.commit.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
@@ -278,8 +303,7 @@ jobs:
             gh api -X DELETE "repos/$REPOSITORY/issues/$PR_NUMBER/labels/baseline%3Arecord" --silent
           fi
 
-  # Only this job's token may write pull request review comments. An
-  # unresolved review thread blocks merging on main, so the recorded budgets
+  # An unresolved review thread blocks merging on main, so the recorded budgets
   # get a fresh review after every delivered commit.
   request-budget-review:
     needs: deliver
@@ -323,6 +347,7 @@ jobs:
     timeout-minutes: 3
     permissions:
       issues: write
+      pull-requests: write
     steps:
       - name: Remove recording label
         env:
