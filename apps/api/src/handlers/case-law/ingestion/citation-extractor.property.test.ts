@@ -178,10 +178,11 @@ test(
           expect(text.slice(occurrence.start, occurrence.end)).toBe(citation);
         }
         expect(
-          shifted.value.occurrences.map((occurrence) =>
-            ({ ...occurrence, start: occurrence.start - lead.length,
-              end: occurrence.end - lead.length,}),
-          ),
+          shifted.value.occurrences.map((occurrence) => ({
+            ...occurrence,
+            start: occurrence.start - lead.length,
+            end: occurrence.end - lead.length,
+          })),
         ).toEqual(original.value.occurrences);
       }),
       propertyConfig({ seed: propertySeed() }),
