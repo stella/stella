@@ -953,7 +953,7 @@ export const buildSkUsDecision = async (
   const page = context ?? createSkUsPageContext();
 
   const decisionDate = parseApiDate(doc.mkDateOfDecision);
-  const decisionType = doc.mkFormOfDecision;
+  const decisionType = doc.mkFormOfDecision ?? undefined;
   const ecli = doc.mkECLI ?? undefined;
   const court = "Ústavný súd SR";
   const documentUrl = `${DOC_DOWNLOAD_URL}/${documentId}`;
@@ -1982,7 +1982,7 @@ const reparseStoredRaw = (
   }
 
   const decisionDate = parseApiDate(listing.mkDateOfDecision);
-  const decisionType = listing.mkFormOfDecision;
+  const decisionType = listing.mkFormOfDecision ?? undefined;
   const court = stored.court;
   const documentUrl = `${DOC_DOWNLOAD_URL}/${fields.documentId}`;
   const documentXhtml = parts?.["document"];
