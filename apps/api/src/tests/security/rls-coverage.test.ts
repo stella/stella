@@ -108,6 +108,9 @@ describe("policy coverage", () => {
     // The entry timer projection has member reads and truth-bound owner/admin
     // INSERT/UPDATE, with identity immutability enforced by its trigger.
     "time_entry_timer_states",
+    // Absence history permits owner/admin reads and updates, owner inserts,
+    // and no app-role deletion; the dedicated assertion covers this shape.
+    "absences",
     // AI memory is multi-scope (org OR user OR workspace in one table)
     // and archive-only (no permissive DELETE). The generic workspace /
     // org loops can't express either shape; the dedicated test below
@@ -750,6 +753,68 @@ describe("policy coverage", () => {
         );
       }
     }
+  });
+
+  test("absence history pins current membership and owner/admin access without deletion", async () => {
+    const policies = await fetchStellaPolicies(testDb);
+    const tablePolicies = policies.filter(
+      (policy) => policy.table_name === "absences",
+    );
+    expect(
+      tablePolicies.map((policy) => policy.policy_name).toSorted(),
+    ).toEqual([
+      "absences_owner_insert",
+      "absences_owner_or_manager_select",
+      "absences_owner_or_manager_update",
+    ]);
+    for (const [name, command] of [
+      ["absences_owner_or_manager_select", "r"],
+      ["absences_owner_insert", "a"],
+      ["absences_owner_or_manager_update", "w"],
+    ] as const) {
+      const policy = tablePolicies.find(
+        (candidate) => candidate.policy_name === name,
+      );
+      expect(policy?.command).toBe(command);
+      expect(policy?.permissive).toBe(true);
+      const expressions = [];
+      if (command !== "a") {expressions.push(policy?.using_expr);}
+      if (command !== "r") {expressions.push(policy?.check_expr);}
+      for (const expression of expressions) {
+        const normalized = expression?.replaceAll('"', "");
+        expect(normalized).toContain(SETTING_ORGANIZATION_ID);
+        expect(normalized).toContain(SETTING_USER_ID);
+        expect(normalized).toMatch(/\borganization_id\s*=/u);
+        expect(normalized).toContain("EXISTS");
+        expect(normalized).toMatch(
+          /m\.organization_id\s*=\s*absences\.organization_id/u,
+        );
+        expect(normalized).toMatch(
+          /m\.user_id\s*=\s*\(\s*SELECT current_setting\('app\.user_id'/u,
+        );
+        expect(normalized).toMatch(/absences\.user_id\s*=/u);
+        expect(normalized).toContain("OR");
+        expect(normalized).toContain("m.role");
+        expect(normalized).toContain("'owner'");
+        expect(normalized).toContain("'admin'");
+        expect(normalized).not.toContain(SETTING_WORKSPACE_IDS);
+      }
+      if (command === "w") {
+        expect(policy?.using_expr).toBe(policy?.check_expr);
+      }
+      if (command === "a") {
+        expect(policy?.using_expr).toBeNull();
+        expect(policy?.check_expr?.replaceAll('"', "")).toMatch(
+          /AND\s*\(?user_id\s*=/u,
+        );
+      }
+    }
+    const grants = await fetchStellaTablePrivileges(testDb);
+    expect(privilegesForTable(grants, "absences")).toEqual([
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+    ]);
   });
 
   test("entry timer state projection grants member reads and truth-bound writes only", async () => {

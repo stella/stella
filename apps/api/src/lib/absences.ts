@@ -87,14 +87,14 @@ type RequestAbsenceOptions = {
   body: typeof requestAbsenceBodySchema.static;
   recordAuditEvent: AuditRecorder;
 };
-export const requestAbsence = ({
+export const requestAbsence = async ({
   safeDb,
   organizationId,
   userId,
   body,
   recordAuditEvent,
 }: RequestAbsenceOptions) =>
-  Result.gen(async function* () {
+  await Result.gen(async function* () {
     yield* validateAbsenceRange(body);
     const outcome = yield* Result.await(
       safeDb(async (tx) => {
@@ -230,7 +230,7 @@ const approvedOverlap = async (
   return matches.length > 0;
 };
 
-export const transitionAbsence = ({
+export const transitionAbsence = async ({
   safeDb,
   organizationId,
   actorUserId,
@@ -239,7 +239,7 @@ export const transitionAbsence = ({
   body,
   recordAuditEvent,
 }: TransitionAbsenceOptions) =>
-  Result.gen(async function* () {
+  await Result.gen(async function* () {
     const outcome = yield* Result.await(
       safeDb(async (tx) => {
         // Membership locks drain identity-bearing writers before account erasure.
@@ -314,7 +314,7 @@ export const transitionAbsence = ({
             ),
           );
         }
-        if (body.action === "reject" && !body.comment?.trim()) {
+        if (body.action === "reject" && !body.comment.trim()) {
           return Result.err(
             new HandlerError({
               status: 400,

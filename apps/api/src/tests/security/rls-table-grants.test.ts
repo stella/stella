@@ -147,10 +147,13 @@ const POST_BOOTSTRAP_APPEND_ONLY_TABLES = new Set(["chat_thread_names"]);
 
 // Invoker-maintained projections may track state changes; deletion is owned
 // by the source row's cascading foreign key, never the request role.
-const POST_BOOTSTRAP_MUTABLE_PROJECTION_TABLES = new Set([
+// Absence lifecycle history shares this surface: requests change status,
+// while account erasure anonymizes history through the privileged owner.
+const POST_BOOTSTRAP_NO_DELETE_MUTABLE_TABLES = new Set([
   "time_entry_timer_states",
+  "absences",
 ]);
-const MUTABLE_PROJECTION_PRIVILEGES = new Set(["select", "insert", "update"]);
+const NO_DELETE_MUTABLE_PRIVILEGES = new Set(["select", "insert", "update"]);
 
 // Internal handoff tables whose scoped role needs INSERT but not table-wide
 // SELECT. Privileged workers own reads; a table may additionally grant a
@@ -322,10 +325,10 @@ const grantsRequiredPrivileges = ({
       privileges.isDisjointFrom(APPEND_ONLY_FORBIDDEN_PRIVILEGES)
     );
   }
-  if (POST_BOOTSTRAP_MUTABLE_PROJECTION_TABLES.has(table)) {
+  if (POST_BOOTSTRAP_NO_DELETE_MUTABLE_TABLES.has(table)) {
     return (
-      privileges.isSupersetOf(MUTABLE_PROJECTION_PRIVILEGES) &&
-      privileges.isSubsetOf(MUTABLE_PROJECTION_PRIVILEGES)
+      privileges.isSupersetOf(NO_DELETE_MUTABLE_PRIVILEGES) &&
+      privileges.isSubsetOf(NO_DELETE_MUTABLE_PRIVILEGES)
     );
   }
   if (POST_BOOTSTRAP_SCOPED_HANDOFF_TABLES.has(table)) {
@@ -564,10 +567,10 @@ const appendOnlyMutationTargets = (grant: StellaTableGrant): string[] => {
   );
 };
 
-const mutableProjectionExcessGrantTargets = (
+const noDeleteMutableExcessGrantTargets = (
   grant: StellaTableGrant,
 ): string[] => {
-  if (grant.privileges.isSubsetOf(MUTABLE_PROJECTION_PRIVILEGES)) {
+  if (grant.privileges.isSubsetOf(NO_DELETE_MUTABLE_PRIVILEGES)) {
     return [];
   }
   if (grant.type === "all_tables_in_schema") {
@@ -576,7 +579,7 @@ const mutableProjectionExcessGrantTargets = (
       : [];
   }
   return grant.tables.filter((table) =>
-    POST_BOOTSTRAP_MUTABLE_PROJECTION_TABLES.has(table),
+    POST_BOOTSTRAP_NO_DELETE_MUTABLE_TABLES.has(table),
   );
 };
 
@@ -587,7 +590,7 @@ const collectRlsGrantState = () => {
   const selectOnlyMutationGrants: string[] = [];
   const appendOnlyMutationGrants: string[] = [];
   const unexpectedDynamicGrantSites: string[] = [];
-  const mutableProjectionExcessGrants: string[] = [];
+  const noDeleteMutableExcessGrants: string[] = [];
 
   for (const path of migrationSqlFiles()) {
     const migration = nodePath.basename(nodePath.resolve(path, ".."));
@@ -639,8 +642,8 @@ const collectRlsGrantState = () => {
       for (const target of appendOnlyMutationTargets(grant)) {
         appendOnlyMutationGrants.push(`${migration}: ${target}`);
       }
-      for (const target of mutableProjectionExcessGrantTargets(grant)) {
-        mutableProjectionExcessGrants.push(`${migration}: ${target}`);
+      for (const target of noDeleteMutableExcessGrantTargets(grant)) {
+        noDeleteMutableExcessGrants.push(`${migration}: ${target}`);
       }
     }
   }
@@ -652,7 +655,7 @@ const collectRlsGrantState = () => {
     selectOnlyMutationGrants,
     appendOnlyMutationGrants,
     unexpectedDynamicGrantSites,
-    mutableProjectionExcessGrants,
+    noDeleteMutableExcessGrants,
   };
 };
 
@@ -742,21 +745,31 @@ describe("RLS table grants", () => {
     expect(collectRlsGrantState().appendOnlyMutationGrants).toEqual([]);
   });
 
-  test("mutable projections grant only SELECT, INSERT and UPDATE", () => {
-    expect(collectRlsGrantState().mutableProjectionExcessGrants).toEqual([]);
-    expect(
-      explicitStellaGrantTables(
-        "GRANT SELECT, INSERT, UPDATE ON TABLE time_entry_timer_states TO stella",
-      ),
-    ).toEqual(["time_entry_timer_states"]);
-    const excessive = stellaTableGrant(
-      "GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE time_entry_timer_states TO stella",
-    );
-    expect(excessive).not.toBeNull();
-    if (excessive !== null) {
-      expect(mutableProjectionExcessGrantTargets(excessive)).toEqual([
-        "time_entry_timer_states",
-      ]);
+  test("mutable projections and retained history grant only SELECT, INSERT and UPDATE", () => {
+    expect(collectRlsGrantState().noDeleteMutableExcessGrants).toEqual([]);
+    for (const table of POST_BOOTSTRAP_NO_DELETE_MUTABLE_TABLES) {
+      expect(
+        explicitStellaGrantTables(
+          `GRANT SELECT, INSERT, UPDATE ON TABLE ${table} TO stella`,
+        ),
+      ).toEqual([table]);
+      expect(
+        explicitStellaGrantTables(
+          `GRANT SELECT, INSERT ON TABLE ${table} TO stella`,
+        ),
+      ).toEqual([]);
+      const excessive = stellaTableGrant(
+        `GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE ${table} TO stella`,
+      );
+      expect(excessive).not.toBeNull();
+      if (excessive !== null) {
+        expect(noDeleteMutableExcessGrantTargets(excessive)).toEqual([table]);
+        expect(
+          explicitStellaGrantTables(
+            `GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE ${table} TO stella`,
+          ),
+        ).toEqual([]);
+      }
     }
   });
 
@@ -776,6 +789,18 @@ describe("RLS table grants", () => {
     expect(missingGrants).toEqual([]);
   });
 
+  test("absence history migration forces row-level security", () => {
+    const statements = sqlStatements(
+      readFileSync(
+        nodePath.join(DRIZZLE_DIR, "20261003122900_absences/migration.sql"),
+        "utf-8",
+      ),
+    );
+    expect(statements).toContain(
+      'ALTER TABLE "absences" FORCE ROW LEVEL SECURITY',
+    );
+  });
+
   test("the classification sets name no table a migration has dropped", () => {
     const { droppedTables } = collectRlsGrantState();
 
@@ -784,7 +809,7 @@ describe("RLS table grants", () => {
         ...POST_BOOTSTRAP_SELECT_ONLY_TABLES,
         ...POST_BOOTSTRAP_APPEND_ONLY_TABLES,
         ...POST_BOOTSTRAP_SCOPED_HANDOFF_TABLES,
-        ...POST_BOOTSTRAP_MUTABLE_PROJECTION_TABLES,
+        ...POST_BOOTSTRAP_NO_DELETE_MUTABLE_TABLES,
         ...POST_BOOTSTRAP_DENY_STELLA_TABLES,
       ].filter((table) => droppedTables.has(table)),
     ).toEqual([]);

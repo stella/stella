@@ -328,8 +328,12 @@ const listMyTimeEntries = createSafeRootHandler(
           ...workRows.map(toMyTimeEntryItem),
           ...absenceRows.map((row) => toAbsenceDayItem(row, query.date)),
         ].toSorted((left, right) => {
-          if (left.id < right.id) {return -1;}
-          if (left.id > right.id) {return 1;}
+          if (left.id < right.id) {
+            return -1;
+          }
+          if (left.id > right.id) {
+            return 1;
+          }
           return (
             Number(left.activityGroup !== ABSENCE_DAY_GROUP) -
             Number(right.activityGroup !== ABSENCE_DAY_GROUP)

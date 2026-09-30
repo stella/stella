@@ -22,6 +22,7 @@ import {
 import { member } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
+  absences,
   caseLawResearchAnswers,
   caseLawResearchColumns,
   chatMessages,
@@ -47,6 +48,9 @@ import {
   workObligations,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import listAbsencesApprovalQueue from "@/api/handlers/absences/approval-queue/list";
+import approveAbsence from "@/api/handlers/absences/approve";
+import listAbsencesMine from "@/api/handlers/absences/mine/list";
 import readBilingualRun from "@/api/handlers/bilingual-translations/read-run";
 import readBillingCodes from "@/api/handlers/billing-codes/list";
 import lookupResearchAnswers from "@/api/handlers/case-law/research/answers-lookup";
@@ -239,6 +243,10 @@ const documentTranslationSourceFileB = toSafeId<"userFile">(
 );
 const workObligationEntityB = toSafeId<"entity">(
   "22222222-2222-4222-8222-222222222250",
+);
+const absenceB = toSafeId<"absence">("22222222-2222-4222-8222-222222222275");
+const absenceToApproveB = toSafeId<"absence">(
+  "22222222-2222-4222-8222-222222222276",
 );
 const adminTimeTimerB = toSafeId<"timeTimer">(
   "22222222-2222-4222-8222-222222222273",
@@ -910,6 +918,83 @@ const isolationCases: IsolationCase[] = [
     expectDenied: expectStatus(404),
     expectPositive: (result, { ids: testIds }) =>
       expectRecordFieldEquals(result, "id", testIds.timeEntryB1),
+  },
+  {
+    name: "personal absences across organizations (same owner)",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listAbsencesMine, workspaceA, { query: {} }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(listAbsencesMine, sameUserWorkspaceB, { query: {} }),
+    expectDenied: (result) => expectPageExcludesId(result, absenceB),
+    expectPositive: (result) => expectPageContainsId(result, absenceB),
+  },
+  {
+    name: "personal absences (same organization, other owner)",
+    runAAgainstB: async ({ workspaceB }) =>
+      await runHandler(listAbsencesMine, workspaceB, { query: {} }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(listAbsencesMine, sameUserWorkspaceB, { query: {} }),
+    expectDenied: (result) => expectPageExcludesId(result, absenceB),
+    expectPositive: (result) => expectPageContainsId(result, absenceB),
+  },
+  {
+    name: "absence approval queue across organizations (same administrator)",
+    runAAgainstB: async ({ ids: testIds }) =>
+      await runHandler(
+        listAbsencesApprovalQueue,
+        createWorkspaceContext({
+          activeWorkspaceIds: [],
+          organizationId: testIds.orgA,
+          userId: testIds.userAdmin,
+          workspaceId: testIds.wsA1,
+        }),
+        { query: {} },
+      ),
+    runBPositive: async ({ ids: testIds }) =>
+      await runHandler(
+        listAbsencesApprovalQueue,
+        createWorkspaceContext({
+          activeWorkspaceIds: [],
+          organizationId: testIds.orgB,
+          userId: testIds.userAdmin,
+          workspaceId: testIds.wsB1,
+        }),
+        { query: {} },
+      ),
+    expectDenied: (result) => expectPageExcludesId(result, absenceB),
+    expectPositive: (result) => expectPageContainsId(result, absenceB),
+  },
+  {
+    name: "absence approval by supplied foreign id",
+    runAAgainstB: async ({ ids: testIds }) =>
+      await runHandler(
+        approveAbsence,
+        createWorkspaceContext({
+          activeWorkspaceIds: [],
+          organizationId: testIds.orgA,
+          userId: testIds.userAdmin,
+          workspaceId: testIds.wsA1,
+        }),
+        { params: { id: absenceToApproveB }, body: { version: 1 } },
+      ),
+    runBPositive: async ({ ids: testIds }) =>
+      await runHandler(
+        approveAbsence,
+        createWorkspaceContext({
+          activeWorkspaceIds: [],
+          organizationId: testIds.orgB,
+          userId: testIds.userAdmin,
+          workspaceId: testIds.wsB1,
+        }),
+        { params: { id: absenceToApproveB }, body: { version: 1 } },
+      ),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) =>
+      expect(result).toEqual({
+        id: absenceToApproveB,
+        status: "approved",
+        version: 2,
+      }),
   },
   {
     name: "time timers across organizations",
@@ -1753,10 +1838,30 @@ const chatSkillFileQuery = (testIds: TestIds) => ({
   webSearch: false,
 });
 
+const seedAbsenceIsolation = async () => {
+  const common = {
+    organizationId: ids.orgB,
+    userId: ids.userA1,
+    kind: "vacation",
+    timezoneId: "Europe/Prague",
+    coverage: "full",
+  } as const;
+  await testDb.insert(absences).values([
+    { ...common, id: absenceB, startDate: "2026-10-01", endDate: "2026-10-02" },
+    {
+      ...common,
+      id: absenceToApproveB,
+      startDate: "2026-10-03",
+      endDate: "2026-10-04",
+    },
+  ]);
+};
+
 beforeAll(async () => {
   testDb = await getTestDb();
   ids = createTestIds();
   await setupRlsTestData(testDb, ids);
+  await seedAbsenceIsolation();
   await testDb.insert(sellerProfiles).values({
     id: sellerProfileB,
     organizationId: ids.orgB,

@@ -68,13 +68,13 @@ type ListAbsencePageOptions = {
     | { type: "approval_queue" };
   query: Static<typeof absenceListQuerySchema>;
 };
-export const listAbsencePage = ({
+export const listAbsencePage = async ({
   safeDb,
   organizationId,
   selection,
   query,
 }: ListAbsencePageOptions) =>
-  Result.gen(async function* () {
+  await Result.gen(async function* () {
     const parts = query.cursor ? decodePaginationCursor(query.cursor) : null;
     const date = parts?.at(0);
     const id = parts?.at(1);
