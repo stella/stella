@@ -1,13 +1,17 @@
 import { panic } from "better-result";
+import { eq } from "drizzle-orm";
 
 import { parsePlainDate, Temporal } from "@stll/time";
 
+import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   DEFAULT_TIME_EDIT_WINDOW_DAYS,
   DEFAULT_TIME_MINIMUM_UNIT_MINUTES,
   DEFAULT_TIME_NARRATIVE_REQUIRED,
+  organizationSettings,
 } from "@/api/db/schema";
+import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -43,17 +47,53 @@ export const readTimePolicy = async ({
       },
     }),
   );
-  return row.map((settings) => ({
-    timeMinimumUnitMinutes:
-      settings?.timeMinimumUnitMinutes ??
-      DEFAULT_TIME_POLICY.timeMinimumUnitMinutes,
-    timeEditWindowDays:
-      settings?.timeEditWindowDays ?? DEFAULT_TIME_POLICY.timeEditWindowDays,
-    timeLockedThroughMonth: settings?.timeLockedThroughMonth ?? null,
-    timeNarrativeRequired:
-      settings?.timeNarrativeRequired ??
-      DEFAULT_TIME_POLICY.timeNarrativeRequired,
-  }));
+  return row.map(toTimePolicy);
+};
+
+type TimePolicySettings = Pick<
+  typeof organizationSettings.$inferSelect,
+  | "timeMinimumUnitMinutes"
+  | "timeEditWindowDays"
+  | "timeLockedThroughMonth"
+  | "timeNarrativeRequired"
+>;
+const toTimePolicy = (settings: TimePolicySettings | undefined) => ({
+  timeMinimumUnitMinutes:
+    settings?.timeMinimumUnitMinutes ??
+    DEFAULT_TIME_POLICY.timeMinimumUnitMinutes,
+  timeEditWindowDays:
+    settings?.timeEditWindowDays ?? DEFAULT_TIME_POLICY.timeEditWindowDays,
+  timeLockedThroughMonth: settings?.timeLockedThroughMonth ?? null,
+  timeNarrativeRequired:
+    settings?.timeNarrativeRequired ??
+    DEFAULT_TIME_POLICY.timeNarrativeRequired,
+});
+
+/** Keep approval decisions serialized with concurrent month-closing updates. */
+export const lockTimePolicy = async (
+  tx: Transaction,
+  organizationId: SafeId<"organization">,
+) => {
+  // Materialize the optional defaults so a concurrent first update has a row to lock.
+  await tx
+    .insert(organizationSettings)
+    .values({ id: createSafeId<"organizationSettings">(), organizationId })
+    .onConflictDoNothing({ target: organizationSettings.organizationId });
+  const [settings] = await tx
+    .select({
+      timeMinimumUnitMinutes: organizationSettings.timeMinimumUnitMinutes,
+      timeEditWindowDays: organizationSettings.timeEditWindowDays,
+      timeLockedThroughMonth: organizationSettings.timeLockedThroughMonth,
+      timeNarrativeRequired: organizationSettings.timeNarrativeRequired,
+    })
+    .from(organizationSettings)
+    .where(eq(organizationSettings.organizationId, organizationId))
+    .limit(1)
+    .for("share");
+  if (!settings) {
+    return panic("Time policy disappeared after initialization");
+  }
+  return toTimePolicy(settings);
 };
 
 export const roundToBillingIncrement = (
