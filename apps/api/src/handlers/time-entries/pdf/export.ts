@@ -33,6 +33,7 @@ export const exportPdfHandler = async ({
     tx
       .select({
         id: timeEntries.id,
+        activityGroup: timeEntries.activityGroup,
         userId: timeEntries.userId,
         dateWorked: timeEntries.dateWorked,
         durationMinutes: timeEntries.durationMinutes,
@@ -97,7 +98,7 @@ export const exportPdfHandler = async ({
       `Duration: ${hours}h  Rate: ${row.currency} ${rate}/hr  Amount: ${row.currency} ${exportAmountText(amount, row.currency)}`,
     );
     textLines.push(
-      `Status: ${row.status}  Billable: ${row.billable ? "Yes" : "No"}`,
+      `Activity group: ${row.activityGroup}  Status: ${row.status}  Billable: ${row.billable ? "Yes" : "No"}`,
     );
 
     // Truncate narrative for PDF
@@ -232,7 +233,7 @@ const buildMinimalPdf = (lines: readonly string[]): Uint8Array => {
 
 const config = {
   description:
-    "Render a matter's time entries as a PDF timesheet report: one block per " +
+    "Render a matter's client time entries as a PDF timesheet report: one block per " +
     "entry plus total hours and totals per currency. Filter by date-worked " +
     "range, status, and work item. Returns PDF bytes; use " +
     "time-entries.csv.export to get the same entries as text.",

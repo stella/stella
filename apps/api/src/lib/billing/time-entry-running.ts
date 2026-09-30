@@ -87,7 +87,7 @@ export const guardRunningTimeEntries = async (
     await tx.execute(sql`
       SELECT pg_advisory_xact_lock(matter_locks.lock_key)
       FROM (SELECT DISTINCT hashtext(${timeEntries.workspaceId}::text) AS lock_key
-        FROM ${timeEntries} WHERE ${condition} ORDER BY lock_key) AS matter_locks
+        FROM ${timeEntries} WHERE ${condition} AND ${timeEntries.workspaceId} IS NOT NULL ORDER BY lock_key) AS matter_locks
       ORDER BY matter_locks.lock_key
     `);
   } else {

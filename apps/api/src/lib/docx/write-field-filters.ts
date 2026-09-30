@@ -14,7 +14,6 @@
  * applies.
  */
 
-import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
 import {
@@ -30,6 +29,7 @@ import {
   type ScannedMarker,
 } from "@stll/template-conditions";
 
+import { loadDocx } from "@/api/lib/docx-archive";
 import { derivedScannedFile } from "@/api/lib/file-scan/document-parsers";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 
@@ -221,8 +221,7 @@ export const writeFieldFilters = async (
   const conditions = new Map(
     conditionRewrites.map((rewrite) => [rewrite.path, rewrite] as const),
   );
-  // oxlint-disable-next-line no-raw-zip-load/no-raw-zip-load -- unbounded archive read predating loadDocxArchive; frozen by the rule budget
-  const zip = await JSZip.loadAsync(file.bytes);
+  const zip = await loadDocx(file.bytes);
   let changed = false;
   // Headers and footers hold markers of their own, and a loop never spans two
   // parts, so each part walks with a stack of its own.

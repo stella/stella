@@ -24,6 +24,7 @@ import { DocumentIcon } from "@/components/document-icon";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import Tooltip from "@/components/tooltip";
 import type { EditableFieldContent } from "@/components/workspaces/edit-field-dialog";
+import { fileHasThumbnail } from "@/components/workspaces/entity-utils";
 import {
   FieldValue,
   type FieldValueVariant,
@@ -732,6 +733,11 @@ const TableFileField = ({
     encrypted: content.encrypted,
   });
   const openFile = useInspectorTabsStore((s) => s.openFile);
+  const thumbnail = {
+    fieldId,
+    hasThumbnail: fileHasThumbnail(content),
+    workspaceId,
+  };
 
   if (isDisplayable) {
     return (
@@ -760,6 +766,7 @@ const TableFileField = ({
           className="size-3.5 shrink-0"
           fileName={content.fileName}
           mimeType={content.mimeType}
+          thumbnail={thumbnail}
         />
         <BidiText as="span" className="min-w-0 truncate text-start">
           <HighlightedText columnId={propertyId} text={content.fileName} />
@@ -779,6 +786,7 @@ const TableFileField = ({
         className="size-3.5 shrink-0"
         fileName={content.fileName}
         mimeType={content.mimeType}
+        thumbnail={thumbnail}
       />
       <BidiText as="span" className="min-w-0 truncate text-start">
         <HighlightedText columnId={propertyId} text={content.fileName} />

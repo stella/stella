@@ -1,7 +1,6 @@
-import { useForm } from "@tanstack/react-form";
+import { useForm, useSelector } from "@tanstack/react-form";
 import { useMutation } from "@tanstack/react-query";
 import { useLocation } from "@tanstack/react-router";
-import { useSelector } from "@tanstack/react-store";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
