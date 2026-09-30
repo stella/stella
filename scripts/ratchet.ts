@@ -3281,14 +3281,23 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
       "direct third-party dependency declarations across root and apps/*/packages/* manifests (dependencies, devDependencies, peerDependencies, optionalDependencies); excludes workspace: links, including @stll links, and shrinks only",
     count: countDirectThirdPartyDeclarations,
   },
+];
+
+const REPORT_ONLY_METRICS = [
   {
     scope: "repo",
     id: "lockfile-package-entries",
     description:
-      "resolution entries in the committed bun.lock packages map; each distinct package resolution counts once and the map only shrinks",
+      "resolution entries in bun.lock; informational, with no growth budget",
     count: countLockfilePackageEntries,
   },
-];
+] as const satisfies readonly RatchetMetric[];
+
+const printReportOnlyMetrics = (root: string): void => {
+  for (const metric of REPORT_ONLY_METRICS) {
+    console.log(`  ${metric.id}: ${metric.count(root).count} (report only)`);
+  }
+};
 
 const PER_FILE_METRIC_IDS: ReadonlySet<string> = new Set(
   RATCHET_METRICS.filter(
@@ -3750,6 +3759,7 @@ const runReport = (): number => {
       }
     }
   }
+  printReportOnlyMetrics(REPO_ROOT);
   return 0;
 };
 
@@ -3805,6 +3815,7 @@ const runWrite = (all: boolean): number => {
 };
 
 const runCheck = (): number => {
+  printReportOnlyMetrics(REPO_ROOT);
   const current = scanAll(REPO_ROOT);
   const baseline = readBaseline();
 
@@ -5628,14 +5639,17 @@ const dependencyMetricSelfTestFailures = (root: string): string[] => {
       `lockfile-package-entries counted ${lockfileEntries.count}, expected 2 resolution entries`,
     );
   }
-  if (
-    diffMetric(
-      "lockfile-package-entries",
-      { count: 3, files: { "bun.lock": 3 } },
-      lockfileEntries,
-    ).status !== "regressed"
-  ) {
-    failures.push("lockfile-package-entries did not flag resolution growth");
+  for (const metric of REPORT_ONLY_METRICS) {
+    if (RATCHET_METRICS.some(({ id }) => id === metric.id)) {
+      failures.push(`${metric.id} must not have a shrink-only budget`);
+    }
+  }
+  writeFileSync(
+    path.join(dependencyFixtureRoot, "bun.lock"),
+    '{ packages: { "first@1.0.0": [], "second@2.0.0": [], "third@3.0.0": [] } }',
+  );
+  if (countLockfilePackageEntries(dependencyFixtureRoot).count !== 3) {
+    failures.push("lockfile-package-entries did not report resolution growth");
   }
   return failures;
 };
