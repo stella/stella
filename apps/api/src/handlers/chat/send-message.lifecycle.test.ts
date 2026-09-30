@@ -28,7 +28,7 @@ describe("send lifecycle checkpoint indexing", () => {
           {
             type: "tool-call",
             id: "approval-1",
-            name: "search",
+            name: "web_search",
             arguments: "{}",
             approval: { id: "approval-1", needsApproval: true },
             state: "approval-requested",
@@ -113,7 +113,7 @@ describe("send lifecycle checkpoint indexing", () => {
       await lifecycle.cleanup();
       expect(indexedThreads).toEqual([threadId]);
       expect(writtenMessages).toHaveLength(1);
-      expect(writtenMessages.at(0)?.content).toEqual(
+      expect(writtenMessages.at(0)?.["content"]).toEqual(
         chatMessageContentFromMessage(checkpoint),
       );
       expect(writtenTurns).toHaveLength(1);

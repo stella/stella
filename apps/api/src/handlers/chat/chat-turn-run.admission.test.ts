@@ -321,7 +321,7 @@ describe("chat run admission follows owned settlement", () => {
         {
           type: "tool-call",
           id: "approval-1",
-          name: "search",
+          name: "web_search",
           arguments: "{}",
           approval: { id: "approval-1", needsApproval: true },
           state: "approval-requested",
@@ -335,7 +335,7 @@ describe("chat run admission follows owned settlement", () => {
         {
           type: "tool-call",
           id: "approval-1",
-          name: "search",
+          name: "web_search",
           arguments: "{}",
           approval: { id: "approval-1", needsApproval: true, approved: true },
           state: "approval-responded",
@@ -405,7 +405,7 @@ describe("chat run admission follows owned settlement", () => {
           {
             type: "tool-call",
             id: "approval-1",
-            name: "search",
+            name: "web_search",
             arguments: "{}",
             approval: { id: "approval-1", needsApproval: true },
             state: "approval-requested",
@@ -419,7 +419,7 @@ describe("chat run admission follows owned settlement", () => {
           {
             type: "tool-call",
             id: "approval-1",
-            name: "search",
+            name: "web_search",
             arguments: "{}",
             approval: { id: "approval-1", needsApproval: true, approved: true },
             state: "approval-responded",
@@ -523,7 +523,7 @@ describe("chat run admission follows owned settlement", () => {
       expect(await run.settled).toBe("stored");
       expect(discardedPersistence).toBe(0);
       expect(writtenMessages).toHaveLength(1);
-      expect(writtenMessages.at(0)?.content).toEqual(
+      expect(writtenMessages.at(0)?.["content"]).toEqual(
         chatMessageContentFromMessage(checkpoint),
       );
       expect(writtenTurns).toHaveLength(1);

@@ -714,16 +714,19 @@ const persistAdmissionLoss = async ({
     incomplete: "create-document",
   } as const satisfies Record<AdmissionCheckpoint, string>;
   const toolName = toolNames[checkpoint];
-  const definition = toolDefinition({
-    name: toolName,
-    description: "Fixture interaction",
-    inputSchema: draftToolInputSchema,
-    ...(checkpoint === "approval" ? { needsApproval: true } : {}),
-  });
   const tool =
     checkpoint === "approval"
-      ? definition.server(async () => "deleted")
-      : definition;
+      ? toolDefinition({
+          name: "mcp__external__delete",
+          description: "Fixture interaction",
+          inputSchema: draftToolInputSchema,
+          needsApproval: true,
+        }).server(async () => "deleted")
+      : toolDefinition({
+          name: toolName,
+          description: "Fixture interaction",
+          inputSchema: draftToolInputSchema,
+        });
   const native = await collectChunks(
     chat({
       adapter: createSingleToolCallAdapter({
@@ -964,7 +967,7 @@ describe("admission lost before continuation production retains the original che
           {
             type: "tool-call",
             id: "original_call",
-            name: "approved_operation",
+            name: "web_search",
             arguments: "{}",
             state: "approval-requested",
             approval: { id: "original_approval", needsApproval: true },
