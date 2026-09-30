@@ -16,12 +16,12 @@ export const markerPlan = fc.record({
     { minLength: 1, maxLength: 8 },
   ),
 });
-export type MarkerPlan = ReturnType<typeof markerPlan.generate>["value"];
-export type MarkerSlot = { read: () => string; write: (value: string) => void };
+type MarkerPlan = ReturnType<typeof markerPlan.generate>["value"];
+type MarkerSlot = { read: () => string; write: (value: string) => void };
 const normalize = (text: string): string =>
   text.normalize("NFC").replace(/\s+/gu, " ");
 
-export const injectMarkers = (
+const injectMarkers = (
   slots: readonly MarkerSlot[],
   plan: MarkerPlan,
 ): string[] => {
