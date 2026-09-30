@@ -56,7 +56,6 @@
     "apps/web/src/routes/onboarding/-components/onboarding-layout.tsx": 4,
     "apps/web/src/routes/onboarding/-components/sidebar-preview.tsx": 1,
     "apps/web/src/routes/tools/-components/public-tools-index.tsx": 2,
-    "apps/web/src/routes/tools/-components/public-tools-shell.tsx": 1,
     "packages/ui/src/inspector/entity-tab.tsx": 1,
     "packages/ui/src/kanban/card-shell.tsx": 1,
     "packages/ui/src/review/review-comment-card.tsx": 1,
