@@ -34,6 +34,10 @@
 //   bun scripts/ratchet.ts --write    record this change's delta from origin/main
 //     --base <ref>                    use an explicit base commit instead
 //     --all                           regenerate every baseline entry
+//   bun scripts/ratchet.ts --write-improvements-only
+//     --base <ref>                    write only if head and delta never regress
+//   bun scripts/ratchet.ts --check-improvements-only
+//                                     verify that trusted delta candidate
 //   bun scripts/ratchet.ts --self-test prove each counter counts what it claims
 //
 // CI-only wiring lives in .github/workflows/ci.yml and scripts/verify.sh
@@ -2228,7 +2232,7 @@ type RepoMetricResult = {
 
 type RepoCounter = (root: string) => RepoMetricResult;
 
-type RatchetMetric =
+export type RatchetMetric =
   | {
       readonly scope: "file";
       readonly id: string;
@@ -3217,8 +3221,8 @@ const metricGate = (metric: RatchetMetric): DiffOptions =>
 
 // --- Scanning ---------------------------------------------------------------
 
-type MetricSnapshot = { count: number; files: Record<string, number> };
-type Baseline = Record<string, MetricSnapshot>;
+export type MetricSnapshot = { count: number; files: Record<string, number> };
+export type Baseline = Record<string, MetricSnapshot>;
 
 type ConfigurationInspection =
   | { status: "valid"; baseline: Baseline }
@@ -3558,7 +3562,7 @@ type MetricStatus = "ok" | "regressed" | "dropped" | "stale";
 
 type RegressedFile = { file: string; from: number; to: number };
 
-type MetricDiff = {
+export type MetricDiff = {
   id: string;
   status: MetricStatus;
   current: number;
@@ -3662,6 +3666,259 @@ const runReport = (): number => {
   return 0;
 };
 
+type DeltaBaselineOptions = {
+  head: Baseline;
+  mergeBaseBaseline: Baseline;
+  baseSnapshot: Baseline;
+};
+
+const deltaBaseline = ({
+  head,
+  mergeBaseBaseline,
+  baseSnapshot,
+}: DeltaBaselineOptions): Baseline => {
+  const snapshot: Baseline = {};
+  for (const metric of RATCHET_METRICS) {
+    const current = requireSnapshot(head, metric.id);
+    snapshot[metric.id] = rebaseSnapshot({
+      allowlist: metricGate(metric).allowlist,
+      mergeBaseEntry: mergeBaseBaseline[metric.id],
+      base: requireSnapshot(baseSnapshot, metric.id),
+      head: current,
+    });
+  }
+  return snapshot;
+};
+
+export type ImprovementsOnlyAssessment = {
+  readonly allowed: boolean;
+  readonly diffs: readonly MetricDiff[];
+};
+
+type AssessImprovementsOnlyOptions = {
+  current: Baseline;
+  baseline: Baseline;
+  metrics?: readonly RatchetMetric[];
+};
+
+export const assessImprovementsOnly = ({
+  current,
+  baseline,
+  metrics = RATCHET_METRICS,
+}: AssessImprovementsOnlyOptions): ImprovementsOnlyAssessment => {
+  const diffs = metrics.map((metric) =>
+    diffMetric(
+      metric.id,
+      requireSnapshot(current, metric.id),
+      baseline[metric.id] ?? { count: 0, files: {} },
+      metricGate(metric),
+    ),
+  );
+  return {
+    allowed: diffs.every(({ status }) => status !== "regressed"),
+    diffs,
+  };
+};
+
+type AssessImprovementWriteOptions = {
+  current: Baseline;
+  candidate: Baseline;
+  baseline: Baseline;
+  metrics?: readonly RatchetMetric[];
+};
+
+export const assessImprovementWrite = ({
+  current,
+  candidate,
+  baseline,
+  metrics = RATCHET_METRICS,
+}: AssessImprovementWriteOptions): ImprovementsOnlyAssessment => {
+  const currentAssessment = assessImprovementsOnly({
+    current,
+    baseline,
+    metrics,
+  });
+  const candidateAssessment = assessImprovementsOnly({
+    current: candidate,
+    baseline,
+    metrics,
+  });
+  const diffs = [...currentAssessment.diffs, ...candidateAssessment.diffs];
+  return {
+    allowed: diffs.every(({ status }) => status !== "regressed"),
+    diffs,
+  };
+};
+
+type WriteImprovementBaselineOptions = {
+  assessment: ImprovementsOnlyAssessment;
+  candidate: string;
+  path: string;
+};
+
+export const writeImprovementBaseline = ({
+  assessment,
+  candidate,
+  path: baselinePath,
+}: WriteImprovementBaselineOptions): "written" | "unchanged" | "refused" => {
+  if (!assessment.allowed) {
+    return "refused";
+  }
+  const existing = readFileSync(baselinePath, "utf-8");
+  if (
+    candidate === existing ||
+    assessment.diffs.every(({ status }) => status === "ok")
+  ) {
+    return "unchanged";
+  }
+  writeFileSync(baselinePath, candidate);
+  return "written";
+};
+
+const readBaselineAtHead = (): { baseline: Baseline; order: string[] } => {
+  const raw = readGit(["show", `HEAD:${BASELINE_REL}`]);
+  const parsed = Result.try((): unknown => JSON.parse(raw));
+  if (Result.isError(parsed) || !isRecord(parsed.value)) {
+    return panic(`ratchet baseline at HEAD is not a JSON object`);
+  }
+  const inspection = inspectConfiguration(
+    Object.keys(parsed.value).map((id) => ({ id })),
+    parsed.value,
+  );
+  if (inspection.status === "invalid") {
+    return panic(inspection.errors.join("\n"));
+  }
+  return { baseline: inspection.baseline, order: Object.keys(parsed.value) };
+};
+
+const improvementsMergeBase = (): string => {
+  const baseIndex = process.argv.indexOf("--base");
+  const baseRef = baseIndex === -1 ? undefined : process.argv.at(baseIndex + 1);
+  if (baseIndex !== -1 && (baseRef === undefined || baseRef.startsWith("--"))) {
+    return panic("--base requires a commit reference");
+  }
+  const ref = baseRef ?? readGit(["merge-base", "origin/main", "HEAD"]);
+  return readGit([
+    "rev-parse",
+    "--verify",
+    "--end-of-options",
+    `${ref}^{commit}`,
+  ]);
+};
+
+type ImprovementsOnlyContext = {
+  candidate: Baseline;
+  assessment: ImprovementsOnlyAssessment;
+  serialized: string;
+};
+
+type BuildImprovementsOnlyContextOptions = {
+  mergeBase: string;
+  baselineAtHead: { baseline: Baseline; order: string[] };
+};
+
+const buildImprovementsOnlyContext = ({
+  mergeBase,
+  baselineAtHead,
+}: BuildImprovementsOnlyContextOptions): ImprovementsOnlyContext => {
+  const head = scanAll(REPO_ROOT);
+  const candidate = deltaBaseline({
+    head,
+    mergeBaseBaseline: readMergeBaseBaseline(mergeBase),
+    baseSnapshot: scanMergeBase(mergeBase),
+  });
+  return {
+    candidate,
+    assessment: assessImprovementWrite({
+      current: head,
+      candidate,
+      baseline: baselineAtHead.baseline,
+    }),
+    serialized: serializeBaseline(candidate, baselineAtHead.order),
+  };
+};
+
+const writeImprovementsOnly = (): number => {
+  if (process.argv.includes("--all")) {
+    return panic("--write-improvements-only cannot be combined with --all");
+  }
+  const baselineAtHead = readBaselineAtHead();
+  const context = buildImprovementsOnlyContext({
+    mergeBase: improvementsMergeBase(),
+    baselineAtHead,
+  });
+  const result = writeImprovementBaseline({
+    assessment: context.assessment,
+    candidate: context.serialized,
+    path: BASELINE_PATH,
+  });
+  if (result === "refused") {
+    console.error(
+      "ratchet --write-improvements-only: refused; metric(s) regressed:",
+    );
+    for (const diff of context.assessment.diffs.filter(
+      ({ status }) => status === "regressed",
+    )) {
+      console.error(`  ${diff.id}: ${diff.baseline} -> ${diff.current}`);
+      for (const { file, from, to } of diff.regressedFiles) {
+        console.error(`      ${file}: ${from} -> ${to}`);
+      }
+    }
+    return 0;
+  }
+  if (result === "unchanged") {
+    console.log(
+      "ratchet --write-improvements-only: unchanged; no baseline write needed.",
+    );
+    return 0;
+  }
+  console.log(`Wrote ratchet baseline to ${BASELINE_REL}:`);
+  for (const metric of RATCHET_METRICS) {
+    const snap = requireSnapshot(context.candidate, metric.id);
+    console.log(
+      `  ${metric.id.padEnd(30)} ${String(snap.count).padStart(5)} across ${Object.keys(snap.files).length} file(s)`,
+    );
+  }
+  return 0;
+};
+
+const checkImprovementsOnly = (): number => {
+  if (process.argv.includes("--all")) {
+    return panic("--check-improvements-only cannot be combined with --all");
+  }
+  const baselineAtHead = readBaselineAtHead();
+  const context = buildImprovementsOnlyContext({
+    mergeBase: improvementsMergeBase(),
+    baselineAtHead,
+  });
+  if (!context.assessment.allowed) {
+    console.error(
+      "ratchet --check-improvements-only: failed; metric(s) regressed:",
+    );
+    for (const diff of context.assessment.diffs.filter(
+      ({ status }) => status === "regressed",
+    )) {
+      console.error(`  ${diff.id}: ${diff.baseline} -> ${diff.current}`);
+      for (const { file, from, to } of diff.regressedFiles) {
+        console.error(`      ${file}: ${from} -> ${to}`);
+      }
+    }
+    return 1;
+  }
+  const expected = context.serialized;
+  const actual = readFileSync(BASELINE_PATH, "utf-8");
+  if (actual !== expected) {
+    console.error(
+      `ratchet --check-improvements-only: ${BASELINE_REL} does not match the trusted delta candidate.`,
+    );
+    return 1;
+  }
+  console.log(
+    "ratchet --check-improvements-only: baseline matches the trusted delta candidate.",
+  );
+  return 0;
+};
+
 const runWrite = (all: boolean): number => {
   const existingOrder = readBaselineOrder();
   const head = scanAll(REPO_ROOT);
@@ -3687,16 +3944,11 @@ const runWrite = (all: boolean): number => {
           ]);
     const baseline = readMergeBaseBaseline(mergeBase);
     const base = scanMergeBase(mergeBase);
-    snapshot = {};
-    for (const metric of RATCHET_METRICS) {
-      const current = requireSnapshot(head, metric.id);
-      snapshot[metric.id] = rebaseSnapshot({
-        allowlist: metricGate(metric).allowlist,
-        mergeBaseEntry: baseline[metric.id],
-        base: requireSnapshot(base, metric.id),
-        head: current,
-      });
-    }
+    snapshot = deltaBaseline({
+      head,
+      mergeBaseBaseline: baseline,
+      baseSnapshot: base,
+    });
   }
   writeFileSync(BASELINE_PATH, serializeBaseline(snapshot, existingOrder));
   console.log(`Wrote ratchet baseline to ${BASELINE_REL}:`);
@@ -6339,6 +6591,12 @@ const runSelfTest = (): number => {
 const main = (): number => {
   if (process.argv.includes("--self-test")) {
     return runSelfTest();
+  }
+  if (process.argv.includes("--check-improvements-only")) {
+    return checkImprovementsOnly();
+  }
+  if (process.argv.includes("--write-improvements-only")) {
+    return writeImprovementsOnly();
   }
   if (process.argv.includes("--write")) {
     return runWrite(process.argv.includes("--all"));

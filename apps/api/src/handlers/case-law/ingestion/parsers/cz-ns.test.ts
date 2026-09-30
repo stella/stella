@@ -395,9 +395,16 @@ describe("parseNsDecisionHtml", () => {
   });
 
   describe("related proceedings table", () => {
-    test.each([1, 2, 4])(
-      "normalizes repeated complaint values while preserving source text (%i copies)",
-      (copies) => {
+    test.each([
+      { copies: 1, headerTag: "td" },
+      { copies: 2, headerTag: "td" },
+      { copies: 4, headerTag: "td" },
+      { copies: 1, headerTag: "th" },
+      { copies: 2, headerTag: "th" },
+      { copies: 4, headerTag: "th" },
+    ])(
+      "normalizes repeated complaint values while preserving source text ($copies copies, $headerTag headers)",
+      ({ copies, headerTag }) => {
         const date = Array.from({ length: copies }, () => "05/25/2022").join(
           "<br><br>",
         );
@@ -406,7 +413,7 @@ describe("parseNsDecisionHtml", () => {
           () => "IV.ÚS 1381/22",
         ).join("<br><br>");
         const html = `<table id="box-table-a"><tr><td colspan="2">Podána ústavní stížnost
-        <table><tr><td>datum podání</td><td>spisová značka</td></tr>
+        <table><tr><${headerTag}>datum podání</${headerTag}><${headerTag}>spisová značka</${headerTag}></tr>
         <tr><td>${date}</td><td>${docket}</td></tr></table></td></tr></table>`;
         const { source } = extractNsMetadata(cheerio.load(html));
         const row = source.ustavniStiznost?.at(0);
@@ -544,5 +551,49 @@ describe("parseNsDecisionHtml", () => {
       );
       expect(titles.length).toBeGreaterThan(0);
     });
+  });
+});
+
+describe("source table text retention", () => {
+  test("keeps every metadata cell and caption without inferring labels", () => {
+    const { source } = extractNsMetadata(
+      cheerio.load(`<table id="box-table-a">
+      <caption>Metadata caption</caption>
+      <tr><th>Soud:</th><td>Named court</td><td>Extra value</td></tr>
+      <tr><td>Unknown label</td><td>Unknown value</td></tr>
+      <tr><th>Standalone header</th></tr>
+    </table>`),
+    );
+    expect(source["metadataTable"]).toEqual({
+      captions: ["Metadata caption"],
+      rows: [
+        [
+          { type: "header", text: "Soud:" },
+          { type: "data", text: "Named court" },
+          { type: "data", text: "Extra value" },
+        ],
+        [
+          { type: "data", text: "Unknown label" },
+          { type: "data", text: "Unknown value" },
+        ],
+        [{ type: "header", text: "Standalone header" }],
+      ],
+    });
+  });
+
+  test("keeps body captions and header cells in source order", () => {
+    const result = parseNsDecisionHtml(
+      baseInput(`<html><body>
+      <table id="box-table-a"></table>
+      <table><caption>Body caption</caption><tr><th>Column heading</th><td>First cell</td><td>Last cell</td></tr></table>
+    </body></html>`),
+    );
+    expect(result.fulltext).toBe(
+      "Body caption\n\nColumn heading\tFirst cell\tLast cell",
+    );
+    const table = result.documentAst.blocks.find(
+      (block) => block.type === "table",
+    );
+    expect(table?.rows.at(0)?.at(0)?.header).toBe(true);
   });
 });
