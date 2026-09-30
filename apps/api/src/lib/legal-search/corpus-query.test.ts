@@ -209,6 +209,7 @@ test("the clause is exactly the tokenization, quoted and ANDed", () => {
 test("the assembler ANDs filter clauses onto the free-text clause", () => {
   expect(
     caseLawCorpusQuery({
+      jurisdiction: undefined,
       text: '"náhrada škody"',
       filters: {
         court: "Nejvyšší soud",
@@ -234,6 +235,7 @@ test("the assembler ANDs filter clauses onto the free-text clause", () => {
 test("a court filter carries its partitions beside the exact court clause, never alone", () => {
   expect(
     caseLawCorpusQuery({
+      jurisdiction: undefined,
       text: "habeas",
       filters: {
         court: "Supreme Court of the United States",
@@ -249,6 +251,7 @@ test("a court filter carries its partitions beside the exact court clause, never
   );
   expect(
     caseLawCorpusQuery({
+      jurisdiction: undefined,
       text: "habeas",
       filters: { court: "A", courtPartitions: ["p01", "p02"] },
     }),
@@ -258,6 +261,7 @@ test("a court filter carries its partitions beside the exact court clause, never
   // Without a court filter there is nothing for a partition to narrow.
   expect(
     caseLawCorpusQuery({
+      jurisdiction: undefined,
       text: "habeas",
       filters: { courtPartitions: ["p08"] },
     }),
@@ -267,12 +271,14 @@ test("a court filter carries its partitions beside the exact court clause, never
 test("an open-ended date range keeps the wildcard bound", () => {
   expect(
     caseLawCorpusQuery({
+      jurisdiction: undefined,
       text: "smlouva",
       filters: { dateFrom: "2020-01-01" },
     }),
   ).toBe('("smlouva") AND decision_date:[2020-01-01 TO *]');
   expect(
     caseLawCorpusQuery({
+      jurisdiction: undefined,
       text: "smlouva",
       filters: { dateTo: "2020-01-01" },
     }),
@@ -280,19 +286,26 @@ test("an open-ended date range keeps the wildcard bound", () => {
 });
 
 test("no filters leaves the free-text clause alone", () => {
-  expect(caseLawCorpusQuery({ text: "smlouva", filters: {} })).toBe(
-    '("smlouva")',
-  );
+  expect(
+    caseLawCorpusQuery({
+      jurisdiction: undefined,
+      text: "smlouva",
+      filters: {},
+    }),
+  ).toBe('("smlouva")');
 });
 
 test("text without a searchable term yields no query", () => {
   expect(
     caseLawCorpusQuery({
+      jurisdiction: undefined,
       text: "?!()",
       filters: { court: "Nejvyšší soud" },
     }),
   ).toBeNull();
-  expect(caseLawCorpusQuery({ text: '""', filters: {} })).toBeNull();
+  expect(
+    caseLawCorpusQuery({ jurisdiction: undefined, text: '""', filters: {} }),
+  ).toBeNull();
 });
 
 // A filter value reaching the engine unescaped would let a caller that does
@@ -301,12 +314,14 @@ test("text without a searchable term yields no query", () => {
 test("filter values cannot close their clause", () => {
   expect(
     caseLawCorpusQuery({
+      jurisdiction: undefined,
       text: "smlouva",
       filters: { court: 'X" OR text:*' },
     }),
   ).toBe('("smlouva") AND court:"X\\" OR text:*"');
   expect(
     caseLawCorpusQuery({
+      jurisdiction: undefined,
       text: "smlouva",
       filters: { language: "cs\\" },
     }),
@@ -354,6 +369,7 @@ test("a clause built with no extra fields names no field at all", () => {
 
 test("the decisions query names the summary where its generation maps one", () => {
   const decisions = caseLawCorpusQuery({
+    jurisdiction: undefined,
     text: "nájemního",
     filters: { jurisdiction: "CZE" },
     surfaceFields: ["headnote"],
@@ -364,7 +380,11 @@ test("the decisions query names the summary where its generation maps one", () =
   expect(decisions).toContain('headnote_stem:"nájemn"');
   // The same query for a generation that maps neither is what it is today.
   expect(
-    caseLawCorpusQuery({ text: "nájemního", filters: { jurisdiction: "CZE" } }),
+    caseLawCorpusQuery({
+      jurisdiction: undefined,
+      text: "nájemního",
+      filters: { jurisdiction: "CZE" },
+    }),
   ).toBe('("nájemního") AND jurisdiction:"CZE"');
 });
 
@@ -415,8 +435,15 @@ test("a generation without extra fields gets the query it gets today", () => {
     expect(
       corpusFreeTextClause(text, { stemming: null, surfaceFields: [] }),
     ).toBe(corpusFreeTextClause(text));
-    expect(caseLawCorpusQuery({ text, filters: { jurisdiction: "CZE" } })).toBe(
+    expect(
       caseLawCorpusQuery({
+        jurisdiction: undefined,
+        text,
+        filters: { jurisdiction: "CZE" },
+      }),
+    ).toBe(
+      caseLawCorpusQuery({
+        jurisdiction: undefined,
         text,
         filters: { jurisdiction: "CZE" },
         stemming: null,
@@ -602,6 +629,7 @@ const svkFreeText = (
   options: Omit<CorpusFreeTextOptions, "slovakLegacyStemFields"> = {},
 ) => {
   const query = caseLawCorpusQuery({
+    jurisdiction: "SVK",
     text,
     ...options,
     filters: { jurisdiction: "SVK" },
@@ -699,6 +727,7 @@ test("non-SVK queries stay byte-identical for every morphology language", () => 
         const baseline = corpusFreeTextClause(text, { stemming });
         for (const jurisdiction of ["CZE", "POL", "DEU", undefined]) {
           const candidate = caseLawCorpusQuery({
+            jurisdiction,
             text,
             stemming,
             filters: { jurisdiction },
@@ -788,4 +817,40 @@ test("Slovak compatibility preserves all baseline leaves and the actual leaf cei
   expect(svkFreeText("premlčanie", { stemming: null })).toBe(
     corpusFreeTextClause("premlčanie"),
   );
+});
+
+test("Slovak query scope enables compatibility even without an index jurisdiction clause", () => {
+  const text = "premlčanie";
+  const sharedIndexQuery = caseLawCorpusQuery({
+    text,
+    jurisdiction: "SVK",
+    filters: { jurisdiction: "SVK" },
+    stemming: SK_STEMMING,
+  });
+  const singleJurisdictionQuery = caseLawCorpusQuery({
+    text,
+    jurisdiction: "SVK",
+    filters: {},
+    stemming: SK_STEMMING,
+  });
+  expect(singleJurisdictionQuery).toBe(
+    svkFreeText(text, { stemming: SK_STEMMING }),
+  );
+  expect(singleJurisdictionQuery).toContain('text_stem:"premlčani"');
+  expect(singleJurisdictionQuery).toContain('headnote_stem:"premlčani"');
+  expect(sharedIndexQuery).toBe(
+    `${singleJurisdictionQuery} AND jurisdiction:"SVK"`,
+  );
+  for (const jurisdiction of ["CZE", undefined]) {
+    expect(
+      caseLawCorpusQuery({
+        text,
+        jurisdiction,
+        filters: { jurisdiction: "SVK" },
+        stemming: SK_STEMMING,
+      }),
+    ).toBe(
+      `${corpusFreeTextClause(text, { stemming: SK_STEMMING })} AND jurisdiction:"SVK"`,
+    );
+  }
 });

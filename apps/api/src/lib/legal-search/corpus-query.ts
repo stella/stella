@@ -635,6 +635,8 @@ export type CaseLawCorpusFilters = {
 
 export type CaseLawCorpusQueryOptions = {
   text: string;
+  /** Query scope, independent of whether the target index needs a filter clause. */
+  jurisdiction: string | undefined;
   filters: CaseLawCorpusFilters;
   expand?: CorpusTermExpander | undefined;
   stemming?: CorpusStemming | null | undefined;
@@ -653,6 +655,7 @@ export type CaseLawCorpusQueryOptions = {
  */
 export const caseLawCorpusQuery = ({
   text,
+  jurisdiction,
   filters,
   expand,
   stemming,
@@ -669,7 +672,7 @@ export const caseLawCorpusQuery = ({
     functionWords,
     legalAlternatives,
     slovakLegacyStemFields:
-      filters.jurisdiction === "SVK" && stemming?.language === "sk"
+      jurisdiction === "SVK" && stemming?.language === "sk"
         ? stemming.fields.filter((field) =>
             SLOVAK_LEGACY_STEM_FIELDS.has(field),
           )
