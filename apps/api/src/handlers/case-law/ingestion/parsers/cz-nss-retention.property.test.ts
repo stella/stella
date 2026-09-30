@@ -26,21 +26,29 @@ const metadata = {
   decisionType: undefined,
   sourceUrl: undefined,
 };
-const retainedElements = "body p, body li, body td, body th, body div";
 const config = () => propertyConfig({ seed: propertySeed(), numRuns: 20 });
+const wrappers = fc.array(fc.constantFrom("div", "section", "blockquote"), {
+  maxLength: 4,
+});
 
 test(
   "Czech administrative body markers retain their source order",
   () => {
     fc.assert(
-      fc.property(markerPlan, fc.boolean(), (plan, nested) => {
+      fc.property(markerPlan, wrappers, (plan, ancestors) => {
         const fixture = cheerio.load(nssUnitDecisionHtml);
-        if (nested) {
-          fixture("body").wrapInner("<div></div>");
+        for (const tag of ancestors) {
+          fixture("body").wrapInner(`<${tag}></${tag}>`);
         }
+        fixture("body").append(
+          "Text před oddílem.<h2>Nadpis oddílu</h2>Text za oddílem." +
+            "<blockquote>Citovaný text.</blockquote>" +
+            "<table><tr><td>První buňka</td><td>Druhá buňka</td></tr></table>" +
+            "<div id='_ftn1'><p>Poznámka pod čarou.</p></div>",
+        );
         const injected = injectMarkupMarkers({
           source: fixture.html(),
-          selector: retainedElements,
+          selector: "body",
           excludedSelector:
             "div[style*='-aw-headerfooter-type'], script, style",
           plan,
