@@ -780,6 +780,7 @@ export const createMcpHttpRequestHandler = ({
         enabled: true,
         organizationId: context.organizationId,
         userId: context.userId,
+        organizationStateDb: context.scopedDb,
         periodIdentity: mcpActionPeriodIdentity(consumesServices),
         run,
       });

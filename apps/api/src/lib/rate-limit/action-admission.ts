@@ -8,6 +8,7 @@ import {
 } from "@stll/api-contract/action-admission";
 import { Temporal } from "@stll/time";
 
+import type { ScopedDb } from "@/api/db/safe-db";
 import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
 import { failureSink } from "@/api/lib/observability/failure";
@@ -31,7 +32,7 @@ import {
 } from "@/api/lib/redis-client";
 import { coordinationKey, type CoordinationKey } from "@/api/lib/redis-keys";
 import {
-  readAdmissionOrganizationState,
+  readOrganizationActionState,
   resolveOrganizationActionBudget,
   type OrganizationActionBudgetConfig,
 } from "@/api/lib/usage/organization-action-budget";
@@ -190,6 +191,11 @@ const configuredPolicy = (): Result<
   return Result.ok({ organizationConcurrency, userConcurrency, leaseMs });
 };
 
+type OrganizationStateReader = (scope: {
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+}) => ReturnType<typeof readOrganizationActionState>;
+
 type ActionAdmissionOptions = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
@@ -201,7 +207,8 @@ type ActionAdmissionOptions = {
   periodPolicy?: ActionPeriodPolicy;
   serviceBudgetsEnabled?: boolean;
   serviceBudgetConfig?: OrganizationActionBudgetConfig;
-  readOrganizationState?: typeof readAdmissionOrganizationState;
+  organizationStateDb?: ScopedDb;
+  readOrganizationState?: OrganizationStateReader;
   budgetNow?: () => number;
   redis?: RedisCommands;
   redisReady?: () => Promise<RedisCommands>;
@@ -348,11 +355,14 @@ const createAdmissionExecutor = ({
  */
 type ResolveAdmissionBudgetOptions = Pick<
   ActionAdmissionOptions,
-  "organizationId" | "userId" | "periodIdentity" | "periodPolicy"
+  "organizationId" | "userId"
 > & {
   serviceBudgetsEnabled: boolean;
   serviceBudgetConfig: OrganizationActionBudgetConfig;
-  readOrganizationState: typeof readAdmissionOrganizationState;
+  periodIdentity: AdmittedActionIdentity | undefined;
+  periodPolicy: ActionPeriodPolicy | undefined;
+  organizationStateDb: ScopedDb | undefined;
+  readOrganizationState: OrganizationStateReader | undefined;
   budgetNow: () => number;
 };
 
@@ -364,6 +374,7 @@ const resolveAdmissionBudget = async ({
   serviceBudgetsEnabled,
   serviceBudgetConfig,
   readOrganizationState,
+  organizationStateDb,
   budgetNow,
 }: ResolveAdmissionBudgetOptions) => {
   let serviceDeadlineMs: number | null = null;
@@ -381,9 +392,25 @@ const resolveAdmissionBudget = async ({
     }
     consumesServices = ACTION_KINDS[periodIdentity.actionKind].consumesServices;
     if (consumesServices) {
+      const readState =
+        readOrganizationState ??
+        (organizationStateDb === undefined
+          ? undefined
+          : async () =>
+              await readOrganizationActionState(
+                organizationStateDb,
+                organizationId,
+              ));
+      if (readState === undefined) {
+        return Result.err(
+          new ActionAdmissionError({
+            message: "Organization action scope is missing",
+            reason: "unavailable",
+          }),
+        );
+      }
       const state = await Result.tryPromise({
-        try: async () =>
-          await readOrganizationState({ organizationId, userId }),
+        try: async () => await readState({ organizationId, userId }),
         catch: (cause: unknown) =>
           new ActionAdmissionError({
             message: "Organization action access could not be read",
@@ -479,10 +506,9 @@ const acquisitionRefusal = (reply: unknown): ActionAdmissionError | null => {
   return null;
 };
 
-type ReuseAdmissionOptions = Pick<
-  ActionAdmissionOptions,
-  "organizationId" | "periodIdentity" | "periodPolicy"
-> & {
+type ReuseAdmissionOptions = Pick<ActionAdmissionOptions, "organizationId"> & {
+  periodIdentity: AdmittedActionIdentity | undefined;
+  periodPolicy: ActionPeriodPolicy | undefined;
   scope: AdmissionScope;
   serviceBudgetsEnabled: boolean;
   budgetNow: () => number;
@@ -550,7 +576,8 @@ export const withActionAdmission = async <T>({
   periodPolicy,
   serviceBudgetsEnabled = env.FEATURE_ORG_SERVICE_BUDGETS,
   serviceBudgetConfig = configuredServiceBudgets(),
-  readOrganizationState = readAdmissionOrganizationState,
+  readOrganizationState,
+  organizationStateDb,
   budgetNow = () => Temporal.Now.instant().epochMilliseconds,
   redis,
   redisReady = admissionRedis.ready,
@@ -592,6 +619,7 @@ export const withActionAdmission = async <T>({
     serviceBudgetsEnabled,
     serviceBudgetConfig,
     readOrganizationState,
+    organizationStateDb,
     budgetNow,
   });
   if (Result.isError(resolvedBudget)) {

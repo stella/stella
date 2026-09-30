@@ -361,6 +361,28 @@ describe("organization budgets at action admission", () => {
     }
   });
 
+  test("service admission without an injected reader or authorized database scope fails closed", async () => {
+    const redis = recordingRedis();
+    let runs = 0;
+    const result = await withActionAdmission({
+      organizationId,
+      userId,
+      enabled: true,
+      policy,
+      serviceBudgetsEnabled: true,
+      serviceBudgetConfig,
+      periodIdentity,
+      budgetNow: () => nowMs,
+      redis: redis.client,
+      run: async () => {
+        runs += 1;
+      },
+    });
+    expectRefusal(result, ACTION_ADMISSION_CODES.admissionUnavailable);
+    expect(redis.commands).toHaveLength(0);
+    expect(runs).toBe(0);
+  });
+
   test("missing state, incomplete selected configuration and state-read outages fail closed", async () => {
     for (const failure of [
       "missing-state",

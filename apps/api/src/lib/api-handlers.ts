@@ -820,6 +820,7 @@ type ConfiguredFiniteHandlerGuard<TConfig, TResult> = TConfig extends {
 type FiniteActionContext = SafeHandlerLogContext & {
   user: { id: SafeId<"user"> };
   session: { activeOrganizationId: SafeId<"organization"> };
+  scopedDb: ScopedDb;
   actionSignal?: AbortSignal;
 };
 
@@ -843,6 +844,7 @@ const runAdmittedFiniteHandler = async function* <
     admit({
       organizationId: ctx.session.activeOrganizationId,
       userId: ctx.user.id,
+      organizationStateDb: ctx.scopedDb,
       periodIdentity: {
         actionKind,
         // These finite endpoints have no client idempotency key.
