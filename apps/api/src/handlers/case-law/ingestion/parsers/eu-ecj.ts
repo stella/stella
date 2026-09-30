@@ -688,8 +688,8 @@ const flattenChildren = (
   const flat: AnyNode[] = [];
   for (const element of elements) {
     const $element = $(element);
-    if ($element.children("p, div, table").length > 0) {
-      flat.push(...flattenChildren($, $element.children().toArray()));
+    if (isTag(element) && $element.children("p, div, table").length > 0) {
+      flat.push(...flattenChildren($, $element.contents().toArray()));
       continue;
     }
     flat.push(element);
@@ -701,7 +701,7 @@ const buildBlocks = (
   $: cheerio.CheerioAPI,
   $document: cheerio.Cheerio<AnyNode>,
 ): Block[] => {
-  const children = flattenChildren($, $document.children().toArray());
+  const children = flattenChildren($, $document.contents().toArray());
   const builder: BlockBuilder = {
     blocks: [],
     sequence: 0,
@@ -745,7 +745,8 @@ const visitChild = (
   index: number,
   lastPointIndex: number,
 ): void => {
-  const tag = tagNameOf($el.get(0));
+  const node = $el.get(0);
+  const tag = tagNameOf(node);
   const classes = classListOf($el);
 
   // `<hr class="coj-note">` opens the footnote list.
@@ -767,6 +768,23 @@ const visitChild = (
     }
     visitTable($, builder, $el);
     builder.inTitleRun = false;
+    return;
+  }
+
+  if (node !== undefined && isText(node)) {
+    const inlines: Inline[] = [];
+    appendTextInline(inlines, $el.text());
+    const normalizedInlines = collapseWhitespace(inlines);
+    const plainText = inlinesToPlainText(normalizedInlines).trim();
+    if (!plainText) {
+      return;
+    }
+    builder.inTitleRun = false;
+    pushParagraph(builder, {
+      ...roleOf(builder.zone),
+      inlines: normalizedInlines,
+      plainText,
+    });
     return;
   }
 
