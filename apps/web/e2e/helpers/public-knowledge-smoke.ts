@@ -6,6 +6,7 @@ import { loadCatalogue } from "@stll/catalogue";
 
 import messages from "../../src/i18n/langs/en.json" with { type: "json" };
 import { createNetworkCollector } from "./network";
+import { isMemberOnlySmokeRequest } from "./public-knowledge-smoke.logic";
 
 const PACK_ID = "general-legal";
 const PUBLIC_API = "/api/v1/public/knowledge/template-packs";
@@ -59,22 +60,54 @@ export const PUBLIC_VISITOR_ROUTE_DEFS = [
 ] as const satisfies readonly VisitorRoute[];
 
 type VisitorCatalogue =
+  | { status: "unprobed" }
   | { status: "disabled" }
   | { status: "ready"; template: CatalogueTemplate };
 
-export const declarePublicKnowledgeSmoke = () => {
-  test.describe("public visitor routes", () => {
+type DeclarePublicKnowledgeSmokeOptions = {
+  mode: "disabled" | "probe";
+};
+
+export const declarePublicKnowledgeSmoke = ({
+  mode,
+}: DeclarePublicKnowledgeSmokeOptions) => {
+  // Known flag-off targets never create fixtures or contact a live service.
+  const describe = mode === "disabled" ? test.describe.skip : test.describe;
+  describe("public visitor routes", () => {
     test.use({ storageState: { cookies: [], origins: [] }, locale: "en-US" });
-    let catalogue: VisitorCatalogue = { status: "disabled" };
+    let catalogue: VisitorCatalogue = { status: "unprobed" };
 
     test.beforeAll(async ({ request }) => {
-      // The target's gate, rather than the runner's build flags, controls this suite.
-      const probe = await request.get(PUBLIC_API);
-      if (probe.status() === 404) {
-        expect(await probe.json()).toEqual({ error: "Not Found" });
+      const [apiProbe, webProbe] = await Promise.all([
+        request.get(PUBLIC_API, { maxRedirects: 0 }),
+        request.get("/knowledge/tools/contribute", { maxRedirects: 0 }),
+      ]);
+      expect([200, 404], "API probe status").toContain(apiProbe.status());
+      expect([200, 404], "web probe status").toContain(webProbe.status());
+      expect(webProbe.headers()["content-type"], "web probe HTML").toMatch(
+        /^text\/html\b/iu,
+      );
+      const apiEnabled = apiProbe.status() === 200;
+      const webEnabled = webProbe.status() === 200;
+      if (!apiEnabled) {
+        expect(await apiProbe.json(), "disabled API response").toEqual({
+          error: "Not Found",
+        });
+      } else {
+        v.parse(
+          v.object({ items: v.array(v.object({ id: v.string() })) }),
+          await apiProbe.json(),
+        );
+      }
+      expect(
+        apiEnabled,
+        "inconsistent flags: API and web Public Knowledge must agree",
+      ).toBe(webEnabled);
+      if (!apiEnabled && !webEnabled) {
+        catalogue = { status: "disabled" };
+        test.skip(true, "Public Knowledge is disabled on API and web");
         return;
       }
-      expect(probe.status()).toBe(200);
       const pack = await request.get(`${PUBLIC_API}/${PACK_ID}`);
       expect(pack.status()).toBe(200);
       const data = v.parse(
@@ -91,9 +124,8 @@ export const declarePublicKnowledgeSmoke = () => {
     const declareRoute = (def: VisitorRoute) => {
       test(def.template, async ({ page }, testInfo) => {
         const current = catalogue;
-        if (current.status === "disabled") {
-          test.skip(true, "Public Knowledge is disabled in the target");
-          return;
+        if (current.status !== "ready") {
+          panic("public route smoke ran without a ready catalogue");
         }
         const route = def.resolve(current.template);
         const requests: string[] = [];
@@ -113,11 +145,11 @@ export const declarePublicKnowledgeSmoke = () => {
             return;
           }
           requests.push(url.pathname);
-          const pathname = url.pathname.replace(/^\/api(?=\/v1\/)/u, "");
           if (
-            (pathname.startsWith("/v1/") &&
-              !pathname.startsWith("/v1/public/")) ||
-            pathname.startsWith("/api/auth/organization/")
+            isMemberOnlySmokeRequest({
+              pathname: url.pathname,
+              method: request.method(),
+            })
           ) {
             forbidden.push(url.pathname);
           }

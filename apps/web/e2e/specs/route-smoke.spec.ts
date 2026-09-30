@@ -392,7 +392,7 @@ const declareRouteSmokeGroup = ({
 };
 
 const baselineMode = process.env["E2E_NETWORK_BASELINE"];
-declarePublicKnowledgeSmoke();
+declarePublicKnowledgeSmoke({ mode: "disabled" });
 
 test("route coverage matches the authenticated route tree", async () => {
   await expectAuthenticatedRouteCoverage(SMOKE_ROUTE_DEFS);
