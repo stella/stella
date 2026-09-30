@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# Exercise the workflow's arm step without GitHub writes or a real merge gate.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+fixture_root="$(mktemp -d "${TMPDIR:-/tmp}/quarantine-prune-test.XXXXXX")"
+trap 'rm -rf "$fixture_root"' EXIT
+bun - > "$fixture_root/arm.sh" <<'EXTRACT'
+const workflow = Bun.YAML.parse(await Bun.file(".github/workflows/quarantine-prune.yml").text());
+const step = workflow.jobs.prune.steps.find(step => step.name === "Arm automatic removal");
+if (step.if !== "steps.prune.outputs.changed == 'true'") throw new Error("Unchanged proposals must reach the arm step");
+process.stdout.write(step.run);
+EXTRACT
+cat > "$fixture_root/gh" <<'STUB'
+#!/usr/bin/env bash
+set -euo pipefail
+[[ "$*" == 'pr list --repo stella/stella --state open --base main --head chore/prune-quarantine-excludes --json number --jq .[0].number // empty' ]]
+echo lookup >> "$CALLS"
+printf '%s\n' "$LOOKUP_NUMBER"
+STUB
+cat > "$fixture_root/bun" <<'STUB'
+#!/usr/bin/env bash
+set -euo pipefail
+[[ "$1" == scripts/merge-bar.ts ]]
+echo "arm:$2" >> "$CALLS"
+exit "$GATE_STATUS"
+STUB
+chmod +x "$fixture_root/gh" "$fixture_root/bun"
+export PATH="$fixture_root:$PATH"
+export CALLS="$fixture_root/calls" GITHUB_STEP_SUMMARY="$fixture_root/summary"
+export GITHUB_REPOSITORY=stella/stella PRUNE_BRANCH=chore/prune-quarantine-excludes
+export PR_NUMBER='' MERGE_HOLD='' LOOKUP_NUMBER=42 GATE_STATUS=0
+
+assert_calls() {
+  [[ "$(cat "$CALLS")" == "$1" ]] || {
+    echo "Unexpected calls: $(cat "$CALLS")" >&2
+    exit 1
+  }
+}
+run_step() {
+  : > "$CALLS"
+  : > "$GITHUB_STEP_SUMMARY"
+  bash "$fixture_root/arm.sh" > "$fixture_root/output"
+}
+# A fresh action output avoids a redundant lookup.
+PR_NUMBER=42
+run_step
+assert_calls 'arm:42'
+# A held proposal remains untouched, then is armed on the unchanged next run.
+PR_NUMBER=''
+MERGE_HOLD=maintenance
+run_step
+assert_calls ''
+MERGE_HOLD=''
+run_step
+assert_calls $'lookup\narm:42'
+# A vanished proposal cannot pass an empty number to the gate.
+LOOKUP_NUMBER=''
+run_step
+assert_calls lookup
+rg -q 'No open quarantine removal PR found' "$GITHUB_STEP_SUMMARY"
+# Gate refusal is visible without failing the scheduled job.
+LOOKUP_NUMBER=42
+GATE_STATUS=1
+run_step
+assert_calls $'lookup\narm:42'
+rg -q 'Merge gate refused removal PR #42' "$GITHUB_STEP_SUMMARY"
+echo 'quarantine prune arm scenarios passed'

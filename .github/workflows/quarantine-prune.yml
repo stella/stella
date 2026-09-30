@@ -109,9 +109,7 @@ jobs:
             Opened automatically. The removal is what `bun scripts/check-stll-quarantine-excludes.ts --prune` produces.
 
       - name: Arm automatic removal
-        if: >-
-          steps.removal-pr.outputs.operation == 'created' ||
-          steps.removal-pr.outputs.operation == 'updated'
+        if: steps.prune.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           GH_READ_TOKEN: ${{ github.token }}
@@ -124,6 +122,19 @@ jobs:
           if [[ -n "$MERGE_HOLD" ]]; then
             echo "::notice::Automatic quarantine removal is held by STELLA_MERGE_HOLD."
             echo "Automatic quarantine removal is held by STELLA_MERGE_HOLD." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          # refresh-pr may report no operation for an unchanged proposal.
+          if [[ -z "$PR_NUMBER" ]]; then
+            PR_NUMBER="$(gh pr list --repo "$GITHUB_REPOSITORY" \
+              --state open --base main --head "$PRUNE_BRANCH" \
+              --json number --jq '.[0].number // empty')"
+          fi
+
+          if [[ -z "$PR_NUMBER" ]]; then
+            echo "::warning::No open quarantine removal PR found; nothing to arm."
+            echo "No open quarantine removal PR found; nothing to arm." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
 
