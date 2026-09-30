@@ -34,6 +34,7 @@ type SupportedDriver = {
   fixture: () => EnrolledAdapterFixture;
   part: string;
   file?: string;
+  text?: string;
 };
 type Driver = SupportedDriver | { driver: "unsupported"; reason: string };
 const DRIVERS = {
@@ -47,7 +48,17 @@ const DRIVERS = {
     driver: "html",
     fixture: czNssFixture,
     part: "document",
-    file: "silent-drop-cz-nss.html",
+    text: `<!doctype html>
+<!-- Synthetic document fixture; no published case or personal data. -->
+<html><body>
+<p>ČESKÁ REPUBLIKA</p>
+<p>ROZSUDEK JMÉNEM REPUBLIKY</p>
+<p>Nejvyšší správní soud rozhodl ve věci kasační stížnosti proti rozhodnutí
+správního orgánu. Kasační stížnost se zamítá. Soud přezkoumal napadené
+rozhodnutí a dospěl k závěru, že řízení bylo vedeno v souladu se zákonem.</p>
+<ul><li>První důvod rozhodnutí.</li><li>Druhý důvod rozhodnutí.</li></ul>
+<table><tbody><tr><td>Rozsah přezkumu</td><td>Napadené rozhodnutí</td></tr></tbody></table>
+</body></html>`,
   },
   "cz-us": {
     driver: "html",
@@ -289,7 +300,7 @@ const fixturePayload = async (
   driver: SupportedDriver,
   original: string,
 ): Promise<unknown> => {
-  let payload = payloadOf(original);
+  let payload = payloadOf(driver.text ?? original);
   if (driver.file === undefined) {
     return payload;
   }
@@ -460,8 +471,9 @@ for (const adapter of replayAdapters) {
               ...new Set(
                 $("*")
                   .toArray()
-                  .filter((node) => isTag(node) && node.children.length > 0)
-                  .map((node) => node.name),
+                  .flatMap((node) =>
+                    isTag(node) && node.children.length > 0 ? [node.name] : [],
+                  ),
               ),
             ].toSorted();
       for (const [kindIndex, kind] of containers.entries()) {
@@ -500,7 +512,7 @@ for (const adapter of replayAdapters) {
     expect(
       observed,
       "New misses fail; passing baseline entries must be removed",
-    ).toEqual(expected.get(adapter.key) ?? []);
+    ).toEqual([...(expected.get(adapter.key) ?? [])]);
   }, 60_000);
 }
 test("a removed adapter cannot leave a stale suppression", () => {
