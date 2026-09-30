@@ -20,7 +20,7 @@ const INVENTORY_FILE = path.resolve(
 );
 
 /** Rewrites the inventory from what the conversations sent. Never in CI. */
-export const UPDATE_REQUEST_PATHS_ENV = "UPDATE_PROVIDER_REQUEST_PATHS";
+const UPDATE_REQUEST_PATHS_ENV = "UPDATE_PROVIDER_REQUEST_PATHS";
 
 /**
  * Subtrees whose keys are data rather than request structure: a tool's own

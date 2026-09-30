@@ -58,6 +58,7 @@ import {
   pairwiseChatCombinations,
   reasoningModelOf,
   shardOf,
+  threeWiseChatCombinations,
   toolCallAnswerFor,
 } from "@/api/tests/helpers/provider-request-matrix";
 import type {
@@ -127,10 +128,12 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 //   structured output, a compaction checkpoint, the provider and model that
 //   continue it (a thread can switch models between messages), the
 //   organization's caching setting, the turn's attachment, reasoning effort
-//   and tool surface, how its model was chosen, and whether the chat model or
-//   its fallback answers. Pull requests run an all-pairs cover of them; the
-//   nightly job runs every combination over a rotation of rounds
-//   (`nightly-property-test.yml`).
+//   and tool surface, how its model was chosen, whether the chat model or its
+//   fallback answers, whether it is anonymized, and whether it runs as a chat
+//   turn or an agent run (whose request the sandbox's harness builds, so it
+//   is excluded by that predicate). Pull requests run an all-pairs cover of
+//   them; every night runs the all-triples cover, and a rotation of rounds
+//   runs every combination (`nightly-property-test.yml`).
 // - Every request those conversations send (the chat turns, the thread
 //   compactor's summary and the side calls) holds to the request schema the
 //   provider publishes (`scripts/provider-request-schemas.ts`) and to the
@@ -254,11 +257,15 @@ const declaredToolKindOf = (name: string): ChatToolPolicyKind | undefined =>
 
 const combinations = enumerateChatCombinations(cassettes);
 
-/** `PROVIDER_REQUEST_COMBINATIONS=all` runs every combination (a nightly
- *  job, split by `PROVIDER_REQUEST_SHARD=<index>/<count>`); otherwise the
- *  all-pairs cover runs. */
+/**
+ * Which combinations run: the all-pairs cover by default (pull requests),
+ * the all-triples cover with `PROVIDER_REQUEST_COMBINATIONS=three-wise`, or
+ * every combination with `all` (both nightly), either split by
+ * `PROVIDER_REQUEST_SHARD=<index>/<count>`.
+ */
 const runPlan = (() => {
-  if (process.env["PROVIDER_REQUEST_COMBINATIONS"] !== "all") {
+  const requested = process.env["PROVIDER_REQUEST_COMBINATIONS"];
+  if (requested !== "all" && requested !== "three-wise") {
     return {
       mode: "all-pairs",
       runs: pairwiseChatCombinations(combinations.included),
@@ -269,9 +276,13 @@ const runPlan = (() => {
   )?.groups;
   const index = Number(shard?.["index"] ?? "0");
   const count = Number(shard?.["count"] ?? "1");
+  const pool =
+    requested === "all"
+      ? combinations.included
+      : threeWiseChatCombinations(combinations.included);
   return {
-    mode: `every combination, shard ${String(index)} of ${String(count)}`,
-    runs: shardOf(combinations.included, { count, index }),
+    mode: `${requested === "all" ? "every combination" : "all-triples"}, shard ${String(index)} of ${String(count)}`,
+    runs: shardOf(pool, { count, index }),
   } as const;
 })();
 
@@ -285,7 +296,9 @@ const baselineOf = (provider: TanStackAIProvider): ChatCombination => ({
   effort: "default",
   history: "plain",
   origin: { provider, slot: "recorded" },
+  runMode: "chat",
   selection: "organization-default",
+  sendMode: "rawOverride",
   stored: "none",
   target: { provider, slot: "recorded" },
   tools: "default",
@@ -306,15 +319,31 @@ const selectedCombinations: readonly ChatCombination[] = (() => {
  * combination runs as a test marked failing under the finding's name, so it
  * fails loudly once the turn stops breaking the rule.
  */
-const knownFindingOf = (combination: ChatCombination): string | undefined =>
+const knownFindingOf = (combination: ChatCombination): string | undefined => {
   // Hydration hands an image to the model as a data URL
   // (`createRawChatFilePart`), and the Bedrock Converse adapter takes only
   // inline image bytes, so the turn fails before its request is sent.
   // Minimal repro: a Bedrock chat turn with a PNG attached.
-  combination.target.provider === "bedrock" &&
-  combination.attachment === "image"
-    ? "a Bedrock turn with an image attachment fails before its request"
-    : undefined;
+  if (
+    combination.target.provider === "bedrock" &&
+    combination.attachment === "image"
+  ) {
+    return "a Bedrock turn with an image attachment fails before its request";
+  }
+  // OpenAI's reasoning is stored as a thinking part whose signature packs
+  // its encrypted content, and the Anthropic adapter sends every signed
+  // thinking part back as a thinking block: Anthropic is handed a signature
+  // it did not issue. Minimal repro: an OpenAI turn that reasoned before a
+  // tool call, continued on an Anthropic model.
+  if (
+    combination.history === "reasoning" &&
+    combination.origin.provider === "openai" &&
+    combination.target.provider === "anthropic"
+  ) {
+    return "an Anthropic turn is sent the signed reasoning an OpenAI model wrote";
+  }
+  return undefined;
+};
 
 // --- Conversations ------------------------------------------------------------
 
@@ -520,6 +549,7 @@ const converse = async (
     history,
     origin,
     selection,
+    sendMode,
     stored,
     target,
     tools,
@@ -634,12 +664,18 @@ const converse = async (
     );
     const attached = ATTACHMENTS[attachment];
     if (attached === undefined) {
-      await second.client.sendUserMessage(Bun.randomUUIDv7(), "Thanks");
+      await second.client.sendUserMessage(Bun.randomUUIDv7(), "Thanks", {
+        sendMode,
+      });
     } else {
-      await second.client.sendUserContent(Bun.randomUUIDv7(), [
-        { type: "text", content: "Read this." },
-        await composerAttachmentPart(attached),
-      ]);
+      await second.client.sendUserContent(
+        Bun.randomUUIDv7(),
+        [
+          { type: "text", content: "Read this." },
+          await composerAttachmentPart(attached),
+        ],
+        { sendMode },
+      );
     }
     await second.harness.expectSoundWebClient({
       client: second.client,

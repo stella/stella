@@ -7,9 +7,13 @@ import {
   TANSTACK_AI_PROVIDERS,
 } from "@stll/ai-catalog";
 import type { ReasoningEffort, TanStackAIProvider } from "@stll/ai-catalog";
+import { CHAT_SEND_MODE, CHAT_SEND_MODES } from "@stll/anonymize-chat";
+import { CHAT_RUN_MODE } from "@stll/api-contract";
+import type { ChatRunMode } from "@stll/api-contract";
 
 import { modelAcceptsDocumentAttachment } from "@/api/handlers/chat/attachment-modality";
 import { TEXT_CSV_MIME_TYPE } from "@/api/handlers/chat/attachment-validation";
+import { canHydrateFilePartAsPlainText } from "@/api/handlers/chat/upload-files";
 import { isChatModelReasoningEffortAvailable } from "@/api/lib/chat-model-selection";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
@@ -30,8 +34,8 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 /** The models a provider's conversations run on: the model its corpus was
  *  recorded with, and another of its catalog models. */
-export const MODEL_SLOTS = ["recorded", "alternate"] as const;
-export type ModelSlot = (typeof MODEL_SLOTS)[number];
+const MODEL_SLOTS = ["recorded", "alternate"] as const;
+type ModelSlot = (typeof MODEL_SLOTS)[number];
 
 /** A provider and one of its models. */
 export type ModelEndpoint = { provider: TanStackAIProvider; slot: ModelSlot };
@@ -41,7 +45,7 @@ export type ModelEndpoint = { provider: TanStackAIProvider; slot: ModelSlot };
  * more, or the reasoning its model returned before the call (signed, where
  * the provider signs it: Anthropic, OpenAI, Gemini).
  */
-export const HISTORY_VARIANTS = ["plain", "reasoning"] as const;
+const HISTORY_VARIANTS = ["plain", "reasoning"] as const;
 export type HistoryVariant = (typeof HISTORY_VARIANTS)[number];
 
 /**
@@ -49,13 +53,13 @@ export type HistoryVariant = (typeof HISTORY_VARIANTS)[number];
  * or a completed structured output (the part policy lets a page send one
  * back, and the model reads it as text).
  */
-export const STORED_PARTS = ["none", "structured-output"] as const;
-export type StoredPart = (typeof STORED_PARTS)[number];
+const STORED_PARTS = ["none", "structured-output"] as const;
+type StoredPart = (typeof STORED_PARTS)[number];
 
 /** Whether the thread was compacted before the continuing turn, so its
  *  request starts from the stored summary. */
-export const COMPACTIONS = ["none", "compacted"] as const;
-export type Compaction = (typeof COMPACTIONS)[number];
+const COMPACTIONS = ["none", "compacted"] as const;
+type Compaction = (typeof COMPACTIONS)[number];
 
 /** The organization's prompt caching setting (`resolveCaching`). */
 export const CACHING_SETTINGS = ["off", "on"] as const;
@@ -91,7 +95,7 @@ export type EffortChoice = "default" | ReasoningEffort;
  * sources, or with every source the send path can add (web search and URL
  * fetching, an organization's external tools listed lazily).
  */
-export const TOOL_SURFACES = ["default", "extended"] as const;
+const TOOL_SURFACES = ["default", "extended"] as const;
 export type ToolSurface = (typeof TOOL_SURFACES)[number];
 
 /**
@@ -99,16 +103,31 @@ export type ToolSurface = (typeof TOOL_SURFACES)[number];
  * attempt runs on the organization's reasoning model once the chat model
  * returns an empty completion (`shouldAttemptChatFallback`).
  */
-export const ATTEMPTS = ["primary", "fallback"] as const;
-export type Attempt = (typeof ATTEMPTS)[number];
+const ATTEMPTS = ["primary", "fallback"] as const;
+type Attempt = (typeof ATTEMPTS)[number];
 
 /**
  * How the continuing turn's model is chosen: the organization's chat model
  * (switched here by the organization's setting), or the model the user
  * picked for the thread (`update-thread-model.ts`).
  */
-export const SELECTIONS = ["organization-default", "thread-pick"] as const;
-export type Selection = (typeof SELECTIONS)[number];
+const SELECTIONS = ["organization-default", "thread-pick"] as const;
+type Selection = (typeof SELECTIONS)[number];
+
+/** How the turn crosses the third-party boundary: as written, or
+ *  anonymized (`createChatThirdPartyBoundary`). */
+export const SEND_MODES = CHAT_SEND_MODES;
+export type SendMode = (typeof SEND_MODES)[number];
+
+/**
+ * How the turn runs: as a chat turn, or as an agent run in a sandbox
+ * (`CHAT_RUN_MODE`).
+ */
+const RUN_MODES = [
+  "chat",
+  ...Object.values(CHAT_RUN_MODE),
+] as const satisfies readonly ("chat" | ChatRunMode)[];
+type RunMode = (typeof RUN_MODES)[number];
 
 /** One chat turn's combination of every dimension. */
 export type ChatCombination = {
@@ -119,7 +138,9 @@ export type ChatCombination = {
   effort: EffortChoice;
   history: HistoryVariant;
   origin: ModelEndpoint;
+  runMode: RunMode;
   selection: Selection;
+  sendMode: SendMode;
   stored: StoredPart;
   target: ModelEndpoint;
   tools: ToolSurface;
@@ -128,7 +149,7 @@ export type ChatCombination = {
 export const endpointKey = ({ provider, slot }: ModelEndpoint): string =>
   `${provider}/${slot}`;
 export const combinationKey = (combination: ChatCombination): string =>
-  `${endpointKey(combination.origin)} (${combination.history}, stored ${combination.stored}, ${combination.compaction}) -> ${endpointKey(combination.target)}; caching ${combination.caching}, attachment ${combination.attachment}, effort ${combination.effort}, tools ${combination.tools}, ${combination.attempt} attempt, ${combination.selection}`;
+  `${endpointKey(combination.origin)} (${combination.history}, stored ${combination.stored}, ${combination.compaction}) -> ${endpointKey(combination.target)}; caching ${combination.caching}, attachment ${combination.attachment}, effort ${combination.effort}, tools ${combination.tools}, ${combination.attempt} attempt, ${combination.selection}, ${combination.sendMode}, ${combination.runMode} run`;
 
 /** The model an endpoint names. */
 export const modelOf = (
@@ -176,6 +197,21 @@ const endpointPredicates = (
  * produce, by name.
  */
 const PREDICATES: Readonly<Record<string, Predicate>> = {
+  /** An agent run hands the turn to the Codex harness in a sandbox
+   *  (`resolveStellaSandboxRun`), which builds the provider request itself:
+   *  no request of the run leaves this process. */
+  "runMode: resolveStellaSandboxRun": (combination) =>
+    combination.runMode === "chat",
+  /** An anonymized turn refuses an attachment it cannot extract to text
+   *  (`canHydrateFilePartAsPlainText`). */
+  "attachment: canHydrateFilePartAsPlainText": (combination) => {
+    const attachment = ATTACHMENTS[combination.attachment];
+    return (
+      combination.sendMode !== CHAT_SEND_MODE.anonymized ||
+      attachment === undefined ||
+      canHydrateFilePartAsPlainText(attachment.mimeType)
+    );
+  },
   ...endpointPredicates("origin"),
   ...endpointPredicates("target"),
   /** The send path refuses a document attachment the model cannot read
@@ -207,6 +243,32 @@ const PREDICATES: Readonly<Record<string, Predicate>> = {
     }
     const model = modelOf(cassettes, combination.target);
     return reasoningModelOf(combination.target.provider, model) !== model;
+  },
+  /** The chat attempt drops a fallback model that cannot read the turn's
+   *  document (`modelRejectsAnyDocument` in `streamChat`). */
+  "attempt: the fallback model accepts the attachment": (
+    combination,
+    cassettes,
+  ) => {
+    const attachment = ATTACHMENTS[combination.attachment];
+    if (
+      combination.attempt === "primary" ||
+      attachment === undefined ||
+      (attachment.mimeType !== PDF_MIME_TYPE &&
+        attachment.mimeType !== TEXT_CSV_MIME_TYPE)
+    ) {
+      return true;
+    }
+    return modelAcceptsDocumentAttachment({
+      model: {
+        modelId: reasoningModelOf(
+          combination.target.provider,
+          modelOf(cassettes, combination.target),
+        ),
+        provider: combination.target.provider,
+      },
+      mimeType: attachment.mimeType,
+    });
   },
   /** A turn on a model the thread picked runs no fallback: the send path
    *  hands `streamChat` the pick as `devModelId`, and `streamChat` resolves
@@ -290,7 +352,9 @@ export const enumerateChatCombinations = (
         compaction: COMPACTIONS,
         effort: EFFORT_CHOICES,
         history: HISTORY_VARIANTS,
+        runMode: RUN_MODES,
         selection: SELECTIONS,
+        sendMode: SEND_MODES,
         stored: STORED_PARTS,
         tools: TOOL_SURFACES,
       });
@@ -325,70 +389,149 @@ const dimensionsOf = (combination: ChatCombination): readonly string[] => [
   combination.tools,
   combination.attempt,
   combination.selection,
+  combination.sendMode,
+  combination.runMode,
 ];
 
 /**
- * A subset of `combinations` in which every pair of values of every two
- * dimensions that some combination takes appears at least once (all-pairs),
- * chosen greedily and deterministically.
+ * A subset of `combinations` in which every combination of values of every
+ * `strength` dimensions that some combination takes appears at least once (a
+ * covering array: all-pairs at 2, all-triples at 3). Built greedily: each
+ * step takes, from a fixed-seed sample of the candidates, the one covering the
+ * most tuples not yet covered, or else the first combination holding the
+ * first uncovered tuple, so it always ends and always yields the same set.
  */
-export const pairwiseCover = <Combination>(
+const coveringArray = <Combination>(
   combinations: readonly Combination[],
   valuesOf: (combination: Combination) => readonly string[],
+  strength: number,
 ): Combination[] => {
-  const pairIds = new Map<string, number>();
-  const pairsOf = combinations.map((combination) => {
-    const values = valuesOf(combination);
-    const ids: number[] = [];
-    for (let left = 0; left < values.length; left += 1) {
-      for (let right = left + 1; right < values.length; right += 1) {
-        const pair = `${String(left)}=${values[left] ?? ""}|${String(right)}=${values[right] ?? ""}`;
-        let id = pairIds.get(pair);
-        if (id === undefined) {
-          id = pairIds.size;
-          pairIds.set(pair, id);
-        }
-        ids.push(id);
+  const encoded = combinations.map(valuesOf);
+  const width = encoded[0]?.length ?? 0;
+  // Each dimension's values, by index.
+  const indexes = Array.from(
+    { length: width },
+    () => new Map<string, number>(),
+  );
+  const vectors = encoded.map((values) =>
+    values.map((value, dimension) => {
+      const index = indexes[dimension] ?? panic("A dimension has values");
+      let id = index.get(value);
+      if (id === undefined) {
+        id = index.size;
+        index.set(value, id);
+      }
+      return id;
+    }),
+  );
+  const sizes = indexes.map((index) => index.size);
+  // Every set of `strength` dimensions, with the offset of its tuples.
+  const groups: { dimensions: number[]; offset: number }[] = [];
+  let tupleCount = 0;
+  const choose = (start: number, picked: number[]) => {
+    if (picked.length === strength) {
+      groups.push({ dimensions: picked, offset: tupleCount });
+      tupleCount += picked.reduce(
+        (count, dimension) => count * (sizes[dimension] ?? 1),
+        1,
+      );
+      return;
+    }
+    for (let dimension = start; dimension < width; dimension += 1) {
+      choose(dimension + 1, [...picked, dimension]);
+    }
+  };
+  choose(0, []);
+  const tuplesOf = (vector: readonly number[]): number[] =>
+    groups.map(({ dimensions, offset }) => {
+      let id = 0;
+      for (const dimension of dimensions) {
+        id = id * (sizes[dimension] ?? 1) + (vector[dimension] ?? 0);
+      }
+      return offset + id;
+    });
+  // The tuples some combination takes, and the first combination taking each.
+  const firstHolder = new Int32Array(tupleCount).fill(-1);
+  for (const [position, vector] of vectors.entries()) {
+    for (const tuple of tuplesOf(vector)) {
+      if (firstHolder[tuple] === -1) {
+        firstHolder[tuple] = position;
       }
     }
-    return ids;
-  });
-  const uncovered = new Uint8Array(pairIds.size).fill(1);
-  let remaining = pairIds.size;
+  }
+  const uncovered = new Uint8Array(tupleCount);
+  let remaining = 0;
+  for (let tuple = 0; tuple < tupleCount; tuple += 1) {
+    if (firstHolder[tuple] !== -1) {
+      uncovered[tuple] = 1;
+      remaining += 1;
+    }
+  }
+  // A Park-Miller generator: fixed, so the cover is the same every run.
+  let seed = 20_260_930;
+  const nextIndex = (): number => {
+    seed = (seed * 48_271) % 2_147_483_647;
+    return seed % vectors.length;
+  };
   const chosen: Combination[] = [];
+  /** Chooses the combination at `position`; returns how many tuples it
+   *  newly covers. */
+  const take = (position: number): number => {
+    const combination = combinations[position];
+    const vector = vectors[position];
+    if (combination === undefined || vector === undefined) {
+      return panic("A chosen position names a combination");
+    }
+    chosen.push(combination);
+    let newlyCovered = 0;
+    for (const tuple of tuplesOf(vector)) {
+      if (uncovered[tuple] === 1) {
+        uncovered[tuple] = 0;
+        newlyCovered += 1;
+      }
+    }
+    return newlyCovered;
+  };
+  let scan = 0;
   while (remaining > 0) {
     let best = -1;
     let bestGain = 0;
-    for (const [index, ids] of pairsOf.entries()) {
+    const samples = Math.min(COVERING_SAMPLES, vectors.length);
+    for (let sample = 0; sample < samples; sample += 1) {
+      const position =
+        vectors.length <= COVERING_SAMPLES ? sample : nextIndex();
       let gain = 0;
-      for (const id of ids) {
-        gain += uncovered[id] ?? 0;
+      for (const tuple of tuplesOf(vectors[position] ?? [])) {
+        gain += uncovered[tuple] ?? 0;
       }
       if (gain > bestGain) {
-        best = index;
+        best = position;
         bestGain = gain;
       }
     }
-    const combination = combinations[best];
-    const ids = pairsOf[best];
-    if (combination === undefined || ids === undefined) {
-      return panic("Every uncovered pair comes from some combination");
-    }
-    chosen.push(combination);
-    for (const id of ids) {
-      if (uncovered[id] === 1) {
-        uncovered[id] = 0;
-        remaining -= 1;
+    if (best === -1) {
+      while (uncovered[scan] !== 1) {
+        scan += 1;
       }
+      best = firstHolder[scan] ?? panic("An uncovered tuple has a holder");
     }
+    remaining -= take(best);
   }
   return chosen;
 };
 
-/** The chat combinations' all-pairs cover. */
+/** How many candidates each step of `coveringArray` weighs. */
+const COVERING_SAMPLES = 2000;
+
+/** The chat combinations' all-pairs cover, which pull requests run. */
 export const pairwiseChatCombinations = (
   combinations: readonly ChatCombination[],
-): ChatCombination[] => pairwiseCover(combinations, dimensionsOf);
+): ChatCombination[] => coveringArray(combinations, dimensionsOf, 2);
+
+/** The chat combinations' all-triples cover, which the nightly job runs. */
+export const threeWiseChatCombinations = (
+  combinations: readonly ChatCombination[],
+): ChatCombination[] => coveringArray(combinations, dimensionsOf, 3);
 
 /** The combinations a shard `index` of `count` runs: every `count`th. */
 export const shardOf = <Combination>(

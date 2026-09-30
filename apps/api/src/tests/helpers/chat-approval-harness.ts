@@ -360,9 +360,7 @@ export const createApprovalHarness = ({
       // (TanStack mirrors the forwarded props as `data`).
       const contextMatterIds = [...sources.contextMatterIds];
       Object.assign(body.forwardedProps, { contextMatterIds });
-      if (typeof body.data === "object" && body.data !== null) {
-        Object.assign(body.data, { contextMatterIds });
-      }
+      Object.assign(body.data, { contextMatterIds });
     }
     const ctx = asTestRaw<SendMessageCtx>({
       body,

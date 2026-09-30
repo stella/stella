@@ -2,6 +2,8 @@ import type { ContentPart } from "@tanstack/ai";
 import type { UIMessage } from "@tanstack/ai-client";
 import { panic } from "better-result";
 
+import type { ChatSendMode } from "@stll/anonymize-chat";
+
 import { ASK_USER_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
 import type { SafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -108,6 +110,7 @@ type WebChatModules = {
   sendThreadChatMessage: (
     runtime: WebChatRuntime,
     message: { content: string | ContentPart[]; id: string },
+    options?: { body?: { sendMode?: ChatSendMode | undefined } | undefined },
   ) => Promise<void>;
 };
 
@@ -270,10 +273,18 @@ export type WebChatClient = {
     requestActive: boolean;
     stopStatus: WebChatSnapshot["stop"]["status"];
   };
-  sendUserMessage: (id: string, text: string) => Promise<void>;
+  sendUserMessage: (
+    id: string,
+    text: string,
+    options?: { sendMode?: ChatSendMode | undefined },
+  ) => Promise<void>;
   /** Sends a message whose content is parts, as the composer sends one with
    *  attachments (`buildChatRequestMessage`). */
-  sendUserContent: (id: string, content: ContentPart[]) => Promise<void>;
+  sendUserContent: (
+    id: string,
+    content: ContentPart[],
+    options?: { sendMode?: ChatSendMode | undefined },
+  ) => Promise<void>;
   /** Sends a message and returns once the live view satisfies `until`,
    *  without waiting for the turn to end. */
   startUserMessage: (
@@ -436,15 +447,28 @@ export const createWebChatClient = async ({
         stopStatus: stop.status,
       };
     },
-    sendUserMessage: async (id, text) => {
+    sendUserMessage: async (id, text, options) => {
       await act(
         async () =>
-          await web.sendThreadChatMessage(runtime, { content: text, id }),
+          await web.sendThreadChatMessage(
+            runtime,
+            { content: text, id },
+            options?.sendMode === undefined
+              ? undefined
+              : { body: { sendMode: options.sendMode } },
+          ),
       );
     },
-    sendUserContent: async (id, content) => {
+    sendUserContent: async (id, content, options) => {
       await act(
-        async () => await web.sendThreadChatMessage(runtime, { content, id }),
+        async () =>
+          await web.sendThreadChatMessage(
+            runtime,
+            { content, id },
+            options?.sendMode === undefined
+              ? undefined
+              : { body: { sendMode: options.sendMode } },
+          ),
       );
     },
     runClientTool: async (toolCallId, tool, output) => {
