@@ -133,7 +133,9 @@ export const createSanctionsMatcherPool = ({
         }
         failed.resolve(null);
       };
-      const timer = setTimeout(fail, options?.deadlineMs ?? deadlineMs);
+      const durationMs = options?.deadlineMs ?? deadlineMs;
+      const expiresAt = performance.now() + durationMs;
+      const timer = setTimeout(fail, durationMs);
       const work = async (): Promise<T | null> => {
         leased = await acquire(controller.signal);
         if (leased === null || controller.signal.aborted) {
@@ -219,7 +221,7 @@ export const createSanctionsMatcherPool = ({
         const result = await Result.tryPromise(
           async () => await operation(session),
         );
-        if (result.isErr()) {
+        if (result.isErr() || performance.now() >= expiresAt) {
           fail();
           return null;
         }

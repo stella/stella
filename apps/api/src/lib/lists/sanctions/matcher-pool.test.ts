@@ -152,13 +152,13 @@ if (response?.status !== "screened" || response.result.possibleMatches.length !=
       target: "bun",
     });
     expect(parentBuild.success).toBe(true);
-    const process = Bun.spawn({
+    const child = Bun.spawn({
       cmd: ["bun", path.join(parent, "entrypoint.js")],
-      env: { PATH: Bun.env["PATH"] ?? "", STELLA_WORKER_DIR: workers },
+      env: { ...process.env, STELLA_WORKER_DIR: workers },
       stderr: "pipe",
       stdout: "pipe",
     });
-    expect(await process.exited).toBe(0);
+    expect(await child.exited).toBe(0);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
