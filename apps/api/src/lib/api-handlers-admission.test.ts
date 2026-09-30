@@ -141,9 +141,11 @@ describe("finite HTTP action admission", () => {
             "private implementation detail",
           );
           if (reason === "period_exhausted" || reason === "not_enabled") {
-            expect(body.contactUrl).toBe(env.ACTION_LIMIT_CONTACT_URL);
+            expect(body).toMatchObject({
+              contactUrl: env.ACTION_LIMIT_CONTACT_URL,
+            });
           } else {
-            expect(body.contactUrl).toBeUndefined();
+            expect(body).not.toHaveProperty("contactUrl");
           }
           expect(calls).toBe(0);
         }

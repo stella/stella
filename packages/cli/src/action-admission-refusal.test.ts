@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
+import * as v from "valibot";
 
 import { respondToMcpLifecycle } from "../tests/mcp-test-lifecycle.js";
 import {
@@ -72,8 +73,12 @@ const render = async (
       token: undefined,
     },
     {
-      stderr: (text) => stderr.push(text),
-      stdout: (text) => stdout.push(text),
+      stderr: (text) => {
+        stderr.push(text);
+      },
+      stdout: (text) => {
+        stdout.push(text);
+      },
     },
   );
   return { stderr: stderr.join(""), stdout: stdout.join(""), exit };
@@ -136,8 +141,14 @@ for (const code of Object.keys(EXPECTED_EXITS)) {
         if (request.method === "GET" || request.method === "PUT") {
           return Response.json(fixture, { status: contract.status });
         }
-        const body: { id: number; method: string; params?: { name?: string } } =
-          await request.json();
+        const body = v.parse(
+          v.object({
+            id: v.optional(v.union([v.string(), v.number()])),
+            method: v.string(),
+            params: v.optional(v.object({ name: v.optional(v.string()) })),
+          }),
+          await request.json(),
+        );
         const lifecycle = respondToMcpLifecycle(body);
         if (lifecycle !== null) {
           return lifecycle;
@@ -161,24 +172,23 @@ for (const code of Object.keys(EXPECTED_EXITS)) {
         readResource({ ...options, uri: "fixture://reference" }),
       ]);
       for (const failure of failures) {
-        expect(Result.isError(failure)).toBe(true);
-        if (Result.isOk(failure)) {
+        expect(failure.status).toBe("error");
+        if (failure.status !== "error") {
           throw new TypeError("Expected admission failure");
         }
-        expect(failure.error.admission).toEqual(refusal);
-        expect(mapClientErrorExit(failure.error)).toBe(
-          EXPECTED_EXITS[refusal.code],
-        );
+        const error = failure.error;
+        expect(error.admission).toEqual(refusal);
+        expect(mapClientErrorExit(error)).toBe(EXPECTED_EXITS[refusal.code]);
         expect(
           await render((context, writers) =>
-            renderClientError({ context, writers, error: failure.error }),
+            renderClientError({ context, writers, error }),
           ),
         ).toEqual(tool);
         const httpJson = await render((context, writers) =>
           renderClientError({
             context,
             writers,
-            error: failure.error,
+            error,
             format: "json",
           }),
         );
@@ -188,7 +198,7 @@ for (const code of Object.keys(EXPECTED_EXITS)) {
           token: options.token,
           env: { XDG_CACHE_HOME: `/tmp/stella-refusal-${Bun.randomUUIDv7()}` },
           force: true,
-          fetchRaw: async () => Result.err(failure.error),
+          fetchRaw: async () => Result.err(error),
           fetchLatestVersion: async () => undefined,
         });
         expect(refresh).toEqual({ status: "admission-refused", refusal });
@@ -224,7 +234,7 @@ for (const code of Object.keys(EXPECTED_EXITS)) {
         expect(compatibility.error.admission).toEqual(refusal);
       }
     } finally {
-      server.stop(true);
+      await server.stop(true);
     }
   });
 }

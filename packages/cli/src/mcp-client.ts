@@ -17,7 +17,7 @@ import { Result, TaggedError, type TaggedErrorClass } from "better-result";
 
 import {
   readHttpActionAdmissionRefusal,
-  type ActionAdmissionRefusal,
+  type CliActionAdmissionRefusal,
 } from "./action-admission-refusal.js";
 import { CLI_MINIMUM_HEADER } from "./cli-version-nudge.js";
 import { CLI_VERSION } from "./generated/cli-version.js";
@@ -75,7 +75,7 @@ export class McpClientError extends McpClientErrorBase<{
   kind: "transport" | "http" | "rpc";
   httpStatus?: number;
   rpcCode?: number;
-  admission?: ActionAdmissionRefusal;
+  admission?: CliActionAdmissionRefusal;
 }> {}
 
 const mcpUrl = (serverUrl: string): string =>
@@ -102,7 +102,7 @@ const requestMethod = (init: RequestInit | undefined): string | undefined => {
 
 const toClientError = (
   cause: unknown,
-  admission?: ActionAdmissionRefusal,
+  admission?: CliActionAdmissionRefusal,
 ): McpClientError => {
   if (admission !== undefined) {
     return new McpClientError({
@@ -155,7 +155,7 @@ const runMcpOperation = async <T>({
 }): Promise<
   Result<{ value: T; evidence?: ResponseEvidence }, McpClientError>
 > => {
-  let admission: ActionAdmissionRefusal | undefined;
+  let admission: CliActionAdmissionRefusal | undefined;
   let evidencePromise: Promise<ResponseEvidence | undefined> | undefined;
   const observedFetch: FetchLike = async (input, init) => {
     const response = await fetch(input, init);

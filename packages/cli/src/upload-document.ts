@@ -7,7 +7,7 @@ import {
   actionAdmissionRefusalLines,
   readActionAdmissionRefusal,
   readHttpActionAdmissionRefusal,
-  type ActionAdmissionRefusal,
+  type CliActionAdmissionRefusal,
 } from "./action-admission-refusal.js";
 import { inferFileMimeType } from "./file-mime-type.js";
 import { formatCapabilityCommand } from "./generate-capability-tree.js";
@@ -76,7 +76,7 @@ export type UploadFailure =
   | {
       type: "put";
       message: string;
-      admission?: ActionAdmissionRefusal;
+      admission?: CliActionAdmissionRefusal;
       cleanupWarning: string | undefined;
     }
   | {
@@ -103,7 +103,7 @@ export type UploadDocumentDependencies = {
     bytes: Uint8Array;
     headers: Readonly<Record<string, string>>;
     url: string;
-  }) => Promise<Result<void, string | ActionAdmissionRefusal>>;
+  }) => Promise<Result<void, string | CliActionAdmissionRefusal>>;
   readLocalFile: (filePath: string) => Promise<Result<LocalFile, string>>;
 };
 
@@ -180,7 +180,7 @@ const putPresignedObject = async ({
   bytes: Uint8Array;
   headers: Readonly<Record<string, string>>;
   url: string;
-}): Promise<Result<void, string | ActionAdmissionRefusal>> => {
+}): Promise<Result<void, string | CliActionAdmissionRefusal>> => {
   const parsedUrl = Result.try(() => new URL(url));
   if (
     Result.isError(parsedUrl) ||

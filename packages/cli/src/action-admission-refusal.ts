@@ -9,7 +9,7 @@ import type { OutputFormat } from "./output.js";
 const isActionAdmissionCode = (code: unknown): code is ActionAdmissionCode =>
   typeof code === "string" && Object.hasOwn(ACTION_ADMISSION_REFUSALS, code);
 
-export type ActionAdmissionRefusal = {
+export type CliActionAdmissionRefusal = {
   code: ActionAdmissionCode;
   message: string;
   hint: string;
@@ -23,7 +23,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 /** Both HTTP bodies and MCP envelopes carry the same admission contract. */
 export const readActionAdmissionRefusal = (
   payload: unknown,
-): ActionAdmissionRefusal | undefined => {
+): CliActionAdmissionRefusal | undefined => {
   if (!isRecord(payload)) {
     return undefined;
   }
@@ -52,15 +52,15 @@ export const readActionAdmissionRefusal = (
 
 export const readHttpActionAdmissionRefusal = async (
   response: Response,
-): Promise<ActionAdmissionRefusal | undefined> => {
-  const body = await Result.tryPromise((): Promise<unknown> =>
-    response.clone().json(),
+): Promise<CliActionAdmissionRefusal | undefined> => {
+  const body = await Result.tryPromise(
+    async (): Promise<unknown> => await response.clone().json(),
   );
   return Result.isOk(body) ? readActionAdmissionRefusal(body.value) : undefined;
 };
 
 export const actionAdmissionRefusalLines = (
-  refusal: ActionAdmissionRefusal,
+  refusal: CliActionAdmissionRefusal,
 ): string[] => [
   `error: ${refusal.message}`,
   `code: ${refusal.code}`,
@@ -76,7 +76,7 @@ export const actionAdmissionRefusalOutput = ({
   format,
   requestId,
 }: {
-  refusal: ActionAdmissionRefusal;
+  refusal: CliActionAdmissionRefusal;
   format?: OutputFormat | undefined;
   requestId?: string;
 }): string =>

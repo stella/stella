@@ -12,7 +12,7 @@ import { Result } from "better-result";
 
 import {
   actionAdmissionRefusalOutput,
-  type ActionAdmissionRefusal,
+  type CliActionAdmissionRefusal,
 } from "./action-admission-refusal.js";
 import { defaultConfigDir } from "./auth/config-dir.js";
 import { resolveAccessToken } from "./auth/resolve-access-token.js";
@@ -91,7 +91,7 @@ const resolvePreamble = async (
 const stricliProcess = process as unknown as StricliProcess & typeof process;
 
 const refuseAdmission = (
-  refusal: ActionAdmissionRefusal,
+  refusal: CliActionAdmissionRefusal,
   argv: readonly string[],
 ): void => {
   const outputIndex = argv.indexOf("--output");

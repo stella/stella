@@ -4,7 +4,7 @@ import * as v from "valibot";
 import packageJson from "../package.json" with { type: "json" };
 import {
   readHttpActionAdmissionRefusal,
-  type ActionAdmissionRefusal,
+  type CliActionAdmissionRefusal,
 } from "./action-admission-refusal.js";
 import {
   AUTH_FETCH_TIMEOUT_MS,
@@ -85,7 +85,7 @@ const CompatibilityCheckErrorBase: TaggedErrorClass<"CompatibilityCheckError"> =
 
 export class CompatibilityCheckError extends CompatibilityCheckErrorBase<{
   message: string;
-  admission?: ActionAdmissionRefusal;
+  admission?: CliActionAdmissionRefusal;
   cause?: unknown;
 }> {}
 

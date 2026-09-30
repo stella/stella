@@ -18,7 +18,7 @@ import { Result } from "better-result";
 import { access, readFile } from "node:fs/promises";
 import { Temporal } from "temporal-polyfill/full";
 
-import type { ActionAdmissionRefusal } from "./action-admission-refusal.js";
+import type { CliActionAdmissionRefusal } from "./action-admission-refusal.js";
 import { TOOL_ANNOTATIONS } from "./annotations.js";
 import { loadBakedCapabilityCatalog } from "./capability-catalog-load.js";
 import { fetchLatestCliVersion } from "./cli-release-channel.js";
@@ -230,7 +230,7 @@ export const resolveCommandTree = async ({
 export type RefreshOutcome =
   | { status: "skipped"; reason: "no-cache" | "fresh" }
   | { status: "failed"; warning: string }
-  | { status: "admission-refused"; refusal: ActionAdmissionRefusal }
+  | { status: "admission-refused"; refusal: CliActionAdmissionRefusal }
   | { status: "refreshed"; deltaEmpty: boolean; nudge?: string };
 
 type FetchRaw = () => Promise<Result<RawToolsList, McpClientError>>;

@@ -44,6 +44,19 @@ describe("period identity coverage", () => {
       if (file === "lib/api-handlers.ts") {
         admissionNames.add("admit");
       }
+      const discoverAdmissionDefaults = (node: ts.Node): void => {
+        if (
+          ts.isBindingElement(node) &&
+          ts.isIdentifier(node.name) &&
+          node.initializer &&
+          ts.isIdentifier(node.initializer) &&
+          admissionNames.has(node.initializer.text)
+        ) {
+          admissionNames.add(node.name.text);
+        }
+        ts.forEachChild(node, discoverAdmissionDefaults);
+      };
+      discoverAdmissionDefaults(tree);
       const visit = (node: ts.Node): void => {
         if (
           ts.isCallExpression(node) &&
