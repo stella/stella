@@ -4,6 +4,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 
 import { usePublicSignInRequest } from "@/components/public-sign-in-request";
+import { publicKnowledgeSource } from "@/features/knowledge/public/public-knowledge";
 import { KnowledgeLandingView } from "@/features/knowledge/views/knowledge-landing-view";
 import type { KnowledgeLandingCard } from "@/features/knowledge/views/knowledge-landing-view";
 import { useMountEffect } from "@/hooks/use-effect";
@@ -42,6 +43,8 @@ export const PublicKnowledgeLanding = ({
 }: PublicKnowledgeLandingProps) => {
   const t = useTranslations();
   const requestSignIn = usePublicSignInRequest();
+  const { available: templatesAvailable } =
+    publicKnowledgeSource.useCatalogueTemplatesAvailable();
 
   useMountEffect(() => {
     if (from !== undefined && requestSignIn !== null) {
@@ -51,6 +54,9 @@ export const PublicKnowledgeLanding = ({
 
   const cards: KnowledgeLandingCard[] = [];
   for (const section of knowledgeSections) {
+    if (section.key === "templates" && !templatesAvailable) {
+      continue;
+    }
     const content = {
       key: section.key,
       icon: section.icon,
