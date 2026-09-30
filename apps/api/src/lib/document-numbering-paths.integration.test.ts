@@ -514,7 +514,7 @@ describe("numbering paths preserve issued stamps across counter state", () => {
         panic("Duplicated matter has no reference");
       }
       const duplicateReference = duplicateMatter.reference;
-      expect(duplicateMatter?.reference).toBe(
+      expect(duplicateReference).toBe(
         scenario.ledger === "present"
           ? `PATH-${index}-DUP-002`
           : candidateReference,
@@ -556,10 +556,7 @@ describe("numbering paths preserve issued stamps across counter state", () => {
         .where(
           and(
             eq(documentReferenceCounters.organizationId, ids.orgA),
-            eq(
-              documentReferenceCounters.reference,
-              duplicateMatter?.reference ?? "",
-            ),
+            eq(documentReferenceCounters.reference, duplicateReference),
           ),
         );
       expect(destinationLedger?.lastValue).toBe(
@@ -571,9 +568,7 @@ describe("numbering paths preserve issued stamps across counter state", () => {
         ),
       );
       expect(sourceEntity.entityId).toBeTruthy();
-      if (duplicateMatter?.reference) {
-        testReferences.push(duplicateMatter.reference);
-      }
+      testReferences.push(duplicateReference);
     },
   );
 });
