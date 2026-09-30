@@ -861,7 +861,6 @@
     "apps/api/src/handlers/case-law/analysis/generate.ts": 1,
     "apps/api/src/handlers/case-law/ingestion/adapters/at-courts.ts": 1,
     "apps/api/src/handlers/case-law/ingestion/adapters/cz-nss.ts": 1,
-    "apps/api/src/handlers/case-law/ingestion/parsers/eu-ecj.ts": 1,
     "apps/api/src/handlers/case-law/ingestion/parsers/pl-courts.ts": 1,
     "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row-update.ts": 1,
     "apps/api/src/handlers/chat/file-thread-shared.ts": 1,
