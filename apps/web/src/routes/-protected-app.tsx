@@ -58,7 +58,6 @@ import type { InspectorTab } from "@/components/inspector/inspector-tabs-store";
 import { inspectorPaneWidthStorageKey } from "@/components/inspector/pane-width-storage";
 import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog";
 import { NotificationBell } from "@/components/notification-bell";
-import { QuickEntry } from "@/components/quick-entry";
 import { AIAvailabilityProvider } from "@/components/require-ai-key";
 import { SelfhostUpdateBanner } from "@/components/selfhost-update-banner";
 import { ShortcutEchoHud } from "@/components/shortcut-echo-hud";
@@ -90,6 +89,7 @@ import {
   workspacesNavigationOptions,
 } from "@/lib/workspaces/queries";
 import { shouldForceSidebarCollapsed } from "@/routes/-inspector-pane-width";
+import { QuickEntry } from "@/routes/-protected-app/-components/quick-entry";
 
 const LazyInspectorPanel = lazy(
   async () =>

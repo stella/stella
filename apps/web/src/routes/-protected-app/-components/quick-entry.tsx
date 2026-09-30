@@ -8,7 +8,7 @@ import { useQuickEntryStore } from "@/lib/workspaces/quick-entry-store";
 import { useQuickEntryHotkey } from "@/lib/workspaces/use-quick-entry-hotkey";
 
 const QuickEntryDialog = lazy(
-  async () => import("@/components/quick-entry-dialog"),
+  async () => import("@/routes/-protected-app/-components/quick-entry-dialog"),
 );
 
 export const QuickEntry = () => {

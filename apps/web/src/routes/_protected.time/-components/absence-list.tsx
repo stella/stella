@@ -209,7 +209,9 @@ export const AbsenceList = ({ review = false }: { review?: boolean }) => {
     ...organizationOptions(user.activeOrganizationId),
     enabled: review,
   });
-  const entries = query.data?.pages.flatMap((page) => page.items) ?? [];
+  const entries = query.isSuccess
+    ? query.data.pages.flatMap((page) => page.items)
+    : [];
   const memberName = (id: string | null) =>
     id === user.id
       ? (user.name ?? null)

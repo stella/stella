@@ -4,11 +4,11 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 
-import { AbsenceDialog } from "@/components/billing/absence-dialog";
-import { GlobalTimerConfirmation } from "@/components/billing/global-timer-confirmation";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { useQuickEntryStore } from "@/lib/workspaces/quick-entry-store";
+import { AbsenceDialog } from "@/routes/_protected.time/-components/absence-dialog";
+import { GlobalTimerConfirmation } from "@/routes/_protected.time/-components/global-timer-confirmation";
 
 export const MyDayActions = ({ date }: { date: string }) => {
   const t = useTranslations();

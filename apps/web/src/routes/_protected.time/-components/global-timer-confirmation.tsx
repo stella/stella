@@ -32,7 +32,6 @@ import {
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
 
-import { timerActivityOptions } from "@/components/billing/global-timer-confirmation.logic";
 import { QuickEntryRefusal } from "@/components/quick-entry-refusal";
 import {
   MatterCombobox,
@@ -44,6 +43,7 @@ import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
+import { toSafeId } from "@/lib/safe-id";
 import {
   globalTimeTimersKeys,
   globalTimeTimersOptions,
@@ -51,6 +51,7 @@ import {
 } from "@/lib/workspaces/queries/global-time-timers";
 import { myTimeEntriesKeys } from "@/lib/workspaces/queries/my-time-entries";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
+import { timerActivityOptions } from "@/routes/_protected.time/-components/global-timer-confirmation.logic";
 
 type Timer = Awaited<ReturnType<typeof listMyTimers>>["items"][number];
 
@@ -72,9 +73,11 @@ const TimerConfirmation = ({
   const [matter, setMatter] = useState<MatterOption | null>(null);
   const [description, setDescription] = useState(timer.description ?? "");
   const [detailsSaved, setDetailsSaved] = useState(false);
+  const selectedMatterId =
+    matter === null ? null : toSafeId<"workspace">(matter.id);
   const effectiveMatterId =
     activityGroup === TIME_ENTRY_ACTIVITY_GROUP.CLIENT
-      ? (timer.matterId ?? matter?.id ?? null)
+      ? (timer.matterId ?? selectedMatterId)
       : null;
   const confirmation = useMutation({
     mutationFn: async () => {
@@ -244,7 +247,9 @@ export const GlobalTimerConfirmation = () => {
     enabled: canRead && open,
   });
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const items = timers.data?.pages.flatMap((page) => page.items) ?? [];
+  const items = timers.isSuccess
+    ? timers.data.pages.flatMap((page) => page.items)
+    : [];
   const selected = items.find((timer) => timer.id === selectedId);
   if (!canRead) {
     return null;

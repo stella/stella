@@ -10,9 +10,6 @@ import { ChevronLeftIcon, ChevronRightIcon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
 
-import { MyDayActions } from "@/components/billing/my-day-actions";
-import { MyDayRow } from "@/components/billing/my-day-row";
-import { MyDayTotals } from "@/components/billing/my-day-totals";
 import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { useFormatter } from "@/i18n/formatting-context";
 import { authClient } from "@/lib/auth-client";
@@ -25,6 +22,9 @@ import {
 } from "@/lib/react-query";
 import { MEDIUM_DATE_FORMAT } from "@/lib/relative-time";
 import { myTimeEntriesInfiniteOptions } from "@/lib/workspaces/queries/my-time-entries";
+import { MyDayActions } from "@/routes/_protected.time/-components/my-day-actions";
+import { MyDayRow } from "@/routes/_protected.time/-components/my-day-row";
+import { MyDayTotals } from "@/routes/_protected.time/-components/my-day-totals";
 
 export const Route = createFileRoute("/_protected/time")({
   validateSearch: (search) => ({
