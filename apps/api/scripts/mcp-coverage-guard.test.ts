@@ -95,7 +95,7 @@ describe("parseExposure", () => {
         type: "capability",
         reason: "billing_admin",
         consumesServices,
-      };
+      } as const;
       expect(parseExposure(exposure)).toEqual(exposure);
     }
     for (const consumesServices of [undefined, null, "false", 0, {}]) {

@@ -51,7 +51,7 @@ export class ActionAdmissionError extends TaggedError("ActionAdmissionError")<{
   cause?: unknown;
 }> {}
 
-export type ActionAdmissionPolicy = {
+type ActionAdmissionPolicy = {
   organizationConcurrency: number;
   userConcurrency: number;
   leaseMs: number;

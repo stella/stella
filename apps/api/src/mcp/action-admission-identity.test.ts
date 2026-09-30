@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { ACTION_KINDS } from "@/api/lib/rate-limit/action-kinds";
+
 import { mcpActionPeriodIdentity } from "./action-admission-identity";
 
 describe("MCP action period identity", () => {
@@ -18,5 +20,11 @@ describe("MCP action period identity", () => {
   test("classifies service-consuming and own-data calls through admission kinds", () => {
     expect(mcpActionPeriodIdentity(true).actionKind).toBe("mcp.services/call");
     expect(mcpActionPeriodIdentity(false).actionKind).toBe("mcp.data/call");
+    for (const consumesServices of [true, false]) {
+      const identity = mcpActionPeriodIdentity(consumesServices);
+      expect(ACTION_KINDS[identity.actionKind].consumesServices).toBe(
+        consumesServices,
+      );
+    }
   });
 });

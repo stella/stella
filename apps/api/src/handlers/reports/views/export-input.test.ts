@@ -46,7 +46,9 @@ describe("report export service classification", () => {
       { ...body, mode: "invalid" },
       { ...body, format: "invalid" },
       { ...body, templateRef: { type: "stored", templateId: "invalid" } },
-      ...["false", 0, null].map((aiNarrative) => ({ ...body, aiNarrative })),
+      { ...body, aiNarrative: "false" },
+      { ...body, aiNarrative: 0 },
+      { ...body, aiNarrative: null },
     ];
     for (const input of malformed) {
       expect(() => classify(input)).toThrow(

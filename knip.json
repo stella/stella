@@ -37,6 +37,8 @@
         "src/lib/ocr-local/ocr-local-worker.ts!",
         "src/lib/ocr-searchable-pdf-worker.ts!",
         "scripts/*.ts",
+        // Compiler contract tests are checked by the API typecheck script.
+        "contracts/**/*.ts",
         "src/scripts/*.ts",
         "src/dev/register-mock-ai.ts",
         "src/lib/__fixtures__/*.ts",
