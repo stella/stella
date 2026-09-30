@@ -801,7 +801,7 @@ type FiniteHandlerGuard<TResult> = [Extract<TResult, Response>] extends [never]
 type ConfiguredFiniteHandlerGuard<TConfig, TResult> = TConfig extends {
   actionAdmission: "handler";
 }
-  ? FiniteHandlerGuard<NoInfer<TResult>>
+  ? NoInfer<FiniteHandlerGuard<TResult>>
   : unknown;
 
 type FiniteActionContext = SafeHandlerLogContext & {
@@ -889,7 +889,7 @@ export const admitFiniteAction = async function* <
   admit,
 }: FiniteActionOptions<TContext, TResult> & {
   handler: SafeHandlerFn<TContext, TResult> &
-    FiniteHandlerGuard<NoInfer<TResult>>;
+    NoInfer<FiniteHandlerGuard<TResult>>;
 }): SafeHandlerGenerator<TResult> {
   if (!env.FEATURE_ACTION_ADMISSION) {
     return yield* handler(ctx);
