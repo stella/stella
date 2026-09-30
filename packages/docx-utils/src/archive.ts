@@ -247,7 +247,13 @@ const loadDocxResult = async (
 export const loadDocx = async (
   buffer: ArrayBuffer | Uint8Array | Buffer,
   options: ArchiveOptions = {},
-): Promise<JSZip> => (await loadDocxResult(buffer, options)).unwrap();
+): Promise<JSZip> => {
+  const result = await loadDocxResult(buffer, options);
+  if (Result.isError(result)) {
+    return await Promise.reject(result.error);
+  }
+  return result.value;
+};
 
 export const loadDocxArchive = async (
   buffer: ArrayBuffer | Uint8Array | Buffer,
