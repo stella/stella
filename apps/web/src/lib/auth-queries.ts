@@ -2,26 +2,11 @@ import { queryOptions, type QueryClient } from "@tanstack/react-query";
 
 import { signalSessionChange } from "@/lib/account/session-signal";
 import { toAuthClientError } from "@/lib/errors/auth";
-import { resetKnowledgeCache } from "@/lib/knowledge/knowledge-cache";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 
 export const rootKeys = {
   session: ["session"],
   role: ["role"],
-};
-
-/**
- * Re-reads who is signed in after sign-in, a change of organization or any
- * other change of session. Knowledge read for the previous session goes
- * first, so the next one never renders it.
- */
-export const refreshAuthQueries = async (queryClient: QueryClient) => {
-  await resetKnowledgeCache(queryClient);
-  await Promise.all([
-    queryClient.refetchQueries({ queryKey: rootKeys.session, type: "all" }),
-    queryClient.refetchQueries({ queryKey: rootKeys.role, type: "all" }),
-  ]);
-  signalSessionChange();
 };
 
 /**
@@ -66,3 +51,15 @@ export const roleOptions = queryOptions({
   },
   staleTime: ROUTE_QUERY_STALE_TIME_MS,
 });
+
+/** Refreshes authentication queries; the host finishes frame cleanup after unmount. */
+export const refreshAuthQueries = async (queryClient: QueryClient) => {
+  // Load the reset owner at the call boundary; it reads these query options.
+  const { settleAuthTransition } = await import("@/lib/session-cache-guard");
+  await Promise.all([
+    queryClient.refetchQueries({ queryKey: rootKeys.session, type: "all" }),
+    queryClient.refetchQueries({ queryKey: rootKeys.role, type: "all" }),
+  ]);
+  await settleAuthTransition(queryClient);
+  signalSessionChange();
+};

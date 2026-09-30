@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { renderMatterReference } from "@stll/api-contract";
+import type { InvoiceDocumentType } from "@stll/invoicing";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -90,4 +91,23 @@ export const allocateNumber = async (
     seriesId: series.id,
     number,
   });
+};
+
+export const findDefaultNumberSeries = async (
+  tx: Transaction,
+  documentType: InvoiceDocumentType,
+) => {
+  const rows = await tx
+    .select({ id: numberSeries.id })
+    .from(numberSeries)
+    .where(
+      and(
+        eq(numberSeries.documentType, documentType),
+        eq(numberSeries.isDefault, true),
+        isNull(numberSeries.archivedAt),
+        sql`${numberSeries.organizationId} = current_setting('app.organization_id', true)`,
+      ),
+    )
+    .limit(1);
+  return rows.at(0);
 };

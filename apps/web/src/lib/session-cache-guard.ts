@@ -1,8 +1,11 @@
 import { hashKey } from "@tanstack/react-query";
-import type { Query, QueryClient } from "@tanstack/react-query";
+import type { Query, QueryClient, QueryKey } from "@tanstack/react-query";
 import { redirect } from "@tanstack/react-router";
 
-import { rootKeys } from "@/lib/auth-queries";
+import { publicKnowledgeKeys } from "@/features/knowledge/public/public-knowledge-keys";
+import { rootKeys, sessionOptions } from "@/lib/auth-queries";
+import { detached } from "@/lib/detached";
+import { memberKnowledgeKeys } from "@/lib/knowledge/knowledge-cache";
 import { isAuthFlowPathname } from "@/lib/redirect";
 
 /**
@@ -18,9 +21,164 @@ type ReloadDocumentAt = (href: string) => void;
 // Clients whose next page loads as a new document, with how to load it.
 const freshDocumentPending = new WeakMap<QueryClient, ReloadDocumentAt>();
 
-const SESSION_QUERY_HASH = hashKey(rootKeys.session);
+const isSessionQuery = ({ queryHash }: Pick<Query, "queryHash">) =>
+  queryHash === hashKey(rootKeys.session);
 
-const isSessionQuery = (query: Query) => query.queryHash === SESSION_QUERY_HASH;
+type TransitionPolicy = "organization" | "identity";
+type TransitionState = {
+  visitor: string;
+  lastMember: string | undefined;
+  pending: Promise<void>;
+} & (
+  | { phase: "settled" }
+  | { phase: "awaiting-frame"; policy: TransitionPolicy }
+);
+const transitions = new WeakMap<QueryClient, TransitionState>();
+const authFlowPages = new WeakMap<QueryClient, () => boolean>();
+
+const sessionVisitor = (session: unknown): string => {
+  const userId = signedInUserId(session);
+  if (userId === undefined) {
+    return "anonymous";
+  }
+  const organizationId =
+    typeof session === "object" &&
+    session !== null &&
+    "session" in session &&
+    typeof session.session === "object" &&
+    session.session !== null &&
+    "activeOrganizationId" in session.session &&
+    typeof session.session.activeOrganizationId === "string"
+      ? session.session.activeOrganizationId
+      : "";
+  return `member:${userId}:${organizationId}`;
+};
+
+const hasPrefix = (query: Query, prefix: QueryKey) =>
+  prefix.every((part, index) => query.queryKey[index] === part);
+
+const memberIdentity = (visitor: string) =>
+  visitor.startsWith("member:")
+    ? visitor.slice(0, visitor.lastIndexOf(":"))
+    : undefined;
+
+const transitionPolicy = (
+  current: TransitionState,
+  visitor: string,
+): TransitionPolicy =>
+  memberIdentity(visitor) !== undefined &&
+  (current.lastMember === undefined ||
+    current.lastMember === memberIdentity(visitor))
+    ? "organization"
+    : "identity";
+
+const cleanup = async (
+  queryClient: QueryClient,
+  predicate: (query: Query) => boolean,
+) => {
+  const pending = queryClient.cancelQueries({ predicate });
+  queryClient.removeQueries({ predicate });
+  await pending;
+};
+
+const removedBy = (policy: TransitionPolicy) => (query: Query) => {
+  if (hasPrefix(query, publicKnowledgeKeys.all)) {
+    return false;
+  }
+  return policy === "organization"
+    ? !hasPrefix(query, rootKeys.session) && !hasPrefix(query, rootKeys.role)
+    : !isSessionQuery(query);
+};
+
+const observeAuthTransition = async (
+  queryClient: QueryClient,
+  refreshKnowledge = false,
+) => {
+  const session: unknown = queryClient.getQueryData(sessionOptions.queryKey);
+  if (
+    signedInUserId(session) === undefined &&
+    authFlowPages.get(queryClient)?.()
+  ) {
+    // Auth steps retain the working cache for a returning member, but no
+    // member Knowledge or outstanding Knowledge read survives a null session.
+    await cleanup(queryClient, (query) =>
+      hasPrefix(query, memberKnowledgeKeys.all()),
+    );
+    return;
+  }
+  const visitor = sessionVisitor(session);
+  const current = transitions.get(queryClient);
+  if (current === undefined) {
+    transitions.set(queryClient, {
+      visitor,
+      lastMember: memberIdentity(visitor),
+      phase: "settled",
+      pending: Promise.resolve(),
+    });
+  } else if (current.visitor !== visitor) {
+    const policy =
+      current.phase === "awaiting-frame" && current.policy === "identity"
+        ? "identity"
+        : transitionPolicy(current, visitor);
+    const pending = cleanup(queryClient, removedBy(policy));
+    transitions.set(queryClient, {
+      visitor,
+      lastMember: memberIdentity(visitor) ?? current.lastMember,
+      phase: "awaiting-frame",
+      policy,
+      pending,
+    });
+    await pending;
+    return;
+  } else {
+    await current.pending;
+  }
+  if (refreshKnowledge) {
+    await cleanup(queryClient, (query) =>
+      hasPrefix(query, memberKnowledgeKeys.all()),
+    );
+  }
+};
+
+/** Refresh cleanup; completion of a frame change also requires its unmount barrier. */
+export const settleAuthTransition = async (queryClient: QueryClient) => {
+  await observeAuthTransition(queryClient, true);
+};
+
+/** Called after the host has replaced the previous frame with its skeleton. */
+export const resetAuthTransition = async (
+  queryClient: QueryClient,
+  visitor: string,
+) => {
+  const current = transitions.get(queryClient);
+  if (current === undefined) {
+    transitions.set(queryClient, {
+      visitor,
+      lastMember: memberIdentity(visitor),
+      phase: "settled",
+      pending: Promise.resolve(),
+    });
+    return;
+  }
+  if (current.visitor === visitor && current.phase === "settled") {
+    await current.pending;
+    return;
+  }
+  const policy =
+    current.visitor === visitor && current.phase === "awaiting-frame"
+      ? current.policy
+      : transitionPolicy(current, visitor);
+  // Observers may have rebuilt queries after the early session cleanup.
+  // This pass is deliberately not deduplicated against that earlier pass.
+  const pending = cleanup(queryClient, removedBy(policy));
+  transitions.set(queryClient, {
+    visitor,
+    lastMember: memberIdentity(visitor) ?? current.lastMember,
+    phase: "settled",
+    pending,
+  });
+  await pending;
+};
 
 /**
  * The signed-in user's id in a cached session, if there is one.
@@ -54,17 +212,29 @@ export const installSessionCacheGuard = (
     reloadDocumentAt,
   }: SessionCacheGuardOptions,
 ) => {
+  authFlowPages.set(queryClient, isAuthFlowPage);
+  const initial = queryClient.getQueryState(sessionOptions.queryKey);
+  if (initial?.status === "success" && !transitions.has(queryClient)) {
+    const visitor = sessionVisitor(initial.data);
+    transitions.set(queryClient, {
+      visitor,
+      lastMember: memberIdentity(visitor),
+      phase: "settled",
+      pending: Promise.resolve(),
+    });
+  }
   // Kept once the session ends, so the next sign-in can be told apart.
-  let cachedFor: string | undefined;
+  let cachedFor = signedInUserId(initial?.data);
   return queryClient.getQueryCache().subscribe((event) => {
     if (event.type !== "updated" || event.action.type !== "success") {
       return;
     }
-    if (event.query.queryHash !== SESSION_QUERY_HASH) {
+    if (!isSessionQuery(event.query)) {
       return;
     }
     const session: unknown = event.query.state.data;
     const userId = signedInUserId(session);
+    detached(observeAuthTransition(queryClient), "session-cache.transition");
     if (userId === undefined) {
       return;
     }
@@ -73,8 +243,6 @@ export const installSessionCacheGuard = (
     if (previous === undefined || previous === userId) {
       return;
     }
-    // Removing a query also cancels its read in flight.
-    queryClient.removeQueries({ predicate: (query) => !isSessionQuery(query) });
     freshDocumentPending.set(queryClient, reloadDocumentAt);
     if (!isAuthFlowPage()) {
       reloadDocument();

@@ -524,6 +524,20 @@ type Messages = {
     "noActiveTimer": "No active timer";
     "noEntries": "No time entries for this period";
     "nonBillable": "Non-billable";
+    "quickEntry": {
+      "entrySaved": "Time entry saved";
+      "expenseSaved": "Expense saved";
+      "expenseTitle": "Add expense";
+      "futureDate": "Choose today or an earlier date.";
+      "invalidDate": "Choose a valid work date.";
+      "minimumUnit": "Time is rounded up to the minimum billing unit.";
+      "narrativeRequired": "Add a description before saving time.";
+      "outsideEditWindow": "This date is outside the editing window.";
+      "periodLocked": "This month is locked.";
+      "saveAndAddExpense": "Save and add expense";
+      "saveAndNew": "Save and add another";
+      "viewDay": "View day";
+    };
     "rates": {
       "addRate": "Add rate";
       "createRateTable": "Create rate table";
@@ -4330,6 +4344,20 @@ type Messages = {
       "renameDescription": "Members will see the new name immediately.";
       "renameTitle": "Rename organization";
       "renameTypeToConfirm": "Type the new name to confirm: {name}";
+      "timePolicy": {
+        "description": "Set time rounding, editing limits and monthly locks.";
+        "editWindow": "Editing window (days)";
+        "editWindowHelp": "Zero allows edits only on the work date.";
+        "invalidEditWindow": "Enter a whole number of days, zero or more.";
+        "invalidLockedMonth": "Choose a completed month.";
+        "invalidMinimumUnit": "Choose a time unit that divides 60 minutes.";
+        "lockedThrough": "Locked through";
+        "lockedThroughHelp": "Entries in this month and earlier months cannot be edited.";
+        "minimumUnit": "Minimum time unit";
+        "minimumUnitHelp": "Time is billed in multiples of this many minutes.";
+        "narrativeRequired": "Require a narrative";
+        "title": "Time policy";
+      };
       "usage": "Usage";
       "usageDescription": "Usage limits and entitlement state for this organisation";
       "usageEmptyDescription": "Configure a usage entitlement to enable metered AI features for this organisation.";

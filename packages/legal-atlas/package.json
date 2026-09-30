@@ -54,6 +54,10 @@
     "./sk-provision-citation-profile": {
       "types": "./src/sk-provision-citation-profile.ts",
       "import": "./src/sk-provision-citation-profile.ts"
+    },
+    "./sk-document-fetch-diagnostics": {
+      "types": "./src/sk-document-fetch-diagnostics.ts",
+      "import": "./src/sk-document-fetch-diagnostics.ts"
     }
   },
   "scripts": {

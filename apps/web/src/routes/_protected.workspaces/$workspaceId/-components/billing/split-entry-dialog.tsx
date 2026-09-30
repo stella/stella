@@ -10,8 +10,8 @@ import { Label } from "@stll/ui/label";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
-import { MatterCombobox } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/matter-combobox";
-import { useSplitTimeEntry } from "@/routes/_protected.workspaces/$workspaceId/-mutations/time-entries";
+import { MatterCombobox } from "@/components/billing/matter-combobox";
+import { useSplitTimeEntry } from "@/lib/workspaces/mutations/time-entries";
 
 type SplitLine = {
   key: number;
