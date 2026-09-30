@@ -31,7 +31,8 @@ export default createServerEntry({
     const pathname = new URL(request.url).pathname;
     if (
       (pathname === "/knowledge" || pathname.startsWith("/knowledge/")) &&
-      headers.get("Content-Type")?.split(";")[0]?.trim() === "text/html"
+      headers.get("Content-Type")?.split(";")[0]?.trim().toLowerCase() ===
+        "text/html"
     ) {
       headers.set("Cache-Control", "private, no-store");
     }
