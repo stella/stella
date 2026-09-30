@@ -1324,6 +1324,14 @@ export const skCourtsFixture = (): EnrolledAdapterFixture => ({
       assembleSkCourtsDecision({
         item: { ...SK_COURTS_LISTING_ROW },
         detail: { ...SK_COURTS_DETAIL_RECORD },
+        courtRegistry: {
+          registreGuid: "sud_105",
+          nazov: "Mestský súd Bratislava IV",
+          typSudu: "Mestský súd",
+          nadriadenySudId: "101",
+          ukonceny_string: "false",
+          skratka_string: "MSBA4",
+        },
       }) ?? panic("sk-courts fixture did not build"),
     ),
 });
