@@ -1059,7 +1059,7 @@
     },
     "packages/text-normalize": {
       "name": "@stll/text-normalize",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "devDependencies": {
         "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",

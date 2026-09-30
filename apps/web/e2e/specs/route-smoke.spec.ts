@@ -229,6 +229,7 @@ const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
       `/workspaces/${world.workspace.id}/correspondence/${world.correspondenceId}`,
   },
   staticRoute("/time"),
+  staticRoute("/settings/organization/time-policy"),
 ];
 
 // Redirect targets for workspace-scoped aliases depend on the runtime view id,

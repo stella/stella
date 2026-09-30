@@ -270,6 +270,7 @@ describe("a stored record reaches the targets the inventory declares", () => {
     expect(outcome.result.court).toBe("Okresný súd Bratislava I");
     expect(outcome.result.decisionDate).toBe("1997-06-20");
     expect(outcome.result.decisionType).toBe("Rozsudok");
+    expect(metadata["decisionTypeKey"]).toBe("rozsudok");
     expect(metadata["identifikacneCislo"]).toBe("1191896318");
     expect(metadata["subArea"]).toEqual(["Ostatné"]);
     expect(metadata["decisionNature"]).toEqual(["Zmeňujúce"]);
@@ -329,13 +330,36 @@ describe("a stored record reaches the targets the inventory declares", () => {
 });
 
 describe("the census and the registry agree about this adapter", () => {
-  test("its two recorded surfaces are the parts the envelope carries", () => {
+  test("its recorded surfaces match a complete decision envelope", () => {
     const { surfaces } = skCourtsAdapter.sourceSurfaces;
     const recorded = Object.entries(surfaces).flatMap(([, disposition]) =>
       disposition.disposition === "stored" ? [disposition.part] : [],
     );
 
-    expect(recorded.toSorted()).toEqual(["detail", "listing"]);
+    const registry = {
+      registreGuid: "sud_102",
+      nazov: "Mestský súd Bratislava I",
+      typSudu: "Mestský súd",
+    };
+    const item = {
+      guid: "surface-inventory",
+      spisovaZnacka: "7C/221/1991",
+      sud: {
+        registreGuid: registry.registreGuid,
+        nazov: "Okresný súd Bratislava I",
+      },
+    };
+    const decision = assembleSkCourtsDecision({
+      item,
+      detail: item,
+      courtRegistry: { status: "available", record: registry },
+    });
+    if (decision === null) {
+      panic("Complete surface fixture must build a decision");
+    }
+    const parts = decodeSourceRawEnvelope(decision.sourceRaw ?? "");
+    expect(parts).not.toBeNull();
+    expect(recorded.toSorted()).toEqual(Object.keys(parts ?? {}).toSorted());
   });
 
   test("the surfaces still on the backlog name why", () => {

@@ -73,11 +73,11 @@ import { Route as ProtectedSettingsOrganizationIndexRouteImport } from './routes
 import { Route as ProtectedSettingsOrganizationAiRouteImport } from './routes/_protected.settings/organization.ai'
 import { Route as ProtectedSettingsOrganizationAnonymizationRouteImport } from './routes/_protected.settings/organization.anonymization'
 import { Route as ProtectedSettingsOrganizationAuditLogsRouteImport } from './routes/_protected.settings/organization.audit-logs'
-import { Route as ProtectedSettingsOrganizationBillingRouteImport } from './routes/_protected.settings/organization.billing'
 import { Route as ProtectedSettingsOrganizationCatalogueRouteImport } from './routes/_protected.settings/organization.catalogue'
 import { Route as ProtectedSettingsOrganizationDocumentTypesRouteImport } from './routes/_protected.settings/organization.document-types'
 import { Route as ProtectedSettingsOrganizationMatterNumberingRouteImport } from './routes/_protected.settings/organization.matter-numbering'
 import { Route as ProtectedSettingsOrganizationMembersRouteImport } from './routes/_protected.settings/organization.members'
+import { Route as ProtectedSettingsOrganizationTimePolicyRouteImport } from './routes/_protected.settings/organization.time-policy'
 import { Route as ProtectedSettingsOrganizationUsageRouteImport } from './routes/_protected.settings/organization.usage'
 import { Route as ProtectedWorkspacesWorkspaceIdIndexRouteImport } from './routes/_protected.workspaces/$workspaceId/index'
 import { Route as ProtectedWorkspacesWorkspaceIdViewIdRouteRouteImport } from './routes/_protected.workspaces/$workspaceId/$viewId.route'
@@ -445,12 +445,6 @@ const ProtectedSettingsOrganizationAuditLogsRoute =
     path: '/audit-logs',
     getParentRoute: () => ProtectedSettingsOrganizationRouteRoute,
   } as any)
-const ProtectedSettingsOrganizationBillingRoute =
-  ProtectedSettingsOrganizationBillingRouteImport.update({
-    id: '/billing',
-    path: '/billing',
-    getParentRoute: () => ProtectedSettingsOrganizationRouteRoute,
-  } as any)
 const ProtectedSettingsOrganizationCatalogueRoute =
   ProtectedSettingsOrganizationCatalogueRouteImport.update({
     id: '/catalogue',
@@ -473,6 +467,12 @@ const ProtectedSettingsOrganizationMembersRoute =
   ProtectedSettingsOrganizationMembersRouteImport.update({
     id: '/members',
     path: '/members',
+    getParentRoute: () => ProtectedSettingsOrganizationRouteRoute,
+  } as any)
+const ProtectedSettingsOrganizationTimePolicyRoute =
+  ProtectedSettingsOrganizationTimePolicyRouteImport.update({
+    id: '/time-policy',
+    path: '/time-policy',
     getParentRoute: () => ProtectedSettingsOrganizationRouteRoute,
   } as any)
 const ProtectedSettingsOrganizationUsageRoute =
@@ -713,11 +713,11 @@ export interface FileRoutesByFullPath {
   '/settings/organization/ai': typeof ProtectedSettingsOrganizationAiRoute
   '/settings/organization/anonymization': typeof ProtectedSettingsOrganizationAnonymizationRoute
   '/settings/organization/audit-logs': typeof ProtectedSettingsOrganizationAuditLogsRoute
-  '/settings/organization/billing': typeof ProtectedSettingsOrganizationBillingRoute
   '/settings/organization/catalogue': typeof ProtectedSettingsOrganizationCatalogueRoute
   '/settings/organization/document-types': typeof ProtectedSettingsOrganizationDocumentTypesRoute
   '/settings/organization/matter-numbering': typeof ProtectedSettingsOrganizationMatterNumberingRoute
   '/settings/organization/members': typeof ProtectedSettingsOrganizationMembersRoute
+  '/settings/organization/time-policy': typeof ProtectedSettingsOrganizationTimePolicyRoute
   '/settings/organization/usage': typeof ProtectedSettingsOrganizationUsageRoute
   '/workspaces/$workspaceId/correspondence': typeof ProtectedWorkspacesWorkspaceIdCorrespondenceRouteWithChildren
   '/workspaces/$workspaceId/expenses': typeof ProtectedWorkspacesWorkspaceIdExpensesRoute
@@ -803,11 +803,11 @@ export interface FileRoutesByTo {
   '/settings/organization/ai': typeof ProtectedSettingsOrganizationAiRoute
   '/settings/organization/anonymization': typeof ProtectedSettingsOrganizationAnonymizationRoute
   '/settings/organization/audit-logs': typeof ProtectedSettingsOrganizationAuditLogsRoute
-  '/settings/organization/billing': typeof ProtectedSettingsOrganizationBillingRoute
   '/settings/organization/catalogue': typeof ProtectedSettingsOrganizationCatalogueRoute
   '/settings/organization/document-types': typeof ProtectedSettingsOrganizationDocumentTypesRoute
   '/settings/organization/matter-numbering': typeof ProtectedSettingsOrganizationMatterNumberingRoute
   '/settings/organization/members': typeof ProtectedSettingsOrganizationMembersRoute
+  '/settings/organization/time-policy': typeof ProtectedSettingsOrganizationTimePolicyRoute
   '/settings/organization/usage': typeof ProtectedSettingsOrganizationUsageRoute
   '/workspaces/$workspaceId/correspondence': typeof ProtectedWorkspacesWorkspaceIdCorrespondenceRouteWithChildren
   '/workspaces/$workspaceId/expenses': typeof ProtectedWorkspacesWorkspaceIdExpensesRoute
@@ -904,11 +904,11 @@ export interface FileRoutesById {
   '/_protected/settings/organization/ai': typeof ProtectedSettingsOrganizationAiRoute
   '/_protected/settings/organization/anonymization': typeof ProtectedSettingsOrganizationAnonymizationRoute
   '/_protected/settings/organization/audit-logs': typeof ProtectedSettingsOrganizationAuditLogsRoute
-  '/_protected/settings/organization/billing': typeof ProtectedSettingsOrganizationBillingRoute
   '/_protected/settings/organization/catalogue': typeof ProtectedSettingsOrganizationCatalogueRoute
   '/_protected/settings/organization/document-types': typeof ProtectedSettingsOrganizationDocumentTypesRoute
   '/_protected/settings/organization/matter-numbering': typeof ProtectedSettingsOrganizationMatterNumberingRoute
   '/_protected/settings/organization/members': typeof ProtectedSettingsOrganizationMembersRoute
+  '/_protected/settings/organization/time-policy': typeof ProtectedSettingsOrganizationTimePolicyRoute
   '/_protected/settings/organization/usage': typeof ProtectedSettingsOrganizationUsageRoute
   '/_protected/workspaces/$workspaceId/correspondence': typeof ProtectedWorkspacesWorkspaceIdCorrespondenceRouteWithChildren
   '/_protected/workspaces/$workspaceId/expenses': typeof ProtectedWorkspacesWorkspaceIdExpensesRoute
@@ -1005,11 +1005,11 @@ export interface FileRouteTypes {
     | '/settings/organization/ai'
     | '/settings/organization/anonymization'
     | '/settings/organization/audit-logs'
-    | '/settings/organization/billing'
     | '/settings/organization/catalogue'
     | '/settings/organization/document-types'
     | '/settings/organization/matter-numbering'
     | '/settings/organization/members'
+    | '/settings/organization/time-policy'
     | '/settings/organization/usage'
     | '/workspaces/$workspaceId/correspondence'
     | '/workspaces/$workspaceId/expenses'
@@ -1095,11 +1095,11 @@ export interface FileRouteTypes {
     | '/settings/organization/ai'
     | '/settings/organization/anonymization'
     | '/settings/organization/audit-logs'
-    | '/settings/organization/billing'
     | '/settings/organization/catalogue'
     | '/settings/organization/document-types'
     | '/settings/organization/matter-numbering'
     | '/settings/organization/members'
+    | '/settings/organization/time-policy'
     | '/settings/organization/usage'
     | '/workspaces/$workspaceId/correspondence'
     | '/workspaces/$workspaceId/expenses'
@@ -1195,11 +1195,11 @@ export interface FileRouteTypes {
     | '/_protected/settings/organization/ai'
     | '/_protected/settings/organization/anonymization'
     | '/_protected/settings/organization/audit-logs'
-    | '/_protected/settings/organization/billing'
     | '/_protected/settings/organization/catalogue'
     | '/_protected/settings/organization/document-types'
     | '/_protected/settings/organization/matter-numbering'
     | '/_protected/settings/organization/members'
+    | '/_protected/settings/organization/time-policy'
     | '/_protected/settings/organization/usage'
     | '/_protected/workspaces/$workspaceId/correspondence'
     | '/_protected/workspaces/$workspaceId/expenses'
@@ -1703,13 +1703,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProtectedSettingsOrganizationAuditLogsRouteImport
       parentRoute: typeof ProtectedSettingsOrganizationRouteRoute
     }
-    '/_protected/settings/organization/billing': {
-      id: '/_protected/settings/organization/billing'
-      path: '/billing'
-      fullPath: '/settings/organization/billing'
-      preLoaderRoute: typeof ProtectedSettingsOrganizationBillingRouteImport
-      parentRoute: typeof ProtectedSettingsOrganizationRouteRoute
-    }
     '/_protected/settings/organization/catalogue': {
       id: '/_protected/settings/organization/catalogue'
       path: '/catalogue'
@@ -1736,6 +1729,13 @@ declare module '@tanstack/react-router' {
       path: '/members'
       fullPath: '/settings/organization/members'
       preLoaderRoute: typeof ProtectedSettingsOrganizationMembersRouteImport
+      parentRoute: typeof ProtectedSettingsOrganizationRouteRoute
+    }
+    '/_protected/settings/organization/time-policy': {
+      id: '/_protected/settings/organization/time-policy'
+      path: '/time-policy'
+      fullPath: '/settings/organization/time-policy'
+      preLoaderRoute: typeof ProtectedSettingsOrganizationTimePolicyRouteImport
       parentRoute: typeof ProtectedSettingsOrganizationRouteRoute
     }
     '/_protected/settings/organization/usage': {
@@ -2088,11 +2088,11 @@ interface ProtectedSettingsOrganizationRouteRouteChildren {
   ProtectedSettingsOrganizationAiRoute: typeof ProtectedSettingsOrganizationAiRoute
   ProtectedSettingsOrganizationAnonymizationRoute: typeof ProtectedSettingsOrganizationAnonymizationRoute
   ProtectedSettingsOrganizationAuditLogsRoute: typeof ProtectedSettingsOrganizationAuditLogsRoute
-  ProtectedSettingsOrganizationBillingRoute: typeof ProtectedSettingsOrganizationBillingRoute
   ProtectedSettingsOrganizationCatalogueRoute: typeof ProtectedSettingsOrganizationCatalogueRoute
   ProtectedSettingsOrganizationDocumentTypesRoute: typeof ProtectedSettingsOrganizationDocumentTypesRoute
   ProtectedSettingsOrganizationMatterNumberingRoute: typeof ProtectedSettingsOrganizationMatterNumberingRoute
   ProtectedSettingsOrganizationMembersRoute: typeof ProtectedSettingsOrganizationMembersRoute
+  ProtectedSettingsOrganizationTimePolicyRoute: typeof ProtectedSettingsOrganizationTimePolicyRoute
   ProtectedSettingsOrganizationUsageRoute: typeof ProtectedSettingsOrganizationUsageRoute
   ProtectedSettingsOrganizationIndexRoute: typeof ProtectedSettingsOrganizationIndexRoute
 }
@@ -2104,8 +2104,6 @@ const ProtectedSettingsOrganizationRouteRouteChildren: ProtectedSettingsOrganiza
       ProtectedSettingsOrganizationAnonymizationRoute,
     ProtectedSettingsOrganizationAuditLogsRoute:
       ProtectedSettingsOrganizationAuditLogsRoute,
-    ProtectedSettingsOrganizationBillingRoute:
-      ProtectedSettingsOrganizationBillingRoute,
     ProtectedSettingsOrganizationCatalogueRoute:
       ProtectedSettingsOrganizationCatalogueRoute,
     ProtectedSettingsOrganizationDocumentTypesRoute:
@@ -2114,6 +2112,8 @@ const ProtectedSettingsOrganizationRouteRouteChildren: ProtectedSettingsOrganiza
       ProtectedSettingsOrganizationMatterNumberingRoute,
     ProtectedSettingsOrganizationMembersRoute:
       ProtectedSettingsOrganizationMembersRoute,
+    ProtectedSettingsOrganizationTimePolicyRoute:
+      ProtectedSettingsOrganizationTimePolicyRoute,
     ProtectedSettingsOrganizationUsageRoute:
       ProtectedSettingsOrganizationUsageRoute,
     ProtectedSettingsOrganizationIndexRoute:

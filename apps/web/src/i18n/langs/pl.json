@@ -586,7 +586,6 @@
       "title": "Profile sprzedawcy",
       "vatId": "Numer VAT"
     },
-    "settingsTitle": "Rozliczenia",
     "split": {
       "addSplit": "Dodaj podział",
       "percentValue": "{value}%",
@@ -871,6 +870,7 @@
         "publishedOnWeb": "Opublikowano w sieci"
       },
       "statutes": "Powołane przepisy",
+      "textNotYetAvailable": "Sąd nie opublikował treści orzeczenia lub nie jest ona jeszcze tutaj dostępna.",
       "textPending": "Tekst orzeczenia jest wciąż pobierany",
       "textReadFailed": "Nie udało się wczytać tekstu orzeczenia",
       "textUnavailable": "Do tego orzeczenia nie ma dostępnego tekstu"
@@ -4340,6 +4340,20 @@
       "renameDescription": "Członkowie od razu zobaczą nową nazwę.",
       "renameTitle": "Zmień nazwę organizacji",
       "renameTypeToConfirm": "Aby potwierdzić, wpisz nową nazwę: {name}",
+      "timePolicy": {
+        "description": "Ustaw zaokrąglanie czasu, terminy edycji i blokady miesięcy.",
+        "editWindow": "Termin edycji (dni)",
+        "editWindowHelp": "Zero pozwala na edycję tylko w dniu wykonania pracy.",
+        "invalidEditWindow": "Wprowadź całkowitą liczbę dni, równą zero lub większą.",
+        "invalidLockedMonth": "Wybierz zakończony miesiąc.",
+        "invalidMinimumUnit": "Wybierz jednostkę czasu, która dzieli 60 minut bez reszty.",
+        "lockedThrough": "Zablokowane do",
+        "lockedThroughHelp": "Wpisów z tego miesiąca i wcześniejszych miesięcy nie można edytować.",
+        "minimumUnit": "Minimalna jednostka czasu",
+        "minimumUnitHelp": "Czas jest rozliczany w wielokrotnościach tej liczby minut.",
+        "narrativeRequired": "Wymagaj opisu",
+        "title": "Zasady ewidencji czasu"
+      },
       "usage": "Użycie",
       "usageDescription": "Limity użycia i stan uprawnień tej organizacji",
       "usageEmptyDescription": "Skonfiguruj uprawnienie do użycia, aby włączyć mierzone funkcje AI w tej organizacji.",

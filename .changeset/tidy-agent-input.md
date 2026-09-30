@@ -1,5 +1,5 @@
 ---
-"@stll/text-normalize": patch
+"@stll/agent-input": patch
 ---
 
 Tighten input handling.

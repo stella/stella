@@ -586,7 +586,6 @@
       "title": "Eladói profilok",
       "vatId": "Áfaazonosító"
     },
-    "settingsTitle": "Számlázás",
     "split": {
       "addSplit": "Megosztás hozzáadása",
       "percentValue": "{value}%",
@@ -871,6 +870,7 @@
         "publishedOnWeb": "Weben közzétéve"
       },
       "statutes": "Alkalmazandó jogszabályok",
+      "textNotYetAvailable": "A bíróság nem tette közzé a határozat szövegét, vagy az itt még nem érhető el.",
       "textPending": "A határozat szövege még betöltés alatt áll",
       "textReadFailed": "A határozat szövegét nem sikerült betölteni",
       "textUnavailable": "Ehhez a határozathoz nem érhető el szöveg"
@@ -4340,6 +4340,20 @@
       "renameDescription": "A tagok azonnal látni fogják az új nevet.",
       "renameTitle": "Szervezet átnevezése",
       "renameTypeToConfirm": "A megerősítéshez írja be az új nevet: {name}",
+      "timePolicy": {
+        "description": "Állítsa be az idő kerekítését, a szerkesztési határidőket és a hónapok zárolását.",
+        "editWindow": "Szerkesztési határidő (nap)",
+        "editWindowHelp": "A nulla csak a munkavégzés napján engedélyezi a szerkesztést.",
+        "invalidEditWindow": "Adjon meg egy nulla vagy nagyobb egész számot a napok számához.",
+        "invalidLockedMonth": "Válasszon egy már lezárult hónapot.",
+        "invalidMinimumUnit": "Válasszon olyan időegységet, amely maradék nélkül osztja a 60 percet.",
+        "lockedThrough": "Zárolás eddig a hónapig",
+        "lockedThroughHelp": "Az ebben és a korábbi hónapokban rögzített bejegyzések nem szerkeszthetők.",
+        "minimumUnit": "Legkisebb időegység",
+        "minimumUnitHelp": "Az idő elszámolása ennyi perc többszöröseiben történik.",
+        "narrativeRequired": "Szöveges leírás megkövetelése",
+        "title": "Időelszámolási szabályok"
+      },
       "usage": "Használat",
       "usageDescription": "Használati korlátok és jogosultsági állapot ehhez a szervezethez",
       "usageEmptyDescription": "Állíts be használati jogosultságot, hogy a szervezet használhassa a mért AI-funkciókat.",

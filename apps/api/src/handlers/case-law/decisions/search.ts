@@ -86,6 +86,7 @@ import {
   decisionSortKeySql,
 } from "@/api/lib/case-law/decision-search-order-sql";
 import { readDecisionHeadnote } from "@/api/lib/case-law/decision-text";
+import { decisionTypeFilterSql } from "@/api/lib/case-law/decision-type-filter-sql";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
 import { readCaseLawSourceRegistry } from "@/api/lib/case-law/non-redistributable-sources";
 import {
@@ -328,7 +329,7 @@ export const caseLawSearchPlan = ({
     ? sql`AND d.decision_date <= ${body.dateTo}`
     : sql``;
   const typeFilter = body.decisionType
-    ? sql`AND d.decision_type = ${body.decisionType}`
+    ? sql`AND ${decisionTypeFilterSql(sql`d.decision_type`, body.decisionType)}`
     : sql``;
   const sourceFilter = body.sourceId
     ? sql`AND d.source_id = ${body.sourceId}`
@@ -1182,7 +1183,9 @@ export const caseLawSearchRowFilters = (
     filters.push(sql`${caseLawDecisions.decisionDate} <= ${body.dateTo}`);
   }
   if (body.decisionType) {
-    filters.push(eq(caseLawDecisions.decisionType, body.decisionType));
+    filters.push(
+      decisionTypeFilterSql(caseLawDecisions.decisionType, body.decisionType),
+    );
   }
   if (body.sourceId) {
     filters.push(eq(caseLawDecisions.sourceId, body.sourceId));

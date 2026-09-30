@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "10eb359967f8767af41e53032d2e2e234d2903083171a7b735c308ef93b4eb4c",
+  "sourceUrl": "https://www.ustavnysud.sk/o/v1/dms/search",
+  "capturedAt": "2026-09-30T08:49:55.217321+00:00",
+  "note": "POST docTypes USSR_DECISION_MK and USSR_ZNAU, pageSize 100, decision date 2026-06-10 and mkRSAPNumberOfFileNorm II. \u00daS 63/2026. Both full responses are kept."
+}

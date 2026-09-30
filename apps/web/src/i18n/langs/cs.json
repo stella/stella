@@ -586,7 +586,6 @@
       "title": "Profily dodavatelů",
       "vatId": "DIČ"
     },
-    "settingsTitle": "Fakturace",
     "split": {
       "addSplit": "Přidat rozdělení",
       "percentValue": "{value}%",
@@ -871,6 +870,7 @@
         "publishedOnWeb": "Zveřejněno na webu"
       },
       "statutes": "Dotčené předpisy",
+      "textNotYetAvailable": "Soud text rozhodnutí nezveřejnil, nebo zde zatím není dostupný.",
       "textPending": "Text rozhodnutí se stále načítá",
       "textReadFailed": "Text rozhodnutí se nepodařilo načíst",
       "textUnavailable": "K tomuto rozhodnutí není k dispozici text"
@@ -4340,6 +4340,20 @@
       "renameDescription": "Členové nový název uvidí okamžitě.",
       "renameTitle": "Přejmenovat organizaci",
       "renameTypeToConfirm": "Pro potvrzení napište nový název: {name}",
+      "timePolicy": {
+        "description": "Nastavte zaokrouhlování času, omezení úprav a uzamykání měsíců.",
+        "editWindow": "Lhůta pro úpravy (dny)",
+        "editWindowHelp": "Nula povoluje úpravy pouze v den provedení práce.",
+        "invalidEditWindow": "Zadejte celé nezáporné číslo udávající počet dnů.",
+        "invalidLockedMonth": "Vyberte již ukončený měsíc.",
+        "invalidMinimumUnit": "Vyberte časovou jednotku, která beze zbytku dělí 60 minut.",
+        "lockedThrough": "Uzamčeno do",
+        "lockedThroughHelp": "Záznamy v tomto měsíci a předchozích měsících nelze upravovat.",
+        "minimumUnit": "Minimální časová jednotka",
+        "minimumUnitHelp": "Čas se účtuje v násobcích tohoto počtu minut.",
+        "narrativeRequired": "Vyžadovat popis",
+        "title": "Pravidla vykazování času"
+      },
       "usage": "Využití",
       "usageDescription": "Limity využití a stav oprávnění pro tuto organizaci",
       "usageEmptyDescription": "Nakonfigurujte oprávnění k využití, aby organizace mohla používat měřené funkce AI.",
