@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 3.1.0
+
+### Minor Changes
+
+- [#4181](https://github.com/stella/stella/pull/4181) [`d70abfc`](https://github.com/stella/stella/commit/d70abfcc3ce7776d38a84d89b45a4574dc79d8f7) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Support invoice document types, original invoice links, and optional draft numbers.
+
 ## 3.0.0
 
 ### Major Changes
