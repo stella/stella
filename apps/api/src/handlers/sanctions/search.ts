@@ -75,7 +75,7 @@ const screeningSubject = ({
       );
     }
     case "person": {
-      const codes = subject.nationalityCodes ?? [];
+      const { nationalityCodes: codes = [] } = subject;
       const nationalityCodes = codes.filter(isCountryCode);
       if (codes.length !== nationalityCodes.length) {
         return invalidSubject(
