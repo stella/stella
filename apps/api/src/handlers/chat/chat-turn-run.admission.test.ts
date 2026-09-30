@@ -87,8 +87,9 @@ describe("chat run admission follows owned settlement", () => {
             reason: "unavailable",
           }),
         );
-        if (exit === "throw")
-          {throw new HandlerError({ status: 503, message: "Provider aborted" });}
+        if (exit === "throw") {
+          throw new HandlerError({ status: 503, message: "Provider aborted" });
+        }
       };
       const output = processServerChatStream({
         abortSignal: run.control.providerAbortController.signal,

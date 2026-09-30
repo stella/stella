@@ -42,8 +42,12 @@ describe("send lifecycle checkpoint indexing", () => {
         update: (table: unknown) => ({
           set: (values: Record<string, unknown>) => ({
             where: () => {
-              if (table === chatMessages) {writtenMessages.push(values);}
-              if (table === chatTurns) {writtenTurns.push(values);}
+              if (table === chatMessages) {
+                writtenMessages.push(values);
+              }
+              if (table === chatTurns) {
+                writtenTurns.push(values);
+              }
               return Object.assign(Promise.resolve(undefined), {
                 returning: async () => [
                   {
