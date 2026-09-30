@@ -11,8 +11,11 @@ import {
   registryString,
   registryExtras,
   expectRegistryOutcome,
+  expectRegistryResponses,
+  forEachRegistryMutation,
   expectNullableString,
 } from "../shared/property-test-helpers.test.js";
+import { lookupFullRecordByIco, searchByName } from "./client.js";
 import {
   parseExtract,
   parseSearchHit,
@@ -164,8 +167,9 @@ test(
             expect(stakeholder.name.length).toBeGreaterThan(0);
           }
           for (const body of parsed.statutoryBodies) {
-            for (const bodyMember of body.members)
-              {expect(bodyMember.name.length).toBeGreaterThan(0);}
+            for (const bodyMember of body.members) {
+              expect(bodyMember.name.length).toBeGreaterThan(0);
+            }
           }
         }
         if (!history) {
@@ -341,6 +345,197 @@ test(
       ),
       propertyConfig({ seed: propertySeed(), numRuns: 80 }),
     );
+  },
+  propertyTestTimeout(10_000),
+);
+
+const endpointForUrl = (url: string) => {
+  const path = new URL(url).pathname;
+  if (path.endsWith("/extract-full")) {
+    return "history";
+  }
+  if (path.endsWith("/extract")) {
+    return "extract";
+  }
+  if (path.endsWith("/documents")) {
+    return "documents";
+  }
+  if (path.endsWith("/related")) {
+    return "related";
+  }
+  return "search";
+};
+
+test.each(["search", "extract", "history", "documents", "related"] as const)(
+  "%s response fields yield domain values, typed errors or unavailable parts",
+  async (kind) => {
+    const payloads: Record<string, unknown> = {};
+    for (const [key, filename] of Object.entries({
+      search: "search-by-ico-eset",
+      extract: "extract-eset",
+      history: "extract-full-eset",
+      documents: "documents-eset",
+      related: "related-empty",
+    })) {
+      payloads[key] = await Bun.file(
+        new URL(`__fixtures__/${filename}.json`, import.meta.url),
+      ).json();
+    }
+    const baseline = await expectRegistryResponses(
+      (url) => {
+        const endpoint = endpointForUrl(url);
+        return payloads[endpoint];
+      },
+      () => lookupFullRecordByIco("31333532"),
+    );
+    expect(baseline?.company.ico).toBe("31333532");
+    expect(baseline?.history.status).toBe("loaded");
+    expect(baseline?.documents.status).toBe("loaded");
+    expect(baseline?.related.status).toBe("loaded");
+    const original =
+      kind === "related"
+        ? {
+            data: [
+              {
+                corporateBodyFullName: "Related",
+                registrationNumber: "31333532",
+                relatedPersonName: "Person",
+                physicalAddressLine1: "Street",
+                fileReference: {
+                  section: "Sro",
+                  insertNumber: "3586",
+                  court: "B",
+                },
+              } satisfies OrsrRawRelatedHit,
+            ],
+          }
+        : payloads[kind];
+    await forEachRegistryMutation(original, async (mutated) => {
+      const responseOf = (url: string) => {
+        const endpoint = endpointForUrl(url);
+        return endpoint === kind ? mutated : payloads[endpoint];
+      };
+      if (kind === "search") {
+        const results = await expectRegistryResponses(responseOf, () =>
+          searchByName("ESET"),
+        );
+        if (results) {
+          for (const row of results) {
+            expect(typeof row.ico).toBe("string");
+            expect(typeof row.name).toBe("string");
+            expectNullableString(row.address);
+          }
+        }
+        return;
+      }
+      const record = await expectRegistryResponses(responseOf, () =>
+        lookupFullRecordByIco("31333532"),
+      );
+      if (!record) {
+        return;
+      }
+      expect(record.company.ico).toBe("31333532");
+      expect(typeof record.company.name).toBe("string");
+      expect(record.company.name.length).toBeGreaterThan(0);
+      for (const value of [
+        record.company.legalForm,
+        record.company.establishedAt,
+        record.company.terminatedAt,
+        record.company.shareCapital,
+        record.company.shareCapitalPaid,
+        record.company.actingClause,
+      ]) {
+        expectNullableString(value);
+      }
+      if (record.company.address) {
+        for (const value of Object.values(record.company.address)) {
+          expectNullableString(value);
+        }
+      }
+      if (record.company.courtFile) {
+        expect(typeof record.company.courtFile.court).toBe("string");
+        expect(typeof record.company.courtFile.section).toBe("string");
+        expect(typeof record.company.courtFile.insertNumber).toBe("string");
+        expectNullableString(record.company.courtFile.courtName);
+      }
+      for (const body of record.company.statutoryBodies) {
+        for (const bodyMember of body.members) {
+          expect(typeof bodyMember.name).toBe("string");
+          for (const value of [
+            bodyMember.position,
+            bodyMember.address,
+            bodyMember.since,
+          ]) {
+            expectNullableString(value);
+          }
+        }
+      }
+      for (const stakeholder of record.company.stakeholders) {
+        expect(typeof stakeholder.name).toBe("string");
+        expect(typeof stakeholder.organName).toBe("string");
+        expect(typeof stakeholder.position).toBe("string");
+        for (const value of [
+          stakeholder.identifier,
+          stakeholder.share,
+          stakeholder.address,
+        ]) {
+          expectNullableString(value);
+        }
+      }
+      for (const part of [record.history, record.documents, record.related]) {
+        switch (part.status) {
+          case "unavailable":
+            expect(part.reason.length).toBeGreaterThan(0);
+            break;
+          case "loaded":
+            expect(Array.isArray(part.value)).toBe(true);
+            break;
+          default:
+            part satisfies never;
+        }
+      }
+      if (record.documents.status === "loaded") {
+        for (const row of record.documents.value) {
+          expect(typeof row.name).toBe("string");
+          expect(typeof row.serialNumber).toBe("number");
+          expectNullableString(row.deliveredOn);
+          expect(
+            row.pageCount === null || typeof row.pageCount === "number",
+          ).toBe(true);
+          expect(
+            row.typeCode === null || typeof row.typeCode === "number",
+          ).toBe(true);
+          expect(row.medium === "paper" || row.medium === "electronic").toBe(
+            true,
+          );
+        }
+      }
+      if (record.related.status === "loaded") {
+        for (const row of record.related.value) {
+          expect(typeof row.name).toBe("string");
+          expectNullableString(row.ico);
+          expectNullableString(row.address);
+          expectNullableString(row.connectedThrough);
+          if (row.fileReference) {
+            for (const value of Object.values(row.fileReference)) {
+              expect(typeof value).toBe("string");
+            }
+          }
+        }
+      }
+      if (record.history.status === "loaded") {
+        for (const row of record.history.value) {
+          expectNullableString(row.validFrom);
+          expectNullableString(row.validTo);
+          if ("value" in row) {
+            expect(typeof row.value).toBe("string");
+          } else {
+            expect(typeof row.name).toBe("string");
+            expectNullableString(row.role);
+          }
+        }
+      }
+    });
   },
   propertyTestTimeout(10_000),
 );

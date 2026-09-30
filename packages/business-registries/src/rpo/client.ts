@@ -1,7 +1,12 @@
 import { Result } from "better-result";
 
 import { encodeRegistryComponent } from "../shared/encode-registry-component.js";
-import { isRecord } from "../shared/guards.js";
+import {
+  hasOptionalString,
+  hasOptionalNumber,
+  isRecord,
+  isOptionalArrayOf,
+} from "../shared/guards.js";
 import {
   performRegistryRequest,
   readRegistryJson,
@@ -39,37 +44,71 @@ export type RpoClientError = RpoAPIError | RpoRequestError | RpoValidationError;
 
 type RpoUpstreamError = RpoAPIError | RpoRequestError;
 
-// Record lists may be absent; when present, every entry is an object.
-const isOptionalRecordList = (value: unknown): boolean =>
-  value === undefined || (Array.isArray(value) && value.every(isRecord));
+const isRpoTimed = (value: unknown): boolean =>
+  isRecord(value) &&
+  hasOptionalString(value, "validFrom") &&
+  hasOptionalString(value, "validTo");
+
+const isRpoCode = (value: unknown): boolean =>
+  value === undefined || (isRecord(value) && hasOptionalString(value, "code"));
+
+const isRpoAddress = (value: unknown): boolean =>
+  isRpoTimed(value) &&
+  isRecord(value) &&
+  isRpoCode(value["country"]) &&
+  isRpoCode(value["municipality"]);
+
+const isRpoSourceRegister = (value: unknown): boolean =>
+  value === undefined ||
+  (isRecord(value) &&
+    isRpoCode(value["value"]) &&
+    isOptionalArrayOf(value["registrationOffices"], isRpoTimed) &&
+    isOptionalArrayOf(value["registrationNumbers"], isRpoTimed));
+
+const isRpoCodedRecord = (value: unknown): boolean =>
+  isRpoTimed(value) && isRecord(value) && isRpoCode(value["value"]);
+
+const isRpoPerson = (value: unknown): boolean =>
+  isRpoTimed(value) &&
+  isRecord(value) &&
+  isRpoCode(value["stakeholderType"]) &&
+  isRpoCode(value["statutoryBodyMember"]);
+
+const isRpoEquity = (value: unknown): boolean =>
+  isRpoTimed(value) &&
+  isRecord(value) &&
+  hasOptionalNumber(value, "value") &&
+  hasOptionalNumber(value, "valuePaid") &&
+  isRpoCode(value["currency"]);
+
+const isRpoStatisticalCodes = (value: unknown): boolean =>
+  value === undefined || (isRecord(value) && isRpoCode(value["mainActivity"]));
 
 const isRpoSearchHit = (value: unknown): value is RpoRawSearchHit =>
   isRecord(value) &&
   typeof value["id"] === "number" &&
-  isOptionalRecordList(value["identifiers"]) &&
-  isOptionalRecordList(value["fullNames"]) &&
-  isOptionalRecordList(value["addresses"]);
+  isRpoSourceRegister(value["sourceRegister"]) &&
+  isOptionalArrayOf(value["identifiers"], isRpoTimed) &&
+  isOptionalArrayOf(value["fullNames"], isRpoTimed) &&
+  isOptionalArrayOf(value["addresses"], isRpoAddress);
 
 const isRpoSearchResponse = (value: unknown): value is RpoRawSearchResponse =>
   isRecord(value) &&
   Array.isArray(value["results"]) &&
   value["results"].every(isRpoSearchHit);
 
-const ENTITY_LIST_FIELDS = [
-  "legalForms",
-  "legalStatuses",
-  "activities",
-  "statutoryBodies",
-  "stakeholders",
-  "authorizations",
-  "equities",
-  "predecessors",
-  "successors",
-] as const;
-
 const isRpoEntity = (value: unknown): value is RpoRawEntity =>
   isRecord(value) &&
-  ENTITY_LIST_FIELDS.every((field) => isOptionalRecordList(value[field])) &&
+  isOptionalArrayOf(value["legalForms"], isRpoCodedRecord) &&
+  isOptionalArrayOf(value["legalStatuses"], isRpoCodedRecord) &&
+  isOptionalArrayOf(value["activities"], isRpoTimed) &&
+  isOptionalArrayOf(value["statutoryBodies"], isRpoPerson) &&
+  isOptionalArrayOf(value["stakeholders"], isRpoPerson) &&
+  isOptionalArrayOf(value["authorizations"], isRpoTimed) &&
+  isOptionalArrayOf(value["equities"], isRpoEquity) &&
+  isOptionalArrayOf(value["predecessors"], isRpoTimed) &&
+  isOptionalArrayOf(value["successors"], isRpoTimed) &&
+  isRpoStatisticalCodes(value["statisticalCodes"]) &&
   isRpoSearchHit(value);
 
 // The guards check the record structure; a payload whose leaf fields break the
