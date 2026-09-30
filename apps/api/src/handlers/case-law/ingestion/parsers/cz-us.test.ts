@@ -5,6 +5,10 @@ import type { Block } from "@/api/handlers/case-law/document-ast";
 import { parseUsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
 import type { ParseUsDecisionInput } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
 import { markupResidueIn } from "@/api/lib/legal-search/parsers/markup-residue";
+import {
+  embeddedTextFixtures,
+  embeddedTextRtf,
+} from "@/api/lib/legal-search/parsers/rtf-destinations.fixtures";
 
 // ── Helpers ─────────────────────────────────────────────────
 
@@ -830,5 +834,52 @@ describe("parseUsDecisionHtml", () => {
       expect(fulltext).toContain("šťáva");
       expect(fulltext).toContain("1 500 000 Kč");
     });
+  });
+});
+
+describe("embedded RTF text destinations", () => {
+  for (const { name, group } of embeddedTextFixtures) {
+    test(`keeps ${name} in source order as separate paragraphs`, () => {
+      const rtf = embeddedTextRtf(group);
+      const { documentAst, fulltext } = parseUsDecisionHtml(
+        baseInput(`<input id="docContentHidden" value="${rtf}" />`),
+      );
+      const texts = documentAst.blocks.map((block) => block.plainText);
+      expect(texts).toEqual([
+        "Anchor start  anchor end",
+        "Box one",
+        "Box two",
+        "Next paragraph",
+      ]);
+      expect(fulltext).not.toContain("hidden");
+      expect(fulltext).not.toContain("deadbeef");
+      const box = documentAst.blocks.find(
+        (block) => block.plainText === "Box one",
+      );
+      expect(
+        box &&
+          hasBlockInlines(box) &&
+          box.inlines.some((inline) => inline.type === "bold"),
+      ).toBe(true);
+    });
+  }
+
+  test("keeps metadata and unknown starred groups invisible", () => {
+    const rtf = String.raw`{\rtf1 Before {\info{\shptxt Hidden metadata}}{\*\unknownprobe{\result Hidden unknown}} After\par}`;
+    const { fulltext } = parseUsDecisionHtml(
+      baseInput(`<input id="docContentHidden" value="${rtf}" />`),
+    );
+    expect(fulltext).toBe("Before  After");
+  });
+
+  test("skips binary object bytes without losing the visible result", () => {
+    const rtf = String.raw`{\rtf1 Before {\object{\*\objdata\bin3 }{} }{\result Box}} After\par}`;
+    const { documentAst } = parseUsDecisionHtml(
+      baseInput(`<input id="docContentHidden" value="${rtf}" />`),
+    );
+    expect(documentAst.blocks.map((block) => block.plainText)).toEqual([
+      "Before  After",
+      "Box",
+    ]);
   });
 });
