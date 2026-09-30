@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, asc, eq, getTableColumns, inArray, ne } from "drizzle-orm";
+import { and, asc, eq, getColumns, inArray, ne } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { BILLING_STATUS, timeEntries, workspaces } from "@/api/db/schema";
@@ -128,7 +128,7 @@ export const approveTimeEntryBatch = async ({
     }
     const rows = await tx
       .select({
-        ...getTableColumns(timeEntries),
+        ...getColumns(timeEntries),
         running: timeEntryIsRunning(),
       })
       .from(timeEntries)

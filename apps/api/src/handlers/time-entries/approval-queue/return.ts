@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq, getTableColumns, ne } from "drizzle-orm";
+import { and, eq, getColumns, ne } from "drizzle-orm";
 import { t } from "elysia";
 
 import { BILLING_STATUS, timeEntries, workspaces } from "@/api/db/schema";
@@ -66,7 +66,7 @@ const returnTimeEntry = createSafeRootHandler(
         }
         const [entry] = await tx
           .select({
-            ...getTableColumns(timeEntries),
+            ...getColumns(timeEntries),
             running: timeEntryIsRunning(),
           })
           .from(timeEntries)
