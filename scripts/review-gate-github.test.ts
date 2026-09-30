@@ -86,6 +86,7 @@ const fakeGateway = ({
   queue = [],
   runReads = [],
   failingReads = [],
+  failingDequeue = false,
 }: {
   pullRequests: readonly PullRequestRead[];
   // What a re-read right before acting returns; defaults to the first read.
@@ -95,6 +96,7 @@ const fakeGateway = ({
   runReads?: readonly (readonly PublishedRun[])[];
   // Pull requests whose full read fails.
   failingReads?: readonly number[];
+  failingDequeue?: boolean;
 }) => {
   const calls: Call[] = [];
   const byNumber = new Map(pullRequests.map((read) => [read.number, read]));
@@ -122,6 +124,9 @@ const fakeGateway = ({
     discoverOpenPullRequests: () => [],
     dequeue: (id) => {
       calls.push({ kind: "dequeue", id });
+      if (failingDequeue) {
+        fail("GraphQL errors: dequeue refused");
+      }
     },
   };
   return { gateway, calls };
@@ -400,6 +405,31 @@ describe("dequeue of a queued pull request", () => {
       1,
     );
     expect(kinds(calls)).toEqual(["revalidate"]);
+  });
+
+  test("enforce: a failed dequeue keeps the failure standing and still fails its group", () => {
+    const group = "a".repeat(40);
+    const { gateway, calls } = fakeGateway({
+      pullRequests: [offender],
+      queue: [{ position: 1, headSha: group, pullRequest: 1 }],
+      failingDequeue: true,
+    });
+    const state = createRun(gateway, config("enforce"), {
+      baseBranch: "main",
+      dryRun: false,
+    });
+    guardedPullRequest(state, 1, { withGroups: true });
+    const writes = calls.flatMap((call) =>
+      call.kind === "write" ? [call] : [],
+    );
+    expect(writes.map(({ sha, output }) => [sha, output.conclusion])).toEqual([
+      [headOf(1), "failure"],
+      [group, "failure"],
+    ]);
+    expect(dequeued(calls)).toEqual(["PR_1"]);
+    expect(state.failures).toEqual([
+      "#1: dequeue failed: GraphQL errors: dequeue refused",
+    ]);
   });
 
   test("a pull request that is not queued is never dequeued", () => {

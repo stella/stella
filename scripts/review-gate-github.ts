@@ -705,7 +705,7 @@ export type Run = {
   // reuse them; a retry after the state moved never does.
   snapshots: Map<number, PullRequestRead>;
   revalidations: Map<number, QueueRecheck>;
-  // Pull requests this run already removed from the queue.
+  // Pull requests this run already tried to remove from the queue, once each.
   dequeued: Set<number>;
   // Head commits the triggering event named, trusted only as the place to
   // publish a blocking result when reading the pull request fails.
@@ -819,8 +819,23 @@ const stillHolds = (run: Run, pullRequest: PullRequestRead): boolean => {
   );
 };
 
+const failureOf = (work: () => void): string | null => {
+  try {
+    work();
+    return null;
+  } catch (error) {
+    if (!(error instanceof ReviewGateError)) {
+      throw error;
+    }
+    return error.message;
+  }
+};
+
 // Enforce mode's eviction. The fresh read is taken right before the mutation
 // and never served from the pass cache: only the confirmed offender leaves.
+// A failed dequeue is recorded, not thrown: the failure already published must
+// stay the newest verdict, and the groups that contain the pull request must
+// still be re-evaluated.
 const dequeueIfConfirmed = (
   run: Run,
   pullRequest: PullRequestRead,
@@ -842,10 +857,14 @@ const dequeueIfConfirmed = (
   console.log(
     `#${pullRequest.number}: ${verdict.title} while queued; dequeuing`,
   );
-  if (!run.dryRun) {
-    run.gateway.dequeue(pullRequest.id);
-  }
   run.dequeued.add(pullRequest.number);
+  const reason = run.dryRun
+    ? null
+    : failureOf(() => run.gateway.dequeue(pullRequest.id));
+  if (reason !== null) {
+    run.failures.push(`#${pullRequest.number}: dequeue failed: ${reason}`);
+    console.log(`#${pullRequest.number}: dequeue failed: ${reason}`);
+  }
 };
 
 export const evaluatePullRequestTarget = (run: Run, number: number): void => {
@@ -961,31 +980,19 @@ const evaluatePullRequestAndGroups = (run: Run, number: number): void => {
 // One target's failure must not stop the others, and must block that target:
 // the gate reports that it could not read GitHub rather than leaving a stale
 // success standing.
-const attempt = (work: () => void): string | null => {
-  try {
-    work();
-    return null;
-  } catch (error) {
-    if (!(error instanceof ReviewGateError)) {
-      throw error;
-    }
-    return error.message;
-  }
-};
-
 const guarded = (
   run: Run,
   label: string,
   work: () => void,
   onFailure: (reason: string) => void,
 ): void => {
-  const reason = attempt(work);
+  const reason = failureOf(work);
   if (reason === null) {
     return;
   }
   run.failures.push(`${label}: ${reason}`);
   console.log(`${label}: ${reason}`);
-  const reportFailure = attempt(() => onFailure(reason));
+  const reportFailure = failureOf(() => onFailure(reason));
   if (reportFailure !== null) {
     run.failures.push(`${label}: could not report: ${reportFailure}`);
   }
