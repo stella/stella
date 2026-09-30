@@ -194,6 +194,56 @@ const makeGitFixture = (change: GitFixtureChange): GitFixture => {
   };
 };
 
+/** A published package shipping `jszip` from the root catalog, then a bump. */
+const makeCatalogFixture = (): GitFixture => {
+  const root = mkdtempSync(path.join(tmpdir(), "stella-dependabot-catalog-"));
+  testRoots.push(root);
+
+  const packagePath = "packages/sample/package.json";
+  mkdirSync(path.join(root, "scripts"), { recursive: true });
+  mkdirSync(path.join(root, ".changeset"), { recursive: true });
+  mkdirSync(path.join(root, "packages/sample"), { recursive: true });
+  writeFileSync(
+    path.join(root, "scripts/changeset-policy.json"),
+    JSON.stringify({
+      releasePaths: [packagePath, "packages/sample/src/**"],
+      generatedPaths: [],
+      packageFiles: [packagePath],
+    }),
+  );
+  writeFileSync(
+    path.join(root, packagePath),
+    `${JSON.stringify({
+      name: "@stll/sample",
+      version: "0.1.0",
+      dependencies: { jszip: "catalog:" },
+    })}\n`,
+  );
+  const writeRoot = (jszip: string) =>
+    writeFileSync(
+      path.join(root, "package.json"),
+      `${JSON.stringify({ name: "root", private: true, catalog: { jszip } })}\n`,
+    );
+
+  runGit(root, ["init", "--quiet"]);
+  runGit(root, ["config", "user.email", "test@example.com"]);
+  runGit(root, ["config", "user.name", "Test"]);
+  writeRoot("3.10.1");
+  runGit(root, ["add", "."]);
+  runGit(root, ["commit", "--quiet", "-m", "base"]);
+  const base = runGit(root, ["rev-parse", "HEAD"]);
+  writeRoot("3.10.2");
+  runGit(root, ["commit", "--quiet", "-am", "head"]);
+  const head = runGit(root, ["rev-parse", "HEAD"]);
+
+  return {
+    root,
+    base,
+    head,
+    output: ".changeset/dependabot-dependencies-124.md",
+  };
+};
+
 const runFixture = (fixture: GitFixture, ...extra: readonly string[]) =>
   runDependabotChangeset(
     [
@@ -517,6 +567,125 @@ describe("Dependabot changeset decision", () => {
   });
 });
 
+describe("a root catalog bump", () => {
+  const rootManifest = (jszip: string) =>
+    json({
+      name: "stella",
+      private: true,
+      workspaces: ["packages/*"],
+      catalog: { jszip, react: "19.2.8" },
+    });
+  const catalogConsumer = {
+    ...basePackage,
+    dependencies: { ...basePackage.dependencies, jszip: "catalog:" },
+  };
+  const decideCatalog = (
+    consumers: ReadonlyMap<string, unknown>,
+    head = "3.10.2",
+  ) =>
+    decide({
+      changedFiles: ["package.json", "bun.lock"],
+      catalog: {
+        base: rootManifest("3.10.1"),
+        head: rootManifest(head),
+        manifests: new Map(
+          [...consumers].map(([packagePath, value]): [string, string] => [
+            packagePath,
+            json(value),
+          ]),
+        ),
+      },
+    });
+
+  test("records the moved floor for each published package that ships the entry", () => {
+    expect(
+      decideCatalog(
+        new Map([
+          [workspaceUiManifest, catalogConsumer],
+          [uiManifest, { ...catalogConsumer, name: "@stll/ui" }],
+        ]),
+      ),
+    ).toEqual({
+      status: "create",
+      entries: [
+        {
+          packageName: "@stll/workspace-ui",
+          updates: [{ name: "jszip", range: "3.10.2" }],
+        },
+        {
+          packageName: "@stll/ui",
+          updates: [{ name: "jszip", range: "3.10.2" }],
+        },
+      ],
+    });
+  });
+
+  test("merges with a manifest bump of the same package", () => {
+    expect(
+      decide({
+        changedFiles: ["package.json", "bun.lock", workspaceUiManifest],
+        manifests: [
+          manifest({
+            packagePath: workspaceUiManifest,
+            base: json(catalogConsumer),
+            head: json({
+              ...catalogConsumer,
+              dependencies: {
+                ...catalogConsumer.dependencies,
+                "tailwind-merge": "^3.7.0",
+              },
+            }),
+          }),
+        ],
+        catalog: {
+          base: rootManifest("3.10.1"),
+          head: rootManifest("3.10.2"),
+          manifests: new Map([[workspaceUiManifest, json(catalogConsumer)]]),
+        },
+      }),
+    ).toEqual({
+      status: "create",
+      entries: [
+        {
+          packageName: "@stll/workspace-ui",
+          updates: [
+            { name: "tailwind-merge", range: "^3.7.0" },
+            { name: "jszip", range: "3.10.2" },
+          ],
+        },
+      ],
+    });
+  });
+
+  test("changes nothing for an entry shipped only as a devDependency or by a private package", () => {
+    expect(
+      decideCatalog(
+        new Map<string, unknown>([
+          [
+            workspaceUiManifest,
+            { ...basePackage, devDependencies: { jszip: "catalog:" } },
+          ],
+          [uiManifest, { ...catalogConsumer, name: "@stll/ui", private: true }],
+        ]),
+      ),
+    ).toEqual({ status: "noop", reason: "no-release-paths" });
+  });
+
+  test.each([
+    ["a major move", catalogConsumer, "4.0.0", "major-change"],
+    [
+      "a peer range",
+      { ...basePackage, peerDependencies: { jszip: "catalog:" } },
+      "3.10.2",
+      "peer-change",
+    ],
+  ] as const)("refuses %s", (_label, consumer, head, reason) => {
+    expect(
+      decideCatalog(new Map([[workspaceUiManifest, consumer]]), head),
+    ).toEqual({ status: "refuse", reason });
+  });
+});
+
 describe("Dependabot changeset rendering", () => {
   test("renders an empty changeset when no package needs a bump", () => {
     expect(
@@ -603,6 +772,20 @@ describe("Dependabot changeset CLI boundary", () => {
     expect(runFixture(fixture, "--check")).toBe(0);
 
     writeFileSync(outputPath, '---\n"@stll/sample": minor\n---\n');
+    expect(() => runFixture(fixture, "--check")).toThrow(/does not match/u);
+  });
+
+  test("writes and verifies a patch changeset for a root catalog bump", () => {
+    const fixture = makeCatalogFixture();
+    const outputPath = path.join(fixture.root, fixture.output);
+
+    expect(runFixture(fixture)).toBe(0);
+    expect(readFileSync(outputPath, "utf-8")).toBe(
+      '---\n"@stll/sample": patch\n---\n\nUpdate `jszip` to `3.10.2`.\n',
+    );
+    expect(runFixture(fixture, "--check")).toBe(0);
+
+    writeFileSync(outputPath, "---\n---\n");
     expect(() => runFixture(fixture, "--check")).toThrow(/does not match/u);
   });
 

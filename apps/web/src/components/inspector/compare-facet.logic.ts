@@ -32,6 +32,8 @@ export const COMPARE_UNSUPPORTED_REASON_LABEL_KEYS = {
   "story-missing-in-target":
     "fileDetail.compareUnsupportedReasons.missingInTarget",
   "story-not-editable": "fileDetail.compareUnsupportedReasons.notEditable",
+  "unsupported-content":
+    "fileDetail.compareUnsupportedReasons.unsupportedContent",
 } as const satisfies Record<CompareUnsupportedReason, TranslationKey>;
 
 const isCompareChangeKind = (value: string): value is CompareChangeKind =>
