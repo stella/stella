@@ -1,7 +1,3 @@
-import type {
-  UnbackedProjectionKeys,
-  UnprojectedColumns,
-} from "@/api/lib/projection-totality";
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
@@ -16,20 +12,15 @@ import {
   timeTimerConfirmations,
   timeTimers,
 } from "@/api/db/schema";
+import type { AuditRecorder } from "@/api/lib/audit-log";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { readTimePolicy } from "@/api/lib/billing-time";
 import { canApproveTimeEntries } from "@/api/lib/billing/time-entry-authorization";
 import {
   insertPreparedTimeEntry,
   lockTimeEntryCapacity,
   prepareTimeEntryInsert,
 } from "@/api/lib/billing/time-entry-insert";
-import type { AuditRecorder } from "@/api/lib/audit-log";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { readTimePolicy } from "@/api/lib/billing-time";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
-import { hasCurrentTimerMatterAccess } from "@/api/lib/time-entry-timer-access";
-import { formatTodayInTimeZone } from "@/api/lib/timezone";
-
 import type { TimerOwner } from "@/api/lib/billing/time-timers";
 import {
   deleteLegacyTimerDraft,
@@ -39,6 +30,14 @@ import {
   timerNotFound,
   timerSeconds,
 } from "@/api/lib/billing/time-timers";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
+import type {
+  UnbackedProjectionKeys,
+  UnprojectedColumns,
+} from "@/api/lib/projection-totality";
+import { hasCurrentTimerMatterAccess } from "@/api/lib/time-entry-timer-access";
+import { formatTodayInTimeZone } from "@/api/lib/timezone";
 
 const CONFIRMED_ENTRY_COLUMNS = {
   id: timeEntries.id,

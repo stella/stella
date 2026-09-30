@@ -2,9 +2,9 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { timerParams } from "@/api/lib/billing/time-timers";
 
 import { finalizeTimer } from "./finalize";
-import { timerParams } from "@/api/lib/billing/time-timers";
 
 const confirmTimer = createSafeRootHandler(
   {
