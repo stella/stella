@@ -131,14 +131,16 @@ const exportInvoicePdf = createSafeHandler(
           }),
       ),
     );
-    const body = yield* rendered.mapError(
-      (error) =>
+    if (rendered.isErr()) {
+      return Result.err(
         new HandlerError({
           status: 409,
-          message: error.message,
+          message: rendered.error.message,
           hint: "Check the seller payment details and invoice dates before exporting.",
         }),
-    );
+      );
+    }
+    const body = rendered.value;
     yield* Result.await(
       safeDb(async (tx) => {
         await recordAuditEvent(tx, {

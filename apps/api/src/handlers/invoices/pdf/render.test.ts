@@ -91,7 +91,7 @@ describe("invoice PDF", () => {
         amountCents: 55_555,
         currency: "CZK",
         locale: "cs-CZ",
-      }),
+      }).replace(/[\u00a0\u202f]/gu, " "),
     );
   });
 
@@ -136,7 +136,7 @@ describe("invoice PDF", () => {
         amountCents: -55_555,
         currency: "CZK",
         locale: "cs-CZ",
-      }),
+      }).replace(/[\u00a0\u202f]/gu, " "),
     );
     expect(buildInvoicePaymentPayload(credit)).toBeNull();
   });

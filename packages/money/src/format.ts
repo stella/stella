@@ -244,7 +244,8 @@ export const formatMoneyCents = ({
     const digitFormatter = new Intl.NumberFormat(locale, {
       useGrouping: false,
     });
-    const localizedFraction = [...fraction]
+    const localizedFraction = fraction
+      .split("")
       .map((digit) => digitFormatter.format(Number(digit)))
       .join("");
     // BigInt has no negative zero: -1 supplies the locale's sign and bidi
