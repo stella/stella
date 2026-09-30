@@ -410,6 +410,9 @@ type TurnSignals = {
   deadlineSignal: AbortSignal;
   runSignal?: AbortSignal;
   teardownAfterSourceChunks?: number;
+  getRestorableCheckpoint?: () =>
+    | ReturnType<typeof toPersistableChatMessage>
+    | undefined;
 };
 
 const uncutTurnSignals = (): TurnSignals => {
@@ -834,6 +837,164 @@ describe("admission loss preserves complete interaction checkpoints", () => {
         );
       });
     }
+  }
+});
+
+describe("late admission loss retains a completed and charged response", () => {
+  test("an empty successful finish retains its empty-provider outcome after one charge", async () => {
+    const admission = new AbortController();
+    let charges = 0;
+    const source = async function* (): AsyncIterable<StreamChunk> {
+      yield {
+        type: EventType.RUN_STARTED,
+        runId: "empty_run",
+        threadId: "thread-1",
+      };
+      yield {
+        type: EventType.RUN_FINISHED,
+        runId: "empty_run",
+        threadId: "thread-1",
+        finishReason: "stop",
+        outcome: { type: "success" },
+      };
+      charges += 1;
+      admission.abort(
+        new ActionAdmissionError({
+          reason: "unavailable",
+          message: "Lease lost after empty completion",
+        }),
+      );
+    };
+    const { finish, emitted } = await persistNativeInterruptTurn(source(), {
+      abortSignal: admission.signal,
+      deadlineSignal: new AbortController().signal,
+    });
+    expect(finish?.outcome).toEqual({
+      type: "failed",
+      error: "empty_completion",
+    });
+    expect(charges).toBe(1);
+    expect(
+      emitted.filter((chunk) => chunk.type === EventType.RUN_FINISHED),
+    ).toHaveLength(1);
+  });
+  for (const exit of ["drain", "throw", "teardown", "adapter-error"] as const) {
+    for (const completed of [true, false]) {
+      test(`${exit} distinguishes ${completed ? "completed" : "interrupted"} text after upstream settlement`, async () => {
+        const native = await collectChunks(
+          chat({
+            adapter: createTextReplyAdapter("Completed answer"),
+            messages: [{ role: "user", content: "Reply" }],
+            threadId: "thread-1",
+          }),
+        );
+        expect(
+          native.some((chunk) => chunk.type === EventType.RUN_FINISHED),
+        ).toBe(true);
+        const fixture = completed
+          ? native
+          : native.filter((chunk) => chunk.type !== EventType.RUN_FINISHED);
+        const admission = new AbortController();
+        let charges = 0;
+        const source = async function* (): AsyncIterable<StreamChunk> {
+          yield* fixture;
+          if (completed) {charges += 1;}
+          admission.abort(
+            new ActionAdmissionError({
+              reason: "unavailable",
+              message: "Lease lost during upstream cleanup",
+            }),
+          );
+          if (exit === "throw")
+            {throw new HandlerError({
+              status: 503,
+              message: "Upstream cleanup aborted",
+            });}
+          if (exit === "adapter-error")
+            {yield {
+              type: EventType.RUN_ERROR,
+              code: "provider_unavailable",
+              message: "Cleanup aborted",
+            };}
+          if (exit === "teardown")
+            {yield { type: EventType.MESSAGES_SNAPSHOT, messages: [] };}
+        };
+        const { emitted, finish } = await persistNativeInterruptTurn(source(), {
+          abortSignal: admission.signal,
+          deadlineSignal: new AbortController().signal,
+          ...(exit === "teardown"
+            ? { teardownAfterSourceChunks: fixture.length + 1 }
+            : {}),
+        });
+        expect(finish?.outcome).toEqual(
+          completed
+            ? { type: "completed" }
+            : { type: "failed", error: "provider_unavailable" },
+        );
+        expect(finish?.responseMessage.parts).toContainEqual({
+          type: "text",
+          content: "Completed answer",
+        });
+        expect(charges).toBe(completed ? 1 : 0);
+        expect(
+          emitted.some((chunk) => chunk.type === EventType.RUN_ERROR),
+        ).toBe(false);
+        if (completed && exit !== "teardown") {
+          expect(
+            emitted.filter((chunk) => chunk.type === EventType.RUN_FINISHED),
+          ).toHaveLength(1);
+        }
+      });
+    }
+  }
+});
+
+describe("admission lost before continuation production retains the original checkpoint", () => {
+  for (const exit of ["drain", "throw", "teardown"] as const) {
+    test(`${exit} preserves the original pending snapshot and message identity`, async () => {
+      const checkpoint = toPersistableChatMessage({
+        id: toSafeId<"chatMessage">("original_pending_message"),
+        role: "assistant",
+        parts: [
+          {
+            type: "tool-call",
+            id: "original_call",
+            name: "approved_operation",
+            arguments: "{}",
+            state: "approval-requested",
+            approval: { id: "original_approval", needsApproval: true },
+          },
+        ],
+      });
+      const admission = new AbortController();
+      admission.abort(
+        new ActionAdmissionError({
+          reason: "unavailable",
+          message: "Lease lost before dispatch",
+        }),
+      );
+      const source = async function* (): AsyncIterable<StreamChunk> {
+        if (exit === "throw")
+          {throw new HandlerError({
+            status: 503,
+            message: "Already aborted provider",
+          });}
+        if (exit === "teardown")
+          {yield { type: EventType.MESSAGES_SNAPSHOT, messages: [] };}
+      };
+      const { finish } = await persistNativeInterruptTurn(source(), {
+        abortSignal: admission.signal,
+        deadlineSignal: new AbortController().signal,
+        getRestorableCheckpoint: () => checkpoint,
+        ...(exit === "teardown" ? { teardownAfterSourceChunks: 1 } : {}),
+      });
+      expect(finish?.outcome).toEqual({
+        type: "awaiting-user",
+        interaction: { type: "approval", toolCallId: "original_call" },
+      });
+      expect(finish?.responseMessage.id).toBe(checkpoint.id);
+      expect(finish?.responseMessage.parts).toEqual(checkpoint.parts);
+    });
   }
 });
 

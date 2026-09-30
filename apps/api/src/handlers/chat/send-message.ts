@@ -609,6 +609,7 @@ export class ChatSendLifecycle {
     }
     const run = new ChatTurnRun({
       admission: this.admission,
+      checkpoint: this.checkpoint,
       connectors,
       deadlineMs: CHAT_METERED_PROVIDER_TIMEOUT_MS,
       owner: {
@@ -2593,21 +2594,21 @@ export const createSendMessage = (
             thread.type === "created" &&
             body.sendMode !== CHAT_SEND_MODE.anonymized
           ) {
+            const title = async () =>
+              await generateThreadTitle({
+                initialTitle: initialThreadTitle,
+                messages: [parsedMessage.message, resolvedResponseMessage],
+                organizationId: session.activeOrganizationId,
+                orgAIConfig,
+                promptCachingEnabled,
+                recordAuditEvent,
+                safeDb,
+                threadId: body.threadId,
+                threadWorkspaceId: workspaceId,
+                userId: user.id,
+              });
             detached(
-              run.followUp(
-                generateThreadTitle({
-                  initialTitle: initialThreadTitle,
-                  messages: [parsedMessage.message, resolvedResponseMessage],
-                  organizationId: session.activeOrganizationId,
-                  orgAIConfig,
-                  promptCachingEnabled,
-                  recordAuditEvent,
-                  safeDb,
-                  threadId: body.threadId,
-                  threadWorkspaceId: workspaceId,
-                  userId: user.id,
-                }),
-              ),
+              run.followUpAfterSettlement(title),
               "send-message.generate-thread-title",
             );
           }

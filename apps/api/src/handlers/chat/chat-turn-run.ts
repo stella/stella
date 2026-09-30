@@ -6,7 +6,12 @@ import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import type { ChatExecutionAdmission } from "@/api/handlers/chat/chat-execution-admission";
-import { persistFailedChatTurn } from "@/api/handlers/chat/chat-message-persistence";
+import { getAwaitingUserInteractions } from "@/api/handlers/chat/chat-message-parts";
+import {
+  persistFailedChatTurn,
+  persistTerminalAssistantTurn,
+} from "@/api/handlers/chat/chat-message-persistence";
+import type { PersistMessageProps } from "@/api/handlers/chat/chat-message-persistence";
 import {
   isChatTurnNotOwned,
   readChatTurnExecutionStanding,
@@ -72,6 +77,7 @@ const CONNECTOR_CLOSE_FAILED_SINK = failureSink({
 
 /** The turn a run produces for, and what storing its failure needs. */
 type ChatTurnRunOwner = {
+  indexThread?: PersistMessageProps["indexThread"];
   execution: ChatTurnExecution;
   owningAssistantMessage: PersistableChatMessage | undefined;
   recordAuditEvent: AuditRecorder;
@@ -98,6 +104,8 @@ type ChatTurnRunControl = {
 
 type ChatTurnRunOptions = {
   admission?: ChatExecutionAdmission | undefined;
+  /** Pending interaction before accepting this continuation. */
+  checkpoint?: PersistableChatMessage | undefined;
   /** Closed by the run when it never produces; a producing run's agent
    *  loop closes them when it ends. */
   connectors: ChatTurnRunConnectors | undefined;
@@ -268,6 +276,11 @@ export class ChatTurnRun {
   private readonly settledResolvers = Promise.withResolvers<ChatTurnRunEnd>();
   private state: ChatTurnRunState = { status: "handed-over" };
   private stored = false;
+  private continuationProduction: "not-started" | "started" = "not-started";
+  private upstream:
+    | { status: "not-started" }
+    | { status: "producing"; closed: Promise<undefined> }
+    | { status: "closed" } = { status: "not-started" };
   /** A cut requested before the run produced; applied once it does. */
   private pendingAbort: string | undefined;
 
@@ -304,6 +317,67 @@ export class ChatTurnRun {
     return this.settledResolvers.promise;
   }
 
+  /** A continuation cannot execute once its admission has been lost. */
+  startContinuationProduction(): boolean {
+    if (this.control.admissionSignal?.aborted) {return false;}
+    this.continuationProduction = "started";
+    return true;
+  }
+
+  /** Only an untouched continuation can return to its original user checkpoint. */
+  get restorableCheckpoint(): PersistableChatMessage | undefined {
+    if (
+      this.continuationProduction !== "not-started" ||
+      !this.control.admissionSignal?.aborted ||
+      this.control.abortController.signal.reason === RUN_CANCEL_REASON ||
+      this.control.abortController.signal.reason === CHAT_TURN_OWNER_LOST_REASON
+    )
+      {return undefined;}
+    const { checkpoint } = this.options;
+    return checkpoint !== undefined &&
+      getAwaitingUserInteractions(checkpoint).length > 0
+      ? checkpoint
+      : undefined;
+  }
+
+  private async restoreCheckpoint(checkpoint: PersistableChatMessage) {
+    const interaction = getAwaitingUserInteractions(checkpoint).at(0);
+    if (interaction === undefined)
+      {return panic("A restorable chat checkpoint must await user input");}
+    const { owner } = this.options;
+    return await persistTerminalAssistantTurn({
+      indexThread: owner.indexThread,
+      execution: owner.execution,
+      outcome: { type: "awaiting-user", interaction },
+      owningAssistantMessage: checkpoint,
+      recordAuditEvent: owner.recordAuditEvent,
+      safeDb: owner.safeDb,
+      threadId: owner.threadId,
+      userId: owner.userId,
+      workspaceId: owner.workspaceId,
+    });
+  }
+
+  // Closing the owned output also closes the nested SDK iterator. Its async
+  // finalizers (metering and MCP disposal) belong to the admission lifetime.
+  private trackUpstream(
+    output: AsyncIterable<StreamChunk>,
+  ): AsyncIterable<StreamChunk> {
+    const closed = Promise.withResolvers<undefined>();
+    this.upstream = { status: "producing", closed: closed.promise };
+    const ended = () => {
+      this.upstream = { status: "closed" };
+      closed.resolve(undefined);
+    };
+    return (async function* () {
+      try {
+        yield* output;
+      } finally {
+        ended();
+      }
+    })();
+  }
+
   /**
    * Start producing `output`, built against `control`, and serve it. The
    * response is the run's one transport: closing it aborts the run, which is
@@ -316,10 +390,15 @@ export class ChatTurnRun {
     this.state = { status: "producing", heartbeat: this.startHeartbeat() };
     // Building the response starts its pump, which pulls the stream first.
     const response = withSseHeartbeat(
-      toServerSentEventsResponse(output, {
-        abortController: this.control.abortController,
-        headers: { [CHAT_TURN_ID_HEADER]: this.execution.id },
-      }),
+      toServerSentEventsResponse(
+        this.options.admission === undefined
+          ? output
+          : this.trackUpstream(output),
+        {
+          abortController: this.control.abortController,
+          headers: { [CHAT_TURN_ID_HEADER]: this.execution.id },
+        },
+      ),
     );
     if (this.pendingAbort !== undefined) {
       this.abort(this.pendingAbort);
@@ -336,8 +415,21 @@ export class ChatTurnRun {
     // the turn no longer running and cut the response's last chunks.
     this.state.heartbeat.stop();
     try {
-      await persist();
-      this.stored = true;
+      const checkpoint = this.restorableCheckpoint;
+      if (checkpoint === undefined) {
+        await persist();
+        this.stored = true;
+      } else {
+        const restored = await this.restoreCheckpoint(checkpoint);
+        this.stored =
+          Result.isOk(restored) || isChatTurnNotOwned(restored.error);
+        if (Result.isError(restored) && !isChatTurnNotOwned(restored.error)) {
+          observeFailure(restored.error, {
+            sink: SETTLEMENT_FAILED_SINK,
+            ctx: { threadId: this.options.owner.threadId },
+          });
+        }
+      }
     } finally {
       this.release();
     }
@@ -352,6 +444,13 @@ export class ChatTurnRun {
     return await this.ownership.followUp(work);
   }
 
+  /** A detached action acquires its own lease only after this one releases. */
+  async followUpAfterSettlement<T>(work: () => Promise<T>): Promise<T> {
+    return await this.ownership.followUp(
+      this.options.admission === undefined ? work() : this.settled.then(work),
+    );
+  }
+
   /**
    * Store the turn as failed: the run cannot produce, or cannot store what it
    * produced. A run that never produced closes its connectors and is done.
@@ -364,17 +463,21 @@ export class ChatTurnRun {
       return panic("A settled chat turn run cannot fail");
     }
     const { owner } = this.options;
-    const failure = await persistFailedChatTurn({
-      code,
-      execution: owner.execution,
-      owningAssistantMessage: owner.owningAssistantMessage,
-      recordAuditEvent: owner.recordAuditEvent,
-      retryable,
-      safeDb: owner.safeDb,
-      threadId: owner.threadId,
-      userId: owner.userId,
-      workspaceId: owner.workspaceId,
-    });
+    const checkpoint = this.restorableCheckpoint;
+    const failure =
+      checkpoint === undefined
+        ? await persistFailedChatTurn({
+            code,
+            execution: owner.execution,
+            owningAssistantMessage: owner.owningAssistantMessage,
+            recordAuditEvent: owner.recordAuditEvent,
+            retryable,
+            safeDb: owner.safeDb,
+            threadId: owner.threadId,
+            userId: owner.userId,
+            workspaceId: owner.workspaceId,
+          })
+        : await this.restoreCheckpoint(checkpoint);
     if (Result.isOk(failure) || isChatTurnNotOwned(failure.error)) {
       // A turn another execution or the reaper settled first keeps that
       // outcome: the fence refused this run, and nothing is left to store.
@@ -543,12 +646,20 @@ export class ChatTurnRun {
       this.settledResolvers.resolve(end);
       return;
     }
-    this.settledResolvers.resolve(
+    const upstreamClosed =
+      this.upstream.status === "producing"
+        ? this.upstream.closed
+        : Promise.resolve(undefined);
+    // Persistence runs within the output iterator: it must return so the
+    // iterator can close. Only the end receipt waits for both settlements.
+    const completed = this.ownership.followUp(
       Promise.resolve(end).then(async (settled) => {
+        await upstreamClosed;
         await admission.release();
         return settled;
       }),
     );
+    this.settledResolvers.resolve(completed);
   }
 }
 

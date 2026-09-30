@@ -531,7 +531,7 @@ export const streamChat = async ({
   const { abortController, deadlineSignal } = run.control;
   const restorationPairs: ChatAnonRestoration[] = [];
 
-  const stream = runChatAttempts({
+  const attemptStream = runChatAttempts({
     abortController: run.control.providerAbortController,
     abortSignal:
       run.control.admissionSignal === undefined
@@ -569,6 +569,15 @@ export const streamChat = async ({
     userId,
     workspaceId,
   });
+  const stream =
+    run.control.admissionSignal === undefined
+      ? attemptStream
+      : (async function* (): AsyncIterable<PublicStreamChunk> {
+          if (!run.startContinuationProduction()) {
+            return;
+          }
+          yield* attemptStream;
+        })();
 
   const shadow = shadowChatRun({
     enabled: env.CHAT_RUN_LOG_SHADOW ?? isLocalDevOpen(),
@@ -621,7 +630,10 @@ export const streamChat = async ({
           ]),
     ...(run.control.admissionSignal === undefined
       ? {}
-      : { runSignal: abortController.signal }),
+      : {
+          runSignal: abortController.signal,
+          getRestorableCheckpoint: () => run.restorableCheckpoint,
+        }),
     deadlineSignal,
     flushPendingSource: persistenceVisibleStream.flushPending,
     initialMessages: preparedMessageList,
@@ -1494,6 +1506,7 @@ type ProcessServerChatStreamProps = {
   abortSignal: AbortSignal;
   /** Original run control keeps user-stop and ownership-loss precedence. */
   runSignal?: AbortSignal;
+  getRestorableCheckpoint?: () => PersistableChatMessage | undefined;
   /** The metered provider deadline the caller set for this turn. It is the
    *  only one of the two causes that reaches this signal, so it is what tells
    *  a deadline apart from a disconnect. */
@@ -1765,6 +1778,7 @@ const drainedRunOutcome = ({
 export const processServerChatStream = async function* ({
   abortSignal,
   runSignal = abortSignal,
+  getRestorableCheckpoint,
   deadlineSignal,
   existingMessageIds = new Set(),
   flushPendingSource,
@@ -1801,6 +1815,12 @@ export const processServerChatStream = async function* ({
       deadlineSignal,
     });
   const admissionLossOutcome = (): ChatTurnOutcome => {
+    const originalInteraction = getAwaitingUserInteraction(
+      getRestorableCheckpoint?.() ?? null,
+    );
+    if (originalInteraction !== null) {
+      return { type: "awaiting-user", interaction: originalInteraction };
+    }
     const handedOut = interruptToolCallIdsOf(deferredRunFinishedChunks);
     for (const chunk of deferredRunFinishedChunks) {
       processor.processChunk(chunk);
@@ -1811,9 +1831,24 @@ export const processServerChatStream = async function* ({
         toolCallsWithCompleteInput.has(candidate.toolCallId) &&
         (candidate.type === "approval" || handedOut.has(candidate.toolCallId)),
     );
-    return interaction === undefined
-      ? { type: "failed", error: "provider_unavailable" }
-      : { type: "awaiting-user", interaction };
+    if (interaction !== undefined) {
+      return { type: "awaiting-user", interaction };
+    }
+    const lastFinish = deferredRunFinishedChunks.at(-1);
+    const response = getResponseMessage();
+    // Provider success can precede deferred consumption and connector cleanup.
+    // A tool-call finish still needs another iteration and cannot prove completion.
+    if (
+      lastFinish?.type === EventType.RUN_FINISHED &&
+      tanStackStreamEventLifecycle(lastFinish) === "completed" &&
+      lastFinish.finishReason !== "tool_calls" &&
+      getAwaitingUserInteraction(response) === null
+    ) {
+      return response === null || response.parts.length === 0
+        ? { type: "failed", error: "empty_completion" }
+        : { type: "completed" };
+    }
+    return { type: "failed", error: "provider_unavailable" };
   };
   const terminalize = async ({
     flushProcessor = false,
@@ -1854,12 +1889,21 @@ export const processServerChatStream = async function* ({
           rawArgumentsByIncompleteToolCallId,
         )
       : getResponseMessage();
-    const terminalResponseMessage = createTerminalResponseMessage({
-      mapMessageId,
-      outcome,
-      responseMessage,
-      usage,
-    });
+    const checkpoint = admissionLost()
+      ? getRestorableCheckpoint?.()
+      : undefined;
+    const terminalResponseMessage =
+      checkpoint === undefined
+        ? createTerminalResponseMessage({
+            mapMessageId,
+            outcome,
+            responseMessage,
+            usage,
+          })
+        : attachTerminalTurnOutcome({
+            message: checkpoint,
+            turnOutcome: outcome,
+          });
     terminal.state = "settled";
     await onFinish({ outcome, responseMessage: terminalResponseMessage });
   };
@@ -1913,6 +1957,9 @@ export const processServerChatStream = async function* ({
             ? cutShortOutcome()
             : admissionLossOutcome(),
         });
+        for (const finish of deferredRunFinishedChunks.splice(0)) {
+          yield finish;
+        }
         return;
       }
       if (
@@ -2053,6 +2100,9 @@ export const processServerChatStream = async function* ({
   } catch (error) {
     if (admissionLost()) {
       await terminalize({ outcome: admissionLossOutcome() });
+      for (const finish of deferredRunFinishedChunks.splice(0)) {
+        yield finish;
+      }
       return;
     }
     const kind = classifyAIError(error);
