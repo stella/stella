@@ -659,7 +659,7 @@ export const createDuplicateWorkspace = (
         });
 
         if (Result.isError(referenceResult)) {
-          return referenceResult;
+          return Result.err(referenceResult.error);
         }
         const reference = referenceResult.value;
 

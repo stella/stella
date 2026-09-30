@@ -263,10 +263,7 @@ describe("duplicateWorkspace", () => {
               onConflictDoUpdate: () => ({
                 returning: async () => [
                   {
-                    lastValue:
-                      table === matterCounters
-                        ? MAX_MATTER_REFERENCE_ALLOCATION_ATTEMPTS
-                        : 1,
+                    lastValue: MAX_MATTER_REFERENCE_ALLOCATION_ATTEMPTS,
                   },
                 ],
               }),
@@ -291,6 +288,10 @@ describe("duplicateWorkspace", () => {
           throw new Error("Unexpected insert table");
         },
       }),
+      update: (table: unknown) => {
+        expect(table).toBe(matterCounters);
+        return { set: () => ({ where: async () => undefined }) };
+      },
       execute: async () => undefined,
     });
 
@@ -405,10 +406,7 @@ describe("duplicateWorkspace", () => {
               onConflictDoUpdate: () => ({
                 returning: async () => [
                   {
-                    lastValue:
-                      table === matterCounters
-                        ? MAX_MATTER_REFERENCE_ALLOCATION_ATTEMPTS
-                        : 1,
+                    lastValue: MAX_MATTER_REFERENCE_ALLOCATION_ATTEMPTS,
                   },
                 ],
               }),
@@ -427,6 +425,10 @@ describe("duplicateWorkspace", () => {
           throw new Error("Unexpected insert table");
         },
       }),
+      update: (table: unknown) => {
+        expect(table).toBe(matterCounters);
+        return { set: () => ({ where: async () => undefined }) };
+      },
       execute: async () => undefined,
     });
 

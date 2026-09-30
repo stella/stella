@@ -203,7 +203,7 @@ export const createWorkspaceHandler = async function* ({
       });
 
       if (Result.isError(referenceResult)) {
-        return referenceResult;
+        return Result.err(referenceResult.error);
       }
       const reference = referenceResult.value;
 
