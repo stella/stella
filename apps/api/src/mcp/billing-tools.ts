@@ -512,6 +512,7 @@ const listTimeEntriesArgsSchema = nullAsAbsent(
 /** Columns list_time_entries surfaces, shared by the list and detail branches. */
 const timeEntryColumns = {
   id: timeEntries.id,
+  activityGroup: timeEntries.activityGroup,
   entityId: timeEntries.workItemId,
   userId: timeEntries.userId,
   dateWorked: timeEntries.dateWorked,

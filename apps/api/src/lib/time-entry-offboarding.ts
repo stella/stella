@@ -2,6 +2,8 @@ import { APIError } from "better-auth/api";
 import { Result } from "better-result";
 import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
 
+import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
+
 import type { Transaction } from "@/api/db/root";
 import { timeEntries, timeTimers, workspaces } from "@/api/db/schema";
 import {
@@ -45,10 +47,9 @@ export const closeRemovedMemberActiveTimer = async ({
       workspaceId: timeEntries.workspaceId,
     })
     .from(timeEntries)
-    .innerJoin(workspaces, eq(workspaces.id, timeEntries.workspaceId))
     .where(
       and(
-        eq(workspaces.organizationId, organizationId),
+        eq(timeEntries.organizationId, organizationId),
         eq(timeEntries.userId, userId),
         isNotNull(timeEntries.timerStartedAt),
         isNull(timeEntries.timerStoppedAt),
@@ -74,17 +75,22 @@ export const closeRemovedMemberActiveTimer = async ({
   });
 
   if (activeTimer) {
-    await tx.execute(
-      sql`SELECT pg_advisory_xact_lock(hashtext(${activeTimer.workspaceId}))`,
-    );
-    const [lockedWorkspace] = await tx
-      .select({ id: workspaces.id })
-      .from(workspaces)
-      .where(eq(workspaces.id, activeTimer.workspaceId))
-      .for("update");
-    const [timer] = lockedWorkspace
+    let workspaceExists = true;
+    if (activeTimer.workspaceId !== null) {
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtext(${activeTimer.workspaceId}))`,
+      );
+      const [lockedWorkspace] = await tx
+        .select({ id: workspaces.id })
+        .from(workspaces)
+        .where(eq(workspaces.id, activeTimer.workspaceId))
+        .for("update");
+      workspaceExists = lockedWorkspace !== undefined;
+    }
+    const [timer] = workspaceExists
       ? await tx
           .select({
+            activityGroup: timeEntries.activityGroup,
             billedMinutes: timeEntries.billedMinutes,
             dateWorked: timeEntries.dateWorked,
             durationMinutes: timeEntries.durationMinutes,
@@ -103,7 +109,7 @@ export const closeRemovedMemberActiveTimer = async ({
           .where(
             and(
               eq(timeEntries.id, activeTimer.id),
-              eq(timeEntries.workspaceId, activeTimer.workspaceId),
+              eq(timeEntries.organizationId, organizationId),
               eq(timeEntries.userId, userId),
               isNotNull(timeEntries.timerStartedAt),
               isNull(timeEntries.timerStoppedAt),
@@ -147,10 +153,10 @@ export const closeRemovedMemberActiveTimer = async ({
             : (now.getTime() - timer.timerStartedAt.getTime()) / 1000) / 60,
         ),
       );
-      const billedMinutes = roundToBillingIncrement(
-        durationMinutes,
-        minimumUnitMinutes,
-      );
+      const billedMinutes =
+        timer.activityGroup === TIME_ENTRY_ACTIVITY_GROUP.INTERNAL
+          ? 0
+          : roundToBillingIncrement(durationMinutes, minimumUnitMinutes);
       await tx
         .update(timeEntries)
         .set({

@@ -1,5 +1,4 @@
-import { describe, test } from "bun:test";
-import { expectTypeOf } from "expect-type";
+import { describe, test, expectTypeOf } from "bun:test";
 
 import type {
   AllHandlerOutputsTyped,
