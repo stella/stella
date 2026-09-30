@@ -215,7 +215,7 @@
     "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel.tsx": 5,
     "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/ai-cell-source-card.tsx": 1,
     "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/billing-codes-dialog.tsx": 3,
-    "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/duration-input.tsx": 2,
+    "apps/web/src/components/billing/duration-input.tsx": 2,
     "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/rate-management-dialog.tsx": 6,
     "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-day-cell.tsx": 8,
     "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-entity-chip.tsx": 10,
