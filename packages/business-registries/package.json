@@ -106,11 +106,13 @@
     "@stll/stdnum": "^2.3.2",
     "better-result": "catalog:",
     "fast-xml-parser": "^5.11.1",
-    "fast-xml-validator": "^1.4.2",
+    "saxes": "catalog:",
     "temporal-polyfill": "catalog:"
   },
   "devDependencies": {
+    "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
-    "bun-types": "catalog:"
+    "bun-types": "catalog:",
+    "fast-check": "catalog:"
   }
 }
