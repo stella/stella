@@ -509,7 +509,7 @@ const READ_DOCUMENT_TEXT_FIELD_PATHS = [
 ];
 
 const UPLOAD_DOCUMENT_VERSION_TOOL_DEFINITION = defineValibotMcpTool({
-  consumesServices: false,
+  consumesServices: true,
   _meta: {
     "openai/fileParams": ["file"],
   },

@@ -90,7 +90,7 @@ const config = {
   mcp: {
     type: "capability",
     reason: "workflow_orchestration",
-    consumesServices: false,
+    consumesServices: true,
   },
   body: t.Object({
     includeContent: t.Boolean(),

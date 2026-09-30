@@ -759,9 +759,13 @@ export const createMcpHttpRequestHandler = ({
 
       let consumesServices = definition.consumesServices;
       if (toolName === "invoke_capability") {
-        consumesServices = invokedCapabilityConsumesServices(
+        const classified = await invokedCapabilityConsumesServices(
           toolRequest.params.arguments ?? {},
         );
+        if (Result.isError(classified)) {
+          return serializeToolResult(classified.error);
+        }
+        consumesServices = classified.value;
       } else if (toolName === "fetch" && mode !== "law") {
         consumesServices = compatFetchConsumesServices(
           toolRequest.params.arguments ?? {},

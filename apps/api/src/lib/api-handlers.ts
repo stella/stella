@@ -63,6 +63,7 @@ import {
   withActionAdmission,
 } from "@/api/lib/rate-limit/action-admission";
 import type { ActionKind } from "@/api/lib/rate-limit/action-kinds";
+import type { ServiceClassification } from "@/api/lib/rate-limit/service-classification";
 import {
   getTanStackTextModelInfoForRole,
   resolveEffectiveServiceTierForProvider,
@@ -246,7 +247,7 @@ export type McpExposure =
   | {
       type: "capability";
       reason: McpCapabilityReason;
-      consumesServices: boolean;
+      consumesServices: ServiceClassification;
     }
   | { type: "internal"; reason: McpInternalReason };
 

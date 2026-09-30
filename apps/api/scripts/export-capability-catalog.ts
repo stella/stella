@@ -1,3 +1,4 @@
+import { KindGuard } from "@sinclair/typebox";
 // Dev-only exporter: projects the safe-handler universe down to a capability
 // catalog and writes a deterministic JSON snapshot
 // (`packages/cli/capability-catalog.json`).
@@ -33,8 +34,6 @@
 // Env-dependent by design (it imports the handler graph, which validates the API
 // env at module load), so run under `bun --env-file=apps/api/.env`. Wired into
 // `bun run verify` and CI next to the CLI registry-snapshot drift guard.
-
-import { KindGuard } from "@sinclair/typebox";
 import { panic, Result } from "better-result";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
@@ -55,6 +54,11 @@ import {
   isTransportInvocable,
   transportFileResponse,
 } from "../src/lib/capability-transport";
+import {
+  VALIDATED_INPUT_SERVICE_CLASSIFICATION,
+  type CatalogServiceClassification,
+  type ServiceClassification,
+} from "../src/lib/rate-limit/service-classification";
 import { advertisedSchema } from "../src/mcp/advertised-schema";
 import { CONTEXT_FIDELITY_WAIVERS } from "../src/mcp/capability-waivers";
 import { PUBLIC_FIELD_NAME } from "../src/mcp/public-field-names";
@@ -488,7 +492,7 @@ type CapabilityEntry = {
   handlerKind: HandlerKind;
   access: "read" | "write";
   destructive: boolean;
-  consumesServices: boolean;
+  consumesServices: CatalogServiceClassification;
   scope: string;
   /** Additional OAuth grants required by a compound covering tool. */
   additionalScopes?: readonly string[];
@@ -827,7 +831,7 @@ const serviceConsumptionOf = (
     { type: "capability" | "tool" | "covered" }
   >,
   toolServicesByName: ReadonlyMap<string, boolean>,
-): boolean => {
+): ServiceClassification => {
   let toolName: string;
   switch (exposure.type) {
     case "capability":
@@ -854,7 +858,7 @@ type BuildCatalogEntryOptions = {
   description: string | undefined;
   kind: HandlerKind;
   access: { access: "read" | "write"; destructive: boolean };
-  consumesServices: boolean;
+  consumesServices: ServiceClassification;
   scope: string;
   additionalScopes: readonly string[];
   requestTimeoutMs: number | undefined;
@@ -900,7 +904,10 @@ const buildCatalogEntry = ({
   handlerKind: kind,
   access: access.access,
   destructive: access.destructive,
-  consumesServices,
+  consumesServices:
+    typeof consumesServices === "function"
+      ? VALIDATED_INPUT_SERVICE_CLASSIFICATION
+      : consumesServices,
   scope,
   ...(additionalScopes.length === 0 ? {} : { additionalScopes }),
   ...(requestTimeoutMs === undefined ? {} : { requestTimeoutMs }),
