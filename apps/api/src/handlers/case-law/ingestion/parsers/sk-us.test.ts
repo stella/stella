@@ -134,3 +134,42 @@ describe("the document the court renders as markup", () => {
     }
   });
 });
+
+test("one-line Roman titles enter the outline without swallowing the following paragraph", () => {
+  const { documentAst } = parse(
+    "<html><body><span>Odôvodnenie:<br/>I. Ústavná sťažnosť<br/>Text odôvodnenia.<br/>II. A) Argumentácia<br/>Ďalší text.<br/></span></body></html>",
+  );
+  const headings = documentAst.blocks.filter(
+    (block) => block.type === "heading",
+  );
+  expect(headings.map((block) => [block.plainText, block.level])).toEqual([
+    ["Odôvodnenie:", 2],
+    ["I. Ústavná sťažnosť", 3],
+    ["II. A) Argumentácia", 4],
+  ]);
+  expect(
+    documentAst.blocks
+      .filter((block) => block.type === "paragraph")
+      .map((block) => block.plainText),
+  ).toEqual(["Text odôvodnenia.", "Ďalší text."]);
+});
+
+test("Roman verdict items keep their holding role while reasoning titles enter the outline", () => {
+  const verdict = "I. Súd žalobu zamieta.";
+  const { documentAst } = parse(
+    `<html><body><span>rozhodol:<br/>${verdict}<br/>II. Náhradu nepriznáva.<br/>Odôvodnenie:<br/>I. Ústavná sťažnosť<br/>Text odôvodnenia.<br/></span></body></html>`,
+  );
+  expect(
+    documentAst.blocks.find((block) => block.plainText.includes(verdict)),
+  ).toMatchObject({ type: "paragraph", role: "holding" });
+  expect(
+    documentAst.blocks.find(
+      (block) => block.plainText === "I. Ústavná sťažnosť",
+    ),
+  ).toMatchObject({ type: "heading", level: 3 });
+  expect(
+    documentAst.blocks
+      .filter((block) => block.type === "heading")
+      .map((block) => block.plainText),
+  ).not.toContain(verdict);
+});
