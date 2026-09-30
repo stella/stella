@@ -167,8 +167,10 @@ test(
 test("rejects archives whose end records are ambiguous", async () => {
   const zip = new JSZip();
   zip.file("part.txt", "text", { createFolders: false });
-  zip.comment = String.fromCodePoint(80, 75, 5, 6);
-  const bytes = await zip.generateAsync({ type: "uint8array" });
+  const bytes = await zip.generateAsync({
+    type: "uint8array",
+    comment: String.fromCodePoint(80, 75, 5, 6),
+  });
   const loader = spyOn(JSZip, "loadAsync");
   try {
     await expectArchiveError(loadDocx(bytes));
