@@ -596,7 +596,9 @@ describe("sk document drain", () => {
     const run = await runDrain({
       queue: queueOf(["doc-1", "doc-2", "doc-3"]),
       respond: ({ caseNumber }) => {
-        if (caseNumber === "doc-1") {throw failure;}
+        if (caseNumber === "doc-1") {
+          throw failure;
+        }
         return OUTCOMES.filled;
       },
       polls: 3,
