@@ -13300,7 +13300,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "contacts", "sanctions-get"],
                 capabilityId: "contacts.sanctions.get",
                 description:
-                  "Read a contact's sanctions screening per list, including evidence, review disposition and freshness. Unavailable never means clear. Binding versus informational uses the firm's practice jurisdictions. To review a current match, call contacts.sanctions.reviews.update with its reviewTarget, a dismissed or confirmed disposition and a reason.",
+                  "Read a contact's sanctions coverage per list and a bounded cursor page of current matches. Follow matches.nextCursor until null; matches.items contains evidence, review disposition and reviewTarget. Unavailable never means clear. Binding versus informational uses the firm's practice jurisdictions. To review a current match, call contacts.sanctions.reviews.update with its reviewTarget, a dismissed or confirmed disposition and a reason.",
                 access: "read",
                 flags: [
                   {
@@ -13314,7 +13314,9 @@ export const generatedRouteMap: RouteNode = {
                   },
                 ],
                 inputOnly: [],
-                paginated: false,
+                paginated: true,
+                paginationPart: "query",
+                itemsKey: "items",
                 destructive: false,
                 scope: "read",
                 inputSchema: {
@@ -13334,6 +13336,22 @@ export const generatedRouteMap: RouteNode = {
                         },
                       },
                     },
+                    query: {
+                      type: "object",
+                      properties: {
+                        cursor: {
+                          maxLength: 8192,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
+                          type: "string",
+                        },
+                        limit: {
+                          minimum: 1,
+                          maximum: 100,
+                          type: "integer",
+                        },
+                      },
+                    },
                   },
                 },
               },
@@ -13348,7 +13366,7 @@ export const generatedRouteMap: RouteNode = {
                 ],
                 capabilityId: "contacts.sanctions.matches.list",
                 description:
-                  "List open sanctions matches for the active organization in bounded cursor pages. Only fresh, currently screened contacts included in monitoring are returned. Dismissed and confirmed matches are omitted. Copy source and sourceEntryId to contacts.sanctions.reviews.update with the returned contactId.",
+                  "List open sanctions matches for the active organization in bounded cursor pages with binding versus informational classification from the firm's practice jurisdictions. Only fresh, currently screened contacts included in monitoring are returned. Dismissed and confirmed matches are omitted. To review a match, read contacts.sanctions.get with the returned contactId and copy its reviewTarget to contacts.sanctions.reviews.update with a disposition and reason.",
                 access: "read",
                 flags: [],
                 inputOnly: [],

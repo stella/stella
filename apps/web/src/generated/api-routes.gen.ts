@@ -3387,7 +3387,9 @@ export type WebRoutes = {
                   contactId: Tbf83a7d346;
                   source: string;
                   sourceEntryId: string;
-                  evidence: T0bc3339b15;
+                  evidence: Tfaeca13aae;
+                } & {
+                  classification: T582feff9d9;
                 }>;
                 nextCursor: Tbe0400fa4c;
                 limit: number;
@@ -3632,7 +3634,7 @@ export type WebRoutes = {
                   reason: null;
                   totalMatches: number;
                   truncated: Tfddd645dc8;
-                  possibleMatches: [T0bc3339b15, ...T0bc3339b15[]];
+                  possibleMatches: [Tfaeca13aae, ...Tfaeca13aae[]];
                 }) | (T304328c782 & {
                   status: "unavailable";
                   reason: ("access-denied" | "company-not-found" | "load-failed" | "not-loaded" | "registry-unavailable" | "stale");
@@ -4369,13 +4371,47 @@ export type WebRoutes = {
             params: {
               contactId: T09d69fbefb;
             };
-            query: Record<never, never>;
+            query: {
+              cursor?: string;
+              limit?: number;
+            };
             headers: Record<never, never>;
             response: {
               200: {
                 contactId: Tbf83a7d346;
                 contactMode: T914c41786d;
                 firmMode: Tfe1936e462;
+                matches: {
+                  items: Array<{
+                    organizationId: Tb1d68817ba;
+                    contactId: Tbf83a7d346;
+                    sourceId: string;
+                    sourceEntryId: string;
+                    editionId: Tcfd90007a8;
+                    state: ("active" | "lapsed");
+                    disposition: ("confirmed" | "dismissed" | "needs-review");
+                    reviewedBy: Tbe0400fa4c;
+                    reviewReason: Tbe0400fa4c;
+                    reviewedAt: Tdf2b0d1150;
+                    reviewedContactFingerprint: Tbe0400fa4c;
+                    reviewedEntryHash: Tbe0400fa4c;
+                    contactFingerprint: string;
+                    entryHash: string;
+                    match: Tfaeca13aae;
+                    updatedAt: string;
+                  } & {
+                    classification: T582feff9d9;
+                    reviewTarget: {
+                      source: string;
+                      sourceEntryId: string;
+                      expectedContactFingerprint: string;
+                      expectedEntryHash: string;
+                    };
+                  }>;
+                  nextCursor: Tbe0400fa4c;
+                  limit: number;
+                };
+                truncated: Tfddd645dc8;
                 lists: Array<{
                   source: T0af9516338;
                   classification: T582feff9d9;
@@ -4412,31 +4448,6 @@ export type WebRoutes = {
                     } | null;
                   };
                   checkedAt: Tdf2b0d1150;
-                  matches: Array<{
-                    organizationId: Tb1d68817ba;
-                    contactId: Tbf83a7d346;
-                    sourceId: string;
-                    sourceEntryId: string;
-                    editionId: Tcfd90007a8;
-                    state: ("active" | "lapsed");
-                    disposition: ("confirmed" | "dismissed" | "needs-review");
-                    reviewedBy: Tbe0400fa4c;
-                    reviewReason: Tbe0400fa4c;
-                    reviewedAt: Tdf2b0d1150;
-                    reviewedContactFingerprint: Tbe0400fa4c;
-                    reviewedEntryHash: Tbe0400fa4c;
-                    contactFingerprint: string;
-                    entryHash: string;
-                    match: T0bc3339b15;
-                    updatedAt: string;
-                  } & {
-                    reviewTarget: {
-                      source: T0af9516338;
-                      sourceEntryId: string;
-                      expectedContactFingerprint: string;
-                      expectedEntryHash: string;
-                    };
-                  }>;
                 }>;
               };
               400: T9a51b7d2bc;
@@ -35184,27 +35195,6 @@ type T0b7cb34284 = {
   status: "ok";
 };
 
-type T0bc3339b15 = {
-  sourceEntryId: string;
-  editionId: string;
-  score: number;
-  sourceUrl: string;
-  name: Tbe0400fa4c;
-  referenceNumber: Tbe0400fa4c;
-  entityType: ("aircraft" | "organisation" | "person" | "unknown" | "vessel");
-  programme: Tbe0400fa4c;
-  listedOn: Tbe0400fa4c;
-  evidence: {
-    nameScore: number;
-    matchedName: Tbe0400fa4c;
-    birthDate: T230894d92c;
-    nationality: T230894d92c;
-    entityType: T230894d92c;
-    identifier: T230894d92c;
-    conflicts: Array<("birth-date" | "entity-type" | "nationality")>;
-  };
-};
-
 type T0bdd08f6e7 = {
   datePropertyId: string;
   endDatePropertyId?: string | undefined;
@@ -35725,8 +35715,6 @@ type T2253957f29 = {
   reason?: "enqueue" | "processing";
   status: "failed";
 };
-
-type T230894d92c = "match" | "mismatch" | "not-compared";
 
 type T23194ec8c3 = "below-minimum" | "contracted" | "source-mismatch" | "stale";
 
@@ -41572,6 +41560,8 @@ type Tf0ef1a069d = {
   verifiedAt: string;
 };
 
+type Tf1d4625763 = "match" | "mismatch" | "not-compared";
+
 type Tf1da61a84f = {
   status: "pending";
 };
@@ -41790,6 +41780,27 @@ type Tfab89e6ca5 = (Tcbcd8d06b3 & {
   workspaceId: Tbe0400fa4c;
   workspaceName: Tbe0400fa4c;
 });
+
+type Tfaeca13aae = {
+  sourceEntryId: string;
+  editionId: string;
+  score: number;
+  sourceUrl: string;
+  name: Tbe0400fa4c;
+  referenceNumber: Tbe0400fa4c;
+  entityType: ("aircraft" | "organisation" | "person" | "unknown" | "vessel");
+  programme: Tbe0400fa4c;
+  listedOn: Tbe0400fa4c;
+  evidence: {
+    nameScore: number;
+    matchedName: Tbe0400fa4c;
+    birthDate: Tf1d4625763;
+    nationality: Tf1d4625763;
+    entityType: Tf1d4625763;
+    identifier: Tf1d4625763;
+    conflicts: Array<("birth-date" | "entity-type" | "nationality")>;
+  };
+};
 
 type Tfafd241922 = "approval-requested" | "approval-responded" | "awaiting-input" | "complete" | "error" | "input-complete" | "input-streaming";
 
