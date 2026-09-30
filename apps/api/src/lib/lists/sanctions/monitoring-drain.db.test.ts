@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
@@ -11,16 +11,20 @@ import {
   contacts,
   organizationSettings,
   sanctionsContactMarks,
+  sanctionsMonitoringBackfills,
+  sanctionsEditionFanouts,
   sanctionsOrganizationMarks,
   sanctionsContactScreenings,
   sanctionsSources,
   sanctionsEditions,
 } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
+import { advanceSanctionsMonitoringBackfill } from "@/api/lib/lists/sanctions/monitoring-backfill";
 import {
   drainSanctionsContactMarks,
   SANCTIONS_MARK_LEASE_MS,
 } from "@/api/lib/lists/sanctions/monitoring-drain";
+import { requestSanctionsMonitoringRefresh } from "@/api/lib/lists/sanctions/monitoring-refresh";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -53,6 +57,21 @@ beforeAll(async () => {
     "utf-8",
   );
   const triggers = migration.slice(migration.indexOf("CREATE FUNCTION"));
+  const backfillMigration = readFileSync(
+    new URL(
+      "../../../../drizzle/20261003123000_sanctions_monitoring_backfills/migration.sql",
+      import.meta.url,
+    ),
+    "utf-8",
+  );
+  await client.exec(
+    backfillMigration
+      .slice(backfillMigration.indexOf("CREATE FUNCTION"))
+      .replaceAll("--> statement-breakpoint", "\n"),
+  );
+  await client.exec(`GRANT SELECT, INSERT, UPDATE, DELETE ON sanctions_monitoring_backfills TO stella;
+    ALTER TABLE sanctions_monitoring_backfills ENABLE ROW LEVEL SECURITY; ALTER TABLE sanctions_monitoring_backfills FORCE ROW LEVEL SECURITY;
+    REVOKE ALL ON sanctions_edition_fanouts FROM stella; GRANT SELECT ON sanctions_edition_fanouts TO stella;`);
   await client.exec(triggers.replaceAll("--> statement-breakpoint", "\n"));
   await client.exec(`
     GRANT SELECT, INSERT, UPDATE, DELETE ON contacts, organization_settings, sanctions_contact_marks, sanctions_organization_marks, sanctions_contact_matches, sanctions_contact_screenings, sanctions_screening_events TO stella;
@@ -262,6 +281,227 @@ test(
       signal: new AbortController().signal,
     });
     expect(await markFor(contact.id)).toBeUndefined();
+  },
+  TIMEOUT,
+);
+
+test(
+  "durable refresh requests are idempotent, tenant scoped and atomic with caller rollback",
+  async () => {
+    const contact = await addContact();
+    await db
+      .delete(sanctionsContactMarks)
+      .where(eq(sanctionsContactMarks.contactId, contact.id));
+    await expect(
+      scopedDb(async (tx) => {
+        await requestSanctionsMonitoringRefresh(tx, {
+          organizationId: orgId,
+          contactIds: [contact.id],
+        });
+        throw new Error("synthetic audit rollback");
+      }),
+    ).rejects.toThrow("synthetic audit rollback");
+    expect(await markFor(contact.id)).toBeUndefined();
+    await scopedDb(async (tx) => {
+      await requestSanctionsMonitoringRefresh(tx, {
+        organizationId: orgId,
+        contactIds: [contact.id, contact.id],
+      });
+      await requestSanctionsMonitoringRefresh(tx, {
+        organizationId: orgId,
+        contactIds: [contact.id],
+      });
+      await requestSanctionsMonitoringRefresh(tx, { organizationId: orgId });
+      await requestSanctionsMonitoringRefresh(tx, { organizationId: orgId });
+    });
+    expect((await markFor(contact.id))?.generation).toBe(1n);
+    await expect(
+      scopedDb(
+        async (tx) =>
+          await requestSanctionsMonitoringRefresh(tx, {
+            organizationId: orgId,
+            contactIds: Array.from({ length: 10_001 }, () => contact.id),
+          }),
+      ),
+    ).rejects.toThrow("contact cap");
+    expect(
+      await scopedFor(otherOrg)(
+        async (tx) => await tx.select().from(sanctionsOrganizationMarks),
+      ),
+    ).toEqual([]);
+  },
+  TIMEOUT,
+);
+
+const emptyEdition = async () => {
+  const editionId = toSafeId<"sanctionsEdition">(Bun.randomUUIDv7());
+  const hash = new Bun.CryptoHasher("sha256").update(editionId).digest("hex");
+  await db.insert(sanctionsEditions).values({
+    id: editionId,
+    sourceId: "eu",
+    markerKey: hash,
+    contentHash: hash,
+    state: "ready",
+    publishedAt: "2026-09-30",
+    entryCount: 0,
+  });
+  await db
+    .update(sanctionsSources)
+    .set({ activeEditionId: editionId, lastSuccessfulVerifiedAt: new Date() })
+    .where(eq(sanctionsSources.id, "eu"));
+  return editionId;
+};
+
+const errorMessages = (error: unknown): string =>
+  error instanceof Error
+    ? `${error.message} ${"cause" in error ? errorMessages(error.cause) : ""}`
+    : String(error);
+
+test(
+  "backfill checkpoints roll back and replay; activation supersedes older work",
+  async () => {
+    const editionId = await emptyEdition();
+    const contact = await addContact();
+    await scopedDb(async (tx) => {
+      await tx
+        .insert(sanctionsMonitoringBackfills)
+        .values({ organizationId: orgId, sourceId: "eu", editionId })
+        .onConflictDoUpdate({
+          target: [
+            sanctionsMonitoringBackfills.organizationId,
+            sanctionsMonitoringBackfills.sourceId,
+          ],
+          set: {
+            editionId,
+            cursorContactId: null,
+            state: "pending",
+            scheduledAt: new Date(),
+          },
+        });
+    });
+    await client.exec(`CREATE FUNCTION reject_backfill_checkpoint() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic cursor failure'; END $$;
+    CREATE TRIGGER backfill_checkpoint_failure BEFORE UPDATE ON sanctions_monitoring_backfills FOR EACH ROW WHEN (OLD.cursor_contact_id IS DISTINCT FROM NEW.cursor_contact_id) EXECUTE FUNCTION reject_backfill_checkpoint();`);
+    const now = futureNow();
+    const attempt = await Result.tryPromise(
+      async () =>
+        await advanceSanctionsMonitoringBackfill({
+          db: scopedDb,
+          organizationId: orgId,
+          sourceId: "eu",
+          now,
+          signal: new AbortController().signal,
+        }),
+    );
+    expect(attempt.isErr()).toBe(true);
+    if (attempt.isErr()) {
+      expect(errorMessages(attempt.error)).toContain(
+        "synthetic cursor failure",
+      );
+    }
+    expect(
+      (await db.select().from(sanctionsMonitoringBackfills)).at(0)
+        ?.cursorContactId,
+    ).toBeNull();
+    expect(
+      await scopedDb(
+        async (tx) =>
+          await tx
+            .select()
+            .from(sanctionsContactScreenings)
+            .where(eq(sanctionsContactScreenings.contactId, contact.id)),
+      ),
+    ).toEqual([]);
+    await client.exec(
+      "DROP TRIGGER backfill_checkpoint_failure ON sanctions_monitoring_backfills; DROP FUNCTION reject_backfill_checkpoint()",
+    );
+    expect(
+      await advanceSanctionsMonitoringBackfill({
+        db: scopedDb,
+        organizationId: orgId,
+        sourceId: "eu",
+        now: new Date(now.getTime() + SANCTIONS_MARK_LEASE_MS + 1),
+        signal: new AbortController().signal,
+      }),
+    ).toBe("advanced");
+    expect(
+      (await db.select().from(sanctionsMonitoringBackfills)).at(0)?.state,
+    ).toBe("complete");
+    expect(
+      await scopedFor(otherOrg)(
+        async (tx) => await tx.select().from(sanctionsMonitoringBackfills),
+      ),
+    ).toEqual([]);
+    const nextEdition = await emptyEdition();
+    await scopedDb(async (tx) => {
+      await tx
+        .update(sanctionsMonitoringBackfills)
+        .set({
+          editionId: nextEdition,
+          cursorContactId: null,
+          state: "pending",
+          scheduledAt: new Date(),
+        })
+        .where(eq(sanctionsMonitoringBackfills.organizationId, orgId));
+    });
+    let newerEdition: typeof nextEdition | undefined;
+    const activateAfterClaim: ScopedDb = async (run) => {
+      const value = await scopedDb(run);
+      if (newerEdition === undefined) {
+        newerEdition = await emptyEdition();
+      }
+      return value;
+    };
+    expect(
+      await advanceSanctionsMonitoringBackfill({
+        db: activateAfterClaim,
+        organizationId: orgId,
+        sourceId: "eu",
+        now: futureNow(),
+        signal: new AbortController().signal,
+      }),
+    ).toBe("superseded");
+    expect(
+      (await db.select().from(sanctionsMonitoringBackfills)).at(0)?.editionId,
+    ).toBe(newerEdition);
+    expect(
+      (await db.select().from(sanctionsEditionFanouts)).find(
+        ({ sourceId }) => sourceId === "eu",
+      )?.editionId,
+    ).toBe(newerEdition);
+  },
+  TIMEOUT,
+);
+
+test(
+  "measure statement-trigger cost for a 10000-contact import",
+  async () => {
+    const insert = async () =>
+      await scopedDb(async (tx) => {
+        const started = performance.now();
+        await tx.execute(sql`INSERT INTO public.contacts (id, organization_id, type, display_name)
+       SELECT gen_random_uuid(), ${orgId}, 'person', 'Import Person' FROM generate_series(1, 10000)`);
+        return performance.now() - started;
+      });
+    await client.exec(
+      "ALTER TABLE public.contacts DISABLE TRIGGER contacts_sanctions_mark_insert",
+    );
+    const baselineMs = await insert();
+    await client.exec(
+      "ALTER TABLE public.contacts ENABLE TRIGGER contacts_sanctions_mark_insert",
+    );
+    const markedMs = await insert();
+    console.log(
+      JSON.stringify({
+        benchmark: "sanctions-contact-import",
+        database: "pglite",
+        contacts: 10_000,
+        baselineMs,
+        markedMs,
+        overheadMs: markedMs - baselineMs,
+        ratio: markedMs / baselineMs,
+      }),
+    );
+    expect(markedMs).toBeGreaterThan(0);
   },
   TIMEOUT,
 );

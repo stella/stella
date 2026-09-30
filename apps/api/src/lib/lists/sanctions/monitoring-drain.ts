@@ -8,11 +8,7 @@ import {
   commitSanctionsMonitoringBatch,
   SANCTIONS_MONITORING_BATCH_SIZE,
 } from "@/api/lib/lists/sanctions/monitoring-diff";
-import {
-  monitoringFingerprint,
-  monitoringSubject,
-} from "@/api/lib/lists/sanctions/monitoring-input";
-import { screenSanctionsSubject } from "@/api/lib/lists/sanctions/screening-service";
+import { prepareMonitoringContacts } from "@/api/lib/lists/sanctions/monitoring-screen";
 import { sanctionsSourceIds } from "@/api/lib/lists/sanctions/source-config";
 
 export const SANCTIONS_MARK_LEASE_MS = 5 * 60_000;
@@ -73,25 +69,11 @@ export const drainSanctionsContactMarks = async ({
     return { marks, contactRows };
   });
   signal.throwIfAborted();
-  const prepared = await Promise.all(
-    claimed.contactRows.map(async (contact) => {
-      const result = await screenSanctionsSubject({
-        db,
-        subject: monitoringSubject(contact),
-        practiceJurisdictions: [],
-        now,
-        resultMode: "complete",
-      });
-      if (result.isErr()) {
-        panic("Monitored contact subject rejected");
-      }
-      return {
-        contactId: contact.id,
-        contactFingerprint: monitoringFingerprint(contact),
-        lists: result.value.lists,
-      };
-    }),
-  );
+  const prepared = await prepareMonitoringContacts({
+    db,
+    contactRows: claimed.contactRows,
+    now,
+  });
   const terminal = new Set(prepared.map(({ contactId }) => contactId));
   const sources = sanctionsSourceIds();
   // One source in flight bounds each transaction and preserves the mark until all sources finish.

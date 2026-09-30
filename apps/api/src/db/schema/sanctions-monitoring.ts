@@ -8,6 +8,7 @@ import type { SanctionsPossibleMatch } from "@/api/lib/lists/sanctions/screening
 
 import {
   orgPolicies,
+  globalCaseLawPolicies,
   organization,
   p,
   pUuid,
@@ -71,6 +72,83 @@ export const sanctionsOrganizationMarks = p.pgTable(
     generation: p.bigint({ mode: "bigint" }).notNull().default(1n),
   },
   () => monitoringPolicies("sanctions_organization_marks"),
+);
+
+const FANOUT_FRESHNESS_STATES = ["unknown", "fresh", "unavailable"] as const;
+const BACKFILL_STATES = ["pending", "complete"] as const;
+
+export const sanctionsMonitoringBackfills = p.pgTable(
+  "sanctions_monitoring_backfills",
+  {
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    sourceId: p
+      .text("source_id")
+      .notNull()
+      .references(() => sanctionsSources.id),
+    editionId: safeUuid<"sanctionsEdition">("edition_id").references(
+      () => sanctionsEditions.id,
+    ),
+    cursorContactId: safeUuid<"contact">("cursor_contact_id"),
+    generation: p.bigint({ mode: "bigint" }).notNull().default(1n),
+    state: p.text({ enum: BACKFILL_STATES }).notNull().default("pending"),
+    scheduledAt: timestamptz("scheduled_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p.primaryKey({ columns: [table.organizationId, table.sourceId] }),
+    p
+      .index("sanctions_monitoring_backfills_due_idx")
+      .on(table.state, table.scheduledAt, table.organizationId, table.sourceId),
+    p.check(
+      "sanctions_monitoring_backfills_state_check",
+      sql`${table.state} IN (${sql.join(
+        BACKFILL_STATES.map((state) => sql`${state}`),
+        sql`, `,
+      )})`,
+    ),
+    p.check(
+      "sanctions_monitoring_backfills_generation_check",
+      sql`${table.generation} > 0`,
+    ),
+    ...monitoringPolicies("sanctions_monitoring_backfills"),
+  ],
+);
+
+export const sanctionsEditionFanouts = p.pgTable(
+  "sanctions_edition_fanouts",
+  {
+    sourceId: p
+      .text("source_id")
+      .primaryKey()
+      .references(() => sanctionsSources.id),
+    editionId: safeUuid<"sanctionsEdition">("edition_id").references(
+      () => sanctionsEditions.id,
+    ),
+    cursorOrganizationId: safeOrganizationId("cursor_organization_id"),
+    freshnessStatus: p
+      .text("freshness_status", { enum: FANOUT_FRESHNESS_STATES })
+      .notNull()
+      .default("unknown"),
+    state: p.text({ enum: BACKFILL_STATES }).notNull().default("pending"),
+  },
+  (table) => [
+    p.check(
+      "sanctions_edition_fanouts_freshness_check",
+      sql`${table.freshnessStatus} IN (${sql.join(
+        FANOUT_FRESHNESS_STATES.map((status) => sql`${status}`),
+        sql`, `,
+      )})`,
+    ),
+    p.check(
+      "sanctions_edition_fanouts_state_check",
+      sql`${table.state} IN (${sql.join(
+        BACKFILL_STATES.map((state) => sql`${state}`),
+        sql`, `,
+      )})`,
+    ),
+    ...globalCaseLawPolicies(),
+  ],
 );
 
 export const sanctionsContactScreenings = p.pgTable(

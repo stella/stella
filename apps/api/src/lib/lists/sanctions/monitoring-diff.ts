@@ -17,13 +17,14 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { readSanctionsFreshness } from "@/api/lib/lists/sanctions/freshness";
 import { monitoringFingerprint } from "@/api/lib/lists/sanctions/monitoring-input";
+import { SANCTIONS_SCREENING_BATCH_SIZE } from "@/api/lib/lists/sanctions/screening-service";
 import type {
   SanctionsListOutcome,
   SanctionsPossibleMatch,
 } from "@/api/lib/lists/sanctions/screening-service";
 import { commitReplaySafeIngestionBatch } from "@/api/lib/replay-safe-ingestion";
 
-export const SANCTIONS_MONITORING_BATCH_SIZE = 100;
+export const SANCTIONS_MONITORING_BATCH_SIZE = SANCTIONS_SCREENING_BATCH_SIZE;
 const MATCHES_PER_CONTACT = 1000;
 
 export type SanctionsMonitoringResult = {
