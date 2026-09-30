@@ -400,6 +400,17 @@ describe("character state", () => {
 });
 
 describe("header tables and destinations", () => {
+  test("starred metadata subgroups stay invisible without unsupported-destination warnings", () => {
+    for (const metadata of [String.raw`\fonttbl`, String.raw`\info`]) {
+      const rtf = String.raw`{\rtf1{${metadata}{\*\fname Hidden name{\*\unknownmetadata{\shptxt Hidden text}}}}Visible\par}`;
+      const document = readRtf(bytesOf(rtf));
+      expect(document.package.document.content.map(textOf)).toEqual([
+        "Visible",
+      ]);
+      expect(document.warnings ?? []).toEqual([]);
+    }
+  });
+
   test("the colour table's own text never reaches the document", () => {
     expect(paragraphsOf(`${HEADER}body\\par }`)).toEqual(["body"]);
   });

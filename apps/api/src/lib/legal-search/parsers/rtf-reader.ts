@@ -1051,6 +1051,16 @@ const readRtfInto = (
     }
   };
 
+  const enterIgnorableDestination = (): void => {
+    if (
+      state.destination.type === "skipped" &&
+      state.destination.reason === "metadata"
+    ) {
+      return;
+    }
+    enterDestination({ type: "skipped", reason: "unknown" });
+  };
+
   const closeGroup = (): void => {
     flushRun();
     const frame = stack.pop();
@@ -1149,9 +1159,9 @@ const readRtfInto = (
       continue;
     }
     if (after === 0x2a) {
-      // The following word may identify supported visible text. Otherwise
-      // retain a warning for the unknown destination while suppressing payload.
-      enterDestination({ type: "skipped", reason: "unknown" });
+      // Unsupported destinations warn outside metadata; a metadata subgroup
+      // inherits its exclusion instead of becoming a new unknown destination.
+      enterIgnorableDestination();
       cursor += 2;
       continue;
     }
