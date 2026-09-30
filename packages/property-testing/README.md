@@ -21,9 +21,9 @@ fc.assert(
 ```
 
 Every `fc.assert` or `fc.check` call must pass parameters through
-`propertyConfig` (directly or through a configured helper), or use
-`assertProperty`. The guard checks each call, including files that already
-import the configuration helper. The workspace also needs a `test:property` script preloading
+`propertyConfig`, directly or through a configured helper. The guard checks
+each call, including files that already import the configuration helper.
+The workspace also needs a `test:property` script preloading
 `@stll/property-testing/preload`; `convention.test.ts` holds the set of
 workspaces with property files and the set with that script to exact
 agreement, in both directions.
