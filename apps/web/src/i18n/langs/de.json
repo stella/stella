@@ -546,6 +546,20 @@
       "setDefault": "Als Standardnummernkreis festlegen",
       "title": "Nummernkreise"
     },
+    "quickEntry": {
+      "entrySaved": "Zeiteintrag gespeichert",
+      "expenseSaved": "Ausgabe gespeichert",
+      "expenseTitle": "Ausgabe hinzufügen",
+      "futureDate": "Wählen Sie heute oder ein früheres Datum.",
+      "invalidDate": "Wählen Sie ein gültiges Arbeitsdatum.",
+      "minimumUnit": "Zeit wird auf die kleinste Abrechnungseinheit aufgerundet.",
+      "narrativeRequired": "Fügen Sie eine Beschreibung hinzu, bevor Sie die Zeit speichern.",
+      "outsideEditWindow": "Dieses Datum liegt außerhalb der Bearbeitungsfrist.",
+      "periodLocked": "Dieser Monat ist gesperrt.",
+      "saveAndAddExpense": "Speichern und Ausgabe hinzufügen",
+      "saveAndNew": "Speichern und weiteren Eintrag hinzufügen",
+      "viewDay": "Tag anzeigen"
+    },
     "rates": {
       "addRate": "Tarif hinzufügen",
       "createRateTable": "Tariftabelle erstellen",

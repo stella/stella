@@ -546,6 +546,20 @@
       "setDefault": "تعيين كسلسلة افتراضية",
       "title": "سلاسل الترقيم"
     },
+    "quickEntry": {
+      "entrySaved": "تم حفظ إدخال الوقت",
+      "expenseSaved": "تم حفظ المصروف",
+      "expenseTitle": "إضافة مصروف",
+      "futureDate": "اختر اليوم أو تاريخًا سابقًا.",
+      "invalidDate": "اختر تاريخ عمل صالحًا.",
+      "minimumUnit": "يُقرَّب الوقت لأعلى إلى الحد الأدنى لوحدة الفوترة.",
+      "narrativeRequired": "أضف وصفًا قبل حفظ الوقت.",
+      "outsideEditWindow": "هذا التاريخ خارج مهلة التعديل.",
+      "periodLocked": "هذا الشهر مقفل.",
+      "saveAndAddExpense": "حفظ وإضافة مصروف",
+      "saveAndNew": "حفظ وإضافة إدخال آخر",
+      "viewDay": "عرض اليوم"
+    },
     "rates": {
       "addRate": "إضافة سعر",
       "createRateTable": "إنشاء جدول أسعار",

@@ -546,6 +546,20 @@
       "setDefault": "Ustaw jako serię domyślną",
       "title": "Serie numeracji"
     },
+    "quickEntry": {
+      "entrySaved": "Wpis czasu zapisany",
+      "expenseSaved": "Wydatek zapisany",
+      "expenseTitle": "Dodaj wydatek",
+      "futureDate": "Wybierz dzisiejszą lub wcześniejszą datę.",
+      "invalidDate": "Wybierz prawidłową datę pracy.",
+      "minimumUnit": "Czas jest zaokrąglany w górę do minimalnej jednostki rozliczeniowej.",
+      "narrativeRequired": "Dodaj opis przed zapisaniem czasu.",
+      "outsideEditWindow": "Ta data wykracza poza termin edycji.",
+      "periodLocked": "Ten miesiąc jest zablokowany.",
+      "saveAndAddExpense": "Zapisz i dodaj wydatek",
+      "saveAndNew": "Zapisz i dodaj kolejny wpis",
+      "viewDay": "Pokaż dzień"
+    },
     "rates": {
       "addRate": "Dodaj stawkę",
       "createRateTable": "Utwórz tabelę stawek",

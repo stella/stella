@@ -546,6 +546,20 @@
       "setDefault": "Nastaviť ako predvolený rad",
       "title": "Číselné rady"
     },
+    "quickEntry": {
+      "entrySaved": "Časový záznam uložený",
+      "expenseSaved": "Výdavok uložený",
+      "expenseTitle": "Pridať výdavok",
+      "futureDate": "Vyberte dnešný alebo skorší dátum.",
+      "invalidDate": "Vyberte platný dátum práce.",
+      "minimumUnit": "Čas sa zaokrúhľuje nahor na minimálnu účtovaciu jednotku.",
+      "narrativeRequired": "Pred uložením času pridajte popis.",
+      "outsideEditWindow": "Tento dátum je mimo lehoty na úpravy.",
+      "periodLocked": "Tento mesiac je uzamknutý.",
+      "saveAndAddExpense": "Uložiť a pridať výdavok",
+      "saveAndNew": "Uložiť a pridať ďalší",
+      "viewDay": "Zobraziť deň"
+    },
     "rates": {
       "addRate": "Pridať sadzbu",
       "createRateTable": "Vytvoriť tabuľku sadzieb",

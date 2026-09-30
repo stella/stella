@@ -13,11 +13,13 @@ import { propertyConfig, propertySeed } from "@stll/property-testing";
 
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import { arrayOrEmpty } from "@/api/lib/array";
-import { withProviderStreamContract } from "@/api/lib/chat/provider-stream-contract";
+import {
+  withProviderStreamContract,
+  withRunToolCallIds,
+} from "@/api/lib/chat/provider-stream-contract";
 import type { CALL_ID_CARRIER } from "@/api/lib/chat/unique-tool-call-ids";
 import {
   ToolCallIdLedger,
-  toolCallIdLedgerMetadata,
   withUniqueToolCallIds,
 } from "@/api/lib/chat/unique-tool-call-ids";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -40,13 +42,10 @@ const collect = async (
   ledger?: ToolCallIdLedger,
 ): Promise<StreamChunk[]> => {
   const out: StreamChunk[] = [];
-  const request = {
+  for await (const chunk of withUniqueToolCallIds(streamOf(chunks), {
+    ledger,
     messages: history,
-    ...(ledger === undefined
-      ? {}
-      : { metadata: toolCallIdLedgerMetadata(ledger) }),
-  };
-  for await (const chunk of withUniqueToolCallIds(streamOf(chunks), request)) {
+  })) {
     out.push(chunk);
   }
   return out;
@@ -315,16 +314,15 @@ const startedIdsInRun = async (ledger?: ToolCallIdLedger) => {
     description: "Looks something up",
     inputSchema: toTanStackToolSchema(v.object({})),
   }).server(async () => "found");
+  const adapter = withProviderStreamContract(perResponseNumberingAdapter());
   const started: string[] = [];
   for await (const chunk of chat({
-    adapter: withProviderStreamContract(perResponseNumberingAdapter()),
+    adapter:
+      ledger === undefined ? adapter : withRunToolCallIds(adapter, ledger),
     agentLoopStrategy: maxIterations(4),
     messages: [{ role: "user", content: "Look it up twice." }],
     middleware: [dropEarlierCalls],
     tools: [lookup],
-    ...(ledger === undefined
-      ? {}
-      : { metadata: toolCallIdLedgerMetadata(ledger) }),
   })) {
     if (chunk.type === EventType.TOOL_CALL_START) {
       started.push(chunk.toolCallId);
@@ -334,9 +332,9 @@ const startedIdsInRun = async (ledger?: ToolCallIdLedger) => {
 };
 
 describe("tool call ids through the engine", () => {
-  // Canary for the engine carrying `metadata` to every adapter request of a
-  // run, compaction's included: when an upgrade stops doing so, the second
-  // call reuses the first one's id.
+  // Canary for one adapter serving every request of a run, compaction's
+  // included: were the engine to stop reading the run's adapter, the second
+  // call would reuse the first one's id.
   test("stay unique across a run whose history loses its earlier calls", async () => {
     // The fixture must express the fault: without the run's ledger the
     // second call reuses the first one's id.
