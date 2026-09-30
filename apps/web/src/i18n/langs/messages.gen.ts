@@ -31,11 +31,14 @@ type Messages = {
     "title": "Connect your agent";
   };
   "agentSetup": {
-    "copiedToast": "Instructions copied. Paste them into your agent.";
-    "copy": "Copy instructions";
-    "description": "Paste these instructions into Claude, Codex, Cursor or another agent. It connects stella for you; you only sign in and approve access.";
-    "instructions": "Connect me to stella, my legal workspace:\n1. Add the stella MCP server as a remote HTTP MCP server named “stella”: {mcpUrl}\n   It uses OAuth. When the browser opens, I will sign in and approve access.\n2. If you can run shell commands, install the stella CLI with “{cliInstall}” and sign in with “stella auth login --server {apiOrigin}”.\n3. Call a stella tool to check that the connection works, then tell me what you can now do for me.\nIf I ask for anonymized data only, use {anonymizedUrl} instead of the first URL.";
-    "title": "Set up with your AI agent";
+    "addressLabel": "Your assistant will ask for this address";
+    "copiedToast": "Instructions copied. Paste them into a chat with your assistant.";
+    "copy": "Copy instructions for it";
+    "description": "Ask Claude or ChatGPT about your matters and documents. Choose your assistant for a short guide; it takes about a minute.";
+    "instructions": "Connect me to stella, my legal workspace. Follow the “Instructions for AI agents” at {guideUrl} and use this server address: {mcpUrl}";
+    "openGuide": "Open the guide for {assistant}";
+    "selfSetupHint": "Can your assistant set things up by itself?";
+    "title": "Use stella in your AI assistant";
   };
   "ai": {
     "chooseRewriteInstruction": "Rewrite options";
@@ -4213,23 +4216,25 @@ type Messages = {
     };
     "connections": {
       "accessTitle": "{clientName} can";
-      "browseIntegrations": "Browse integrations";
+      "browseIntegrations": "Add a service";
       "cliDescription": "Install the stella command-line client and sign in to script matters, documents, and templates from a terminal.";
       "cliInstallLabel": "Install";
       "cliLoginLabel": "Log in";
       "cliTitle": "Command-line interface";
       "connected": "Connected";
       "connectedAgo": "Connected {time}";
-      "connectedAppsDescription": "Applications and tools you have authorized to access your account.";
-      "connectedAppsEmpty": "Add the server URL below to Claude or Cursor to connect your first app.";
+      "connectedAppsDescription": "Apps you have signed in to stella with. Disconnect any you no longer use.";
+      "connectedAppsEmpty": "Nothing yet. Set up Claude or ChatGPT above and it will appear here.";
       "connectedAppsTitle": "Apps with access";
-      "description": "Integrations the AI can use, and apps with access to your account.";
+      "description": "Use stella from your AI assistant and see what can access your account.";
+      "developerDescription": "Server addresses and the command-line tool, for technical setups.";
+      "developerTitle": "Developer access";
       "disconnectConfirmDescription": "This revokes {clientName}'s access to your account, along with any tokens it has issued. You can reconnect at any time.";
       "disconnectConfirmTitle": "Disconnect {clientName}?";
       "disconnectSuccess": "Disconnected {clientName}";
-      "integrationsDescription": "Services the AI can use in chat on your behalf.";
-      "integrationsEmpty": "Add your first integration in Tools";
-      "integrationsTitle": "Integrations";
+      "integrationsDescription": "Outside services the AI can use for you, such as your document drive.";
+      "integrationsEmpty": "Add your first service";
+      "integrationsTitle": "Connected services";
       "mcpAnonymizedLabel": "Anonymized endpoint";
       "mcpAnonymizedShortNote": "The same tools, with personal data masked.";
       "mcpFullNote": "Full access to your matters and documents.";

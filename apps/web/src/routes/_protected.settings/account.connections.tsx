@@ -8,7 +8,7 @@ import { List, ListGroup } from "@stll/ui/list";
 import { SearchField } from "@stll/ui/search-field";
 import { Skeleton } from "@stll/ui/skeleton";
 
-import { AgentSetupPrompt } from "@/components/agent-setup-prompt";
+import { AssistantSetup } from "@/components/assistant-setup";
 import { externalApiOrigin } from "@/lib/api-origins";
 import { mcpConnectionsOptions } from "@/lib/knowledge/queries";
 import { catalogueOptions } from "@/lib/knowledge/queries/catalogue";
@@ -76,7 +76,7 @@ function ConnectionsPage() {
           value={query}
         />
       </div>
-      {!isSearching && <AgentSetupPrompt />}
+      {!isSearching && <AssistantSetup />}
       {showIntegrations && <IntegrationsGroup integrations={integrations} />}
       {showApps && <AppsGroup apps={apps} />}
       {!isSearching && <ClientSetupGroups apiOrigin={externalApiOrigin()} />}

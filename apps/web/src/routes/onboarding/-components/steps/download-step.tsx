@@ -7,19 +7,16 @@ import { Button } from "@stll/ui/button";
 import { ExternalLinkIcon, MonitorIcon, TerminalIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
-import { AgentSetupPrompt } from "@/components/agent-setup-prompt";
 import { AIProviderIcon } from "@/components/ai-provider-icons";
+import { AssistantSetup } from "@/components/assistant-setup";
 import { DesktopDownloadButtons } from "@/components/desktop-download-buttons";
 import { DesktopConnectionStatus } from "@/features/desktop/desktop-connection-status";
 import { useDesktopAccountConnection } from "@/features/desktop/use-desktop-account-connection";
 import { useHydrationSafeDesktopPlatform } from "@/hooks/use-hydration-safe-desktop-platform";
+import { CLI_DOCS_URL } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import { ClipboardWorkflowPreview } from "@/routes/onboarding/-components/clipboard-workflow-preview";
-
-const ASSISTANT_DOCS_URL =
-  "https://stll.app/docs/get-started/connect-ai-assistant/";
-const CLI_DOCS_URL = "https://stll.app/docs/get-started/cli/";
 
 /**
  * Single source of truth for the card order: drives the rendered card
@@ -187,22 +184,6 @@ const SetupPanel = ({
   </div>
 );
 
-/** Brand tile that opens the setup guide for that assistant. */
-const AssistantTile = ({
-  name,
-  children,
-}: React.PropsWithChildren<{ name: string }>) => (
-  <a
-    className="bg-muted/60 text-foreground hover:bg-muted flex flex-1 items-center justify-center gap-2.5 rounded-xl px-4 py-3 text-sm font-medium"
-    href={sanitizeHref(ASSISTANT_DOCS_URL)}
-    rel="noreferrer"
-    target="_blank"
-  >
-    {children}
-    {name}
-  </a>
-);
-
 type DocsLinkProps = React.PropsWithChildren<{
   href: string;
   className?: string;
@@ -234,21 +215,10 @@ const AssistantPanel = () => {
 
   return (
     <SetupPanel title={t("onboarding.mcpCardTitle")}>
-      <div className="flex gap-3">
-        <AssistantTile name="Claude">
-          <AIProviderIcon className="size-6" provider="anthropic" />
-        </AssistantTile>
-        <AssistantTile name="ChatGPT">
-          <AIProviderIcon className="size-6" provider="openai" />
-        </AssistantTile>
-      </div>
-      <p className="text-muted-foreground text-sm leading-relaxed text-pretty">
-        {t("onboarding.mcpCardDescription")}
-      </p>
-      {/* Same instructions as Settings → Connections. They carry this
-          deployment's own server address, so self-hosted readers connect to
-          the right stella. */}
-      <AgentSetupPrompt variant="inline" />
+      {/* The same block as Settings → Connections, so both paths stay one. It
+          carries this deployment's own address, so self-hosted readers
+          connect to the right stella. */}
+      <AssistantSetup variant="inline" />
       <DocsLink
         className="text-muted-foreground text-xs"
         href={CLI_DOCS_URL}

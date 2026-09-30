@@ -9,6 +9,12 @@ import {
   MCP_LAW_HTTP_PATH,
 } from "@stll/api-contract";
 import { copyToClipboard } from "@stll/clipboard";
+import {
+  Accordion,
+  AccordionItem,
+  AccordionPanel,
+  AccordionTrigger,
+} from "@stll/ui/accordion";
 import { Button } from "@stll/ui/button";
 import {
   CaseLawIcon,
@@ -95,6 +101,40 @@ export const ClientSetupGroups = ({ apiOrigin }: { apiOrigin: string }) => {
       value: `stella auth login --server ${baseUrl}`,
     },
   ];
+
+  // Addresses, variants and commands are for developers; everyone else sets
+  // up through their assistant above, so this stays folded away.
+  return (
+    <Accordion>
+      <AccordionItem value="developer">
+        <AccordionTrigger className="min-h-11">
+          <span className="flex flex-col items-start gap-0.5 text-start">
+            <span className="text-foreground text-sm font-medium">
+              {t("settings.connections.developerTitle")}
+            </span>
+            <span className="text-muted-foreground text-xs font-normal">
+              {t("settings.connections.developerDescription")}
+            </span>
+          </span>
+        </AccordionTrigger>
+        <AccordionPanel>
+          <div className="flex flex-col gap-8 pt-2">
+            <DeveloperGroups cliRows={cliRows} mcpRows={mcpRows} />
+          </div>
+        </AccordionPanel>
+      </AccordionItem>
+    </Accordion>
+  );
+};
+
+const DeveloperGroups = ({
+  mcpRows,
+  cliRows,
+}: {
+  mcpRows: readonly SetupRow[];
+  cliRows: readonly SetupRow[];
+}) => {
+  const t = useTranslations();
 
   return (
     <>
