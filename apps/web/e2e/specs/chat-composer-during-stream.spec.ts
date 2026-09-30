@@ -115,9 +115,9 @@ test("composer draft survives typing while a response is streaming", async ({
 
 // Markers recognized by the mock AI adapter (E2E_CREATE_DOCUMENT_MARKER and
 // E2E_STREAMED_TOOL_ARGS_MARKER in apps/api/src/dev/register-mock-ai.ts):
-// together they make the mock stream a create-document call's arguments as a
-// few hundred small deltas over about three seconds, the densest update rate
-// a chat turn produces.
+// together they make the mock stream a create-document call's arguments as
+// about five hundred small deltas over two to three seconds, the densest
+// update rate a chat turn produces.
 const STREAMED_TOOL_ARGS_PROMPT =
   "Draft it as a document please, streaming the arguments";
 
