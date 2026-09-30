@@ -114,4 +114,23 @@ describe("the document the court renders as markup", () => {
     expect(fulltext).not.toMatch(/\u00a0{4}/u);
     expect(fulltext).toContain("podal sťažnosť.");
   });
+
+  test("keeps body text outside spans, including paragraphs and table cells", () => {
+    const { documentAst, fulltext } = parse(
+      "<html><body>Voľný úvod.<p>Text odseku.</p>" +
+        "<table><tr><td>Text bunky A.</td><td><span>Text bunky B.</span></td></tr></table>" +
+        "Voľný záver.</body></html>",
+    );
+
+    for (const text of [
+      "Voľný úvod.",
+      "Text odseku.",
+      "Text bunky A.",
+      "Text bunky B.",
+      "Voľný záver.",
+    ]) {
+      expect(fulltext).toContain(text);
+      expect(JSON.stringify(documentAst)).toContain(text);
+    }
+  });
 });

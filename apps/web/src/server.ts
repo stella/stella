@@ -28,6 +28,14 @@ export default createServerEntry({
     // marker is consumed here so only the status crosses the wire.
     const requestedStatus = ssrStatusFromHeader(headers.get(SSR_STATUS_HEADER));
     headers.delete(SSR_STATUS_HEADER);
+    const pathname = new URL(request.url).pathname;
+    if (
+      (pathname === "/knowledge" || pathname.startsWith("/knowledge/")) &&
+      headers.get("Content-Type")?.split(";")[0]?.trim().toLowerCase() ===
+        "text/html"
+    ) {
+      headers.set("Cache-Control", "private, no-store");
+    }
 
     return new Response(response.body, {
       headers,

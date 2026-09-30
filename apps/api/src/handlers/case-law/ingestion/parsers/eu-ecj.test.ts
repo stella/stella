@@ -587,6 +587,41 @@ describe("parseEcjDecisionHtml", () => {
     ]);
   });
 
+  test("keeps loose text around paragraphs, nested wrappers and tables in source order", () => {
+    const html = [
+      "<html><body><div class='listNotice'>",
+      "Before paragraph.",
+      "<p>Paragraph text.</p>",
+      "Between wrappers.",
+      "<div>Inside wrapper.</div>",
+      "Before table.",
+      "<table><tr><td>Table text.</td></tr></table>",
+      "After table.",
+      "</div></body></html>",
+    ].join("");
+
+    const { documentAst } = parseEcjDecisionHtml({
+      caseNumber: "C-1/00",
+      ecli: undefined,
+      court: "Court of Justice",
+      decisionDate: undefined,
+      decisionType: undefined,
+      sourceUrl: undefined,
+      celex: "62000CJ0001",
+      html,
+    });
+
+    expect(documentAst.blocks.map((block) => block.plainText)).toEqual([
+      "Before paragraph.",
+      "Paragraph text.",
+      "Between wrappers.",
+      "Inside wrapper.",
+      "Before table.",
+      "Table text.",
+      "After table.",
+    ]);
+  });
+
   /**
    * Rule 10 as an invariant rather than an example: a row the
    * marker/content rules do not match is still walked for its text.
