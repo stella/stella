@@ -388,7 +388,7 @@ export type CliReleaseVerdict =
   | { readonly status: "blocked"; readonly message: string };
 
 const REMEDY_PENDING =
-  "Merge the pending Version Packages pull request first (or revert the changeset), then re-run tag-on-version-bump from the Actions tab.";
+  "Merge the pending Version Packages pull request first (or revert the changeset), then dispatch release-tag with the verified commit from the Actions tab.";
 
 export const verdictFromClassification = (
   classification: CliReleaseClassification,

@@ -1467,6 +1467,7 @@ jobs:
           bun test scripts/check-staging-deploy-decision.test.ts
           bun test scripts/check-release-cli-changeset-hold.test.ts
           bash scripts/check-release-changelog.test.sh
+          bash scripts/prepare-release-tag.test.sh
           bash scripts/release-pull-requests.test.sh
           bash scripts/check-main-merge-hold.test.sh
           bash scripts/create-release-manifest.test.sh
