@@ -9,6 +9,7 @@ import { describe, expect, test } from "bun:test";
 
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import {
+  buildSkDecisionPdfBlocks,
   isUnreadablePdfError,
   parseSkDecisionPdf,
 } from "@/api/lib/legal-search/parsers/sk-courts";
@@ -69,5 +70,80 @@ describe("unreadable PDF failures", () => {
     ]) {
       expect(isUnreadablePdfError(failure)).toBe(false);
     }
+  });
+});
+
+describe("PDF source line retention", () => {
+  const blocksFrom = (texts: string[]) =>
+    buildSkDecisionPdfBlocks({
+      lines: texts.map((text) => ({
+        text,
+        segments: [{ text }],
+        bold: false,
+        fontSize: 10,
+        pageIndex: 0,
+      })),
+      metadata: { court: "Court", caseNumber: "1/2026", ecli: undefined },
+    });
+
+  test("strips only a matching standalone header before merging body lines", () => {
+    const blocks = blocksFrom(["Súd: Court", "The body survives."]);
+    expect(blocks.map((block) => block.plainText).join(" ")).toBe(
+      "The body survives.",
+    );
+  });
+
+  test("keeps a header label followed by body text or a different source value", () => {
+    for (const text of ["Súd: Court The body survives.", "Súd: Other court"]) {
+      expect(
+        blocksFrom([text])
+          .map((block) => block.plainText)
+          .join(" "),
+      ).toBe(text);
+    }
+  });
+
+  test("keeps digit-only amounts and numbered points at page boundaries", () => {
+    for (const texts of [["1234", "Body"], ["Body", "1234"], ["1"]]) {
+      expect(
+        blocksFrom(texts)
+          .map((block) => block.plainText)
+          .join(" "),
+      ).toBe(texts.join(" "));
+    }
+  });
+
+  test("keeps digit-only text after a closing formula", () => {
+    const lines = [
+      {
+        text: "Poučenie:",
+        segments: [{ text: "Poučenie:" }],
+        bold: true,
+        fontSize: 10,
+        pageIndex: 0,
+      },
+      {
+        text: "V Bratislave dňa 1. januára 2026",
+        segments: [{ text: "V Bratislave dňa 1. januára 2026" }],
+        bold: false,
+        fontSize: 10,
+        pageIndex: 0,
+      },
+      {
+        text: "123",
+        segments: [{ text: "123" }],
+        bold: true,
+        fontSize: 10,
+        pageIndex: 0,
+      },
+    ];
+    const blocks = buildSkDecisionPdfBlocks({
+      lines,
+      metadata: { court: "Court", caseNumber: "1/2026", ecli: undefined },
+    });
+    expect(blocks.find((block) => block.plainText === "123")).toMatchObject({
+      type: "paragraph",
+      role: "signature",
+    });
   });
 });
