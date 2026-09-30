@@ -4434,7 +4434,11 @@ describe("OpenAI-compatible MCP tools", () => {
       include: undefined,
       fields: ["details", "metadata", "textFields", "source", "citations"],
     },
-    { cursor: encodePaginationCursor([1, null]), include: undefined, fields: [] },
+    {
+      cursor: encodePaginationCursor([1, null]),
+      include: undefined,
+      fields: [],
+    },
     { cursor: undefined, include: [], fields: [] },
     {
       cursor: encodePaginationCursor([1, null]),
@@ -4466,7 +4470,8 @@ describe("OpenAI-compatible MCP tools", () => {
           }),
         ),
       );
-      const decision = payload.items.at(0)?.decision ?? panic("Missing decision");
+      const decision =
+        payload.items.at(0)?.decision ?? panic("Missing decision");
       expect(decision).toMatchObject({
         decisionId: DECISION_ID,
         caseNumber: "29 Cdo 123/2024",

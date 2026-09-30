@@ -2371,9 +2371,11 @@ const decisionItemResult = ({
       ...((include === undefined ? firstWindow : include.includes("source"))
         ? { source: read.source }
         : {}),
-      ...((include === undefined
-        ? firstWindow || citationsPending
-        : include.includes("citations"))
+      ...((
+        include === undefined
+          ? firstWindow || citationsPending
+          : include.includes("citations")
+      )
         ? { citationsFrom: read.citationsFrom, citationsTo: read.citationsTo }
         : {}),
       text:
