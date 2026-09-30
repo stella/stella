@@ -819,23 +819,29 @@ const stillHolds = (run: Run, pullRequest: PullRequestRead): boolean => {
   );
 };
 
-const failureOf = (work: () => void): string | null => {
+type Outcome<T> = { ok: true; value: T } | { ok: false; reason: string };
+
+const outcomeOf = <T>(work: () => T): Outcome<T> => {
   try {
-    work();
-    return null;
+    return { ok: true, value: work() };
   } catch (error) {
     if (!(error instanceof ReviewGateError)) {
       throw error;
     }
-    return error.message;
+    return { ok: false, reason: error.message };
   }
+};
+
+const failureOf = (work: () => void): string | null => {
+  const outcome = outcomeOf(work);
+  return outcome.ok ? null : outcome.reason;
 };
 
 // Enforce mode's eviction. The fresh read is taken right before the mutation
 // and never served from the pass cache: only the confirmed offender leaves.
-// A failed dequeue is recorded, not thrown: the failure already published must
-// stay the newest verdict, and the groups that contain the pull request must
-// still be re-evaluated.
+// A failed read or dequeue is recorded, not thrown: the failure already
+// published must stay the newest verdict, and the groups that contain the pull
+// request must still be re-evaluated.
 const dequeueIfConfirmed = (
   run: Run,
   pullRequest: PullRequestRead,
@@ -847,8 +853,17 @@ const dequeueIfConfirmed = (
   ) {
     return;
   }
-  const fresh = run.gateway.revalidate(pullRequest.number);
-  if (!confirmDequeue(verdict, fresh)) {
+  const fresh = outcomeOf(() => run.gateway.revalidate(pullRequest.number));
+  if (!fresh.ok) {
+    run.failures.push(
+      `#${pullRequest.number}: dequeue not confirmed: ${fresh.reason}`,
+    );
+    console.log(
+      `#${pullRequest.number}: dequeue not confirmed: ${fresh.reason}`,
+    );
+    return;
+  }
+  if (!confirmDequeue(verdict, fresh.value)) {
     console.log(
       `#${pullRequest.number}: not dequeued; the fresh read no longer confirms it`,
     );
@@ -965,18 +980,6 @@ export const evaluateGroupTarget = (run: Run, headSha: string): void => {
   );
 };
 
-// A queued pull request that changed (a late thread, a new request) moves the
-// verdict of every group that contains it.
-const evaluatePullRequestAndGroups = (run: Run, number: number): void => {
-  evaluatePullRequestTarget(run, number);
-  if (run.snapshots.get(number)?.queued !== true) {
-    return;
-  }
-  for (const headSha of affectedGroups(run.gateway.readQueue(), number)) {
-    evaluateGroupTarget(run, headSha);
-  }
-};
-
 // One target's failure must not stop the others, and must block that target:
 // the gate reports that it could not read GitHub rather than leaving a stale
 // success standing.
@@ -1039,6 +1042,25 @@ const guardedGroup = (run: Run, headSha: string): void =>
         observedAt: now(),
       }),
   );
+
+// A queued pull request that changed (a late thread, a new request) moves the
+// verdict of every group that contains it. A group that cannot be read blocks
+// that group's commit, never the pull request's verdict already published.
+const evaluatePullRequestAndGroups = (run: Run, number: number): void => {
+  evaluatePullRequestTarget(run, number);
+  if (run.snapshots.get(number)?.queued !== true) {
+    return;
+  }
+  const queue = outcomeOf(() => run.gateway.readQueue());
+  if (!queue.ok) {
+    run.failures.push(`#${number}: groups not read: ${queue.reason}`);
+    console.log(`#${number}: groups not read: ${queue.reason}`);
+    return;
+  }
+  for (const headSha of affectedGroups(queue.value, number)) {
+    guardedGroup(run, headSha);
+  }
+};
 
 const sweep = (run: Run): void => {
   const targets = selectSweepTargets(
