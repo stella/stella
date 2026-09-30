@@ -409,14 +409,14 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "include": {
           "type": "array",
           "items": {
-            "type": "string",
             "enum": [
               "details",
               "metadata",
               "textFields",
               "source",
               "citations"
-            ]
+            ],
+            "type": "string"
           },
           "description": "Optional fields to return: details (court, dates, identifiers and URLs), metadata, textFields (abstract, headnote, legalSentence, summary), source, citations (both directions). Omit for all on the cursor-less window and only unfinished citation pages on continuations. An empty list returns text and identity only. Pass selected fields again with a cursor to request them on that window. Use a JSON array of strings; a single string is read as a one-item list.",
           "x-stella-agent-input": {
@@ -6852,14 +6852,14 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         "include": {
           "type": "array",
           "items": {
-            "type": "string",
             "enum": [
               "details",
               "metadata",
               "textFields",
               "source",
               "citations"
-            ]
+            ],
+            "type": "string"
           },
           "description": "Optional fields to return: details (court, dates, identifiers and URLs), metadata, textFields (abstract, headnote, legalSentence, summary), source, citations (both directions). Omit for all on the cursor-less window and only unfinished citation pages on continuations. An empty list returns text and identity only. Pass selected fields again with a cursor to request them on that window. Use a JSON array of strings; a single string is read as a one-item list.",
           "x-stella-agent-input": {
@@ -8300,14 +8300,14 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
         "include": {
           "type": "array",
           "items": {
-            "type": "string",
             "enum": [
               "details",
               "metadata",
               "textFields",
               "source",
               "citations"
-            ]
+            ],
+            "type": "string"
           },
           "description": "Optional fields to return: details (court, dates, identifiers and URLs), metadata, textFields (abstract, headnote, legalSentence, summary), source, citations (both directions). Omit for all on the cursor-less window and only unfinished citation pages on continuations. An empty list returns text and identity only. Pass selected fields again with a cursor to request them on that window. Use a JSON array of strings; a single string is read as a one-item list.",
           "x-stella-agent-input": {
