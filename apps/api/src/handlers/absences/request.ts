@@ -1,7 +1,10 @@
 import { Result } from "better-result";
 
-import { requestAbsence, requestAbsenceBodySchema } from "@/api/lib/absences";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import {
+  requestAbsence,
+  requestAbsenceBodySchema,
+} from "@/api/lib/billing/absences";
 
 const request = createSafeRootHandler(
   {

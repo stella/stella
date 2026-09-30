@@ -1,8 +1,8 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { transitionAbsence } from "@/api/lib/absences";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { transitionAbsence } from "@/api/lib/billing/absences";
 import { tSafeId } from "@/api/lib/custom-schema";
 
 const cancel = createSafeRootHandler(

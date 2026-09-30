@@ -268,6 +268,11 @@ export const ROLE_GRANT_STATEMENTS = [
     GRANT SELECT, INSERT, UPDATE, DELETE
       ON ALL TABLES IN SCHEMA public TO stella
   `,
+  // Absence history is retained and anonymized by account erasure; request
+  // transactions may create and decide it but never delete it.
+  `
+    REVOKE DELETE ON TABLE "absences" FROM stella
+  `,
   `
     REVOKE ALL PRIVILEGES ON TABLE "case_law_search_backfill_failures"
       FROM stella

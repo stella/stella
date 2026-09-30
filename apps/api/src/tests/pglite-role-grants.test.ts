@@ -73,6 +73,37 @@ const COLUMN_GRANT =
 
 const unquote = (value: string): string => value.replaceAll('"', "");
 
+// Narrow table grants must converge after the harness's initial wholesale
+// grant; a role/table pair alone cannot detect an extra DELETE privilege.
+const effectiveTablePrivileges = (sqlText: string, table: string) => {
+  const privileges = new Set<string>();
+  const statements = sqlText.matchAll(
+    /\b(GRANT|REVOKE)\s+([A-Z,\s]+?)\s+ON\s+(?:TABLE\s+)?([^;]+?)\s+(?:TO|FROM)\s+stella\s*(?:;|$)/giu,
+  );
+  for (const statement of statements) {
+    const [, command = "", verbs = "", targets = ""] = statement;
+    const wholesale =
+      targets.trim().toUpperCase() === "ALL TABLES IN SCHEMA PUBLIC";
+    const targeted = [...targets.matchAll(IDENTIFIER)].some(
+      (match) => (match[1] ?? match[2]) === table,
+    );
+    if (!wholesale && !targeted) {
+      continue;
+    }
+    for (const privilege of verbs
+      .toUpperCase()
+      .split(",")
+      .map((verb) => verb.trim())) {
+      if (command.toUpperCase() === "GRANT") {
+        privileges.add(privilege);
+      } else {
+        privileges.delete(privilege);
+      }
+    }
+  }
+  return privileges;
+};
+
 /** Every `(role, table)` pair the given SQL grants, as `role:table`. */
 const grantedPairs = (sqlText: string): Set<string> => {
   const pairs = new Set<string>();
@@ -146,6 +177,25 @@ const readMigrationSql = async (): Promise<string> => {
 };
 
 describe("pglite role grants mirror the committed migrations", () => {
+  test("absence history fixture privileges converge to the migration's exact grant", async () => {
+    const migrationPrivileges = effectiveTablePrivileges(
+      await readMigrationSql(),
+      "absences",
+    );
+    const harnessPrivileges = effectiveTablePrivileges(
+      ROLE_GRANT_STATEMENTS.join(";\n"),
+      "absences",
+    );
+    expect([...migrationPrivileges].toSorted()).toEqual([
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+    ]);
+    expect([...harnessPrivileges].toSorted()).toEqual(
+      [...migrationPrivileges].toSorted(),
+    );
+  });
+
   test("the migrations grant no table the harness leaves ungranted", async () => {
     const migrationPairs = grantedPairs(await readMigrationSql());
     const harnessPairs = grantedPairs(ROLE_GRANT_STATEMENTS.join(";\n"));
