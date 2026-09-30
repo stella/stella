@@ -2,12 +2,7 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "workspaces": {
     ".": {
-      "entry": [
-        "scripts/*.ts",
-        "i18n-unused.config.js",
-        "oxlint.config.ts",
-        "oxlint.design.config.ts"
-      ],
+      "entry": ["scripts/*.ts", "oxlint.config.ts", "oxlint.design.config.ts"],
       "ignoreDependencies": [
         "@tanstack/eslint-plugin-query",
         "@tanstack/eslint-plugin-router",
@@ -15,10 +10,8 @@
         "eslint-plugin-drizzle",
         "oxlint-tsgolint",
         "ultracite",
-        "i18n-unused",
         "oxlint",
-        "squawk-cli",
-        "vite"
+        "squawk-cli"
       ],
       "ignoreBinaries": ["scripts/dev.sh"]
     },

@@ -144,7 +144,6 @@
     "eslint": "catalog:",
     "eslint-plugin-drizzle": "catalog:",
     "fast-check": "catalog:",
-    "i18n-unused": "^0.20.0",
     "knip": "^6.37.0",
     "lefthook": "^2.1.14",
     "oxc-transform-react": "catalog:",
@@ -161,8 +160,7 @@
     "turbo": "2.11.3",
     "typescript": "catalog:",
     "ultracite": "catalog:",
-    "valibot": "catalog:",
-    "vite": "catalog:"
+    "valibot": "catalog:"
   },
   "resolutions": {
     "@atlaskit/pragmatic-drag-and-drop": "3.1.0",

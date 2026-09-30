@@ -11,6 +11,7 @@ import type {
 import { normalizePublicDecisionLanguage } from "@/api/lib/case-law/decision-language";
 import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
+import { publicRowHoldsDocument } from "@/api/lib/case-law/stored-payload";
 import { LIMITS } from "@/api/lib/limits";
 import {
   definePublicLawSharedQuery,
@@ -237,14 +238,55 @@ export const listPublicDecisionLanguageAlternates = async ({
 }: {
   tx: CaseLawPublicReadTransaction;
   languageGroupKey: string | null;
-}): Promise<readonly PublicDecisionLanguageAlternate[]> => {
+}): Promise<
+  readonly (PublicDecisionLanguageAlternate & { hasDocument: boolean })[]
+> => {
   if (languageGroupKey === null) {
-    return NO_ALTERNATES;
+    return [];
   }
-  const rows = await readPublicDecisionLanguageAlternatesQuery(tx, [
-    languageGroupKey,
-  ]);
-  return groupPublicDecisionLanguageAlternates(rows).alternatesFor(
-    languageGroupKey,
-  );
+  // Only this single-group detail query inspects payload presence. Rank it
+  // before language deduplication so a textless duplicate cannot hide text.
+  const versions = tx
+    .select({
+      id: caseLawDecisions.id,
+      caseNumber: caseLawDecisions.caseNumber,
+      slug: caseLawDecisions.slug,
+      country: caseLawDecisions.country,
+      court: caseLawDecisions.court,
+      decisionDate: caseLawDecisions.decisionDate,
+      language: caseLawDecisions.language,
+      hasDocument: publicRowHoldsDocument.as("has_document"),
+      languageRank: sql<number>`row_number() over (
+        partition by ${normalizedLanguageSql}
+        order by ${publicRowHoldsDocument} desc, ${caseLawDecisions.id}
+      )`.as("language_rank"),
+    })
+    .from(caseLawDecisions)
+    .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
+    .where(
+      and(
+        eq(caseLawDecisions.languageGroupKey, languageGroupKey),
+        inArray(caseLawDecisions.country, [...PUBLIC_CASE_LAW_COUNTRIES]),
+        redistributableCaseLawSource,
+        publishedCaseLawDecision,
+        sql`${normalizedLanguageSql} ~ ${ROUTE_LANGUAGE_PATTERN}`,
+      ),
+    )
+    .as("detail_versions");
+  const rows = await tx
+    .select({
+      id: versions.id,
+      caseNumber: versions.caseNumber,
+      slug: versions.slug,
+      country: versions.country,
+      court: versions.court,
+      decisionDate: versions.decisionDate,
+      language: versions.language,
+      hasDocument: versions.hasDocument,
+    })
+    .from(versions)
+    .where(eq(versions.languageRank, 1))
+    .orderBy(asc(versions.language), asc(versions.id))
+    .limit(LIMITS.caseLawLanguageAlternatesPerGroupMax);
+  return rows.length < 2 ? [] : rows;
 };

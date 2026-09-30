@@ -8,7 +8,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
 const RUNNING_TIMER_STATE = "running";
-const timeEntryIsRunning = () => sql`COALESCE((
+export const timeEntryIsRunning = () => sql<boolean>`COALESCE((
   SELECT ${timeEntryTimerStates.state} = ${RUNNING_TIMER_STATE}
   FROM ${timeEntryTimerStates}
   WHERE ${timeEntryTimerStates.entryId} = ${timeEntries.id}
@@ -18,22 +18,28 @@ const timeEntryIsRunning = () => sql`COALESCE((
 
 type GuardRunningTimeEntriesOptions = {
   tx: Pick<PgAsyncDatabase<PgQueryResultHKT>, "select" | "execute">;
-  workspaceId: SafeId<"workspace">;
-  selection:
-    | { type: "entries"; ids: SafeId<"timeEntry">[] }
-    | { type: "invoice"; invoiceId: SafeId<"invoice"> }
-    | { type: "none" };
   actorUserId: SafeId<"user">;
-};
+} & (
+  | {
+      workspaceId: SafeId<"workspace">;
+      selection:
+        | { type: "entries"; ids: SafeId<"timeEntry">[] }
+        | { type: "invoice"; invoiceId: SafeId<"invoice"> }
+        | { type: "none" };
+    }
+  | {
+      organizationId: SafeId<"organization">;
+      selection: { type: "approval_batch"; ids: SafeId<"timeEntry">[] };
+    }
+);
 
-export const guardRunningTimeEntries = async ({
-  tx,
-  workspaceId,
-  selection,
-  actorUserId,
-}: GuardRunningTimeEntriesOptions) => {
+export const guardRunningTimeEntries = async (
+  options: GuardRunningTimeEntriesOptions,
+) => {
+  const { tx, selection, actorUserId } = options;
   const selectedEntries = (() => {
     switch (selection.type) {
+      case "approval_batch":
       case "entries":
         return inArray(timeEntries.id, selection.ids);
       case "invoice":
@@ -46,7 +52,9 @@ export const guardRunningTimeEntries = async ({
     }
   })();
   const condition = and(
-    eq(timeEntries.workspaceId, workspaceId),
+    "organizationId" in options
+      ? eq(timeEntries.organizationId, options.organizationId)
+      : eq(timeEntries.workspaceId, options.workspaceId),
     selectedEntries,
   );
   const snapshot = await tx
@@ -68,14 +76,25 @@ export const guardRunningTimeEntries = async ({
     FROM (
       SELECT DISTINCT hashtext('timer:' || ${timeEntries.organizationId} || ':' || ${timeEntries.userId}) AS lock_key
       FROM ${timeEntries}
-      WHERE ${timeEntries.workspaceId} = ${workspaceId}
+      WHERE ${condition}
         AND ${inArray(timeEntries.id, ids)}
         AND ${timeEntries.userId} IS NOT NULL
       ORDER BY lock_key
     ) AS owner_locks
     ORDER BY owner_locks.lock_key
   `);
-  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`);
+  if ("organizationId" in options) {
+    await tx.execute(sql`
+      SELECT pg_advisory_xact_lock(matter_locks.lock_key)
+      FROM (SELECT DISTINCT hashtext(${timeEntries.workspaceId}::text) AS lock_key
+        FROM ${timeEntries} WHERE ${condition} ORDER BY lock_key) AS matter_locks
+      ORDER BY matter_locks.lock_key
+    `);
+  } else {
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtext(${options.workspaceId}))`,
+    );
+  }
   const locked = await tx
     .select({ id: timeEntries.id })
     .from(timeEntries)
@@ -94,12 +113,16 @@ export const guardRunningTimeEntries = async ({
       message: "Time entry selection changed; reload and try again",
     });
   }
+  // Approval batches report running refusals per row under these same locks.
+  if ("organizationId" in options) {
+    return null;
+  }
   const [blocked] = await tx
     .select({ id: timeEntries.id })
     .from(timeEntries)
     .where(
       and(
-        eq(timeEntries.workspaceId, workspaceId),
+        eq(timeEntries.workspaceId, options.workspaceId),
         inArray(timeEntries.id, ids),
         ne(timeEntries.userId, actorUserId),
         timeEntryIsRunning(),

@@ -5,8 +5,8 @@ import { Button } from "@stll/ui/button";
 import { PencilIcon, TrashIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
+import { formatCurrencyAmount } from "@/components/billing/format-currency";
 import { usePermissions } from "@/hooks/use-permissions";
-import { formatCurrencyAmount } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
 
 type Expense = {
   id: string;

@@ -12,7 +12,7 @@ import type { DecisionRowWrite } from "@/api/handlers/case-law/ingestion/pipelin
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import { processResultForCorpusOutcome } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import type { ProcessResult } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
-import { pgPayloadCarriesDocument } from "@/api/handlers/case-law/stored-payload";
+import { pgPayloadCarriesDocument } from "@/api/lib/case-law/stored-payload";
 import { settleReservedCaseLawCorpusUpload } from "@/api/lib/legal-search/case-law-corpus-upload-intents";
 import { synchronizeLockedCorpusProjectionDesiredStateTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { openCorpusPackBatch } from "@/api/lib/legal-search/corpus-pack-batch";
