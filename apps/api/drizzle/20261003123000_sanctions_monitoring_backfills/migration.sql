@@ -47,3 +47,14 @@ CREATE TRIGGER sanctions_new_source_fanout AFTER INSERT ON public.sanctions_sour
 CREATE TRIGGER sanctions_active_edition_fanout AFTER UPDATE OF active_edition_id ON public.sanctions_sources
  FOR EACH ROW WHEN (OLD.active_edition_id IS DISTINCT FROM NEW.active_edition_id)
  EXECUTE FUNCTION public.enqueue_sanctions_edition_fanout();--> statement-breakpoint
+
+-- Initialize the bounded reference registry before a tenant drain can store unavailable coverage.
+INSERT INTO public.sanctions_sources (id, issuer, marker_url) VALUES
+('eu', 'European Union', 'https://data.europa.eu/api/hub/repo/datasets/consolidated-list-of-persons-groups-and-entities-subject-to-eu-financial-sanctions'),
+('un', 'United Nations', 'https://scsanctions.un.org/resources/xml/en/consolidated.xml'),
+('cz', 'Czech Republic', 'https://mzv.gov.cz/jnp/cz/o_ministerstvu/otevrena_data/index_5.html'),
+('us-sdn', 'United States', 'https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/SDN.XML'),
+('us-non-sdn', 'United States', 'https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/CONSOLIDATED.XML'),
+('uk', 'United Kingdom', 'https://sanctionslist.fcdo.gov.uk/docs/UK-Sanctions-List.xml'),
+('ch', 'Switzerland', 'https://www.sesam.search.admin.ch/sesam-search-web/pages/downloadXmlGesamtliste.xhtml?action=downloadXmlGesamtlisteAction&lang=de')
+ON CONFLICT ON CONSTRAINT sanctions_sources_pkey DO NOTHING;

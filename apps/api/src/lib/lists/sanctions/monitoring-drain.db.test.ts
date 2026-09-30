@@ -25,6 +25,10 @@ import {
   SANCTIONS_MARK_LEASE_MS,
 } from "@/api/lib/lists/sanctions/monitoring-drain";
 import { requestSanctionsMonitoringRefresh } from "@/api/lib/lists/sanctions/monitoring-refresh";
+import {
+  SANCTIONS_SOURCE_CONFIG,
+  sanctionsSourceIds,
+} from "@/api/lib/lists/sanctions/source-config";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -95,7 +99,13 @@ beforeAll(async () => {
   );
   await db
     .insert(sanctionsSources)
-    .values({ id: "eu", issuer: "EU", markerUrl: "https://example.test/list" });
+    .values(
+      sanctionsSourceIds().map((id) => ({
+        id,
+        issuer: SANCTIONS_SOURCE_CONFIG[id].issuer,
+        markerUrl: SANCTIONS_SOURCE_CONFIG[id].markerUrl,
+      })),
+    );
   const editionId = toSafeId<"sanctionsEdition">(Bun.randomUUIDv7());
   await db.insert(sanctionsEditions).values({
     id: editionId,
