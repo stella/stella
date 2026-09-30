@@ -67,7 +67,9 @@ const prepareLineInput = ({
   vatTreatment,
 }: Static<typeof createLineBodySchema>) => {
   const vat = { vatRateBps, vatTreatment };
-  if (source.type !== "manual") {return Result.ok({ manualDraft: null, vat });}
+  if (source.type !== "manual") {
+    return Result.ok({ manualDraft: null, vat });
+  }
   return manualLineDraft({
     description: source.description,
     quantity: source.quantity,
