@@ -18,13 +18,13 @@ import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
 
 import { AiRewriteControl } from "@/components/ai-rewrite-control";
+import { SavedTimeNarratives } from "@/components/billing/saved-time-narratives";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useLocale } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { polishTimeEntryNarrative } from "@/lib/workspaces/time-entries-api";
-import { SavedTimeNarratives } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/saved-time-narratives";
 
 type LanguagePick = { code: string; label: string };
 
@@ -34,6 +34,7 @@ type TimeEntryNarrativeFieldProps = {
   onLanguageChange: (language: string | null) => void;
   narrativeLanguage: string | null;
   rows?: number | undefined;
+  required?: boolean;
   value: string;
   workspaceId: string;
 };
@@ -45,6 +46,7 @@ export const TimeEntryNarrativeField = ({
   onLanguageChange,
   narrativeLanguage,
   rows = 4,
+  required = true,
   value,
   workspaceId,
 }: TimeEntryNarrativeFieldProps) => {
@@ -141,7 +143,7 @@ export const TimeEntryNarrativeField = ({
         maxLength={10_000}
         onChange={(event) => onChange(event.currentTarget.value)}
         placeholder={tBilling("narrativePlaceholder")}
-        required
+        required={required}
         rows={rows}
         value={value}
       />

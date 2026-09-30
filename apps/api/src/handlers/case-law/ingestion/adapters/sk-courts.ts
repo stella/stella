@@ -366,19 +366,6 @@ const fetchDetail = async (
 };
 
 /**
- * Build the public source URL for a decision.
- *
- * The infosud viewer (obcan.justice.sk/infosud/...) is a
- * Liferay portlet that frequently returns "item not found"
- * for valid decisions. Use the direct PDF content URL
- * instead — it's always available and is the actual document.
- */
-const sourceUrlForDecision = (
-  guid: string,
-  documentUrl: string | null | undefined,
-): string => documentUrl ?? `${BASE_URL}/${encodeURIComponent(guid)}`;
-
-/**
  * The publisher's own document id for a listing item, or undefined where the
  * item states none this store can hold.
  *
@@ -476,6 +463,16 @@ const fetchDetailForItem = async (
   return detail === null ? { type: "unavailable" } : { type: "detail", detail };
 };
 
+type SkCourtsMetadata = Record<string, unknown> & {
+  updateDate: string | undefined;
+  updateDateIso: string | undefined;
+  updateDateDefect:
+    | { type: "invalid-publisher-date"; value: string }
+    | undefined;
+  statedSourceUrl: string | undefined;
+  sourceUrlStatus: "published" | "not-published-by-source" | "rejected-url";
+};
+
 type SkCourtsDecisionParts = {
   /** The item exactly as the publisher listed it. */
   item: SkApiItem;
@@ -567,6 +564,22 @@ export const assembleSkCourtsDecision = ({
   const decisionType = toOptionalValue(item.formaRozhodnutia);
   const ecli = toOptionalValue(detail?.ecli);
 
+  const updateDate = toOptionalValue(detail?.updateDate);
+  const parsedUpdateDate =
+    updateDate === undefined ? undefined : parseCeDate(updateDate);
+  const updateDateIso =
+    parsedUpdateDate === undefined
+      ? undefined
+      : parsePlainDate(parsedUpdateDate)?.toString();
+  const statedSourceUrl = toOptionalValue(detail?.dokument?.url);
+  const sourceUrl = sanitizeUrl(statedSourceUrl);
+  const sourceUrlStatus = (() => {
+    if (statedSourceUrl === undefined) {
+      return "not-published-by-source";
+    }
+    return sourceUrl === undefined ? "rejected-url" : "published";
+  })();
+
   return {
     caseNumber,
     ecli,
@@ -576,9 +589,7 @@ export const assembleSkCourtsDecision = ({
     decisionDate,
     decisionType,
     sourceDocumentId: skCourtsSourceDocumentId(item.guid),
-    sourceUrl: item.guid
-      ? sanitizeUrl(sourceUrlForDecision(item.guid, detail?.dokument?.url))
-      : undefined,
+    sourceUrl,
     documentUrl:
       restrictSkCourtDocumentUrl(
         toOptionalValue(detail?.dokument?.url) ?? "",
@@ -611,13 +622,20 @@ export const assembleSkCourtsDecision = ({
       documentExtension: toOptionalValue(detail?.dokument?.fileExtension),
       documentSize: detail?.dokument?.size,
       documentFileId: detail?.dokument?.id,
-      updateDate: toOptionalValue(detail?.updateDate),
+      updateDate,
+      updateDateIso,
+      updateDateDefect:
+        updateDate !== undefined && updateDateIso === undefined
+          ? { type: "invalid-publisher-date", value: updateDate }
+          : undefined,
+      statedSourceUrl,
+      sourceUrlStatus,
       originCourt: toOptionalValue(detail?.povodnySud?.nazov),
       originCourtRegistreGuid: toOptionalValue(
         detail?.povodnySud?.registreGuid,
       ),
       originCaseNumber: toOptionalValue(detail?.povodnaSpisovaZnacka),
-    }),
+    } satisfies SkCourtsMetadata),
     rawHash,
     parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
     documentAst: EMPTY_AST,

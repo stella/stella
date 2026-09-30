@@ -35,6 +35,10 @@ import {
   mergeResampledMetrics,
   summarizeCapture,
 } from "../helpers/network";
+import {
+  declarePublicKnowledgeSmoke,
+  PUBLIC_VISITOR_ROUTE_DEFS,
+} from "../helpers/public-knowledge-smoke";
 import { createBrowserErrorCollector } from "../helpers/test";
 import {
   type TestWorkspace,
@@ -258,14 +262,8 @@ const resolveRoute = (def: SmokeRouteDef, world: SmokeWorld): SmokeRoute => {
 const INTENTIONALLY_NOT_SMOKED = new Set([
   // Requires a connected desktop registry account and a real company record.
   "/knowledge/company-formats/$registry/$companyId",
-  // Visitor knowledge pages behind their flag; smoked once the flag is permanent.
-  "/knowledge/templates/catalogue",
-  "/knowledge/templates/catalogue/$packId/$templateId",
-  "/knowledge/tools/$entry",
   // A file download handler, not a page.
   "/knowledge/tools/$entry/download",
-  // Visitor knowledge pages behind their flag; smoked once the flag is permanent.
-  "/knowledge/tools/contribute",
   "/workspaces/$workspaceId/invoices/$invoiceId",
   "/workspaces/$workspaceId/reports/$exportId",
 ]);
@@ -394,6 +392,7 @@ const declareRouteSmokeGroup = ({
 };
 
 const baselineMode = process.env["E2E_NETWORK_BASELINE"];
+declarePublicKnowledgeSmoke({ mode: "disabled" });
 
 test("route coverage matches the authenticated route tree", async () => {
   await expectAuthenticatedRouteCoverage(SMOKE_ROUTE_DEFS);
@@ -733,6 +732,7 @@ const expectAuthenticatedRouteCoverage = async (
   const actual = await readAuthenticatedRouteTemplates();
   const expected = [
     ...routeDefs.map((def) => def.template),
+    ...PUBLIC_VISITOR_ROUTE_DEFS.map((def) => def.template),
     ...INTENTIONALLY_NOT_SMOKED,
   ].toSorted();
 

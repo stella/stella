@@ -77,8 +77,14 @@ export const slugify = (
     }
   }
 
+  let clipped = "";
+  for (const character of buffer) {
+    if (clipped.length + character.length > maxLength) {
+      break;
+    }
+    clipped += character;
+  }
   // Every separator is one character, so the trim shortens by one per pass.
-  let clipped = buffer.slice(0, maxLength);
   while (clipped.endsWith(separator)) {
     clipped = clipped.slice(0, -1);
   }
