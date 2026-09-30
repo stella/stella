@@ -99,6 +99,25 @@ const E2E_CREATE_DOCUMENT_REPLY =
   "The draft is open in the panel. Placeholders left to fill: the parties " +
   "and the effective date.";
 
+// Added to the create-document marker, this makes the mock stream the call's
+// arguments as a few hundred small deltas in under two seconds: the shape of a
+// real provider writing a large tool input, and the densest update rate the
+// chat client sees. A page that commits once per delta trips the web app's
+// render-storm canary.
+const E2E_STREAMED_TOOL_ARGS_MARKER = "streaming the arguments";
+const STREAMED_TOOL_ARGS_CLAUSE_COUNT = 40;
+const STREAMED_TOOL_ARGS_DELTA_LENGTH = 12;
+const STREAMED_TOOL_ARGS_DELTA_DELAY_MS = 5;
+const E2E_STREAMED_CREATE_DOCUMENT_SOURCE =
+  `@doc kind=agreement locale=en page=A4\n` +
+  `@title MUTUAL NON-DISCLOSURE AGREEMENT\n${Array.from(
+    { length: STREAMED_TOOL_ARGS_CLAUSE_COUNT },
+    (_, index) =>
+      `@clause Confidentiality undertaking ${String(index + 1)}\n` +
+      "[[Receiving Party]] keeps the Confidential Information of " +
+      "[[Disclosing Party]] secret and uses it only for the Purpose.\n",
+  ).join("")}@signatures\nparty: [[Party A]]\nparty: [[Party B]]\n`;
+
 const SLOW_STREAM_REPLY =
   "This mock reply streams back in many small pieces instead of arriving all " +
   "at once, so an end to end test has a real window while the assistant is " +
@@ -246,6 +265,91 @@ function* emptyContinuationChunks({
   };
 }
 
+type CreateDocumentCallChunksOptions = {
+  messageId: string;
+  model: string;
+  runId: string;
+  /** Whether the arguments arrive as many small deltas or as one. */
+  streamedArguments: boolean;
+  threadId: string;
+  timestamp: number;
+};
+
+/**
+ * The run `E2E_CREATE_DOCUMENT_MARKER` asks for first: the `create-document`
+ * call the client answers.
+ *
+ * @yields Each provider event of the run, after its `RUN_STARTED`.
+ */
+async function* createDocumentCallChunks({
+  messageId,
+  model,
+  runId,
+  streamedArguments,
+  threadId,
+  timestamp,
+}: CreateDocumentCallChunksOptions): AsyncGenerator<AdapterYieldChunk> {
+  const toolCallId = "mock-create-document-call";
+  yield {
+    type: EventType.TEXT_MESSAGE_START,
+    messageId,
+    role: "assistant",
+    model,
+    timestamp,
+  };
+  yield {
+    type: EventType.TOOL_CALL_START,
+    toolCallId,
+    toolCallName: E2E_CREATE_DOCUMENT_TOOL_NAME,
+    parentMessageId: messageId,
+    timestamp,
+  };
+  if (streamedArguments) {
+    const serialized = JSON.stringify({
+      name: E2E_CREATE_DOCUMENT_NAME,
+      source: E2E_STREAMED_CREATE_DOCUMENT_SOURCE,
+    });
+    for (
+      let offset = 0;
+      offset < serialized.length;
+      offset += STREAMED_TOOL_ARGS_DELTA_LENGTH
+    ) {
+      yield {
+        type: EventType.TOOL_CALL_ARGS,
+        toolCallId,
+        delta: serialized.slice(
+          offset,
+          offset + STREAMED_TOOL_ARGS_DELTA_LENGTH,
+        ),
+        model,
+        timestamp,
+      };
+      await Bun.sleep(STREAMED_TOOL_ARGS_DELTA_DELAY_MS);
+    }
+  } else {
+    yield {
+      type: EventType.TOOL_CALL_ARGS,
+      toolCallId,
+      delta: JSON.stringify({
+        name: E2E_CREATE_DOCUMENT_NAME,
+        source: E2E_CREATE_DOCUMENT_SOURCE,
+      }),
+      model,
+      timestamp,
+    };
+  }
+  yield { type: EventType.TOOL_CALL_END, toolCallId, timestamp };
+  yield {
+    type: EventType.RUN_FINISHED,
+    runId,
+    threadId,
+    model,
+    timestamp,
+    finishReason: "tool_calls",
+    usage: mockUsage,
+  };
+}
+
 const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
   kind: "text",
   name: "mock",
@@ -282,44 +386,16 @@ const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
     } satisfies AdapterYieldChunk;
 
     if (createDocumentPhase === "call") {
-      yield {
-        type: EventType.TEXT_MESSAGE_START,
+      yield* createDocumentCallChunks({
         messageId,
-        role: "assistant",
         model,
-        timestamp,
-      } satisfies AdapterYieldChunk;
-      yield {
-        type: EventType.TOOL_CALL_START,
-        toolCallId: "mock-create-document-call",
-        toolCallName: E2E_CREATE_DOCUMENT_TOOL_NAME,
-        parentMessageId: messageId,
-        timestamp,
-      } satisfies AdapterYieldChunk;
-      yield {
-        type: EventType.TOOL_CALL_ARGS,
-        toolCallId: "mock-create-document-call",
-        delta: JSON.stringify({
-          name: E2E_CREATE_DOCUMENT_NAME,
-          source: E2E_CREATE_DOCUMENT_SOURCE,
-        }),
-        model,
-        timestamp,
-      } satisfies AdapterYieldChunk;
-      yield {
-        type: EventType.TOOL_CALL_END,
-        toolCallId: "mock-create-document-call",
-        timestamp,
-      } satisfies AdapterYieldChunk;
-      yield {
-        type: EventType.RUN_FINISHED,
         runId: resolvedRunId,
+        streamedArguments: latestUserText.includes(
+          E2E_STREAMED_TOOL_ARGS_MARKER,
+        ),
         threadId: resolvedThreadId,
-        model,
         timestamp,
-        finishReason: "tool_calls",
-        usage: mockUsage,
-      } satisfies AdapterYieldChunk;
+      });
       return;
     }
 
