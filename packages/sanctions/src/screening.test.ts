@@ -703,7 +703,16 @@ test("identifier traversal shares the screening budget and cannot report clear o
 
 test("callers may tighten but cannot raise the screening work bound", () => {
   const boundedIndex = buildScreeningIndex([
-    { version: EXTRA_VERSION, entries: [listed({ name: "Vladimir Putin" })] },
+    {
+      version: EXTRA_VERSION,
+      entries: [
+        listed({
+          sourceId: "one",
+          entityType: "person",
+          name: "Vladimir Putin",
+        }),
+      ],
+    },
   ]);
   for (const maxWork of [0, -1, 1.5, MAX_SCREENING_WORK + 1]) {
     expect(() =>
