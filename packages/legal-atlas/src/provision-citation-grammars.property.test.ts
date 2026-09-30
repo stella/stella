@@ -221,18 +221,16 @@ describe("provision citation grammar properties", () => {
           expectSpans(text, provisions);
           expectSpans(text, gazettes);
           expect(czech.locateAbbreviatedProvisions(prefix + text)).toEqual(
-            provisions.map((citation) => ({
-              ...citation,
-              start: citation.start + prefix.length,
-              end: citation.end + prefix.length,
-            })),
+            provisions.map((citation) =>
+              ({ ...citation, start: citation.start + prefix.length,
+                end: citation.end + prefix.length,}),
+            ),
           );
           expect(locateGazetteCitations(prefix + text)).toEqual(
-            gazettes.map((citation) => ({
-              ...citation,
-              start: citation.start + prefix.length,
-              end: citation.end + prefix.length,
-            })),
+            gazettes.map((citation) =>
+              ({ ...citation, start: citation.start + prefix.length,
+                end: citation.end + prefix.length,}),
+            ),
           );
           expect(performance.now() - started).toBeLessThan(2000);
         }),
