@@ -12,6 +12,7 @@ import {
   readTimePolicy,
   roundToBillingIncrement,
 } from "@/api/lib/billing-time";
+import { recordBillingCapCrossings } from "@/api/lib/billing/arrangements";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -347,6 +348,7 @@ const splitEntry = createSafeHandler(
         ];
 
         await recordAuditEvent(tx, events);
+        await recordBillingCapCrossings(tx, { workspaceId, recordAuditEvent });
 
         return { ok: true as const };
       }),

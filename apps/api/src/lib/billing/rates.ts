@@ -1,12 +1,14 @@
 import type { Err } from "better-result";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, desc, eq, gte, inArray, isNull, lte, or } from "drizzle-orm";
 
+import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { rateEntries } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
+import { isMemberRole } from "@/api/lib/member-roles";
 
 type RateLookup = {
   dateWorked: string;
@@ -39,7 +41,7 @@ export const resolveRatesInTransaction = async ({
 
   const defaultTable = await tx.query.rateTables.findFirst({
     where: { workspaceId: { eq: workspaceId }, isDefault: true },
-    columns: { id: true, currency: true },
+    columns: { id: true, currency: true, organizationId: true },
   });
   if (!defaultTable) {
     return resolved;
@@ -61,12 +63,30 @@ export const resolveRatesInTransaction = async ({
       latestDate = lookup.dateWorked;
     }
   }
+  const memberships = await tx
+    .select({ userId: member.userId, role: member.role })
+    .from(member)
+    .where(
+      and(
+        eq(member.organizationId, defaultTable.organizationId),
+        inArray(member.userId, [...uniqueUsers]),
+      ),
+    );
+  const rolesByUser = new Map(
+    memberships.map((membership) => {
+      if (!isMemberRole(membership.role)) {
+        panic("Unknown organization member role while resolving rates");
+      }
+      return [membership.userId, membership.role] as const;
+    }),
+  );
   const entries = await tx
     .select({
       effectiveFrom: rateEntries.effectiveFrom,
       effectiveTo: rateEntries.effectiveTo,
       hourlyRate: rateEntries.hourlyRate,
       userId: rateEntries.userId,
+      role: rateEntries.role,
     })
     .from(rateEntries)
     .where(
@@ -83,21 +103,35 @@ export const resolveRatesInTransaction = async ({
         ),
       ),
     )
-    .orderBy(desc(rateEntries.effectiveFrom))
+    .orderBy(desc(rateEntries.effectiveFrom), desc(rateEntries.id))
     .limit(LIMITS.rateEntriesPerTable);
 
   const entriesByUser = new Map<string, typeof entries>();
+  const entriesByRole = new Map<string, typeof entries>();
+  const defaultEntries: typeof entries = [];
   for (const entry of entries) {
-    const key = entry.userId ?? "__default__";
-    const bucket = entriesByUser.get(key);
+    if (entry.userId === null && entry.role === null) {
+      defaultEntries.push(entry);
+      continue;
+    }
+    const buckets = entry.userId === null ? entriesByRole : entriesByUser;
+    const key = entry.userId ?? entry.role;
+    if (key === null) {
+      panic("Rate entry has no selector");
+    }
+    const bucket = buckets.get(key);
     if (bucket) {
       bucket.push(entry);
     } else {
-      entriesByUser.set(key, [entry]);
+      buckets.set(key, [entry]);
     }
   }
 
   for (const lookup of lookups) {
+    const role = rolesByUser.get(lookup.userId);
+    if (role === undefined) {
+      continue;
+    }
     const userEntry = entriesByUser
       .get(lookup.userId)
       ?.find(
@@ -106,15 +140,20 @@ export const resolveRatesInTransaction = async ({
           (entry.effectiveTo === null ||
             entry.effectiveTo >= lookup.dateWorked),
       );
-    const defaultEntry = entriesByUser
-      .get("__default__")
+    const roleEntry = entriesByRole
+      .get(role)
       ?.find(
         (entry) =>
           entry.effectiveFrom <= lookup.dateWorked &&
           (entry.effectiveTo === null ||
             entry.effectiveTo >= lookup.dateWorked),
       );
-    const entry = userEntry ?? defaultEntry;
+    const defaultEntry = defaultEntries.find(
+      (entry) =>
+        entry.effectiveFrom <= lookup.dateWorked &&
+        (entry.effectiveTo === null || entry.effectiveTo >= lookup.dateWorked),
+    );
+    const entry = userEntry ?? roleEntry ?? defaultEntry;
     if (entry) {
       resolved.set(rateLookupKey(lookup), {
         hourlyRate: entry.hourlyRate,

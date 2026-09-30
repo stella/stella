@@ -19,6 +19,7 @@ import { lockInvoiceInStatus } from "@/api/handlers/invoices/lock-invoice";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { FieldDiffs } from "@/api/lib/audit-log";
+import { flatFeeInvoiceRefusal } from "@/api/lib/billing/invoice-arrangements";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   tCurrencyCode,
@@ -202,6 +203,28 @@ const invoiceHasEntries = async (
   return false;
 };
 
+type SellerProfileAvailabilityOptions = {
+  sellerProfileId: SafeId<"sellerProfile">;
+  organizationId: SafeId<"organization">;
+};
+const sellerProfileIsAvailable = async (
+  tx: Transaction,
+  { sellerProfileId, organizationId }: SellerProfileAvailabilityOptions,
+) => {
+  const [profile] = await tx
+    .select({ id: sellerProfiles.id })
+    .from(sellerProfiles)
+    .where(
+      and(
+        eq(sellerProfiles.id, sellerProfileId),
+        eq(sellerProfiles.organizationId, organizationId),
+        isNull(sellerProfiles.archivedAt),
+      ),
+    )
+    .limit(1);
+  return profile !== undefined;
+};
+
 const updateInvoice = createSafeHandler(
   {
     description:
@@ -260,6 +283,12 @@ const updateInvoice = createSafeHandler(
 
           const documentType =
             changedFields.documentType ?? existing.documentType;
+          if (
+            existing.billingMode === "flat_fee" &&
+            documentType !== "invoice"
+          ) {
+            return Result.err(flatFeeInvoiceRefusal());
+          }
           const originalInvoiceId =
             changedFields.originalInvoiceId === undefined
               ? existing.originalInvoiceId
@@ -308,20 +337,10 @@ const updateInvoice = createSafeHandler(
 
           const { sellerProfileId } = changedFields;
           if (sellerProfileId !== undefined && sellerProfileId !== null) {
-            const [profile] = await tx
-              .select({ id: sellerProfiles.id })
-              .from(sellerProfiles)
-              .where(
-                and(
-                  eq(sellerProfiles.id, sellerProfileId),
-                  eq(
-                    sellerProfiles.organizationId,
-                    session.activeOrganizationId,
-                  ),
-                  isNull(sellerProfiles.archivedAt),
-                ),
-              )
-              .limit(1);
+            const profile = await sellerProfileIsAvailable(tx, {
+              sellerProfileId,
+              organizationId: session.activeOrganizationId,
+            });
             if (!profile) {
               return Result.ok({ status: "seller-profile-not-found" });
             }

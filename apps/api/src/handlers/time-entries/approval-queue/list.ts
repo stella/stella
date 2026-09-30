@@ -65,6 +65,7 @@ const QUEUE_OMITTED_COLUMNS = [
   "taskCode",
   "activityCode",
   "invoiceId",
+  "invoiceAttachment",
   "splitGroupId",
   "timerStartedAt",
   "timerStoppedAt",

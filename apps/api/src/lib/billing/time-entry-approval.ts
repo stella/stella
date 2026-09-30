@@ -10,6 +10,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { getTimePolicyViolation, lockTimePolicy } from "@/api/lib/billing-time";
 import type { TimePolicy } from "@/api/lib/billing-time";
+import { recordBillingCapCrossings } from "@/api/lib/billing/arrangements";
 import { canApproveAssignedTimeEntry } from "@/api/lib/billing/time-entry-authorization";
 import {
   guardRunningTimeEntries,
@@ -222,6 +223,14 @@ export const approveTimeEntryBatch = async ({
           },
         })),
       );
+    }
+    const matters = new Set(
+      approved.flatMap((entry) =>
+        entry.workspaceId === null ? [] : [entry.workspaceId],
+      ),
+    );
+    for (const workspaceId of matters) {
+      await recordBillingCapCrossings(tx, { workspaceId, recordAuditEvent });
     }
     return Result.ok({ results });
   });

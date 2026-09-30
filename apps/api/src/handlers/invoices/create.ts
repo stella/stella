@@ -4,10 +4,13 @@ import { type Static, t } from "elysia";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { Transaction } from "@/api/db/root";
+import type { SafeDbError } from "@/api/db/safe-db";
 import { resultTx } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
+  INVOICE_ATTACHMENT,
+  INVOICE_BILLING_PURPOSE,
   INVOICE_STATUS,
   invoices,
   timeEntries,
@@ -15,11 +18,14 @@ import {
 import {
   ATTACHED_ENTRY_LINE_VAT,
   insertInvoiceLines,
+  manualLineDraft,
   recalculateInvoiceTotals,
   timeEntryLineDraft,
 } from "@/api/handlers/invoices/invoice-lines";
 import { createSafeHandler } from "@/api/lib/api-handlers";
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { lockBillingArrangement } from "@/api/lib/billing/arrangements";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tCurrencyCode, tSafeId } from "@/api/lib/custom-schema";
@@ -67,16 +73,19 @@ type CreateInvoiceResult = {
   totalAmount: CentsAmount;
   entryCount: number;
 };
-type CreateInvoiceBody = Static<typeof createInvoiceBodySchema>;
-const validateEntries = async (
-  safeDb: SafeDb,
-  workspaceId: SafeId<"workspace">,
-  body: CreateInvoiceBody,
-) =>
-  Result.gen(async function* () {
-    const entries = yield* Result.await(
-      safeDb((tx) =>
-        tx
+type InvoiceCreationEntryOptions = {
+  workspaceId: SafeId<"workspace">;
+  body: Static<typeof createInvoiceBodySchema>;
+  flatFee: CentsAmount | null;
+};
+const validateCreationEntries = async (
+  tx: Transaction,
+  { workspaceId, body, flatFee }: InvoiceCreationEntryOptions,
+) => {
+  const selected =
+    body.timeEntryIds.length === 0
+      ? []
+      : await tx
           .select({
             id: timeEntries.id,
             status: timeEntries.status,
@@ -91,61 +100,289 @@ const validateEntries = async (
               eq(timeEntries.activityGroup, TIME_ENTRY_ACTIVITY_GROUP.CLIENT),
               inArray(timeEntries.id, body.timeEntryIds),
             ),
-          ),
+          );
+  if (selected.length !== body.timeEntryIds.length) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Some time entries were not found",
+      }),
+    );
+  }
+  if (
+    selected.some(
+      (entry) =>
+        entry.status !== BILLING_STATUS.APPROVED ||
+        entry.invoiceId !== null ||
+        (flatFee === null && !entry.billable),
+    )
+  ) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message:
+          "All entries must be approved, not already on an invoice, and billable for hourly billing",
+      }),
+    );
+  }
+  if (
+    flatFee === null &&
+    selected.some((entry) => entry.currency !== body.currency)
+  ) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "All time entries must match the invoice currency",
+      }),
+    );
+  }
+  return Result.ok(undefined);
+};
+
+const createInvoiceLineDrafts = (
+  entries: readonly Parameters<typeof timeEntryLineDraft>[0][],
+  flatFee: CentsAmount | null,
+) => {
+  if (flatFee === null) {
+    return Result.ok(
+      entries.map((entry) =>
+        timeEntryLineDraft(entry, ATTACHED_ENTRY_LINE_VAT),
       ),
     );
+  }
+  return manualLineDraft({
+    description: "Flat fee",
+    quantity: "1",
+    unit: null,
+    unitPrice: flatFee,
+    ...ATTACHED_ENTRY_LINE_VAT,
+  }).map((fee) => [
+    { ...fee, billingPurpose: INVOICE_BILLING_PURPOSE.FLAT_FEE } as const,
+  ]);
+};
 
-    if (entries.length !== body.timeEntryIds.length) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Some time entries were not found",
-        }),
-      );
-    }
+type CreateDraftInvoiceOptions = {
+  actorUserId: SafeId<"user">;
+  organizationId: SafeId<"organization">;
+  workspaceId: SafeId<"workspace">;
+  body: Static<typeof createInvoiceBodySchema>;
+  now: Date;
+  recordAuditEvent: AuditRecorder;
+};
+const createDraftInvoice = async (
+  tx: Transaction,
+  {
+    actorUserId,
+    organizationId,
+    workspaceId,
+    body,
+    now,
+    recordAuditEvent,
+  }: CreateDraftInvoiceOptions,
+): Promise<Result<CreateInvoiceResult, HandlerError>> => {
+  const expectedCount = body.timeEntryIds.length;
 
-    const invalid = entries.some(
-      (e) =>
-        e.status !== BILLING_STATUS.APPROVED ||
-        !e.billable ||
-        e.invoiceId !== null,
-    );
-    if (invalid) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message:
-            "All entries must be approved, billable," +
-            " and not already on an invoice",
-        }),
-      );
-    }
-
-    // An invoice is single-currency: there is no FX conversion, so summing
-    // entries in different currencies would produce a meaningless total.
-    const currencyMismatch = entries.some((e) => e.currency !== body.currency);
-    if (currencyMismatch) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "All time entries must match the invoice currency",
-        }),
-      );
-    }
-
-    return Result.ok(entries);
+  const runningError = await guardRunningTimeEntries({
+    tx,
+    workspaceId,
+    actorUserId,
+    selection: { type: "entries", ids: body.timeEntryIds },
   });
+  if (runningError) {
+    return Result.err(runningError);
+  }
+  const arrangement = await lockBillingArrangement(tx, workspaceId);
+  const flatFee =
+    (body.documentType ?? "invoice") === "invoice" &&
+    arrangement?.mode === "flat_fee"
+      ? arrangement.flatFeeAmount
+      : null;
+  if (flatFee !== null && arrangement?.currency !== body.currency) {
+    return Result.err(
+      new HandlerError({
+        status: 409,
+        code: "billing_currency_mismatch",
+        message: "A flat-fee invoice must use the arrangement currency",
+        hint: "Read rates.arrangement.get for this matter, then retry invoices.create with the returned currency.",
+      }),
+    );
+  }
+  const entries = await validateCreationEntries(tx, {
+    workspaceId,
+    body,
+    flatFee,
+  });
+  if (entries.isErr()) {
+    return Result.err(entries.error);
+  }
+  const totalInvoices = await tx.$count(
+    invoices,
+    eq(invoices.workspaceId, workspaceId),
+  );
+  if (totalInvoices >= LIMITS.invoicesPerWorkspace) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Invoice limit reached for this workspace",
+      }),
+    );
+  }
+  const documentType = body.documentType ?? "invoice";
+  const originalInvoiceId = body.originalInvoiceId ?? null;
+  if (documentType === "credit_note" && body.timeEntryIds.length > 0) {
+    return Result.err(
+      new HandlerError({
+        status: 422,
+        message: "Credit notes cannot bill time entries or expenses",
+      }),
+    );
+  }
+  const valid = await validateInvoiceDocument(tx, {
+    workspaceId,
+    documentType,
+    originalInvoiceId,
+    currency: body.currency,
+  });
+  if (valid.isErr()) {
+    return Result.err(valid.error);
+  }
+  const [created] = await tx
+    .insert(invoices)
+    .values({
+      organizationId,
+      workspaceId,
+      invoiceNumber: body.invoiceNumber ?? null,
+      documentType,
+      originalInvoiceId,
+      billingMode: flatFee === null ? "hourly" : "flat_fee",
+      flatFeeAmount: flatFee,
+      invoiceDate: body.invoiceDate,
+      dueDate: body.dueDate ?? null,
+      reference: body.reference ?? null,
+      currency: body.currency,
+      notes: body.notes ?? null,
+      status: INVOICE_STATUS.DRAFT,
+    })
+    .returning({
+      id: invoices.id,
+      invoiceNumber: invoices.invoiceNumber,
+    });
+
+  if (!created) {
+    return panic("Invoice insert returned no row");
+  }
+
+  const updated = await tx
+    .update(timeEntries)
+    .set({
+      invoiceId: created.id,
+      invoiceAttachment:
+        flatFee === null
+          ? INVOICE_ATTACHMENT.CHARGED
+          : INVOICE_ATTACHMENT.COVERED,
+      status: BILLING_STATUS.BILLED,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(timeEntries.workspaceId, workspaceId),
+        eq(timeEntries.activityGroup, TIME_ENTRY_ACTIVITY_GROUP.CLIENT),
+        inArray(timeEntries.id, body.timeEntryIds),
+        eq(timeEntries.status, BILLING_STATUS.APPROVED),
+        flatFee === null ? eq(timeEntries.billable, true) : undefined,
+        isNull(timeEntries.invoiceId),
+        // Repeat hourly eligibility in the atomic claim; covered work keeps its recorded currency.
+        flatFee === null ? eq(timeEntries.currency, body.currency) : undefined,
+      ),
+    )
+    .returning({
+      id: timeEntries.id,
+      billedMinutes: timeEntries.billedMinutes,
+      rateAtEntry: timeEntries.rateAtEntry,
+      narrative: timeEntries.narrative,
+      invoiceNarrative: timeEntries.invoiceNarrative,
+    });
+
+  const linkedCount = updated.length;
+  if (linkedCount !== expectedCount) {
+    return Result.err(
+      new HandlerError({
+        status: 409,
+        message: INVOICE_ENTRIES_MODIFIED_MESSAGE,
+      }),
+    );
+  }
+
+  // The lines and totals written below record their own invoice events.
+  await recordAuditEvent(tx, [
+    {
+      action: AUDIT_ACTION.CREATE,
+      resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
+      resourceId: created.id,
+      metadata: { documentType, originalInvoiceId },
+      changes: {
+        created: {
+          old: null,
+          new: {
+            invoiceNumber: created.invoiceNumber,
+            invoiceDate: body.invoiceDate,
+            currency: body.currency,
+            entryCount: linkedCount,
+            status: INVOICE_STATUS.DRAFT,
+          },
+        },
+      },
+    },
+    ...billedEntryEvents(updated, created.id),
+  ]);
+
+  const scope = { invoiceId: created.id, workspaceId };
+  const drafted = createInvoiceLineDrafts(updated, flatFee);
+  if (drafted.isErr()) {
+    return Result.err(drafted.error);
+  }
+  const lines = drafted.value;
+  await insertInvoiceLines(tx, { ...scope, organizationId }, lines, {
+    recordAuditEvent,
+  });
+  const totals = await recalculateInvoiceTotals(
+    tx,
+    scope,
+    now,
+    recordAuditEvent,
+  );
+  if (totals.isErr()) {
+    return Result.err(totals.error);
+  }
+  const totalAmount = totals.value.grossAmountMinor;
+
+  return Result.ok({
+    id: created.id,
+    invoiceNumber: created.invoiceNumber,
+    totalAmount,
+    entryCount: linkedCount,
+  });
+};
+
+const invoiceCreationError = (error: SafeDbError | HandlerError) =>
+  DatabaseError.is(error) && error.code === PG_ERROR.UNIQUE_VIOLATION
+    ? new HandlerError({
+        status: 409,
+        message: "An invoice with this number already exists",
+      })
+    : error;
 
 const createInvoice = createSafeHandler(
   {
     description:
-      "Create a draft invoice from approved, billable, not-yet-invoiced time " +
-      "entries in a matter, marking them billed and setting the total from " +
-      "their billed minutes and recorded rates. Every entry must already " +
-      "carry the invoice currency, since nothing is converted, and the " +
+      "Create a draft invoice from approved, not-yet-invoiced client time " +
+      "entries in a matter, marking them billed. Hourly invoices require " +
+      "billable entries in the invoice currency and calculate time charges " +
+      "from their billed minutes and recorded rates; nothing is converted. The " +
       "optional invoice number must not already be in use. An omitted number " +
       "is allocated from the document type’s default series at finalize. Credit " +
       "notes require an original finalized, sent, or paid invoice in the same matter. " +
+      "A flat-fee matter snapshots its agreed fee as one protected manual line; selected approved client entries are covered without time charges. Hourly matters reserve time charges against any cap and refuse an excess without write-down. " +
       "Pass empty timeEntryIds for a draft with manual lines. Expenses are added " +
       "afterwards with invoices.entries.add.",
     permissions: { invoice: ["create"] },
@@ -160,194 +397,19 @@ const createInvoice = createSafeHandler(
     body,
     recordAuditEvent,
   }) {
-    const entries = yield* Result.await(
-      validateEntries(safeDb, workspaceId, body),
-    );
-
-    const now = new Date();
-    const expectedCount = entries.length;
-
-    const txResult = await resultTx(
-      safeDb,
-      async (tx): Promise<Result<CreateInvoiceResult, HandlerError>> => {
-        const runningError = await guardRunningTimeEntries({
-          tx,
-          workspaceId,
+    const result = yield* Result.await(
+      resultTx(safeDb, (tx) =>
+        createDraftInvoice(tx, {
           actorUserId: user.id,
-          selection: { type: "entries", ids: body.timeEntryIds },
-        });
-        if (runningError) {
-          return Result.err(runningError);
-        }
-        const totalInvoices = await tx.$count(
-          invoices,
-          eq(invoices.workspaceId, workspaceId),
-        );
-        if (totalInvoices >= LIMITS.invoicesPerWorkspace) {
-          return Result.err(
-            new HandlerError({
-              status: 400,
-              message: "Invoice limit reached for this workspace",
-            }),
-          );
-        }
-        const documentType = body.documentType ?? "invoice";
-        const originalInvoiceId = body.originalInvoiceId ?? null;
-        if (documentType === "credit_note" && body.timeEntryIds.length > 0) {
-          return Result.err(
-            new HandlerError({
-              status: 422,
-              message: "Credit notes cannot bill time entries or expenses",
-            }),
-          );
-        }
-        const valid = await validateInvoiceDocument(tx, {
+          organizationId: session.activeOrganizationId,
           workspaceId,
-          documentType,
-          originalInvoiceId,
-          currency: body.currency,
-        });
-        if (valid.isErr()) {
-          return Result.err(valid.error);
-        }
-        const [created] = await tx
-          .insert(invoices)
-          .values({
-            organizationId: session.activeOrganizationId,
-            workspaceId,
-            invoiceNumber: body.invoiceNumber ?? null,
-            documentType,
-            originalInvoiceId,
-            invoiceDate: body.invoiceDate,
-            dueDate: body.dueDate ?? null,
-            reference: body.reference ?? null,
-            currency: body.currency,
-            notes: body.notes ?? null,
-            status: INVOICE_STATUS.DRAFT,
-          })
-          .returning({
-            id: invoices.id,
-            invoiceNumber: invoices.invoiceNumber,
-          });
-
-        if (!created) {
-          return panic("Invoice insert returned no row");
-        }
-
-        const updated = await tx
-          .update(timeEntries)
-          .set({
-            invoiceId: created.id,
-            status: BILLING_STATUS.BILLED,
-            updatedAt: now,
-          })
-          .where(
-            and(
-              eq(timeEntries.workspaceId, workspaceId),
-              eq(timeEntries.activityGroup, TIME_ENTRY_ACTIVITY_GROUP.CLIENT),
-              inArray(timeEntries.id, body.timeEntryIds),
-              eq(timeEntries.status, BILLING_STATUS.APPROVED),
-              eq(timeEntries.billable, true),
-              isNull(timeEntries.invoiceId),
-              // Re-check currency in the claiming update: if an entry's currency
-              // changed between the preflight read and now, it is not claimed,
-              // the count mismatch trips, and the caller retries.
-              eq(timeEntries.currency, body.currency),
-            ),
-          )
-          .returning({
-            id: timeEntries.id,
-            billedMinutes: timeEntries.billedMinutes,
-            rateAtEntry: timeEntries.rateAtEntry,
-            narrative: timeEntries.narrative,
-            invoiceNarrative: timeEntries.invoiceNarrative,
-          });
-
-        const linkedCount = updated.length;
-        if (linkedCount !== expectedCount) {
-          return Result.err(
-            new HandlerError({
-              status: 409,
-              message: INVOICE_ENTRIES_MODIFIED_MESSAGE,
-            }),
-          );
-        }
-
-        // The lines and totals written below record their own invoice events.
-        await recordAuditEvent(tx, [
-          {
-            action: AUDIT_ACTION.CREATE,
-            resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
-            resourceId: created.id,
-            metadata: { documentType, originalInvoiceId },
-            changes: {
-              created: {
-                old: null,
-                new: {
-                  invoiceNumber: created.invoiceNumber,
-                  invoiceDate: body.invoiceDate,
-                  currency: body.currency,
-                  entryCount: linkedCount,
-                  status: INVOICE_STATUS.DRAFT,
-                },
-              },
-            },
-          },
-          ...billedEntryEvents(updated, created.id),
-        ]);
-
-        const scope = { invoiceId: created.id, workspaceId };
-        await insertInvoiceLines(
-          tx,
-          { ...scope, organizationId: session.activeOrganizationId },
-          updated.map((entry) =>
-            timeEntryLineDraft(entry, ATTACHED_ENTRY_LINE_VAT),
-          ),
-          { recordAuditEvent },
-        );
-        const totals = await recalculateInvoiceTotals(
-          tx,
-          scope,
-          now,
+          body,
+          now: new Date(),
           recordAuditEvent,
-        );
-        if (totals.isErr()) {
-          return Result.err(totals.error);
-        }
-        const totalAmount = totals.value.grossAmountMinor;
-
-        return Result.ok({
-          id: created.id,
-          invoiceNumber: created.invoiceNumber,
-          totalAmount,
-          entryCount: linkedCount,
-        });
-      },
+        }),
+      ).then((txResult) => txResult.mapError(invoiceCreationError)),
     );
-
-    if (Result.isError(txResult)) {
-      if (
-        DatabaseError.is(txResult.error) &&
-        txResult.error.code === PG_ERROR.UNIQUE_VIOLATION
-      ) {
-        return Result.err(
-          new HandlerError({
-            status: 409,
-            message: "An invoice with this number already exists",
-          }),
-        );
-      }
-      return Result.err(txResult.error);
-    }
-
-    const result = txResult.value;
-
-    return Result.ok({
-      id: result.id,
-      invoiceNumber: result.invoiceNumber,
-      totalAmount: result.totalAmount,
-      entryCount: result.entryCount,
-    });
+    return Result.ok(result);
   },
 );
 

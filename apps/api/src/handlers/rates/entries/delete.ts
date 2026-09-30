@@ -19,7 +19,7 @@ const rateEntryParamsSchema = workspaceParams({
 const deleteRateEntry = createSafeHandler(
   {
     description:
-      "Delete a single user's rate line (hourly rate and effective dates) from " +
+      "Delete one person, role, or table-default rate line (hourly rate and effective dates) from " +
       "a rate table, leaving the table and its other lines in place. Use " +
       "rates.delete to remove the whole table instead.",
     permissions: { rate: ["delete"] },
@@ -56,6 +56,7 @@ const deleteRateEntry = createSafeHandler(
             deleted: {
               old: {
                 userId: existing.userId,
+                role: existing.role,
                 hourlyRate: existing.hourlyRate,
                 effectiveFrom: existing.effectiveFrom,
                 effectiveTo: existing.effectiveTo,

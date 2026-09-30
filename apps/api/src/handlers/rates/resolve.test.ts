@@ -10,6 +10,7 @@ import {
 import { eq } from "drizzle-orm";
 import fc from "fast-check";
 
+import type { OrganizationRoleName } from "@stll/auth-model";
 import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
 
 import type { Transaction } from "@/api/db/root";
@@ -47,9 +48,11 @@ setDefaultTimeout(propertyTestTimeout(120_000));
 //        a. USER-SPECIFIC entries (userId = query user) take precedence; the
 //           one with the greatest effectiveFrom wins — even over a newer
 //           table-default entry.
-//        b. Otherwise TABLE-DEFAULT entries (userId IS NULL); the one with the
-//           greatest effectiveFrom wins.
-//        c. Otherwise -> null.
+//        b. Otherwise ROLE entries matching current organization membership;
+//           the one with the greatest effectiveFrom wins.
+//        c. Otherwise TABLE-DEFAULT entries (userId and role both NULL); the
+//           one with the greatest effectiveFrom wins.
+//        d. Otherwise -> null.
 //   Entries belonging to a different user never participate.
 //   The resolved currency is always the default table's currency.
 
@@ -119,14 +122,14 @@ const runResolve = async (input: {
 
 type GeneratedEntry = {
   fromOffset: number;
-  kind: "user" | "other" | "default";
+  kind: "user" | "other" | "role" | "other-role" | "default";
   rate: number;
   toDelta: number | null;
 };
 
 const entryArb = fc.record<GeneratedEntry>({
   fromOffset: fc.integer({ min: 0, max: 3650 }),
-  kind: fc.constantFrom("user", "other", "default"),
+  kind: fc.constantFrom("user", "other", "role", "other-role", "default"),
   rate: fc.integer({ min: 1, max: 1_000_000 }),
   toDelta: fc.option(fc.integer({ min: 0, max: 365 }), { nil: null }),
 });
@@ -140,6 +143,7 @@ const entriesArb = fc.uniqueArray(entryArb, {
 
 type ResolvedRow = {
   userId: SafeId<"user"> | null;
+  role: OrganizationRoleName | null;
   rate: number;
   fromOffset: number;
   fromIso: string;
@@ -156,8 +160,19 @@ const rowUserId = (kind: GeneratedEntry["kind"]): SafeId<"user"> | null => {
   return null;
 };
 
+const rowRole = (kind: GeneratedEntry["kind"]): ResolvedRow["role"] => {
+  if (kind === "role") {
+    return "member";
+  }
+  if (kind === "other-role") {
+    return "intern";
+  }
+  return null;
+};
+
 const toRow = (entry: GeneratedEntry): ResolvedRow => ({
   userId: rowUserId(entry.kind),
+  role: rowRole(entry.kind),
   rate: entry.rate,
   fromOffset: entry.fromOffset,
   fromIso: isoDate(entry.fromOffset),
@@ -187,7 +202,11 @@ const expectedResolution = (
     inRange.filter((row) => row.userId === ids.userA1),
   );
   const winner =
-    userWinner ?? pickLatest(inRange.filter((row) => row.userId === null));
+    userWinner ??
+    pickLatest(inRange.filter((row) => row.role === "member")) ??
+    pickLatest(
+      inRange.filter((row) => row.userId === null && row.role === null),
+    );
   return winner === null
     ? null
     : { hourlyRate: winner.rate, currency: DEFAULT_CURRENCY };
@@ -208,7 +227,7 @@ describe("effective-dated rate resolution", () => {
   });
 
   test(
-    "resolves the greatest-effectiveFrom in-range entry, user rate over default",
+    "resolves person over role over single within inclusive effective dates",
     async () => {
       await fc.assert(
         fc.asyncProperty(
@@ -230,6 +249,7 @@ describe("effective-dated rate resolution", () => {
                   workspaceId: ids.wsA1,
                   rateTableId: defaultTableId,
                   userId: row.userId,
+                  role: row.role,
                   hourlyRate: cents(row.rate),
                   effectiveFrom: row.fromIso,
                   effectiveTo: row.toIso,
@@ -265,6 +285,7 @@ describe("effective-dated rate resolution", () => {
 describe("resolveRate HTTP handler", () => {
   const USER_RATE = 25_000;
   const DEFAULT_RATE = 15_000;
+  const ROLE_RATE = 20_000;
 
   beforeAll(async () => {
     await testDb
@@ -278,6 +299,16 @@ describe("resolveRate HTTP handler", () => {
         userId: ids.userA1,
         hourlyRate: cents(USER_RATE),
         effectiveFrom: "2025-01-01",
+      },
+      {
+        id: toSafeId<"rateEntry">(Bun.randomUUIDv7()),
+        workspaceId: ids.wsA1,
+        rateTableId: defaultTableId,
+        userId: null,
+        role: "member",
+        hourlyRate: cents(ROLE_RATE),
+        effectiveFrom: "2025-01-01",
+        effectiveTo: "2025-12-31",
       },
       {
         id: toSafeId<"rateEntry">(Bun.randomUUIDv7()),
@@ -319,6 +350,34 @@ describe("resolveRate HTTP handler", () => {
       hourlyRate: DEFAULT_RATE,
       currency: DEFAULT_CURRENCY,
     });
+  });
+
+  test("role applies at both inclusive boundaries and falls back to single outside its window", async () => {
+    for (const [date, hourlyRate] of [
+      ["2024-12-31", DEFAULT_RATE],
+      ["2025-01-01", ROLE_RATE],
+      ["2025-12-31", ROLE_RATE],
+      ["2026-01-01", DEFAULT_RATE],
+    ] as const) {
+      const result = await resolveRateHandler.handler(
+        contextFor({ userId: ids.userA2, date }),
+      );
+      expect(result).toEqual({ hourlyRate, currency: DEFAULT_CURRENCY });
+    }
+  });
+
+  test("organization-scoped role lookup does not resolve a foreign organization's member", async () => {
+    const result = await Result.gen(async function* () {
+      return Result.ok(
+        yield* resolveRate({
+          safeDb: scopedSafeDb(),
+          workspaceId: ids.wsA1,
+          userId: ids.userB1,
+          dateWorked: "2025-06-01",
+        }),
+      );
+    });
+    expect(result).toEqual(Result.ok(null));
   });
 
   test("404s when the queried user is not a member of the organization", async () => {

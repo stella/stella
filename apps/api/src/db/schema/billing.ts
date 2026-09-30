@@ -9,6 +9,7 @@ import {
   type InvoiceStatus,
 } from "@stll/api-contract";
 import type { TimeEntrySuggestionEvidence } from "@stll/api-contract/time-entry-types";
+import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
 import { VAT_TREATMENTS } from "@stll/invoicing";
 import { ORGANIZATION_MANAGEMENT_ROLES } from "@stll/permissions";
 
@@ -16,6 +17,7 @@ import { timeEntryPolicies } from "@/api/db/rls";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import type { SafeId } from "@/api/lib/branded-types";
 
+import { BILLING_ARRANGEMENT_MODES } from "./billing-arrangements";
 import {
   EXPENSE_CATEGORIES,
   TIME_ENTRY_SOURCES,
@@ -57,6 +59,15 @@ const INTERNAL_TIME_ENTRY_STATUSES = [
   "draft",
   "approved",
 ] as const satisfies readonly (typeof TIME_ENTRY_STATUSES)[number][];
+
+export const INVOICE_ATTACHMENT = {
+  CHARGED: "charged",
+  COVERED: "covered",
+} as const;
+export const INVOICE_BILLING_PURPOSE = {
+  ORDINARY: "ordinary",
+  FLAT_FEE: "flat_fee",
+} as const;
 
 export const timeEntries = p.pgTable(
   "time_entries",
@@ -112,6 +123,12 @@ export const timeEntries = p.pgTable(
     invoiceId: safeUuid<"invoice">("invoice_id").references(() => invoices.id, {
       onDelete: "set null",
     }),
+    invoiceAttachment: p
+      .text("invoice_attachment", {
+        enum: [INVOICE_ATTACHMENT.CHARGED, INVOICE_ATTACHMENT.COVERED],
+      })
+      .notNull()
+      .default(INVOICE_ATTACHMENT.CHARGED),
     splitGroupId: safeUuid<"timeEntry">("split_group_id"),
     timerStartedAt: timestamptz("timer_started_at"),
     timerStoppedAt: timestamptz("timer_stopped_at"),
@@ -119,6 +136,13 @@ export const timeEntries = p.pgTable(
     updatedAt: timestamptz("updated_at").defaultNow(),
   },
   (table) => [
+    p.check(
+      "time_entries_invoice_attachment_check",
+      sql`${table.invoiceAttachment} IN (${sql.join(
+        table.invoiceAttachment.enumValues.map((value) => sql`${value}`),
+        sql`, `,
+      )})`,
+    ),
     p
       .foreignKey({
         columns: [table.workItemId, table.workspaceId],
@@ -737,6 +761,7 @@ export const rateEntries = p.pgTable(
     userId: p
       .text("user_id")
       .references(() => user.id, { onDelete: "cascade" }),
+    role: p.text("role", { enum: ORGANIZATION_ROLE_NAMES }),
     hourlyRate: centsColumn("hourly_rate").notNull(),
     effectiveFrom: p.date("effective_from").notNull(),
     effectiveTo: p.date("effective_to"),
@@ -746,6 +771,20 @@ export const rateEntries = p.pgTable(
     p
       .index("rate_entries_table_user_from_idx")
       .on(table.rateTableId, table.userId, table.effectiveFrom),
+    p
+      .index("rate_entries_table_role_from_idx")
+      .on(table.rateTableId, table.role, table.effectiveFrom),
+    p.check(
+      "rate_entries_exclusive_target_check",
+      sql`${table.userId} IS NULL OR ${table.role} IS NULL`,
+    ),
+    p.check(
+      "rate_entries_role_check",
+      sql`${table.role} IS NULL OR ${table.role} IN (${sql.join(
+        ORGANIZATION_ROLE_NAMES.map((role) => sql.raw(`'${role}'`)),
+        sql`, `,
+      )})`,
+    ),
     p.index("rate_entries_workspace_id_idx").on(table.workspaceId),
     ...wsPolicies(),
   ],
@@ -825,6 +864,11 @@ export const invoices = p.pgTable(
       .notNull()
       .default("invoice"),
     originalInvoiceId: safeUuid<"invoice">("original_invoice_id"),
+    billingMode: p
+      .text("billing_mode", { enum: BILLING_ARRANGEMENT_MODES })
+      .notNull()
+      .default("hourly"),
+    flatFeeAmount: centsColumn("flat_fee_amount"),
     // Retained on revert to draft so document type and original stay frozen.
     finalizedAt: timestamptz("finalized_at"),
     reference: p.varchar({ length: 256 }),
@@ -865,6 +909,13 @@ export const invoices = p.pgTable(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
+    p.check(
+      "invoices_billing_mode_check",
+      sql`${table.billingMode} IN (${sql.join(
+        table.billingMode.enumValues.map((value) => sql`${value}`),
+        sql`, `,
+      )}) AND ((${table.billingMode} = 'hourly' AND ${table.flatFeeAmount} IS NULL) OR (${table.billingMode} = 'flat_fee' AND ${table.flatFeeAmount} >= 0 AND ${table.flatFeeAmount} IS NOT NULL))`,
+    ),
     p
       .foreignKey({
         columns: [table.workspaceId, table.organizationId],
@@ -930,6 +981,15 @@ export const invoiceLines = p.pgTable(
     invoiceId: safeUuid<"invoice">("invoice_id")
       .notNull()
       .references(() => invoices.id, { onDelete: "cascade" }),
+    billingPurpose: p
+      .text("billing_purpose", {
+        enum: [
+          INVOICE_BILLING_PURPOSE.ORDINARY,
+          INVOICE_BILLING_PURPOSE.FLAT_FEE,
+        ],
+      })
+      .notNull()
+      .default(INVOICE_BILLING_PURPOSE.ORDINARY),
     position: p.integer().notNull(),
     description: p.text().notNull(),
     quantity: p.numeric({ precision: 18, scale: 4 }).notNull(),
@@ -955,6 +1015,13 @@ export const invoiceLines = p.pgTable(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
+    p.check(
+      "invoice_lines_billing_purpose_check",
+      sql`${table.billingPurpose} IN (${sql.join(
+        table.billingPurpose.enumValues.map((value) => sql`${value}`),
+        sql`, `,
+      )}) AND (${table.billingPurpose} <> 'flat_fee' OR ${table.source} = 'manual')`,
+    ),
     p
       .foreignKey({
         columns: [table.workspaceId, table.organizationId],

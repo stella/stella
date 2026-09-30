@@ -8,6 +8,7 @@ import { BILLING_STATUS, timeEntries, workspaces } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { lockTimePolicy } from "@/api/lib/billing-time";
+import { recordBillingCapCrossings } from "@/api/lib/billing/arrangements";
 import { timeApprovalRefusal } from "@/api/lib/billing/time-entry-approval";
 import {
   guardRunningTimeEntries,
@@ -133,6 +134,12 @@ const returnTimeEntry = createSafeRootHandler(
           entry.returnComment === comment &&
           entry.returnedByUserId === user.id
         ) {
+          if (entry.workspaceId !== null) {
+            await recordBillingCapCrossings(tx, {
+              workspaceId: entry.workspaceId,
+              recordAuditEvent,
+            });
+          }
           return Result.ok({ id: entry.id, status: BILLING_STATUS.DRAFT });
         }
         await tx
@@ -166,6 +173,12 @@ const returnTimeEntry = createSafeRootHandler(
             approvedByUserId: { old: entry.approvedByUserId, new: null },
           },
         });
+        if (entry.workspaceId !== null) {
+          await recordBillingCapCrossings(tx, {
+            workspaceId: entry.workspaceId,
+            recordAuditEvent,
+          });
+        }
         return Result.ok({ id: entry.id, status: BILLING_STATUS.DRAFT });
       }),
     );
