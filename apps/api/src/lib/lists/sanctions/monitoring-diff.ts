@@ -325,7 +325,7 @@ type LockMonitoringClaimOptions = Pick<
 const lockMonitoringClaim = async (
   tx: Transaction,
   { organizationId, claim }: LockMonitoringClaimOptions,
-) => 
+) =>
   claim === undefined
     ? undefined
     : new Set(
@@ -339,8 +339,7 @@ const lockMonitoringClaim = async (
         ORDER BY mark.contact_id FOR UPDATE OF mark
       `)
         ).map(({ contactId }) => contactId),
-      )
-;
+      );
 
 /**
  * Commit one bounded org/source batch after screening outside the transaction.
