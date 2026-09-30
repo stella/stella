@@ -1410,6 +1410,7 @@ const CONTRACT_CORPUS = {
       buildArgs: () => ({ decision_ids: [uid(54)] }),
       setup: () => {
         readGatedDecisionWithDocumentMock.mockResolvedValue({
+          hasDocument: true,
           documentPending: false,
           documentReadFailed: false,
           documentUnavailable: false,

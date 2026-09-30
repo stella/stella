@@ -28,8 +28,9 @@ Addresses use 32 random bytes encoded as 64 lowercase hexadecimal characters.
   forwarder's assertions. An attached original's DKIM signature is checked against
   its exact decoded bytes with bounded DNS access. A verified signature identifies
   its signing domain, not an authenticated original author. Unsigned, invalid or
-  partially signed originals remain unverified. Unavailable DNS or an exhausted
-  verification budget also leaves this optional proof unverified.
+  partially signed originals remain unverified. Unavailable DNS, an exhausted
+  verification budget or headers exceeding the inbound header limit also leave
+  this optional proof unverified.
 - Threaded replies retain the member's complete message and quoted history.
   Ambiguous quoted headers do not trigger extraction. Invalid or timezone-free
   Date headers have an unknown sent time; explicitly zoned dates normalize to UTC.

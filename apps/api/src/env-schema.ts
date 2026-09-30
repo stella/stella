@@ -348,6 +348,25 @@ export const envApiServerSchema = {
   ACTION_ADMISSION_LEASE_MS: v.optional(
     v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1)),
   ),
+  // Optional operator-owned action windows; no built-in allowance.
+  ACTION_ADMISSION_PERIOD_MS: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(Number.MAX_SAFE_INTEGER),
+    ),
+  ),
+  ACTION_ADMISSION_PERIOD_ACTIONS: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(Number.MAX_SAFE_INTEGER),
+    ),
+  ),
   FEATURE_DESKTOP_EDITING: featureFlagSchema,
   FEATURE_TIME_BILLING: featureFlagSchema,
   /** Dark-launch tenant-scoped AI memory until product and performance review. */

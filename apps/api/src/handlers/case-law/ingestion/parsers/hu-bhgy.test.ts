@@ -231,6 +231,96 @@ describe("the docket the document prints", () => {
 // ── Structure ────────────────────────────────────────────
 
 describe("reading a document folio handed over", () => {
+  test("keeps visible text across fields, tracked insertions, wrappers, and nested links", () => {
+    const paragraph: Paragraph = {
+      type: "paragraph",
+      content: [
+        { type: "run", content: [{ type: "text", text: "before " }] },
+        {
+          type: "complexField",
+          instruction: "PAGE",
+          fieldType: "PAGE",
+          fieldCode: [],
+          fieldResult: [
+            { type: "run", content: [{ type: "text", text: "field " }] },
+          ],
+        },
+        {
+          type: "simpleField",
+          instruction: "PAGE",
+          fieldType: "PAGE",
+          content: [
+            { type: "run", content: [{ type: "text", text: "simple " }] },
+          ],
+        },
+        {
+          type: "insertion",
+          info: { id: 1, author: "court" },
+          content: [
+            { type: "run", content: [{ type: "text", text: "inserted " }] },
+          ],
+        },
+        {
+          type: "moveTo",
+          info: { id: 2, author: "court" },
+          content: [
+            { type: "run", content: [{ type: "text", text: "moved " }] },
+          ],
+        },
+        {
+          type: "inlineSdt",
+          properties: { sdtType: "richText" },
+          content: [
+            { type: "run", content: [{ type: "text", text: "controlled " }] },
+          ],
+        },
+        {
+          type: "inlineWrapper",
+          kind: "smartTag",
+          element: "name",
+          content: [
+            { type: "run", content: [{ type: "text", text: "wrapped " }] },
+          ],
+        },
+        {
+          type: "mathEquation",
+          display: "inline",
+          ommlXml: "<m:oMath><m:r><m:t>math </m:t></m:r></m:oMath>",
+          plainText: "math ",
+        },
+        {
+          type: "preservedInline",
+          xml: "<opaque><w:r><w:t>preserved </w:t></w:r></opaque>",
+          text: "preserved ",
+        },
+        {
+          type: "hyperlink",
+          children: [
+            { type: "run", content: [{ type: "text", text: "link one " }] },
+            {
+              type: "inlineWrapper",
+              kind: "smartTag",
+              element: "linkText",
+              content: [
+                { type: "run", content: [{ type: "text", text: "link two " }] },
+              ],
+            },
+            {
+              type: "preservedInline",
+              xml: "<opaque><w:r><w:t>link three</w:t></w:r></opaque>",
+              text: "link three",
+            },
+          ],
+        },
+      ],
+    };
+    const parsed = parseDocument(bodyOf([paragraph]));
+
+    expect(parsed.fulltext).toContain(
+      "before field simple inserted moved controlled wrapped math preserved link one link two link three",
+    );
+  });
+
   // The same header, as the publisher actually builds it: one paragraph whose
   // runs carry `break` items, which is what an RTF `\line` reads as.
   test("a header paragraph built with soft breaks states the docket alone", () => {

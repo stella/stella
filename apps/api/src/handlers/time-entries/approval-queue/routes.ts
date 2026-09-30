@@ -1,0 +1,26 @@
+import Elysia from "elysia";
+
+import approveTimeEntries from "@/api/handlers/time-entries/approval-queue/approve";
+import listApprovalQueue from "@/api/handlers/time-entries/approval-queue/list";
+import returnTimeEntry from "@/api/handlers/time-entries/approval-queue/return";
+import { authMacro, permissionMacro } from "@/api/lib/auth";
+import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
+import { createStandardApiRateLimitOptions } from "@/api/lib/rate-limit/standard-api";
+
+export const timeApprovalQueueRoute = new Elysia({ prefix: "/v1/time-entries" })
+  .use(rateLimit(createStandardApiRateLimitOptions()))
+  .use(authMacro)
+  .use(permissionMacro)
+  .guard({ validateAuth: true })
+  .get("/approval-queue", listApprovalQueue.handler, {
+    permissions: listApprovalQueue.config.permissions,
+    query: listApprovalQueue.config.query,
+  })
+  .post("/approve", approveTimeEntries.handler, {
+    permissions: approveTimeEntries.config.permissions,
+    body: approveTimeEntries.config.body,
+  })
+  .post("/approval-queue/return", returnTimeEntry.handler, {
+    permissions: returnTimeEntry.config.permissions,
+    body: returnTimeEntry.config.body,
+  });

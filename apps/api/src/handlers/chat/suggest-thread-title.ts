@@ -171,6 +171,7 @@ export const createSuggestThreadTitle = ({
     const text = yield* Result.await(
       Result.gen(() =>
         admitFiniteAction({
+          actionKind: "chat.suggest-thread-title",
           ctx,
           ...(admit === undefined ? {} : { admit }),
           async *handler({ actionSignal }) {

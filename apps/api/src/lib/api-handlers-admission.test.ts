@@ -23,7 +23,7 @@ const context = (signal?: AbortSignal) => ({
 });
 
 const config = {
-  actionAdmission: "handler",
+  actionAdmission: { type: "handler", actionKind: "test.finite-action" },
   permissions: { chat: ["create"] },
   mcp: { type: "internal", reason: "assistant_chat" },
 } satisfies HandlerConfig;
@@ -81,6 +81,34 @@ const withFeature = async (enabled: boolean, run: () => Promise<void>) => {
 };
 
 describe("finite HTTP action admission", () => {
+  test("admitted finite HTTP requests supply their canonical kind and distinct request identities", async () => {
+    await withFeature(true, async () => {
+      const identities: unknown[] = [];
+      const endpoint = createSafeRootHandler(
+        config,
+        async function* () {
+          return Result.ok({ ok: true });
+        },
+        {
+          admit: async (options) => {
+            identities.push(options.periodIdentity);
+            return Result.ok(await options.run(new AbortController().signal));
+          },
+        },
+      );
+      await endpoint.handler(asTestRaw(context()));
+      await endpoint.handler(asTestRaw(context()));
+      expect(identities).toHaveLength(2);
+      for (const identity of identities) {
+        expect(identity).toMatchObject({
+          actionKind: config.actionAdmission.actionKind,
+          logicalPhaseId: expect.any(String),
+        });
+      }
+      expect(identities.at(0)).not.toEqual(identities.at(1));
+    });
+  });
+
   test("flag off preserves payload, typed errors and request signal without coordination", async () => {
     await withFeature(false, async () => {
       const deps = dependencies(0);
