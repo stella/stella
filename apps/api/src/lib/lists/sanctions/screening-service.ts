@@ -163,7 +163,7 @@ const SanctionsSubjectErrorBase: TaggedErrorClass<"SanctionsSubjectError"> =
   TaggedError("SanctionsSubjectError");
 
 /** The subject cannot be screened as given; the caller corrects it. */
-export class SanctionsSubjectError extends SanctionsSubjectErrorBase<{
+class SanctionsSubjectError extends SanctionsSubjectErrorBase<{
   code: "empty-query" | "invalid-birth-date";
   message: string;
 }> {}
@@ -355,7 +355,7 @@ const screenList = async ({
   };
 };
 
-export type ScreenSanctionsSubjectProps = {
+type ScreenSanctionsSubjectProps = {
   /** Any handle that may read the global sanctions tables. */
   db: ScopedDb;
   subject: SanctionsScreeningSubject;

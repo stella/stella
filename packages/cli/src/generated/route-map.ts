@@ -50411,6 +50411,223 @@ export const generatedRouteMap: RouteNode = {
         "time-entries": {
           kind: "route",
           children: {
+            "approval-queue-approve": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "time-entries",
+                  "approval-queue-approve",
+                ],
+                capabilityId: "time-entries.approval-queue.approve",
+                description:
+                  "Approve up to 200 time entries in accessible matters. Only the assigned approver or an organization owner/admin may approve. Each id returns approved or a refusal reason; running timers and locked periods are refused. Approval records the actor and time, and clears the last return comment. Already approved entries can be retried safely.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string-array",
+                    repeatable: true,
+                    flag: "--ids",
+                    prop: "ids",
+                    required: true,
+                    part: "body",
+                    partPath: "ids",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "billing_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["ids"],
+                      properties: {
+                        ids: {
+                          minItems: 1,
+                          maxItems: 200,
+                          uniqueItems: true,
+                          type: "array",
+                          items: {
+                            minLength: 36,
+                            maxLength: 36,
+                            pattern:
+                              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                            type: "string",
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "approval-queue-list": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "time-entries",
+                  "approval-queue-list",
+                ],
+                capabilityId: "time-entries.approval-queue.list",
+                description:
+                  "List draft time entries awaiting the signed-in user's approval in accessible matters. Owners/admins also see drafts without an assigned approver. Optionally filter work dates (from/to, YYYY-MM-DD), timekeeper (member), and matter. Returns logged durationMinutes separately from adjusted billedMinutes and the last return comment. Follow nextCursor for the next bounded page.",
+                access: "read",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--from",
+                    prop: "from",
+                    required: false,
+                    part: "query",
+                    partPath: "from",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--to",
+                    prop: "to",
+                    required: false,
+                    part: "query",
+                    partPath: "to",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--member",
+                    prop: "member",
+                    required: false,
+                    part: "query",
+                    partPath: "member",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--matter",
+                    prop: "matter",
+                    required: false,
+                    part: "query",
+                    partPath: "matter",
+                  },
+                ],
+                inputOnly: [],
+                paginated: true,
+                paginationPart: "query",
+                itemsKey: "items",
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    query: {
+                      type: "object",
+                      properties: {
+                        from: {
+                          format: "date",
+                          type: "string",
+                        },
+                        to: {
+                          format: "date",
+                          type: "string",
+                        },
+                        member: {
+                          minLength: 1,
+                          maxLength: 128,
+                          type: "string",
+                        },
+                        matter: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        cursor: {
+                          maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
+                          type: "string",
+                        },
+                        limit: {
+                          minimum: 1,
+                          maximum: 200,
+                          type: "integer",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "approval-queue-return": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "time-entries",
+                  "approval-queue-return",
+                ],
+                capabilityId: "time-entries.approval-queue.return",
+                description:
+                  "Return one draft or approved time entry to draft with a required comment (up to 2000 characters). Only its assigned approver or an organization owner/admin may return it. Running timers and locked periods are refused. The owner keeps seeing the last comment while editing; re-approval clears it. Billed or written-off entries cannot be returned.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--id",
+                    prop: "id",
+                    required: true,
+                    part: "body",
+                    partPath: "id",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--comment",
+                    prop: "comment",
+                    required: true,
+                    part: "body",
+                    partPath: "comment",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "billing_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["id", "comment"],
+                      properties: {
+                        id: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        comment: {
+                          minLength: 1,
+                          maxLength: 2000,
+                          pattern: "\\S",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
             "batch-delete": {
               kind: "capability-leaf",
               spec: {

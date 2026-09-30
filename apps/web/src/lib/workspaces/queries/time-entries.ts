@@ -81,7 +81,8 @@ const timeEntriesListKey = (key: TimeEntriesListKey) => ({
 });
 
 export const timeEntriesKeys = {
-  all: (workspaceId: string) => ["timeEntries", workspaceId],
+  root: () => ["timeEntries"],
+  all: (workspaceId: string) => [...timeEntriesKeys.root(), workspaceId],
   // What the list shows depends on who asks (their own entries, or everyone's
   // for a reviewer), so it is keyed by the signed-in user too.
   list: (workspaceId: string, userId: string, key: TimeEntriesListKey) => [

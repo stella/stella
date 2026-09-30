@@ -4,6 +4,12 @@ import { timeEntries } from "@/api/db/schema";
 export const timeEntryReadColumns = {
   id: timeEntries.id,
   userId: timeEntries.userId,
+  approverUserId: timeEntries.approverUserId,
+  approvedByUserId: timeEntries.approvedByUserId,
+  approvedAt: timeEntries.approvedAt,
+  returnedByUserId: timeEntries.returnedByUserId,
+  returnedAt: timeEntries.returnedAt,
+  returnComment: timeEntries.returnComment,
   workItemId: timeEntries.workItemId,
   dateWorked: timeEntries.dateWorked,
   timezoneId: timeEntries.timezoneId,

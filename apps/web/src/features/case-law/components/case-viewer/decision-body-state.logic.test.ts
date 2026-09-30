@@ -4,7 +4,24 @@ import {
   missingBodyReason,
   missingBodyRetryable,
   MISSING_BODY_REASON,
+  decisionHasNoDocument,
 } from "@/features/case-law/components/case-viewer/decision-body-state.logic";
+
+test("only confirmed document absence changes notice and indexing", () => {
+  for (const hasDocument of [false, true]) {
+    for (const documentReadFailed of [false, true]) {
+      for (const documentPending of [false, true]) {
+        expect(
+          decisionHasNoDocument({
+            hasDocument,
+            documentReadFailed,
+            documentPending,
+          }),
+        ).toBe(!hasDocument && !documentReadFailed && !documentPending);
+      }
+    }
+  }
+});
 
 const state = (
   overrides: Partial<Parameters<typeof missingBodyReason>[0]>,

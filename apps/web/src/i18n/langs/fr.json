@@ -851,6 +851,7 @@
         "publishedOnWeb": "Publié sur le web"
       },
       "statutes": "Textes applicables",
+      "textNotYetAvailable": "La juridiction n’a pas publié le texte de la décision, ou celui-ci n’est pas encore disponible ici.",
       "textPending": "Le texte de la décision est en cours de récupération",
       "textReadFailed": "Le texte de la décision n'a pas pu être chargé",
       "textUnavailable": "Aucun texte n'est disponible pour cette décision"
@@ -4320,6 +4321,20 @@
       "renameDescription": "Les membres verront immédiatement le nouveau nom.",
       "renameTitle": "Renommer l’organisation",
       "renameTypeToConfirm": "Saisissez le nouveau nom pour confirmer : {name}",
+      "timePolicy": {
+        "description": "Définissez les arrondis du temps, les délais de modification et les verrouillages mensuels.",
+        "editWindow": "Délai de modification (jours)",
+        "editWindowHelp": "Avec zéro, les modifications sont autorisées uniquement à la date du travail.",
+        "invalidEditWindow": "Saisissez un nombre entier de jours, supérieur ou égal à zéro.",
+        "invalidLockedMonth": "Choisissez un mois terminé.",
+        "invalidMinimumUnit": "Choisissez une unité de temps qui divise 60 minutes sans reste.",
+        "lockedThrough": "Verrouillé jusqu’à",
+        "lockedThroughHelp": "Les entrées de ce mois et des mois précédents ne peuvent pas être modifiées.",
+        "minimumUnit": "Unité de temps minimale",
+        "minimumUnitHelp": "Le temps est facturé par multiples de ce nombre de minutes.",
+        "narrativeRequired": "Exiger une description",
+        "title": "Règles de saisie du temps"
+      },
       "usage": "Utilisation",
       "usageDescription": "Limites d’utilisation et état des droits pour cette organisation",
       "usageEmptyDescription": "Configurez un droit d’utilisation pour activer les fonctionnalités d’IA mesurées pour cette organisation.",
