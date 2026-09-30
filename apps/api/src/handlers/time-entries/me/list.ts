@@ -1,12 +1,13 @@
-import { Result } from "better-result";
-import { and, asc, eq, gt, ne } from "drizzle-orm";
+import { panic, Result } from "better-result";
+import { and, asc, eq, gt, ne, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { parsePlainDate } from "@stll/time";
 
-import { timeEntries, workspaces } from "@/api/db/schema";
+import { timeDailyTargets, timeEntries, workspaces } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { leftTodayMinutes } from "@/api/lib/billing/daily-target";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tPaginationCursor, tPaginationLimit } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -104,7 +105,8 @@ const config = {
   description:
     "List the signed-in user's time entries for one work date across matters " +
     "in the active organization. Returns only matters the caller can still access, " +
-    "with a cursor for the next page.",
+    "with a cursor for the next page. Daily target and remaining minutes cover all " +
+    "accessible entries for the date, independently of pagination; both are null when no target is set.",
   permissions: { timeEntry: ["read"] },
   mcp: { type: "capability", reason: "billing_admin" },
   access: "read",
@@ -150,9 +152,16 @@ const listMyTimeEntries = createSafeRootHandler(
     }
 
     const limit = query.limit ?? LIMITS.timeEntriesPageSizeDefault;
-    const rows = yield* Result.await(
-      safeDb((tx) =>
-        tx
+    const dayScope = and(
+      eq(timeEntries.organizationId, session.activeOrganizationId),
+      eq(timeEntries.userId, user.id),
+      eq(timeEntries.dateWorked, query.date),
+      eq(workspaces.organizationId, session.activeOrganizationId),
+      ne(workspaces.status, DELETING_WORKSPACE_STATUS),
+    );
+    const day = yield* Result.await(
+      safeDb(async (tx) => {
+        const rows = await tx
           .select(myTimeEntryColumns)
           .from(timeEntries)
           .innerJoin(
@@ -162,29 +171,51 @@ const listMyTimeEntries = createSafeRootHandler(
               eq(timeEntries.organizationId, workspaces.organizationId),
             ),
           )
-          .where(
+          .where(and(dayScope, cursor ? gt(timeEntries.id, cursor) : undefined))
+          .orderBy(asc(timeEntries.id))
+          .limit(limit + 1);
+        const summaries = await tx
+          .select({
+            loggedMinutes:
+              sql<number>`coalesce(sum(${timeEntries.durationMinutes}), 0)`.mapWith(
+                Number,
+              ),
+            dailyTargetMinutes: sql<number | null>`(
+            SELECT ${timeDailyTargets.minutes} FROM ${timeDailyTargets}
+            WHERE ${timeDailyTargets.organizationId} = ${session.activeOrganizationId}
+              AND ${timeDailyTargets.userId} = ${user.id}
+          )`,
+          })
+          .from(timeEntries)
+          .innerJoin(
+            workspaces,
             and(
-              eq(timeEntries.organizationId, session.activeOrganizationId),
-              eq(timeEntries.userId, user.id),
-              eq(timeEntries.dateWorked, query.date),
-              cursor ? gt(timeEntries.id, cursor) : undefined,
-              eq(workspaces.organizationId, session.activeOrganizationId),
-              ne(workspaces.status, DELETING_WORKSPACE_STATUS),
+              eq(timeEntries.workspaceId, workspaces.id),
+              eq(timeEntries.organizationId, workspaces.organizationId),
             ),
           )
-          .orderBy(asc(timeEntries.id))
-          .limit(limit + 1),
-      ),
+          .where(dayScope);
+        const summary = summaries.at(0);
+        if (summary === undefined) {
+          return panic("Daily time aggregate returned no row");
+        }
+        return { rows, summary };
+      }),
     );
 
     const page = createCursorPage({
-      rows,
+      rows: day.rows,
       limit,
       cursorForItem: ({ id }) => encodePaginationCursor([id]),
     });
     return Result.ok({
       ...page,
       items: page.items.map(toMyTimeEntryItem),
+      dailyTargetMinutes: day.summary.dailyTargetMinutes,
+      leftTodayMinutes: leftTodayMinutes(
+        day.summary.dailyTargetMinutes,
+        day.summary.loggedMinutes,
+      ),
     });
   },
 );

@@ -1,0 +1,32 @@
+import { Result } from "better-result";
+
+import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import {
+  dailyTargetBody,
+  setDailyTarget,
+} from "@/api/lib/billing/daily-target";
+
+const updateDailyTarget = createSafeRootHandler(
+  {
+    description:
+      "Set the signed-in user's daily time target in the active organization. Pass minutes from 1 to 1440, or null to clear the target. Read time-entries.me.list for the target and remaining minutes for a work date.",
+    permissions: { timeEntry: ["create"] },
+    access: "write",
+    mcp: { type: "capability", reason: "billing_admin" },
+    body: dailyTargetBody,
+  },
+  async function* ({ safeDb, session, user, body, recordAuditEvent }) {
+    return Result.ok(
+      yield* Result.await(
+        setDailyTarget({
+          safeDb,
+          organizationId: session.activeOrganizationId,
+          userId: user.id,
+          minutes: body.minutes,
+          recordAuditEvent,
+        }),
+      ),
+    );
+  },
+);
+export default updateDailyTarget;

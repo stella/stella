@@ -1103,6 +1103,27 @@ const TASKS: readonly Task[] = [
   // starts with list_capabilities, a legitimate discovery step this
   // first-call scorer cannot credit.
   {
+    id: "set-daily-time-target",
+    request:
+      "Set my daily time target to 480 minutes in the active organization through time-entries.me.daily-target.update.",
+    mcp: {
+      toolName: "invoke_capability",
+      exampleArgs: {
+        capability: "time-entries.me.daily-target.update",
+        input: { body: { minutes: 480 } },
+      },
+      checkArgs: (args) => [
+        ...field(args, "capability", "time-entries.me.daily-target.update"),
+        ...nestedField(args, ["input", "body", "minutes"], 480),
+      ],
+    },
+    cli: {
+      kind: "command",
+      path: ["capability", "time-entries", "me-daily-target-update"],
+      flags: { minutes: 480 },
+    },
+  },
+  {
     id: "translate-document",
     request:
       `Start a DeepL translation to German through the document-translations.runs.create capability: document ${TRANSLATION_ENTITY_ID}, ` +

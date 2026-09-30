@@ -38,6 +38,52 @@ import { entities } from "./entities";
 export const ACTIVE_TIMER_INDEX_NAME =
   "time_entries_one_active_timer_per_user_idx";
 
+const DAILY_TARGET_ADMIN_ROLES = ORGANIZATION_MANAGEMENT_ROLES.map((role) =>
+  sql.raw(`'${role}'`),
+);
+const DAILY_TARGET_ACCESS = sql`(
+  "time_daily_targets"."organization_id" = (SELECT current_setting('app.organization_id', true))
+  AND (
+    "time_daily_targets"."user_id" = (SELECT current_setting('app.user_id', true))
+    OR EXISTS (
+      SELECT 1 FROM ${member}
+      WHERE ${member.organizationId} = (SELECT current_setting('app.organization_id', true))
+        AND ${member.userId} = (SELECT current_setting('app.user_id', true))
+        AND ${member.role} IN (${sql.join(DAILY_TARGET_ADMIN_ROLES, sql`, `)})
+    )
+  )
+)`;
+
+export const timeDailyTargets = p.pgTable(
+  "time_daily_targets",
+  {
+    organizationId: safeOrganizationId("organization_id").notNull(),
+    userId: p.text("user_id").notNull(),
+    minutes: p.integer("minutes"),
+    updatedAt: timestamptz("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    p.primaryKey({ columns: [table.organizationId, table.userId] }),
+    p
+      .foreignKey({
+        columns: [table.organizationId, table.userId],
+        foreignColumns: [member.organizationId, member.userId],
+        name: "time_daily_targets_member_fk",
+      })
+      .onDelete("cascade"),
+    p.check(
+      "time_daily_targets_minutes_check",
+      sql`${table.minutes} IS NULL OR (${table.minutes} > 0 AND ${table.minutes} <= 1440)`,
+    ),
+    p.pgPolicy("member_target_access", {
+      for: "all",
+      to: stella,
+      using: DAILY_TARGET_ACCESS,
+      withCheck: DAILY_TARGET_ACCESS,
+    }),
+  ],
+);
+
 const TIME_ENTRY_SUGGESTION_STATUS_SQL_VALUES =
   TIME_ENTRY_SUGGESTION_STATUSES.map((status) => sql.raw(`'${status}'`));
 

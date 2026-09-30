@@ -50957,13 +50957,73 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
+            "me-daily-target-update": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "time-entries",
+                  "me-daily-target-update",
+                ],
+                capabilityId: "time-entries.me.daily-target.update",
+                description:
+                  "Set the signed-in user's daily time target in the active organization. Pass minutes from 1 to 1440, or null to clear the target. Read time-entries.me.list for the target and remaining minutes for a work date.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "int",
+                    min: 1,
+                    max: 1440,
+                    repeatable: false,
+                    description:
+                      "Daily target in minutes; null clears the target",
+                    flag: "--minutes",
+                    prop: "minutes",
+                    required: true,
+                    part: "body",
+                    partPath: "minutes",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "billing_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["minutes"],
+                      properties: {
+                        minutes: {
+                          description:
+                            "Daily target in minutes; null clears the target",
+                          nullable: true,
+                          anyOf: [
+                            {
+                              minimum: 1,
+                              maximum: 1440,
+                              type: "integer",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
             "me-list": {
               kind: "capability-leaf",
               spec: {
                 commandPath: ["capability", "time-entries", "me-list"],
                 capabilityId: "time-entries.me.list",
                 description:
-                  "List the signed-in user's time entries for one work date across matters in the active organization. Returns only matters the caller can still access, with a cursor for the next page.",
+                  "List the signed-in user's time entries for one work date across matters in the active organization. Returns only matters the caller can still access, with a cursor for the next page. Daily target and remaining minutes cover all accessible entries for the date, independently of pagination; both are null when no target is set.",
                 access: "read",
                 flags: [
                   {
@@ -51005,6 +51065,88 @@ export const generatedRouteMap: RouteNode = {
                           maxLength: 512,
                           description:
                             "Opaque cursor from a previous page to fetch the next page",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "members-daily-target-update": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "time-entries",
+                  "members-daily-target-update",
+                ],
+                capabilityId: "time-entries.members.daily-target.update",
+                description:
+                  "Set a current member's daily time target in the active organization. Only organization owners and admins may set another member's target. Pass minutes from 1 to 1440, or null to clear it.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--user-id",
+                    prop: "userId",
+                    required: true,
+                    part: "params",
+                    partPath: "userId",
+                  },
+                  {
+                    kind: "int",
+                    min: 1,
+                    max: 1440,
+                    repeatable: false,
+                    description:
+                      "Daily target in minutes; null clears the target",
+                    flag: "--minutes",
+                    prop: "minutes",
+                    required: true,
+                    part: "body",
+                    partPath: "minutes",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "billing_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["minutes"],
+                      properties: {
+                        minutes: {
+                          description:
+                            "Daily target in minutes; null clears the target",
+                          nullable: true,
+                          anyOf: [
+                            {
+                              minimum: 1,
+                              maximum: 1440,
+                              type: "integer",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["userId"],
+                      properties: {
+                        userId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                           type: "string",
                         },
                       },
