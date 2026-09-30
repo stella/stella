@@ -3,7 +3,6 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
 
 import { SANCTIONS_SOURCES } from "@stll/sanctions";
 import type { SanctionsEntry } from "@stll/sanctions";
@@ -14,8 +13,6 @@ import {
   contacts,
   organization,
   organizationSettings,
-  sanctionsContactMarks,
-  sanctionsOrganizationMarks,
   sanctionsContactMatches,
   sanctionsContactScreenings,
   sanctionsScreeningEvents,
@@ -44,38 +41,31 @@ let db: ReturnType<typeof drizzle>;
 let scopedDb: ScopedDb;
 const indexCache = createSanctionsIndexCache();
 
+const scopedFor =
+  (organizationId: typeof orgId): ScopedDb =>
+  async (run) =>
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`SET LOCAL ROLE stella`);
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${organizationId}, true)`,
+      );
+      return await run(asTestRaw<Transaction>(tx));
+    });
+
 beforeAll(async () => {
   client = await createTestPglite();
   db = drizzle({ client });
-  scopedDb = async (run) =>
-    await db.transaction(async (tx) => await run(asTestRaw<Transaction>(tx)));
-  // Derive trigger installation from the production migration itself.
-  const migration = readFileSync(
-    new URL(
-      "../../../../drizzle/20261003122000_sanctions_monitoring/migration.sql",
-      import.meta.url,
-    ),
-    "utf-8",
-  );
-  const triggers = migration.slice(
-    migration.indexOf("CREATE FUNCTION mark_sanctions_contact"),
-  );
-  for (const statement of triggers.split("--> statement-breakpoint")) {
-    if (statement.trim()) {
-      await client.exec(statement);
-    }
-  }
-  for (const tableName of [
-    "sanctions_contact_marks",
-    "sanctions_organization_marks",
-    "sanctions_contact_matches",
-    "sanctions_contact_screenings",
-    "sanctions_screening_events",
-  ]) {
-    await client.exec(
-      `ALTER TABLE ${tableName} ENABLE ROW LEVEL SECURITY; ALTER TABLE ${tableName} FORCE ROW LEVEL SECURITY;`,
-    );
-  }
+  scopedDb = scopedFor(orgId);
+  await client.exec(`
+    REVOKE ALL ON organization, sanctions_sources, sanctions_editions, sanctions_edition_entries, sanctions_entry_payloads FROM stella;
+    GRANT SELECT ON organization, sanctions_sources, sanctions_editions, sanctions_edition_entries, sanctions_entry_payloads TO stella;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON contacts, organization_settings, sanctions_contact_matches, sanctions_contact_screenings, sanctions_screening_events TO stella;
+    ALTER TABLE contacts ENABLE ROW LEVEL SECURITY; ALTER TABLE contacts FORCE ROW LEVEL SECURITY;
+    ALTER TABLE organization_settings ENABLE ROW LEVEL SECURITY; ALTER TABLE organization_settings FORCE ROW LEVEL SECURITY;
+    ALTER TABLE sanctions_contact_matches ENABLE ROW LEVEL SECURITY; ALTER TABLE sanctions_contact_matches FORCE ROW LEVEL SECURITY;
+    ALTER TABLE sanctions_contact_screenings ENABLE ROW LEVEL SECURITY; ALTER TABLE sanctions_contact_screenings FORCE ROW LEVEL SECURITY;
+    ALTER TABLE sanctions_screening_events ENABLE ROW LEVEL SECURITY; ALTER TABLE sanctions_screening_events FORCE ROW LEVEL SECURITY;
+  `);
   await db.insert(organization).values([
     {
       id: orgId,
@@ -205,7 +195,7 @@ const commit = async (
   organizationId = orgId,
 ) =>
   await commitSanctionsMonitoringBatch({
-    db: scopedDb,
+    db: scopedFor(organizationId),
     organizationId,
     source: "eu",
     results: [result],
@@ -217,6 +207,14 @@ const eventsFor = async (contactId: typeof contacts.$inferSelect.id) =>
     .select()
     .from(sanctionsScreeningEvents)
     .where(eq(sanctionsScreeningEvents.contactId, contactId));
+
+const screeningFor = async (contactId: typeof contacts.$inferSelect.id) =>
+  (
+    await db
+      .select()
+      .from(sanctionsContactScreenings)
+      .where(eq(sanctionsContactScreenings.contactId, contactId))
+  ).at(0) ?? panic("Expected screening status");
 
 const matchFor = async (contactId: typeof contacts.$inferSelect.id) =>
   (
@@ -318,7 +316,7 @@ test(
 );
 
 test(
-  "stale sources, superseded editions and opt-outs retain coverage and matches",
+  "stale sources and opt-outs persist explicit status without changing matches",
   async () => {
     await activate("e");
     const contact = await addContact();
@@ -331,7 +329,9 @@ test(
         lastSuccessfulVerifiedAt: new Date(now.getTime() - 72 * 3_600_000),
       })
       .where(eq(sanctionsSources.id, "eu"));
-    expect(await commit(work)).toEqual([]);
+    expect(await commit(work)).toEqual([contact.id]);
+    expect((await screeningFor(contact.id)).status).toBe("unavailable");
+    expect((await screeningFor(contact.id)).reason).toBe("stale");
     expect(await matchFor(contact.id)).toEqual(initial);
     await activate("f");
     expect(await commit(work)).toEqual([]);
@@ -340,7 +340,8 @@ test(
       .update(contacts)
       .set({ sanctionsMonitoringMode: "excluded" })
       .where(eq(contacts.id, contact.id));
-    expect(await commit(fresh)).toEqual([]);
+    expect(await commit(fresh)).toEqual([contact.id]);
+    expect((await screeningFor(contact.id)).status).toBe("excluded");
     await db
       .update(contacts)
       .set({ sanctionsMonitoringMode: "included" })
@@ -348,83 +349,14 @@ test(
     await db
       .insert(organizationSettings)
       .values({ organizationId: orgId, sanctionsMonitoringMode: "disabled" });
-    expect(await commit(fresh)).toEqual([]);
+    expect(await commit(fresh)).toEqual([contact.id]);
+    expect((await screeningFor(contact.id)).status).toBe("excluded");
     expect(await eventsFor(contact.id)).toHaveLength(1);
     await db
       .update(organizationSettings)
       .set({ sanctionsMonitoringMode: "enabled" })
       .where(eq(organizationSettings.organizationId, orgId));
-    expect(
-      await db
-        .select()
-        .from(sanctionsOrganizationMarks)
-        .where(eq(sanctionsOrganizationMarks.organizationId, orgId)),
-    ).toHaveLength(1);
     expect(await commit(fresh)).toEqual([contact.id]);
-  },
-  TIMEOUT,
-);
-
-test(
-  "transactional marks cover rollback, bulk imports and opt-out edits",
-  async () => {
-    const contact = await addContact();
-    const generation = (
-      await db
-        .select()
-        .from(sanctionsContactMarks)
-        .where(eq(sanctionsContactMarks.contactId, contact.id))
-    ).at(0)?.generation;
-    expect(generation).toBe(1n);
-    await expect(
-      db.transaction(async (tx) => {
-        await tx
-          .update(contacts)
-          .set({ sanctionsMonitoringMode: "excluded" })
-          .where(eq(contacts.id, contact.id));
-        throw new Error("synthetic rollback");
-      }),
-    ).rejects.toThrow("synthetic rollback");
-    expect(
-      (
-        await db
-          .select()
-          .from(sanctionsContactMarks)
-          .where(eq(sanctionsContactMarks.contactId, contact.id))
-      ).at(0)?.generation,
-    ).toBe(generation);
-    await db
-      .update(contacts)
-      .set({ sanctionsMonitoringMode: "excluded" })
-      .where(eq(contacts.id, contact.id));
-    expect(
-      (
-        await db
-          .select()
-          .from(sanctionsContactMarks)
-          .where(eq(sanctionsContactMarks.contactId, contact.id))
-      ).at(0)?.generation,
-    ).toBe(2n);
-    const batch = await db
-      .insert(contacts)
-      .values(
-        Array.from({ length: 3 }, () => ({
-          organizationId: orgId,
-          type: "person" as const,
-          displayName: "Import synthetic",
-        })),
-      )
-      .returning();
-    for (const row of batch) {
-      expect(
-        (
-          await db
-            .select()
-            .from(sanctionsContactMarks)
-            .where(eq(sanctionsContactMarks.contactId, row.id))
-        ).at(0)?.generation,
-      ).toBe(1n);
-    }
   },
   TIMEOUT,
 );
@@ -469,6 +401,8 @@ test(
             editionId: toSafeId<"sanctionsEdition">(
               result.outcome.editionId ?? panic("Edition missing"),
             ),
+            status: "possible-match",
+            reason: null,
             contactFingerprint: result.contactFingerprint,
             checkedAt: now,
           });

@@ -10,4 +10,13 @@ export const SANCTIONS_MONITORING_EVENT_TYPES = [
   "changed",
   "lapsed",
   "reopened",
+  "dismissed",
+  "review-restored",
+] as const;
+
+export const SANCTIONS_SCREENING_STATUSES = [
+  "clear",
+  "possible-match",
+  "unavailable",
+  "excluded",
 ] as const;

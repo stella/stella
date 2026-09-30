@@ -36,11 +36,7 @@ export const monitoringSubject = (
         ),
       };
     case "person": {
-      const nationalityCodes = contact.nationalityCodes.map((code) =>
-        isCountryCode(code)
-          ? code
-          : panic("Persisted contact nationality is invalid"),
-      );
+      const nationalityCodes = contact.nationalityCodes.filter(isCountryCode);
       const {
         dateOfBirthYear: year,
         dateOfBirthMonth: month,

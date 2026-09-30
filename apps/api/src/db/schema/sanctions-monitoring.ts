@@ -1,4 +1,5 @@
 import {
+  SANCTIONS_SCREENING_STATUSES,
   SANCTIONS_REVIEW_DISPOSITIONS,
   SANCTIONS_MATCH_STATES,
   SANCTIONS_MONITORING_EVENT_TYPES,
@@ -20,7 +21,7 @@ import { contacts } from "./contacts";
 import { sanctionsEditions, sanctionsSources } from "./sanctions";
 
 const monitoringPolicies = (tableName: string) => {
-  const owner = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = ${tableName}::regclass)`;
+  const owner = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = ${sql.raw(`'public.${tableName}'`)}::regclass)`;
   return [
     ...orgPolicies(),
     p.pgPolicy(`${tableName}_owner_access`, {
@@ -31,54 +32,6 @@ const monitoringPolicies = (tableName: string) => {
     }),
   ];
 };
-
-export const sanctionsContactMarks = p.pgTable(
-  "sanctions_contact_marks",
-  {
-    organizationId: safeOrganizationId("organization_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
-    contactId: safeUuid<"contact">("contact_id").primaryKey(),
-    generation: p.bigint({ mode: "bigint" }).notNull().default(1n),
-    markedAt: timestamptz("marked_at").notNull().defaultNow(),
-  },
-  (table) => [
-    p
-      .index("sanctions_contact_marks_org_cursor_idx")
-      .on(table.organizationId, table.contactId),
-    p.check(
-      "sanctions_contact_marks_generation_check",
-      sql`${table.generation} > 0`,
-    ),
-    p
-      .foreignKey({
-        columns: [table.organizationId, table.contactId],
-        foreignColumns: [contacts.organizationId, contacts.id],
-      })
-      .onDelete("cascade"),
-    ...monitoringPolicies("sanctions_contact_marks"),
-  ],
-);
-
-// Enablement is a durable request to start an organization cursor, not a bulk
-// insert of every contact in the settings transaction.
-export const sanctionsOrganizationMarks = p.pgTable(
-  "sanctions_organization_marks",
-  {
-    organizationId: safeOrganizationId("organization_id")
-      .primaryKey()
-      .references(() => organization.id, { onDelete: "cascade" }),
-    generation: p.bigint({ mode: "bigint" }).notNull().default(1n),
-    markedAt: timestamptz("marked_at").notNull().defaultNow(),
-  },
-  (table) => [
-    p.check(
-      "sanctions_organization_marks_generation_check",
-      sql`${table.generation} > 0`,
-    ),
-    ...monitoringPolicies("sanctions_organization_marks"),
-  ],
-);
 
 export const sanctionsContactScreenings = p.pgTable(
   "sanctions_contact_screenings",
@@ -91,9 +44,11 @@ export const sanctionsContactScreenings = p.pgTable(
       .text("source_id")
       .notNull()
       .references(() => sanctionsSources.id),
-    editionId: safeUuid<"sanctionsEdition">("edition_id")
-      .notNull()
-      .references(() => sanctionsEditions.id),
+    editionId: safeUuid<"sanctionsEdition">("edition_id").references(
+      () => sanctionsEditions.id,
+    ),
+    status: p.text({ enum: SANCTIONS_SCREENING_STATUSES }).notNull(),
+    reason: p.text(),
     contactFingerprint: p.text("contact_fingerprint").notNull(),
     checkedAt: timestamptz("checked_at").notNull(),
   },
@@ -107,6 +62,17 @@ export const sanctionsContactScreenings = p.pgTable(
         foreignColumns: [contacts.organizationId, contacts.id],
       })
       .onDelete("cascade"),
+    p.check(
+      "sanctions_contact_screenings_status_check",
+      sql`${table.status} IN (${sql.join(
+        SANCTIONS_SCREENING_STATUSES.map((status) => sql`${status}`),
+        sql`, `,
+      )})`,
+    ),
+    p.check(
+      "sanctions_contact_screenings_clear_edition_check",
+      sql`${table.status} <> 'clear' OR ${table.editionId} IS NOT NULL`,
+    ),
     ...monitoringPolicies("sanctions_contact_screenings"),
   ],
 );
@@ -169,6 +135,7 @@ export const sanctionsContactMatches = p.pgTable(
         foreignColumns: [contacts.organizationId, contacts.id],
       })
       .onDelete("cascade"),
+    p.index("sanctions_contact_matches_reviewed_by_idx").on(table.reviewedBy),
     ...monitoringPolicies("sanctions_contact_matches"),
   ],
 );

@@ -6,15 +6,13 @@ import { stableStringify } from "@stll/stable-stringify";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
+import type { sanctionsScreeningEvents } from "@/api/db/schema";
 import {
   contacts,
-  organization,
   organizationSettings,
   sanctionsContactMatches,
   sanctionsContactScreenings,
   sanctionsEditionEntries,
-  sanctionsScreeningEvents,
-  sanctionsSources,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readSanctionsFreshness } from "@/api/lib/lists/sanctions/freshness";
@@ -26,8 +24,7 @@ import type {
 import { commitReplaySafeIngestionBatch } from "@/api/lib/replay-safe-ingestion";
 
 export const SANCTIONS_MONITORING_BATCH_SIZE = 100;
-const MATCH_READ_PAGE_SIZE = 1000;
-const MATCH_WRITE_BATCH_SIZE = 500;
+const MATCHES_PER_CONTACT = 1000;
 
 export type SanctionsMonitoringResult = {
   contactId: SafeId<"contact">;
@@ -58,9 +55,7 @@ const matchTransition = ({
   old,
   identityChanged,
   hit,
-}: MatchTransitionOptions):
-  | typeof sanctionsScreeningEvents.$inferSelect.type
-  | null => {
+}: MatchTransitionOptions): "new" | "reopened" | "changed" | null => {
   if (old === undefined) {
     return "new";
   }
@@ -81,6 +76,8 @@ const EVENT_REASONS = {
   reopened: "identity-or-membership-changed",
   changed: "evidence-changed",
   lapsed: "absent-from-full-screening",
+  dismissed: "review-dismissed",
+  "review-restored": "review-restored",
 } as const satisfies Record<
   typeof sanctionsScreeningEvents.$inferSelect.type,
   string
@@ -198,6 +195,8 @@ const buildMonitoringDiff = ({
       contactId,
       sourceId: source,
       editionId,
+      status: outcome.status,
+      reason: null,
       contactFingerprint,
       checkedAt: now,
     });
@@ -211,49 +210,101 @@ const persistMonitoringDiff = async (
   { matches, events }: ReturnType<typeof buildMonitoringDiff>,
 ) => {
   if (matches.length > 0) {
-    for (
-      let offset = 0;
-      offset < matches.length;
-      offset += MATCH_WRITE_BATCH_SIZE
-    ) {
-      await tx
-        .insert(sanctionsContactMatches)
-        .values(matches.slice(offset, offset + MATCH_WRITE_BATCH_SIZE))
-        .onConflictDoUpdate({
-          target: [
-            sanctionsContactMatches.organizationId,
-            sanctionsContactMatches.contactId,
-            sanctionsContactMatches.sourceId,
-            sanctionsContactMatches.sourceEntryId,
-          ],
-          set: {
-            editionId: sql`excluded.edition_id`,
-            state: sql`excluded.state`,
-            disposition: sql`excluded.disposition`,
-            reviewedBy: sql`excluded.reviewed_by`,
-            reviewReason: sql`excluded.review_reason`,
-            contactFingerprint: sql`excluded.contact_fingerprint`,
-            entryHash: sql`excluded.entry_hash`,
-            match: sql`excluded.match`,
-            updatedAt: sql`excluded.updated_at`,
-          },
-        });
+    await tx.execute(sql`
+      INSERT INTO sanctions_contact_matches
+        (organization_id, contact_id, source_id, source_entry_id, edition_id, state,
+         disposition, reviewed_by, review_reason, contact_fingerprint, entry_hash, match, updated_at)
+      SELECT x."organizationId", x."contactId", x."sourceId", x."sourceEntryId", x."editionId",
+        x.state, x.disposition, x."reviewedBy", x."reviewReason", x."contactFingerprint", x."entryHash", x.match, x."updatedAt"
+      FROM jsonb_to_recordset(${JSON.stringify(matches)}::text::jsonb) AS x(
+        "organizationId" varchar(128), "contactId" uuid, "sourceId" text, "sourceEntryId" text,
+        "editionId" uuid, state text, disposition text, "reviewedBy" text, "reviewReason" text,
+        "contactFingerprint" text, "entryHash" text, match jsonb, "updatedAt" timestamptz)
+      ON CONFLICT (organization_id, contact_id, source_id, source_entry_id) DO UPDATE SET
+        edition_id = excluded.edition_id, state = excluded.state, disposition = excluded.disposition,
+        reviewed_by = excluded.reviewed_by, review_reason = excluded.review_reason,
+        contact_fingerprint = excluded.contact_fingerprint, entry_hash = excluded.entry_hash,
+        match = excluded.match, updated_at = excluded.updated_at
+    `);
+  }
+  if (events.length > 0) {
+    await tx.execute(sql`
+      INSERT INTO sanctions_screening_events
+        (id, organization_id, contact_id, source_id, source_entry_id, type, old_edition_id,
+         new_edition_id, reason, old_match, new_match, created_at)
+      SELECT gen_random_uuid(), x."organizationId", x."contactId", x."sourceId", x."sourceEntryId",
+        x.type, x."oldEditionId", x."newEditionId", x.reason, x."oldMatch", x."newMatch", x."createdAt"
+      FROM jsonb_to_recordset(${JSON.stringify(events)}::text::jsonb) AS x(
+        "organizationId" varchar(128), "contactId" uuid, "sourceId" text, "sourceEntryId" text,
+        type text, "oldEditionId" uuid, "newEditionId" uuid, reason text, "oldMatch" jsonb,
+        "newMatch" jsonb, "createdAt" timestamptz)
+    `);
+  }
+};
+
+type LoadMonitoringDiffOptions = Pick<
+  BuildMonitoringDiffOptions,
+  "organizationId" | "source" | "editionId" | "eligible"
+> & { tx: Transaction };
+
+const loadMonitoringDiff = async ({
+  tx,
+  organizationId,
+  source,
+  editionId,
+  eligible,
+}: LoadMonitoringDiffOptions) => {
+  const oldRows = await tx
+    .select()
+    .from(sanctionsContactMatches)
+    .where(
+      and(
+        eq(sanctionsContactMatches.organizationId, organizationId),
+        eq(sanctionsContactMatches.sourceId, source),
+        inArray(
+          sanctionsContactMatches.contactId,
+          eligible.map(({ contactId }) => contactId),
+        ),
+      ),
+    )
+    .limit(eligible.length * MATCHES_PER_CONTACT + 1);
+  const oldCounts = new Map<SafeId<"contact">, number>();
+  for (const row of oldRows) {
+    const count = (oldCounts.get(row.contactId) ?? 0) + 1;
+    if (count > MATCHES_PER_CONTACT) {
+      panic("Monitoring match history exceeds its per-contact bound");
     }
+    oldCounts.set(row.contactId, count);
   }
-  for (
-    let offset = 0;
-    offset < events.length;
-    offset += MATCH_WRITE_BATCH_SIZE
-  ) {
-    await tx
-      .insert(sanctionsScreeningEvents)
-      .values(events.slice(offset, offset + MATCH_WRITE_BATCH_SIZE));
-  }
+  const hitIds = [
+    ...new Set(
+      eligible.flatMap(({ outcome }) =>
+        outcome.possibleMatches.map((hit) => hit.sourceEntryId),
+      ),
+    ),
+  ];
+  const hashes =
+    hitIds.length === 0
+      ? []
+      : await tx
+          .select()
+          .from(sanctionsEditionEntries)
+          .where(
+            and(
+              eq(sanctionsEditionEntries.editionId, editionId),
+              sql`${sanctionsEditionEntries.sourceEntryId} = ANY(${hitIds}::text[])`,
+            ),
+          )
+          .limit(hitIds.length);
+  const hashByEntry = new Map(
+    hashes.map((row) => [row.sourceEntryId, row.contentHash]),
+  );
+  return { oldRows, hashByEntry };
 };
 
 /**
  * Commit one bounded org/source batch after screening outside the transaction.
- * Locks protect both mutable inputs and the active edition. A rejected item
+ * Contact locks fence mutable inputs; freshness and edition are checked in the transaction. A rejected item
  * keeps its previous coverage, so the caller must retry it before advancing.
  */
 export const commitSanctionsMonitoringBatch = async ({
@@ -271,35 +322,28 @@ export const commitSanctionsMonitoringBatch = async ({
   ) {
     panic("Sanctions monitoring batch contains duplicate contacts");
   }
-  const terminalContactIds: SafeId<"contact">[] = [];
-  const screenings: (typeof sanctionsContactScreenings.$inferInsert)[] = [];
+  const checkpoint: {
+    rows: (typeof sanctionsContactScreenings.$inferInsert)[];
+  } = { rows: [] };
   return await commitReplaySafeIngestionBatch({
     runInTransaction: db,
     items: results,
-    checkpoint: screenings,
+    checkpoint,
     persistItems: async (tx, items) => {
+      checkpoint.rows = [];
+      const terminalContactIds: SafeId<"contact">[] = [];
       if (items.length === 0) {
         return terminalContactIds;
       }
-      await tx
-        .select({ id: organization.id })
-        .from(organization)
-        .where(eq(organization.id, organizationId))
-        .limit(1)
-        .for("update");
       const settings = (
         await tx
           .select()
           .from(organizationSettings)
           .where(eq(organizationSettings.organizationId, organizationId))
           .limit(1)
-          .for("update")
+          .for("no key update")
       ).at(0);
-      // The organization lock also fences insertion of previously absent settings.
       // Missing settings use the enabled default.
-      if (settings?.sanctionsMonitoringMode === "disabled") {
-        return terminalContactIds;
-      }
       const ids = items.map(({ contactId }) => contactId);
       const contactRows = await tx
         .select()
@@ -312,13 +356,7 @@ export const commitSanctionsMonitoringBatch = async ({
         )
         .orderBy(asc(contacts.id))
         .limit(SANCTIONS_MONITORING_BATCH_SIZE)
-        .for("update");
-      await tx
-        .select({ id: sanctionsSources.id })
-        .from(sanctionsSources)
-        .where(eq(sanctionsSources.id, source))
-        .limit(1)
-        .for("share");
+        .for("no key update");
       const freshness = (
         await readSanctionsFreshness({
           db: async (read) => await read(tx),
@@ -328,93 +366,82 @@ export const commitSanctionsMonitoringBatch = async ({
       if (freshness === undefined) {
         panic("Missing sanctions source freshness");
       }
-      if (freshness.status !== "fresh" || freshness.edition === null) {
-        return terminalContactIds;
-      }
-      const editionId = freshness.edition.id;
+      const editionId = freshness.edition?.id ?? null;
       const byContact = new Map(contactRows.map((row) => [row.id, row]));
-      const eligible = items.filter(
-        ({ contactId, contactFingerprint, outcome }) => {
-          const contact = byContact.get(contactId);
-          return (
-            contact !== undefined &&
-            contact.sanctionsMonitoringMode === "included" &&
-            monitoringFingerprint(contact) === contactFingerprint &&
-            outcome.source === source &&
-            outcome.status !== "unavailable" &&
-            outcome.editionId === editionId
-          );
-        },
-      );
+      const eligible: SanctionsMonitoringResult[] = [];
+      for (const item of items) {
+        const contact = byContact.get(item.contactId);
+        if (contact === undefined) {
+          continue;
+        }
+        const excluded =
+          settings?.sanctionsMonitoringMode === "disabled" ||
+          contact.sanctionsMonitoringMode === "excluded";
+        if (excluded) {
+          checkpoint.rows.push({
+            organizationId,
+            contactId: contact.id,
+            sourceId: source,
+            editionId: null,
+            status: "excluded",
+            reason:
+              settings?.sanctionsMonitoringMode === "disabled"
+                ? "monitoring-disabled"
+                : "contact-excluded",
+            contactFingerprint: monitoringFingerprint(contact),
+            checkedAt: now,
+          });
+          terminalContactIds.push(contact.id);
+          continue;
+        }
+        if (
+          monitoringFingerprint(contact) !== item.contactFingerprint ||
+          item.outcome.source !== source
+        ) {
+          continue;
+        }
+        if (
+          freshness.status === "unavailable" ||
+          item.outcome.status === "unavailable"
+        ) {
+          checkpoint.rows.push({
+            organizationId,
+            contactId: contact.id,
+            sourceId: source,
+            editionId,
+            status: "unavailable",
+            reason: freshness.reason ?? item.outcome.reason,
+            contactFingerprint: item.contactFingerprint,
+            checkedAt: now,
+          });
+          terminalContactIds.push(contact.id);
+          continue;
+        }
+        if (item.outcome.editionId === editionId) {
+          eligible.push(item);
+        }
+      }
       if (eligible.length === 0) {
         return terminalContactIds;
       }
+      if (editionId === null) {
+        panic("Fresh monitoring edition missing");
+      }
       for (const { outcome } of eligible) {
-        if (outcome.truncated) {
+        if (
+          outcome.truncated ||
+          outcome.possibleMatches.length > MATCHES_PER_CONTACT
+        ) {
           panic("Monitoring requires the complete sanctions result set");
         }
       }
-      const oldRows: (typeof sanctionsContactMatches.$inferSelect)[] = [];
-      let cursor: { contactId: string; sourceEntryId: string } | undefined;
-      for (;;) {
-        const page = await tx
-          .select()
-          .from(sanctionsContactMatches)
-          .where(
-            and(
-              eq(sanctionsContactMatches.organizationId, organizationId),
-              eq(sanctionsContactMatches.sourceId, source),
-              inArray(sanctionsContactMatches.contactId, ids),
-              cursor === undefined
-                ? undefined
-                : sql`(${sanctionsContactMatches.contactId}, ${sanctionsContactMatches.sourceEntryId}) > (${cursor.contactId}::uuid, ${cursor.sourceEntryId})`,
-            ),
-          )
-          .orderBy(
-            asc(sanctionsContactMatches.contactId),
-            asc(sanctionsContactMatches.sourceEntryId),
-          )
-          .limit(MATCH_READ_PAGE_SIZE);
-        oldRows.push(...page);
-        const last = page.at(-1);
-        if (page.length < MATCH_READ_PAGE_SIZE || last === undefined) {
-          break;
-        }
-        cursor = {
-          contactId: last.contactId,
-          sourceEntryId: last.sourceEntryId,
-        };
-      }
-      const hitIds = [
-        ...new Set(
-          eligible.flatMap(({ outcome }) =>
-            outcome.possibleMatches.map((hit) => hit.sourceEntryId),
-          ),
-        ),
-      ];
-      const hashByEntry = new Map<string, string>();
-      for (
-        let offset = 0;
-        offset < hitIds.length;
-        offset += MATCH_WRITE_BATCH_SIZE
-      ) {
-        const hashes = await tx
-          .select()
-          .from(sanctionsEditionEntries)
-          .where(
-            and(
-              eq(sanctionsEditionEntries.editionId, editionId),
-              inArray(
-                sanctionsEditionEntries.sourceEntryId,
-                hitIds.slice(offset, offset + MATCH_WRITE_BATCH_SIZE),
-              ),
-            ),
-          )
-          .limit(MATCH_WRITE_BATCH_SIZE);
-        for (const row of hashes) {
-          hashByEntry.set(row.sourceEntryId, row.contentHash);
-        }
-      }
+      const { oldRows, hashByEntry } = await loadMonitoringDiff({
+        tx,
+        organizationId,
+        source,
+        editionId,
+        eligible,
+      });
       const diff = buildMonitoringDiff({
         organizationId,
         source,
@@ -424,12 +451,12 @@ export const commitSanctionsMonitoringBatch = async ({
         hashByEntry,
         now,
       });
-      screenings.push(...diff.screenings);
+      checkpoint.rows.push(...diff.screenings);
       terminalContactIds.push(...diff.terminalContactIds);
       await persistMonitoringDiff(tx, diff);
       return terminalContactIds;
     },
-    persistCheckpoint: async (tx, rows) => {
+    persistCheckpoint: async (tx, { rows }) => {
       if (rows.length === 0) {
         return;
       }
@@ -446,6 +473,8 @@ export const commitSanctionsMonitoringBatch = async ({
             editionId: sql`excluded.edition_id`,
             contactFingerprint: sql`excluded.contact_fingerprint`,
             checkedAt: sql`excluded.checked_at`,
+            status: sql`excluded.status`,
+            reason: sql`excluded.reason`,
           },
         });
     },
