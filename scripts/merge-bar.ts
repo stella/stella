@@ -72,8 +72,8 @@ class MergeHoldError extends TaggedError("MergeHoldError")<{
 type CheckMergeHoldOptions = {
   readVariable: () => Result<string | null, MergeHoldReadError>;
   readIsRelease: () => Result<boolean, MergeHoldReadError>;
-  checkedByWorkflow?: string;
-  githubActions?: string;
+  checkedByWorkflow?: string | undefined;
+  githubActions?: string | undefined;
 };
 
 export const checkMergeHold = ({
