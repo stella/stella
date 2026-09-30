@@ -307,9 +307,15 @@ describe("changed-file autofix boundary", () => {
           .split("\n")
           .map((line) => line.trim().replace(/^run: /u, "")),
       );
-      const write: readonly string[] = generator.write;
-      const check = write.includes("--write")
-        ? write.map((part) => (part === "--write" ? "--check" : part))
+      // Runtime flags don't change what a command checks; an improvements-only
+      // writer is guarded by the full check.
+      const write = generator.write.filter(
+        (part) => part !== "--no-install" && part !== "--no-env-file",
+      );
+      const writesBaseline = (part: string) =>
+        part === "--write" || part === "--write-improvements-only";
+      const check = write.some(writesBaseline)
+        ? write.map((part) => (writesBaseline(part) ? "--check" : part))
         : [...write, "--check"];
       const render = (argv: readonly string[]) => {
         const cwd = argv.at(1);
