@@ -14,6 +14,10 @@ import {
   getTimePeriodLockError,
   roundToBillingIncrement,
 } from "@/api/lib/billing-time";
+import {
+  lockTimerOwner,
+  pauseRunningTimers,
+} from "@/api/lib/billing/time-timers";
 import type { SafeId } from "@/api/lib/branded-types";
 
 /**
@@ -29,6 +33,8 @@ export const closeRemovedMemberActiveTimer = async ({
   tx: Transaction;
   userId: SafeId<"user">;
 }) => {
+  const owner = { organizationId, userId };
+  await lockTimerOwner(tx, owner);
   await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${userId}))`);
 
   const [activeTimer] = await tx
@@ -163,5 +169,11 @@ export const closeRemovedMemberActiveTimer = async ({
       });
     }
   }
+  await pauseRunningTimers({
+    tx,
+    owner,
+    now: new Date(),
+    recordAuditEvent,
+  });
   return Result.ok(undefined);
 };

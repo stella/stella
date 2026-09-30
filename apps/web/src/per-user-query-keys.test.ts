@@ -411,6 +411,10 @@ const PER_USER_READS: Record<string, PerUserRead> = {
       timeEntriesKeys.teamSummary(WORKSPACE, USER, "2026-01-01", "2026-01-31"),
     ],
   },
+  "time-timers/list.ts": {
+    kind: "no-web-caller",
+    calls: ['api["time-timers"].get'],
+  },
   "usage/get-lane.ts": {
     kind: "keyed",
     calls: ["api.usage.lane.get"],

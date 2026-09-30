@@ -67,6 +67,19 @@ A file over the ceiling is refused, naming the limit; send such a document from
 an MCP host that can attach it to the tool's file reference rather than
 re-exporting it to fit.
 
+## Timers
+
+Use `time-timers.start` to create a timer before choosing a matter, then
+`time-timers.list` to find your running and paused timers. Starting or resuming
+a timer pauses your other running timer in the active organization.
+
+Set the matter and description with `time-timers.update`. Pause and resume
+retain elapsed time; `time-timers.discard` removes unconfirmed time.
+`time-timers.confirm` requires a matter and an IANA timezone, creates a draft
+time entry, and applies the organization's time policy. Retry confirmation
+with the same timer ID to receive the original entry without creating another.
+These capabilities replace the per-entry timer start and stop capabilities.
+
 ## Registry drift
 
 The command surface is baked in at build time. When the server you are signed

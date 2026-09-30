@@ -17,6 +17,7 @@ import {
   entities,
   TIME_ENTRY_SOURCE,
   timeEntries,
+  timeTimers,
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
@@ -25,8 +26,8 @@ import batchDelete from "@/api/handlers/time-entries/batch/delete";
 import batchUpdate from "@/api/handlers/time-entries/batch/update";
 import deleteTimeEntryById from "@/api/handlers/time-entries/delete";
 import splitEntry from "@/api/handlers/time-entries/split";
-import timerStop from "@/api/handlers/time-entries/timer/stop";
 import updateTimeEntryById from "@/api/handlers/time-entries/update";
+import confirmTimer from "@/api/handlers/time-timers/confirm";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
@@ -133,6 +134,9 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await testDb
+    .delete(timeTimers)
+    .where(eq(timeTimers.organizationId, organizationId));
+  await testDb
     .delete(timeEntries)
     .where(eq(timeEntries.workspaceId, workspaceId));
   await releaseTestDb();
@@ -226,7 +230,7 @@ type DeleteCtx = Parameters<typeof deleteTimeEntryById.handler>[0];
 type BatchUpdateCtx = Parameters<typeof batchUpdate.handler>[0];
 type BatchDeleteCtx = Parameters<typeof batchDelete.handler>[0];
 type SplitCtx = Parameters<typeof splitEntry.handler>[0];
-type TimerStopCtx = Parameters<typeof timerStop.handler>[0];
+type ConfirmTimerCtx = Parameters<typeof confirmTimer.handler>[0];
 
 /** The failure status of a handler result, or null when it succeeded. */
 const statusOf = (result: unknown): number | null =>
@@ -405,58 +409,79 @@ describe("time entry changes between members of one organization", () => {
 
 // ── Timer ──────────────────────────────────────────────
 
-const stopTimerAs = async (actor: ActorName) =>
-  await timerStop.handler(asTestRaw<TimerStopCtx>(contextFor(actor)));
+const seedTimer = async (owner: ActorName) => {
+  const id = createSafeId<"timeTimer">();
+  const startedAt = new Date(Date.now() - 30 * 60_000);
+  await testDb.insert(timeTimers).values({
+    id,
+    organizationId,
+    workspaceId,
+    userId: actors[owner].userId,
+    description: ORIGINAL_NARRATIVE,
+    state: "running",
+    startedAt,
+    lastResumedAt: startedAt,
+    accumulatedSeconds: 0,
+  });
+  return id;
+};
 
-describe("stopping a timer in a matter shared by several members", () => {
+const readTimer = async (id: SafeId<"timeTimer">) =>
+  await testDb.query.timeTimers.findFirst({ where: { id: { eq: id } } });
+
+const confirmTimerAs = async (actor: ActorName, id: SafeId<"timeTimer">) =>
+  await confirmTimer.handler(
+    asTestRaw<ConfirmTimerCtx>({
+      ...contextFor(actor),
+      params: { id },
+      body: { timezoneId: "UTC" },
+    }),
+  );
+
+describe("confirming a timer in a matter shared by several members", () => {
   test.each(["colleague", "admin", "owner"] as const)(
-    "%s without a running timer cannot stop the timekeeper's",
+    "%s cannot confirm the timekeeper's timer",
     async (actor) => {
-      const id = await seedEntry({ owner: "timekeeper", running: true });
-      const before = await readEntry(id);
-
-      const result = await stopTimerAs(actor);
-
-      expect(statusOf(result)).toBe(404);
-      expect(await readEntry(id)).toEqual(before);
-      // Clean up so later cases start with no running timer for this user.
-      await testDb.delete(timeEntries).where(eq(timeEntries.id, id));
+      const id = await seedTimer("timekeeper");
+      const before = await readTimer(id);
+      expect(statusOf(await confirmTimerAs(actor, id))).toBe(404);
+      expect(await readTimer(id)).toEqual(before);
+      await testDb.delete(timeTimers).where(eq(timeTimers.id, id));
     },
   );
 
-  test("a colleague stops only their own timer while the timekeeper's runs", async () => {
-    const timekeeperTimer = await seedEntry({
-      owner: "timekeeper",
-      running: true,
-    });
-    const colleagueTimer = await seedEntry({
-      owner: "colleague",
-      running: true,
-    });
-    const before = await readEntry(timekeeperTimer);
-
-    const result = await stopTimerAs("colleague");
-
+  test("a colleague confirms only their own timer while the timekeeper's runs", async () => {
+    const timekeeperTimer = await seedTimer("timekeeper");
+    const colleagueTimer = await seedTimer("colleague");
+    const before = await readTimer(timekeeperTimer);
+    const result = await confirmTimerAs("colleague", colleagueTimer);
     expect(statusOf(result)).toBeNull();
-    expect(result).toMatchObject({ id: colleagueTimer });
-    expect(await readEntry(colleagueTimer)).toMatchObject({
-      timerStartedAt: null,
-      timerStoppedAt: expect.any(Date),
+    if (!("id" in result)) {
+      throw new Error(`Timer confirmation failed: ${JSON.stringify(result)}`);
+    }
+    expect(await readTimer(colleagueTimer)).toBeUndefined();
+    expect(await readEntry(result.id)).toMatchObject({
+      userId: actors.colleague.userId,
+      source: TIME_ENTRY_SOURCE.TIMER,
     });
-    expect(await readEntry(timekeeperTimer)).toEqual(before);
-    await testDb.delete(timeEntries).where(eq(timeEntries.id, timekeeperTimer));
+    expect(await readTimer(timekeeperTimer)).toEqual(before);
+    await testDb.delete(timeTimers).where(eq(timeTimers.id, timekeeperTimer));
   });
 
-  test("the timekeeper can stop their own timer", async () => {
-    const id = await seedEntry({ owner: "timekeeper", running: true });
-
-    const result = await stopTimerAs("timekeeper");
-
+  test("the timekeeper can confirm their own timer", async () => {
+    const id = await seedTimer("timekeeper");
+    const result = await confirmTimerAs("timekeeper", id);
     expect(statusOf(result)).toBeNull();
-    expect(result).toMatchObject({ id });
-    const after = await readEntry(id);
-    expect(after?.timerStartedAt).toBeNull();
-    expect(after?.durationMinutes).toBeGreaterThan(0);
+    if (!("id" in result)) {
+      throw new Error(`Timer confirmation failed: ${JSON.stringify(result)}`);
+    }
+    expect(await readTimer(id)).toBeUndefined();
+    const entry = await readEntry(result.id);
+    expect(entry).toMatchObject({
+      userId: actors.timekeeper.userId,
+      status: BILLING_STATUS.DRAFT,
+    });
+    expect(entry?.durationMinutes).toBeGreaterThan(0);
   });
 });
 

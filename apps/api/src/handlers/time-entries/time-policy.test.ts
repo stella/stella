@@ -3,8 +3,8 @@ import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
 
 import { BILLING_STATUS } from "@/api/db/schema";
 import { deleteTimeEntryHandler } from "@/api/handlers/time-entries/delete";
-import { createTimeEntryHandler } from "@/api/handlers/time-entries/time-entry-insert";
 import { updateTimeEntryHandler } from "@/api/handlers/time-entries/update";
+import { createTimeEntryHandler } from "@/api/lib/billing/time-entry-insert";
 import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";

@@ -1232,14 +1232,29 @@ export const CAPABILITY_DISPATCH = {
   "time-entries.summary.get": {
     load: async () => await import("@/api/handlers/time-entries/summary/get"),
   },
-  "time-entries.timer.start": {
-    load: async () => await import("@/api/handlers/time-entries/timer/start"),
-  },
-  "time-entries.timer.stop": {
-    load: async () => await import("@/api/handlers/time-entries/timer/stop"),
-  },
   "time-entries.update": {
     load: async () => await import("@/api/handlers/time-entries/update"),
+  },
+  "time-timers.confirm": {
+    load: async () => await import("@/api/handlers/time-timers/confirm"),
+  },
+  "time-timers.discard": {
+    load: async () => await import("@/api/handlers/time-timers/discard"),
+  },
+  "time-timers.list": {
+    load: async () => await import("@/api/handlers/time-timers/list"),
+  },
+  "time-timers.pause": {
+    load: async () => await import("@/api/handlers/time-timers/pause"),
+  },
+  "time-timers.resume": {
+    load: async () => await import("@/api/handlers/time-timers/resume"),
+  },
+  "time-timers.start": {
+    load: async () => await import("@/api/handlers/time-timers/start"),
+  },
+  "time-timers.update": {
+    load: async () => await import("@/api/handlers/time-timers/update"),
   },
   "uploads.create": {
     load: async () => await import("@/api/handlers/uploads/create"),

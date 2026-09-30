@@ -13,6 +13,7 @@ import {
   TIME_ENTRY_SOURCES,
   TIME_ENTRY_STATUSES,
   centsColumn,
+  member,
   organization,
   orgPolicies,
   p,
@@ -21,6 +22,7 @@ import {
   safeUuid,
   safeWorkspaceId,
   sql,
+  stella,
   unsafeCents,
   user,
   userOrganizationPolicies,
@@ -123,6 +125,110 @@ export const timeEntries = p.pgTable(
       sql`${table.billedMinutes} >= 0`,
     ),
     ...wsOrganizationPolicies("time_entries"),
+  ],
+);
+
+export const TIME_TIMER_STATES = ["running", "paused"] as const;
+export const RUNNING_TIME_TIMER_INDEX_NAME =
+  "time_timers_one_running_owner_idx";
+const TIME_TIMER_STATE_SQL_VALUES = TIME_TIMER_STATES.map((state) =>
+  sql.raw(`'${state}'`),
+);
+
+const TIME_TIMER_CURRENT_MEMBER_CHECK = sql`EXISTS (
+  SELECT 1 FROM ${member}
+  WHERE ${member.organizationId} = "time_timers"."organization_id"
+    AND ${member.userId} = "time_timers"."user_id"
+)`;
+
+export const timeTimers = p.pgTable(
+  "time_timers",
+  {
+    id: pUuid<"timeTimer">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    userId: p
+      .text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    workspaceId: safeWorkspaceId("workspace_id").references(
+      () => workspaces.id,
+      { onDelete: "set null" },
+    ),
+    description: p.text("description"),
+    legacyTimeEntryId: safeUuid<"timeEntry">("legacy_time_entry_id").references(
+      () => timeEntries.id,
+      { onDelete: "set null" },
+    ),
+    state: p.text("state", { enum: TIME_TIMER_STATES }).notNull(),
+    startedAt: timestamptz("started_at").notNull(),
+    accumulatedSeconds: p.integer("accumulated_seconds").notNull().default(0),
+    lastResumedAt: timestamptz("last_resumed_at"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p.foreignKey({
+      columns: [table.workspaceId, table.organizationId],
+      foreignColumns: [workspaces.id, workspaces.organizationId],
+      name: "time_timers_workspace_organization_fk",
+    }),
+    p
+      .uniqueIndex(RUNNING_TIME_TIMER_INDEX_NAME)
+      .on(table.organizationId, table.userId)
+      .where(sql`${table.state} = 'running'`),
+    p
+      .index("time_timers_owner_id_idx")
+      .on(table.organizationId, table.userId, table.id),
+    p.index("time_timers_workspace_idx").on(table.workspaceId),
+    p.index("time_timers_legacy_entry_idx").on(table.legacyTimeEntryId),
+    p.check(
+      "time_timers_state_check",
+      sql`${table.state} IN (${sql.join(TIME_TIMER_STATE_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "time_timers_accumulated_seconds_check",
+      sql`${table.accumulatedSeconds} >= 0`,
+    ),
+    p.check(
+      "time_timers_resume_state_check",
+      sql`(${table.state} = 'running') = (${table.lastResumedAt} IS NOT NULL)`,
+    ),
+    ...userOrganizationPolicies(),
+    p.pgPolicy("current_member", {
+      as: "restrictive",
+      for: "all",
+      to: stella,
+      using: TIME_TIMER_CURRENT_MEMBER_CHECK,
+      withCheck: TIME_TIMER_CURRENT_MEMBER_CHECK,
+    }),
+  ],
+);
+
+export const timeTimerConfirmations = p.pgTable(
+  "time_timer_confirmations",
+  {
+    timerId: safeUuid<"timeTimer">("timer_id").primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    userId: p
+      .text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    timeEntryId: safeUuid<"timeEntry">("time_entry_id").references(
+      () => timeEntries.id,
+      { onDelete: "set null" },
+    ),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p
+      .index("time_timer_confirmations_owner_idx")
+      .on(table.organizationId, table.userId),
+    p.index("time_timer_confirmations_entry_idx").on(table.timeEntryId),
+    ...userOrganizationPolicies(),
   ],
 );
 
