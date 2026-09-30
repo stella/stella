@@ -393,6 +393,10 @@ export const OWNERSHIP = [
           reason: "Provider canary with synthetic content.",
         },
         {
+          path: "apps/api/scripts/ai-provider-cassette-probe.ts",
+          reason: "Records provider cassettes from synthetic prompts.",
+        },
+        {
           path: "apps/api/scripts/benchmark-chat-read-surface.ts",
           reason: "Benchmark with synthetic content.",
         },
