@@ -272,6 +272,7 @@ describe("personal daily time summary", () => {
     for (const minutes of [undefined, null]) {
       await withTargets(minutes, async () => {
         expect(await listFor({ date: SUMMARY_DAY })).toMatchObject({
+          loggedTodayMinutes: 65,
           dailyTargetMinutes: null,
           leftTodayMinutes: null,
         });
@@ -283,6 +284,7 @@ describe("personal daily time summary", () => {
     await withTargets(120, async () => {
       const complete = await listFor({ date: SUMMARY_DAY });
       expect(complete).toMatchObject({
+        loggedTodayMinutes: 65,
         dailyTargetMinutes: 120,
         leftTodayMinutes: 55,
       });
@@ -306,6 +308,7 @@ describe("personal daily time summary", () => {
       );
       for (const page of [first, second]) {
         expect(page).toMatchObject({
+          loggedTodayMinutes: 65,
           dailyTargetMinutes: 120,
           leftTodayMinutes: 55,
         });
@@ -316,6 +319,7 @@ describe("personal daily time summary", () => {
   test("excludes inaccessible, deleting, foreign-organization, other-user and other-date work", async () => {
     await withTargets(120, async () => {
       expect(await listFor({ date: DAY })).toMatchObject({
+        loggedTodayMinutes: 60,
         dailyTargetMinutes: 120,
         leftTodayMinutes: 60,
       });
@@ -325,6 +329,7 @@ describe("personal daily time summary", () => {
   test("clamps remaining minutes at zero after reducing a target below logged time", async () => {
     await withTargets(120, async () => {
       expect(await listFor({ date: SUMMARY_DAY })).toMatchObject({
+        loggedTodayMinutes: 65,
         dailyTargetMinutes: 120,
         leftTodayMinutes: 55,
       });
@@ -338,6 +343,7 @@ describe("personal daily time summary", () => {
           ),
         );
       expect(await listFor({ date: SUMMARY_DAY })).toMatchObject({
+        loggedTodayMinutes: 65,
         dailyTargetMinutes: 30,
         leftTodayMinutes: 0,
       });
@@ -348,6 +354,7 @@ describe("personal daily time summary", () => {
     await withTargets(120, async () => {
       expect(await listFor({ date: EMPTY_DAY })).toMatchObject({
         items: [],
+        loggedTodayMinutes: 0,
         dailyTargetMinutes: 120,
         leftTodayMinutes: 120,
       });
