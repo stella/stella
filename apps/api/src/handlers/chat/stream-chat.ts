@@ -32,6 +32,10 @@ import { setSharedLockTimeout } from "@/api/db/shared-pool-timeouts";
 import { env } from "@/api/env";
 import { modelAcceptsDocumentAttachment } from "@/api/handlers/chat/attachment-modality";
 import {
+  chunkCarriesAnswer,
+  runProducedAnswer,
+} from "@/api/handlers/chat/attempt-answer";
+import {
   applyChatPartPersistenceBudget,
   attachTerminalTurnOutcome,
   classifyChatPartForPersistence,
@@ -719,11 +723,14 @@ export const chatTurnRejectsStreamingTools = ({
 type ChatAttemptState = {
   emptyCompletion: ChatEmptyCompletionError | null;
   finalLoopDetection: ChatLoopDetectedError | null;
+  /** Whether the attempt has streamed an answer (`chunkCarriesAnswer`). */
+  producedAnswer: boolean;
 };
 
 export const createChatAttemptState = (): ChatAttemptState => ({
   emptyCompletion: null,
   finalLoopDetection: null,
+  producedAnswer: false,
 });
 
 type ChatAttemptModelInfo = Pick<
@@ -738,7 +745,6 @@ type RecordChatAttemptFinishProps = {
   modelInfo: ChatAttemptModelInfo;
   state: ChatAttemptState;
   threadId: SafeId<"chatThread">;
-  usage: TokenUsage | undefined;
 };
 
 export const recordChatAttemptFinish = ({
@@ -748,7 +754,6 @@ export const recordChatAttemptFinish = ({
   modelInfo,
   state,
   threadId,
-  usage,
 }: RecordChatAttemptFinishProps): void => {
   const loopDetection = detectModelLoop(messages);
   if (shouldSurfaceFinalContentLoop(loopDetection)) {
@@ -757,7 +762,11 @@ export const recordChatAttemptFinish = ({
     });
   }
 
-  if (finishReason !== "stop" || usage?.completionTokens !== 0) {
+  // Emptiness is read from what the attempt streamed, never from the
+  // provider's token count: a model can spend completion tokens on an answer
+  // that holds nothing. Any other finish reason is left to the terminal
+  // guard, which settles the turn without trying the fallback model.
+  if (finishReason !== "stop" || state.producedAnswer) {
     return;
   }
 
@@ -1420,7 +1429,6 @@ const createChatRuntimeMiddleware = ({
           modelInfo: model,
           state,
           threadId,
-          usage: event.info.usage,
         });
         return;
       case "aborted":
@@ -1434,6 +1442,9 @@ const createChatRuntimeMiddleware = ({
   return {
     name: "stella-chat-runtime",
     ...terminalHooks,
+    onChunk: (_ctx, chunk) => {
+      state.producedAnswer ||= chunkCarriesAnswer(chunk);
+    },
     onConfig: async (ctx, config) => {
       if (ctx.phase !== "beforeModel") {
         return undefined;
@@ -1514,9 +1525,10 @@ type ProcessServerChatStreamProps = {
    *  only one of the two causes that reaches this signal, so it is what tells
    *  a deadline apart from a disconnect. */
   deadlineSignal: AbortSignal;
-  existingMessageIds?: ReadonlySet<string> | undefined;
   flushPendingSource?: (() => PublicStreamChunk[]) | undefined;
   getResponseMessage: () => ChatMessage | null;
+  /** The history the run starts from: the messages it may continue. */
+  initialMessages?: readonly ChatMessage[] | undefined;
   mapMessageId: MessageIdMapper;
   onFinish: (event: StreamChatFinishEvent) => Promise<void> | void;
   processor: ChatStreamProcessor;
@@ -1778,11 +1790,20 @@ const drainedRunOutcome = ({
   return { type: "completed" };
 };
 
+/** The chunk that tells the client which message the turn writes. */
+const assistantMessageStart = (mapMessageId: MessageIdMapper): StreamChunk => ({
+  type: EventType.TEXT_MESSAGE_START,
+  messageId: mapMessageId(ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL),
+  role: "assistant",
+  timestamp: Temporal.Now.instant().epochMilliseconds,
+});
+
 type AdmissionLossOutcomeOptions = Pick<
   ProcessServerChatStreamProps,
   "getRestorableCheckpoint" | "getResponseMessage" | "processor"
 > & {
   deferredRunFinishedChunks: readonly PublicStreamChunk[];
+  initialMessages: readonly ChatMessage[];
   toolCallsWithCompleteInput: ReadonlySet<string>;
 };
 
@@ -1790,6 +1811,7 @@ const resolveAdmissionLossOutcome = ({
   deferredRunFinishedChunks,
   getRestorableCheckpoint,
   getResponseMessage,
+  initialMessages,
   processor,
   toolCallsWithCompleteInput,
 }: AdmissionLossOutcomeOptions): ChatTurnOutcome => {
@@ -1822,9 +1844,9 @@ const resolveAdmissionLossOutcome = ({
     finishReasonOf(lastFinish) !== "tool_calls" &&
     getAwaitingUserInteraction(response) === null
   ) {
-    return response === null || response.parts.length === 0
-      ? { type: "failed", error: "empty_completion" }
-      : { type: "completed" };
+    return runProducedAnswer({ initialMessages, responseMessage: response })
+      ? { type: "completed" }
+      : { type: "failed", error: "empty_completion" };
   }
   return { type: "failed", error: "provider_unavailable" };
 };
@@ -1849,6 +1871,7 @@ type StreamSettlementOptions = Pick<
   | "onFinish"
   | "processor"
 > & {
+  initialMessages: readonly ChatMessage[];
   runSignal: AbortSignal;
   deferredRunFinishedChunks: PublicStreamChunk[];
   rawArgumentsByIncompleteToolCallId: Map<string, string>;
@@ -1864,6 +1887,7 @@ const createStreamSettlement = ({
   flushPendingSource,
   getRestorableCheckpoint,
   getResponseMessage,
+  initialMessages,
   mapMessageId,
   onFinish,
   processor,
@@ -1891,6 +1915,7 @@ const createStreamSettlement = ({
       deferredRunFinishedChunks,
       getRestorableCheckpoint,
       getResponseMessage,
+      initialMessages,
       processor,
       toolCallsWithCompleteInput,
     });
@@ -1939,6 +1964,7 @@ const createStreamSettlement = ({
     const terminalResponseMessage =
       checkpoint === undefined
         ? createTerminalResponseMessage({
+            initialMessages,
             mapMessageId,
             outcome,
             responseMessage,
@@ -2065,9 +2091,9 @@ export const processServerChatStream = async function* ({
   runSignal = abortSignal,
   getRestorableCheckpoint,
   deadlineSignal,
-  existingMessageIds = new Set(),
   flushPendingSource,
   getResponseMessage,
+  initialMessages = [],
   mapMessageId,
   onFinish,
   processor,
@@ -2098,6 +2124,7 @@ export const processServerChatStream = async function* ({
     flushPendingSource,
     getRestorableCheckpoint,
     getResponseMessage,
+    initialMessages,
     mapMessageId,
     onFinish,
     processor,
@@ -2114,22 +2141,13 @@ export const processServerChatStream = async function* ({
   // client opens a placeholder under an id of its own beside the message the
   // turn stored or continued.
   const announceBeforeFailure = (): StreamChunk[] =>
-    announcedAssistantMessage
-      ? []
-      : [
-          {
-            type: EventType.TEXT_MESSAGE_START,
-            messageId: mapMessageId(ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL),
-            role: "assistant",
-            timestamp: Temporal.Now.instant().epochMilliseconds,
-          },
-        ];
+    announcedAssistantMessage ? [] : [assistantMessageStart(mapMessageId)];
   try {
     const normalizedSource = ensureAssistantMessageStart({
       getOrCreateMessageId: () =>
         mapMessageId(ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL),
       source: remapOutgoingMessageIds({
-        existingMessageIds,
+        existingMessageIds: new Set(initialMessages.map(({ id }) => id)),
         mapMessageId,
         source,
       }),
@@ -2289,7 +2307,7 @@ export const processServerChatStream = async function* ({
 
 type ProcessTurnForPersistenceProps = Omit<
   ProcessServerChatStreamProps,
-  "existingMessageIds" | "getResponseMessage" | "mapMessageId" | "processor"
+  "getResponseMessage" | "initialMessages" | "mapMessageId" | "processor"
 > & {
   /** The history the run starts from: the messages it may continue. */
   initialMessages: ChatMessage[];
@@ -2326,14 +2344,15 @@ const processTurnForPersistence = ({
   });
   return processServerChatStream({
     ...stream,
-    existingMessageIds: new Set(initialMessages.map(({ id }) => id)),
     getResponseMessage: message,
+    initialMessages,
     mapMessageId: createTurnMessageIdMapper(owningAssistantMessageId),
     processor,
   });
 };
 
 type FinishResponseMessageProps = {
+  initialMessages: readonly ChatMessage[];
   mapMessageId: MessageIdMapper;
   outcome: ChatTurnOutcome;
   responseMessage: ChatMessage | null;
@@ -2341,14 +2360,18 @@ type FinishResponseMessageProps = {
 };
 
 const createTerminalResponseMessage = ({
+  initialMessages,
   mapMessageId,
   outcome,
   responseMessage,
   usage,
 }: FinishResponseMessageProps): PersistableTerminalAssistantMessage => {
+  // A turn that waits on the user holds the call it waits on, so only a
+  // completion can have answered nothing. A continuation's message already
+  // holds the call the user answered; what counts is what this run added.
   if (
-    (outcome.type === "completed" || outcome.type === "awaiting-user") &&
-    (!responseMessage || responseMessage.parts.length === 0)
+    outcome.type === "completed" &&
+    !runProducedAnswer({ initialMessages, responseMessage })
   ) {
     throw new ChatEmptyCompletionError({
       message: CHAT_EMPTY_COMPLETION_MESSAGE,

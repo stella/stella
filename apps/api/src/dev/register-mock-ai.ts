@@ -13,6 +13,7 @@ import { Temporal } from "@stll/time";
 
 import { isMockAI } from "@/api/consts";
 import { env } from "@/api/env";
+import { ASK_USER_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
 import { logger } from "@/api/lib/observability/logger";
 import { registerTanStackMockTextAdapterFactory } from "@/api/lib/tanstack-ai-models";
 import { generateBatchMock } from "@/api/lib/workflow/generate-batch-mock";
@@ -62,6 +63,19 @@ const E2E_SLOW_STREAM_MARKER = "Stream slowly please";
 const E2E_EMPTY_COMPLETION_MARKER = "Return an empty completion please";
 
 const EMPTY_COMPLETION_DELAY_MS = 1500;
+
+// A user message containing this marker makes the mock adapter ask the user a
+// question (the `ask-user` client tool) and then, once the answer is posted
+// back, stop with an empty text message while still reporting completion
+// tokens: the shape of a model that goes silent after a card is answered. The
+// continuation already holds the question, so this exercises the server's
+// empty-answer check on a message that is not itself empty.
+const E2E_EMPTY_CONTINUATION_MARKER = "Ask me, then answer with nothing please";
+
+const E2E_ASK_USER_ARGUMENTS = {
+  analysis: "The answer depends on the side the user represents.",
+  questions: [{ question: "Which side?", reason: "It decides the draft." }],
+};
 
 // A user message containing this marker makes the mock adapter answer with a
 // `create-document` tool call (a client-executed tool), the shape of a real
@@ -154,6 +168,84 @@ const resolveCreateDocumentPhase = ({
   return messages.at(-1)?.role === "tool" ? "reply" : "call";
 };
 
+type EmptyContinuationChunksOptions = {
+  /** Whether the user has answered the question the first run asked. */
+  answered: boolean;
+  messageId: string;
+  model: string;
+  runId: string;
+  threadId: string;
+  timestamp: number;
+};
+
+/**
+ * The run `E2E_EMPTY_CONTINUATION_MARKER` asks for: the question, then, once
+ * it is answered, an empty text message.
+ *
+ * @yields Each provider event of the run, after its `RUN_STARTED`.
+ */
+function* emptyContinuationChunks({
+  answered,
+  messageId,
+  model,
+  runId,
+  threadId,
+  timestamp,
+}: EmptyContinuationChunksOptions): Generator<AdapterYieldChunk> {
+  yield {
+    type: EventType.TEXT_MESSAGE_START,
+    messageId,
+    role: "assistant",
+    model,
+    timestamp,
+  };
+  if (answered) {
+    yield {
+      type: EventType.TEXT_MESSAGE_CONTENT,
+      messageId,
+      delta: "",
+      model,
+      timestamp,
+    };
+    yield { type: EventType.TEXT_MESSAGE_END, messageId, model, timestamp };
+    yield {
+      type: EventType.RUN_FINISHED,
+      runId,
+      threadId,
+      model,
+      timestamp,
+      finishReason: "stop",
+      usage: mockUsage,
+    };
+    return;
+  }
+  const toolCallId = "mock-ask-user-call";
+  yield {
+    type: EventType.TOOL_CALL_START,
+    toolCallId,
+    toolCallName: ASK_USER_TOOL_NAME,
+    parentMessageId: messageId,
+    timestamp,
+  };
+  yield {
+    type: EventType.TOOL_CALL_ARGS,
+    toolCallId,
+    delta: JSON.stringify(E2E_ASK_USER_ARGUMENTS),
+    model,
+    timestamp,
+  };
+  yield { type: EventType.TOOL_CALL_END, toolCallId, timestamp };
+  yield {
+    type: EventType.RUN_FINISHED,
+    runId,
+    threadId,
+    model,
+    timestamp,
+    finishReason: "tool_calls",
+    usage: mockUsage,
+  };
+}
+
 const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
   kind: "text",
   name: "mock",
@@ -228,6 +320,18 @@ const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
         finishReason: "tool_calls",
         usage: mockUsage,
       } satisfies AdapterYieldChunk;
+      return;
+    }
+
+    if (latestUserText.includes(E2E_EMPTY_CONTINUATION_MARKER)) {
+      yield* emptyContinuationChunks({
+        answered: messages.at(-1)?.role === "tool",
+        messageId,
+        model,
+        runId: resolvedRunId,
+        threadId: resolvedThreadId,
+        timestamp,
+      });
       return;
     }
 

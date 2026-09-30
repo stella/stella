@@ -1385,8 +1385,8 @@ describe("native continuation persistence", () => {
     const emitted = await collectChunks(
       processServerChatStream({
         ...uncutTurnSignals(),
-        existingMessageIds: new Set(messages.map(({ id }) => id)),
         getResponseMessage: () => responseMessage,
+        initialMessages: messages,
         mapMessageId: createTurnMessageIdMapper(
           toSafeId<"chatMessage">(owningAssistantMessageId),
         ),
@@ -2092,7 +2092,7 @@ describe("outgoing chat stream message ids", () => {
     const stream = processServerChatStream({
       abortSignal: new AbortController().signal,
       deadlineSignal: new AbortController().signal,
-      existingMessageIds: new Set([owningMessageId]),
+      initialMessages: [{ id: owningMessageId, parts: [], role: "assistant" }],
       getResponseMessage: () => ({
         id: owningMessageId,
         role: "assistant",
@@ -3811,7 +3811,7 @@ describe("chat attempt terminal classification", () => {
     ).toBe(false);
   });
 
-  test("captures empty stop completions", () => {
+  test("captures a stop that streamed no answer", () => {
     const state = createChatAttemptState();
     const capturedErrors: unknown[] = [];
 
@@ -3824,11 +3824,6 @@ describe("chat attempt terminal classification", () => {
       modelInfo: { modelId: "gpt-test", provider: "openai" },
       state,
       threadId: toSafeId<"chatThread">("11111111-1111-4111-8111-111111111111"),
-      usage: {
-        completionTokens: 0,
-        promptTokens: 12,
-        totalTokens: 12,
-      },
     });
 
     expect(state.emptyCompletion).toBeInstanceOf(ChatEmptyCompletionError);
@@ -3836,8 +3831,23 @@ describe("chat attempt terminal classification", () => {
     expect(capturedErrors).toEqual([state.emptyCompletion]);
   });
 
+  test("keeps a stop that streamed an answer", () => {
+    const state = { ...createChatAttemptState(), producedAnswer: true };
+
+    recordChatAttemptFinish({
+      captureError: () => {},
+      finishReason: "stop",
+      messages: [],
+      modelInfo: { modelId: "gpt-test", provider: "openai" },
+      state,
+      threadId: toSafeId<"chatThread">("11111111-1111-4111-8111-111111111111"),
+    });
+
+    expect(state.emptyCompletion).toBeNull();
+  });
+
   test("surfaces final content loops", () => {
-    const state = createChatAttemptState();
+    const state = { ...createChatAttemptState(), producedAnswer: true };
     const loopChunk = "abcdefghij".repeat(5);
     const messages: ModelMessage[] = [
       { content: "Please answer.", role: "user" },
@@ -3851,11 +3861,6 @@ describe("chat attempt terminal classification", () => {
       modelInfo: { modelId: "gpt-test", provider: "openai" },
       state,
       threadId: toSafeId<"chatThread">("11111111-1111-4111-8111-111111111111"),
-      usage: {
-        completionTokens: 50,
-        promptTokens: 12,
-        totalTokens: 62,
-      },
     });
 
     expect(state.finalLoopDetection).toBeInstanceOf(ChatLoopDetectedError);
