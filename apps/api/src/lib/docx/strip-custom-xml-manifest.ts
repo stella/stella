@@ -13,10 +13,12 @@
  * SharePoint metadata) that merely mentions the URI is never removed.
  */
 
-import JSZip from "jszip";
+import type JSZip from "jszip";
 import * as slimdom from "slimdom";
 
 import { compareCodeUnit } from "@stll/collation";
+
+import { loadDocx } from "@/api/lib/docx-archive";
 
 const MANIFEST_NS = "urn:stella:template:v1";
 
@@ -137,8 +139,7 @@ const removeManifestSlot = async (
  * buffers that never had one: the same bytes come back.
  */
 export const stripManifest = async (docxBuffer: Buffer): Promise<Buffer> => {
-  // oxlint-disable-next-line no-raw-zip-load/no-raw-zip-load -- unbounded archive read predating loadDocxArchive; frozen by the rule budget
-  const zip = await JSZip.loadAsync(docxBuffer);
+  const zip = await loadDocx(docxBuffer);
 
   const found = await findManifestSlot(zip);
   if (!found) {

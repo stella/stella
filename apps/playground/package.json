@@ -16,7 +16,6 @@
   "dependencies": {
     "@stll/folio-react": "catalog:",
     "@stll/ui": "workspace:*",
-    "lucide-react": "catalog:",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
     "use-intl": "catalog:"

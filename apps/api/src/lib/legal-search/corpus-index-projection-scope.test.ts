@@ -1,5 +1,4 @@
-import { expect, test } from "bun:test";
-import { expectTypeOf } from "expect-type";
+import { expect, test, expectTypeOf } from "bun:test";
 
 import { toSafeId, type SafeId } from "@/api/lib/branded-types";
 import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";

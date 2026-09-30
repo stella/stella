@@ -22,6 +22,7 @@ import {
   withActionAdmission,
 } from "@/api/lib/rate-limit/action-admission";
 import { isEventStreamResponse, withSseHeartbeat } from "@/api/lib/sse";
+import { mcpActionPeriodIdentity } from "@/api/mcp/action-admission-identity";
 import {
   isMcpSession,
   type McpAuthenticationFailure,
@@ -756,6 +757,7 @@ export const createMcpHttpRequestHandler = ({
         enabled: true,
         organizationId: context.organizationId,
         userId: context.userId,
+        periodIdentity: mcpActionPeriodIdentity(),
         run,
       });
       if (Result.isOk(admitted)) {
@@ -767,8 +769,8 @@ export const createMcpHttpRequestHandler = ({
       ) {
         return mcpStructuredErrorResult({
           code: "rate_limited",
-          message: "Concurrent action limit reached",
-          hint: "Wait for an active action to finish, then retry this call.",
+          message: admitted.error.message,
+          hint: "Wait for admission capacity, then retry this call.",
           retryable: true,
         });
       }

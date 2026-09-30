@@ -27,6 +27,16 @@
     "errorNotFound": "Selle koodi jaoks ei leidnud me ootel olevat päringut. Kontrollige koodi ja proovige uuesti.",
     "title": "Ühenda oma agent"
   },
+  "agentSetup": {
+    "addressLabel": "Assistent küsib seda aadressi",
+    "copiedToast": "Juhised kopeeritud. Kleebi need vestlusesse oma assistendiga.",
+    "copy": "Kopeeri talle juhised",
+    "description": "Küsi Claude’ilt või ChatGPT-lt oma toimikute ja dokumentide kohta. Vali oma assistent, et avada lühike juhend; see võtab umbes minuti.",
+    "instructions": "Ühenda mind stellaga, minu õigusalase tööruumiga. Järgi aadressil {guideUrl} jaotist „Instructions for AI agents“ ja kasuta seda serveri aadressi: {mcpUrl}",
+    "openGuide": "Ava juhend: {assistant}",
+    "selfSetupHint": "Kasutad Claude Code’i või Codexit?",
+    "title": "Kasuta stellat oma AI-assistendis"
+  },
   "ai": {
     "chooseRewriteInstruction": "Ümberkirjutamise valikud",
     "editWithAI": "Muuda AI-ga",
@@ -521,6 +531,20 @@
     "noActiveTimer": "Aktiivset taimerit pole",
     "noEntries": "Selle perioodi ajakandeid pole",
     "nonBillable": "Mittearveldatav",
+    "quickEntry": {
+      "entrySaved": "Aja kanne salvestatud",
+      "expenseSaved": "Kulu salvestatud",
+      "expenseTitle": "Lisa kulu",
+      "futureDate": "Valige tänane või varasem kuupäev.",
+      "invalidDate": "Valige kehtiv töö kuupäev.",
+      "minimumUnit": "Aeg ümardatakse üles väikseima arveldusühikuni.",
+      "narrativeRequired": "Enne aja salvestamist lisage kirjeldus.",
+      "outsideEditWindow": "See kuupäev jääb muutmise tähtajast välja.",
+      "periodLocked": "See kuu on lukustatud.",
+      "saveAndAddExpense": "Salvesta ja lisa kulu",
+      "saveAndNew": "Salvesta ja lisa järgmine",
+      "viewDay": "Vaata päeva"
+    },
     "rates": {
       "addRate": "Lisa määr",
       "createRateTable": "Loo määratabel",
@@ -837,6 +861,7 @@
         "publishedOnWeb": "Veebis avaldatud"
       },
       "statutes": "Kohaldatavad õigusaktid",
+      "textNotYetAvailable": "Kohus ei ole lahendi teksti avaldanud või ei ole see siin veel kättesaadav.",
       "textPending": "Lahendi teksti alles hangitakse",
       "textReadFailed": "Lahendi teksti ei õnnestunud laadida",
       "textUnavailable": "Selle lahendi teksti ei ole saadaval"
@@ -2258,7 +2283,8 @@
     "compareUnsupportedReasons": {
       "missingInBase": "Dokumendiosa eksisteerib ainult sihtmärgis",
       "missingInTarget": "Dokumendiosa eksisteerib ainult baasis",
-      "notEditable": "Dokumendi osa ei ole redigeeritav"
+      "notEditable": "Dokumendi osa ei ole redigeeritav",
+      "unsupportedContent": "See versioon sisaldab sisu, mida ei saa veel võrrelda."
     },
     "compareUnverified": "Kontrollimata võrdlus",
     "compareVerificationFailures": "{count, plural, one {Üks edasi-tagasi kontroll ebaõnnestus. Vaadake võrdlus enne sellele tuginemist üle.} other {# edasi-tagasi kontrolli ebaõnnestus. Vaadake võrdlus enne sellele tuginemist üle.}}",
@@ -3676,7 +3702,6 @@
     "aiTitle": "Ühendage oma AI teenusepakkuja",
     "appsSubtitle": "stella töötab ka väljaspool brauserit: teie töölaual ja teie AI-assistendis. Selle seadistuse juurde saate alati hiljem tagasi tulla.",
     "appsTitle": "Hankige stella igale poole",
-    "assistantDocsLink": "Kuidas assistenti ühendada",
     "catalogueAlwaysOn": "Alati sees",
     "catalogueClearSearch": "Tühjenda otsing",
     "catalogueCommunityHeading": "Muud",
@@ -4203,31 +4228,40 @@
       "wordEditShortcutPlaceholder": "nt JK"
     },
     "connections": {
+      "accessTitle": "{clientName} saab",
+      "browseIntegrations": "Lisa teenus",
       "cliDescription": "Installige stella käsurea klient ja logige sisse, et skriptida toimikuid, dokumente ja malle terminalist.",
-      "cliHelpHint": "Käivitage „stella --help“, et näha kõiki käske.",
       "cliInstallLabel": "Installimine",
       "cliLoginLabel": "Sisselogimine",
       "cliTitle": "Käsurea liides",
-      "connectedAppsDescription": "Rakendused ja tööriistad, millele olete lubanud juurdepääsu oma kontole.",
-      "connectedAppsEmpty": "Rakendused, mida lubate, näiteks Claude või stella käsurea tööriist, kuvatakse siin.",
-      "connectedAppsTitle": "Ühendatud rakendused",
-      "connectedColumn": "Ühendatud",
-      "description": "Ühendage MCP-kliendid ja käsurea liides oma kontoga.",
+      "connected": "Ühendatud",
+      "connectedAgo": "Ühendatud {time}",
+      "connectedAppsDescription": "Rakendused, kuhu oled stella kontoga sisse loginud. Katkesta ühendus nendega, mida enam ei kasuta.",
+      "connectedAppsEmpty": "Veel mitte midagi. Seadista ülal Claude või ChatGPT ja see ilmub siia.",
+      "connectedAppsTitle": "Juurdepääsuga rakendused",
+      "description": "Kasuta stellat oma AI-assistendist ja vaata, millel on juurdepääs sinu kontole.",
+      "developerDescription": "Serveriaadressid ja käsureatööriist tehniliseks seadistamiseks.",
+      "developerTitle": "Arendaja juurdepääs",
       "disconnectConfirmDescription": "See tühistab rakenduse {clientName} juurdepääsu teie kontole ja kõik selle väljastatud load. Saate igal ajal uuesti ühenduse luua.",
       "disconnectConfirmTitle": "Katkestada ühendus rakendusega {clientName}?",
       "disconnectSuccess": "Ühendus rakendusega {clientName} katkestatud",
+      "integrationsDescription": "Välised teenused, mida AI saab sinu eest kasutada, näiteks dokumendihoidla.",
+      "integrationsEmpty": "Lisa esimene teenus",
+      "integrationsTitle": "Ühendatud teenused",
       "mcpAnonymizedLabel": "Anonüümitud lõpp-punkt",
-      "mcpAnonymizedNote": "Saadaval on ka anonüümitud lõpp-punkt; see pakub samu tööriistu peidetud isikuandmetega.",
-      "mcpDescription": "Ühendage MCP-ga ühilduv klient, näiteks Claude või Cursor, selle serveri URL-i abil oma stella kontoga.",
+      "mcpAnonymizedShortNote": "Samad tööriistad, isikuandmed maskitud.",
+      "mcpFullNote": "Täielik juurdepääs sinu toimikutele ja dokumentidele.",
       "mcpLawLabel": "Õigusallikate lõpp-punkt",
-      "mcpLawNote": "Saadaval on ka õigusallikate lõpp-punkt; see pakub ainult avalikku kohtupraktikat ja õigusakte ning ei pääse toimikute andmetele ligi.",
-      "mcpStep1": "Lisage ülaltoodud URL oma kliendis kohandatud liidesena või MCP-serverina.",
-      "mcpStep2": "Logige sisse, kui brauser seda küsib.",
-      "mcpStep3": "Kinnitage juurdepääs nõusoleku ekraanil.",
+      "mcpLawShortNote": "Ainult avalik kohtupraktika ja õigusaktid, ilma toimikute andmeteta.",
+      "mcpSetupHint": "Lisa URL kohandatud konnektorina Claude'is, Cursoris või muus MCP-kliendis, seejärel logi sisse ja kinnita juurdepääs.",
       "mcpTitle": "MCP-server",
       "mcpUrlLabel": "Serveri URL",
-      "scopesLabel": "Juurdepääs",
-      "title": "Ühendused"
+      "noMatches": "Päringule „{query}“ ei vasta ükski ühendus",
+      "notConnected": "Ühendamata",
+      "permissionCount": "{count, plural, one {# õigus} other {# õigust}}",
+      "searchPlaceholder": "Otsi ühendusi",
+      "title": "Ühendused",
+      "turnedOff": "Välja lülitatud"
     },
     "organization": {
       "activeMembers": "Aktiivsed liikmed",
@@ -4306,6 +4340,20 @@
       "renameDescription": "Liikmed näevad uut nime kohe.",
       "renameTitle": "Nimeta organisatsioon ümber",
       "renameTypeToConfirm": "Kinnitamiseks sisesta uus nimi: {name}",
+      "timePolicy": {
+        "description": "Määrake aja ümardamine, muutmise tähtajad ja kuude lukustamine.",
+        "editWindow": "Muutmise tähtaeg (päevades)",
+        "editWindowHelp": "Null lubab muudatusi ainult töö tegemise kuupäeval.",
+        "invalidEditWindow": "Sisestage päevade arv täisarvuna, null või rohkem.",
+        "invalidLockedMonth": "Valige juba lõppenud kuu.",
+        "invalidMinimumUnit": "Valige ajaühik, mis jagab 60 minutit jäägita.",
+        "lockedThrough": "Lukustatud kuni",
+        "lockedThroughHelp": "Selle kuu ja varasemate kuude kandeid ei saa muuta.",
+        "minimumUnit": "Väikseim ajaühik",
+        "minimumUnitHelp": "Aega arveldatakse selle minutite arvu kordsetena.",
+        "narrativeRequired": "Nõua selgitust",
+        "title": "Ajaarvestuse reeglid"
+      },
       "usage": "Kasutus",
       "usageDescription": "Selle organisatsiooni kasutuslimiidid ja õiguse olek",
       "usageEmptyDescription": "Seadista kasutusõigus, et lubada selles organisatsioonis mõõdetud AI-funktsioonid.",
@@ -5003,6 +5051,11 @@
     "whenNotToUsePlaceholder": "Millal tuleks seda malli vältida?",
     "whenToUse": "Millal kasutada",
     "whenToUsePlaceholder": "Millal tuleks seda malli kasutada? (aitab AI-l malli valida)"
+  },
+  "timesheets": {
+    "day": {
+      "internalWork": "Sisemine töö"
+    }
   },
   "translate": {
     "dialog": {

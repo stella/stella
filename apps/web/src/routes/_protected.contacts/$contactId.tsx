@@ -80,7 +80,7 @@ const ContactSectionSkeleton = ({
 // two-column grid of section cards, so the page does not jump when data lands.
 function ContactDetailPending() {
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto border-t p-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4">
       <div className="flex items-center gap-3">
         <Skeleton className="size-7 rounded-md" />
         <Skeleton className="size-5 rounded-full" />
@@ -167,7 +167,7 @@ function ContactDetailPage() {
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto border-t p-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4">
       {/* Header */}
       <div className="flex items-center gap-3">
         <Button

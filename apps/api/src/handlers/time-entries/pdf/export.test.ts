@@ -8,6 +8,7 @@ import { exportPdfHandler } from "./export";
 
 const timeEntryRow = (overrides: Record<string, unknown> = {}) => ({
   id: toSafeId<"timeEntry">("te_1"),
+  activityGroup: "client",
   userId: "user_1",
   workItemId: toSafeId<"entity">("ent_1"),
   dateWorked: "2026-06-14",
@@ -42,6 +43,7 @@ describe("exportPdfHandler totals", () => {
     });
 
     const text = new TextDecoder().decode(pdf);
+    expect(text).toContain("Activity group: client");
     expect(text).toContain("Total Hours: 2.00");
     expect(text).not.toContain("Total Hours: 4.00");
   });

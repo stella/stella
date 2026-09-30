@@ -27,6 +27,16 @@
     "errorNotFound": "Für diesen Code wurde keine ausstehende Anfrage gefunden. Überprüfen Sie den Code und versuchen Sie es erneut.",
     "title": "Verbinden Sie Ihren Agenten"
   },
+  "agentSetup": {
+    "addressLabel": "Ihr Assistent fragt nach dieser Adresse",
+    "copiedToast": "Anweisungen kopiert. Fügen Sie sie in einen Chat mit Ihrem Assistenten ein.",
+    "copy": "Anweisungen für ihn kopieren",
+    "description": "Fragen Sie Claude oder ChatGPT zu Ihren Akten und Dokumenten. Wählen Sie Ihren Assistenten für eine kurze Anleitung; es dauert etwa eine Minute.",
+    "instructions": "Verbinde mich mit stella, meinem juristischen Arbeitsbereich. Folge den Anweisungen für KI-Agenten unter {guideUrl} und verwende diese Serveradresse: {mcpUrl}",
+    "openGuide": "Anleitung für {assistant} öffnen",
+    "selfSetupHint": "Sie nutzen Claude Code oder Codex?",
+    "title": "stella in Ihrem KI-Assistenten nutzen"
+  },
   "ai": {
     "chooseRewriteInstruction": "Optionen zur Überarbeitung",
     "editWithAI": "Mit KI bearbeiten",
@@ -521,6 +531,20 @@
     "noActiveTimer": "Kein aktiver Timer",
     "noEntries": "Keine Zeiteinträge für diesen Zeitraum",
     "nonBillable": "Nicht abrechenbar",
+    "quickEntry": {
+      "entrySaved": "Zeiteintrag gespeichert",
+      "expenseSaved": "Ausgabe gespeichert",
+      "expenseTitle": "Ausgabe hinzufügen",
+      "futureDate": "Wählen Sie heute oder ein früheres Datum.",
+      "invalidDate": "Wählen Sie ein gültiges Arbeitsdatum.",
+      "minimumUnit": "Zeit wird auf die kleinste Abrechnungseinheit aufgerundet.",
+      "narrativeRequired": "Fügen Sie eine Beschreibung hinzu, bevor Sie die Zeit speichern.",
+      "outsideEditWindow": "Dieses Datum liegt außerhalb der Bearbeitungsfrist.",
+      "periodLocked": "Dieser Monat ist gesperrt.",
+      "saveAndAddExpense": "Speichern und Ausgabe hinzufügen",
+      "saveAndNew": "Speichern und weiteren Eintrag hinzufügen",
+      "viewDay": "Tag anzeigen"
+    },
     "rates": {
       "addRate": "Tarif hinzufügen",
       "createRateTable": "Tariftabelle erstellen",
@@ -837,6 +861,7 @@
         "publishedOnWeb": "Im Web veröffentlicht"
       },
       "statutes": "Anwendbare Vorschriften",
+      "textNotYetAvailable": "Das Gericht hat den Entscheidungstext nicht veröffentlicht, oder er ist hier noch nicht verfügbar.",
       "textPending": "Der Entscheidungstext wird noch abgerufen",
       "textReadFailed": "Der Entscheidungstext konnte nicht geladen werden",
       "textUnavailable": "Für diese Entscheidung liegt kein Text vor"
@@ -2258,7 +2283,8 @@
     "compareUnsupportedReasons": {
       "missingInBase": "Dokumentteil existiert nur im Ziel",
       "missingInTarget": "Dokumentteil existiert nur in der Basis",
-      "notEditable": "Der Dokumentteil kann nicht bearbeitet werden"
+      "notEditable": "Der Dokumentteil kann nicht bearbeitet werden",
+      "unsupportedContent": "Diese Version enthält Inhalte, die noch nicht verglichen werden können."
     },
     "compareUnverified": "Nicht verifizierter Vergleich",
     "compareVerificationFailures": "{count, plural, one {Eine Round-Trip-Prüfung ist fehlgeschlagen. Prüfen Sie diesen Vergleich, bevor Sie sich darauf verlassen.} other {# Round-Trip-Prüfungen sind fehlgeschlagen. Prüfen Sie diesen Vergleich, bevor Sie sich darauf verlassen.}}",
@@ -3676,7 +3702,6 @@
     "aiTitle": "Verbinden Sie Ihren KI-Anbieter",
     "appsSubtitle": "stella funktioniert auch außerhalb des Browsers: auf Ihrem Desktop und in Ihrem KI-Assistenten. Sie können jederzeit später zu dieser Einrichtung zurückkehren.",
     "appsTitle": "Holen Sie sich stella überall",
-    "assistantDocsLink": "So verbinden Sie Ihren Assistenten",
     "catalogueAlwaysOn": "Immer aktiv",
     "catalogueClearSearch": "Suche löschen",
     "catalogueCommunityHeading": "Weitere",
@@ -4203,31 +4228,40 @@
       "wordEditShortcutPlaceholder": "z. B. JK"
     },
     "connections": {
+      "accessTitle": "{clientName} darf",
+      "browseIntegrations": "Dienst hinzufügen",
       "cliDescription": "Installieren Sie den stella-Kommandozeilen-Client und melden Sie sich an, um Akten, Dokumente und Vorlagen per Terminal zu automatisieren.",
-      "cliHelpHint": "Führen Sie „stella --help“ aus, um die vollständige Befehlsliste zu sehen.",
       "cliInstallLabel": "Installation",
       "cliLoginLabel": "Anmeldung",
       "cliTitle": "Kommandozeile",
-      "connectedAppsDescription": "Anwendungen und Tools, denen Sie Zugriff auf Ihr Konto gewährt haben.",
-      "connectedAppsEmpty": "Apps, die Sie autorisieren, etwa Claude oder die stella-CLI, erscheinen hier.",
-      "connectedAppsTitle": "Verbundene Apps",
-      "connectedColumn": "Verbunden",
-      "description": "Verbinden Sie MCP-Clients und die Kommandozeile mit Ihrem Konto.",
+      "connected": "Verbunden",
+      "connectedAgo": "Verbunden {time}",
+      "connectedAppsDescription": "Apps, bei denen Sie sich mit stella angemeldet haben. Trennen Sie alle, die Sie nicht mehr nutzen.",
+      "connectedAppsEmpty": "Noch nichts. Richten Sie oben Claude oder ChatGPT ein, dann erscheint es hier.",
+      "connectedAppsTitle": "Apps mit Zugriff",
+      "description": "Nutzen Sie stella in Ihrem KI-Assistenten und sehen Sie, was auf Ihr Konto zugreifen kann.",
+      "developerDescription": "Serveradressen und das Kommandozeilen-Tool für technische Einrichtungen.",
+      "developerTitle": "Entwicklerzugang",
       "disconnectConfirmDescription": "Dies entzieht {clientName} den Zugriff auf Ihr Konto sowie alle ausgestellten Tokens. Sie können sich jederzeit erneut verbinden.",
       "disconnectConfirmTitle": "{clientName} trennen?",
       "disconnectSuccess": "{clientName} wurde getrennt",
+      "integrationsDescription": "Externe Dienste, die die KI für Sie nutzen kann, etwa Ihre Dokumentenablage.",
+      "integrationsEmpty": "Fügen Sie Ihren ersten Dienst hinzu",
+      "integrationsTitle": "Verbundene Dienste",
       "mcpAnonymizedLabel": "Anonymisierter Endpunkt",
-      "mcpAnonymizedNote": "Es ist auch ein anonymisierter Endpunkt verfügbar; er bietet dieselben Werkzeuge mit maskierten personenbezogenen Daten.",
-      "mcpDescription": "Verbinden Sie einen MCP-kompatiblen Client, etwa Claude oder Cursor, über diese Server-URL mit Ihrem stella-Konto.",
+      "mcpAnonymizedShortNote": "Dieselben Tools, personenbezogene Daten maskiert.",
+      "mcpFullNote": "Voller Zugriff auf Ihre Akten und Dokumente.",
       "mcpLawLabel": "Endpunkt für Rechtsquellen",
-      "mcpLawNote": "Es ist auch ein Endpunkt für Rechtsquellen verfügbar; er bietet ausschließlich öffentliche Rechtsprechung und Gesetze und greift auf keine Aktendaten zu.",
-      "mcpStep1": "Fügen Sie die obige URL in Ihrem Client als benutzerdefinierten Connector oder MCP-Server hinzu.",
-      "mcpStep2": "Melden Sie sich an, sobald der Browser dazu auffordert.",
-      "mcpStep3": "Bestätigen Sie den Zugriff auf dem Einwilligungsbildschirm.",
+      "mcpLawShortNote": "Nur öffentliche Rechtsprechung und Gesetze, keine Aktendaten.",
+      "mcpSetupHint": "Fügen Sie eine URL als benutzerdefinierten Connector in Claude, Cursor oder einem anderen MCP-Client hinzu, melden Sie sich an und bestätigen Sie den Zugriff.",
       "mcpTitle": "MCP-Server",
       "mcpUrlLabel": "Server-URL",
-      "scopesLabel": "Zugriff",
-      "title": "Verbindungen"
+      "noMatches": "Keine Verbindung passt zu „{query}“",
+      "notConnected": "Nicht verbunden",
+      "permissionCount": "{count, plural, one {# Berechtigung} other {# Berechtigungen}}",
+      "searchPlaceholder": "Verbindungen durchsuchen",
+      "title": "Verbindungen",
+      "turnedOff": "Ausgeschaltet"
     },
     "organization": {
       "activeMembers": "Aktive Mitglieder",
@@ -4306,6 +4340,20 @@
       "renameDescription": "Mitglieder sehen den neuen Namen sofort.",
       "renameTitle": "Organisation umbenennen",
       "renameTypeToConfirm": "Geben Sie zur Bestätigung den neuen Namen ein: {name}",
+      "timePolicy": {
+        "description": "Legen Sie Zeitrundung, Bearbeitungsfristen und Monatssperren fest.",
+        "editWindow": "Bearbeitungsfrist (Tage)",
+        "editWindowHelp": "Bei null sind Änderungen nur am Tag der geleisteten Arbeit erlaubt.",
+        "invalidEditWindow": "Geben Sie eine ganze Anzahl von Tagen ein, mindestens null.",
+        "invalidLockedMonth": "Wählen Sie einen abgeschlossenen Monat.",
+        "invalidMinimumUnit": "Wählen Sie eine Zeiteinheit, die 60 Minuten ohne Rest teilt.",
+        "lockedThrough": "Gesperrt bis einschließlich",
+        "lockedThroughHelp": "Einträge in diesem und früheren Monaten können nicht bearbeitet werden.",
+        "minimumUnit": "Kleinste Zeiteinheit",
+        "minimumUnitHelp": "Zeit wird in Vielfachen dieser Minutenzahl abgerechnet.",
+        "narrativeRequired": "Beschreibungstext erforderlich",
+        "title": "Regeln zur Zeiterfassung"
+      },
       "usage": "Nutzung",
       "usageDescription": "Nutzungslimits und Berechtigungsstatus für diese Organisation",
       "usageEmptyDescription": "Konfigurieren Sie eine Nutzungsberechtigung, um gemessene KI-Funktionen für diese Organisation zu aktivieren.",
@@ -5003,6 +5051,11 @@
     "whenNotToUsePlaceholder": "Wann sollte diese Vorlage nicht verwendet werden?",
     "whenToUse": "Wann verwenden",
     "whenToUsePlaceholder": "Wann sollte diese Vorlage verwendet werden? (hilft der KI bei der Vorlagenauswahl)"
+  },
+  "timesheets": {
+    "day": {
+      "internalWork": "Interne Arbeit"
+    }
   },
   "translate": {
     "dialog": {

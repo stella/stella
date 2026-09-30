@@ -13,7 +13,8 @@ exports[`the name rank SQL renders byte for byte as before: tier 1`] = `
       WHEN d.country = 'EU' AND d.court ~* 'general court' THEN 3
       WHEN d.country = 'HUN' AND d.court ~* 'kúria|legfelsőbb bíróság' THEN 3
       WHEN d.country = 'POL' AND d.court ~* 'sąd najwyższy|naczelny sąd administracyjny' THEN 3
-      WHEN d.country = 'SVK' AND d.court ~* 'najvyšší' THEN 3
+      WHEN d.country = 'SVK' AND d.court ~* 'najvyšší[\\s ]+správny[\\s ]+súd' THEN 3
+      WHEN d.country = 'SVK' AND d.court ~* 'najvyšší[\\s ]+súd' THEN 3
       WHEN d.country = 'USA' AND d.court ~* '^supreme court of the united states$' THEN 3
       WHEN d.country = 'AUT' AND d.court ~* 'oberlandesgericht|landesgericht' THEN 2
       WHEN d.country = 'CZE' AND d.court ~* 'vrchní soud|krajský soud|městský soud' THEN 2
@@ -26,6 +27,9 @@ exports[`the name rank SQL renders byte for byte as before: tier 1`] = `
       WHEN d.country = 'HUN' AND d.court ~* 'közigazgatási és munkaügyi bíróság' THEN 1
       WHEN d.country = 'POL' AND d.court ~* 'krajowa izba odwoławcza' THEN 1
       WHEN d.country = 'POL' AND d.court ~* 'sąd rejonowy' THEN 1
+      WHEN d.country = 'SVK' AND d.court ~* '^správny súd' THEN 1
+      WHEN d.country = 'SVK' AND d.court ~* 'okresný súd|mestský súd' THEN 1
+      WHEN d.country = 'SVK' AND d.court ~* 'špecializovaný trestný súd|špeciálny súd' THEN 1
       ELSE NULL END,
       CASE WHEN d.court ~* 'verfassungsgerichtshof|^vfgh$' THEN 4
       WHEN d.court ~* 'ústavní soud' THEN 4
@@ -38,7 +42,8 @@ exports[`the name rank SQL renders byte for byte as before: tier 1`] = `
       WHEN d.court ~* 'general court' THEN 3
       WHEN d.court ~* 'kúria|legfelsőbb bíróság' THEN 3
       WHEN d.court ~* 'sąd najwyższy|naczelny sąd administracyjny' THEN 3
-      WHEN d.court ~* 'najvyšší' THEN 3
+      WHEN d.court ~* 'najvyšší[\\s ]+správny[\\s ]+súd' THEN 3
+      WHEN d.court ~* 'najvyšší[\\s ]+súd' THEN 3
       WHEN d.court ~* '^supreme court of the united states$' THEN 3
       WHEN d.court ~* 'oberlandesgericht|landesgericht' THEN 2
       WHEN d.court ~* 'vrchní soud|krajský soud|městský soud' THEN 2
@@ -51,6 +56,9 @@ exports[`the name rank SQL renders byte for byte as before: tier 1`] = `
       WHEN d.court ~* 'közigazgatási és munkaügyi bíróság' THEN 1
       WHEN d.court ~* 'krajowa izba odwoławcza' THEN 1
       WHEN d.court ~* 'sąd rejonowy' THEN 1
+      WHEN d.court ~* '^správny súd' THEN 1
+      WHEN d.court ~* 'okresný súd|mestský súd' THEN 1
+      WHEN d.court ~* 'špecializovaný trestný súd|špeciálny súd' THEN 1
       ELSE NULL END,
       1
     )"
@@ -68,7 +76,8 @@ exports[`the name rank SQL renders byte for byte as before: weight 1`] = `
       WHEN citing_d.court ~* 'general court' THEN 8
       WHEN citing_d.court ~* 'kúria|legfelsőbb bíróság' THEN 8
       WHEN citing_d.court ~* 'sąd najwyższy|naczelny sąd administracyjny' THEN 8
-      WHEN citing_d.court ~* 'najvyšší' THEN 8
+      WHEN citing_d.court ~* 'najvyšší[\\s ]+správny[\\s ]+súd' THEN 8
+      WHEN citing_d.court ~* 'najvyšší[\\s ]+súd' THEN 8
       WHEN citing_d.court ~* '^supreme court of the united states$' THEN 8
       WHEN citing_d.court ~* 'oberlandesgericht|landesgericht' THEN 4
       WHEN citing_d.court ~* 'vrchní soud|krajský soud|městský soud' THEN 4
@@ -81,5 +90,8 @@ exports[`the name rank SQL renders byte for byte as before: weight 1`] = `
       WHEN citing_d.court ~* 'közigazgatási és munkaügyi bíróság' THEN 3
       WHEN citing_d.court ~* 'krajowa izba odwoławcza' THEN 3
       WHEN citing_d.court ~* 'sąd rejonowy' THEN 2
+      WHEN citing_d.court ~* '^správny súd' THEN 3
+      WHEN citing_d.court ~* 'okresný súd|mestský súd' THEN 2
+      WHEN citing_d.court ~* 'špecializovaný trestný súd|špeciálny súd' THEN 3
       ELSE 1 END"
 `;

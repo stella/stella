@@ -1024,6 +1024,7 @@ jobs:
         # claims and that a rise regresses, so a broken guard cannot pass
         # silently. Regenerate: `bun scripts/ratchet.ts --write`.
         run: |
+          bun test scripts/ratchet-improvements.test.ts scripts/autofix-ratchet-boundary.test.ts
           bun scripts/ratchet.ts --self-test
           bun scripts/ratchet.ts --check
 
@@ -1464,6 +1465,7 @@ jobs:
           bun test scripts/check-release-cli-changeset-hold.test.ts
           bash scripts/check-release-changelog.test.sh
           bash scripts/release-pull-requests.test.sh
+          bash scripts/check-main-merge-hold.test.sh
           bash scripts/create-release-manifest.test.sh
           bash scripts/promote-desktop-release.test.sh
 
@@ -1738,7 +1740,9 @@ jobs:
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.suite_depth == 'full'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # The Playwright system dependencies come from the runner's apt mirror,
+    # whose throughput varies widely between runs.
+    timeout-minutes: 35
     permissions:
       contents: read
 
@@ -2805,7 +2809,9 @@ jobs:
       && needs.ci-plan.outputs.stack_redaction_browsers_required == 'true'
       && needs.ci-plan.outputs.suite_depth == 'full'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # The Playwright system dependencies come from the runner's apt mirror,
+    # whose throughput varies widely between runs.
+    timeout-minutes: 35
     permissions:
       contents: read
     steps:
@@ -2844,7 +2850,7 @@ jobs:
       && needs.ci-plan.outputs.e2e_core_required == 'true'
       && needs.ci-plan.outputs.suite_depth == 'full'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     permissions:
       contents: read
     steps:
@@ -3009,7 +3015,7 @@ jobs:
       && needs.ci-plan.outputs.e2e_landing_required == 'true'
       && needs.ci-plan.outputs.suite_depth == 'full'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 35
     permissions:
       contents: read
     steps:
@@ -3720,3 +3726,24 @@ jobs:
               exit 1
               ;;
           esac
+
+      # Evaluate the variable when this final job starts, after the suites.
+      - name: Check out the merge hold rule
+        if: github.event_name == 'merge_group' && vars.STELLA_MERGE_HOLD != ''
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/check-main-merge-hold.sh
+            scripts/release-pull-requests.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Main merge hold
+        if: github.event_name == 'merge_group' && vars.STELLA_MERGE_HOLD != ''
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          GH_TOKEN: ${{ github.token }}
+          MERGE_GROUP_HEAD_REF: ${{ github.event.merge_group.head_ref }}
+          REPOSITORY: ${{ github.repository }}
+          STELLA_MERGE_HOLD: ${{ vars.STELLA_MERGE_HOLD }}
+        run: bash scripts/check-main-merge-hold.sh
