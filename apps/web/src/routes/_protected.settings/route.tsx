@@ -242,8 +242,10 @@ function SettingsLayout() {
                   return (
                     <MenuItem
                       key={item.to}
+                      className="min-h-11 sm:min-h-11"
                       render={
                         <Link
+                          from={Route.fullPath}
                           to={item.to}
                           aria-current={
                             pathname === item.to ? "page" : undefined
@@ -257,7 +259,10 @@ function SettingsLayout() {
                   );
                 })}
                 {section.id === "account" && (
-                  <MenuItem onClick={openShortcuts}>
+                  <MenuItem
+                    className="min-h-11 sm:min-h-11"
+                    onClick={openShortcuts}
+                  >
                     <KeyboardIcon className="size-4" />
                     {t("navigation.shortcutsDialog.title")}
                   </MenuItem>
@@ -288,6 +293,7 @@ function SettingsLayout() {
                           "bg-sidebar-accent text-sidebar-accent-foreground",
                       }}
                       className={NAV_ITEM_CLASS}
+                      from={Route.fullPath}
                       to={item.to}
                     >
                       <Icon className="size-4" />
