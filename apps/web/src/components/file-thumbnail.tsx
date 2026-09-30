@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties, ReactElement, ReactNode } from "react";
 
 import { cn } from "@stll/ui/utils";
 
@@ -123,7 +123,7 @@ type FileThumbnailIconProps = MatterFileThumbnailRef & {
    *  takes exactly the box the icon would. */
   className?: string | undefined;
   /** The file-type icon, drawn as-is without a thumbnail or when it fails. */
-  fallbackIcon: ReactNode;
+  fallbackIcon: ReactElement;
 };
 
 /**

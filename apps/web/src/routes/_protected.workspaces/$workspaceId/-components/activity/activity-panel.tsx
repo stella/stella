@@ -1699,7 +1699,7 @@ const PerformerCells = ({ item }: { item: MatterActivityItem }) => {
   if (item.performer.type === "user") {
     return (
       <PersonMentionLabel
-        avatarClassName="size-5 text-[8px]"
+        avatarClassName="size-5 text-2xs"
         className="contents"
         mention={{
           deletedAt: item.performer.deletedAt,
