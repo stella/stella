@@ -1,5 +1,5 @@
 import { lazy, Suspense, useLayoutEffect, useState } from "react";
-import type { ReactElement } from "react";
+import type { ComponentType, ReactElement } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouterState } from "@tanstack/react-router";
@@ -72,7 +72,17 @@ const routeUserOf = (
  * user, so a page change never remounts it and an organization switch always
  * does.
  */
-export const AppFrameHost = ({ children }: { children: ReactElement }) => {
+type AppFrameHostProps = {
+  children: ReactElement;
+  frames?: {
+    member: ComponentType<{ children: ReactElement; user: AuthenticatedUser }>;
+    public: ComponentType<{ children: ReactElement }>;
+  };
+};
+
+export const AppFrameHost = ({ children, frames }: AppFrameHostProps) => {
+  const MemberFrame = frames?.member ?? LazyProtectedAppFrame;
+  const PublicFrame = frames?.public ?? LazyKnowledgePublicFrame;
   const routeIdKey = useRouterState({
     select: (state) =>
       state.matches.map((match) => match.routeId).join(ROUTE_ID_SEPARATOR),
@@ -163,18 +173,18 @@ export const AppFrameHost = ({ children }: { children: ReactElement }) => {
         <ProtectedPendingSkeleton />
       ) : (
         <Suspense fallback={<ProtectedPendingSkeleton />}>
-          <LazyProtectedAppFrame
+          <MemberFrame
             key={`${memberUser.activeOrganizationId}:${memberUser.id}`}
             user={memberUser}
           >
             {children}
-          </LazyProtectedAppFrame>
+          </MemberFrame>
         </Suspense>
       );
     case "public":
       return (
         <Suspense fallback={<ProtectedPendingSkeleton />}>
-          <LazyKnowledgePublicFrame>{children}</LazyKnowledgePublicFrame>
+          <PublicFrame>{children}</PublicFrame>
         </Suspense>
       );
     case "checking":

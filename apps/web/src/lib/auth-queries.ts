@@ -10,7 +10,7 @@ export {
   sessionOptions,
 } from "@/lib/auth-query-options";
 
-/** Refreshes authentication queries and completes the client transition. */
+/** Refreshes authentication queries; the host finishes frame cleanup after unmount. */
 export const refreshAuthQueries = async (queryClient: QueryClient) => {
   await Promise.all([
     queryClient.refetchQueries({ queryKey: rootKeys.session, type: "all" }),
