@@ -11,14 +11,15 @@ import { eq, inArray } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
-import { auditLogs } from "@/api/db/schema";
-import { createSafeDb } from "@/api/db/scoped";
+import { auditLogs, workspaces } from "@/api/db/schema";
+import { createSafeDb, createMembershipSafeDb } from "@/api/db/scoped";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
   createBackgroundAuditRecorder,
 } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -31,18 +32,13 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 import type { ReadAuditLogsQuery } from "./query";
 import { queryAuditLogPage } from "./query";
 
-// `toAuditLogConditions` scopes to the session's organization first; the
-// caller-supplied `workspaceId` is a narrowing filter inside it, never a
-// source of access. `audit_logs` carries organization-only
-// RLS (`audit_logs_select` uses the organization check), so the workspace
-// narrowing is enforced by this query alone: nothing below the handler will
-// re-filter it.
-
 setDefaultTimeout(120_000);
 
 let testDb: TestDatabase;
 let ids: TestIds;
 let safeDb: SafeDb;
+
+const seededWorkspaceIds: SafeId<"workspace">[] = [];
 
 const seededAuditLogIds: SafeId<"auditLog">[] = [];
 
@@ -138,13 +134,18 @@ afterAll(async () => {
   await testDb
     .delete(auditLogs)
     .where(inArray(auditLogs.id, seededAuditLogIds));
+  if (seededWorkspaceIds.length > 0) {
+    await testDb
+      .delete(workspaces)
+      .where(inArray(workspaces.id, seededWorkspaceIds));
+  }
   await releaseRlsFixture();
 });
 
-const readPage = async (query: ReadAuditLogsQuery) => {
+const readPage = async (query: ReadAuditLogsQuery, reader = safeDb) => {
   const result = await Result.gen(() =>
     queryAuditLogPage({
-      safeDb,
+      safeDb: reader,
       organizationId: ids.orgA,
       recordAuditEvent: noopAuditRecorder,
       query: { limit: 50, ...query },
@@ -163,6 +164,80 @@ const seededIdsOf = (items: readonly { id: SafeId<"auditLog"> }[]) =>
     .filter((id) => seededAuditLogIds.some((seeded) => seeded === id));
 
 describe("audit log compliance filter", () => {
+  test("pages respect the reader's matter scope", async () => {
+    const reader = asTestRaw<SafeDb>(
+      createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+    );
+    const page = await readPage({}, reader);
+    expect(seededIdsOf(page.items).toSorted()).toEqual(
+      [rowInWorkspaceA1, rowOrganizationLevel, rowWithForeignActor].toSorted(),
+    );
+  });
+
+  test("organization readers follow matter availability", async () => {
+    const reader = asTestRaw<SafeDb>(
+      createMembershipSafeDb(testDb, {
+        organizationId: ids.orgA,
+        serverValidatedWorkspaceIds: [],
+        userId: ids.userAdmin,
+      }),
+    );
+    const personalMatterId = toSafeId<"workspace">(Bun.randomUUIDv7());
+    await testDb.insert(workspaces).values({
+      id: personalMatterId,
+      organizationId: ids.orgA,
+      name: "Matter C",
+      status: "active",
+    });
+    seededWorkspaceIds.push(personalMatterId);
+    await seedAuditEntry({
+      organizationId: ids.orgA,
+      workspaceId: personalMatterId,
+      userId: ids.userA1,
+    });
+    const page = await readPage({}, reader);
+    expect(seededIdsOf(page.items).toSorted()).toEqual(
+      [
+        rowInWorkspaceA1,
+        rowInWorkspaceA2,
+        rowOrganizationLevel,
+        rowWithForeignActor,
+      ].toSorted(),
+    );
+    await testDb
+      .delete(auditLogs)
+      .where(eq(auditLogs.workspaceId, personalMatterId));
+    await testDb.delete(workspaces).where(eq(workspaces.id, personalMatterId));
+  });
+
+  test("stored thread changes use the standard audit detail projection", async () => {
+    const entryId = await seedAuditEntry({
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      userId: ids.userA1,
+    });
+    await testDb
+      .update(auditLogs)
+      .set({
+        resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
+        changes: {
+          title: { old: "Chat A", new: "Chat B" },
+          chatModel: { old: "model-a", new: "model-b" },
+          created: {
+            old: null,
+            new: { title: "Chat A", chatModel: "model-a" },
+          },
+        },
+      })
+      .where(eq(auditLogs.id, entryId));
+    const page = await readPage({ workspaceId: ids.wsA1 });
+    expect(page.items.find((item) => item.id === entryId)?.changes).toEqual({
+      chatModel: { old: "model-a", new: "model-b" },
+      created: { old: null, new: { chatModel: "model-a" } },
+    });
+    await testDb.delete(auditLogs).where(eq(auditLogs.id, entryId));
+  });
+
   test("a workspaceId filter narrows the page instead of widening it", async () => {
     const page = await readPage({ workspaceId: ids.wsA2 });
 

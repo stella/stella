@@ -53,7 +53,6 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/notifications/**/*.ts",
   "apps/api/src/handlers/number-series/**/*.ts",
   "apps/api/src/handlers/vat-rates/**/*.ts",
-  "apps/api/src/handlers/operator/**/*.ts",
   "apps/api/src/handlers/organization-settings/**/*.ts",
   "apps/api/src/handlers/public-knowledge/**/*.ts",
   "apps/api/src/handlers/reports/**/*.ts",

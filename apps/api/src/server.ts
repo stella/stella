@@ -78,7 +78,6 @@ import { meRoute } from "@/api/handlers/me/routes";
 import { memoriesRoute } from "@/api/handlers/memories/routes";
 import { notificationsRoute } from "@/api/handlers/notifications/routes";
 import { numberSeriesRoute } from "@/api/handlers/number-series/routes";
-import { operatorRoute } from "@/api/handlers/operator/routes";
 import { organizationSettingsRoute } from "@/api/handlers/organization-settings/routes";
 import { playbooksRoute } from "@/api/handlers/playbooks/routes";
 import { playbookRunsRoute } from "@/api/handlers/playbooks/run-route";
@@ -405,7 +404,6 @@ const api = new Elysia()
   )
   .use(localDevPublicRoutes)
   .use(smokeRoute)
-  .use(operatorRoute)
   .mount(getAuth().handler)
   .group(STELLA_API_VERSION_PREFIX, (app) =>
     app

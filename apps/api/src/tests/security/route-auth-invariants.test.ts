@@ -47,3 +47,41 @@ describe("every route declares permissions", () => {
     },
   );
 });
+
+describe("root route registrations", () => {
+  test("root plugins match the reviewed census", async () => {
+    const source = await readSource("apps/api/src/server.ts");
+    const rootStart = source.indexOf("const api = new Elysia()");
+    const versionedStart = source.indexOf(
+      ".group(STELLA_API_VERSION_PREFIX",
+      rootStart,
+    );
+    expect(rootStart).toBeGreaterThanOrEqual(0);
+    expect(versionedStart).toBeGreaterThan(rootStart);
+
+    const rootSource = source.slice(rootStart, versionedStart);
+    const plugins = [...rootSource.matchAll(/\.use\(\s*(\w+)\s*\)/gu)].map(
+      (match) => match[1],
+    );
+    expect(plugins.toSorted()).toEqual([
+      "agentAuthConfirmRoute",
+      "agentAuthRoute",
+      "aiAutocompleteRoute",
+      "authMetadataRoute",
+      "authUiRoute",
+      "feedbackPublicRoute",
+      "healthRoute",
+      "hostedUsageWebhookRoute",
+      "localDevPublicRoutes",
+      "mcpRoute",
+      "memoriesRoute",
+      "multipartFormParser",
+      "myTimeEntriesRoute",
+      "notificationsRoute",
+      "smokeRoute",
+      "timeApprovalQueueRoute",
+      "timeTimersRoute",
+      "wellKnownRoute",
+    ]);
+  });
+});
