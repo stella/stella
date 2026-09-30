@@ -34,7 +34,8 @@ export const numberSeriesOptions = (organizationId: string) =>
   infiniteQueryOptions({
     queryKey: numberSeriesKeys.all(organizationId),
     initialPageParam: stringCursorSeed(),
-    queryFn: ({ pageParam, signal }) => listNumberSeries(pageParam, signal),
+    queryFn: async ({ pageParam, signal }) =>
+      listNumberSeries(pageParam, signal),
     getNextPageParam: (page) => page.nextCursor ?? undefined,
   });
 
@@ -65,7 +66,7 @@ export const numberSeriesPreviewOptions = (
 ) =>
   queryOptions({
     queryKey: numberSeriesKeys.preview(options),
-    queryFn: ({ signal }) => getNumberSeriesPreview(options, signal),
+    queryFn: async ({ signal }) => getNumberSeriesPreview(options, signal),
   });
 export type NumberSeriesPreviewData = Awaited<
   ReturnType<typeof getNumberSeriesPreview>

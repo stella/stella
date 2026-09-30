@@ -91,7 +91,10 @@ const NumberSeriesCardBody = ({
     mutationFn: sendNumberSeriesCommand,
     invalidate: numberSeriesKeys.all(organizationId),
   });
-  const seriesList = query.data?.pages.flatMap((page) => page.items) ?? [];
+  const seriesList =
+    query.data === undefined
+      ? []
+      : query.data.pages.flatMap((page) => page.items);
   const close = () => {
     if (!mutation.isPending) {
       setDialog({ type: "closed" });
@@ -102,7 +105,9 @@ const NumberSeriesCardBody = ({
     if (mutation.isPending) {
       return;
     }
-    const result = await Result.tryPromise(() => mutation.mutateAsync(command));
+    const result = await Result.tryPromise(async () =>
+      mutation.mutateAsync(command),
+    );
     if (Result.isOk(result)) {
       setDialog({ type: "closed" });
       mutation.reset();

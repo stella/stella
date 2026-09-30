@@ -17,38 +17,47 @@ export const numberSeriesFormSchema = ({
   required,
   invalidField,
 }: NumberSeriesValidationMessages) =>
-  v.object({
-    name: v.pipe(
-      v.string(),
-      v.trim(),
-      v.nonEmpty(required),
-      v.maxLength(128, invalidField),
-    ),
-    documentType: v.picklist(
-      ["invoice", "advance", "credit_note"],
-      invalidField,
-    ),
-    pattern: v.pipe(
-      v.string(),
-      v.trim(),
-      v.minLength(5, invalidField),
-      v.maxLength(128, invalidField),
-    ),
-    padding: v.pipe(
-      v.number(),
-      v.integer(invalidField),
-      v.minValue(1, invalidField),
-      v.maxValue(6, invalidField),
-    ),
-    sellerProfileId: v.pipe(
-      v.nullable(v.string()),
-      v.transform((value) =>
-        value === null || value.trim() === ""
-          ? undefined
-          : toSafeId<"sellerProfile">(value.trim()),
+  v.pipe(
+    v.object({
+      name: v.pipe(
+        v.string(),
+        v.trim(),
+        v.nonEmpty(required),
+        v.maxLength(128, invalidField),
       ),
+      documentType: v.picklist(
+        ["invoice", "advance", "credit_note"],
+        invalidField,
+      ),
+      pattern: v.pipe(
+        v.string(),
+        v.trim(),
+        v.minLength(5, invalidField),
+        v.maxLength(128, invalidField),
+      ),
+      padding: v.pipe(
+        v.number(),
+        v.integer(invalidField),
+        v.minValue(1, invalidField),
+        v.maxValue(6, invalidField),
+      ),
+      sellerProfileId: v.pipe(
+        v.nullable(v.string()),
+        v.transform((value) =>
+          value === null || value.trim() === ""
+            ? undefined
+            : toSafeId<"sellerProfile">(value.trim()),
+        ),
+      ),
+    }),
+    v.transform(
+      ({ sellerProfileId, ...value }) =>
+        ({
+          ...value,
+          ...(sellerProfileId === undefined ? {} : { sellerProfileId }),
+        }) satisfies NumberSeriesInput,
     ),
-  });
+  );
 
 type NumberSeriesPatchOptions = {
   original: NumberSeries;

@@ -36,7 +36,10 @@ export const NumberSeriesSellerPicker = ({
   const query = useInfiniteQuery(
     sellerProfilesOptions(user.activeOrganizationId),
   );
-  const profiles = query.data?.pages.flatMap((page) => page.items) ?? [];
+  const profiles =
+    query.data === undefined
+      ? []
+      : query.data.pages.flatMap((page) => page.items);
   const selectedInList = profiles.find((profile) => profile.id === value);
   const selected = useQuery({
     ...sellerProfileOptions({

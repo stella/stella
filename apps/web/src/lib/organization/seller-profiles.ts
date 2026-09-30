@@ -24,7 +24,8 @@ export const sellerProfilesOptions = (organizationId: string) =>
   infiniteQueryOptions({
     queryKey: sellerProfilesKeys.all(organizationId),
     initialPageParam: stringCursorSeed(),
-    queryFn: ({ pageParam, signal }) => listSellerProfiles(pageParam, signal),
+    queryFn: async ({ pageParam, signal }) =>
+      listSellerProfiles(pageParam, signal),
     getNextPageParam: (page) => page.nextCursor ?? undefined,
   });
 

@@ -52,15 +52,13 @@ describe("number series form", () => {
   test("omits an unselected seller from create requests", () => {
     for (const sellerProfileId of [null, "", "  "]) {
       const values = v.parse(schema, { ...raw, sellerProfileId });
-      expect(values.sellerProfileId).toBeUndefined();
-      expect(JSON.stringify(values)).toBe(
-        JSON.stringify({
-          name: "Main invoices",
-          documentType: "invoice",
-          pattern: DEFAULT_NUMBER_SERIES_PATTERN,
-          padding: 4,
-        }),
-      );
+      expect(Object.hasOwn(values, "sellerProfileId")).toBe(false);
+      expect(values).toEqual({
+        name: "Main invoices",
+        documentType: "invoice",
+        pattern: DEFAULT_NUMBER_SERIES_PATTERN,
+        padding: 4,
+      });
     }
   });
 
@@ -82,7 +80,7 @@ describe("number series form", () => {
         "Invalid field",
       );
     }
-    for (const documentType of ["invoice", "advance", "credit_note"]) {
+    for (const documentType of ["invoice", "advance", "credit_note"] as const) {
       expect(v.parse(schema, { ...raw, documentType }).documentType).toBe(
         documentType,
       );
