@@ -47,6 +47,10 @@ export const PublicTemplatesCatalogue = () => {
     }
   };
 
+  if (source.status === "ready" && source.templates.length === 0) {
+    return null;
+  }
+
   return (
     <TemplateLibraryView
       actions={{ loadMore: () => undefined }}

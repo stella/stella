@@ -1,5 +1,5 @@
 import { lazy, Suspense, useLayoutEffect, useState } from "react";
-import type { ReactElement } from "react";
+import type { ComponentType, ReactElement } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouterState } from "@tanstack/react-router";
@@ -7,12 +7,11 @@ import { panic } from "better-result";
 
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import type { ClientAuthStatus } from "@/hooks/use-client-auth-status";
-import { rootKeys } from "@/lib/auth-queries";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { resetVisitorCache } from "@/lib/knowledge/knowledge-cache";
 import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launch";
 import { usePinnedStore } from "@/lib/pinned-store";
+import { resetAuthTransition } from "@/lib/session-cache-guard";
 import {
   frameVisitor,
   selectAppFrame,
@@ -37,9 +36,6 @@ const LazyKnowledgePublicFrame = lazy(async () => {
 });
 
 const ROUTE_ID_SEPARATOR = "\n";
-
-// What says who is visiting; everything else belongs to one visitor.
-const VISITOR_INDEPENDENT_KEYS = [rootKeys.session, rootKeys.role];
 
 const isAuthenticatedUser = (value: unknown): value is AuthenticatedUser =>
   typeof value === "object" &&
@@ -76,7 +72,17 @@ const routeUserOf = (
  * user, so a page change never remounts it and an organization switch always
  * does.
  */
-export const AppFrameHost = ({ children }: { children: ReactElement }) => {
+type AppFrameHostProps = {
+  children: ReactElement;
+  frames?: {
+    member: ComponentType<{ children: ReactElement; user: AuthenticatedUser }>;
+    public: ComponentType<{ children: ReactElement }>;
+  };
+};
+
+export const AppFrameHost = ({ children, frames }: AppFrameHostProps) => {
+  const MemberFrame = frames?.member ?? LazyProtectedAppFrame;
+  const PublicFrame = frames?.public ?? LazyKnowledgePublicFrame;
   const routeIdKey = useRouterState({
     select: (state) =>
       state.matches.map((match) => match.routeId).join(ROUTE_ID_SEPARATOR),
@@ -139,13 +145,13 @@ export const AppFrameHost = ({ children }: { children: ReactElement }) => {
     setShownVisitor(visitor);
   }
   useLayoutEffect(() => {
-    if (!resetting || visitor === null) {
+    if (!publicKnowledge || visitor === null) {
       return undefined;
     }
     const superseded = new AbortController();
     detached(
       (async () => {
-        await resetVisitorCache(queryClient, VISITOR_INDEPENDENT_KEYS);
+        await resetAuthTransition(queryClient, visitor);
         if (!superseded.signal.aborted) {
           setShownVisitor(visitor);
         }
@@ -155,7 +161,7 @@ export const AppFrameHost = ({ children }: { children: ReactElement }) => {
     return () => {
       superseded.abort();
     };
-  }, [queryClient, resetting, visitor]);
+  }, [queryClient, publicKnowledge, visitor]);
 
   if (resetting) {
     return <ProtectedPendingSkeleton />;
@@ -167,18 +173,18 @@ export const AppFrameHost = ({ children }: { children: ReactElement }) => {
         <ProtectedPendingSkeleton />
       ) : (
         <Suspense fallback={<ProtectedPendingSkeleton />}>
-          <LazyProtectedAppFrame
+          <MemberFrame
             key={`${memberUser.activeOrganizationId}:${memberUser.id}`}
             user={memberUser}
           >
             {children}
-          </LazyProtectedAppFrame>
+          </MemberFrame>
         </Suspense>
       );
     case "public":
       return (
         <Suspense fallback={<ProtectedPendingSkeleton />}>
-          <LazyKnowledgePublicFrame>{children}</LazyKnowledgePublicFrame>
+          <PublicFrame>{children}</PublicFrame>
         </Suspense>
       );
     case "checking":
