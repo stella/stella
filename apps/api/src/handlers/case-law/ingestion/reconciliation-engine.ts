@@ -563,7 +563,10 @@ const claimTextlessHeldRechecks = async ({
       // audit: skip - durable per-row scheduler backoff bookkeeping
       await tx
         .update(caseLawDecisions)
-        .set({ textlessDetailRecheckedAt: now })
+        .set({
+          textlessDetailRecheckedAt: now,
+          updatedAt: sql`${caseLawDecisions.updatedAt}`,
+        })
         .where(
           and(
             sql`${caseLawDecisions.id} = ANY(ARRAY[${sql.join(
@@ -1615,14 +1618,19 @@ const recheckTextlessHeldRows = async ({
     decisionIds: candidates.map(({ id }) => id),
   });
 
-  for (const [index, row] of candidates.entries()) {
-    if (!claimed.has(row.id)) {
-      continue;
-    }
+  const rows = candidates.filter(({ id }) => claimed.has(id));
+  const ingestEndsAtMs = now().getTime() + RECONCILIATION_INGEST_BUDGET_MS;
+  for (const [index, row] of rows.entries()) {
     if (index > 0) {
       await sleep(fetchDelayMs);
     }
     const attemptedAt = now();
+    if (attemptedAt.getTime() >= ingestEndsAtMs) {
+      summary.deferred += rows.length - index;
+      break;
+    }
+    // Renew even when missing raw or unavailable detail causes no domain write.
+    await lease.beforeDatabaseMark();
     let raw: Uint8Array;
     if (row.sourceRaw !== null) {
       raw = new TextEncoder().encode(row.sourceRaw);
