@@ -150,12 +150,12 @@ test.each([403, 404])(
 );
 
 test("other metadata failures stop cleanup", async () => {
-  const error = await cleanup({ run: queued(), metadataStatus: 500 }).then(
+  const rejection = await cleanup({ run: queued(), metadataStatus: 500 }).then(
     () => null,
     (error: unknown) => error,
   );
-  expect(error).toBeInstanceOf(Error);
-  expect(error).toMatchObject({ message: "Unavailable" });
+  expect(rejection).toBeInstanceOf(Error);
+  expect(rejection).toMatchObject({ message: "Unavailable" });
 });
 
 test("the six-hour rule still applies without a resolvable PR", async () => {
