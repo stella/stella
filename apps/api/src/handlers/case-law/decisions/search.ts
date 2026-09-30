@@ -160,6 +160,7 @@ import {
   type CorpusTermExpander,
   tokenizeCorpusFreeText,
 } from "@/api/lib/legal-search/corpus-query";
+import { corpusRankingCursorTarget } from "@/api/lib/legal-search/corpus-ranking-policy";
 import {
   type CorpusSearchCursor,
   decodeCorpusSearchCursor,
@@ -1905,7 +1906,13 @@ export const searchCorpusIndexDecisions = async (
     observeFailure(target.error, { sink: corpusIndexGroupNotReady });
     return status(503, { message: "Search is temporarily unavailable" });
   }
-  const { serving, route, contract, cursorTarget } = target.value;
+  const { serving, route, contract } = target.value;
+  const rankingMode =
+    sort === "relevance" ? envBase.CORPUS_INDEX_RANKING_MODE : "off";
+  const cursorTarget = corpusRankingCursorTarget(
+    target.value.cursorTarget,
+    rankingMode,
+  );
   const generation = serving.generation;
   // Asserted before any engine work: every decision count this branch reports
   // is a cardinality over this field, so a generation that cannot aggregate
@@ -2107,6 +2114,7 @@ export const searchCorpusIndexDecisions = async (
     order: corpusSearchOrder(sort),
     parsedCursor,
     scanTransport: caseLawScanTransport(sort),
+    rankingMode,
     snippetFields: ["text"],
     extractId: (hit) => {
       const id = hit["document_id"];

@@ -30,6 +30,7 @@ import {
   caseLawCorpusQuery,
   tokenizeCorpusFreeText,
 } from "@/api/lib/legal-search/corpus-query";
+import { corpusRankingCursorTarget } from "@/api/lib/legal-search/corpus-ranking-policy";
 import {
   decodeCorpusSearchCursor,
   encodeCorpusSearchCursor,
@@ -66,7 +67,7 @@ import { stripSearchHighlightMarkup } from "@/api/lib/search/highlight";
  * corpus index legal-search provider: two-stage retrieve-then-rerank.
  * corpus index returns BM25 lexical candidates (filtered by tag/fast fields
  * for split pruning); the API re-joins them to the precomputed
- * citation_authority in Postgres and blends via RRF — corpus index has no
+ * citation_authority in Postgres and adds its saturated signal; corpus index has no
  * in-engine function scoring, so the legal-domain ranking stays here.
  *
  * Case-law generations built at passage granularity return one hit per
@@ -195,7 +196,12 @@ const searchResult = async (
       }),
     );
   }
-  const { serving, route, contract, cursorTarget } = target.value;
+  const { serving, route, contract } = target.value;
+  const rankingMode = envBase.CORPUS_INDEX_RANKING_MODE;
+  const cursorTarget = corpusRankingCursorTarget(
+    target.value.cursorTarget,
+    rankingMode,
+  );
   const generation = serving.generation;
 
   // Scoped query → that jurisdiction's index, plus a jurisdiction clause when
@@ -278,6 +284,11 @@ const searchResult = async (
     // owns the reader-chosen orders.
     order: RELEVANCE_ORDER,
     parsedCursor,
+    rankingMode,
+    scanTransport:
+      rankingMode === "bm25-ratio"
+        ? { type: "scored", fields: ["document_id"] }
+        : { type: "native" },
     snippetFields: ["text"],
     extractId: (hit) => {
       const id = hit["document_id"];
