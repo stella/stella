@@ -4,7 +4,10 @@ import { panic } from "better-result";
 
 import { timeTimersOptions } from "@/features/time-timers/queries";
 import { isInboxPreviewEnabled } from "@/hooks/use-inbox-preview";
-import { isTimeBillingPreviewEnabled } from "@/hooks/use-time-billing-preview";
+import {
+  isTimeBillingPreviewEnabled,
+  isTimeBillingRouteEnabled,
+} from "@/hooks/use-time-billing-preview";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
@@ -19,6 +22,7 @@ import {
 } from "@/lib/react-query";
 import { returnPathOf } from "@/lib/redirect";
 import { myTimeEntriesInfiniteOptions } from "@/lib/workspaces/queries/my-time-entries";
+import { organizationSettingsOptions } from "@/queries/organization-settings";
 import { loadAuthContext } from "@/routes/-auth-context";
 
 // The signed-in routes' guard, apart from the signed-in frame so a route can
@@ -58,6 +62,18 @@ export const loadProtectedContext = async ({
   }
 
   const activeOrganizationId = authContext.session.activeOrganizationId;
+
+  if (
+    location.pathname === "/settings/organization/time-policy" &&
+    isTimeBillingRouteEnabled()
+  ) {
+    detached(
+      context.queryClient.ensureQueryData(
+        organizationSettingsOptions(activeOrganizationId),
+      ),
+      "protected-layout.time-policy-prefetch",
+    );
+  }
 
   // Start optional shell data immediately. The loader settles the role before
   // chrome mounts, while child loaders fetch their independent data in parallel.
@@ -113,7 +129,7 @@ export const prefetchProtectedShell = async ({
 }: {
   context: {
     queryClient: QueryClient;
-    user: { id: string; activeOrganizationId: string };
+    user?: { id: string; activeOrganizationId: string } | undefined;
   };
 }) => {
   await prefetchRouteQuery(context.queryClient, roleOptions, (error) => {
@@ -121,6 +137,7 @@ export const prefetchProtectedShell = async ({
   });
   const role = context.queryClient.getQueryData(roleOptions.queryKey);
   if (
+    context.user === undefined ||
     !isTimeBillingPreviewEnabled() ||
     role === undefined ||
     !authClient.organization.checkRolePermission({

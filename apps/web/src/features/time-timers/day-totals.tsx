@@ -93,7 +93,7 @@ const DailyTargetForm = ({ initialTarget, onDone }: DailyTargetFormProps) => {
   const queryClient = useQueryClient();
   const mutation = useMutation({
     mutationFn: async (minutes: number | null) =>
-      unwrapEden(await myTimeEntriesApi["daily-target"].post({ minutes })),
+      unwrapEden(await myTimeEntriesApi["daily-target"].put({ minutes })),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: myTimeEntriesKeys.all(user.activeOrganizationId),
