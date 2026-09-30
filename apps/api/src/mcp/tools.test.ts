@@ -4489,7 +4489,9 @@ describe("OpenAI-compatible MCP tools", () => {
         ["citations", "citationsTo"],
         ["citations", "citationsFrom"],
       ] as const) {
-        expect(Object.hasOwn(decision, key)).toBe(fields.includes(field));
+        expect(Object.hasOwn(decision, key)).toBe(
+          fields.some((expected) => expected === field),
+        );
       }
     },
   );
