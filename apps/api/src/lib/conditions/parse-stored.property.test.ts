@@ -22,11 +22,11 @@ import { parseStoredCondition } from "./parse-stored";
 
 const nonemptyText = fc.string({ minLength: 1, maxLength: 1000 });
 const operandArb: fc.Arbitrary<Operand> = fc.oneof(
-  nonemptyText.map((propertyId) => ({ type: "property", propertyId })),
-  nonemptyText.map((path) => ({ type: "path", path })),
+  nonemptyText.map((propertyId) => ({ type: "property" as const, propertyId })),
+  nonemptyText.map((path) => ({ type: "path" as const, path })),
   fc
     .constantFrom(...BUILTIN_FIELDS)
-    .map((field) => ({ type: "builtin", field })),
+    .map((field) => ({ type: "builtin" as const, field })),
   fc.constant({ type: "kind" as const }),
   fc
     .oneof(
@@ -35,19 +35,29 @@ const operandArb: fc.Arbitrary<Operand> = fc.oneof(
       fc.boolean(),
       fc.array(fc.string(), { maxLength: 5 }),
     )
-    .map((value) => ({ type: "literal", value })),
+    .map((value) => ({ type: "literal" as const, value })),
 );
 const leaf: fc.Arbitrary<ConditionNode> = fc.oneof(
   fc
     .tuple(operandArb, fc.constantFrom(...COMPARE_OPS), operandArb)
-    .map(([left, op, right]) => ({ type: "compare", left, op, right })),
+    .map(([left, op, right]) => ({
+      type: "compare" as const,
+      left,
+      op,
+      right,
+    })),
   fc
     .tuple(
       operandArb,
       fc.constantFrom(...PREDICATE_OPS),
       fc.oneof(fc.string(), fc.array(fc.string(), { maxLength: 5 })),
     )
-    .map(([operand, op, value]) => ({ type: "predicate", operand, op, value })),
+    .map(([operand, op, value]) => ({
+      type: "predicate" as const,
+      operand,
+      op,
+      value,
+    })),
 );
 const nodeAtDepth = (depth: number): fc.Arbitrary<ConditionNode> => {
   if (depth === 0) {
@@ -62,7 +72,7 @@ const nodeAtDepth = (depth: number): fc.Arbitrary<ConditionNode> => {
         fc.boolean(),
       )
       .map(([combinator, children, negated]) => ({
-        type: "group",
+        type: "group" as const,
         combinator,
         children,
         negated,

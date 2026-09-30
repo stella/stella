@@ -1,5 +1,3 @@
-import { TaggedError } from "better-result";
-
 /**
  * Parse a template `{% if ... %}` condition expression into the canonical
  * `@stll/conditions` AST. The Jinja surface syntax (`==`, `!=`, `>`, `<`,
@@ -17,16 +15,12 @@ import { TaggedError } from "better-result";
  * groups explicitly. Malformed input degrades gracefully (an unmatched `(`
  * closes at end of input; trailing tokens are ignored) rather than throwing,
  * so a half-typed condition can still be evaluated. Expressions exceeding
- * the nesting budget throw a `ConditionParseError`.
+ * the nesting budget return `null`.
  */
 import type { CompareOp, ConditionNode, Operand } from "@stll/conditions";
 
 /** Maximum combined nesting of parentheses and unary negation. */
 export const MAX_CONDITION_NESTING = 256;
-
-export class ConditionParseError extends TaggedError("ConditionParseError")<{
-  message: string;
-}> {}
 
 const COMPARE_SYMBOL_TO_OP = {
   "==": "eq",
@@ -226,47 +220,63 @@ export const parseCondition = (expression: string): ConditionNode | null => {
   const peek = (): Token | undefined => tokens[pos];
 
   // or := and ( "or" and )*
-  const parseOr = (depth: number): ConditionNode => {
+  const parseOr = (depth: number): ConditionNode | null => {
     const first = parseAnd(depth);
+    if (first === null) {
+      return null;
+    }
     if (peek()?.type !== "or") {
       return first;
     }
     const children = [first];
     while (peek()?.type === "or") {
       pos += 1;
-      children.push(parseAnd(depth));
+      const child = parseAnd(depth);
+      if (child === null) {
+        return null;
+      }
+      children.push(child);
     }
     return { type: "group", combinator: "or", children };
   };
 
   // and := not ( "and" not )*
-  const parseAnd = (depth: number): ConditionNode => {
+  const parseAnd = (depth: number): ConditionNode | null => {
     const first = parseNot(depth);
+    if (first === null) {
+      return null;
+    }
     if (peek()?.type !== "and") {
       return first;
     }
     const children = [first];
     while (peek()?.type === "and") {
       pos += 1;
-      children.push(parseNot(depth));
+      const child = parseNot(depth);
+      if (child === null) {
+        return null;
+      }
+      children.push(child);
     }
     return { type: "group", combinator: "and", children };
   };
 
   // not := "not" not | comparison
-  const parseNot = (depth: number): ConditionNode => {
+  const parseNot = (depth: number): ConditionNode | null => {
     if (peek()?.type === "not") {
       if (depth >= MAX_CONDITION_NESTING) {
-        throw new ConditionParseError({
-          message: "Condition nesting exceeds the parsing limit",
-        });
+        return null;
       }
       pos += 1;
+      const child = parseNot(depth + 1);
+      if (child === null) {
+        return null;
+      }
       return {
         type: "group",
         combinator: "and",
         negated: true,
-        children: [parseNot(depth + 1)],
+        children: [child],
       };
     }
     return parseComparison(depth);
@@ -276,15 +286,16 @@ export const parseCondition = (expression: string): ConditionNode | null => {
   //              | operand "is" [ "not" ] "defined"
   //              | literal "in" operand
   //              | operand ( compareOp operand )?
-  const parseComparison = (depth: number): ConditionNode => {
+  const parseComparison = (depth: number): ConditionNode | null => {
     if (peek()?.type === "lparen") {
       if (depth >= MAX_CONDITION_NESTING) {
-        throw new ConditionParseError({
-          message: "Condition nesting exceeds the parsing limit",
-        });
+        return null;
       }
       pos += 1;
       const inner = parseOr(depth + 1);
+      if (inner === null) {
+        return null;
+      }
       if (peek()?.type === "rparen") {
         pos += 1;
       }

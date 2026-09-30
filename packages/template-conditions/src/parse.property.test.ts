@@ -1,4 +1,3 @@
-import { Result } from "better-result";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
@@ -14,15 +13,11 @@ import {
 } from "@stll/property-testing";
 
 import { serializeCondition } from "./condition-builder";
-import {
-  ConditionParseError,
-  MAX_CONDITION_NESTING,
-  parseCondition,
-} from "./parse";
+import { MAX_CONDITION_NESTING, parseCondition } from "./parse";
 
 const pathOperand: fc.Arbitrary<Operand> = fc
   .constantFrom("country", "party.role", "base-rent", "žadatel.jméno")
-  .map((path) => ({ type: "path", path }));
+  .map((path) => ({ type: "path" as const, path }));
 const text = fc.oneof(
   fc.string().filter((value) => !value.includes("\\")),
   fc.constantFrom('"', "'", "\n", "😀"),
@@ -31,12 +26,17 @@ const operandArb: fc.Arbitrary<Operand> = fc.oneof(
   pathOperand,
   fc
     .oneof(text, fc.integer(), fc.boolean())
-    .map((value) => ({ type: "literal", value })),
+    .map((value) => ({ type: "literal" as const, value })),
 );
 const leaf: fc.Arbitrary<ConditionNode> = fc.oneof(
   fc
     .tuple(operandArb, fc.constantFrom(...COMPARE_OPS), operandArb)
-    .map(([left, op, right]) => ({ type: "compare", left, op, right })),
+    .map(([left, op, right]) => ({
+      type: "compare" as const,
+      left,
+      op,
+      right,
+    })),
   fc
     .tuple(
       operandArb,
@@ -46,11 +46,11 @@ const leaf: fc.Arbitrary<ConditionNode> = fc.oneof(
         "is_not_empty" as const,
       ),
     )
-    .map(([operand, op]) => ({ type: "predicate", operand, op })),
+    .map(([operand, op]) => ({ type: "predicate" as const, operand, op })),
   fc.tuple(pathOperand, text).map(([operand, value]) => ({
-    type: "predicate",
+    type: "predicate" as const,
     operand,
-    op: "contains",
+    op: "contains" as const,
     value,
   })),
 );
@@ -72,13 +72,13 @@ const nodeAtDepth = (depth: number): fc.Arbitrary<ConditionNode> => {
         fc.array(child, { minLength: 2, maxLength: 3 }),
       )
       .map(([combinator, children]) => ({
-        type: "group",
+        type: "group" as const,
         combinator,
         children,
       })),
     child.map((node) => ({
-      type: "group",
-      combinator: "and",
+      type: "group" as const,
+      combinator: "and" as const,
       negated: true,
       children: [node],
     })),
@@ -99,7 +99,7 @@ test(
 );
 
 test(
-  "arbitrary expressions return a condition or a typed parse error",
+  "arbitrary expressions return a condition or null",
   () => {
     const expression = fc.oneof(
       fc.string(),
@@ -122,15 +122,7 @@ test(
     );
     fc.assert(
       fc.property(expression, (value) => {
-        const result = Result.try({
-          try: () => parseCondition(value),
-          catch: (error) => error,
-        });
-        if (result.isErr()) {
-          expect(result.error).toBeInstanceOf(ConditionParseError);
-          return;
-        }
-        const parsed = result.value;
+        const parsed = parseCondition(value);
         expect(
           parsed === null ||
             ["compare", "predicate", "group"].includes(parsed.type),
@@ -159,9 +151,7 @@ test.each(["parentheses", "negation", "mixed"])(
     };
     expect(parseCondition(expressionAt(MAX_CONDITION_NESTING))).not.toBeNull();
     for (const depth of [MAX_CONDITION_NESTING + 1, 10_000]) {
-      expect(() => parseCondition(expressionAt(depth))).toThrow(
-        ConditionParseError,
-      );
+      expect(parseCondition(expressionAt(depth))).toBeNull();
     }
   },
 );
@@ -175,7 +165,7 @@ test(
         fc.nat(),
         (depth, split) => {
           const expression = nestedExpression(depth, split % (depth + 1));
-          expect(() => parseCondition(expression)).toThrow(ConditionParseError);
+          expect(parseCondition(expression)).toBeNull();
           expect(
             parseCondition(
               nestedExpression(

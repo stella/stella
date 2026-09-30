@@ -157,7 +157,6 @@ export const evaluateCondition = (
 
 export {
   CONDITION_RESERVED_WORDS,
-  ConditionParseError,
   MAX_CONDITION_NESTING,
   parseCondition,
 } from "./parse.js";
