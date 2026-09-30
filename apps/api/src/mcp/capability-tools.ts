@@ -1456,7 +1456,11 @@ export const invokedCapabilityConsumesServices = async (args: unknown) => {
   return classifyValidatedCapabilityServiceInput({
     config: loaded.endpoint.config,
     entry,
-    publicInput: parsed.output.input ?? {},
+    publicInput: {
+      body: parsed.output.input?.body,
+      params: parsed.output.input?.params,
+      query: parsed.output.input?.query,
+    },
   });
 };
 

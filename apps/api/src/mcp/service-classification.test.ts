@@ -26,6 +26,8 @@ describe("capability classification uses validated export input", () => {
           },
           entry: { handlerKind: "workspace", transport: { type: "json" } },
           publicInput: {
+            params: undefined,
+            query: undefined,
             body: {
               ...body,
               format,
@@ -55,7 +57,11 @@ describe("capability classification uses validated export input", () => {
         },
       },
       entry: { handlerKind: "workspace", transport: { type: "json" } },
-      publicInput: { body: { ...body, viewId: "invalid", aiNarrative: false } },
+      publicInput: {
+        params: undefined,
+        query: undefined,
+        body: { ...body, viewId: "invalid", aiNarrative: false },
+      },
     });
     expect(result.isErr()).toBe(true);
     expect(classifications).toBe(0);
