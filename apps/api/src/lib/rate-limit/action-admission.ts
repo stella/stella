@@ -149,6 +149,7 @@ type ActionAdmissionOptions = {
   userId: SafeId<"user">;
   run: (signal: AbortSignal) => Promise<unknown>;
   enabled?: boolean;
+  scope?: "inherit" | "independent";
   policy?: ActionAdmissionPolicy;
   periodIdentity?: ActionPeriodIdentity;
   periodPolicy?: ActionPeriodPolicy;
@@ -295,6 +296,7 @@ export const withActionAdmission = async <T>({
   userId,
   run,
   enabled = env.FEATURE_ACTION_ADMISSION,
+  scope = "inherit",
   policy,
   periodIdentity,
   periodPolicy,
@@ -331,6 +333,7 @@ export const withActionAdmission = async <T>({
 
   const inherited = admissionScope.getStore();
   if (
+    scope === "inherit" &&
     inherited?.status === "active" &&
     inherited.organizationId === organizationId &&
     inherited.userId === userId
@@ -339,7 +342,6 @@ export const withActionAdmission = async <T>({
       try: async () => {
         inherited.signal.throwIfAborted();
         const value = await run(inherited.signal);
-        inherited.signal.throwIfAborted();
         return value;
       },
       catch: (error: unknown) => error,
@@ -466,7 +468,7 @@ export const withActionAdmission = async <T>({
   }
 
   let outcome: Result<T, unknown>;
-  const scope: AdmissionScope = {
+  const executionScope: AdmissionScope = {
     organizationId,
     userId,
     signal: controller.signal,
@@ -475,14 +477,14 @@ export const withActionAdmission = async <T>({
   try {
     outcome = await Result.tryPromise({
       try: async () =>
-        await admissionScope.run(scope, async () => {
+        await admissionScope.run(executionScope, async () => {
           controller.signal.throwIfAborted();
           return await run(controller.signal);
         }),
       catch: (error: unknown) => error,
     });
   } finally {
-    scope.status = "settled";
+    executionScope.status = "settled";
     stopped = true;
     cancelScheduled();
     await Promise.resolve(renewal);
@@ -493,7 +495,9 @@ export const withActionAdmission = async <T>({
       observeFailure(released.error, { sink: RELEASE_FAILURE });
     }
   }
-  if (controller.signal.aborted) {
+  // A settled success may already have committed or charged. Losing the lease
+  // cannot replace it with an infrastructure error that invites duplicate work.
+  if (Result.isError(outcome) && controller.signal.aborted) {
     return Result.err(controller.signal.reason);
   }
   return outcome;

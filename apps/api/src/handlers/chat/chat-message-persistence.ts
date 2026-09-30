@@ -711,7 +711,7 @@ type PersistTerminalAssistantTurnProps = {
   workspaceId: SafeId<"workspace"> | null;
 };
 
-const persistTerminalAssistantTurn = async ({
+export const persistTerminalAssistantTurn = async ({
   execution,
   failure,
   outcome,

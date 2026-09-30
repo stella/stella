@@ -5,6 +5,7 @@ import { panic, Result } from "better-result";
 import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
 
 import type { SafeDb } from "@/api/db/safe-db";
+import type { ChatExecutionAdmission } from "@/api/handlers/chat/chat-execution-admission";
 import { persistFailedChatTurn } from "@/api/handlers/chat/chat-message-persistence";
 import {
   isChatTurnNotOwned,
@@ -87,11 +88,16 @@ type ChatTurnRunConnectors = { close: () => void | Promise<void> };
 type ChatTurnRunControl = {
   /** The run's own abort: its deadline, a stop, or its response closing. */
   abortController: AbortController;
+  /** The SDK provider also stops on admission loss without ending the transport. */
+  providerAbortController: AbortController;
   /** The deadline alone, which tells a timeout from the other causes. */
   deadlineSignal: AbortSignal;
+  /** Execution admission cancellation; durable ownership keeps its own fence. */
+  admissionSignal?: AbortSignal;
 };
 
 type ChatTurnRunOptions = {
+  admission?: ChatExecutionAdmission | undefined;
   /** Closed by the run when it never produces; a producing run's agent
    *  loop closes them when it ends. */
   connectors: ChatTurnRunConnectors | undefined;
@@ -268,9 +274,22 @@ export class ChatTurnRun {
   constructor(options: ChatTurnRunOptions) {
     this.options = options;
     const deadlineSignal = AbortSignal.timeout(options.deadlineMs);
+    const abortController = abortControllerFromSignal(deadlineSignal);
     this.control = {
-      abortController: abortControllerFromSignal(deadlineSignal),
+      abortController,
+      providerAbortController:
+        options.admission === undefined
+          ? abortController
+          : abortControllerFromSignal(
+              AbortSignal.any([
+                abortController.signal,
+                options.admission.signal,
+              ]),
+            ),
       deadlineSignal,
+      ...(options.admission === undefined
+        ? {}
+        : { admissionSignal: options.admission.signal }),
     };
     this.ownership = options.ownership ?? processChatTurnOwnership;
     this.ownership.adopt(this);
@@ -506,7 +525,7 @@ export class ChatTurnRun {
     const end: ChatTurnRunEnd = this.stored ? "stored" : "unstored";
     if (state.status !== "producing") {
       this.ownership.release(this);
-      this.settledResolvers.resolve(end);
+      this.finishSettlement(end);
       return;
     }
     state.heartbeat.stop();
@@ -514,7 +533,22 @@ export class ChatTurnRun {
     // process's turns at any moment from here still waits for that beat.
     const idle = this.ownership.followUp(state.heartbeat.idle());
     this.ownership.release(this);
-    this.settledResolvers.resolve(idle.then(() => end));
+    this.finishSettlement(idle.then(() => end));
+  }
+  private finishSettlement(
+    end: ChatTurnRunEnd | Promise<ChatTurnRunEnd>,
+  ): void {
+    const { admission } = this.options;
+    if (admission === undefined) {
+      this.settledResolvers.resolve(end);
+      return;
+    }
+    this.settledResolvers.resolve(
+      Promise.resolve(end).then(async (settled) => {
+        await admission.release();
+        return settled;
+      }),
+    );
   }
 }
 

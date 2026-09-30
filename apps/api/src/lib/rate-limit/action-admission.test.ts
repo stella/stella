@@ -262,11 +262,12 @@ describe("shared action admission", () => {
     );
   });
 
-  test("lease loss aborts the inherited nested signal and rejects its completed result", async () => {
+  test("lease loss aborts the inherited signal without replacing a settled and charged result", async () => {
     const redis = sharedRedis({ onRenew: async () => 0 });
     const timing = manualTiming(redis);
     const started = deferred();
     const pending = deferred();
+    let charges = 0;
     const admitted = withActionAdmission({
       enabled: true,
       organizationId,
@@ -282,10 +283,11 @@ describe("shared action admission", () => {
             userId: firstUser,
             run: async (signal) => {
               expect(signal).toBe(outerSignal);
+              charges += 1;
               started.finish();
               await pending.promise;
               expect(signal.aborted).toBe(true);
-              return "unexpected";
+              return "completed";
             },
           }),
         ),
@@ -293,7 +295,8 @@ describe("shared action admission", () => {
     await started.promise;
     await timing.fireNext();
     pending.finish();
-    expect(await failureOf(admitted)).toMatchObject({ reason: "unavailable" });
+    expect(await valueOf(admitted)).toBe("completed");
+    expect(charges).toBe(1);
   });
 
   test("work continuing after its enclosing call finishes cannot reuse a released lease", async () => {

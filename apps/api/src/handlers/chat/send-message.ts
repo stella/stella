@@ -25,6 +25,8 @@ import {
   resolveActiveChatSkillContext,
   type ActiveChatSkillContext,
 } from "@/api/handlers/chat/active-skill-context";
+import { startChatExecutionAdmission } from "@/api/handlers/chat/chat-execution-admission";
+import type { ChatExecutionAdmission } from "@/api/handlers/chat/chat-execution-admission";
 import {
   chatMessageFromPersisted,
   getAwaitingUserInteractions,
@@ -40,6 +42,7 @@ import {
   persistInterruptedChatTurn,
   persistMessage,
   persistStoppedChatTurn,
+  persistTerminalAssistantTurn,
 } from "@/api/handlers/chat/chat-message-persistence";
 import {
   appendAnonymizedModeHintToChatSafePrompt,
@@ -474,6 +477,8 @@ type CompletedTurnFollowUps = {
  */
 export class ChatSendLifecycle {
   private readonly options: ChatSendLifecycleOptions;
+  private admission: ChatExecutionAdmission | undefined;
+  private checkpoint: PersistableChatMessage | undefined;
   private claimedTurn: ClaimedChatTurnOwnership = { status: "unclaimed" };
   /** Ends this process's record of the claim; a no-op once ended. */
   private releaseClaim: () => void = () => undefined;
@@ -521,6 +526,77 @@ export class ChatSendLifecycle {
     });
   }
 
+  async admitExecution({
+    organizationId,
+    checkpoint,
+  }: {
+    organizationId: SafeId<"organization">;
+    checkpoint: PersistableChatMessage | undefined;
+  }): Promise<Result<void, HandlerError>> {
+    const acquired = await startChatExecutionAdmission({
+      organizationId,
+      userId: this.options.userId,
+    });
+    if (Result.isError(acquired)) {
+      return acquired;
+    }
+    this.admission = acquired.value;
+    this.checkpoint = checkpoint;
+    return Result.ok(undefined);
+  }
+
+  get admissionSignal(): AbortSignal | undefined {
+    return this.admission?.signal;
+  }
+
+  checkAdmission(): Result<void, HandlerError> {
+    if (!this.admission?.signal.aborted) {
+      return Result.ok(undefined);
+    }
+    return Result.err(
+      new HandlerError({
+        status: 503,
+        code: "service_unavailable",
+        message: "Action admission is unavailable",
+        cause: this.admission.signal.reason,
+      }),
+    );
+  }
+
+  private async restorePreExecutionCheckpoint(): Promise<boolean> {
+    if (
+      this.claimedTurn.status !== "preflight" ||
+      !this.admission?.signal.aborted ||
+      this.checkpoint === undefined
+    ) {
+      return false;
+    }
+    const interaction = getAwaitingUserInteractions(this.checkpoint).at(0);
+    if (interaction === undefined) {
+      return false;
+    }
+    // No tools have executed before handoff. Restore only this original
+    // awaiting snapshot, through the same execution fence as normal settlement.
+    const restored = await persistTerminalAssistantTurn({
+      execution: this.claimedTurn.execution,
+      outcome: { type: "awaiting-user", interaction },
+      owningAssistantMessage: this.checkpoint,
+      recordAuditEvent: this.options.recordAuditEvent,
+      safeDb: this.options.safeDb,
+      threadId: this.options.threadId,
+      userId: this.options.userId,
+      workspaceId: this.options.workspaceId,
+    });
+    if (Result.isError(restored)) {
+      captureError(restored.error, {
+        source: "chat-admission-checkpoint-restoration",
+      });
+    } else {
+      this.claimedTurn = { status: "unclaimed" };
+    }
+    return true;
+  }
+
   /**
    * Hand the claimed turn to its run, with the connector clients the run's
    * tools use: from here the run alone settles the turn and closes them. The
@@ -532,6 +608,7 @@ export class ChatSendLifecycle {
       return panic("Cannot start a run for a turn this send does not hold");
     }
     const run = new ChatTurnRun({
+      admission: this.admission,
       connectors,
       deadlineMs: CHAT_METERED_PROVIDER_TIMEOUT_MS,
       owner: {
@@ -556,6 +633,9 @@ export class ChatSendLifecycle {
   ): Promise<void> {
     if (this.claimedTurn.status !== "preflight") {
       panic("Cannot fail a chat turn this send does not hold");
+    }
+    if (await this.restorePreExecutionCheckpoint()) {
+      return;
     }
     const failureResult = await persistFailedChatTurn({
       code,
@@ -599,6 +679,9 @@ export class ChatSendLifecycle {
     if (this.claimedTurn.status !== "preflight") {
       return panic("Cannot interrupt a chat turn this send does not hold");
     }
+    if (await this.restorePreExecutionCheckpoint()) {
+      return Result.ok(undefined);
+    }
     const settlementResult = await persistInterruptedChatTurn({
       execution: this.claimedTurn.execution,
       owningAssistantMessage: this.claimedTurn.owningAssistantMessage,
@@ -616,7 +699,10 @@ export class ChatSendLifecycle {
 
   async cleanup(): Promise<void> {
     try {
-      if (this.claimedTurn.status === "preflight") {
+      if (
+        this.claimedTurn.status === "preflight" &&
+        !(await this.restorePreExecutionCheckpoint())
+      ) {
         const failureResult = await persistFailedChatTurn({
           code: "internal",
           execution: this.claimedTurn.execution,
@@ -656,6 +742,9 @@ export class ChatSendLifecycle {
       }
     } finally {
       this.releaseClaim();
+      if (this.claimedTurn.status !== "handed-over") {
+        await this.admission?.release();
+      }
     }
   }
 }
@@ -2035,6 +2124,24 @@ export const createSendMessage = (
           webSearchProviders,
         } = preparedIncomingMessageResult.value;
 
+        yield* Result.await(
+          lifecycle.admitExecution({
+            organizationId: session.activeOrganizationId,
+            checkpoint:
+              body.message.role === "assistant" &&
+              validationThreadState.persistedMessage !== null
+                ? toPersistableChatMessage(
+                    chatMessageFromPersisted({
+                      content: validationThreadState.persistedMessage.content,
+                      id: body.message.id,
+                      role: validationThreadState.persistedMessage.role,
+                    }),
+                  )
+                : undefined,
+          }),
+        );
+        yield* lifecycle.checkAdmission();
+
         const acceptedTurnResult = await acceptIncomingTurn({
           accessibleSet,
           accessibleWorkspaceIds,
@@ -2129,8 +2236,14 @@ export const createSendMessage = (
         // Compaction can issue a metered provider request. The turn was claimed
         // above, so a concurrent send is rejected before either request starts
         // this work. Its terminal state remains explicit on every preflight exit.
-        const createMeteredAIAbortSignal = () =>
-          AbortSignal.timeout(CHAT_METERED_PROVIDER_TIMEOUT_MS);
+        const createMeteredAIAbortSignal = () => {
+          const deadline = AbortSignal.timeout(
+            CHAT_METERED_PROVIDER_TIMEOUT_MS,
+          );
+          return lifecycle.admissionSignal === undefined
+            ? deadline
+            : AbortSignal.any([deadline, lifecycle.admissionSignal]);
+        };
         if (isClientConnectionAborted()) {
           yield* Result.await(lifecycle.interruptCurrentTurn());
           return Result.err(
@@ -2436,6 +2549,7 @@ export const createSendMessage = (
           sendMode: body.sendMode,
         });
 
+        yield* lifecycle.checkAdmission();
         yield* Result.await(
           prepareDispatch({
             execution: turnExecution,
@@ -2445,6 +2559,8 @@ export const createSendMessage = (
             safeDb,
           }),
         );
+
+        yield* lifecycle.checkAdmission();
 
         const isServerTool = (toolName: string) =>
           streamingTools[toolName]?.execute !== undefined;

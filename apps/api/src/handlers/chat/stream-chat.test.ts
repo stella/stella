@@ -3,6 +3,7 @@ import {
   EventType,
   maxIterations,
   normalizeStreamChunk,
+  RUN_CANCEL_REASON,
   StreamProcessor,
   toolDefinition,
 } from "@tanstack/ai";
@@ -35,6 +36,7 @@ import {
   CHAT_RUN_MODE,
   validateToolCallParts,
 } from "@/api/handlers/chat/chat-schema";
+import { CHAT_TURN_OWNER_LOST_REASON } from "@/api/handlers/chat/chat-turn-run";
 import { settleHistoryForRun } from "@/api/handlers/chat/chat-turn-settlement";
 import { guardProviderHistory } from "@/api/handlers/chat/provider-history";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
@@ -69,6 +71,7 @@ import {
   HandlerError,
 } from "@/api/lib/errors/tagged-errors";
 import { logger } from "@/api/lib/observability/logger";
+import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
 import { abortControllerFromSignal } from "@/api/lib/tanstack-ai-generate";
 import { toUserFileUrl } from "@/api/lib/user-files/types";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
@@ -405,6 +408,8 @@ type ProcessedStreamFinishEvent = Parameters<
 type TurnSignals = {
   abortSignal: AbortSignal;
   deadlineSignal: AbortSignal;
+  runSignal?: AbortSignal;
+  teardownAfterSourceChunks?: number;
 };
 
 const uncutTurnSignals = (): TurnSignals => {
@@ -420,6 +425,7 @@ const persistNativeInterruptTurn = async (
   chunks: AsyncIterable<StreamChunk>,
   signals: TurnSignals = uncutTurnSignals(),
 ) => {
+  const { teardownAfterSourceChunks, ...streamSignals } = signals;
   const messageId = toSafeId<"chatMessage">(
     "11111111-1111-4111-8111-111111111111",
   );
@@ -442,18 +448,26 @@ const persistNativeInterruptTurn = async (
       yield chunk;
     }
   };
-  const emitted = await collectChunks(
-    processServerChatStream({
-      ...signals,
-      getResponseMessage: () => responseMessage,
-      mapMessageId,
-      onFinish: (event) => {
-        terminal.finish = event;
-      },
-      processor,
-      source: observed(),
-    }),
-  );
+  const output = processServerChatStream({
+    ...streamSignals,
+    getResponseMessage: () => responseMessage,
+    mapMessageId,
+    onFinish: (event) => {
+      terminal.finish = event;
+    },
+    processor,
+    source: observed(),
+  });
+  const emitted: StreamChunk[] = [];
+  for await (const chunk of output) {
+    emitted.push(chunk);
+    if (
+      teardownAfterSourceChunks !== undefined &&
+      source.length >= teardownAfterSourceChunks
+    ) {
+      break;
+    }
+  }
   return { emitted, finish: terminal.finish, source };
 };
 
@@ -672,6 +686,155 @@ describe("a turn cut while the model was thinking", () => {
       reason: "timeout",
     });
   });
+});
+
+type AdmissionExit = "drain" | "throw" | "teardown" | "adapter-error";
+type AdmissionCheckpoint =
+  | "approval"
+  | "client-tool"
+  | "ask-user"
+  | "incomplete";
+
+const persistAdmissionLoss = async ({
+  exit,
+  checkpoint,
+  controlReason,
+}: {
+  exit: AdmissionExit;
+  checkpoint: AdmissionCheckpoint;
+  controlReason?: string;
+}) => {
+  const toolNames = {
+    approval: "mcp__external__delete",
+    "ask-user": "ask-user",
+    "client-tool": "create-document",
+    incomplete: "create-document",
+  } as const satisfies Record<AdmissionCheckpoint, string>;
+  const toolName = toolNames[checkpoint];
+  const definition = toolDefinition({
+    name: toolName,
+    description: "Fixture interaction",
+    inputSchema: draftToolInputSchema,
+    ...(checkpoint === "approval" ? { needsApproval: true } : {}),
+  });
+  const tool =
+    checkpoint === "approval"
+      ? definition.server(async () => "deleted")
+      : definition;
+  const native = await collectChunks(
+    chat({
+      adapter: createSingleToolCallAdapter({
+        arguments: '{"name":"NDA","source":"@title NDA"}',
+        toolName,
+      }),
+      agentLoopStrategy: maxIterations(3),
+      messages: [{ role: "user", content: "Draft a document" }],
+      threadId: "thread-1",
+      tools: [tool],
+    }),
+  );
+  expect(native.some((chunk) => chunk.type === EventType.TOOL_CALL_END)).toBe(
+    true,
+  );
+  expect(native.some((chunk) => chunk.type === EventType.RUN_FINISHED)).toBe(
+    true,
+  );
+  const fixture =
+    checkpoint === "incomplete"
+      ? native.filter((chunk) => chunk.type !== EventType.TOOL_CALL_END)
+      : native;
+  const admission = new AbortController();
+  const control = new AbortController();
+  const deadline = new AbortController();
+  const source = async function* (): AsyncIterable<StreamChunk> {
+    yield* fixture;
+    admission.abort(
+      new ActionAdmissionError({
+        message: "Admission lease lost",
+        reason: "unavailable",
+      }),
+    );
+    if (controlReason !== undefined) {
+      control.abort(controlReason);
+    }
+    if (exit === "throw") {
+      throw new HandlerError({ status: 503, message: "Provider aborted" });
+    }
+    if (exit === "adapter-error") {
+      yield {
+        type: EventType.RUN_ERROR,
+        code: "provider_unavailable",
+        message: "Provider aborted",
+      };
+    }
+    if (exit === "teardown") {
+      // A forwarded snapshot lets the consumer close while a terminal finish is still buffered.
+      yield { type: EventType.MESSAGES_SNAPSHOT, messages: [] };
+      throw new HandlerError({
+        status: 500,
+        message: "Consumer failed to tear down",
+      });
+    }
+  };
+  return await persistNativeInterruptTurn(source(), {
+    abortSignal: AbortSignal.any([control.signal, admission.signal]),
+    deadlineSignal: deadline.signal,
+    runSignal: control.signal,
+    ...(exit === "teardown"
+      ? { teardownAfterSourceChunks: fixture.length + 1 }
+      : {}),
+  });
+};
+
+describe("admission loss preserves complete interaction checkpoints", () => {
+  for (const exit of ["drain", "throw", "teardown", "adapter-error"] as const) {
+    for (const checkpoint of [
+      "approval",
+      "client-tool",
+      "ask-user",
+      "incomplete",
+    ] as const) {
+      test(`${exit} keeps ${checkpoint} infrastructure loss distinct from a user stop`, async () => {
+        const { finish, emitted } = await persistAdmissionLoss({
+          exit,
+          checkpoint,
+        });
+        expect(finish?.outcome).toEqual(
+          checkpoint === "incomplete"
+            ? { type: "failed", error: "provider_unavailable" }
+            : {
+                type: "awaiting-user",
+                interaction: { type: checkpoint, toolCallId: "call-1" },
+              },
+        );
+        expect(
+          emitted.some((chunk) => chunk.type === EventType.RUN_ERROR),
+        ).toBe(false);
+        expect(
+          finish?.responseMessage.parts.some(
+            (part) => part.type === "tool-call",
+          ),
+        ).toBe(true);
+      });
+    }
+    for (const controlReason of [
+      RUN_CANCEL_REASON,
+      CHAT_TURN_OWNER_LOST_REASON,
+    ]) {
+      test(`${exit} preserves ${controlReason} precedence after admission loss`, async () => {
+        const { finish } = await persistAdmissionLoss({
+          exit,
+          checkpoint: "approval",
+          controlReason,
+        });
+        expect(finish?.outcome).toEqual(
+          controlReason === RUN_CANCEL_REASON
+            ? { type: "cancelled", reason: "user-stop" }
+            : { type: "interrupted", reason: "owner-lost" },
+        );
+      });
+    }
+  }
 });
 
 describe("native interrupt boundary persistence", () => {

@@ -37,6 +37,7 @@ import {
   classifyChatPartForPersistence,
   getChatAttachmentMimeType,
   getAwaitingUserInteraction,
+  getAwaitingUserInteractions,
   getUserFileIdFromAttachmentPart,
   isChatAttachmentPart,
   isChatDocumentPart,
@@ -174,6 +175,7 @@ import type { ChatTerminalError } from "@/api/lib/errors/tagged-errors";
 import { errorFingerprint } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { providerSafeJsonSchemaOptionsForTanStackProvider } from "@/api/lib/provider-safe-json-schema";
+import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
 import {
   chatTurnOutputTokens,
   mergeGenerationOptions,
@@ -530,8 +532,11 @@ export const streamChat = async ({
   const restorationPairs: ChatAnonRestoration[] = [];
 
   const stream = runChatAttempts({
-    abortController,
-    abortSignal: deadlineSignal,
+    abortController: run.control.providerAbortController,
+    abortSignal:
+      run.control.admissionSignal === undefined
+        ? deadlineSignal
+        : AbortSignal.any([deadlineSignal, run.control.admissionSignal]),
     devModelId,
     externalMcpToolSource,
     fallbackModel,
@@ -607,7 +612,16 @@ export const streamChat = async ({
     // The run's own signal, not the deadline's. Cancelling the response stream
     // aborts only this derived controller — that is the abort a client
     // disconnect delivers — while the deadline reaches both.
-    abortSignal: abortController.signal,
+    abortSignal:
+      run.control.admissionSignal === undefined
+        ? abortController.signal
+        : AbortSignal.any([
+            abortController.signal,
+            run.control.admissionSignal,
+          ]),
+    ...(run.control.admissionSignal === undefined
+      ? {}
+      : { runSignal: abortController.signal }),
     deadlineSignal,
     flushPendingSource: persistenceVisibleStream.flushPending,
     initialMessages: preparedMessageList,
@@ -1478,6 +1492,8 @@ type ProcessServerChatStreamProps = {
   /** The run's own signal: aborted by the provider deadline below *and* by the
    *  response stream's cancel, which is how a client disconnect arrives. */
   abortSignal: AbortSignal;
+  /** Original run control keeps user-stop and ownership-loss precedence. */
+  runSignal?: AbortSignal;
   /** The metered provider deadline the caller set for this turn. It is the
    *  only one of the two causes that reaches this signal, so it is what tells
    *  a deadline apart from a disconnect. */
@@ -1748,6 +1764,7 @@ const drainedRunOutcome = ({
 
 export const processServerChatStream = async function* ({
   abortSignal,
+  runSignal = abortSignal,
   deadlineSignal,
   existingMessageIds = new Set(),
   flushPendingSource,
@@ -1766,6 +1783,38 @@ export const processServerChatStream = async function* ({
   // persistence so a callback failure cannot re-enter and double-write a
   // different outcome from catch/finally.
   const terminal: { state: "open" | "settled" } = { state: "open" };
+  const admissionLost = () =>
+    ActionAdmissionError.is(abortSignal.reason) &&
+    runSignal.reason !== RUN_CANCEL_REASON &&
+    runSignal.reason !== CHAT_TURN_OWNER_LOST_REASON;
+  const admissionCutByControl = () =>
+    ActionAdmissionError.is(abortSignal.reason) &&
+    (runSignal.reason === RUN_CANCEL_REASON ||
+      runSignal.reason === CHAT_TURN_OWNER_LOST_REASON);
+  const cutShortOutcome = () =>
+    chatCutShortOutcome({
+      abortSignal:
+        runSignal.reason === RUN_CANCEL_REASON ||
+        runSignal.reason === CHAT_TURN_OWNER_LOST_REASON
+          ? runSignal
+          : abortSignal,
+      deadlineSignal,
+    });
+  const admissionLossOutcome = (): ChatTurnOutcome => {
+    const handedOut = interruptToolCallIdsOf(deferredRunFinishedChunks);
+    for (const chunk of deferredRunFinishedChunks) {
+      processor.processChunk(chunk);
+    }
+    processor.finalizeStream();
+    const interaction = getAwaitingUserInteractions(getResponseMessage()).find(
+      (candidate) =>
+        toolCallsWithCompleteInput.has(candidate.toolCallId) &&
+        (candidate.type === "approval" || handedOut.has(candidate.toolCallId)),
+    );
+    return interaction === undefined
+      ? { type: "failed", error: "provider_unavailable" }
+      : { type: "awaiting-user", interaction };
+  };
   const terminalize = async ({
     flushProcessor = false,
     outcome,
@@ -1852,6 +1901,19 @@ export const processServerChatStream = async function* ({
       );
       if (sourceChunk.type === EventType.TOOL_CALL_END) {
         toolCallsWithCompleteInput.add(sourceChunk.toolCallId);
+      }
+      if (
+        sourceChunk.type === EventType.RUN_ERROR &&
+        (admissionLost() || admissionCutByControl())
+      ) {
+        usage = tokenUsageFromTerminalChunk(sourceChunk) ?? usage;
+        await terminalize({
+          flushProcessor: admissionCutByControl(),
+          outcome: admissionCutByControl()
+            ? cutShortOutcome()
+            : admissionLossOutcome(),
+        });
+        return;
       }
       if (
         sourceChunk.type === EventType.RUN_STARTED &&
@@ -1943,6 +2005,18 @@ export const processServerChatStream = async function* ({
       yield chunk;
     }
 
+    if (admissionLost() || admissionCutByControl()) {
+      await terminalize({
+        flushProcessor: admissionCutByControl(),
+        outcome: admissionCutByControl()
+          ? cutShortOutcome()
+          : admissionLossOutcome(),
+      });
+      for (const chunk of deferredRunFinishedChunks.splice(0)) {
+        yield chunk;
+      }
+      return;
+    }
     const finalRunFinishedChunks = deferredRunFinishedChunks.splice(0);
     for (const chunk of finalRunFinishedChunks) {
       processor.processChunk(chunk);
@@ -1956,7 +2030,11 @@ export const processServerChatStream = async function* ({
     // drives the stream itself, and repeating it later is a no-op.
     processor.finalizeStream();
     const outcome = drainedRunOutcome({
-      abortSignal,
+      abortSignal:
+        runSignal.reason === RUN_CANCEL_REASON ||
+        runSignal.reason === CHAT_TURN_OWNER_LOST_REASON
+          ? runSignal
+          : abortSignal,
       deadlineSignal,
       finalRunFinishedChunks,
       responseMessage: getResponseMessage(),
@@ -1973,6 +2051,10 @@ export const processServerChatStream = async function* ({
       yield chunk;
     }
   } catch (error) {
+    if (admissionLost()) {
+      await terminalize({ outcome: admissionLossOutcome() });
+      return;
+    }
     const kind = classifyAIError(error);
     if (abortSignal.aborted) {
       // An aborted stream is an expected exit (metered cutoff, client
@@ -1981,7 +2063,7 @@ export const processServerChatStream = async function* ({
       captureError(error, { kind });
       await terminalize({
         flushProcessor: true,
-        outcome: chatCutShortOutcome({ abortSignal, deadlineSignal }),
+        outcome: cutShortOutcome(),
       });
     } else {
       reportStreamFailure(error, kind);
@@ -2012,7 +2094,7 @@ export const processServerChatStream = async function* ({
     if (terminal.state === "open") {
       await terminalize({
         flushProcessor: true,
-        outcome: chatCutShortOutcome({ abortSignal, deadlineSignal }),
+        outcome: admissionLost() ? admissionLossOutcome() : cutShortOutcome(),
       });
     }
   }
