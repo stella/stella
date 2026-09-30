@@ -36,7 +36,9 @@ export const classifyPublicKnowledgeWebProbe = (
     .replace(/<style\b[^>]*>[\s\S]*?<\/style>/giu, "")
     .replace(/<!--[\s\S]*?-->/gu, "");
   const body = /<body\b[^>]*>([\s\S]*?)<\/body>/iu.exec(markup)?.at(1)?.trim();
-  if (!body) {return "unexpected";}
+  if (!body) {
+    return "unexpected";
+  }
 
   for (const heading of body.matchAll(/<h1\b[^>]*>([^<]*)<\/h1>/giu)) {
     if (heading.at(1)?.trim() === messages.publicTools.contribute.title) {
