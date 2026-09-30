@@ -350,6 +350,7 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "eslint",
   "expo-doctor",
   "franc",
+  "happy-dom",
   "immer",
   "input-otp",
   "ioredis",

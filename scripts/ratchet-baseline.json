@@ -2120,7 +2120,7 @@
     }
   },
   "direct-third-party-declarations": {
-    "count": 511,
+    "count": 512,
     "files": {
       "apps/api/package.json": 85,
       "apps/collab/package.json": 10,
@@ -2130,7 +2130,7 @@
       "apps/legal-atlas-runner/package.json": 3,
       "apps/mobile/package.json": 17,
       "apps/playground/package.json": 10,
-      "apps/web/package.json": 97,
+      "apps/web/package.json": 98,
       "package.json": 31,
       "packages/agent-engine/package.json": 7,
       "packages/agent-input/package.json": 4,
