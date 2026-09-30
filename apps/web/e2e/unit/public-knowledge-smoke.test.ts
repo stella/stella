@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 
-import messages from "../../src/i18n/langs/en.json" with { type: "json" };
 import {
   classifyPublicKnowledgeWebProbe,
   isMemberOnlySmokeRequest,
@@ -72,31 +71,50 @@ describe("public visitor request access", () => {
   });
 });
 
-describe("public knowledge served HTML probe", () => {
-  const shell = `<body><!--$--><div class="flex w-full items-center justify-center h-dvh"><span aria-busy="true" data-slot="loader" role="status"><svg><path d="M0 0"></path></svg></span></div><!--/$--><script data-tsr-stream-part="">$_TSR.router={matches:[{i:"__root__",s:"success",ssr:!1}]}</script></body>`;
-
-  test("recognizes the flag-off 200 client loading shell", () => {
-    expect(classifyPublicKnowledgeWebProbe(shell)).toBe("disabled");
-  });
-
-  test("recognizes the existing contribute heading rendered on the server", () => {
-    expect(
-      classifyPublicKnowledgeWebProbe(
-        `<body><main><h1 class="text-lg font-semibold">${messages.publicTools.contribute.title}</h1><form></form></main></body>`,
-      ),
-    ).toBe("enabled");
-  });
-
-  test("rejects unexpected HTML rather than treating it as flag-off", () => {
-    for (const html of [
-      "",
-      "<body>Forbidden</body>",
-      "<body><h1>Sign in</h1></body>",
-      `<body><script>const heading = '<h1>${messages.publicTools.contribute.title}</h1>'</script></body>`,
-      shell.replace("ssr:!1", "ssr:!0"),
-      shell.replace("</div>", "</div><p>Failed to load</p>"),
+describe("public knowledge root-head marker", () => {
+  test("recognizes enabled markers across HTML attribute forms", () => {
+    for (const marker of [
+      '<meta name="public-knowledge" content="enabled">',
+      "<meta content='enabled' name='public-knowledge' />",
+      '<META CONTENT = "enabled" NAME = "public-knowledge">',
+      "<meta name=public-knowledge content=enabled>",
     ]) {
-      expect(classifyPublicKnowledgeWebProbe(html)).toBe("unexpected");
+      expect(
+        classifyPublicKnowledgeWebProbe(
+          `<html><head>${marker}</head><body></body></html>`,
+        ),
+      ).toBe("enabled");
+    }
+  });
+
+  test("absent markers mean disabled, including script and comment lookalikes", () => {
+    for (const head of [
+      "<title>stella</title>",
+      '<meta name="other" content="enabled">',
+      `<script>const marker = '<meta name="public-knowledge" content="enabled">'</script>`,
+      '<!-- <meta name="public-knowledge" content="enabled"> -->',
+    ]) {
+      expect(
+        classifyPublicKnowledgeWebProbe(
+          `<head>${head}</head><body><meta name="public-knowledge" content="enabled"></body>`,
+        ),
+      ).toBe("disabled");
+    }
+  });
+
+  test("invalid marker contents fail classification", () => {
+    for (const content of [
+      'content="disabled"',
+      'content="true"',
+      'content="ENABLED"',
+      'content=""',
+      "",
+    ]) {
+      expect(
+        classifyPublicKnowledgeWebProbe(
+          `<head><meta name="public-knowledge" ${content}></head>`,
+        ),
+      ).toBe("unexpected");
     }
   });
 });

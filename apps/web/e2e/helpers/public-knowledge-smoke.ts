@@ -83,10 +83,7 @@ export const declarePublicKnowledgeSmoke = ({
     test.beforeAll(async ({ request }) => {
       const [apiProbe, webProbe] = await Promise.all([
         request.get(PUBLIC_API, { maxRedirects: 0 }),
-        request.get("/knowledge/tools/contribute", {
-          maxRedirects: 0,
-          headers: { "Accept-Language": "en-US" },
-        }),
+        request.get("/", { maxRedirects: 0 }),
       ]);
       expect([200, 404], "API probe status").toContain(apiProbe.status());
       expect(webProbe.status(), "web probe status").toBe(200);
@@ -95,10 +92,9 @@ export const declarePublicKnowledgeSmoke = ({
       );
       const apiEnabled = apiProbe.status() === 200;
       const webState = classifyPublicKnowledgeWebProbe(await webProbe.text());
-      expect(
-        webState,
-        "unexpected web probe HTML: no SSR heading or known client shell",
-      ).not.toBe("unexpected");
+      expect(webState, "unexpected public-knowledge marker content").not.toBe(
+        "unexpected",
+      );
       const webEnabled = webState === "enabled";
       if (!apiEnabled) {
         expect(await apiProbe.json(), "disabled API response").toEqual({

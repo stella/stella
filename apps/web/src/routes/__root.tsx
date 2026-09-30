@@ -29,7 +29,9 @@ import "@/fonts.css";
 import type { AnalyticsValue } from "@/lib/analytics/provider";
 import type { RouteErrorLifecycleController } from "@/lib/analytics/route-error-lifecycle";
 import { RouteErrorLifecycleProvider } from "@/lib/analytics/route-error-lifecycle-context";
+import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launch";
 import { isPublicSsrPath } from "@/lib/public-ssr-paths";
+import { createRootHead } from "@/lib/root-head";
 import { requireFreshDocument } from "@/lib/session-cache-guard";
 import { AppFrameHost } from "@/routes/-app-frame-host";
 import "@/styles/app.css";
@@ -52,14 +54,7 @@ export const Route = createRootRouteWithContext<{
   component: RootComponent,
   // Document head management via route `head` option.
   // https://tanstack.com/router/latest/docs/framework/react/guide/document-head-management
-  head: () => ({
-    meta: [
-      { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1.0" },
-      { title: "stella" },
-    ],
-    links: [{ rel: "icon", href: "/favicon.svg", type: "image/svg+xml" }],
-  }),
+  head: () => createRootHead(isPublicKnowledgeEnabled()),
   pendingComponent: () => <DefaultPendingComponent className="h-dvh" />,
   errorComponent: RootErrorComponent,
 });
