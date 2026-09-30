@@ -128,7 +128,9 @@ export default eslintCompatPlugin({
           if (
             variable === null ||
             definition?.type !== "Variable" ||
-            definition.parent?.kind !== "const"
+            !isAstNode(definition.parent) ||
+            definition.parent.type !== "VariableDeclaration" ||
+            definition.parent.kind !== "const"
           ) {
             return null;
           }
