@@ -3,21 +3,21 @@
 SET LOCAL lock_timeout = '1s';--> statement-breakpoint
 SET LOCAL statement_timeout = '5s';--> statement-breakpoint
 ALTER TABLE "contacts" ADD CONSTRAINT "contacts_org_id_unique" UNIQUE USING INDEX "contacts_org_id_unique";--> statement-breakpoint
-ALTER TABLE contacts ADD COLUMN sanctions_monitoring_mode text NOT NULL DEFAULT 'included', ADD CONSTRAINT contacts_sanctions_monitoring_mode_check CHECK (sanctions_monitoring_mode IN ('included', 'excluded'));--> statement-breakpoint
-ALTER TABLE organization_settings ADD COLUMN sanctions_monitoring_mode text NOT NULL DEFAULT 'enabled', ADD CONSTRAINT organization_settings_sanctions_monitoring_mode_check CHECK (sanctions_monitoring_mode IN ('enabled', 'disabled'));--> statement-breakpoint
+ALTER TABLE contacts ADD COLUMN sanctions_monitoring_mode text NOT NULL DEFAULT 'included', ADD CONSTRAINT "contacts_sanctions_monitoring_mode_check" CHECK (sanctions_monitoring_mode IN ('included', 'excluded'));--> statement-breakpoint
+ALTER TABLE organization_settings ADD COLUMN sanctions_monitoring_mode text NOT NULL DEFAULT 'enabled', ADD CONSTRAINT "organization_settings_sanctions_monitoring_mode_check" CHECK (sanctions_monitoring_mode IN ('enabled', 'disabled'));--> statement-breakpoint
 CREATE TABLE sanctions_contact_screenings (
   organization_id varchar(128) NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
   contact_id uuid NOT NULL,
   source_id text NOT NULL REFERENCES sanctions_sources(id),
-  edition_id uuid REFERENCES sanctions_editions(id),
+  edition_id uuid CONSTRAINT sanctions_screenings_edition_fk REFERENCES sanctions_editions(id),
   status text NOT NULL,
   reason text,
   contact_fingerprint text NOT NULL,
   checked_at timestamptz NOT NULL,
   PRIMARY KEY (organization_id, contact_id, source_id),
-  CONSTRAINT sanctions_contact_screenings_status_check CHECK (status IN ('clear', 'possible-match', 'unavailable', 'excluded')),
-  CONSTRAINT sanctions_contact_screenings_clear_edition_check CHECK (status <> 'clear' OR edition_id IS NOT NULL),
-  FOREIGN KEY (organization_id, contact_id) REFERENCES contacts(organization_id, id) ON DELETE CASCADE
+  CONSTRAINT "sanctions_contact_screenings_status_check" CHECK (status IN ('clear', 'possible-match', 'unavailable', 'excluded')),
+  CONSTRAINT "sanctions_contact_screenings_clear_edition_check" CHECK (status <> 'clear' OR edition_id IS NOT NULL),
+  CONSTRAINT sanctions_screenings_contact_fk FOREIGN KEY (organization_id, contact_id) REFERENCES contacts(organization_id, id) ON DELETE CASCADE
 );--> statement-breakpoint
 ALTER TABLE sanctions_contact_screenings ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE sanctions_contact_screenings FORCE ROW LEVEL SECURITY;--> statement-breakpoint
@@ -42,9 +42,9 @@ CREATE TABLE sanctions_contact_matches (
   match jsonb NOT NULL,
   updated_at timestamptz NOT NULL,
   PRIMARY KEY (organization_id, contact_id, source_id, source_entry_id),
-  CONSTRAINT sanctions_contact_matches_state_check CHECK (state IN ('active', 'lapsed')),
-  CONSTRAINT sanctions_contact_matches_disposition_check CHECK (disposition IN ('needs-review', 'dismissed')),
-  FOREIGN KEY (organization_id, contact_id) REFERENCES contacts(organization_id, id) ON DELETE CASCADE
+  CONSTRAINT "sanctions_contact_matches_state_check" CHECK (state IN ('active', 'lapsed')),
+  CONSTRAINT "sanctions_contact_matches_disposition_check" CHECK (disposition IN ('needs-review', 'dismissed')),
+  CONSTRAINT sanctions_matches_contact_fk FOREIGN KEY (organization_id, contact_id) REFERENCES contacts(organization_id, id) ON DELETE CASCADE
 );--> statement-breakpoint
 ALTER TABLE sanctions_contact_matches ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE sanctions_contact_matches FORCE ROW LEVEL SECURITY;--> statement-breakpoint
@@ -61,14 +61,14 @@ CREATE TABLE sanctions_screening_events (
   source_id text NOT NULL REFERENCES sanctions_sources(id),
   source_entry_id text NOT NULL,
   type text NOT NULL,
-  old_edition_id uuid REFERENCES sanctions_editions(id),
-  new_edition_id uuid NOT NULL REFERENCES sanctions_editions(id),
+  old_edition_id uuid CONSTRAINT sanctions_events_old_edition_fk REFERENCES sanctions_editions(id),
+  new_edition_id uuid NOT NULL CONSTRAINT sanctions_events_new_edition_fk REFERENCES sanctions_editions(id),
   reason text NOT NULL,
   old_match jsonb,
   new_match jsonb,
   created_at timestamptz NOT NULL,
-  CONSTRAINT sanctions_screening_events_type_check CHECK (type IN ('new', 'changed', 'lapsed', 'reopened', 'dismissed', 'review-restored')),
-  FOREIGN KEY (organization_id, contact_id) REFERENCES contacts(organization_id, id) ON DELETE CASCADE
+  CONSTRAINT "sanctions_screening_events_type_check" CHECK (type IN ('new', 'changed', 'lapsed', 'reopened', 'dismissed', 'review-restored')),
+  CONSTRAINT sanctions_events_contact_fk FOREIGN KEY (organization_id, contact_id) REFERENCES contacts(organization_id, id) ON DELETE CASCADE
 );--> statement-breakpoint
 ALTER TABLE sanctions_screening_events ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE sanctions_screening_events FORCE ROW LEVEL SECURITY;--> statement-breakpoint
