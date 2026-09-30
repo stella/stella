@@ -283,6 +283,7 @@ const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
   template: "other",
   template_lookup_format: "other",
   time_entry: "other",
+  time_timer: "other",
   view: "other",
   view_template: "other",
 } as const satisfies Record<AuditResourceType, AuditActivityCategoryResolver>;

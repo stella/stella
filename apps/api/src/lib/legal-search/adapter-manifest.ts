@@ -15,6 +15,8 @@ import {
 import {
   ADAPTER_KEYS,
   type AdapterKey,
+  IMPORT_SOURCE_KEYS,
+  type ImportSourceKey,
 } from "@/api/lib/legal-search/ingestion-constants";
 
 type SourcePlaceholderPattern = {
@@ -48,7 +50,7 @@ type AdapterJurisdictionDeclaration = {
   };
 }[CaseLawJurisdiction];
 
-type AdapterManifest<TKey extends AdapterKey> = {
+type AdapterManifest<TKey extends string> = {
   readonly key: TKey;
   /** The feed's English label, for operators and logs. */
   readonly name: string;
@@ -581,3 +583,18 @@ export const ADAPTER_MANIFESTS = {
     },
   },
 } as const satisfies AdapterManifestMap;
+
+/** Imported snapshots carry their own completeness bounds; they have no crawl date range. */
+export const IMPORT_SOURCE_MANIFESTS = {
+  [IMPORT_SOURCE_KEYS.COURTLISTENER]: {
+    key: IMPORT_SOURCE_KEYS.COURTLISTENER,
+    name: "CourtListener bulk opinion records",
+    publisher: "Free Law Project, CourtListener",
+    publicHomeUrl: "https://www.courtlistener.com",
+    ...ADAPTER_JURISDICTIONS.USA,
+    ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
+    placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+  },
+} as const satisfies {
+  readonly [TKey in ImportSourceKey]: Omit<AdapterManifest<TKey>, "dateRange">;
+};

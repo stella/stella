@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import type { UnhandledException } from "better-result";
+import { TransactionRollbackError } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDbRetryConfig as BaseSafeDbRetryConfig } from "@/api/db/scoped";
@@ -81,3 +82,32 @@ export const withScopedTx = async <T>(
   fn: (tx: Transaction) => Promise<T>,
 ): Promise<Result<T, SafeDbError>> =>
   handle.tx ? Result.ok(await fn(handle.tx)) : await handle.safeDb(fn);
+
+/** Roll back a savepoint when a typed business refusal follows database writes. */
+export const withResultSavepoint = async <T>(
+  tx: Transaction,
+  run: (
+    savepoint: Transaction,
+  ) => Promise<Result<T, HandlerError | SafeDbError>>,
+) => {
+  let refusal: HandlerError | SafeDbError | undefined;
+  const result = await Result.tryPromise(
+    async () =>
+      await tx.transaction(async (savepoint) => {
+        const outcome = await run(savepoint);
+        if (outcome.isErr()) {
+          refusal = outcome.error;
+          return savepoint.rollback();
+        }
+        return outcome.value;
+      }),
+  );
+  if (
+    result.isErr() &&
+    result.error.cause instanceof TransactionRollbackError &&
+    refusal
+  ) {
+    return Result.err(refusal);
+  }
+  return result;
+};

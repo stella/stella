@@ -34,7 +34,13 @@ up as a reviewable diff in the PR. Six guards exist today:
 - **Per-iteration I/O checks**: `scripts/db-await-in-loop.ts` (type-aware,
   CI) flags a database call awaited once per loop iteration (the N+1),
   recognizing handles by type rather than name and suppressed with
-  `// db-await-in-loop: <reason>`; `no-network-await-in-loop` flags
+  `// db-await-in-loop: <reason>`. A single DB hit in a constant-sized
+  batch round (canonical `chunked` or an array slice-step loop, size >= 2),
+  a fixed set of at most 16 elements, or a nonnegative constant-start counter
+  (constant bound <= 16) is accepted when no enclosing loop or fan-out exists.
+  Multiple hits, nested per-row work, variable sizes, mutated counters and
+  keyset walks still require batching or an explicit reason.
+  `no-network-await-in-loop` flags
   an HTTP request, AWS SDK command dispatch, or API-client method awaited the
   same way (`iterations x RTT`). Both are static and both name the owner, so
   the fix is concrete: batch the calls, or record in the suppression reason

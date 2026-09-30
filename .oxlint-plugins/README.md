@@ -291,3 +291,5 @@ implies a hazard that is gone.
 5. Add or update the linked catalogue entry here.
 6. Run `bun scripts/check-oxlint-plugin-registry.ts` and
    `bash scripts/lint-oxlint-fixtures.sh`.
+
+- [`require-running-entry-guard`](./require-running-entry-guard.ts) (`require-running-entry-guard`): requires an awaited running-entry guard and an early refusal in the same transaction before updating or deleting time entries; timer consumption and local fixture reset are scoped exceptions.

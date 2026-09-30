@@ -48,8 +48,15 @@
 // literal array (`Promise.all([a(tx), b(tx)])`) has a fixed length and is not
 // fan-out. A site whose statement is a `return`/`throw`, or is followed in its
 // statement list by an exit from the loop, runs once per loop and is not
-// flagged, but only where nothing can bypass that exit: no `continue` targets
-// the loop, and no `try` with a `catch` or `finally` sits in between.
+// flagged when no `try` with a `catch` or `finally` can override the exit.
+// A return-site or an immediately following exit is independent of unrelated
+// continues; a later exit still requires no `continue` targeting the loop.
+// One DB hit per constant-bounded round is exempt: canonical chunked inputs
+// (literal/const size >= 2), array slice-step loops with that stride, fixed
+// sets of at most 16 elements, and nonnegative constant-start counters bounded by <= 16.
+// The counter must not be written in the body. Multiple DB hits, fan-out,
+// enclosing loops or fan-out callbacks, dynamic sizes and keyset walks stay
+// flagged; bounded rounds cannot hide per-row work in a nested loop.
 // `items.forEach(async ...)` starts work without awaiting it and is
 // not tracked, as before. A `Result.tryPromise` callback runs in place, so a
 // loop around it is still the loop.
@@ -185,6 +192,7 @@ export type DbAwaitInLoopUnclassified = {
 export type DbAwaitInLoopReport = {
   readonly hits: readonly DbAwaitInLoopHit[];
   readonly suppressedHits: number;
+  readonly boundedRoundHits: number;
   readonly directiveProblems: readonly DbAwaitInLoopDirectiveProblem[];
   readonly unclassified: readonly DbAwaitInLoopUnclassified[];
   readonly filesScanned: number;
@@ -198,6 +206,7 @@ export type ScanDbAwaitInLoopOptions = {
   readonly isInScope: (relativePath: string) => boolean;
   // Repository-relative paths of the modules that declare handle types.
   readonly handleDeclarationFiles: readonly string[];
+  readonly chunkHelperFiles?: readonly string[];
 };
 
 type Match =
@@ -364,7 +373,7 @@ const isPerIterationPosition = (loop: ts.Node, child: ts.Node): boolean => {
   return false;
 };
 
-const isIterationStatement = (node: ts.Node): boolean =>
+const isIterationStatement = (node: ts.Node): node is ts.IterationStatement =>
   ts.isForStatement(node) ||
   ts.isForOfStatement(node) ||
   ts.isForInStatement(node) ||
@@ -421,9 +430,8 @@ const continueTarget = (jump: ts.ContinueStatement): ts.Node | null => {
   return null;
 };
 
-// Can anything in `loop` go round it again early? Any `continue` targeting it,
-// labelled or not, and wherever it sits, can bypass an exit that follows a
-// site, so its presence voids the exemption for the whole loop.
+// A continue targeting this loop can bypass a later exit when another
+// statement intervenes. It cannot bypass the site's own or immediate exit.
 const isContinuedAnywhere = (loop: ts.Node): boolean => {
   let found = false;
   const visit = (node: ts.Node): void => {
@@ -449,14 +457,13 @@ const isLoopExit = (statement: ts.Statement, loop: ts.Node): boolean =>
 // statement list by an exit from `loop`? Then it runs at most once per run of
 // the loop, however many iterations came before it:
 // `if (failed) { await flush(); return; }`. Exempted only where nothing can
-// bypass or override that exit: no `continue` targets the loop anywhere in
-// it, and no `try` between the site and the loop has a `catch` (a retry) or a
-// `finally` (which can replace the exit).
+// bypass or override that exit: an intervening statement needs the absence
+// of a loop-targeting continue, and a surrounding try cannot have a catch
+// (a retry) or finally (which can replace the exit).
 const leavesLoopAfter = (site: ts.Node, loop: ts.Node): boolean => {
-  if (isContinuedAnywhere(loop)) {
-    return false;
-  }
   let statement: ts.Node = site;
+  // `if (done) return await flush();` exits from inside the `if`.
+  let exitsOnTheWay = false;
   while (
     statement.parent !== loop &&
     !ts.isBlock(statement.parent) &&
@@ -467,6 +474,8 @@ const leavesLoopAfter = (site: ts.Node, loop: ts.Node): boolean => {
     if (isFunctionBoundary(statement)) {
       return false;
     }
+    exitsOnTheWay ||=
+      ts.isReturnStatement(statement) || ts.isThrowStatement(statement);
   }
   // An exit inside a callback that runs in place (a `Result.tryPromise`
   // body) leaves the callback, not the loop. Inside a `try` with a `catch`, a
@@ -482,7 +491,7 @@ const leavesLoopAfter = (site: ts.Node, loop: ts.Node): boolean => {
       return false;
     }
   }
-  if (ts.isReturnStatement(statement) || ts.isThrowStatement(statement)) {
+  if (exitsOnTheWay) {
     return true;
   }
   const owner = statement.parent;
@@ -494,33 +503,46 @@ const leavesLoopAfter = (site: ts.Node, loop: ts.Node): boolean => {
     return false;
   }
   let after = false;
+  let immediate = true;
   for (const entry of owner.statements) {
-    if (after && isLoopExit(entry, loop)) {
+    if (!after) {
+      after = entry === statement;
+      continue;
+    }
+    if (isLoopExit(entry, loop) && (immediate || !isContinuedAnywhere(loop))) {
       return true;
     }
-    after ||= entry === statement;
+    immediate = false;
   }
   return false;
 };
 
 const findLoopContext = (
   site: ts.Node,
-): { context: LoopContext; fanOut: ts.CallExpression | null } | null => {
+  exitSites: "include" | "exclude" = "exclude",
+): {
+  context: LoopContext;
+  loop: ts.IterationStatement | null;
+  fanOut: ts.CallExpression | null;
+} | null => {
   let child: ts.Node = site;
   let current: ts.Node = site.parent;
   while (!ts.isSourceFile(current)) {
     if (
+      isIterationStatement(current) &&
       isPerIterationPosition(current, child) &&
-      !leavesLoopAfter(site, current)
+      (exitSites === "include" || !leavesLoopAfter(site, current))
     ) {
-      return { context: "loop", fanOut: null };
+      return { context: "loop", loop: current, fanOut: null };
     }
     if (ts.isClassStaticBlockDeclaration(current)) {
       return null;
     }
     if (isFunctionBoundary(current) && !isResultTryPromiseCallback(current)) {
       const fanOut = promiseFanOutOfCallback(current);
-      return fanOut === null ? null : { context: "fan-out", fanOut };
+      return fanOut === null
+        ? null
+        : { context: "fan-out", loop: null, fanOut };
     }
     child = current;
     current = current.parent;
@@ -779,6 +801,7 @@ export const scanDbAwaitInLoop = ({
   repositoryRoot,
   isInScope,
   handleDeclarationFiles,
+  chunkHelperFiles = ["apps/api/src/lib/chunked.ts"],
 }: ScanDbAwaitInLoopOptions): DbAwaitInLoopReport => {
   const checker = program.getTypeChecker();
   const handleFiles = new Set(
@@ -786,6 +809,359 @@ export const scanDbAwaitInLoop = ({
       toPosix(path.resolve(repositoryRoot, file)),
     ),
   );
+
+  const chunkFiles = new Set(
+    chunkHelperFiles.map((file) => toPosix(path.resolve(repositoryRoot, file))),
+  );
+  const symbolOf = (expression: ts.Expression): ts.Symbol | undefined => {
+    const symbol = checker.getSymbolAtLocation(unwrap(expression));
+    return symbol !== undefined && isImportAlias(symbol)
+      ? checker.getAliasedSymbol(symbol)
+      : symbol;
+  };
+  const isConstDeclaration = (
+    node: ts.Declaration,
+  ): node is ts.VariableDeclaration =>
+    ts.isVariableDeclaration(node) &&
+    ts.isVariableDeclarationList(node.parent) &&
+    node.parent.getFirstToken()?.kind === ts.SyntaxKind.ConstKeyword;
+
+  const isChunkHelper = (
+    expression: ts.Expression,
+    seen = new Set<ts.Symbol>(),
+  ): boolean => {
+    const symbol = symbolOf(expression);
+    if (symbol === undefined || seen.has(symbol)) {
+      return false;
+    }
+    seen.add(symbol);
+    return (symbol.declarations ?? []).some((declaration) => {
+      if (
+        symbol.getName() === "chunked" &&
+        chunkFiles.has(toPosix(declaration.getSourceFile().fileName))
+      ) {
+        return true;
+      }
+      return (
+        isConstDeclaration(declaration) &&
+        declaration.initializer !== undefined &&
+        isChunkHelper(declaration.initializer, seen)
+      );
+    });
+  };
+
+  const isConstValue = (expression: ts.Expression): boolean => {
+    const value = unwrap(expression);
+    if (
+      ts.isPropertyAccessExpression(value) ||
+      ts.isElementAccessExpression(value)
+    ) {
+      return isConstValue(value.expression);
+    }
+    return (symbolOf(value)?.declarations ?? []).some(isConstDeclaration);
+  };
+  const literalNumber = (expression: ts.Expression): number | null => {
+    const value = unwrap(expression);
+    if (!ts.isNumericLiteral(value) && !isConstValue(value)) {
+      return null;
+    }
+    const type = checker.getTypeAtLocation(value);
+    return type.isNumberLiteral() && Number.isSafeInteger(type.value)
+      ? type.value
+      : null;
+  };
+
+  const isConstObject = (
+    expression: ts.Expression,
+    seen = new Set<ts.Symbol>(),
+  ): boolean => {
+    const value = unwrap(expression);
+    if (ts.isObjectLiteralExpression(value)) {
+      return !value.properties.some(ts.isSpreadAssignment);
+    }
+    const symbol = symbolOf(value);
+    if (symbol === undefined || seen.has(symbol)) {
+      return false;
+    }
+    seen.add(symbol);
+    return (symbol.declarations ?? []).some(
+      (declaration) =>
+        isConstDeclaration(declaration) &&
+        declaration.initializer !== undefined &&
+        isConstObject(declaration.initializer, seen),
+    );
+  };
+
+  const isReadonlyObject = (
+    expression: ts.Expression,
+    seen = new Set<ts.Symbol>(),
+  ): boolean => {
+    if (!isConstObject(expression)) {
+      return false;
+    }
+    const properties = checker.getTypeAtLocation(expression).getProperties();
+    if (
+      properties.length > 0 &&
+      properties.every((property) =>
+        (property.declarations ?? []).some(
+          (declaration) =>
+            ts.canHaveModifiers(declaration) &&
+            ts
+              .getModifiers(declaration)
+              ?.some(
+                (modifier) => modifier.kind === ts.SyntaxKind.ReadonlyKeyword,
+              ),
+        ),
+      )
+    ) {
+      return true;
+    }
+    let value = expression;
+    while (
+      ts.isParenthesizedExpression(value) ||
+      ts.isSatisfiesExpression(value) ||
+      ts.isAsExpression(value) ||
+      ts.isTypeAssertionExpression(value)
+    ) {
+      if (
+        (ts.isAsExpression(value) || ts.isTypeAssertionExpression(value)) &&
+        ts.isTypeReferenceNode(value.type) &&
+        ts.isIdentifier(value.type.typeName) &&
+        value.type.typeName.text === "const"
+      ) {
+        return true;
+      }
+      value = value.expression;
+    }
+    const symbol = symbolOf(value);
+    if (symbol === undefined || seen.has(symbol)) {
+      return false;
+    }
+    seen.add(symbol);
+    return (symbol.declarations ?? []).some(
+      (declaration) =>
+        isConstDeclaration(declaration) &&
+        declaration.type === undefined &&
+        declaration.initializer !== undefined &&
+        isReadonlyObject(declaration.initializer, seen),
+    );
+  };
+
+  const fixedSetLength = (expression: ts.Expression): number | null => {
+    const value = unwrap(expression);
+    if (ts.isArrayLiteralExpression(value)) {
+      return value.elements.some(ts.isSpreadElement)
+        ? null
+        : value.elements.length;
+    }
+    if (
+      ts.isCallExpression(value) &&
+      ts.isPropertyAccessExpression(value.expression)
+    ) {
+      const member = value.expression;
+      if (!["entries", "keys", "values"].includes(member.name.text)) {
+        return null;
+      }
+      if (value.arguments.length === 0) {
+        return fixedSetLength(member.expression);
+      }
+      const [object] = value.arguments;
+      if (
+        !ts.isIdentifier(member.expression) ||
+        member.expression.text !== "Object" ||
+        value.arguments.length !== 1 ||
+        object === undefined ||
+        !isReadonlyObject(object)
+      ) {
+        return null;
+      }
+      const type = checker.getTypeAtLocation(object);
+      return checker.getIndexInfosOfType(type).length === 0
+        ? type.getProperties().length
+        : null;
+    }
+    const type = checker.getTypeAtLocation(value);
+    if (
+      !checker.isTupleType(type) ||
+      !("target" in type) ||
+      typeof type.target !== "object" ||
+      type.target === null ||
+      !("readonly" in type.target) ||
+      type.target.readonly !== true
+    ) {
+      return null;
+    }
+    const length = type.getProperty("length");
+    if (length === undefined) {
+      return null;
+    }
+    const lengthType = checker.getTypeOfSymbolAtLocation(length, value);
+    const lengths = lengthType.isUnion() ? lengthType.types : [lengthType];
+    let maximum = 0;
+    for (const entry of lengths) {
+      if (!entry.isNumberLiteral()) {
+        return null;
+      }
+      maximum = Math.max(maximum, entry.value);
+    }
+    return maximum;
+  };
+
+  const writesCounter = (body: ts.Node, counter: ts.Symbol): boolean => {
+    const containsCounter = (node: ts.Node): boolean =>
+      (ts.isIdentifier(node) &&
+        checker.getSymbolAtLocation(node) === counter) ||
+      ts.forEachChild(node, containsCounter) === true;
+    const visit = (node: ts.Node): boolean => {
+      if (
+        ts.isBinaryExpression(node) &&
+        node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+        node.operatorToken.kind <= ts.SyntaxKind.LastAssignment &&
+        containsCounter(node.left)
+      ) {
+        return true;
+      }
+      if (
+        (ts.isPrefixUnaryExpression(node) ||
+          ts.isPostfixUnaryExpression(node)) &&
+        (node.operator === ts.SyntaxKind.PlusPlusToken ||
+          node.operator === ts.SyntaxKind.MinusMinusToken) &&
+        containsCounter(node.operand)
+      ) {
+        return true;
+      }
+      return ts.forEachChild(node, visit) === true;
+    };
+    return visit(body);
+  };
+
+  const isCounter = (expression: ts.Expression, counter: ts.Symbol): boolean =>
+    ts.isIdentifier(unwrap(expression)) && symbolOf(expression) === counter;
+
+  const counterStep = (
+    expression: ts.Expression,
+    counter: ts.Symbol,
+  ): number | null => {
+    const increment = unwrap(expression);
+    if (
+      ts.isBinaryExpression(increment) &&
+      increment.operatorToken.kind === ts.SyntaxKind.PlusEqualsToken &&
+      isCounter(increment.left, counter)
+    ) {
+      return literalNumber(increment.right);
+    }
+    if (
+      (ts.isPrefixUnaryExpression(increment) ||
+        ts.isPostfixUnaryExpression(increment)) &&
+      increment.operator === ts.SyntaxKind.PlusPlusToken &&
+      isCounter(increment.operand, counter)
+    ) {
+      return 1;
+    }
+    return null;
+  };
+
+  const boundedCounter = (loop: ts.ForStatement): boolean => {
+    if (
+      !loop.initializer ||
+      !ts.isVariableDeclarationList(loop.initializer) ||
+      loop.initializer.declarations.length !== 1 ||
+      !loop.condition ||
+      !loop.incrementor
+    ) {
+      return false;
+    }
+    const declaration = loop.initializer.declarations.at(0);
+    if (
+      !declaration ||
+      !ts.isIdentifier(declaration.name) ||
+      !declaration.initializer
+    ) {
+      return false;
+    }
+    const initial = literalNumber(declaration.initializer);
+    if (initial === null || initial < 0) {
+      return false;
+    }
+    const counter = checker.getSymbolAtLocation(declaration.name);
+    if (!counter || writesCounter(loop.statement, counter)) {
+      return false;
+    }
+    const step = counterStep(loop.incrementor, counter);
+    if (step === null || step < 1) {
+      return false;
+    }
+    let condition = unwrap(loop.condition);
+    while (
+      ts.isBinaryExpression(condition) &&
+      condition.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken
+    ) {
+      condition = unwrap(condition.left);
+    }
+    if (
+      !ts.isBinaryExpression(condition) ||
+      !isCounter(condition.left, counter)
+    ) {
+      return false;
+    }
+    const operator = condition.operatorToken.kind;
+    if (
+      operator !== ts.SyntaxKind.LessThanToken &&
+      operator !== ts.SyntaxKind.LessThanEqualsToken
+    ) {
+      return false;
+    }
+    const bound = literalNumber(condition.right);
+    if (bound !== null) {
+      return step === 1 && bound >= 0 && bound <= 16;
+    }
+    const right = unwrap(condition.right);
+    return (
+      step >= 2 &&
+      operator === ts.SyntaxKind.LessThanToken &&
+      ts.isPropertyAccessExpression(right) &&
+      right.name.text === "length" &&
+      checker.isArrayType(checker.getTypeAtLocation(right.expression))
+    );
+  };
+
+  const boundedRoundShape = (loop: ts.IterationStatement): boolean => {
+    if (ts.isForStatement(loop)) {
+      return boundedCounter(loop);
+    }
+    if (!ts.isForOfStatement(loop)) {
+      return false;
+    }
+    const iterable = unwrap(loop.expression);
+    if (ts.isCallExpression(iterable) && isChunkHelper(iterable.expression)) {
+      const size = iterable.arguments.at(1);
+      const number = size === undefined ? null : literalNumber(size);
+      return iterable.arguments.length === 2 && number !== null && number >= 2;
+    }
+    const length = fixedSetLength(iterable);
+    return length !== null && length <= 16;
+  };
+
+  const hasEnclosingIteration = (loop: ts.IterationStatement): boolean => {
+    for (
+      let node: ts.Node = loop.parent;
+      !ts.isSourceFile(node);
+      node = node.parent
+    ) {
+      if (isIterationStatement(node)) {
+        return true;
+      }
+      if (isFunctionBoundary(node)) {
+        if (promiseFanOutOfCallback(node) !== null) {
+          return true;
+        }
+        if (!isResultTryPromiseCallback(node)) {
+          return false;
+        }
+      }
+    }
+    return false;
+  };
 
   const isProgramSource = (sourceFile: ts.SourceFile): boolean =>
     !sourceFile.isDeclarationFile &&
@@ -1257,6 +1633,7 @@ export const scanDbAwaitInLoop = ({
   const directiveProblems: DbAwaitInLoopDirectiveProblem[] = [];
   const directiveCounts: Record<string, number> = {};
   let suppressedHits = 0;
+  let boundedRoundHits = 0;
   let filesScanned = 0;
 
   for (const sourceFile of program.getSourceFiles()) {
@@ -1265,7 +1642,14 @@ export const scanDbAwaitInLoop = ({
       continue;
     }
     filesScanned += 1;
-    const fileHits: DbAwaitInLoopHit[] = [];
+    const fileHits: {
+      hit: DbAwaitInLoopHit;
+      loop: ts.IterationStatement | null;
+      fanOut: boolean;
+    }[] = [];
+
+    const loopHits = new Map<ts.Node, number>();
+    const fanOutSites = new Set<ts.Node>();
 
     const location = (node: ts.Node): { line: number; column: number } => {
       const position = sourceFile.getLineAndCharacterOfPosition(
@@ -1275,11 +1659,33 @@ export const scanDbAwaitInLoop = ({
     };
 
     const report = (site: ts.Node, match: Match): void => {
+      for (
+        let node: ts.Node = site.parent;
+        !ts.isSourceFile(node);
+        node = node.parent
+      ) {
+        if (isIterationStatement(node)) {
+          loopHits.set(node, (loopHits.get(node) ?? 0) + 1);
+        }
+        if (isFunctionBoundary(node) && !isResultTryPromiseCallback(node)) {
+          break;
+        }
+      }
+      const context = findLoopContext(site);
+      if (context === null && !fanOutSites.has(site)) {
+        return;
+      }
       fileHits.push({
-        file,
-        ...location(site),
-        kind: match.kind,
-        subject: match.kind === "query" ? "" : match.subject,
+        hit: {
+          file,
+          ...location(site),
+          kind: match.kind,
+          subject: match.kind === "query" ? "" : match.subject,
+        },
+        loop: context?.loop ?? null,
+        fanOut:
+          (context?.fanOut !== null && context?.fanOut !== undefined) ||
+          fanOutSites.has(site),
       });
     };
 
@@ -1289,7 +1695,14 @@ export const scanDbAwaitInLoop = ({
         ts.isCallExpression(awaited) && isPromiseFanOutCall(awaited)
           ? cachedFanOutMatch(awaited)
           : null;
-      if (loop === null && fanOut === null) {
+      if (fanOut !== null) {
+        fanOutSites.add(site);
+      }
+      if (
+        loop === null &&
+        fanOut === null &&
+        findLoopContext(site, "include") === null
+      ) {
         return;
       }
       // The enclosing fan-out already reports on its own await; one fan-out
@@ -1302,16 +1715,13 @@ export const scanDbAwaitInLoop = ({
         (ts.isCallExpression(awaited) && isQueryCall(awaited, true)) ||
         (!ts.isCallExpression(awaited) && isExecutableQuery(typeOf(awaited)))
       ) {
-        if (loop !== null && !ownedByFanOut) {
+        if (!ownedByFanOut) {
           report(site, QUERY_MATCH);
         }
         return;
       }
       if (fanOut !== null) {
         report(site, fanOut);
-        return;
-      }
-      if (loop === null) {
         return;
       }
       let match: Match | null = null;
@@ -1368,7 +1778,17 @@ export const scanDbAwaitInLoop = ({
     if (directiveCount > 0) {
       directiveCounts[file] = directiveCount;
     }
-    for (const hit of fileHits) {
+    for (const { hit, loop, fanOut } of fileHits) {
+      if (
+        loop !== null &&
+        !fanOut &&
+        loopHits.get(loop) === 1 &&
+        !hasEnclosingIteration(loop) &&
+        boundedRoundShape(loop)
+      ) {
+        boundedRoundHits += 1;
+        continue;
+      }
       const lineDirective = directives.lines.find(
         (directive) => directive.target === hit.line,
       );
@@ -1406,6 +1826,7 @@ export const scanDbAwaitInLoop = ({
   return {
     hits: hits.toSorted(byLocation),
     suppressedHits,
+    boundedRoundHits,
     directiveProblems: directiveProblems.toSorted(byLocation),
     unclassified: unclassified.toSorted(byLocation),
     filesScanned,
@@ -1506,7 +1927,7 @@ const run = (): number => {
     (milliseconds / 1000).toFixed(1);
   const peakMiB = Math.round(process.resourceUsage().maxRSS / 1024);
   console.log(
-    `db-await-in-loop: ${report.filesScanned} files, program ${seconds(programReady - started)}s, scan ${seconds(finished - programReady)}s, peak RSS ${peakMiB} MiB; ${report.suppressedHits} suppressed, ${report.hits.length} unsuppressed, ${report.directiveProblems.length} directive problem(s)`,
+    `db-await-in-loop: ${report.filesScanned} files, program ${seconds(programReady - started)}s, scan ${seconds(finished - programReady)}s, peak RSS ${peakMiB} MiB; ${report.boundedRoundHits} constant-bounded rounds, ${report.suppressedHits} suppressed, ${report.hits.length} unsuppressed, ${report.directiveProblems.length} directive problem(s)`,
   );
 
   return report.hits.length > 0 || report.directiveProblems.length > 0 ? 1 : 0;

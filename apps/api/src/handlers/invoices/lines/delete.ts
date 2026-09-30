@@ -17,6 +17,7 @@ import {
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
+import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -38,13 +39,43 @@ const deleteInvoiceLine = createSafeHandler(
     mcp: { type: "capability", reason: "billing_admin" },
     params: lineParamsSchema,
   },
-  async function* ({ safeDb, session, workspaceId, params, recordAuditEvent }) {
+  async function* ({
+    safeDb,
+    session,
+    user,
+    workspaceId,
+    params,
+    recordAuditEvent,
+  }) {
     const now = new Date();
 
     const result = yield* Result.await(
       abortableTx(
         safeDb,
         async (tx): Promise<Result<DeletedLine, HandlerError>> => {
+          const [sourceLine] = await tx
+            .select({ timeEntryId: invoiceLines.timeEntryId })
+            .from(invoiceLines)
+            .where(
+              and(
+                eq(invoiceLines.id, params.lineId),
+                eq(invoiceLines.invoiceId, params.invoiceId),
+                eq(invoiceLines.workspaceId, workspaceId),
+              ),
+            )
+            .limit(1);
+          const runningError = await guardRunningTimeEntries({
+            tx,
+            workspaceId,
+            actorUserId: user.id,
+            selection: {
+              type: "entries",
+              ids: sourceLine?.timeEntryId ? [sourceLine.timeEntryId] : [],
+            },
+          });
+          if (runningError) {
+            return Result.err(runningError);
+          }
           const invoice = await lockDraftInvoiceForLines(
             tx,
             {

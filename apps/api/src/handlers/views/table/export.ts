@@ -9,6 +9,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 // oxlint-disable-next-line no-restricted-imports -- export boundary: brands field ids returned by queryEntities (server-validated, workspace-scoped) to re-hydrate their justifications from Postgres
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { chunked } from "@/api/lib/chunked";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { queryEntities } from "@/api/lib/entities/query-entities";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -31,14 +32,6 @@ import { DOCX_MIME_TYPE, XLSX_MIME_TYPE } from "@/api/mime-types";
 // Postgres caps bound parameters per statement; chunk the justification
 // lookup so an export at the row ceiling cannot overflow a single `IN (...)`.
 const JUSTIFICATION_FIELD_ID_BATCH = 1000;
-
-const chunkArray = <T>(items: T[], size: number): T[][] => {
-  const chunks: T[][] = [];
-  for (let index = 0; index < items.length; index += size) {
-    chunks.push(items.slice(index, index + size));
-  }
-  return chunks;
-};
 
 const config = {
   description:
@@ -193,11 +186,10 @@ const exportTableView = createSafeHandler(
       const justificationRows = yield* Result.await(
         safeDb(async (tx) => {
           const rows: { fieldId: string; content: JustificationContent }[] = [];
-          for (const fieldIdBatch of chunkArray(
+          for (const fieldIdBatch of chunked(
             commentFieldIds,
             JUSTIFICATION_FIELD_ID_BATCH,
           )) {
-            // db-await-in-loop: sequential reads on the same transaction connection (one in-flight query per tx); the batch caps each `IN (...)` below the bound-parameter limit
             const batchRows = await tx.query.justifications.findMany({
               where: {
                 workspaceId: { eq: workspaceId },

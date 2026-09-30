@@ -4,19 +4,21 @@
  *
  * A candidate is one text column of one opinion row. It is `parsed`,
  * `unusable` (selection moves to the next column), `requires-assets` (its
- * text depends on images nothing captured), `unsupported` (no parser for its
- * structure yet) or `over-limit` (the cluster's shared budget ran out).
+ * text depends on images nothing captured) or `over-limit` (the cluster's
+ * shared budget ran out).
  */
 
 import type { AnyNode } from "domhandler";
 
 import type { Block } from "@/api/handlers/case-law/document-ast";
 
+import type { UnitPosition } from "./opinion-class";
+
 /**
  * Named bounds on one cluster's text. Past any, the cluster is held whole;
  * nothing is truncated.
  */
-const COURTLISTENER_TEXT_LIMITS = {
+export const COURTLISTENER_TEXT_LIMITS = {
   /** DOM nodes parsed across every candidate the cluster's opinions try. */
   DOM_NODES: 200_000,
   /** Blocks the composed document emits. */
@@ -43,9 +45,11 @@ export const TEXT_CANDIDATE_UNUSABLE = {
   NO_VISIBLE_TEXT: "no-visible-text",
   CONTENT_LOSS: "content-loss",
   MARKUP_RESIDUE: "markup-residue",
+  /** Some source text did not reach the blocks, in order and in full. */
+  TEXT_NOT_CONSERVED: "text-not-conserved",
 } as const;
 
-type TextCandidateUnusable =
+export type TextCandidateUnusable =
   (typeof TEXT_CANDIDATE_UNUSABLE)[keyof typeof TEXT_CANDIDATE_UNUSABLE];
 
 /**
@@ -56,13 +60,24 @@ export type TextUnit = {
   readonly kind: "opinion" | "outside";
   /** The publisher's type attribute on the opinion element, as written. */
   readonly domType: string | null;
+  /** The row's own opinion, or an opinion nested inside another. */
+  readonly position: UnitPosition;
+  /**
+   * How the blocks were told apart: by the publisher's markup, which marks
+   * notes, or by layout alone, which proves no body and note runs.
+   */
+  readonly boundaries: "markup" | "layout";
   readonly blocks: readonly Block[];
+  /** The block that is the unit's root `ORDER` title, when it opens with one. */
+  readonly orderTitleBlockId: string | null;
 };
 
 /** Counts a reader of the parse can check against the source. */
-type TextCounts = {
+export type TextCounts = {
   readonly pageAnchors: number;
   readonly notes: number;
+  /** Source note spans that HTML repair could not preserve. */
+  readonly noteSpanDefects: number;
   /** Publisher citation links unwrapped to their words. */
   readonly publisherLinks: number;
   /** Characters of printed page labels moved off the text axis. */
@@ -73,7 +88,7 @@ type TextCounts = {
   readonly unknownConstructs: Readonly<Record<string, number>>;
 };
 
-type ParsedOpinionText = {
+export type ParsedOpinionText = {
   readonly units: readonly TextUnit[];
   readonly counts: TextCounts;
   /**
@@ -86,8 +101,11 @@ type ParsedOpinionText = {
 export type FormatParse =
   | { readonly status: "parsed"; readonly text: ParsedOpinionText }
   | { readonly status: "unusable"; readonly reason: TextCandidateUnusable }
-  | { readonly status: "requires-assets"; readonly images: number }
-  | { readonly status: "unsupported"; readonly structure: string }
+  | {
+      readonly status: "requires-assets";
+      /** Graphic constructs found, by element name. */
+      readonly graphics: Readonly<Record<string, number>>;
+    }
   | { readonly status: "over-limit"; readonly limit: CourtListenerTextLimit };
 
 /**

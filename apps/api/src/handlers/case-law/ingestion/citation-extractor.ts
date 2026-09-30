@@ -2071,6 +2071,14 @@ export const extractDecisionCitations = ({
   DecisionCitationExtraction,
   DecisionCitationRejection
 > => {
+  let scopes: CitationScopeIndex | undefined;
+  if (citationScopes !== undefined && documentAst !== undefined) {
+    const indexed = indexCitationScopes(documentAst.blocks, citationScopes);
+    if (Result.isError(indexed)) {
+      return Result.err(indexed.error);
+    }
+    scopes = indexed.value;
+  }
   if (!readsUsReporterCitations(country)) {
     return Result.ok({
       citations: extractCitations([...sections]),
@@ -2086,14 +2094,6 @@ export const extractDecisionCitations = ({
       documentAst,
       reading: { type: "ast-unavailable" },
     });
-  }
-  let scopes: CitationScopeIndex | undefined;
-  if (citationScopes !== undefined) {
-    const indexed = indexCitationScopes(documentAst.blocks, citationScopes);
-    if (Result.isError(indexed)) {
-      return Result.err(indexed.error);
-    }
-    scopes = indexed.value;
   }
   const extracted = extractUsCitations({
     ast: documentAst,
