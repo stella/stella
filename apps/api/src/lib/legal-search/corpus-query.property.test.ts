@@ -80,6 +80,7 @@ test(
         expect(quoted.slice(1, -1).replace(/\\(["\\])/gu, "$1")).toBe(value);
         const query = caseLawCorpusQuery({
           text: "needle",
+          jurisdiction: undefined,
           filters: { source: value },
         });
         expect(query).toBe(

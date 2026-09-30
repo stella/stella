@@ -162,6 +162,7 @@ const handlerQuery = (text: string): string => {
     language: undefined,
   });
   const query = caseLawCorpusQuery({
+    jurisdiction: "SVK",
     text,
     filters: { jurisdiction: "SVK" },
     stemming: fields.stemming,
