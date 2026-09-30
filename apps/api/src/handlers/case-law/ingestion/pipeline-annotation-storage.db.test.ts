@@ -15,6 +15,7 @@ import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter"
 import { extractDecisionCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import {
   CITATION_SCOPE_METADATA_KEY,
+  CitationScopesRejectedError,
   citationScopeAstHash,
   citationScopeEnvelope,
   validatedCitationScopes,
@@ -120,6 +121,51 @@ const input = (documentId: string, body = sourceText): IngestionResult => ({
   documentAst: sourceAst(documentId, body),
   citationScopes: opinion,
 });
+
+test.each(["SVK", "CZE"])(
+  "%s rejects invalid opinion scopes before storing their envelope",
+  async (country) => {
+    const documentId = createSafeId<"caseLawDecision">();
+    const failed = await Result.tryPromise({
+      try: async () =>
+        await processDecision({
+          input: {
+            ...input(documentId),
+            country,
+            courtId: undefined,
+            citationScopes: [
+              {
+                opinionId: "majority",
+                blockIds: ["missing-block"],
+                boundaries: "proven",
+              },
+            ],
+          },
+          sourceId,
+          scopedDb,
+          observedAt: new Date("2026-09-27T12:00:00.000Z"),
+          observationOrder: 1n,
+          corpus: inlineCorpus,
+        }),
+      catch: (cause) => cause,
+    });
+    if (!Result.isError(failed)) {
+      expect.unreachable(
+        "A missing block must reject the incoming scope envelope",
+      );
+    }
+    expect(failed.error).toBeInstanceOf(CitationScopesRejectedError);
+    if (!(failed.error instanceof CitationScopesRejectedError)) {
+      expect.unreachable("Scope rejection retains its structured error");
+    }
+    expect(failed.error.defect).toBe("unknown-block");
+    const rows = await db
+      .select()
+      .from(caseLawDecisions)
+      .where(eq(caseLawDecisions.sourceDocumentId, documentId));
+    expect(rows).toHaveLength(0);
+  },
+);
 
 const storedAst = async (pack: EncodedPack, decisionId: string) => {
   const entry = pack.entries.find(
