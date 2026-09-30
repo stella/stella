@@ -102,6 +102,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/desktop/src/registry/**/*.{ts,tsx}",
   "apps/web/src/components/ai-elements/**/*.{ts,tsx}",
   "apps/web/src/components/ai-prompt-input/**/*.{ts,tsx}",
+  "apps/web/src/components/billing/**/*.{ts,tsx}",
   "apps/web/src/components/breadcrumbs/**/*.{ts,tsx}",
   "apps/web/src/components/catalogue/**/*.{ts,tsx}",
   "apps/web/src/components/conditions/**/*.{ts,tsx}",

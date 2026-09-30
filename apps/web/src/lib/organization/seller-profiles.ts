@@ -1,4 +1,5 @@
 import { infiniteQueryOptions } from "@tanstack/react-query";
+import { panic } from "better-result";
 
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
@@ -24,7 +25,8 @@ export const sellerProfilesOptions = (organizationId: string) =>
   infiniteQueryOptions({
     queryKey: sellerProfilesKeys.all(organizationId),
     initialPageParam: stringCursorSeed(),
-    queryFn: ({ pageParam, signal }) => listSellerProfiles(pageParam, signal),
+    queryFn: async ({ pageParam, signal }) =>
+      listSellerProfiles(pageParam, signal),
     getNextPageParam: (page) => page.nextCursor ?? undefined,
   });
 
@@ -72,5 +74,8 @@ export const sendSellerProfileCommand = async (
       return unwrapEden(await profile.default.post());
     case "archive":
       return unwrapEden(await profile.archive.post());
+    default:
+      command satisfies never;
+      return panic("Unexpected seller profile command");
   }
 };
