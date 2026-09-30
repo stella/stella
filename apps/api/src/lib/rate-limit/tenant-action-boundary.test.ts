@@ -145,9 +145,18 @@ describe("tenant route classification", () => {
         for (const method of ["GET", "POST"]) {
           const request = new Request(`http://localhost${path}`, { method });
           const response = await app.handle(request);
-          expect(classify(request)).toBe(
-            response.status === 200 && (await response.text()) === "tenant",
-          );
+          expect({
+            reverse,
+            path,
+            method,
+            classified: classify(request),
+          }).toEqual({
+            reverse,
+            path,
+            method,
+            classified:
+              response.status === 200 && (await response.text()) === "tenant",
+          });
         }
       }
     }

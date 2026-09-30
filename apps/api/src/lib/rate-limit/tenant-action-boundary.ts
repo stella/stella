@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import { Elysia } from "elysia";
 import type { InternalRoute } from "elysia";
+import { encodePath, getLoosePath } from "elysia/utils";
 
 import { env } from "@/api/env";
 import {
@@ -16,7 +17,7 @@ export const TENANT_ACTION_DETAIL = "x-stella-tenant-action";
 declare module "elysia" {
   type DocumentDecoration = {
     "x-stella-tenant-action"?: boolean;
-  };
+  }
 }
 
 type TenantActionClassifierOptions = {
@@ -32,17 +33,13 @@ export const createTenantActionClassifier = ({
   strictPath,
   aot,
 }: TenantActionClassifierOptions) => {
-  // Both registries contain metadata only; matching never dispatches handlers.
+  // The registry and static map hold metadata; matching never dispatches handlers.
   const configuration = {
     aot: false,
     ...(strictPath === undefined ? {} : { strictPath }),
   };
   const registry = new Elysia(configuration);
-  const staticRegistry = new Elysia(configuration);
   const matchRoute = registry.router.dynamic.find.bind(registry.router.dynamic);
-  const matchStaticRoute = staticRegistry.router.dynamic.find.bind(
-    staticRegistry.router.dynamic,
-  );
   const routeType = (route: InternalRoute) => {
     const detail = route.hooks.detail;
     return detail !== undefined &&
@@ -51,6 +48,10 @@ export const createTenantActionClassifier = ({
       ? "tenant"
       : "exempt";
   };
+  const staticMetadata = new Map<
+    string,
+    Record<string, ReturnType<typeof routeType>>
+  >();
   let hasDynamicWebSocket = false;
   for (const route of routes) {
     if (
@@ -66,8 +67,8 @@ export const createTenantActionClassifier = ({
   }
   if (aot !== false) {
     // AOT's first static path group owns its encoded/loose aliases, including
-    // method misses. Reverse insertion preserves that precedence on collisions.
-    for (const [path, indices] of Object.entries(staticRoutes).toReversed()) {
+    // method misses. Derive the same aliases with the framework's utilities.
+    for (const [path, indices] of Object.entries(staticRoutes)) {
       const methods: Record<string, ReturnType<typeof routeType>> = {};
       for (const [method, index] of Object.entries(indices)) {
         const route = routes.at(index);
@@ -76,7 +77,15 @@ export const createTenantActionClassifier = ({
         }
         methods[method] = routeType(route);
       }
-      staticRegistry.route("ALL", path, methods);
+      const aliases =
+        strictPath === true
+          ? [path, encodePath(path)]
+          : [path, getLoosePath(path), encodePath(path)];
+      for (const alias of aliases) {
+        if (!staticMetadata.has(alias)) {
+          staticMetadata.set(alias, methods);
+        }
+      }
     }
   }
   const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -89,11 +98,11 @@ export const createTenantActionClassifier = ({
     const { handle } = match.store;
     if (
       !isRecord(handle) ||
-      (handle.type !== "tenant" && handle.type !== "exempt")
+      (handle["type"] !== "tenant" && handle["type"] !== "exempt")
     ) {
       return panic("Tenant route registry lost its derived metadata");
     }
-    return handle.type;
+    return handle["type"];
   };
   return (request: Request): boolean => {
     const path = new URL(request.url).pathname;
@@ -103,16 +112,12 @@ export const createTenantActionClassifier = ({
         ? request.headers.get("upgrade")?.toLowerCase()
         : request.headers.get("upgrade")) === "websocket";
     if (aot !== false) {
-      const match = matchStaticRoute("ALL", path);
-      if (match !== null) {
-        const methods = match.store.handle;
-        if (!isRecord(methods)) {
-          return panic("Static tenant route registry lost its method group");
-        }
+      const methods = staticMetadata.get(path);
+      if (methods !== undefined) {
         const selected =
-          (upgrade ? methods.WS : undefined) ??
+          (upgrade ? methods["WS"] : undefined) ??
           methods[request.method] ??
-          methods.ALL;
+          methods["ALL"];
         if (selected !== undefined) {
           if (selected !== "tenant" && selected !== "exempt") {
             return panic("Static tenant route disposition is invalid");

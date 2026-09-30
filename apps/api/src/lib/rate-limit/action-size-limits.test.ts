@@ -94,8 +94,13 @@ describe("tenant action size boundaries", () => {
       method: "POST",
     });
     expect(Result.isError(await boundActionRequest(chunked, 3))).toBe(true);
-    expect(pulls).toBe(2);
+    // A tee can prefetch one chunk; neither branch may keep pulling after cancellation.
+    expect(pulls).toBeGreaterThanOrEqual(2);
+    expect(pulls).toBeLessThanOrEqual(3);
     expect(cancelled).toBe(true);
+    const pullsAtCancellation = pulls;
+    await Promise.resolve();
+    expect(pulls).toBe(pullsAtCancellation);
     for (const declaredLength of ["-1", "1.5", "NaN", "not-a-length"]) {
       expect(
         Result.isError(

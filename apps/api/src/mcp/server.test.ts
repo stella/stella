@@ -1601,7 +1601,7 @@ describe("MCP transport conformance", () => {
         inputSchema: { properties: {}, type: "object" },
         name: "list_matters",
       },
-    ];
+    ] as const satisfies McpTool[];
     const serialized = JSON.stringify({
       id: 1,
       jsonrpc: "2.0",

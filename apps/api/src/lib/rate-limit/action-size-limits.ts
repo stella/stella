@@ -136,7 +136,7 @@ export const actionSizeErrorResponse = (
       : serialized;
   return new Response(body, {
     status,
-    headers: body === null ? undefined : { "content-type": "application/json" },
+    headers: body === null ? {} : { "content-type": "application/json" },
   });
 };
 
