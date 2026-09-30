@@ -3519,33 +3519,7 @@ export type WebRoutes = {
                 findings: [T69c6723040, ...T69c6723040[]];
                 totalMatches: number;
                 record: Tb165f0f166;
-              }) | (T1b3c18c274 & Tbffa2a23cb) | (T1b3c18c274 & T096dadd2e6) | (T1b3c18c274 & Tebd3ce2c77) | {
-                status: ("clear" | "possible-match" | "unavailable");
-                checkedAt: string;
-                cutoff: number;
-                lists: Array<((T304328c782 & Tf0ef1a069d & {
-                  status: "clear";
-                  reason: null;
-                  totalMatches: 0;
-                  truncated: false;
-                  possibleMatches: T9449cd95bd;
-                }) | (T304328c782 & Tf0ef1a069d & {
-                  status: "possible-match";
-                  reason: null;
-                  totalMatches: number;
-                  truncated: Tfddd645dc8;
-                  possibleMatches: [Teae76f4456, ...Teae76f4456[]];
-                }) | (T304328c782 & {
-                  status: "unavailable";
-                  reason: ("access-denied" | "company-not-found" | "load-failed" | "not-loaded" | "registry-unavailable" | "stale");
-                  editionId: Tbe0400fa4c;
-                  publishedAt: Tbe0400fa4c;
-                  verifiedAt: Tbe0400fa4c;
-                  totalMatches: 0;
-                  truncated: false;
-                  possibleMatches: T9449cd95bd;
-                }))>;
-              } & {
+              }) | (T1b3c18c274 & Tbffa2a23cb) | (T1b3c18c274 & T096dadd2e6) | (T1b3c18c274 & Tebd3ce2c77) | (T2ba8dc21d2 & {
                 kind: "sanctions";
                 subject: {
                   type: "organization";
@@ -3567,7 +3541,7 @@ export type WebRoutes = {
                   value: string;
                   country: T4b2953aefa;
                 };
-              });
+              }));
               400: T9a51b7d2bc;
               401: T9a51b7d2bc;
               402: T9a51b7d2bc;
@@ -5500,6 +5474,85 @@ export type WebRoutes = {
         };
       };
     });
+    sanctions: {
+      search: {
+        post: {
+          body: {
+            subject: {
+              companyId?: string;
+              name: string;
+              type: "organization";
+            } | {
+              dateOfBirth?: {
+                precision: "year";
+                year: number;
+              } | {
+                precision: "month";
+                year: number;
+                month: number;
+              } | {
+                precision: "day";
+                year: number;
+                month: number;
+                day: number;
+              };
+              nationalityCodes?: Array<string>;
+              type: "person";
+              firstName: string;
+              lastName: string;
+            };
+          };
+          params: T5e3ac29766;
+          query: unknown;
+          headers: unknown;
+          response: {
+            200: T2ba8dc21d2;
+            400: T9a51b7d2bc;
+            401: T9a51b7d2bc;
+            402: T9a51b7d2bc;
+            403: T9a51b7d2bc;
+            404: T9a51b7d2bc;
+            409: T9a51b7d2bc;
+            413: T9a51b7d2bc;
+            422: (T9a51b7d2bc | {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            });
+            428: T9a51b7d2bc;
+            429: T9a51b7d2bc;
+            500: T9a51b7d2bc;
+            502: T9a51b7d2bc;
+            503: {
+              code?: string;
+              message: string;
+              hint?: string;
+              issues?: Array<Tfbf26a7023>;
+              reason?: string;
+              required?: number;
+              available?: number;
+              confirmation?: T0d3b649ce9;
+              error?: string;
+              claim?: T753574bc22;
+              registration_id?: string;
+              registration_type?: string;
+              claim_url?: string;
+              claim_token?: string;
+              claim_token_expires?: string;
+              post_claim_scopes?: Array<string>;
+              requiredFields?: Array<T81694d3f69>;
+            } | {
+              readonly code: "service_unavailable";
+              readonly message: "Sanctions screening is busy; try again shortly";
+            };
+          };
+        };
+      };
+    };
     me: {
       "oauth-connections": {
         get: {
@@ -35684,6 +35737,34 @@ type T2b5a9a8bf4 = {
 };
 
 type T2b6600fed5 = "api" | "calendar" | "email" | "import" | "infosoud" | "manual" | null;
+
+type T2ba8dc21d2 = {
+  status: ("clear" | "possible-match" | "unavailable");
+  checkedAt: string;
+  cutoff: number;
+  lists: Array<((T304328c782 & Tf0ef1a069d & {
+    status: "clear";
+    reason: null;
+    totalMatches: 0;
+    truncated: false;
+    possibleMatches: T9449cd95bd;
+  }) | (T304328c782 & Tf0ef1a069d & {
+    status: "possible-match";
+    reason: null;
+    totalMatches: number;
+    truncated: Tfddd645dc8;
+    possibleMatches: [Teae76f4456, ...Teae76f4456[]];
+  }) | (T304328c782 & {
+    status: "unavailable";
+    reason: ("access-denied" | "company-not-found" | "load-failed" | "not-loaded" | "registry-unavailable" | "stale");
+    editionId: Tbe0400fa4c;
+    publishedAt: Tbe0400fa4c;
+    verifiedAt: Tbe0400fa4c;
+    totalMatches: 0;
+    truncated: false;
+    possibleMatches: T9449cd95bd;
+  }))>;
+};
 
 type T2bf53fea26 = {
   id: Tcdc6b0a442;
