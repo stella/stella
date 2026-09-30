@@ -267,7 +267,9 @@ export const listOpenSanctionsMatches = async (
   ) {
     return invalidCursor("contacts.sanctions.matches.list");
   }
-  const [_, contactId, sourceId, sourceEntryId] = position ?? [];
+  const contactId = position?.at(1);
+  const sourceId = position?.at(2);
+  const sourceEntryId = position?.at(3);
   const freshness = await readSanctionsFreshness({
     db: async (read) => await read(tx),
     now,
