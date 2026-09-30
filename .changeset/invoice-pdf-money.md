@@ -1,5 +1,6 @@
 ---
 "@stll/money": patch
+"@stll/cli": minor
 ---
 
-Preserve exact minor-unit formatting.
+Add invoice PDF capability metadata and preserve exact minor-unit formatting.

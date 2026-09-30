@@ -8572,6 +8572,46 @@ export type WebRoutes = {
       };
     } & {
       ":workspaceId": {
+        ":invoiceId": {
+          pdf: {
+            get: {
+              body: Record<never, never>;
+              params: {
+                workspaceId: T8d02a37b3f;
+                invoiceId: Tb7bcf69f62;
+              };
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: Response;
+                400: T9a51b7d2bc;
+                401: T9a51b7d2bc;
+                402: T9a51b7d2bc;
+                403: Tddfcdef857;
+                404: T98724a80a4;
+                409: T9a51b7d2bc;
+                413: T9a51b7d2bc;
+                422: (T9a51b7d2bc | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: T9a51b7d2bc;
+                429: T9a51b7d2bc;
+                500: T9a51b7d2bc;
+                502: T9a51b7d2bc;
+                503: T9a51b7d2bc;
+              };
+            };
+          };
+        };
+      };
+    } & {
+      ":workspaceId": {
         put: {
           body: {
             reference?: string | null;

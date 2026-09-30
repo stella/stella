@@ -548,7 +548,9 @@ const createInvoiceWriter = async ({ pdf, lang }: InvoiceWriterOptions) => {
             Type: PdfName.of("XObject"),
             Subtype: PdfName.of("Form"),
             BBox: new PdfArray(
-              [0, 0, PAGE_WIDTH, PAGE_HEIGHT].map(PdfNumber.of),
+              [0, 0, PAGE_WIDTH, PAGE_HEIGHT].map((value) =>
+                PdfNumber.of(value),
+              ),
             ),
             Resources: PdfDict.of({ Font: shaped.fonts }),
           }),
