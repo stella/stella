@@ -75,8 +75,7 @@ export const readContactSanctions = async (
   const position = cursor === undefined ? null : decodePaginationCursor(cursor);
   if (
     cursor !== undefined &&
-    (position === null ||
-      position.length !== 4 ||
+    (position?.length !== 4 ||
       position.at(0) !== organizationId ||
       position.at(1) !== contactId ||
       typeof position.at(2) !== "string" ||
@@ -260,8 +259,7 @@ export const listOpenSanctionsMatches = async (
   const position = cursor === undefined ? null : decodePaginationCursor(cursor);
   if (
     cursor !== undefined &&
-    (position === null ||
-      position.length !== 4 ||
+    (position?.length !== 4 ||
       position.at(0) !== organizationId ||
       !isUuidPaginationCursorPart(position.at(1)) ||
       typeof position.at(2) !== "string" ||
@@ -269,8 +267,7 @@ export const listOpenSanctionsMatches = async (
   ) {
     return invalidCursor("contacts.sanctions.matches.list");
   }
-  const [_, contactId, sourceId, sourceEntryId] =
-    position === null ? [] : position;
+  const [_, contactId, sourceId, sourceEntryId] = position ?? [];
   const freshness = await readSanctionsFreshness({
     db: async (read) => await read(tx),
     now,
@@ -399,8 +396,7 @@ export const listSanctionsMonitoringEvents = async (
   const position = cursor === undefined ? null : decodePaginationCursor(cursor);
   if (
     cursor !== undefined &&
-    (position === null ||
-      position.length !== 3 ||
+    (position?.length !== 3 ||
       position.at(0) !== organizationId ||
       parseDateTimePaginationCursorPart(position.at(1)) === null ||
       !isUuidPaginationCursorPart(position.at(2)))

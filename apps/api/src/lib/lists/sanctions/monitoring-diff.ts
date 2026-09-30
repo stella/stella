@@ -317,6 +317,31 @@ const loadMonitoringDiff = async ({
   return { oldRows, hashByEntry };
 };
 
+type LockMonitoringClaimOptions = Pick<
+  CommitMonitoringBatchOptions,
+  "organizationId" | "claim"
+>;
+
+const lockMonitoringClaim = async (
+  tx: Transaction,
+  { organizationId, claim }: LockMonitoringClaimOptions,
+) => 
+  claim === undefined
+    ? undefined
+    : new Set(
+        (
+          await tx.execute<{ contactId: SafeId<"contact"> }>(sql`
+        SELECT mark.contact_id AS "contactId" FROM sanctions_contact_marks AS mark
+        JOIN jsonb_to_recordset(${JSON.stringify(claim.marks.map(({ contactId, generation }) => ({ contactId, generation: generation.toString() })))}::text::jsonb)
+          AS claimed("contactId" uuid, generation bigint)
+          ON mark.contact_id = claimed."contactId" AND mark.generation = claimed.generation
+        WHERE mark.organization_id = ${organizationId} AND mark.scheduled_at = ${claim.leaseExpiresAt}::timestamptz
+        ORDER BY mark.contact_id FOR UPDATE OF mark
+      `)
+        ).map(({ contactId }) => contactId),
+      )
+;
+
 /**
  * Commit one bounded org/source batch after screening outside the transaction.
  * Contact locks fence mutable inputs; freshness and edition are checked in the transaction. A rejected item
@@ -375,21 +400,7 @@ export const commitSanctionsMonitoringBatch = async ({
         .limit(SANCTIONS_MONITORING_BATCH_SIZE)
         .for("no key update");
       // Contact writers take contact -> mark; acquire marks only after the ordered contact locks.
-      const owned =
-        claim === undefined
-          ? undefined
-          : new Set(
-              (
-                await tx.execute<{ contactId: SafeId<"contact"> }>(sql`
-        SELECT mark.contact_id AS "contactId" FROM sanctions_contact_marks AS mark
-        JOIN jsonb_to_recordset(${JSON.stringify(claim.marks.map(({ contactId, generation }) => ({ contactId, generation: generation.toString() })))}::text::jsonb)
-          AS claimed("contactId" uuid, generation bigint)
-          ON mark.contact_id = claimed."contactId" AND mark.generation = claimed.generation
-        WHERE mark.organization_id = ${organizationId} AND mark.scheduled_at = ${claim.leaseExpiresAt}::timestamptz
-        ORDER BY mark.contact_id FOR UPDATE OF mark
-      `)
-              ).map(({ contactId }) => contactId),
-            );
+      const owned = await lockMonitoringClaim(tx, { organizationId, claim });
       // Durable workers evaluate freshness after acquiring their fences, not at claim time.
       const now = preparedAt ?? new Date();
       const freshness = (

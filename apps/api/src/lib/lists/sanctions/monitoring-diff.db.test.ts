@@ -1119,8 +1119,8 @@ test.each(
                   const selected = from(table);
                   const takeLock = selected.for.bind(selected);
                   return Object.assign(selected, {
-                    for: (...options: Parameters<typeof selected.for>) =>
-                      takeLock(...options).then(async (rows) => {
+                    for: async (...options: Parameters<typeof selected.for>) =>
+                      await takeLock(...options).then(async (rows) => {
                         const step = (
                           ["settings", "contact", "match"] as const
                         ).at(lockedSelections);
