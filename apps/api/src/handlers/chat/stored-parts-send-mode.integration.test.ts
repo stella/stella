@@ -28,6 +28,8 @@ import { toDataUrl } from "@/api/lib/data-url";
 import { isRecord } from "@/api/lib/type-guards";
 import { createApprovalHarness } from "@/api/tests/helpers/chat-approval-harness";
 import { createPromptPrefixLedger } from "@/api/tests/helpers/chat-prompt-prefix";
+import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import {
   cassetteForModel,
   modelOf,
@@ -187,7 +189,9 @@ const STORED_PART_WIRE = {
       type: "thinking",
       content: `${PLANTED.thinking} signs the lease.`,
     },
-    readBy: EVERY_PROVIDER,
+    readBy: NO_PROVIDER,
+    reason:
+      "Adapters replay only reasoning the provider signed; stored reasoning without a signature is not sent.",
   },
   "tool-call": {
     part: {
@@ -196,7 +200,8 @@ const STORED_PART_WIRE = {
       name: "search_documents",
       arguments: JSON.stringify({ query: PLANTED["tool-call"] }),
       input: { query: PLANTED["tool-call"] },
-      state: "input-complete",
+      output: { signedBy: PLANTED["tool-result"] },
+      state: "complete",
     },
     readBy: EVERY_PROVIDER,
   },
@@ -239,8 +244,12 @@ const STORED_PART_WIRE = {
 
 type StoredPartType = keyof typeof STORED_PART_WIRE;
 
-/** The parts a turn's history holds, by the message they are stored in. An
- *  image makes an anonymized turn refuse, so it gets a thread of its own. */
+/**
+ * How each stored part gets into the thread. A document is uploaded with the
+ * first turn, as the composer sends it; the others are stored after it in
+ * one assistant message. An image makes an anonymized turn refuse, so it is
+ * stored in a thread of its own.
+ */
 const HISTORIES = {
   assistant: [
     "text",
@@ -248,13 +257,18 @@ const HISTORIES = {
     "tool-call",
     "tool-result",
     "structured-output",
-    "document",
     "audio",
     "video",
     "ui-resource",
   ],
   image: ["image"],
 } as const satisfies Record<string, readonly StoredPartType[]>;
+
+/** Every part type the assistant history carries, the upload included. */
+const ASSISTANT_HISTORY_TYPES = [
+  "document",
+  ...HISTORIES.assistant,
+] as const satisfies readonly StoredPartType[];
 
 const SEND_MODES = [
   CHAT_SEND_MODE.rawOverride,
@@ -266,6 +280,7 @@ let ids: TestIds;
 let safeDb: SafeDb;
 let scopedDb: ScopedDb;
 let replay: ProviderWireReplay;
+let fakeS3: FakeS3;
 let previousMockAI: typeof env.USE_MOCK_AI;
 let previousBedrockEndpoint: string | undefined;
 const seededThreadIds: SafeId<"chatThread">[] = [];
@@ -284,7 +299,8 @@ beforeAll(async () => {
   previousBedrockEndpoint = process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"];
   process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"] =
     "https://bedrock-runtime.us-east-1.amazonaws.com.cassette.invalid";
-  replay = installProviderWireReplay({});
+  fakeS3 = startFakeS3();
+  replay = installProviderWireReplay({ passThroughOrigins: [fakeS3.endpoint] });
   // The organization's catalog names every planted value, so anonymized
   // mode recognises each one wherever it is stored.
   for (const canonical of Object.values(PLANTED)) {
@@ -301,6 +317,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   replay.restore();
+  fakeS3.stop();
   env.USE_MOCK_AI = previousMockAI;
   if (previousBedrockEndpoint === undefined) {
     delete process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"];
@@ -395,9 +412,13 @@ const converse = async ({
   const first = await openSession(provider, threadId);
   try {
     replay.serve(first.answer);
-    await first.client.sendUserMessage(Bun.randomUUIDv7(), "Hello", {
-      sendMode: historyMode,
-    });
+    await first.client.sendUserContent(
+      Bun.randomUUIDv7(),
+      history === "image"
+        ? [{ type: "text", content: "Hello" }]
+        : [{ type: "text", content: "Hello" }, STORED_PART_WIRE.document.part],
+      { sendMode: historyMode },
+    );
     if (first.client.runtimeState().hasError) {
       panic("The history's first turn failed");
     }
@@ -421,12 +442,15 @@ const converse = async ({
   const second = await openSession(provider, threadId);
   try {
     replay.serve(second.answer);
+    // The replay's log spans the whole file; this turn's requests are the
+    // ones after it starts.
+    const earlier = second.seam.sentRequests().length;
     await second.client.sendUserMessage(Bun.randomUUIDv7(), "Thanks", {
       sendMode,
     });
     return {
       failed: second.client.runtimeState().hasError,
-      sent: [...second.seam.sentRequests()],
+      sent: second.seam.sentRequests().slice(earlier),
     };
   } finally {
     await second.close();
@@ -470,21 +494,26 @@ const CONVERSATION_TIMEOUT_MS = 60_000;
 
 describe("every stored part is prepared for the send mode", () => {
   test("every part type states how it reaches a provider", () => {
-    // Stored and model-visible parts are read by some provider; stored
-    // UI-only parts by none.
+    // A UI-only part is read by no provider, and a part some provider does
+    // not read says why.
     for (const [type, entry] of Object.entries(STORED_PART_WIRE)) {
       if (!("part" in entry)) {
         continue;
       }
-      const readBySome = Object.values(entry.readBy).some(Boolean);
-      if (type !== "image") {
-        expect({ type, readBySome }).toEqual({
+      if (!isProviderVisibleChatPart(entry.part)) {
+        expect({ type, readBy: entry.readBy }).toEqual({
           type,
-          readBySome: isProviderVisibleChatPart(entry.part),
+          readBy: NO_PROVIDER,
         });
       }
       if (!Object.values(entry.readBy).every(Boolean)) {
-        expect("reason" in entry && entry.reason !== "").toBe(true);
+        expect({
+          type,
+          reason: "reason" in entry && entry.reason !== "",
+        }).toEqual({
+          type,
+          reason: true,
+        });
       }
     }
   });
@@ -505,7 +534,7 @@ describe("every stored part is prepared for the send mode", () => {
             const chatRequests = chatRequestsOf(turn.sent);
             expect(chatRequests.length).toBeGreaterThan(0);
 
-            for (const type of HISTORIES.assistant) {
+            for (const type of ASSISTANT_HISTORY_TYPES) {
               const entry = STORED_PART_WIRE[type];
               const planted = PLANTED[type];
               if (sendMode === CHAT_SEND_MODE.anonymized) {
