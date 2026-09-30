@@ -3142,7 +3142,7 @@ describe("OpenAI-compatible MCP tools", () => {
                 minLength: 1,
                 maxLength: 256,
                 description:
-                  "Anchor of the provision in the publisher's own scheme. read_statute's outline lists a consolidation's provision anchors (par_1729); a subdivision of one of them is accepted too and narrows the answer to that subdivision (par_1729-odst_1, par_1729-odst_2-pism_a). Anchors are not derivable from a section number.",
+                  "Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision. Other publishers may use different schemes.",
               },
               as_of: {
                 type: "string",
