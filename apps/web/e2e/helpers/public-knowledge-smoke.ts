@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import type { Request } from "@playwright/test";
+import type { APIRequestContext, Request } from "@playwright/test";
 import { panic } from "better-result";
 import * as v from "valibot";
 
@@ -11,6 +11,7 @@ import {
   classifyPublicKnowledgeWebProbe,
   isMemberOnlySmokeRequest,
 } from "./public-knowledge-smoke.logic";
+import { STAGING_CHECKS } from "./staging-state";
 
 const PACK_ID = "general-legal";
 const PUBLIC_API = "/api/v1/public/knowledge/template-packs";
@@ -72,6 +73,35 @@ type DeclarePublicKnowledgeSmokeOptions = {
   mode: "disabled" | "probe";
 };
 
+const probePublicKnowledge = async (request: APIRequestContext) => {
+  const [apiProbe, webProbe] = await Promise.all([
+    request.get(PUBLIC_API, { maxRedirects: 0 }),
+    request.get("/", { maxRedirects: 0 }),
+  ]);
+  expect([200, 404], "API probe status").toContain(apiProbe.status());
+  expect(webProbe.status(), "web probe status").toBe(200);
+  expect(webProbe.headers()["content-type"], "web probe HTML").toMatch(
+    /^text\/html\b/iu,
+  );
+  const apiEnabled = apiProbe.status() === 200;
+  const webState = classifyPublicKnowledgeWebProbe(await webProbe.text());
+  expect(webState, "unexpected public-knowledge marker content").not.toBe(
+    "unexpected",
+  );
+  const webEnabled = webState === "enabled";
+  if (!apiEnabled) {
+    expect(await apiProbe.json(), "disabled API response").toEqual({
+      error: "Not Found",
+    });
+  } else {
+    v.parse(
+      v.object({ items: v.array(v.object({ id: v.string() })) }),
+      await apiProbe.json(),
+    );
+  }
+  return { apiEnabled, webEnabled };
+};
+
 export const declarePublicKnowledgeSmoke = ({
   mode,
 }: DeclarePublicKnowledgeSmokeOptions) => {
@@ -83,40 +113,26 @@ export const declarePublicKnowledgeSmoke = ({
     }
     test.describe(title, declare);
   };
+  describe("public knowledge flags", () => {
+    test.use({ storageState: { cookies: [], origins: [] }, locale: "en-US" });
+    test(
+      "API and web Public Knowledge flags agree",
+      { tag: STAGING_CHECKS["public-knowledge-flags"].tag },
+      async ({ request }) => {
+        const { apiEnabled, webEnabled } = await probePublicKnowledge(request);
+        expect(
+          apiEnabled,
+          "inconsistent flags: API and web Public Knowledge must agree",
+        ).toBe(webEnabled);
+      },
+    );
+  });
   describe("public visitor routes", () => {
     test.use({ storageState: { cookies: [], origins: [] }, locale: "en-US" });
     let catalogue: VisitorCatalogue = { status: "unprobed" };
 
     test.beforeAll(async ({ request }) => {
-      const [apiProbe, webProbe] = await Promise.all([
-        request.get(PUBLIC_API, { maxRedirects: 0 }),
-        request.get("/", { maxRedirects: 0 }),
-      ]);
-      expect([200, 404], "API probe status").toContain(apiProbe.status());
-      expect(webProbe.status(), "web probe status").toBe(200);
-      expect(webProbe.headers()["content-type"], "web probe HTML").toMatch(
-        /^text\/html\b/iu,
-      );
-      const apiEnabled = apiProbe.status() === 200;
-      const webState = classifyPublicKnowledgeWebProbe(await webProbe.text());
-      expect(webState, "unexpected public-knowledge marker content").not.toBe(
-        "unexpected",
-      );
-      const webEnabled = webState === "enabled";
-      if (!apiEnabled) {
-        expect(await apiProbe.json(), "disabled API response").toEqual({
-          error: "Not Found",
-        });
-      } else {
-        v.parse(
-          v.object({ items: v.array(v.object({ id: v.string() })) }),
-          await apiProbe.json(),
-        );
-      }
-      expect(
-        apiEnabled,
-        "inconsistent flags: API and web Public Knowledge must agree",
-      ).toBe(webEnabled);
+      const { apiEnabled, webEnabled } = await probePublicKnowledge(request);
       if (!apiEnabled && !webEnabled) {
         catalogue = { status: "disabled" };
         test.skip(true, "Public Knowledge is disabled on API and web");

@@ -48,6 +48,39 @@ Schema changes should follow an expand/contract sequence:
 Application rollback must not require database rollback. Destructive migrations
 should lag the release that stopped using the old data.
 
+## Staging Verification
+
+`deploy-staging.yml` runs on `main` only. It records a Deployment as
+`in_progress` after promotion and marks it `success` only when the gating web
+and API chat smokes pass. The `staging/verified` commit status records the same
+result on the deployed SHA and links to the workflow run. A new promotion resets
+that status to `pending`; a failed or incomplete gating smoke records `failure`.
+The API model-turn smoke retains its separate report-only policy.
+
+The repository variable `STAGING_STATE` declares environment prerequisites as
+JSON. Missing keys (or an unset variable) mean on: every check gates. The allowed
+keys are `corpus_index` (`on` or `off`) and `rollout` (`on` or
+`knowledge-web-pending`). Unknown keys, invalid values, and malformed JSON fail
+closed. Set it explicitly when a prerequisite is unavailable:
+
+```sh
+gh variable set STAGING_STATE --repo stella/stella --body '{"corpus_index":"off","rollout":"knowledge-web-pending"}'
+```
+
+Return all checks to gating with:
+
+```sh
+gh variable delete STAGING_STATE --repo stella/stella
+```
+
+Only the public-law hydration check becomes report-only when `corpus_index=off`;
+only Public Knowledge API/web flag consistency becomes report-only when
+`rollout=knowledge-web-pending`. Assertions still run, and failures retain their
+Playwright traces and report. Every smoke run logs the dispositions and reasons
+and writes them to the step summary. Other test failures and runner errors gate.
+This declaration records prerequisites; it does not infer state from responses
+or change deployed feature flags.
+
 ## Creating A Release
 
 1. Ensure CI is green on `main`.
