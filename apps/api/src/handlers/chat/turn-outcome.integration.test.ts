@@ -143,9 +143,9 @@ const surfacePlan = planCombinationRun({
 });
 
 /**
- * What a combination's turn breaks today, by the rule it breaks. Each runs
- * as a test marked failing under the rule's name, so it fails loudly once
- * the turn keeps the rule.
+ * The rules a combination's turn does not keep yet, by name. Each such
+ * combination runs as a test marked failing under the rules' names, so it
+ * fails loudly once the turn keeps them and the entry goes.
  */
 const knownTurnFindingOf = ({
   position,
@@ -154,13 +154,10 @@ const knownTurnFindingOf = ({
 }: TurnCombination): string | undefined => {
   const answer = shapeAnswerOf(cassettes, provider, shape);
   const findings: string[] = [];
-  // A run that streamed nothing visible (empty or whitespace text, reasoning
-  // alone, a filter or length stop with no text) settles its turn as an
-  // `empty-response` failure the user can retry. Today a fresh turn fails
-  // as `provider-error`, and a continuation, whose message already holds
-  // the answered card, or a run that kept only its reasoning, completes.
-  // Minimal repro: answer an ask-user card; the model stops with an empty
-  // text message; the turn completes with nothing after the card.
+  // A run that streams nothing visible (empty or whitespace text, reasoning
+  // alone, a filter or length stop with no text) settles its turn as a
+  // retryable `empty-response` failure, measured against what its message
+  // held before the run.
   if (
     !("notApplicable" in answer) &&
     answer.verdict.kind === "nothing" &&
@@ -170,11 +167,9 @@ const knownTurnFindingOf = ({
       "a run that shows nothing fails retryably as an empty response",
     );
   }
-  // A whitespace-only answer on a turn that writes a new message stays on
-  // the live page as its whitespace text, and reloads as an empty text part
-  // (`chat.live.equals-reload`). Gemini's adapter drops the whitespace delta
-  // before the page sees it. Minimal repro: a first message answered with
-  // " \n\n " on OpenAI; compare the live message's text with a reload.
+  // What the page shows of a whitespace-only answer on a new message is
+  // what a reload shows (`chat.live.equals-reload`). Gemini's adapter hands
+  // the page no whitespace-only delta.
   if (
     shape === "whitespace" &&
     provider !== "google" &&
@@ -186,14 +181,11 @@ const knownTurnFindingOf = ({
   ) {
     findings.push("a whitespace-only answer reloads as the page showed it");
   }
-  // Once the compactor has summarized a thread, a turn that pauses on an
-  // approval card hands the page its model-facing history: the page shows
-  // the summary as a user message (`stella-chat-compaction-summary`) ahead
-  // of the thread, which a reload does not. Minimal repro: one answered
-  // turn, `runChatThreadCompaction`, then a message answered with a call
-  // behind an approval.
+  // The page of a summarized thread shows the thread, never the summary the
+  // model reads in its place (`chat.live.equals-reload`), including when the
+  // turn pauses on a card.
   if (shape === "tool-call" && position === "after-compaction") {
-    findings.push("a compacted thread's summary never reaches the page");
+    findings.push("a compacted thread's summary stays off the page");
   }
   return findings.length === 0 ? undefined : findings.join("; ");
 };
