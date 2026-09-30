@@ -1333,6 +1333,40 @@ describe("dev env factories", () => {
     });
   });
 
+  test("same-origin API opt-in overrides stale URLs together for every allocated port", () => {
+    for (const offset of [0, 10, 80]) {
+      const ports = portsForOffset(offset);
+      const webEnv = createWebEnv({
+        baseEnv: {
+          DEV_API_PROXY_TARGET: "http://localhost:1",
+          STELLA_DEV_SAME_ORIGIN_API: "1",
+          VITE_BROWSER_API_URL: "http://localhost:2/api",
+          VITE_PUBLIC_APP_URL: "http://localhost:3",
+        },
+        ports,
+      });
+      const browserApi = new URL(webEnv["VITE_BROWSER_API_URL"] ?? "");
+      const app = new URL(webEnv["VITE_PUBLIC_APP_URL"] ?? "");
+      expect(app.origin).toBe(`http://localhost:${String(ports.web)}`);
+      expect(browserApi.origin).toBe(app.origin);
+      expect(browserApi.pathname).toBe("/api");
+      expect(webEnv["DEV_API_PROXY_TARGET"]).toBe(
+        `http://127.0.0.1:${String(ports.api)}`,
+      );
+      expect(webEnv.VITE_API_URL).toBe(`http://localhost:${String(ports.api)}`);
+    }
+  });
+
+  test("same-origin API routing requires an explicit opt-in", () => {
+    for (const optIn of [undefined, "", "0"]) {
+      const baseEnv = { STELLA_DEV_SAME_ORIGIN_API: optIn };
+      const webEnv = createWebEnv({ baseEnv, ports: portsForOffset(10) });
+      expect(webEnv).not.toHaveProperty("DEV_API_PROXY_TARGET");
+      expect(webEnv).not.toHaveProperty("VITE_BROWSER_API_URL");
+      expect(webEnv).not.toHaveProperty("VITE_PUBLIC_APP_URL");
+    }
+  });
+
   test("threads computed ports into the desktop env", () => {
     expect(
       createDesktopEnv({
