@@ -212,7 +212,7 @@ are omitted here. Input union keys are required unless marked `?`.
 - `stella contact check-counterparty`
   - `--check` — Source to screen against. cz-insolvency: the Czech insolvency register (ISIR), pending and ended proceedings; takes a company or a person with a full birth date. cz-vat-reliability: the Czech VAT register, unreliable-payer status and published bank accounts; takes a tax ID, or a company ID sent as CZ + IČO and marked derived. sanctions: every sanctions list stella keeps (the EU, UN and national lists), one outcome per list; takes a company ID, an organization by name, or a person by name with any known birth date and nationalities. Use an advertised value; case and surrounding whitespace are normalized. (enum: cz-insolvency, cz-vat-reliability, sanctions)
   - via `--input` only: subject
-  - subject: type="company-id": company_id:string; type="tax-id": tax_id:string; type="person": first_name:string, last_name:string, birth_date:string. Example: `--input '{"subject":{"type":"company-id","company_id":"x"}}'`
+  - subject: type="company-id": company_id:string; type="tax-id": tax_id:string; type="person": first_name:string, last_name:string, date_of_birth?:{precision="year"|"month"|"day"}, nationality_codes?:string[]; type="organization": name:string. Example: `--input '{"subject":{"type":"company-id","company_id":"x"}}'`
 - `stella contact delete`
   - `--contact-id` — Contact ID to delete (string)
 - `stella contact list`
