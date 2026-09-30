@@ -130,7 +130,7 @@ describe("quick-start run ownership", () => {
       identity: createDevQuickStartIdentity(RANDOM_ID),
       organizationId: null,
     } satisfies DevQuickStartAttempt;
-    const run = () =>
+    const run = async () =>
       runDevQuickStart({
         attempt: runtime.getAttempt(() => initialAttempt),
         authenticate: async () => {

@@ -347,7 +347,7 @@ export const DevQuickStartContinuation = ({
     window.location.assign(redirectTo);
   };
 
-  const handleContinuation = () =>
+  const handleContinuation = async () =>
     devQuickStartRuntime.runSingleFlight({
       stage: DEV_QUICK_START_STAGE.continue,
       run: runContinuation,

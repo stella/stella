@@ -38,7 +38,7 @@ export const devQuickStartRuntime = (() => {
 // Keep the flight and its attempt even when this module itself is hot-replaced.
 if (import.meta.hot) {
   import.meta.hot.accept();
-  import.meta.hot.dispose((data) => {
+  import.meta.hot.dispose((data: Record<string, unknown>) => {
     data[DEV_QUICK_START_HMR_KEY] = devQuickStartRuntime;
   });
 }
