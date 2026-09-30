@@ -241,6 +241,9 @@ export const createSanctionsMatcherPool = ({
           const worker = created.value;
           slot.worker = worker;
           worker.on("error", () => {
+            if (slot.worker !== worker) {
+              return;
+            }
             if (slot.fail !== null) {
               slot.fail();
             } else {

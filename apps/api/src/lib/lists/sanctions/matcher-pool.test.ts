@@ -9,6 +9,8 @@ import {
 } from "@stll/sanctions";
 import type { ParsedList } from "@stll/sanctions";
 
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
 import { createSanctionsMatcherPool } from "./matcher-pool";
 import type { SanctionsMatcherRequest } from "./matcher-protocol";
 
@@ -263,6 +265,92 @@ test("deadline replies retain admission until unfinished operations settle", asy
     );
   } finally {
     held.resolve(undefined);
+    await pool.close();
+  }
+});
+
+test("late retired-worker errors cannot release a held acquisition or a replacement worker", async () => {
+  const termination = Promise.withResolvers<number>();
+  const acquisition = Promise.withResolvers<undefined>();
+  const workers: {
+    events: {
+      on: (name: string, listener: () => void) => void;
+      emit: (name: string) => void;
+    };
+    terminations: number;
+  }[] = [];
+  const pool = createSanctionsMatcherPool({
+    size: 1,
+    deadlineMs: 20,
+    createWorker: () => {
+      const listeners = new Map<string, () => void>();
+      const state = {
+        events: {
+          on: (name: string, listener: () => void) => {
+            listeners.set(name, listener);
+          },
+          emit: (name: string) => {
+            listeners.get(name)?.();
+          },
+        },
+        terminations: 0,
+      };
+      const ordinal = workers.length;
+      workers.push(state);
+      return asTestRaw<Worker>(
+        Object.assign(state.events, {
+          unref: () => state.events,
+          terminate: () => {
+            state.terminations += 1;
+            return ordinal === 0 ? termination.promise : Promise.resolve(0);
+          },
+        }),
+      );
+    },
+  });
+  let unfinished = 0;
+  let started = 0;
+  const operation = async () => {
+    started += 1;
+    unfinished += 1;
+    await acquisition.promise;
+    unfinished -= 1;
+    return "settled";
+  };
+  try {
+    expect(await pool.run(operation)).toBeNull();
+    const retired = workers.at(0);
+    expect(retired).toBeDefined();
+    retired?.events.emit("error");
+    termination.resolve(0);
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve);
+    });
+    expect(await pool.run(operation)).toBeNull();
+    expect(started).toBe(1);
+    expect(unfinished).toBe(1);
+    expect(workers).toHaveLength(1);
+    acquisition.resolve(undefined);
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve);
+    });
+    expect(await pool.run(async () => "recovered")).toBe("recovered");
+    expect(workers).toHaveLength(2);
+    const replacement = workers.at(1);
+    retired?.events.emit("error");
+    retired?.events.emit("exit");
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve);
+    });
+    expect(replacement?.terminations).toBe(0);
+    expect(await pool.run(async () => "still recovered")).toBe(
+      "still recovered",
+    );
+    expect(workers).toHaveLength(2);
+    expect(unfinished).toBe(0);
+  } finally {
+    acquisition.resolve(undefined);
+    termination.resolve(0);
     await pool.close();
   }
 });
