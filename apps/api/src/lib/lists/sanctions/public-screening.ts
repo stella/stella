@@ -13,7 +13,6 @@ import {
   screenSanctionsSubject,
   unavailableSanctionsScreening,
 } from "./screening-service";
-import type { ScreenSanctionsSubjectProps } from "./screening-service";
 
 type PublicScreeningOptions = {
   pool?: typeof sharedSanctionsMatcherPool;
@@ -27,7 +26,7 @@ export const createPublicSanctionsScreening = ({
   const warming: { pending: Promise<unknown> | null } = { pending: null };
   const coldLoads = new Map<string, ReturnType<typeof loadEditionEntries>>();
   const execute = async (
-    props: ScreenSanctionsSubjectProps,
+    props: Parameters<typeof screenSanctionsSubject>[0],
     options?: { deadlineMs: number; onSettled: () => void },
   ) => {
     const result = await pool.run(
