@@ -10,14 +10,21 @@ import { panic } from "better-result";
  * Runs in the nightly Postgres job; skipped elsewhere.
  */
 import { beforeAll, describe, expect, test } from "bun:test";
-import { inArray } from "drizzle-orm";
+import { inArray, eq } from "drizzle-orm";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import { readDecisionHandler } from "@/api/handlers/case-law/decisions/get";
+import {
+  decisionRecordQuery,
+  readDecisionHandler,
+} from "@/api/handlers/case-law/decisions/get";
 import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
+import {
+  corpusKeys,
+  EMPTY_CORPUS_CONTENT_HASHES,
+} from "@/api/lib/legal-search/corpus-storage";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -72,6 +79,7 @@ if (!databaseUrl || !runPostgresTests) {
         throw new Error("expected a readable decision");
       }
       return {
+        hasDocument: decision.hasDocument,
         pending: decision.documentPending,
         unavailable: decision.documentUnavailable,
       };
@@ -110,6 +118,7 @@ if (!databaseUrl || !runPostgresTests) {
 
     test("a decision nobody has fetched is pending", async () => {
       expect(await readState(await insertDecision(null))).toEqual({
+        hasDocument: false,
         pending: true,
         unavailable: false,
       });
@@ -120,6 +129,7 @@ if (!databaseUrl || !runPostgresTests) {
       // marker. Reporting it as pending would send every later view back
       // through the fetch path for a document that does not exist.
       expect(await readState(await insertDecision(""))).toEqual({
+        hasDocument: false,
         pending: false,
         unavailable: true,
       });
@@ -128,7 +138,38 @@ if (!databaseUrl || !runPostgresTests) {
     test("a decision with its document is neither", async () => {
       expect(
         await readState(await insertDecision("Decision\n\nReasons.")),
-      ).toEqual({ pending: false, unavailable: false });
+      ).toEqual({ hasDocument: true, pending: false, unavailable: false });
+    });
+    test("single-row document presence distinguishes empty canonical payloads without reading S3", async () => {
+      const id = await insertDecision(null);
+      for (const [contentHash, expected] of [
+        [null, false],
+        [
+          EMPTY_CORPUS_CONTENT_HASHES.at(0) ??
+            panic("Expected an empty corpus hash"),
+          false,
+        ],
+        ["a".repeat(64), true],
+      ] as const) {
+        const keys = corpusKeys({
+          documentId: id,
+          jurisdiction: "CZE",
+          contentHash: contentHash ?? "pending",
+        });
+        await db
+          .update(caseLawDecisions)
+          .set({
+            contentHash,
+            textS3Key: keys.textKey,
+            normalizedS3Key: keys.sectionsKey,
+            astS3Key: keys.astKey,
+          })
+          .where(eq(caseLawDecisions.id, id));
+        const row = await caseLawPublicReadDb(
+          async (tx) => await decisionRecordQuery(tx, id),
+        );
+        expect(row?.hasDocument).toBe(expected);
+      }
     });
   });
 }

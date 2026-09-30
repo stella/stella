@@ -23,7 +23,10 @@ import {
 } from "@/api/handlers/case-law/document-ast";
 import { DECISION_JUDGE_ROLE_RANK } from "@/api/handlers/case-law/judges/consts";
 import { judgePortraitPath } from "@/api/handlers/case-law/judges/portrait";
-import { corpusCarriesDocument } from "@/api/handlers/case-law/stored-payload";
+import {
+  corpusCarriesDocument,
+  rowHoldsDocumentFor,
+} from "@/api/handlers/case-law/stored-payload";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
@@ -307,6 +310,7 @@ export const decisionRecordQuery = (
 ) =>
   tx.query.caseLawDecisions.findFirst({
     where: { id: { eq: decisionId } },
+    extras: { hasDocument: rowHoldsDocumentFor },
     columns: {
       id: true,
       caseNumber: true,
@@ -505,6 +509,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
 
     return {
       documentPending,
+      hasDocument: decision.hasDocument,
       documentReadFailed,
       documentUnavailable,
       id: decision.id,

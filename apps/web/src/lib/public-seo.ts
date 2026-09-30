@@ -59,20 +59,24 @@ export const createPublicHead = ({
   type,
 }: PublicHeadInput) => {
   const canonicalUrl = createPublicCanonicalUrl(path);
-  const links = [
-    { rel: "canonical", href: canonicalUrl },
-    ...alternateLinks.map((link) => ({
-      rel: "alternate",
-      hreflang: link.hreflang,
-      href: link.href,
-    })),
-  ];
-  const robots = crawlAllowed ? PUBLIC_ROBOTS : PRIVATE_ROBOTS;
+  const links =
+    indexing === "noindex"
+      ? []
+      : [
+          { rel: "canonical", href: canonicalUrl },
+          ...alternateLinks.map((link) => ({
+            rel: "alternate",
+            hreflang: link.hreflang,
+            href: link.href,
+          })),
+        ];
+  const publicRobots = indexing === "noindex" ? "noindex" : PUBLIC_ROBOTS;
+  const robots = crawlAllowed ? publicRobots : PRIVATE_ROBOTS;
   const meta: PublicMeta[] = [
     { title },
     {
       name: "robots",
-      content: indexing === "noindex" ? "noindex" : robots,
+      content: robots,
     },
     { property: "og:title", content: title },
     { property: "og:type", content: type },

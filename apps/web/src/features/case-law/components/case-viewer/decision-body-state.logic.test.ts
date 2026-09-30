@@ -1,53 +1,26 @@
 import { describe, expect, test } from "bun:test";
 
-import type { DocumentAst } from "@stll/legal-ast/document-ast";
-
 import {
   missingBodyReason,
   missingBodyRetryable,
   MISSING_BODY_REASON,
-  hasDecisionText,
+  decisionHasNoDocument,
 } from "@/features/case-law/components/case-viewer/decision-body-state.logic";
 
-test("empty and whitespace-only text do not make a decision indexable", () => {
-  for (const fulltext of [null, "", " \n\t", "\u00a0"]) {
-    expect(hasDecisionText({ fulltext, documentAst: null })).toBe(false);
+test("only confirmed document absence changes notice and indexing", () => {
+  for (const hasDocument of [false, true]) {
+    for (const documentReadFailed of [false, true]) {
+      for (const documentPending of [false, true]) {
+        expect(
+          decisionHasNoDocument({
+            hasDocument,
+            documentReadFailed,
+            documentPending,
+          }),
+        ).toBe(!hasDocument && !documentReadFailed && !documentPending);
+      }
+    }
   }
-  expect(hasDecisionText({ fulltext: "Judgment", documentAst: null })).toBe(
-    true,
-  );
-});
-
-test("AST text remains available when the fulltext fallback is absent", () => {
-  const documentAst = {
-    version: 1,
-    source: { system: "test", documentId: "1", webUrl: "", printUrl: "" },
-    metadata: {
-      caseNumber: "1",
-      ecli: null,
-      court: "Court",
-      decisionDate: null,
-      decisionType: null,
-      keywords: [],
-      statutes: [],
-    },
-    blocks: [
-      {
-        type: "paragraph",
-        id: "p1",
-        anchorId: "p1",
-        plainText: "Judgment",
-        inlines: [{ type: "text", text: "Judgment" }],
-      },
-    ],
-  } satisfies DocumentAst;
-  expect(hasDecisionText({ documentAst, fulltext: null })).toBe(true);
-  expect(
-    hasDecisionText({
-      documentAst: { ...documentAst, blocks: [] },
-      fulltext: null,
-    }),
-  ).toBe(false);
 });
 
 const state = (

@@ -42,6 +42,7 @@ const UNPUBLISHED_DECISION = {
   documentAst: null,
   documentAstSource: null,
   projectionDigest: null,
+  hasDocument: false,
   documentPending: false,
   documentReadFailed: false,
   documentUnavailable: false,
@@ -106,8 +107,13 @@ test("textless decision heads stay noindex until the text arrives", async () => 
         type: "article",
       }).meta.at(1),
     );
+    expect(emptyHead.links).toEqual([]);
     const textHead = await createPublicCaseLawDecisionHead({
-      decision: { ...decision, fulltext: "Published judgment" },
+      decision: {
+        ...decision,
+        fulltext: "Published judgment",
+        hasDocument: true,
+      },
       params,
     });
     const existingHead = createPublicLawHead({
@@ -116,7 +122,50 @@ test("textless decision heads stay noindex until the text arrives", async () => 
       type: "article",
     });
     expect(textHead.meta.at(1)).toEqual(existingHead.meta.at(1));
+    for (const flags of [
+      { hasDocument: true, documentPending: false, documentReadFailed: true },
+      { hasDocument: false, documentPending: true, documentReadFailed: false },
+      { hasDocument: false, documentPending: false, documentReadFailed: true },
+    ]) {
+      const transientHead = await createPublicCaseLawDecisionHead({
+        decision: { ...decision, ...flags },
+        params,
+      });
+      expect(transientHead.meta.at(1)).toEqual(existingHead.meta.at(1));
+      expect(transientHead.links).toEqual(textHead.links);
+    }
   }
+});
+
+test("a readable decision omits textless language variants from alternate links", async () => {
+  const variant = {
+    caseNumber: "1",
+    country: "CZE",
+    court: "Synthetic court",
+    decisionDate: null,
+    id: PUBLISHED_DECISION.id,
+    slug: "synthetic-decision",
+  };
+  const decision = {
+    ...PUBLISHED_DECISION,
+    hasDocument: true,
+    languageAlternates: [
+      { ...variant, language: "cs", hasDocument: true },
+      { ...variant, language: "en", hasDocument: true },
+      { ...variant, language: "de", hasDocument: false },
+    ],
+  };
+  const head = await createPublicCaseLawDecisionHead({
+    decision,
+    params: {
+      country: "cze",
+      court: "synthetic-court",
+      slug: "synthetic-decision",
+    },
+  });
+  expect(
+    head.links.flatMap((link) => ("hreflang" in link ? [link.hreflang] : [])),
+  ).toEqual(["cs", "en", "x-default"]);
 });
 
 describe("public case-law decision route readiness", () => {

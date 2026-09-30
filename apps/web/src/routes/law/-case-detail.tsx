@@ -19,7 +19,7 @@ import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-sto
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
 import Tooltip from "@/components/tooltip";
-import { hasDecisionText } from "@/features/case-law/components/case-viewer/decision-body-state.logic";
+import { decisionHasNoDocument } from "@/features/case-law/components/case-viewer/decision-body-state.logic";
 import { buildDecisionFacts } from "@/features/case-law/components/case-viewer/decision-facts.logic";
 import { DecisionWorkspace } from "@/features/case-law/components/case-viewer/decision-workspace";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
@@ -75,7 +75,7 @@ export function PublicDecisionViewer({
     );
   });
 
-  const hasText = hasDecisionText(decision);
+  const noDocument = decisionHasNoDocument(decision);
   const originalUrl =
     buildDecisionFacts({
       decisionType: decision.decisionType,
@@ -161,8 +161,8 @@ export function PublicDecisionViewer({
           }
         />
       </ChromeHeaderActions>
-      {!hasText && <PublicDecisionTextNotice sourceUrl={originalUrl} />}
-      {hasText &&
+      {noDocument && <PublicDecisionTextNotice sourceUrl={originalUrl} />}
+      {!noDocument &&
         (authStatus.isAuthenticated ? (
           <Suspense
             fallback={

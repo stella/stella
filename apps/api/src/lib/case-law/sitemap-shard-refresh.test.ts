@@ -70,7 +70,6 @@ const decision = (
   country: "CZE",
   language: "cs",
   decisionDate: null,
-  fulltext: "Published decision text",
   ...overrides,
 });
 
@@ -110,16 +109,6 @@ beforeAll(async () => {
   ]);
 
   await db.insert(caseLawDecisions).values([
-    decision({
-      caseNumber: "Text pending",
-      decisionDate: "2035-03-01",
-      fulltext: null,
-    }),
-    decision({
-      caseNumber: "Text empty",
-      decisionDate: "2035-03-02",
-      fulltext: "",
-    }),
     decision({ caseNumber: "1 Cdo 1/2020", decisionDate: "2020-03-15" }),
     decision({ caseNumber: "2 Cdo 2/2020", decisionDate: "2020-03-28" }),
     decision({

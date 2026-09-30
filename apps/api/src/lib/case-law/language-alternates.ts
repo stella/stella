@@ -3,6 +3,7 @@ import { and, asc, eq, inArray, lte, sql } from "drizzle-orm";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import { rowHoldsDocument } from "@/api/handlers/case-law/stored-payload";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import type {
   CaseLawPublicReadDb,
@@ -237,14 +238,34 @@ export const listPublicDecisionLanguageAlternates = async ({
 }: {
   tx: CaseLawPublicReadTransaction;
   languageGroupKey: string | null;
-}): Promise<readonly PublicDecisionLanguageAlternate[]> => {
+}): Promise<
+  readonly (PublicDecisionLanguageAlternate & { hasDocument: boolean })[]
+> => {
   if (languageGroupKey === null) {
-    return NO_ALTERNATES;
+    return [];
   }
   const rows = await readPublicDecisionLanguageAlternatesQuery(tx, [
     languageGroupKey,
   ]);
-  return groupPublicDecisionLanguageAlternates(rows).alternatesFor(
-    languageGroupKey,
+  const alternates =
+    groupPublicDecisionLanguageAlternates(rows).alternatesFor(languageGroupKey);
+  if (alternates.length === 0) {
+    return [];
+  }
+  // Only a single decision's capped language group inspects payload presence;
+  // collection reads keep their existing metadata-only projection.
+  const presence = await tx
+    .select({ id: caseLawDecisions.id, hasDocument: rowHoldsDocument })
+    .from(caseLawDecisions)
+    .where(
+      inArray(
+        caseLawDecisions.id,
+        alternates.map((alternate) => alternate.id),
+      ),
+    )
+    .limit(LIMITS.caseLawLanguageAlternatesPerGroupMax);
+  const byId = new Map(presence.map((row) => [row.id, row.hasDocument]));
+  return alternates.map((alternate) =>
+    ({ ...alternate, hasDocument: byId.get(alternate.id) === true,}),
   );
 };

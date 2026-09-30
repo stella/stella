@@ -16,7 +16,6 @@ import {
   setSharedStatementTimeout,
 } from "@/api/db/shared-pool-timeouts";
 import { envBase } from "@/api/env-base";
-import { rowHoldsDocument } from "@/api/handlers/case-law/stored-payload";
 import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import {
@@ -206,8 +205,6 @@ export const sitemapRefreshPageSql = ({
     counts.last_modified_ms
   FROM last_entry
   LEFT JOIN LATERAL (
-    -- Inspect payload presence only inside this bounded page. The cursor
-    -- advances over textless rows too, keeping the index-only range walk.
     SELECT
       page.year,
       page.month,
@@ -215,10 +212,8 @@ export const sitemapRefreshPageSql = ({
       count(*)::int AS total,
       (extract(epoch FROM max(page.updated_at)) * 1000)::float8 AS last_modified_ms
     FROM page
-    INNER JOIN ${caseLawDecisions} ON ${caseLawDecisions.id} = page.id
     INNER JOIN ${caseLawSources} ON ${caseLawSources.id} = page.source_id
     WHERE ${redistributableCaseLawSource}
-      AND ${rowHoldsDocument}
     GROUP BY page.year, page.month, page.bucket
   ) AS counts ON true
 `;

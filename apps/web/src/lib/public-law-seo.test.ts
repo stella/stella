@@ -48,7 +48,18 @@ describe("public law SEO", () => {
         (meta) => !("name" in meta && meta.name === "robots"),
       ),
     );
-    expect(textless.links).toEqual(ordinary.links);
+    expect(textless.links).toEqual([]);
+  });
+  test("non-crawlable pages keep nofollow even when the document is absent", () => {
+    expect(
+      createPublicLawHead({
+        crawlAllowed: false,
+        indexing: "noindex",
+        path: "/law/cases",
+        title: "Case law",
+        type: "article",
+      }).meta,
+    ).toContainEqual({ name: "robots", content: "noindex,nofollow" });
   });
   test("builds absolute canonical URLs from the public app origin", () => {
     expect(createPublicLawCanonicalUrl("/law/cases")).toBe(
