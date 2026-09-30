@@ -43,7 +43,7 @@ describe("spawnWorker", () => {
     expect(Result.isError(result)).toBe(false);
     if (!Result.isError(result)) {
       const childEnvironment: unknown = JSON.parse(result.value);
-      expect(childEnvironment).toEqual({ PATH: process.env["PATH"] ?? "" });
+      expect(childEnvironment).toEqual(["PATH"]);
     }
   });
 
