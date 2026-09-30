@@ -553,18 +553,19 @@ const claimTextlessHeldRecheck = async ({
   decisionId,
 }: ClaimTextlessHeldRecheckOptions): Promise<boolean> => {
   const before = textlessHeldRecheckCutoff(now, recheck);
-  const claimed = await scopedDb(async (tx) => 
-    // audit: skip - durable per-row scheduler backoff bookkeeping
-    await tx
-      .update(caseLawDecisions)
-      .set({ textlessDetailRecheckedAt: now })
-      .where(
-        and(
-          eq(caseLawDecisions.id, decisionId),
-          textlessHeldDueWhere({ sourceId, before, recheck }),
-        ),
-      )
-      .returning({ id: caseLawDecisions.id })
+  const claimed = await scopedDb(
+    async (tx) =>
+      // audit: skip - durable per-row scheduler backoff bookkeeping
+      await tx
+        .update(caseLawDecisions)
+        .set({ textlessDetailRecheckedAt: now })
+        .where(
+          and(
+            eq(caseLawDecisions.id, decisionId),
+            textlessHeldDueWhere({ sourceId, before, recheck }),
+          ),
+        )
+        .returning({ id: caseLawDecisions.id }),
   );
   return claimed.length > 0;
 };
