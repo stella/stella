@@ -125,7 +125,7 @@ BEGIN
   IF NEW.legacy_time_entry_id IS NOT NULL THEN
     INSERT INTO public.time_entry_timer_states (entry_id, organization_id, user_id, state)
     VALUES (NEW.legacy_time_entry_id, NEW.organization_id, NEW.user_id, NEW.state)
-    ON CONFLICT (entry_id) DO UPDATE SET
+    ON CONFLICT ON CONSTRAINT "time_entry_timer_states_pkey" DO UPDATE SET
       organization_id = EXCLUDED.organization_id, user_id = EXCLUDED.user_id, state = EXCLUDED.state;
   END IF;
   RETURN NEW;

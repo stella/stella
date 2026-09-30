@@ -1,3 +1,5 @@
+import { sql } from "drizzle-orm";
+
 import { timeEntries } from "@/api/db/schema";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 
