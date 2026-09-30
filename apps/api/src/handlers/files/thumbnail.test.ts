@@ -86,7 +86,7 @@ describe("matter file thumbnail", () => {
     });
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toContain(thumbnailKey);
-    expect(response.headers.get("cache-control")).toBe("private, max-age=300");
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
     expect(events).toEqual([
       expect.objectContaining({
         action: "download",

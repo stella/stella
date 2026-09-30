@@ -10,12 +10,11 @@ import { fileFieldQuery } from "@/api/lib/files/read-file";
 import { createFileKey } from "@/api/lib/files/utils";
 
 /**
- * Thumbnails are requested by `<img>` tags on every render of a list, so the
- * signed URL stays short-lived and the browser may reuse the redirect for a
- * fraction of that lifetime instead of re-signing (and re-auditing) each time.
+ * Each thumbnail redirect is authorized and audited against the current
+ * session. Signed URLs stay short-lived, and redirects are never cached.
  */
 export const FILE_THUMBNAIL_URL_EXPIRY_SECONDS = 15 * 60;
-const FILE_THUMBNAIL_REDIRECT_CACHE_CONTROL = "private, max-age=300";
+const FILE_THUMBNAIL_REDIRECT_CACHE_CONTROL = "private, no-store";
 
 type ReadFileThumbnailOptions = {
   fieldId: SafeId<"field">;
