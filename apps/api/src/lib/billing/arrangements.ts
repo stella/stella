@@ -108,11 +108,11 @@ const billingUsageProjection = ({
   const workspaceId =
     typeof workspace === "string"
       ? workspace
-      : sql`${sql.identifier(getTableName(workspace.table))}.${sql.identifier(workspace.name)}`;
+      : sql`${sql.identifier(getTableName(billingArrangements))}.${sql.identifier(workspace.name)}`;
   const currency =
     typeof currencyValue === "string"
       ? currencyValue
-      : sql`${sql.identifier(getTableName(currencyValue.table))}.${sql.identifier(currencyValue.name)}`;
+      : sql`${sql.identifier(getTableName(billingArrangements))}.${sql.identifier(currencyValue.name)}`;
   // PostgreSQL numeric arithmetic prevents intermediate product/sum overflow;
   // half-up integer division matches prorateHourlyCents per entry, not after summing.
   const legacyCondition = sql`e.workspace_id = ${workspaceId} AND e.activity_group = ${TIME_ENTRY_ACTIVITY_GROUP.CLIENT} AND e.invoice_attachment = 'charged' AND i.workspace_id = ${workspaceId} AND i.status <> ${INVOICE_STATUS.VOID} ${excludeInvoiceId ? sql`AND i.id <> ${excludeInvoiceId}` : sql``} AND NOT EXISTS (SELECT 1 FROM ${invoiceLines} l WHERE l.invoice_id = i.id AND l.time_entry_id = e.id AND l.source = ${INVOICE_LINE_SOURCE.TIME_ENTRY} AND l.released_at IS NULL)`;
