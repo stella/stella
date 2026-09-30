@@ -236,14 +236,14 @@
       "default": {"title": 22, "description": 491, "inputSchema": 1849, "outputSchema": 1104, "annotations": 99, "payloadUtf8Bytes": 3672}
     },
     "search_case_law": {
-      "anonymized": {"title": 15, "description": 803, "inputSchema": 3237, "outputSchema": 2209, "annotations": 93, "payloadUtf8Bytes": 6457},
-      "default": {"title": 15, "description": 803, "inputSchema": 3237, "outputSchema": 2209, "annotations": 93, "payloadUtf8Bytes": 6457},
-      "law": {"title": 15, "description": 803, "inputSchema": 3237, "outputSchema": 2209, "annotations": 93, "payloadUtf8Bytes": 6457}
+      "anonymized": {"title": 15, "description": 803, "inputSchema": 4297, "outputSchema": 2209, "annotations": 93, "payloadUtf8Bytes": 7522},
+      "default": {"title": 15, "description": 803, "inputSchema": 4297, "outputSchema": 2209, "annotations": 93, "payloadUtf8Bytes": 7522},
+      "law": {"title": 15, "description": 803, "inputSchema": 4297, "outputSchema": 2209, "annotations": 93, "payloadUtf8Bytes": 7522}
     },
     "search_legislation": {
-      "anonymized": {"title": 18, "description": 530, "inputSchema": 2064, "outputSchema": 1041, "annotations": 96, "payloadUtf8Bytes": 3852},
-      "default": {"title": 18, "description": 530, "inputSchema": 2064, "outputSchema": 1041, "annotations": 96, "payloadUtf8Bytes": 3852},
-      "law": {"title": 18, "description": 530, "inputSchema": 2064, "outputSchema": 1041, "annotations": 96, "payloadUtf8Bytes": 3852}
+      "anonymized": {"title": 18, "description": 530, "inputSchema": 2065, "outputSchema": 1041, "annotations": 96, "payloadUtf8Bytes": 3853},
+      "default": {"title": 18, "description": 530, "inputSchema": 2065, "outputSchema": 1041, "annotations": 96, "payloadUtf8Bytes": 3853},
+      "law": {"title": 18, "description": 530, "inputSchema": 2065, "outputSchema": 1041, "annotations": 96, "payloadUtf8Bytes": 3853}
     },
     "set_field_value": {
       "default": {"title": 15, "description": 441, "inputSchema": 2771, "outputSchema": 76, "annotations": 117, "payloadUtf8Bytes": 3520},
