@@ -113,6 +113,54 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
       });
     });
 
+    test("acquisition delayed across the UTC boundary retries into the store's current period", async () => {
+      await withStore(async ({ client, organizationId }) => {
+        const acquisitions: string[][] = [];
+        let acceptedCount: unknown;
+        const result = await withActionAdmission({
+          organizationId,
+          userId,
+          enabled: true,
+          policy,
+          periodPolicy: { periodMs: 250, limit: 1 },
+          periodIdentity: {
+            actionKind: "chat.send",
+            logicalPhaseId: "delayed-phase",
+          },
+          redis: {
+            send: async (command, args) => {
+              if (!args.at(0)?.includes("ZREMRANGEBYSCORE"))
+                {return await client.send(command, args);}
+              acquisitions.push(args);
+              if (acquisitions.length === 1)
+                {await Bun.sleep(
+                  Math.max(0, Number(args.at(10)) - Date.now()) + 20,
+                );}
+              const reply = await client.send(command, args);
+              if (acquisitions.length === 2) {
+                const key = args.at(4);
+                if (!key) {throw new Error("Missing retry period key");}
+                acceptedCount = await client.send("HGET", [key, "count"]);
+              }
+              return reply;
+            },
+          },
+          run: async () => "accepted in current period",
+        });
+        expect(result).toEqual(Result.ok("accepted in current period"));
+        expect(acquisitions).toHaveLength(2);
+        expect(acceptedCount).toBe("1");
+        const first = acquisitions.at(0);
+        const second = acquisitions.at(1);
+        expect(second?.at(9)).toBe(first?.at(10));
+        expect(second?.at(8)).toBe(first?.at(8));
+        expect(second?.at(12)).toBe(first?.at(12));
+        const oldKey = first?.at(4);
+        if (!oldKey) {throw new Error("Missing old period key");}
+        expect(await client.send("EXISTS", [oldKey])).toBe(0);
+      });
+    });
+
     test("renewal reads the same reservation and never increments its count", async () => {
       await withStore(async ({ client, organizationId }) => {
         const { promise: renewed, resolve: finishRenewal } =

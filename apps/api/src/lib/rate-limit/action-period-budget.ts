@@ -1,5 +1,6 @@
 import { Result, TaggedError } from "better-result";
 import { createHash } from "node:crypto";
+import * as v from "valibot";
 
 import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -113,11 +114,37 @@ export const resolveActionPeriodBudget = ({
   });
 };
 
+const STALE_PERIOD_STATUS = -3;
+const stalePeriodReplySchema = v.tuple([
+  v.literal(STALE_PERIOD_STATUS),
+  v.pipe(
+    v.number(),
+    v.integer(),
+    v.minValue(0),
+    v.maxValue(Number.MAX_SAFE_INTEGER),
+  ),
+]);
+
+export const staleActionPeriodTime = (reply: unknown): number | null =>
+  v.is(stalePeriodReplySchema, reply) ? reply[1] : null;
+
+export const actionPeriodArguments = (
+  budget: ActionPeriodBudget | null,
+): string[] =>
+  budget === null
+    ? []
+    : [
+        String(budget.startMs),
+        String(budget.endMs),
+        String(budget.limit),
+        budget.phaseField,
+      ];
+
 // Embedded in the concurrency acquire script after both pools have headroom.
 // KEYS[3] is the single period hash; ARGV[5..8] stay fixed for this admission.
 export const ACTION_PERIOD_ACQUIRE_SCRIPT = `
 if KEYS[3] then
-  if now < tonumber(ARGV[5]) or now >= tonumber(ARGV[6]) then return -2 end
+  if now < tonumber(ARGV[5]) or now >= tonumber(ARGV[6]) then return {${STALE_PERIOD_STATUS}, now} end
   local count = tonumber(redis.call("HGET", KEYS[3], "count") or "0")
   if count == nil or count < 0 or count ~= math.floor(count) then return -2 end
   local replay = redis.call("HEXISTS", KEYS[3], ARGV[8]) == 1

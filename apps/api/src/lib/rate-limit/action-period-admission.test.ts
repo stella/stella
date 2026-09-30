@@ -69,6 +69,102 @@ describe("period admission boundary", () => {
     expect(ran).toBe(false);
   });
 
+  test("nested invalid identities fail closed before inherited lease reuse", async () => {
+    for (const identity of [
+      undefined,
+      { actionKind: " ", logicalPhaseId: "phase" },
+      { actionKind: "chat.send", logicalPhaseId: " " },
+    ]) {
+      let acquisitions = 0;
+      let nestedRan = false;
+      const redis = {
+        send: async (_command: string, args: string[]) => {
+          if (args.at(0)?.includes("ZREMRANGEBYSCORE")) {acquisitions += 1;}
+          return 1;
+        },
+      };
+      const outer = await withActionAdmission({
+        organizationId,
+        userId,
+        enabled: true,
+        policy,
+        periodPolicy,
+        periodIdentity,
+        redis,
+        run: async () =>
+          await withActionAdmission({
+            organizationId,
+            userId,
+            enabled: true,
+            policy,
+            periodPolicy,
+            redis,
+            ...(identity === undefined ? {} : { periodIdentity: identity }),
+            run: async () => {
+              nestedRan = true;
+            },
+          }),
+      });
+      expect(Result.isOk(outer)).toBe(true);
+      if (Result.isOk(outer)) {expectUnavailable(outer.value);}
+      expect(nestedRan).toBe(false);
+      expect(acquisitions).toBe(1);
+    }
+  });
+
+  test("delayed acquisition retries one stale window using store time and the same phase", async () => {
+    const acquisitions: string[][] = [];
+    const result = await withActionAdmission({
+      organizationId,
+      userId,
+      enabled: true,
+      policy,
+      periodPolicy,
+      periodIdentity,
+      redis: {
+        send: async (_command, args) => {
+          if (!args.at(0)?.includes("ZREMRANGEBYSCORE")) {return 1;}
+          acquisitions.push(args);
+          return acquisitions.length === 1 ? [-3, Number(args.at(10))] : 1;
+        },
+      },
+      run: async () => "completed",
+    });
+    expect(result).toEqual(Result.ok("completed"));
+    expect(acquisitions).toHaveLength(2);
+    const first = acquisitions.at(0);
+    const second = acquisitions.at(1);
+    expect(second?.at(9)).toBe(first?.at(10));
+    expect(second?.at(4)).not.toBe(first?.at(4));
+    expect(second?.at(8)).toBe(first?.at(8));
+    expect(second?.at(12)).toBe(first?.at(12));
+  });
+
+  test("a second stale reply fails closed without an acquisition loop", async () => {
+    let acquisitions = 0;
+    let ran = false;
+    const result = await withActionAdmission({
+      organizationId,
+      userId,
+      enabled: true,
+      policy,
+      periodPolicy,
+      periodIdentity,
+      redis: {
+        send: async (_command, args) => {
+          acquisitions += 1;
+          return [-3, Number(args.at(10))];
+        },
+      },
+      run: async () => {
+        ran = true;
+      },
+    });
+    expectUnavailable(result);
+    expect(acquisitions).toBe(2);
+    expect(ran).toBe(false);
+  });
+
   test("store outage fails closed and does not execute tenant work", async () => {
     let ran = false;
     const result = await withActionAdmission({

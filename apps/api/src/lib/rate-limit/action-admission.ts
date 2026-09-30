@@ -9,6 +9,8 @@ import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   ACTION_PERIOD_ACQUIRE_SCRIPT,
+  actionPeriodArguments,
+  staleActionPeriodTime,
   resolveActionPeriodBudget,
   type ActionPeriodBudget,
   type ActionPeriodIdentity,
@@ -181,6 +183,8 @@ const defaultTiming: AdmissionTiming = {
 type AdmissionExecutorOptions = {
   keys: AdmissionKeys;
   budget: ActionPeriodBudget | null;
+  organizationId: SafeId<"organization">;
+  periodIdentity: ActionPeriodIdentity | undefined;
   redis: RedisCommands | undefined;
   redisReady: () => Promise<RedisCommands>;
 };
@@ -188,13 +192,18 @@ type AdmissionExecutorOptions = {
 const createAdmissionExecutor = ({
   keys,
   budget,
+  organizationId,
+  periodIdentity,
   redis,
   redisReady,
 }: AdmissionExecutorOptions) => {
-  const commandKeys =
-    budget === null
-      ? [keys.organization, keys.user]
-      : [keys.organization, keys.user, budget.key];
+  const retryIdentity =
+    periodIdentity === undefined
+      ? undefined
+      : {
+          actionKind: periodIdentity.actionKind,
+          logicalPhaseId: periodIdentity.logicalPhaseId,
+        };
   const execute = async (script: string, args: string[]) =>
     await Result.tryPromise({
       try: async () => {
@@ -205,21 +214,48 @@ const createAdmissionExecutor = ({
             commandTimeoutMs: REDIS_COMMAND_TIMEOUT_MS,
             label: "action-admission-redis-connect",
           }));
-        // Only acquisition touches the period hash; renewal and release own leases alone.
-        const scriptKeys =
-          script === ACQUIRE_SCRIPT
-            ? commandKeys
-            : [keys.organization, keys.user];
-        return await withCommandTimeout({
-          command: client.send("EVAL", [
-            script,
-            String(scriptKeys.length),
-            ...scriptKeys,
-            ...args,
-          ]),
-          commandTimeoutMs: REDIS_COMMAND_TIMEOUT_MS,
-          label: "action-admission-redis-command",
+        const send = async (
+          window: ActionPeriodBudget | null,
+          commandArgs: string[],
+        ) => {
+          // Renewal and release touch concurrency keys alone.
+          const scriptKeys =
+            script === ACQUIRE_SCRIPT && window !== null
+              ? [keys.organization, keys.user, window.key]
+              : [keys.organization, keys.user];
+          return await withCommandTimeout({
+            command: client.send("EVAL", [
+              script,
+              String(scriptKeys.length),
+              ...scriptKeys,
+              ...commandArgs,
+            ]),
+            commandTimeoutMs: REDIS_COMMAND_TIMEOUT_MS,
+            label: "action-admission-redis-command",
+          });
+        };
+        const reply = await send(budget, args);
+        const storeNow =
+          script === ACQUIRE_SCRIPT ? staleActionPeriodTime(reply) : null;
+        if (budget === null || storeNow === null) {return reply;}
+
+        // A stale window has not reserved anything. Retry once using store time,
+        // with the original lease and logical phase, never after another failure.
+        const refreshed = resolveActionPeriodBudget({
+          organizationId,
+          identity: retryIdentity,
+          policy: {
+            periodMs: budget.endMs - budget.startMs,
+            limit: budget.limit,
+          },
+          nowMs: storeNow,
         });
+        if (Result.isError(refreshed)) {throw refreshed.error;}
+        if (refreshed.value === null) {return -2;}
+        return await send(refreshed.value, [
+          ...args.slice(0, 4),
+          ...actionPeriodArguments(refreshed.value),
+        ]);
       },
       catch: (error: unknown) =>
         new ActionAdmissionError({
@@ -259,6 +295,23 @@ export const withActionAdmission = async <T>({
     });
   }
 
+  const resolvedBudget = resolveActionPeriodBudget({
+    organizationId,
+    identity: periodIdentity,
+    policy: periodPolicy,
+    nowMs: Temporal.Now.instant().epochMilliseconds,
+  });
+  if (Result.isError(resolvedBudget)) {
+    return Result.err(
+      new ActionAdmissionError({
+        message: resolvedBudget.error.message,
+        reason: "unavailable",
+        cause: resolvedBudget.error,
+      }),
+    );
+  }
+  const budget = resolvedBudget.value;
+
   const inherited = admissionScope.getStore();
   if (
     inherited?.status === "active" &&
@@ -281,35 +334,18 @@ export const withActionAdmission = async <T>({
   if (Result.isError(resolvedPolicy)) {
     return resolvedPolicy;
   }
-  const resolvedBudget = resolveActionPeriodBudget({
-    organizationId,
-    identity: periodIdentity,
-    policy: periodPolicy,
-    nowMs: Temporal.Now.instant().epochMilliseconds,
-  });
-  if (Result.isError(resolvedBudget)) {
-    return Result.err(
-      new ActionAdmissionError({
-        message: resolvedBudget.error.message,
-        reason: "unavailable",
-        cause: resolvedBudget.error,
-      }),
-    );
-  }
-  const budget = resolvedBudget.value;
   const limits = resolvedPolicy.value;
   const keys = admissionKeys({ organizationId, userId });
   const leaseId = createId();
-  const periodArgs =
-    budget === null
-      ? []
-      : [
-          String(budget.startMs),
-          String(budget.endMs),
-          String(budget.limit),
-          budget.phaseField,
-        ];
-  const execute = createAdmissionExecutor({ keys, budget, redis, redisReady });
+  const periodArgs = actionPeriodArguments(budget);
+  const execute = createAdmissionExecutor({
+    keys,
+    budget,
+    organizationId,
+    periodIdentity,
+    redis,
+    redisReady,
+  });
 
   const initialAttemptAt = timing.now();
   const admitted = await execute(ACQUIRE_SCRIPT, [
