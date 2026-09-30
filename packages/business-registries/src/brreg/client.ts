@@ -1,5 +1,10 @@
 import { encodeRegistryComponent } from "../shared/encode-registry-component.js";
-import { isRecord } from "../shared/guards.js";
+import {
+  hasOptionalString,
+  hasOptionalNumber,
+  isRecord,
+  isOptionalArrayOf,
+} from "../shared/guards.js";
 import { registryFetch } from "../shared/http.js";
 import { clampSearchLimit } from "../shared/search.js";
 import {
@@ -26,24 +31,53 @@ const DEFAULT_SEARCH_LIMIT = 50;
 const MAX_SEARCH_LIMIT = 100;
 const BRREG_RESULT_CAP = 10_000;
 
-const isOptionalRecord = (value: unknown): boolean =>
-  value === undefined || isRecord(value);
+const isString = (value: unknown): boolean => typeof value === "string";
 
-const isOptionalNumber = (value: unknown): boolean =>
-  value === undefined || typeof value === "number";
+const isBrregAddress = (value: unknown): boolean =>
+  value === undefined ||
+  (isRecord(value) &&
+    hasOptionalString(value, "land") &&
+    hasOptionalString(value, "postnummer") &&
+    hasOptionalString(value, "poststed") &&
+    hasOptionalString(value, "kommune") &&
+    isOptionalArrayOf(value["adresse"], isString));
+
+const isBrregCode = (value: unknown): boolean =>
+  value === undefined ||
+  (isRecord(value) &&
+    hasOptionalString(value, "kode") &&
+    hasOptionalString(value, "beskrivelse"));
 
 const isBrregRawEnhet = (value: unknown): value is BrregRawEnhet =>
   isRecord(value) &&
   typeof value["organisasjonsnummer"] === "string" &&
   typeof value["navn"] === "string" &&
-  isOptionalRecord(value["organisasjonsform"]) &&
-  isOptionalRecord(value["postadresse"]) &&
-  isOptionalRecord(value["forretningsadresse"]) &&
-  isOptionalRecord(value["beliggenhetsadresse"]) &&
-  isOptionalRecord(value["naeringskode1"]) &&
-  isOptionalRecord(value["naeringskode2"]) &&
-  isOptionalRecord(value["naeringskode3"]) &&
-  isOptionalNumber(value["antallAnsatte"]);
+  hasOptionalString(value, "registreringsdatoEnhetsregisteret") &&
+  hasOptionalString(value, "stiftelsesdato") &&
+  hasOptionalString(value, "slettedato") &&
+  hasOptionalString(value, "nedleggelsesdato") &&
+  hasOptionalString(value, "konkursdato") &&
+  hasOptionalString(value, "underAvviklingDato") &&
+  hasOptionalString(value, "tvangsopplostPgaManglendeRegnskapDato") &&
+  hasOptionalString(value, "tvangsopplostPgaManglendeRevisorDato") &&
+  hasOptionalString(value, "tvangsopplostPgaMangelfulltStyreDato") &&
+  hasOptionalString(value, "tvangsopplostPgaManglendeDagligLederDato") &&
+  hasOptionalString(value, "tvangsavvikletPgaManglendeSlettingDato") &&
+  hasOptionalNumber(value, "antallAnsatte") &&
+  (value["konkurs"] === undefined || typeof value["konkurs"] === "boolean") &&
+  (value["underAvvikling"] === undefined ||
+    typeof value["underAvvikling"] === "boolean") &&
+  (value["underTvangsavviklingEllerTvangsopplosning"] === undefined ||
+    typeof value["underTvangsavviklingEllerTvangsopplosning"] === "boolean") &&
+  (value["registrertIMvaregisteret"] === undefined ||
+    typeof value["registrertIMvaregisteret"] === "boolean") &&
+  isBrregCode(value["organisasjonsform"]) &&
+  isBrregAddress(value["forretningsadresse"]) &&
+  isBrregAddress(value["beliggenhetsadresse"]) &&
+  isBrregAddress(value["postadresse"]) &&
+  isBrregCode(value["naeringskode1"]) &&
+  isBrregCode(value["naeringskode2"]) &&
+  isBrregCode(value["naeringskode3"]);
 
 const isBrregSearchResponse = (
   value: unknown,

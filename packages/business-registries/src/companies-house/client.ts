@@ -1,5 +1,5 @@
 import { encodeRegistryComponent } from "../shared/encode-registry-component.js";
-import { isRecord } from "../shared/guards.js";
+import { isOptionalRecord, isRecord } from "../shared/guards.js";
 import { registryFetch } from "../shared/http.js";
 import { clampSearchLimit } from "../shared/search.js";
 import {
@@ -63,9 +63,6 @@ const buildAuthHeader = (apiKey: string): string => {
   return `Basic ${token}`;
 };
 
-const isOptionalRecord = (value: unknown): boolean =>
-  value === undefined || isRecord(value);
-
 const isOptionalStringArray = (value: unknown): boolean =>
   value === undefined ||
   (Array.isArray(value) && value.every((item) => typeof item === "string"));
@@ -73,17 +70,45 @@ const isOptionalStringArray = (value: unknown): boolean =>
 const isCompaniesHousePreviousName = (value: unknown): boolean =>
   isRecord(value) && typeof value["name"] === "string";
 
+const isCompaniesHouseBirthDate = (value: unknown): boolean =>
+  value === undefined ||
+  (isRecord(value) &&
+    ["month", "year"].every(
+      (key) =>
+        value[key] === undefined ||
+        value[key] === null ||
+        typeof value[key] === "string" ||
+        typeof value[key] === "number",
+    ));
+
+const isOptionalBoolean = (value: unknown): boolean =>
+  value === undefined || typeof value === "boolean";
+
+const isCompaniesHouseAccounts = (value: unknown): boolean =>
+  value === undefined ||
+  (isRecord(value) &&
+    isOptionalBoolean(value["overdue"]) &&
+    (!isRecord(value["next_accounts"]) ||
+      isOptionalBoolean(value["next_accounts"]["overdue"])));
+
+const isCompaniesHouseConfirmation = (value: unknown): boolean =>
+  value === undefined ||
+  (isRecord(value) && isOptionalBoolean(value["overdue"]));
+
 const isCompaniesHouseRawCompanyProfile = (
   value: unknown,
 ): value is CompaniesHouseRawCompanyProfile =>
   isRecord(value) &&
   typeof value["company_name"] === "string" &&
   typeof value["company_number"] === "string" &&
+  ["has_charges", "has_insolvency_history", "has_been_liquidated"].every(
+    (key) => isOptionalBoolean(value[key]),
+  ) &&
   isOptionalRecord(value["registered_office_address"]) &&
   isOptionalRecord(value["service_address"]) &&
   isOptionalStringArray(value["sic_codes"]) &&
-  isOptionalRecord(value["accounts"]) &&
-  isOptionalRecord(value["confirmation_statement"]) &&
+  isCompaniesHouseAccounts(value["accounts"]) &&
+  isCompaniesHouseConfirmation(value["confirmation_statement"]) &&
   (value["previous_company_names"] === undefined ||
     (Array.isArray(value["previous_company_names"]) &&
       value["previous_company_names"].every(isCompaniesHousePreviousName)));
@@ -107,7 +132,7 @@ const isCompaniesHouseOfficer = (value: unknown): boolean =>
   isRecord(value) &&
   typeof value["name"] === "string" &&
   typeof value["officer_role"] === "string" &&
-  isOptionalRecord(value["date_of_birth"]) &&
+  isCompaniesHouseBirthDate(value["date_of_birth"]) &&
   isOptionalRecord(value["address"]) &&
   isOptionalRecord(value["principal_office_address"]) &&
   isOptionalRecord(value["identification"]);
