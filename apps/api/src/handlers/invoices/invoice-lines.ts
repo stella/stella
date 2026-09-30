@@ -544,6 +544,31 @@ export const lockDraftInvoiceForLines = async (
   return Result.ok(invoice);
 };
 
+type InvoiceEntryChangeLockOptions = InvoiceScope & {
+  recordAuditEvent: AuditRecorder;
+  conflictMessage: string;
+};
+
+export const requireDraftInvoiceForEntryChanges = async (
+  tx: Transaction,
+  {
+    recordAuditEvent,
+    conflictMessage,
+    ...scope
+  }: InvoiceEntryChangeLockOptions,
+) => {
+  const result = await lockDraftInvoiceForLines(tx, scope, recordAuditEvent);
+  if (result.isErr()) {
+    return Result.err(result.error);
+  }
+  if (!result.value) {
+    return Result.err(
+      new HandlerError({ status: 409, message: conflictMessage }),
+    );
+  }
+  return Result.ok(result.value);
+};
+
 /** Invoice totals and VAT breakdown over the given lines. */
 export const invoiceTotals = (
   lines: readonly LineAmountInput[],

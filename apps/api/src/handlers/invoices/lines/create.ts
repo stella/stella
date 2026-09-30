@@ -67,17 +67,14 @@ const prepareLineInput = ({
   vatTreatment,
 }: Static<typeof createLineBodySchema>) => {
   const vat = { vatRateBps, vatTreatment };
-  const draft =
-    source.type === "manual"
-      ? manualLineDraft({
-          description: source.description,
-          quantity: source.quantity,
-          unit: source.unit ?? null,
-          unitPrice: cents(source.unitPriceMinor),
-          ...vat,
-        })
-      : Result.ok(null);
-  return draft.map((manualDraft) => ({ manualDraft, vat }));
+  if (source.type !== "manual") {return Result.ok({ manualDraft: null, vat });}
+  return manualLineDraft({
+    description: source.description,
+    quantity: source.quantity,
+    unit: source.unit ?? null,
+    unitPrice: cents(source.unitPriceMinor),
+    ...vat,
+  }).map((manualDraft) => ({ manualDraft, vat }));
 };
 
 const lineParamsSchema = workspaceParams({ invoiceId: tSafeId("invoice") });

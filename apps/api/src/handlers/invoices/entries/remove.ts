@@ -11,7 +11,7 @@ import {
   timeEntries,
 } from "@/api/db/schema";
 import {
-  lockDraftInvoiceForLines,
+  requireDraftInvoiceForEntryChanges,
   recalculateInvoiceTotals,
 } from "@/api/handlers/invoices/invoice-lines";
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -153,6 +153,14 @@ const removeEntries = createSafeHandler(
 
     const now = new Date();
 
+    const entryChangeScope = {
+      invoiceId: params.invoiceId,
+      organizationId: session.activeOrganizationId,
+      workspaceId,
+      recordAuditEvent,
+      conflictMessage: "Invoice status changed concurrently; please retry",
+    };
+
     const txResult = yield* Result.await(
       resultTx(safeDb, async (tx) => {
         const runningError = await guardRunningTimeEntries({
@@ -166,26 +174,12 @@ const removeEntries = createSafeHandler(
         if (runningError) {
           return Result.err(runningError);
         }
-        const invoiceResult = await lockDraftInvoiceForLines(
+        const invoiceResult = await requireDraftInvoiceForEntryChanges(
           tx,
-          {
-            invoiceId: params.invoiceId,
-            organizationId: session.activeOrganizationId,
-            workspaceId,
-          },
-          recordAuditEvent,
+          entryChangeScope,
         );
         if (invoiceResult.isErr()) {
           return Result.err(invoiceResult.error);
-        }
-        const invoiceCheck = invoiceResult.value;
-        if (!invoiceCheck) {
-          return Result.err(
-            new HandlerError({
-              status: 409,
-              message: "Invoice status changed concurrently; please retry",
-            }),
-          );
         }
 
         const timeEntryIds = body.timeEntryIds;

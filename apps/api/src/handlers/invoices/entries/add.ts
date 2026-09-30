@@ -15,7 +15,7 @@ import {
   checkInvoiceLineCapacity,
   expenseLineDraft,
   insertInvoiceLines,
-  lockDraftInvoiceForLines,
+  requireDraftInvoiceForEntryChanges,
   recalculateInvoiceTotals,
   timeEntryLineDraft,
 } from "@/api/handlers/invoices/invoice-lines";
@@ -316,6 +316,14 @@ const addEntries = createSafeHandler(
     const now = new Date();
     const { timeEntryIds, expenseIds } = body;
 
+    const entryChangeScope = {
+      invoiceId: params.invoiceId,
+      organizationId: session.activeOrganizationId,
+      workspaceId,
+      recordAuditEvent,
+      conflictMessage: INVOICE_ENTRIES_MODIFIED_MESSAGE,
+    };
+
     const txResult = await resultTx(safeDb, async (tx) => {
       const runningError = await guardRunningTimeEntries({
         tx,
@@ -328,27 +336,14 @@ const addEntries = createSafeHandler(
       if (runningError) {
         return Result.err(runningError);
       }
-      const invoiceResult = await lockDraftInvoiceForLines(
+      const invoiceResult = await requireDraftInvoiceForEntryChanges(
         tx,
-        {
-          invoiceId: params.invoiceId,
-          organizationId: session.activeOrganizationId,
-          workspaceId,
-        },
-        recordAuditEvent,
+        entryChangeScope,
       );
       if (invoiceResult.isErr()) {
         return Result.err(invoiceResult.error);
       }
       const invoiceCheck = invoiceResult.value;
-      if (!invoiceCheck) {
-        return Result.err(
-          new HandlerError({
-            status: 409,
-            message: INVOICE_ENTRIES_MODIFIED_MESSAGE,
-          }),
-        );
-      }
       if (invoiceCheck.documentType === "credit_note") {
         return Result.err(
           new HandlerError({
