@@ -141,7 +141,7 @@ export const createPublicSanctionsSearchHandler = ({
 }: PublicSanctionsSearchOptions = {}) =>
   createSafePublicHandler(
     {
-      mcp: { type: "covered", by: "check_counterparty" },
+      mcp: { type: "internal", reason: "public_indexing" },
       body: bodySchema,
     },
     async function* ({
