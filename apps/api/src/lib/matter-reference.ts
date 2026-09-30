@@ -11,6 +11,9 @@ import {
 } from "@/api/lib/billing/number-pattern";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+
+export const MAX_MATTER_REFERENCE_ALLOCATION_ATTEMPTS = 100;
 
 export const validatePattern = (pattern: string, padding: number) =>
   validateNumberPattern({ pattern, padding, sequenceDigitsBudget: 6 });
@@ -40,7 +43,11 @@ export const allocateMatterReference = async ({
 }: AllocateMatterReferenceOptions): Promise<string> => {
   const scopeKey = toScopeKey(pattern, now);
   // The counter lock serializes candidate selection across matter creation.
-  for (;;) {
+  for (
+    let attempt = 0;
+    attempt < MAX_MATTER_REFERENCE_ALLOCATION_ATTEMPTS;
+    attempt++
+  ) {
     const counters = await tx
       .insert(matterCounters)
       .values({
@@ -79,4 +86,10 @@ export const allocateMatterReference = async ({
       return reference;
     }
   }
+  throw new HandlerError({
+    status: 409,
+    code: "MATTER_REFERENCE_ALLOCATION_EXHAUSTED",
+    message:
+      "Could not allocate a matter reference. Choose a different matter numbering pattern and try again.",
+  });
 };

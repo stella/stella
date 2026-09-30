@@ -29,7 +29,11 @@ import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { toScopeKey } from "@/api/lib/matter-reference";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  MAX_MATTER_REFERENCE_ALLOCATION_ATTEMPTS,
+  toScopeKey,
+} from "@/api/lib/matter-reference";
 import { runNumberingCopy } from "@/api/tests/helpers/document-numbering-copy";
 import { runNumberingUpload } from "@/api/tests/helpers/document-numbering-upload";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -48,6 +52,12 @@ setDefaultTimeout(120_000);
 let testDb: TestDatabase;
 let ids: TestIds;
 let fake: FakeS3;
+let originalNumberingSettings:
+  | Pick<
+      typeof organizationSettings.$inferSelect,
+      "matterNumberPattern" | "matterNumberPadding"
+    >
+  | undefined;
 const createdWorkspaceIds: SafeId<"workspace">[] = [];
 const testReferences: string[] = [];
 const recordAuditEvent: AuditRecorder = async () => undefined;
@@ -261,6 +271,17 @@ beforeAll(async () => {
   testDb = await getTestDb();
   ids = createTestIds();
   await setupRlsTestData(testDb, ids);
+  const rows = await testDb
+    .select({
+      matterNumberPattern: organizationSettings.matterNumberPattern,
+      matterNumberPadding: organizationSettings.matterNumberPadding,
+    })
+    .from(organizationSettings)
+    .where(eq(organizationSettings.organizationId, ids.orgA));
+  originalNumberingSettings = rows.at(0);
+  if (originalNumberingSettings === undefined) {
+    panic("Numbering test organization has no settings");
+  }
 });
 
 afterAll(async () => {
@@ -281,8 +302,17 @@ afterAll(async () => {
         );
     }
   } finally {
-    fake.stop();
-    await releaseTestDb();
+    try {
+      if (originalNumberingSettings !== undefined) {
+        await testDb
+          .update(organizationSettings)
+          .set(originalNumberingSettings)
+          .where(eq(organizationSettings.organizationId, ids.orgA));
+      }
+    } finally {
+      fake.stop();
+      await releaseTestDb();
+    }
   }
 });
 
@@ -634,3 +664,94 @@ test("every full stamp issued in the organization is unique", async () => {
   expect(stamps.length).toBeGreaterThan(0);
   expect(new Set(stamps).size).toBe(stamps.length);
 });
+
+test.each([
+  MAX_MATTER_REFERENCE_ALLOCATION_ATTEMPTS - 1,
+  MAX_MATTER_REFERENCE_ALLOCATION_ATTEMPTS,
+])(
+  "matter allocation is bounded with %d unavailable candidates",
+  async (blockedCount) => {
+    const pattern = `PATH-BOUND-${blockedCount}-{SEQ}`;
+    const references = Array.from(
+      { length: blockedCount },
+      (_, index) =>
+        `PATH-BOUND-${blockedCount}-${String(index + 1).padStart(3, "0")}`,
+    );
+    testReferences.push(...references);
+    await testDb
+      .update(organizationSettings)
+      .set({ matterNumberPattern: pattern, matterNumberPadding: 3 })
+      .where(eq(organizationSettings.organizationId, ids.orgA));
+    await testDb.insert(documentReferenceCounters).values(
+      references.map((reference) => ({
+        id: createSafeId<"documentReferenceCounter">(),
+        organizationId: ids.orgA,
+        reference,
+        workspaceId: null,
+        lastValue: 5,
+      })),
+    );
+    const workspaceId = createSafeId<"workspace">();
+    createdWorkspaceIds.push(workspaceId);
+    const create = async () =>
+      await Result.gen(() =>
+        createWorkspaceHandler({
+          safeDb: asTestRaw(createSafeDb(testDb, [], ids.orgA, ids.userA1)),
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+          recordAuditEvent,
+          body: {
+            id: workspaceId,
+            name: "Bounded numbering",
+            filePropertyName: "Documents",
+          },
+        }),
+      );
+    const result = await create();
+    let expectedReference = `PATH-BOUND-${blockedCount}-${String(blockedCount + 1).padStart(3, "0")}`;
+    if (blockedCount === MAX_MATTER_REFERENCE_ALLOCATION_ATTEMPTS) {
+      expect(Result.isError(result)).toBe(true);
+      if (Result.isOk(result)) {
+        panic("Exhausted allocation unexpectedly succeeded");
+      }
+      expect(HandlerError.is(result.error)).toBe(true);
+      if (!HandlerError.is(result.error)) {
+        panic("Exhausted allocation did not return a recoverable error");
+      }
+      expect(result.error.status).toBe(409);
+      expect(result.error.code).toBe("MATTER_REFERENCE_ALLOCATION_EXHAUSTED");
+      const counters = await testDb
+        .select()
+        .from(matterCounters)
+        .where(
+          and(
+            eq(matterCounters.organizationId, ids.orgA),
+            eq(matterCounters.scopeKey, toScopeKey(pattern, new Date())),
+          ),
+        );
+      expect(counters).toHaveLength(0);
+      const matters = await testDb
+        .select({ id: workspaces.id })
+        .from(workspaces)
+        .where(eq(workspaces.id, workspaceId));
+      expect(matters).toHaveLength(0);
+      expectedReference = `PATH-BOUND-${blockedCount}-001`;
+      await testDb
+        .delete(documentReferenceCounters)
+        .where(
+          and(
+            eq(documentReferenceCounters.organizationId, ids.orgA),
+            eq(documentReferenceCounters.reference, expectedReference),
+          ),
+        );
+      expectOk(await create());
+    } else {
+      expectOk(result);
+    }
+    const rows = await testDb
+      .select({ reference: workspaces.reference })
+      .from(workspaces)
+      .where(eq(workspaces.id, workspaceId));
+    expect(rows.at(0)?.reference).toBe(expectedReference);
+  },
+);

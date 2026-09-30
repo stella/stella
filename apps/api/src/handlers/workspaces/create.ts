@@ -6,6 +6,7 @@ import type { Static } from "elysia";
 import { member } from "@/api/db/auth-schema";
 import { SETTING_WORKSPACE_IDS } from "@/api/db/rls";
 import type { SafeDb } from "@/api/db/safe-db";
+import { abortableTx } from "@/api/db/safe-db";
 import {
   contacts,
   properties,
@@ -85,7 +86,7 @@ export const createWorkspaceHandler = async function* ({
   body,
 }: CreateWorkspaceHandlerProps) {
   const txResult = yield* Result.await(
-    safeDb(async (tx) => {
+    abortableTx(safeDb, async (tx) => {
       // New personal matters (no clientId) start with exactly one
       // member: the creator. Additional members can be attached
       // through the workspace members endpoint after creation.
