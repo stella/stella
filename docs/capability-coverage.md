@@ -15,7 +15,7 @@ here as its CLI form). Projected from the same handler enumeration that builds
 A capability id is its handler path under `apps/api/src/handlers/`, joined
 with `.`: `<domain>[.<resource>…].<action>`. The action is one word:
 a canonical verb (`list`, `get`, `create`, `update`, `delete`)
-or a domain verb (`add`, `approve`, `archive`, `cancel`, `check`, `clip`, `clone`, `compare`, `confirm`, `convert`, `copy`, `count`, `diff`, `discover`, `discard`, `download`, `duplicate`, `export`, `fill`, `generate`, `import`, `install`, `link`, `lookup`, `move`, `pause`, `prefill`, `prepare`, `preview`, `remove`, `rename`, `reorder`, `replace`, `resolve`, `restore`, `resume`, `retry`, `review`, `rewrite`, `run`, `search`, `split`, `start`, `suggest`, `summarize`, `sync`, `transition`, `unarchive`, `unlink`, `upload`, `upsert`).
+or a domain verb (`add`, `approve`, `archive`, `cancel`, `check`, `clip`, `clone`, `compare`, `confirm`, `convert`, `copy`, `count`, `diff`, `discover`, `discard`, `download`, `duplicate`, `export`, `fill`, `generate`, `import`, `install`, `link`, `lookup`, `move`, `pause`, `prefill`, `prepare`, `preview`, `remove`, `rename`, `reorder`, `replace`, `resolve`, `restore`, `resume`, `retry`, `review`, `rewrite`, `run`, `search`, `split`, `start`, `stop`, `suggest`, `summarize`, `sync`, `transition`, `unarchive`, `unlink`, `upload`, `upsert`).
 A compound action is a nested resource: `clauses.categories.create`, not
 `clauses.categories-create`.
 
@@ -582,15 +582,17 @@ A compound action is a nested resource: `clauses.categories.create`, not
 
 ## time-timers
 
-| Capability            | Access             | Scope                | Feature              | Reachable via                                            |
-| --------------------- | ------------------ | -------------------- | -------------------- | -------------------------------------------------------- |
-| `time-timers.confirm` | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-timers confirm` |
-| `time-timers.discard` | write, destructive | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-timers discard` |
-| `time-timers.list`    | read               | stella:read          | FEATURE_TIME_BILLING | generic invoke → `stella capability time-timers list`    |
-| `time-timers.pause`   | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-timers pause`   |
-| `time-timers.resume`  | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-timers resume`  |
-| `time-timers.start`   | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-timers start`   |
-| `time-timers.update`  | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-timers update`  |
+| Capability               | Access             | Scope                | Feature              | Reachable via                                               |
+| ------------------------ | ------------------ | -------------------- | -------------------- | ----------------------------------------------------------- |
+| `time-timers.admin.list` | read               | stella:read          | FEATURE_TIME_BILLING | generic invoke → `stella capability time-timers admin-list` |
+| `time-timers.admin.stop` | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-timers admin-stop` |
+| `time-timers.confirm`    | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-timers confirm`    |
+| `time-timers.discard`    | write, destructive | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-timers discard`    |
+| `time-timers.list`       | read               | stella:read          | FEATURE_TIME_BILLING | generic invoke → `stella capability time-timers list`       |
+| `time-timers.pause`      | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-timers pause`      |
+| `time-timers.resume`     | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-timers resume`     |
+| `time-timers.start`      | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-timers start`      |
+| `time-timers.update`     | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-timers update`     |
 
 ## uploads
 

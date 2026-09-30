@@ -7,6 +7,7 @@ import {
 } from "@stll/api-contract";
 import type { TimeEntrySuggestionEvidence } from "@stll/api-contract/time-entry-types";
 import { VAT_TREATMENTS } from "@stll/invoicing";
+import { ORGANIZATION_MANAGEMENT_ROLES } from "@stll/permissions";
 
 import {
   EXPENSE_CATEGORIES,
@@ -141,6 +142,64 @@ const TIME_TIMER_CURRENT_MEMBER_CHECK = sql`EXISTS (
     AND ${member.userId} = "time_timers"."user_id"
 )`;
 
+const TIME_TIMER_ADMIN_ROLE_SQL_VALUES = ORGANIZATION_MANAGEMENT_ROLES.map(
+  (role) => sql.raw(`'${role}'`),
+);
+
+const timerOrganizationAdminCheck = (
+  tableName:
+    | "time_timers"
+    | "time_timer_confirmations"
+    | "time_entry_timer_states",
+) => sql`(
+  ${sql.identifier(tableName)}."organization_id" = (SELECT current_setting('app.organization_id', true))
+  AND EXISTS (
+    SELECT 1 FROM ${member}
+    WHERE ${member.organizationId} = (SELECT current_setting('app.organization_id', true))
+      AND ${member.userId} = (SELECT current_setting('app.user_id', true))
+      AND ${member.role} IN (${sql.join(TIME_TIMER_ADMIN_ROLE_SQL_VALUES, sql`, `)})
+  )
+)`;
+
+const TIME_TIMER_ADMIN_CHECK = sql`(
+  ${timerOrganizationAdminCheck("time_timers")} AND "time_timers"."state" = 'running'
+)`;
+const TIME_TIMER_ADMIN_DELETE_CHECK = sql`(
+  ${TIME_TIMER_ADMIN_CHECK}
+  AND EXISTS (
+    SELECT 1 FROM "time_timer_confirmations"
+    WHERE "time_timer_confirmations"."timer_id" = "time_timers"."id"
+      AND "time_timer_confirmations"."organization_id" = "time_timers"."organization_id"
+      AND "time_timer_confirmations"."user_id" = "time_timers"."user_id"
+      AND "time_timer_confirmations"."time_entry_id" IS NOT NULL
+  )
+)`;
+const TIME_TIMER_CONFIRMATION_ADMIN_CHECK = timerOrganizationAdminCheck(
+  "time_timer_confirmations",
+);
+const TIME_TIMER_CONFIRMATION_ADMIN_INSERT_CHECK = sql`(
+  ${TIME_TIMER_CONFIRMATION_ADMIN_CHECK}
+  AND EXISTS (
+    SELECT 1 FROM ${member}
+    WHERE ${member.organizationId} = "time_timer_confirmations"."organization_id"
+      AND ${member.userId} = "time_timer_confirmations"."user_id"
+  )
+  AND EXISTS (
+    SELECT 1 FROM "time_timers"
+    WHERE "time_timers"."id" = "time_timer_confirmations"."timer_id"
+      AND "time_timers"."organization_id" = "time_timer_confirmations"."organization_id"
+      AND "time_timers"."user_id" = "time_timer_confirmations"."user_id"
+      AND "time_timers"."state" = 'running'
+  )
+  AND "time_timer_confirmations"."time_entry_id" IS NOT NULL
+  AND EXISTS (
+    SELECT 1 FROM ${timeEntries}
+    WHERE ${timeEntries.id} = "time_timer_confirmations"."time_entry_id"
+      AND ${timeEntries.organizationId} = "time_timer_confirmations"."organization_id"
+      AND ${timeEntries.userId} = "time_timer_confirmations"."user_id"
+  )
+)`;
+
 export const timeTimers = p.pgTable(
   "time_timers",
   {
@@ -181,8 +240,16 @@ export const timeTimers = p.pgTable(
     p
       .index("time_timers_owner_id_idx")
       .on(table.organizationId, table.userId, table.id),
+    p
+      .index("time_timers_running_org_id_idx")
+      .on(table.organizationId, table.id)
+      .where(sql`${table.state} = 'running'`),
     p.index("time_timers_workspace_idx").on(table.workspaceId),
     p.index("time_timers_legacy_entry_idx").on(table.legacyTimeEntryId),
+    p
+      .uniqueIndex("time_timers_legacy_entry_uidx")
+      .on(table.legacyTimeEntryId)
+      .where(sql`${table.legacyTimeEntryId} IS NOT NULL`),
     p.check(
       "time_timers_state_check",
       sql`${table.state} IN (${sql.join(TIME_TIMER_STATE_SQL_VALUES, sql`, `)})`,
@@ -196,6 +263,16 @@ export const timeTimers = p.pgTable(
       sql`(${table.state} = 'running') = (${table.lastResumedAt} IS NOT NULL)`,
     ),
     ...userOrganizationPolicies(),
+    p.pgPolicy("organization_admin_select", {
+      for: "select",
+      to: stella,
+      using: TIME_TIMER_ADMIN_CHECK,
+    }),
+    p.pgPolicy("organization_admin_delete", {
+      for: "delete",
+      to: stella,
+      using: TIME_TIMER_ADMIN_DELETE_CHECK,
+    }),
     p.pgPolicy("current_member", {
       as: "restrictive",
       for: "all",
@@ -229,6 +306,16 @@ export const timeTimerConfirmations = p.pgTable(
       .on(table.organizationId, table.userId),
     p.index("time_timer_confirmations_entry_idx").on(table.timeEntryId),
     ...userOrganizationPolicies(),
+    p.pgPolicy("organization_admin_select", {
+      for: "select",
+      to: stella,
+      using: TIME_TIMER_CONFIRMATION_ADMIN_CHECK,
+    }),
+    p.pgPolicy("organization_admin_insert", {
+      for: "insert",
+      to: stella,
+      withCheck: TIME_TIMER_CONFIRMATION_ADMIN_INSERT_CHECK,
+    }),
   ],
 );
 
@@ -852,5 +939,90 @@ export const vatRates = p.pgTable(
       sql`${table.validTo} IS NULL OR ${table.validTo} > ${table.validFrom}`,
     ),
     ...orgPolicies(),
+  ],
+);
+
+const TIMER_SIGNAL_MEMBER_CHECK = sql`(
+  "time_entry_timer_states"."organization_id" = (SELECT current_setting('app.organization_id', true))
+  AND EXISTS (
+    SELECT 1 FROM ${member}
+    WHERE ${member.organizationId} = "time_entry_timer_states"."organization_id"
+      AND ${member.userId} = (SELECT current_setting('app.user_id', true))
+  )
+)`;
+const TIMER_SIGNAL_VISIBILITY_CHECK = sql`(
+  ${TIMER_SIGNAL_MEMBER_CHECK}
+  AND (
+    "time_entry_timer_states"."user_id" = (SELECT current_setting('app.user_id', true))
+    OR EXISTS (
+      SELECT 1 FROM ${timeEntries}
+      WHERE ${timeEntries.id} = "time_entry_timer_states"."entry_id"
+        AND ${timeEntries.organizationId} = "time_entry_timer_states"."organization_id"
+        AND ${timeEntries.userId} = "time_entry_timer_states"."user_id"
+    )
+  )
+)`;
+const TIMER_SIGNAL_WRITER_CHECK = sql`(
+  ${TIMER_SIGNAL_MEMBER_CHECK}
+  AND (
+    "time_entry_timer_states"."user_id" = (SELECT current_setting('app.user_id', true))
+    OR ${timerOrganizationAdminCheck("time_entry_timer_states")}
+  )
+)`;
+const TIMER_SIGNAL_PROVENANCE_CHECK = sql`EXISTS (
+  SELECT 1 FROM ${timeTimers}
+  WHERE ${timeTimers.organizationId} = "time_entry_timer_states"."organization_id"
+    AND ${timeTimers.userId} = "time_entry_timer_states"."user_id"
+    AND ${timeTimers.legacyTimeEntryId} = "time_entry_timer_states"."entry_id"
+)`;
+const TIMER_SIGNAL_TRUTH_CHECK = sql`(
+  ("time_entry_timer_states"."state" = 'running') = EXISTS (
+    SELECT 1 FROM ${timeTimers}
+    WHERE ${timeTimers.organizationId} = "time_entry_timer_states"."organization_id"
+      AND ${timeTimers.userId} = "time_entry_timer_states"."user_id"
+      AND ${timeTimers.legacyTimeEntryId} = "time_entry_timer_states"."entry_id"
+      AND ${timeTimers.state} = 'running'
+  )
+)`;
+
+export const timeEntryTimerStates = p.pgTable(
+  "time_entry_timer_states",
+  {
+    entryId: safeUuid<"timeEntry">("entry_id")
+      .primaryKey()
+      .references(() => timeEntries.id, { onDelete: "cascade" }),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    userId: p
+      .text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    state: p.text("state", { enum: TIME_TIMER_STATES }).notNull(),
+  },
+  (table) => [
+    p
+      .index("time_entry_timer_states_org_entry_idx")
+      .on(table.organizationId, table.entryId),
+    p.check(
+      "time_entry_timer_states_state_check",
+      sql`${table.state} IN (${sql.join(TIME_TIMER_STATE_SQL_VALUES, sql`, `)})`,
+    ),
+    p.pgPolicy("member_select", {
+      for: "select",
+      to: stella,
+      using: TIMER_SIGNAL_VISIBILITY_CHECK,
+    }),
+    p.pgPolicy("owner_admin_insert", {
+      for: "insert",
+      to: stella,
+      withCheck: sql`(${TIMER_SIGNAL_WRITER_CHECK} AND ${TIMER_SIGNAL_TRUTH_CHECK} AND ${TIMER_SIGNAL_PROVENANCE_CHECK})`,
+    }),
+    p.pgPolicy("owner_admin_update", {
+      for: "update",
+      to: stella,
+      using: TIMER_SIGNAL_WRITER_CHECK,
+      withCheck: sql`(${TIMER_SIGNAL_WRITER_CHECK} AND ${TIMER_SIGNAL_TRUTH_CHECK})`,
+    }),
   ],
 );

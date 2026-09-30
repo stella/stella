@@ -186,6 +186,7 @@ export const DOMAIN_ACTION_VERBS = [
   "search",
   "split",
   "start",
+  "stop",
   "suggest",
   "summarize",
   "sync",

@@ -12965,6 +12965,92 @@ export type WebRoutes = {
         };
       };
     } & {
+      admin: {
+        get: {
+          body: Record<never, never>;
+          params: T5e3ac29766;
+          query: {
+            cursor?: string;
+            limit?: number;
+          };
+          headers: Record<never, never>;
+          response: {
+            200: {
+              items: Array<{
+                id: T058aa8b860;
+                ownerId: string;
+                matterId: T63854f81c6;
+                accumulatedSeconds: number;
+                startedAt: string;
+                lastResumedAt: Tbe0400fa4c;
+              }>;
+              nextCursor: Tbe0400fa4c;
+              limit: number;
+            };
+            400: T9a51b7d2bc;
+            401: T9a51b7d2bc;
+            402: T9a51b7d2bc;
+            403: Tddfcdef857;
+            404: T9a51b7d2bc;
+            409: T9a51b7d2bc;
+            413: T9a51b7d2bc;
+            422: (T9a51b7d2bc | {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            });
+            428: T9a51b7d2bc;
+            429: T9a51b7d2bc;
+            500: T9a51b7d2bc;
+            502: T9a51b7d2bc;
+            503: T9a51b7d2bc;
+          };
+        };
+      };
+    } & {
+      admin: {
+        ":id": {
+          stop: {
+            post: {
+              body: {
+                narrative?: string;
+              };
+              params: T32313cfbba;
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: T6776d3555e;
+                400: T9a51b7d2bc;
+                401: T9a51b7d2bc;
+                402: T9a51b7d2bc;
+                403: Tddfcdef857;
+                404: T9a51b7d2bc;
+                409: T9a51b7d2bc;
+                413: T9a51b7d2bc;
+                422: (T9a51b7d2bc | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: T9a51b7d2bc;
+                429: T9a51b7d2bc;
+                500: T9a51b7d2bc;
+                502: T9a51b7d2bc;
+                503: T9a51b7d2bc;
+              };
+            };
+          };
+        };
+      };
+    } & {
       start: {
         post: {
           body: T6b880dac0c;
@@ -13112,11 +13198,7 @@ export type WebRoutes = {
             query: Record<never, never>;
             headers: Record<never, never>;
             response: {
-              200: {
-                id: Tdb05f01858;
-                durationMinutes: number;
-                billedMinutes: number;
-              };
+              200: T6776d3555e;
               400: T9a51b7d2bc;
               401: T9a51b7d2bc;
               402: T9a51b7d2bc;
@@ -21029,6 +21111,8 @@ export type WebRoutes = {
                   } | {
                     type: "stale";
                   } | {
+                    type: "legacy";
+                  } | {
                     type: "current";
                   } | {
                     type: "out_of_scope";
@@ -21036,8 +21120,6 @@ export type WebRoutes = {
                     type: "withheld";
                   } | {
                     type: "unplaceable";
-                  } | {
-                    type: "legacy";
                   };
                   generation: string;
                   publishedProjectionDigest: Tbe0400fa4c;
@@ -37430,6 +37512,12 @@ type T66d278db93 = "cancelled" | "committed" | "failed" | "queued" | "review" | 
 
 type T66e92cdab1 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "chatMessage";
+};
+
+type T6776d3555e = {
+  id: Tdb05f01858;
+  durationMinutes: number;
+  billedMinutes: number;
 };
 
 type T682630bfc7 = Tddfc027982 | null;

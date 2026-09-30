@@ -105,6 +105,9 @@ describe("policy coverage", () => {
     // Its nullable matter pointer does not admit the row; the dedicated timer
     // assertion covers owner policies and the restrictive membership check.
     "time_timers",
+    // The entry timer projection has member reads and truth-bound owner/admin
+    // INSERT/UPDATE, with identity immutability enforced by its trigger.
+    "time_entry_timer_states",
     // AI memory is multi-scope (org OR user OR workspace in one table)
     // and archive-only (no permissive DELETE). The generic workspace /
     // org loops can't express either shape; the dedicated test below
@@ -646,7 +649,9 @@ describe("policy coverage", () => {
       const tablePolicies = policies.filter(
         (policy) => policy.table_name === table,
       );
-      const ownerPolicies = tablePolicies.filter((policy) => policy.permissive);
+      const ownerPolicies = tablePolicies.filter(
+        (policy) => policy.permissive && policy.policy_name.startsWith("user_"),
+      );
       expect(
         ownerPolicies.map((policy) => policy.policy_name).toSorted(),
       ).toEqual(["user_delete", "user_insert", "user_select", "user_update"]);
@@ -673,6 +678,49 @@ describe("policy coverage", () => {
           expect(expression).toContain("organization_id");
           expect(expression).toContain(SETTING_ORGANIZATION_ID);
           expect(expression).not.toContain(SETTING_WORKSPACE_IDS);
+        }
+      }
+      const adminCommands =
+        table === "time_timers"
+          ? ([
+              ["organization_admin_select", "r"],
+              ["organization_admin_delete", "d"],
+            ] as const)
+          : ([
+              ["organization_admin_select", "r"],
+              ["organization_admin_insert", "a"],
+            ] as const);
+      expect(
+        tablePolicies
+          .filter((policy) => policy.permissive)
+          .map((policy) => policy.policy_name)
+          .toSorted(),
+      ).toEqual(
+        [
+          ...ownerPolicies.map((policy) => policy.policy_name),
+          ...adminCommands.map(([name]) => name),
+        ].toSorted(),
+      );
+      for (const [name, command] of adminCommands) {
+        const policy = tablePolicies.find(
+          (candidate) => candidate.policy_name === name,
+        );
+        expect(policy?.permissive).toBe(true);
+        expect(policy?.command).toBe(command);
+        const expression =
+          command === "a" ? policy?.check_expr : policy?.using_expr;
+        const normalized = expression?.replaceAll('"', "");
+        expect(normalized).toContain("organization_id");
+        expect(normalized).toContain(SETTING_ORGANIZATION_ID);
+        expect(normalized).toContain("member.user_id");
+        expect(normalized).toContain(SETTING_USER_ID);
+        expect(normalized).toContain("member.role");
+        expect(normalized).toContain("'owner'");
+        expect(normalized).toContain("'admin'");
+        if (table === "time_timers") {
+          expect(normalized).toMatch(
+            /(?:time_timers\.)?state\s*=\s*'running'/u,
+          );
         }
       }
       const restrictivePolicies = tablePolicies.filter(
@@ -702,6 +750,83 @@ describe("policy coverage", () => {
         );
       }
     }
+  });
+
+  test("entry timer state projection grants member reads and truth-bound writes only", async () => {
+    const policies = await fetchStellaPolicies(testDb);
+    const tablePolicies = policies.filter(
+      (policy) => policy.table_name === "time_entry_timer_states",
+    );
+    expect(
+      tablePolicies.map((policy) => policy.policy_name).toSorted(),
+    ).toEqual(["member_select", "owner_admin_insert", "owner_admin_update"]);
+    for (const [name, command] of [
+      ["member_select", "r"],
+      ["owner_admin_insert", "a"],
+      ["owner_admin_update", "w"],
+    ] as const) {
+      const policy = tablePolicies.find(
+        (candidate) => candidate.policy_name === name,
+      );
+      expect(policy?.command).toBe(command);
+      expect(policy?.permissive).toBe(true);
+      const expressions = [];
+      if (command !== "a") {
+        expressions.push(policy?.using_expr);
+      }
+      if (command !== "r") {
+        expressions.push(policy?.check_expr);
+      }
+      for (const expression of expressions) {
+        expect(expression).toContain("organization_id");
+        expect(expression).toContain(SETTING_ORGANIZATION_ID);
+        if (command !== "r") {
+          expect(expression).toContain("member");
+        }
+        expect(expression).toContain(SETTING_USER_ID);
+      }
+      if (command === "r") {
+        expect(policy?.using_expr).toContain("OR");
+        expect(policy?.using_expr).toContain("time_entries");
+        expect(policy?.using_expr).toContain("entry_id");
+        continue;
+      }
+      expect(policy?.check_expr).toContain("time_timers");
+      expect(policy?.check_expr).toContain("legacy_time_entry_id");
+      expect(policy?.check_expr).toContain("'running'");
+      expect(policy?.check_expr).toContain("'owner'");
+      expect(policy?.check_expr).toContain("'admin'");
+    }
+    const grants = await fetchStellaTablePrivileges(testDb);
+    expect(privilegesForTable(grants, "time_entry_timer_states")).toEqual([
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+    ]);
+  });
+
+  test("admin timer ending requires a matching receipt and receipt creation requires a running timer", async () => {
+    const policies = await fetchStellaPolicies(testDb);
+    const timerDelete = policies.find(
+      (policy) =>
+        policy.table_name === "time_timers" &&
+        policy.policy_name === "organization_admin_delete",
+    );
+    expect(timerDelete?.using_expr).toContain("time_timer_confirmations");
+    expect(timerDelete?.using_expr).toContain("timer_id");
+    expect(timerDelete?.using_expr).toContain("organization_id");
+    expect(timerDelete?.using_expr).toContain("user_id");
+    expect(timerDelete?.using_expr).toContain("time_entry_id IS NOT NULL");
+    const receiptInsert = policies.find(
+      (policy) =>
+        policy.table_name === "time_timer_confirmations" &&
+        policy.policy_name === "organization_admin_insert",
+    );
+    expect(receiptInsert?.check_expr).toContain("time_timers");
+    expect(receiptInsert?.check_expr).toContain("timer_id");
+    expect(receiptInsert?.check_expr).toContain("organization_id");
+    expect(receiptInsert?.check_expr).toContain("user_id");
+    expect(receiptInsert?.check_expr).toContain("'running'");
   });
 
   test("usage governance tables expose only intended app-role access", async () => {

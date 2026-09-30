@@ -22,6 +22,7 @@ import {
   canApproveTimeEntries,
   canManageTimeEntry,
 } from "@/api/lib/billing/time-entry-authorization";
+import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -290,6 +291,15 @@ export const updateTimeEntryHandler = async function* ({
 
   const updated = yield* Result.await(
     safeDb(async (tx) => {
+      const runningError = await guardRunningTimeEntries({
+        tx,
+        workspaceId,
+        selection: { type: "entries", ids: [body.id] },
+        actorUserId: actor.userId,
+      });
+      if (runningError) {
+        return runningError;
+      }
       const rows = await tx
         .update(timeEntries)
         .set(updates)
@@ -343,6 +353,9 @@ export const updateTimeEntryHandler = async function* ({
     }),
   );
 
+  if (HandlerError.is(updated)) {
+    return Result.err(updated);
+  }
   if (!updated) {
     return Result.err(
       new HandlerError({

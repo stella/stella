@@ -13,6 +13,7 @@ import {
   canApproveTimeEntries,
   canManageTimeEntry,
 } from "@/api/lib/billing/time-entry-authorization";
+import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -70,13 +71,8 @@ export const deleteTimeEntryHandler = async function* ({
     ),
   );
 
-  if (!existing) {
-    return Result.err(
-      new HandlerError({ status: 404, message: "Time entry not found" }),
-    );
-  }
-
   if (
+    !existing ||
     !canManageTimeEntry({
       memberRole: actor.memberRole,
       currentUserId: actor.userId,
@@ -135,6 +131,15 @@ export const deleteTimeEntryHandler = async function* ({
   if (existing.status === BILLING_STATUS.DRAFT) {
     const deleted = yield* Result.await(
       safeDb(async (tx) => {
+        const runningError = await guardRunningTimeEntries({
+          tx,
+          workspaceId,
+          selection: { type: "entries", ids: [body.id] },
+          actorUserId: actor.userId,
+        });
+        if (runningError) {
+          return runningError;
+        }
         const rows = await tx
           .delete(timeEntries)
           .where(
@@ -175,6 +180,9 @@ export const deleteTimeEntryHandler = async function* ({
         return true;
       }),
     );
+    if (HandlerError.is(deleted)) {
+      return Result.err(deleted);
+    }
     if (!deleted) {
       return Result.err(
         new HandlerError({
@@ -189,6 +197,15 @@ export const deleteTimeEntryHandler = async function* ({
   // Non-draft entries get written off instead of deleted
   const writtenOff = yield* Result.await(
     safeDb(async (tx) => {
+      const runningError = await guardRunningTimeEntries({
+        tx,
+        workspaceId,
+        selection: { type: "entries", ids: [body.id] },
+        actorUserId: actor.userId,
+      });
+      if (runningError) {
+        return runningError;
+      }
       const rows = await tx
         .update(timeEntries)
         .set({
@@ -223,6 +240,9 @@ export const deleteTimeEntryHandler = async function* ({
     }),
   );
 
+  if (HandlerError.is(writtenOff)) {
+    return Result.err(writtenOff);
+  }
   if (!writtenOff) {
     return Result.err(
       new HandlerError({

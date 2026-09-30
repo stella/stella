@@ -3,7 +3,7 @@ import { Result } from "better-result";
 import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
-import { timeEntries, workspaces } from "@/api/db/schema";
+import { timeEntries, timeTimers, workspaces } from "@/api/db/schema";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -16,7 +16,9 @@ import {
 } from "@/api/lib/billing-time";
 import {
   lockTimerOwner,
+  ownedTimers,
   pauseRunningTimers,
+  timerSeconds,
 } from "@/api/lib/billing/time-timers";
 import type { SafeId } from "@/api/lib/branded-types";
 
@@ -88,8 +90,16 @@ export const closeRemovedMemberActiveTimer = async ({
             durationMinutes: timeEntries.durationMinutes,
             id: timeEntries.id,
             timerStartedAt: timeEntries.timerStartedAt,
+            clock: timeTimers,
           })
           .from(timeEntries)
+          .leftJoin(
+            timeTimers,
+            and(
+              eq(timeTimers.legacyTimeEntryId, timeEntries.id),
+              ownedTimers(owner),
+            ),
+          )
           .where(
             and(
               eq(timeEntries.id, activeTimer.id),
@@ -100,7 +110,7 @@ export const closeRemovedMemberActiveTimer = async ({
             ),
           )
           .limit(1)
-          .for("update")
+          .for("update", { of: timeEntries })
       : [];
 
     if (timer?.timerStartedAt) {
@@ -131,7 +141,11 @@ export const closeRemovedMemberActiveTimer = async ({
       const now = new Date();
       const durationMinutes = Math.max(
         1,
-        Math.round((now.getTime() - timer.timerStartedAt.getTime()) / 60_000),
+        Math.round(
+          (timer.clock
+            ? timerSeconds(timer.clock, now)
+            : (now.getTime() - timer.timerStartedAt.getTime()) / 1000) / 60,
+        ),
       );
       const billedMinutes = roundToBillingIncrement(
         durationMinutes,
@@ -175,5 +189,18 @@ export const closeRemovedMemberActiveTimer = async ({
     now: new Date(),
     recordAuditEvent,
   });
+  const [remaining] = await tx
+    .select({ id: timeTimers.id })
+    .from(timeTimers)
+    .where(and(ownedTimers(owner), eq(timeTimers.state, "running")))
+    .limit(1);
+  if (remaining) {
+    return Result.err(
+      new APIError("BAD_REQUEST", {
+        error: "timer_offboarding_incomplete",
+        message: "Timers could not be stopped before member removal",
+      }),
+    );
+  }
   return Result.ok(undefined);
 };
