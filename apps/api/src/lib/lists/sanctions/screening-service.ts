@@ -62,7 +62,7 @@ export type SanctionsScreeningSubject =
       nationalityCodes: readonly CountryCode[];
     };
 
-type SanctionsPossibleMatch = {
+export type SanctionsPossibleMatch = {
   sourceEntryId: string;
   editionId: string;
   /** 0..1, at or above the cutoff. A possible match needs human review. */
