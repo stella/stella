@@ -296,7 +296,7 @@ const toPossibleMatch = (
   },
 });
 
-export type SanctionsListMatcher = (props: {
+type SanctionsListMatcher = (props: {
   db: SanctionsReadDb;
   source: SanctionsSource;
   edition: SanctionsActiveEdition;
