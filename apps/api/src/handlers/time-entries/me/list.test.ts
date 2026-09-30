@@ -231,7 +231,9 @@ describe("personal time entries", () => {
     if (!firstItem) {
       throw new Error("first page is empty");
     }
-    expect(first.nextCursor).toBe(encodePaginationCursor([firstItem.id]));
+    expect(first.nextCursor).toBe(
+      encodePaginationCursor([firstItem.id, "time_entry"]),
+    );
 
     const second = await listFor({
       date: DAY,

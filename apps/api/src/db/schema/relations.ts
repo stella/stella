@@ -1,3 +1,4 @@
+import { absences } from "./absences";
 import {
   billingCodes,
   expenses,
@@ -138,6 +139,7 @@ import {
 
 export const relations = defineRelations(
   {
+    absences,
     agentSkills,
     agentSkillResources,
     savedSearches,

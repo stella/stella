@@ -26,6 +26,7 @@ type IdentityDisposition =
  * automatically a product resource; additions must make that decision here.
  */
 export const RESOURCE_IDENTITY_DISPOSITION = {
+  absence: { type: "non_resource", reason: "workflow" },
   accountDeletionRequest: { type: "non_resource", reason: "workflow" },
   agentSkill: { type: "resource", resourceType: RESOURCE_TYPE.AGENT_SKILL },
   agentSkillComment: {

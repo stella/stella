@@ -216,6 +216,7 @@ type AuditActivityCategoryResolver =
   | ((event: AuditEvent) => AuditActivityCategory);
 
 const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
+  absence: "other",
   entity: entityActivityCategory,
   field: taskOrDocumentActivityCategory,
   entity_version: taskOrDocumentActivityCategory,

@@ -135,6 +135,7 @@ export type ActivityTargetSource =
  * automation row.
  */
 export const ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE = {
+  absence: null,
   // Audited against the entity the obligation governs, so it reads as that
   // task rather than as a separate record.
   work_obligation: "entity",
