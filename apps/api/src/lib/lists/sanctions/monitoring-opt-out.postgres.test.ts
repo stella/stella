@@ -18,7 +18,6 @@ import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 
 import { commitSanctionsMonitoringBatch } from "./monitoring-diff";
-import type { SanctionsMonitoringResult } from "./monitoring-diff";
 import { monitoringFingerprint } from "./monitoring-input";
 import { disableSanctionsMonitoring } from "./monitoring-opt-out";
 import type { SanctionsPossibleMatch } from "./screening-service";
@@ -159,7 +158,9 @@ if (!runPostgresTests || databaseUrl === undefined) {
             truncated: false,
             possibleMatches: [],
           },
-        } satisfies SanctionsMonitoringResult;
+        } satisfies Parameters<
+          typeof commitSanctionsMonitoringBatch
+        >[0]["results"][number];
         await Promise.all([
           commitSanctionsMonitoringBatch({
             db: scopedDb,
