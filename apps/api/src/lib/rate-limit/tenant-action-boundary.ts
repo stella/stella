@@ -35,8 +35,14 @@ export const createTenantActionClassifier = ({
   const registry = new Elysia(configuration);
   const matchRoute = registry.router.dynamic.find.bind(registry.router.dynamic);
   const routeType = (route: InternalRoute) => {
-    const detail = route.hooks.detail;
-    return detail !== undefined &&
+    // Elysia exposes hooks as any; narrow its metadata at this boundary.
+    const hooks: unknown = route.hooks;
+    if (typeof hooks !== "object" || hooks === null || !("detail" in hooks)) {
+      return "exempt";
+    }
+    const { detail } = hooks;
+    return typeof detail === "object" &&
+      detail !== null &&
       TENANT_ACTION_DETAIL in detail &&
       detail[TENANT_ACTION_DETAIL] === true
       ? "tenant"
@@ -113,9 +119,6 @@ export const createTenantActionClassifier = ({
           methods[request.method] ??
           methods["ALL"];
         if (selected !== undefined) {
-          if (selected !== "tenant" && selected !== "exempt") {
-            return panic("Static tenant route disposition is invalid");
-          }
           return selected === "tenant";
         }
       }

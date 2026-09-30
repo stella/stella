@@ -217,7 +217,7 @@ describe("tenant HTTP action boundary", () => {
       enabled: true,
       isTenantAction: () => true,
       policy: () => Result.ok(limits),
-      handleRequest: (received) => app.handle(received),
+      handleRequest: async (received) => app.handle(received),
       decorateRefusal: (refusal, original) => {
         expect(original).toBe(request);
         refusal.headers.set(
@@ -355,7 +355,7 @@ describe("tenant HTTP action boundary", () => {
           enabled: true,
           isTenantAction: () => true,
           policy: () => Result.ok({ ...limits, responseBytes }),
-          handleRequest: (request) => app.handle(request),
+          handleRequest: async (request) => app.handle(request),
         },
       );
       expect(response.status).toBe(responseBytes === exactBytes ? 200 : 413);

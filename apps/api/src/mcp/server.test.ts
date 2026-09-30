@@ -139,7 +139,9 @@ const createModernMcpRequest = ({
       authorization: `Bearer ${token}`,
       "content-type": "application/json",
       "mcp-method": method,
-      ...(typeof params.name === "string" ? { "mcp-name": params.name } : {}),
+      ...(typeof params["name"] === "string"
+        ? { "mcp-name": params["name"] }
+        : {}),
       "mcp-protocol-version": MODERN_PROTOCOL_VERSION,
     },
     method: "POST",

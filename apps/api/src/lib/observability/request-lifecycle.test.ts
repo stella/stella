@@ -330,7 +330,7 @@ describe("the request lifecycle", () => {
         .onRequest(({ request: received }) => initRequestContext(received))
         .onAfterHandle(async (context) => await completeRequest(context))
         .all("/action", () => ({ value: "é".repeat(300) }));
-      const response = await withFinalResponseCompletion(request, () =>
+      const response = await withFinalResponseCompletion(request, async () =>
         runTenantHttpAction(request, {
           enabled: true,
           isTenantAction: () => true,
@@ -343,7 +343,7 @@ describe("the request lifecycle", () => {
                   }),
                 )
               : Result.ok({ requestBytes: 1, responseBytes: 512, pageSize: 3 }),
-          handleRequest: (received) => app.handle(received),
+          handleRequest: async (received) => app.handle(received),
           decorateRefusal: (refusal, received) => {
             initRequestContext(received);
             return refusal;

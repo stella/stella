@@ -632,17 +632,19 @@ const scopeRequestAsyncStores = (): void => {
     aot: api.config.aot,
   });
   api.wrap(
-    (handleRequest) => (request: Request) =>
-      runWithRequestScope(() => {
+    (handleRequest) => async (request: Request) =>
+      runWithRequestScope(async () => {
         if (!env.FEATURE_ACTION_ADMISSION) {
           return handleRequest(request);
         }
-        return withFinalResponseCompletion(request, () =>
+        return withFinalResponseCompletion(request, async () =>
           runTenantHttpAction(request, {
             handleRequest: async (bounded) => {
               // The private HOC types erase the response type; validate the
               // framework boundary before applying serialized JSON limits.
-              const response = await handleRequest(bounded);
+              const response: unknown = await Promise.resolve(
+                handleRequest(bounded),
+              );
               if (!(response instanceof Response)) {
                 return panic("The HTTP framework returned an invalid response");
               }

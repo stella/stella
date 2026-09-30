@@ -208,7 +208,9 @@ export const createChatHistoryTools = ({
       inputSchema: toTanStackToolSchema(searchChatHistoryInputSchema),
       outputSchema: toTanStackToolSchema(searchChatHistoryOutputSchema),
     }).server(async ({ query, limit: requestedLimit }) => {
-      const limit = normalizeTenantPageLimit(requestedLimit);
+      const limit = normalizeTenantPageLimit(
+        requestedLimit ?? LIMITS.chatHistorySearchPageSizeDefault,
+      );
       const normalizedQuery = query.trim();
       if (!normalizedQuery) {
         return raiseChatToolError(
