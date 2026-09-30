@@ -28,6 +28,8 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
+      pull-requests: read
+      checks: read
 
     steps:
       # Pinned to the default branch: without a ref, a manual dispatch from a
@@ -62,6 +64,11 @@ jobs:
           # bunfig.toml that fails CI for a different reason.
           bun scripts/check-stll-quarantine-excludes.ts
 
+      # Install before minting the write credential, as release-pr does.
+      - name: Install merge gate dependencies
+        if: steps.prune.outputs.changed == 'true'
+        run: bun install --frozen-lockfile
+
       - name: Mint app token
         if: steps.prune.outputs.changed == 'true'
         id: app-token
@@ -69,7 +76,9 @@ jobs:
         with:
           app-id: ${{ secrets.PROVENANCE_APP_ID }}
           private-key: ${{ secrets.PROVENANCE_APP_PRIVATE_KEY }}
-          # Push the branch and open the PR, nothing else the app can reach.
+          # Merge-gate reads use the workflow token; the app only writes.
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
           permission-contents: write
           permission-pull-requests: write
 
@@ -77,6 +86,7 @@ jobs:
       # name is reserved for this job alone: re-running replaces its own
       # proposal with one computed from current main.
       - name: Open or update the removal PR
+        id: removal-pr
         if: steps.prune.outputs.changed == 'true'
         uses: stella/.github/.github/actions/signed-commit@aff5017c264acce5a2bcdf15876da08835e6de70
         with:
@@ -97,3 +107,30 @@ jobs:
             Leaving an expired entry in place is not neutral: it would let the next version of that package publish straight past the gate. Merging this restores that check.
 
             Opened automatically. The removal is what `bun scripts/check-stll-quarantine-excludes.ts --prune` produces.
+
+      - name: Arm automatic removal
+        if: >-
+          steps.removal-pr.outputs.operation == 'created' ||
+          steps.removal-pr.outputs.operation == 'updated'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_READ_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.removal-pr.outputs.pull-request-number }}
+          MERGE_HOLD: ${{ vars.STELLA_MERGE_HOLD }}
+          STELLA_MERGE_HOLD_CHECKED_BY_WORKFLOW: "1"
+        run: |
+          set -euo pipefail
+
+          if [[ -n "$MERGE_HOLD" ]]; then
+            echo "::notice::Automatic quarantine removal is held by STELLA_MERGE_HOLD."
+            echo "Automatic quarantine removal is held by STELLA_MERGE_HOLD." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          if bun scripts/merge-bar.ts "$PR_NUMBER"; then
+            echo "Removal PR #$PR_NUMBER handed to the merge gate." >> "$GITHUB_STEP_SUMMARY"
+          else
+            status=$?
+            echo "::warning::Merge gate refused removal PR #$PR_NUMBER (exit $status); see the log above."
+            echo "Merge gate refused removal PR #$PR_NUMBER (exit $status); see the step log." >> "$GITHUB_STEP_SUMMARY"
+          fi
