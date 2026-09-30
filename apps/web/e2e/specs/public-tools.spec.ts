@@ -1,6 +1,6 @@
 import { assertSsrDocument } from "@stll/ssr-testkit";
 
-import { findDoubledChromeDividers } from "../helpers/chrome-divider";
+import { findChromeDividerProblems } from "../helpers/chrome-divider";
 import { expect, test } from "../helpers/test";
 
 const PUBLIC_SSR_TIMEOUT_MS = 45_000;
@@ -45,7 +45,7 @@ test("anonymous visitors can search and browse by legal task", async ({
 
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   // The public shell's top bar owns the divider under its breadcrumb too.
-  expect(await findDoubledChromeDividers(page)).toEqual([]);
+  expect(await findChromeDividerProblems(page)).toEqual([]);
 
   const workflowDiscovery = page.locator(
     'section[aria-labelledby="featured-tools-heading"]',

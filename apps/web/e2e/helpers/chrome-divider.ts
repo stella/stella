@@ -3,8 +3,8 @@
 import type { Page } from "@playwright/test";
 
 /**
- * Every element in the shell's content slot whose visible top border lies on
- * the chrome divider, described as `tag.class…`.
+ * Missing chrome dividers and content borders on the same boundary,
+ * described as `tag.class…`.
  *
  * The divider under the breadcrumb bar belongs to the app chrome: the shell's
  * top bar draws it once. A page that also draws a top border on its first row
@@ -14,9 +14,9 @@ import type { Page } from "@playwright/test";
  *
  * Runs inside the page, so it is self-contained: nothing from this module is
  * in scope there. Null when the page has no shell, which the caller reports
- * rather than reading as "no second divider".
+ * rather than reading as "exactly one divider".
  */
-const collectDoubledChromeDividers = (): string[] | null => {
+const collectChromeDividerProblems = (): string[] | null => {
   const topBar = document.querySelector(
     '[data-slot="workspace-shell-top-bar"]',
   );
@@ -41,7 +41,24 @@ const collectDoubledChromeDividers = (): string[] | null => {
       : `${element.tagName.toLowerCase()}.${classes}`;
   };
 
-  const doubled: string[] = [];
+  const problems: string[] = [];
+  const header = topBar.querySelector("header");
+  const headerStyle = header === null ? null : getComputedStyle(header);
+  const headerRect = header?.getBoundingClientRect();
+  if (
+    headerStyle === null ||
+    headerRect === undefined ||
+    headerRect.width === 0 ||
+    headerRect.height === 0 ||
+    Math.abs(headerRect.bottom - dividerY) > tolerance ||
+    headerStyle.visibility !== "visible" ||
+    headerStyle.borderBottomStyle === "none" ||
+    headerStyle.borderBottomStyle === "hidden" ||
+    !(Number.parseFloat(headerStyle.borderBottomWidth) > 0) ||
+    isInvisibleColor(headerStyle.borderBottomColor)
+  ) {
+    problems.push("Missing visible chrome header bottom border");
+  }
   for (const element of content.querySelectorAll("*")) {
     const rect = element.getBoundingClientRect();
     if (
@@ -61,19 +78,19 @@ const collectDoubledChromeDividers = (): string[] | null => {
     ) {
       continue;
     }
-    doubled.push(describe(element));
+    problems.push(describe(element));
   }
-  return doubled;
+  return problems;
 };
 
-export const findDoubledChromeDividers = async (
+export const findChromeDividerProblems = async (
   page: Page,
 ): Promise<string[]> => {
-  const doubled = await page.evaluate(collectDoubledChromeDividers);
-  if (doubled === null) {
+  const problems = await page.evaluate(collectChromeDividerProblems);
+  if (problems === null) {
     throw new Error(
       "No workspace shell on the page, so the chrome divider was not checked",
     );
   }
-  return doubled;
+  return problems;
 };

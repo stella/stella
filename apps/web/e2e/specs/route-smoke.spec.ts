@@ -15,7 +15,7 @@ import {
 } from "../execution-profile";
 import { apiDelete, apiPut } from "../helpers/api";
 import { ROUTE_ERROR_HEADING } from "../helpers/app-shell";
-import { findDoubledChromeDividers } from "../helpers/chrome-divider";
+import { findChromeDividerProblems } from "../helpers/chrome-divider";
 import {
   CORRESPONDENCE_SMOKE_SUBJECT,
   createTestCorrespondence,
@@ -545,8 +545,8 @@ const measureRouteTarget = async ({
     // The chrome draws the one divider under the breadcrumb bar; a page row
     // with its own top border on that line doubles it into a 2px rule.
     expect(
-      await findDoubledChromeDividers(page),
-      `${route.template} draws a second divider under the app chrome`,
+      await findChromeDividerProblems(page),
+      `${route.template} must show exactly one divider under the app chrome`,
     ).toEqual([]);
     browserErrors.assertEmpty(`unexpected browser errors on ${route.template}`);
     // Captured after the route shell and tracked API work are ready, so the
