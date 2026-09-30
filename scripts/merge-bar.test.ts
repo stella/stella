@@ -1383,9 +1383,9 @@ describe("repository merge hold", () => {
     expect(result.isErr() && result.error).toBe(error);
   });
 
-  test.each([[], ["--jump"]])(
-    "the CLI refuses a hold before merge writes: %j",
-    (extraArguments) => {
+  test.each([{ arguments: [] }, { arguments: ["--jump"] }])(
+    "the CLI refuses a hold before merge writes: $arguments",
+    ({ arguments: extraArguments }) => {
       const directory = mkdtempSync(path.join(tmpdir(), "merge-bar-hold-"));
       const executable = path.join(directory, "gh");
       writeFileSync(
