@@ -4,7 +4,10 @@ import { describe, expect, mock, test } from "bun:test";
 import { BILLING_STATUS, INVOICE_STATUS, invoices } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+import {
+  createScopedDbMock,
+  createSelectQueryMock,
+} from "@/api/tests/scoped-db-mock";
 
 import addEntries from "./add";
 
@@ -100,7 +103,7 @@ describe("addEntries currency enforcement", () => {
           }),
         },
       },
-      select: () => ({
+      select: (fields: object) => ({
         from: (table: unknown) => {
           if (table === invoices) {
             return {
@@ -112,12 +115,9 @@ describe("addEntries currency enforcement", () => {
             };
           }
 
-          // The preflight read awaits the filter; the legacy-line backfill
-          // orders it and finds no attached entry without a line.
-          return {
-            where: (): unknown =>
-              Object.assign(
-                Promise.resolve([
+          return createSelectQueryMock(
+            "status" in fields
+              ? [
                   {
                     id: toSafeId<"timeEntry">("te_1"),
                     status: BILLING_STATUS.APPROVED,
@@ -125,10 +125,9 @@ describe("addEntries currency enforcement", () => {
                     invoiceId: null,
                     currency: "USD",
                   },
-                ]),
-                { orderBy: () => ({ limit: async () => [] }) },
-              ),
-          };
+                ]
+              : [],
+          ).from();
         },
       }),
       update: () => ({

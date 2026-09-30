@@ -6,7 +6,10 @@ import { BILLING_STATUS } from "@/api/db/schema";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+import {
+  createScopedDbMock,
+  createSelectQueryMock,
+} from "@/api/tests/scoped-db-mock";
 
 import updateTimeEntryById from "./update";
 
@@ -67,6 +70,7 @@ describe("updateTimeEntryById", () => {
           }),
         },
       },
+      select: () => createSelectQueryMock([]),
       update: () => ({
         set: () => ({
           where: () => ({
@@ -137,6 +141,7 @@ describe("updateTimeEntryById", () => {
           }),
         },
       },
+      select: () => createSelectQueryMock([]),
       update: () => ({
         set: (updates: Record<string, unknown>) => {
           appliedUpdates = updates;
@@ -201,6 +206,7 @@ describe("updateTimeEntryById", () => {
           }),
         },
       },
+      select: () => createSelectQueryMock([]),
       update: () => ({
         set: (updates: Record<string, unknown>) => {
           appliedUpdates = updates;
@@ -264,6 +270,7 @@ describe("updateTimeEntryById", () => {
           }),
         },
       },
+      select: () => createSelectQueryMock([]),
       update: () => ({
         set: () => ({
           where: (condition: SQL) => {

@@ -276,6 +276,7 @@
         "$TURBO_ROOT$/.github/workflows/ai-provider-canary.yml",
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/apps/web/src/components/chat/**",
+        "$TURBO_ROOT$/apps/web/src/features/chat/chat-runtime.ts",
         "$TURBO_ROOT$/oxlint.config.ts"
       ]
     },
@@ -327,6 +328,8 @@
         "$TURBO_ROOT$/.github/workflows/**",
         "$TURBO_ROOT$/apps/**",
         "$TURBO_ROOT$/packages/**",
+        "$TURBO_ROOT$/.oxlint-plugins/**",
+        "$TURBO_ROOT$/oxlint.config.ts",
         "$TURBO_ROOT$/scripts/**"
       ]
     },

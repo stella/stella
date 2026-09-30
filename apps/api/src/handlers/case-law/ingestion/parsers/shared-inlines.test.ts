@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import * as cheerio from "cheerio";
+import { readFileSync } from "node:fs";
 
 import type { Inline } from "@/api/handlers/case-law/document-ast";
 import {
@@ -88,6 +89,58 @@ describe("walkInlines", () => {
   test("anonymization spans mark text and coalesce", () => {
     expect(walk("<span class='anon-block'>a<span></span>b</span>")).toEqual([
       { type: "text", text: "ab", anonymized: true },
+    ]);
+  });
+
+  test("pageAnchor turns the elements it answers for into zero-width anchors", () => {
+    const html =
+      "Shrin<span class='page' data-page='114'>*114</span>ers <b>and</b>";
+    const options: WalkInlinesOptions = {
+      pageAnchor: (element) => {
+        const label = element.attribs["data-page"];
+        return label === undefined ? undefined : { type: "page-anchor", label };
+      },
+    };
+    expect(walk(html, options)).toEqual([
+      { type: "text", text: "Shrin" },
+      { type: "page-anchor", label: "114" },
+      { type: "text", text: "ers " },
+      { type: "bold", children: [{ type: "text", text: "and" }] },
+    ]);
+    // Without the hook the same markup keeps its printed label as text, as
+    // every existing parser reads it.
+    expect(inlinesToPlainText(walk(html))).toBe("Shrin*114ers and");
+  });
+
+  test("page markers retain their boundary whitespace without separating split words", () => {
+    for (const before of ["", " ", "\n", "\u00a0"]) {
+      for (const after of ["", " ", "\n", "\u00a0"]) {
+        const inlines = walk(`left<span>${before}*2${after}</span>right`, {
+          pageAnchor: () => ({ type: "page-anchor", label: "2" }),
+        });
+        expect(inlinesToPlainText(inlines)).toBe(`left${before}${after}right`);
+      }
+    }
+  });
+
+  test("keeps the page boundary space in a recorded opinion heading", () => {
+    const html = readFileSync(
+      new URL(
+        "courtlistener/__fixtures__/html/heading-4696496-discussion-ii.html",
+        import.meta.url,
+      ),
+      "utf-8",
+    );
+    const $ = cheerio.load(html);
+    const inlines = walkInlines($, $("h").first(), {
+      pageAnchor: (element) =>
+        element.attribs["number"] === "6"
+          ? { type: "page-anchor", label: "6" }
+          : undefined,
+    });
+    expect(inlines).toEqual([
+      { type: "page-anchor", label: "6" },
+      { type: "text", text: "  II. DISCUSSION" },
     ]);
   });
 

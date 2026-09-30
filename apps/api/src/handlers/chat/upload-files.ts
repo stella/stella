@@ -10,6 +10,7 @@ import { isChatFileMimeType } from "@stll/api-contract/chat-file-types";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { chatThreads, userFiles } from "@/api/db/schema";
+import { env } from "@/api/env";
 import {
   CHAT_MAX_FILE_BYTES,
   TEXT_CSV_MIME_TYPE,
@@ -52,14 +53,20 @@ import {
 } from "@/api/lib/file-scan/scan-upload";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
+import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import {
   generateImageThumbnail,
   shouldGenerateImageThumbnail,
   THUMBNAIL_MIME_TYPE,
 } from "@/api/lib/files/image-derivative";
+import {
+  OrganizationFileUsageError,
+  organizationFileUsageHandlerError,
+  writeOrganizationFile,
+} from "@/api/lib/files/organization-file-usage";
 import { createUserFileKey, deleteS3Keys } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
-import { deleteS3ObjectWithSignal, putS3ObjectWithSignal } from "@/api/lib/s3";
+import { putS3ObjectWithSignal } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { extractFileTextResult } from "@/api/lib/search/extract-content";
 import { isUserFileUrl, toUserFileUrl } from "@/api/lib/user-files/types";
@@ -85,9 +92,13 @@ type UploadMessageFilesProps = {
   workspaceId: SafeId<"workspace"> | null;
 };
 
+export type UploadMessageFilesError =
+  | HandlerError<400 | 409 | 413 | 422 | 500 | 503>
+  | SafeDbError;
+
 type UploadMessageFilesReturn = Result<
   UploadedChatMessage,
-  HandlerError<400 | 422 | 500> | SafeDbError
+  UploadMessageFilesError
 >;
 
 export type UploadedChatFile = {
@@ -117,7 +128,7 @@ export const uploadMessageFiles = async ({
   const uploadedFiles: UploadedChatFile[] = [];
   const parts: ChatMessage["parts"] = [];
   const fail = async (
-    error: HandlerError<400 | 422 | 500> | SafeDbError,
+    error: UploadMessageFilesError,
   ): Promise<UploadMessageFilesReturn> => {
     if (uploadedFiles.length === 0) {
       return Result.err(error);
@@ -151,7 +162,6 @@ export const uploadMessageFiles = async ({
 
     const parsedPart = parseMessageFileDataUrl({ part });
     if (Result.isError(parsedPart)) {
-      // db-await-in-loop: runs once, as the loop returns; it rolls back the uploads so far
       return await fail(parsedPart.error);
     }
 
@@ -166,7 +176,6 @@ export const uploadMessageFiles = async ({
       workspaceId,
     });
     if (Result.isError(uploadedFile)) {
-      // db-await-in-loop: runs once, as the loop returns; it rolls back the uploads so far
       return await fail(uploadedFile.error);
     }
 
@@ -549,6 +558,7 @@ type ReserveChatObjectCleanupIntent = (options: {
 
 type UploadUserFileDependencies = {
   generateImageThumbnail?: typeof generateImageThumbnail;
+  organizationFileUsageDb?: Parameters<typeof writeOrganizationFile>[0]["db"];
   putS3ObjectWithSignal?: typeof putS3ObjectWithSignal;
   reserveChatObjectCleanupIntent?: ReserveChatObjectCleanupIntent;
   settleObjectCleanupIntentsAfterWriter?: typeof settleObjectCleanupIntentsAfterWriter;
@@ -610,6 +620,35 @@ const reserveChatObjectCleanupIntent: ReserveChatObjectCleanupIntent = async (
   });
 };
 
+type OrganizationFileUsageDb = NonNullable<
+  UploadUserFileDependencies["organizationFileUsageDb"]
+>;
+
+type ChatLedgerOptions = {
+  ledgerDeleteOptions: { fileUsageDb?: OrganizationFileUsageDb };
+  ledgerWriteOptions: { db?: OrganizationFileUsageDb };
+};
+
+const chatLedgerOptions = (
+  db: OrganizationFileUsageDb | undefined,
+): ChatLedgerOptions =>
+  db === undefined
+    ? { ledgerDeleteOptions: {}, ledgerWriteOptions: {} }
+    : { ledgerDeleteOptions: { fileUsageDb: db }, ledgerWriteOptions: { db } };
+
+// A ledger refusal keeps its client status; only an unmetered write failure is
+// an internal error.
+const chatAttachmentStoreError = (
+  error: unknown,
+): HandlerError<409 | 413 | 500 | 503> =>
+  error instanceof OrganizationFileUsageError
+    ? organizationFileUsageHandlerError(error)
+    : new HandlerError({
+        status: 500,
+        message: "Failed to store chat attachment",
+        cause: error,
+      });
+
 type UploadUserFileInput = {
   dependencies?: UploadUserFileDependencies;
   file: {
@@ -644,6 +683,9 @@ export const uploadUserFile = async ({
       dependencies?.generateImageThumbnail ?? generateImageThumbnail;
     const putS3Object =
       dependencies?.putS3ObjectWithSignal ?? putS3ObjectWithSignal;
+    const { ledgerDeleteOptions, ledgerWriteOptions } = chatLedgerOptions(
+      dependencies?.organizationFileUsageDb,
+    );
     // Enforce the MIME allowlist at the storage boundary, not only in
     // validateChatFileParts at message-send: user files are later served
     // inline (Content-Disposition without a filename), so a stored
@@ -669,6 +711,31 @@ export const uploadUserFile = async ({
       mimeType: file.mimeType,
       userId,
     });
+
+    let organizationId: SafeId<"organization"> | undefined;
+    if (env.FEATURE_FILE_USAGE_LIMITS) {
+      const thread = yield* Result.await(
+        safeDb(
+          async (tx) =>
+            await tx.query.chatThreads.findFirst({
+              where: {
+                id: { eq: threadId },
+                userId: { eq: userId },
+              },
+              columns: { organizationId: true },
+            }),
+        ),
+      );
+      if (!thread) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "Chat thread no longer exists",
+          }),
+        );
+      }
+      organizationId = thread.organizationId;
+    }
 
     const scanResult = await scanUpload({
       bytes: file.bytes,
@@ -785,27 +852,36 @@ export const uploadUserFile = async ({
     let thumbnailFileId: string | null = null;
     let placeholder: string | null = null;
     let thumbnailKey: string | null = null;
-    const writeSourceResult = await Result.tryPromise({
-      try: async () =>
-        await withTimeout(
-          async (signal) =>
-            await putS3Object(s3Key, file.bytes, file.mimeType, signal),
-          {
-            label: "chat-attachment-put",
-            timeoutMs: BUFFER_INTENT_WRITE_TIMEOUT_MS,
-          },
-        ),
-      catch: (cause) => cause,
-    });
+    const writeSource = async () =>
+      await withTimeout(
+        async (signal) =>
+          await putS3Object(s3Key, file.bytes, file.mimeType, signal),
+        {
+          label: "chat-attachment-put",
+          timeoutMs: BUFFER_INTENT_WRITE_TIMEOUT_MS,
+        },
+      );
+    const writeSourceResult = env.FEATURE_FILE_USAGE_LIMITS
+      ? await writeOrganizationFile({
+          organizationId: organizationId ?? panic("Missing chat organization"),
+          objectKey: s3Key,
+          sizeBytes: file.bytes.byteLength,
+          write: writeSource,
+          ...ledgerWriteOptions,
+        })
+      : await Result.tryPromise({ try: writeSource, catch: (cause) => cause });
     if (Result.isError(writeSourceResult)) {
-      const cleanupResult = await Result.tryPromise({
-        try: async () =>
-          await deleteS3ObjectWithSignal(
-            s3Key,
-            AbortSignal.timeout(CHAT_ATTACHMENT_DELETE_TIMEOUT_MS),
-          ),
-        catch: (cause) => cause,
-      });
+      const cleanupResult = Result.flatten(
+        await Result.tryPromise({
+          try: async () =>
+            await deleteOrganizationFileWithSignal(
+              s3Key,
+              AbortSignal.timeout(CHAT_ATTACHMENT_DELETE_TIMEOUT_MS),
+              ledgerDeleteOptions,
+            ),
+          catch: (cause) => cause,
+        }),
+      );
       if (Result.isError(cleanupResult)) {
         captureError(cleanupResult.error, {
           s3Key,
@@ -836,46 +912,53 @@ export const uploadUserFile = async ({
           userFileId: id,
         });
       }
-      return Result.err(
-        new HandlerError({
-          status: 500,
-          message: "Failed to store chat attachment",
-          cause: writeSourceResult.error,
-        }),
-      );
+      return Result.err(chatAttachmentStoreError(writeSourceResult.error));
     }
 
     if (preparedThumbnail !== null) {
-      const writeThumbnailResult = await Result.tryPromise({
-        try: async () =>
-          await withTimeout(
-            async (signal) =>
-              await putS3Object(
-                preparedThumbnail.key,
-                preparedThumbnail.bytes,
-                THUMBNAIL_MIME_TYPE,
-                signal,
-              ),
-            {
-              label: "chat-thumbnail-put",
-              timeoutMs: BUFFER_INTENT_WRITE_TIMEOUT_MS,
-            },
-          ),
-        catch: (cause) => cause,
-      });
+      const writeThumbnail = async () =>
+        await withTimeout(
+          async (signal) =>
+            await putS3Object(
+              preparedThumbnail.key,
+              preparedThumbnail.bytes,
+              THUMBNAIL_MIME_TYPE,
+              signal,
+            ),
+          {
+            label: "chat-thumbnail-put",
+            timeoutMs: BUFFER_INTENT_WRITE_TIMEOUT_MS,
+          },
+        );
+      const writeThumbnailResult = env.FEATURE_FILE_USAGE_LIMITS
+        ? await writeOrganizationFile({
+            organizationId:
+              organizationId ?? panic("Missing chat organization"),
+            objectKey: preparedThumbnail.key,
+            sizeBytes: preparedThumbnail.bytes.byteLength,
+            write: writeThumbnail,
+            ...ledgerWriteOptions,
+          })
+        : await Result.tryPromise({
+            try: writeThumbnail,
+            catch: (cause) => cause,
+          });
       if (Result.isError(writeThumbnailResult)) {
         captureError(writeThumbnailResult.error, {
           stage: "chat-thumbnail-write",
           userFileId: id,
         });
-        const cleanupResult = await Result.tryPromise({
-          try: async () =>
-            await deleteS3ObjectWithSignal(
-              preparedThumbnail.key,
-              AbortSignal.timeout(CHAT_ATTACHMENT_DELETE_TIMEOUT_MS),
-            ),
-          catch: (cause) => cause,
-        });
+        const cleanupResult = Result.flatten(
+          await Result.tryPromise({
+            try: async () =>
+              await deleteOrganizationFileWithSignal(
+                preparedThumbnail.key,
+                AbortSignal.timeout(CHAT_ATTACHMENT_DELETE_TIMEOUT_MS),
+                ledgerDeleteOptions,
+              ),
+            catch: (cause) => cause,
+          }),
+        );
         if (Result.isError(cleanupResult)) {
           captureError(cleanupResult.error, {
             stage: "chat-thumbnail-write-cleanup",
@@ -888,14 +971,17 @@ export const uploadUserFile = async ({
           safeDb,
         });
         if (Result.isError(settlement)) {
-          const sourceCleanup = await Result.tryPromise({
-            try: async () =>
-              await deleteS3ObjectWithSignal(
-                s3Key,
-                AbortSignal.timeout(CHAT_ATTACHMENT_DELETE_TIMEOUT_MS),
-              ),
-            catch: (cause) => cause,
-          });
+          const sourceCleanup = Result.flatten(
+            await Result.tryPromise({
+              try: async () =>
+                await deleteOrganizationFileWithSignal(
+                  s3Key,
+                  AbortSignal.timeout(CHAT_ATTACHMENT_DELETE_TIMEOUT_MS),
+                  ledgerDeleteOptions,
+                ),
+              catch: (cause) => cause,
+            }),
+          );
           const sourceSettlement = await settleCleanupIntents({
             intentIds: sourceCleanupIntentIds,
             objectState: Result.isOk(sourceCleanup)
@@ -993,14 +1079,17 @@ export const uploadUserFile = async ({
       });
     }
 
-    const sourceCleanupResult = await Result.tryPromise({
-      try: async () =>
-        await deleteS3ObjectWithSignal(
-          s3Key,
-          AbortSignal.timeout(CHAT_ATTACHMENT_DELETE_TIMEOUT_MS),
-        ),
-      catch: (cause) => cause,
-    });
+    const sourceCleanupResult = Result.flatten(
+      await Result.tryPromise({
+        try: async () =>
+          await deleteOrganizationFileWithSignal(
+            s3Key,
+            AbortSignal.timeout(CHAT_ATTACHMENT_DELETE_TIMEOUT_MS),
+            ledgerDeleteOptions,
+          ),
+        catch: (cause) => cause,
+      }),
+    );
     const sourceSettlement = await settleCleanupIntents({
       intentIds: sourceCleanupIntentIds,
       objectState: Result.isOk(sourceCleanupResult)
@@ -1011,14 +1100,17 @@ export const uploadUserFile = async ({
     const thumbnailCleanupResult =
       thumbnailKey === null
         ? Result.ok(undefined)
-        : await Result.tryPromise({
-            try: async () =>
-              await deleteS3ObjectWithSignal(
-                thumbnailKey,
-                AbortSignal.timeout(CHAT_ATTACHMENT_DELETE_TIMEOUT_MS),
-              ),
-            catch: (cause) => cause,
-          });
+        : Result.flatten(
+            await Result.tryPromise({
+              try: async () =>
+                await deleteOrganizationFileWithSignal(
+                  thumbnailKey,
+                  AbortSignal.timeout(CHAT_ATTACHMENT_DELETE_TIMEOUT_MS),
+                  ledgerDeleteOptions,
+                ),
+              catch: (cause) => cause,
+            }),
+          );
     const thumbnailSettlement = await settleCleanupIntents({
       intentIds: thumbnailCleanupIntentIds,
       objectState: Result.isOk(thumbnailCleanupResult)

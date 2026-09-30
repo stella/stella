@@ -13,6 +13,10 @@ import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { markdownToStellaDocx } from "@/api/lib/docx-authoring/from-markdown";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { ChatToolError, unreachable } from "@/api/lib/errors/tagged-errors";
+import {
+  OrganizationFileUsageError,
+  organizationFileUsageHandlerError,
+} from "@/api/lib/files/organization-file-usage";
 import { LIMITS } from "@/api/lib/limits";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
@@ -72,11 +76,20 @@ type CreateWorkspaceDocumentToolsProps = {
 
 const toChatToolError = (
   error:
+    | OrganizationFileUsageError
     | { _tag: "DocumentTooLargeError" }
     | { _tag: "EntityLimitError" }
     | { _tag: "InvalidParentError" }
     | { _tag: "MissingFilePropertyError" },
 ): ChatToolError => {
+  if (error instanceof OrganizationFileUsageError) {
+    const mapped = organizationFileUsageHandlerError(error);
+    return new ChatToolError({
+      kind: mapped.status === 503 ? "server-defect" : "limit",
+      message: mapped.message,
+      cause: error,
+    });
+  }
   switch (error._tag) {
     case "DocumentTooLargeError":
       return new ChatToolError({

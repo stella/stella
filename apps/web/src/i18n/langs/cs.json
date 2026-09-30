@@ -1449,6 +1449,7 @@
     "back": "Zpět",
     "cancel": "Zrušit",
     "caseLaw": "Judikatura",
+    "catalogue": "Katalog",
     "category": "Kategorie",
     "categoryName": "Název kategorie",
     "changeColor": "Změnit barvu",
@@ -3227,6 +3228,23 @@
       "urlPlaceholder": "https://github.com/org/repo/tree/main/cesta/k/dovednosti",
       "version": "Verze: {version}"
     },
+    "catalogue": {
+      "addToLibrary": "Přidat do knihovny",
+      "added": "{name} je ve vaší knihovně",
+      "confirmAddTitle": "Přidat {name} do {organization}?",
+      "confirmDescription": "Kopie tohoto vzoru se uloží do knihovny {organization}.",
+      "confirmDownloadTitle": "Stáhnout {name} pro {organization}?",
+      "confirmStarterDescription": "Kopie tohoto playbooku se uloží do knihovny {organization}.",
+      "confirmUseTitle": "Použít {name} v {organization}?",
+      "installFailed": "Vzor se nepodařilo přidat",
+      "noPreview": "Náhled tohoto vzoru není k dispozici.",
+      "notFound": "Tento vzor v katalogu není.",
+      "unavailable": "Katalog teď není k dispozici."
+    },
+    "landing": {
+      "accountLine": "S bezplatným účtem si uchováte vlastní vzory, ustanovení a playbooky své organizace.",
+      "withAccount": "S bezplatným účtem"
+    },
     "mcp": {
       "addAndConnect": "Přidat a připojit",
       "addServer": "Přidat server",
@@ -3708,7 +3726,6 @@
     "someInvitesFailed": "{count, plural, one {# pozvánka se nezdařila} few {# pozvánky se nezdařily} other {# pozvánek se nezdařilo}}",
     "stepAi": "AI",
     "stepApps": "Aplikace a nástroje",
-    "stepCatalogue": "Katalog",
     "stepJurisdiction": "Jurisdikce",
     "stepOrganization": "Tým",
     "stepTeam": "Pozvánky",

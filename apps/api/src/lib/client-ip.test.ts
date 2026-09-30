@@ -4,6 +4,8 @@ import {
   AUTH_CLIENT_ADDRESS_HEADER,
   CLIENT_ADDRESS_SOURCE,
   isTrustedProxy,
+  normalizeRateLimitClientAddress,
+  resolveRateLimitClientAddress,
   parseEdgeClientAddress,
   parseTrustedProxies,
   resolveClientAddress,
@@ -379,5 +381,39 @@ describe("stampClientAddressHeader", () => {
     });
     stampClientAddressHeader(request, null);
     expect(request.headers.get(AUTH_CLIENT_ADDRESS_HEADER)).toBeNull();
+  });
+});
+
+describe("rate limit address normalization", () => {
+  test("keeps IPv4 and mapped IPv4 addresses in the full-address counter", () => {
+    for (const address of [
+      "192.0.2.1",
+      "::ffff:192.0.2.1",
+      "::FFFF:c000:201",
+    ]) {
+      expect(normalizeRateLimitClientAddress(address)).toBe("192.0.2.1");
+    }
+    expect(normalizeRateLimitClientAddress("192.0.2.2")).toBe("192.0.2.2");
+    expect(normalizeRateLimitClientAddress("::ffff:c000:202")).toBe(
+      "192.0.2.2",
+    );
+  });
+
+  test("normalizes the configured edge address before choosing the counter", () => {
+    expect(
+      resolveRateLimitClientAddress({
+        request: new Request("https://example.test/", {
+          headers: {
+            "viewer-address": "[2001:0DB8:abcd:1234::9]:443",
+            "x-forwarded-for": "198.51.100.1",
+          },
+        }),
+        server: fakeServer("10.1.2.3"),
+        clientAddressOptions: {
+          trusted: parseTrustedProxies("10.0.0.0/8"),
+          edgeHeader: "viewer-address",
+        },
+      }),
+    ).toBe("2001:db8:abcd:1234::");
   });
 });

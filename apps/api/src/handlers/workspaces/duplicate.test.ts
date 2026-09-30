@@ -13,6 +13,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import type { FieldContent, PropertyContent } from "@/api/db/schema-validators";
+import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createAuditRecorder } from "@/api/lib/audit-log";
@@ -929,6 +930,7 @@ describe("duplicateWorkspace", () => {
       execute: async () => undefined,
     });
 
+    expect(env.FEATURE_FILE_USAGE_LIMITS).toBe(false);
     const result = await duplicateWorkspace.handler(
       createContext({ includeContent: true, safeDb, scopedDb }),
     );

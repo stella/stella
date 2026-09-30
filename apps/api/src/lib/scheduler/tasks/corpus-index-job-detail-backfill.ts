@@ -15,6 +15,7 @@ import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { Temporal } from "@stll/time";
 import { isUuid } from "@stll/uuid-codec";
 
+import { withLongRunningConnection } from "@/api/db/long-running-connection";
 import type { Transaction } from "@/api/db/root";
 import {
   CORPUS_INDEX_JOB_SUCCEEDED_CHECKS,
@@ -50,8 +51,8 @@ const CONTINUATION_DELAY_MS = 1000;
  * once: without these a row held by a writer would keep the task, and the
  * connection under it, past the scheduler lease that says it is still running.
  */
-const BATCH_LOCK_TIMEOUT = "5s";
-const BATCH_STATEMENT_TIMEOUT = "30s";
+const BATCH_LOCK_TIMEOUT_MS = 5000;
+const BATCH_STATEMENT_TIMEOUT_MS = 30_000;
 /**
  * VALIDATE takes SHARE UPDATE EXCLUSIVE, which lets writers through but queues
  * behind an autovacuum of the table until that vacuum yields, so the wait is
@@ -60,24 +61,23 @@ const BATCH_STATEMENT_TIMEOUT = "30s";
  * lifted, so a validation that is not making progress is cancelled and tried
  * again on the next tick instead of holding its connection indefinitely.
  */
-const VALIDATE_LOCK_TIMEOUT = "1min";
-const VALIDATE_STATEMENT_TIMEOUT = "30min";
+const VALIDATE_LOCK_TIMEOUT_MS = 60_000;
+const VALIDATE_STATEMENT_TIMEOUT_MS = 30 * 60_000;
 
-type TransactionBudget = { lockTimeout: string; statementTimeout: string };
+type TransactionBudget = { lockTimeout: number; statementTimeout: number };
 
 /**
- * Both budgets, set LOCAL so they end with the transaction. Written as raw
- * statements because `SET LOCAL` takes a literal, not a bind parameter; the
- * values are this module's own constants.
+ * Both budgets are transaction-local on the shared pool. The timeout owner
+ * keeps them below that pool's idle-connection cap.
  */
 const setTransactionBudget = async (
   tx: Transaction,
   { lockTimeout, statementTimeout }: TransactionBudget,
 ): Promise<void> => {
-  await tx.execute(sql.raw(`SET LOCAL lock_timeout = '${lockTimeout}'`));
-  await tx.execute(
-    sql.raw(`SET LOCAL statement_timeout = '${statementTimeout}'`),
-  );
+  const { setSharedLockTimeout, setSharedStatementTimeout } =
+    await import("@/api/db/shared-pool-timeouts");
+  await setSharedLockTimeout(tx, lockTimeout);
+  await setSharedStatementTimeout(tx, statementTimeout);
 };
 
 export type CorpusIndexJobDetailBatch = {
@@ -361,8 +361,8 @@ export const backfillCorpusIndexJobDetail: SchedulerTask = async ({
     try: async () =>
       await db.transaction(async (tx) => {
         await setTransactionBudget(tx, {
-          lockTimeout: BATCH_LOCK_TIMEOUT,
-          statementTimeout: BATCH_STATEMENT_TIMEOUT,
+          lockTimeout: BATCH_LOCK_TIMEOUT_MS,
+          statementTimeout: BATCH_STATEMENT_TIMEOUT_MS,
         });
         const { movedCount, nextCursor } = await runCorpusIndexJobDetailBatchTx(
           tx,
@@ -428,19 +428,25 @@ export const backfillCorpusIndexJobDetail: SchedulerTask = async ({
   // nothing left to move, tries again.
   const validated = await Result.tryPromise({
     try: async () =>
-      await db.transaction(async (tx) => {
-        await setTransactionBudget(tx, {
-          lockTimeout: VALIDATE_LOCK_TIMEOUT,
-          statementTimeout: VALIDATE_STATEMENT_TIMEOUT,
-        });
-        await validateCorpusIndexJobChecksTx(tx);
-        // audit: skip — retires a versioned one-shot repair; scheduler job
-        // runs retain the operator trail.
-        await tx
-          .update(schedulerJobs)
-          .set({ enabled: false })
-          .where(leaseFence);
-      }),
+      await withLongRunningConnection(
+        {
+          lockTimeout: VALIDATE_LOCK_TIMEOUT_MS,
+          statementTimeout: VALIDATE_STATEMENT_TIMEOUT_MS,
+          signal,
+        },
+        async ({ db: dedicatedDb }) =>
+          await dedicatedDb.transaction(async (tx) => {
+            await validateCorpusIndexJobChecksTx(tx);
+            signal.throwIfAborted();
+            // audit: skip — retires a versioned one-shot repair; scheduler job
+            // runs retain the operator trail.
+            await tx
+              .update(schedulerJobs)
+              .set({ enabled: false })
+              .where(leaseFence);
+            signal.throwIfAborted();
+          }),
+      ),
     catch: (cause) =>
       new CorpusIndexJobDetailBackfillError({
         message: "The corpus index-job checks were not validated",

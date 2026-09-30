@@ -6,6 +6,7 @@ import {
 } from "@stll/api-contract/case-law-court-tiers";
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
+import { withSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { courtAbbreviation } from "@/api/lib/case-law/court-abbreviations";
@@ -84,7 +85,7 @@ const CLOCK_SKEW_MARGIN_MS = DAY_IN_MS / 24;
  * million-row corpus, so the bound is what turns that into a fast, visible
  * degradation rather than a stalled page.
  */
-const ACTIVITY_STATEMENT_TIMEOUT = "3s";
+const ACTIVITY_STATEMENT_TIMEOUT_MS = 3000;
 
 /**
  * How many of a tier's courts the breakdown names individually before the tier
@@ -161,23 +162,6 @@ type CourtActivityRead = {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
-/**
- * The transaction's current statement timeout, so the bound this read sets can
- * be handed back. Null when the setting cannot be read, which leaves the bound
- * in place for the rest of the transaction rather than guessing a value to
- * restore.
- */
-const readStatementTimeout = async (
-  tx: CaseLawPublicReadTransaction,
-): Promise<string | null> => {
-  const result: unknown = await tx.execute(
-    sql`SELECT current_setting('statement_timeout') AS statement_timeout`,
-  );
-  const row = executedRows(result).at(0);
-  const value = isRecord(row) ? row["statement_timeout"] : undefined;
-  return typeof value === "string" ? value : null;
-};
-
 const toCount = (value: unknown): number => {
   const count = Number(value);
   return Number.isFinite(count) ? count : 0;
@@ -220,17 +204,11 @@ export const readCaseLawCourtActivityQuery = definePublicLawSharedQuery(
               FROM jsonb_array_elements_text(${JSON.stringify([...excludedSourceIds])}::text::jsonb) AS value
             )`;
 
-    // Transaction-local, and restored below rather than left for whatever the
-    // caller runs next: `readCaseLawCourtActivityQuery` is handed a
-    // transaction, not a connection, and it is not the only read that may use
-    // it. `set_config(..., true)` reverts with the transaction, so a cancelled
-    // statement needs no unwinding of its own.
-    const previousTimeout = await readStatementTimeout(tx);
-    await tx.execute(
-      sql`SELECT set_config('statement_timeout', ${ACTIVITY_STATEMENT_TIMEOUT}, true)`,
-    );
-
-    const result: unknown = await tx.execute(sql`
+    const result: unknown = await withSharedStatementTimeout(
+      tx,
+      ACTIVITY_STATEMENT_TIMEOUT_MS,
+      async () =>
+        await tx.execute(sql`
       SELECT
         named.court AS court,
         to_json(latest.updated_at) #>> '{}' AS updated_at,
@@ -260,12 +238,8 @@ export const readCaseLawCourtActivityQuery = definePublicLawSharedQuery(
           ${admitted}
       ) recent ON true
       ORDER BY named.ordinality
-    `);
-    if (previousTimeout !== null) {
-      await tx.execute(
-        sql`SELECT set_config('statement_timeout', ${previousTimeout}, true)`,
-      );
-    }
+    `),
+    );
 
     const rows = executedRows(result).filter(isRecord);
     return new Map(

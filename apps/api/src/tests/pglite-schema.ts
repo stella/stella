@@ -570,6 +570,30 @@ export const installPgliteOrganizationMemberCapacity = async (
   }
 };
 
+/** Install migration-owned timer signals and grants omitted by schema push. */
+export const installPgliteTimeEntryTimerSignals = async (
+  db: PgliteSchemaDb,
+) => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261003122600_timer_admin_stop",
+      "migration.sql",
+    ),
+  ).filter((statement) => {
+    const source = executableSql(statement);
+    return (
+      source.startsWith("CREATE FUNCTION") ||
+      source.startsWith("CREATE TRIGGER") ||
+      (/^(?:GRANT|REVOKE)\s/u.test(source) &&
+        source.includes('ON "time_entry_timer_states"'))
+    );
+  });
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
 export const installPgliteMigration = async ({
   db,
   migrationPath,

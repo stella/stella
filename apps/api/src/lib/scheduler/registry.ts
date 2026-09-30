@@ -105,6 +105,10 @@ import {
   recordMissingOrganizationAccessStatesTask,
 } from "@/api/lib/scheduler/tasks/organization-access-state-reconcile";
 import {
+  RECONCILE_ORGANIZATION_FILE_RESERVATIONS_TASK,
+  reconcileOrganizationFileReservations,
+} from "@/api/lib/scheduler/tasks/organization-file-reservation-reconcile";
+import {
   RECONCILE_REPORT_EXPORTS_TASK,
   reconcileReportExports,
 } from "@/api/lib/scheduler/tasks/report-export-reconcile";
@@ -187,6 +191,8 @@ const SCHEDULER_TASKS = {
   [MEMORY_EXTRACTOR_TASK]: extractMemoriesFromCompactions,
   [RECORD_MISSING_ORGANIZATION_ACCESS_STATES_TASK]:
     recordMissingOrganizationAccessStatesTask,
+  [RECONCILE_ORGANIZATION_FILE_RESERVATIONS_TASK]:
+    reconcileOrganizationFileReservations,
   [CLEAN_TEMPLATE_DELETION_OBJECTS_TASK]: cleanTemplateDeletionObjects,
   [REPAIR_FILE_DERIVATIVES_TASK]: repairFileDerivatives,
   [RECONCILE_FLOW_RUN_ORPHANS_TASK]: reconcileFlowRunOrphans,

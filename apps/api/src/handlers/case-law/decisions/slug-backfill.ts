@@ -47,7 +47,6 @@ const assignSlug = async (db: ScopedDb, row: BackfillRow): Promise<boolean> => {
     try {
       // Compare-and-set on a still-null slug: a concurrent writer may have
       // filled this row, in which case we leave its slug untouched.
-      // db-await-in-loop: retry loop must observe this write before retrying
       // oxlint-disable-next-line arrow-body-style -- block body carries the audit-skip directive the require-audit-on-mutation rule scans for
       const updated = await db((tx) => {
         // audit: skip — backfills a derived public slug, not user-facing state

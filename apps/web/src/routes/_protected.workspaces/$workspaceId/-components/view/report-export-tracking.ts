@@ -1,8 +1,13 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { createJSONStorage, persist } from "zustand/middleware";
 
 import { Temporal } from "@stll/time";
 import { stellaToast } from "@stll/ui/toast";
+
+import {
+  followStorageOwner,
+  userScopedStateStorage,
+} from "@/lib/account/user-scoped-storage";
 
 import {
   evictedTrackedExportIds,
@@ -72,6 +77,7 @@ export const useReportExportTrackingStore = create<ReportExportTrackingStore>()(
     }),
     {
       name: "stella.report-exports.active",
+      storage: createJSONStorage(() => userScopedStateStorage(localStorage)),
       partialize: ({ exports }) => ({ exports }),
       version: 2,
       merge: (persisted, current) => ({
@@ -81,6 +87,8 @@ export const useReportExportTrackingStore = create<ReportExportTrackingStore>()(
     },
   ),
 );
+
+followStorageOwner(useReportExportTrackingStore);
 
 /** Evicting a tracked export (the 100-slot cap) drops its state before the
  * tracker ever observes it settle, so its loading toast would otherwise

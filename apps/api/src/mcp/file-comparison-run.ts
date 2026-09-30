@@ -34,7 +34,8 @@ import {
   scanUpload,
 } from "@/api/lib/file-scan/scan-upload";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
-import { deleteS3ObjectWithSignal, readS3ArrayBuffer } from "@/api/lib/s3";
+import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
+import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { headObject } from "@/api/lib/s3-presign";
 import {
   DEFAULT_DELIVER_TEMPORARY_REDLINE_DEPENDENCIES,
@@ -66,9 +67,16 @@ export const UPLOADS_OUTPUT_MODES = ["preview", "download"] as const;
 
 type UploadsOutputMode = (typeof UPLOADS_OUTPUT_MODES)[number];
 
+type DeleteObject = (
+  key: string,
+  signal: AbortSignal,
+) => Promise<
+  Awaited<ReturnType<typeof deleteOrganizationFileWithSignal>> | undefined
+>;
+
 export type FileComparisonRunDependencies = {
   compareDocxBuffers: typeof compareDocxBuffers;
-  deleteObject: typeof deleteS3ObjectWithSignal;
+  deleteObject: DeleteObject;
   headObject: typeof headObject;
   readObject: typeof readS3ArrayBuffer;
   resolveDocxEditAuthorName: typeof resolveDocxEditAuthorName;
@@ -79,7 +87,7 @@ const DEFAULT_FILE_COMPARISON_RUN_DEPENDENCIES: FileComparisonRunDependencies =
   {
     ...DEFAULT_DELIVER_TEMPORARY_REDLINE_DEPENDENCIES,
     compareDocxBuffers,
-    deleteObject: deleteS3ObjectWithSignal,
+    deleteObject: deleteOrganizationFileWithSignal,
     headObject,
     readObject: readS3ArrayBuffer,
     resolveDocxEditAuthorName,
@@ -179,7 +187,10 @@ const discardInput = async ({
   const deleted = await Result.tryPromise(
     async () => await deleteObject(key, signal),
   );
-  if (Result.isError(deleted)) {
+  if (
+    Result.isError(deleted) ||
+    (deleted.value && Result.isError(deleted.value))
+  ) {
     // The row stays behind on purpose, so the sweep retries the key.
     return;
   }

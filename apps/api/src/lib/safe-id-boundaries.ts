@@ -44,6 +44,9 @@ export const brandPersistedSellerProfileId = (
   sellerProfileId: string,
 ): SafeId<"sellerProfile"> => toSafeId<"sellerProfile">(sellerProfileId);
 
+export const brandPersistedVatRateId = (id: string): SafeId<"vatRate"> =>
+  toSafeId<"vatRate">(id);
+
 export const brandPersistedNumberSeriesId = (
   numberSeriesId: string,
 ): SafeId<"numberSeries"> => toSafeId<"numberSeries">(numberSeriesId);
@@ -382,3 +385,6 @@ export const brandDerivedCorrespondenceDropId = (
 export const brandPersistedCorrespondenceDropId = (
   id: string,
 ): SafeId<"correspondenceDropLog"> => toSafeId<"correspondenceDropLog">(id);
+
+export const brandPersistedTimeTimerId = (id: string): SafeId<"timeTimer"> =>
+  toSafeId<"timeTimer">(id);

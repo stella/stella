@@ -139,6 +139,38 @@ describe("embedded block anchors", () => {
   });
 });
 
+describe("footnote tables", () => {
+  test("renders table note membership and its printed mark", () => {
+    const markup = renderToStaticMarkup(
+      createElement(BlockRenderer, {
+        activeMatchIndex: -1,
+        anchorPresentation: "embedded",
+        block: {
+          anchorId: "note-5-table",
+          id: "b103",
+          note: { type: "footnote", label: "5", noteId: "fn5" },
+          plainText: "A\tB",
+          rows: [
+            [
+              { inlines: [{ text: "A", type: "text" }], plainText: "A" },
+              { inlines: [{ text: "B", type: "text" }], plainText: "B" },
+            ],
+          ],
+          type: "table",
+        },
+        rangesByPieceId: {},
+        variant: "case-law",
+      }),
+    );
+
+    expect(markup).toContain('data-note="footnote"');
+    expect(markup).toContain(
+      'class="reader-note-label" data-reader-chrome="">5</span>',
+    );
+    expect(markup).toContain("<table");
+  });
+});
+
 describe("fallback legal text anchors", () => {
   test("every paragraph remains annotatable and renders its stored mark", () => {
     const markup = renderToStaticMarkup(

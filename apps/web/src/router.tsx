@@ -11,6 +11,9 @@ import {
   DefaultPendingComponent,
 } from "@/components/route-components";
 import { installChatRuntimeCleanup } from "@/features/chat/queries";
+import { installSessionChangeListener } from "@/lib/account/session-change-listener";
+import { listenForSessionChange } from "@/lib/account/session-signal";
+import { installUserScopedStorage } from "@/lib/account/user-scoped-storage";
 import { createAnalyticsValue } from "@/lib/analytics/provider";
 import {
   createRouteErrorLifecycleController,
@@ -51,6 +54,38 @@ export function getRouter() {
       window.location.reload();
     },
   });
+  if (typeof window !== "undefined") {
+    installUserScopedStorage(queryClient);
+    installSessionChangeListener(queryClient, {
+      listen: listenForSessionChange,
+      onRestore: (listener) => {
+        const onPageShow = (event: PageTransitionEvent) => {
+          if (event.persisted) {
+            listener();
+          }
+        };
+        window.addEventListener("pageshow", onPageShow);
+        return () => {
+          window.removeEventListener("pageshow", onPageShow);
+        };
+      },
+      isHidden: () => document.visibilityState === "hidden",
+      onVisible: (listener) => {
+        const onChange = () => {
+          if (document.visibilityState === "visible") {
+            listener();
+          }
+        };
+        document.addEventListener("visibilitychange", onChange);
+        return () => {
+          document.removeEventListener("visibilitychange", onChange);
+        };
+      },
+      reloadDocument: () => {
+        window.location.reload();
+      },
+    });
+  }
   let readCaughtRouteTemplate = () => "unknown";
 
   const router = createRouter({

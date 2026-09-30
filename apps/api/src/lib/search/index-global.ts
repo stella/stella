@@ -1908,7 +1908,6 @@ export const upsertWorkspaceSearchDocuments = async (
   // deadlocking.
   const pending = [...new Set(workspaceIds)].toSorted(compareCodeUnit);
   for (let start = 0; start < pending.length; start += REINDEX_BATCH_SIZE) {
-    // db-await-in-loop: one batch of at most REINDEX_BATCH_SIZE matters per iteration: one read and one four-statement transaction per batch, never per matter
     await writeWorkspaceProjections(
       pending.slice(start, start + REINDEX_BATCH_SIZE),
       database,

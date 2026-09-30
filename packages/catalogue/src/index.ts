@@ -27,6 +27,7 @@ export {
   MCP_AUTH_TYPES,
   PRACTICE_AREAS,
   catalogueEntrySchema,
+  catalogueSlugSchema,
   githubSkillEntrySchema,
   inTreeSkillEntrySchema,
   mcpEntrySchema,

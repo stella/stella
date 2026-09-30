@@ -113,6 +113,7 @@ import {
 import { fetchOlderMessages } from "@/features/chat/queries";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { userStorageKey } from "@/lib/account/user-scoped-storage";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -806,13 +807,15 @@ export const useChatSession = ({
       }
 
       const nextStored = new Set(
-        readStoredStrings(CHAT_ALWAYS_APPROVED_TOOLS_STORAGE_KEY),
+        readStoredStrings(
+          userStorageKey(CHAT_ALWAYS_APPROVED_TOOLS_STORAGE_KEY),
+        ),
       ).add(approvalKey);
       setAlwaysApprovedTools(
         new Set(alwaysApprovedTools).add(getToolApprovalGrant(toolName)),
       );
       writeStoredApprovedStrings(
-        CHAT_ALWAYS_APPROVED_TOOLS_STORAGE_KEY,
+        userStorageKey(CHAT_ALWAYS_APPROVED_TOOLS_STORAGE_KEY),
         nextStored,
       );
       dispatchApprovedToolsChanged({ scope: "local" });
@@ -1439,7 +1442,9 @@ export const useChatSession = ({
       );
     };
     const handleStorage = (event: StorageEvent) => {
-      if (event.key !== CHAT_ALWAYS_APPROVED_TOOLS_STORAGE_KEY) {
+      if (
+        event.key !== userStorageKey(CHAT_ALWAYS_APPROVED_TOOLS_STORAGE_KEY)
+      ) {
         return;
       }
 
@@ -1498,6 +1503,7 @@ export const useChatSession = ({
   };
 };
 
+// Kept per signed-in user.
 const CHAT_ALWAYS_APPROVED_TOOLS_STORAGE_KEY =
   "stella.chat.alwaysApprovedTools";
 const CHAT_CONVERSATION_APPROVED_TOOLS_STORAGE_KEY_PREFIX =
@@ -1528,7 +1534,9 @@ const readAlwaysApprovedTools = ({
   mcpConnectorIdentities: readonly McpConnectorApprovalIdentity[];
   organizationId: string;
 }) => {
-  const stored = readStoredStrings(CHAT_ALWAYS_APPROVED_TOOLS_STORAGE_KEY);
+  const stored = readStoredStrings(
+    userStorageKey(CHAT_ALWAYS_APPROVED_TOOLS_STORAGE_KEY),
+  );
   const approvedTools: ToolApprovalGrant[] = [];
 
   for (const value of stored) {

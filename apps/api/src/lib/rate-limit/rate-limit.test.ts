@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import Elysia, { status, t } from "elysia";
 
+import { parseTrustedProxies } from "@/api/lib/client-ip";
 import {
+  InMemoryRateLimitContext,
+  scopedGenerator,
+  scopedRateLimitKey,
   rateLimit,
   type RateLimitContext,
   type RateLimitContextConfig,
@@ -868,3 +872,124 @@ const createRateLimitedApp = (context: RedisRateLimitContext) =>
       }),
     )
     .get("/", () => "ok");
+
+describe("client address counters", () => {
+  const clientAddressOptions = {
+    trusted: parseTrustedProxies("10.0.0.0/8"),
+    edgeHeader: null,
+  };
+  const request = (address: string) =>
+    new Request("https://example.test/", {
+      headers: { "x-forwarded-for": address },
+    });
+
+  test("keeps the direct peer counter when forwarded values change", () => {
+    const server = { requestIP: () => ({ address: "192.0.2.10" }) };
+    const context = new InMemoryRateLimitContext();
+    context.init(RATE_LIMIT_OPTIONS);
+    try {
+      for (const [index, address] of [
+        "198.51.100.1",
+        "198.51.100.2",
+        "198.51.100.3",
+      ].entries()) {
+        const key = scopedRateLimitKey({
+          scope: "api",
+          request: request(address),
+          server,
+          clientAddressOptions,
+        });
+        expect(key).toBe("api:192.0.2.10");
+        const counter = context.increment(key, WINDOW_MS, 1000);
+        expect(counter.count).toBe(index + 1);
+        expect(counter.count <= RATE_LIMIT_OPTIONS.max).toBe(index < 2);
+      }
+    } finally {
+      context.kill();
+    }
+  });
+
+  test("keeps clients on one configured peer in separate counters", () => {
+    const server = { requestIP: () => ({ address: "10.1.2.3" }) };
+    const context = new InMemoryRateLimitContext();
+    context.init(RATE_LIMIT_OPTIONS);
+    const key = (address: string) =>
+      scopedRateLimitKey({
+        scope: "api",
+        request: request(address),
+        server,
+        clientAddressOptions,
+      });
+    try {
+      const first = key("198.51.100.1");
+      const second = key("198.51.100.2");
+      expect(first).toBe("api:198.51.100.1");
+      expect(second).toBe("api:198.51.100.2");
+      for (let count = 1; count <= 3; count += 1) {
+        expect(context.increment(first, WINDOW_MS, 1000).count).toBe(count);
+      }
+      expect(
+        context.increment(first, WINDOW_MS, 1000).count <=
+          RATE_LIMIT_OPTIONS.max,
+      ).toBe(false);
+      expect(
+        context.increment(second, WINDOW_MS, 1000).count <=
+          RATE_LIMIT_OPTIONS.max,
+      ).toBe(true);
+    } finally {
+      context.kill();
+    }
+  });
+
+  test("shares one canonical IPv6 /64 counter while separating adjacent networks", () => {
+    const server = { requestIP: () => ({ address: "10.1.2.3" }) };
+    const context = new InMemoryRateLimitContext();
+    context.init(RATE_LIMIT_OPTIONS);
+    const key = (address: string) =>
+      scopedRateLimitKey({
+        scope: "api",
+        request: request(address),
+        server,
+        clientAddressOptions,
+      });
+    try {
+      const identities = [
+        "2001:db8:abcd:1234::1",
+        "2001:0DB8:ABCD:1234:0000:0000:0000:0001",
+        "2001:db8:abcd:1234:ffff:ffff:ffff:ffff",
+      ];
+      for (const [index, address] of identities.entries()) {
+        expect(key(address)).toBe("api:2001:db8:abcd:1234::");
+        expect(context.increment(key(address), WINDOW_MS, 1000).count).toBe(
+          index + 1,
+        );
+      }
+      expect(
+        context.increment(key("2001:db8:abcd:1235::1"), WINDOW_MS, 1000).count,
+      ).toBe(1);
+    } finally {
+      context.kill();
+    }
+  });
+
+  test("keeps scope-only keys without a runtime address", () => {
+    const synthetic = request("198.51.100.1");
+    expect(
+      scopedRateLimitKey({
+        scope: "api",
+        request: synthetic,
+        server: null,
+        clientAddressOptions,
+      }),
+    ).toBe("api");
+    expect(scopedGenerator("api")(synthetic, null)).toBe("api");
+    expect(
+      scopedRateLimitKey({
+        scope: "api",
+        request: synthetic,
+        server: { requestIP: () => null },
+        clientAddressOptions,
+      }),
+    ).toBe("api");
+  });
+});

@@ -28,6 +28,7 @@ import { Temporal } from "@stll/time";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { userFiles } from "@/api/db/schema";
 import type { UsageEventLane } from "@/api/db/schema";
+import { setSharedLockTimeout } from "@/api/db/shared-pool-timeouts";
 import { env } from "@/api/env";
 import { modelAcceptsDocumentAttachment } from "@/api/handlers/chat/attachment-modality";
 import {
@@ -573,7 +574,7 @@ export const streamChat = async ({
             async (tx) => {
               // Bound lock ownership too: a timed-out shadow append must not stall settlement.
               await tx.execute(sql`SET LOCAL transaction_timeout = '100ms'`);
-              await tx.execute(sql`SET LOCAL lock_timeout = '25ms'`);
+              await setSharedLockTimeout(tx, 25);
               return await callback(tx);
             },
             { retry: { times: 0, delayMs: 0, backoff: "constant" } },

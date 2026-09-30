@@ -22,10 +22,14 @@ export const consumeEmailAttachmentSaveRateLimit = async ({
 }: {
   context?: RateLimitCounterContext;
   request: Request;
-  server: Parameters<typeof scopedRateLimitKey>[2];
+  server: Parameters<typeof scopedRateLimitKey>[0]["server"];
 }): Promise<boolean> => {
   const counter = await context.increment(
-    scopedRateLimitKey(EMAIL_ATTACHMENT_SAVE_RATE_LIMIT_SCOPE, request, server),
+    scopedRateLimitKey({
+      scope: EMAIL_ATTACHMENT_SAVE_RATE_LIMIT_SCOPE,
+      request,
+      server,
+    }),
     API_RATE_LIMITS.upload.duration,
   );
   return counter.count <= API_RATE_LIMITS.upload.max;

@@ -4,6 +4,7 @@ import { and, asc, count, eq, inArray, lte, sql } from "drizzle-orm";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { entities } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { chunked } from "@/api/lib/chunked";
 import {
   createTimestampIdCursorCodec,
   parsePgTimestampCursorValue,
@@ -29,20 +30,6 @@ const parseTimestamp = (value: string) =>
   parsePgTimestampCursorValue(value) ??
   panic("Stored workflow timestamp cursor is invalid");
 
-const chunkEntityIds = (
-  entityIds: readonly SafeId<"entity">[],
-): SafeId<"entity">[][] => {
-  const chunks: SafeId<"entity">[][] = [];
-  for (
-    let index = 0;
-    index < entityIds.length;
-    index += LIMITS.workflowEntityBatchSize
-  ) {
-    chunks.push(entityIds.slice(index, index + LIMITS.workflowEntityBatchSize));
-  }
-  return chunks;
-};
-
 export const fetchExplicitWorkflowTargetRows = async ({
   inputEntityIds,
   scopedDb,
@@ -53,8 +40,7 @@ export const fetchExplicitWorkflowTargetRows = async ({
   workspaceId: SafeId<"workspace">;
 }): Promise<WorkflowTargetEntityRow[]> => {
   const entityRows: WorkflowTargetEntityRow[] = [];
-  for (const chunk of chunkEntityIds(inputEntityIds)) {
-    // db-await-in-loop: one set-based read per chunk; chunking caps the IN list at workflowEntityBatchSize bound parameters
+  for (const chunk of chunked(inputEntityIds, LIMITS.workflowEntityBatchSize)) {
     const rows = await scopedDb((tx) =>
       tx
         .select({ id: entities.id, kind: entities.kind })

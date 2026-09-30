@@ -1,0 +1,36 @@
+{
+  "source": "CourtListener public bulk data",
+  "snapshotDate": "2026-06-30",
+  "snapshotManifest": "dev/MANIFEST.md",
+  "sourceDataset": "dev-clusters-full.ndjson.gz",
+  "clusterId": "4696496",
+  "opinionId": "4609686",
+  "columns": [
+    "html_with_citations",
+    "html_anon_2020"
+  ],
+  "sourceRecord": "opinion 4609686 columns html_with_citations and html_anon_2020",
+  "fixtureSelection": "Exact contiguous excerpt containing two adjacent headings; not a complete field value.",
+  "sourceColumns": {
+    "html_with_citations": {
+      "startUtf8Byte": 11863,
+      "endUtf8ByteExclusive": 12011,
+      "sourceColumnSHA256": "1016b009230f4a1c8c529865f9ab3fca65e6c2b84e5859ab269ae132a4179bdc"
+    },
+    "html_anon_2020": {
+      "startUtf8Byte": 10919,
+      "endUtf8ByteExclusive": 11067,
+      "sourceColumnSHA256": "645af5291078e832a293e31adff9fbf5bb80a176e5ed31adc940c9cc0d6509be"
+    }
+  },
+  "excerptSHA256": "e0536f7c1f0baac3155221747f19fb5033f01c43c68e04cfe21db243e3145153",
+  "recordIdentityUrl": "https://www.courtlistener.com/api/rest/v3/opinions/4609686/",
+  "sourceArtifact": {
+    "url": "https://com-courtlistener-storage.s3-us-west-2.amazonaws.com/bulk-data/opinions-2026-06-30.csv.bz2",
+    "etag": "150e073ae1e7adad94ca9a57fb449980-6505",
+    "compressedByteRange": {
+      "start": 0,
+      "end": 209715199
+    }
+  }
+}

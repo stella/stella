@@ -1,4 +1,5 @@
 import { panic } from "better-result";
+import { Address4, Address6 } from "ip-address";
 /**
  * Resolves the client IP for a request, refusing to trust
  * `x-forwarded-for` unless the request actually arrived through a trusted
@@ -311,4 +312,43 @@ export const resolveSignupRateLimitClientIp = (
   return (
     addressFromTrustedPeer(request, peer, trusted, edgeHeader)?.address ?? null
   );
+};
+
+const IPV6_RATE_LIMIT_PREFIX_LENGTH = 64;
+
+export const normalizeRateLimitClientAddress = (identity: string): string => {
+  const ipVersion = isIP(identity);
+  if (ipVersion === 4) {
+    return new Address4(identity).correctForm();
+  }
+  if (ipVersion !== 6) {
+    return identity;
+  }
+
+  const address = new Address6(identity);
+  if (address.isMapped4()) {
+    return address.to4().correctForm();
+  }
+  return new Address6(
+    `${address.correctForm()}/${IPV6_RATE_LIMIT_PREFIX_LENGTH}`,
+  )
+    .startAddress()
+    .correctForm();
+};
+
+export type RateLimitClientAddressOptions = {
+  request: Request;
+  server: ServerLike | null;
+  clientAddressOptions?: ClientAddressOptions;
+};
+
+export const resolveRateLimitClientAddress = ({
+  request,
+  server,
+  clientAddressOptions,
+}: RateLimitClientAddressOptions): string | null => {
+  const client = resolveClientAddress(request, server, clientAddressOptions);
+  return client === null
+    ? null
+    : normalizeRateLimitClientAddress(client.address);
 };

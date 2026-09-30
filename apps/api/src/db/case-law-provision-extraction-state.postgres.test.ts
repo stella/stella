@@ -482,6 +482,7 @@ if (!databaseUrl || !runPostgresTests) {
         const reserved = await client.reserve();
         try {
           const session = {
+            setTransactionBudget: async () => undefined,
             execute: async (
               query: string,
               params: readonly (

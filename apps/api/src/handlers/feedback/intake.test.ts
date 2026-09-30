@@ -127,6 +127,34 @@ describe("public feedback intake", () => {
     expect(submitMock).toHaveBeenCalledTimes(5);
   });
 
+  test("shares the feedback budget across one IPv6 /64 and separates adjacent networks", async () => {
+    const deps = { guards: memoryGuards() };
+    for (let index = 1; index <= 5; index += 1) {
+      const response = await receiveForTest({
+        rawBody: raw({ title: `report ${index}` }),
+        clientIp: `2001:db8:abcd:1234::${index}`,
+        deps,
+      });
+      expect(response.status).toBe(200);
+    }
+    const blocked = await receiveForTest({
+      rawBody: raw({ title: "report 6" }),
+      clientIp: "2001:0DB8:ABCD:1234:ffff:ffff:ffff:ffff",
+      deps,
+    });
+    expect(blocked.status).toBe(429);
+    expect(await readErrorCode(blocked)).toBe("rate_limited");
+    expect(submitMock).toHaveBeenCalledTimes(5);
+
+    const otherNetwork = await receiveForTest({
+      rawBody: raw({ title: "other network" }),
+      clientIp: "2001:db8:abcd:1235::1",
+      deps,
+    });
+    expect(otherNetwork.status).toBe(200);
+    expect(submitMock).toHaveBeenCalledTimes(6);
+  });
+
   test("answers 503 when the report could not be stored", async () => {
     const failing = mock<typeof submitFeedbackReport>(async () =>
       Result.err(new FeedbackStoreError({ message: "nope" })),

@@ -159,7 +159,7 @@ const createHarness = ({
         throw new Error("s3 delete failed");
       }
       deletedKeys.push(key);
-      await Promise.resolve();
+      return undefined;
     },
     headObject: async (key) => {
       const stored = bytes[key];
@@ -181,6 +181,7 @@ const createHarness = ({
         Result.ok({
           contentLength: headSizes?.[key] ?? stored.byteLength,
           checksumSHA256: checksum,
+          lastModified: null,
         }),
       );
     },

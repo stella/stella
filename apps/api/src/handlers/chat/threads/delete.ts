@@ -76,6 +76,59 @@ const deleteThread = createSafeRootHandler(
     // then DB rows, page by page) so a thread with many uploads never loads its
     // whole file set into memory; each round is bounded by the batch size and
     // the loop still deletes every file before falling through to the thread delete.
+    const cleanupFilePage = async (
+      files: {
+        id: SafeId<"userFile">;
+        s3Key: string;
+        thumbnailFileId: string | null;
+        userId: string;
+      }[],
+    ) => {
+      const s3Keys = files.flatMap((file) =>
+        file.thumbnailFileId
+          ? [
+              file.s3Key,
+              createUserFileKey({
+                fileId: file.thumbnailFileId,
+                mimeType: THUMBNAIL_MIME_TYPE,
+                userId: brandPersistedUserId(file.userId),
+              }),
+            ]
+          : [file.s3Key],
+      );
+      const deleted = await deleteS3Keys(s3Keys);
+      if (Result.isError(deleted)) {
+        return Result.err(
+          new HandlerError({
+            status: 500,
+            message: "Failed to delete thread user files from storage",
+            cause: deleted.error,
+          }),
+        );
+      }
+      const removed = await safeDb(async (tx) => {
+        // audit: skip — file-row cleanup belongs to the CHAT_THREAD delete audit below
+        await tx.delete(userFiles).where(
+          and(
+            eq(userFiles.userId, user.id),
+            eq(userFiles.threadId, params.threadId),
+            inArray(
+              userFiles.id,
+              files.map((file) => file.id),
+            ),
+          ),
+        );
+      });
+      return removed.mapError(
+        (cause) =>
+          new HandlerError({
+            status: 500,
+            message: "Failed to delete thread user file records",
+            cause,
+          }),
+      );
+    };
+
     let lastFileId: SafeId<"userFile"> | null = null;
     while (true) {
       const conditions: SQL[] = [
@@ -108,46 +161,8 @@ const deleteThread = createSafeRootHandler(
         break;
       }
 
-      const s3Keys = files.flatMap((file) =>
-        file.thumbnailFileId
-          ? [
-              file.s3Key,
-              createUserFileKey({
-                fileId: file.thumbnailFileId,
-                mimeType: THUMBNAIL_MIME_TYPE,
-                userId: brandPersistedUserId(file.userId),
-              }),
-            ]
-          : [file.s3Key],
-      );
-      const deleteResult = await deleteS3Keys(s3Keys);
-      if (Result.isError(deleteResult)) {
-        yield* Result.err(
-          new HandlerError({
-            status: 500,
-            message: "Failed to delete thread user files from storage",
-            cause: deleteResult.error,
-          }),
-        );
-      }
-
-      // SAFETY: storage deletion must succeed before the corresponding bounded page of rows is removed.
-      // db-await-in-loop: one delete per page of the keyset walk, already an inArray over the whole page, and ordered after that page's storage delete
-      yield* Result.await(
-        // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-        safeDb((tx) => {
-          // audit: skip — file-row cleanup is part of the thread delete, which emits the CHAT_THREAD audit row below
-          return tx.delete(userFiles).where(
-            and(
-              eq(userFiles.userId, user.id),
-              inArray(
-                userFiles.id,
-                files.map((file) => file.id),
-              ),
-            ),
-          );
-        }),
-      );
+      // db-await-in-loop: one bounded cleanup per cursor page; storage and batched accounting precede the page's row delete
+      yield* Result.await(cleanupFilePage(files));
 
       if (!hasMore) {
         break;

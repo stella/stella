@@ -1449,6 +1449,7 @@
     "back": "Späť",
     "cancel": "Zrušiť",
     "caseLaw": "Judikatúra",
+    "catalogue": "Katalóg",
     "category": "Kategória",
     "categoryName": "Názov kategórie",
     "changeColor": "Zmeniť farbu",
@@ -3227,6 +3228,23 @@
       "urlPlaceholder": "https://github.com/org/repo/tree/main/cesta/k/zrucnosti",
       "version": "Verzia: {version}"
     },
+    "catalogue": {
+      "addToLibrary": "Pridať do knižnice",
+      "added": "{name} je vo vašej knižnici",
+      "confirmAddTitle": "Pridať {name} do {organization}?",
+      "confirmDescription": "Kópia tohto vzoru sa uloží do knižnice {organization}.",
+      "confirmDownloadTitle": "Stiahnuť {name} pre {organization}?",
+      "confirmStarterDescription": "Kópia tohto playbooku sa uloží do knižnice {organization}.",
+      "confirmUseTitle": "Použiť {name} v {organization}?",
+      "installFailed": "Vzor sa nepodarilo pridať",
+      "noPreview": "Náhľad tohto vzoru nie je k dispozícii.",
+      "notFound": "Tento vzor v katalógu nie je.",
+      "unavailable": "Katalóg teraz nie je k dispozícii."
+    },
+    "landing": {
+      "accountLine": "S bezplatným účtom si uchováte vlastné vzory, ustanovenia a playbooky svojej organizácie.",
+      "withAccount": "S bezplatným účtom"
+    },
     "mcp": {
       "addAndConnect": "Pridať a pripojiť",
       "addServer": "Pridať server",
@@ -3708,7 +3726,6 @@
     "someInvitesFailed": "{count, plural, one {# pozvánka zlyhala} few {# pozvánky zlyhali} other {# pozvánok zlyhalo}}",
     "stepAi": "AI",
     "stepApps": "Aplikácie a nástroje",
-    "stepCatalogue": "Katalóg",
     "stepJurisdiction": "Jurisdikcia",
     "stepOrganization": "Tím",
     "stepTeam": "Pozvánky",
