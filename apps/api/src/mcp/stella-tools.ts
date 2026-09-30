@@ -2194,6 +2194,10 @@ type DecisionCursorState = {
   text: number;
 };
 
+// A numeric start marker keeps an unread first citation page distinct from
+// null (exhausted) when text continues without returning citations.
+const DECISION_CITATIONS_START = 0;
+
 // read_case_law_decision pages the decision text and both citation lists with
 // a single compound cursor encoding [textOffset, citationsCursor].
 const decodeDecisionCursor = (
@@ -2211,11 +2215,16 @@ const decodeDecisionCursor = (
     typeof text !== "number" ||
     !Number.isInteger(text) ||
     text < 0 ||
-    (citations !== null && typeof citations !== "string")
+    (citations !== DECISION_CITATIONS_START &&
+      citations !== null &&
+      typeof citations !== "string")
   ) {
     return null;
   }
-  return { citations, text };
+  return {
+    citations: citations === DECISION_CITATIONS_START ? undefined : citations,
+    text,
+  };
 };
 
 type GatedDecisionRead = Awaited<
@@ -2272,7 +2281,7 @@ type DecisionItemOptions = {
   textOffset: number;
   firstWindow: boolean;
   include: v.InferOutput<typeof readCaseLawDecisionArgsSchema>["include"];
-  citationsPending: boolean;
+  citationsCursor: DecisionCursorState["citations"];
 };
 
 const decisionItemResult = ({
@@ -2283,7 +2292,7 @@ const decisionItemResult = ({
   textOffset,
   firstWindow,
   include,
-  citationsPending,
+  citationsCursor,
 }: DecisionItemOptions): DecisionItemResult => {
   if (read === null || !isReadCaseLawDecisionSuccess(read)) {
     return decisionNotFoundItem(decisionId);
@@ -2320,8 +2329,18 @@ const decisionItemResult = ({
   const textLength = plainText === null ? 0 : plainText.length;
 
   const textBounds = resolveWindowBounds(textLength, textOffset, maxTextChars);
+  const includeCitations =
+    include === undefined
+      ? citationsCursor !== null
+      : include.includes("citations");
+  const retainedCitationsCursor =
+    citationsCursor === undefined ? DECISION_CITATIONS_START : citationsCursor;
+  const nextCitationsCursor = includeCitations
+    ? read.citationsNextCursor
+    : retainedCitationsCursor;
   const hasMore =
-    textBounds.nextOffset !== null || read.citationsNextCursor !== null;
+    textBounds.nextOffset !== null ||
+    (includeCitations && read.citationsNextCursor !== null);
 
   return {
     decisionId,
@@ -2331,7 +2350,7 @@ const decisionItemResult = ({
         }
       : {}),
     nextCursor: hasMore
-      ? encodePaginationCursor([textBounds.end, read.citationsNextCursor])
+      ? encodePaginationCursor([textBounds.end, nextCitationsCursor])
       : null,
     status: DECISION_READ_STATUS.found,
     decision: {
@@ -2371,9 +2390,7 @@ const decisionItemResult = ({
       ...((include === undefined ? firstWindow : include.includes("source"))
         ? { source: read.source }
         : {}),
-      ...((include === undefined
-        ? firstWindow || citationsPending
-        : include.includes("citations"))
+      ...(includeCitations
         ? { citationsFrom: read.citationsFrom, citationsTo: read.citationsTo }
         : {}),
       text:
@@ -2547,7 +2564,7 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
         textOffset: offsets.text,
         firstWindow: cursor === undefined,
         include,
-        citationsPending: typeof offsets.citations === "string",
+        citationsCursor: offsets.citations,
       }),
     ),
   } satisfies v.InferInput<typeof READ_CASE_LAW_DECISION_PROJECTION>);
