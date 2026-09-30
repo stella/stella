@@ -37,10 +37,9 @@ const expectValidationFailure = async (
 };
 
 test("image validation requires a configured content root", async () => {
-  await expectValidationFailure(
-    () => checkBundledPublicTemplates(undefined),
-    "TEMPLATE_PACKS_CONTENT_DIR must be set",
-  );
+  await expectValidationFailure(async () => {
+    await checkBundledPublicTemplates(undefined);
+  }, "TEMPLATE_PACKS_CONTENT_DIR must be set");
 });
 
 test.each(["missing", "empty"])(
@@ -50,10 +49,9 @@ test.each(["missing", "empty"])(
     if (state === "empty") {
       mkdirSync(path.join(root, "packs"));
     }
-    await expectValidationFailure(
-      () => checkBundledPublicTemplates(root),
-      "bundled public template catalogue is incomplete",
-    );
+    await expectValidationFailure(async () => {
+      await checkBundledPublicTemplates(root);
+    }, "bundled public template catalogue is incomplete");
   },
 );
 
@@ -83,13 +81,11 @@ test("image validation checks the complete public pack and its bytes", async () 
     fixturePack.templates.at(0) ?? panic("expected populated fixture template");
   const file = path.join(root, "packs", publicFixture.id, template.file);
   writeFileSync(file, "invalid content");
-  await expectValidationFailure(
-    () => checkBundledPublicTemplates(root, catalogueFactory),
-    "Bundled template bytes do not match the manifest hash",
-  );
+  await expectValidationFailure(async () => {
+    await checkBundledPublicTemplates(root, catalogueFactory);
+  }, "Bundled template bytes do not match the manifest hash");
   rmSync(file);
-  await expectValidationFailure(
-    () => checkBundledPublicTemplates(root, catalogueFactory),
-    "bundled public template catalogue is incomplete",
-  );
+  await expectValidationFailure(async () => {
+    await checkBundledPublicTemplates(root, catalogueFactory);
+  }, "bundled public template catalogue is incomplete");
 });
