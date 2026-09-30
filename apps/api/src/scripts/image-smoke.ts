@@ -15,7 +15,6 @@
  */
 
 import { panic } from "better-result";
-import { existsSync } from "node:fs";
 import path from "node:path";
 
 import {
@@ -24,7 +23,6 @@ import {
 } from "@stll/anonymize";
 import { validateIco } from "@stll/business-registries/ares";
 import { DEFAULT_CUTOFF, buildScreeningIndex, screen } from "@stll/sanctions";
-import { createBundledTemplatePackCatalogue } from "@stll/template-packs";
 
 import { OCR_LOCAL_MODEL_FILES } from "@/api/lib/document-processing-contract";
 import { yaraRuleFileCount, yaraScanner } from "@/api/lib/file-scan/yara";
@@ -41,25 +39,15 @@ import {
   runtimeOcrPdfFontPath,
   runtimeWorkerDir,
 } from "@/api/lib/runtime-worker-path";
+import { checkBundledPublicTemplates } from "@/api/scripts/image-smoke-template-packs";
 
 const probe = async (label: string, run: () => Promise<void> | void) => {
   await run();
   console.log(`image-smoke ok: ${label}`);
 };
 
-await probe("bundled template packs", () => {
-  const root = process.env["TEMPLATE_PACKS_CONTENT_DIR"];
-  if (!root || !existsSync(path.join(root, "packs"))) {
-    return;
-  }
-  const publicPacks = createBundledTemplatePackCatalogue(root)
-    .list()
-    .filter((pack) => pack.publicDisplay);
-  if (publicPacks.length === 0) {
-    panic(
-      "bundled template-pack content is present but the public catalogue is empty",
-    );
-  }
+await probe("bundled template packs", async () => {
+  await checkBundledPublicTemplates(process.env["TEMPLATE_PACKS_CONTENT_DIR"]);
 });
 
 await probe("quickjs sandbox wasm", async () => {
