@@ -1963,6 +1963,7 @@ describe("OpenAI-compatible MCP tools", () => {
         dateFrom: "2024-01-01",
         decisionType: "judgment",
         limit: 5,
+        sentenceAlignedExcerpt: true,
         query: "shareholder dispute",
         sort: "newest",
         sourceId: "11111111-1111-4111-8111-111111111111",
@@ -4129,6 +4130,57 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(searchDecisionsHandlerMock).not.toHaveBeenCalled();
   });
 
+  test("read_case_law_decision bounds text and accepts an outline cursor", async () => {
+    const fulltext = `I. Průběh řízení\n${"Facts. ".repeat(
+      40,
+    )}\nIV. Důvodnost dovolání\nReasons.`;
+    readDecisionHandlerMock.mockResolvedValue({
+      ...createReadDecisionResult(),
+      fulltext,
+    });
+    const first = parseToolPayload(
+      await handleMcpToolCall({
+        args: { decision_ids: [DECISION_ID], max_chars: 50 },
+        context: createContext(),
+        toolName: "read_case_law_decision",
+      }),
+    );
+    expect(first).toMatchObject({
+      items: [
+        {
+          decision: {
+            text: fulltext.slice(0, 50),
+            truncated: true,
+            outline: [
+              {
+                title: "I. Průběh řízení",
+                cursor: encodePaginationCursor([0, null]),
+              },
+              {
+                title: "IV. Důvodnost dovolání",
+                cursor: encodePaginationCursor([fulltext.indexOf("IV."), null]),
+              },
+            ],
+          },
+        },
+      ],
+    });
+    const resumed = parseToolPayload(
+      await handleMcpToolCall({
+        args: {
+          decision_ids: [DECISION_ID],
+          max_chars: 50,
+          cursor: encodePaginationCursor([fulltext.indexOf("IV."), null]),
+        },
+        context: createContext(),
+        toolName: "read_case_law_decision",
+      }),
+    );
+    expect(resumed).toMatchObject({
+      items: [{ decision: { text: "IV. Důvodnost dovolání\nReasons." } }],
+    });
+  });
+
   test("read_case_law_decision derives plain text from the AST fallback", async () => {
     readDecisionHandlerMock.mockResolvedValue(createReadDecisionResult());
 
@@ -4201,6 +4253,12 @@ describe("OpenAI-compatible MCP tools", () => {
             },
             sourceUrl: "https://example.test/decision",
             sourceAttributionUrl: "https://example.test/decision",
+            outline: [
+              {
+                title: "29 Cdo 123/2024",
+                cursor: encodePaginationCursor([0, null]),
+              },
+            ],
             text: "29 Cdo 123/2024\n\nThe court dismissed the appeal.",
             charCount: "29 Cdo 123/2024\n\nThe court dismissed the appeal."
               .length,
@@ -4405,6 +4463,12 @@ describe("OpenAI-compatible MCP tools", () => {
             },
             sourceUrl: "https://example.test/decision",
             sourceAttributionUrl: "https://example.test/decision",
+            outline: [
+              {
+                title: "29 Cdo 123/2024",
+                cursor: encodePaginationCursor([0, null]),
+              },
+            ],
             text: "29 Cdo 123/2024\n\nThe court dismissed the appeal.",
             charCount: "29 Cdo 123/2024\n\nThe court dismissed the appeal."
               .length,

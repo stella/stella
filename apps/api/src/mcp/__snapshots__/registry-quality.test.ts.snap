@@ -375,7 +375,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "scope": "stella:read",
     "access": "read",
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read case-law decisions by id. Every \`decision_ids[]\` entry is answered on its own, in input order, under \`status\`: \`found\` carries the decision (metadata, text fields, plain text, source URLs, resourceName, citation ids), while \`not_found\` (no such public decision) and \`pending\` (its publisher document is not stored yet) carry a message. Prefer one batched call over one per decision; the call's text budget is shared, so read one id alone for a whole decision's text. It does NOT say how the citing courts treated a decision: its citation entries carry no treatment and no surrounding text. For that call read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }). Long text and citation lists come back in windows; pass an entry's nextCursor back as cursor with that one id.",
+    "description": "Read decisions by id. Each \`decision_ids[]\` entry is answered in input order: \`found\` carries metadata, text fields, plain text, source URLs, resourceName and citation ids; \`not_found\` means no public decision; \`pending\` means its publisher document is not stored yet. Batch ids to share the text budget. With one id, \`max_chars\` sizes its text window. The first window includes up to 100 outline headings or numbered paragraphs: pass an outline cursor with that id to read from there. Long text and citations are paged: pass nextCursor with the same id. For citing courts' treatment and surrounding text, call read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }).",
     "annotations": {
       "title": "Read case-law decision",
       "destructiveHint": false,
@@ -399,6 +399,16 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "minItems": 1,
           "maxItems": 20,
           "description": "The decisions to read, at most 20 per call. Each id is answered on its own, so one unknown id does not sink the rest."
+        },
+        "max_chars": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8000,
+          "description": "Text window size, 1–8000 characters. Accepted only alongside a single decision id. Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
         },
         "cursor": {
           "type": "string",
@@ -6801,7 +6811,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "scope": "stella:read_anonymized",
     "access": "read",
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read case-law decisions by id. Every \`decision_ids[]\` entry is answered on its own, in input order, under \`status\`: \`found\` carries the decision (metadata, text fields, plain text, source URLs, resourceName, citation ids), while \`not_found\` (no such public decision) and \`pending\` (its publisher document is not stored yet) carry a message. Prefer one batched call over one per decision; the call's text budget is shared, so read one id alone for a whole decision's text. It does NOT say how the citing courts treated a decision: its citation entries carry no treatment and no surrounding text. For that call read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }). Long text and citation lists come back in windows; pass an entry's nextCursor back as cursor with that one id.",
+    "description": "Read decisions by id. Each \`decision_ids[]\` entry is answered in input order: \`found\` carries metadata, text fields, plain text, source URLs, resourceName and citation ids; \`not_found\` means no public decision; \`pending\` means its publisher document is not stored yet. Batch ids to share the text budget. With one id, \`max_chars\` sizes its text window. The first window includes up to 100 outline headings or numbered paragraphs: pass an outline cursor with that id to read from there. Long text and citations are paged: pass nextCursor with the same id. For citing courts' treatment and surrounding text, call read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }).",
     "annotations": {
       "title": "Read case-law decision",
       "destructiveHint": false,
@@ -6825,6 +6835,16 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           "minItems": 1,
           "maxItems": 20,
           "description": "The decisions to read, at most 20 per call. Each id is answered on its own, so one unknown id does not sink the rest."
+        },
+        "max_chars": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8000,
+          "description": "Text window size, 1–8000 characters. Accepted only alongside a single decision id. Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
         },
         "cursor": {
           "type": "string",
@@ -8232,7 +8252,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
     "scope": "stella:read",
     "access": "read",
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read case-law decisions by id. Every \`decision_ids[]\` entry is answered on its own, in input order, under \`status\`: \`found\` carries the decision (metadata, text fields, plain text, source URLs, resourceName, citation ids), while \`not_found\` (no such public decision) and \`pending\` (its publisher document is not stored yet) carry a message. Prefer one batched call over one per decision; the call's text budget is shared, so read one id alone for a whole decision's text. It does NOT say how the citing courts treated a decision: its citation entries carry no treatment and no surrounding text. For that call read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }). Long text and citation lists come back in windows; pass an entry's nextCursor back as cursor with that one id.",
+    "description": "Read decisions by id. Each \`decision_ids[]\` entry is answered in input order: \`found\` carries metadata, text fields, plain text, source URLs, resourceName and citation ids; \`not_found\` means no public decision; \`pending\` means its publisher document is not stored yet. Batch ids to share the text budget. With one id, \`max_chars\` sizes its text window. The first window includes up to 100 outline headings or numbered paragraphs: pass an outline cursor with that id to read from there. Long text and citations are paged: pass nextCursor with the same id. For citing courts' treatment and surrounding text, call read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }).",
     "annotations": {
       "title": "Read case-law decision",
       "destructiveHint": false,
@@ -8256,6 +8276,16 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
           "minItems": 1,
           "maxItems": 20,
           "description": "The decisions to read, at most 20 per call. Each id is answered on its own, so one unknown id does not sink the rest."
+        },
+        "max_chars": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8000,
+          "description": "Text window size, 1–8000 characters. Accepted only alongside a single decision id. Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
         },
         "cursor": {
           "type": "string",

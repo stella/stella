@@ -329,6 +329,8 @@ type CorpusExcerptOptions = {
   /** What the engine itself returned for this hit, if anything. */
   engineSnippet: string | null;
   excerpt: SearchExcerpt;
+  /** Prefer complete sentences for agent triage, within the same character cap. */
+  sentenceAligned?: boolean | undefined;
   language: MorphologyLanguage | null;
   /** The hit's stored passage, as the index holds it. */
   passage: unknown;
@@ -375,11 +377,51 @@ const capToChars = (text: string, maxChars: number): string => {
   return text.slice(0, cut);
 };
 
+const sentenceWindow = (
+  passage: string,
+  matchStart: number,
+  maxChars: number,
+): { start: number; end: number } | null => {
+  const sentences = [
+    ...new Intl.Segmenter("und", { granularity: "sentence" }).segment(passage),
+  ];
+  const at = sentences.findIndex(
+    ({ index, segment }) =>
+      index <= matchStart && index + segment.length > matchStart,
+  );
+  const sentence = sentences.at(at);
+  if (at === -1 || sentence === undefined) {
+    return null;
+  }
+  if (sentence.segment.trim().length > maxChars) {
+    return null;
+  }
+  let start = sentence.index;
+  let end = start + sentence.segment.trimEnd().length;
+  // Grow around the matching sentence, keeping every accepted sentence whole.
+  for (let index = at - 1; index >= 0; index -= 1) {
+    const left = sentences.at(index);
+    if (left === undefined || end - left.index > maxChars) {
+      break;
+    }
+    start = left.index;
+  }
+  for (const right of sentences.slice(at + 1)) {
+    const nextEnd = right.index + right.segment.trimEnd().length;
+    if (nextEnd - start > maxChars) {
+      break;
+    }
+    end = nextEnd;
+  }
+  return { start, end };
+};
+
 export const corpusExcerpt = ({
   engineSnippet,
   excerpt,
   language,
   passage,
+  sentenceAligned = false,
   tokens,
 }: CorpusExcerptOptions): string | null => {
   if (usesEngineSnippet(excerpt)) {
@@ -392,8 +434,16 @@ export const corpusExcerpt = ({
   const { maxChars } = decisionExcerptWindow(excerpt);
   const anchor =
     engineSnippet === null ? null : locateAnchor(passage, engineSnippet);
-  const window =
+  const wordWindow =
     anchor === null ? null : growAroundSnippet(passage, anchor, maxChars);
+  const matchStart =
+    anchor === null
+      ? null
+      : anchor.start + (engineMarkRanges(anchor.fragment).at(0)?.start ?? 0);
+  const window =
+    sentenceAligned && matchStart !== null
+      ? (sentenceWindow(passage, matchStart, maxChars) ?? wordWindow)
+      : wordWindow;
 
   // One window as plain text, however it was chosen, so the cap and the
   // marking below both apply whichever way this went.

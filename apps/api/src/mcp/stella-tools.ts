@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { and, desc, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
+import { AGENT_INPUT_NORMALIZATION_KIND } from "@stll/agent-input";
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import {
@@ -105,6 +106,7 @@ import { decodeCursor } from "@/api/lib/search/cursor";
 import { getSearchReader } from "@/api/lib/search/provider";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { resolveCourtFilter } from "@/api/mcp/case-law-court-filter";
+import { decisionOutline } from "@/api/mcp/case-law-decision-outline";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import { loadPracticeJurisdictions } from "@/api/mcp/practice-jurisdictions";
@@ -765,6 +767,17 @@ const readCaseLawDecisionArgsSchema = nullAsAbsent(
         `The decisions to read, at most ${LIMITS.caseLawDecisionBatchMax} per call. Each id is answered on its own, so one unknown id does not sink the rest.`,
       ),
     ),
+    max_chars: v.optional(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(1),
+        v.maxValue(MCP_CONTENT_MAX_CHARS),
+        v.description(
+          `Text window size, 1–${MCP_CONTENT_MAX_CHARS} characters. Accepted only alongside a single decision id.`,
+        ),
+      ),
+    ),
     cursor: cursorInput({
       description:
         "Opaque cursor from a previous call to read the next window of one decision's text and citations. Accepted only alongside a single decision id.",
@@ -1000,20 +1013,23 @@ export const STELLA_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Read case-law decisions by id. Every `decision_ids[]` " +
-      "entry is answered on its own, in input order, under `status`: `found` " +
-      "carries the decision (metadata, text fields, plain text, source " +
-      "URLs, resourceName, citation ids), while `not_found` (no such public " +
-      "decision) and `pending` (its publisher document is not stored yet) " +
-      "carry a message. Prefer one batched call over one per decision; the " +
-      "call's text budget is shared, so read one id alone for a whole " +
-      "decision's text. It does NOT say how the citing courts treated a " +
-      "decision: its citation entries carry no treatment and no surrounding " +
-      "text. For that call read_case_law_citations ({ decision_id: " +
-      "'<uuid>', direction: 'cited_by' }). Long text and citation lists " +
-      "come back in windows; pass an entry's nextCursor back as cursor with " +
-      "that one id.",
+      "Read decisions by id. Each `decision_ids[]` entry is answered in input " +
+      "order: `found` carries metadata, text fields, plain text, source URLs, " +
+      "resourceName and citation ids; `not_found` means no public decision; " +
+      "`pending` means its publisher document is not stored yet. Batch ids to " +
+      "share the text budget. With one id, `max_chars` sizes its text window. " +
+      "The first window includes up to 100 outline headings or numbered " +
+      "paragraphs: pass an outline cursor with that id to read from there. " +
+      "Long text and citations are paged: pass nextCursor with the same id. " +
+      "For citing courts' treatment and surrounding text, call " +
+      "read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }).",
     inputSchema: readCaseLawDecisionArgsSchema,
+    inputNormalization: {
+      max_chars: {
+        kind: AGENT_INPUT_NORMALIZATION_KIND.number,
+        range: "clamp",
+      },
+    },
     access: "read",
     anonymized: { exposure: "passthrough" },
     // Backed by the public case-law corpus (caseLawPublicReadDb), the same
@@ -2019,6 +2035,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
     const subCursor = resolved.cursors[index];
     const body = {
       query,
+      sentenceAlignedExcerpt: true,
       limit: perQueryLimit,
       ...(typeof subCursor === "string" ? { cursor: subCursor } : {}),
       ...(courtFilter === undefined ? {} : { court: courtFilter }),
@@ -2294,9 +2311,12 @@ const decisionItemResult = ({
     id: brandPersistedCaseLawDecisionId(read.id),
   });
 
+  const blocks = aiTextAllowed
+    ? (parseUsableDocumentAst(read.documentAst)?.blocks ?? null)
+    : null;
   const plainText = aiTextAllowed
     ? toPlainCorpusText({
-        blocks: parseUsableDocumentAst(read.documentAst)?.blocks ?? null,
+        blocks,
         fulltext: read.fulltext,
       })
     : null;
@@ -2350,6 +2370,9 @@ const decisionItemResult = ({
         plainText === null || textBounds.start >= textBounds.end
           ? null
           : plainText.slice(textBounds.start, textBounds.end),
+      ...(plainText !== null && textOffset === 0
+        ? { outline: decisionOutline({ blocks, text: plainText }) }
+        : {}),
       charCount: plainText === null ? null : textLength,
       truncated: textBounds.nextOffset !== null,
       ...(aiTextAllowed
@@ -2379,7 +2402,11 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
   if (!parsed.success) {
     return validationErrorResult(parsed.issues);
   }
-  const { cursor, decision_ids: decisionIds } = parsed.output;
+  const {
+    cursor,
+    decision_ids: decisionIds,
+    max_chars: maxChars,
+  } = parsed.output;
 
   // A window cursor belongs to ONE decision's text and citation lists, so it
   // cannot say which entry of a batch it continues.
@@ -2394,6 +2421,17 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
         },
       ],
       hint: "Pass one decision id with a cursor to continue its text.",
+    });
+  }
+
+  if (maxChars !== undefined && decisionIds.length > 1) {
+    return structuredErrorResult({
+      code: "validation_error",
+      message: "max_chars sizes one decision's text window",
+      hint: "Pass one decision id with max_chars, or omit max_chars for a batch read.",
+      issues: [
+        { path: "max_chars", message: "Accepted only with one decision id." },
+      ],
     });
   }
 
@@ -2504,7 +2542,7 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
   // whole window, which is what a caller reading one decision asked for.
   const maxTextChars = Math.max(
     1,
-    Math.floor(MCP_CONTENT_MAX_CHARS / decisionIds.length),
+    Math.floor((maxChars ?? MCP_CONTENT_MAX_CHARS) / decisionIds.length),
   );
 
   return toolDataResult({
