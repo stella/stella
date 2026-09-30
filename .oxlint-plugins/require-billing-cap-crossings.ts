@@ -16,7 +16,10 @@ const SCHEMA_MODULES = [
   "apps/api/src/db/schema/billing",
 ];
 const ENTRY_EXPORTS = new Set(["timeEntries"]);
-const RECONCILIATION_EXPORTS = new Set(["recordBillingCapCrossings"]);
+const RECONCILIATION_EXPORTS = new Set([
+  "recordBillingCapCrossings",
+  "recordBillingCapCrossingsForMatters",
+]);
 const FUNCTION_TYPES = new Set([
   "ArrowFunctionExpression",
   "FunctionExpression",
@@ -109,7 +112,7 @@ export default eslintCompatPlugin({
         type: "problem",
         messages: {
           missingReconciliation:
-            "Await recordBillingCapCrossings with this transaction after changing time entries so approved-value changes reconcile cap crossings.",
+            "Await recordBillingCapCrossings or recordBillingCapCrossingsForMatters with this transaction after changing time entries so approved-value changes reconcile cap crossings.",
         },
       },
       createOnce(context) {

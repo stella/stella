@@ -7,7 +7,7 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -20,7 +20,10 @@ import {
 } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { createAuditRecorder } from "@/api/lib/audit-log";
-import { recordBillingCapCrossings } from "@/api/lib/billing/arrangements";
+import {
+  recordBillingCapCrossings,
+  recordBillingCapCrossingsForMatters,
+} from "@/api/lib/billing/arrangements";
 import { createSafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
 import { isPgError } from "@/api/lib/pg-error";
@@ -41,6 +44,8 @@ setDefaultTimeout(120_000);
 let db: TestDatabase;
 let ids: TestIds;
 const workspaceId = createSafeId<"workspace">();
+const secondWorkspaceId = createSafeId<"workspace">();
+const testWorkspaceIds = [workspaceId, secondWorkspaceId];
 const entryId = createSafeId<"timeEntry">();
 const capped = {
   mode: "hourly",
@@ -53,25 +58,33 @@ beforeAll(async () => {
   const fixture = await getRlsFixture();
   db = fixture.testDb;
   ids = fixture.ids;
-  await db.insert(workspaces).values({
-    id: workspaceId,
-    organizationId: ids.orgA,
-    name: "Billing arrangement test",
-    reference: workspaceId,
-  });
+  await db.insert(workspaces).values(
+    testWorkspaceIds.map((id) => ({
+      id,
+      organizationId: ids.orgA,
+      name: "Billing arrangement test",
+      reference: id,
+    })),
+  );
 });
 const cleanup = async () => {
-  await db.delete(auditLogs).where(eq(auditLogs.workspaceId, workspaceId));
-  await db.delete(timeEntries).where(eq(timeEntries.workspaceId, workspaceId));
-  await db.delete(invoices).where(eq(invoices.workspaceId, workspaceId));
+  await db
+    .delete(auditLogs)
+    .where(inArray(auditLogs.workspaceId, testWorkspaceIds));
+  await db
+    .delete(timeEntries)
+    .where(inArray(timeEntries.workspaceId, testWorkspaceIds));
+  await db
+    .delete(invoices)
+    .where(inArray(invoices.workspaceId, testWorkspaceIds));
   await db
     .delete(billingArrangements)
-    .where(eq(billingArrangements.workspaceId, workspaceId));
+    .where(inArray(billingArrangements.workspaceId, testWorkspaceIds));
 };
 beforeEach(cleanup);
 afterAll(async () => {
   await cleanup();
-  await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
+  await db.delete(workspaces).where(inArray(workspaces.id, testWorkspaceIds));
   await releaseRlsFixture();
 });
 
@@ -278,13 +291,125 @@ test("another organization cannot read or replace an arrangement under a foreign
   ).toMatchObject({ arrangement: capped });
 });
 
+test("batched matter reconciliation keeps currencies separate and emits each upward boundary once", async () => {
+  await db.insert(billingArrangements).values(
+    testWorkspaceIds.map((id) => ({
+      workspaceId: id,
+      organizationId: ids.orgA,
+      ...capped,
+      capAmount: cents(capped.capAmount),
+    })),
+  );
+  await seedApproved(10_000);
+  const secondEntryId = createSafeId<"timeEntry">();
+  await db.insert(timeEntries).values({
+    id: secondEntryId,
+    organizationId: ids.orgA,
+    workspaceId: secondWorkspaceId,
+    userId: ids.userAdmin,
+    dateWorked: "2026-10-04",
+    timezoneId: "UTC",
+    durationMinutes: 60,
+    billedMinutes: 60,
+    rateAtEntry: cents(8000),
+    currency: "EUR",
+    narrative: "Other matter work",
+    status: "approved",
+    billable: true,
+  });
+  const scoped = asTestRaw<SafeDb>(
+    createSafeDb(db, testWorkspaceIds, ids.orgA, ids.userAdmin),
+  );
+  const refresh = async () =>
+    await scoped(
+      async (tx) =>
+        await recordBillingCapCrossingsForMatters(tx, {
+          workspaceIds: [secondWorkspaceId, workspaceId, secondWorkspaceId],
+          recordAuditEvent: audit(),
+        }),
+    );
+  expect((await refresh()).isOk()).toBe(true);
+  expect((await refresh()).isOk()).toBe(true);
+  const initial = await db
+    .select()
+    .from(billingArrangements)
+    .where(inArray(billingArrangements.workspaceId, testWorkspaceIds));
+  expect(initial.find((row) => row.workspaceId === workspaceId)).toMatchObject({
+    capState: "above",
+    crossingSequence: 2,
+  });
+  expect(
+    initial.find((row) => row.workspaceId === secondWorkspaceId),
+  ).toMatchObject({
+    currencyState: "mismatch",
+    capState: "below",
+    crossingSequence: 0,
+  });
+  const events = await db
+    .select()
+    .from(auditLogs)
+    .where(inArray(auditLogs.workspaceId, testWorkspaceIds));
+  expect(events).toHaveLength(3);
+  expect(events.filter((row) => row.workspaceId === workspaceId)).toHaveLength(
+    2,
+  );
+  expect(
+    events.find((row) => row.workspaceId === secondWorkspaceId)?.metadata,
+  ).toMatchObject({ event: "billing_currency_mismatch" });
+  await db
+    .update(timeEntries)
+    .set({ currency: "USD" })
+    .where(eq(timeEntries.id, secondEntryId));
+  expect((await refresh()).isOk()).toBe(true);
+  expect((await refresh()).isOk()).toBe(true);
+  const reconciled = await db.query.billingArrangements.findFirst({
+    where: { workspaceId: { eq: secondWorkspaceId } },
+  });
+  expect(reconciled).toMatchObject({
+    currencyState: "matched",
+    thresholdState: "above",
+    capState: "below",
+    crossingSequence: 1,
+  });
+  expect(
+    await db
+      .select()
+      .from(auditLogs)
+      .where(inArray(auditLogs.workspaceId, testWorkspaceIds)),
+  ).toHaveLength(4);
+});
+
 test("an audit failure rolls back crossing state and its audit rows together", async () => {
   await set(capped);
   await seedApproved(10_000);
-  const result = await safeDb()(
+  await db.insert(billingArrangements).values({
+    workspaceId: secondWorkspaceId,
+    organizationId: ids.orgA,
+    ...capped,
+    capAmount: cents(capped.capAmount),
+  });
+  await db.insert(timeEntries).values({
+    id: createSafeId<"timeEntry">(),
+    organizationId: ids.orgA,
+    workspaceId: secondWorkspaceId,
+    userId: ids.userAdmin,
+    dateWorked: "2026-10-04",
+    timezoneId: "UTC",
+    durationMinutes: 60,
+    billedMinutes: 60,
+    rateAtEntry: cents(10_000),
+    currency: "USD",
+    narrative: "Other matter work",
+    status: "approved",
+    billable: true,
+  });
+  const scoped = asTestRaw<SafeDb>(
+    createSafeDb(db, testWorkspaceIds, ids.orgA, ids.userAdmin),
+  );
+  const result = await scoped(
     async (tx) =>
-      await recordBillingCapCrossings(tx, {
-        workspaceId,
+      await recordBillingCapCrossingsForMatters(tx, {
+        workspaceIds: testWorkspaceIds,
         recordAuditEvent: async (auditTx, events) => {
           await audit()(auditTx, events);
           panic("Audit unavailable for rollback fixture");
@@ -292,16 +417,25 @@ test("an audit failure rolls back crossing state and its audit rows together", a
       }),
   );
   expect(result.isErr()).toBe(true);
-  expect(await crossingEvents()).toHaveLength(0);
+  expect(
+    await db
+      .select()
+      .from(auditLogs)
+      .where(inArray(auditLogs.workspaceId, testWorkspaceIds)),
+  ).toHaveLength(1);
   const rows = await db
     .select()
     .from(billingArrangements)
-    .where(eq(billingArrangements.workspaceId, workspaceId));
-  expect(rows.at(0)).toMatchObject({
-    thresholdState: "below",
-    capState: "below",
-    crossingSequence: 0,
-  });
+    .where(inArray(billingArrangements.workspaceId, testWorkspaceIds));
+  expect(rows).toHaveLength(2);
+  expect(
+    rows.every(
+      (row) =>
+        row.thresholdState === "below" &&
+        row.capState === "below" &&
+        row.crossingSequence === 0,
+    ),
+  ).toBe(true);
   expect((await refreshCrossings()).isOk()).toBe(true);
   expect(await crossingEvents()).toHaveLength(2);
 });

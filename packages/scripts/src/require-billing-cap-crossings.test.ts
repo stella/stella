@@ -71,6 +71,54 @@ const mutation = "await tx.update(entries).set({ billable: false });";
 const reconciliation =
   "await reconcile(tx, { workspaceId, recordAuditEvent });";
 
+test("canonical batch reconciliation accepts its export name and aliases", async () => {
+  for (const localName of [
+    "recordBillingCapCrossingsForMatters",
+    "reconcile",
+  ]) {
+    const batchImports = `
+      import { timeEntries as entries } from "@/api/db/schema";
+      import { recordBillingCapCrossingsForMatters as ${localName} } from "@/api/lib/billing/arrangements";
+    `;
+    expect(
+      await lint(`${batchImports} const write = async tx => {
+      ${mutation}
+      await ${localName}(tx, { workspaceIds, recordAuditEvent });
+    };`),
+    ).toBe(0);
+  }
+});
+
+test("batch reconciliation rejects fake, shadowed, early, nested, unawaited, and foreign-transaction calls", async () => {
+  const batchImports = imports.replace(
+    "recordBillingCapCrossings as",
+    "recordBillingCapCrossingsForMatters as",
+  );
+  const batchCall = "await reconcile(tx, { workspaceIds, recordAuditEvent });";
+  for (const body of [
+    `${batchCall} ${mutation}`,
+    `${mutation} const later = async () => { ${batchCall} };`,
+    `${mutation} reconcile(tx, { workspaceIds, recordAuditEvent });`,
+    `${mutation} await reconcile(otherTx, { workspaceIds, recordAuditEvent });`,
+  ]) {
+    expect(
+      await lint(
+        `${batchImports} const write = async (tx, otherTx) => { ${body} };`,
+      ),
+    ).toBe(1);
+  }
+  expect(
+    await lint(
+      `${batchImports.replace("@/api/lib/billing/arrangements", "./fake")} const write = async tx => { ${mutation} ${batchCall} };`,
+    ),
+  ).toBe(1);
+  expect(
+    await lint(
+      `${batchImports} const write = async (tx, reconcile) => { ${mutation} ${batchCall} };`,
+    ),
+  ).toBe(1);
+});
+
 test("approved-value mutation reconciliation accepts canonical awaited imports after writes", async () => {
   for (const hook of [
     reconciliation,
