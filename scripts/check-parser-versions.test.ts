@@ -301,3 +301,24 @@ test("the queue compares against its exact base while pull requests use the merg
   ).toBe("failed");
   expect(commands).toHaveLength(2);
 });
+
+test("published packages are external while unresolved workspace exports fail closed", () => {
+  const base = fixture();
+  const head = fixture();
+  for (const tree of [base, head]) {
+    tree.set(
+      `${PARSERS}shared-helper.ts`,
+      'import { text } from "@stll/docx-core/model"; export const helper = <T>(value: T) => text(value);',
+    );
+  }
+  expect(changed(base, head)).toEqual([]);
+  head.set(
+    "packages/docx-core/package.json",
+    JSON.stringify({ exports: { "./other": "./src/other.ts" } }),
+  );
+  expect(changed(base, head)).toContain(
+    expect.stringContaining(
+      "Unresolved repository import @stll/docx-core/model",
+    ),
+  );
+});

@@ -8,7 +8,8 @@ const PARSER_DIRECTORIES = [
   "apps/api/src/lib/legal-search/parsers/",
 ];
 const OUTPUT_UNCHANGED = /^\s*\/\/\s*parser-output-unchanged:\s*(\S.*)$/u;
-const transpiler = new Bun.Transpiler({ loader: "tsx" });
+const transpiler = new Bun.Transpiler({ loader: "ts" });
+const jsxTranspiler = new Bun.Transpiler({ loader: "tsx" });
 
 type SourceTree = ReadonlyMap<string, string>;
 type StaticValue =
@@ -44,7 +45,9 @@ class StaticTree {
     if (source === undefined || !/\.[cm]?[jt]sx?$/u.test(file)) {
       return "";
     }
-    const code = transpiler.transformSync(source);
+    const code = (
+      file.endsWith("x") ? jsxTranspiler : transpiler
+    ).transformSync(source);
     this.codeCache.set(file, code);
     return code;
   }
@@ -109,20 +112,25 @@ class StaticTree {
     if (source === undefined || !/\.[cm]?[jt]sx?$/u.test(file)) {
       return [];
     }
-    return transpiler.scanImports(source).flatMap(({ path: specifier }) => {
-      const target = this.resolve(file, specifier);
-      if (
-        target === undefined &&
-        (specifier.startsWith(".") ||
-          specifier.startsWith("@/api/") ||
-          specifier.startsWith("@stll/"))
-      ) {
-        this.importErrors.add(
-          `Unresolved repository import ${specifier} in ${file}`,
-        );
-      }
-      return target === undefined ? [] : [target];
-    });
+    return (file.endsWith("x") ? jsxTranspiler : transpiler)
+      .scanImports(source)
+      .flatMap(({ path: specifier }) => {
+        const target = this.resolve(file, specifier);
+        if (
+          target === undefined &&
+          (specifier.startsWith(".") ||
+            specifier.startsWith("@/api/") ||
+            (specifier.startsWith("@stll/") &&
+              this.files.has(
+                `packages/${specifier.slice("@stll/".length).split("/").at(0)}/package.json`,
+              )))
+        ) {
+          this.importErrors.add(
+            `Unresolved repository import ${specifier} in ${file}`,
+          );
+        }
+        return target === undefined ? [] : [target];
+      });
   }
 
   closure(file: string): Set<string> {
