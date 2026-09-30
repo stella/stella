@@ -823,30 +823,31 @@ const replayRow = async ({
 
   if (!changed && versionChanged) {
     await sourceLease.beforeDatabaseMark();
-    const stamped = await scopedDb(async (tx) => 
-      // audit: skip — stamps parser provenance for a public corpus row; no document change
-      await tx
-        .update(caseLawDecisions)
-        .set({
-          parserVersion: reparsed.result.parserVersion ?? null,
-          updatedAt: sql`${caseLawDecisions.updatedAt}`,
-        })
-        .where(
-          and(
-            eq(caseLawDecisions.id, row.id),
-            eq(caseLawDecisions.sourceId, sourceId),
-            isNull(caseLawDecisions.redactedAt),
-            sql`${caseLawDecisions.updatedAt} = ${row.updateToken}::timestamptz`,
-            sql`${caseLawDecisions.parserVersion} IS NOT DISTINCT FROM ${row.parserVersion}::integer`,
-            sql`EXISTS (
+    const stamped = await scopedDb(
+      async (tx) =>
+        // audit: skip — stamps parser provenance for a public corpus row; no document change
+        await tx
+          .update(caseLawDecisions)
+          .set({
+            parserVersion: reparsed.result.parserVersion ?? null,
+            updatedAt: sql`${caseLawDecisions.updatedAt}`,
+          })
+          .where(
+            and(
+              eq(caseLawDecisions.id, row.id),
+              eq(caseLawDecisions.sourceId, sourceId),
+              isNull(caseLawDecisions.redactedAt),
+              sql`${caseLawDecisions.updatedAt} = ${row.updateToken}::timestamptz`,
+              sql`${caseLawDecisions.parserVersion} IS NOT DISTINCT FROM ${row.parserVersion}::integer`,
+              sql`EXISTS (
             SELECT 1 FROM ${caseLawSources}
             WHERE ${caseLawSources.id} = ${sourceId}
               AND ${caseLawSources.ingestionLeaseToken} = ${sourceLease.leaseToken}
               AND ${caseLawSources.ingestionLeaseExpiresAt} > now()
           )`,
-          ),
-        )
-        .returning({ id: caseLawDecisions.id })
+            ),
+          )
+          .returning({ id: caseLawDecisions.id }),
     );
     if (stamped.length === 0) {
       return {

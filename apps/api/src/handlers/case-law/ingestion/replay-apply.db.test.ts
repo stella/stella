@@ -725,13 +725,11 @@ test("a corpus object that outlives its delete leaves the row alone", async () =
 const replayConvergenceFixture = async (text: string) => {
   const sourceId = createSafeId<"caseLawSource">();
   const id = createSafeId<"caseLawDecision">();
-  await db
-    .insert(caseLawSources)
-    .values({
-      id: sourceId,
-      adapterKey: `replay-convergence-${sourceId}`,
-      name: "replay convergence fixture",
-    });
+  await db.insert(caseLawSources).values({
+    id: sourceId,
+    adapterKey: `replay-convergence-${sourceId}`,
+    name: "replay convergence fixture",
+  });
   const result = {
     caseNumber: "C-10/26",
     court: "Court of Justice",
