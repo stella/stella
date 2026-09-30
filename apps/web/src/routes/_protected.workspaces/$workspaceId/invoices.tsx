@@ -108,7 +108,8 @@ const useInvoiceColumns = (): InvoiceColumn[] => {
     {
       id: "invoiceNumber",
       header: () => t("billing.invoices.invoiceNumber"),
-      cell: (invoice) => invoice.invoiceNumber,
+      cell: (invoice) =>
+        invoice.invoiceNumber ?? t("billing.invoices.statuses.draft"),
       cellClassName: "font-medium",
       skeletonCell: () => <Skeleton className="h-4 w-24" />,
     },

@@ -241,6 +241,11 @@ through Folio gains one it does not have.
   glowing logo (`DefaultPendingComponent`) is the last-resort
   fallback, not the default. Give each route its own
   `pendingComponent` so the route you navigate to picks its own shape.
+- **Shimmer only what you do not know yet.** Chrome that needs no data
+  (the logo, primary nav icons, rail toggles, fixed icons) renders for real
+  in a skeleton, taken from the same definitions the real chrome uses; only
+  data- or locale-dependent parts (labels, lists, the account, the page
+  body) shimmer. A grey box where the stella logo belongs reads as broken.
 - **Skeletons must be structurally drift-proof.** Generate the
   skeleton from the same source as the real UI, never a hand-copied
   parallel tree. For tables, render the header, rows, and skeleton
