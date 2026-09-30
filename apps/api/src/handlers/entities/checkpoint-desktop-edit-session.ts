@@ -7,6 +7,7 @@ import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 import { Temporal } from "@stll/time";
 
 import { desktopEditSessions, workspaces } from "@/api/db/schema";
+import { env } from "@/api/env";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -25,6 +26,7 @@ import {
 } from "@/api/lib/desktop-edit-sessions";
 import { validateDesktopEditFileBuffer } from "@/api/lib/entity-versions/validate-desktop-edit-file-buffer";
 import { scanFile } from "@/api/lib/file-scan/scan";
+import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
 import { createFileKey } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
@@ -248,7 +250,31 @@ export const checkpointDesktopEditSessionHandler = async ({
     // token-holder overwrite the checkpoint, desyncing the S3 object from
     // the persisted checkpointSha256Hex. The lock is held for one write on
     // a low-frequency, single-session path.
-    await writeS3ObjectWithRetry({ data: new Uint8Array(buffer), key });
+    const checkpointBytes = new Uint8Array(buffer);
+    if (!env.FEATURE_FILE_USAGE_LIMITS) {
+      await writeS3ObjectWithRetry({ data: checkpointBytes, key });
+    } else {
+      const fileWrite = await writeOrganizationFile({
+        organizationId: authorizedSession.value.organizationId,
+        objectKey: key,
+        sizeBytes: checkpointBytes.byteLength,
+        contentSha256Hex: sha256Hex,
+        write: async () =>
+          await writeS3ObjectWithRetry({ data: checkpointBytes, key }),
+      });
+      if (Result.isError(fileWrite)) {
+        let responseStatus: 409 | 413 | 503 = 503;
+        if (fileWrite.error.reason === "capacity_exceeded") {
+          responseStatus = 413;
+        } else if (
+          fileWrite.error.reason === "key_conflict" ||
+          fileWrite.error.reason === "reservation_busy"
+        ) {
+          responseStatus = 409;
+        }
+        return status(responseStatus, { message: fileWrite.error.message });
+      }
+    }
 
     const checkpointedAt = new Date();
 

@@ -6,6 +6,7 @@ import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { pendingUploads } from "@/api/db/schema";
+import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -28,13 +29,16 @@ import {
   enqueueImageThumbnailOrMarkFailed,
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
+import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import { allocateFileObject } from "@/api/lib/files/file-object-ids";
+import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
+import type { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
 import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
 import { createFileKey } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
-import { deleteS3ObjectWithSignal, putS3ObjectWithSignal } from "@/api/lib/s3";
+import { putS3ObjectWithSignal } from "@/api/lib/s3";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import {
   processExtraction,
@@ -117,7 +121,7 @@ export type CreateEntityVersionFromBufferResult = Result<
     fileName: string;
     versionNumber: number;
   },
-  EntityVersionTargetError
+  EntityVersionTargetError | OrganizationFileUsageError
 >;
 
 const ENTITY_VERSION_TARGET_MESSAGES = {
@@ -221,17 +225,20 @@ export const createEntityVersionFromBuffer = async ({
   let written: Extract<WriteFileVersionResult, { status: "ok" }>;
   try {
     const cleanupObject = async (): Promise<boolean> => {
-      const cleanup = await Result.tryPromise({
-        try: async () =>
-          await withTimeout(
-            async (signal) => await deleteS3ObjectWithSignal(objectKey, signal),
-            {
-              label: "buffer-version-writer-cleanup.delete",
-              timeoutMs: BUFFER_INTENT_DELETE_TIMEOUT_MS,
-            },
-          ),
-        catch: (cause) => cause,
-      });
+      const cleanup = Result.flatten(
+        await Result.tryPromise({
+          try: async () =>
+            await withTimeout(
+              async (signal) =>
+                await deleteOrganizationFileWithSignal(objectKey, signal),
+              {
+                label: "buffer-version-writer-cleanup.delete",
+                timeoutMs: BUFFER_INTENT_DELETE_TIMEOUT_MS,
+              },
+            ),
+          catch: (cause) => cause,
+        }),
+      );
       if (Result.isError(cleanup)) {
         captureError(cleanup.error, { entityId, objectKey });
         return false;
@@ -240,14 +247,35 @@ export const createEntityVersionFromBuffer = async ({
     };
 
     try {
-      await withTimeout(
-        async (signal) =>
-          await putS3ObjectWithSignal(objectKey, bytes, mimeType, signal),
-        {
-          label: "buffer-version-writer-put",
-          timeoutMs: BUFFER_INTENT_WRITE_TIMEOUT_MS,
-        },
-      );
+      if (!env.FEATURE_FILE_USAGE_LIMITS) {
+        await withTimeout(
+          async (signal) =>
+            await putS3ObjectWithSignal(objectKey, bytes, mimeType, signal),
+          {
+            label: "buffer-version-writer-put",
+            timeoutMs: BUFFER_INTENT_WRITE_TIMEOUT_MS,
+          },
+        );
+      } else {
+        const fileWrite = await writeOrganizationFile({
+          organizationId,
+          objectKey,
+          sizeBytes: bytes.byteLength,
+          write: async () =>
+            await withTimeout(
+              async (signal) =>
+                await putS3ObjectWithSignal(objectKey, bytes, mimeType, signal),
+              {
+                label: "buffer-version-writer-put",
+                timeoutMs: BUFFER_INTENT_WRITE_TIMEOUT_MS,
+              },
+            ),
+        });
+        if (Result.isError(fileWrite)) {
+          await cleanupObject();
+          return Result.err(fileWrite.error);
+        }
+      }
     } catch (error) {
       // A timeout or connection failure can be ambiguous: object storage may
       // publish after the immediate delete completes. Keep the intent

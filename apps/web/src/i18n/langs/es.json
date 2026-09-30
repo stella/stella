@@ -1449,6 +1449,7 @@
     "back": "Volver",
     "cancel": "Cancelar",
     "caseLaw": "Jurisprudencia",
+    "catalogue": "Catálogo",
     "category": "Categoría",
     "categoryName": "Nombre de categoría",
     "changeColor": "Cambiar color",
@@ -3227,6 +3228,23 @@
       "urlPlaceholder": "https://github.com/org/repo/tree/main/ruta/a/la/habilidad",
       "version": "Versión: {version}"
     },
+    "catalogue": {
+      "addToLibrary": "Añadir a la biblioteca",
+      "added": "{name} está en tu biblioteca",
+      "confirmAddTitle": "¿Añadir {name} a {organization}?",
+      "confirmDescription": "Se guardará una copia de esta plantilla en la biblioteca de {organization}.",
+      "confirmDownloadTitle": "¿Descargar {name} para {organization}?",
+      "confirmStarterDescription": "Se guardará una copia de este playbook en la biblioteca de {organization}.",
+      "confirmUseTitle": "¿Usar {name} en {organization}?",
+      "installFailed": "No se pudo añadir la plantilla",
+      "noPreview": "No hay vista previa disponible para esta plantilla.",
+      "notFound": "Esta plantilla no está en el catálogo.",
+      "unavailable": "El catálogo no está disponible en este momento."
+    },
+    "landing": {
+      "accountLine": "Con una cuenta gratuita, guarda las plantillas, cláusulas y playbooks propios de tu organización.",
+      "withAccount": "Con una cuenta gratuita"
+    },
     "mcp": {
       "addAndConnect": "Añadir y conectar",
       "addServer": "Añadir servidor",
@@ -3708,7 +3726,6 @@
     "someInvitesFailed": "{count, plural, one {# invitación falló} many {# invitaciones fallaron} other {# invitaciones fallaron}}",
     "stepAi": "IA",
     "stepApps": "Aplicaciones y herramientas",
-    "stepCatalogue": "Catálogo",
     "stepJurisdiction": "Jurisdicción",
     "stepOrganization": "Equipo",
     "stepTeam": "Invitar",

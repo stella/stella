@@ -16,8 +16,6 @@ import splitEntry from "@/api/handlers/time-entries/split";
 import createTimeSuggestionDecision from "@/api/handlers/time-entries/suggestions/decisions/create";
 import listTimeSuggestions from "@/api/handlers/time-entries/suggestions/list";
 import readTimeEntrySummary from "@/api/handlers/time-entries/summary/get";
-import timerStart from "@/api/handlers/time-entries/timer/start";
-import timerStop from "@/api/handlers/time-entries/timer/stop";
 import updateTimeEntryById from "@/api/handlers/time-entries/update";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import {
@@ -73,15 +71,6 @@ export const timeEntriesRoute = new Elysia({
     body: deleteTimeEntryById.config.body,
     resourceSetUpdated: timeEntryRealtimeUpdates,
     permissions: deleteTimeEntryById.config.permissions,
-  })
-  .post("/timer/start", timerStart.handler, {
-    body: timerStart.config.body,
-    resourceSetUpdated: timeEntryRealtimeUpdates,
-    permissions: timerStart.config.permissions,
-  })
-  .post("/timer/stop", timerStop.handler, {
-    resourceSetUpdated: timeEntryRealtimeUpdates,
-    permissions: timerStop.config.permissions,
   })
   .post("/batch", batchUpdate.handler, {
     body: batchUpdate.config.body,

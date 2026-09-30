@@ -29,6 +29,7 @@ import {
   installPglitePdfSigningTokenScopes,
   installPgliteSchemaPrerequisites,
   installPgliteStatuteCitationCounts,
+  installPgliteTimeEntryTimerSignals,
   installPgliteWorkspaceAccessObjects,
 } from "@/api/tests/pglite-schema";
 
@@ -268,6 +269,10 @@ export const ROLE_GRANT_STATEMENTS = [
       ON ALL TABLES IN SCHEMA public TO stella
   `,
   `
+    REVOKE ALL PRIVILEGES ON TABLE "case_law_search_backfill_failures"
+      FROM stella
+  `,
+  `
     REVOKE ALL PRIVILEGES ON TABLE ${AUTH_TABLES_SQL} FROM stella
   `,
   `
@@ -377,6 +382,7 @@ export const ROLE_GRANT_STATEMENTS = [
   `
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
       "case_law_reconciliation_items",
+      "case_law_search_backfill_failures",
       "case_law_coverage_slices",
       "case_law_corpus_upload_intents",
       "case_law_corpus_pack_refs",
@@ -680,6 +686,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   for (const statement of ROLE_GRANT_STATEMENTS) {
     await db.execute(sql.raw(statement));
   }
+  await installPgliteTimeEntryTimerSignals(db);
 
   return client;
 };

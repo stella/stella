@@ -1452,6 +1452,7 @@ type Messages = {
     "back": "Back";
     "cancel": "Cancel";
     "caseLaw": "Case Law";
+    "catalogue": "Catalogue";
     "category": "Category";
     "categoryName": "Category name";
     "changeColor": "Change color";
@@ -3230,6 +3231,23 @@ type Messages = {
       "urlPlaceholder": "https://github.com/org/repo/tree/main/path/to/skill";
       "version": "Version: {version}";
     };
+    "catalogue": {
+      "addToLibrary": "Add to library";
+      "added": "{name} is in your library";
+      "confirmAddTitle": "Add {name} to {organization}?";
+      "confirmDescription": "A copy of this template goes into the {organization} library.";
+      "confirmDownloadTitle": "Download {name} for {organization}?";
+      "confirmStarterDescription": "A copy of this playbook goes into the {organization} library.";
+      "confirmUseTitle": "Use {name} in {organization}?";
+      "installFailed": "The template could not be added";
+      "noPreview": "No preview is available for this template.";
+      "notFound": "This template is not in the catalogue.";
+      "unavailable": "The catalogue is not available right now.";
+    };
+    "landing": {
+      "accountLine": "Keep your organization's own templates, clauses and playbooks with a free account.";
+      "withAccount": "With a free account";
+    };
     "mcp": {
       "addAndConnect": "Add and connect";
       "addServer": "Add server";
@@ -3711,7 +3729,6 @@ type Messages = {
     "someInvitesFailed": "{count, plural, one {# invitation failed} other {# invitations failed}}";
     "stepAi": "AI";
     "stepApps": "Apps & tools";
-    "stepCatalogue": "Catalogue";
     "stepJurisdiction": "Jurisdiction";
     "stepOrganization": "Team";
     "stepTeam": "Invite";

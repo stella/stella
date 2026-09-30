@@ -53,7 +53,11 @@ import {
   hasVisibleText,
   type PersonRow,
 } from "./snapshot-columns";
-import { CITATION_TYPES, OPINION_TYPES } from "./vocabulary";
+import {
+  CITATION_TYPES,
+  compareOpinionOrder,
+  OPINION_TYPES,
+} from "./vocabulary";
 
 const COUNTRY = US_REPORTER_JURISDICTION;
 const LANGUAGE = "en";
@@ -470,13 +474,7 @@ const decisionPlan = (
   diagnostics: PlanDiagnostic[],
 ) => {
   const { cluster } = admitted.record;
-  // Rows in the documented order: type prefix, then numeric ID. Input order
-  // and timestamps carry no meaning.
-  const ordered = admitted.opinions.toSorted(
-    (left, right) =>
-      OPINION_TYPES[left.type].rank - OPINION_TYPES[right.type].rank ||
-      compareCanonicalIds(left.row.id, right.row.id),
-  );
+  const ordered = admitted.opinions.toSorted(compareOpinionOrder);
 
   const decisionDate = canonicalDecisionDate(cluster.date_filed, COUNTRY);
   if (decisionDate === null) {

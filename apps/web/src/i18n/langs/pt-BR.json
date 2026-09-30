@@ -1449,6 +1449,7 @@
     "back": "Voltar",
     "cancel": "Cancelar",
     "caseLaw": "Jurisprudência",
+    "catalogue": "Catálogo",
     "category": "Categoria",
     "categoryName": "Nome da categoria",
     "changeColor": "Mudar cor",
@@ -3227,6 +3228,23 @@
       "urlPlaceholder": "https://github.com/org/repo/tree/main/caminho/para/habilidade",
       "version": "Versão: {version}"
     },
+    "catalogue": {
+      "addToLibrary": "Adicionar à biblioteca",
+      "added": "{name} está na sua biblioteca",
+      "confirmAddTitle": "Adicionar {name} a {organization}?",
+      "confirmDescription": "Uma cópia deste modelo será salva na biblioteca de {organization}.",
+      "confirmDownloadTitle": "Baixar {name} para {organization}?",
+      "confirmStarterDescription": "Uma cópia deste playbook será salva na biblioteca de {organization}.",
+      "confirmUseTitle": "Usar {name} em {organization}?",
+      "installFailed": "Não foi possível adicionar o modelo",
+      "noPreview": "Nenhuma pré-visualização disponível para este modelo.",
+      "notFound": "Este modelo não está no catálogo.",
+      "unavailable": "O catálogo não está disponível no momento."
+    },
+    "landing": {
+      "accountLine": "Com uma conta gratuita, mantenha os modelos, cláusulas e playbooks próprios da sua organização.",
+      "withAccount": "Com uma conta gratuita"
+    },
     "mcp": {
       "addAndConnect": "Adicionar e conectar",
       "addServer": "Adicionar servidor",
@@ -3708,7 +3726,6 @@
     "someInvitesFailed": "{count, plural, one {# convite falhou} many {# convites falharam} other {# convites falharam}}",
     "stepAi": "IA",
     "stepApps": "Aplicativos e ferramentas",
-    "stepCatalogue": "Catálogo",
     "stepJurisdiction": "Jurisdição",
     "stepOrganization": "Equipe",
     "stepTeam": "Convidar",

@@ -8,6 +8,7 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawCorpusUploadIntents,
   caseLawDecisions,
+  caseLawDecisionIdentifiers,
   caseLawSources,
 } from "@/api/db/schema";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
@@ -240,6 +241,14 @@ const scopedDb: ScopedDb = async (callback) => {
           if (table === caseLawCorpusUploadIntents) {
             return [{ status: intentStatus }];
           }
+          if (table === caseLawDecisionIdentifiers) {
+            return [];
+          }
+          if (table === caseLawDecisions && "citationKey" in selection) {
+            return existingDecision
+              ? [{ ...existingDecision, holdsDocument: false }]
+              : [];
+          }
           if ("holdsDocument" in selection) {
             // The document-less payload guard: the row holds no document,
             // and this refresh's empty payload differs from what it holds.
@@ -258,6 +267,9 @@ const scopedDb: ScopedDb = async (callback) => {
           }
           return [];
         };
+        if (table === caseLawDecisionIdentifiers) {
+          return { where: rows };
+        }
         return {
           innerJoin: () => ({
             where: () => ({ limit: () => ({ for: rows }) }),

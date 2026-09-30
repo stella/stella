@@ -93,7 +93,7 @@ afterAll(async () => {
 // approval, ask-user and draft cards), fed by the recorded SSE through a fake
 // server. Nothing under test is mocked: the fake stands where the network is.
 // The recordings come from `apps/api/src/handlers/chat/
-// recorded-conversations.integration.test.ts`, which fails when they drift
+// recorded-conversations*.integration.test.ts`, which fail when they drift
 // from the server.
 
 // --- Recordings ------------------------------------------------------------

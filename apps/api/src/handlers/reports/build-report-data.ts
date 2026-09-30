@@ -795,7 +795,6 @@ export const buildReportData = async ({
               index,
               index + JUSTIFICATION_FIELD_ID_BATCH,
             );
-            // db-await-in-loop: sequential reads on one tx connection; the batch caps each `IN (...)` below the bound-parameter limit
             const batchRows = await tx.query.justifications.findMany({
               where: {
                 workspaceId: { eq: workspaceId },

@@ -71,6 +71,13 @@ type GatedTestClient = {
 type OpenClientOptions = {
   /** Connections in this client's pool. */
   readonly max?: number;
+  /** Seconds of inactivity before Bun closes a connection. */
+  readonly idleTimeout?: number;
+  /** PostgreSQL settings sent when each connection opens. */
+  readonly connection?: {
+    readonly statement_timeout?: number;
+    readonly lock_timeout?: number;
+  };
 };
 
 type GatedTestClientScope = {
@@ -98,8 +105,12 @@ export const withGatedTestClients = async <T>(
   { closeTimeout }: GatedTestClientsOptions = {},
 ): Promise<T> => {
   const opened: SQL[] = [];
-  const openClient = ({ max = 1 }: OpenClientOptions = {}) => {
-    const client = new SQL({ url: databaseUrl, max });
+  const openClient = ({
+    max = 1,
+    idleTimeout,
+    connection,
+  }: OpenClientOptions = {}) => {
+    const client = new SQL({ url: databaseUrl, max, idleTimeout, connection });
     opened.push(client);
     return { sql: client, db: openDatabase(client) };
   };

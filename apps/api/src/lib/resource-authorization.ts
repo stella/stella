@@ -135,6 +135,7 @@ export const RESOURCE_AUTHORIZATION_DISPOSITION = {
     owner: "saved_time_narratives",
   },
   [RESOURCE_TYPE.NUMBER_SERIES]: { type: "domain_policy", owner: "billing" },
+  [RESOURCE_TYPE.VAT_RATE]: { type: "domain_policy", owner: "billing" },
   [RESOURCE_TYPE.STYLE_SET]: { type: "domain_policy", owner: "style_sets" },
   [RESOURCE_TYPE.TEMPLATE]: { type: "domain_policy", owner: "templates" },
   [RESOURCE_TYPE.TEMPLATE_CATEGORY]: {

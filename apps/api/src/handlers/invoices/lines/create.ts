@@ -4,6 +4,7 @@ import { t } from "elysia";
 
 import type { InvoiceTotals } from "@stll/invoicing";
 
+import type { SafeDbError } from "@/api/db/safe-db";
 import { abortableTx } from "@/api/db/safe-db";
 import { BILLING_STATUS, expenses, timeEntries } from "@/api/db/schema";
 import {
@@ -25,6 +26,7 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
+import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   tMinorUnitAmount,
@@ -66,6 +68,12 @@ type CreatedLine = { id: SafeId<"invoiceLine">; totals: InvoiceTotals };
 const NOT_BILLABLE_MESSAGE =
   "The entry must be approved, billable, priced in the invoice currency, and not already on an invoice";
 
+// The partial unique index prevents attaching an entry already on another line.
+const lineCreationError = (error: HandlerError | SafeDbError) =>
+  DatabaseError.is(error) && error.code === PG_ERROR.UNIQUE_VIOLATION
+    ? new HandlerError({ status: 409, message: NOT_BILLABLE_MESSAGE })
+    : error;
+
 const createInvoiceLine = createSafeHandler(
   {
     description:
@@ -83,6 +91,7 @@ const createInvoiceLine = createSafeHandler(
   async function* ({
     safeDb,
     session,
+    user,
     workspaceId,
     params,
     body,
@@ -108,6 +117,18 @@ const createInvoiceLine = createSafeHandler(
     const txResult = await abortableTx(
       safeDb,
       async (tx): Promise<Result<CreatedLine, HandlerError>> => {
+        const runningError = await guardRunningTimeEntries({
+          tx,
+          workspaceId,
+          actorUserId: user.id,
+          selection: {
+            type: "entries",
+            ids: source.type === "time_entry" ? [source.timeEntryId] : [],
+          },
+        });
+        if (runningError) {
+          return Result.err(runningError);
+        }
         const invoice = await lockDraftInvoiceForLines(
           tx,
           {
@@ -270,15 +291,7 @@ const createInvoiceLine = createSafeHandler(
     );
 
     if (Result.isError(txResult)) {
-      const error = txResult.error;
-      // The partial unique index is the last guard: the entry already sits on
-      // another invoice's line.
-      if (DatabaseError.is(error) && error.code === PG_ERROR.UNIQUE_VIOLATION) {
-        return Result.err(
-          new HandlerError({ status: 409, message: NOT_BILLABLE_MESSAGE }),
-        );
-      }
-      return Result.err(error);
+      return Result.err(lineCreationError(txResult.error));
     }
 
     return txResult.value;

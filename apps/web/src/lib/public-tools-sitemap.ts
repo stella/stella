@@ -1,6 +1,11 @@
 import { loadCatalogue } from "@stll/catalogue";
 
 import {
+  publicToolPath,
+  publicToolsBasePath,
+  publicToolsContributePath,
+} from "@/lib/knowledge/public-tools-path";
+import {
   assertSitemapXmlWithinProtocolLimits,
   escapeSitemapXml,
   SITEMAP_XML_RESPONSE_HEADERS,
@@ -19,9 +24,9 @@ type PublicToolsSitemapOptions = {
 // static (the generated `@stll/catalogue` bundle), so the whole set is
 // enumerable in one file without pagination.
 const collectToolPaths = (): readonly `/${string}`[] => [
-  "/tools",
-  "/tools/contribute",
-  ...loadCatalogue().map((entry): `/${string}` => `/tools/${entry.slug}`),
+  publicToolsBasePath(),
+  publicToolsContributePath(),
+  ...loadCatalogue().map((entry) => publicToolPath(entry.slug)),
 ];
 
 export const createPublicToolsSitemapXml = ({

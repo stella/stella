@@ -127,11 +127,11 @@ const SCENE_WATCHED_PATHS: Record<StoryCaptureId, readonly string[]> = {
   // Seeded Supply Agreement template in the Knowledge template studio; the
   // filmed content comes from seed-templates.ts, not seed-dev.ts.
   templates: [
-    "apps/web/src/routes/_protected.knowledge",
+    "apps/web/src/routes/knowledge",
     "apps/api/scripts/seed-templates.ts",
   ],
   // Knowledge tools catalogue (the MCP/capability surface).
-  cli: ["apps/web/src/routes/_protected.knowledge"],
+  cli: ["apps/web/src/routes/knowledge"],
   // "New document from template" inside the Meridian workspace (workspace
   // slice) plus the Prefill-from-documents panel (knowledge slice, same
   // TemplateForm/TemplatePrefillPanel the Template Studio Fill tab uses).
@@ -140,7 +140,7 @@ const SCENE_WATCHED_PATHS: Record<StoryCaptureId, readonly string[]> = {
   // fixture, not a live model, is what this scene actually films.
   "template-fill": [
     "apps/web/src/routes/_protected.workspaces/$workspaceId",
-    "apps/web/src/routes/_protected.knowledge",
+    "apps/web/src/routes/knowledge",
     "apps/api/scripts/seed-templates.ts",
     "apps/api/src/dev/register-mock-ai.ts",
   ],

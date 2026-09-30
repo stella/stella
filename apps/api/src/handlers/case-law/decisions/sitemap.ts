@@ -26,6 +26,7 @@ import {
   SITEMAP_UNDATED_MONTH,
   SITEMAP_UNDATED_YEAR,
 } from "@/api/lib/case-law/sitemap-shard-sql";
+import { chunked } from "@/api/lib/chunked";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 
@@ -84,18 +85,6 @@ const normalizeLanguageSegment = (language: string): string | null => {
   }
 
   return normalized;
-};
-
-const chunkArray = <T>(
-  items: readonly T[],
-  chunkSize: number,
-): readonly T[][] => {
-  const chunks: T[][] = [];
-  for (let index = 0; index < items.length; index += chunkSize) {
-    chunks.push(items.slice(index, index + chunkSize));
-  }
-
-  return chunks;
 };
 
 // The half-open [start, end) day range covered by one dated natural shard, so
@@ -285,11 +274,10 @@ export const listSitemapShardDecisionsHandler = async (
     // would make the read unbounded. Hitting the cap is a data-integrity anomaly
     // (a group exceeding the expected variant count), not a normal case: warn and
     // proceed with what loaded rather than 500 the whole sitemap.
-    for (const groupKeyBatch of chunkArray(
+    for (const groupKeyBatch of chunked(
       languageGroupKeys,
       SITEMAP_LANGUAGE_ALTERNATE_GROUP_BATCH_SIZE,
     )) {
-      // db-await-in-loop: one inArray read per key chunk; each chunk carries its own row cap and overflow warning, which a single read over every key could not bound
       const batchRows = await readSitemapDecisionAlternates(tx, groupKeyBatch);
       if (batchRows.length === SITEMAP_LANGUAGE_ALTERNATE_ROW_LIMIT) {
         logger.warn("case_law.sitemap.language_alternate_overflow", {

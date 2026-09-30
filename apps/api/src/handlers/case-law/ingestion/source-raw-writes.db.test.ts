@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -12,12 +13,18 @@ import { drizzle } from "drizzle-orm/pglite";
 import { authRelationsPart } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
-import { caseLawDecisions, caseLawSources, relations } from "@/api/db/schema";
+import {
+  caseLawDecisions,
+  caseLawRawSweeps,
+  caseLawSources,
+  relations,
+} from "@/api/db/schema";
 import {
   EMPTY_AST,
   encodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import { CitationScopesRejectedError } from "@/api/handlers/case-law/ingestion/citation-scopes";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -115,6 +122,51 @@ const observe = async ({ sourceId, listing, order }: ObserveOptions) =>
   });
 
 const puts = () => fake.requests.filter(({ method }) => method === "PUT");
+
+test("a planning rejection schedules the new decision's uploaded raw for sweeping", async () => {
+  const sourceId = await createSource();
+  const failed = await Result.tryPromise({
+    try: async () =>
+      await processDecision({
+        input: {
+          caseNumber: "raw-planning-rejection",
+          sourceDocumentId: "raw-planning-rejection",
+          court: "Ústavný súd Slovenskej republiky",
+          country: "SVK",
+          language: "sk",
+          fulltext: "Rozhodnutie o veci samej.",
+          metadata: {},
+          textFields: absentDecisionTextFields(
+            TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+          ),
+          rawHash: "raw-planning-rejection",
+          documentAst: EMPTY_AST,
+          citationScopes: [],
+          sourceRaw: "publisher raw",
+        },
+        sourceId,
+        scopedDb,
+        observedAt: new Date(),
+        observationOrder: 1n,
+      }),
+    catch: (cause) => cause,
+  });
+  if (!Result.isError(failed)) {
+    expect.unreachable("Scopes without an AST must reject planning");
+  }
+  expect(failed.error).toBeInstanceOf(CitationScopesRejectedError);
+  expect(puts()).toHaveLength(1);
+  const sweeps = await db
+    .select()
+    .from(caseLawRawSweeps)
+    .where(eq(caseLawRawSweeps.sourceId, sourceId));
+  expect(sweeps).toHaveLength(1);
+  const decisions = await db
+    .select()
+    .from(caseLawDecisions)
+    .where(eq(caseLawDecisions.sourceId, sourceId));
+  expect(decisions).toHaveLength(0);
+});
 
 test("re-observing an unchanged decision with a publisher file writes nothing", async () => {
   const sourceId = await createSource();

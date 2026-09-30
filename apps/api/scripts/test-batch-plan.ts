@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 import ts from "typescript";
 
+import { RECORDED_CONVERSATION_SUITES } from "../src/tests/helpers/recorded-conversation-suites";
+
 /** The ordinary DB batch stays small without paying one process per file. */
 export const DB_TEST_BATCH_SIZE = 3;
 
@@ -19,11 +21,9 @@ export const dbTestBatchSize = (propertyOnly: boolean) =>
  * neighbours. Each runs in a process of its own, whatever its class (see
  * `splitSoloTests`).
  */
-export const SOLO_TEST_PATHS: ReadonlySet<string> = new Set([
-  // ~1.7 GB peak alone: replays every recorded conversation scenario through
-  // the full send pipeline.
-  "src/handlers/chat/recorded-conversations.integration.test.ts",
-]);
+export const SOLO_TEST_PATHS: ReadonlySet<string> = new Set(
+  Object.values(RECORDED_CONVERSATION_SUITES),
+);
 
 /**
  * Move each solo file out of its composed batch into a batch of its own. The

@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
@@ -12,6 +12,7 @@ import {
   readTimePolicy,
   roundToBillingIncrement,
 } from "@/api/lib/billing-time";
+import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -44,7 +45,14 @@ const splitEntry = createSafeHandler(
     access: "write",
     body: splitEntryBodySchema,
   },
-  async function* ({ safeDb, session, workspaceId, body, recordAuditEvent }) {
+  async function* ({
+    safeDb,
+    session,
+    user,
+    workspaceId,
+    body,
+    recordAuditEvent,
+  }) {
     const totalPercentage = body.splits.reduce(
       (sum, s) => sum + s.percentage,
       0,
@@ -158,6 +166,15 @@ const splitEntry = createSafeHandler(
     // advisory lock to prevent TOCTOU on the workspace limit.
     const txResult = yield* Result.await(
       safeDb(async (tx) => {
+        const runningError = await guardRunningTimeEntries({
+          tx,
+          workspaceId,
+          selection: { type: "entries", ids: [body.id] },
+          actorUserId: user.id,
+        });
+        if (runningError) {
+          return { ok: false as const, error: runningError };
+        }
         const netNew = body.splits.length - 1;
         if (netNew > 0) {
           await tx.execute(
@@ -172,15 +189,37 @@ const splitEntry = createSafeHandler(
           }
         }
 
-        // Delete original entry
-        await tx
+        const [current] = await tx
+          .select({ id: timeEntries.id })
+          .from(timeEntries)
+          .where(
+            and(
+              eq(timeEntries.id, body.id),
+              eq(timeEntries.workspaceId, workspaceId),
+            ),
+          )
+          .limit(1);
+        if (!current) {
+          return {
+            ok: false as const,
+            error: new HandlerError({
+              status: 409,
+              message: "Time entry changed; reload and try again",
+            }),
+          };
+        }
+        const [deleted] = await tx
           .delete(timeEntries)
           .where(
             and(
               eq(timeEntries.id, body.id),
               eq(timeEntries.workspaceId, workspaceId),
             ),
-          );
+          )
+          .returning({ id: timeEntries.id });
+        if (!deleted) {
+          return panic("Locked original entry deletion returned no row");
+        }
 
         const createdEntries: {
           id: SafeId<"timeEntry">;
@@ -287,6 +326,9 @@ const splitEntry = createSafeHandler(
     );
 
     if (!txResult.ok) {
+      if ("error" in txResult) {
+        return Result.err(txResult.error);
+      }
       return Result.err(
         new HandlerError({
           status: 400,

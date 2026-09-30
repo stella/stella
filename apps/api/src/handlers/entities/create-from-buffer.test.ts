@@ -26,7 +26,9 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
+import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
+import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
@@ -194,6 +196,50 @@ describe("createEntityFromBuffer", () => {
     expect(getCallCount()).toBe(0);
     // The size gate runs before any object-storage request at all.
     expect(fake.requests).toEqual([]);
+  });
+
+  test("returns file-write failures after cleanup and keeps the upload intent recoverable", async () => {
+    const { scopedDb } = createScopedDbMock(
+      withIntentPersistence({
+        query: {
+          properties: {
+            findMany: async () => [
+              { id: propertyId, content: { type: "file" as const } },
+            ],
+          },
+        },
+        select: createParentSelect({ parentKind: null }),
+      }),
+    );
+    const priorFlag = env.FEATURE_FILE_USAGE_LIMITS;
+    const priorWorkerFlag =
+      envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS;
+    env.FEATURE_FILE_USAGE_LIMITS = true;
+    envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = false;
+    fake.failNext({ method: "PUT", code: "AccessDenied", status: 403 });
+    try {
+      const result = await createEntityFromBufferForTest({
+        scopedDb,
+        organizationId,
+        workspaceId,
+        userId,
+        recordAuditEvent: async () => undefined,
+        buffer: new TextEncoder().encode("pdf bytes"),
+        fileName: "Agreement.pdf",
+        mimeType: "application/pdf",
+      });
+      expect(result).toMatchObject({
+        status: "error",
+        error: { reason: "storage_unavailable" },
+      });
+      expect(requestKeys("DELETE")).toHaveLength(1);
+      expect(objectKeysInStore()).toEqual([]);
+      expect(processExtractionMock).not.toHaveBeenCalled();
+      expect(intentStatuses).toEqual(["scanning"]);
+    } finally {
+      env.FEATURE_FILE_USAGE_LIMITS = priorFlag;
+      envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = priorWorkerFlag;
+    }
   });
 
   test("writes an entity create audit log with the DB insert", async () => {

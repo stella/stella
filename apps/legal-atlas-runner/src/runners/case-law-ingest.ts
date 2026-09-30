@@ -1064,6 +1064,7 @@ export const runCaseLawIngest = async (
       return;
     }
     let pollMs = SEARCH_INDEX_INTERVAL_MS;
+    let reportedParkedCount = -1;
     while (true) {
       if (isDraining()) {
         return;
@@ -1073,7 +1074,7 @@ export const runCaseLawIngest = async (
         return;
       }
       try {
-        const { found, indexed } = await runWithHardDeadline(
+        const { found, indexed, parked } = await runWithHardDeadline(
           "search-index",
           SEARCH_INDEX_HARD_DEADLINE_MS,
           async () =>
@@ -1088,6 +1089,12 @@ export const runCaseLawIngest = async (
             : SEARCH_INDEX_INTERVAL_MS;
         if (indexed > 0) {
           logInfo(`[search-index] Indexed ${indexed} decisions (backfill)`);
+        }
+        if (parked.count !== reportedParkedCount) {
+          logInfo(
+            `[search-index] ${parked.count} parked decisions require per-document repair`,
+          );
+          reportedParkedCount = parked.count;
         }
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);

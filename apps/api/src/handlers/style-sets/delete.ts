@@ -4,6 +4,7 @@ import { t } from "elysia";
 
 import { abortableTx } from "@/api/db/safe-db";
 import { styleSets } from "@/api/db/schema";
+import { env } from "@/api/env";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -13,6 +14,7 @@ import {
   timestampMatchesCasToken,
 } from "@/api/lib/db/timestamp-cas";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import { getS3 } from "@/api/lib/s3";
 import { deleteQueuedStyleSetPackages } from "@/api/lib/style-set-package-cleanup-queue";
 
@@ -107,13 +109,33 @@ export default createSafeRootHandler(
       }),
     );
 
-    yield* Result.await(
-      Result.tryPromise({
-        try: async () =>
-          await Promise.all([
-            deleteQueuedStyleSetPackages(params.styleSetId),
-            ...deleted.s3Keys.map(async (s3Key) => await getS3().delete(s3Key)),
-          ]),
+    const deletionResult = Result.flatten(
+      await Result.tryPromise({
+        try: async () => {
+          const cleanupResults = await Promise.all([
+            deleteQueuedStyleSetPackages(params.styleSetId).then(() =>
+              Result.ok(undefined),
+            ),
+            ...deleted.s3Keys.map(async (s3Key) => {
+              if (env.FEATURE_FILE_USAGE_LIMITS) {
+                return await deleteOrganizationFileWithSignal(
+                  s3Key,
+                  AbortSignal.timeout(10_000),
+                );
+              }
+              await getS3().delete(s3Key);
+              return Result.ok(undefined);
+            }),
+          ]);
+          return Result.all(cleanupResults).mapError(
+            (cause) =>
+              new HandlerError({
+                status: 500,
+                message: "Could not delete the style set package.",
+                cause,
+              }),
+          );
+        },
         catch: (cause) =>
           new HandlerError({
             status: 500,
@@ -122,6 +144,7 @@ export default createSafeRootHandler(
           }),
       }),
     );
+    yield* Result.await(Promise.resolve(deletionResult));
     yield* Result.await(
       safeDb(async (tx) => {
         // audit: skip — storage cleanup for the already-audited style set deletion

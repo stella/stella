@@ -16,7 +16,6 @@ export const sweepChatRunLogs: SchedulerTask = async ({
   let logsClosed = 0;
   let logsDeleted = 0;
   for (let batch = 0; batch < 16 && !signal.aborted; batch += 1) {
-    // db-await-in-loop: retention drain of at most 16 bounded batches; each batch is its own short transaction so the sweep never holds locks across the whole backlog
     const swept = await sweepClosedChatRunLogs(db);
     entriesDeleted += swept.entriesDeleted;
     logsClosed += swept.logsClosed;

@@ -32,7 +32,6 @@ import type { readLegislationProvisionVersions } from "@/api/handlers/legislatio
 import type { searchLegislationHandler } from "@/api/handlers/legislation/search";
 import type { listStatuteVersionsHandler } from "@/api/handlers/legislation/versions";
 import type { configureTemplateFields } from "@/api/handlers/templates/configure-template-fields-service";
-import type { createTimeEntryHandler } from "@/api/handlers/time-entries/time-entry-insert";
 import type { readWorkspaceHandler } from "@/api/handlers/workspaces/get";
 import type { readOverviewHandler } from "@/api/handlers/workspaces/read-overview";
 import type { readWorkspaceContactsHandler } from "@/api/handlers/workspaces/workspace-contacts-read";
@@ -49,6 +48,7 @@ import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import { resolveCredentialMemberAuthorization } from "@/api/lib/auth";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
+import type { createTimeEntryHandler } from "@/api/lib/billing/time-entry-insert";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   availableRegistryHandlersForOrg,

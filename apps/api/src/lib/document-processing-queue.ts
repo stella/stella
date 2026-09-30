@@ -93,6 +93,11 @@ import { createReconciliationProgress } from "@/api/lib/document-processing-reco
 import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
 import { createFileKey, createOcrSearchablePdfKey } from "@/api/lib/file-key";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
+import {
+  writeOrganizationFile,
+  type FileUsageInput,
+  type OrganizationFileUsageError,
+} from "@/api/lib/files/organization-file-usage";
 import { logger } from "@/api/lib/observability/logger";
 import {
   isLocalDocumentOcrConfigured,
@@ -177,6 +182,37 @@ const REPAIR_SCAN_CURSOR_CAS_SCRIPT = `
 `;
 const SOURCE_SUPERSEDED_CANCELLATION_CODE = "source_superseded";
 
+type OcrDerivativeStore = (
+  input: FileUsageInput & { write: () => Promise<void> },
+) => Promise<Result<void, OrganizationFileUsageError>>;
+
+export const storeOcrSearchablePdfDerivative = async ({
+  objectKey,
+  organizationId,
+  pdfBytes,
+  usageLimitsEnabled,
+  writePdf,
+  writeMetered = writeOrganizationFile,
+}: {
+  objectKey: string;
+  organizationId: SafeId<"organization">;
+  pdfBytes: Uint8Array;
+  usageLimitsEnabled: boolean;
+  writePdf: () => Promise<void>;
+  writeMetered?: OcrDerivativeStore;
+}): Promise<Result<void, OrganizationFileUsageError>> => {
+  if (!usageLimitsEnabled) {
+    await writePdf();
+    return Result.ok();
+  }
+  return await writeMetered({
+    objectKey,
+    organizationId,
+    sizeBytes: pdfBytes.byteLength,
+    write: writePdf,
+  });
+};
+
 /**
  * Builds and stores the run's cached searchable PDF.
  *
@@ -213,17 +249,30 @@ const writeOcrSearchablePdfDerivative = async ({
       }
       lifecycleSignal.throwIfAborted();
 
-      await writeTenantS3Object({
-        contentType: PDF_MIME_TYPE,
-        data: searchablePdf.value,
-        key: createOcrSearchablePdfKey({
-          organizationId: run.organizationId,
-          workspaceId: run.workspaceId,
-          runId: run.id,
-        }),
-        scope,
-        signal: lifecycleSignal,
+      const objectKey = createOcrSearchablePdfKey({
+        organizationId: run.organizationId,
+        workspaceId: run.workspaceId,
+        runId: run.id,
       });
+      const writePdf = async () =>
+        await writeTenantS3Object({
+          contentType: PDF_MIME_TYPE,
+          data: searchablePdf.value,
+          key: objectKey,
+          scope,
+          signal: lifecycleSignal,
+        });
+      const fileWrite = await storeOcrSearchablePdfDerivative({
+        objectKey,
+        organizationId: run.organizationId,
+        pdfBytes: searchablePdf.value,
+        usageLimitsEnabled:
+          envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS,
+        writePdf,
+      });
+      if (Result.isError(fileWrite)) {
+        throw fileWrite.error;
+      }
     },
     catch: (cause) => cause,
   });

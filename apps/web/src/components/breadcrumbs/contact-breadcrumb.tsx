@@ -1,20 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
-import { getRouteApi } from "@tanstack/react-router";
 import type { ResolveParams } from "@tanstack/react-router";
 
 import { BidiText } from "@stll/ui/bidi-text";
 
 import { BreadcrumbLink } from "@/components/breadcrumbs/shared";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { contactOptions } from "@/lib/contacts/queries";
-
-const protectedRouteApi = getRouteApi("/_protected");
 
 export const ContactBreadcrumb = ({
   contactId,
 }: ResolveParams<"/contacts/$contactId">) => {
-  const activeOrganizationId = protectedRouteApi.useRouteContext({
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const { data: contact } = useQuery(
     contactOptions(activeOrganizationId, contactId),
   );

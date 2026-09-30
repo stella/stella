@@ -9,7 +9,7 @@ import { isFileIn } from "./utils.ts";
 // React.lazy so the route shell commits before the catalogue chunk mounts.
 
 const CATALOGUE_BROWSER_MODULE =
-  "@/routes/_protected.knowledge/-components/catalogue/catalogue-browser";
+  "@/routes/knowledge/-components/catalogue/catalogue-browser";
 
 const isCatalogueBrowserModule = (source) =>
   source === CATALOGUE_BROWSER_MODULE ||

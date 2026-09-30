@@ -11,7 +11,9 @@ import {
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { bufferObjectCleanupIntents, workspaces } from "@/api/db/schema";
+import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
+import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { injectStamp, stripStamp } from "@/api/lib/docx-stamp";
@@ -229,6 +231,29 @@ describe("createEntityVersionFromBuffer", () => {
     // durable intent and before any request.
     expect(fake.requests).toEqual([]);
     expect(writeFileVersionMock).not.toHaveBeenCalled();
+  });
+
+  test("returns file-write failures without publishing a version or abandoning recovery", async () => {
+    const priorFlag = env.FEATURE_FILE_USAGE_LIMITS;
+    const priorWorkerFlag =
+      envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS;
+    env.FEATURE_FILE_USAGE_LIMITS = true;
+    envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = false;
+    fake.failNext({ method: "PUT", code: "AccessDenied", status: 403 });
+    try {
+      const result = await createEntityVersionFromBuffer(baseInput);
+      expect(result).toMatchObject({
+        status: "error",
+        error: { reason: "storage_unavailable" },
+      });
+      expect(requestedKeys("DELETE")).toEqual([OBJECT_KEY]);
+      expect(fake.objects.has(STORED_OBJECT_ID)).toBe(false);
+      expect(writeFileVersionMock).not.toHaveBeenCalled();
+      expect(intentStatuses).toEqual(["scanning"]);
+    } finally {
+      env.FEATURE_FILE_USAGE_LIMITS = priorFlag;
+      envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = priorWorkerFlag;
+    }
   });
 
   test("keeps recovery after deleting an ambiguous initial write", async () => {

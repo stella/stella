@@ -1,6 +1,6 @@
 // Records the chat conversations the web app replays through its rendered
 // chat (apps/web/src/components/chat/__fixtures__/recorded-conversations):
-// each scenario in src/handlers/chat/recorded-conversations.integration.test.ts
+// each scenario in the recorded-conversation integration suites
 // runs through the real send pipeline and the web chat runtime, and its
 // requests, SSE bodies and message pages are written as JSON.
 //
@@ -15,14 +15,20 @@
 
 import path from "node:path";
 
+import { RECORDED_CONVERSATION_SUITES } from "../src/tests/helpers/recorded-conversation-suites";
+
 const API_ROOT = path.resolve(import.meta.dir, "..");
-const RECORDER = "src/handlers/chat/recorded-conversations.integration.test.ts";
 
 const check = process.argv.includes("--check");
-const child = Bun.spawn(["bun", "run", "test", RECORDER], {
-  cwd: API_ROOT,
-  env: { ...process.env, ...(check ? {} : { CHAT_TRANSCRIPTS_WRITE: "1" }) },
-  stderr: "inherit",
-  stdout: "inherit",
-});
-process.exit(await child.exited);
+for (const recorder of Object.values(RECORDED_CONVERSATION_SUITES)) {
+  const child = Bun.spawn(["bun", "run", "test", recorder], {
+    cwd: API_ROOT,
+    env: { ...process.env, ...(check ? {} : { CHAT_TRANSCRIPTS_WRITE: "1" }) },
+    stderr: "inherit",
+    stdout: "inherit",
+  });
+  const exitCode = await child.exited;
+  if (exitCode !== 0) {
+    process.exit(exitCode);
+  }
+}

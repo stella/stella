@@ -3,6 +3,7 @@ import { replaceDecisionJudges } from "@/api/handlers/case-law/judges/decision-j
 import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
 import { deployedCorpusTransfer } from "@/api/lib/legal-search/corpus-pack-batch";
 import type { CorpusTransfer } from "@/api/lib/legal-search/corpus-pack-batch";
+import type { CorpusByteSourceSeams } from "@/api/lib/legal-search/corpus-storage";
 
 export type CaseLawCorpusDependencies = {
   mode: CorpusStorageMode;
@@ -12,6 +13,8 @@ export type CaseLawCorpusDependencies = {
    * the configured layout never calls.
    */
   transfer: CorpusTransfer;
+  /** Byte readers for stored payload reuse; production uses corpus storage defaults. */
+  readBytes?: Pick<CorpusByteSourceSeams, "readObject" | "readRange">;
 };
 
 export const CASE_LAW_CORPUS_DEPENDENCIES: CaseLawCorpusDependencies = {

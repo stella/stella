@@ -23,11 +23,11 @@ import {
   enqueueImageThumbnailOrMarkFailed,
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
+import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 import { createFileKey } from "@/api/lib/files/utils";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
-import { deleteS3ObjectWithSignal } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import {
   processExtraction,
@@ -139,15 +139,23 @@ export const finalizeEntityVersion = async function* ({
   }
 
   const cleanupFinalObject = async (stage: string) => {
-    await withTimeout(
-      async (signal) => await deleteS3ObjectWithSignal(finalKey, signal),
-      {
-        label: "entity-version-final-cleanup.delete",
-        timeoutMs: BUFFER_INTENT_DELETE_TIMEOUT_MS,
-      },
-    ).catch((error: unknown) =>
-      captureError(error, { entityId, fieldId, stage }),
+    const deleted = Result.flatten(
+      await Result.tryPromise({
+        try: async () =>
+          await withTimeout(
+            async (signal) =>
+              await deleteOrganizationFileWithSignal(finalKey, signal),
+            {
+              label: "entity-version-final-cleanup.delete",
+              timeoutMs: BUFFER_INTENT_DELETE_TIMEOUT_MS,
+            },
+          ),
+        catch: (cause) => cause,
+      }),
     );
+    if (Result.isError(deleted)) {
+      captureError(deleted.error, { entityId, fieldId, stage });
+    }
   };
 
   let finalized:

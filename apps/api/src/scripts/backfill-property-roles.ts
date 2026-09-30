@@ -9,13 +9,13 @@
  */
 import { sql } from "drizzle-orm";
 
+import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 
 const WORKSPACE_BATCH_SIZE = Number(
   process.env["PROPERTY_ROLE_BACKFILL_BATCH_SIZE"] ?? 100,
 );
 const STATEMENT_TIMEOUT_MS = 60_000;
-const STATEMENT_TIMEOUT = `${STATEMENT_TIMEOUT_MS}ms`;
 
 const db = openMaintenanceDb({ readOnly: false });
 
@@ -33,9 +33,7 @@ const backfillBatch = async (
     : sql``;
 
   const rows = await db.transaction(async (tx) => {
-    await tx.execute(
-      sql`SELECT set_config('statement_timeout', ${STATEMENT_TIMEOUT}, true)`,
-    );
+    await setSharedStatementTimeout(tx, STATEMENT_TIMEOUT_MS);
 
     return await tx.execute(sql`
       WITH workspace_batch AS (

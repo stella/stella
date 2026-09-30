@@ -278,10 +278,12 @@ const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
   seller_profile: "other",
   saved_time_narrative: "other",
   number_series: "other",
+  vat_rate: "other",
   style_set: "other",
   template: "other",
   template_lookup_format: "other",
   time_entry: "other",
+  time_timer: "other",
   view: "other",
   view_template: "other",
 } as const satisfies Record<AuditResourceType, AuditActivityCategoryResolver>;

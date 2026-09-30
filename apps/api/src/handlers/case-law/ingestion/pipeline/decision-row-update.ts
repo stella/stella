@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
@@ -13,6 +14,10 @@ import {
   reopenCitationsFrom,
   reopenCitationsResolvedTo,
 } from "@/api/handlers/case-law/citation-resolution";
+import {
+  CITATION_SCOPE_METADATA_KEY,
+  preserveCitationScopeEnvelope,
+} from "@/api/handlers/case-law/ingestion/citation-scopes";
 import { writeDecisionCitations } from "@/api/handlers/case-law/ingestion/pipeline/citations";
 import {
   payloadChangedSql,
@@ -37,6 +42,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { preserveStoredTextAfterParseFailure } from "@/api/lib/case-law/decision-text";
 import type { ActiveCorpusProjectionSourceLock } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { metadataMarkedListingOnly } from "@/api/lib/legal-search/partial-observation-sql";
+import { sortDeep } from "@/api/lib/sort-deep";
 
 type IdentifierType = DecisionWritePlan["identifierRows"][number]["type"];
 
@@ -49,6 +55,7 @@ const replacedDecisionState = async (
   country: string;
   language: string;
   decisionDate: string | null;
+  holdsDocument: boolean;
   metadata: Record<string, unknown> | null;
   identifiers: {
     type: IdentifierType;
@@ -62,6 +69,7 @@ const replacedDecisionState = async (
       country: caseLawDecisions.country,
       language: caseLawDecisions.language,
       decisionDate: caseLawDecisions.decisionDate,
+      holdsDocument: sql<boolean>`${rowHoldsDocument}`,
       metadata: caseLawDecisions.metadata,
     })
     .from(caseLawDecisions)
@@ -111,6 +119,33 @@ const observedIdentifiers = <
 type ReplacedDecisionState = NonNullable<
   Awaited<ReturnType<typeof replacedDecisionState>>
 >;
+
+type LockedCitationScopeStateOptions = {
+  incomingCarriesDocument: boolean;
+  preparedMetadata: DecisionWritePlan["preparedMetadata"];
+  replacedState: ReplacedDecisionState | null;
+  reusedCitationScopeEnvelope: DecisionWritePlan["reusedCitationScopeEnvelope"];
+};
+
+const lockedCitationScopeState = ({
+  incomingCarriesDocument,
+  preparedMetadata,
+  replacedState,
+  reusedCitationScopeEnvelope,
+}: LockedCitationScopeStateOptions) => {
+  const preservesDocument =
+    !incomingCarriesDocument && replacedState?.holdsDocument === true;
+  return {
+    stale:
+      preservesDocument &&
+      JSON.stringify(
+        sortDeep(replacedState.metadata?.[CITATION_SCOPE_METADATA_KEY] ?? null),
+      ) !== JSON.stringify(sortDeep(reusedCitationScopeEnvelope ?? null)),
+    metadata: preservesDocument
+      ? preserveCitationScopeEnvelope(preparedMetadata, replacedState.metadata)
+      : preparedMetadata,
+  };
+};
 
 const resolutionIdentityChanged = (
   {
@@ -243,6 +278,8 @@ export const describeRowUpdateTx = async (
       languageGroupKey,
       payloadColumns,
       pendingMirrorPayload,
+      preparedMetadata,
+      reusedCitationScopeEnvelope,
       storedPayloadUnchanged,
     },
     rawArtifact: { s3UploadFailed, sourceRawS3Key, sourceRawContentType },
@@ -264,6 +301,12 @@ export const describeRowUpdateTx = async (
   const replacedState = preservesExistingDetail
     ? null
     : await replacedDecisionState(tx, existing.id);
+  const scopeState = lockedCitationScopeState({
+    incomingCarriesDocument,
+    preparedMetadata,
+    replacedState,
+    reusedCitationScopeEnvelope,
+  });
 
   // The row's stated identity and description, as this observation
   // reads them. Compared against the stored row below so that
@@ -291,7 +334,7 @@ export const describeRowUpdateTx = async (
   const describedMetadata = preservesExistingDetail
     ? undefined
     : preserveStoredTextAfterParseFailure({
-        incomingMetadata: result.metadata,
+        incomingMetadata: scopeState.metadata,
         storedMetadata: replacedState?.metadata ?? null,
         textFields: result.textFields,
       });
@@ -376,7 +419,13 @@ export const describeRowUpdateTx = async (
         ),
   );
 
-  return { replacedState, payloadNeedsGuard, set, where };
+  return {
+    replacedState,
+    payloadNeedsGuard,
+    set,
+    staleCitationScopePayload: scopeState.stale,
+    where,
+  };
 };
 
 /**
@@ -423,12 +472,12 @@ const reopenMovedIdentityTx = async (
   // path deliberately excludes its own links, so nothing else would
   // ever ask about them again.
   await reopenCitationsResolvedTo(tx, existing.id);
-  // And the edges this decision *makes*. Its jurisdiction and date are
-  // the resolver's policy and time filters, so moving either changes
-  // what its own citations may match — a date moving forwards can
-  // revive an unmatched one, moving backwards invalidates a resolved
-  // one, and the walk excludes terminal rows either way.
-  await reopenCitationsFrom(tx, existing.id);
+  // And, when this source writes graph rows, the edges this decision
+  // *makes*. Its jurisdiction and date are the resolver's policy and time
+  // filters, so moving either changes what those citations may match.
+  if (write.plan.citations.disposition === "legacy-graph") {
+    await reopenCitationsFrom(tx, existing.id);
+  }
   // The old key as well as the new one. An ambiguous citation carries
   // no target, so nothing that searches by target can reach it — and
   // this decision leaving its old key is exactly what can make the
@@ -489,18 +538,27 @@ export const finishRefreshedRowTx = async (
     return DECISION_ROW_WRITE_STATUS.APPLIED;
   }
 
-  // The resolver locks the graph before it locks citation rows. Match
-  // that order even when the decision identity did not change; taking
-  // row locks first and the graph lock in resolve below can deadlock an
-  // overlapping resolver batch. Re-entrant when a reopen helper above
-  // already acquired it for this transaction.
-  await lockCitationGraph(tx);
-  await writeDecisionCitations(tx, {
-    decisionId: existing.id,
-    citations,
-    observedAt,
-    stored: true,
-  });
+  switch (citations.disposition) {
+    case "annotation-only":
+      break;
+    case "legacy-graph":
+      // The resolver locks the graph before it locks citation rows. Match
+      // that order even when the decision identity did not change; taking
+      // row locks first and the graph lock in resolve below can deadlock an
+      // overlapping resolver batch. Re-entrant when a reopen helper above
+      // already acquired it for this transaction.
+      await lockCitationGraph(tx);
+      await writeDecisionCitations(tx, {
+        decisionId: existing.id,
+        citations,
+        observedAt,
+        stored: true,
+      });
+      break;
+    default:
+      citations satisfies never;
+      panic("Unhandled citation disposition");
+  }
 
   await reconcileStableProjection(tx, write, existing.id, projectionLock);
   return DECISION_ROW_WRITE_STATUS.APPLIED;

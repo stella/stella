@@ -7,6 +7,7 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { getTimePolicyViolation, readTimePolicy } from "@/api/lib/billing-time";
+import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { formatTodayInTimeZone } from "@/api/lib/timezone";
@@ -62,7 +63,14 @@ const batchDelete = createSafeHandler(
     access: "write",
     body: batchDeleteBodySchema,
   },
-  async function* ({ safeDb, session, workspaceId, body, recordAuditEvent }) {
+  async function* ({
+    safeDb,
+    session,
+    user,
+    workspaceId,
+    body,
+    recordAuditEvent,
+  }) {
     const { ids } = body;
     const policy = yield* Result.await(
       readTimePolicy({
@@ -75,6 +83,15 @@ const batchDelete = createSafeHandler(
     // Wrapped in a transaction for atomicity.
     const updated = yield* Result.await(
       safeDb(async (tx) => {
+        const runningError = await guardRunningTimeEntries({
+          tx,
+          workspaceId,
+          selection: { type: "entries", ids },
+          actorUserId: user.id,
+        });
+        if (runningError) {
+          return { type: "policy" as const, error: runningError, rows: [] };
+        }
         const candidates = await tx
           .select({
             dateWorked: timeEntries.dateWorked,

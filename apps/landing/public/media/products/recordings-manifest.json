@@ -155,7 +155,7 @@
         "apps/web/src/fonts.css",
         "apps/web/src/styles/app.css",
         "packages/ui/src/styles/theme.css",
-        "apps/web/src/routes/_protected.knowledge"
+        "apps/web/src/routes/knowledge"
       ],
       "manualVerification": {
         "artifactsHash": "9970b7bbc3b9decd9c7533fbbce3e60ac5e4c008560f9365b5aaa2fe74e64f1f",
@@ -186,7 +186,7 @@
         "apps/web/src/fonts.css",
         "apps/web/src/styles/app.css",
         "packages/ui/src/styles/theme.css",
-        "apps/web/src/routes/_protected.knowledge"
+        "apps/web/src/routes/knowledge"
       ],
       "manualVerification": {
         "artifactsHash": "2c48d16460b713dcdfb58b28f546c078b2bc1e78a54e60d1eb8eb65a6a3fc200",
@@ -217,7 +217,7 @@
         "apps/web/src/fonts.css",
         "apps/web/src/styles/app.css",
         "packages/ui/src/styles/theme.css",
-        "apps/web/src/routes/_protected.knowledge"
+        "apps/web/src/routes/knowledge"
       ],
       "manualVerification": {
         "artifactsHash": "841c0f66ac7f36366f9a7932c43bf002219cb9e8c327031891c8620f27ba12b4",
@@ -248,7 +248,7 @@
         "apps/web/src/fonts.css",
         "apps/web/src/styles/app.css",
         "packages/ui/src/styles/theme.css",
-        "apps/web/src/routes/_protected.knowledge"
+        "apps/web/src/routes/knowledge"
       ],
       "manualVerification": {
         "artifactsHash": "6b7556a4b86e9e7ee527479111b0c8671c9b3022d58cb98ed2866e81e97dda57",
@@ -656,7 +656,7 @@
         "apps/web/src/styles/app.css",
         "packages/ui/src/styles/theme.css",
         "apps/web/src/routes/_protected.workspaces/$workspaceId",
-        "apps/web/src/routes/_protected.knowledge",
+        "apps/web/src/routes/knowledge",
         "apps/api/scripts/seed-templates.ts",
         "apps/api/src/dev/register-mock-ai.ts"
       ],
@@ -690,7 +690,7 @@
         "apps/web/src/styles/app.css",
         "packages/ui/src/styles/theme.css",
         "apps/web/src/routes/_protected.workspaces/$workspaceId",
-        "apps/web/src/routes/_protected.knowledge",
+        "apps/web/src/routes/knowledge",
         "apps/api/scripts/seed-templates.ts",
         "apps/api/src/dev/register-mock-ai.ts"
       ],
@@ -723,7 +723,7 @@
         "apps/web/src/fonts.css",
         "apps/web/src/styles/app.css",
         "packages/ui/src/styles/theme.css",
-        "apps/web/src/routes/_protected.knowledge",
+        "apps/web/src/routes/knowledge",
         "apps/api/scripts/seed-templates.ts"
       ],
       "manualVerification": {
@@ -755,7 +755,7 @@
         "apps/web/src/fonts.css",
         "apps/web/src/styles/app.css",
         "packages/ui/src/styles/theme.css",
-        "apps/web/src/routes/_protected.knowledge",
+        "apps/web/src/routes/knowledge",
         "apps/api/scripts/seed-templates.ts"
       ],
       "manualVerification": {
