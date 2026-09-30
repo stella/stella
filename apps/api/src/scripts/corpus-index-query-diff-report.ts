@@ -123,6 +123,7 @@ export const goldenQueryRequest = (
     language: query.filters?.language,
   });
   const engineQuery = caseLawCorpusQuery({
+    jurisdiction: query.jurisdiction,
     text: query.text,
     filters: { ...query.filters, jurisdiction: jurisdictionClause },
     stemming,

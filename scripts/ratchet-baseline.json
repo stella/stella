@@ -343,7 +343,7 @@
     "files": {}
   },
   "throw-outside-boundary": {
-    "count": 891,
+    "count": 895,
     "files": {
       "apps/api/src/handlers/case-law/decisions/latest.ts": 3,
       "apps/api/src/handlers/case-law/ingestion/adapters/at-courts.ts": 9,
@@ -357,7 +357,7 @@
       "apps/api/src/handlers/case-law/ingestion/adapters/pl-courts.ts": 5,
       "apps/api/src/handlers/case-law/ingestion/adapters/publisher-request-gate.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/adapters/retry.ts": 1,
-      "apps/api/src/handlers/case-law/ingestion/adapters/sk-courts.ts": 4,
+      "apps/api/src/handlers/case-law/ingestion/adapters/sk-courts.ts": 3,
       "apps/api/src/handlers/case-law/ingestion/adapters/sk-us.ts": 10,
       "apps/api/src/handlers/case-law/ingestion/adapters/test-utils.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/citation-extractor.ts": 2,
@@ -391,6 +391,9 @@
       "apps/api/src/handlers/external-preview/preview.ts": 7,
       "apps/api/src/handlers/feedback/intake-guards.ts": 1,
       "apps/api/src/handlers/fields/kanban-placement/update.ts": 2,
+      "apps/api/src/handlers/invoices/create.ts": 2,
+      "apps/api/src/handlers/invoices/entries/add.ts": 2,
+      "apps/api/src/handlers/invoices/transition.ts": 2,
       "apps/api/src/handlers/lists/generation-candidates/acceptance/create.ts": 1,
       "apps/api/src/handlers/mcp-connectors/create-connector.ts": 1,
       "apps/api/src/handlers/properties/batch/create.ts": 3,
@@ -415,7 +418,7 @@
       "apps/api/src/handlers/view-templates/create.ts": 2,
       "apps/api/src/handlers/views/create.ts": 4,
       "apps/api/src/handlers/views/update.ts": 1,
-      "apps/api/src/handlers/workspaces/duplicate.ts": 6,
+      "apps/api/src/handlers/workspaces/duplicate.ts": 5,
       "apps/api/src/handlers/workspaces/members/remove.ts": 6,
       "apps/api/src/lib/account-deletion-reassignment.ts": 4,
       "apps/api/src/lib/account-deletion-steps.ts": 4,
@@ -461,6 +464,7 @@
       "apps/api/src/lib/legal-search/decision-language-identity.ts": 2,
       "apps/api/src/lib/legal-search/decision-primary-reference.ts": 1,
       "apps/api/src/lib/legal-search/ingestion-normalization.ts": 4,
+      "apps/api/src/lib/legal-search/sk-document-backfill.ts": 1,
       "apps/api/src/lib/mcp-upstream/connections.ts": 2,
       "apps/api/src/lib/mcp-upstream/crypto.ts": 2,
       "apps/api/src/lib/mcp-upstream/oauth.ts": 2,
@@ -589,7 +593,7 @@
       "apps/web/src/routes/_protected.workspaces/$workspaceId/timesheets.tsx": 2,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/workflows.tsx": 1,
       "apps/web/src/routes/agent-claim.tsx": 2,
-      "apps/web/src/routes/auth/-components/dev-quick-start-button.tsx": 11,
+      "apps/web/src/routes/auth/-components/dev-quick-start-button.tsx": 10,
       "apps/web/src/routes/auth/accept-invitation.$invitationId.tsx": 6,
       "apps/web/src/routes/auth/index.tsx": 2,
       "apps/web/src/routes/auth/organization.tsx": 5,
@@ -652,7 +656,7 @@
     }
   },
   "try-catch-outside-boundary": {
-    "count": 359,
+    "count": 360,
     "files": {
       "apps/api/src/handlers/ai-autocomplete/stream.ts": 1,
       "apps/api/src/handlers/case-law/analysis/generate.ts": 1,
@@ -826,7 +830,7 @@
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-default-view-redirect.ts": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/route.tsx": 1,
       "apps/web/src/routes/_protected.workspaces/-components/pdf-viewer-controls.tsx": 1,
-      "apps/web/src/routes/auth/-components/dev-quick-start-storage.ts": 2,
+      "apps/web/src/routes/auth/-components/dev-quick-start-storage.ts": 3,
       "apps/web/src/routes/auth/organization.tsx": 1,
       "apps/web/src/routes/knowledge/-components/clause-ai-tracked-changes.ts": 1,
       "apps/web/src/routes/knowledge/-components/template-studio-chat.tsx": 2,
@@ -1120,6 +1124,7 @@
       "apps/api/src/handlers/case-law/erasure.ts": 3,
       "apps/api/src/handlers/case-law/ingestion/adapters/pagination.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/adapters/retry.ts": 1,
+      "apps/api/src/handlers/case-law/ingestion/pipeline/batch.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/reconciliation-engine.ts": 1,
       "apps/api/src/handlers/case-law/polarity/classifier.ts": 2,
       "apps/api/src/handlers/case-law/polarity/rule-engine.ts": 1,
@@ -1193,10 +1198,10 @@
       "apps/api/src/scripts/adapter-health.ts": 1,
       "apps/api/src/scripts/citation-probe.ts": 1,
       "apps/api/src/scripts/mcp-canary.ts": 3,
+      "apps/api/src/scripts/post-deploy-response-policy.ts": 1,
       "apps/api/src/scripts/post-deploy-smoke.ts": 1,
       "apps/api/src/scripts/redact-case-law-decision.ts": 1,
       "apps/collab/src/server.ts": 1,
-      "apps/landing/src/components/anonymize-demo-engine.ts": 2,
       "apps/landing/src/components/anonymize-demo-worker-client.ts": 2,
       "apps/landing/src/components/anonymize-demo-worker.ts": 2,
       "apps/landing/src/components/react/DocxEditorTool.tsx": 1,
@@ -1665,7 +1670,6 @@
       "apps/web/src/components/public-law-table/public-law-pager.tsx": 1,
       "apps/web/src/components/public-law-table/public-law-results-state.logic.ts": 1,
       "apps/web/src/components/public-session-inspector.tsx": 1,
-      "apps/web/src/components/quick-entry.tsx": 1,
       "apps/web/src/components/selfhost-update-banner.tsx": 1,
       "apps/web/src/components/shortcut-echo-hud.tsx": 1,
       "apps/web/src/components/sidebar-sizing.ts": 1,
@@ -1674,6 +1678,7 @@
       "apps/web/src/components/usage/use-usage-limit.ts": 1,
       "apps/web/src/components/workspaces/attached-template-upload-dialog.tsx": 1,
       "apps/web/src/components/workspaces/document-reference-upload-dialog.tsx": 1,
+      "apps/web/src/components/workspaces/matter-combobox.tsx": 1,
       "apps/web/src/components/workspaces/properties/delete-property.tsx": 1,
       "apps/web/src/components/workspaces/properties/property-conditions.tsx": 1,
       "apps/web/src/components/workspaces/table/use-entity-table-find.ts": 1
@@ -2115,17 +2120,17 @@
     }
   },
   "direct-third-party-declarations": {
-    "count": 533,
+    "count": 511,
     "files": {
-      "apps/api/package.json": 87,
+      "apps/api/package.json": 85,
       "apps/collab/package.json": 10,
-      "apps/desktop/package.json": 16,
+      "apps/desktop/package.json": 15,
       "apps/extension/package.json": 7,
-      "apps/landing/package.json": 21,
-      "apps/legal-atlas-runner/package.json": 2,
+      "apps/landing/package.json": 19,
+      "apps/legal-atlas-runner/package.json": 3,
       "apps/mobile/package.json": 17,
-      "apps/playground/package.json": 11,
-      "apps/web/package.json": 107,
+      "apps/playground/package.json": 10,
+      "apps/web/package.json": 97,
       "package.json": 31,
       "packages/agent-engine/package.json": 7,
       "packages/agent-input/package.json": 4,
@@ -2140,7 +2145,7 @@
       "packages/calculations/package.json": 4,
       "packages/catalogue/package.json": 3,
       "packages/chat-limits/package.json": 1,
-      "packages/chat/package.json": 13,
+      "packages/chat/package.json": 7,
       "packages/cli/package.json": 7,
       "packages/clipboard/package.json": 2,
       "packages/collation/package.json": 1,
@@ -2177,7 +2182,7 @@
       "packages/user-agent/package.json": 1,
       "packages/uuid-codec/package.json": 3,
       "packages/workspace-model/package.json": 2,
-      "packages/workspace-ui/package.json": 23
+      "packages/workspace-ui/package.json": 22
     }
   }
 }

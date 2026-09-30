@@ -27,6 +27,16 @@
     "errorNotFound": "Pro tento kód jsme nenašli žádný čekající požadavek. Zkontrolujte kód a zkuste to znovu.",
     "title": "Připojte svého agenta"
   },
+  "agentSetup": {
+    "addressLabel": "Asistent si vyžádá tuto adresu",
+    "copiedToast": "Pokyny zkopírovány. Vložte je do chatu se svým asistentem.",
+    "copy": "Zkopírujte mu pokyny",
+    "description": "Ptejte se Claude nebo ChatGPT na své spisy a dokumenty. Vyberte svého asistenta a otevře se krátký návod; zabere asi minutu.",
+    "instructions": "Připoj mě ke stelle, mému právnímu pracovnímu prostoru. Postupuj podle části „Instructions for AI agents“ na {guideUrl} a použij tuto adresu serveru: {mcpUrl}",
+    "openGuide": "Otevřít návod pro {assistant}",
+    "selfSetupHint": "Používáte Claude Code nebo Codex?",
+    "title": "Používejte stellu ve svém AI asistentovi"
+  },
   "ai": {
     "chooseRewriteInstruction": "Možnosti úpravy",
     "editWithAI": "Upravit pomocí AI",
@@ -2273,7 +2283,8 @@
     "compareUnsupportedReasons": {
       "missingInBase": "Část dokumentu existuje pouze v cíli",
       "missingInTarget": "Část dokumentu existuje pouze v základně",
-      "notEditable": "Část dokumentu nelze upravovat"
+      "notEditable": "Část dokumentu nelze upravovat",
+      "unsupportedContent": "Tato verze obsahuje obsah, který zatím nelze porovnat."
     },
     "compareUnverified": "Neověřené srovnání",
     "compareVerificationFailures": "{count, plural, one {Jedna obousměrná kontrola selhala. Než se na výsledek spolehnete, porovnání zkontrolujte.} few {# obousměrné kontroly selhaly. Než se na výsledek spolehnete, porovnání zkontrolujte.} other {# obousměrných kontrol selhalo. Než se na výsledek spolehnete, porovnání zkontrolujte.}}",
@@ -3691,7 +3702,6 @@
     "aiTitle": "Připojte svého poskytovatele AI",
     "appsSubtitle": "stella funguje i mimo prohlížeč: v aplikaci pro počítač a ve vašem AI asistentovi. K tomuto nastavení se můžete kdykoliv později vrátit.",
     "appsTitle": "Získejte stellu všude",
-    "assistantDocsLink": "Jak připojit svého asistenta",
     "catalogueAlwaysOn": "Vždy zapnuto",
     "catalogueClearSearch": "Vymazat hledání",
     "catalogueCommunityHeading": "Ostatní",
@@ -4218,31 +4228,40 @@
       "wordEditShortcutPlaceholder": "např. JK"
     },
     "connections": {
+      "accessTitle": "{clientName} může",
+      "browseIntegrations": "Přidat službu",
       "cliDescription": "Nainstalujte si příkazový řádek stella a přihlaste se, abyste mohli z terminálu skriptovat spisy, dokumenty a vzory.",
-      "cliHelpHint": "Spuštěním „stella --help“ zobrazíte úplný seznam příkazů.",
       "cliInstallLabel": "Instalace",
       "cliLoginLabel": "Přihlášení",
       "cliTitle": "Příkazový řádek",
-      "connectedAppsDescription": "Aplikace a nástroje, kterým jste povolili přístup k účtu.",
-      "connectedAppsEmpty": "Aplikace, které autorizujete, například Claude nebo CLI stella, se zobrazí zde.",
-      "connectedAppsTitle": "Připojené aplikace",
-      "connectedColumn": "Připojeno",
-      "description": "Připojte MCP klienty a příkazový řádek ke svému účtu.",
+      "connected": "Připojeno",
+      "connectedAgo": "Připojeno {time}",
+      "connectedAppsDescription": "Aplikace, do kterých jste se přihlásili účtem stella. Ty, které už nepoužíváte, odpojte.",
+      "connectedAppsEmpty": "Zatím nic. Nastavte výše Claude nebo ChatGPT a objeví se tady.",
+      "connectedAppsTitle": "Aplikace s přístupem",
+      "description": "Používejte stellu ze svého AI asistenta a mějte přehled, co má přístup k vašemu účtu.",
+      "developerDescription": "Adresy serveru a nástroj pro příkazový řádek pro technická nastavení.",
+      "developerTitle": "Přístup pro vývojáře",
       "disconnectConfirmDescription": "Tím zrušíte přístup aplikace {clientName} k vašemu účtu i všechny tokeny, které vydala. Kdykoli se můžete znovu připojit.",
       "disconnectConfirmTitle": "Odpojit aplikaci {clientName}?",
       "disconnectSuccess": "Aplikace {clientName} byla odpojena",
+      "integrationsDescription": "Externí služby, které za vás AI může používat, například úložiště dokumentů.",
+      "integrationsEmpty": "Přidejte první službu",
+      "integrationsTitle": "Připojené služby",
       "mcpAnonymizedLabel": "Anonymizovaný koncový bod",
-      "mcpAnonymizedNote": "K dispozici je i anonymizovaný koncový bod; nabízí stejné nástroje se skrytými osobními údaji.",
-      "mcpDescription": "Pomocí této adresy URL serveru připojte ke svému účtu stella klienta kompatibilního s MCP, například Claude nebo Cursor.",
+      "mcpAnonymizedShortNote": "Stejné nástroje, osobní údaje jsou skryté.",
+      "mcpFullNote": "Plný přístup k vašim spisům a dokumentům.",
       "mcpLawLabel": "Koncový bod právního korpusu",
-      "mcpLawNote": "K dispozici je i koncový bod právního korpusu; nabízí pouze veřejnou judikaturu a právní předpisy a nedostane se k datům ve spisech.",
-      "mcpStep1": "Přidejte adresu URL výše jako vlastní konektor nebo server MCP ve svém klientovi.",
-      "mcpStep2": "Přihlaste se, jakmile vás k tomu prohlížeč vyzve.",
-      "mcpStep3": "Na obrazovce souhlasu schvalte přístup.",
+      "mcpLawShortNote": "Jen veřejná judikatura a legislativa, bez dat ze spisů.",
+      "mcpSetupHint": "Přidejte adresu jako vlastní konektor v Claude, Cursoru nebo jiném MCP klientovi, pak se přihlaste a schvalte přístup.",
       "mcpTitle": "Server MCP",
       "mcpUrlLabel": "Adresa URL serveru",
-      "scopesLabel": "Přístup",
-      "title": "Připojení"
+      "noMatches": "Hledanému výrazu „{query}“ neodpovídá žádné připojení",
+      "notConnected": "Nepřipojeno",
+      "permissionCount": "{count, plural, one {# oprávnění} few {# oprávnění} many {# oprávnění} other {# oprávnění}}",
+      "searchPlaceholder": "Hledat připojení",
+      "title": "Připojení",
+      "turnedOff": "Vypnuto"
     },
     "organization": {
       "activeMembers": "Aktivní členové",
@@ -5032,6 +5051,11 @@
     "whenNotToUsePlaceholder": "Kdy tento vzor nepoužít?",
     "whenToUse": "Kdy použít",
     "whenToUsePlaceholder": "Kdy se má tento vzor použít? (pomáhá AI s výběrem vzoru)"
+  },
+  "timesheets": {
+    "day": {
+      "internalWork": "Interní práce"
+    }
   },
   "translate": {
     "dialog": {

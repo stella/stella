@@ -60,7 +60,7 @@ export type ParseNsDecisionInput = {
 
 type ParseNsDecisionOutput = {
   metadata: DocumentAstMetadata;
-  sourceMetadata: Record<string, unknown>;
+  sourceMetadata: NsSourceMetadata;
   documentAst: DocumentAst;
   fulltext: string;
 };
@@ -107,10 +107,10 @@ export const parseNsDecisionHtml = (
 
 // ── Metadata extraction ────────────────────────────────────
 
+const DOMINO_DATE_RE = /^(?<month>\d{1,2})\/(?<day>\d{1,2})\/(?<year>\d{4})$/u;
+
 const parseDominoDate = (raw: string): string | null => {
-  const match = /^(?<month>\d{1,2})\/(?<day>\d{1,2})\/(?<year>\d{4})$/u.exec(
-    raw,
-  );
+  const match = DOMINO_DATE_RE.exec(raw);
   if (!match) {
     return null;
   }
@@ -118,7 +118,84 @@ const parseDominoDate = (raw: string): string | null => {
   if (month === undefined || day === undefined || year === undefined) {
     return null;
   }
-  return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  const iso = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  const date = new Date(`${iso}T00:00:00Z`);
+  return Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== iso
+    ? null
+    : iso;
+};
+
+type NsComplaintCell =
+  | {
+      type: "date";
+      value: string;
+      sourceValue: string;
+      defects: readonly NsComplaintDefect[];
+    }
+  | {
+      type: "text";
+      value: string;
+      sourceValue: string;
+      defects: readonly NsComplaintDefect[];
+    }
+  | {
+      type: "unresolved-date";
+      sourceValue: string;
+      defects: readonly NsComplaintDefect[];
+    };
+
+type NsComplaintDefect =
+  | "duplicated-value"
+  | "embedded-newlines"
+  | "us-date-format"
+  | "conflicting-values"
+  | "invalid-date";
+
+type NsSourceMetadata = Record<string, unknown> & {
+  ustavniStiznost?: Record<string, NsComplaintCell>[];
+};
+
+// Domino publishes dates as month/day/year. Keep the cell's exact text even
+// when its display repeats the same value; unrelated dates never replace it.
+const complaintCell = (
+  header: string,
+  sourceValue: string,
+): NsComplaintCell => {
+  const parts = sourceValue
+    .split(/\r?\n/u)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const distinct = [...new Set(parts)];
+  const defects: NsComplaintDefect[] = [];
+  if (parts.length > distinct.length) {
+    defects.push("duplicated-value");
+  }
+  if (/[\r\n]/u.test(sourceValue)) {
+    defects.push("embedded-newlines");
+  }
+  const value = distinct.join("\n");
+  if (!header.startsWith("datum")) {
+    return { type: "text", value, sourceValue, defects };
+  }
+  if (distinct.some((part) => DOMINO_DATE_RE.test(part))) {
+    defects.push("us-date-format");
+  }
+  if (distinct.length > 1) {
+    return {
+      type: "unresolved-date",
+      sourceValue,
+      defects: [...defects, "conflicting-values"],
+    };
+  }
+  const iso = parseDominoDate(value);
+  if (iso === null) {
+    return {
+      type: "unresolved-date",
+      sourceValue,
+      defects: [...defects, "invalid-date"],
+    };
+  }
+  return { type: "date", value: iso, sourceValue, defects };
 };
 
 type SourceMetadataTable = {
@@ -128,7 +205,7 @@ type SourceMetadataTable = {
 
 type MetadataResult = {
   canonical: DocumentAstMetadata;
-  source: Record<string, unknown>;
+  source: NsSourceMetadata;
   relatedProceedingsTable: TableCell[][] | null;
 };
 
@@ -142,7 +219,7 @@ export const extractNsMetadata = ($: cheerio.CheerioAPI): MetadataResult => {
     keywords: [],
     statutes: [],
   };
-  const source: Record<string, unknown> = {};
+  const source: NsSourceMetadata = {};
   let relatedProceedingsTable: TableCell[][] | null = null;
 
   const splitBrValues = (td: cheerio.Cheerio<AnyNode>) =>
@@ -177,21 +254,24 @@ export const extractNsMetadata = ($: cheerio.CheerioAPI): MetadataResult => {
         const nestedTable = singleTd.find("table");
         if (nestedTable.length > 0) {
           const rows: TableCell[][] = [];
-          nestedTable.find("tr").each((__, innerTr) => {
-            const row: TableCell[] = [];
-            $(innerTr)
-              .children("td, th")
-              .each((___, td) => {
-                const inlines = walkInlines($, $(td));
-                row.push({
-                  inlines,
-                  plainText: inlinesToPlainText(inlines),
+          nestedTable
+            .first()
+            .find("> tbody > tr, > tr")
+            .each((__, innerTr) => {
+              const row: TableCell[] = [];
+              $(innerTr)
+                .children("td, th")
+                .each((___, td) => {
+                  const inlines = walkInlines($, $(td));
+                  row.push({
+                    inlines,
+                    plainText: inlinesToPlainText(inlines),
+                  });
                 });
-              });
-            if (row.length > 0) {
-              rows.push(row);
-            }
-          });
+              if (row.length > 0) {
+                rows.push(row);
+              }
+            });
           relatedProceedingsTable = rows.length > 0 ? rows : null;
 
           if (rows.length > 1) {
@@ -202,11 +282,11 @@ export const extractNsMetadata = ($: cheerio.CheerioAPI): MetadataResult => {
             const headers = headerRow.map((c) =>
               c.plainText.trim().toLowerCase(),
             );
-            source["ustavniStiznost"] = rows.slice(1).map((row) => {
-              const entry: Record<string, string> = {};
+            source.ustavniStiznost = rows.slice(1).map((row) => {
+              const entry: Record<string, NsComplaintCell> = {};
               for (let i = 0; i < headers.length; i++) {
                 const h = headers[i] ?? `col${i}`;
-                entry[h] = row[i]?.plainText.trim() ?? "";
+                entry[h] = complaintCell(h, row.at(i)?.plainText ?? "");
               }
               return entry;
             });

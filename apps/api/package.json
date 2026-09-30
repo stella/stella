@@ -182,7 +182,6 @@
     "@anthropic-ai/sdk": "0.97.1",
     "@aws-sdk/client-bedrock-runtime": "^3.1138.0",
     "@electric-sql/pglite": "^0.5.8",
-    "@faker-js/faker": "^10.6.0",
     "@mistralai/mistralai": "2.2.0",
     "@modelcontextprotocol/client": "2.0.0",
     "@modelcontextprotocol/ext-apps": "^2.0.0",
@@ -194,7 +193,6 @@
     "ajv-formats": "catalog:",
     "bun-types": "catalog:",
     "drizzle-kit": "catalog:",
-    "expect-type": "^1.4.0",
     "fast-check": "catalog:",
     "openai": "6.49.0",
     "pdfjs-dist": "^6.3.289"
