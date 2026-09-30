@@ -101,5 +101,8 @@ export const sendNumberSeriesCommand = async (command: NumberSeriesCommand) => {
       return unwrapEden(await series.default.post());
     case "archive":
       return unwrapEden(await series.archive.post());
+    default:
+      command satisfies never;
+      return panic("Unexpected number series command");
   }
 };
