@@ -1,0 +1,124 @@
+import type { CallToolResult } from "@modelcontextprotocol/server";
+import { panic, Result } from "better-result";
+import { describe, expect, test } from "bun:test";
+
+import { Temporal } from "@stll/time";
+
+import { env } from "@/api/env";
+import { toSafeId } from "@/api/lib/branded-types";
+import { closeActionAdmissionRedis } from "@/api/lib/rate-limit/action-admission";
+import { resolveActionPeriodBudget } from "@/api/lib/rate-limit/action-period-budget";
+import { createRedisClient } from "@/api/lib/redis-client";
+import type { McpRequestContext } from "@/api/mcp/context";
+import { createMcpHttpRequestHandler } from "@/api/mcp/server-core";
+import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
+import { asTestRaw, readTestJson } from "@/api/tests/helpers/test-tool-set";
+
+const runValkeyTests = process.env["STELLA_RUN_VALKEY_TESTS"] === "true";
+if (!runValkeyTests || !process.env["REDIS_URL"]) {
+  describe.skip("MCP action admission (valkey)", () => {
+    test("requires Valkey", () => {});
+  });
+} else {
+  describe("MCP action admission (valkey)", () => {
+    test("tools/call dispatches sharing a client RPC id consume distinct actions", async () => {
+      const previous = {
+        FEATURE_ACTION_ADMISSION: env.FEATURE_ACTION_ADMISSION,
+        ACTION_ADMISSION_ORG_CONCURRENCY: env.ACTION_ADMISSION_ORG_CONCURRENCY,
+        ACTION_ADMISSION_USER_CONCURRENCY:
+          env.ACTION_ADMISSION_USER_CONCURRENCY,
+        ACTION_ADMISSION_LEASE_MS: env.ACTION_ADMISSION_LEASE_MS,
+        ACTION_ADMISSION_PERIOD_MS: env.ACTION_ADMISSION_PERIOD_MS,
+        ACTION_ADMISSION_PERIOD_ACTIONS: env.ACTION_ADMISSION_PERIOD_ACTIONS,
+      };
+      const organizationId = toSafeId<"organization">(
+        `mcp_period_${Bun.randomUUIDv7()}`,
+      );
+      const userId = toSafeId<"user">("mcp_period_user");
+      const client = createRedisClient();
+      const errors: unknown[] = [];
+      let dispatches = 0;
+      const tool = listStaticMcpToolDefinitions().find(
+        ({ name }) => name === "list_matters",
+      );
+      if (!tool) {
+        panic("Missing list_matters tool definition");
+      }
+      const handleRequest = createMcpHttpRequestHandler({
+        authenticateMcpRequest: async () =>
+          Result.ok({ organizationId, userId, scopes: ["stella:read"] }),
+        captureError: (error) => {
+          errors.push(error);
+        },
+        getMcpToolDefinition: async () => tool,
+        getMcpToolRequiredScopesHint: () => ["stella:read"],
+        handleMcpToolCall: async () => {
+          dispatches += 1;
+          return { content: [{ type: "text", text: "ok" }] };
+        },
+        listMcpTools: async () => [],
+        listMcpResources: () => [],
+        readMcpResource: () => ({ contents: [] }),
+        recordMcpSessionInitialized: () => undefined,
+        resolveMcpSessionContext: async () =>
+          asTestRaw<McpRequestContext>({ organizationId, userId }),
+      });
+      closeActionAdmissionRedis();
+      Object.assign(env, {
+        FEATURE_ACTION_ADMISSION: true,
+        ACTION_ADMISSION_ORG_CONCURRENCY: 2,
+        ACTION_ADMISSION_USER_CONCURRENCY: 2,
+        ACTION_ADMISSION_LEASE_MS: 120_000,
+        ACTION_ADMISSION_PERIOD_MS: 86_400_000,
+        ACTION_ADMISSION_PERIOD_ACTIONS: 2,
+      });
+      try {
+        await client.connect();
+        for (let dispatch = 0; dispatch < 2; dispatch += 1) {
+          const response = await handleRequest(
+            new Request("http://localhost/mcp", {
+              method: "POST",
+              headers: {
+                accept: "application/json, text/event-stream",
+                authorization: "Bearer token",
+                "content-type": "application/json",
+              },
+              body: JSON.stringify({
+                id: 7,
+                jsonrpc: "2.0",
+                method: "tools/call",
+                params: { name: "list_matters", arguments: {} },
+              }),
+            }),
+          );
+          expect(response.status).toBe(200);
+          const body = await readTestJson<{
+            id: number;
+            result: CallToolResult;
+          }>(response);
+          expect(body.id).toBe(7);
+          expect(body.result.isError).not.toBe(true);
+        }
+        expect(dispatches).toBe(2);
+        expect(errors).toHaveLength(0);
+        const budget = resolveActionPeriodBudget({
+          organizationId,
+          identity: { actionKind: "mcp.tools/call", logicalPhaseId: "lookup" },
+          policy: { periodMs: 86_400_000, limit: 2 },
+          nowMs: Temporal.Now.instant().epochMilliseconds,
+        });
+        if (Result.isError(budget) || budget.value === null) {
+          throw new Error("Missing MCP budget");
+        }
+        expect(await client.send("HGET", [budget.value.key, "count"])).toBe(
+          "2",
+        );
+        expect(await client.send("HLEN", [budget.value.key])).toBe(3);
+      } finally {
+        client.close();
+        closeActionAdmissionRedis();
+        Object.assign(env, previous);
+      }
+    });
+  });
+}

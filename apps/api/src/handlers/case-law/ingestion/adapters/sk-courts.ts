@@ -1,6 +1,10 @@
 import { panic, Result } from "better-result";
 
 import { mapWithConcurrency } from "@stll/concurrency";
+import {
+  skDocumentErrorDiagnostics,
+  skDocumentResponseDiagnostics,
+} from "@stll/legal-atlas/sk-document-fetch-diagnostics";
 import { parsePlainDate, Temporal } from "@stll/time";
 
 import {
@@ -42,6 +46,17 @@ import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/ad
 import { createPagePaginatedFetch } from "@/api/handlers/case-law/ingestion/adapters/pagination";
 import { publisherTarget } from "@/api/handlers/case-law/ingestion/adapters/publisher-target";
 import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
+import { createSkCollectionConnector } from "@/api/handlers/case-law/ingestion/adapters/sk-collections";
+import {
+  createSkCourtRegistryReader,
+  isSkCourtRegistryRecord,
+  isSkCourtRegistryUnavailable,
+  skCourtDirectoryMetadata,
+} from "@/api/handlers/case-law/ingestion/adapters/sk-court-directory";
+import type {
+  SkCourtRegistryReader,
+  SkCourtRegistryObservation,
+} from "@/api/handlers/case-law/ingestion/adapters/sk-court-directory";
 import {
   INGESTION_USER_AGENT,
   adapterCatch,
@@ -57,7 +72,9 @@ import {
 import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  checkedDecisionMetadata,
 } from "@/api/lib/case-law/decision-text";
+import { decisionTypeKey } from "@/api/lib/case-law/decision-type-key";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { DOCUMENT_DELIVERY } from "@/api/lib/legal-search/ingestion-types";
@@ -138,12 +155,33 @@ export const skCourtsDocumentFetch: SkDocumentFetch = async (
     });
     return undefined;
   }
-  return await fetchPublisher(target.value, {
-    adapterKey: ADAPTER_KEYS.SK_COURTS,
-    redirect: "error",
-    signal,
-    timeoutMs: DOCUMENT_TIMEOUT_MS,
+  const fetched = await Result.tryPromise({
+    try: async () =>
+      await fetchPublisher(target.value, {
+        adapterKey: ADAPTER_KEYS.SK_COURTS,
+        redirect: "error",
+        signal,
+        timeoutMs: DOCUMENT_TIMEOUT_MS,
+        headers: { "User-Agent": INGESTION_USER_AGENT },
+      }),
+    catch: (error) => error,
   });
+  if (Result.isError(fetched)) {
+    logger.warn(
+      "case_law.ingestion.sk_document_fetch_failed",
+      skDocumentErrorDiagnostics(fetched.error),
+    );
+    throw fetched.error;
+  }
+  const diagnostics = skDocumentResponseDiagnostics(fetched.value);
+  if (
+    !fetched.value.ok ||
+    (diagnostics.contentTypeClass !== "pdf" &&
+      diagnostics.contentTypeClass !== "binary")
+  ) {
+    logger.warn("case_law.ingestion.sk_document_fetch_response", diagnostics);
+  }
+  return fetched.value;
 };
 
 const arrayOrEmpty = <T>(value: T[] | null | undefined): T[] => {
@@ -467,6 +505,7 @@ type SkCourtsDecisionParts = {
   item: SkApiItem;
   /** The per-decision record, where one was read. */
   detail: SkDetailItem | null;
+  courtRegistry?: SkCourtRegistryObservation | null | undefined;
 };
 
 /**
@@ -476,16 +515,32 @@ type SkCourtsDecisionParts = {
  * The detail part is absent rather than null where no record was read: a part
  * that is there states a response, and one that is not states that none was.
  */
-const skCourtsSourceRaw = (
-  item: SkApiItem,
-  detail: SkDetailItem | null,
-): { sourceRaw: string; sourceRawContentType: string } => ({
-  sourceRaw: encodeSourceRawEnvelope({
-    listing: JSON.stringify(item),
-    ...(detail === null ? {} : { detail: JSON.stringify(detail) }),
-  }),
-  sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-});
+const skCourtsSourceRaw = ({
+  item,
+  detail,
+  courtRegistry,
+}: SkCourtsDecisionParts): {
+  sourceRaw: string;
+  sourceRawContentType: string;
+} => {
+  const registryParts =
+    courtRegistry?.status === "available"
+      ? { "court-registry": JSON.stringify(courtRegistry.record) }
+      : {};
+  const unavailableParts =
+    courtRegistry?.status === "unavailable"
+      ? { "court-registry-unavailable": JSON.stringify(courtRegistry) }
+      : {};
+  return {
+    sourceRaw: encodeSourceRawEnvelope({
+      listing: JSON.stringify(item),
+      ...(detail === null ? {} : { detail: JSON.stringify(detail) }),
+      ...registryParts,
+      ...unavailableParts,
+    }),
+    sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  };
+};
 
 /**
  * Build one decision from the two responses already in hand, without
@@ -496,6 +551,7 @@ const skCourtsSourceRaw = (
  * keyed and projected that way everywhere.
  */
 export const assembleSkCourtsDecision = ({
+  courtRegistry,
   detail,
   item,
 }: SkCourtsDecisionParts): IngestionResult | null => {
@@ -505,10 +561,19 @@ export const assembleSkCourtsDecision = ({
   }
   const { caseNumber, court } = fields;
 
-  // Hash only the list-endpoint payload so the
-  // change-detection key stays stable regardless of
-  // transient detail-fetch failures.
-  const rawJson = JSON.stringify(item);
+  // Registry changes must reach already stored decisions; detail failures
+  // still do not change the listing observation.
+  const directoryMetadata =
+    courtRegistry?.status === "available"
+      ? skCourtDirectoryMetadata(courtRegistry.record, court)
+      : undefined;
+  const registryUnavailable =
+    courtRegistry?.status === "unavailable" ? courtRegistry : undefined;
+  const rawJson = JSON.stringify({
+    item,
+    directoryMetadata,
+    registryUnavailable,
+  });
   const rawHash = hashContent(rawJson);
 
   // PDF download is deferred to the document walk in the
@@ -557,12 +622,17 @@ export const assembleSkCourtsDecision = ({
         toOptionalValue(detail?.dokument?.url) ?? "",
       )?.toString() ?? undefined,
     textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-    metadata: {
+    metadata: checkedDecisionMetadata({
+      ...directoryMetadata,
+      ...(registryUnavailable === undefined
+        ? {}
+        : { courtRegistry: registryUnavailable }),
       caseNumber,
       ecli,
       court,
       decisionDate,
       decisionType,
+      decisionTypeKey: decisionTypeKey(decisionType),
       guid: toOptionalValue(item.guid),
       identifikacneCislo: toOptionalValue(item.identifikacneCislo),
       // The name this service states for a decision is the judge's or a
@@ -593,12 +663,12 @@ export const assembleSkCourtsDecision = ({
         detail?.povodnySud?.registreGuid,
       ),
       originCaseNumber: toOptionalValue(detail?.povodnaSpisovaZnacka),
-    } satisfies SkCourtsMetadata,
+    } satisfies SkCourtsMetadata),
     rawHash,
     parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
     documentAst: EMPTY_AST,
     documentDelivery: DOCUMENT_DELIVERY.DEFERRED,
-    ...skCourtsSourceRaw(item, detail),
+    ...skCourtsSourceRaw({ item, detail, courtRegistry }),
   };
 };
 
@@ -614,7 +684,7 @@ export type SkCourtsBuildResult =
   | { type: "built"; decision: IngestionResult }
   /** No docket or no court to key on; nothing can store this item. */
   | { type: "unkeyable" }
-  /** The publisher served no record for the id the listing states. */
+  /** A decision or court registry record was unavailable; reconciliation retries. */
   | { type: "detail-unavailable"; decision: IngestionResult };
 
 /**
@@ -622,9 +692,17 @@ export type SkCourtsBuildResult =
  * enrichment path. Shared by the crawl and the reconciliation walk so neither
  * can key, parse or enrich an item differently from the other.
  */
+type SkCourtsBuildOptions = {
+  signal?: AbortSignal | undefined;
+  readCourt?: SkCourtRegistryReader | undefined;
+};
+
 export const buildSkCourtsDecision = async (
   item: SkApiItem,
-  signal?: AbortSignal,
+  {
+    signal,
+    readCourt = createSkCourtRegistryReader(signal),
+  }: SkCourtsBuildOptions = {},
 ): Promise<SkCourtsBuildResult> => {
   // Asked before the record is fetched, so an item nothing can store never
   // costs a request; the assembler answers the same question again over what
@@ -633,26 +711,40 @@ export const buildSkCourtsDecision = async (
     return { type: "unkeyable" };
   }
   const fetched = await fetchDetailForItem(item, signal);
+  const registreGuid = toOptionalValue(item.sud?.registreGuid);
+  const registry =
+    registreGuid === undefined
+      ? Result.ok(null)
+      : await readCourt(registreGuid, signal);
+  if (registry.isErr()) {
+    logger.warn("case_law.ingestion.court_registry_unavailable", {
+      adapterKey: ADAPTER_KEYS.SK_COURTS,
+      ...(registreGuid === undefined ? {} : { registreGuid }),
+      reason: registry.error.message,
+    });
+  }
+  const courtRegistry = registry.unwrapOr(null);
   const decision = assembleSkCourtsDecision({
     item,
     detail: fetched.type === "detail" ? fetched.detail : null,
+    courtRegistry,
   });
   if (decision === null) {
     return { type: "unkeyable" };
   }
-  return fetched.type === "unavailable"
+  return fetched.type === "unavailable" || registry.isErr()
     ? { type: "detail-unavailable", decision }
     : { type: "built", decision };
 };
 
 const parseItemWithDetail = async (
   raw: unknown,
-  signal?: AbortSignal,
+  options: SkCourtsBuildOptions = {},
 ): Promise<IngestionResult | null> => {
   if (!isSkApiItem(raw)) {
     return null;
   }
-  const built = await buildSkCourtsDecision(raw, signal);
+  const built = await buildSkCourtsDecision(raw, options);
   switch (built.type) {
     case "unkeyable":
       return null;
@@ -936,12 +1028,12 @@ const listSkCourtsSlicePage = async ({
  */
 const buildSkCourtsFromPayload = async (
   payload: unknown,
-  signal?: AbortSignal,
+  options: SkCourtsBuildOptions = {},
 ): Promise<ReconciliationBuildOutcome> => {
   if (!isSkApiItem(payload)) {
     return { type: "unkeyable" };
   }
-  const built = await buildSkCourtsDecision(payload, signal);
+  const built = await buildSkCourtsDecision(payload, options);
   switch (built.type) {
     case "built":
       return { type: "built", decision: built.decision };
@@ -1062,16 +1154,16 @@ const nextClosedDay = (verifiedThrough: string): string | null => {
 const collectFrontierPage = async (
   frontier: SkCourtsFrontier,
   signal?: AbortSignal,
-): Promise<SyncPage> => {
+): Promise<Result<SyncPage, AdapterFetchError>> => {
   const day = nextClosedDay(frontier.verifiedThrough);
   if (day === null) {
-    return {
+    return Result.ok({
       decisions: [],
       nextCursor: encodeFrontierCursor({
         verifiedThrough: frontier.verifiedThrough,
         page: 0,
       }),
-    };
+    });
   }
 
   const { listed, total } = await listSkCourtsDayPage({
@@ -1080,17 +1172,39 @@ const collectFrontierPage = async (
     pageSize: PAGE_SIZE,
     signal,
   });
+  const readCourt = createSkCourtRegistryReader(signal);
+  const records = await mapWithConcurrency({
+    items: [
+      ...new Set(
+        listed.flatMap((item) => {
+          if (!isSkApiItem(item) || skCourtsIdentityFields(item) === null) {
+            return [];
+          }
+          const id = item.sud?.registreGuid;
+          return id === null || id === undefined ? [] : [id];
+        }),
+      ),
+    ],
+    limit: ITEM_CONCURRENCY,
+    operation: async (id) => await readCourt(id),
+  });
+  for (const record of records) {
+    if (record.isErr()) {
+      return record;
+    }
+  }
   const built = await mapWithConcurrency({
     items: listed,
     limit: ITEM_CONCURRENCY,
-    operation: async (item) => await parseItemWithDetail(item, signal),
+    operation: async (item) =>
+      await parseItemWithDetail(item, { signal, readCourt }),
   });
   const decisions = built.filter(
     (decision): decision is IngestionResult => decision !== null,
   );
 
   const nextPage = frontier.page + 1;
-  return {
+  return Result.ok({
     decisions,
     nextCursor:
       nextPage * PAGE_SIZE < total
@@ -1099,7 +1213,7 @@ const collectFrontierPage = async (
             page: nextPage,
           })
         : encodeFrontierCursor({ verifiedThrough: day, page: 0 }),
-  };
+  });
 };
 
 // ── Source fields ────────────────────────────────────────
@@ -1368,9 +1482,36 @@ const reparseStoredRaw = (
     };
   }
 
+  const registryRecord = storedPart(
+    parts?.["court-registry"],
+    isSkCourtRegistryRecord,
+  );
+  const registryUnavailable = storedPart(
+    parts?.["court-registry-unavailable"],
+    isSkCourtRegistryUnavailable,
+  );
+  const courtRegistry =
+    registryRecord === null
+      ? registryUnavailable
+      : { status: "available" as const, record: registryRecord };
+  if (
+    (parts?.["court-registry"] !== undefined &&
+      (registryRecord === null ||
+        registryRecord.registreGuid !== item.sud?.registreGuid)) ||
+    (parts?.["court-registry-unavailable"] !== undefined &&
+      registryUnavailable === null) ||
+    (registryRecord !== null && registryUnavailable !== null)
+  ) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
+      detail: "Invalid or mismatched stored court registry record",
+    };
+  }
   const decision = assembleSkCourtsDecision({
     item,
     detail: storedPart(parts?.["detail"], isSkDetailItem),
+    courtRegistry,
   });
   if (decision === null) {
     return {
@@ -1431,9 +1572,7 @@ const SK_COURTS_SOURCE_SURFACES = {
     "judge-registry": excludedSourceSurface(
       "a record per person rather than per decision, and the roster import is the pass that reads it",
     ),
-    "court-registry": excludedSourceSurface(
-      "the detail record already embeds the court entry this would state",
-    ),
+    "court-registry": storedSourceSurface("court-registry"),
     "portal-viewer": excludedSourceSurface(
       "a page shell the publisher's robots policy disallows, over the same record the detail part carries",
     ),
@@ -1462,6 +1601,7 @@ const SK_COURTS_SOURCE_SURFACES = {
 
 export const skCourtsAdapter = defineSourceAdapter({
   key: ADAPTER_KEYS.SK_COURTS,
+  collectionEnrichment: createSkCollectionConnector({ status: "disabled" }),
   sourceSurfaces: SK_COURTS_SOURCE_SURFACES,
   sourceFields: {
     status: "declared",
@@ -1521,13 +1661,21 @@ export const skCourtsAdapter = defineSourceAdapter({
     ...skCourtsDaySlices.walk,
     tipWindowDays: SK_COURTS_TIP_WINDOW_DAYS,
     listSlicePage: listSkCourtsSlicePage,
-    buildDecision: buildSkCourtsFromPayload,
+    buildDecision: async (payload, signal) =>
+      await buildSkCourtsFromPayload(payload, { signal }),
+    createSliceBuildDecision: () => {
+      const readCourt = createSkCourtRegistryReader();
+      return async (payload, signal) =>
+        await buildSkCourtsFromPayload(payload, { signal, readCourt });
+    },
   },
 
   fetchPage: async (cursor, config, signal) => {
     const frontier = decodeFrontierCursor(cursor);
     if (frontier === null) {
-      const page = await backfillPage(cursor, config, signal);
+      const page = await createBackfillPage(
+        createSkCourtRegistryReader(signal),
+      )(cursor, config, signal);
       // The walk names its successor and nothing else, so the handover
       // cursor it writes states no day. Give it one here rather than
       // persisting a cursor in neither phase's grammar.
@@ -1547,10 +1695,11 @@ export const skCourtsAdapter = defineSourceAdapter({
         nextCursor: encodeFrontierCursor(handoverFrontier()),
       });
     }
-    return await Result.tryPromise({
+    const collected = await Result.tryPromise({
       try: async () => await collectFrontierPage(frontier, signal),
       catch: adapterCatch(ADAPTER_KEYS.SK_COURTS, cursor),
     });
+    return collected.andThen((page) => page);
   },
 });
 
@@ -1563,36 +1712,59 @@ export const skCourtsAdapter = defineSourceAdapter({
  * decisions land at the end, behind the cursor — and when it reaches that
  * end, the frontier takes over.
  */
-const backfillPage = createPagePaginatedFetch<SkApiResponse>({
-  adapterKey: ADAPTER_KEYS.SK_COURTS,
-  pageSize: PAGE_SIZE,
-  legacyPageSize: LEGACY_PAGE_SIZE,
-  firstPage: FIRST_PAGE,
-  listTimeoutMs: 60_000,
-  itemConcurrency: ITEM_CONCURRENCY,
+const createBackfillPage = (readCourt: SkCourtRegistryReader) =>
+  createPagePaginatedFetch<SkApiResponse>({
+    adapterKey: ADAPTER_KEYS.SK_COURTS,
+    pageSize: PAGE_SIZE,
+    legacyPageSize: LEGACY_PAGE_SIZE,
+    firstPage: FIRST_PAGE,
+    listTimeoutMs: 60_000,
+    itemConcurrency: ITEM_CONCURRENCY,
 
-  buildRequest: (page) => listRequest(page, "ASC"),
+    buildRequest: (page) => listRequest(page, "ASC"),
 
-  traversal: [
-    {
-      name: "backfill",
-      buildRequest: (page) => listRequest(page, "ASC"),
-      followedBy: FRONTIER_PHASE,
+    traversal: [
+      {
+        name: "backfill",
+        buildRequest: (page) => listRequest(page, "ASC"),
+        followedBy: FRONTIER_PHASE,
+      },
+    ],
+
+    parseResponse: async (response) => {
+      const json: unknown = await response.json();
+      if (!isSkApiResponse(json)) {
+        return Result.ok({});
+      }
+      const courtIds = new Set(
+        arrayOrEmpty(json.rozhodnutieList).flatMap((item) => {
+          if (!isSkApiItem(item) || skCourtsIdentityFields(item) === null) {
+            return [];
+          }
+          const id = item.sud?.registreGuid;
+          return id === null || id === undefined ? [] : [id];
+        }),
+      );
+      const records = await mapWithConcurrency({
+        items: [...courtIds],
+        limit: ITEM_CONCURRENCY,
+        operation: async (id) => await readCourt(id),
+      });
+      for (const record of records) {
+        if (record.isErr()) {
+          return record;
+        }
+      }
+      return Result.ok(json);
     },
-  ],
 
-  parseResponse: async (response) => {
-    const json: unknown = await response.json();
-    return Result.ok(isSkApiResponse(json) ? json : {});
-  },
+    extractItems: (data) => ({
+      items: arrayOrEmpty(data.rozhodnutieList),
+      total: toOptionalValue(data.numFound),
+    }),
 
-  extractItems: (data) => ({
-    items: arrayOrEmpty(data.rozhodnutieList),
-    total: toOptionalValue(data.numFound),
-  }),
-
-  parseItem: async (item, signal) => {
-    const decision = await parseItemWithDetail(item, signal);
-    return decision === null ? null : { type: "decision", decision };
-  },
-});
+    parseItem: async (item, signal) => {
+      const decision = await parseItemWithDetail(item, { signal, readCourt });
+      return decision === null ? null : { type: "decision", decision };
+    },
+  });

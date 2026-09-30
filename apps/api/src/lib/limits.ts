@@ -289,6 +289,8 @@ export const LIMITS = {
   timeEntriesPerWorkspace: 50_000,
   timeEntriesPageSizeDefault: 100,
   timeEntriesPageSizeMax: 200,
+  timeEntriesApprovalBatchMax: 200,
+  timeEntryReturnCommentMaxLength: 2000,
   expensesPerWorkspace: 10_000,
   expensesPageSizeDefault: 100,
   expensesPageSizeMax: 200,
