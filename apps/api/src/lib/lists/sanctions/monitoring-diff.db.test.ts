@@ -452,7 +452,7 @@ test(
       (
         await db
           .update(contacts)
-          .set({ nationalityCodes: ["unknown"] })
+          .set({ nationalityCodes: ["ZZ"] })
           .where(eq(contacts.id, second.id))
           .returning()
       ).at(0) ?? panic("Contact missing");
