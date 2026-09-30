@@ -136,7 +136,7 @@ function ApprovalContent({ filters }: { filters: ApprovalFilters }) {
     workspacesRouteOptions(identity.organizationId),
   );
   const members = new Map(
-    organization?.members.map((member) => [member.userId, member.user.name]),
+    organization.members.map((member) => [member.userId, member.user.name]),
   );
   const matters = new Map(
     mattersData.workspaces.map((matter) => [matter.id, matter.name]),
