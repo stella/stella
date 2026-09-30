@@ -10,27 +10,30 @@ it may take, and which inputs it draws.
 ```ts
 import fc from "fast-check";
 
-import { propertyConfig, propertySeed } from "@stll/property-testing";
+import { propertyConfig } from "@stll/property-testing";
 
 fc.assert(
   fc.property(arbitrary, (value) => {
     expect(normalize(normalize(value))).toBe(normalize(value));
   }),
-  propertyConfig({ numRuns: 300, seed: propertySeed() }),
+  propertyConfig({ numRuns: 300 }),
 );
 ```
 
-`propertyConfig` is required, and a guard enforces it: a bare `fc.assert`
-opts out of nightly scaling and CI verbose reporting without anyone
-noticing. The workspace also needs a `test:property` script preloading
+Every `fc.assert` or `fc.check` call must pass parameters through
+`propertyConfig` (directly or through a configured helper), or use
+`assertProperty`. The guard checks each call, including files that already
+import the configuration helper. The workspace also needs a `test:property` script preloading
 `@stll/property-testing/preload`; `convention.test.ts` holds the set of
 workspaces with property files and the set with that script to exact
 agreement, in both directions.
 
 ## Seeding: fixed in CI, exploring nightly
 
-`propertySeed()` returns a fixed seed in PR CI and `undefined` during the
-nightly sweep, so fast-check draws its own.
+`propertyConfig()` defaults an omitted `seed` key to `propertySeed()`: a fixed
+seed in PR CI and `undefined` during the nightly sweep, so fast-check draws
+its own. Callers do not need to pass `propertySeed()` themselves. An explicitly
+supplied seed is preserved.
 
 The two runs answer different questions. **PR CI is a regression gate.**
 It has to fail the same way for everyone who runs it; a counterexample
@@ -53,14 +56,9 @@ run reproduces, without editing the test:
 PROPERTY_TEST_SEED=1234 bun run test:property
 ```
 
-`PROPERTY_TEST_SEED` wins in every environment, sweep or not. A
-non-integer value throws rather than being silently ignored.
-
-### Scope
-
-`propertySeed()` is opt-in per file. Suites written before this
-convention run unseeded everywhere and are being migrated separately; do
-not assume a property file is seeded because this package offers it.
+`PROPERTY_TEST_SEED` controls the default seed in every environment, sweep or
+not. A non-integer value throws rather than being silently ignored. A seed
+explicitly supplied by the caller takes precedence over this default.
 
 ## Environment variables
 
