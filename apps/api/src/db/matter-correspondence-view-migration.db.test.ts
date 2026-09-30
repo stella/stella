@@ -3,6 +3,7 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
 
+import { LIMITS } from "@/api/lib/limits";
 import { getDefaultViews } from "@/api/lib/views";
 import { parseStoredViewLayout } from "@/api/lib/views-schema";
 
@@ -24,7 +25,12 @@ const MATTER = {
   empty: "018f0000-0000-7000-8000-00000000000c",
   deleting: "018f0000-0000-7000-8000-00000000000d",
   archived: "018f0000-0000-7000-8000-00000000000e",
+  full: "018f0000-0000-7000-8000-00000000000f",
+  belowCap: "018f0000-0000-7000-8000-000000000010",
 } as const;
+
+/** LIMITS.viewsCount, which the migration hardcodes. */
+const VIEWS_CAP = LIMITS.viewsCount;
 
 const PRE_MIGRATION = `
 CREATE TABLE workspaces (
@@ -43,7 +49,9 @@ INSERT INTO workspaces (id, status) VALUES
   ('${MATTER.hasOne}', 'active'),
   ('${MATTER.empty}', 'active'),
   ('${MATTER.deleting}', 'deleting'),
-  ('${MATTER.archived}', 'archived');
+  ('${MATTER.archived}', 'archived'),
+  ('${MATTER.full}', 'active'),
+  ('${MATTER.belowCap}', 'active');
 INSERT INTO workspace_views (id, workspace_id, name, layout, position) VALUES
   ('018f0000-0000-7000-8000-000000000101', '${MATTER.defaults}', 'Overview', '{"type":"overview"}', 0),
   ('018f0000-0000-7000-8000-000000000102', '${MATTER.defaults}', 'Table', '{"type":"table"}', 1),
@@ -53,6 +61,13 @@ INSERT INTO workspace_views (id, workspace_id, name, layout, position) VALUES
   ('018f0000-0000-7000-8000-000000000203', '${MATTER.hasOne}', 'Table', '{"type":"table"}', 2),
   ('018f0000-0000-7000-8000-000000000401', '${MATTER.deleting}', 'Overview', '{"type":"overview"}', 0),
   ('018f0000-0000-7000-8000-000000000501', '${MATTER.archived}', 'Overview', '{"type":"overview"}', 3);
+-- A matter at the view cap, and one a single view below it.
+INSERT INTO workspace_views (id, workspace_id, name, layout, position)
+SELECT gen_random_uuid(), '${MATTER.full}', 'Table ' || n, '{"type":"table"}', n
+FROM generate_series(0, ${VIEWS_CAP - 1}) AS n;
+INSERT INTO workspace_views (id, workspace_id, name, layout, position)
+SELECT gen_random_uuid(), '${MATTER.belowCap}', 'Table ' || n, '{"type":"table"}', n
+FROM generate_series(0, ${VIEWS_CAP - 2}) AS n;
 `;
 
 /** PGlite runs the file as one script; the breakpoints are the migrator's. */
@@ -109,6 +124,13 @@ test("appends one correspondence view to each matter that lacks one, and replays
       { workspace_id: MATTER.hasOne, name: "Client mail", position: 1 },
       { workspace_id: MATTER.empty, name: "Correspondence", position: 0 },
       { workspace_id: MATTER.archived, name: "Correspondence", position: 4 },
+      // At the cap: skipped, so the matter stays within what views.list
+      // returns. One below it still gets the view.
+      {
+        workspace_id: MATTER.belowCap,
+        name: "Correspondence",
+        position: VIEWS_CAP - 1,
+      },
     ]);
 
     // Existing rows are untouched; only the new views were added.
@@ -116,7 +138,12 @@ test("appends one correspondence view to each matter that lacks one, and replays
     expect(after.filter((row) => before.some((b) => b.id === row.id))).toEqual(
       before,
     );
-    expect(after).toHaveLength(before.length + 3);
+    expect(after).toHaveLength(before.length + 4);
+    const viewsPerMatter = await database.query<{ count: number }>(
+      `SELECT COUNT(*)::int AS count FROM workspace_views
+        GROUP BY workspace_id ORDER BY count DESC LIMIT 1`,
+    );
+    expect(viewsPerMatter.rows[0]?.count).toBe(VIEWS_CAP);
   } finally {
     await database.close();
   }
