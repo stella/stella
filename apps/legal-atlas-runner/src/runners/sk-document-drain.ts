@@ -18,6 +18,11 @@
  * and the priority handling can be exercised on their own.
  */
 
+import {
+  type SkDocumentFetchErrorDiagnostic,
+  skDocumentErrorDiagnostics,
+} from "@stll/legal-atlas/sk-document-fetch-diagnostics";
+
 import type {
   DecisionDocumentOutcome,
   DocumentFetchFailure,
@@ -59,6 +64,8 @@ export type SkDocumentDrainSummary = OutcomeCounts & {
    * see.
    */
   lastError: unknown;
+  /** Bounded classes only; never a URL, response body or error message. */
+  lastErrorDiagnostic: SkDocumentFetchErrorDiagnostic | undefined;
 };
 
 const emptySummary = (): SkDocumentDrainSummary => ({
@@ -73,6 +80,7 @@ const emptySummary = (): SkDocumentDrainSummary => ({
   } satisfies Record<DocumentFetchFailure, number>,
   filled: 0,
   lastError: undefined,
+  lastErrorDiagnostic: undefined,
   lastFailureDetail: undefined,
   parked: 0,
   superseded: 0,
@@ -202,6 +210,7 @@ export const runSkDocumentDrain = async ({
       consecutiveFailures += 1;
       summary.failed += 1;
       summary.lastError = error;
+      summary.lastErrorDiagnostic = skDocumentErrorDiagnostics(error);
       delayMs = Math.min(
         timing.fetchDelayMs * 2 ** consecutiveFailures,
         timing.failureBackoffMaxMs,

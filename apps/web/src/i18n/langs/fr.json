@@ -477,6 +477,23 @@
     "failedToStartTimer": "Impossible de démarrer le chronomètre",
     "failedToStopTimer": "Impossible d'arrêter le chronomètre",
     "filterStatus": "Filtrer par statut",
+    "globalTimer": {
+      "confirm": "Confirmer le temps",
+      "dailyTarget": "Mon objectif quotidien",
+      "discard": "Abandonner le chronomètre",
+      "invalidDailyTarget": "Saisissez un nombre entier de 1 à 1440 minutes ou laissez le champ vide.",
+      "leftToday": "Temps restant aujourd’hui",
+      "loggedToday": "Temps saisi aujourd’hui",
+      "matterInaccessible": "Choisissez un dossier auquel vous avez accès.",
+      "narrativeRequired": "Ajoutez une description avant de confirmer le temps.",
+      "noDailyTarget": "Aucun objectif quotidien",
+      "pause": "Mettre en pause",
+      "periodLocked": "Ce mois est verrouillé. Demandez à un administrateur de le déverrouiller.",
+      "resume": "Reprendre",
+      "targetHelp": "Saisissez votre objectif quotidien en minutes ou laissez le champ vide pour le supprimer.",
+      "timerUnavailable": "Ce chronomètre n’est plus disponible. Actualisez la liste.",
+      "title": "Chronomètres"
+    },
     "hourlyRateMustBeNonNegative": "Le taux horaire ne peut pas être négatif",
     "hours": "Heures",
     "invoiceNarrative": "Description de la facture",
@@ -521,6 +538,20 @@
     "noActiveTimer": "Aucun chronomètre actif",
     "noEntries": "Aucune entrée de temps pour cette période",
     "nonBillable": "Non facturable",
+    "quickEntry": {
+      "entrySaved": "Entrée de temps enregistrée",
+      "expenseSaved": "Dépense enregistrée",
+      "expenseTitle": "Ajouter une dépense",
+      "futureDate": "Choisissez aujourd’hui ou une date antérieure.",
+      "invalidDate": "Choisissez une date de travail valide.",
+      "minimumUnit": "Le temps est arrondi au supérieur selon l’unité minimale de facturation.",
+      "narrativeRequired": "Ajoutez une description avant d’enregistrer le temps.",
+      "outsideEditWindow": "Cette date est hors du délai de modification.",
+      "periodLocked": "Ce mois est verrouillé.",
+      "saveAndAddExpense": "Enregistrer et ajouter une dépense",
+      "saveAndNew": "Enregistrer et ajouter une entrée",
+      "viewDay": "Voir la journée"
+    },
     "rates": {
       "addRate": "Ajouter un tarif",
       "createRateTable": "Créer un barème",
@@ -837,6 +868,7 @@
         "publishedOnWeb": "Publié sur le web"
       },
       "statutes": "Textes applicables",
+      "textNotYetAvailable": "La juridiction n’a pas publié le texte de la décision, ou celui-ci n’est pas encore disponible ici.",
       "textPending": "Le texte de la décision est en cours de récupération",
       "textReadFailed": "Le texte de la décision n'a pas pu être chargé",
       "textUnavailable": "Aucun texte n'est disponible pour cette décision"
@@ -2258,7 +2290,8 @@
     "compareUnsupportedReasons": {
       "missingInBase": "La partie du document existe uniquement dans la cible",
       "missingInTarget": "La partie document existe uniquement dans la base",
-      "notEditable": "La partie du document n'est pas modifiable"
+      "notEditable": "La partie du document n'est pas modifiable",
+      "unsupportedContent": "Cette version contient du contenu qui ne peut pas encore être comparé."
     },
     "compareUnverified": "Comparaison non vérifiée",
     "compareVerificationFailures": "{count, plural, one {Une vérification aller-retour a échoué. Examinez cette comparaison avant de vous y fier.} other {# vérifications aller-retour ont échoué. Examinez cette comparaison avant de vous y fier.}}",
@@ -4306,6 +4339,20 @@
       "renameDescription": "Les membres verront immédiatement le nouveau nom.",
       "renameTitle": "Renommer l’organisation",
       "renameTypeToConfirm": "Saisissez le nouveau nom pour confirmer : {name}",
+      "timePolicy": {
+        "description": "Définissez les arrondis du temps, les délais de modification et les verrouillages mensuels.",
+        "editWindow": "Délai de modification (jours)",
+        "editWindowHelp": "Avec zéro, les modifications sont autorisées uniquement à la date du travail.",
+        "invalidEditWindow": "Saisissez un nombre entier de jours, supérieur ou égal à zéro.",
+        "invalidLockedMonth": "Choisissez un mois terminé.",
+        "invalidMinimumUnit": "Choisissez une unité de temps qui divise 60 minutes sans reste.",
+        "lockedThrough": "Verrouillé jusqu’à",
+        "lockedThroughHelp": "Les entrées de ce mois et des mois précédents ne peuvent pas être modifiées.",
+        "minimumUnit": "Unité de temps minimale",
+        "minimumUnitHelp": "Le temps est facturé par multiples de ce nombre de minutes.",
+        "narrativeRequired": "Exiger une description",
+        "title": "Règles de saisie du temps"
+      },
       "usage": "Utilisation",
       "usageDescription": "Limites d’utilisation et état des droits pour cette organisation",
       "usageEmptyDescription": "Configurez un droit d’utilisation pour activer les fonctionnalités d’IA mesurées pour cette organisation.",
@@ -5003,6 +5050,11 @@
     "whenNotToUsePlaceholder": "Quand faut-il éviter ce modèle ?",
     "whenToUse": "Quand utiliser",
     "whenToUsePlaceholder": "Quand ce modèle doit-il être utilisé ? (guide la sélection de modèles par l'IA)"
+  },
+  "timesheets": {
+    "day": {
+      "internalWork": "Travail interne"
+    }
   },
   "translate": {
     "dialog": {

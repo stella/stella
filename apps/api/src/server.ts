@@ -106,6 +106,8 @@ import {
   templateCategoriesRoute,
   templatesRoute,
 } from "@/api/handlers/templates/routes";
+import { timeApprovalQueueRoute } from "@/api/handlers/time-entries/approval-queue/routes";
+import { internalTimeEntriesRoute } from "@/api/handlers/time-entries/internal/routes";
 import { myTimeEntriesRoute } from "@/api/handlers/time-entries/me/routes";
 import { memberTimeTargetsRoute } from "@/api/handlers/time-entries/members/routes";
 import { timeEntriesRoute } from "@/api/handlers/time-entries/routes";
@@ -399,6 +401,8 @@ const api = new Elysia()
   .use(notificationsRoute)
   .use(
     new Elysia()
+      .use(timeApprovalQueueRoute)
+      .use(internalTimeEntriesRoute)
       .use(myTimeEntriesRoute)
       .use(memberTimeTargetsRoute)
       .use(timeTimersRoute),

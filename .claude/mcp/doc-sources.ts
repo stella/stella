@@ -198,7 +198,7 @@ export const DOC_SOURCES = {
     url: "https://turborepo.dev/llms.txt",
   },
   PostHog: {
-    dependencies: ["posthog-js", "posthog-node", "@posthog/react"],
+    dependencies: ["posthog-js", "posthog-node"],
     url: "https://posthog.com/llms.txt",
   },
   Zustand: {
@@ -251,10 +251,6 @@ export const DOC_SOURCES = {
   Lucide: {
     dependencies: ["lucide-react"],
     url: "https://lucide.dev/llms.txt",
-  },
-  ReactGrab: {
-    dependencies: ["react-grab"],
-    url: "https://react-grab.com/llms.txt",
   },
   Tsdown: {
     dependencies: ["tsdown"],
@@ -328,13 +324,11 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "@types/chrome",
   "@types/hast",
   "@types/node",
-  "@types/nodemailer",
   "@typescript-eslint/utils",
   "@typescript/native",
   "@vscode/markdown-editor",
   "@vscode/observables",
   "astro",
-  "buffer",
   "cheerio",
   "class-variance-authority",
   "client-zip",
@@ -349,7 +343,6 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "expect-type",
   "expo-doctor",
   "franc",
-  "i18n-unused",
   "immer",
   "input-otp",
   "ioredis",
@@ -386,7 +379,6 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "use-debounce",
   "use-intl",
   "uuid",
-  "web-ext",
 ]
   .map(noLlmsTxt)
   .concat(

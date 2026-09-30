@@ -477,6 +477,23 @@
     "failedToStartTimer": "Nie udało się uruchomić stopera",
     "failedToStopTimer": "Nie udało się zatrzymać stopera",
     "filterStatus": "Filtruj według statusu",
+    "globalTimer": {
+      "confirm": "Potwierdź czas",
+      "dailyTarget": "Mój dzienny cel",
+      "discard": "Odrzuć stoper",
+      "invalidDailyTarget": "Wpisz liczbę całkowitą od 1 do 1440 minut lub pozostaw pole puste.",
+      "leftToday": "Pozostało dzisiaj",
+      "loggedToday": "Zarejestrowano dzisiaj",
+      "matterInaccessible": "Wybierz sprawę, do której masz dostęp.",
+      "narrativeRequired": "Dodaj opis przed potwierdzeniem czasu.",
+      "noDailyTarget": "Brak dziennego celu",
+      "pause": "Wstrzymaj",
+      "periodLocked": "Ten miesiąc jest zablokowany. Poproś administratora o jego odblokowanie.",
+      "resume": "Wznów",
+      "targetHelp": "Wpisz dzienny cel w minutach lub pozostaw pole puste, aby go usunąć.",
+      "timerUnavailable": "Ten stoper nie jest już dostępny. Odśwież listę.",
+      "title": "Stopery"
+    },
     "hourlyRateMustBeNonNegative": "Stawka godzinowa nie może być ujemna",
     "hours": "Godziny",
     "invoiceNarrative": "Opis na fakturze",
@@ -521,6 +538,20 @@
     "noActiveTimer": "Brak aktywnego timera",
     "noEntries": "Brak wpisów czasu w tym okresie",
     "nonBillable": "Nierozliczalne",
+    "quickEntry": {
+      "entrySaved": "Wpis czasu zapisany",
+      "expenseSaved": "Wydatek zapisany",
+      "expenseTitle": "Dodaj wydatek",
+      "futureDate": "Wybierz dzisiejszą lub wcześniejszą datę.",
+      "invalidDate": "Wybierz prawidłową datę pracy.",
+      "minimumUnit": "Czas jest zaokrąglany w górę do minimalnej jednostki rozliczeniowej.",
+      "narrativeRequired": "Dodaj opis przed zapisaniem czasu.",
+      "outsideEditWindow": "Ta data wykracza poza termin edycji.",
+      "periodLocked": "Ten miesiąc jest zablokowany.",
+      "saveAndAddExpense": "Zapisz i dodaj wydatek",
+      "saveAndNew": "Zapisz i dodaj kolejny wpis",
+      "viewDay": "Pokaż dzień"
+    },
     "rates": {
       "addRate": "Dodaj stawkę",
       "createRateTable": "Utwórz tabelę stawek",
@@ -837,6 +868,7 @@
         "publishedOnWeb": "Opublikowano w sieci"
       },
       "statutes": "Powołane przepisy",
+      "textNotYetAvailable": "Sąd nie opublikował treści orzeczenia lub nie jest ona jeszcze tutaj dostępna.",
       "textPending": "Tekst orzeczenia jest wciąż pobierany",
       "textReadFailed": "Nie udało się wczytać tekstu orzeczenia",
       "textUnavailable": "Do tego orzeczenia nie ma dostępnego tekstu"
@@ -2258,7 +2290,8 @@
     "compareUnsupportedReasons": {
       "missingInBase": "Część dokumentu istnieje tylko w miejscu docelowym",
       "missingInTarget": "Część dokumentu istnieje tylko w bazie",
-      "notEditable": "Część dokumentu nie podlega edycji"
+      "notEditable": "Część dokumentu nie podlega edycji",
+      "unsupportedContent": "Ta wersja zawiera treść, której nie można jeszcze porównać."
     },
     "compareUnverified": "Niesprawdzone porównanie",
     "compareVerificationFailures": "{count, plural, one {Jedna kontrola dwukierunkowa nie powiodła się. Sprawdź porównanie, zanim na nim polegasz.} few {# kontrole dwukierunkowe nie powiodły się. Sprawdź porównanie, zanim na nim polegasz.} many {# kontroli dwukierunkowych nie powiodło się. Sprawdź porównanie, zanim na nim polegasz.} other {# kontroli dwukierunkowych nie powiodło się. Sprawdź porównanie, zanim na nim polegasz.}}",
@@ -4306,6 +4339,20 @@
       "renameDescription": "Członkowie od razu zobaczą nową nazwę.",
       "renameTitle": "Zmień nazwę organizacji",
       "renameTypeToConfirm": "Aby potwierdzić, wpisz nową nazwę: {name}",
+      "timePolicy": {
+        "description": "Ustaw zaokrąglanie czasu, terminy edycji i blokady miesięcy.",
+        "editWindow": "Termin edycji (dni)",
+        "editWindowHelp": "Zero pozwala na edycję tylko w dniu wykonania pracy.",
+        "invalidEditWindow": "Wprowadź całkowitą liczbę dni, równą zero lub większą.",
+        "invalidLockedMonth": "Wybierz zakończony miesiąc.",
+        "invalidMinimumUnit": "Wybierz jednostkę czasu, która dzieli 60 minut bez reszty.",
+        "lockedThrough": "Zablokowane do",
+        "lockedThroughHelp": "Wpisów z tego miesiąca i wcześniejszych miesięcy nie można edytować.",
+        "minimumUnit": "Minimalna jednostka czasu",
+        "minimumUnitHelp": "Czas jest rozliczany w wielokrotnościach tej liczby minut.",
+        "narrativeRequired": "Wymagaj opisu",
+        "title": "Zasady ewidencji czasu"
+      },
       "usage": "Użycie",
       "usageDescription": "Limity użycia i stan uprawnień tej organizacji",
       "usageEmptyDescription": "Skonfiguruj uprawnienie do użycia, aby włączyć mierzone funkcje AI w tej organizacji.",
@@ -5003,6 +5050,11 @@
     "whenNotToUsePlaceholder": "Kiedy unikać tego szablonu?",
     "whenToUse": "Kiedy używać",
     "whenToUsePlaceholder": "Kiedy należy używać tego szablonu? (pomaga AI w wyborze szablonu)"
+  },
+  "timesheets": {
+    "day": {
+      "internalWork": "Praca wewnętrzna"
+    }
   },
   "translate": {
     "dialog": {

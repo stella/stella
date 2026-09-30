@@ -168,7 +168,7 @@
       "itemsKey": "results"
     },
     "name": "search_case_law",
-    "description": "Search case law within one country. `queries` carries phrasings of one question and merges their results; matchedQueries names the phrasings behind each hit. `limit` is the merged page, split evenly across them. Filters: court, language, dates, decision type, source_id (a `facets.source` bucket's `value`). Facets and total describe ONE query's whole set: first page of a single-query call only, null otherwise. Function words are not required terms; `searches[]` gives each phrasing's `queryUsed` and warnings, and `strict` requires every word. Each hit carries citationAuthority (the score ranking blends in), matchingPassages, a route-independent resourceName and caseNumber, its citable reference: not always a docket. read_case_law_decision types it; read_case_law_citations gives citing polarity.",
+    "description": "Search case law within one country. `queries` carries phrasings of one question and merges their results; matchedQueries names the phrasings behind each hit. `limit` is the merged page, split evenly across them. Filters: court, language, dates, decision type, source_id (a `facets.source` bucket's `value`). Facets describe the first phrasing on page one, null later. Total is not counted for multiple phrasings. Function words are not required terms; `searches[]` gives each phrasing's `queryUsed` and warnings, and `strict` requires every word. Each hit carries citationAuthority (the score ranking blends in), matchingPassages, a route-independent resourceName and caseNumber, its citable reference: not always a docket. read_case_law_decision types it; read_case_law_citations gives citing polarity.",
     "inputSchema": {
       "type": "object",
       "required": ["queries", "country"],
@@ -373,7 +373,7 @@
       "perEntryCursor": true
     },
     "name": "read_case_law_decision",
-    "description": "Read case-law decisions by id. Every `decision_ids[]` entry is answered on its own, in input order, under `status`: `found` carries the decision (metadata, text fields, plain text, source URLs, resourceName, citation ids), while `not_found` (no such public decision) and `pending` (its publisher document is not stored yet) carry a message. Prefer one batched call over one per decision; the call's text budget is shared, so read one id alone for a whole decision's text. It does NOT say how the citing courts treated a decision: its citation entries carry no treatment and no surrounding text. For that call read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }). Long text and citation lists come back in windows; pass an entry's nextCursor back as cursor with that one id.",
+    "description": "Read decisions by `decision_ids[]`, answered in input order: `found` carries a decision, `not_found` and `pending` carry a message. Batch ids to share the text budget; read one id for a full window. Static details (metadata, textFields, source, URLs) appear on the cursor-less window only. `include` selects optional fields on any window; [] returns text and identity only. Text and unfinished citation lists are paged: pass nextCursor as cursor with that one id. Citation ids carry neither treatment nor surrounding text; for those call read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }).",
     "inputSchema": {
       "type": "object",
       "required": ["decision_ids"],
@@ -395,6 +395,23 @@
           "minLength": 1,
           "maxLength": 512,
           "description": "Opaque cursor from a previous call to read the next window of one decision's text and citations. Accepted only alongside a single decision id."
+        },
+        "include": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "details",
+              "metadata",
+              "textFields",
+              "source",
+              "citations"
+            ],
+            "type": "string"
+          },
+          "description": "Optional fields to return: details (court, dates, identifiers and URLs), metadata, textFields (abstract, headnote, legalSentence, summary), source, citations (both directions). Omit for all on the cursor-less window and only unfinished citation pages on continuations. An empty list returns text and identity only. Pass selected fields again with a cursor to request them on that window. Use a JSON array of strings; a single string is read as a one-item list.",
+          "x-stella-agent-input": {
+            "kind": "string-list"
+          }
         }
       }
     },
@@ -4506,7 +4523,7 @@
       "singleReadWhen": "invoice_id"
     },
     "name": "list_invoices",
-    "description": "List invoices in a matter, or read one invoice in detail. Pass invoice_id to get a single invoice with its lines, totals with the VAT breakdown, taxable supply date, seller profile id, buyer details, and attached time entries and expenses. Otherwise pass matter_id to list the matter's invoices. Returns each invoice's id, number, reference, status, dates, currency, and total (integer minor currency units).",
+    "description": "List invoices in a matter, or read one invoice in detail. Pass invoice_id to get a single invoice with its lines, totals with the VAT breakdown, taxable supply date, seller profile id, buyer details, and attached time entries and expenses. Otherwise pass matter_id to list the matter's invoices. Returns each invoice's id, number (null before numbering), document type, original invoice id, reference, status, dates, currency, and total (integer minor currency units).",
     "inputSchema": {
       "type": "object",
       "required": [],

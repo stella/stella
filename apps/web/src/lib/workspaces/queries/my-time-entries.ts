@@ -3,6 +3,7 @@ import { infiniteQueryOptions } from "@tanstack/react-query";
 import { myTimeEntriesApi } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
+import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 
 const MY_TIME_ENTRIES_PAGE_SIZE = 50;
 
@@ -22,6 +23,7 @@ export const myTimeEntriesInfiniteOptions = (
 ) =>
   infiniteQueryOptions({
     queryKey: myTimeEntriesKeys.day(organizationId, userId, date),
+    staleTime: ROUTE_QUERY_STALE_TIME_MS,
     initialPageParam: stringCursorSeed(),
     queryFn: async ({ pageParam, signal }) =>
       unwrapEden(

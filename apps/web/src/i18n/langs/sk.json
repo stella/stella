@@ -477,6 +477,23 @@
     "failedToStartTimer": "Nepodarilo sa spustiť časovač",
     "failedToStopTimer": "Nepodarilo sa zastaviť časovač",
     "filterStatus": "Filtrovať podľa stavu",
+    "globalTimer": {
+      "confirm": "Potvrdiť čas",
+      "dailyTarget": "Môj denný cieľ",
+      "discard": "Zahodiť časovač",
+      "invalidDailyTarget": "Zadajte celé číslo od 1 do 1440 minút alebo nechajte pole prázdne.",
+      "leftToday": "Dnes zostáva",
+      "loggedToday": "Dnes vykázané",
+      "matterInaccessible": "Vyberte spis, ku ktorému máte prístup.",
+      "narrativeRequired": "Pred potvrdením času pridajte popis.",
+      "noDailyTarget": "Bez denného cieľa",
+      "pause": "Pozastaviť",
+      "periodLocked": "Tento mesiac je uzamknutý. Požiadajte správcu o jeho odomknutie.",
+      "resume": "Pokračovať",
+      "targetHelp": "Zadajte denný cieľ v minútach alebo pole vyprázdnite, ak chcete cieľ zrušiť.",
+      "timerUnavailable": "Tento časovač už nie je dostupný. Obnovte zoznam.",
+      "title": "Časovače"
+    },
     "hourlyRateMustBeNonNegative": "Hodinová sadzba nesmie byť záporná",
     "hours": "Hodiny",
     "invoiceNarrative": "Popis faktúry",
@@ -521,6 +538,20 @@
     "noActiveTimer": "Žiadny aktívny časovač",
     "noEntries": "Žiadne časové záznamy za toto obdobie",
     "nonBillable": "Nefakturovateľné",
+    "quickEntry": {
+      "entrySaved": "Časový záznam uložený",
+      "expenseSaved": "Výdavok uložený",
+      "expenseTitle": "Pridať výdavok",
+      "futureDate": "Vyberte dnešný alebo skorší dátum.",
+      "invalidDate": "Vyberte platný dátum práce.",
+      "minimumUnit": "Čas sa zaokrúhľuje nahor na minimálnu účtovaciu jednotku.",
+      "narrativeRequired": "Pred uložením času pridajte popis.",
+      "outsideEditWindow": "Tento dátum je mimo lehoty na úpravy.",
+      "periodLocked": "Tento mesiac je uzamknutý.",
+      "saveAndAddExpense": "Uložiť a pridať výdavok",
+      "saveAndNew": "Uložiť a pridať ďalší",
+      "viewDay": "Zobraziť deň"
+    },
     "rates": {
       "addRate": "Pridať sadzbu",
       "createRateTable": "Vytvoriť tabuľku sadzieb",
@@ -837,6 +868,7 @@
         "publishedOnWeb": "Zverejnené na webe"
       },
       "statutes": "Aplikované predpisy",
+      "textNotYetAvailable": "Súd text rozhodnutia nezverejnil alebo tu zatiaľ nie je dostupný.",
       "textPending": "Text rozhodnutia sa stále načítava",
       "textReadFailed": "Text rozhodnutia sa nepodarilo načítať",
       "textUnavailable": "K tomuto rozhodnutiu nie je k dispozícii text"
@@ -2258,7 +2290,8 @@
     "compareUnsupportedReasons": {
       "missingInBase": "Časť dokumentu existuje iba v cieli",
       "missingInTarget": "Časť dokumentu existuje iba v základni",
-      "notEditable": "Časť dokumentu nie je možné upravovať"
+      "notEditable": "Časť dokumentu nie je možné upravovať",
+      "unsupportedContent": "Táto verzia obsahuje obsah, ktorý zatiaľ nemožno porovnať."
     },
     "compareUnverified": "Neoverené porovnanie",
     "compareVerificationFailures": "{count, plural, one {Jedna obojsmerná kontrola zlyhala. Skontrolujte porovnanie skôr, ako sa naň spoľahnete.} few {# obojsmerné kontroly zlyhali. Skontrolujte porovnanie skôr, ako sa naň spoľahnete.} other {# obojsmerných kontrol zlyhalo. Skontrolujte porovnanie skôr, ako sa naň spoľahnete.}}",
@@ -4306,6 +4339,20 @@
       "renameDescription": "Členovia uvidia nový názov okamžite.",
       "renameTitle": "Premenovať organizáciu",
       "renameTypeToConfirm": "Pre potvrdenie napíšte nový názov: {name}",
+      "timePolicy": {
+        "description": "Nastavte zaokrúhľovanie času, obmedzenia úprav a uzamykanie mesiacov.",
+        "editWindow": "Lehota na úpravy (dni)",
+        "editWindowHelp": "Nula povoľuje úpravy iba v deň vykonania práce.",
+        "invalidEditWindow": "Zadajte celé nezáporné číslo udávajúce počet dní.",
+        "invalidLockedMonth": "Vyberte už ukončený mesiac.",
+        "invalidMinimumUnit": "Vyberte časovú jednotku, ktorá bezo zvyšku delí 60 minút.",
+        "lockedThrough": "Uzamknuté do",
+        "lockedThroughHelp": "Záznamy v tomto mesiaci a predchádzajúcich mesiacoch nemožno upravovať.",
+        "minimumUnit": "Minimálna časová jednotka",
+        "minimumUnitHelp": "Čas sa účtuje v násobkoch tohto počtu minút.",
+        "narrativeRequired": "Vyžadovať popis",
+        "title": "Pravidlá vykazovania času"
+      },
       "usage": "Využitie",
       "usageDescription": "Limity využitia a stav oprávnenia pre túto organizáciu",
       "usageEmptyDescription": "Nakonfigurujte oprávnenie na využitie, aby organizácia mohla používať merané funkcie AI.",
@@ -5003,6 +5050,11 @@
     "whenNotToUsePlaceholder": "Kedy sa tomuto vzoru vyhnúť?",
     "whenToUse": "Kedy použiť",
     "whenToUsePlaceholder": "Kedy sa má tento vzor použiť? (pomáha AI s výberom vzoru)"
+  },
+  "timesheets": {
+    "day": {
+      "internalWork": "Interná práca"
+    }
   },
   "translate": {
     "dialog": {

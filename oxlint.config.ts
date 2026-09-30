@@ -1210,6 +1210,7 @@ export default defineConfig({
     "./.oxlint-plugins/require-search-scope.ts",
     "./.oxlint-plugins/no-direct-ingestion-checkpoint-write.ts",
     "./.oxlint-plugins/no-literal-decision-court.ts",
+    "./.oxlint-plugins/no-parser-validator-calls.ts",
     "./.oxlint-plugins/no-raw-decision-text-fields.ts",
     "./.oxlint-plugins/no-unowned-file-version-write.ts",
     "./.oxlint-plugins/mcp-security.ts",
@@ -1689,7 +1690,6 @@ export default defineConfig({
               "apps/web/src/routes/_protected.settings/account.profile.tsx",
               "apps/web/src/routes/_protected.settings/organization.usage.tsx",
               "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-row.tsx",
-              "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/timer-controls.tsx",
               "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx",
               "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/extraction-run-progress.tsx",
               "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx",
@@ -3040,6 +3040,24 @@ export default defineConfig({
       rules: {
         "no-direct-ingestion-checkpoint-write/no-direct-ingestion-checkpoint-write":
           "error",
+      },
+    },
+    {
+      files: [
+        "apps/api/src/handlers/case-law/ingestion/{parsers,adapters}/**/*.ts",
+        "apps/api/src/lib/legal-search/parsers/**/*.ts",
+        ".oxlint-plugins/__fixtures__/no-parser-validator-calls.fixture.ts",
+        ".oxlint-plugins/__fixtures__/no-parser-validator-calls.fixture.import.ts",
+        ".oxlint-plugins/__fixtures__/no-parser-validator-calls.fixture.call.ts",
+        ".oxlint-plugins/__fixtures__/no-parser-validator-calls.fixture.legacy.ts",
+        ".oxlint-plugins/__fixtures__/no-parser-validator-calls.fixture.stale.ts",
+      ],
+      excludeFiles: [
+        "**/*.test.ts",
+        "apps/api/src/lib/legal-search/parsers/validate-ast.ts",
+      ],
+      rules: {
+        "no-parser-validator-calls/no-parser-validator-calls": "error",
       },
     },
     {

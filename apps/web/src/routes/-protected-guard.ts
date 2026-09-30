@@ -2,10 +2,14 @@ import type { QueryClient } from "@tanstack/react-query";
 import { redirect } from "@tanstack/react-router";
 import { panic } from "better-result";
 
+import { timeTimersOptions } from "@/features/time-timers/queries";
 import { isInboxPreviewEnabled } from "@/hooks/use-inbox-preview";
+import { isTimeBillingPreviewEnabled } from "@/hooks/use-time-billing-preview";
 import { getAnalytics } from "@/lib/analytics/provider";
+import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
+import { localISODate } from "@/lib/local-iso-date";
 import { notificationsOptions } from "@/lib/notification-queries";
 import { aiAvailabilityOptions } from "@/lib/organization/ai-config-queries";
 import { usePinnedStore } from "@/lib/pinned-store";
@@ -14,6 +18,7 @@ import {
   prefetchRouteQuery,
 } from "@/lib/react-query";
 import { returnPathOf } from "@/lib/redirect";
+import { myTimeEntriesInfiniteOptions } from "@/lib/workspaces/queries/my-time-entries";
 import { loadAuthContext } from "@/routes/-auth-context";
 
 // The signed-in routes' guard, apart from the signed-in frame so a route can
@@ -106,8 +111,44 @@ export const loadProtectedContext = async ({
 export const prefetchProtectedShell = async ({
   context,
 }: {
-  context: { queryClient: QueryClient };
-}) =>
+  context: {
+    queryClient: QueryClient;
+    user: { id: string; activeOrganizationId: string };
+  };
+}) => {
   await prefetchRouteQuery(context.queryClient, roleOptions, (error) => {
     getAnalytics().captureError(error);
   });
+  const role = context.queryClient.getQueryData(roleOptions.queryKey);
+  if (
+    !isTimeBillingPreviewEnabled() ||
+    role === undefined ||
+    !authClient.organization.checkRolePermission({
+      role,
+      permissions: { timeEntry: ["read"] },
+    })
+  ) {
+    return;
+  }
+  const onPrefetchError = (error: unknown) =>
+    getAnalytics().captureError(error);
+  detached(
+    Promise.all([
+      prefetchNonCriticalInfiniteQuery(
+        context.queryClient,
+        timeTimersOptions(context.user.activeOrganizationId, context.user.id),
+        onPrefetchError,
+      ),
+      prefetchNonCriticalInfiniteQuery(
+        context.queryClient,
+        myTimeEntriesInfiniteOptions(
+          context.user.activeOrganizationId,
+          context.user.id,
+          localISODate(),
+        ),
+        onPrefetchError,
+      ),
+    ]),
+    "protected-layout.time-prefetch",
+  );
+};

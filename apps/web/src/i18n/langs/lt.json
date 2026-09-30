@@ -477,6 +477,23 @@
     "failedToStartTimer": "Nepavyko paleisti laikmačio",
     "failedToStopTimer": "Nepavyko sustabdyti laikmačio",
     "filterStatus": "Filtruoti pagal būseną",
+    "globalTimer": {
+      "confirm": "Patvirtinti laiką",
+      "dailyTarget": "Mano dienos tikslas",
+      "discard": "Atmesti laikmatį",
+      "invalidDailyTarget": "Įveskite sveikąjį skaičių nuo 1 iki 1440 minučių arba palikite lauką tuščią.",
+      "leftToday": "Šiandien liko",
+      "loggedToday": "Šiandien užregistruota",
+      "matterInaccessible": "Pasirinkite bylą, prie kurios turite prieigą.",
+      "narrativeRequired": "Prieš patvirtindami laiką pridėkite aprašymą.",
+      "noDailyTarget": "Dienos tikslas nenustatytas",
+      "pause": "Pristabdyti",
+      "periodLocked": "Šis mėnuo užrakintas. Paprašykite administratoriaus jį atrakinti.",
+      "resume": "Tęsti",
+      "targetHelp": "Įveskite dienos tikslą minutėmis arba palikite lauką tuščią, kad jį pašalintumėte.",
+      "timerUnavailable": "Šis laikmatis nebepasiekiamas. Atnaujinkite sąrašą.",
+      "title": "Laikmačiai"
+    },
     "hourlyRateMustBeNonNegative": "Valandinis įkainis negali būti neigiamas",
     "hours": "Valandos",
     "invoiceNarrative": "Sąskaitos aprašas",
@@ -521,6 +538,20 @@
     "noActiveTimer": "Nėra aktyvaus laikmačio",
     "noEntries": "Šiam laikotarpiui laiko įrašų nėra",
     "nonBillable": "Neapmokamas",
+    "quickEntry": {
+      "entrySaved": "Laiko įrašas išsaugotas",
+      "expenseSaved": "Išlaida išsaugota",
+      "expenseTitle": "Pridėti išlaidą",
+      "futureDate": "Pasirinkite šiandieną arba ankstesnę datą.",
+      "invalidDate": "Pasirinkite galiojančią darbo datą.",
+      "minimumUnit": "Laikas apvalinamas į didesnę pusę iki mažiausio atsiskaitymo vieneto.",
+      "narrativeRequired": "Prieš išsaugodami laiką pridėkite aprašymą.",
+      "outsideEditWindow": "Ši data nepatenka į redagavimo terminą.",
+      "periodLocked": "Šis mėnuo užrakintas.",
+      "saveAndAddExpense": "Išsaugoti ir pridėti išlaidą",
+      "saveAndNew": "Išsaugoti ir pridėti kitą įrašą",
+      "viewDay": "Peržiūrėti dieną"
+    },
     "rates": {
       "addRate": "Pridėti įkainį",
       "createRateTable": "Sukurti įkainių lentelę",
@@ -837,6 +868,7 @@
         "publishedOnWeb": "Paskelbta internete"
       },
       "statutes": "Taikomi teisės aktai",
+      "textNotYetAvailable": "Teismas nepaskelbė sprendimo teksto arba jis čia dar neprieinamas.",
       "textPending": "Sprendimo tekstas dar gaunamas",
       "textReadFailed": "Nepavyko įkelti sprendimo teksto",
       "textUnavailable": "Šiam sprendimui teksto nėra"
@@ -2258,7 +2290,8 @@
     "compareUnsupportedReasons": {
       "missingInBase": "Dokumento dalis egzistuoja tik taikinyje",
       "missingInTarget": "Dokumento dalis egzistuoja tik bazėje",
-      "notEditable": "Dokumento dalis neredaguojama"
+      "notEditable": "Dokumento dalis neredaguojama",
+      "unsupportedContent": "Šioje versijoje yra turinio, kurio dar negalima palyginti."
     },
     "compareUnverified": "Nepatvirtintas palyginimas",
     "compareVerificationFailures": "{count, plural, one {Vienas abipusis patikrinimas nepavyko. Prieš pasikliaudami rezultatu, peržiūrėkite palyginimą.} few {Nepavyko # abipusiai patikrinimai. Prieš pasikliaudami rezultatu, peržiūrėkite palyginimą.} other {Nepavyko # abipusių patikrinimų. Prieš pasikliaudami rezultatu, peržiūrėkite palyginimą.}}",
@@ -4306,6 +4339,20 @@
       "renameDescription": "Nariai naują pavadinimą matys iš karto.",
       "renameTitle": "Pervadinti organizaciją",
       "renameTypeToConfirm": "Norėdami patvirtinti, įveskite naują pavadinimą: {name}",
+      "timePolicy": {
+        "description": "Nustatykite laiko apvalinimą, redagavimo terminus ir mėnesių užrakinimą.",
+        "editWindow": "Redagavimo terminas (dienomis)",
+        "editWindowHelp": "Nulis leidžia redaguoti tik darbo atlikimo dieną.",
+        "invalidEditWindow": "Įveskite sveikąjį dienų skaičių, lygų nuliui arba didesnį.",
+        "invalidLockedMonth": "Pasirinkite jau pasibaigusį mėnesį.",
+        "invalidMinimumUnit": "Pasirinkite laiko vienetą, iš kurio 60 minučių dalijasi be liekanos.",
+        "lockedThrough": "Užrakinta iki",
+        "lockedThroughHelp": "Šio ir ankstesnių mėnesių įrašų redaguoti negalima.",
+        "minimumUnit": "Mažiausias laiko vienetas",
+        "minimumUnitHelp": "Laikas apmokestinamas šio minučių skaičiaus kartotiniais.",
+        "narrativeRequired": "Reikalauti aprašo",
+        "title": "Laiko apskaitos taisyklės"
+      },
       "usage": "Naudojimas",
       "usageDescription": "Šios organizacijos naudojimo limitai ir teisės būsena",
       "usageEmptyDescription": "Sukonfigūruokite naudojimo teisę, kad šiai organizacijai būtų įjungtos matuojamos DI funkcijos.",
@@ -5003,6 +5050,11 @@
     "whenNotToUsePlaceholder": "Kada šio šablono vengti?",
     "whenToUse": "Kada naudoti",
     "whenToUsePlaceholder": "Kada turėtų būti naudojamas šis šablonas? (padeda DI pasirinkti šabloną)"
+  },
+  "timesheets": {
+    "day": {
+      "internalWork": "Vidaus darbas"
+    }
   },
   "translate": {
     "dialog": {

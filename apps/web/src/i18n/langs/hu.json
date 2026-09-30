@@ -477,6 +477,23 @@
     "failedToStartTimer": "Nem sikerült elindítani az időmérőt",
     "failedToStopTimer": "Nem sikerült leállítani az időmérőt",
     "filterStatus": "Szűrés státusz szerint",
+    "globalTimer": {
+      "confirm": "Idő megerősítése",
+      "dailyTarget": "Saját napi célom",
+      "discard": "Időmérő elvetése",
+      "invalidDailyTarget": "Adjon meg egy egész számot 1 és 1440 perc között, vagy hagyja üresen a mezőt.",
+      "leftToday": "Mára hátralévő idő",
+      "loggedToday": "Ma rögzítve",
+      "matterInaccessible": "Válasszon egy ügyet, amelyhez van hozzáférése.",
+      "narrativeRequired": "Az idő megerősítése előtt adjon meg egy leírást.",
+      "noDailyTarget": "Nincs napi cél",
+      "pause": "Szüneteltetés",
+      "periodLocked": "Ez a hónap zárolva van. Kérje meg a rendszergazdát a feloldására.",
+      "resume": "Folytatás",
+      "targetHelp": "Adja meg a napi célt percben, vagy hagyja üresen a mezőt a cél törléséhez.",
+      "timerUnavailable": "Ez az időmérő már nem érhető el. Frissítse a listát.",
+      "title": "Időmérők"
+    },
     "hourlyRateMustBeNonNegative": "Az óradíj nem lehet negatív",
     "hours": "Órák",
     "invoiceNarrative": "Számla szövege",
@@ -521,6 +538,20 @@
     "noActiveTimer": "Nincs aktív időmérő",
     "noEntries": "Nincsenek időbejegyzések ebben az időszakban",
     "nonBillable": "Nem számlázható",
+    "quickEntry": {
+      "entrySaved": "Időbejegyzés mentve",
+      "expenseSaved": "Költség mentve",
+      "expenseTitle": "Költség hozzáadása",
+      "futureDate": "Válassza a mai napot vagy egy korábbi dátumot.",
+      "invalidDate": "Válasszon érvényes munkavégzési dátumot.",
+      "minimumUnit": "Az időt a legkisebb elszámolási egységre kerekítjük felfelé.",
+      "narrativeRequired": "Az idő mentése előtt adjon meg egy leírást.",
+      "outsideEditWindow": "Ez a dátum kívül esik a szerkesztési határidőn.",
+      "periodLocked": "Ez a hónap zárolva van.",
+      "saveAndAddExpense": "Mentés és költség hozzáadása",
+      "saveAndNew": "Mentés és új bejegyzés",
+      "viewDay": "Nap megtekintése"
+    },
     "rates": {
       "addRate": "Díjszabás hozzáadása",
       "createRateTable": "Díjtáblázat létrehozása",
@@ -837,6 +868,7 @@
         "publishedOnWeb": "Weben közzétéve"
       },
       "statutes": "Alkalmazandó jogszabályok",
+      "textNotYetAvailable": "A bíróság nem tette közzé a határozat szövegét, vagy az itt még nem érhető el.",
       "textPending": "A határozat szövege még betöltés alatt áll",
       "textReadFailed": "A határozat szövegét nem sikerült betölteni",
       "textUnavailable": "Ehhez a határozathoz nem érhető el szöveg"
@@ -2258,7 +2290,8 @@
     "compareUnsupportedReasons": {
       "missingInBase": "A dokumentum rész csak a célban létezik",
       "missingInTarget": "A dokumentum rész csak az alapban létezik",
-      "notEditable": "A dokumentum rész nem szerkeszthető"
+      "notEditable": "A dokumentum rész nem szerkeszthető",
+      "unsupportedContent": "Ez a verzió olyan tartalmat tartalmaz, amely egyelőre nem hasonlítható össze."
     },
     "compareUnverified": "Ellenőrizetlen összehasonlítás",
     "compareVerificationFailures": "{count, plural, one {Egy oda-vissza ellenőrzés sikertelen volt. Ellenőrizze az összehasonlítást, mielőtt támaszkodik rá.} other {# oda-vissza ellenőrzés sikertelen volt. Ellenőrizze az összehasonlítást, mielőtt támaszkodik rá.}}",
@@ -4306,6 +4339,20 @@
       "renameDescription": "A tagok azonnal látni fogják az új nevet.",
       "renameTitle": "Szervezet átnevezése",
       "renameTypeToConfirm": "A megerősítéshez írja be az új nevet: {name}",
+      "timePolicy": {
+        "description": "Állítsa be az idő kerekítését, a szerkesztési határidőket és a hónapok zárolását.",
+        "editWindow": "Szerkesztési határidő (nap)",
+        "editWindowHelp": "A nulla csak a munkavégzés napján engedélyezi a szerkesztést.",
+        "invalidEditWindow": "Adjon meg egy nulla vagy nagyobb egész számot a napok számához.",
+        "invalidLockedMonth": "Válasszon egy már lezárult hónapot.",
+        "invalidMinimumUnit": "Válasszon olyan időegységet, amely maradék nélkül osztja a 60 percet.",
+        "lockedThrough": "Zárolás eddig a hónapig",
+        "lockedThroughHelp": "Az ebben és a korábbi hónapokban rögzített bejegyzések nem szerkeszthetők.",
+        "minimumUnit": "Legkisebb időegység",
+        "minimumUnitHelp": "Az idő elszámolása ennyi perc többszöröseiben történik.",
+        "narrativeRequired": "Szöveges leírás megkövetelése",
+        "title": "Időelszámolási szabályok"
+      },
       "usage": "Használat",
       "usageDescription": "Használati korlátok és jogosultsági állapot ehhez a szervezethez",
       "usageEmptyDescription": "Állíts be használati jogosultságot, hogy a szervezet használhassa a mért AI-funkciókat.",
@@ -5003,6 +5050,11 @@
     "whenNotToUsePlaceholder": "Mikor kerülendő ez a sablon?",
     "whenToUse": "Mikor használja",
     "whenToUsePlaceholder": "Mikor használandó ez a sablon? (segíti az AI sablonválasztását)"
+  },
+  "timesheets": {
+    "day": {
+      "internalWork": "Belső munka"
+    }
   },
   "translate": {
     "dialog": {

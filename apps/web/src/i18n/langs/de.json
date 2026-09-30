@@ -477,6 +477,23 @@
     "failedToStartTimer": "Timer konnte nicht gestartet werden",
     "failedToStopTimer": "Timer konnte nicht gestoppt werden",
     "filterStatus": "Nach Status filtern",
+    "globalTimer": {
+      "confirm": "Zeit bestätigen",
+      "dailyTarget": "Mein Tagesziel",
+      "discard": "Timer verwerfen",
+      "invalidDailyTarget": "Geben Sie eine ganze Zahl von 1 bis 1440 Minuten ein oder lassen Sie das Feld leer.",
+      "leftToday": "Heute verbleibend",
+      "loggedToday": "Heute erfasst",
+      "matterInaccessible": "Wählen Sie eine Akte, auf die Sie zugreifen können.",
+      "narrativeRequired": "Fügen Sie eine Beschreibung hinzu, bevor Sie die Zeit bestätigen.",
+      "noDailyTarget": "Kein Tagesziel",
+      "pause": "Pausieren",
+      "periodLocked": "Dieser Monat ist gesperrt. Bitten Sie einen Administrator, ihn zu entsperren.",
+      "resume": "Fortsetzen",
+      "targetHelp": "Geben Sie Ihr Tagesziel in Minuten ein oder lassen Sie das Feld leer, um es zu löschen.",
+      "timerUnavailable": "Dieser Timer ist nicht mehr verfügbar. Aktualisieren Sie die Liste.",
+      "title": "Timer"
+    },
     "hourlyRateMustBeNonNegative": "Der Stundensatz darf nicht negativ sein",
     "hours": "Stunden",
     "invoiceNarrative": "Rechnungstext",
@@ -521,6 +538,20 @@
     "noActiveTimer": "Kein aktiver Timer",
     "noEntries": "Keine Zeiteinträge für diesen Zeitraum",
     "nonBillable": "Nicht abrechenbar",
+    "quickEntry": {
+      "entrySaved": "Zeiteintrag gespeichert",
+      "expenseSaved": "Ausgabe gespeichert",
+      "expenseTitle": "Ausgabe hinzufügen",
+      "futureDate": "Wählen Sie heute oder ein früheres Datum.",
+      "invalidDate": "Wählen Sie ein gültiges Arbeitsdatum.",
+      "minimumUnit": "Zeit wird auf die kleinste Abrechnungseinheit aufgerundet.",
+      "narrativeRequired": "Fügen Sie eine Beschreibung hinzu, bevor Sie die Zeit speichern.",
+      "outsideEditWindow": "Dieses Datum liegt außerhalb der Bearbeitungsfrist.",
+      "periodLocked": "Dieser Monat ist gesperrt.",
+      "saveAndAddExpense": "Speichern und Ausgabe hinzufügen",
+      "saveAndNew": "Speichern und weiteren Eintrag hinzufügen",
+      "viewDay": "Tag anzeigen"
+    },
     "rates": {
       "addRate": "Tarif hinzufügen",
       "createRateTable": "Tariftabelle erstellen",
@@ -837,6 +868,7 @@
         "publishedOnWeb": "Im Web veröffentlicht"
       },
       "statutes": "Anwendbare Vorschriften",
+      "textNotYetAvailable": "Das Gericht hat den Entscheidungstext nicht veröffentlicht, oder er ist hier noch nicht verfügbar.",
       "textPending": "Der Entscheidungstext wird noch abgerufen",
       "textReadFailed": "Der Entscheidungstext konnte nicht geladen werden",
       "textUnavailable": "Für diese Entscheidung liegt kein Text vor"
@@ -2258,7 +2290,8 @@
     "compareUnsupportedReasons": {
       "missingInBase": "Dokumentteil existiert nur im Ziel",
       "missingInTarget": "Dokumentteil existiert nur in der Basis",
-      "notEditable": "Der Dokumentteil kann nicht bearbeitet werden"
+      "notEditable": "Der Dokumentteil kann nicht bearbeitet werden",
+      "unsupportedContent": "Diese Version enthält Inhalte, die noch nicht verglichen werden können."
     },
     "compareUnverified": "Nicht verifizierter Vergleich",
     "compareVerificationFailures": "{count, plural, one {Eine Round-Trip-Prüfung ist fehlgeschlagen. Prüfen Sie diesen Vergleich, bevor Sie sich darauf verlassen.} other {# Round-Trip-Prüfungen sind fehlgeschlagen. Prüfen Sie diesen Vergleich, bevor Sie sich darauf verlassen.}}",
@@ -4306,6 +4339,20 @@
       "renameDescription": "Mitglieder sehen den neuen Namen sofort.",
       "renameTitle": "Organisation umbenennen",
       "renameTypeToConfirm": "Geben Sie zur Bestätigung den neuen Namen ein: {name}",
+      "timePolicy": {
+        "description": "Legen Sie Zeitrundung, Bearbeitungsfristen und Monatssperren fest.",
+        "editWindow": "Bearbeitungsfrist (Tage)",
+        "editWindowHelp": "Bei null sind Änderungen nur am Tag der geleisteten Arbeit erlaubt.",
+        "invalidEditWindow": "Geben Sie eine ganze Anzahl von Tagen ein, mindestens null.",
+        "invalidLockedMonth": "Wählen Sie einen abgeschlossenen Monat.",
+        "invalidMinimumUnit": "Wählen Sie eine Zeiteinheit, die 60 Minuten ohne Rest teilt.",
+        "lockedThrough": "Gesperrt bis einschließlich",
+        "lockedThroughHelp": "Einträge in diesem und früheren Monaten können nicht bearbeitet werden.",
+        "minimumUnit": "Kleinste Zeiteinheit",
+        "minimumUnitHelp": "Zeit wird in Vielfachen dieser Minutenzahl abgerechnet.",
+        "narrativeRequired": "Beschreibungstext erforderlich",
+        "title": "Regeln zur Zeiterfassung"
+      },
       "usage": "Nutzung",
       "usageDescription": "Nutzungslimits und Berechtigungsstatus für diese Organisation",
       "usageEmptyDescription": "Konfigurieren Sie eine Nutzungsberechtigung, um gemessene KI-Funktionen für diese Organisation zu aktivieren.",
@@ -5003,6 +5050,11 @@
     "whenNotToUsePlaceholder": "Wann sollte diese Vorlage nicht verwendet werden?",
     "whenToUse": "Wann verwenden",
     "whenToUsePlaceholder": "Wann sollte diese Vorlage verwendet werden? (hilft der KI bei der Vorlagenauswahl)"
+  },
+  "timesheets": {
+    "day": {
+      "internalWork": "Interne Arbeit"
+    }
   },
   "translate": {
     "dialog": {

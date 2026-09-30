@@ -1,6 +1,8 @@
 import { panic, Result } from "better-result";
 import { and, eq, ne, sql } from "drizzle-orm";
 
+import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
+
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { TIME_ENTRY_SOURCE, timeEntries } from "@/api/db/schema";
@@ -16,6 +18,7 @@ import {
 import type { TimePolicy } from "@/api/lib/billing-time";
 import { resolveRate } from "@/api/lib/billing/rates";
 import { canApproveTimeEntries } from "@/api/lib/billing/time-entry-authorization";
+import { lockTimerOwner } from "@/api/lib/billing/time-timers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -61,6 +64,33 @@ type PreparedTimeEntry = {
   activityCode: string | null;
 };
 
+type TimeEntryPolicyCheckOptions = {
+  policy: TimePolicy;
+  canApprove: boolean;
+  body: Pick<TimeEntryInsertInput, "dateWorked" | "timezoneId" | "narrative">;
+  dateWindow: "entry" | "timer_completion";
+};
+const checkInsertTimePolicy = function* ({
+  policy,
+  canApprove,
+  body,
+  dateWindow,
+}: TimeEntryPolicyCheckOptions) {
+  const today = yield* formatTodayInTimeZone({ timezoneId: body.timezoneId });
+  const violation = getTimePolicyViolation({
+    policy,
+    dateWorked: body.dateWorked,
+    today,
+    // Completing a previously started timer preserves the original stop semantics.
+    canApprove: canApprove || dateWindow === "timer_completion",
+    narrative: body.narrative,
+  });
+  if (violation) {
+    return yield* Result.err(violation);
+  }
+  return undefined;
+};
+
 // Validation and rate resolution shared by every path that creates a time
 // entry: the date window, the optional work item, and the effective rate.
 // May reuse a caller-owned transaction when a timer must be consumed atomically.
@@ -74,20 +104,7 @@ export const prepareTimeEntryInsert = async function* ({
   dateWindow = "entry",
   billingSnapshot,
 }: PrepareTimeEntryInsertProps) {
-  const todayStr = yield* formatTodayInTimeZone({
-    timezoneId: body.timezoneId,
-  });
-  const policyViolation = getTimePolicyViolation({
-    policy,
-    dateWorked: body.dateWorked,
-    today: todayStr,
-    // Completing a previously started timer preserves the original stop semantics.
-    canApprove: canApprove || dateWindow === "timer_completion",
-    narrative: body.narrative,
-  });
-  if (policyViolation) {
-    return yield* Result.err(policyViolation);
-  }
+  yield* checkInsertTimePolicy({ policy, canApprove, body, dateWindow });
 
   const workItemId = body.workItemId ?? null;
 
@@ -214,12 +231,24 @@ export const insertPreparedTimeEntry = async ({
   prepared,
   recordAuditEvent,
 }: InsertPreparedTimeEntryOptions): Promise<{ id: SafeId<"timeEntry"> }> => {
+  const matter = await tx.query.workspaces.findFirst({
+    where: {
+      id: { eq: workspaceId },
+      organizationId: { eq: organizationId },
+    },
+    columns: { leadUserId: true },
+  });
+  if (!matter) {
+    return panic("Authorized matter disappeared before time entry creation");
+  }
   const [entry] = await tx
     .insert(timeEntries)
     .values({
       organizationId,
+      activityGroup: TIME_ENTRY_ACTIVITY_GROUP.CLIENT,
       workspaceId,
       userId,
+      approverUserId: matter.leadUserId,
       workItemId: prepared.workItemId,
       dateWorked: prepared.dateWorked,
       timezoneId: prepared.timezoneId,
@@ -262,6 +291,135 @@ export const insertPreparedTimeEntry = async ({
     },
   });
 
+  return { id: entry.id };
+};
+
+type InternalTimeEntryInput = Pick<
+  TimeEntryInsertInput,
+  | "dateWorked"
+  | "timezoneId"
+  | "durationMinutes"
+  | "narrative"
+  | "narrativeLanguage"
+>;
+type PrepareInternalTimeEntryOptions = {
+  policy: TimePolicy;
+  canApprove: boolean;
+  body: InternalTimeEntryInput;
+  dateWindow?: "entry" | "timer_completion";
+};
+
+export const prepareInternalTimeEntryInsert = function* ({
+  policy,
+  canApprove,
+  body,
+  dateWindow = "entry",
+}: PrepareInternalTimeEntryOptions) {
+  yield* checkInsertTimePolicy({ policy, canApprove, body, dateWindow });
+  return {
+    dateWorked: body.dateWorked,
+    timezoneId: body.timezoneId,
+    durationMinutes: body.durationMinutes,
+    narrative: body.narrative,
+    narrativeLanguage: body.narrativeLanguage ?? null,
+    billedMinutes: 0,
+  };
+};
+
+type InternalEntryOwner = {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+};
+export const lockInternalTimeEntryCapacity = async ({
+  tx,
+  organizationId,
+  userId,
+}: InternalEntryOwner) => {
+  await lockTimerOwner(tx, { organizationId, userId });
+  const count = await tx.$count(
+    timeEntries,
+    and(
+      eq(timeEntries.organizationId, organizationId),
+      eq(timeEntries.userId, userId),
+      eq(timeEntries.activityGroup, TIME_ENTRY_ACTIVITY_GROUP.INTERNAL),
+    ),
+  );
+  if (count >= LIMITS.internalTimeEntriesPerUser) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        code: "time_entry_limit",
+        message: "Internal time entry limit reached",
+        hint: "Export or remove older internal entries before creating more.",
+      }),
+    );
+  }
+  return Result.ok(undefined);
+};
+
+type InsertInternalTimeEntryOptions = InternalEntryOwner & {
+  source: TimeEntrySource;
+  prepared: InternalTimeEntryInput;
+  recordAuditEvent: AuditRecorder;
+};
+/** Insert after the owner's capacity lock, within the same transaction. */
+export const insertPreparedInternalTimeEntry = async ({
+  tx,
+  organizationId,
+  userId,
+  source,
+  prepared,
+  recordAuditEvent,
+}: InsertInternalTimeEntryOptions) => {
+  const [entry] = await tx
+    .insert(timeEntries)
+    .values({
+      organizationId,
+      userId,
+      activityGroup: TIME_ENTRY_ACTIVITY_GROUP.INTERNAL,
+      workspaceId: null,
+      workItemId: null,
+      approverUserId: null,
+      dateWorked: prepared.dateWorked,
+      timezoneId: prepared.timezoneId,
+      durationMinutes: prepared.durationMinutes,
+      billedMinutes: 0,
+      rateAtEntry: cents(0),
+      currency: UNPRICED_TIME_ENTRY_CURRENCY,
+      narrative: prepared.narrative,
+      narrativeLanguage: prepared.narrativeLanguage ?? null,
+      billable: false,
+      noCharge: false,
+      taskCode: null,
+      activityCode: null,
+      invoiceId: null,
+      invoiceNarrative: null,
+      source,
+    })
+    .returning({ id: timeEntries.id });
+  if (!entry) {
+    return panic("Internal time entry insert returned no row");
+  }
+  await recordAuditEvent(tx, {
+    action: AUDIT_ACTION.CREATE,
+    resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
+    resourceId: entry.id,
+    workspaceId: null,
+    changes: {
+      created: {
+        old: null,
+        new: {
+          activityGroup: TIME_ENTRY_ACTIVITY_GROUP.INTERNAL,
+          dateWorked: prepared.dateWorked,
+          durationMinutes: prepared.durationMinutes,
+          billedMinutes: 0,
+          billable: false,
+          source,
+        },
+      },
+    },
+  });
   return { id: entry.id };
 };
 
