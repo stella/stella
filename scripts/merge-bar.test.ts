@@ -1291,6 +1291,40 @@ describe("release pull requests jump the merge queue", () => {
 });
 
 describe("repository merge hold", () => {
+  test.each([
+    { checkedByWorkflow: "1", githubActions: "true", expectedReads: 0 },
+    { checkedByWorkflow: "1", githubActions: undefined, expectedReads: 1 },
+    { checkedByWorkflow: undefined, githubActions: "true", expectedReads: 1 },
+    { checkedByWorkflow: "0", githubActions: "true", expectedReads: 1 },
+    { checkedByWorkflow: "1", githubActions: "false", expectedReads: 1 },
+  ])(
+    "workflow hold checks require both flags: %j",
+    ({ checkedByWorkflow, githubActions, expectedReads }) => {
+      let variableReads = 0;
+      let releaseReads = 0;
+      const result = checkMergeHold({
+        checkedByWorkflow,
+        githubActions,
+        readVariable: () => {
+          variableReads += 1;
+          return Result.ok("release pending");
+        },
+        readIsRelease: () => {
+          releaseReads += 1;
+          return Result.ok(false);
+        },
+      });
+      expect(variableReads).toBe(expectedReads);
+      expect(releaseReads).toBe(expectedReads);
+      expect(result.isOk()).toBe(expectedReads === 0);
+      if (result.isOk()) {
+        expect(result.value).toEqual({ source: "workflow" });
+      } else {
+        expect(result.error.message).toBe("MERGE HOLD: release pending");
+      }
+    },
+  );
+
   test.each([null, ""])(
     "an absent or empty hold allows ordinary pull requests: %j",
     (reason) => {

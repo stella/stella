@@ -46,4 +46,20 @@ if run_hold merge_group 'release pending' "$ref" error; then
   echo 'FAIL release listing errors must be refused' >&2; exit 1
 fi
 grep -q 'release listing unavailable' "$stub_dir/error"
+# The authoritative read belongs to the final verdict, after aggregation.
+workflow="$script_dir/../.github/workflows/ci.yml"
+verdict_job=$(sed -n '/^  ci-result:/,$p' "$workflow")
+[[ "$(grep -c 'name: Main merge hold' "$workflow")" == 1 ]]
+grep -q 'name: Main merge hold' <<<"$verdict_job"
+grep -q "if: github.event_name == 'merge_group' && vars.STELLA_MERGE_HOLD != ''" <<<"$verdict_job"
+grep -q 'STELLA_MERGE_HOLD:.*vars.STELLA_MERGE_HOLD' <<<"$verdict_job"
+grep -q 'scripts/release-pull-requests.sh' <<<"$verdict_job"
+evaluation_line=$(grep -n 'name: Evaluate CI outcome' <<<"$verdict_job" | cut -d: -f1)
+hold_line=$(grep -n 'name: Main merge hold' <<<"$verdict_job" | cut -d: -f1)
+[[ "$hold_line" -gt "$evaluation_line" ]]
+
+# Version Packages delegates the read only after its own variable gate.
+release_workflow="$script_dir/../.github/workflows/release-pr.yml"
+grep -q "if: needs.gate.outputs.may-version == 'true' && vars.STELLA_MERGE_HOLD == ''" "$release_workflow"
+grep -q 'auto-merge-command: STELLA_MERGE_HOLD_CHECKED_BY_WORKFLOW=1 bun scripts/merge-bar.ts' "$release_workflow"
 echo 'check-main-merge-hold.test.sh: ok'

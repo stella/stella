@@ -874,16 +874,6 @@ jobs:
           BASE_REF: ${{ github.base_ref || 'main' }}
         run: bun scripts/check-cli-release-coupling.ts --base "origin/$BASE_REF"
 
-      - name: Main merge hold
-        if: github.event_name == 'merge_group' && vars.STELLA_MERGE_HOLD != ''
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          GH_TOKEN: ${{ github.token }}
-          MERGE_GROUP_HEAD_REF: ${{ github.event.merge_group.head_ref }}
-          REPOSITORY: ${{ github.repository }}
-          STELLA_MERGE_HOLD: ${{ vars.STELLA_MERGE_HOLD }}
-        run: bash scripts/check-main-merge-hold.sh
-
       # The other half of that guard: while a release pull request is open, the
       # queue holds a pull request adding a CLI changeset until the release has
       # merged, so the release is never the one ejected. A pull request run
@@ -3734,3 +3724,24 @@ jobs:
               exit 1
               ;;
           esac
+
+      # Evaluate the variable when this final job starts, after the suites.
+      - name: Check out the merge hold rule
+        if: github.event_name == 'merge_group' && vars.STELLA_MERGE_HOLD != ''
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/check-main-merge-hold.sh
+            scripts/release-pull-requests.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Main merge hold
+        if: github.event_name == 'merge_group' && vars.STELLA_MERGE_HOLD != ''
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          GH_TOKEN: ${{ github.token }}
+          MERGE_GROUP_HEAD_REF: ${{ github.event.merge_group.head_ref }}
+          REPOSITORY: ${{ github.repository }}
+          STELLA_MERGE_HOLD: ${{ vars.STELLA_MERGE_HOLD }}
+        run: bash scripts/check-main-merge-hold.sh

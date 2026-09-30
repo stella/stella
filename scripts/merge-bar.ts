@@ -72,22 +72,30 @@ class MergeHoldError extends TaggedError("MergeHoldError")<{
 type CheckMergeHoldOptions = {
   readVariable: () => Result<string | null, MergeHoldReadError>;
   readIsRelease: () => Result<boolean, MergeHoldReadError>;
+  checkedByWorkflow?: string;
+  githubActions?: string;
 };
 
 export const checkMergeHold = ({
   readVariable,
   readIsRelease,
-}: CheckMergeHoldOptions) =>
-  readVariable().andThen((reason) => {
+  checkedByWorkflow,
+  githubActions,
+}: CheckMergeHoldOptions) => {
+  if (checkedByWorkflow === "1" && githubActions === "true") {
+    return Result.ok({ source: "workflow" } as const);
+  }
+  return readVariable().andThen((reason) => {
     if (reason === null || reason === "") {
-      return Result.ok(null);
+      return Result.ok({ source: "repository-variable" } as const);
     }
     return readIsRelease().andThen((isRelease) =>
       isRelease
-        ? Result.ok(null)
+        ? Result.ok({ source: "repository-variable" } as const)
         : Result.err(new MergeHoldError({ message: `MERGE HOLD: ${reason}` })),
     );
   });
+};
 
 // --- Repository policy --------------------------------------------------------
 
@@ -1476,10 +1484,18 @@ if (import.meta.main) {
     readVariable: () => readRepositoryMergeHold(options.repo),
     readIsRelease: () =>
       readReleaseRecognition(options.repo, options.pullNumber),
+    checkedByWorkflow: process.env["STELLA_MERGE_HOLD_CHECKED_BY_WORKFLOW"],
+    githubActions: process.env["GITHUB_ACTIONS"],
   });
   if (hold.isErr()) {
     console.error(hold.error.message);
     process.exit(1);
+  }
+
+  if (hold.value.source === "workflow") {
+    console.log(
+      "merge hold: checked by the calling workflow; final CI verdict enforces it",
+    );
   }
 
   const pullRequest = readSettledPullRequest(gateway);
