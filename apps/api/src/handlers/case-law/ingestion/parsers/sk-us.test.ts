@@ -141,7 +141,7 @@ test("Roman verdict items keep their holding role while reasoning titles enter t
     `<html><body><span>rozhodol:<br/>${verdict}<br/>II. Náhradu nepriznáva.<br/>Odôvodnenie:<br/>I. Ústavná sťažnosť<br/>Text odôvodnenia.<br/></span></body></html>`,
   );
   expect(
-    documentAst.blocks.find((block) => block.plainText?.includes(verdict)),
+    documentAst.blocks.find((block) => block.plainText.includes(verdict)),
   ).toMatchObject({ type: "paragraph", role: "holding" });
   expect(
     documentAst.blocks.find(
