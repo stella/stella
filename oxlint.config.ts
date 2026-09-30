@@ -1,8 +1,8 @@
 import { defineConfig } from "oxlint";
 import type { OxlintOverride } from "oxlint";
-import core from "ultracite/oxlint/core";
-import react from "ultracite/oxlint/react";
-import shadcn from "ultracite/oxlint/shadcn";
+import core from "./scripts/oxlint-presets/core.mjs";
+import react from "./scripts/oxlint-presets/react.mjs";
+import shadcn from "./scripts/oxlint-presets/shadcn.mjs";
 
 import {
   libraryIgnorePatterns,
@@ -135,6 +135,10 @@ const publicSsrAmbientStateRules = {
 } satisfies NonNullable<OxlintOverride["rules"]>;
 
 const fixtureRuleOverrides = [
+  fixtureRuleOverride("drizzle.fixture.ts", [
+    "drizzle/enforce-delete-with-where",
+    "drizzle/enforce-update-with-where",
+  ]),
   {
     files: [".oxlint-plugins/__fixtures__/public-ssr-ambient-state.fixture.ts"],
     rules: publicSsrAmbientStateRules,
@@ -1143,7 +1147,7 @@ export default defineConfig({
     stellaLowercasePluginSpecifier,
     "@tanstack/eslint-plugin-query",
     "@tanstack/eslint-plugin-router",
-    "eslint-plugin-drizzle",
+    "./.oxlint-plugins/drizzle.ts",
     "oxlint-tailwindcss",
     "@stll/oxlint-config/no-raw-colors",
     "./.oxlint-plugins/no-raw-date-input.ts",
