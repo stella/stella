@@ -9,11 +9,12 @@
  */
 
 import { panic } from "better-result";
-import JSZip from "jszip";
+import type JSZip from "jszip";
 import * as slimdom from "slimdom";
 
 import type { NamedCondition } from "@stll/template-conditions";
 
+import { loadDocx } from "@/api/lib/docx-archive";
 import { derivedScannedFile } from "@/api/lib/file-scan/document-parsers";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 
@@ -63,8 +64,7 @@ const fillTemplateWithValues = async (
   data: Buffer,
   values: PatchValues,
 ): Promise<Buffer> => {
-  // oxlint-disable-next-line no-raw-zip-load/no-raw-zip-load -- unbounded archive read predating loadDocxArchive; frozen by the rule budget
-  const zip = await JSZip.loadAsync(data);
+  const zip = await loadDocx(data);
   const partNames = templateContentPartPaths(Object.keys(zip.files));
 
   // Each part is read, patched, and written back independently — `values` is
@@ -220,8 +220,7 @@ export const fillTemplate = async (
   let data: Buffer = Buffer.from(template.bytes);
 
   // Open ZIP once for manifest + block-directive checks
-  // oxlint-disable-next-line no-raw-zip-load/no-raw-zip-load -- unbounded archive read predating loadDocxArchive; frozen by the rule budget
-  const zip = await JSZip.loadAsync(data);
+  const zip = await loadDocx(data);
 
   // A boolean condition-field IS a named condition (addressed by its path), so
   // synthesize both shapes into one list the evaluator resolves bare names
@@ -284,8 +283,7 @@ export const fillTemplate = async (
   // (paragraph span text) rather than the raw string lets a `num()`/`ref()`
   // that Word split across runs be seen and rewritten, the same way the
   // placeholder pipeline handles split markers.
-  // oxlint-disable-next-line no-raw-zip-load/no-raw-zip-load -- unbounded archive read predating loadDocxArchive; frozen by the rule budget
-  const numberingZip = await JSZip.loadAsync(data);
+  const numberingZip = await loadDocx(data);
   const numberingParts = templateContentPartPaths(
     Object.keys(numberingZip.files),
   );
