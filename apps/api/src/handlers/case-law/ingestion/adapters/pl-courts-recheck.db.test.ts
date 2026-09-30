@@ -60,8 +60,22 @@ import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
+let claimStatements = 0;
 const connect = (client: Awaited<ReturnType<typeof createTestPglite>>) =>
-  drizzle({ client, relations: { ...relations, ...authRelationsPart } });
+  drizzle({
+    client,
+    relations: { ...relations, ...authRelationsPart },
+    logger: {
+      logQuery(query) {
+        if (
+          query.startsWith('update "case_law_decisions"') &&
+          query.includes('"textless_detail_rechecked_at"')
+        ) {
+          claimStatements += 1;
+        }
+      },
+    },
+  });
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof connect>;
@@ -84,6 +98,7 @@ afterAll(async () => {
 });
 
 beforeEach(() => {
+  claimStatements = 0;
   fake = startFakeS3();
 });
 
@@ -387,7 +402,7 @@ test("textless listing-only rows younger than seven days remain untouched", asyn
   expect(detailReads).toBe(0);
 });
 
-test("textless held rechecks claim at most 200 rows per work unit", async () => {
+test("textless held rechecks claim each capped page in one statement before reading raw", async () => {
   const sourceId = await seedSource();
   const old = new Date(NOW.getTime() - 8 * DAY_IN_MS);
   await db.insert(caseLawDecisions).values(
@@ -448,7 +463,11 @@ test("textless held rechecks claim at most 200 rows per work unit", async () => 
   expect(plan).not.toContain("Seq Scan");
 
   let rawReads = 0;
+  let claimsBeforeFirstRead: number | undefined;
   const readMissingRaw: StoredRawResultReader = async () => {
+    if (rawReads === 0) {
+      claimsBeforeFirstRead = claimStatements;
+    }
     rawReads += 1;
     return Result.ok(null);
   };
@@ -474,6 +493,8 @@ test("textless held rechecks claim at most 200 rows per work unit", async () => 
   expect(attempts).toHaveLength(205);
   expect(claimed).toHaveLength(200);
   expect(rawReads).toBe(200);
+  expect(claimStatements).toBe(1);
+  expect(claimsBeforeFirstRead).toBe(1);
 
   const nextUnit = await runUnit(sourceId, readMissingRaw);
   expect(nextUnit).toMatchObject({
@@ -481,4 +502,5 @@ test("textless held rechecks claim at most 200 rows per work unit", async () => 
     summary: { unit: "textless-detail-rechecks", keyable: 5 },
   });
   expect(rawReads).toBe(205);
+  expect(claimStatements).toBe(2);
 });

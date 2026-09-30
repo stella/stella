@@ -406,7 +406,7 @@ type TextlessHeldDueWhereOptions = {
   recheck: NonNullable<SourceReconciliation["textlessHeldRecheck"]>;
 };
 
-export const textlessHeldDueWhere = ({
+const textlessHeldDueWhere = ({
   sourceId,
   before,
   recheck,
@@ -544,16 +544,19 @@ const selectDueTextlessHeldRechecks = async ({
 };
 
 type ClaimTextlessHeldRecheckOptions = TextlessHeldRecheckQueryOptions & {
-  decisionId: SafeId<"caseLawDecision">;
+  decisionIds: readonly SafeId<"caseLawDecision">[];
 };
 
-const claimTextlessHeldRecheck = async ({
+const claimTextlessHeldRechecks = async ({
   scopedDb,
   sourceId,
   now,
   recheck,
-  decisionId,
-}: ClaimTextlessHeldRecheckOptions): Promise<boolean> => {
+  decisionIds,
+}: ClaimTextlessHeldRecheckOptions) => {
+  if (decisionIds.length === 0) {
+    return new Set(decisionIds);
+  }
   const before = textlessHeldRecheckCutoff(now, recheck);
   const claimed = await scopedDb(
     async (tx) =>
@@ -563,13 +566,16 @@ const claimTextlessHeldRecheck = async ({
         .set({ textlessDetailRecheckedAt: now })
         .where(
           and(
-            eq(caseLawDecisions.id, decisionId),
+            sql`${caseLawDecisions.id} = ANY(ARRAY[${sql.join(
+              decisionIds.map((id) => sql`${id}`),
+              sql`, `,
+            )}]::uuid[])`,
             textlessHeldDueWhere({ sourceId, before, recheck }),
           ),
         )
         .returning({ id: caseLawDecisions.id }),
   );
-  return claimed.length > 0;
+  return new Set(claimed.map(({ id }) => id));
 };
 
 type HeldDocumentIdsOptions = {
@@ -1597,23 +1603,26 @@ const recheckTextlessHeldRows = async ({
     recheck,
   });
   summary.keyable = candidates.length;
+  await lease.beforeDatabaseMark();
+  // Claim the page once before external I/O. If the run dies before reaching
+  // a claimed row, that row retries after the seven-day backoff; this delay
+  // is acceptable for a completeness sweep and prevents rapid retry loops.
+  const claimed = await claimTextlessHeldRechecks({
+    scopedDb,
+    sourceId,
+    now: now(),
+    recheck,
+    decisionIds: candidates.map(({ id }) => id),
+  });
 
   for (const [index, row] of candidates.entries()) {
+    if (!claimed.has(row.id)) {
+      continue;
+    }
     if (index > 0) {
       await sleep(fetchDelayMs);
     }
     const attemptedAt = now();
-    await lease.beforeDatabaseMark();
-    const claimed = await claimTextlessHeldRecheck({
-      scopedDb,
-      sourceId,
-      now: attemptedAt,
-      recheck,
-      decisionId: row.id,
-    });
-    if (!claimed) {
-      continue;
-    }
     let raw: Uint8Array;
     if (row.sourceRaw !== null) {
       raw = new TextEncoder().encode(row.sourceRaw);
@@ -1677,6 +1686,7 @@ const recheckTextlessHeldRows = async ({
       documentUrl: row.documentUrl,
       metadata: row.metadata ?? {},
     };
+    // db-await-in-loop: ingest after each paced publisher fetch; bounded to 200 rows under the source lease
     await ingestListedItem({
       adapterKey,
       item,
