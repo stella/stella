@@ -73,7 +73,7 @@ export const useTimerMutation = () => {
           return;
         default:
           command satisfies never;
-          return panic("Unknown timer command");
+          panic("Unknown timer command");
       }
     },
     onSuccess: async (_, command) => {
