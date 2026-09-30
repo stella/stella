@@ -26,7 +26,11 @@ import type {
   HostedUsageAllocationPayload,
   HostedUsageEntitlementPayload,
 } from "@/api/lib/hosted-usage-provider/event-schemas";
-import { getRemainingUsageUnits } from "@/api/lib/usage/usage-ledger";
+import {
+  assertUsageAvailable,
+  getRemainingUsageUnits,
+} from "@/api/lib/usage/usage-ledger";
+import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -709,7 +713,7 @@ describe("dispatch — handleUsageEntitlementStatusChange", () => {
     });
   });
 
-  test("ignored when no matching entitlement exists", async () => {
+  test("initializes a revoked entitlement when its creation has not arrived", async () => {
     await withRolledBackTx(async (tx) => {
       const fx = await setupFixture(tx);
       const outcome = await handleUsageEntitlementStatusChange({
@@ -718,7 +722,7 @@ describe("dispatch — handleUsageEntitlementStatusChange", () => {
         eventId: "evt_status_orphan_001",
         eventKind: "revoked",
       });
-      expect(outcome.kind).toBe("ignored");
+      expect(outcome.kind).toBe("applied");
     });
   });
 });
@@ -1271,5 +1275,296 @@ describe("dispatch — out-of-order provider events", () => {
       });
       expect(second.kind).toBe("applied");
     });
+  });
+});
+
+describe("hosted lifecycle convergence", () => {
+  test("incomplete events never enable consumption across replay and activation", async () => {
+    await withRolledBackTx(async (tx) => {
+      const fx = await setupFixture(tx);
+      for (const status of [
+        "incomplete",
+        "active",
+        "incomplete",
+        "incomplete",
+      ]) {
+        await handleHostedEntitlementUpsert({
+          tx,
+          payload: buildEntitlementPayload(fx, { status }),
+          eventId: `evt_${Bun.randomUUIDv7()}`,
+        });
+        const rows = await tx
+          .select({ status: usageEntitlements.status })
+          .from(usageEntitlements)
+          .where(eq(usageEntitlements.organizationId, fx.organizationId));
+        expect(rows.at(0)?.status).toBe(
+          status === "active" ? "active" : "past_due",
+        );
+        expect(
+          (
+            await assertUsageAvailable({
+              tx,
+              organizationId: fx.organizationId,
+              required: 1,
+              asOf: new Date(PERIOD_START.getTime() + 1000),
+            })
+          ).ok,
+        ).toBe(status === "active");
+      }
+    });
+  });
+
+  test("cancellation facts converge across creation order and replay", async () => {
+    for (const eventKind of ["canceled", "revoked"] as const) {
+      for (const first of ["status", "creation"] as const) {
+        for (const creationTime of [
+          "2026-07-01T10:00:00.000Z",
+          "2026-07-02T10:00:00.000Z",
+        ]) {
+          await withRolledBackTx(async (tx) => {
+            const fx = await setupFixture(tx);
+            const creation = async () =>
+              await handleHostedEntitlementUpsert({
+                tx,
+                eventId: `evt_${Bun.randomUUIDv7()}`,
+                payload: buildEntitlementPayload(fx, {
+                  occurred_at: creationTime,
+                  created_at: PERIOD_START.toISOString(),
+                }),
+              });
+            const status = async () =>
+              await handleUsageEntitlementStatusChange({
+                tx,
+                eventId: `evt_${Bun.randomUUIDv7()}`,
+                eventKind,
+                payload: buildEntitlementPayload(fx, {
+                  occurred_at: "2026-07-02T10:00:00.000Z",
+                  created_at: PERIOD_START.toISOString(),
+                }),
+              });
+            if (first === "creation") {
+              await creation();
+              expect((await status()).kind).toBe("applied");
+            } else {
+              expect((await status()).kind).toBe("applied");
+              await creation();
+            }
+            await creation();
+            await status();
+            const rows = await tx
+              .select({
+                status: usageEntitlements.status,
+                cancelAtPeriodEnd: usageEntitlements.cancelAtPeriodEnd,
+                hostedLastEventAt: usageEntitlements.hostedLastEventAt,
+                hostedEntitlementCreatedAt:
+                  usageEntitlements.hostedEntitlementCreatedAt,
+              })
+              .from(usageEntitlements)
+              .where(eq(usageEntitlements.organizationId, fx.organizationId));
+            expect(rows).toHaveLength(1);
+            expect(rows.at(0)?.status).toBe(
+              eventKind === "revoked" ? "cancelled" : "active",
+            );
+            expect(rows.at(0)?.cancelAtPeriodEnd).toBe(
+              eventKind === "canceled",
+            );
+            expect(rows.at(0)?.hostedLastEventAt?.toISOString()).toBe(
+              "2026-07-02T10:00:00.000Z",
+            );
+            expect(rows.at(0)?.hostedEntitlementCreatedAt).toEqual(
+              PERIOD_START,
+            );
+            expect(
+              (
+                await assertUsageAvailable({
+                  tx,
+                  organizationId: fx.organizationId,
+                  required: 1,
+                  asOf: new Date(PERIOD_START.getTime() + 1000),
+                })
+              ).ok,
+            ).toBe(eventKind !== "revoked");
+          });
+        }
+      }
+    }
+  });
+
+  test("a first-delivered ended cancellation preserves denied access", async () => {
+    await withRolledBackTx(async (tx) => {
+      const fx = await setupFixture(tx);
+      const payload = buildEntitlementPayload(fx, {
+        status: "canceled",
+        occurred_at: "2026-07-02T10:00:00.000Z",
+        created_at: PERIOD_START.toISOString(),
+      });
+      expect(
+        (
+          await handleUsageEntitlementStatusChange({
+            tx,
+            payload,
+            eventKind: "canceled",
+            eventId: `evt_${Bun.randomUUIDv7()}`,
+          })
+        ).kind,
+      ).toBe("applied");
+      await handleHostedEntitlementUpsert({
+        tx,
+        eventId: `evt_${Bun.randomUUIDv7()}`,
+        payload: buildEntitlementPayload(fx, {
+          occurred_at: payload.occurred_at,
+          created_at: payload.created_at,
+        }),
+      });
+      const rows = await tx
+        .select({ status: usageEntitlements.status })
+        .from(usageEntitlements)
+        .where(eq(usageEntitlements.organizationId, fx.organizationId));
+      expect(rows.at(0)?.status).toBe("cancelled");
+      expect(
+        (
+          await assertUsageAvailable({
+            tx,
+            organizationId: fx.organizationId,
+            required: 1,
+            asOf: new Date(PERIOD_START.getTime() + 1000),
+          })
+        ).ok,
+      ).toBe(false);
+    });
+  });
+
+  test("equal-time revocation dominates cancellation in every delivery order", async () => {
+    for (const kinds of [
+      ["canceled", "revoked"],
+      ["revoked", "canceled"],
+    ] as const) {
+      await withRolledBackTx(async (tx) => {
+        const fx = await setupFixture(tx);
+        for (const eventKind of [...kinds, ...kinds]) {
+          await handleUsageEntitlementStatusChange({
+            tx,
+            eventKind,
+            eventId: `evt_${Bun.randomUUIDv7()}`,
+            payload: buildEntitlementPayload(fx, {
+              status: eventKind === "canceled" ? "canceled" : "unpaid",
+              occurred_at: "2026-07-02T10:00:00.000Z",
+              created_at: PERIOD_START.toISOString(),
+            }),
+          });
+        }
+        const rows = await tx
+          .select({
+            status: usageEntitlements.status,
+            cancelAtPeriodEnd: usageEntitlements.cancelAtPeriodEnd,
+          })
+          .from(usageEntitlements)
+          .where(eq(usageEntitlements.organizationId, fx.organizationId));
+        expect(rows.at(0)).toEqual({
+          status: "cancelled",
+          cancelAtPeriodEnd: false,
+        });
+      });
+    }
+  });
+
+  test("equal event times select the later external generation across delivery orders", async () => {
+    for (const first of ["earlier", "later"] as const) {
+      await withRolledBackTx(async (tx) => {
+        const fx = await setupFixture(tx);
+        const nextId = `provider_ent_${Bun.randomUUIDv7()}`;
+        const earlier = buildEntitlementPayload(fx, {
+          created_at: PERIOD_START.toISOString(),
+          occurred_at: "2026-07-03T10:00:00.000Z",
+          quantity: 3,
+        });
+        const later = buildEntitlementPayload(fx, {
+          id: nextId,
+          created_at: "2026-07-02T10:00:00.000Z",
+          occurred_at: earlier.occurred_at,
+          quantity: 5,
+        });
+        for (const payload of first === "earlier"
+          ? [earlier, later, later, earlier]
+          : [later, earlier, later, earlier]) {
+          await handleHostedEntitlementUpsert({
+            tx,
+            payload,
+            eventId: `evt_${Bun.randomUUIDv7()}`,
+          });
+        }
+        // A terminal event for the old external generation must not replace the winner either.
+        await handleUsageEntitlementStatusChange({
+          tx,
+          payload: earlier,
+          eventKind: "revoked",
+          eventId: `evt_${Bun.randomUUIDv7()}`,
+        });
+        const rows = await tx
+          .select({
+            status: usageEntitlements.status,
+            seats: usageEntitlements.seats,
+            externalId: usageEntitlements.hostedEntitlementExternalId,
+            createdAt: usageEntitlements.hostedEntitlementCreatedAt,
+          })
+          .from(usageEntitlements)
+          .where(eq(usageEntitlements.organizationId, fx.organizationId));
+        expect(rows).toHaveLength(1);
+        expect(rows.at(0)).toEqual({
+          status: "active",
+          seats: 5,
+          externalId: nextId,
+          createdAt: new Date("2026-07-02T10:00:00.000Z"),
+        });
+      });
+    }
+  });
+
+  test("ambiguous external generation ties preserve the mapping and report reconciliation", async () => {
+    const createdTimes = [PERIOD_START.toISOString(), undefined];
+    for (const existingCreatedAt of createdTimes) {
+      for (const incomingCreatedAt of createdTimes) {
+        await withRolledBackTx(async (tx) => {
+          const fx = await setupFixture(tx);
+          const occurred_at = "2026-07-03T10:00:00.000Z";
+          await handleHostedEntitlementUpsert({
+            tx,
+            eventId: `evt_${Bun.randomUUIDv7()}`,
+            payload: buildEntitlementPayload(fx, {
+              created_at: existingCreatedAt,
+              occurred_at,
+            }),
+          });
+          const analytics = installRecordingAnalytics();
+          try {
+            const result = await handleHostedEntitlementUpsert({
+              tx,
+              eventId: `evt_${Bun.randomUUIDv7()}`,
+              payload: buildEntitlementPayload(fx, {
+                id: `provider_ent_${Bun.randomUUIDv7()}`,
+                created_at: incomingCreatedAt,
+                occurred_at,
+                quantity: 7,
+              }),
+            });
+            expect(result.kind).toBe("ignored");
+            expect(analytics.exceptions()).toHaveLength(1);
+            const rows = await tx
+              .select({
+                externalId: usageEntitlements.hostedEntitlementExternalId,
+                seats: usageEntitlements.seats,
+              })
+              .from(usageEntitlements)
+              .where(eq(usageEntitlements.organizationId, fx.organizationId));
+            expect(rows.at(0)).toEqual({
+              externalId: fx.hostedEntitlementExternalId,
+              seats: 3,
+            });
+          } finally {
+            analytics.restore();
+          }
+        });
+      }
+    }
   });
 });
