@@ -1,12 +1,13 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { sql, TransactionRollbackError } from "drizzle-orm";
+import { eq, sql, TransactionRollbackError } from "drizzle-orm";
 import { readFileSync } from "node:fs";
 
 import {
   sanctionsEditionFanouts,
   sanctionsMonitoringBackfills,
 } from "@/api/db/schema";
+import { queueSanctionsMonitoringBackfills } from "@/api/lib/lists/sanctions/monitoring-fanout";
 import { logger } from "@/api/lib/observability/logger";
 import { backfillSanctionsMonitoringTask } from "@/api/lib/scheduler/tasks/sanctions-monitoring-backfill";
 import type {
@@ -124,6 +125,31 @@ if (!databaseUrl || !runPostgresTests) {
             ),
           });
           expect(continued).toBe(true);
+          expect(
+            (
+              await tx.execute<{ role: string }>(
+                sql`SELECT current_user AS role`,
+              )
+            ).at(0)?.role,
+          ).toBe("monitoring_role_regression");
+          // Exhaust fanout discovery and exercise its empty return under a nested savepoint.
+          await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
+          await tx
+            .update(sanctionsEditionFanouts)
+            .set({ state: "complete" })
+            .where(eq(sanctionsEditionFanouts.state, "pending"));
+          await tx.execute(sql`RESET ROLE`);
+          await queueSanctionsMonitoringBackfills({
+            db: asTestRaw<SchedulerDb>(tx),
+            now: new Date(),
+          });
+          expect(
+            (
+              await tx.execute<{ role: string }>(
+                sql`SELECT current_user AS role`,
+              )
+            ).at(0)?.role,
+          ).toBe("monitoring_role_regression");
           expect(
             await tx.select().from(sanctionsMonitoringBackfills),
           ).not.toHaveLength(0);

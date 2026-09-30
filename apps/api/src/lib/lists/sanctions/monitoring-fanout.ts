@@ -36,6 +36,7 @@ const fanOutEditionPage = async (db: SchedulerDb) =>
         .for("no key update", { skipLocked: true })
     ).at(0);
     if (fanout === undefined) {
+      await tx.execute(sql`SELECT set_config('role', ${owner.role}, true)`);
       return 0;
     }
     // Keep the ingestion row fence while the scheduler owner enqueues tenant jobs.
@@ -88,6 +89,7 @@ const fanOutEditionPage = async (db: SchedulerDb) =>
           orgs.length < ORGANIZATION_FANOUT_BATCH_SIZE ? "complete" : "pending",
       })
       .where(eq(sanctionsEditionFanouts.sourceId, fanout.sourceId));
+    await tx.execute(sql`SELECT set_config('role', ${owner.role}, true)`);
     return orgs.length;
   });
 
@@ -156,6 +158,10 @@ const consumeOrganizationRequest = async (db: SchedulerDb) =>
 
 const queueFreshnessTransitions = async (db: SchedulerDb, now: Date) => {
   await db.transaction(async (tx) => {
+    const owner =
+      (await tx.execute<{ role: string }>(sql`SELECT current_user AS role`)).at(
+        0,
+      ) ?? panic("Scheduler role missing");
     await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
     const rows = await readSanctionsFreshness({
       now,
@@ -171,6 +177,8 @@ const queueFreshnessTransitions = async (db: SchedulerDb, now: Date) => {
       WHERE fanout.edition_id IS NOT DISTINCT FROM excluded.edition_id
         AND fanout.freshness_status IS DISTINCT FROM excluded.freshness_status
   `);
+    // SET LOCAL survives a successful savepoint; nested scheduler calls retain their owner role.
+    await tx.execute(sql`SELECT set_config('role', ${owner.role}, true)`);
   });
 };
 
