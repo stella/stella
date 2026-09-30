@@ -233,6 +233,11 @@ RUN mkdir -p /app/runtime-workers && \
     bun build \
       --define __STELLA_RELEASE__=true \
       --target bun \
+      --outfile /app/runtime-workers/sanctions-matcher-worker.js \
+      apps/api/src/lib/lists/sanctions/sanctions-matcher-worker.ts && \
+    bun build \
+      --define __STELLA_RELEASE__=true \
+      --target bun \
       --outfile /app/runtime-workers/pdf-worker.js \
       apps/api/src/lib/files/pdf-worker.ts && \
     bun build \

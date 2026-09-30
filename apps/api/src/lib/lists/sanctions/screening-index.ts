@@ -55,7 +55,7 @@ class SanctionsIndexLoadFailure extends SanctionsIndexLoadFailureBase<{
   cause?: unknown;
 }> {}
 
-const loadEditionEntries = async (
+export const loadEditionEntries = async (
   db: SanctionsReadDb,
   edition: SanctionsActiveEdition,
 ): Promise<SanctionsEntry[]> => {

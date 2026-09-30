@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { createHash } from "node:crypto";
+import { Worker } from "node:worker_threads";
 
 import { buildScreeningIndex, SANCTIONS_SOURCES } from "@stll/sanctions";
 import type { SanctionsEntry, SanctionsSource } from "@stll/sanctions";
@@ -33,6 +34,9 @@ import {
 } from "@/api/lib/lists/sanctions/source-config";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
+
+import { createSanctionsMatcherPool } from "./matcher-pool";
+import { createPublicSanctionsScreening } from "./public-screening";
 
 const DB_TEST_TIMEOUT_MS = 120_000;
 const HOUR_MS = 60 * 60 * 1000;
@@ -707,3 +711,45 @@ describe("sanctions screening service", () => {
     expect(reads).toBe(0);
   });
 });
+
+test.each(["hang", "crash"])(
+  "public worker %s never answers clear and recovers",
+  async (fault) => {
+    let spawned = 0;
+    const pool = createSanctionsMatcherPool({
+      deadlineMs: 200,
+      createWorker: () => {
+        spawned += 1;
+        return spawned === 1
+          ? new Worker(
+              new URL("test-fixtures/matcher-fault-worker.ts", import.meta.url),
+              { workerData: fault },
+            )
+          : new Worker(new URL("sanctions-matcher-worker.ts", import.meta.url));
+      },
+    });
+    const publicScreen = createPublicSanctionsScreening({ pool });
+    const props = {
+      db: requestDb,
+      subject: {
+        type: "organization",
+        name: "A Completely Distant Name",
+        identifiers: [],
+      },
+      practiceJurisdictions: [],
+      now: FRESH_NOW,
+    } as const;
+    try {
+      const first = (await publicScreen(props)).unwrap();
+      expect(first.status).toBe("unavailable");
+      expect(first.lists.every((list) => list.status === "unavailable")).toBe(
+        true,
+      );
+      const next = (await publicScreen(props)).unwrap();
+      expect(next.status).toBe("clear");
+      expect(spawned).toBe(2);
+    } finally {
+      await pool.close();
+    }
+  },
+);

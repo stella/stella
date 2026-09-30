@@ -20,6 +20,8 @@ import { createPublicSanctionsRoute } from "@/api/handlers/sanctions/public-rout
 import { toSafeId } from "@/api/lib/branded-types";
 import { runEntityCheckShared } from "@/api/lib/business-registries/entity-checks";
 import type { CounterpartyCheckSubject } from "@/api/lib/business-registries/entity-checks";
+import { createSanctionsMatcherPool } from "@/api/lib/lists/sanctions/matcher-pool";
+import { createPublicSanctionsScreening } from "@/api/lib/lists/sanctions/public-screening";
 import { createSanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
 import type { SanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
 import { createSanctionsIndexCache } from "@/api/lib/lists/sanctions/screening-index";
@@ -45,6 +47,13 @@ const STALE_NOW = new Date("2026-09-23T08:00:00Z");
 const MANY_MATCHES = SANCTIONS_MATCH_LIMIT + 5;
 const BENCHMARK_ENTRY_COUNT = 20_000;
 const INSERT_BATCH_SIZE = 500;
+
+const pools = new Set<ReturnType<typeof createSanctionsMatcherPool>>();
+const benchmarkPool = () => {
+  const pool = createSanctionsMatcherPool({ deadlineMs: 10_000 });
+  pools.add(pool);
+  return pool;
+};
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
@@ -202,7 +211,10 @@ beforeAll(async () => {
   }
 }, DB_TEST_TIMEOUT_MS);
 
-afterAll(async () => await client.close());
+afterAll(async () => {
+  await Promise.all([...pools].map(async (pool) => await pool.close()));
+  await client.close();
+});
 
 type NameSubject = Extract<
   CounterpartyCheckSubject,
@@ -213,7 +225,7 @@ type ParityOptions = {
   now?: Date;
   caches?: {
     product: ReturnType<typeof createSanctionsIndexCache>;
-    public: ReturnType<typeof createSanctionsIndexCache>;
+    public: ReturnType<typeof createSanctionsMatcherPool>;
   };
 };
 
@@ -224,7 +236,7 @@ const assertParity = async ({
 }: ParityOptions) => {
   // Separate caches ensure both access boundaries load the corpus themselves.
   const productCache = caches?.product ?? createSanctionsIndexCache();
-  const publicCache = caches?.public ?? createSanctionsIndexCache();
+  const publicPool = caches?.public ?? benchmarkPool();
   const inProduct = (
     await runEntityCheckShared({
       check: "sanctions",
@@ -254,7 +266,7 @@ const assertParity = async ({
   const route = createPublicSanctionsRoute({
     db: publicDb,
     now,
-    indexCache: publicCache,
+    screen: createPublicSanctionsScreening({ pool: publicPool }),
     rateLimitOptions: {
       context,
       generator: scopedGenerator("parity-test"),
@@ -303,6 +315,10 @@ const assertParity = async ({
     return inProduct;
   } finally {
     await context.kill();
+    if (caches === undefined) {
+      await publicPool.close();
+      pools.delete(publicPool);
+    }
   }
 };
 
@@ -585,12 +601,12 @@ describe("public sanctions search parity", () => {
         .update(sanctionsEditions)
         .set({ entryCount: entriesFor("eu").length + entries.length })
         .where(eq(sanctionsEditions.id, activeEdition("eu")));
-      const cache = createSanctionsIndexCache();
+      const pool = benchmarkPool();
       const context = new InMemoryRateLimitContext();
       const route = createPublicSanctionsRoute({
         db: publicDb,
         now: FRESH_NOW,
-        indexCache: cache,
+        screen: createPublicSanctionsScreening({ pool }),
         rateLimitOptions: {
           context,
           generator: scopedGenerator("timing-test"),
@@ -660,6 +676,7 @@ describe("public sanctions search parity", () => {
               maximumTurnMs,
               performance.now() - lastTick,
             );
+            expect(maximumTurnMs).toBeLessThan(50);
             console.info(
               JSON.stringify({
                 adversarialService: name,
@@ -671,9 +688,11 @@ describe("public sanctions search parity", () => {
             clearInterval(heartbeat);
           }
         }
+        await pool.close();
+        pools.delete(pool);
         const parityCaches = {
           product: createSanctionsIndexCache(),
-          public: createSanctionsIndexCache(),
+          public: benchmarkPool(),
         };
         for (const name of [
           "Registered Entity 42 Holdings",
@@ -731,9 +750,11 @@ describe("public sanctions search parity", () => {
               partialAliases.length,
           })
           .where(eq(sanctionsEditions.id, activeEdition("eu")));
+        await parityCaches.public.close();
+        pools.delete(parityCaches.public);
         const incompleteCaches = {
           product: createSanctionsIndexCache(),
-          public: createSanctionsIndexCache(),
+          public: benchmarkPool(),
         };
         const incomplete = await assertParity({
           caches: incompleteCaches,
