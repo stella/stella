@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import { parseBunLockText } from "./bun-lock-text";
+
 const script = path.join(import.meta.dirname, "detect-e2e-changes.sh");
 const runnerChromeAptSource = "/etc/apt/sources.list.d/google-chrome.list";
 const githubExpression = (value: string) => ["$", "{{ ", value, " }}"].join("");
@@ -767,9 +769,8 @@ describe("detect-e2e-changes", () => {
       ciBrowser,
       "Install UI browser test runtime",
     );
-    expect(uiRuntime).toContain("dependency-mode: full");
-    // The desktop suite runs Chromium and WebKit. Both come from the cached
-    // action, so nothing downloads a browser per run.
+    expect(uiRuntime).toContain("dependency-mode: preinstalled");
+    // Both desktop engines come from the pinned image.
     expect(uiRuntime).toContain("browsers: chromium webkit");
     expect(
       workflowStep(ciBrowser, "Test desktop browser interactions"),
@@ -807,9 +808,9 @@ describe("detect-e2e-changes", () => {
       "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
     );
     expect(playwrightSetup).toContain("id: browser-cache");
-    expect(playwrightSetup).toContain("full|launch-verified");
+    expect(playwrightSetup).toContain("full|launch-verified|preinstalled");
     expect(playwrightSetup).toContain(
-      "if: steps.browser-cache.outputs.cache-hit != 'true'",
+      "if: inputs.dependency-mode != 'preinstalled' && steps.browser-cache.outputs.cache-hit != 'true'",
     );
     expect(playwrightSetup).toContain(
       "if: steps.browser-cache.outputs.cache-hit == 'true' && inputs.dependency-mode == 'full'",
@@ -819,7 +820,7 @@ describe("detect-e2e-changes", () => {
     );
     expect(playwrightSetup).toContain("if verify_browsers; then");
     expect(playwrightSetup).toContain(
-      `bunx playwright install-deps "${shellExpansion("browsers[@]")}"`,
+      `bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/install-deps.sh" "${shellExpansion("browsers[@]")}"`,
     );
     expect(
       actionStep(playwrightSetup, "Disable runner Chrome apt source"),
@@ -827,6 +828,46 @@ describe("detect-e2e-changes", () => {
     expect(
       playwrightSetup.indexOf("Disable runner Chrome apt source"),
     ).toBeLessThan(playwrightSetup.indexOf("Install browsers on cache miss"));
+  });
+
+  test("pins the browser container to the locked Playwright version", () => {
+    const lock = parseBunLockText(
+      readFileSync(path.join(import.meta.dirname, "../bun.lock"), "utf-8"),
+    );
+    if (typeof lock !== "object" || lock === null || !("packages" in lock)) {
+      throw new Error("Lockfile must contain packages");
+    }
+    const { packages } = lock;
+    if (
+      typeof packages !== "object" ||
+      packages === null ||
+      !("@playwright/test" in packages)
+    ) {
+      throw new Error("Lockfile must resolve Playwright");
+    }
+    const entry = packages["@playwright/test"];
+    if (!Array.isArray(entry) || typeof entry.at(0) !== "string") {
+      throw new TypeError("Playwright resolution must contain a version");
+    }
+    const resolution = String(entry.at(0));
+    expect(resolution).toStartWith("@playwright/test@");
+    const version = resolution.slice("@playwright/test@".length);
+    const job = workflowJob("ci-browser");
+    expect(job).toContain(
+      `image: mcr.microsoft.com/playwright:v${version}-noble@sha256:`,
+    );
+    expect(job).toMatch(/playwright:v[\d.]+-noble@sha256:[a-f0-9]{64}\n/u);
+    expect(job).toContain("shell: bash");
+    expect(job).not.toContain("playwright install");
+    expect(actionStep(playwrightSetup, "Restore Playwright browser")).toContain(
+      "if: inputs.dependency-mode != 'preinstalled'",
+    );
+    expect(
+      actionStep(playwrightSetup, "Disable runner Chrome apt source"),
+    ).toContain("if: inputs.dependency-mode != 'preinstalled'");
+    expect(
+      actionStep(playwrightSetup, "Verify browser host dependencies"),
+    ).toContain('"$DEPENDENCY_MODE" == "preinstalled"');
   });
 
   test("isolates cross-engine stack redaction from Chromium E2E", () => {
@@ -857,6 +898,7 @@ describe("detect-e2e-changes", () => {
         "apps/web/tsconfig.json",
         "apps/web/package.json",
         "scripts/retry.sh",
+        ".github/actions/setup-playwright/*",
         "bunfig.toml",
         "package.json",
         "bun.lock",
@@ -867,9 +909,7 @@ describe("detect-e2e-changes", () => {
     expect(stackRedaction).toContain(
       "needs.ci-plan.outputs.stack_redaction_browsers_required == 'true'",
     );
-    expect(stackRedaction).toContain(
-      "bunx playwright install --with-deps firefox webkit",
-    );
+    expect(stackRedaction).toContain("bunx playwright install firefox webkit");
     expect(
       workflowStep(stackRedaction, "Disable runner Chrome apt source"),
     ).toContain(runnerChromeAptSource);
@@ -879,7 +919,9 @@ describe("detect-e2e-changes", () => {
     expect(stackRedaction).toContain(
       "bun --filter @stll/web test:e2e:stack-redaction",
     );
-    expect(stackRedaction).not.toContain("setup-playwright");
+    expect(stackRedaction).not.toContain(
+      "uses: ./.github/actions/setup-playwright",
+    );
     expect(result).toContain("stack-redaction-browsers");
   });
 
