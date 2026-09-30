@@ -874,10 +874,8 @@ jobs:
           BASE_REF: ${{ github.base_ref || 'main' }}
         run: bun scripts/check-cli-release-coupling.ts --base "origin/$BASE_REF"
 
-      # The other half of that guard: while a release pull request is open, the
-      # queue holds a pull request adding a CLI changeset until the release has
-      # merged, so the release is never the one ejected. A pull request run
-      # only warns.
+      # Hold CLI changesets while a release is open or main's VERSION awaits
+      # its tag. Pull request runs warn; merge queue runs enforce the hold.
       - name: Release CLI changeset hold
         if: >-
           github.event_name == 'pull_request'
@@ -902,12 +900,15 @@ jobs:
             number="${BASH_REMATCH[1]}"
           fi
           state=$(bash scripts/release-pull-requests.sh --repo "$REPOSITORY" --number "$number")
+          pending=$(bash scripts/release-pending.sh --repo "$REPOSITORY")
+          version_state=$(sed -n 's/^version_state=//p' <<<"$pending")
           open_other=$(sed -n 's/^open_other=//p' <<<"$state")
           current_is_release=$(sed -n 's/^current_is_release=//p' <<<"$state")
           bun scripts/check-release-cli-changeset-hold.ts \
             --base "origin/$BASE_REF" \
             --event "$EVENT_NAME" \
             --open-releases "$open_other" \
+            --version-state "$version_state" \
             --is-release "$current_is_release"
 
       - name: CLI contract changeset guard
@@ -1468,6 +1469,7 @@ jobs:
           bun test scripts/check-release-cli-changeset-hold.test.ts
           bash scripts/check-release-changelog.test.sh
           bash scripts/release-pull-requests.test.sh
+          bash scripts/release-pending.test.sh
           bash scripts/check-main-merge-hold.test.sh
           bash scripts/create-release-manifest.test.sh
           bash scripts/promote-desktop-release.test.sh
