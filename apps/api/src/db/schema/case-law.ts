@@ -2902,12 +2902,21 @@ export const caseLawIngestionFailures = p.pgTable(
     errorType: p.varchar("error_type", { length: 128 }).notNull(),
     errorMessage: p.varchar("error_message", { length: 2048 }).notNull(),
     cursor: p.text(),
+    /**
+     * The failing record's stable identity where its caller names one; a
+     * record written again with the same identity keeps its one row.
+     */
+    recordIdentity: p.varchar("record_identity", { length: 256 }),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
   },
   (t) => [
     p.index("case_law_ingestion_failures_source_idx").on(t.sourceId),
     p.index("case_law_ingestion_failures_error_type_idx").on(t.errorType),
     p.index("case_law_ingestion_failures_created_idx").on(t.createdAt),
+    p
+      .uniqueIndex("case_law_ingestion_failures_source_record_uidx")
+      .on(t.sourceId, t.recordIdentity)
+      .where(isNotNull(t.recordIdentity)),
     ...globalCaseLawPolicies(),
   ],
 );
