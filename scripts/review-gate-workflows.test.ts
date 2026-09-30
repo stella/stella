@@ -313,3 +313,23 @@ describe("the monitor", () => {
     }
   });
 });
+
+// The hand-run eviction holds the same write access enforce mode needs, so
+// it is started only by a maintainer and does nothing but the dequeue.
+describe("the dequeue workflow", () => {
+  const dequeue = readWorkflow("review-gate-dequeue.yml");
+
+  test("runs only by hand, with just the merge-queue write", () => {
+    expect(Object.keys(dequeue.on)).toEqual(["workflow_dispatch"]);
+    expect(dequeue.permissions).toEqual({});
+    for (const job of Object.values(dequeue.jobs)) {
+      expect(job.permissions).toEqual({
+        contents: "write",
+        "pull-requests": "write",
+      });
+      expect(job.steps.at(-1)?.run).toBe(
+        'bun scripts/review-gate-github.ts dequeue "$PR_NUMBER"',
+      );
+    }
+  });
+});

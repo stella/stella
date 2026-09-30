@@ -1153,6 +1153,22 @@ const main = (argv: readonly string[]): void => {
       guardedGroup(run, target ?? fail("group needs a commit"));
       break;
     }
+    case "dequeue": {
+      // A maintainer's removal of one queued pull request, with the token
+      // enforce mode dequeues with; unguarded, so a refusal fails the run.
+      const [number] = pullRequestNumbers(target ?? "");
+      const pullRequest = run.gateway.readPullRequest(
+        number ?? fail("dequeue needs a pull request"),
+      );
+      if (!pullRequest.queued) {
+        fail(`#${pullRequest.number} is not in the merge queue`);
+      }
+      if (!run.dryRun) {
+        run.gateway.dequeue(pullRequest.id);
+      }
+      console.log(`#${pullRequest.number}: dequeued`);
+      break;
+    }
     case "relay": {
       // A run of the permissionless relay workflow: its event, commit and
       // pull requests say only where to look.
@@ -1183,7 +1199,7 @@ const main = (argv: readonly string[]): void => {
     }
     default: {
       fail(
-        `Unknown command "${command}"; expected pr, sha, group, relay or sweep`,
+        `Unknown command "${command}"; expected pr, sha, group, relay, sweep or dequeue`,
       );
     }
   }

@@ -1,0 +1,47 @@
+name: Review Gate Dequeue
+
+# Removes one pull request from the merge queue with this workflow's token,
+# the way the Review Gate's enforce mode evicts a confirmed offender. Run by
+# hand; the Review Gate itself never triggers it.
+on:
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Queued pull request number to remove from the merge queue
+        required: true
+        type: number
+
+concurrency:
+  group: review-gate-dequeue-${{ inputs.pr }}
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  dequeue:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            package.json
+            scripts/review-gate.ts
+            scripts/review-gate-github.ts
+            .github/review-gate.yml
+          sparse-checkout-cone-mode: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+
+      - name: Dequeue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REVIEW_GATE_BASE: ${{ github.event.repository.default_branch }}
+          PR_NUMBER: ${{ inputs.pr }}
+        run: bun scripts/review-gate-github.ts dequeue "$PR_NUMBER"

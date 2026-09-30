@@ -13,6 +13,7 @@ on:
       - Desktop release canary
       - Landing canary
       - Model Catalog Upstream Check
+      - Review Gate Monitor
       # Not scheduled, but unattended: a failed publication leaves the
       # previous build serving, and nobody would learn the new one never
       # landed.
