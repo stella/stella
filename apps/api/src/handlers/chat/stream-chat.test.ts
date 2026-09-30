@@ -446,6 +446,7 @@ const persistNativeInterruptTurn = async (
     processServerChatStream({
       ...signals,
       getResponseMessage: () => responseMessage,
+      initialMessages: [],
       mapMessageId,
       onFinish: (event) => {
         terminal.finish = event;
@@ -1328,6 +1329,7 @@ describe("outgoing chat stream message ids", () => {
           abortSignal: new AbortController().signal,
           deadlineSignal: new AbortController().signal,
           getResponseMessage: () => responseMessage,
+          initialMessages: [],
           mapMessageId: createChatMessageIdMapper(() => messageId),
           onFinish: ({ outcome }) => {
             resolveTerminalOutcome(outcome.type);
@@ -1886,6 +1888,7 @@ describe("outgoing chat stream message ids", () => {
       abortSignal: new AbortController().signal,
       deadlineSignal: new AbortController().signal,
       getResponseMessage: () => responseMessage,
+      initialMessages: [],
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: () => {
         events.push("server:onFinish");
@@ -1965,6 +1968,7 @@ describe("outgoing chat stream message ids", () => {
       abortSignal: new AbortController().signal,
       deadlineSignal: new AbortController().signal,
       getResponseMessage: () => responseMessage,
+      initialMessages: [],
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: ({ responseMessage: finishedMessage }) => {
         persistedTexts.push(
@@ -2047,6 +2051,7 @@ describe("outgoing chat stream message ids", () => {
       abortSignal: new AbortController().signal,
       deadlineSignal: new AbortController().signal,
       getResponseMessage: () => responseMessage,
+      initialMessages: [],
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: ({ responseMessage: finishedMessage }) => {
         persistedToolCalls = finishedMessage.parts.flatMap((part) =>
@@ -2205,6 +2210,7 @@ describe("outgoing chat stream message ids", () => {
       abortSignal: new AbortController().signal,
       deadlineSignal: new AbortController().signal,
       getResponseMessage: () => responseMessage,
+      initialMessages: [],
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: ({ responseMessage: finishedMessage }) => {
         const part = finishedMessage.parts.at(0);
@@ -2311,6 +2317,7 @@ describe("outgoing chat stream message ids", () => {
       abortSignal: abortController.signal,
       deadlineSignal: new AbortController().signal,
       getResponseMessage: () => responseMessage,
+      initialMessages: [],
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: ({ outcome, responseMessage: finishedMessage }) => {
         finishEvents.push({
@@ -2375,6 +2382,7 @@ describe("outgoing chat stream message ids", () => {
       abortSignal: new AbortController().signal,
       deadlineSignal: new AbortController().signal,
       getResponseMessage: () => null,
+      initialMessages: [],
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: ({ outcome }) => {
         outcomes.push(outcome.type);
@@ -2435,6 +2443,7 @@ describe("outgoing chat stream message ids", () => {
       abortSignal: new AbortController().signal,
       deadlineSignal: new AbortController().signal,
       getResponseMessage: () => null,
+      initialMessages: [],
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: ({ outcome }) => {
         outcomes.push(outcome.type);
@@ -2473,6 +2482,7 @@ describe("outgoing chat stream message ids", () => {
         abortSignal: new AbortController().signal,
         deadlineSignal: new AbortController().signal,
         getResponseMessage: () => null,
+        initialMessages: [],
         mapMessageId: createChatMessageIdMapper(() => messageId),
         onFinish: () => undefined,
         processor: new StreamProcessor(),
@@ -2510,6 +2520,7 @@ describe("outgoing chat stream message ids", () => {
         abortSignal: new AbortController().signal,
         deadlineSignal: new AbortController().signal,
         getResponseMessage: () => null,
+        initialMessages: [],
         mapMessageId: createChatMessageIdMapper(() => messageId),
         onFinish: () => undefined,
         processor: new StreamProcessor(),
@@ -2550,6 +2561,7 @@ describe("outgoing chat stream message ids", () => {
       abortSignal: new AbortController().signal,
       deadlineSignal: new AbortController().signal,
       getResponseMessage: () => null,
+      initialMessages: [],
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: ({ outcome }) => {
         outcomes.push(outcome.type);
@@ -2596,6 +2608,7 @@ describe("outgoing chat stream message ids", () => {
       abortSignal: new AbortController().signal,
       deadlineSignal: new AbortController().signal,
       getResponseMessage: () => null,
+      initialMessages: [],
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: ({ outcome }) => {
         outcomes.push(outcome.type);
@@ -2627,6 +2640,7 @@ describe("outgoing chat stream message ids", () => {
       abortSignal: new AbortController().signal,
       deadlineSignal: new AbortController().signal,
       getResponseMessage: () => null,
+      initialMessages: [],
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: ({ outcome }) => {
         outcomes.push(outcome.type);
@@ -2664,6 +2678,7 @@ describe("outgoing chat stream message ids", () => {
       abortSignal: new AbortController().signal,
       deadlineSignal: new AbortController().signal,
       getResponseMessage: () => null,
+      initialMessages: [],
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: ({ outcome }) => {
         outcomes.push(outcome.type);
@@ -3081,6 +3096,7 @@ describe("chat stream client-disconnect persistence", () => {
       abortSignal,
       deadlineSignal: new AbortController().signal,
       getResponseMessage,
+      initialMessages: [],
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: ({ outcome, responseMessage }) => {
         finishEvents.push({
@@ -3158,6 +3174,7 @@ describe("chat stream client-disconnect persistence", () => {
       deadlineSignal: new AbortController().signal,
       flushPendingSource: persistenceVisible.flushPending,
       getResponseMessage: () => responseMessage,
+      initialMessages: [],
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: ({ responseMessage: finishedMessage }) => {
         persistedParts = finishedMessage.parts;
@@ -3191,6 +3208,7 @@ describe("chat stream client-disconnect persistence", () => {
       abortSignal: new AbortController().signal,
       deadlineSignal: new AbortController().signal,
       getResponseMessage,
+      initialMessages: [],
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: () => {
         finishCount += 1;
@@ -3233,6 +3251,7 @@ describe("chat stream client-disconnect persistence", () => {
       abortSignal: new AbortController().signal,
       deadlineSignal: new AbortController().signal,
       getResponseMessage,
+      initialMessages: [],
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: ({ outcome }) => {
         outcomes.push(outcome.type);
@@ -3316,6 +3335,7 @@ describe("streamed chat message conversion", () => {
         abortSignal: new AbortController().signal,
         deadlineSignal: new AbortController().signal,
         getResponseMessage: () => responseMessage,
+        initialMessages: [],
         mapMessageId: createChatMessageIdMapper(() => messageId),
         onFinish: ({ outcome }) => {
           outcomes.push(outcome.type);
@@ -3354,6 +3374,7 @@ describe("streamed chat message conversion", () => {
       abortSignal: new AbortController().signal,
       deadlineSignal: new AbortController().signal,
       getResponseMessage: () => responseMessage,
+      initialMessages: [],
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: ({ outcome }) => {
         outcomes.push(outcome.type);
@@ -3694,6 +3715,7 @@ describe("chat stream refs", () => {
       abortSignal: new AbortController().signal,
       deadlineSignal: new AbortController().signal,
       getResponseMessage: () => responseMessage,
+      initialMessages: [],
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: ({ responseMessage: terminalMessage }) => {
         const toolCall = terminalMessage.parts.find(

@@ -3,28 +3,14 @@ import type { StreamChunk, UIMessage } from "@tanstack/ai";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
-import {
-  attemptProducedAnswer,
-  chunkCarriesAnswer,
-} from "@/api/handlers/chat/attempt-answer";
-import { toChatMessage } from "@/api/handlers/chat/stream-chat";
+import { chunkCarriesAnswer } from "@/api/handlers/chat/attempt-answer";
 import { ASK_USER_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
-import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
 import {
   createScriptedTextAdapter,
   scriptedTurnChunks,
 } from "@/api/tests/helpers/chat-round-trip";
 import type { ScriptedTurn } from "@/api/tests/helpers/chat-round-trip";
-
-/** The id the scripted provider gives the message of a run's first step. */
-const ASSISTANT_MESSAGE_ID = "provider-message-1";
-
-const USER_MESSAGE: UIMessage = {
-  id: "user-1",
-  parts: [{ content: "Draft the NDA", type: "text" }],
-  role: "user",
-};
 
 const ANSWERED_QUESTION = {
   arguments: "{}",
@@ -35,33 +21,23 @@ const ANSWERED_QUESTION = {
   type: "tool-call",
 } as const;
 
-/** What the run starts from: nothing of its own, or the message it continues
- *  once the user answered the question that message asked. */
-const HISTORIES: Record<string, UIMessage[]> = {
-  "a fresh turn": [USER_MESSAGE],
-  "a continuation": [
-    USER_MESSAGE,
-    {
-      id: ASSISTANT_MESSAGE_ID,
-      parts: [
-        { content: "One question first.", type: "text" },
-        ANSWERED_QUESTION,
-      ],
-      role: "assistant",
-    },
-  ],
-  "a continuation of a message that ends in text": [
-    USER_MESSAGE,
-    {
-      id: ASSISTANT_MESSAGE_ID,
-      parts: [
-        ANSWERED_QUESTION,
-        { content: "One question first.", type: "text" },
-      ],
-      role: "assistant",
-    },
-  ],
-};
+/** The message a continuation resumes, once the user answered the question
+ *  it asked. */
+const CONTINUED_HISTORY: UIMessage[] = [
+  {
+    id: "user-1",
+    parts: [{ content: "Draft the NDA", type: "text" }],
+    role: "user",
+  },
+  {
+    id: "provider-message-1",
+    parts: [
+      { content: "One question first.", type: "text" },
+      ANSWERED_QUESTION,
+    ],
+    role: "assistant",
+  },
+];
 
 const NEW_CALL = {
   arguments: "{}",
@@ -81,6 +57,11 @@ const RUNS: [string, ScriptedTurn, boolean][] = [
     false,
   ],
   ["text", { finishReason: "stop", text: "Here it is.", type: "text" }, true],
+  [
+    "text the continued message already held",
+    { finishReason: "stop", text: "One question first.", type: "text" },
+    true,
+  ],
   ["a tool call", { toolCalls: [NEW_CALL], type: "step" }, true],
   [
     "whitespace and a tool call",
@@ -94,101 +75,24 @@ const RUNS: [string, ScriptedTurn, boolean][] = [
   ],
 ];
 
-const CASES = Object.entries(HISTORIES).flatMap(([history, messages]) =>
-  RUNS.map(
-    ([run, turn, answers]) => [history, run, messages, turn, answers] as const,
-  ),
-);
-
-/** Runs `turn` through the SDK's own stream processor, as a turn's
- *  persistence does, and returns its chunks and the parts it left. */
-const streamed = async (initialMessages: UIMessage[], turn: ScriptedTurn) => {
-  const { message, processor } = createStreamMessageCapture({
-    capture: toChatMessage,
-    initialMessages,
-  });
+const streamed = async (turn: ScriptedTurn): Promise<StreamChunk[]> => {
   const chunks: StreamChunk[] = [];
-  const source = scriptedTurnChunks(turn, {
+  for await (const chunk of scriptedTurnChunks(turn, {
     index: 0,
     model: "scripted",
     runId: "run-1",
     threadId: "thread-1",
-  });
-  for await (const chunk of source) {
+  })) {
     chunks.push(chunk);
-    processor.processChunk(chunk);
   }
-  processor.finalizeStream();
-  const continued = initialMessages.find(
-    ({ id }) => id === ASSISTANT_MESSAGE_ID,
-  );
-  return {
-    after: message()?.parts ?? [],
-    before:
-      continued === undefined ? [] : (toChatMessage(continued)?.parts ?? []),
-    chunks,
-  };
+  return chunks;
 };
 
 describe("whether a run answered", () => {
-  test.each(CASES)(
-    "%s that streams %s",
-    async (_history, _run, messages, turn, answers) => {
-      const { after, before, chunks } = await streamed(messages, turn);
+  test.each(RUNS)("a run that streams %s", async (_run, turn, answers) => {
+    const chunks = await streamed(turn);
 
-      // Both readings, the chunks the attempt watches and the message the
-      // terminal guard reads, say the same thing about the same run.
-      expect(chunks.some(chunkCarriesAnswer)).toBe(answers);
-      expect(attemptProducedAnswer({ after, before })).toBe(answers);
-    },
-  );
-
-  test("text the message already held, said again, is an answer", async () => {
-    const messages = HISTORIES["a continuation"] ?? [];
-    const { after, before, chunks } = await streamed(messages, {
-      finishReason: "stop",
-      text: "One question first.",
-      type: "text",
-    });
-
-    expect(after.map(({ type }) => type)).toEqual([
-      "text",
-      "tool-call",
-      "text",
-    ]);
-    expect(chunks.some(chunkCarriesAnswer)).toBe(true);
-    expect(attemptProducedAnswer({ after, before })).toBe(true);
-  });
-
-  // The SDK writes the run's text over the text a message ends with, so a
-  // run that says that text again leaves the parts as they were: only the
-  // chunks can tell. The attempt reads those; the terminal guard accepts
-  // this one blind spot over a second copy of the stream.
-  test("canary: re-saying the text the message ends with leaves no trace", async () => {
-    const messages =
-      HISTORIES["a continuation of a message that ends in text"] ?? [];
-    const { after, before, chunks } = await streamed(messages, {
-      finishReason: "stop",
-      text: "One question first.",
-      type: "text",
-    });
-
-    expect(after).toEqual(before);
-    expect(chunks.some(chunkCarriesAnswer)).toBe(true);
-    expect(attemptProducedAnswer({ after, before })).toBe(false);
-  });
-
-  test("the continued message alone is never the run's answer", async () => {
-    const messages = HISTORIES["a continuation"] ?? [];
-    const { before } = await streamed(messages, {
-      toolCalls: [],
-      type: "step",
-    });
-
-    // The fixture must reach the fault: the message holds a call and text.
-    expect(before.map(({ type }) => type)).toEqual(["text", "tool-call"]);
-    expect(attemptProducedAnswer({ after: before, before })).toBe(false);
-    expect(attemptProducedAnswer({ after: before, before: [] })).toBe(true);
+    expect(chunks.some(chunkCarriesAnswer)).toBe(answers);
   });
 });
 
@@ -209,7 +113,7 @@ describe("what the engine pipes through the attempt middleware", () => {
     const run = chat({
       adapter: createScriptedTextAdapter([turn]),
       agentLoopStrategy: maxIterations(3),
-      messages: HISTORIES["a continuation"] ?? [],
+      messages: CONTINUED_HISTORY,
       middleware: [
         {
           name: "attempt-answer-test",
