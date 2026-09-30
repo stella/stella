@@ -151,6 +151,7 @@ const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
   }),
   staticRoute("/settings/organization/document-types"),
   staticRoute("/settings/organization/matter-numbering"),
+  staticRoute("/settings/organization/time-policy"),
   staticRoute("/settings/organization/members"),
   staticRoute("/settings/organization/usage"),
   staticRoute("/inbox"),
