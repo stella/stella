@@ -87,6 +87,7 @@ import { MCP_MAX_REQUEST_BODY_BYTES } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { OPENAI_FILE_REFERENCE_SCHEMA } from "@/api/mcp/document-file-upload";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
+import { plainRecord } from "@/api/mcp/input-schemas";
 import {
   TEMPLATE_CONDITION_DECISION_OUTPUT_SCHEMA,
   type TemplateConditionDecisionOutput,
@@ -616,7 +617,7 @@ const previewTemplateConditionsArgsSchema = nullAsAbsent(
       "Template whose AI-decided conditions to ask about, as returned by list_templates",
     ),
     values: v.pipe(
-      v.record(v.string(), v.unknown()),
+      plainRecord(v.unknown()),
       v.description(
         "Map of field path to value. It is the same map fill_template takes. Partial is fine: the model decides on what it is given.",
       ),
@@ -744,7 +745,7 @@ const fillTemplateArgsSchema = nullAsAbsent(
   v.strictObject({
     template_id: uuidInputSchema("Template id, as returned by list_templates"),
     values: v.pipe(
-      v.record(v.string(), v.unknown()),
+      plainRecord(v.unknown()),
       v.description("Map of field path to value."),
     ),
     allow_unused_values: v.optional(
@@ -834,7 +835,7 @@ const saveFilledTemplateArgsSchema = nullAsAbsent(
       ),
     ),
     values: v.pipe(
-      v.record(v.string(), v.unknown()),
+      plainRecord(v.unknown()),
       v.description("Map of template field path to value"),
     ),
     completion_mode: templateFillCompletionModeSchema,

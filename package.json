@@ -144,7 +144,6 @@
     "eslint": "catalog:",
     "eslint-plugin-drizzle": "catalog:",
     "fast-check": "catalog:",
-    "i18n-unused": "^0.20.0",
     "knip": "^6.37.0",
     "lefthook": "^2.1.14",
     "oxc-transform-react": "catalog:",
@@ -161,8 +160,7 @@
     "turbo": "2.11.3",
     "typescript": "catalog:",
     "ultracite": "catalog:",
-    "valibot": "catalog:",
-    "vite": "catalog:"
+    "valibot": "catalog:"
   },
   "resolutions": {
     "@atlaskit/pragmatic-drag-and-drop": "3.1.0",
@@ -173,7 +171,7 @@
     "@expo/ui": "57.0.19",
     "@stll/folio-core": "0.52.0",
     "adm-zip": "0.6.1",
-    "brace-expansion": "5.0.9",
+    "brace-expansion": "5.0.11",
     "expo-constants": "57.0.19",
     "expo-modules-core": "57.0.18",
     "fast-uri": "3.1.8",
@@ -181,7 +179,7 @@
     "ip-address": "10.7.2",
     "lucide-react": "1.41.0",
     "mailauth/joi": "18.2.9",
-    "mailauth/nodemailer": "9.1.0",
+    "mailauth/nodemailer": "10.0.10",
     "nanoid": "3.3.18",
     "postcss": "8.5.28",
     "prosemirror-model": "1.25.12",

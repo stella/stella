@@ -390,14 +390,20 @@ const normalizeLeaf = ({
       return normalizeLocale(value);
     case "number": {
       const locale = annotation.locale;
+      const types = isUnknownArray(schema["type"])
+        ? schema["type"]
+        : [schema["type"]];
       if (annotation.range === "clamp") {
-        const types = isUnknownArray(schema["type"])
-          ? schema["type"]
-          : [schema["type"]];
         return normalizeNumberInRange(value, {
           minimum: numericKeyword(schema, "minimum"),
           maximum: numericKeyword(schema, "maximum"),
           integer: types.includes("integer"),
+          ...(locale === undefined ? {} : { locale }),
+        });
+      }
+      if (types.includes("integer")) {
+        return normalizeNumberInRange(value, {
+          integer: true,
           ...(locale === undefined ? {} : { locale }),
         });
       }

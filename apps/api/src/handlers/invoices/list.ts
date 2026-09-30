@@ -36,7 +36,7 @@ const readInvoices = createSafeHandler(
   {
     description:
       "List a matter's invoices oldest first with cursor pagination, " +
-      "returning each invoice's number, reference, status, dates, currency, " +
+      "returning each invoice's number (null before numbering), document type, original invoice id, reference, status, dates, currency, " +
       "and total, but not its line items. Use invoices.get to read the " +
       "attached time entries and expenses.",
     permissions: { workspace: ["read"] },
@@ -74,6 +74,8 @@ const readInvoices = createSafeHandler(
           .select({
             id: invoices.id,
             invoiceNumber: invoices.invoiceNumber,
+            documentType: invoices.documentType,
+            originalInvoiceId: invoices.originalInvoiceId,
             reference: invoices.reference,
             status: invoices.status,
             invoiceDate: invoices.invoiceDate,
@@ -103,6 +105,8 @@ const readInvoices = createSafeHandler(
       items: page.items.map((row) => ({
         id: row.id,
         invoiceNumber: row.invoiceNumber,
+        documentType: row.documentType,
+        originalInvoiceId: row.originalInvoiceId,
         reference: row.reference,
         status: row.status,
         invoiceDate: row.invoiceDate,

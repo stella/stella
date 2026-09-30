@@ -22,6 +22,17 @@ import {
 } from "@stll/ui/select";
 import { Textarea } from "@stll/ui/textarea";
 
+import {
+  majorUnitInput,
+  submittedRateCents,
+} from "@/components/billing/amount-input.logic";
+import { DurationInput } from "@/components/billing/duration-input";
+import {
+  DEFAULT_CURRENCY,
+  formatCurrencyAmount,
+} from "@/components/billing/format-currency";
+import { MatterCombobox } from "@/components/billing/matter-combobox";
+import { TimeEntryNarrativeField } from "@/components/billing/time-entry-narrative-field";
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
@@ -29,17 +40,6 @@ import { localISODate } from "@/lib/local-iso-date";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
 import { billingCodesOptions } from "@/lib/workspaces/queries/billing-codes";
 import { resolvedRateOptions } from "@/lib/workspaces/queries/rates";
-import {
-  majorUnitInput,
-  submittedRateCents,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/amount-input.logic";
-import { DurationInput } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/duration-input";
-import {
-  DEFAULT_CURRENCY,
-  formatCurrencyAmount,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
-import { MatterCombobox } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/matter-combobox";
-import { TimeEntryNarrativeField } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-narrative-field";
 
 export type TimeEntryFormValues = {
   matterId: string;

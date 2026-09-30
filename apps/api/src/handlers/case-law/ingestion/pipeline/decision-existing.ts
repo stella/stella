@@ -24,7 +24,7 @@ import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-pol
 import {
   corpusCarriesDocument,
   payloadCarriesDocument,
-} from "@/api/handlers/case-law/stored-payload";
+} from "@/api/lib/case-law/stored-payload";
 import {
   lockActiveCorpusProjectionSourceTx,
   synchronizeLockedCorpusProjectionDesiredStateTx,

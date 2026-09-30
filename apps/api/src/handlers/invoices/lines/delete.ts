@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 
 import type { InvoiceTotals } from "@stll/invoicing";
 
-import { abortableTx } from "@/api/db/safe-db";
+import { resultTx } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
   expenses,
@@ -41,8 +41,8 @@ const deleteInvoiceLine = createSafeHandler(
   },
   async function* ({
     safeDb,
-    session,
     user,
+    session,
     workspaceId,
     params,
     recordAuditEvent,
@@ -50,7 +50,7 @@ const deleteInvoiceLine = createSafeHandler(
     const now = new Date();
 
     const result = yield* Result.await(
-      abortableTx(
+      resultTx(
         safeDb,
         async (tx): Promise<Result<DeletedLine, HandlerError>> => {
           const [sourceLine] = await tx
@@ -76,7 +76,7 @@ const deleteInvoiceLine = createSafeHandler(
           if (runningError) {
             return Result.err(runningError);
           }
-          const invoice = await lockDraftInvoiceForLines(
+          const invoiceResult = await lockDraftInvoiceForLines(
             tx,
             {
               invoiceId: params.invoiceId,
@@ -85,6 +85,10 @@ const deleteInvoiceLine = createSafeHandler(
             },
             recordAuditEvent,
           );
+          if (invoiceResult.isErr()) {
+            return Result.err(invoiceResult.error);
+          }
+          const invoice = invoiceResult.value;
           if (!invoice) {
             return Result.err(
               new HandlerError({
@@ -193,6 +197,10 @@ const deleteInvoiceLine = createSafeHandler(
             recordAuditEvent,
           );
 
+          if (totals.isErr()) {
+            return Result.err(totals.error);
+          }
+
           await recordAuditEvent(tx, [
             {
               action: AUDIT_ACTION.UPDATE,
@@ -212,12 +220,12 @@ const deleteInvoiceLine = createSafeHandler(
             ...events,
           ]);
 
-          return Result.ok({ id: line.id, totals });
+          return Result.ok({ id: line.id, totals: totals.value });
         },
       ),
     );
 
-    return result;
+    return Result.ok(result);
   },
 );
 
