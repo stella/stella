@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
 import { getApiHealthUrl, parseHealthCommit } from "./api-health";
 import { advanceDeploymentStability } from "./check-api-deployment";
@@ -53,6 +54,45 @@ describe("API deployment health receipt", () => {
 
     expect(setupPin).toBeDefined();
     expect(releasePin).toBe(setupPin);
+  });
+
+  test("staging checks share their access configuration", async () => {
+    const workflow = await Bun.file(
+      new URL("../.github/workflows/deploy-staging.yml", import.meta.url),
+    ).text();
+    const parsed = v.parse(
+      v.object({
+        jobs: v.record(
+          v.string(),
+          v.object({
+            steps: v.array(
+              v.object({
+                run: v.optional(v.string()),
+                env: v.optional(v.record(v.string(), v.string())),
+              }),
+            ),
+          }),
+        ),
+      }),
+      Bun.YAML.parse(workflow),
+    );
+    const consumers = Object.values(parsed.jobs)
+      .flatMap(({ steps }) => steps)
+      .filter(
+        ({ run }) =>
+          run?.includes("$STAGING_HEALTH_URL") ||
+          run?.includes("test:e2e:staging") ||
+          run?.includes("apps/api/src/scripts/post-deploy-smoke.ts"),
+      );
+
+    expect(consumers.length).toBeGreaterThan(0);
+    for (const { run, env } of consumers) {
+      const prefix = run?.includes("$STAGING_HEALTH_URL") ? "" : "E2E_";
+      expect(env?.[`${prefix}EDGE_HEADER_NAME`]).toBe("x-stella-edge-token");
+      expect(env?.[`${prefix}EDGE_HEADER_VALUE`]).toBe(
+        `\${{ secrets.STAGING_VIEWER_ACCESS_TOKEN }}`,
+      );
+    }
   });
 
   test("ties staging promotion to the current health gate", async () => {
