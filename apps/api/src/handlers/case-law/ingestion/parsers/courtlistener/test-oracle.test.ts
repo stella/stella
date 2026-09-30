@@ -50,6 +50,14 @@ test("the HTML source walk ignores document metadata and templates", () => {
   ).toEqual(["Visible", "text"]);
 });
 
+test("excluding a mid-word page marker keeps the word joined", () => {
+  const source = "left<span>*2</span>right";
+  expect(source.slice(10, 12)).toBe("*2");
+  expect(
+    sourceWords("html", source, { excludedSpans: [{ start: 10, end: 12 }] }),
+  ).toEqual(["leftright"]);
+});
+
 test("excluding one note label still detects deletion of an identical numeric cross-reference", () => {
   const source =
     '<footnote_body><sup>1</sup> See note <a href="#fn1">1</a> above.</footnote_body>';

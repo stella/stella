@@ -224,7 +224,6 @@ const htmlWords = (
       if (excludedStart > position) {
         visible.push(decodeHTML(source.slice(position, excludedStart)));
       }
-      visible.push(" ");
       position = Math.max(position, Math.min(end, span.end));
     }
     if (position < end) {
