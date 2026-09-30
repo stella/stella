@@ -20,7 +20,7 @@ export const StellaWordmark = (props: SVGProps<SVGSVGElement>) => {
 // Arabic lockup: the wordmark ستيلا (Noto Kufi Arabic Semibold) with the
 // canonical, unmirrored symbol. `fill` is currentColor so it adapts to the
 // theme exactly like the Latin wordmark.
-const StellaWordmarkArabic = (props: SVGProps<SVGSVGElement>) => (
+export const StellaWordmarkArabic = (props: SVGProps<SVGSVGElement>) => (
   <svg
     aria-hidden="true"
     fill="currentColor"

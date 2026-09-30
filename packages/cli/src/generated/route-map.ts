@@ -25125,7 +25125,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "invoices", "create"],
                 capabilityId: "invoices.create",
                 description:
-                  "Create a draft invoice from approved, billable, not-yet-invoiced time entries in a matter, marking them billed and setting the total from their billed minutes and recorded rates. Every entry must already carry the invoice currency, since nothing is converted, and the invoice number must not already be in use. Expenses are added afterwards with invoices.entries.add.",
+                  "Create a draft invoice from approved, billable, not-yet-invoiced time entries in a matter, marking them billed and setting the total from their billed minutes and recorded rates. Every entry must already carry the invoice currency, since nothing is converted, and the optional invoice number must not already be in use. An omitted number is allocated from the document type’s default series at finalize. Credit notes require an original finalized, sent, or paid invoice in the same matter. Pass empty timeEntryIds for a draft with manual lines. Expenses are added afterwards with invoices.entries.add.",
                 access: "write",
                 flags: [
                   {
@@ -25142,9 +25142,18 @@ export const generatedRouteMap: RouteNode = {
                     repeatable: false,
                     flag: "--invoice-number",
                     prop: "invoiceNumber",
-                    required: true,
+                    required: false,
                     part: "body",
                     partPath: "invoiceNumber",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--original-invoice-id",
+                    prop: "originalInvoiceId",
+                    required: false,
+                    part: "body",
+                    partPath: "originalInvoiceId",
                   },
                   {
                     kind: "string",
@@ -25201,7 +25210,7 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "timeEntryIds",
                   },
                 ],
-                inputOnly: [],
+                inputOnly: ["body.documentType"],
                 paginated: false,
                 destructive: false,
                 scope: "billing_write",
@@ -25211,16 +25220,34 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     body: {
                       type: "object",
-                      required: [
-                        "invoiceNumber",
-                        "invoiceDate",
-                        "currency",
-                        "timeEntryIds",
-                      ],
+                      required: ["invoiceDate", "currency", "timeEntryIds"],
                       properties: {
                         invoiceNumber: {
                           minLength: 1,
                           maxLength: 64,
+                          type: "string",
+                        },
+                        documentType: {
+                          anyOf: [
+                            {
+                              const: "invoice",
+                              type: "string",
+                            },
+                            {
+                              const: "advance",
+                              type: "string",
+                            },
+                            {
+                              const: "credit_note",
+                              type: "string",
+                            },
+                          ],
+                        },
+                        originalInvoiceId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                           type: "string",
                         },
                         invoiceDate: {
@@ -25270,7 +25297,7 @@ export const generatedRouteMap: RouteNode = {
                           ],
                         },
                         timeEntryIds: {
-                          minItems: 1,
+                          minItems: 0,
                           maxItems: 500,
                           type: "array",
                           items: {
@@ -25576,7 +25603,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "invoices", "get"],
                 capabilityId: "invoices.get",
                 description:
-                  "Read one invoice with its full detail: its lines in order with quantity, unit price, VAT, and amounts; totals with the VAT breakdown by rate; seller profile, buyer, dates, currency, and status; and every attached time entry and expense with its work item. An invoice from before invoice lines lists no lines for its attached entries until its first line edit; its totals still count them. Use invoices.list for a paginated summary without lines.",
+                  "Read one invoice with its full detail: its lines in order with quantity, unit price, VAT, and amounts; totals with the VAT breakdown by rate; document type, original invoice id, seller profile, buyer, dates, currency, and status; and every attached time entry and expense with its work item. An invoice from before invoice lines lists no lines for its attached entries until its first line edit; its totals still count them. Use invoices.list for a paginated summary without lines.",
                 access: "read",
                 flags: [
                   {
@@ -26097,7 +26124,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "invoices", "list"],
                 capabilityId: "invoices.list",
                 description:
-                  "List a matter's invoices oldest first with cursor pagination, returning each invoice's number, reference, status, dates, currency, and total, but not its line items. Use invoices.get to read the attached time entries and expenses.",
+                  "List a matter's invoices oldest first with cursor pagination, returning each invoice's number (null before numbering), document type, original invoice id, reference, status, dates, currency, and total, but not its line items. Use invoices.get to read the attached time entries and expenses.",
                 access: "read",
                 flags: [
                   {
@@ -26156,7 +26183,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "invoices", "transition"],
                 capabilityId: "invoices.transition",
                 description:
-                  "Move an invoice through its lifecycle with one action: finalize (draft to finalized), send (finalized to sent), mark_paid (sent to paid), revert_to_draft (finalized back to draft), or void (from finalized, sent, or paid). Voiding also releases every attached time entry and expense back to approved, unbilled status and clears the paid timestamp. An action the invoice's current status does not allow is refused.",
+                  "Move an invoice through finalize, send, mark_paid, void, or revert_to_draft. Finalize assigns an omitted number from the document type's default series, using the issue date; configure a default number series first. Manual numbers and numbers kept after reverting to draft are preserved. A credit note must reference an eligible original and cannot exceed its total. Voiding releases attached entries and clears the paid timestamp.",
                 access: "write",
                 flags: [
                   {
@@ -26249,7 +26276,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "invoices", "update"],
                 capabilityId: "invoices.update",
                 description:
-                  "Change a draft invoice's number, issue date (invoiceDate), taxable supply date, due date, reference, notes, currency, issuing seller profile, or buyer details as they should read on the document. Omitted fields stay unchanged; null clears an optional field. Only draft invoices can be edited, and the currency cannot change while the invoice has lines or attached entries.",
+                  "Change a draft invoice's number, issue date (invoiceDate), taxable supply date, due date, reference, notes, currency, issuing seller profile, or buyer details as they should read on the document. Omitted fields stay unchanged; null clears an optional field. Only draft invoices can be edited. Type and original invoice become immutable after the first finalize, including after reverting to draft. Credit notes require an eligible original in the same matter. Currency cannot change while the invoice has lines or attached entries.",
                 access: "write",
                 flags: [
                   {
@@ -26271,13 +26298,22 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "invoiceId",
                   },
                   {
-                    kind: "string",
+                    kind: "nullable-string",
                     repeatable: false,
                     flag: "--invoice-number",
                     prop: "invoiceNumber",
                     required: false,
                     part: "body",
                     partPath: "invoiceNumber",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--original-invoice-id",
+                    prop: "originalInvoiceId",
+                    required: false,
+                    part: "body",
+                    partPath: "originalInvoiceId",
                   },
                   {
                     kind: "string",
@@ -26415,7 +26451,7 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "buyerCountry",
                   },
                 ],
-                inputOnly: [],
+                inputOnly: ["body.documentType"],
                 paginated: false,
                 destructive: false,
                 scope: "billing_write",
@@ -26427,9 +26463,48 @@ export const generatedRouteMap: RouteNode = {
                       type: "object",
                       properties: {
                         invoiceNumber: {
-                          minLength: 1,
-                          maxLength: 64,
-                          type: "string",
+                          nullable: true,
+                          anyOf: [
+                            {
+                              minLength: 1,
+                              maxLength: 64,
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                        documentType: {
+                          anyOf: [
+                            {
+                              const: "invoice",
+                              type: "string",
+                            },
+                            {
+                              const: "advance",
+                              type: "string",
+                            },
+                            {
+                              const: "credit_note",
+                              type: "string",
+                            },
+                          ],
+                        },
+                        originalInvoiceId: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              minLength: 36,
+                              maxLength: 36,
+                              pattern:
+                                "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
                         },
                         invoiceDate: {
                           format: "date",

@@ -24,6 +24,7 @@ import {
   foldSearchMatchText,
   foldSearchMatchTextWithOffsets,
 } from "./search-match.js";
+import { slugify } from "./slug.js";
 
 // Seeded in PR CI so a counterexample is reproducible from the log, and
 // unseeded under the nightly sweep so it explores new inputs. See
@@ -48,10 +49,26 @@ const TATWEEL = String.fromCodePoint(0x06_40);
 
 const SEPARATORS = [" ", "  ", "\n", "\t", NBSP, TATWEEL];
 
-const CHARACTERS = [...SCRIPT_CHARACTERS, ...SEPARATORS];
+const ORIGINAL_CHARACTERS = [...SCRIPT_CHARACTERS, ...SEPARATORS];
+const CHARACTERS = [
+  ...ORIGINAL_CHARACTERS,
+  "\u0301",
+  "\u030c",
+  "\u0327",
+  "\u200d",
+  "𝔄",
+  "𐐀",
+  "😀",
+  "𐐨",
+];
 
 const text = fc
   .array(fc.constantFrom(...CHARACTERS), { maxLength: 24 })
+  .map((parts) => parts.join(""));
+
+// Extending this alphabet is out of scope pending SQL parity.
+const sqlMirrorText = fc
+  .array(fc.constantFrom(...ORIGINAL_CHARACTERS), { maxLength: 24 })
   .map((parts) => parts.join(""));
 
 const FOLDS = {
@@ -72,11 +89,14 @@ describe("fold family (properties)", () => {
   for (const [name, fold] of Object.entries(FOLDS)) {
     test(`${name} is idempotent`, () => {
       fc.assert(
-        fc.property(text, (value) => {
-          const once = fold(value);
+        fc.property(
+          fold === arabicNormalize ? sqlMirrorText : text,
+          (value) => {
+            const once = fold(value);
 
-          expect(fold(once)).toBe(once);
-        }),
+            expect(fold(once)).toBe(once);
+          },
+        ),
         config(400),
       );
     });
@@ -161,11 +181,14 @@ describe("offset-carrying folds (properties)", () => {
 
         expect(originalRanges).toHaveLength(folded.length);
         let previousStart = 0;
+        let previousEnd = 0;
         for (const { start, end } of originalRanges) {
           expect(start).toBeGreaterThanOrEqual(previousStart);
-          expect(end).toBeGreaterThanOrEqual(start);
+          expect(end).toBeGreaterThan(start);
+          expect(end).toBeGreaterThanOrEqual(previousEnd);
           expect(end).toBeLessThanOrEqual(value.length);
           previousStart = start;
+          previousEnd = end;
         }
       }),
       config(400),
@@ -226,6 +249,94 @@ describe("findSearchMatchRanges (properties)", () => {
         },
       ),
       config(200),
+    );
+  });
+});
+
+describe("slug keys (properties)", () => {
+  test("are stable under repeated normalization within the budget", () => {
+    fc.assert(
+      fc.property(
+        text,
+        fc.constantFrom("ascii", "unicode"),
+        fc.constantFrom("-", "_"),
+        fc.integer({ min: 1, max: 48 }),
+        (value, charset, separator, maxLength) => {
+          const options = { charset, separator, maxLength, fallback: "x" };
+          const once = slugify(value, options);
+          expect(slugify(once, options)).toBe(once);
+          expect(once.length).toBeLessThanOrEqual(maxLength);
+          expect(once).toMatch(
+            charset === "ascii" ? /^[a-z0-9_-]+$/u : /^[\p{L}\p{N}_-]+$/u,
+          );
+          expect(once.startsWith(separator)).toBe(false);
+          expect(once.endsWith(separator)).toBe(false);
+          expect(once.includes(separator.repeat(2))).toBe(false);
+        },
+      ),
+      config(100),
+    );
+  });
+});
+
+describe("search projection (properties)", () => {
+  test("finds generated needles and maps every occurrence to source content", () => {
+    fc.assert(
+      fc.property(
+        text,
+        fc.nat(),
+        fc.integer({ min: 1, max: 6 }),
+        (content, offset, width) => {
+          const folded = foldSearchMatchTextWithOffsets(content);
+          fc.pre(folded.text.trim().length > 0);
+          const characters = Array.from(folded.text);
+          const start = offset % characters.length;
+          const query = characters
+            .slice(start, start + width)
+            .join("")
+            .trim();
+          fc.pre(query.length > 0);
+          const ranges = findSearchMatchRanges(folded, query);
+          expect(ranges.length).toBeGreaterThan(0);
+          expect(findSearchMatchRanges(content, query)).toEqual(ranges);
+          let previousEnd = 0;
+          for (const range of ranges) {
+            expect(range.start).toBeGreaterThanOrEqual(previousEnd);
+            expect(range.end).toBeGreaterThan(range.start);
+            expect(range.end).toBeLessThanOrEqual(content.length);
+            expect(
+              foldSearchMatchText(content.slice(range.start, range.end)),
+            ).toContain(query);
+            previousEnd = range.end;
+          }
+          for (const maxMatches of [0, 1, 2, ranges.length]) {
+            expect(
+              findSearchMatchRanges(folded, query, { maxMatches }),
+            ).toEqual(ranges.slice(0, maxMatches));
+          }
+        },
+      ),
+      config(100),
+    );
+  });
+
+  test("keeps ranges bounded for incomplete UTF-16 needles", () => {
+    fc.assert(
+      fc.property(
+        text,
+        fc.integer({ min: 0xd8_00, max: 0xdf_ff }),
+        (content, unit) => {
+          const query = String.fromCodePoint(unit);
+          let previousEnd = 0;
+          for (const { start, end } of findSearchMatchRanges(content, query)) {
+            expect(start).toBeGreaterThanOrEqual(previousEnd);
+            expect(end).toBeGreaterThan(start);
+            expect(end).toBeLessThanOrEqual(content.length);
+            previousEnd = end;
+          }
+        },
+      ),
+      config(100),
     );
   });
 });

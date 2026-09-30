@@ -8414,7 +8414,9 @@ export type WebRoutes = {
             200: {
               items: Array<{
                 id: Tb7bcf69f62;
-                invoiceNumber: string;
+                invoiceNumber: Tbe0400fa4c;
+                documentType: Tbb2566af3f;
+                originalInvoiceId: T35ba71e459;
                 reference: Tbe0400fa4c;
                 status: Tc0f5c8e964;
                 invoiceDate: string;
@@ -8485,6 +8487,7 @@ export type WebRoutes = {
                 }>;
                 totals: T5a0acd1281;
                 paidAt: Tbe0400fa4c;
+                finalizedAt: Tbe0400fa4c;
                 createdAt: string;
                 updatedAt: string;
                 status: Tc0f5c8e964;
@@ -8492,9 +8495,11 @@ export type WebRoutes = {
                 id: Tb7bcf69f62;
                 workspaceId: T9e07a7d6cd;
                 dueDate: Tbe0400fa4c;
+                documentType: Tbb2566af3f;
                 currency: string;
                 notes: Tbe0400fa4c;
-                invoiceNumber: string;
+                invoiceNumber: Tbe0400fa4c;
+                originalInvoiceId: T35ba71e459;
                 invoiceDate: string;
                 totalAmount: stll_money_CentsAmount;
                 taxableSupplyDate: Tbe0400fa4c;
@@ -8571,9 +8576,11 @@ export type WebRoutes = {
           body: {
             reference?: string | null;
             dueDate?: string | null;
+            documentType?: "advance" | "credit_note" | "invoice";
             notes?: string | null;
+            invoiceNumber?: string;
+            originalInvoiceId?: Tb7bcf69f62;
             currency: string;
-            invoiceNumber: string;
             invoiceDate: string;
             timeEntryIds: Array<Te904b5ade5>;
           };
@@ -8583,7 +8590,7 @@ export type WebRoutes = {
           response: {
             200: {
               id: Tb7bcf69f62;
-              invoiceNumber: string;
+              invoiceNumber: Tbe0400fa4c;
               totalAmount: stll_money_CentsAmount;
               entryCount: number;
             };
@@ -8618,9 +8625,11 @@ export type WebRoutes = {
             body: {
               reference?: string | null;
               dueDate?: string | null;
+              documentType?: "advance" | "credit_note" | "invoice";
               currency?: string;
               notes?: string | null;
-              invoiceNumber?: string;
+              invoiceNumber?: string | null;
+              originalInvoiceId?: Tb7bcf69f62 | null;
               invoiceDate?: string;
               taxableSupplyDate?: string | null;
               sellerProfileId?: Tfd3441c0df | null;
@@ -11571,6 +11580,238 @@ export type WebRoutes = {
         };
       };
     };
+    absences: {
+      post: {
+        body: {
+          kind: T9f4bda5ae8;
+          timezoneId: string;
+          startDate: string;
+          endDate: string;
+          coverage: {
+            type: "full";
+          } | {
+            type: "half";
+            segment: T5229d28056;
+          };
+        };
+        params: T5e3ac29766;
+        query: Record<never, never>;
+        headers: Record<never, never>;
+        response: {
+          200: {
+            status: "requested";
+            id: T2a7b8ca874;
+            version: number;
+          };
+          400: T9a51b7d2bc;
+          401: T9a51b7d2bc;
+          402: T9a51b7d2bc;
+          403: Tddfcdef857;
+          404: T9a51b7d2bc;
+          409: T9a51b7d2bc;
+          413: T9a51b7d2bc;
+          422: (T9a51b7d2bc | {
+            type: "validation";
+            on: string;
+            summary?: string;
+            message?: string;
+            found?: unknown;
+            property?: string;
+            expected?: string;
+          });
+          428: T9a51b7d2bc;
+          429: T9a51b7d2bc;
+          500: T9a51b7d2bc;
+          502: T9a51b7d2bc;
+          503: T9a51b7d2bc;
+        };
+      };
+    } & {
+      mine: {
+        get: {
+          body: Record<never, never>;
+          params: T5e3ac29766;
+          query: Td2e9a73eb7;
+          headers: Record<never, never>;
+          response: {
+            200: T6d7f51ee1d;
+            400: T9a51b7d2bc;
+            401: T9a51b7d2bc;
+            402: T9a51b7d2bc;
+            403: Tddfcdef857;
+            404: T9a51b7d2bc;
+            409: T9a51b7d2bc;
+            413: T9a51b7d2bc;
+            422: (T9a51b7d2bc | {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            });
+            428: T9a51b7d2bc;
+            429: T9a51b7d2bc;
+            500: T9a51b7d2bc;
+            502: T9a51b7d2bc;
+            503: T9a51b7d2bc;
+          };
+        };
+      };
+    } & {
+      "approval-queue": {
+        get: {
+          body: Record<never, never>;
+          params: T5e3ac29766;
+          query: Td2e9a73eb7;
+          headers: Record<never, never>;
+          response: {
+            200: T6d7f51ee1d;
+            400: T9a51b7d2bc;
+            401: T9a51b7d2bc;
+            402: T9a51b7d2bc;
+            403: Tddfcdef857;
+            404: T9a51b7d2bc;
+            409: T9a51b7d2bc;
+            413: T9a51b7d2bc;
+            422: (T9a51b7d2bc | {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            });
+            428: T9a51b7d2bc;
+            429: T9a51b7d2bc;
+            500: T9a51b7d2bc;
+            502: T9a51b7d2bc;
+            503: T9a51b7d2bc;
+          };
+        };
+      };
+    } & {
+      ":id": {
+        approve: {
+          post: {
+            body: {
+              comment?: string;
+              version: number;
+            };
+            params: {
+              id: T2a7b8ca874;
+            };
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: T3289403d12;
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: Tddfcdef857;
+              404: T9a51b7d2bc;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: (T9a51b7d2bc | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    } & {
+      ":id": {
+        reject: {
+          post: {
+            body: {
+              version: number;
+              comment: string;
+            };
+            params: {
+              id: T2a7b8ca874;
+            };
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: T3289403d12;
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: Tddfcdef857;
+              404: T9a51b7d2bc;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: (T9a51b7d2bc | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    } & {
+      ":id": {
+        cancel: {
+          post: {
+            body: {
+              version: number;
+            };
+            params: {
+              id: T2a7b8ca874;
+            };
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: T3289403d12;
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: Tddfcdef857;
+              404: T9a51b7d2bc;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: (T9a51b7d2bc | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    };
     signals: {
       get: {
         body: Record<never, never>;
@@ -12900,238 +13141,6 @@ export type WebRoutes = {
               200: {
                 unreadCount: number;
               };
-              400: T9a51b7d2bc;
-              401: T9a51b7d2bc;
-              402: T9a51b7d2bc;
-              403: Tddfcdef857;
-              404: T9a51b7d2bc;
-              409: T9a51b7d2bc;
-              413: T9a51b7d2bc;
-              422: (T9a51b7d2bc | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: T9a51b7d2bc;
-              429: T9a51b7d2bc;
-              500: T9a51b7d2bc;
-              502: T9a51b7d2bc;
-              503: T9a51b7d2bc;
-            };
-          };
-        };
-      };
-    };
-    absences: {
-      post: {
-        body: {
-          kind: T9f4bda5ae8;
-          timezoneId: string;
-          startDate: string;
-          endDate: string;
-          coverage: {
-            type: "full";
-          } | {
-            type: "half";
-            segment: T5229d28056;
-          };
-        };
-        params: T5e3ac29766;
-        query: Record<never, never>;
-        headers: Record<never, never>;
-        response: {
-          200: {
-            status: "requested";
-            id: T2a7b8ca874;
-            version: number;
-          };
-          400: T9a51b7d2bc;
-          401: T9a51b7d2bc;
-          402: T9a51b7d2bc;
-          403: Tddfcdef857;
-          404: T9a51b7d2bc;
-          409: T9a51b7d2bc;
-          413: T9a51b7d2bc;
-          422: (T9a51b7d2bc | {
-            type: "validation";
-            on: string;
-            summary?: string;
-            message?: string;
-            found?: unknown;
-            property?: string;
-            expected?: string;
-          });
-          428: T9a51b7d2bc;
-          429: T9a51b7d2bc;
-          500: T9a51b7d2bc;
-          502: T9a51b7d2bc;
-          503: T9a51b7d2bc;
-        };
-      };
-    } & {
-      mine: {
-        get: {
-          body: Record<never, never>;
-          params: T5e3ac29766;
-          query: Td2e9a73eb7;
-          headers: Record<never, never>;
-          response: {
-            200: T6d7f51ee1d;
-            400: T9a51b7d2bc;
-            401: T9a51b7d2bc;
-            402: T9a51b7d2bc;
-            403: Tddfcdef857;
-            404: T9a51b7d2bc;
-            409: T9a51b7d2bc;
-            413: T9a51b7d2bc;
-            422: (T9a51b7d2bc | {
-              type: "validation";
-              on: string;
-              summary?: string;
-              message?: string;
-              found?: unknown;
-              property?: string;
-              expected?: string;
-            });
-            428: T9a51b7d2bc;
-            429: T9a51b7d2bc;
-            500: T9a51b7d2bc;
-            502: T9a51b7d2bc;
-            503: T9a51b7d2bc;
-          };
-        };
-      };
-    } & {
-      "approval-queue": {
-        get: {
-          body: Record<never, never>;
-          params: T5e3ac29766;
-          query: Td2e9a73eb7;
-          headers: Record<never, never>;
-          response: {
-            200: T6d7f51ee1d;
-            400: T9a51b7d2bc;
-            401: T9a51b7d2bc;
-            402: T9a51b7d2bc;
-            403: Tddfcdef857;
-            404: T9a51b7d2bc;
-            409: T9a51b7d2bc;
-            413: T9a51b7d2bc;
-            422: (T9a51b7d2bc | {
-              type: "validation";
-              on: string;
-              summary?: string;
-              message?: string;
-              found?: unknown;
-              property?: string;
-              expected?: string;
-            });
-            428: T9a51b7d2bc;
-            429: T9a51b7d2bc;
-            500: T9a51b7d2bc;
-            502: T9a51b7d2bc;
-            503: T9a51b7d2bc;
-          };
-        };
-      };
-    } & {
-      ":id": {
-        approve: {
-          post: {
-            body: {
-              comment?: string;
-              version: number;
-            };
-            params: {
-              id: T2a7b8ca874;
-            };
-            query: Record<never, never>;
-            headers: Record<never, never>;
-            response: {
-              200: T3289403d12;
-              400: T9a51b7d2bc;
-              401: T9a51b7d2bc;
-              402: T9a51b7d2bc;
-              403: Tddfcdef857;
-              404: T9a51b7d2bc;
-              409: T9a51b7d2bc;
-              413: T9a51b7d2bc;
-              422: (T9a51b7d2bc | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: T9a51b7d2bc;
-              429: T9a51b7d2bc;
-              500: T9a51b7d2bc;
-              502: T9a51b7d2bc;
-              503: T9a51b7d2bc;
-            };
-          };
-        };
-      };
-    } & {
-      ":id": {
-        reject: {
-          post: {
-            body: {
-              version: number;
-              comment: string;
-            };
-            params: {
-              id: T2a7b8ca874;
-            };
-            query: Record<never, never>;
-            headers: Record<never, never>;
-            response: {
-              200: T3289403d12;
-              400: T9a51b7d2bc;
-              401: T9a51b7d2bc;
-              402: T9a51b7d2bc;
-              403: Tddfcdef857;
-              404: T9a51b7d2bc;
-              409: T9a51b7d2bc;
-              413: T9a51b7d2bc;
-              422: (T9a51b7d2bc | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: T9a51b7d2bc;
-              429: T9a51b7d2bc;
-              500: T9a51b7d2bc;
-              502: T9a51b7d2bc;
-              503: T9a51b7d2bc;
-            };
-          };
-        };
-      };
-    } & {
-      ":id": {
-        cancel: {
-          post: {
-            body: {
-              version: number;
-            };
-            params: {
-              id: T2a7b8ca874;
-            };
-            query: Record<never, never>;
-            headers: Record<never, never>;
-            response: {
-              200: T3289403d12;
               400: T9a51b7d2bc;
               401: T9a51b7d2bc;
               402: T9a51b7d2bc;
@@ -36670,6 +36679,8 @@ type T350a170d52 = {
 type T352ed14c79 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "agentSkill";
 };
+
+type T35ba71e459 = Tb7bcf69f62 | null;
 
 type T367a10cc51 = {
   readonly input: T466db84340;

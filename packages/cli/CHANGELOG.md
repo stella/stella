@@ -1,5 +1,33 @@
 # @stll/cli
 
+## 3.1.0
+
+### Minor Changes
+
+- [#4181](https://github.com/stella/stella/pull/4181) [`d70abfc`](https://github.com/stella/stella/commit/d70abfcc3ce7776d38a84d89b45a4574dc79d8f7) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Support invoice document types, original invoice links, and optional draft numbers.
+
+## 3.0.0
+
+### Major Changes
+
+- [#4172](https://github.com/stella/stella/pull/4172) [`e0549d2`](https://github.com/stella/stella/commit/e0549d2baa56b3bfa3553b52265da8f1e13a1411) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add global timer capabilities and remove per-entry timer capabilities.
+
+### Minor Changes
+
+- [#4127](https://github.com/stella/stella/pull/4127) [`0b9fb6a`](https://github.com/stella/stella/commit/0b9fb6ad2519d1ad649ef589ab5716f3fbb06388) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add invoice line commands.
+
+- [#4188](https://github.com/stella/stella/pull/4188) [`e9183fb`](https://github.com/stella/stella/commit/e9183fbc5b7e0866035f7d7280462bea63e7ada6) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add administrative timer listing and completion capabilities.
+
+- [#4156](https://github.com/stella/stella/pull/4156) [`1bfd0b5`](https://github.com/stella/stella/commit/1bfd0b527b76e1aecd5924ed818e2d2ed05a5ee6) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add VAT rate management capabilities with validity dates.
+
+### Patch Changes
+
+- [#4173](https://github.com/stella/stella/pull/4173) [`1f9dee5`](https://github.com/stella/stella/commit/1f9dee578bfa1571d37f24737c5ac9fad3223eab) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The generated agent skill describes input-only union fields: the discriminator values, each variant's keys and one minimal `--input` example.
+
+- [#4141](https://github.com/stella/stella/pull/4141) [`46bd78c`](https://github.com/stella/stella/commit/46bd78cb6f74104c01dccd138a2e1219e6ca2472) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Accept the longer continuation cursor legislation search now returns.
+
+- [#3798](https://github.com/stella/stella/pull/3798) [`ce30a4c`](https://github.com/stella/stella/commit/ce30a4c989003f81123057b25f10c1b70333775f) Thanks [@shanehobson](https://github.com/shanehobson)! - `save_playbook` documents when `scope.perspective` is set: only for a buyer, seller, or neutral side; a recipient, controller, or customer omits it.
+
 ## 2.3.2
 
 ### Patch Changes
