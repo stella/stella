@@ -203,21 +203,19 @@ describe("personal time entries", () => {
       throw new Error(`unexpected list response: ${JSON.stringify(result)}`);
     }
 
-    expect(result.items.map(({ id }) => id).toSorted()).toEqual(
-      [...visibleIds].toSorted(),
+    expect(result.items).toHaveLength(visibleIds.length);
+    expect(result.items.map(({ id }) => id)).toEqual(
+      expect.arrayContaining([...visibleIds]),
     );
-    expect(
-      result.items
-        .filter((item) => item.activityGroup !== "absence")
-        .map(({ workspaceId }) => workspaceId)
-        .toSorted(),
-    ).toEqual([ids.wsA1, ids.wsA2].toSorted());
-    expect(
-      result.items
-        .filter((item) => item.activityGroup !== "absence")
-        .map(({ workspaceName }) => workspaceName)
-        .toSorted(),
-    ).toEqual(["WS A1", "WS A2"]);
+    const workEntries = result.items.filter(
+      (item) => item.activityGroup !== "absence",
+    );
+    expect(workEntries.map(({ workspaceId }) => workspaceId)).toEqual(
+      expect.arrayContaining([ids.wsA1, ids.wsA2]),
+    );
+    expect(workEntries.map(({ workspaceName }) => workspaceName)).toEqual(
+      expect.arrayContaining(["WS A1", "WS A2"]),
+    );
     expect(result.nextCursor).toBeNull();
   });
 

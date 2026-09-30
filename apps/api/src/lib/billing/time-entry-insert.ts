@@ -70,7 +70,7 @@ type TimeEntryPolicyCheckOptions = {
   body: Pick<TimeEntryInsertInput, "dateWorked" | "timezoneId" | "narrative">;
   dateWindow: "entry" | "timer_completion";
 };
-const checkInsertTimePolicy = async function* ({
+const checkInsertTimePolicy = function* ({
   policy,
   canApprove,
   body,
@@ -88,6 +88,7 @@ const checkInsertTimePolicy = async function* ({
   if (violation) {
     return yield* Result.err(violation);
   }
+  return undefined;
 };
 
 // Validation and rate resolution shared by every path that creates a time
