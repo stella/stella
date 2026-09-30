@@ -127,6 +127,13 @@ through Folio gains one it does not have.
 - **Shadows over borders:** prefer layered semi-transparent
   `box-shadow` for depth and separation. Reserve `border` for
   semantic boundaries (inputs, dividers), not for creating depth.
+- **The chrome owns the divider under the breadcrumb bar.** A page
+  root, or a nested layout's first pane, never draws its own top
+  border (`border-t`, `border-y`, `border`) on that line; it stacks
+  on the header's `border-b` as one 2px rule. The shell's content
+  slot (`WorkspaceShell`) strips the top border off its first child,
+  and route smoke fails any route that still paints one there
+  (`findDoubledChromeDividers`, `apps/web/e2e/helpers/chrome-divider.ts`).
 - **Image outlines:** for images on white/light backgrounds, add a
   subtle `outline: 1px solid rgb(0 0 0 / 0.06)` to define the edge
   without a heavy border.
