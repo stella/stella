@@ -3,7 +3,6 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, sql, TransactionRollbackError } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
-import { readFileSync } from "node:fs";
 import { loadavg } from "node:os";
 
 import { organization } from "@/api/db/auth-schema";
@@ -79,32 +78,11 @@ const futureNow = () => new Date(Date.now() + 1000);
 beforeAll(async () => {
   client = await createTestPglite();
   db = drizzle({ client });
-  const migration = readFileSync(
-    new URL(
-      "../../../../drizzle/20261003122900_sanctions_monitoring_marks/migration.sql",
-      import.meta.url,
-    ),
-    "utf-8",
-  );
-  const triggers = migration.slice(migration.indexOf("CREATE FUNCTION"));
-  const backfillMigration = readFileSync(
-    new URL(
-      "../../../../drizzle/20261003123000_sanctions_monitoring_backfills/migration.sql",
-      import.meta.url,
-    ),
-    "utf-8",
-  );
   await client.exec(`GRANT SELECT, INSERT, UPDATE ON sanctions_edition_fanouts TO stella_ingestion;
     ALTER TABLE sanctions_edition_fanouts ENABLE ROW LEVEL SECURITY; ALTER TABLE sanctions_edition_fanouts FORCE ROW LEVEL SECURITY;`);
-  await client.exec(
-    backfillMigration
-      .slice(backfillMigration.indexOf("CREATE FUNCTION"))
-      .replaceAll("--> statement-breakpoint", "\n"),
-  );
   await client.exec(`GRANT SELECT, INSERT, UPDATE, DELETE ON sanctions_monitoring_backfills TO stella;
     ALTER TABLE sanctions_monitoring_backfills ENABLE ROW LEVEL SECURITY; ALTER TABLE sanctions_monitoring_backfills FORCE ROW LEVEL SECURITY;
     REVOKE ALL ON sanctions_edition_fanouts FROM stella; GRANT SELECT ON sanctions_edition_fanouts TO stella;`);
-  await client.exec(triggers.replaceAll("--> statement-breakpoint", "\n"));
   await client.exec(`
     GRANT SELECT, INSERT, UPDATE, DELETE ON contacts, organization_settings, sanctions_contact_marks, sanctions_organization_marks, sanctions_contact_matches, sanctions_contact_screenings, sanctions_screening_events TO stella;
     REVOKE ALL ON organization, sanctions_sources, sanctions_editions, sanctions_edition_entries, sanctions_entry_payloads FROM stella;
@@ -588,7 +566,9 @@ const expiredWorkerRace = async (mode: "activation" | "stale") => {
     now,
     signal: new AbortController().signal,
   });
-  expect(replacement).toBeDefined();
+  if (replacement === undefined) {
+    panic("Replacement worker did not finish");
+  }
   expect(expired.terminal).toBe(0);
   expect(await snapshot()).toEqual(replacement);
   expect(
