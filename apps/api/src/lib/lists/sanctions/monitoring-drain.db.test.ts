@@ -105,7 +105,8 @@ beforeAll(async () => {
         issuer: SANCTIONS_SOURCE_CONFIG[id].issuer,
         markerUrl: SANCTIONS_SOURCE_CONFIG[id].markerUrl,
       })),
-    );
+    )
+    .onConflictDoNothing();
   const editionId = toSafeId<"sanctionsEdition">(Bun.randomUUIDv7());
   await db.insert(sanctionsEditions).values({
     id: editionId,
