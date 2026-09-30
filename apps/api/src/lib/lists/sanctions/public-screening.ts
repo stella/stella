@@ -24,9 +24,10 @@ export const createPublicSanctionsScreening = ({
   loadEntries = loadEditionEntries,
 }: PublicScreeningOptions = {}): typeof screenSanctionsSubject => {
   let warming: Promise<unknown> | null = null;
+  const coldLoads = new Map<string, ReturnType<typeof loadEditionEntries>>();
   const execute = async (
     props: ScreenSanctionsSubjectProps,
-    deadlineMs?: number,
+    options?: { deadlineMs: number; onSettled: () => void },
   ) => {
     const result = await pool.run(
       async (session) =>
@@ -36,9 +37,25 @@ export const createPublicSanctionsScreening = ({
             if (session.signal.aborted) {
               return null;
             }
-            const entries = session.hasEdition(source, edition.id)
-              ? null
-              : await loadEntries(db, edition);
+            let entries = null;
+            if (!session.hasEdition(source, edition.id)) {
+              const key = `${source}:${edition.id}`;
+              let pending = coldLoads.get(key);
+              if (pending === undefined) {
+                if (coldLoads.size >= SANCTIONS_MATCHER_CONFIG.poolSizeMax) {
+                  return null;
+                }
+                pending = loadEntries({
+                  db,
+                  edition,
+                  signal: session.signal,
+                }).finally(() => {
+                  coldLoads.delete(key);
+                });
+                coldLoads.set(key, pending);
+              }
+              entries = await pending;
+            }
             if (
               session.signal.aborted ||
               (entries !== null && entries.length !== edition.entryCount)
@@ -66,7 +83,7 @@ export const createPublicSanctionsScreening = ({
             return reply.status === "screened" ? reply.result : null;
           },
         }),
-      deadlineMs === undefined ? undefined : { deadlineMs },
+      options,
     );
     return result;
   };
@@ -86,10 +103,13 @@ export const createPublicSanctionsScreening = ({
           practiceJurisdictions: [],
           now: props.now,
         },
-        SANCTIONS_MATCHER_CONFIG.warmupDeadlineMs,
-      ).finally(() => {
-        warming = null;
-      });
+        {
+          deadlineMs: SANCTIONS_MATCHER_CONFIG.warmupDeadlineMs,
+          onSettled: () => {
+            warming = null;
+          },
+        },
+      );
     }
     return result === null
       ? Result.ok(

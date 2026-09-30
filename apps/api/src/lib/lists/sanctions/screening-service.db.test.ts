@@ -37,6 +37,7 @@ import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 import { createSanctionsMatcherPool } from "./matcher-pool";
 import { createPublicSanctionsScreening } from "./public-screening";
+import { loadEditionEntries } from "./screening-index";
 
 const DB_TEST_TIMEOUT_MS = 120_000;
 const HOUR_MS = 60 * 60 * 1000;
@@ -753,3 +754,67 @@ test.each(["hang", "crash"])(
     }
   },
 );
+
+test("repeated public deadlines bound unfinished cold loads until held reads settle", async () => {
+  const pool = createSanctionsMatcherPool({ size: 2, deadlineMs: 30 });
+  const held = Promise.withResolvers<undefined>();
+  const started = Promise.withResolvers<undefined>();
+  let startedLoads = 0;
+  let unfinished = 0;
+  let peak = 0;
+  let pagesAfterCancellation = 0;
+  const publicScreen = createPublicSanctionsScreening({
+    pool,
+    loadEntries: async (options) => {
+      startedLoads += 1;
+      unfinished += 1;
+      peak = Math.max(peak, unfinished);
+      started.resolve(undefined);
+      await held.promise;
+      const entries = await loadEditionEntries({
+        ...options,
+        db: async (read) => {
+          if (options.signal?.aborted) {
+            pagesAfterCancellation += 1;
+          }
+          return await options.db(read);
+        },
+      });
+      unfinished -= 1;
+      return entries;
+    },
+  });
+  const props = {
+    db: requestDb,
+    subject: {
+      type: "organization",
+      name: "Synthetic Company",
+      identifiers: [],
+    },
+    practiceJurisdictions: [],
+    now: FRESH_NOW,
+  } as const;
+  try {
+    const first = publicScreen(props);
+    await started.promise;
+    expect((await first).unwrap().status).toBe("unavailable");
+    for (const _attempt of Array.from({ length: 6 })) {
+      expect((await publicScreen(props)).unwrap().status).toBe("unavailable");
+    }
+    // Both leases may share the same edition read; neither deadline releases it.
+    expect(startedLoads).toBe(1);
+    expect(unfinished).toBe(1);
+    expect(peak).toBe(1);
+    held.resolve(undefined);
+    await pool.close();
+    // Let the underlying operation (not just the deadline result) settle.
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve);
+    });
+    expect(unfinished).toBe(0);
+    expect(pagesAfterCancellation).toBe(0);
+  } finally {
+    held.resolve(undefined);
+    await pool.close();
+  }
+});

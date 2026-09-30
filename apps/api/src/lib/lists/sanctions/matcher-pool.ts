@@ -120,7 +120,7 @@ export const createSanctionsMatcherPool = ({
   return {
     run: async <T>(
       operation: (session: SanctionsMatcherSession) => Promise<T>,
-      options?: { deadlineMs: number },
+      options?: { deadlineMs?: number; onSettled?: () => void },
     ): Promise<T | null> => {
       const controller = new AbortController();
       const failed = Promise.withResolvers<null>();
@@ -227,25 +227,32 @@ export const createSanctionsMatcherPool = ({
         }
         return result.value;
       };
+      const pendingWork = work().finally(options?.onSettled);
       try {
-        return await Promise.race([work(), failed.promise]);
+        return await Promise.race([pendingWork, failed.promise]);
       } finally {
         clearTimeout(timer);
         controller.abort();
         if (leased !== null) {
           const slot = leased;
           slot.fail = null;
-          // Do not admit another thread until termination has completed.
+          // Admission owns unfinished acquisition/page reads too, even after
+          // the caller deadline. Reuse only after both work and retirement settle.
           const release = () => {
             slot.busy = false;
             notify();
             return undefined;
           };
-          if (retirement !== null) {
-            detached(retirement.then(release), "sanctions.matcher-retire");
-          } else {
-            release();
-          }
+          detached(
+            Promise.all([
+              pendingWork.then(
+                () => undefined,
+                () => undefined,
+              ),
+              retirement ?? Promise.resolve(),
+            ]).then(release),
+            "sanctions.matcher-retire",
+          );
         }
       }
     },

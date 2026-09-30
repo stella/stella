@@ -55,38 +55,54 @@ class SanctionsIndexLoadFailure extends SanctionsIndexLoadFailureBase<{
   cause?: unknown;
 }> {}
 
-export const loadEditionEntries = async (
-  db: SanctionsReadDb,
-  edition: SanctionsActiveEdition,
-): Promise<SanctionsEntry[]> => {
+type LoadEditionEntriesOptions = {
+  db: SanctionsReadDb;
+  edition: SanctionsActiveEdition;
+  signal?: AbortSignal;
+};
+
+export const loadEditionEntries = async ({
+  db,
+  edition,
+  signal,
+}: LoadEditionEntriesOptions): Promise<SanctionsEntry[]> => {
   const entries: SanctionsEntry[] = [];
   const loadPage = async (cursor: string | null): Promise<void> => {
-    const page = await db(
-      async (tx) =>
-        await tx
-          .select({
-            sourceEntryId: sanctionsEditionEntries.sourceEntryId,
-            payload: sanctionsEntryPayloads.payload,
-          })
-          .from(sanctionsEditionEntries)
-          .innerJoin(
-            sanctionsEntryPayloads,
-            eq(
-              sanctionsEditionEntries.contentHash,
-              sanctionsEntryPayloads.contentHash,
-            ),
-          )
-          .where(
-            and(
-              eq(sanctionsEditionEntries.editionId, edition.id),
-              cursor === null
-                ? undefined
-                : gt(sanctionsEditionEntries.sourceEntryId, cursor),
-            ),
-          )
-          .orderBy(asc(sanctionsEditionEntries.sourceEntryId))
-          .limit(ENTRY_PAGE_SIZE),
-    );
+    if (signal?.aborted) {
+      return;
+    }
+    const page = await db(async (tx) => {
+      // Acquiring a transaction may outlive cancellation; never issue its page.
+      if (signal?.aborted) {
+        return [];
+      }
+      return await tx
+        .select({
+          sourceEntryId: sanctionsEditionEntries.sourceEntryId,
+          payload: sanctionsEntryPayloads.payload,
+        })
+        .from(sanctionsEditionEntries)
+        .innerJoin(
+          sanctionsEntryPayloads,
+          eq(
+            sanctionsEditionEntries.contentHash,
+            sanctionsEntryPayloads.contentHash,
+          ),
+        )
+        .where(
+          and(
+            eq(sanctionsEditionEntries.editionId, edition.id),
+            cursor === null
+              ? undefined
+              : gt(sanctionsEditionEntries.sourceEntryId, cursor),
+          ),
+        )
+        .orderBy(asc(sanctionsEditionEntries.sourceEntryId))
+        .limit(ENTRY_PAGE_SIZE);
+    });
+    if (signal?.aborted) {
+      return;
+    }
     for (const row of page) {
       entries.push(row.payload);
     }
@@ -117,7 +133,7 @@ const loadIndex = async ({
   Result<ScreeningIndex, SanctionsIndexLoadFailure>
 > => {
   const loaded = await Result.tryPromise({
-    try: async () => await loadEditionEntries(db, edition),
+    try: async () => await loadEditionEntries({ db, edition }),
     catch: (cause) =>
       new SanctionsIndexLoadFailure({
         stage: "read-failed",

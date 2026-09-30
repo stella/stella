@@ -231,3 +231,38 @@ test("cold construction and adversarial warm matching leave timers responsive", 
     await pool.close();
   }
 }, 20_000);
+
+test("deadline replies retain admission until unfinished operations settle", async () => {
+  const pool = createSanctionsMatcherPool({ size: 2, deadlineMs: 20 });
+  const held = Promise.withResolvers<undefined>();
+  let started = 0;
+  let unfinished = 0;
+  let peak = 0;
+  const operation = async () => {
+    started += 1;
+    unfinished += 1;
+    peak = Math.max(peak, unfinished);
+    await held.promise;
+    unfinished -= 1;
+    return "settled";
+  };
+  try {
+    for (const _attempt of Array.from({ length: 8 })) {
+      expect(await pool.run(operation)).toBeNull();
+    }
+    expect(started).toBe(2);
+    expect(unfinished).toBe(2);
+    expect(peak).toBe(2);
+    held.resolve(undefined);
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve);
+    });
+    expect(unfinished).toBe(0);
+    expect(await pool.run(async () => "recovered", { deadlineMs: 1000 })).toBe(
+      "recovered",
+    );
+  } finally {
+    held.resolve(undefined);
+    await pool.close();
+  }
+});
