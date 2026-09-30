@@ -183,8 +183,8 @@ if (!databaseUrl || !runPostgres) {
             }),
           );
         await compete(
-          (gatedRecord) => create(firstSafe, "First", gatedRecord),
-          () => create(secondSafe, "Second", record),
+          async (gatedRecord) => await create(firstSafe, "First", gatedRecord),
+          async () => await create(secondSafe, "Second", record),
         );
         const created = await firstDb
           .select()
@@ -233,8 +233,9 @@ if (!databaseUrl || !runPostgres) {
             }),
           );
         await compete(
-          (gatedRecord) => promote(firstSafe, firstTable.id, gatedRecord),
-          () => promote(secondSafe, secondTable.id, record),
+          async (gatedRecord) =>
+            await promote(firstSafe, firstTable.id, gatedRecord),
+          async () => await promote(secondSafe, secondTable.id, record),
         );
         const promoted = await firstDb
           .select()

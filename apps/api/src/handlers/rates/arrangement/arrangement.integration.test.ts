@@ -106,7 +106,9 @@ const summary = async () => {
       safeDb: safeDb(),
     }),
   );
-  if (!("summary" in response)) {panic("Billing summary request was refused");}
+  if (!("summary" in response)) {
+    panic("Billing summary request was refused");
+  }
   return response.summary;
 };
 const refreshCrossings = async () =>
@@ -197,9 +199,17 @@ test("cap events occur once per upward crossing and reset after value decreases"
   expect((await refreshCrossings()).isOk()).toBe(true);
   const events = await crossingEvents();
   expect(events).toHaveLength(3);
-  expect(events.map((row) => row.metadata?.["sequence"]).toSorted()).toEqual([
-    1, 2, 3,
-  ]);
+  expect(
+    events
+      .map((row) => {
+        const sequence = row.metadata?.["sequence"];
+        if (typeof sequence !== "number") {
+          panic("Crossing audit sequence missing");
+        }
+        return sequence;
+      })
+      .toSorted((left, right) => left - right),
+  ).toEqual([1, 2, 3]);
   expect(
     events.filter((row) => row.metadata?.["boundary"] === "threshold"),
   ).toHaveLength(2);
@@ -302,8 +312,9 @@ test("GET configuration can be resent unchanged and stale revisions are refused"
     Parameters<typeof getArrangement.handler>[0]
   >({ workspaceId, safeDb: safeDb() });
   const response = await getArrangement.handler(context);
-  if (!("arrangement" in response))
-    {panic("Billing arrangement request was refused");}
+  if (!("arrangement" in response)) {
+    panic("Billing arrangement request was refused");
+  }
   const readback = response.arrangement;
   expect(readback).not.toBeNull();
   if (!readback) {

@@ -105,7 +105,7 @@ describe("addEntries currency enforcement", () => {
             }),
           },
         },
-        select: (fields: object) => ({
+        select: (fields?: object) => ({
           from: (table: unknown) => {
             if (table === invoices) {
               return {
@@ -118,7 +118,7 @@ describe("addEntries currency enforcement", () => {
             }
 
             return createSelectQueryMock(
-              "status" in fields
+              fields && "status" in fields
                 ? [
                     {
                       id: toSafeId<"timeEntry">("te_1"),

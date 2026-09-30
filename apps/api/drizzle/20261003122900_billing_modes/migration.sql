@@ -5,7 +5,7 @@ SET statement_timeout = '10s';
 --> statement-breakpoint
 CREATE TABLE "billing_arrangements" (
  "workspace_id" uuid PRIMARY KEY,
- "organization_id" text NOT NULL REFERENCES "organization"("id") ON DELETE CASCADE,
+ "organization_id" varchar(128) NOT NULL REFERENCES "organization"("id") ON DELETE CASCADE,
  "mode" text NOT NULL,
  "currency" varchar(3) NOT NULL,
  "flat_fee_amount" bigint,

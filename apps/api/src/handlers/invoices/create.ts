@@ -398,15 +398,17 @@ const createInvoice = createSafeHandler(
     recordAuditEvent,
   }) {
     const result = yield* Result.await(
-      resultTx(safeDb, (tx) =>
-        createDraftInvoice(tx, {
-          actorUserId: user.id,
-          organizationId: session.activeOrganizationId,
-          workspaceId,
-          body,
-          now: new Date(),
-          recordAuditEvent,
-        }),
+      resultTx(
+        safeDb,
+        async (tx) =>
+          await createDraftInvoice(tx, {
+            actorUserId: user.id,
+            organizationId: session.activeOrganizationId,
+            workspaceId,
+            body,
+            now: new Date(),
+            recordAuditEvent,
+          }),
       ).then((txResult) => txResult.mapError(invoiceCreationError)),
     );
     return Result.ok(result);

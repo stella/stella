@@ -69,6 +69,15 @@ type OnlineIndex = RequiredMigrationIndex & {
 export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   {
     createSql:
+      'CREATE INDEX CONCURRENTLY "rate_entries_table_role_from_idx" ON public."rate_entries" USING btree ("rate_table_id", "role", "effective_from")',
+    definitionBody:
+      "ON public.rate_entries USING btree (rate_table_id, role, effective_from)",
+    isUnique: false,
+    name: "rate_entries_table_role_from_idx",
+    tableName: "rate_entries",
+  },
+  {
+    createSql:
       'CREATE INDEX CONCURRENTLY "time_entries_org_status_date_id_idx" ON public."time_entries" USING btree ("organization_id", "status", "date_worked", "id")',
     definitionBody:
       "ON public.time_entries USING btree (organization_id, status, date_worked, id)",

@@ -248,7 +248,7 @@ test("a canonical flat fee cannot accept extra lines, attachments, price edits, 
     where: { invoiceId: { eq: invoiceId } },
   });
   if (!line) {
-    return panic("Flat fee line missing");
+    panic("Flat fee line missing");
   }
   const entry = await seedEntry();
   const attempts = [

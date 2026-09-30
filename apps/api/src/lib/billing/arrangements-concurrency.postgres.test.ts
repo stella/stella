@@ -189,7 +189,20 @@ if (!databaseUrl || !runPostgres) {
           .where(eq(auditLogs.workspaceId, workspaceId));
         expect(events).toHaveLength(2);
         expect(
-          events.map((event) => event.metadata?.["boundary"]).toSorted(),
+          events
+            .map((event) => {
+              const boundary = event.metadata?.["boundary"];
+              if (typeof boundary !== "string") {
+                panic("Crossing audit boundary missing");
+              }
+              return boundary;
+            })
+            .toSorted((left, right) => {
+              if (left === right) {
+                return 0;
+              }
+              return left < right ? -1 : 1;
+            }),
         ).toEqual(["cap", "threshold"]);
         const rows = await firstDb
           .select()
