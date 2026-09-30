@@ -1007,6 +1007,7 @@ type IngestItemOptions = {
   lease: CaseLawSourceIngestionLease;
   now: Date;
   buildDecision: SourceReconciliation["buildDecision"];
+  reconciliation: SourceReconciliation;
   reparseStoredRaw: SourceAdapter["reparseStoredRaw"];
   scopedDb: ScopedDb;
   slice: string;
@@ -1028,6 +1029,7 @@ const ingestListedItem = async ({
   lease,
   now,
   buildDecision,
+  reconciliation,
   reparseStoredRaw,
   scopedDb,
   slice,
@@ -1321,6 +1323,7 @@ const walkSlice = async ({
       lease,
       now: now(),
       buildDecision,
+      reconciliation,
       reparseStoredRaw,
       scopedDb,
       slice,
@@ -1459,6 +1462,7 @@ const retryParkedItems = async ({
       lease,
       now: now(),
       buildDecision,
+      reconciliation,
       reparseStoredRaw,
       scopedDb,
       slice: item.slice,

@@ -26,6 +26,7 @@ import {
 import type { StoredRawReparseOutcome } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   skCourtsAdapter,
+  assembleSkCourtsDecision,
   SK_COURTS_SOURCE_FIELD_PATHS,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 import { readGzipJson } from "@/api/lib/gzip-json";
@@ -327,13 +328,36 @@ describe("a stored record reaches the targets the inventory declares", () => {
 });
 
 describe("the census and the registry agree about this adapter", () => {
-  test("its two recorded surfaces are the parts the envelope carries", () => {
+  test("its recorded surfaces match a complete decision envelope", () => {
     const { surfaces } = skCourtsAdapter.sourceSurfaces;
     const recorded = Object.entries(surfaces).flatMap(([, disposition]) =>
       disposition.disposition === "stored" ? [disposition.part] : [],
     );
 
-    expect(recorded.toSorted()).toEqual(["detail", "listing"]);
+    const registry = {
+      registreGuid: "sud_102",
+      nazov: "Mestský súd Bratislava I",
+      typSudu: "Mestský súd",
+    };
+    const item = {
+      guid: "surface-inventory",
+      spisovaZnacka: "7C/221/1991",
+      sud: {
+        registreGuid: registry.registreGuid,
+        nazov: "Okresný súd Bratislava I",
+      },
+    };
+    const decision = assembleSkCourtsDecision({
+      item,
+      detail: item,
+      courtRegistry: { status: "available", record: registry },
+    });
+    if (decision === null) {
+      panic("Complete surface fixture must build a decision");
+    }
+    const parts = decodeSourceRawEnvelope(decision.sourceRaw ?? "");
+    expect(parts).not.toBeNull();
+    expect(recorded.toSorted()).toEqual(Object.keys(parts ?? {}).toSorted());
   });
 
   test("the surfaces still on the backlog name why", () => {

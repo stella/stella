@@ -100,7 +100,7 @@ export const skCourtDirectoryMetadata = (
     logger.warn("case_law.ingestion.unknown_court_type", {
       adapterKey: ADAPTER_KEYS.SK_COURTS,
       registreGuid: record.registreGuid,
-      type: type ?? null,
+      type: type ?? "not_stated",
     });
   }
   return {

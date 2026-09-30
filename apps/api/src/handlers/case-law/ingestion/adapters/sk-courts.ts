@@ -673,7 +673,7 @@ export const buildSkCourtsDecision = async (
   if (registry.isErr()) {
     logger.warn("case_law.ingestion.court_registry_unavailable", {
       adapterKey: ADAPTER_KEYS.SK_COURTS,
-      registreGuid: registreGuid ?? null,
+      ...(registreGuid === undefined ? {} : { registreGuid }),
       reason: registry.error.message,
     });
   }
@@ -1131,12 +1131,11 @@ const collectFrontierPage = async (
     items: [
       ...new Set(
         listed.flatMap((item) => {
+          if (!isSkApiItem(item) || skCourtsIdentityFields(item) === null) {
+            return [];
+          }
           const id = item.sud?.registreGuid;
-          return skCourtsIdentityFields(item) === null ||
-            id === null ||
-            id === undefined
-            ? []
-            : [id];
+          return id === null || id === undefined ? [] : [id];
         }),
       ),
     ],
@@ -1692,12 +1691,11 @@ const createBackfillPage = (readCourt: SkCourtRegistryReader) =>
       }
       const courtIds = new Set(
         arrayOrEmpty(json.rozhodnutieList).flatMap((item) => {
+          if (!isSkApiItem(item) || skCourtsIdentityFields(item) === null) {
+            return [];
+          }
           const id = item.sud?.registreGuid;
-          return skCourtsIdentityFields(item) === null ||
-            id === null ||
-            id === undefined
-            ? []
-            : [id];
+          return id === null || id === undefined ? [] : [id];
         }),
       );
       const records = await mapWithConcurrency({
