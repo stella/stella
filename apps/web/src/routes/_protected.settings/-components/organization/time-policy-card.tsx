@@ -70,7 +70,7 @@ export const TimePolicyCard = () => {
   }
   return (
     <TimePolicyForm
-      key={`${user.activeOrganizationId}:${query.data.timeMinimumUnitMinutes}:${query.data.timeEditWindowDays}:${query.data.timeLockedThroughMonth}:${query.data.timeNarrativeRequired}`}
+      key={`${user.activeOrganizationId}:${String(query.data.timeMinimumUnitMinutes)}:${String(query.data.timeEditWindowDays)}:${String(query.data.timeLockedThroughMonth)}:${String(query.data.timeNarrativeRequired)}`}
       settings={query.data}
       canEdit={canEdit}
     />

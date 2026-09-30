@@ -91,6 +91,8 @@ export const timePolicyErrorKey = (error: unknown) => {
       return TIME_POLICY_REFUSALS.invalid_time_minimum_unit;
     case "invalid_time_locked_month":
       return TIME_POLICY_REFUSALS.invalid_time_locked_month;
+    case undefined:
+      return null;
     default:
       return null;
   }
