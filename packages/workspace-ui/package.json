@@ -60,7 +60,7 @@
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/workspace-ui",
     "format": "bun ../../scripts/run-oxfmt.ts .",
     "prepack": "bun run build",
-    "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlF 'fc.assert' src --include='*.test.ts')"
+    "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')"
   },
   "dependencies": {
     "@stll/calculations": "workspace:^",

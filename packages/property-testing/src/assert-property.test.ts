@@ -1,0 +1,251 @@
+import { afterEach, expect, spyOn, test } from "bun:test";
+import fc from "fast-check";
+
+import {
+  PropertyAssertionError,
+  runProperty,
+  assertProperty,
+  failureFingerprint,
+  propertyConfig,
+} from "./index";
+
+const ENV_KEYS = [
+  "CI",
+  "PROPERTY_TEST_SEED",
+  "PROPERTY_TEST_PATH",
+  "PROPERTY_TEST_NUM_RUNS_FACTOR",
+  "PROPERTY_TEST_TIME_LIMIT_MS",
+  "PROPERTY_TEST_REDACT",
+];
+const original = new Map(ENV_KEYS.map((key) => [key, process.env[key]]));
+afterEach(() => {
+  for (const [key, value] of original) {
+    if (value === undefined) {
+      Reflect.deleteProperty(process.env, key);
+    } else {
+      process.env[key] = value;
+    }
+  }
+});
+const neutralEnv = (): void => {
+  for (const key of ENV_KEYS) {
+    Reflect.deleteProperty(process.env, key);
+  }
+};
+const FILE = "packages/property-testing/src/assert-property.test.ts";
+const PIN = {
+  seed: 123,
+  path: "0",
+  note: "Regression coverage",
+  date: "2026-09-30",
+};
+
+test("identifies the calling test with an explicit id", () => {
+  neutralEnv();
+  expect(() =>
+    assertProperty(
+      "identifies the calling test with an explicit id",
+      fc.property(fc.constant(1), () => false),
+    ),
+  ).toThrow(`"${FILE}::identifies the calling test with an explicit id"`);
+});
+
+test("replays pins before examples and generation for sync and async properties", async () => {
+  neutralEnv();
+  for (const asyncMode of [false, true]) {
+    const values: number[] = [];
+    const predicate = (value: number): boolean => {
+      values.push(value);
+      return true;
+    };
+    const property = asyncMode
+      ? fc.asyncProperty(fc.constant(1), async (value) => predicate(value))
+      : fc.property(fc.constant(1), predicate);
+    await runProperty({
+      file: FILE,
+      id: "replay order",
+      property,
+      params: { numRuns: 2, examples: [[99]] },
+      pinned: [PIN],
+    });
+    expect(values).toEqual([1, 1, 99, 1]);
+  }
+});
+
+test("a failing pin stops generation and carries a reproducible report", () => {
+  neutralEnv();
+  let calls = 0;
+  expect(() =>
+    runProperty({
+      file: FILE,
+      id: "pinned failure",
+      property: fc.property(fc.constant(1), () => {
+        calls++;
+        return false;
+      }),
+      params: { numRuns: 1, examples: [[99]] },
+      pinned: [PIN],
+    }),
+  ).toThrow(/Replay: PROPERTY_TEST_SEED=123 PROPERTY_TEST_PATH='0' bun test/u);
+  expect(calls).toBe(1);
+});
+
+test("honors an environment replay path only for its matching explicit seed", () => {
+  neutralEnv();
+  process.env["PROPERTY_TEST_SEED"] = "123";
+  process.env["PROPERTY_TEST_PATH"] = "4:2";
+  expect(propertyConfig({ seed: 123 }).path).toBe("4:2");
+  expect(propertyConfig({ seed: 456, path: "0" }).path).toBe("0");
+  expect(propertyConfig({ seed: 456 }).path).toBeUndefined();
+  Reflect.deleteProperty(process.env, "PROPERTY_TEST_SEED");
+  expect(propertyConfig({ seed: 123 }).path).toBeUndefined();
+});
+
+test("time boxes only exploratory generation and leaves interruption non-failing", () => {
+  neutralEnv();
+  process.env["PROPERTY_TEST_TIME_LIMIT_MS"] = "50";
+  expect(propertyConfig().interruptAfterTimeLimit).toBeUndefined();
+  process.env["PROPERTY_TEST_NUM_RUNS_FACTOR"] = "10";
+  expect(propertyConfig()).toMatchObject({
+    interruptAfterTimeLimit: 50,
+    markInterruptAsFailure: false,
+  });
+  process.env["PROPERTY_TEST_TIME_LIMIT_MS"] = "invalid";
+  expect(() => propertyConfig()).toThrow(
+    "PROPERTY_TEST_TIME_LIMIT_MS must be a positive integer",
+  );
+});
+
+test("emits one CI marker per failure and omits redacted counterexamples", () => {
+  neutralEnv();
+  process.env["CI"] = "true";
+  process.env["PROPERTY_TEST_NUM_RUNS_FACTOR"] = "1.1";
+  const log = spyOn(console, "error").mockImplementation(() => {});
+  try {
+    for (const redacted of [false, true]) {
+      if (redacted) {
+        process.env["PROPERTY_TEST_REDACT"] = "1";
+      }
+      expect(() =>
+        runProperty({
+          file: FILE,
+          id: "marker",
+          property: fc.property(fc.constant("private"), () => false),
+          params: { numRuns: 1 },
+          pinned: [],
+        }),
+      ).toThrow(PropertyAssertionError);
+      const line = log.mock.calls.at(-1)?.at(0);
+      expect(typeof line).toBe("string");
+      if (typeof line !== "string") {
+        throw new TypeError("Expected marker line");
+      }
+      expect(line.startsWith("STELLA_PROPERTY_FAILURE ")).toBe(true);
+      const record: unknown = JSON.parse(
+        line.slice("STELLA_PROPERTY_FAILURE ".length),
+      );
+      expect(record).toMatchObject({
+        file: FILE,
+        id: "marker",
+        factor: 1.1,
+        fingerprint: expect.stringMatching(/^[a-f\d]{16}$/u),
+        replay: expect.stringContaining("bun test"),
+      });
+      expect(line.includes('"counterexample"')).toBe(!redacted);
+    }
+    expect(log).toHaveBeenCalledTimes(2);
+  } finally {
+    log.mockRestore();
+  }
+});
+
+test("fingerprints ignore generated values but distinguish assertion and id", () => {
+  const variants = [
+    'Expected "alpha" at 123',
+    "Expected 'beta' at -456",
+    "Expected `gamma` at 3.14",
+    "Expected 01234567-89ab-cdef-0123-456789abcdef at 0xdeadbeef",
+    "Expected abcdef1234567890 at 12",
+  ];
+  const fingerprints = variants.map((error) =>
+    failureFingerprint({ id: "invariant", error }),
+  );
+  expect(new Set(fingerprints).size).toBe(1);
+  expect(
+    failureFingerprint({ id: "other", error: variants.at(0) ?? "" }),
+  ).not.toBe(fingerprints.at(0));
+  expect(
+    failureFingerprint({ id: "invariant", error: "Different assertion" }),
+  ).not.toBe(fingerprints.at(0));
+  expect(
+    failureFingerprint({ id: "invariant", error: "failure\nstack 123" }),
+  ).toBe(failureFingerprint({ id: "invariant", error: "failure\nstack 456" }));
+});
+
+test("async failures reject with replay details before generated examples", async () => {
+  neutralEnv();
+  const values: number[] = [];
+  const property = fc.asyncProperty(fc.constant(1), async (value) => {
+    values.push(value);
+    return false;
+  });
+  await expect(
+    runProperty({
+      file: FILE,
+      id: "async replay",
+      property,
+      params: { numRuns: 1, examples: [[99]] },
+      pinned: [PIN],
+    }),
+  ).rejects.toThrow("Replay: PROPERTY_TEST_SEED=123");
+  expect(values).toEqual([1]);
+});
+
+test("pins retain their own paths under a different environment replay", () => {
+  neutralEnv();
+  process.env["PROPERTY_TEST_SEED"] = "456";
+  process.env["PROPERTY_TEST_PATH"] = "999";
+  expect(() =>
+    runProperty({
+      file: FILE,
+      id: "own pinned path",
+      property: fc.property(fc.constant(1), () => false),
+      params: { numRuns: 1 },
+      pinned: [PIN],
+    }),
+  ).toThrow("PROPERTY_TEST_PATH='0'");
+});
+
+test("rejects custom reporters instead of allowing a failure to be swallowed", () => {
+  neutralEnv();
+  expect(() =>
+    assertProperty(
+      "reporter boundary",
+      fc.property(fc.constant(1), () => false),
+      { reporter: () => {} },
+    ),
+  ).toThrow("custom reporters are unsupported");
+});
+
+test("nightly time limits cannot truncate pinned replays", async () => {
+  neutralEnv();
+  process.env["PROPERTY_TEST_NUM_RUNS_FACTOR"] = "10";
+  process.env["PROPERTY_TEST_TIME_LIMIT_MS"] = "1";
+  let calls = 0;
+  const property = fc.asyncProperty(fc.constant(1), async () => {
+    calls++;
+    await new Promise((resolve) => {
+      setTimeout(resolve, 2);
+    });
+    return true;
+  });
+  await runProperty({
+    file: FILE,
+    id: "untruncated pins",
+    property,
+    params: { numRuns: 1 },
+    pinned: [PIN],
+  });
+  expect(calls).toBeGreaterThanOrEqual(10);
+  expect(calls).toBeLessThan(20);
+});
