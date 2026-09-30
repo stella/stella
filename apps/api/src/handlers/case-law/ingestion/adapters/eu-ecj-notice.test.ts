@@ -154,13 +154,13 @@ describe("the branch notice is read per expression", () => {
       parent.append(copy);
     };
 
-    appendCopy(work, "CASE-LAW_NATIONAL-JUDGEMENT", (copy) =>
+    appendCopy(work, "CASE-LAW_NATIONAL-JUDGEMENT", (copy) => {
       copy
         .children("VALUE")
         .text(
           "<national_judgement><p>Second referring court.</p></national_judgement>",
-        ),
-    );
+        );
+    });
     appendCopy(work, "CASE-LAW_ORIGINATES_IN_COUNTRY", (copy) => {
       copy.children("IDENTIFIER").text("LUX");
       copy.children("PREFLABEL").text("Luxembourg");
@@ -177,24 +177,24 @@ describe("the branch notice is read per expression", () => {
         copy.children("PREFLABEL").text("Appeal");
       },
     );
-    appendCopy(work, "CASE-LAW_DELIVERED_BY_JUDGE", (copy) =>
-      copy.find("AGENT_NAME > VALUE").first().text("Second Rapporteur"),
-    );
-    appendCopy(work, "CASE-LAW_DELIVERED_BY_ADVOCATE-GENERAL", (copy) =>
-      copy.find("AGENT_NAME > VALUE").first().text("Second Advocate General"),
-    );
-    appendCopy(work, "VERSION", (copy) =>
-      copy.children("VALUE").text("Second record version"),
-    );
-    appendCopy(work, "WORK_DATE_DOCUMENT", (copy) =>
-      copy.children("VALUE").text("2023-12-06"),
-    );
-    appendCopy(expression, "EXPRESSION_TITLE", (copy) =>
-      copy.children("VALUE").text("Second expression title"),
-    );
-    appendCopy(expression, "EXPRESSION_CASE-LAW_IDENTIFIER_CASE", (copy) =>
-      copy.children("VALUE").text("Second case identifier"),
-    );
+    appendCopy(work, "CASE-LAW_DELIVERED_BY_JUDGE", (copy) => {
+      copy.find("AGENT_NAME > VALUE").first().text("Second Rapporteur");
+    });
+    appendCopy(work, "CASE-LAW_DELIVERED_BY_ADVOCATE-GENERAL", (copy) => {
+      copy.find("AGENT_NAME > VALUE").first().text("Second Advocate General");
+    });
+    appendCopy(work, "VERSION", (copy) => {
+      copy.children("VALUE").text("Second record version");
+    });
+    appendCopy(work, "WORK_DATE_DOCUMENT", (copy) => {
+      copy.children("VALUE").text("2023-12-06");
+    });
+    appendCopy(expression, "EXPRESSION_TITLE", (copy) => {
+      copy.children("VALUE").text("Second expression title");
+    });
+    appendCopy(expression, "EXPRESSION_CASE-LAW_IDENTIFIER_CASE", (copy) => {
+      copy.children("VALUE").text("Second case identifier");
+    });
     appendCopy(dossierEvent, "EVENT_CONTAINS_WORK", (copy) => {
       copy.find("SAMEAS URI IDENTIFIER").first().text("62000CJ0001");
       copy
