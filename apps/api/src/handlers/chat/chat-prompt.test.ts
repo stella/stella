@@ -696,7 +696,7 @@ describe("chat prompt builders", () => {
     });
 
     expect(prompt.safeLayers.static).toBe(prompt.cacheStablePrefix);
-    expect(prompt.safeLayers.organization).toBe(
+    expect(String(prompt.safeLayers.organization)).toBe(
       "\n\nUser generally practices law in: Czechia.",
     );
     expect(chatSafePromptText(prompt.safeLayers)).toBe(prompt.safePrompt);

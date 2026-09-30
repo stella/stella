@@ -30,6 +30,8 @@ import {
 
 const CHAT_DIRECTORY = "apps/api/src/handlers/chat/";
 const REQUEST_MODULE = "apps/api/src/handlers/chat/chat-request";
+const FIXTURE =
+  ".oxlint-plugins/__fixtures__/no-ad-hoc-chat-request.fixture.ts";
 
 /** The builders only the request module may call, by the module that
  *  exports them, as canonical repository paths: an alias, a relative path
@@ -88,9 +90,12 @@ export default eslintCompatPlugin({
             ownerNamespaces.clear();
             const filename = filenameForContext(context);
             return (
-              filename.includes(CHAT_DIRECTORY) &&
-              !canonicalModuleId(filename, filename).endsWith(REQUEST_MODULE) &&
-              !isTestFile(filename)
+              filename.endsWith(FIXTURE) ||
+              (filename.includes(CHAT_DIRECTORY) &&
+                !canonicalModuleId(filename, filename).endsWith(
+                  REQUEST_MODULE,
+                ) &&
+                !isTestFile(filename))
             );
           },
           ImportDeclaration(node) {

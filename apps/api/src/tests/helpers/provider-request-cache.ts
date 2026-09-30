@@ -12,7 +12,7 @@ import { WIRE_PROMPT_SECTIONS } from "@/api/tests/helpers/replayed-harness-model
 // budgets it is held to: the tokens of each surface's stable prefix (a
 // ratchet) and each tool's share of it (a per-tool budget with written
 // exceptions). Both are read from the request bodies the provider SDKs wrote
-// in `provider-request-schemas.integration.test.ts`.
+// in `provider-request-cache.integration.test.ts`.
 
 // --- Reading a request --------------------------------------------------------
 
