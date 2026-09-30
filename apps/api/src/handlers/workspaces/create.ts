@@ -6,7 +6,7 @@ import type { Static } from "elysia";
 import { member } from "@/api/db/auth-schema";
 import { SETTING_WORKSPACE_IDS } from "@/api/db/rls";
 import type { SafeDb } from "@/api/db/safe-db";
-import { abortableTx } from "@/api/db/safe-db";
+import { resultTx } from "@/api/db/safe-db";
 import {
   contacts,
   properties,
@@ -86,7 +86,7 @@ export const createWorkspaceHandler = async function* ({
   body,
 }: CreateWorkspaceHandlerProps) {
   const txResult = yield* Result.await(
-    abortableTx(safeDb, async (tx) => {
+    resultTx(safeDb, async (tx) => {
       // New personal matters (no clientId) start with exactly one
       // member: the creator. Additional members can be attached
       // through the workspace members endpoint after creation.
@@ -147,19 +147,21 @@ export const createWorkspaceHandler = async function* ({
       const activeCount = countResult.at(0)?.total ?? 0;
 
       if (body.clientId !== undefined && !client) {
-        return {
-          ok: false as const,
-          status: 404 as const,
-          message: "Client not found",
-        };
+        return Result.err(
+          new HandlerError({
+            status: 404,
+            message: "Client not found",
+          }),
+        );
       }
 
       if (orgMembers.length !== requestedMemberUserIds.length) {
-        return {
-          ok: false as const,
-          status: 400 as const,
-          message: "Some users are not members of this organization",
-        };
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "Some users are not members of this organization",
+          }),
+        );
       }
 
       // Membership verified above — brand each requested user ID.
@@ -174,11 +176,12 @@ export const createWorkspaceHandler = async function* ({
       );
 
       if (activeCount >= LIMITS.workspacesCount) {
-        return {
-          ok: false as const,
-          status: 400 as const,
-          message: "Workspaces limit reached",
-        };
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "Workspaces limit reached",
+          }),
+        );
       }
 
       const newName =
@@ -191,13 +194,18 @@ export const createWorkspaceHandler = async function* ({
       const padding =
         settings?.matterNumberPadding ?? DEFAULT_MATTER_NUMBER_PADDING;
       const now = new Date();
-      const reference = await allocateMatterReference({
+      const referenceResult = await allocateMatterReference({
         tx,
         organizationId,
         pattern,
         now,
         padding,
       });
+
+      if (Result.isError(referenceResult)) {
+        return referenceResult;
+      }
+      const reference = referenceResult.value;
 
       await tx.insert(workspaces).values({
         id: body.id,
@@ -307,21 +315,9 @@ export const createWorkspaceHandler = async function* ({
 
       await enqueueWorkspaceSearchRepairs(tx, [workspaceId]);
 
-      return {
-        ok: true as const,
-        id: body.id,
-      };
+      return Result.ok({ id: body.id });
     }),
   );
-
-  if (!txResult.ok) {
-    return Result.err(
-      new HandlerError({
-        status: txResult.status,
-        message: txResult.message,
-      }),
-    );
-  }
 
   flushWorkspaceSearchRepairs([txResult.id]).catch(captureError);
 

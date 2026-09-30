@@ -4,7 +4,7 @@ import { t } from "elysia";
 
 import { member } from "@/api/db/auth-schema";
 import { SETTING_WORKSPACE_IDS } from "@/api/db/rls";
-import { transactionAbortError } from "@/api/db/safe-db";
+import { resultTx } from "@/api/db/safe-db";
 import {
   type entities,
   type fields,
@@ -584,7 +584,7 @@ export const createDuplicateWorkspace = (
       // transaction callback commits whatever it has already written, so a
       // rejection raised part-way through would persist half a matter and then
       // have the caller delete the objects those committed rows point at.
-      const txResult = await safeDb(async (tx) => {
+      const txResult = await resultTx(safeDb, async (tx) => {
         const [countResult, duplicatedNames, settings, orgMembers] =
           await Promise.all([
             tx
@@ -650,13 +650,18 @@ export const createDuplicateWorkspace = (
         const padding =
           settings?.matterNumberPadding ?? DEFAULT_MATTER_NUMBER_PADDING;
         const now = new Date();
-        const reference = await allocateMatterReference({
+        const referenceResult = await allocateMatterReference({
           tx,
           organizationId,
           pattern,
           now,
           padding,
         });
+
+        if (Result.isError(referenceResult)) {
+          return referenceResult;
+        }
+        const reference = referenceResult.value;
 
         await tx.insert(workspaces).values({
           id: targetWorkspaceId,
@@ -948,11 +953,11 @@ export const createDuplicateWorkspace = (
           targetWorkspaceId,
         ]);
 
-        return {
+        return Result.ok({
           workspaceId: targetWorkspaceId,
           entityIds: duplicatedEntityIds,
           nativeExtractionRunIds,
-        };
+        });
       });
 
       // An aborted duplicate leaves no target matter, so every object copied
@@ -962,7 +967,7 @@ export const createDuplicateWorkspace = (
           copiedS3Keys,
           targetWorkspaceId,
         });
-        return Result.err(transactionAbortError(txResult.error));
+        return Result.err(txResult.error);
       }
 
       // These post-commit calls only accelerate work the transaction already

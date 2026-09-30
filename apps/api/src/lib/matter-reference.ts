@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { renderMatterReference } from "@stll/api-contract";
@@ -43,7 +43,7 @@ export const allocateMatterReference = async ({
   pattern,
   padding,
   now,
-}: AllocateMatterReferenceOptions): Promise<string> => {
+}: AllocateMatterReferenceOptions): Promise<Result<string, HandlerError>> => {
   const scopeKey = toScopeKey(pattern, now);
   // Reserve the bounded search range under one counter lock. Keep that lock
   // until the chosen sequence is committed, returning unused numbers to it.
@@ -122,12 +122,14 @@ export const allocateMatterReference = async ({
           eq(matterCounters.scopeKey, scopeKey),
         ),
       );
-    return selected.reference;
+    return Result.ok(selected.reference);
   }
-  throw new HandlerError({
-    status: 409,
-    code: "MATTER_REFERENCE_ALLOCATION_EXHAUSTED",
-    message:
-      "Could not allocate a matter reference. Choose a different matter numbering pattern and try again.",
-  });
+  return Result.err(
+    new HandlerError({
+      status: 409,
+      code: "MATTER_REFERENCE_ALLOCATION_EXHAUSTED",
+      message:
+        "Could not allocate a matter reference. Choose a different matter numbering pattern and try again.",
+    }),
+  );
 };
