@@ -3,7 +3,7 @@ import type { Result } from "better-result";
 
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 
-export const SK_COLLECTION_PARSER_VERSION = 2;
+export const SK_COLLECTION_PARSER_VERSION = 3;
 
 export const SK_COLLECTION_SERIES = {
   NS_R: "ns-r",
@@ -72,8 +72,8 @@ export type SkCollectionReadOutcome =
 
 export type SkCollectionDecision = Pick<
   IngestionResult,
-  "caseNumber" | "court" | "ecli" | "country" | "decisionDate"
-> & { id: string };
+  "caseNumber" | "court" | "country"
+> & { id: string; ecli: string | null; decisionDate: string | null };
 
 export type SkCollectionJoinOutcome =
   | {

@@ -1,4 +1,5 @@
 import { PDF } from "@libpdf/core";
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -313,7 +314,7 @@ describe("publisher collection enrichment", () => {
   test("returns only extracted annotations and validators from a transient download", async () => {
     const connector = createSkCollectionConnector({
       status: "enabled",
-      extract: async () => samplePages(0),
+      extract: async () => Result.ok(samplePages(0)),
       request: async ({ url }) =>
         url.endsWith("/robots.txt")
           ? new Response("User-agent: *\nAllow: /")
@@ -529,7 +530,7 @@ describe("publisher collection enrichment", () => {
       status: "enabled",
       extract: async (_bytes, issueUrl) => {
         expect(issueUrl).toBe(NS_ISSUE.url);
-        return samplePages(0);
+        return Result.ok(samplePages(0));
       },
       request: async ({ url, method }) => {
         if (url.endsWith("/robots.txt")) {
@@ -558,7 +559,7 @@ describe("publisher collection enrichment", () => {
     } satisfies SkCollectionIssueCache;
     const connector = createSkCollectionConnector({
       status: "enabled",
-      extract: async () => samplePages(0),
+      extract: async () => Result.ok(samplePages(0)),
       request: async ({ url, method, headers }) => {
         expect(method).toBe("GET");
         expect(headers.has("if-none-match")).toBe(false);
@@ -573,6 +574,55 @@ describe("publisher collection enrichment", () => {
     expect(result.status).toBe("read");
     if (result.status === "read") {
       expect(result.cache.parserVersion).toBe(SK_COLLECTION_PARSER_VERSION);
+    }
+  });
+  test.each([
+    { body: null, message: "Collection response has no body" },
+    { body: "invalid", message: "Issue response is not a PDF" },
+  ])(
+    "propagates typed body validation: $message",
+    async ({ body, message }) => {
+      const connector = createSkCollectionConnector({
+        status: "enabled",
+        request: async ({ url }) =>
+          url.endsWith("/robots.txt")
+            ? new Response(null, { status: 404 })
+            : new Response(body),
+      });
+      const result = await connector.readIssue({
+        issue: NS_ISSUE,
+        cache: null,
+      });
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error.message).toBe(message);
+        expect(result.error.issueUrl).toBe(NS_ISSUE.url);
+      }
+    },
+  );
+
+  test("propagates an extractor's typed failure without replacing its issue citation", async () => {
+    const connector = createSkCollectionConnector({
+      status: "enabled",
+      extract: async (_bytes, issueUrl) =>
+        Result.err(
+          new SkCollectionIssueError({
+            message: "Collection issue exceeds the page limit",
+            issueUrl,
+          }),
+        ),
+      request: async ({ url }) =>
+        url.endsWith("/robots.txt")
+          ? new Response(null, { status: 404 })
+          : new Response("%PDF-transient"),
+    });
+    const result = await connector.readIssue({ issue: NS_ISSUE, cache: null });
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.message).toBe(
+        "Collection issue exceeds the page limit",
+      );
+      expect(result.error.issueUrl).toBe(NS_ISSUE.url);
     }
   });
 });

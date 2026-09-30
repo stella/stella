@@ -26,7 +26,7 @@ const TARGET_START = /^\s*[([]\s*(?:rozsudok|uznesenie|stanovisko)\b/iu;
 const TARGET_DOCKET =
   /sp\.\s*zn\.\s*(\d+\s*[\p{L}]+[\s/]*\d+\s*\/\s*\d{2,4}(?:-\d+)?)/u;
 const TARGET_COURT =
-  /(?:rozsudok|uznesenie|stanovisko)\s+(.+?)\s+(?:z\s|sp\.\s*zn\.)/iu;
+  /^\s{0,16}[([]\s{0,16}(?:rozsudok|uznesenie|stanovisko)\s{1,16}(.{1,256}?)\s{1,16}(?:z\s|sp\.\s*zn\.)/iu;
 const ECLI = /ECLI:SK:[A-Z\d]+:\d{4}:[A-Z\d.]+/u;
 const MIN_TEXT_CHARACTERS = 100;
 const MAX_HEADNOTE_CHARACTERS = 3000;

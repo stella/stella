@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import { readCappedBytes } from "@stll/skills/streaming";
 
@@ -71,20 +71,14 @@ const requestIssue = async ({
     rawUrl: url,
   });
   if (target === null) {
-    throw new SkCollectionIssueError({
-      message: "Collection URL is outside the publisher boundary",
-      issueUrl: url,
-    });
+    return panic("Collection URL is outside the publisher boundary");
   }
   if (
     target.origin !== publisher.origin ||
     (target.pathname !== "/robots.txt" &&
       !target.pathname.startsWith(publisher.prefix))
   ) {
-    throw new SkCollectionIssueError({
-      message: "Collection URL is outside the selected publisher",
-      issueUrl: url,
-    });
+    return panic("Collection URL is outside the selected publisher");
   }
   return await fetchPublisher(target, {
     adapterKey: ADAPTER_KEYS.SK_COURTS,
@@ -213,40 +207,48 @@ const responseBytes = async (
   response: Response,
   maxBytes: number,
   issueUrl: string,
-) => {
+): Promise<Result<Uint8Array, SkCollectionIssueError>> => {
   if (response.body === null) {
-    throw new SkCollectionIssueError({
-      message: "Collection response has no body",
-      issueUrl,
-    });
+    return Result.err(
+      new SkCollectionIssueError({
+        message: "Collection response has no body",
+        issueUrl,
+      }),
+    );
   }
   const bytes = await readCappedBytes(response.body, maxBytes);
   if (bytes === null) {
-    throw new SkCollectionIssueError({
-      message: "Collection response exceeds the byte limit",
-      issueUrl,
-    });
+    return Result.err(
+      new SkCollectionIssueError({
+        message: "Collection response exceeds the byte limit",
+        issueUrl,
+      }),
+    );
   }
-  return bytes;
+  return Result.ok(bytes);
 };
 
 const extractPages = async (
   bytes: Uint8Array,
   issueUrl: string,
-): Promise<readonly SkCollectionTextPage[]> => {
+): Promise<Result<readonly SkCollectionTextPage[], SkCollectionIssueError>> => {
   const { PDF } = await import("@libpdf/core");
   const pdf = await PDF.load(bytes);
   const pages = pdf.getPages();
   if (pages.length > PDF_MAX_PAGES) {
-    throw new SkCollectionIssueError({
-      message: "Collection issue exceeds the page limit",
-      issueUrl,
-    });
+    return Result.err(
+      new SkCollectionIssueError({
+        message: "Collection issue exceeds the page limit",
+        issueUrl,
+      }),
+    );
   }
-  return pages.map((page, index) => ({
-    page: index + 1,
-    lines: page.extractText().lines.map(({ text }) => text),
-  }));
+  return Result.ok(
+    pages.map((page, index) => ({
+      page: index + 1,
+      lines: page.extractText().lines.map(({ text }) => text),
+    })),
+  );
 };
 
 type CachedIssueValidationOptions = {
@@ -257,6 +259,11 @@ type CachedIssueValidationOptions = {
   signal?: AbortSignal | undefined;
 };
 
+type CachedIssueValidation =
+  | { status: "unchanged" }
+  | { status: "changed" }
+  | { status: "response"; response: Response };
+
 const cachedIssueUnchanged = async ({
   issue,
   cache,
@@ -264,9 +271,7 @@ const cachedIssueUnchanged = async ({
   headers,
   signal,
 }: CachedIssueValidationOptions): Promise<
-  | { status: "unchanged" }
-  | { status: "changed" }
-  | { status: "response"; response: Response }
+  Result<CachedIssueValidation, SkCollectionIssueError>
 > => {
   if (cache.etag !== null) {
     headers.set("If-None-Match", cache.etag);
@@ -281,7 +286,7 @@ const cachedIssueUnchanged = async ({
     signal,
   });
   if (head.status === 304) {
-    return { status: "unchanged" };
+    return Result.ok({ status: "unchanged" });
   }
   if (head.status === 405 || head.status === 501) {
     const response = await request({
@@ -291,27 +296,33 @@ const cachedIssueUnchanged = async ({
       headers,
       signal,
     });
-    return response.status === 304
-      ? { status: "unchanged" }
-      : { status: "response", response };
+    return Result.ok(
+      response.status === 304
+        ? ({ status: "unchanged" } as const)
+        : ({ status: "response", response } as const),
+    );
   }
   if (!head.ok) {
-    throw new SkCollectionIssueError({
-      message: `Issue validation failed (${head.status})`,
-      issueUrl: issue.url,
-    });
+    return Result.err(
+      new SkCollectionIssueError({
+        message: `Issue validation failed (${head.status})`,
+        issueUrl: issue.url,
+      }),
+    );
   }
   const previous = cache.etag ?? cache.lastModified;
   const current = head.headers.get(
     cache.etag === null ? "last-modified" : "etag",
   );
   if (current === null) {
-    throw new SkCollectionIssueError({
-      message: "Issue validation lost its publisher validator",
-      issueUrl: issue.url,
-    });
+    return Result.err(
+      new SkCollectionIssueError({
+        message: "Issue validation lost its publisher validator",
+        issueUrl: issue.url,
+      }),
+    );
   }
-  return { status: current === previous ? "unchanged" : "changed" };
+  return Result.ok({ status: current === previous ? "unchanged" : "changed" });
 };
 
 type CollectionConnectorOptions = {
@@ -342,8 +353,10 @@ export const createSkCollectionConnector = ({
     if (status === "disabled") {
       return Result.ok({ status: "disabled" });
     }
-    return await Result.tryPromise({
-      try: async (): Promise<SkCollectionReadOutcome> => {
+    const result = await Result.tryPromise({
+      try: async (): Promise<
+        Result<SkCollectionReadOutcome, SkCollectionIssueError>
+      > => {
         const publisher = PUBLISHERS[issue.series];
         const target = restrictOutboundUrl({
           hostPolicy: { type: "exact-origin", origins: [publisher.origin] },
@@ -356,10 +369,12 @@ export const createSkCollectionConnector = ({
           target.search !== "" ||
           !Number.isInteger(issue.year)
         ) {
-          throw new SkCollectionIssueError({
-            message: "Invalid collection issue descriptor",
-            issueUrl: issue.url,
-          });
+          return Result.err(
+            new SkCollectionIssueError({
+              message: "Invalid collection issue descriptor",
+              issueUrl: issue.url,
+            }),
+          );
         }
         if (
           cache !== null &&
@@ -367,13 +382,15 @@ export const createSkCollectionConnector = ({
             cache.issue.series !== issue.series ||
             cache.issue.year !== issue.year)
         ) {
-          throw new SkCollectionIssueError({
-            message: "Cached collection issue identity differs",
-            issueUrl: issue.url,
-          });
+          return Result.err(
+            new SkCollectionIssueError({
+              message: "Cached collection issue identity differs",
+              issueUrl: issue.url,
+            }),
+          );
         }
         if (issue.year < 2010) {
-          return {
+          return Result.ok({
             status: "read",
             cache: {
               issue,
@@ -382,7 +399,7 @@ export const createSkCollectionConnector = ({
               lastModified: null,
               outcome: { status: "needs-ocr", reason: "before-2010" },
             },
-          };
+          });
         }
         const currentCache =
           cache?.parserVersion === SK_COLLECTION_PARSER_VERSION ? cache : null;
@@ -392,7 +409,7 @@ export const createSkCollectionConnector = ({
           currentCache.etag === null &&
           currentCache.lastModified === null
         ) {
-          return { status: "unchanged", cache: currentCache };
+          return Result.ok({ status: "unchanged", cache: currentCache });
         }
         const headers = new Headers({ "User-Agent": USER_AGENT });
         const robots = await request({
@@ -404,19 +421,26 @@ export const createSkCollectionConnector = ({
         });
         if (robots.status !== 404) {
           if (!robots.ok) {
-            throw new SkCollectionIssueError({
-              message: `Robots request failed (${robots.status})`,
-              issueUrl: issue.url,
-            });
+            return Result.err(
+              new SkCollectionIssueError({
+                message: `Robots request failed (${robots.status})`,
+                issueUrl: issue.url,
+              }),
+            );
           }
           const body = await responseBytes(robots, ROBOTS_MAX_BYTES, issue.url);
-          if (!robotsAllows(new TextDecoder().decode(body), target.pathname)) {
-            return { status: "robots-denied", issueUrl: issue.url };
+          if (body.isErr()) {
+            return body;
+          }
+          if (
+            !robotsAllows(new TextDecoder().decode(body.value), target.pathname)
+          ) {
+            return Result.ok({ status: "robots-denied", issueUrl: issue.url });
           }
         }
         const validation =
           currentCache === null
-            ? ({ status: "changed" } as const)
+            ? Result.ok({ status: "changed" } as const)
             : await cachedIssueUnchanged({
                 issue,
                 cache: currentCache,
@@ -424,12 +448,16 @@ export const createSkCollectionConnector = ({
                 headers,
                 signal,
               });
-        if (validation.status === "unchanged" && currentCache !== null) {
-          return { status: "unchanged", cache: currentCache };
+        if (validation.isErr()) {
+          return validation;
+        }
+        const validated = validation.value;
+        if (validated.status === "unchanged" && currentCache !== null) {
+          return Result.ok({ status: "unchanged", cache: currentCache });
         }
         const response =
-          validation.status === "response"
-            ? validation.response
+          validated.status === "response"
+            ? validated.response
             : await request({
                 series: issue.series,
                 url: issue.url,
@@ -438,29 +466,39 @@ export const createSkCollectionConnector = ({
                 signal,
               });
         if (!response.ok) {
-          throw new SkCollectionIssueError({
-            message: `Issue request failed (${response.status})`,
-            issueUrl: issue.url,
-          });
+          return Result.err(
+            new SkCollectionIssueError({
+              message: `Issue request failed (${response.status})`,
+              issueUrl: issue.url,
+            }),
+          );
         }
         const bytes = await responseBytes(response, PDF_MAX_BYTES, issue.url);
-        if (new TextDecoder().decode(bytes.subarray(0, 5)) !== "%PDF-") {
-          throw new SkCollectionIssueError({
-            message: "Issue response is not a PDF",
-            issueUrl: issue.url,
-          });
+        if (bytes.isErr()) {
+          return bytes;
         }
-        const pages = await extract(bytes, issue.url);
-        return {
+        if (new TextDecoder().decode(bytes.value.subarray(0, 5)) !== "%PDF-") {
+          return Result.err(
+            new SkCollectionIssueError({
+              message: "Issue response is not a PDF",
+              issueUrl: issue.url,
+            }),
+          );
+        }
+        const pages = await extract(bytes.value, issue.url);
+        if (pages.isErr()) {
+          return pages;
+        }
+        return Result.ok({
           status: "read",
           cache: {
             issue,
             parserVersion: SK_COLLECTION_PARSER_VERSION,
             etag: response.headers.get("etag"),
             lastModified: response.headers.get("last-modified"),
-            outcome: parseSkCollectionPages(issue, pages),
+            outcome: parseSkCollectionPages(issue, pages.value),
           },
-        };
+        });
       },
       catch: (cause) =>
         cause instanceof SkCollectionIssueError
@@ -471,5 +509,6 @@ export const createSkCollectionConnector = ({
               cause,
             }),
     });
+    return result.andThen((outcome) => outcome);
   },
 });
