@@ -1345,12 +1345,12 @@ describe("dev env factories", () => {
         },
         ports,
       });
-      const browserApi = new URL(webEnv["VITE_BROWSER_API_URL"] ?? "");
-      const app = new URL(webEnv["VITE_PUBLIC_APP_URL"] ?? "");
+      const browserApi = new URL(webEnv.VITE_BROWSER_API_URL ?? "");
+      const app = new URL(webEnv.VITE_PUBLIC_APP_URL ?? "");
       expect(app.origin).toBe(`http://localhost:${String(ports.web)}`);
       expect(browserApi.origin).toBe(app.origin);
       expect(browserApi.pathname).toBe("/api");
-      expect(webEnv["DEV_API_PROXY_TARGET"]).toBe(
+      expect(webEnv.DEV_API_PROXY_TARGET).toBe(
         `http://127.0.0.1:${String(ports.api)}`,
       );
       expect(webEnv.VITE_API_URL).toBe(`http://localhost:${String(ports.api)}`);

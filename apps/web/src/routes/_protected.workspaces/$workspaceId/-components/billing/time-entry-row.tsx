@@ -16,9 +16,9 @@ import {
 } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
+import { formatCurrencyAmount } from "@/components/billing/format-currency";
 import { usePermissions } from "@/hooks/use-permissions";
 import { formatMinutes } from "@/lib/workspaces/format-duration";
-import { formatCurrencyAmount } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
 import { SplitEntryDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/split-entry-dialog";
 import { STATUS_STYLES } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/status-styles";
 import { timeEntryActionLabel } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-copy.logic";
