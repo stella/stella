@@ -34,5 +34,5 @@ export const summarizeMyDay = (pages: readonly MyDayPage[]) => {
     }
   }
   const lastPage = pages.at(-1);
-  return lastPage !== undefined && lastPage.nextCursor === null ? totals : null;
+  return lastPage?.nextCursor === null ? totals : null;
 };
