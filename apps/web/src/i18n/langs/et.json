@@ -27,6 +27,13 @@
     "errorNotFound": "Selle koodi jaoks ei leidnud me ootel olevat päringut. Kontrollige koodi ja proovige uuesti.",
     "title": "Ühenda oma agent"
   },
+  "agentSetup": {
+    "copiedToast": "Juhised kopeeritud. Kleebi need oma agendile.",
+    "copy": "Kopeeri juhised",
+    "description": "Kleebi need juhised Claude’i, Codexisse, Cursorisse või muusse agenti. See ühendab stella sinu eest; sina ainult logid sisse ja kinnitad juurdepääsu.",
+    "instructions": "Ühenda mind stellaga, minu õigusalase tööruumiga:\n1. Lisa stella MCP-server kaug-HTTP MCP-serverina nimega „stella“: {mcpUrl}\n   See kasutab OAuthi. Kui brauser avaneb, login sisse ja kinnitan juurdepääsu.\n2. Kui saad käivitada käsurea käske, paigalda stella CLI käsuga „{cliInstall}“ ja logi sisse käsuga „stella auth login --server {apiOrigin}“.\n3. Kutsu välja mõni stella tööriist, et kontrollida ühenduse toimimist, ja ütle siis, milles saad mind nüüd aidata.\nKui soovin ainult anonüümitud andmeid, kasuta esimese URL-i asemel {anonymizedUrl}.",
+    "title": "Seadista oma AI-agendiga"
+  },
   "ai": {
     "chooseRewriteInstruction": "Ümberkirjutamise valikud",
     "editWithAI": "Muuda AI-ga",
@@ -3676,7 +3683,6 @@
     "aiTitle": "Ühendage oma AI teenusepakkuja",
     "appsSubtitle": "stella töötab ka väljaspool brauserit: teie töölaual ja teie AI-assistendis. Selle seadistuse juurde saate alati hiljem tagasi tulla.",
     "appsTitle": "Hankige stella igale poole",
-    "assistantDocsLink": "Kuidas assistenti ühendada",
     "catalogueAlwaysOn": "Alati sees",
     "catalogueClearSearch": "Tühjenda otsing",
     "catalogueCommunityHeading": "Muud",

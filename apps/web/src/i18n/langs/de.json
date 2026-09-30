@@ -27,6 +27,13 @@
     "errorNotFound": "Für diesen Code wurde keine ausstehende Anfrage gefunden. Überprüfen Sie den Code und versuchen Sie es erneut.",
     "title": "Verbinden Sie Ihren Agenten"
   },
+  "agentSetup": {
+    "copiedToast": "Anweisungen kopiert. Fügen Sie sie bei Ihrem Agenten ein.",
+    "copy": "Anweisungen kopieren",
+    "description": "Fügen Sie diese Anweisungen in Claude, Codex, Cursor oder einen anderen Agenten ein. Er verbindet stella für Sie; Sie melden sich nur an und bestätigen den Zugriff.",
+    "instructions": "Verbinde mich mit stella, meinem juristischen Arbeitsbereich:\n1. Füge den stella-MCP-Server als Remote-HTTP-MCP-Server mit dem Namen „stella“ hinzu: {mcpUrl}\n   Er nutzt OAuth. Wenn sich der Browser öffnet, melde ich mich an und bestätige den Zugriff.\n2. Wenn du Shell-Befehle ausführen kannst, installiere die stella-CLI mit „{cliInstall}“ und melde dich mit „stella auth login --server {apiOrigin}“ an.\n3. Rufe ein stella-Tool auf, um zu prüfen, dass die Verbindung funktioniert, und sag mir dann, was du jetzt für mich tun kannst.\nWenn ich nur anonymisierte Daten möchte, verwende statt der ersten URL {anonymizedUrl}.",
+    "title": "Mit Ihrem KI-Agenten einrichten"
+  },
   "ai": {
     "chooseRewriteInstruction": "Optionen zur Überarbeitung",
     "editWithAI": "Mit KI bearbeiten",
@@ -3676,7 +3683,6 @@
     "aiTitle": "Verbinden Sie Ihren KI-Anbieter",
     "appsSubtitle": "stella funktioniert auch außerhalb des Browsers: auf Ihrem Desktop und in Ihrem KI-Assistenten. Sie können jederzeit später zu dieser Einrichtung zurückkehren.",
     "appsTitle": "Holen Sie sich stella überall",
-    "assistantDocsLink": "So verbinden Sie Ihren Assistenten",
     "catalogueAlwaysOn": "Immer aktiv",
     "catalogueClearSearch": "Suche löschen",
     "catalogueCommunityHeading": "Weitere",

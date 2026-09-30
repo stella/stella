@@ -27,6 +27,13 @@
     "errorNotFound": "Nie znaleźliśmy oczekującego żądania dla tego kodu. Sprawdź kod i spróbuj ponownie.",
     "title": "Połącz swojego agenta"
   },
+  "agentSetup": {
+    "copiedToast": "Instrukcje skopiowane. Wklej je swojemu agentowi.",
+    "copy": "Kopiuj instrukcje",
+    "description": "Wklej te instrukcje do Claude, Codexa, Cursora lub innego agenta. Połączy stellę za Ciebie; Ty tylko się logujesz i zatwierdzasz dostęp.",
+    "instructions": "Połącz mnie ze stellą, moim prawniczym obszarem roboczym:\n1. Dodaj serwer MCP stella jako zdalny serwer HTTP MCP o nazwie „stella”: {mcpUrl}\n   Używa OAuth. Gdy otworzy się przeglądarka, zaloguję się i zatwierdzę dostęp.\n2. Jeśli możesz uruchamiać polecenia w terminalu, zainstaluj CLI stella poleceniem „{cliInstall}” i zaloguj się poleceniem „stella auth login --server {apiOrigin}”.\n3. Wywołaj narzędzie stella, aby sprawdzić, czy połączenie działa, a potem powiedz mi, w czym możesz mi teraz pomóc.\nJeśli poproszę tylko o dane zanonimizowane, użyj {anonymizedUrl} zamiast pierwszego adresu.",
+    "title": "Skonfiguruj za pomocą agenta AI"
+  },
   "ai": {
     "chooseRewriteInstruction": "Opcje przeredagowania",
     "editWithAI": "Edytuj z AI",
@@ -3676,7 +3683,6 @@
     "aiTitle": "Połącz swojego dostawcę AI",
     "appsSubtitle": "stella działa też poza przeglądarką: na komputerze i w asystencie AI. Do tej konfiguracji możesz wrócić w dowolnym momencie.",
     "appsTitle": "Korzystaj ze stelli wszędzie",
-    "assistantDocsLink": "Jak podłączyć asystenta",
     "catalogueAlwaysOn": "Zawsze włączone",
     "catalogueClearSearch": "Wyczyść wyszukiwanie",
     "catalogueCommunityHeading": "Pozostałe",

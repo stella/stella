@@ -27,6 +27,13 @@
     "errorNotFound": "Nem találtunk függőben lévő kérést ehhez a kódhoz. Ellenőrizze a kódot, és próbálja újra.",
     "title": "Csatlakoztassa ügynökét"
   },
+  "agentSetup": {
+    "copiedToast": "Utasítások másolva. Illeszd be őket az ügynöködbe.",
+    "copy": "Utasítások másolása",
+    "description": "Illeszd be ezeket az utasításokat a Claude-ba, a Codexbe, a Cursorba vagy más ügynökbe. Ő csatlakoztatja a stellát helyetted; neked csak be kell jelentkezned és jóvá kell hagynod a hozzáférést.",
+    "instructions": "Csatlakoztass a stellához, a jogi munkaterületemhez:\n1. Add hozzá a stella MCP-szervert távoli HTTP MCP-szerverként „stella” néven: {mcpUrl}\n   OAuth-t használ. Amikor megnyílik a böngésző, bejelentkezem és jóváhagyom a hozzáférést.\n2. Ha tudsz parancsokat futtatni, telepítsd a stella CLI-t ezzel: „{cliInstall}”, majd jelentkezz be ezzel: „stella auth login --server {apiOrigin}”.\n3. Hívj meg egy stella-eszközt, hogy ellenőrizd a kapcsolatot, majd mondd el, miben tudsz most segíteni.\nHa csak anonimizált adatokat kérek, az első URL helyett használd ezt: {anonymizedUrl}.",
+    "title": "Beállítás MI-ügynökkel"
+  },
   "ai": {
     "chooseRewriteInstruction": "Átírási lehetőségek",
     "editWithAI": "Szerkesztés AI-val",
@@ -3676,7 +3683,6 @@
     "aiTitle": "Kapcsolja össze AI-szolgáltatóját",
     "appsSubtitle": "A stella a böngészőn kívül is működik: az asztali gépén és az AI-asszisztensében. Ehhez a beállításhoz később bármikor visszatérhet.",
     "appsTitle": "Szerezze meg a stellát mindenhol",
-    "assistantDocsLink": "Így csatlakoztathatja az asszisztensét",
     "catalogueAlwaysOn": "Mindig aktív",
     "catalogueClearSearch": "Keresés törlése",
     "catalogueCommunityHeading": "Egyéb",

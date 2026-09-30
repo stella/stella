@@ -27,6 +27,13 @@
     "errorNotFound": "Nous n'avons trouvé aucune demande en attente pour ce code. Vérifiez le code et réessayez.",
     "title": "Connectez votre agent"
   },
+  "agentSetup": {
+    "copiedToast": "Instructions copiées. Collez-les dans votre agent.",
+    "copy": "Copier les instructions",
+    "description": "Collez ces instructions dans Claude, Codex, Cursor ou un autre agent. Il connecte stella pour vous ; vous n’avez qu’à vous connecter et approuver l’accès.",
+    "instructions": "Connecte-moi à stella, mon espace de travail juridique :\n1. Ajoute le serveur MCP stella comme serveur MCP HTTP distant nommé « stella » : {mcpUrl}\n   Il utilise OAuth. Quand le navigateur s’ouvre, je me connecte et j’approuve l’accès.\n2. Si tu peux exécuter des commandes shell, installe la CLI stella avec « {cliInstall} » et connecte-toi avec « stella auth login --server {apiOrigin} ».\n3. Appelle un outil stella pour vérifier que la connexion fonctionne, puis dis-moi ce que tu peux maintenant faire pour moi.\nSi je demande uniquement des données anonymisées, utilise {anonymizedUrl} à la place de la première URL.",
+    "title": "Configurer avec votre agent IA"
+  },
   "ai": {
     "chooseRewriteInstruction": "Options de réécriture",
     "editWithAI": "Modifier avec l’IA",
@@ -3676,7 +3683,6 @@
     "aiTitle": "Connectez votre fournisseur d'IA",
     "appsSubtitle": "stella fonctionne aussi en dehors du navigateur : sur votre bureau et dans votre assistant IA. Vous pourrez revenir à cette configuration à tout moment.",
     "appsTitle": "Obtenez stella partout",
-    "assistantDocsLink": "Comment connecter votre assistant",
     "catalogueAlwaysOn": "Toujours actif",
     "catalogueClearSearch": "Effacer la recherche",
     "catalogueCommunityHeading": "Autres",

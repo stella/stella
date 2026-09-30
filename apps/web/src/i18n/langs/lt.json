@@ -27,6 +27,13 @@
     "errorNotFound": "Neradome laukiančios užklausos su šiuo kodu. Patikrinkite kodą ir bandykite dar kartą.",
     "title": "Prijunkite savo agentą"
   },
+  "agentSetup": {
+    "copiedToast": "Instrukcijos nukopijuotos. Įklijuokite jas savo agentui.",
+    "copy": "Kopijuoti instrukcijas",
+    "description": "Įklijuokite šias instrukcijas į Claude, Codex, Cursor ar kitą agentą. Jis prijungs stella už jus; jums tereikia prisijungti ir patvirtinti prieigą.",
+    "instructions": "Prijunk mane prie stella, mano teisinės darbo erdvės:\n1. Pridėk stella MCP serverį kaip nuotolinį HTTP MCP serverį pavadinimu „stella“: {mcpUrl}\n   Jis naudoja OAuth. Kai atsidarys naršyklė, prisijungsiu ir patvirtinsiu prieigą.\n2. Jei gali vykdyti komandas terminale, įdiek stella CLI komanda „{cliInstall}“ ir prisijunk komanda „stella auth login --server {apiOrigin}“.\n3. Iškviesk kurį nors stella įrankį, kad patikrintum, ar ryšys veikia, ir tada pasakyk, kuo dabar gali man padėti.\nJei prašysiu tik anonimizuotų duomenų, vietoj pirmojo URL naudok {anonymizedUrl}.",
+    "title": "Nustatyti su DI agentu"
+  },
   "ai": {
     "chooseRewriteInstruction": "Perrašymo parinktys",
     "editWithAI": "Redaguoti su DI",
@@ -3676,7 +3683,6 @@
     "aiTitle": "Prijunkite savo DI teikėją",
     "appsSubtitle": "stella veikia ir už naršyklės ribų: jūsų kompiuteryje ir jūsų DI asistente. Prie šio nustatymo galite bet kada grįžti vėliau.",
     "appsTitle": "Gaukite stella visur",
-    "assistantDocsLink": "Kaip prijungti savo asistentą",
     "catalogueAlwaysOn": "Visada įjungta",
     "catalogueClearSearch": "Išvalyti paiešką",
     "catalogueCommunityHeading": "Kiti",

@@ -27,6 +27,13 @@
     "errorNotFound": "Pro tento kód jsme nenašli žádný čekající požadavek. Zkontrolujte kód a zkuste to znovu.",
     "title": "Připojte svého agenta"
   },
+  "agentSetup": {
+    "copiedToast": "Pokyny zkopírovány. Vložte je svému agentovi.",
+    "copy": "Kopírovat pokyny",
+    "description": "Vložte tyto pokyny do Claude, Codexu, Cursoru nebo jiného agenta. Stellu připojí za vás, vy se jen přihlásíte a schválíte přístup.",
+    "instructions": "Připoj mě ke stelle, mému právnímu pracovnímu prostoru:\n1. Přidej MCP server stella jako vzdálený HTTP MCP server s názvem „stella“: {mcpUrl}\n   Používá OAuth. Až se otevře prohlížeč, přihlásím se a schválím přístup.\n2. Pokud umíš spouštět příkazy v terminálu, nainstaluj CLI stella příkazem „{cliInstall}“ a přihlas se příkazem „stella auth login --server {apiOrigin}“.\n3. Zavolej nějaký nástroj stella, ověř, že připojení funguje, a pak mi řekni, s čím mi teď můžeš pomoct.\nPokud budu chtít jen anonymizovaná data, použij místo první adresy {anonymizedUrl}.",
+    "title": "Nastavit pomocí AI agenta"
+  },
   "ai": {
     "chooseRewriteInstruction": "Možnosti úpravy",
     "editWithAI": "Upravit pomocí AI",
@@ -3676,7 +3683,6 @@
     "aiTitle": "Připojte svého poskytovatele AI",
     "appsSubtitle": "stella funguje i mimo prohlížeč: v aplikaci pro počítač a ve vašem AI asistentovi. K tomuto nastavení se můžete kdykoliv později vrátit.",
     "appsTitle": "Získejte stellu všude",
-    "assistantDocsLink": "Jak připojit svého asistenta",
     "catalogueAlwaysOn": "Vždy zapnuto",
     "catalogueClearSearch": "Vymazat hledání",
     "catalogueCommunityHeading": "Ostatní",

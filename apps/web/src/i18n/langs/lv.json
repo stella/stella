@@ -27,6 +27,13 @@
     "errorNotFound": "Šim kodam neatradām nevienu gaidošu pieprasījumu. Pārbaudiet kodu un mēģiniet vēlreiz.",
     "title": "Savienojiet savu aģentu"
   },
+  "agentSetup": {
+    "copiedToast": "Norādījumi nokopēti. Ielīmējiet tos savam aģentam.",
+    "copy": "Kopēt norādījumus",
+    "description": "Ielīmējiet šos norādījumus rīkā Claude, Codex, Cursor vai citā aģentā. Tas pievienos stella jūsu vietā; jums tikai jāpiesakās un jāapstiprina piekļuve.",
+    "instructions": "Pievieno mani stella, manai juridiskajai darbvietai:\n1. Pievieno stella MCP serveri kā attālu HTTP MCP serveri ar nosaukumu “stella”: {mcpUrl}\n   Tas izmanto OAuth. Kad atvērsies pārlūks, es pieteikšos un apstiprināšu piekļuvi.\n2. Ja vari izpildīt komandas terminālī, instalē stella CLI ar “{cliInstall}” un piesakies ar “stella auth login --server {apiOrigin}”.\n3. Izsauc kādu stella rīku, lai pārbaudītu savienojumu, un pēc tam pastāsti, ar ko tagad vari man palīdzēt.\nJa prasīšu tikai anonimizētus datus, pirmā URL vietā izmanto {anonymizedUrl}.",
+    "title": "Iestatīt ar MI aģentu"
+  },
   "ai": {
     "chooseRewriteInstruction": "Pārrakstīšanas iespējas",
     "editWithAI": "Rediģēt ar AI",
@@ -3676,7 +3683,6 @@
     "aiTitle": "Pievienojiet savu AI pakalpojumu sniedzēju",
     "appsSubtitle": "stella darbojas arī ārpus pārlūkprogrammas: jūsu datorā un jūsu AI asistentā. Pie šīs iestatīšanas varat atgriezties jebkurā laikā.",
     "appsTitle": "Iegūstiet stella visur",
-    "assistantDocsLink": "Kā pievienot savu asistentu",
     "catalogueAlwaysOn": "Vienmēr ieslēgts",
     "catalogueClearSearch": "Notīrīt meklēšanu",
     "catalogueCommunityHeading": "Citi",

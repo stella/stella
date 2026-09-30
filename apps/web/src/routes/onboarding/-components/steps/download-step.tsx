@@ -3,19 +3,16 @@ import type * as React from "react";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { MCP_HTTP_PATH } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
 import { ExternalLinkIcon, MonitorIcon, TerminalIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
+import { AgentSetupPrompt } from "@/components/agent-setup-prompt";
 import { AIProviderIcon } from "@/components/ai-provider-icons";
-import { CopyField } from "@/components/copy-field";
 import { DesktopDownloadButtons } from "@/components/desktop-download-buttons";
-import { env } from "@/env";
 import { DesktopConnectionStatus } from "@/features/desktop/desktop-connection-status";
 import { useDesktopAccountConnection } from "@/features/desktop/use-desktop-account-connection";
 import { useHydrationSafeDesktopPlatform } from "@/hooks/use-hydration-safe-desktop-platform";
-import { externalApiOrigin } from "@/lib/api-origins";
 import { detached } from "@/lib/detached";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import { ClipboardWorkflowPreview } from "@/routes/onboarding/-components/clipboard-workflow-preview";
@@ -248,18 +245,10 @@ const AssistantPanel = () => {
       <p className="text-muted-foreground text-sm leading-relaxed text-pretty">
         {t("onboarding.mcpCardDescription")}
       </p>
-      {/* The guide names the hosted server; a self-hosted deployment has to
-          hand its own address over here or the reader connects to the wrong
-          stella. */}
-      {env.VITE_SELFHOST && (
-        <CopyField
-          label={t("settings.connections.mcpUrlLabel")}
-          value={`${externalApiOrigin().replace(/\/$/u, "")}${MCP_HTTP_PATH}`}
-        />
-      )}
-      <DocsLink href={ASSISTANT_DOCS_URL}>
-        {t("onboarding.assistantDocsLink")}
-      </DocsLink>
+      {/* Same instructions as Settings → Connections. They carry this
+          deployment's own server address, so self-hosted readers connect to
+          the right stella. */}
+      <AgentSetupPrompt variant="inline" />
       <DocsLink
         className="text-muted-foreground text-xs"
         href={CLI_DOCS_URL}
