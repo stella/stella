@@ -154,6 +154,9 @@ export const isChangesetEntry = (file: string): boolean =>
 /** A published package that ships a catalog entry whose version changed. */
 export type CatalogInput = {
   readonly packageName: string;
+  /** The manifest section that consumes it. */
+  readonly field: (typeof SHIPPED_DEPENDENCY_FIELDS)[number];
+  readonly dependency: string;
   /** The specifier as the manifest writes it: `jszip@catalog:`. */
   readonly entry: string;
 };
@@ -250,7 +253,9 @@ export const parseWorkspaceCatalogs = (
 };
 
 /** The catalog entries a manifest ships to consumers. */
-const shippedCatalogEntries = (manifest: JsonObject): string[] =>
+const shippedCatalogEntries = (
+  manifest: JsonObject,
+): Omit<CatalogInput, "packageName">[] =>
   SHIPPED_DEPENDENCY_FIELDS.flatMap((field) => {
     const dependencies = manifest[field];
     return Object.entries(
@@ -258,10 +263,14 @@ const shippedCatalogEntries = (manifest: JsonObject): string[] =>
     ).flatMap(([dependency, range]) =>
       typeof range === "string" && range.startsWith(CATALOG_PROTOCOL)
         ? [
-            catalogSpecifier(
+            {
+              field,
               dependency,
-              range.slice(CATALOG_PROTOCOL.length).trim() || DEFAULT_CATALOG,
-            ),
+              entry: catalogSpecifier(
+                dependency,
+                range.slice(CATALOG_PROTOCOL.length).trim() || DEFAULT_CATALOG,
+              ),
+            },
           ]
         : [],
     );
@@ -308,8 +317,15 @@ export const findCatalogInputs = ({
       return [];
     }
     return shippedCatalogEntries(manifest)
-      .filter((entry) => beforeVersions.get(entry) !== afterVersions.get(entry))
-      .map((entry) => ({ packageName, entry }));
+      .filter(
+        ({ entry }) => beforeVersions.get(entry) !== afterVersions.get(entry),
+      )
+      .map(({ field, dependency, entry }) => ({
+        packageName,
+        field,
+        dependency,
+        entry,
+      }));
   });
 };
 
@@ -355,9 +371,12 @@ const releaseInputs = (
   ...changedFiles.filter(
     (file) => file.startsWith(directory) && isRelease(file),
   ),
-  ...catalogInputs
-    .filter((input) => input.packageName === name)
-    .map((input) => input.entry),
+  // One entry may be consumed from more than one section.
+  ...new Set(
+    catalogInputs
+      .filter((input) => input.packageName === name)
+      .map((input) => input.entry),
+  ),
 ];
 
 /**

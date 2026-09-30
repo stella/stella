@@ -477,7 +477,12 @@ describe("catalog versions a published package ships", () => {
 
   test("reads default and named catalog entries from the shipped sections", () => {
     expect(jszipBump).toEqual([
-      { packageName: DOCX_UTILS, entry: "jszip@catalog:" },
+      {
+        packageName: DOCX_UTILS,
+        field: "dependencies",
+        dependency: "jszip",
+        entry: "jszip@catalog:",
+      },
     ]);
     expect(
       findCatalogInputs({
@@ -486,7 +491,14 @@ describe("catalog versions a published package ships", () => {
         before: rootManifest("3.10.1", "^19.2.7"),
         after: rootManifest("3.10.1"),
       }),
-    ).toEqual([{ packageName: "@stll/ui", entry: "react@catalog:react19" }]);
+    ).toEqual([
+      {
+        packageName: "@stll/ui",
+        field: "peerDependencies",
+        dependency: "react",
+        entry: "react@catalog:react19",
+      },
+    ]);
   });
 
   test("rejects a shipped catalog bump that no changeset names, naming the package and entry", () => {

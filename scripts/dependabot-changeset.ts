@@ -6,12 +6,16 @@ import { isDeepStrictEqual } from "node:util";
 
 import {
   decideChangesetGate,
+  findCatalogInputs,
   isChangesetEntry,
   loadChangesetPolicy,
+  parseWorkspaceCatalogs,
+  type CatalogInput,
   type ChangesetPolicy,
 } from "./changeset-guard";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
+const ROOT_MANIFEST = "package.json";
 const EMPTY_CHANGESET = "---\n---\n";
 const OUTPUT_PATH = /^\.changeset\/dependabot-dependencies-[1-9]\d*\.md$/u;
 const DEV_DEPENDENCY_FIELD = "devDependencies";
@@ -46,11 +50,23 @@ type ManifestPair = {
   readonly head: string;
 };
 
+/**
+ * The root manifest on both sides and the release-gated manifests at head,
+ * which say which published packages ship each catalog entry.
+ */
+type CatalogChange = {
+  readonly base: string;
+  readonly head: string;
+  readonly manifests: ReadonlyMap<string, string>;
+};
+
 type DependabotChangesetInput = {
   readonly policy: ChangesetPolicy;
   readonly changedFiles: readonly string[];
   readonly addedChangesetFiles: readonly string[];
   readonly manifests: readonly ManifestPair[];
+  /** Present when the diff changes the root manifest. */
+  readonly catalog?: CatalogChange;
 };
 
 type RefusalReason =
@@ -219,16 +235,101 @@ const inspectManifest = ({ base, head }: ManifestPair): ManifestInspection => {
   return { status: "eligible", entry: { packageName, updates } };
 };
 
+/** A root manifest the catalog comparison cannot read yields null. */
+const readCatalogInputs = (
+  policy: ChangesetPolicy,
+  catalog: CatalogChange | undefined,
+): readonly CatalogInput[] | null => {
+  if (catalog === undefined) {
+    return [];
+  }
+  try {
+    return findCatalogInputs({
+      policy,
+      manifests: catalog.manifests,
+      before: catalog.base,
+      after: catalog.head,
+    });
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Publishing writes the catalog version into the packed manifest, so a bump
+ * of an entry a published package ships moves that package's floor exactly
+ * as a manifest edit would, and passes the same range rules. A peer range
+ * stays gated for review, as it does in a manifest.
+ */
+const inspectCatalogInputs = (
+  inputs: readonly CatalogInput[],
+  catalog: CatalogChange | undefined,
+): ManifestInspection[] => {
+  if (inputs.length === 0 || catalog === undefined) {
+    return [];
+  }
+  const baseVersions = parseWorkspaceCatalogs(catalog.base);
+  const headVersions = parseWorkspaceCatalogs(catalog.head);
+  const byPackage = new Map<string, CatalogInput[]>();
+  for (const input of inputs) {
+    byPackage.set(input.packageName, [
+      ...(byPackage.get(input.packageName) ?? []),
+      input,
+    ]);
+  }
+  return [...byPackage].map(
+    ([packageName, packageInputs]): ManifestInspection => {
+      const updates: DependencyUpdate[] = [];
+      for (const { field, dependency, entry } of packageInputs) {
+        if (field === "peerDependencies") {
+          return { status: "refuse", reason: "peer-change" };
+        }
+        const versionOf = (versions: ReadonlyMap<string, string>) => {
+          const version = versions.get(entry);
+          return version === undefined ? {} : { [dependency]: version };
+        };
+        const runtime = diffRuntimeDependencies(
+          versionOf(baseVersions),
+          versionOf(headVersions),
+        );
+        if (runtime.status === "refuse") {
+          return runtime;
+        }
+        updates.push(...runtime.updates);
+      }
+      return { status: "eligible", entry: { packageName, updates } };
+    },
+  );
+};
+
+/** One entry per package, whether its floor moved in a manifest or a catalog. */
+const mergeEntries = (entries: readonly ChangesetEntry[]): ChangesetEntry[] => {
+  const merged = new Map<string, DependencyUpdate[]>();
+  for (const { packageName, updates } of entries) {
+    merged.set(packageName, [...(merged.get(packageName) ?? []), ...updates]);
+  }
+  return [...merged].map(([packageName, updates]) => ({
+    packageName,
+    updates,
+  }));
+};
+
 export const decideDependabotChangeset = ({
   policy,
   changedFiles,
   addedChangesetFiles,
   manifests,
+  catalog,
 }: DependabotChangesetInput): DependabotChangesetDecision => {
+  const catalogInputs = readCatalogInputs(policy, catalog);
+  if (catalogInputs === null) {
+    return { status: "refuse", reason: "malformed-manifest" };
+  }
   const gate = decideChangesetGate({
     changedFiles,
     addedFiles: addedChangesetFiles,
     releasePaths: policy.releasePaths,
+    catalogInputs,
   });
   switch (gate.status) {
     case "not-required":
@@ -255,16 +356,19 @@ export const decideDependabotChangeset = ({
       const manifestByPath = new Map(
         manifests.map((pair) => [pair.packagePath, pair]),
       );
-      const inspections = [...new Set(gate.releaseFiles)].map((packagePath) => {
-        const pair = manifestByPath.get(packagePath);
-        if (pair === undefined) {
-          return {
-            status: "refuse",
-            reason: "malformed-manifest",
-          } satisfies ManifestInspection;
-        }
-        return inspectManifest(pair);
-      });
+      const inspections = [
+        ...[...new Set(gate.releaseFiles)].map((packagePath) => {
+          const pair = manifestByPath.get(packagePath);
+          if (pair === undefined) {
+            return {
+              status: "refuse",
+              reason: "malformed-manifest",
+            } satisfies ManifestInspection;
+          }
+          return inspectManifest(pair);
+        }),
+        ...inspectCatalogInputs(gate.catalogInputs, catalog),
+      ];
       const refusals = inspections.filter(
         (inspection) => inspection.status === "refuse",
       );
@@ -281,12 +385,14 @@ export const decideDependabotChangeset = ({
 
       return {
         status: "create",
-        entries: inspections.map((inspection) => {
-          if (inspection.status === "refuse") {
-            return panic("eligible manifest set contained a refusal");
-          }
-          return inspection.entry;
-        }),
+        entries: mergeEntries(
+          inspections.map((inspection) => {
+            if (inspection.status === "refuse") {
+              return panic("eligible manifest set contained a refusal");
+            }
+            return inspection.entry;
+          }),
+        ),
       };
     }
     default: {
@@ -411,6 +517,43 @@ const parseArgs = (args: readonly string[]): CliOptions => {
   return { base, head, output, mode };
 };
 
+type ReadCatalogChangeOptions = {
+  readonly root: string;
+  readonly policy: ChangesetPolicy;
+  readonly mergeBase: string;
+  readonly head: string;
+};
+
+/** Undefined when either root manifest is not a regular file. */
+const readCatalogChange = ({
+  root,
+  policy,
+  mergeBase,
+  head,
+}: ReadCatalogChangeOptions): CatalogChange | undefined => {
+  const base = readRegularBlob({
+    root,
+    ref: mergeBase,
+    packagePath: ROOT_MANIFEST,
+  });
+  const headRoot = readRegularBlob({
+    root,
+    ref: head,
+    packagePath: ROOT_MANIFEST,
+  });
+  if (base === null || headRoot === null) {
+    return undefined;
+  }
+  const manifests = new Map<string, string>();
+  for (const packagePath of policy.packageFiles) {
+    const manifest = readRegularBlob({ root, ref: head, packagePath });
+    if (manifest !== null) {
+      manifests.set(packagePath, manifest);
+    }
+  }
+  return { base, head: headRoot, manifests };
+};
+
 type DecideFromGitOptions = {
   readonly root: string;
   readonly base: string;
@@ -479,6 +622,9 @@ const decideFromGit = ({
     changedFiles,
     addedChangesetFiles,
     manifests,
+    catalog: changedSet.has(ROOT_MANIFEST)
+      ? readCatalogChange({ root, policy, mergeBase, head: exactHead })
+      : undefined,
   });
 };
 
