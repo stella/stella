@@ -47,7 +47,7 @@ const createFixture = async (
     onRedisError: () => undefined,
   });
   const options = createPublicSanctionsRateLimitOptions();
-  options.context.kill();
+  await options.context.kill();
   const server = {
     requestIP: () => (peer === null ? null : { address: peer }),
   };
@@ -236,6 +236,6 @@ test("production sanctions rate limiting fails closed on Redis failure", async (
       asTestRaw<{ failurePolicy: string }>(options.context).failurePolicy,
     ).toBe("fail_closed");
   } finally {
-    options.context.kill();
+    await options.context.kill();
   }
 });
