@@ -11,9 +11,11 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
+import readAIConfig from "./read-ai-config";
 import updateAIConfig from "./update-ai-config";
 
 type UpdateContext = Parameters<typeof updateAIConfig.handler>[0];
+type ReadContext = Parameters<typeof readAIConfig.handler>[0];
 
 const models = BYOK_DEFAULT_MODELS.google;
 const overrideModels = {
@@ -108,6 +110,37 @@ describe("organization AI settings validation", () => {
       expect(saved.providers).toEqual([
         { provider: "google", apiKey: "test-key", region: "global" },
       ]);
+    });
+  }
+
+  for (const region of ["eu", "ch"] as const) {
+    test(`reads stored settings unchanged (${region})`, async () => {
+      const db = createSettingsDb(region);
+      const result = await readAIConfig.handler(
+        createTestHandlerContext<ReadContext>({ safeDb: db.safeDb }),
+      );
+      expect(result).toMatchObject({
+        providers: TANSTACK_AI_PROVIDERS.map((provider) => ({
+          provider,
+          region,
+        })),
+      });
+      expect(db.written()).toBeUndefined();
+    });
+
+    test(`rejects an unsupported stored setting on save (${region})`, async () => {
+      const db = createSettingsDb(region);
+      const result = await updateAIConfig.handler(
+        createTestHandlerContext<UpdateContext>({
+          safeDb: db.safeDb,
+          body: { providers: [{ provider: "google" }], overrideModels },
+        }),
+      );
+      expect(result).toMatchObject({
+        code: 400,
+        response: { code: "ai_config_provider_invalid" },
+      });
+      expect(db.written()).toBeUndefined();
     });
   }
 });

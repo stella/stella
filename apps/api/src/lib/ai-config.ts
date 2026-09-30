@@ -1,5 +1,3 @@
-import { panic } from "better-result";
-
 import {
   BYOK_MODEL_OPTIONS,
   resolveWorkingBYOKModelForRole,
@@ -142,40 +140,6 @@ export type OrgAIModelSelection = {
   modelId: string;
 };
 
-export const normalizeProviderRegion = (
-  provider: AIProvider,
-  region: DataRegion | undefined,
-): DataRegion => {
-  if (supportsRegion(provider) && region) {
-    return region;
-  }
-
-  return "global";
-};
-
-export const normalizeOrgAIProviderConfig = (
-  config: OrgAIProviderConfig,
-): OrgAIProviderConfig => {
-  switch (config.provider) {
-    case "azure_foundry":
-    case "huggingface":
-      return config;
-    case "google":
-    case "openrouter":
-    case "openai":
-    case "anthropic":
-    case "bedrock":
-    case "mistral":
-    case "openai_compatible":
-      return {
-        ...config,
-        region: normalizeProviderRegion(config.provider, config.region),
-      };
-    default:
-      return panic("Unsupported AI provider configuration");
-  }
-};
-
 const isBYOKProviderId = (provider: AIProvider): provider is BYOKProvider =>
   provider in BYOK_MODEL_OPTIONS;
 
@@ -223,7 +187,7 @@ const healOverrideModels = (
 });
 
 export const normalizeOrgAIConfig = (config: OrgAIConfig): OrgAIConfig => ({
-  providers: config.providers.map(normalizeOrgAIProviderConfig),
+  providers: config.providers,
   overrideModels: healOverrideModels(config.overrideModels),
   decision: config.decision,
 });

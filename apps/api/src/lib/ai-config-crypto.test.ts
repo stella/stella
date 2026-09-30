@@ -72,7 +72,7 @@ describe("isOrgAIConfig", () => {
     ).toBe(true);
   });
 
-  test("normalizes legacy Google regional configs to global", () => {
+  test("preserves stored provider settings", () => {
     expect(
       normalizeOrgAIConfig({
         providers: [{ provider: "google", apiKey: "sk-test", region: "eu" }],
@@ -80,7 +80,7 @@ describe("isOrgAIConfig", () => {
         decision: null,
       }),
     ).toEqual({
-      providers: [{ provider: "google", apiKey: "sk-test", region: "global" }],
+      providers: [{ provider: "google", apiKey: "sk-test", region: "eu" }],
       overrideModels: fullOverrideModels,
       decision: null,
     });

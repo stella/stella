@@ -41,12 +41,12 @@ import type {
 } from "@stll/ai-catalog";
 
 import { env } from "@/api/env";
-import {
-  normalizeProviderRegion,
-  type AIRequestServiceTier,
-  type DataRegion,
-  type OrgAIConfig,
-  type OrgAIProviderConfig,
+import { supportsRegion } from "@/api/lib/ai-config";
+import type {
+  AIRequestServiceTier,
+  DataRegion,
+  OrgAIConfig,
+  OrgAIProviderConfig,
 } from "@/api/lib/ai-config";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { orgAIConfigStatusError } from "@/api/lib/ai-config-response";
@@ -430,14 +430,11 @@ export const resolveTanStackAIProviderSupport = ({
     };
   }
 
-  if (provider === "google" && region && region !== "global") {
+  if (region && region !== "global" && !supportsRegion(provider)) {
     return {
       supported: false,
       reason: "regional-routing-not-implemented",
-      message:
-        "Google regional routing is not supported by the TanStack AI " +
-        "integration yet. Use the global Google Gemini endpoint or another " +
-        "supported provider.",
+      message: `The selected endpoint setting is not supported by ${provider}. Use global.`,
     };
   }
 
@@ -883,7 +880,7 @@ const providerRegion = (
     case "bedrock":
     case "mistral":
     case "openai_compatible":
-      return normalizeProviderRegion(config.provider, config.region);
+      return config.region ?? "global";
     default:
       return panic("Unsupported AI provider configuration");
   }

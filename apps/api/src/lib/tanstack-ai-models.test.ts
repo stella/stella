@@ -98,22 +98,23 @@ describe("resolveTanStackAIProviderSupport", () => {
     });
   });
 
-  test("fails explicitly for Google regional routing", () => {
-    expect(
-      resolveTanStackAIProviderSupport({
-        provider: "google",
-        region: "eu",
-      }),
-    ).toMatchObject({
-      supported: false,
-      reason: "regional-routing-not-implemented",
-    });
-    expect(
-      resolveTanStackAIProviderSupport({
-        provider: "google",
-        region: "global",
-      }),
-    ).toEqual({ supported: true });
+  test("validates endpoint settings against every supported provider", () => {
+    for (const provider of TANSTACK_AI_PROVIDERS) {
+      for (const region of ["eu", "ch"] as const) {
+        expect(
+          resolveTanStackAIProviderSupport({ provider, region }),
+        ).toMatchObject({
+          supported: false,
+          reason: "regional-routing-not-implemented",
+        });
+      }
+      expect(
+        resolveTanStackAIProviderSupport({ provider, region: "global" }),
+      ).toEqual({ supported: true });
+      expect(resolveTanStackAIProviderSupport({ provider })).toEqual({
+        supported: true,
+      });
+    }
   });
 });
 
@@ -583,19 +584,19 @@ describe("TanStack text model resolution", () => {
     expect(model.adapter.name).toBe("bedrock-converse");
   });
 
-  test("normalizes existing Google regional BYOK selections to global", () => {
-    const orgConfig = orgConfigForProvider("google", "eu");
-
-    const model = getTanStackTextModelForRole("chat", orgConfig, {
-      organizationId: orgId,
-    });
-
-    expect(model).toMatchObject({
-      keySource: "byok",
-      provider: "google",
-      region: "global",
-    });
-    expect(model.adapter.name).toBe("gemini");
+  test("refuses unsupported stored provider settings before adapter creation", () => {
+    for (const provider of TANSTACK_AI_PROVIDERS) {
+      for (const region of ["eu", "ch"] as const) {
+        const orgConfig = orgConfigForProvider(provider, region);
+        expect(() =>
+          getTanStackTextModelForRole("chat", orgConfig, {
+            organizationId: orgId,
+          }),
+        ).toThrow(
+          `The selected endpoint setting is not supported by ${provider}. Use global.`,
+        );
+      }
+    }
   });
 
   test("reports TanStack availability per selected role", () => {

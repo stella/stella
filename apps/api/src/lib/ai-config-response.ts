@@ -1,6 +1,5 @@
 import { panic } from "better-result";
 
-import { normalizeProviderRegion } from "@/api/lib/ai-config";
 import type { DataRegion, OrgAIProviderConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
@@ -101,10 +100,7 @@ export const providerResponseRegion = (
     case "bedrock":
     case "mistral":
     case "openai_compatible":
-      return normalizeProviderRegion(
-        providerConfig.provider,
-        providerConfig.region,
-      );
+      return providerConfig.region ?? "global";
     default:
       return panic("Unsupported AI provider configuration");
   }
