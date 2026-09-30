@@ -399,7 +399,10 @@ export const commitSanctionsMonitoringBatch = async ({
         .limit(SANCTIONS_MONITORING_BATCH_SIZE)
         .for("no key update");
       // Contact writers take contact -> mark; acquire marks only after the ordered contact locks.
-      const owned = await lockMonitoringClaim(tx, { organizationId, claim });
+      const owned =
+        claim === undefined
+          ? undefined
+          : await lockMonitoringClaim(tx, { organizationId, claim });
       // Durable workers evaluate freshness after acquiring their fences, not at claim time.
       const now = preparedAt ?? new Date();
       const freshness = (
