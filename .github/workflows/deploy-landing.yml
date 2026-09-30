@@ -121,7 +121,7 @@ jobs:
     # the site never cancels a deploy that is still watching.
     concurrency:
       group: deploy-landing-${{ github.ref }}
-      cancel-in-progress: true
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     # Allows for the single retry below (a 3-minute wait plus a second deploy).
     timeout-minutes: 30

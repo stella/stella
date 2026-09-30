@@ -198,9 +198,8 @@ describe("the publisher", () => {
 });
 
 // Concurrency and the event filter decide which evaluations can drop one
-// another. A run whose job is skipped must never enter a group, and a merge
-// group's evaluation must never be replaced by anything: until the next
-// sweep, nothing else evaluates that commit.
+// another. Unrelated status contexts and commit scopes cannot replace each
+// other; merge-group evaluations and sweeps must finish.
 describe("the publisher's concurrency", () => {
   const [job] = Object.values(publisher.jobs);
   // Workflow-level, as every pull request workflow's is
@@ -211,49 +210,48 @@ describe("the publisher's concurrency", () => {
     ? publisher.concurrency
     : {};
   const group = concurrency["group"];
-  // In order: the first alternative that holds wins, and `&&` binds tighter
-  // than `||`, so each alternative is one condition and its key.
-  const alternatives =
-    typeof group === "string"
-      ? group
-          .replaceAll(/\s+/gu, " ")
-          .replace(/^review-gate-\$\{\{ /u, "")
-          .replace(/ \}\}$/u, "")
-          .split("||")
-          .map((part) => part.trim())
-      : [];
   const OWN_GROUP = "format('run-{0}', github.run_id)";
 
   test("is set on the workflow, never on the job", () => {
     expect(typeof group).toBe("string");
-    expect(concurrency["cancel-in-progress"]).toBe(true);
+    expect(typeof concurrency["cancel-in-progress"]).toBe("string");
     expect(job?.concurrency).toBeUndefined();
   });
 
-  // GitHub replaces even a pending run when another joins its group, whatever
-  // cancel-in-progress says, so only a group of its own keeps a run. The own
-  // groups come first, ahead of every key another event could share.
-  test("gives every run that must finish a group of its own", () => {
-    expect(alternatives.slice(0, 4)).toEqual([
-      // Listed among the pull request's checks, where cancelled reads as failed.
-      `github.event_name == 'pull_request_target' && ${OWN_GROUP}`,
-      // The group commit's only evaluation until the next sweep.
-      `github.event.workflow_run.event == 'merge_group' && ${OWN_GROUP}`,
-      // Every app's statuses arrive, and only the script can tell a
-      // reviewer's from the rest: a no-op must never replace a run.
-      `github.event_name == 'status' && ${OWN_GROUP}`,
-      // The sweep, the fallback for every group, never cut short mid-pass.
-      `github.event_name == 'schedule' && ${OWN_GROUP}`,
-    ]);
+  test("protects sweeps, manual runs and merge-group relays", () => {
+    const cancel = concurrency["cancel-in-progress"];
+    expect(cancel).toContain("github.event_name == 'pull_request_target'");
+    expect(cancel).toContain("github.event_name == 'issue_comment'");
+    expect(cancel).toContain("github.event_name == 'status'");
+    expect(cancel).toContain(
+      "github.event.workflow_run.event != 'merge_group'",
+    );
+    expect(cancel).not.toContain("github.event_name == 'schedule'");
+    expect(cancel).not.toContain("github.event_name == 'workflow_dispatch'");
+    expect(group).toContain(OWN_GROUP);
+    expect(group).toContain("github.event.workflow_run.event != 'merge_group'");
   });
 
-  test("shares a group only between runs that re-read what they replace", () => {
-    expect(alternatives.slice(4)).toEqual([
-      "github.event.workflow_run.head_sha",
-      "github.event.issue.number",
-      "inputs.pr",
-      OWN_GROUP,
-    ]);
+  test("coalesces PR events and relays with separate namespaces", () => {
+    expect(group).toContain(
+      "format('pr-{0}', github.event.pull_request.number)",
+    );
+    expect(group).toContain("format('pr-{0}', github.event.issue.number)");
+    expect(group).toContain(
+      "format('relay-pr-{0}', github.event.workflow_run.pull_requests[0].number",
+    );
+    expect(group).toContain("github.event.workflow_run.head_sha");
+  });
+
+  test("status contexts cannot supersede unrelated contexts or commit scopes", () => {
+    expect(group).toContain("format('status-{0}-{1}-{2}'");
+    expect(group).toContain("github.event.sha");
+    expect(group).toContain("github.event.context");
+    expect(group).toContain("github.event.branches");
+    expect(group).toContain("github.event.repository.default_branch");
+    expect(group).toContain("'main'");
+    expect(group).toContain("'merge'");
+    expect(group).toContain("'pr'");
   });
 
   // Reviewer names live only in .github/review-gate.yml: the workflow must
@@ -273,6 +271,21 @@ describe("the publisher's concurrency", () => {
 });
 
 describe("the relay", () => {
+  test("coalesces reviews by PR and gives merge groups a unique run", () => {
+    const concurrency = isRecord(relay.concurrency) ? relay.concurrency : {};
+    expect(concurrency["group"]).toContain("github.event.pull_request.number");
+    expect(concurrency["group"]).toContain("github.run_id");
+    expect(concurrency["cancel-in-progress"]).toContain(
+      "github.event_name == 'pull_request_review'",
+    );
+    expect(concurrency["cancel-in-progress"]).toContain(
+      "github.event_name == 'pull_request_review_comment'",
+    );
+    expect(concurrency["cancel-in-progress"]).not.toContain(
+      "github.event_name == 'merge_group'",
+    );
+  });
+
   test("carries the events that run a pull request's own workflow version", () => {
     expect(Object.keys(relay.on).toSorted()).toEqual([
       "merge_group",

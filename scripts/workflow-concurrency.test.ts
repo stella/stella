@@ -4,17 +4,19 @@ import { fileURLToPath } from "node:url";
 // A superseded pull request run keeps its runners busy until it finishes.
 // GitHub has no shared `concurrency` across workflows, so every workflow a
 // pull request triggers declares its own, and this is the one rule they share:
-// a top-level group keyed per pull request (or ref), cancelling in progress.
-// Events that must always finish get a group of their own inside that
-// expression rather than an exemption here.
+// a top-level group keyed per pull request, cancelling in progress.
+// Other events use a unique group and never cancel a run in progress.
 
 const WORKFLOWS_URL = new URL("../.github/workflows/", import.meta.url);
-const PULL_REQUEST_EVENTS = new Set(["pull_request", "pull_request_target"]);
+const PULL_REQUEST_EVENTS = new Set([
+  "pull_request",
+  "pull_request_target",
+  "pull_request_review",
+  "pull_request_review_comment",
+]);
 /**
- * Keys that tell one pull request's runs from another's. `github.ref` is
- * `refs/pull/<n>/merge` under pull_request but the base branch under
- * pull_request_target, so that trigger needs the number itself. `head_ref`
- * never counts: two forks can push branches of the same name.
+ * PR numbers survive both regular and target events. `head_ref` never
+ * counts: two forks can push branches of the same name.
  */
 const PULL_REQUEST_NUMBER = [
   /\bgithub\.event\.pull_request\.number\b/u,
@@ -22,8 +24,6 @@ const PULL_REQUEST_NUMBER = [
 ];
 /** On an issue_comment trigger, the pull request is the commented issue. */
 const COMMENTED_ISSUE_NUMBER = /\bgithub\.event\.issue\.number\b/u;
-/** Not `github.ref_name`, which is only the branch name on a push. */
-const PULL_REQUEST_MERGE_REF = /\bgithub\.ref\b(?!_)/u;
 /** The pull request workflows today. Fewer means the scan broke. */
 const MINIMUM_PULL_REQUEST_WORKFLOWS = 9;
 
@@ -56,22 +56,38 @@ const concurrencyProblems = (workflow: unknown): string[] => {
     ];
   }
   const events = triggers(workflow["on"]);
-  const keys = events.includes("pull_request_target")
-    ? [
-        ...PULL_REQUEST_NUMBER,
-        ...(events.includes("issue_comment") ? [COMMENTED_ISSUE_NUMBER] : []),
-      ]
-    : [...PULL_REQUEST_NUMBER, PULL_REQUEST_MERGE_REF];
+  const keys = [
+    ...PULL_REQUEST_NUMBER,
+    ...(events.includes("issue_comment") ? [COMMENTED_ISSUE_NUMBER] : []),
+  ];
+  const mixed = events.some((event) => !PULL_REQUEST_EVENTS.has(event));
   const group = concurrency["group"];
+  const cancel = concurrency["cancel-in-progress"];
+  const protectedEvents = [
+    "push",
+    "merge_group",
+    "release",
+    "schedule",
+    "workflow_dispatch",
+  ];
+  const conditionalCancellation =
+    typeof cancel === "string" &&
+    protectedEvents.every(
+      (event) => !cancel.includes(`github.event_name == '${event}'`),
+    ) &&
+    events
+      .filter((event) => PULL_REQUEST_EVENTS.has(event))
+      .every((event) => cancel.includes(`github.event_name == '${event}'`));
   return [
     ...(typeof group === "string" && keys.some((key) => key.test(group))
       ? []
-      : [
-          `concurrency group is not keyed per pull request (${keys.map(({ source }) => source).join(", ")})`,
-        ]),
-    ...(concurrency["cancel-in-progress"] === true
+      : ["concurrency group is not keyed per pull request"]),
+    ...(mixed && (typeof group !== "string" || !group.includes("github.run_id"))
+      ? ["non-PR runs need a unique concurrency group"]
+      : []),
+    ...((mixed ? conditionalCancellation : cancel === true)
       ? []
-      : ["concurrency does not set `cancel-in-progress: true`"]),
+      : ["concurrency must cancel only superseded PR runs"]),
   ];
 };
 
@@ -105,6 +121,44 @@ describe("pull request workflow concurrency", () => {
     ).toEqual([]);
   });
 
+  test("protected events never cancel workflow or job runs", async () => {
+    const workflows = await repositoryWorkflows();
+    const problems = workflows.flatMap(({ file, workflow }) => {
+      if (!isRecord(workflow)) {
+        return [];
+      }
+      const protectedEvents = triggers(workflow["on"]).filter((event) =>
+        [
+          "push",
+          "merge_group",
+          "release",
+          "schedule",
+          "workflow_dispatch",
+        ].includes(event),
+      );
+      if (protectedEvents.length === 0) {
+        return [];
+      }
+      const jobs = isRecord(workflow["jobs"])
+        ? Object.values(workflow["jobs"])
+        : [];
+      return [workflow, ...jobs].flatMap((owner) => {
+        if (!isRecord(owner) || !isRecord(owner["concurrency"])) {
+          return [];
+        }
+        const cancel = owner["concurrency"]["cancel-in-progress"];
+        return cancel === true ||
+          (typeof cancel === "string" &&
+            protectedEvents.some((event) =>
+              cancel.includes(`github.event_name == '${event}'`),
+            ))
+          ? [`${file}: protected event can cancel a run`]
+          : [];
+      });
+    });
+    expect(problems).toEqual([]);
+  });
+
   test("reads every trigger spelling", () => {
     expect(runsOnPullRequests({ on: "pull_request" })).toBe(true);
     expect(runsOnPullRequests({ on: ["push", "pull_request_target"] })).toBe(
@@ -134,14 +188,15 @@ describe("pull request workflow concurrency", () => {
       concurrencyProblems({
         on,
         concurrency: {
-          group: `\${{ github.workflow }}-\${{ github.ref }}`,
+          group: `\${{ github.workflow }}-\${{ github.event.pull_request.number }}`,
           "cancel-in-progress": false,
         },
       }),
-    ).toEqual([expect.stringContaining("cancel-in-progress")]);
+    ).toEqual([expect.stringContaining("cancel only")]);
   });
 
   test.each([
+    ["pull_request", `\${{ github.workflow }}-\${{ github.ref }}`],
     // Two forks can push branches of the same name.
     ["pull_request", `\${{ github.workflow }}-\${{ github.head_ref }}`],
     ["pull_request_target", `\${{ github.workflow }}-\${{ github.head_ref }}`],
@@ -164,7 +219,6 @@ describe("pull request workflow concurrency", () => {
   });
 
   test.each([
-    [["pull_request"], `\${{ github.workflow }}-\${{ github.ref }}`],
     [
       ["pull_request"],
       `\${{ github.workflow }}-\${{ github.event.pull_request.number }}`,
@@ -173,10 +227,6 @@ describe("pull request workflow concurrency", () => {
       ["pull_request_target"],
       `\${{ github.workflow }}-\${{ github.event.number }}`,
     ],
-    [
-      ["pull_request_target", "issue_comment"],
-      `\${{ github.workflow }}-\${{ github.event.issue.number }}`,
-    ],
   ])("accepts %p grouped as %s", (events, group) => {
     expect(
       concurrencyProblems({
@@ -184,6 +234,40 @@ describe("pull request workflow concurrency", () => {
         concurrency: { group, "cancel-in-progress": true },
       }),
     ).toEqual([]);
+  });
+
+  test("isolates protected events from superseded PR runs", () => {
+    for (const event of [
+      "push",
+      "merge_group",
+      "release",
+      "schedule",
+      "workflow_dispatch",
+    ]) {
+      const workflow = {
+        on: { pull_request: null, [event]: null },
+        concurrency: {
+          group: `\${{ github.workflow }}-\${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || format('run-{0}', github.run_id) }}`,
+          "cancel-in-progress": `\${{ github.event_name == 'pull_request' }}`,
+        },
+      };
+      expect(concurrencyProblems(workflow)).toEqual([]);
+      expect(
+        concurrencyProblems({
+          ...workflow,
+          concurrency: { ...workflow.concurrency, "cancel-in-progress": true },
+        }),
+      ).toEqual([expect.stringContaining("cancel only")]);
+      expect(
+        concurrencyProblems({
+          ...workflow,
+          concurrency: {
+            ...workflow.concurrency,
+            group: `pr-\${{ github.event.pull_request.number }}`,
+          },
+        }),
+      ).toEqual([expect.stringContaining("unique concurrency group")]);
+    }
   });
 
   test("accepts a per pull request group that cancels in progress", () => {

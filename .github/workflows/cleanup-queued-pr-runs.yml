@@ -1,0 +1,80 @@
+name: Clean queued PR runs
+
+on:
+  schedule:
+    - cron: "23 3 * * *"
+
+permissions:
+  actions: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Cancel stale or superseded queued PR runs
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          script: |
+            const repo = context.repo;
+            const prEvents = new Set(["pull_request", "pull_request_target"]);
+            const cutoff = Date.now() - 6 * 60 * 60 * 1000;
+
+            // Only an unavailable PR inventory disables the superseded-head check.
+            // Other API failures stop the workflow before any cancellations.
+            let heads = null;
+            try {
+              const pulls = await github.paginate(github.rest.pulls.list, {
+                ...repo, state: "open", per_page: 100,
+              });
+              heads = new Set(pulls.map(pull => pull.head.sha));
+            } catch (error) {
+              if (error.status !== 403 && error.status !== 404) throw error;
+              core.warning("Superseded-head cleanup skipped: PR metadata access unavailable");
+            }
+            const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
+              ...repo, status: "queued", per_page: 100,
+            });
+            const reasonFor = run => {
+              if (run.status !== "queued" || !prEvents.has(run.event)) return null;
+              if (heads !== null && !heads.has(run.head_sha)) return "superseded head";
+              if (Date.parse(run.created_at) < cutoff) return "queued over six hours";
+              return null;
+            };
+            const selected = runs.filter(run => reasonFor(run));
+            core.info(`Queued runs: ${runs.length}; open PR heads: ${heads === null ? "unavailable" : heads.size}; selected: ${selected.length}`);
+            let failed = 0;
+            for (const selectedRun of selected) {
+              const args = { ...repo, run_id: selectedRun.id };
+              const { data: current } = await github.rest.actions.getWorkflowRun(args);
+              const reason = reasonFor(current);
+              if (!reason) {
+                core.info(`Skipped ${current.id}: no longer an eligible queued PR run`);
+                continue;
+              }
+              try {
+                await github.rest.actions.cancelWorkflowRun(args);
+                core.info(`Cancellation requested for ${current.id}: ${reason}`);
+                continue;
+              } catch (error) {
+                core.warning(`Cancel refused for ${current.id}: ${error.message}`);
+              }
+              // A run may start while cancellation is attempted. Never force-cancel that run.
+              const { data: retry } = await github.rest.actions.getWorkflowRun(args);
+              if (!reasonFor(retry)) {
+                core.info(`Skipped force-cancel for ${retry.id}: no longer an eligible queued PR run`);
+                continue;
+              }
+              try {
+                await github.request("POST /repos/{owner}/{repo}/actions/runs/{run_id}/force-cancel", args);
+                core.info(`Force-cancellation requested for ${retry.id}: ${reasonFor(retry)}`);
+              } catch (error) {
+                failed += 1;
+                core.error(`Unable to cancel queued PR run ${retry.id}: ${error.message}; manual inspection required`);
+              }
+            }
+            if (failed > 0) core.setFailed(`${failed} queued PR run(s) could not be cancelled`);
