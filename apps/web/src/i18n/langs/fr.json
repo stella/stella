@@ -477,6 +477,18 @@
     "failedToStartTimer": "Impossible de démarrer le chronomètre",
     "failedToStopTimer": "Impossible d'arrêter le chronomètre",
     "filterStatus": "Filtrer par statut",
+    "globalTimer": {
+      "confirm": "Confirmer le temps",
+      "discard": "Abandonner le chronomètre",
+      "loggedToday": "Enregistré aujourd’hui",
+      "matterInaccessible": "Choisissez un dossier auquel vous avez accès.",
+      "narrativeRequired": "Ajoutez une description avant de confirmer le temps.",
+      "pause": "Mettre en pause",
+      "periodLocked": "Ce mois est verrouillé. Demandez à un administrateur de le déverrouiller.",
+      "resume": "Reprendre",
+      "timerUnavailable": "Ce chronomètre n’est plus disponible. Actualisez la liste.",
+      "title": "Chronomètres"
+    },
     "hourlyRateMustBeNonNegative": "Le taux horaire ne peut pas être négatif",
     "hours": "Heures",
     "invoiceNarrative": "Description de la facture",

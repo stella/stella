@@ -11,6 +11,7 @@ import { Dialog, DialogPopup } from "@stll/ui/dialog";
 import { PlusIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
+import { GlobalTimer } from "@/features/time-timers/global-timer";
 import {
   formatDecimalHours,
   formatMinutes,
@@ -25,7 +26,6 @@ import { useMatterNameMap } from "@/routes/_protected.workspaces/$workspaceId/-c
 import { TimeEntryForm } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-form";
 import type { TimeEntryFormValues } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-form";
 import { TimeEntryRow } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-row";
-import { TimerControls } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/timer-controls";
 import {
   useCreateTimeEntry,
   useDeleteTimeEntry,
@@ -184,7 +184,7 @@ export const TimesheetDayView = ({
   return (
     <div className="flex flex-col gap-3">
       {/* Timer */}
-      <TimerControls workspaceId={workspaceId} />
+      <GlobalTimer workspaceId={workspaceId} />
 
       {/* Summary bar */}
       <div className="flex items-center justify-between">

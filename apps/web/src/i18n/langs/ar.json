@@ -477,6 +477,18 @@
     "failedToStartTimer": "تعذّر بدء المؤقّت",
     "failedToStopTimer": "تعذّر إيقاف المؤقّت",
     "filterStatus": "التصفية حسب الحالة",
+    "globalTimer": {
+      "confirm": "تأكيد الوقت",
+      "discard": "إلغاء المؤقت",
+      "loggedToday": "المسجّل اليوم",
+      "matterInaccessible": "اختر ملفًا قانونيًا يمكنك الوصول إليه.",
+      "narrativeRequired": "أضف وصفًا قبل تأكيد الوقت.",
+      "pause": "إيقاف مؤقت",
+      "periodLocked": "هذا الشهر مقفل. اطلب من مسؤول فتحه.",
+      "resume": "استئناف",
+      "timerUnavailable": "لم يعد هذا المؤقت متاحًا. حدّث القائمة.",
+      "title": "مؤقتات"
+    },
     "hourlyRateMustBeNonNegative": "لا يمكن أن يكون السعر بالساعة سالبًا",
     "hours": "الساعات",
     "invoiceNarrative": "بيان الفاتورة",

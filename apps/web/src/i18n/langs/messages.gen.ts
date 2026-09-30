@@ -480,6 +480,18 @@ type Messages = {
     "failedToStartTimer": "Failed to start timer";
     "failedToStopTimer": "Failed to stop timer";
     "filterStatus": "Filter by status";
+    "globalTimer": {
+      "confirm": "Confirm time";
+      "discard": "Discard timer";
+      "loggedToday": "Logged today";
+      "matterInaccessible": "Choose a matter you can access.";
+      "narrativeRequired": "Add a description before confirming time.";
+      "pause": "Pause";
+      "periodLocked": "This month is locked. Ask an administrator to unlock it.";
+      "resume": "Resume";
+      "timerUnavailable": "This timer is no longer available. Refresh the list.";
+      "title": "Timers";
+    };
     "hourlyRateMustBeNonNegative": "Hourly rate cannot be negative";
     "hours": "Hours";
     "invoiceNarrative": "Invoice narrative";

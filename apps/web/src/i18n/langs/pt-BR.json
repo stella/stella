@@ -477,6 +477,18 @@
     "failedToStartTimer": "Falha ao iniciar o cronômetro",
     "failedToStopTimer": "Falha ao parar o cronômetro",
     "filterStatus": "Filtrar por status",
+    "globalTimer": {
+      "confirm": "Confirmar tempo",
+      "discard": "Descartar cronômetro",
+      "loggedToday": "Registrado hoje",
+      "matterInaccessible": "Escolha um caso ao qual você tenha acesso.",
+      "narrativeRequired": "Adicione uma descrição antes de confirmar o tempo.",
+      "pause": "Pausar",
+      "periodLocked": "Este mês está bloqueado. Peça a um administrador para desbloqueá-lo.",
+      "resume": "Retomar",
+      "timerUnavailable": "Este cronômetro não está mais disponível. Atualize a lista.",
+      "title": "Cronômetros"
+    },
     "hourlyRateMustBeNonNegative": "O valor por hora não pode ser negativo",
     "hours": "Horas",
     "invoiceNarrative": "Narrativa da fatura",

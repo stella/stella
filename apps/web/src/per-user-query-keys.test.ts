@@ -7,6 +7,7 @@ import { companyFormatKeys } from "@/components/company-format-library";
 import { readerAnnotationKeys } from "@/components/legal-reader/annotations/reader-annotations-query";
 import { savedSearchKeys } from "@/components/saved-searches.logic";
 import { chatKeys } from "@/features/chat/chat-query-contract";
+import { timeTimersOptions } from "@/features/time-timers/queries";
 import {
   linkedAccountsOptions,
   pendingDeletionTasksOptions,
@@ -30,7 +31,10 @@ import {
   entityViewKeys,
   entityViewsOptions,
 } from "@/lib/workspaces/queries/entity-views";
-import { myTimeEntriesInfiniteOptions } from "@/lib/workspaces/queries/my-time-entries";
+import {
+  loggedTodayOptions,
+  myTimeEntriesInfiniteOptions,
+} from "@/lib/workspaces/queries/my-time-entries";
 import { reportExportsKeys } from "@/lib/workspaces/queries/report-exports";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
 import { viewTemplateKeys } from "@/lib/workspaces/queries/view-templates";
@@ -381,10 +385,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     kind: "keyed",
     calls: ["fetchTimeEntries"],
     files: ["lib/workspaces/queries/time-entries.ts"],
-    keys: () => [
-      timeEntriesKeys.list(WORKSPACE, USER, {}),
-      timeEntriesKeys.activeTimer(WORKSPACE, USER),
-    ],
+    keys: () => [timeEntriesKeys.list(WORKSPACE, USER, {})],
   },
   "time-entries/me/list.ts": {
     kind: "keyed",
@@ -392,6 +393,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     files: ["lib/workspaces/queries/my-time-entries.ts"],
     keys: () => [
       myTimeEntriesInfiniteOptions(ORG, USER, "2026-01-01").queryKey,
+      loggedTodayOptions(ORG, USER, "2026-01-01").queryKey,
     ],
   },
   "time-entries/suggestions/list.ts": {
@@ -417,8 +419,10 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     calls: ['api["time-timers"].admin.get'],
   },
   "time-timers/list.ts": {
-    kind: "no-web-caller",
+    kind: "keyed",
     calls: ['api["time-timers"].get'],
+    files: ["features/time-timers/queries.ts"],
+    keys: () => [timeTimersOptions(ORG, USER).queryKey],
   },
   "usage/get-lane.ts": {
     kind: "keyed",
