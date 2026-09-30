@@ -34,7 +34,7 @@
     "description": "Klauskite Claude arba ChatGPT apie savo bylas ir dokumentus. Pasirinkite asistentą ir atsivers trumpas vadovas; tai užtruks apie minutę.",
     "instructions": "Prijunk mane prie stella, mano teisinės darbo erdvės. Vadovaukis skiltimi „Instructions for AI agents“ adresu {guideUrl} ir naudok šį serverio adresą: {mcpUrl}",
     "openGuide": "Atidaryti vadovą: {assistant}",
-    "selfSetupHint": "Ar jūsų asistentas gali susikonfigūruoti pats?",
+    "selfSetupHint": "Naudojate Claude Code ar Codex?",
     "title": "Naudokite stella savo DI asistente"
   },
   "ai": {

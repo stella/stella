@@ -34,7 +34,7 @@
     "description": "Pytaj Claude lub ChatGPT o swoje sprawy i dokumenty. Wybierz asystenta, aby otworzyć krótką instrukcję; zajmie to około minuty.",
     "instructions": "Połącz mnie ze stellą, moim prawniczym obszarem roboczym. Postępuj zgodnie z sekcją „Instructions for AI agents” na {guideUrl} i użyj tego adresu serwera: {mcpUrl}",
     "openGuide": "Otwórz instrukcję dla {assistant}",
-    "selfSetupHint": "Czy Twój asystent potrafi skonfigurować się sam?",
+    "selfSetupHint": "Korzystasz z Claude Code lub Codexa?",
     "title": "Korzystaj ze stelli w swoim asystencie AI"
   },
   "ai": {

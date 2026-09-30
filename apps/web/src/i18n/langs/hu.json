@@ -34,7 +34,7 @@
     "description": "Kérdezd a Claude-ot vagy a ChatGPT-t az ügyeidről és dokumentumaidról. Válaszd ki az asszisztensed egy rövid útmutatóhoz; nagyjából egy perc.",
     "instructions": "Csatlakoztass a stellához, a jogi munkaterületemhez. Kövesd az „Instructions for AI agents” részt itt: {guideUrl}, és ezt a szervercímet használd: {mcpUrl}",
     "openGuide": "Útmutató megnyitása: {assistant}",
-    "selfSetupHint": "Be tudja állítani magát az asszisztensed?",
+    "selfSetupHint": "Claude Code-ot vagy Codexet használsz?",
     "title": "Használd a stellát az MI-asszisztensedben"
   },
   "ai": {

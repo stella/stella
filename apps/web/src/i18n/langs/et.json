@@ -34,7 +34,7 @@
     "description": "Küsi Claude’ilt või ChatGPT-lt oma toimikute ja dokumentide kohta. Vali oma assistent, et avada lühike juhend; see võtab umbes minuti.",
     "instructions": "Ühenda mind stellaga, minu õigusalase tööruumiga. Järgi aadressil {guideUrl} jaotist „Instructions for AI agents“ ja kasuta seda serveri aadressi: {mcpUrl}",
     "openGuide": "Ava juhend: {assistant}",
-    "selfSetupHint": "Kas su assistent oskab end ise seadistada?",
+    "selfSetupHint": "Kasutad Claude Code’i või Codexit?",
     "title": "Kasuta stellat oma AI-assistendis"
   },
   "ai": {

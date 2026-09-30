@@ -34,7 +34,7 @@
     "description": "Ptejte se Claude nebo ChatGPT na své spisy a dokumenty. Vyberte svého asistenta a otevře se krátký návod; zabere asi minutu.",
     "instructions": "Připoj mě ke stelle, mému právnímu pracovnímu prostoru. Postupuj podle části „Instructions for AI agents“ na {guideUrl} a použij tuto adresu serveru: {mcpUrl}",
     "openGuide": "Otevřít návod pro {assistant}",
-    "selfSetupHint": "Umí se váš asistent nastavit sám?",
+    "selfSetupHint": "Používáte Claude Code nebo Codex?",
     "title": "Používejte stellu ve svém AI asistentovi"
   },
   "ai": {

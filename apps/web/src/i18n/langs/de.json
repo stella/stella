@@ -34,7 +34,7 @@
     "description": "Fragen Sie Claude oder ChatGPT zu Ihren Akten und Dokumenten. Wählen Sie Ihren Assistenten für eine kurze Anleitung; es dauert etwa eine Minute.",
     "instructions": "Verbinde mich mit stella, meinem juristischen Arbeitsbereich. Folge den „Instructions for AI agents“ unter {guideUrl} und verwende diese Serveradresse: {mcpUrl}",
     "openGuide": "Anleitung für {assistant} öffnen",
-    "selfSetupHint": "Kann sich Ihr Assistent selbst einrichten?",
+    "selfSetupHint": "Sie nutzen Claude Code oder Codex?",
     "title": "stella in Ihrem KI-Assistenten nutzen"
   },
   "ai": {

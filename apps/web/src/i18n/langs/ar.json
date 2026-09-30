@@ -34,7 +34,7 @@
     "description": "اسأل Claude أو ChatGPT عن ملفاتك القانونية ومستنداتك. اختر مساعدك لفتح دليل قصير؛ يستغرق الأمر نحو دقيقة.",
     "instructions": "اربطني بـ stella، مساحة عملي القانونية. اتّبع قسم «Instructions for AI agents» في {guideUrl} واستخدم عنوان الخادم هذا: {mcpUrl}",
     "openGuide": "افتح دليل {assistant}",
-    "selfSetupHint": "هل يستطيع مساعدك إعداد نفسه؟",
+    "selfSetupHint": "هل تستخدم Claude Code أو Codex؟",
     "title": "استخدم stella في مساعد الذكاء الاصطناعي"
   },
   "ai": {
