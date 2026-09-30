@@ -119,7 +119,9 @@ import {
   selectDueReconciliationItems,
   selectTrackedIdentityKeys,
 } from "@/api/lib/legal-search/reconciliation-store";
+import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { pgErrorFields } from "@/api/lib/pg-error";
 
 /** Parked items rebuilt in one unit; each costs a publisher fetch. */
@@ -1553,6 +1555,11 @@ const walkSlice = async ({
   return summary;
 };
 
+const TEXTLESS_RECHECK_RAW_FAILURE_SINK = failureSink({
+  event: "case_law.reconciliation.textless_recheck_raw_unavailable",
+  expected: [],
+});
+
 type RecheckTextlessHeldOptions = {
   adapterKey: string;
   fetchDelayMs: number;
@@ -1614,16 +1621,21 @@ const recheckTextlessHeldRows = async ({
       const stored = await readStoredRaw(row.sourceRawS3Key);
       if (Result.isError(stored) || stored.value === null) {
         summary.failed += 1;
-        logger.warn(
-          "case_law.reconciliation.textless_recheck_raw_unavailable",
-          {
-            adapterKey,
-            decisionId: row.id,
-            errorTag: Result.isError(stored)
-              ? errorTag(stored.error)
-              : "missing",
-          },
-        );
+        if (Result.isError(stored)) {
+          observeFailure(stored.error, {
+            sink: TEXTLESS_RECHECK_RAW_FAILURE_SINK,
+            ctx: { adapterKey, decisionId: row.id },
+          });
+        } else {
+          logger.warn(
+            "case_law.reconciliation.textless_recheck_raw_unavailable",
+            {
+              adapterKey,
+              decisionId: row.id,
+              phase: "missing",
+            },
+          );
+        }
         continue;
       }
       raw = stored.value;
@@ -1795,13 +1807,14 @@ type ExecuteReconciliationUnitOptions = Pick<
   | "fetchDelayMs"
   | "now"
   | "reparseStoredRaw"
-  | "readStoredRaw"
   | "scopedDb"
-  | "sliceIngestBudget"
   | "sleep"
   | "sourceId"
 > & {
+  readStoredRaw: StoredRawResultReader;
   reconciliation: SourceReconciliation;
+  sliceIngestBudget: number;
+  sliceRetries: SliceRetrySchedule;
   unit: ReconciliationWorkUnit;
 };
 
@@ -1814,10 +1827,14 @@ const executeReconciliationUnit = async ({
   reconciliation,
   scopedDb,
   sliceIngestBudget,
+  sliceRetries,
   sleep,
   sourceId,
   unit,
 }: ExecuteReconciliationUnitOptions): Promise<ReconciliationUnitOutcome> => {
+  if (unit.type === "idle") {
+    return { type: "idle" };
+  }
   const lease = await acquireCaseLawSourceIngestionLease({
     scopedDb,
     sourceId,
@@ -2114,6 +2131,7 @@ export const runReconciliationWorkUnit = async ({
     reconciliation,
     scopedDb,
     sliceIngestBudget,
+    sliceRetries,
     sleep,
     sourceId,
     unit,

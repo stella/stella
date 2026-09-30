@@ -225,7 +225,7 @@ const seedTextlessListing = async (
       fulltext: undefined,
       sections: undefined,
       documentAst: EMPTY_AST,
-      textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.SOURCE_OMITTED),
+      textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
       isListingOnly: true,
       metadata: {
         ...crawled.metadata,
