@@ -130,18 +130,18 @@ type NsComplaintCell =
       type: "date";
       value: string;
       sourceValue: string;
-      defects: NsComplaintDefect[];
+      defects: readonly NsComplaintDefect[];
     }
   | {
       type: "text";
       value: string;
       sourceValue: string;
-      defects: NsComplaintDefect[];
+      defects: readonly NsComplaintDefect[];
     }
   | {
       type: "unresolved-date";
       sourceValue: string;
-      defects: NsComplaintDefect[];
+      defects: readonly NsComplaintDefect[];
     };
 
 type NsComplaintDefect =

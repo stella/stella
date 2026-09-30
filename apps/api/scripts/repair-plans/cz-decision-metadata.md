@@ -15,7 +15,9 @@ row ID, with `id`, `adapterKey: "cz-ns"`, `sourceHash`, `metadata`, and `printHt
 (one JSON object per line). `printHtml` must be the archived print response,
 including the `#box-table-a` metadata table: use the `print` part of the stored
 source envelope, or a verified legacy print payload. Do not use fulltext or
-fetch fresh court pages. Store exports and output outside the public repository.
+fetch fresh court pages. A null `sourceHash` is accepted as an unresolved row and
+cannot produce a proposal because a future write cannot be fenced to that
+snapshot. Store exports and output outside the public repository.
 
 From `apps/api`, run:
 
