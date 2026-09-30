@@ -173,7 +173,10 @@ export const resolveCourtFilter = async ({
   });
   return {
     court: resolvedCourt,
-    courts: resolvedCourts?.length ? [...new Set(resolvedCourts)] : undefined,
+    courts:
+      resolvedCourts !== undefined && resolvedCourts.length > 0
+        ? [...new Set(resolvedCourts)]
+        : undefined,
     warnings,
   };
 };
