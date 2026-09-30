@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   checkMergeHold,
+  checkGreenResultFreshness,
   MergeHoldReadError,
   evaluateMergeBar,
   evaluateQueuePlacement,
@@ -58,6 +59,9 @@ case "$*" in
   *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
   *'api graphql'*) printf '%s\\n' "$FIXTURE_PULL_REQUEST";;
   *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}}]';;
+  *check-runs/1*) printf '%s\\n' '{"details_url":"https://github.com/stella/stella/actions/runs/1"}';;
+  *actions/runs/1*) printf '%s\\n' '{"head_sha":"${HEAD_SHA}","pull_requests":[{"number":123,"head":{"sha":"${HEAD_SHA}"},"base":{"ref":"main","sha":"${OTHER_SHA}"}}]}';;
+  *compare/*) printf '%s\\n' '{"status":"identical"}';;
   *check-runs*) printf '1\\tci-result\\tcompleted\\tsuccess\\n';;
   *pulls/123/files*) printf '%s\\n' "$FIXTURE_FILES";;
   *pulls/123*) printf '%s\\n' "$FIXTURE_CHANGED_FILES";;
@@ -142,6 +146,9 @@ case "$*" in
   'variable get STELLA_MERGE_HOLD --repo '*) printf '%s\\n' 'variable STELLA_MERGE_HOLD was not found' >&2; exit 1;;
   *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
   *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"Overlay check"}]}}]';;
+  *check-runs/1*) printf '%s\\n' '{"details_url":"https://github.com/stella/stella/actions/runs/1"}';;
+  *actions/runs/1*) printf '%s\\n' '{"head_sha":"${HEAD_SHA}","pull_requests":[{"number":123,"head":{"sha":"${HEAD_SHA}"},"base":{"ref":"main","sha":"${OTHER_SHA}"}}]}';;
+  *compare/*) printf '%s\\n' '{"status":"identical"}';;
   *check-runs*) printf '1\\tOverlay check\\tcompleted\\tsuccess\\n';;
   *headRefOid*)
     if [ "$1" = api ]; then printf '%s\\n' '${response}';
@@ -298,6 +305,9 @@ case "$*" in
   *'mergeQueue(branch'*) printf '%s\\n' '${queue}';;
   *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
   *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}},{"type":"merge_queue","parameters":{}}]';;
+  *check-runs/1*) printf '%s\\n' '{"details_url":"https://github.com/stella/stella/actions/runs/1"}';;
+  *actions/runs/1*) printf '%s\\n' '{"head_sha":"${HEAD_SHA}","pull_requests":[{"number":123,"head":{"sha":"${HEAD_SHA}"},"base":{"ref":"main","sha":"${OTHER_SHA}"}}]}';;
+  *compare/*) printf '%s\\n' '{"status":"identical"}';;
   *check-runs*) printf '1\\tci-result\\tcompleted\\tsuccess\\n';;
   *headRefOid*)
     if [ "$1" = api ]; then printf '%s\\n' '${pullRequest}';
@@ -368,6 +378,9 @@ case "$*" in
   *'pr merge'*|*enqueuePullRequest*) exit 98;;
   *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
   *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}},{"type":"merge_queue","parameters":{}}]';;
+  *check-runs/1*) printf '%s\\n' '{"details_url":"https://github.com/stella/stella/actions/runs/1"}';;
+  *actions/runs/1*) printf '%s\\n' '{"head_sha":"${HEAD_SHA}","pull_requests":[{"number":123,"head":{"sha":"${HEAD_SHA}"},"base":{"ref":"main","sha":"${OTHER_SHA}"}}]}';;
+  *compare/*) printf '%s\\n' '{"status":"identical"}';;
   *check-runs*) printf '1\\tci-result\\tin_progress\\t\\n';;
   *headRefOid*)
     if [ "$1" = api ]; then printf '%s\\n' '${pullRequest}';
@@ -1430,4 +1443,150 @@ esac
       }
     },
   );
+});
+
+describe("green result freshness", () => {
+  const run = {
+    head_sha: HEAD_SHA,
+    pull_requests: [
+      {
+        number: 2137,
+        head: { sha: HEAD_SHA },
+        base: { ref: "main", sha: OTHER_SHA },
+      },
+    ],
+  };
+  const readers = (comparison: unknown) => ({
+    pullRequest: passingSnapshot().pullRequest,
+    jump: false,
+    checkRuns: passingSnapshot().checkRuns,
+    readWorkflowRun: () => run,
+    readBaseComparison: (sha: string, branch: string) => {
+      expect(sha).toBe(OTHER_SHA);
+      expect(branch).toBe("main");
+      return comparison;
+    },
+    readPullFiles: () => ["scripts/shared.ts"],
+  });
+
+  test("unchanged base and up to twenty unrelated commits retain green results", () => {
+    expect(
+      checkGreenResultFreshness(readers({ status: "identical" })).isOk(),
+    ).toBe(true);
+    for (const ahead_by of [1, 19, 20]) {
+      expect(
+        checkGreenResultFreshness(
+          readers({
+            status: "ahead",
+            ahead_by,
+            files: [{ filename: "unrelated.ts" }],
+          }),
+        ).isOk(),
+      ).toBe(true);
+    }
+  });
+
+  test("overlapping edits and rename sources require refreshed CI", () => {
+    for (const file of [
+      { filename: "scripts/shared.ts" },
+      {
+        filename: "scripts/renamed.ts",
+        previous_filename: "scripts/shared.ts",
+      },
+    ]) {
+      const result = checkGreenResultFreshness(
+        readers({ status: "ahead", ahead_by: 1, files: [file] }),
+      );
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error.message).toContain("scripts/shared.ts");
+        expect(result.error.message).toContain("merge main and let CI re-run");
+      }
+    }
+  });
+
+  test("more than twenty commits, rewritten history and truncated files refuse stale green", () => {
+    for (const comparison of [
+      { status: "ahead", ahead_by: 21, files: [] },
+      { status: "diverged" },
+      { status: "behind" },
+      {
+        status: "ahead",
+        ahead_by: 1,
+        files: Array.from({ length: 300 }, () => ({
+          filename: "unrelated.ts",
+        })),
+      },
+    ]) {
+      expect(checkGreenResultFreshness(readers(comparison)).isErr()).toBe(true);
+    }
+  });
+
+  test("missing or mismatched workflow snapshots cannot establish freshness", () => {
+    for (const workflow of [
+      { ...run, head_sha: OTHER_SHA },
+      { ...run, pull_requests: [] },
+      {
+        ...run,
+        pull_requests: [
+          {
+            number: 2137,
+            head: { sha: OTHER_SHA },
+            base: run.pull_requests.at(0)?.base,
+          },
+        ],
+      },
+      {
+        ...run,
+        pull_requests: [
+          {
+            number: 2137,
+            head: { sha: HEAD_SHA },
+            base: { ref: "other", sha: OTHER_SHA },
+          },
+        ],
+      },
+    ]) {
+      expect(
+        checkGreenResultFreshness({
+          ...readers({ status: "identical" }),
+          readWorkflowRun: () => workflow,
+        }).isErr(),
+      ).toBe(true);
+    }
+  });
+
+  test("release, jump and pending verdicts preserve existing behavior without freshness reads", () => {
+    const noRead = () => {
+      throw new MergeHoldReadError({ message: "unexpected freshness read" });
+    };
+    const options = {
+      ...readers(null),
+      readWorkflowRun: noRead,
+      readBaseComparison: noRead,
+      readPullFiles: noRead,
+    };
+    expect(checkGreenResultFreshness({ ...options, jump: true }).isOk()).toBe(
+      true,
+    );
+    expect(
+      checkGreenResultFreshness({
+        ...options,
+        pullRequest: { ...options.pullRequest, title: "chore: release v1.0.0" },
+      }).isOk(),
+    ).toBe(true);
+    for (const checkRuns of [
+      [],
+      [checkRun("ci-result", "in_progress", null)],
+      [checkRun("ci-result", "completed", "failure")],
+      [
+        checkRun("ci-result", "completed", "success"),
+        checkRun("ci-result", "queued", null, { id: 2 }),
+      ],
+    ]) {
+      expect(checkGreenResultFreshness({ ...options, checkRuns }).isOk()).toBe(
+        true,
+      );
+    }
+  });
 });

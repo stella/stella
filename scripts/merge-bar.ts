@@ -563,6 +563,126 @@ export const evaluateMergeBar = (
   };
 };
 
+// Limit unrelated drift too: beyond twenty commits, path overlap alone is
+// too weak a signal for whether an old green run still represents integration.
+const MAX_GREEN_BASE_DRIFT = 20;
+const COMPARE_FILE_LIMIT = 300;
+
+class StaleGreenResultError extends TaggedError("StaleGreenResultError")<{
+  message: string;
+}> {}
+
+type CheckGreenResultFreshnessOptions = {
+  pullRequest: PullRequestSnapshot;
+  jump: boolean;
+  checkRuns: readonly CheckRunSnapshot[];
+  readWorkflowRun: (checkRunId: number) => unknown;
+  readBaseComparison: (testedBaseSha: string, baseRefName: string) => unknown;
+  readPullFiles: () => readonly string[];
+};
+
+export const checkGreenResultFreshness = ({
+  pullRequest,
+  jump,
+  checkRuns,
+  readWorkflowRun,
+  readBaseComparison,
+  readPullFiles,
+}: CheckGreenResultFreshnessOptions) => {
+  if (jump || isReleasePullRequest(pullRequest)) {
+    return Result.ok();
+  }
+  const green = latestRunByName(checkRuns).get("ci-result");
+  if (green?.status !== "completed" || green.conclusion !== "success") {
+    return Result.ok();
+  }
+  const refuse = (detail: string) =>
+    Result.err(
+      new StaleGreenResultError({
+        message: `STALE_GREEN_RESULT: ${detail}; merge main and let CI re-run.`,
+      }),
+    );
+  // Use the workflow's triggering PR snapshot, never today's PR merge ref:
+  // GitHub regenerates that ref whenever the base branch moves.
+  const run = readRecord(readWorkflowRun(green.id), "ci-result workflow run");
+  if (readString(run, "head_sha") !== pullRequest.headSha) {
+    return refuse("ci-result workflow does not match the current PR head");
+  }
+  const pulls = run["pull_requests"];
+  if (!Array.isArray(pulls)) {
+    return refuse("ci-result workflow has no recorded PR base");
+  }
+  const rawPull = pulls.find(
+    (value) =>
+      readRecord(value, "workflow pull request")["number"] ===
+      pullRequest.number,
+  );
+  if (rawPull === undefined) {
+    return refuse("ci-result workflow has no recorded base for this PR");
+  }
+  const pull = readRecord(rawPull, "workflow pull request");
+  if (
+    readString(readRecord(pull["head"], "workflow PR head"), "sha") !==
+    pullRequest.headSha
+  ) {
+    return refuse(
+      "ci-result workflow PR snapshot does not match the current head",
+    );
+  }
+  const base = readRecord(pull["base"], "workflow PR base");
+  if (readString(base, "ref") !== pullRequest.baseRefName) {
+    return refuse("ci-result was computed for another base branch");
+  }
+  const testedBaseSha = readString(base, "sha");
+  const comparison = readRecord(
+    readBaseComparison(testedBaseSha, pullRequest.baseRefName),
+    "base comparison",
+  );
+  const status = readString(comparison, "status");
+  if (status === "identical") {
+    return Result.ok();
+  }
+  if (status !== "ahead") {
+    return refuse(
+      "the tested base is no longer an ancestor of the current base",
+    );
+  }
+  const commits = comparison["ahead_by"];
+  if (
+    typeof commits !== "number" ||
+    !Number.isSafeInteger(commits) ||
+    commits < 0
+  ) {
+    panic("Expected a non-negative commit count in base comparison");
+  }
+  if (commits > MAX_GREEN_BASE_DRIFT) {
+    return refuse(
+      `main advanced ${commits} commits since the green run (limit ${MAX_GREEN_BASE_DRIFT})`,
+    );
+  }
+  const files = comparison["files"];
+  if (!Array.isArray(files) || files.length >= COMPARE_FILE_LIMIT) {
+    return refuse("cannot establish complete changed-file coverage for main");
+  }
+  const changedPaths = new Set<string>();
+  for (const rawFile of files) {
+    const file = readRecord(rawFile, "base changed file");
+    changedPaths.add(readString(file, "filename"));
+    if (typeof file["previous_filename"] === "string") {
+      changedPaths.add(file["previous_filename"]);
+    }
+  }
+  const overlap = readPullFiles().filter((filename) =>
+    changedPaths.has(filename),
+  );
+  if (overlap.length > 0) {
+    return refuse(
+      `main changed files also touched by this PR: ${overlap.join(", ")}`,
+    );
+  }
+  return Result.ok();
+};
+
 // --- gh seam ----------------------------------------------------------------
 
 type GitHubGateway = {
@@ -571,6 +691,9 @@ type GitHubGateway = {
   // needs the SHA, and a narrow read makes the TOCTOU window smaller.
   readHeadSha: () => string;
   readCheckRuns: (headSha: string) => readonly CheckRunSnapshot[];
+  readWorkflowRun: (checkRunId: number) => unknown;
+  readBaseComparison: (testedBaseSha: string, baseRefName: string) => unknown;
+  readPullFiles: () => readonly string[];
   readReviewThreads: () => readonly ReviewThreadSnapshot[];
   readMigrationDirectories: () => MigrationSnapshot;
   // Both writes pin the head every gate was evaluated against, so GitHub
@@ -971,6 +1094,38 @@ const createGhGateway = ({
   }
   const prArgs = [String(pullNumber), "--repo", repo];
 
+  const readChangedFiles = () => {
+    const rawChangedFiles = runGhJson([
+      "api",
+      `repos/${repo}/pulls/${pullNumber}`,
+      "--jq",
+      ".changed_files",
+    ]);
+    if (
+      typeof rawChangedFiles !== "number" ||
+      !Number.isSafeInteger(rawChangedFiles) ||
+      rawChangedFiles < 0
+    ) {
+      panic("Expected a nonnegative changed_files count from gh");
+    }
+    const changedFiles = runGh([
+      "api",
+      "--paginate",
+      `repos/${repo}/pulls/${pullNumber}/files`,
+      "--jq",
+      ".[] | {status, filename, previous_filename} | @json",
+    ])
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => readRecord(JSON.parse(line), "changed pull request file"));
+    if (changedFiles.length !== rawChangedFiles) {
+      panic(
+        `Expected ${rawChangedFiles} changed files from gh, received ${changedFiles.length}`,
+      );
+    }
+    return changedFiles;
+  };
+
   return {
     sleep: (milliseconds) => Bun.sleepSync(milliseconds),
     readHeadSha: () =>
@@ -1075,6 +1230,39 @@ const createGhGateway = ({
       return runs;
     },
 
+    readWorkflowRun: (checkRunId) => {
+      const check = readRecord(
+        runGhJson(["api", `repos/${repo}/check-runs/${checkRunId}`]),
+        "ci-result check run",
+      );
+      const url = readString(check, "details_url");
+      const prefix = `https://github.com/${repo}/actions/runs/`;
+      const runId = url.startsWith(prefix)
+        ? url.slice(prefix.length).split("/").at(0)
+        : undefined;
+      if (runId === undefined || !PULL_NUMBER_PATTERN.test(runId)) {
+        panic(
+          "ci-result check does not link to a workflow run in this repository",
+        );
+      }
+      return runGhJson(["api", `repos/${repo}/actions/runs/${runId}`]);
+    },
+
+    readBaseComparison: (testedBaseSha, baseRefName) =>
+      runGhJson([
+        "api",
+        `repos/${repo}/compare/${encodeURIComponent(testedBaseSha)}...${encodeURIComponent(baseRefName)}`,
+      ]),
+
+    readPullFiles: () =>
+      readChangedFiles().flatMap((file) => {
+        const filename = readString(file, "filename");
+        const previousFilename = file["previous_filename"];
+        return typeof previousFilename === "string"
+          ? [filename, previousFilename]
+          : [filename];
+      }),
+
     readReviewThreads: () => {
       const threads: ReviewThreadSnapshot[] = [];
       let cursor: string | null = null;
@@ -1134,36 +1322,7 @@ const createGhGateway = ({
           inventoryChanged: false,
         };
       }
-      const rawChangedFiles = runGhJson([
-        "api",
-        `repos/${repo}/pulls/${pullNumber}`,
-        "--jq",
-        ".changed_files",
-      ]);
-      if (
-        typeof rawChangedFiles !== "number" ||
-        !Number.isSafeInteger(rawChangedFiles) ||
-        rawChangedFiles < 0
-      ) {
-        panic("Expected a nonnegative changed_files count from gh");
-      }
-      const changedFiles = runGh([
-        "api",
-        "--paginate",
-        `repos/${repo}/pulls/${pullNumber}/files`,
-        "--jq",
-        ".[] | {status, filename, previous_filename} | @json",
-      ])
-        .split("\n")
-        .filter(Boolean)
-        .map((line) =>
-          readRecord(JSON.parse(line), "changed pull request file"),
-        );
-      if (changedFiles.length !== rawChangedFiles) {
-        panic(
-          `Expected ${rawChangedFiles} changed files from gh, received ${changedFiles.length}`,
-        );
-      }
+      const changedFiles = readChangedFiles();
       const addedDirectories: string[] = [];
       const removedDirectories: string[] = [];
       const modifiedDirectories: string[] = [];
@@ -1536,12 +1695,25 @@ if (import.meta.main) {
   }
   // Read order is load-bearing: each gate's window is the time between its
   // own read and the write, so the head SHA the write pins is read last.
+  const checkRuns = gateway.readCheckRuns(pullRequest.headSha);
+  const freshness = checkGreenResultFreshness({
+    pullRequest,
+    jump: options.jump,
+    checkRuns,
+    readWorkflowRun: gateway.readWorkflowRun,
+    readBaseComparison: gateway.readBaseComparison,
+    readPullFiles: gateway.readPullFiles,
+  });
+  if (freshness.isErr()) {
+    console.error(freshness.error.message);
+    process.exit(1);
+  }
   const snapshot: MergeBarSnapshot = {
     pullRequest,
     landing: policy.landing,
     requiredCheckRuns: policy.requiredCheckRuns,
     checkRunsHeadSha: pullRequest.headSha,
-    checkRuns: gateway.readCheckRuns(pullRequest.headSha),
+    checkRuns,
     migrations: gateway.readMigrationDirectories(),
     reviewThreads: gateway.readReviewThreads(),
     headShaBeforeMerge: gateway.readHeadSha(),
