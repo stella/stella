@@ -244,6 +244,14 @@ const facetBuckets = (
 
 type SearchDecisionsBody = Static<typeof searchDecisionsBodySchema>;
 
+type PostgresSearchBody = Omit<
+  SearchDecisionsBody,
+  "category" | "hasLegalSentence"
+> & {
+  category?: never;
+  hasLegalSentence?: never;
+};
+
 export const searchDecisionsHandler = async (
   body: SearchDecisionsBody,
   caseLawDb: CaseLawPublicReadDb,
@@ -263,7 +271,15 @@ export const searchDecisionsHandler = async (
     return await searchCorpusIndexDecisions(scopedBody, caseLawDb);
   }
 
-  return await searchPostgresDecisions(scopedBody, caseLawDb);
+  const { category, hasLegalSentence, ...postgresBody } = scopedBody;
+  if (category !== undefined || hasLegalSentence !== undefined) {
+    return status(400, {
+      message:
+        "Category and legal-sentence filters require corpus-index search. Remove category and hasLegalSentence or use a corpus-index deployment.",
+    });
+  }
+
+  return await searchPostgresDecisions(postgresBody, caseLawDb);
 };
 
 type CaseLawSearchFacet =
@@ -282,7 +298,7 @@ export const CASE_LAW_SEARCH_FACETS = [
 ] as const satisfies readonly CaseLawSearchFacet[];
 
 type CaseLawSearchPlanOptions = {
-  body: SearchDecisionsBody;
+  body: PostgresSearchBody;
   configs: readonly FtsSearchConfig[];
   courtWeights: CourtWeightMap;
   excerpt: Parameters<typeof decisionHeadlineConfig>[0];
@@ -331,15 +347,6 @@ export const caseLawSearchPlan = ({
         sql`, `,
       )})`
     : sql``;
-  const categoryFilter =
-    body.category === undefined
-      ? sql``
-      : sql`AND ${decisionSearchCategorySql(sql`d.metadata`)} = ${body.category}`;
-  const legalSentenceFilter =
-    body.hasLegalSentence === undefined
-      ? sql``
-      : sql`AND ${decisionHasLegalSentenceSql(sql`d.metadata`)} = ${body.hasLegalSentence}`;
-  const metadataFilters = sql`${categoryFilter} ${legalSentenceFilter}`;
   const countryFilter = sql`AND d.country = ${body.country}`;
   const dateFromFilter = body.dateFrom
     ? sql`AND d.decision_date >= ${body.dateFrom}`
@@ -386,7 +393,6 @@ export const caseLawSearchPlan = ({
     ${datedFilter}
     ${courtFilter}
     ${courtListFilter}
-    ${metadataFilters}
     ${countryFilter}
     ${dateFromFilter}
     ${dateToFilter}
@@ -547,7 +553,6 @@ export const caseLawSearchPlan = ({
     ${facetFrom}
     WHERE ${ftsSearch.predicate}
       ${datedFilter}
-      ${metadataFilters}
       ${countryFilter}
       ${dateFromFilter}
       ${dateToFilter}
@@ -568,7 +573,6 @@ export const caseLawSearchPlan = ({
     WHERE ${ftsSearch.predicate}
       ${courtFilter}
       ${courtListFilter}
-      ${metadataFilters}
       ${countryFilter}
       ${typeFilter}
       ${sourceFilter}
@@ -586,7 +590,6 @@ export const caseLawSearchPlan = ({
       ${datedFilter}
       ${courtFilter}
       ${courtListFilter}
-      ${metadataFilters}
       ${countryFilter}
       ${dateFromFilter}
       ${dateToFilter}
@@ -605,7 +608,6 @@ export const caseLawSearchPlan = ({
       ${datedFilter}
       ${courtFilter}
       ${courtListFilter}
-      ${metadataFilters}
       ${countryFilter}
       ${dateFromFilter}
       ${dateToFilter}
@@ -623,7 +625,6 @@ export const caseLawSearchPlan = ({
       ${datedFilter}
       ${courtFilter}
       ${courtListFilter}
-      ${metadataFilters}
       ${countryFilter}
       ${dateFromFilter}
       ${dateToFilter}
@@ -675,7 +676,7 @@ export const readCaseLawSearchFacet = definePublicLawSharedQuery(
 );
 
 const searchPostgresDecisions = async (
-  body: SearchDecisionsBody,
+  body: PostgresSearchBody,
   caseLawDb: CaseLawPublicReadDb,
 ) => {
   const limit = body.limit ?? LIMITS.caseLawSearchPageSizeDefault;
@@ -2133,7 +2134,7 @@ export const searchCorpusIndexDecisions = async (
       body,
       interpretation,
       hitCount: page.hits.length,
-      countsResultSet: parsedCursor === null,
+      countsResultSet: parsedCursor === null && nextCursor === null,
     }),
   };
 };
