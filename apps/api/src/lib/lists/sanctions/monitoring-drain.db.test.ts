@@ -71,6 +71,8 @@ beforeAll(async () => {
     ),
     "utf-8",
   );
+  await client.exec(`GRANT SELECT, INSERT, UPDATE ON sanctions_edition_fanouts TO stella_ingestion;
+    ALTER TABLE sanctions_edition_fanouts ENABLE ROW LEVEL SECURITY; ALTER TABLE sanctions_edition_fanouts FORCE ROW LEVEL SECURITY;`);
   await client.exec(
     backfillMigration
       .slice(backfillMigration.indexOf("CREATE FUNCTION"))

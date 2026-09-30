@@ -38,7 +38,7 @@ type CommitMonitoringBatchOptions = {
   organizationId: SafeId<"organization">;
   source: SanctionsSource;
   results: readonly SanctionsMonitoringResult[];
-  now: Date;
+  now?: Date;
   claim?: {
     leaseExpiresAt: Date;
     marks: readonly { contactId: SafeId<"contact">; generation: bigint }[];
@@ -380,7 +380,7 @@ export const commitSanctionsMonitoringBatch = async ({
               ).map(({ contactId }) => contactId),
             );
       // Durable workers evaluate freshness after acquiring their fences, not at claim time.
-      const now = claim === undefined ? preparedAt : new Date();
+      const now = preparedAt ?? new Date();
       const freshness = (
         await readSanctionsFreshness({
           db: async (read) => await read(tx),

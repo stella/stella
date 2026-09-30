@@ -98,7 +98,6 @@ export const drainSanctionsContactMarks = async ({
         organizationId,
         source,
         results,
-        now,
         claim: { leaseExpiresAt, marks: claimed.marks },
       }),
     );

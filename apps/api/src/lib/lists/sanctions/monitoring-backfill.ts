@@ -155,7 +155,6 @@ export const advanceSanctionsMonitoringBackfill = async ({
         organizationId,
         source,
         results: items,
-        now,
       });
       if (terminal.length !== items.length) {
         return "retry" as const;
