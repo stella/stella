@@ -51,13 +51,14 @@ const retireMatcherSlot = async (slot: Slot) => {
   slot.worker = null;
   slot.editions.clear();
   if (worker === null) {
-    return await (slot.termination ?? Promise.resolve());
+    await (slot.termination ?? Promise.resolve());
+    return;
   }
   slot.termination = worker.terminate().then(() => {
     slot.termination = null;
     return undefined;
   });
-  return await slot.termination;
+  await slot.termination;
 };
 
 const createMatcherWorker = () =>
