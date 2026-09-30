@@ -1745,7 +1745,9 @@ jobs:
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.suite_depth == 'full'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # The Playwright system dependencies come from the runner's apt mirror,
+    # whose throughput varies widely between runs.
+    timeout-minutes: 35
     permissions:
       contents: read
 
