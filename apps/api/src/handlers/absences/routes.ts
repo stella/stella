@@ -4,10 +4,10 @@ import { authMacro, permissionMacro } from "@/api/lib/auth";
 import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
 import { createStandardApiRateLimitOptions } from "@/api/lib/rate-limit/standard-api";
 
-import approvalQueue from "./approval-queue";
+import approvalQueue from "./approval-queue/list";
 import approve from "./approve";
 import cancel from "./cancel";
-import mine from "./mine";
+import mine from "./mine/list";
 import reject from "./reject";
 import request from "./request";
 

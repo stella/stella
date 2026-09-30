@@ -5,7 +5,7 @@ import { isOrganizationManagementRole } from "@stll/permissions";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
-import { absenceListQuerySchema, listAbsencePage } from "./list-query";
+import { absenceListQuerySchema, listAbsencePage } from "../list-query";
 
 const approvalQueue = createSafeRootHandler(
   {

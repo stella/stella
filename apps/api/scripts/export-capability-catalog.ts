@@ -174,6 +174,7 @@ const formatGeneratedArtifact = async (
  * `apps/api/src/mcp/constants.ts`.
  */
 const DOMAIN_SCOPE: Record<string, string> = {
+  absences: "stella:billing_write",
   "audit-logs": "stella:admin_read",
   "billing-codes": "stella:billing_write",
   // Corpus reads (decision analysis, ingestion status, matter-link list)

@@ -15,9 +15,20 @@ here as its CLI form). Projected from the same handler enumeration that builds
 A capability id is its handler path under `apps/api/src/handlers/`, joined
 with `.`: `<domain>[.<resource>…].<action>`. The action is one word:
 a canonical verb (`list`, `get`, `create`, `update`, `delete`)
-or a domain verb (`add`, `approve`, `archive`, `cancel`, `check`, `clip`, `clone`, `compare`, `confirm`, `convert`, `copy`, `count`, `diff`, `discover`, `discard`, `download`, `duplicate`, `export`, `fill`, `generate`, `import`, `install`, `link`, `lookup`, `move`, `pause`, `prefill`, `prepare`, `preview`, `remove`, `rename`, `reorder`, `replace`, `resolve`, `return`, `restore`, `resume`, `retry`, `review`, `rewrite`, `run`, `search`, `split`, `start`, `stop`, `suggest`, `summarize`, `sync`, `transition`, `unarchive`, `unlink`, `upload`, `upsert`).
+or a domain verb (`add`, `approve`, `archive`, `cancel`, `check`, `clip`, `clone`, `compare`, `confirm`, `convert`, `copy`, `count`, `diff`, `discover`, `discard`, `download`, `duplicate`, `export`, `fill`, `generate`, `import`, `install`, `link`, `lookup`, `move`, `pause`, `prefill`, `prepare`, `preview`, `reject`, `remove`, `rename`, `reorder`, `replace`, `request`, `resolve`, `return`, `restore`, `resume`, `retry`, `review`, `rewrite`, `run`, `search`, `split`, `start`, `stop`, `suggest`, `summarize`, `sync`, `transition`, `unarchive`, `unlink`, `upload`, `upsert`).
 A compound action is a nested resource: `clauses.categories.create`, not
 `clauses.categories-create`.
+
+## absences
+
+| Capability                     | Access | Scope                | Feature | Reachable via                                                     |
+| ------------------------------ | ------ | -------------------- | ------- | ----------------------------------------------------------------- |
+| `absences.approval-queue.list` | read   | stella:read          | —       | generic invoke → `stella capability absences approval-queue-list` |
+| `absences.approve`             | write  | stella:billing_write | —       | generic invoke → `stella capability absences approve`             |
+| `absences.cancel`              | write  | stella:billing_write | —       | generic invoke → `stella capability absences cancel`              |
+| `absences.mine.list`           | read   | stella:read          | —       | generic invoke → `stella capability absences mine-list`           |
+| `absences.reject`              | write  | stella:billing_write | —       | generic invoke → `stella capability absences reject`              |
+| `absences.request`             | write  | stella:billing_write | —       | generic invoke → `stella capability absences request`             |
 
 ## audit-logs
 

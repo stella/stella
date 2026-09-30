@@ -8138,6 +8138,442 @@ export const generatedRouteMap: RouteNode = {
             },
           },
         },
+        absences: {
+          kind: "route",
+          children: {
+            "approval-queue-list": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "absences", "approval-queue-list"],
+                capabilityId: "absences.approval-queue.list",
+                description:
+                  "List requested absences awaiting an organization owner or admin decision. Each row carries the current version for approve or reject and capacity in days. Follow nextCursor for the next bounded page.",
+                access: "read",
+                flags: [],
+                inputOnly: [],
+                paginated: true,
+                paginationPart: "query",
+                itemsKey: "items",
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    query: {
+                      type: "object",
+                      properties: {
+                        cursor: {
+                          maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
+                          type: "string",
+                        },
+                        limit: {
+                          minimum: 1,
+                          maximum: 200,
+                          type: "integer",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            approve: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "absences", "approve"],
+                capabilityId: "absences.approve",
+                description:
+                  "Approve a requested absence as an organization owner or admin. Supply its current version from the approval queue; overlapping approved absences for the same owner are refused. An optional comment records the decision.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--id",
+                    prop: "id",
+                    required: true,
+                    part: "params",
+                    partPath: "id",
+                  },
+                  {
+                    kind: "int",
+                    min: 1,
+                    repeatable: false,
+                    flag: "--body-version",
+                    prop: "body.version",
+                    required: true,
+                    part: "body",
+                    partPath: "version",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--comment",
+                    prop: "comment",
+                    required: false,
+                    part: "body",
+                    partPath: "comment",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "billing_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      additionalProperties: false,
+                      type: "object",
+                      required: ["version"],
+                      properties: {
+                        version: {
+                          minimum: 1,
+                          type: "integer",
+                        },
+                        comment: {
+                          maxLength: 2000,
+                          type: "string",
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["id"],
+                      properties: {
+                        id: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            cancel: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "absences", "cancel"],
+                capabilityId: "absences.cancel",
+                description:
+                  "Cancel your own absence while it is requested. Supply its current version from your absence list; decided absences cannot be cancelled.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--id",
+                    prop: "id",
+                    required: true,
+                    part: "params",
+                    partPath: "id",
+                  },
+                  {
+                    kind: "int",
+                    min: 1,
+                    repeatable: false,
+                    flag: "--body-version",
+                    prop: "body.version",
+                    required: true,
+                    part: "body",
+                    partPath: "version",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "billing_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      additionalProperties: false,
+                      type: "object",
+                      required: ["version"],
+                      properties: {
+                        version: {
+                          minimum: 1,
+                          type: "integer",
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["id"],
+                      properties: {
+                        id: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "mine-list": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "absences", "mine-list"],
+                capabilityId: "absences.mine.list",
+                description:
+                  "List your own absence requests in the active organization, including decisions and current versions. Dates are local and end-exclusive; capacity is reported as days, without assumed work minutes. Follow nextCursor for the next bounded page.",
+                access: "read",
+                flags: [],
+                inputOnly: [],
+                paginated: true,
+                paginationPart: "query",
+                itemsKey: "items",
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    query: {
+                      type: "object",
+                      properties: {
+                        cursor: {
+                          maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
+                          type: "string",
+                        },
+                        limit: {
+                          minimum: 1,
+                          maximum: 200,
+                          type: "integer",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            reject: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "absences", "reject"],
+                capabilityId: "absences.reject",
+                description:
+                  "Reject a requested absence as an organization owner or admin with a required nonblank comment. Supply its current version from the approval queue.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--id",
+                    prop: "id",
+                    required: true,
+                    part: "params",
+                    partPath: "id",
+                  },
+                  {
+                    kind: "int",
+                    min: 1,
+                    repeatable: false,
+                    flag: "--body-version",
+                    prop: "body.version",
+                    required: true,
+                    part: "body",
+                    partPath: "version",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--comment",
+                    prop: "comment",
+                    required: true,
+                    part: "body",
+                    partPath: "comment",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "billing_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      additionalProperties: false,
+                      type: "object",
+                      required: ["version", "comment"],
+                      properties: {
+                        version: {
+                          minimum: 1,
+                          type: "integer",
+                        },
+                        comment: {
+                          minLength: 1,
+                          maxLength: 2000,
+                          pattern: "\\S",
+                          type: "string",
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["id"],
+                      properties: {
+                        id: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            request: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "absences", "request"],
+                capabilityId: "absences.request",
+                description:
+                  "Request your own absence in the active organization using a local startDate and endDate (end-exclusive), IANA timezoneId, kind, and full or half-day coverage. Half-day requests cover one day and specify morning or afternoon. Returns id, requested status, and version; use the current version when changing the request. Capacity is reported as days, without assumed work minutes.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "enum",
+                    enum: ["vacation", "sick", "other"],
+                    repeatable: false,
+                    flag: "--kind",
+                    prop: "kind",
+                    required: true,
+                    part: "body",
+                    partPath: "kind",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--start-date",
+                    prop: "startDate",
+                    required: true,
+                    part: "body",
+                    partPath: "startDate",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    description: "Exclusive end date",
+                    flag: "--end-date",
+                    prop: "endDate",
+                    required: true,
+                    part: "body",
+                    partPath: "endDate",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--timezone-id",
+                    prop: "timezoneId",
+                    required: true,
+                    part: "body",
+                    partPath: "timezoneId",
+                  },
+                ],
+                inputOnly: ["body.coverage"],
+                paginated: false,
+                destructive: false,
+                scope: "billing_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      additionalProperties: false,
+                      type: "object",
+                      required: [
+                        "kind",
+                        "startDate",
+                        "endDate",
+                        "timezoneId",
+                        "coverage",
+                      ],
+                      properties: {
+                        kind: {
+                          default: "vacation",
+                          type: "string",
+                          enum: ["vacation", "sick", "other"],
+                        },
+                        startDate: {
+                          format: "date",
+                          type: "string",
+                        },
+                        endDate: {
+                          format: "date",
+                          description: "Exclusive end date",
+                          type: "string",
+                        },
+                        timezoneId: {
+                          minLength: 1,
+                          maxLength: 64,
+                          type: "string",
+                        },
+                        coverage: {
+                          anyOf: [
+                            {
+                              additionalProperties: false,
+                              type: "object",
+                              required: ["type"],
+                              properties: {
+                                type: {
+                                  const: "full",
+                                  type: "string",
+                                },
+                              },
+                            },
+                            {
+                              additionalProperties: false,
+                              type: "object",
+                              required: ["type", "segment"],
+                              properties: {
+                                type: {
+                                  const: "half",
+                                  type: "string",
+                                },
+                                segment: {
+                                  anyOf: [
+                                    {
+                                      const: "morning",
+                                      type: "string",
+                                    },
+                                    {
+                                      const: "afternoon",
+                                      type: "string",
+                                    },
+                                  ],
+                                },
+                              },
+                            },
+                          ],
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
         "audit-logs": {
           kind: "route",
           children: {
@@ -51293,7 +51729,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "time-entries", "me-list"],
                 capabilityId: "time-entries.me.list",
                 description:
-                  "List the signed-in user's client and internal time entries for one work date in the active organization. Client rows include an accessible matter; internal rows have no matter. Follow the cursor for the next page.",
+                  "List the signed-in user's client work, internal work, and approved absences for one local date in the active organization. Client rows include an accessible matter; internal rows have no matter. Absences report days (1 or 0.5), with no inferred minutes. Follow the mixed-source cursor for the next page.",
                 access: "read",
                 flags: [
                   {

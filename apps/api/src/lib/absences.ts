@@ -6,9 +6,10 @@ import { ABSENCE_KINDS } from "@stll/api-contract";
 import { isOrganizationManagementRole } from "@stll/permissions";
 import { parsePlainDate } from "@stll/time";
 
+import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
-import { absences, member } from "@/api/db/schema";
+import { absences } from "@/api/db/schema";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -344,7 +345,9 @@ export const transitionAbsence = ({
             status: absences.status,
             version: absences.version,
           });
-        if (!changed) {return panic("Locked absence update returned no row");}
+        if (!changed) {
+          return panic("Locked absence update returned no row");
+        }
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.UPDATE,
           resourceType: AUDIT_RESOURCE_TYPE.ABSENCE,

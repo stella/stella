@@ -2,7 +2,7 @@ import { Result } from "better-result";
 
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 
-import { absenceListQuerySchema, listAbsencePage } from "./list-query";
+import { absenceListQuerySchema, listAbsencePage } from "../list-query";
 
 const mine = createSafeRootHandler(
   {

@@ -15,6 +15,25 @@ export type CapabilityDispatchEntry = {
 };
 
 export const CAPABILITY_DISPATCH = {
+  "absences.approval-queue.list": {
+    load: async () =>
+      await import("@/api/handlers/absences/approval-queue/list"),
+  },
+  "absences.approve": {
+    load: async () => await import("@/api/handlers/absences/approve"),
+  },
+  "absences.cancel": {
+    load: async () => await import("@/api/handlers/absences/cancel"),
+  },
+  "absences.mine.list": {
+    load: async () => await import("@/api/handlers/absences/mine/list"),
+  },
+  "absences.reject": {
+    load: async () => await import("@/api/handlers/absences/reject"),
+  },
+  "absences.request": {
+    load: async () => await import("@/api/handlers/absences/request"),
+  },
   "audit-logs.list": {
     load: async () => await import("@/api/handlers/audit-logs/list"),
   },

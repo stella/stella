@@ -91,11 +91,11 @@ const KEY_TYPE_HAS_USER = "the key argument's type requires userId";
 
 // Keyed by handler path under apps/api/src/handlers.
 const PER_USER_READS: Record<string, PerUserRead> = {
-  "absences/mine.ts": {
+  "absences/mine/list.ts": {
     kind: "no-web-caller",
     calls: ["api.absences.mine.get"],
   },
-  "absences/approval-queue.ts": {
+  "absences/approval-queue/list.ts": {
     kind: "no-web-caller",
     calls: ['api.absences["approval-queue"].get'],
   },
