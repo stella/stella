@@ -840,8 +840,8 @@ test("Slovak query scope enables compatibility even without an index jurisdictio
   if (singleJurisdictionQuery === null) {
     panic("Searchable Slovak test terms must produce a query");
   }
-  expect(singleJurisdictionQuery).toBe(
-    svkFreeText(text, { stemming: SK_STEMMING }),
+  expect(svkFreeText(text, { stemming: SK_STEMMING })).toBe(
+    singleJurisdictionQuery,
   );
   expect(singleJurisdictionQuery).toContain('text_stem:"premlčani"');
   expect(singleJurisdictionQuery).toContain('headnote_stem:"premlčani"');
