@@ -46,52 +46,125 @@ const ROW_CLASS = {
 } as const satisfies Record<OpinionType, ClassDeclaration>;
 
 /**
- * The Harvard `<opinion type>` values that state a class. Any other value,
- * the generic `opinion` included, is a wrapper that proves none.
+ * The opinion-element type values that state a class: Harvard's
+ * `<opinion type>` and the anonymized HTML's `opiniontype`. The generic
+ * `opinion` proves no class; an undeclared value is an explicit conflict.
  */
-const DOM_CLASS: Readonly<Record<string, ClassDeclaration>> = {
+const DOM_OPINION_TYPES = [
+  "majority",
+  "plurality",
+  "unanimous",
+  "on-the-merits",
+  "concur",
+  "concurrence",
+  "concurring-in-part-and-dissenting-in-part",
+  "dissent",
+  "opinion",
+] as const;
+type DomOpinionType = (typeof DOM_OPINION_TYPES)[number];
+const isDomOpinionType = (value: string): value is DomOpinionType =>
+  DOM_OPINION_TYPES.some((known) => known === value);
+
+const DOM_CLASS = {
   majority: ARGUMENTATION,
   plurality: ARGUMENTATION,
   unanimous: ARGUMENTATION,
   "on-the-merits": ARGUMENTATION,
+  concur: SEPARATE_ARGUMENTATION,
   concurrence: SEPARATE_ARGUMENTATION,
   "concurring-in-part-and-dissenting-in-part": SEPARATE_ARGUMENTATION,
   dissent: SEPARATE_DISSENT,
-};
+  opinion: UNPROVEN,
+} as const satisfies Record<DomOpinionType, ClassDeclaration>;
+
+export const unrecognizedOpinionType = (
+  domType: string | null,
+): string | null =>
+  domType !== null && !isDomOpinionType(domType) ? domType : null;
 
 const domClass = (domType: string | null): ClassDeclaration | null =>
-  domType !== null && Object.hasOwn(DOM_CLASS, domType)
-    ? (DOM_CLASS[domType] ?? null)
-    : null;
+  domType !== null && isDomOpinionType(domType) ? DOM_CLASS[domType] : null;
 
 type UnitClass = {
   readonly body: BodyClass;
-  readonly separate: boolean;
   /** The element states a class of its own. */
   readonly structural: boolean;
   /** Row and element state different classes; the body stays unknown. */
   readonly conflict: boolean;
+  /** The unit may be read as the principal text, not a separate opinion. */
+  readonly principal: boolean;
 };
+
+/** The row's first root, a nested opinion, or an additional HTML root wrapper. */
+export type UnitPosition = "row" | "nested" | "sibling";
 
 /**
  * The class of one structural unit of a row. The element refines a row that
  * proves nothing (a combined row's `majority`); where both state a class and
- * they differ, neither is trusted.
+ * they differ, neither is trusted and the unit is not principal text. An
+ * opinion nested inside another is its own container: its class is the
+ * element's alone, and it is never the principal text.
  */
 export const unitClass = (
   rowType: OpinionType,
   domType: string | null,
+  position: UnitPosition,
 ): UnitClass => {
-  const row: ClassDeclaration = ROW_CLASS[rowType];
   const dom = domClass(domType);
+  if (unrecognizedOpinionType(domType) !== null || position === "sibling") {
+    return {
+      body: "unknown",
+      structural: false,
+      conflict: true,
+      principal: false,
+    };
+  }
+  if (position === "nested") {
+    return {
+      body: dom?.body ?? "unknown",
+      structural: dom !== null,
+      conflict: false,
+      principal: false,
+    };
+  }
+  const row: ClassDeclaration = ROW_CLASS[rowType];
   if (dom === null) {
-    return { ...row, structural: false, conflict: false };
+    return {
+      body: row.body,
+      structural: false,
+      conflict: false,
+      principal: !row.separate,
+    };
   }
   if (row.body === "unknown") {
-    return { ...dom, structural: true, conflict: false };
+    return {
+      body: dom.body,
+      structural: true,
+      conflict: false,
+      principal: !dom.separate,
+    };
   }
   const conflict = row.body !== dom.body || row.separate !== dom.separate;
-  return conflict
-    ? { body: "unknown", separate: row.separate, structural: true, conflict }
-    : { ...dom, structural: true, conflict };
+  return {
+    body: conflict ? "unknown" : dom.body,
+    structural: true,
+    conflict,
+    principal: !conflict && !dom.separate,
+  };
 };
+
+/**
+ * A combined row whose own element states no class has no proven opinion
+ * boundary: its blocks are scoped one by one, so no short form resolves
+ * across a boundary nobody established.
+ */
+export const hasUnprovenBoundaries = (
+  rowType: OpinionType,
+  domType: string | null,
+  position: UnitPosition,
+): boolean =>
+  unrecognizedOpinionType(domType) !== null ||
+  position === "sibling" ||
+  (position === "row" &&
+    rowType === "010combined" &&
+    (domClass(domType) === null || domClass(domType)?.body === "unknown"));

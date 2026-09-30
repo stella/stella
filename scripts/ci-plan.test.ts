@@ -460,19 +460,34 @@ const heavyJobs = Object.entries(ciJobs).flatMap(([job, body]) =>
 );
 const gatedJobs = resultJob.needs.filter((job) => job !== "ci-plan");
 
+const reportOnlyJobs = Object.entries(ciJobs).flatMap(([job, body]) =>
+  v.parse(v.object({ "continue-on-error": v.optional(v.boolean()) }), body)[
+    "continue-on-error"
+  ]
+    ? [job]
+    : [],
+);
 // Jobs that only collect diagnostics after a gated job failed. ci-result does
 // not wait for them: the failure they report already fails the run.
-const REPORT_ONLY_JOBS = ["e2e-report"];
+const diagnosticJobs = Object.entries(ciJobs).flatMap(([job, body]) =>
+  jobIf(body).includes("needs.") &&
+  /needs\.[\w-]+\.result == 'failure'/u.test(jobIf(body))
+    ? [job]
+    : [],
+);
 
 test("the result gate evaluates every job in the workflow", () => {
   expect(new Set(resultJob.needs)).toEqual(
     new Set(
       Object.keys(ciJobs).filter(
-        (job) => job !== "ci-result" && !REPORT_ONLY_JOBS.includes(job),
+        (job) =>
+          job !== "ci-result" &&
+          !reportOnlyJobs.includes(job) &&
+          !diagnosticJobs.includes(job),
       ),
     ),
   );
-  for (const job of REPORT_ONLY_JOBS) {
+  for (const job of diagnosticJobs) {
     const failedOn = [
       ...jobIf(ciJobs[job]).matchAll(/needs\.([\w-]+)\.result == 'failure'/gu),
     ].map((match) => match[1] ?? "");
@@ -482,6 +497,9 @@ test("the result gate evaluates every job in the workflow", () => {
     }
     expect(jobIf(ciJobs[job]), job).not.toContain("always()");
   }
+  expect(reportOnlyJobs).toEqual(["migration-exact-base-upgrade"]);
+  expect(resultJob.needs).not.toContain("migration-exact-base-upgrade");
+  expect(jobScopes).not.toHaveProperty("migration-exact-base-upgrade");
   expect(resultStep.env["NEEDS"]).toBe(["$", "{{ toJSON(needs) }}"].join(""));
   fc.assert(
     fc.property(
@@ -1022,4 +1040,35 @@ test("a failed API image run annotates the failing lines, escaped", () => {
   expect(annotate({ build: "ERROR: failed to solve: pull failed\n" })).toEqual([
     "::error title=API image build (linux/arm64)::ERROR: failed to solve: pull failed",
   ]);
+});
+
+test("manual full-depth runs leave the merge-group-only exact-base job unplanned", () => {
+  const step = jobSteps(ciJobs["ci-plan"]).find(({ run }) =>
+    run?.includes('if [[ "$EVENT_NAME" == "workflow_dispatch" ]]'),
+  );
+  expect(step?.run).toBeDefined();
+  const directory = mkdtempSync(nodePath.join(tmpdir(), "ci-plan-exact-base-"));
+  const output = nodePath.join(directory, "output");
+  try {
+    const run = Bun.spawnSync({
+      cmd: ["bash", "-e", "-c", step?.run ?? "exit 1"],
+      env: {
+        EVENT_NAME: "workflow_dispatch",
+        SUITE_DEPTH: "full",
+        GITHUB_OUTPUT: output,
+        PATH: process.env["PATH"] ?? "",
+      },
+      stdout: "ignore",
+      stderr: "pipe",
+    });
+    expect(run.exitCode, new TextDecoder().decode(run.stderr)).toBe(0);
+    expect(readFileSync(output, "utf-8").split("\n")).toContain(
+      "migration_exact_base_required=false",
+    );
+    expect(jobIf(ciJobs["migration-exact-base-upgrade"])).toContain(
+      "github.event_name == 'merge_group'",
+    );
+  } finally {
+    rmSync(directory, { force: true, recursive: true });
+  }
 });

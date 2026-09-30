@@ -404,7 +404,7 @@ const plannedContent = async (
   sourceId: SafeId<"caseLawSource">,
   reviews: ReadonlyMap<string, string>,
 ): Promise<string[]> => {
-  const plan = await planDecisionWrite({
+  const planned = await planDecisionWrite({
     result: input,
     existing: undefined,
     decisionId: citingDecisionId,
@@ -414,6 +414,19 @@ const plannedContent = async (
     incomingCarriesDocument: true,
     polarityRules: undefined,
   });
+  const plan = planned.unwrap();
+  if ("status" in plan) {
+    throw new TypeError("A new decision produces a citation write plan");
+  }
+  switch (plan.citations.disposition) {
+    case "legacy-graph":
+      break;
+    case "annotation-only":
+      throw new TypeError("Expected a legacy citation graph plan");
+    default:
+      plan.citations satisfies never;
+      throw new TypeError("Unhandled citation disposition");
+  }
   expect(plan.citations.citingDecisionId).toBe(citingDecisionId);
   return plan.citations.references
     .map(({ reference, verdict }) => {

@@ -1158,107 +1158,18 @@ export const BlockRenderer = ({
   }
 
   if (block.type === "paragraph") {
-    // Short standalone roman numerals (I, II, III …) that the
-    // parser emitted as paragraphs are section dividers; centre
-    // them like level-3 headings instead of bleeding into the
-    // body copy.
-    const isRomanNumeralDivider = /^[IVX]+\.?$/u.test(block.plainText.trim());
-    // Non-body roles (case number, closing formula, signature)
-    // need their own alignment; every other paragraph — including
-    // intro, argumentation and unroled body text — defaults to
-    // justified reading layout.
-    const nonJustifiedRoles = new Set([
-      "case-number",
-      "closing",
-      "signature",
-      "parties",
-      "front-matter",
-    ]);
-    const shouldJustify =
-      !isRomanNumeralDivider &&
-      (block.role === undefined || !nonJustifiedRoles.has(block.role));
-    const noteLabel = block.note?.type === "footnote" ? block.note.label : null;
-    const showNoteLabel =
-      noteHead &&
-      noteLabel !== null &&
-      !footnoteTextCarriesLabel(noteLabel, block.plainText);
-    return (
-      <p
-        className={cn(
-          "group relative mb-[var(--reader-paragraph-gap)] scroll-mt-[var(--reader-anchor-offset)] last:mb-0",
-          shouldJustify && "reader-justify",
-          block.role === "holding" && "font-[520]",
-          // Indented, slightly condensed; never italicized or reflowed —
-          // a reproduced passage must not be visually altered.
-          block.role === "quote" &&
-            "border-border my-4 border-s-2 ps-5 text-[0.95em]",
-          // Reporter front matter keeps its published, centered shape.
-          block.role === "parties" &&
-            "my-4 text-center text-[1.05em] leading-relaxed tracking-wide",
-          block.role === "front-matter" &&
-            "text-muted-foreground my-1 text-center text-[0.95em]",
-          block.note?.type === "footnote" &&
-            "text-muted-foreground mb-2 text-[0.86em] leading-relaxed",
-          isRomanNumeralDivider &&
-            "mt-[var(--reader-section-gap-top)] mb-[var(--reader-section-gap-bottom)] text-center text-sm font-semibold",
-          block.role === "case-number" &&
-            "reader-chrome text-muted-foreground mb-2 text-end text-[calc(0.95rem*var(--reader-text-scale))]",
-          block.role === "closing" && "mt-8 text-center",
-          block.role === "signature" &&
-            "reader-signature text-muted-foreground mt-1 text-end",
-          block.listDepth !== undefined &&
-            PARAGRAPH_LIST_INDENT_CLASS[block.listDepth],
-          // Courts that number their paragraphs are cited by that
-          // number, so it hangs in the margin rather than running into
-          // the sentence, the way the published decision prints it.
-          block.number !== undefined && "ps-8",
-        )}
-        {...documentAnchorProps}
-        data-note={block.note?.type}
-      >
-        {permalink}
-        {showNoteLabel && !isAddressable && (
-          // The reference the label jumps back to is not in an excerpt.
-          <span className="reader-note-label" data-reader-chrome="">
-            {noteLabel}
-          </span>
-        )}
-        {showNoteLabel && isAddressable && (
-          <button
-            className="reader-note-label"
-            data-reader-chrome=""
-            onClick={() => jumpToNoteReference(block.anchorId)}
-            type="button"
-          >
-            {noteLabel}
-          </button>
-        )}
-        {block.number !== undefined && (
-          <HighlightedText
-            activeMatchIndex={activeMatchIndex}
-            className="reader-chrome text-muted-foreground absolute start-0 text-[0.8em] select-none"
-            data-reader-chrome=""
-            pieceId={getParagraphNumberPieceId(block.id)}
-            ranges={rangesForPiece(
-              rangesByPieceId,
-              getParagraphNumberPieceId(block.id),
-            )}
-            text={String(block.number)}
-          />
-        )}
-        <InlineContent
-          activeMatchIndex={activeMatchIndex}
-          anchorPresentation={anchorPresentation}
-          anchors={anchorsForPiece(anchorsByPieceId, block.id)}
-          inlines={block.inlines}
-          pieceId={block.id}
-          ranges={rangesForPiece(rangesByPieceId, block.id)}
-        />
-        {noteBackJumpTo !== undefined && block.note?.type === "footnote" && (
-          <NoteBackJump headAnchorId={noteBackJumpTo} />
-        )}
-      </p>
-    );
+    return renderParagraphBlock({
+      activeMatchIndex,
+      anchorPresentation,
+      anchorsByPieceId,
+      block,
+      documentAnchorProps,
+      isAddressable,
+      noteBackJumpTo,
+      noteHead,
+      permalink,
+      rangesByPieceId,
+    });
   }
 
   // A figure the publisher printed with the document. `alt` is whatever the
@@ -1285,18 +1196,214 @@ export const BlockRenderer = ({
     );
   }
 
+  return renderTableBlock({
+    activeMatchIndex,
+    anchorPresentation,
+    anchorsByPieceId,
+    block,
+    documentAnchorProps,
+    isAddressable,
+    noteBackJumpTo,
+    noteHead,
+    permalink,
+    rangesByPieceId,
+  });
+};
+
+type RenderTextBlockOptions = {
+  activeMatchIndex: number;
+  anchorPresentation: AnchorPresentation;
+  anchorsByPieceId: Record<string, TextAnchor[]> | undefined;
+  documentAnchorProps: {
+    "data-anchor": string;
+    "data-reader-landing": string | undefined;
+    id: string | undefined;
+  };
+  isAddressable: boolean;
+  noteBackJumpTo: string | undefined;
+  noteHead: boolean;
+  permalink: ReactNode;
+  rangesByPieceId: Record<string, ReaderMarkRange[]>;
+};
+
+type RenderParagraphOptions = RenderTextBlockOptions & {
+  block: Extract<Block, { type: "paragraph" }>;
+};
+
+const renderParagraphBlock = ({
+  activeMatchIndex,
+  anchorPresentation,
+  anchorsByPieceId,
+  block,
+  documentAnchorProps,
+  isAddressable,
+  noteBackJumpTo,
+  noteHead,
+  permalink,
+  rangesByPieceId,
+}: RenderParagraphOptions) => {
+  // Short standalone roman numerals (I, II, III …) that the
+  // parser emitted as paragraphs are section dividers; centre
+  // them like level-3 headings instead of bleeding into the
+  // body copy.
+  const isRomanNumeralDivider = /^[IVX]+\.?$/u.test(block.plainText.trim());
+  // Non-body roles (case number, closing formula, signature)
+  // need their own alignment; every other paragraph — including
+  // intro, argumentation and unroled body text — defaults to
+  // justified reading layout.
+  const nonJustifiedRoles = new Set([
+    "case-number",
+    "closing",
+    "signature",
+    "parties",
+    "front-matter",
+  ]);
+  const shouldJustify =
+    !isRomanNumeralDivider &&
+    (block.role === undefined || !nonJustifiedRoles.has(block.role));
+  const noteLabel = block.note?.type === "footnote" ? block.note.label : null;
+  const showNoteLabel =
+    noteHead &&
+    noteLabel !== null &&
+    !footnoteTextCarriesLabel(noteLabel, block.plainText);
+  return (
+    <p
+      className={cn(
+        "group relative mb-[var(--reader-paragraph-gap)] scroll-mt-[var(--reader-anchor-offset)] last:mb-0",
+        shouldJustify && "reader-justify",
+        block.role === "holding" && "font-[520]",
+        // Indented, slightly condensed; never italicized or reflowed —
+        // a reproduced passage must not be visually altered.
+        block.role === "quote" &&
+          "border-border my-4 border-s-2 ps-5 text-[0.95em]",
+        // Reporter front matter keeps its published, centered shape.
+        block.role === "parties" &&
+          "my-4 text-center text-[1.05em] leading-relaxed tracking-wide",
+        block.role === "front-matter" &&
+          "text-muted-foreground my-1 text-center text-[0.95em]",
+        block.note?.type === "footnote" &&
+          "text-muted-foreground mb-2 text-[0.86em] leading-relaxed",
+        isRomanNumeralDivider &&
+          "mt-[var(--reader-section-gap-top)] mb-[var(--reader-section-gap-bottom)] text-center text-sm font-semibold",
+        block.role === "case-number" &&
+          "reader-chrome text-muted-foreground mb-2 text-end text-[calc(0.95rem*var(--reader-text-scale))]",
+        block.role === "closing" && "mt-8 text-center",
+        block.role === "signature" &&
+          "reader-signature text-muted-foreground mt-1 text-end",
+        block.listDepth !== undefined &&
+          PARAGRAPH_LIST_INDENT_CLASS[block.listDepth],
+        // Courts that number their paragraphs are cited by that
+        // number, so it hangs in the margin rather than running into
+        // the sentence, the way the published decision prints it.
+        block.number !== undefined && "ps-8",
+      )}
+      {...documentAnchorProps}
+      data-note={block.note?.type}
+    >
+      {permalink}
+      {showNoteLabel && !isAddressable && (
+        // The reference the label jumps back to is not in an excerpt.
+        <span className="reader-note-label" data-reader-chrome="">
+          {noteLabel}
+        </span>
+      )}
+      {showNoteLabel && isAddressable && (
+        <button
+          className="reader-note-label"
+          data-reader-chrome=""
+          onClick={() => jumpToNoteReference(block.anchorId)}
+          type="button"
+        >
+          {noteLabel}
+        </button>
+      )}
+      {block.number !== undefined && (
+        <HighlightedText
+          activeMatchIndex={activeMatchIndex}
+          className="reader-chrome text-muted-foreground absolute start-0 text-[0.8em] select-none"
+          data-reader-chrome=""
+          pieceId={getParagraphNumberPieceId(block.id)}
+          ranges={rangesForPiece(
+            rangesByPieceId,
+            getParagraphNumberPieceId(block.id),
+          )}
+          text={String(block.number)}
+        />
+      )}
+      <InlineContent
+        activeMatchIndex={activeMatchIndex}
+        anchorPresentation={anchorPresentation}
+        anchors={anchorsForPiece(anchorsByPieceId, block.id)}
+        inlines={block.inlines}
+        pieceId={block.id}
+        ranges={rangesForPiece(rangesByPieceId, block.id)}
+      />
+      {noteBackJumpTo !== undefined && block.note?.type === "footnote" && (
+        <NoteBackJump headAnchorId={noteBackJumpTo} />
+      )}
+    </p>
+  );
+};
+
+type RenderTableOptions = RenderTextBlockOptions & {
+  block: Extract<Block, { type: "table" }>;
+};
+
+const renderTableBlock = ({
+  activeMatchIndex,
+  anchorPresentation,
+  anchorsByPieceId,
+  block,
+  documentAnchorProps,
+  isAddressable,
+  noteBackJumpTo,
+  noteHead,
+  permalink,
+  rangesByPieceId,
+}: RenderTableOptions) => {
   // The permalink is a link, and a link is not allowed inside `<table>`, so
   // the wrapper carries it. The anchor id stays on the table itself: it is
   // what every deep link already written points at.
+  const tableNoteLabel =
+    block.note?.type === "footnote" ? block.note.label : null;
+  const showTableNoteLabel =
+    noteHead &&
+    tableNoteLabel !== null &&
+    !footnoteTextCarriesLabel(tableNoteLabel, block.plainText);
   return (
     // A court's table has the columns it has, and a narrow reader (the
     // inspector pane at its minimum) cannot always hold them. It scrolls
     // inside its own box rather than widening the pane, and never on paper,
     // where the page is as wide as it will ever be.
-    <div className="group relative max-w-full overflow-x-auto print:overflow-x-visible">
+    <div
+      className={cn(
+        "group relative max-w-full overflow-x-auto print:overflow-x-visible",
+        block.note?.type === "footnote" && "text-muted-foreground text-sm",
+      )}
+      data-note={block.note?.type}
+    >
       {permalink}
+      {showTableNoteLabel && !isAddressable && (
+        <span className="reader-note-label" data-reader-chrome="">
+          {tableNoteLabel}
+        </span>
+      )}
+      {showTableNoteLabel && isAddressable && (
+        <button
+          className="reader-note-label"
+          data-reader-chrome=""
+          onClick={() => jumpToNoteReference(block.anchorId)}
+          type="button"
+        >
+          {tableNoteLabel}
+        </button>
+      )}
       <table
-        className="reader-chrome my-4 w-full border-collapse scroll-mt-[var(--reader-anchor-offset)] text-[calc(0.88rem*var(--reader-text-scale))]"
+        className={cn(
+          "reader-chrome my-4 w-full border-collapse scroll-mt-[var(--reader-anchor-offset)] text-[calc(0.88rem*var(--reader-text-scale))]",
+          block.note?.type === "footnote" &&
+            "my-2 text-[calc(0.86rem*var(--reader-text-scale))]",
+        )}
         {...documentAnchorProps}
       >
         <tbody>
@@ -1342,6 +1449,9 @@ export const BlockRenderer = ({
           ))}
         </tbody>
       </table>
+      {noteBackJumpTo !== undefined && block.note?.type === "footnote" && (
+        <NoteBackJump headAnchorId={noteBackJumpTo} />
+      )}
     </div>
   );
 };

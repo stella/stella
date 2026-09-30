@@ -161,6 +161,7 @@ export type SafeIdType =
   | "templateVersion"
   | "timeEntry"
   | "timeEntrySuggestion"
+  | "timeTimer"
   | "user"
   | "userFile"
   | "workspace"

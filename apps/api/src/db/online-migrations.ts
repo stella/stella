@@ -147,6 +147,24 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   },
   {
     createSql:
+      'CREATE INDEX CONCURRENTLY "time_timers_running_org_id_idx" ON public."time_timers" USING btree ("organization_id", "id") WHERE "state" = \'running\'',
+    definitionBody:
+      "ON public.time_timers USING btree (organization_id, id) WHERE (state = 'running'::text)",
+    isUnique: false,
+    name: "time_timers_running_org_id_idx",
+    tableName: "time_timers",
+  },
+  {
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "time_timers_legacy_entry_uidx" ON public."time_timers" USING btree ("legacy_time_entry_id") WHERE "legacy_time_entry_id" IS NOT NULL',
+    definitionBody:
+      "ON public.time_timers USING btree (legacy_time_entry_id) WHERE (legacy_time_entry_id IS NOT NULL)",
+    isUnique: true,
+    name: "time_timers_legacy_entry_uidx",
+    tableName: "time_timers",
+  },
+  {
+    createSql:
       'CREATE UNIQUE INDEX CONCURRENTLY "playbook_definitions_org_starter_id_uidx" ON public."playbook_definitions" USING btree ("organization_id", "starter_id") WHERE "starter_id" IS NOT NULL',
     definitionBody:
       "ON public.playbook_definitions USING btree (organization_id, starter_id) WHERE (starter_id IS NOT NULL)",

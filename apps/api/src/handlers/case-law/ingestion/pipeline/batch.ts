@@ -11,7 +11,9 @@ import {
 import type {
   AdmittedDecisions,
   BoundedCaseLawIngestionBatch,
+  CaseLawIngestionBatchRecord,
   CaseLawBatchFailureReason,
+  RejectedCaseLawIngestionRecord,
 } from "@/api/handlers/case-law/ingestion/pipeline/batch-types";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { CASE_LAW_CORPUS_DEPENDENCIES } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
@@ -357,6 +359,38 @@ const rejectDecision = ({
     : null;
 };
 
+type RejectSourceRecordOptions = {
+  tally: BatchTally;
+  record: RejectedCaseLawIngestionRecord;
+  sourceId: SafeId<"caseLawSource">;
+};
+
+/** Persist a source rejection without reserving a decision identity. */
+const rejectSourceRecord = ({
+  tally,
+  record,
+  sourceId,
+}: RejectSourceRecordOptions): DecisionBatchHalt | null => {
+  tally.failureStreak++;
+  tally.ledgerIndexes.push(tally.settlements.length);
+  tally.failures.push({
+    sourceId,
+    caseNumber: record.primaryLabel ?? record.recordKey,
+    language: record.language,
+    errorType: record.reason,
+    errorMessage: record.message,
+    cursor: `${record.recordKey}:${record.recordHash}`,
+  });
+  tally.skipped++;
+  tally.settlements.push({
+    type: "unsettled",
+    reason: CASE_LAW_BATCH_FAILURE.RECORD_REJECTED,
+  });
+  return tally.failureStreak >= MAX_CONSECUTIVE_FAILURES
+    ? { type: "failure-streak", tag: record.reason, message: record.message }
+    : null;
+};
+
 type SettlePackOptions = {
   tally: BatchTally;
   flushed: Result<CorpusPackBatchOutcomes, unknown>;
@@ -456,7 +490,7 @@ type ApplyDecisionBatchOptions = {
  * what it reached.
  */
 export const applyDecisionBatch = async ({
-  batch: { decisions },
+  batch: { batchRecords },
   sourceId,
   scopedDb,
   observation,
@@ -502,7 +536,7 @@ export const applyDecisionBatch = async ({
   let halt: DecisionBatchHalt | null = null;
   let failureLedger: FailureLedgerWrite;
   try {
-    for (const [index, input] of decisions.entries()) {
+    for (const [index, record] of batchRecords.entries()) {
       if (insertLimit !== undefined && tally.inserted >= insertLimit) {
         halt = { type: "insert-limit" };
         break;
@@ -512,6 +546,14 @@ export const applyDecisionBatch = async ({
         break;
       }
       current = index;
+      if (record.type === "rejected") {
+        halt = rejectSourceRecord({ tally, record, sourceId });
+        if (halt !== null) {
+          break;
+        }
+        continue;
+      }
+      const { decision: input } = record;
       const processed = await Result.tryPromise({
         try: async () =>
           // db-await-in-loop: per-decision ingest pipeline: identity locks, corpus write, upsert, citations, ordered per observation
@@ -582,13 +624,13 @@ export const applyDecisionBatch = async ({
 
 const uncertifiedBatch = (
   reason: CaseLawBatchFailureReason,
-  decisions: readonly IngestionResult[],
+  records: readonly CaseLawIngestionBatchRecord[],
   message: string,
 ): CaseLawBatchApplyError =>
   new CaseLawBatchApplyError({
     message,
     reason,
-    unsettled: decisions.length,
+    unsettled: records.length,
     records: [],
   });
 
@@ -598,7 +640,7 @@ const uncertifiedBatch = (
  * holds the batch, retryable only when it grades as transient.
  */
 const underSourceLease = async <T>(
-  decisions: readonly IngestionResult[],
+  records: readonly CaseLawIngestionBatchRecord[],
   step: () => Promise<T>,
 ): Promise<Result<T, CaseLawBatchApplyError>> => {
   const done = await Result.tryPromise({ try: step, catch: (cause) => cause });
@@ -610,18 +652,14 @@ const underSourceLease = async <T>(
     return Result.err(
       uncertifiedBatch(
         CASE_LAW_BATCH_FAILURE.LEASE_LOST,
-        decisions,
+        records,
         error.message,
       ),
     );
   }
   if (error instanceof TimeoutError) {
     return Result.err(
-      uncertifiedBatch(
-        CASE_LAW_BATCH_FAILURE.TIMEOUT,
-        decisions,
-        error.message,
-      ),
+      uncertifiedBatch(CASE_LAW_BATCH_FAILURE.TIMEOUT, records, error.message),
     );
   }
   observeFailure(error, {
@@ -634,7 +672,7 @@ const underSourceLease = async <T>(
         "transient"
         ? CASE_LAW_BATCH_FAILURE.TRANSIENT
         : CASE_LAW_BATCH_FAILURE.UNCLASSIFIED,
-      decisions,
+      records,
       error instanceof Error ? error.message : String(error),
     ),
   );
@@ -676,7 +714,7 @@ type UnsettledRecord = { index: number; reason: CaseLawBatchFailureReason };
  * only when it is all that is wrong.
  */
 const batchFailure = (
-  decisions: readonly IngestionResult[],
+  records: readonly CaseLawIngestionBatchRecord[],
   { halt, settlements }: DecisionBatchApplication,
 ): CaseLawBatchApplyError | null => {
   const unsettled: UnsettledRecord[] = settlements.flatMap(
@@ -691,30 +729,38 @@ const batchFailure = (
     unsettled.find(({ reason }) => matches(reason))?.reason ?? null;
   const reason =
     reasonWhere((found) => found === CASE_LAW_BATCH_FAILURE.FAILURE_WRITE) ??
-    stopFailure(halt, decisions.length - settlements.length) ??
+    stopFailure(halt, records.length - settlements.length) ??
     reasonWhere((found) => found !== CASE_LAW_BATCH_FAILURE.RECORD_REJECTED) ??
     unsettled.at(0)?.reason ??
     null;
   const settled = settlements.length - unsettled.length;
   if (reason === null) {
-    return settled === decisions.length
+    return settled === records.length
       ? null
       : panic("A batch that did not stop left a record unreached");
   }
-  const count = decisions.length - settled;
+  const count = records.length - settled;
   return new CaseLawBatchApplyError({
-    message: `${count} of ${decisions.length} record(s) not settled (${reason})`,
+    message: `${count} of ${records.length} record(s) not settled (${reason})`,
     reason,
     unsettled: count,
     records: unsettled.slice(0, MAX_REPORTED_RECORDS).map((record) => {
-      const decision =
-        decisions.at(record.index) ?? panic("Settlement without its record");
+      const input =
+        records.at(record.index) ?? panic("Settlement without its record");
       return {
         index: record.index,
         reason: record.reason,
-        caseNumber: decision.caseNumber.slice(0, REPORTED_IDENTITY_LENGTH),
+        caseNumber: (input.type === "decision"
+          ? input.decision.caseNumber
+          : (input.primaryLabel ?? input.recordKey)
+        ).slice(0, REPORTED_IDENTITY_LENGTH),
         sourceDocumentId:
-          decision.sourceDocumentId?.slice(0, REPORTED_IDENTITY_LENGTH) ?? null,
+          input.type === "decision"
+            ? (input.decision.sourceDocumentId?.slice(
+                0,
+                REPORTED_IDENTITY_LENGTH,
+              ) ?? null)
+            : null,
       };
     }),
   });
@@ -763,29 +809,39 @@ export const applyCaseLawIngestionBatch = async ({
     return Result.err(
       uncertifiedBatch(
         CASE_LAW_BATCH_FAILURE.ABORTED,
-        batch.decisions,
+        batch.batchRecords,
         "Batch aborted before it was ordered",
       ),
     );
   }
-  // An owned copy, admitted again: the prepared batch holds the caller's
-  // records, which may have changed since they were measured.
+  // Re-admit before cloning: a caller may have mutated a rejected DTO since
+  // preparation, and an Error must never cross structuredClone as a record.
+  const current = prepareCaseLawIngestionBatch({ records: batch.batchRecords });
+  if (Result.isError(current)) {
+    return Result.err(
+      uncertifiedBatch(
+        CASE_LAW_BATCH_FAILURE.OUT_OF_BOUNDS,
+        batch.batchRecords,
+        current.error.message,
+      ),
+    );
+  }
   const owned = prepareCaseLawIngestionBatch({
-    decisions: structuredClone(batch.decisions),
+    records: structuredClone(current.value.batchRecords),
   });
   if (Result.isError(owned)) {
     return Result.err(
       uncertifiedBatch(
         CASE_LAW_BATCH_FAILURE.OUT_OF_BOUNDS,
-        batch.decisions,
+        batch.batchRecords,
         owned.error.message,
       ),
     );
   }
-  const { decisions } = owned.value;
+  const { batchRecords } = owned.value;
   // Ordered once the records exist and before any write, as a crawl orders
   // a page after its response: the row guards compare this order.
-  const ordered = await underSourceLease(decisions, async () => {
+  const ordered = await underSourceLease(batchRecords, async () => {
     await sourceLease.beforeDatabaseMark();
     return await allocateSourceObservationOrder({
       leaseToken: sourceLease.leaseToken,
@@ -809,16 +865,22 @@ export const applyCaseLawIngestionBatch = async ({
     failureStreak: 0,
     signal,
   });
-  const failure = batchFailure(decisions, application);
-  if (failure !== null) {
+  const failure = batchFailure(batchRecords, application);
+  if (
+    failure !== null &&
+    failure.reason !== CASE_LAW_BATCH_FAILURE.RECORD_REJECTED
+  ) {
     return Result.err(failure);
   }
   const held = await underSourceLease(
-    decisions,
+    batchRecords,
     sourceLease.beforeDatabaseMark,
   );
   if (Result.isError(held)) {
     return Result.err(held.error);
+  }
+  if (failure !== null) {
+    return Result.err(failure);
   }
   const applied = application.settlements.filter(
     ({ type }) => type === "applied",
@@ -828,6 +890,6 @@ export const applyCaseLawIngestionBatch = async ({
     observationOrder: observation.order,
     observedAt: observation.observedAt,
     applied,
-    unchanged: decisions.length - applied,
+    unchanged: batchRecords.length - applied,
   });
 };

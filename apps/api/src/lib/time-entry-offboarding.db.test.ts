@@ -1,15 +1,28 @@
 import {
   afterAll,
+  afterEach,
   beforeAll,
+  beforeEach,
   describe,
   expect,
   setDefaultTimeout,
+  setSystemTime,
   test,
 } from "bun:test";
 import { and, eq } from "drizzle-orm";
 
 import { member } from "@/api/db/auth-schema";
-import { organizationSettings, timeEntries, workspaces } from "@/api/db/schema";
+import {
+  organizationSettings,
+  timeEntries,
+  timeTimers,
+  timeEntryTimerStates,
+  workspaceMembers,
+  workspaces,
+} from "@/api/db/schema";
+import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import deleteTimeEntry from "@/api/handlers/time-entries/delete";
+import updateTimeEntry from "@/api/handlers/time-entries/update";
 import { getAuth } from "@/api/lib/auth";
 import { createSafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
@@ -22,6 +35,7 @@ import {
   initAgentAuthTestDb,
   releaseAgentAuthTestDb,
 } from "@/api/tests/helpers/mock-agent-auth-db";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 setDefaultTimeout(120_000);
@@ -35,6 +49,9 @@ beforeAll(async () => {
 afterAll(async () => {
   await releaseAgentAuthTestDb();
 });
+
+beforeEach(() => setSystemTime(new Date("2026-09-30T12:00:00Z")));
+afterEach(() => setSystemTime());
 
 const createMemberWithActiveTimer = async (dateWorked: string) => {
   const auth = getAuth();
@@ -89,7 +106,25 @@ const createMemberWithActiveTimer = async (dateWorked: string) => {
     currency: "USD",
     narrative: "",
     source: "timer",
-    timerStartedAt: new Date(Date.now() - 120_000),
+    timerStartedAt: new Date(Date.now() - 3_600_000),
+  });
+  const ownerId = brandPersistedUserId(owner.userId);
+  await testDb.insert(workspaceMembers).values([
+    { id: createSafeId<"workspaceMember">(), workspaceId, userId: ownerId },
+    { id: createSafeId<"workspaceMember">(), workspaceId, userId },
+  ]);
+  const globalTimerId = createSafeId<"timeTimer">();
+  await testDb.insert(timeTimers).values({
+    id: globalTimerId,
+    organizationId,
+    userId,
+    workspaceId,
+    legacyTimeEntryId: timerId,
+    state: "running",
+    startedAt: new Date(Date.now() - 86_400_000),
+    lastResumedAt: new Date(Date.now() - 120_000),
+    accumulatedSeconds: 601,
+    description: "Research",
   });
   return {
     auth,
@@ -97,7 +132,10 @@ const createMemberWithActiveTimer = async (dateWorked: string) => {
     organization,
     organizationId,
     owner,
+    ownerId,
+    workspaceId,
     timerId,
+    globalTimerId,
     userId,
   };
 };
@@ -111,6 +149,12 @@ describe("member removal with an active timer", () => {
       timeLockedThroughMonth: "2025-01-31",
     });
 
+    const entryBefore = await testDb.query.timeEntries.findFirst({
+      where: { id: { eq: fixture.timerId } },
+    });
+    const timerBefore = await testDb.query.timeTimers.findFirst({
+      where: { id: { eq: fixture.globalTimerId } },
+    });
     const response = await fixture.auth.api.removeMember({
       body: {
         memberIdOrEmail: fixture.invitee.email,
@@ -139,14 +183,35 @@ describe("member removal with an active timer", () => {
       .where(eq(timeEntries.id, fixture.timerId));
     expect(remainingMember).toBeDefined();
     expect(activeTimer?.timerStartedAt).toBeInstanceOf(Date);
+    const globalTimer = await testDb.query.timeTimers.findFirst({
+      where: { id: { eq: fixture.globalTimerId } },
+    });
+    expect(globalTimer).toMatchObject({
+      state: "running",
+      accumulatedSeconds: 601,
+    });
+    expect(
+      await testDb.query.timeEntries.findFirst({
+        where: { id: { eq: fixture.timerId } },
+      }),
+    ).toEqual(entryBefore);
+    expect(globalTimer).toEqual(timerBefore);
+    expect(
+      (
+        await testDb
+          .select()
+          .from(timeEntryTimerStates)
+          .where(eq(timeEntryTimerStates.entryId, fixture.timerId))
+      ).at(0),
+    ).toMatchObject({ state: "running" });
   });
 
   test("closes an unlocked timer and removes the member", async () => {
-    const fixture = await createMemberWithActiveTimer("2025-02-01");
+    const fixture = await createMemberWithActiveTimer("2026-09-30");
     await testDb.insert(organizationSettings).values({
       id: createSafeId<"organizationSettings">(),
       organizationId: fixture.organizationId,
-      timeLockedThroughMonth: "2025-01-31",
+      timeLockedThroughMonth: "2026-08-31",
       timeMinimumUnitMinutes: 15,
     });
 
@@ -171,6 +236,7 @@ describe("member removal with an active timer", () => {
       );
     const [stoppedTimer] = await testDb
       .select({
+        durationMinutes: timeEntries.durationMinutes,
         billedMinutes: timeEntries.billedMinutes,
         timerStartedAt: timeEntries.timerStartedAt,
         timerStoppedAt: timeEntries.timerStoppedAt,
@@ -180,6 +246,83 @@ describe("member removal with an active timer", () => {
     expect(remainingMember).toBeUndefined();
     expect(stoppedTimer?.timerStartedAt).toBeNull();
     expect(stoppedTimer?.timerStoppedAt).toBeInstanceOf(Date);
+    expect(stoppedTimer?.durationMinutes).toBe(12);
     expect(stoppedTimer?.billedMinutes).toBe(15);
+    const globalTimer = await testDb.query.timeTimers.findFirst({
+      where: { id: { eq: fixture.globalTimerId } },
+    });
+    expect(globalTimer).toMatchObject({ state: "paused", lastResumedAt: null });
+    expect(globalTimer?.accumulatedSeconds).toBe(721);
+    expect(
+      (
+        await testDb
+          .select()
+          .from(timeEntryTimerStates)
+          .where(eq(timeEntryTimerStates.entryId, fixture.timerId))
+      ).at(0),
+    ).toMatchObject({ state: "paused" });
+    const recordAuditEvent = async () => undefined;
+    const context = {
+      user: { id: fixture.ownerId },
+      memberRole: { role: "owner" },
+      session: { activeOrganizationId: fixture.organizationId },
+      workspaceId: fixture.workspaceId,
+      safeDb: createSafeDb(
+        testDb,
+        [fixture.workspaceId],
+        fixture.organizationId,
+        fixture.ownerId,
+      ),
+      scopedDb: createScopedDb(
+        testDb,
+        [fixture.workspaceId],
+        fixture.organizationId,
+        fixture.ownerId,
+      ),
+      recordAuditEvent,
+      createAuditRecorder: () => recordAuditEvent,
+      request: new Request("https://example.test/time-entry-offboarding"),
+      route: "/test/time-entry-offboarding",
+    };
+    expect(
+      await updateTimeEntry.handler(
+        asTestRaw<Parameters<typeof updateTimeEntry.handler>[0]>({
+          ...context,
+          body: { id: fixture.timerId, narrative: "Reviewed recorded work" },
+        }),
+      ),
+    ).not.toHaveProperty("code");
+    expect(
+      await testDb.query.timeEntries.findFirst({
+        where: { id: { eq: fixture.timerId } },
+      }),
+    ).toMatchObject({
+      userId: fixture.userId,
+      narrative: "Reviewed recorded work",
+      durationMinutes: 12,
+      billedMinutes: 15,
+      timerStartedAt: null,
+    });
+    expect(
+      await deleteTimeEntry.handler(
+        asTestRaw<Parameters<typeof deleteTimeEntry.handler>[0]>({
+          ...context,
+          body: { id: fixture.timerId },
+        }),
+      ),
+    ).toMatchObject({ deleted: true });
+    expect(
+      await testDb.query.timeEntries.findFirst({
+        where: { id: { eq: fixture.timerId } },
+      }),
+    ).toBeUndefined();
+    expect(
+      (
+        await testDb
+          .select()
+          .from(timeEntryTimerStates)
+          .where(eq(timeEntryTimerStates.entryId, fixture.timerId))
+      ).at(0),
+    ).toBeUndefined();
   });
 });
