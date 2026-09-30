@@ -110,10 +110,10 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 // - Every combination of response shape, turn position and provider that
 //   the product and the provider's protocol can produce is enumerated, and
 //   every exclusion names its predicate (`turn-outcome-matrix.ts`). Pull
-//   requests run the all-pairs cover; every night runs the all-triples cover
-//   and a rotation through every combination
-//   (`nightly-property-test.yml`), with `TURN_OUTCOME_COMBINATIONS` and
-//   `TURN_OUTCOME_SHARD`.
+//   requests run the all-pairs cover; every night runs every combination
+//   in shards (`nightly-property-test.yml`, `TURN_OUTCOME_COMBINATIONS=all`
+//   and `TURN_OUTCOME_SHARD`). With three dimensions, the all-triples cover
+//   is every combination.
 // - The builders that show model output beside the turn (title, recap,
 //   suggested prompts, a subagent's answer) never show a blank for any
 //   shape, on every provider.
@@ -143,33 +143,66 @@ const surfacePlan = planCombinationRun({
 });
 
 /**
- * The rules a combination's turn does not keep yet, by name. Each such
- * combination runs as a test marked failing under the rules' names, so it
- * fails loudly once the turn keeps them and the entry goes.
+ * A rule some turns do not keep yet: its name, the oracles its breach trips,
+ * and whether the breach also moves the turn's settlement.
  */
-const knownTurnFindingOf = ({
+type KnownRule = {
+  name: string;
+  oracles: readonly OracleViolation["oracle"][];
+  settlement: boolean;
+};
+
+/** A run that streams nothing visible (empty or whitespace text, reasoning
+ *  alone, a filter or length stop with no text) settles its turn as a
+ *  retryable `empty-response` failure, measured against what its message
+ *  held before the run. */
+const EMPTY_RUN_RULE: KnownRule = {
+  name: "a run that shows nothing fails retryably as an empty response",
+  oracles: [
+    CHAT_ORACLE.clientNoErrors,
+    CHAT_ORACLE.turnCompletedShowsAnswer,
+    CHAT_ORACLE.turnEmptyFailsRetryably,
+  ],
+  settlement: true,
+};
+
+/** What the page shows of a whitespace-only answer on a new message is what
+ *  a reload shows. Gemini's adapter hands the page no whitespace-only
+ *  delta. */
+const WHITESPACE_RULE: KnownRule = {
+  name: "a whitespace-only answer reloads as the page showed it",
+  oracles: [CHAT_ORACLE.liveEqualsReload],
+  settlement: false,
+};
+
+/** The page of a summarized thread shows the thread, never the summary the
+ *  model reads in its place, including when the turn pauses on a card. */
+const COMPACTION_SUMMARY_RULE: KnownRule = {
+  name: "a compacted thread's summary stays off the page",
+  oracles: [CHAT_ORACLE.liveEqualsReload],
+  settlement: false,
+};
+
+/**
+ * The rules a combination's turn does not keep yet. Each such combination
+ * runs as a known finding under the rules' names: it must still break them,
+ * and only them, so a broken setup fails it like any other test, and it
+ * fails loudly once the turn keeps the rules and the entry goes.
+ */
+const knownTurnRulesOf = ({
   position,
   provider,
   shape,
-}: TurnCombination): string | undefined => {
+}: TurnCombination): KnownRule[] => {
   const answer = shapeAnswerOf(cassettes, provider, shape);
-  const findings: string[] = [];
-  // A run that streams nothing visible (empty or whitespace text, reasoning
-  // alone, a filter or length stop with no text) settles its turn as a
-  // retryable `empty-response` failure, measured against what its message
-  // held before the run.
+  const rules: KnownRule[] = [];
   if (
     !("notApplicable" in answer) &&
     answer.verdict.kind === "nothing" &&
     position !== "after-tool-result"
   ) {
-    findings.push(
-      "a run that shows nothing fails retryably as an empty response",
-    );
+    rules.push(EMPTY_RUN_RULE);
   }
-  // What the page shows of a whitespace-only answer on a new message is
-  // what a reload shows (`chat.live.equals-reload`). Gemini's adapter hands
-  // the page no whitespace-only delta.
   if (
     shape === "whitespace" &&
     provider !== "google" &&
@@ -179,15 +212,12 @@ const knownTurnFindingOf = ({
       position === "skill-run" ||
       position === "fallback")
   ) {
-    findings.push("a whitespace-only answer reloads as the page showed it");
+    rules.push(WHITESPACE_RULE);
   }
-  // The page of a summarized thread shows the thread, never the summary the
-  // model reads in its place (`chat.live.equals-reload`), including when the
-  // turn pauses on a card.
   if (shape === "tool-call" && position === "after-compaction") {
-    findings.push("a compacted thread's summary stays off the page");
+    rules.push(COMPACTION_SUMMARY_RULE);
   }
-  return findings.length === 0 ? undefined : findings.join("; ");
+  return rules;
 };
 
 let testDb: TestDatabase;
@@ -803,6 +833,22 @@ const runSurface = async (
 
 // --- Tests --------------------------------------------------------------------
 
+/** What a combination's turn owes: its settlement, and no violation. */
+const expectedResultOf = (combination: TurnCombination): TurnResult => {
+  const answer = shapeAnswerOf(
+    cassettes,
+    combination.provider,
+    combination.shape,
+  );
+  return "notApplicable" in answer
+    ? panic("An included combination has an answer")
+    : {
+        reasoningStored: answer.reasoning ? true : "n/a",
+        settlement: expectedSettlement(answer.verdict, combination.position),
+        violations: [],
+      };
+};
+
 describe(`settled chat turns: ${String(turns.included.length)} combinations the product can produce (${String(turns.excluded.length)} excluded by a named predicate); ${turnPlan.mode}: ${String(turnPlan.runs.length)} run`, () => {
   test("every excluded combination names the predicate that excludes it", () => {
     expect(
@@ -859,38 +905,35 @@ describe(`settled chat turns: ${String(turns.included.length)} combinations the 
   });
 
   for (const combination of turnPlan.runs) {
-    const known = knownTurnFindingOf(combination);
+    const known = knownTurnRulesOf(combination);
     const check = async () => {
-      const answer = shapeAnswerOf(
-        cassettes,
-        combination.provider,
-        combination.shape,
-      );
-      if ("notApplicable" in answer) {
-        return panic("An included combination has an answer");
-      }
-      const expected = expectedSettlement(answer.verdict, combination.position);
+      const expected = expectedResultOf(combination);
       const result = await runTurn(combination);
-      expect(result).toEqual({
-        reasoningStored: answer.reasoning ? true : "n/a",
-        settlement: expected,
-        violations: [],
+      // A known finding still breaks its rules, and nothing else.
+      const allowed = new Set(known.flatMap(({ oracles }) => oracles));
+      const settlementMayMove = known.some(({ settlement }) => settlement);
+      const knownView = (view: TurnResult, stillBroken: boolean) => ({
+        reasoningStored: view.reasoningStored,
+        settlement: settlementMayMove ? "may differ" : view.settlement,
+        stillBroken,
+        unexpected: view.violations.filter(
+          ({ oracle }) => !allowed.has(oracle),
+        ),
       });
+      expect(
+        known.length === 0
+          ? result
+          : knownView(result, !Bun.deepEquals(result, expected)),
+      ).toEqual(known.length === 0 ? expected : knownView(expected, true));
     };
     const name = turnCombinationKey(combination);
-    if (known === undefined) {
-      test(
-        `${name}: settles as it showed`,
-        check,
-        propertyTestTimeout(TURN_TIMEOUT_MS),
-      );
-    } else {
-      test.failing(
-        `${name}: known finding: ${known}`,
-        check,
-        propertyTestTimeout(TURN_TIMEOUT_MS),
-      );
-    }
+    test(
+      known.length === 0
+        ? `${name}: settles as it showed`
+        : `${name}: known finding: ${known.map(({ name: rule }) => rule).join("; ")}`,
+      check,
+      propertyTestTimeout(TURN_TIMEOUT_MS),
+    );
   }
 });
 

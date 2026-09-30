@@ -851,10 +851,7 @@ export const expectedSettlement = (
         return { status: "completed" };
       }
       return {
-        failureCode:
-          verdict.kind === "nothing" && verdict.finishReason === "stop"
-            ? "empty-response"
-            : "any",
+        failureCode: verdict.finishReason === "stop" ? "empty-response" : "any",
         failureRetryable: true,
         status: "failed",
       };

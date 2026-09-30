@@ -160,44 +160,10 @@ jobs:
           ROUND_INPUT: ${{ github.event.inputs.round }}
           SLOT: ${{ matrix.slot }}
 
-  # Every settled chat turn against what it showed, for the response shape,
-  # turn position and provider combinations: the all-triples cover every
-  # night, and every combination once every ROUNDS nights (the rounds rotate
-  # by day, as above).
-  turn-outcome-three-wise:
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    permissions:
-      contents: read
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          submodules: true
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version-file: "package.json"
-
-      - name: Install dependencies
-        run: bash scripts/retry.sh bun ci --ignore-scripts
-        env:
-          NPM_TOKEN: ""
-
-      - name: Prepare environment
-        run: |
-          cd ./apps/api
-          cp .env.example .env
-
-      - name: Turn outcome all-triples cover
-        working-directory: apps/api
-        run: bun run test src/handlers/chat/turn-outcome.integration.test.ts
-        env:
-          TURN_OUTCOME_COMBINATIONS: three-wise
-
+  # Every settled chat turn against what it showed, for every response
+  # shape, turn position and provider combination, split into SHARDS jobs.
+  # The matrices have three dimensions, so their all-triples cover is every
+  # combination: each night runs all of them, a few seconds each.
   turn-outcome-combinations:
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -206,10 +172,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        slot: [0, 1, 2, 3]
-    env:
-      ROUNDS: "2"
-      SLOTS: "4"
+        shard: [0, 1, 2, 3]
 
     steps:
       - name: Checkout
@@ -235,17 +198,10 @@ jobs:
 
       - name: Turn outcome combinations
         working-directory: apps/api
-        run: |
-          day=$((10#$(date -u +%j)))
-          round=$(( ${ROUND_INPUT:-$day} % ROUNDS ))
-          shard=$(( round * SLOTS + SLOT ))
-          echo "Round ${round}, shard ${shard} of $(( ROUNDS * SLOTS ))"
-          TURN_OUTCOME_SHARD="${shard}/$(( ROUNDS * SLOTS ))" \
-            bun run test src/handlers/chat/turn-outcome.integration.test.ts
+        run: bun run test src/handlers/chat/turn-outcome.integration.test.ts
         env:
           TURN_OUTCOME_COMBINATIONS: all
-          ROUND_INPUT: ${{ github.event.inputs.round }}
-          SLOT: ${{ matrix.slot }}
+          TURN_OUTCOME_SHARD: ${{ matrix.shard }}/4
 
   chat-mutation-matrix:
     runs-on: ubuntu-latest

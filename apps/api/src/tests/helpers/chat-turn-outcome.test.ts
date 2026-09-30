@@ -216,6 +216,43 @@ describe("a settled turn against what it showed", () => {
         }),
       }),
     ).toEqual([CHAT_ORACLE.turnOneTerminal]);
+    // Two finishes of one run.
+    expect(oraclesOf({ chunks: [...finished, ...finished.slice(1)] })).toEqual([
+      CHAT_ORACLE.turnOneTerminal,
+    ]);
+    // A tool cycle: each model call finishes with its calls, then the run.
+    expect(
+      oraclesOf({
+        chunks: [
+          ...finished.slice(0, 1),
+          {
+            finishReason: "tool_calls",
+            runId: "run",
+            threadId: "thread",
+            type: EventType.RUN_FINISHED,
+          },
+          ...finished.slice(1),
+        ],
+      }),
+    ).toEqual([]);
+    // A fallback attempt: the chat model's run, then the fallback's own.
+    expect(
+      oraclesOf({
+        chunks: [
+          ...finished,
+          {
+            runId: "fallback",
+            threadId: "thread",
+            type: EventType.RUN_STARTED,
+          },
+          {
+            runId: "fallback",
+            threadId: "thread",
+            type: EventType.RUN_FINISHED,
+          },
+        ],
+      }),
+    ).toEqual([]);
     // A response the page stopped reading is not held to it.
     expect(
       oraclesOf({ chunks: finished.slice(0, 1), ended: "stopped" }),

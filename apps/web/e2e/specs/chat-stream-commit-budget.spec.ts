@@ -17,8 +17,8 @@ import { expect, test } from "../helpers/test";
 /**
  * Kinds whose deltas each reach the page as their own commit today: the chat
  * runtime tells its subscribers about every chunk that changes the messages.
- * Each runs as an expected failure under the rule it breaks, so it fails
- * loudly once the page commits at a bounded rate. A subagent's run and its
+ * Each runs as a known finding: only its rate is expected over the budget, so
+ * it fails loudly once the page commits at a bounded rate. A subagent's run and its
  * status steps stream inside the server's tool call, so the page sees none
  * of their deltas.
  */
@@ -54,10 +54,6 @@ for (const kind of KINDS) {
     page,
   }) => {
     test.skip(!EXPECTS_DEV_RUNTIME, "The commit counter is dev-only.");
-    test.fail(
-      OVER_BUDGET_TODAY.has(kind),
-      "The page commits once per streamed delta of this kind.",
-    );
 
     await page.goto("/chat", { waitUntil: "commit" });
     const composer = page.getByRole("textbox", {
@@ -107,9 +103,16 @@ for (const kind of KINDS) {
         transcript.getByRole("button", { name: "Resend" }),
       ).toHaveCount(0);
     }
-    expect(
-      commits / seconds,
-      `chat.render.stream-commits-bounded: ${String(commits)} commits in ${seconds.toFixed(1)} s while ${streams} streamed`,
-    ).toBeLessThanOrEqual(budget);
+    const detail = `chat.render.stream-commits-bounded: ${String(commits)} commits in ${seconds.toFixed(1)} s while ${streams} streamed`;
+    // A known finding: only the rate is expected over the budget; the page
+    // must still stream and settle as above.
+    if (OVER_BUDGET_TODAY.has(kind)) {
+      expect(
+        commits / seconds,
+        `${detail}; within budget now: drop ${kind} from OVER_BUDGET_TODAY`,
+      ).toBeGreaterThan(budget);
+    } else {
+      expect(commits / seconds, detail).toBeLessThanOrEqual(budget);
+    }
   });
 }

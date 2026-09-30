@@ -130,16 +130,29 @@ type ResponseEnding =
   | "disconnected"
   | "stopped";
 
-const TERMINAL_EVENTS: ReadonlySet<string> = new Set([
-  EventType.RUN_ERROR,
-  EventType.RUN_FINISHED,
-]);
+/**
+ * Whether a chunk ends its run for good: a run error, or a finish that is
+ * not the end of one model call of a tool cycle. The engine closes each
+ * such call with a `tool_calls` finish under the same run and goes on, so
+ * those may come before the end; nothing may follow a final one.
+ */
+const isFinalTerminal = (chunk: StreamChunk): boolean => {
+  if (chunk.type === EventType.RUN_ERROR) {
+    return true;
+  }
+  if (chunk.type !== EventType.RUN_FINISHED) {
+    return false;
+  }
+  return chunk.outcome !== undefined || chunk.finishReason !== "tool_calls";
+};
 
 /**
- * `chat.turn.one-terminal`: a response read to its end with no Stop ends in
- * exactly one run terminal event, last, and reports an error exactly when
- * its turn failed. Nothing may follow a run error, and a response never
- * reports two.
+ * `chat.turn.one-terminal`: a response read to its end with no Stop ends
+ * each run it starts exactly once, with a final terminal event
+ * (`isFinalTerminal`), before the next run starts (a fallback attempt is a
+ * run of its own); ends on one; and reports an error exactly when its turn
+ * failed, as its last event. A request that fails before any run starts
+ * reports its error alone.
  */
 const findTerminalViolations = ({
   chunks,
@@ -154,22 +167,39 @@ const findTerminalViolations = ({
     return [];
   }
   const findings: unknown[] = [];
-  const errors = chunks.flatMap((chunk, index) =>
-    chunk.type === EventType.RUN_ERROR ? [index] : [],
-  );
+  let open: string | null = null;
+  for (const [index, chunk] of chunks.entries()) {
+    if (chunk.type === EventType.RUN_STARTED) {
+      if (open !== null) {
+        findings.push({ runStartedWhileOpen: open, index, turnId: turn.id });
+      }
+      open = chunk.runId;
+    } else if (
+      chunk.type === EventType.RUN_FINISHED ||
+      chunk.type === EventType.RUN_ERROR
+    ) {
+      // A request can fail before any run starts: its error closes none.
+      if (open === null && chunk.type === EventType.RUN_FINISHED) {
+        findings.push({
+          terminalOfNoOpenRun: chunk.type,
+          index,
+          turnId: turn.id,
+        });
+      } else if (isFinalTerminal(chunk)) {
+        open = null;
+      }
+    }
+  }
   const last = chunks.at(-1);
-  if (last === undefined || !TERMINAL_EVENTS.has(last.type)) {
-    findings.push({ lastEvent: last?.type ?? null, turnId: turn.id });
+  if (last === undefined || !isFinalTerminal(last) || open !== null) {
+    findings.push({ lastEvent: last?.type ?? null, open, turnId: turn.id });
   }
-  if (errors.length > 1) {
+  const errors = chunks.filter(({ type }) => type === EventType.RUN_ERROR);
+  if (
+    errors.length > 1 ||
+    (errors.length === 1 && last?.type !== EventType.RUN_ERROR)
+  ) {
     findings.push({ runErrors: errors.length, turnId: turn.id });
-  }
-  const firstError = errors[0];
-  if (firstError !== undefined && firstError !== chunks.length - 1) {
-    findings.push({
-      afterRunError: chunks.slice(firstError + 1).map(({ type }) => type),
-      turnId: turn.id,
-    });
   }
   const reportedError = errors.length > 0;
   if (reportedError !== (turn.status === "failed")) {

@@ -657,8 +657,12 @@ export const createApprovalHarness = ({
     threadId: SafeId<"chatThread">;
     turnId: string | null;
   }): Promise<OracleViolation[]> => {
+    // A streamed response names the turn it runs, and that turn is stored:
+    // without it none of the checks below could run.
     if (turnId === null) {
-      return [];
+      return violationsOf(CHAT_ORACLE.persistedRunIdentity, [
+        { missingTurnHeader: CHAT_TURN_ID_HEADER, threadId },
+      ]);
     }
     const turn = await testDb.query.chatTurns.findFirst({
       columns: {
@@ -671,7 +675,9 @@ export const createApprovalHarness = ({
       where: { id: { eq: toSafeId<"chatTurn">(turnId) } },
     });
     if (turn === undefined) {
-      return [];
+      return violationsOf(CHAT_ORACLE.persistedRunIdentity, [
+        { unstoredTurnId: turnId, threadId },
+      ]);
     }
     const messageId = turn.assistantMessageId;
     const [stored, reload, web] = await Promise.all([
