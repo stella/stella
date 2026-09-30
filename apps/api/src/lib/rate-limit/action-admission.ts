@@ -286,6 +286,31 @@ const createAdmissionExecutor = ({
   return execute;
 };
 
+const validateAdmissionReply = (
+  reply: unknown,
+): Result<void, ActionAdmissionError> => {
+  if (reply === 0 || reply === -1) {
+    return Result.err(
+      new ActionAdmissionError({
+        message:
+          reply === -1
+            ? "Action period limit reached"
+            : "Concurrent action limit reached",
+        reason: "busy",
+      }),
+    );
+  }
+  if (reply !== 1) {
+    return Result.err(
+      new ActionAdmissionError({
+        message: "Action admission returned an invalid response",
+        reason: "unavailable",
+      }),
+    );
+  }
+  return Result.ok(undefined);
+};
+
 /**
  * The disabled branch never opens Valkey or reads admission configuration.
  * Nested admission must be awaited: same-caller work shares the parent's lease
@@ -377,24 +402,9 @@ export const withActionAdmission = async <T>({
   if (Result.isError(admitted)) {
     return admitted;
   }
-  if (admitted.value === 0 || admitted.value === -1) {
-    return Result.err(
-      new ActionAdmissionError({
-        message:
-          admitted.value === -1
-            ? "Action period limit reached"
-            : "Concurrent action limit reached",
-        reason: "busy",
-      }),
-    );
-  }
-  if (admitted.value !== 1) {
-    return Result.err(
-      new ActionAdmissionError({
-        message: "Action admission returned an invalid response",
-        reason: "unavailable",
-      }),
-    );
+  const validated = validateAdmissionReply(admitted.value);
+  if (Result.isError(validated)) {
+    return validated;
   }
 
   let leaseDeadline = initialAttemptAt + limits.leaseMs;
