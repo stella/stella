@@ -49,7 +49,7 @@ export const SANCTIONS_SOURCE_CONFIG = {
   { issuer: string; markerUrl: string; freshnessMs: number }
 >;
 
-const isSanctionsSource = (value: string): value is SanctionsSource =>
+export const isSanctionsSource = (value: string): value is SanctionsSource =>
   Object.hasOwn(SANCTIONS_SOURCE_CONFIG, value);
 
 export const sanctionsSourceIds = (): SanctionsSource[] => {

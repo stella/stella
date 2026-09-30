@@ -95,6 +95,21 @@ describe("online migrations", () => {
     expect(harness.released()).toBe(true);
   });
 
+  test.each(ONLINE_MIGRATION_INDEXES)(
+    "repairs an interrupted build for every registered index: $name",
+    async ({ name }) => {
+      const harness = createHarness({ indexStates: { [name]: [false, true] } });
+      await runOnlineMigrations(harness.pool);
+      expect(
+        indexOfStatement(
+          harness.statements,
+          `${REINDEX_FRAGMENT} public."${name}"`,
+        ),
+      ).toBeGreaterThan(-1);
+      expect(harness.released()).toBe(true);
+    },
+  );
+
   test("drops an interrupted reindex artifact before retrying", async () => {
     const artifactName = `${CREDENTIAL_INDEX}_ccnew`;
     const harness = createHarness({

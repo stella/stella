@@ -11,7 +11,7 @@ import {
 export default createSafeRootHandler(
   {
     description:
-      "List open sanctions matches for the active organization in bounded cursor pages. Only fresh, currently screened contacts included in monitoring are returned. Dismissed and confirmed matches are omitted. Copy source and sourceEntryId to contacts.sanctions.reviews.update with the returned contactId.",
+      "List open sanctions matches for the active organization in bounded cursor pages with binding versus informational classification from the firm's practice jurisdictions. Only fresh, currently screened contacts included in monitoring are returned. Dismissed and confirmed matches are omitted. To review a match, read contacts.sanctions.get with the returned contactId and copy its reviewTarget to contacts.sanctions.reviews.update with a disposition and reason.",
     permissions: { workspace: ["read"] },
     access: "read",
     mcp: { type: "capability", reason: "contact_directory" },

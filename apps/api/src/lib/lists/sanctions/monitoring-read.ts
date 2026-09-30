@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 
 import { isCountryCode } from "@stll/country-codes";
@@ -20,7 +20,10 @@ import { classifySanctionsIssuer } from "@/api/lib/lists/sanctions/classificatio
 import { readSanctionsFreshness } from "@/api/lib/lists/sanctions/freshness";
 import { monitoringFingerprint } from "@/api/lib/lists/sanctions/monitoring-input";
 import { SANCTIONS_NOTIFICATION_EVENT_TYPES } from "@/api/lib/lists/sanctions/monitoring-vocabulary";
-import { sanctionsSourceIds } from "@/api/lib/lists/sanctions/source-config";
+import {
+  isSanctionsSource,
+  sanctionsSourceIds,
+} from "@/api/lib/lists/sanctions/source-config";
 import {
   createCursorPage,
   decodePaginationCursor,
@@ -30,20 +33,59 @@ import {
 } from "@/api/lib/pagination";
 
 export const SANCTIONS_MONITORING_PAGE_SIZE = 100;
-const MATCHES_PER_LIST = 1000;
+const loadMonitoringClassifier = async (
+  tx: Transaction,
+  organizationId: SafeId<"organization">,
+) => {
+  const practiceJurisdictions = (
+    await loadPracticeJurisdictions({
+      scopedDb: async (read) => await read(tx),
+      organizationId,
+    })
+  )
+    .map((row) => row.countryCode)
+    .filter(isCountryCode);
+  return (source: string) => {
+    if (!isSanctionsSource(source)) {
+      panic("Persisted monitoring match has an unknown source");
+    }
+    return classifySanctionsIssuer(
+      SANCTIONS_SOURCES[source].issuer,
+      practiceJurisdictions,
+    );
+  };
+};
 
 export const readContactSanctions = async (
   tx: Transaction,
   {
     organizationId,
     contactId,
+    cursor,
+    limit = SANCTIONS_MONITORING_PAGE_SIZE,
     now = new Date(),
   }: {
     organizationId: SafeId<"organization">;
     contactId: SafeId<"contact">;
+    cursor?: string;
+    limit?: number;
     now?: Date;
   },
 ) => {
+  const position = cursor === undefined ? null : decodePaginationCursor(cursor);
+  if (
+    cursor !== undefined &&
+    (position === null ||
+      position.length !== 4 ||
+      position.at(0) !== organizationId ||
+      position.at(1) !== contactId ||
+      typeof position.at(2) !== "string" ||
+      typeof position.at(3) !== "string")
+  ) {
+    return invalidCursor("contacts.sanctions.get");
+  }
+  const afterSource = position?.at(2);
+  const afterEntry = position?.at(3);
   const contact = (
     await tx
       .select()
@@ -81,32 +123,77 @@ export const readContactSanctions = async (
       ),
     )
     .limit(sanctionsSourceIds().length);
-  const matches = excluded
-    ? []
-    : await tx
-        .select()
-        .from(sanctionsContactMatches)
-        .where(
-          and(
-            eq(sanctionsContactMatches.organizationId, organizationId),
-            eq(sanctionsContactMatches.contactId, contactId),
-            eq(sanctionsContactMatches.state, "active"),
-          ),
-        )
-        .limit(MATCHES_PER_LIST * sanctionsSourceIds().length);
-  const db = async <T>(read: (handle: Transaction) => Promise<T>) =>
-    await read(tx);
-  const freshness = await readSanctionsFreshness({ db, now });
-  const practiceJurisdictions = (
-    await loadPracticeJurisdictions({ scopedDb: db, organizationId })
-  )
-    .map((row) => row.countryCode)
-    .filter(isCountryCode);
+  const freshness = await readSanctionsFreshness({
+    db: async (read) => await read(tx),
+    now,
+  });
+  const classifySource = await loadMonitoringClassifier(tx, organizationId);
   const fingerprint = monitoringFingerprint(contact);
+  const eligibleSources = freshness.flatMap((source) => {
+    const screening = screenings.find((row) => row.sourceId === source.source);
+    return source.status === "fresh" &&
+      source.edition !== null &&
+      screening?.status === "possible-match" &&
+      screening.editionId === source.edition.id &&
+      screening.contactFingerprint === fingerprint
+      ? [
+          and(
+            eq(sanctionsContactMatches.sourceId, source.source),
+            eq(sanctionsContactMatches.editionId, source.edition.id),
+          ),
+        ]
+      : [];
+  });
+  const rows =
+    excluded || eligibleSources.length === 0
+      ? []
+      : await tx
+          .select()
+          .from(sanctionsContactMatches)
+          .where(
+            and(
+              eq(sanctionsContactMatches.organizationId, organizationId),
+              eq(sanctionsContactMatches.contactId, contactId),
+              eq(sanctionsContactMatches.state, "active"),
+              eq(sanctionsContactMatches.contactFingerprint, fingerprint),
+              or(...eligibleSources),
+              typeof afterSource === "string" && typeof afterEntry === "string"
+                ? sql`(${sanctionsContactMatches.sourceId}, ${sanctionsContactMatches.sourceEntryId}) > (${afterSource}, ${afterEntry})`
+                : undefined,
+            ),
+          )
+          .orderBy(
+            asc(sanctionsContactMatches.sourceId),
+            asc(sanctionsContactMatches.sourceEntryId),
+          )
+          .limit(limit + 1);
+  const matches = createCursorPage({
+    rows: rows.map((row) =>
+      Object.assign(row, {
+        classification: classifySource(row.sourceId),
+        reviewTarget: {
+          source: row.sourceId,
+          sourceEntryId: row.sourceEntryId,
+          expectedContactFingerprint: row.contactFingerprint,
+          expectedEntryHash: row.entryHash,
+        },
+      }),
+    ),
+    limit,
+    cursorForItem: (row) =>
+      encodePaginationCursor([
+        organizationId,
+        contactId,
+        row.sourceId,
+        row.sourceEntryId,
+      ]),
+  });
   return Result.ok({
     contactId,
     contactMode: contact.sanctionsMonitoringMode,
     firmMode,
+    matches,
+    truncated: matches.nextCursor !== null,
     lists: freshness.map((source) => {
       const screening = screenings.find(
         (row) => row.sourceId === source.source,
@@ -128,34 +215,11 @@ export const readContactSanctions = async (
         : (source.reason ?? "pending-screening");
       return {
         source: source.source,
-        classification: classifySanctionsIssuer(
-          SANCTIONS_SOURCES[source.source].issuer,
-          practiceJurisdictions,
-        ),
+        classification: classifySource(source.source),
         status,
         reason: excluded ? excludedReason : screeningReason,
         freshness: source,
         checkedAt: screening?.checkedAt ?? null,
-        matches:
-          status === "possible-match"
-            ? matches
-                .filter(
-                  (row) =>
-                    row.sourceId === source.source &&
-                    row.editionId === source.edition?.id &&
-                    row.contactFingerprint === fingerprint,
-                )
-                .map((row) =>
-                  Object.assign(row, {
-                    reviewTarget: {
-                      source: source.source,
-                      sourceEntryId: row.sourceEntryId,
-                      expectedContactFingerprint: row.contactFingerprint,
-                      expectedEntryHash: row.entryHash,
-                    },
-                  }),
-                )
-            : [],
       };
     }),
   });
@@ -170,6 +234,7 @@ type MonitoringPageOptions = {
 
 const invalidCursor = (
   capability:
+    | "contacts.sanctions.get"
     | "contacts.sanctions.matches.list"
     | "contacts.sanctions.events.list",
 ) =>
@@ -300,9 +365,14 @@ export const listOpenSanctionsMatches = async (
       asc(sanctionsContactMatches.sourceEntryId),
     )
     .limit(limit + 1);
+  const classifySource = await loadMonitoringClassifier(tx, organizationId);
   return Result.ok(
     createCursorPage({
-      rows,
+      rows: rows.map((row) =>
+        Object.assign(row, {
+          classification: classifySource(row.source),
+        }),
+      ),
       limit,
       cursorForItem: (row) =>
         encodePaginationCursor([

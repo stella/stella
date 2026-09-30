@@ -98,6 +98,7 @@ export const contactsRoute = new Elysia({ prefix: "/contacts" })
         })
         .get("/sanctions", contactSanctions.handler, {
           permissions: contactSanctions.config.permissions,
+          query: contactSanctions.config.query,
         })
         .post("/sanctions/reviews", reviewSanctions.handler, {
           permissions: reviewSanctions.config.permissions,

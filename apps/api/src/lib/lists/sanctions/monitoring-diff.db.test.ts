@@ -49,7 +49,7 @@ import {
   listSanctionsMonitoringEvents,
 } from "./monitoring-read";
 import { reviewSanctionsMatch } from "./monitoring-review";
-import { sanctionsSourceIds } from "./source-config";
+import { SANCTIONS_SOURCE_CONFIG, sanctionsSourceIds } from "./source-config";
 
 const TIMEOUT = 120_000;
 const now = new Date("2026-09-29T12:00:00Z");
@@ -557,7 +557,7 @@ test.each(["dismissed", "confirmed"] as const)(
       panic("Synthetic contact read failed");
     }
     const target =
-      read.value.lists.find((row) => row.source === "eu")?.matches.at(0)
+      read.value.matches.items.find((row) => row.sourceId === "eu")
         ?.reviewTarget ?? panic("Synthetic review target missing");
     expect(target.expectedContactFingerprint).toBe(initial.contactFingerprint);
     expect(target.expectedEntryHash).toBe(initial.entryHash);
@@ -569,7 +569,7 @@ test.each(["dismissed", "confirmed"] as const)(
       reason: "Synthetic review",
       reviewerId,
       recordAuditEvent,
-      now,
+      clock: () => now,
     } as const;
     const denied = await scopedFor(otherOrg)(
       async (tx) => await reviewSanctionsMatch(tx, options),
@@ -683,11 +683,9 @@ test(
           }),
       )
     ).unwrap();
-    expect(
-      excluded.lists.every(
-        (row) => row.status === "excluded" && row.matches.length === 0,
-      ),
-    ).toBe(true);
+    expect(excluded.lists.every((row) => row.status === "excluded")).toBe(true);
+    expect(excluded.matches.items).toEqual([]);
+    expect(excluded.matches.nextCursor).toBeNull();
     expect(await eventsFor(contact.id)).toHaveLength(firstEvents.length);
     expect(
       (
@@ -778,7 +776,7 @@ test(
               reason: "Synthetic review",
               expectedContactFingerprint: current.contactFingerprint,
               expectedEntryHash: current.entryHash,
-              now,
+              clock: () => now,
               recordAuditEvent: async () => panic("synthetic audit failure"),
             }),
         ),
@@ -1043,6 +1041,244 @@ test(
           .where(eq(sanctionsOrganizationMarks.organizationId, orgId))
       ).at(0),
     ).toEqual(orgMark);
+  },
+  TIMEOUT,
+);
+
+test.each(["dismissed", "confirmed"] as const)(
+  "rejects %s when evidence expires during advisory-lock acquisition",
+  async (disposition) => {
+    await db
+      .delete(organizationSettings)
+      .where(eq(organizationSettings.organizationId, orgId));
+    await activate("b");
+    const contact = await addContact();
+    await commit(await prepare(contact));
+    const match = await matchFor(contact.id);
+    const beforeExpiry = new Date(
+      now.getTime() + SANCTIONS_SOURCE_CONFIG.eu.freshnessMs - 1,
+    );
+    const afterExpiry = new Date(beforeExpiry.getTime() + 2);
+    const current = (
+      await scopedDb(
+        async (tx) =>
+          await readContactSanctions(tx, {
+            organizationId: orgId,
+            contactId: contact.id,
+            now: beforeExpiry,
+          }),
+      )
+    ).unwrap();
+    expect(current.matches.items).toHaveLength(1);
+    const target =
+      current.matches.items.at(0)?.reviewTarget ??
+      panic("Review target missing");
+    const waiting = Promise.withResolvers<undefined>();
+    const acquired = Promise.withResolvers<undefined>();
+    let clockValue = beforeExpiry;
+    let audits = 0;
+    const operation = scopedDb(async (tx) => {
+      let firstStatement = true;
+      const waitingTransaction = new Proxy(tx, {
+        get(handle, property) {
+          if (property === "execute") {
+            return async (query: Parameters<Transaction["execute"]>[0]) => {
+              if (firstStatement) {
+                firstStatement = false;
+                waiting.resolve(undefined);
+                await acquired.promise;
+              }
+              return await handle.execute(query);
+            };
+          }
+          return Reflect.get(handle, property);
+        },
+      });
+      return await reviewSanctionsMatch(waitingTransaction, {
+        organizationId: orgId,
+        contactId: contact.id,
+        reviewerId,
+        ...target,
+        disposition,
+        reason: "Synthetic review",
+        clock: () => clockValue,
+        recordAuditEvent: async () => {
+          audits += 1;
+        },
+      });
+    });
+    try {
+      await waiting.promise;
+      clockValue = afterExpiry;
+    } finally {
+      acquired.resolve(undefined);
+    }
+    const result = await operation;
+    expect(result.isErr() && result.error.status).toBe(409);
+    expect(await matchFor(contact.id)).toEqual(match);
+    expect((await eventsFor(contact.id)).map((event) => event.type)).toEqual([
+      "new",
+    ]);
+    expect(audits).toBe(0);
+  },
+  TIMEOUT,
+);
+
+test(
+  "contact evidence pages are bounded, ordered, complete and bound to both tenant and contact",
+  async () => {
+    await db
+      .delete(organizationSettings)
+      .where(eq(organizationSettings.organizationId, orgId));
+    await activate("a");
+    const contact = await addContact();
+    await commit(await prepare(contact));
+    const match = await matchFor(contact.id);
+    const extraMatches = Array.from({ length: 200 }, (_, index) => {
+      const sourceEntryId = `entry-${String(index).padStart(3, "0")}`;
+      return {
+        ...match,
+        sourceEntryId,
+        match: { ...match.match, sourceEntryId },
+      };
+    });
+    await db.insert(sanctionsContactMatches).values(extraMatches);
+    const options = { organizationId: orgId, contactId: contact.id, now };
+    const first = (
+      await scopedDb(async (tx) => await readContactSanctions(tx, options))
+    ).unwrap();
+    expect(first.matches.limit).toBe(100);
+    expect(first.matches.items).toHaveLength(100);
+    expect(first.truncated).toBe(true);
+    const second = (
+      await scopedDb(
+        async (tx) =>
+          await readContactSanctions(tx, {
+            ...options,
+            cursor: first.matches.nextCursor ?? panic("First cursor missing"),
+          }),
+      )
+    ).unwrap();
+    const third = (
+      await scopedDb(
+        async (tx) =>
+          await readContactSanctions(tx, {
+            ...options,
+            cursor: second.matches.nextCursor ?? panic("Second cursor missing"),
+          }),
+      )
+    ).unwrap();
+    expect(second.matches.items).toHaveLength(100);
+    expect(third.matches.items).toHaveLength(1);
+    expect(third.truncated).toBe(false);
+    expect(third.matches.nextCursor).toBeNull();
+    const ids = [
+      ...first.matches.items,
+      ...second.matches.items,
+      ...third.matches.items,
+    ].map((row) => row.sourceEntryId);
+    expect(ids).toEqual(
+      [
+        ...extraMatches.map((row) => row.sourceEntryId),
+        match.sourceEntryId,
+      ].toSorted(),
+    );
+    expect(new Set(ids).size).toBe(201);
+    expect(
+      first.matches.items.every(
+        (row) => row.reviewTarget.expectedEntryHash === match.entryHash,
+      ),
+    ).toBe(true);
+    const otherContact = await addContact();
+    const wrongContact = await scopedDb(
+      async (tx) =>
+        await readContactSanctions(tx, {
+          ...options,
+          contactId: otherContact.id,
+          cursor: first.matches.nextCursor ?? panic("First cursor missing"),
+        }),
+    );
+    expect(wrongContact.isErr() && wrongContact.error.code).toBe(
+      "invalid_cursor",
+    );
+    const wrongTenant = await scopedFor(otherOrg)(
+      async (tx) =>
+        await readContactSanctions(tx, {
+          ...options,
+          organizationId: otherOrg,
+          cursor: first.matches.nextCursor ?? panic("First cursor missing"),
+        }),
+    );
+    expect(wrongTenant.isErr() && wrongTenant.error.code).toBe(
+      "invalid_cursor",
+    );
+  },
+  TIMEOUT,
+);
+
+test(
+  "contact and organization reads share classification as practice jurisdictions change",
+  async () => {
+    await db
+      .delete(organizationSettings)
+      .where(eq(organizationSettings.organizationId, orgId));
+    await activate("8");
+    const contact = await addContact();
+    await commit(await prepare(contact));
+    await db
+      .delete(sanctionsContactMarks)
+      .where(eq(sanctionsContactMarks.contactId, contact.id));
+    const readBoth = async () => {
+      const details = (
+        await scopedDb(
+          async (tx) =>
+            await readContactSanctions(tx, {
+              organizationId: orgId,
+              contactId: contact.id,
+              now,
+            }),
+        )
+      ).unwrap();
+      const open = (
+        await scopedDb(
+          async (tx) =>
+            await listOpenSanctionsMatches(tx, {
+              organizationId: orgId,
+              now,
+            }),
+        )
+      ).unwrap();
+      return {
+        list: details.lists.find((row) => row.source === "eu")?.classification,
+        match: details.matches.items.at(0)?.classification,
+        open: open.items.find((row) => row.contactId === contact.id)
+          ?.classification,
+      };
+    };
+    expect(await readBoth()).toEqual({
+      list: "informational",
+      match: "informational",
+      open: "informational",
+    });
+    await db.insert(organizationSettings).values({
+      id: toSafeId<"organizationSettings">(Bun.randomUUIDv7()),
+      organizationId: orgId,
+      practiceJurisdictions: [{ countryCode: "DE", isPrimary: true }],
+    });
+    expect(await readBoth()).toEqual({
+      list: "binding",
+      match: "binding",
+      open: "binding",
+    });
+    await db
+      .update(organizationSettings)
+      .set({ practiceJurisdictions: [{ countryCode: "US", isPrimary: true }] })
+      .where(eq(organizationSettings.organizationId, orgId));
+    expect(await readBoth()).toEqual({
+      list: "informational",
+      match: "informational",
+      open: "informational",
+    });
   },
   TIMEOUT,
 );

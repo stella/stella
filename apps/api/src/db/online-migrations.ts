@@ -69,6 +69,24 @@ type OnlineIndex = RequiredMigrationIndex & {
 export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   {
     createSql:
+      'CREATE INDEX CONCURRENTLY "sanctions_contact_matches_org_open_cursor_idx" ON public."sanctions_contact_matches" USING btree ("organization_id", "state", "disposition", "contact_id", "source_id", "source_entry_id")',
+    definitionBody:
+      "ON public.sanctions_contact_matches USING btree (organization_id, state, disposition, contact_id, source_id, source_entry_id)",
+    isUnique: false,
+    name: "sanctions_contact_matches_org_open_cursor_idx",
+    tableName: "sanctions_contact_matches",
+  },
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "sanctions_screening_events_org_cursor_idx" ON public."sanctions_screening_events" USING btree ("organization_id", "created_at", "id")',
+    definitionBody:
+      "ON public.sanctions_screening_events USING btree (organization_id, created_at, id)",
+    isUnique: false,
+    name: "sanctions_screening_events_org_cursor_idx",
+    tableName: "sanctions_screening_events",
+  },
+  {
+    createSql:
       'CREATE UNIQUE INDEX CONCURRENTLY "contacts_org_id_unique" ON public."contacts" USING btree ("organization_id", "id")',
     definitionBody: "ON public.contacts USING btree (organization_id, id)",
     isUnique: true,

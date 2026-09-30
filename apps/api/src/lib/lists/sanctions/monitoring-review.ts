@@ -29,7 +29,7 @@ export type ReviewSanctionsMatchOptions = {
   expectedEntryHash: string;
   reason: string;
   recordAuditEvent: AuditRecorder;
-  now?: Date;
+  clock?: () => Date;
 };
 
 export const reviewSanctionsMatch = async (
@@ -45,7 +45,7 @@ export const reviewSanctionsMatch = async (
     expectedEntryHash,
     reason,
     recordAuditEvent,
-    now = new Date(),
+    clock = () => new Date(),
   }: ReviewSanctionsMatchOptions,
 ) => {
   const trimmedReason = reason.trim();
@@ -99,6 +99,7 @@ export const reviewSanctionsMatch = async (
       .limit(1)
       .for("update")
   ).at(0);
+  const now = clock();
   const freshness = (
     await readSanctionsFreshness({ db: async (read) => await read(tx), now })
   ).find((row) => row.source === source);
