@@ -23,62 +23,76 @@ const BIBLIOGRAPHY_PREFIX = "BIB.";
 
 export type EcjFormexBibliography = {
   /** The docket as the publisher spells it, e.g. `C-128/22`. */
-  caseNumber: string | undefined;
-  celex: string | undefined;
-  ecli: string | undefined;
+  caseNumber: readonly string[];
+  celex: readonly string[];
+  ecli: readonly string[];
   /** Corporate-body code of the court (`CJ`, `GCEU`). */
-  author: string | undefined;
+  author: readonly string[];
   /** The decision's ordinal within its Reports fascicle. */
-  sequence: string | undefined;
+  sequence: readonly string[];
   /** Its page coordinates in the Reports of Cases. */
-  pages: Readonly<Record<string, string>>;
+  pages: Readonly<Record<string, readonly string[]>>;
 };
 
 const PAGE_TAGS = ["PAGE.FIRST.ECR", "PAGE.LAST.ECR", "PAGE.SEQ", "PAGE.TOTAL"];
 
 type BibliographyReader = {
-  /** Text of a direct child of the bibliographic block, if it states one. */
-  readonly value: (tag: string) => string | undefined;
+  /** Text of each matching direct child, in document order. */
+  readonly values: (tag: string) => readonly string[];
   /** The block's own child element names, in document order. */
   readonly tags: readonly string[];
 };
 
-const readBibliography = (xml: string): BibliographyReader => {
-  const $ = cheerio.load(xml, { xml: true });
-  const children = $(":root")
-    .children()
-    .toArray()
-    .filter((element) =>
-      element.tagName.toUpperCase().startsWith(BIBLIOGRAPHY_PREFIX),
-    )
-    .flatMap((block) => $(block).children().toArray());
-  return {
-    value: (tag) => {
-      const element = children.find(
-        (candidate) => candidate.tagName.toUpperCase() === tag,
-      );
-      const text = element === undefined ? "" : $(element).text().trim();
-      return text.length > 0 ? text : undefined;
+const readBibliography = (
+  xml: string | readonly string[],
+): BibliographyReader => {
+  const children = (typeof xml === "string" ? [xml] : xml).flatMap(
+    (document) => {
+      const $ = cheerio.load(document, { xml: true });
+      return $(":root")
+        .children()
+        .toArray()
+        .filter((element) =>
+          element.tagName.toUpperCase().startsWith(BIBLIOGRAPHY_PREFIX),
+        )
+        .flatMap((block) =>
+          $(block)
+            .children()
+            .toArray()
+            .map((element) => ({
+              tag: element.tagName.toUpperCase(),
+              text: $(element).text().trim(),
+            })),
+        );
     },
-    tags: children.map((element) => element.tagName.toUpperCase()),
+  );
+  return {
+    values: (tag) =>
+      children
+        .filter((child) => child.tag === tag)
+        .map(({ text }) => text)
+        .filter((text) => text.length > 0),
+    tags: children.map(({ tag }) => tag),
   };
 };
 
-export const parseFormexBibliography = (xml: string): EcjFormexBibliography => {
+export const parseFormexBibliography = (
+  xml: string | readonly string[],
+): EcjFormexBibliography => {
   const reader = readBibliography(xml);
-  const pages: Record<string, string> = {};
+  const pages: Record<string, readonly string[]> = {};
   for (const tag of PAGE_TAGS) {
-    const value = reader.value(tag);
-    if (value !== undefined) {
-      pages[tag] = value;
+    const values = reader.values(tag);
+    if (values.length > 0) {
+      pages[tag] = values;
     }
   }
   return {
-    caseNumber: reader.value("REF.CASE"),
-    celex: reader.value("NO.CELEX"),
-    ecli: reader.value("NO.ECLI"),
-    author: reader.value("AUTHOR"),
-    sequence: reader.value("NO.SEQ"),
+    caseNumber: reader.values("REF.CASE"),
+    celex: reader.values("NO.CELEX"),
+    ecli: reader.values("NO.ECLI"),
+    author: reader.values("AUTHOR"),
+    sequence: reader.values("NO.SEQ"),
     pages,
   };
 };
@@ -93,7 +107,9 @@ export const parseFormexBibliography = (xml: string): EcjFormexBibliography => {
 const FORMEX_BODY_FIELD = "formex.body";
 
 /** Every field name the stored Formex part states. */
-export const listEcjFormexFields = (xml: string): readonly string[] => {
+export const listEcjFormexFields = (
+  xml: string | readonly string[],
+): readonly string[] => {
   const { tags } = readBibliography(xml);
   return tags.length === 0
     ? []

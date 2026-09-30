@@ -8,6 +8,8 @@
  */
 
 import { describe, expect, test } from "bun:test";
+import * as cheerio from "cheerio";
+import type { Element } from "domhandler";
 
 import {
   buildListingQuery,
@@ -118,11 +120,11 @@ describe("the branch notice is read per expression", () => {
     // identical and everything the Office renders into the negotiated
     // language is not. A row storing its neighbour's notice would carry the
     // second column under the first row's identity.
-    expect(english.celex).toBe(greek.celex ?? "");
-    expect(english.rapporteur).toBe(greek.rapporteur ?? "");
-    expect(english.caseIdentifier).toBe("Case C-128/22");
-    expect(greek.caseIdentifier).toBe("Υπόθεση C-128/22");
-    expect(greek.title).not.toBe(english.title);
+    expect(english.celex).toEqual(greek.celex);
+    expect(english.rapporteur).toEqual(greek.rapporteur);
+    expect(english.caseIdentifier).toContain("Case C-128/22");
+    expect(greek.caseIdentifier).toContain("Υπόθεση C-128/22");
+    expect(greek.title).not.toEqual(english.title);
   });
 
   test("the court is read from the authority code, not the rendered label", () => {
@@ -130,7 +132,102 @@ describe("the branch notice is read per expression", () => {
     // judgment under twenty-four different courts.
     const greek = parseEcjNotice(noticeEl);
 
-    expect(greek.courtCode).toBe("CJ");
+    expect(greek.courtCode).toContain("CJ");
+  });
+
+  test("retains every repeated work and expression value in source order", () => {
+    const $ = cheerio.load(noticeEn, { xml: true });
+    const work = $("NOTICE > WORK").first();
+    const expression = $("NOTICE > EXPRESSION").first();
+    const dossierEvent = work
+      .find("WORK_PART_OF_DOSSIER > EMBEDDED_NOTICE > EVENT")
+      .first();
+    const appendCopy = (
+      parent: cheerio.Cheerio<Element>,
+      tag: string,
+      update: (copy: cheerio.Cheerio<Element>) => void,
+    ) => {
+      const original = parent.children(tag).first();
+      expect(original).toHaveLength(1);
+      const copy = original.clone();
+      update(copy);
+      parent.append(copy);
+    };
+
+    appendCopy(work, "CASE-LAW_NATIONAL-JUDGEMENT", (copy) =>
+      copy
+        .children("VALUE")
+        .text(
+          "<national_judgement><p>Second referring court.</p></national_judgement>",
+        ),
+    );
+    appendCopy(work, "CASE-LAW_ORIGINATES_IN_COUNTRY", (copy) => {
+      copy.children("IDENTIFIER").text("LUX");
+      copy.children("PREFLABEL").text("Luxembourg");
+    });
+    appendCopy(work, "CASE-LAW_USES_PROCEDURE_LANGUAGE", (copy) => {
+      copy.children("IDENTIFIER").text("FRA");
+      copy.children("PREFLABEL").text("French");
+    });
+    appendCopy(
+      work,
+      "CASE-LAW_HAS_TYPE_PROCEDURE_CONCEPT_TYPE_PROCEDURE",
+      (copy) => {
+        copy.children("IDENTIFIER").text("APPEAL");
+        copy.children("PREFLABEL").text("Appeal");
+      },
+    );
+    appendCopy(work, "CASE-LAW_DELIVERED_BY_JUDGE", (copy) =>
+      copy.find("AGENT_NAME > VALUE").first().text("Second Rapporteur"),
+    );
+    appendCopy(work, "CASE-LAW_DELIVERED_BY_ADVOCATE-GENERAL", (copy) =>
+      copy.find("AGENT_NAME > VALUE").first().text("Second Advocate General"),
+    );
+    appendCopy(work, "VERSION", (copy) =>
+      copy.children("VALUE").text("Second record version"),
+    );
+    appendCopy(work, "WORK_DATE_DOCUMENT", (copy) =>
+      copy.children("VALUE").text("2023-12-06"),
+    );
+    appendCopy(expression, "EXPRESSION_TITLE", (copy) =>
+      copy.children("VALUE").text("Second expression title"),
+    );
+    appendCopy(expression, "EXPRESSION_CASE-LAW_IDENTIFIER_CASE", (copy) =>
+      copy.children("VALUE").text("Second case identifier"),
+    );
+    appendCopy(dossierEvent, "EVENT_CONTAINS_WORK", (copy) => {
+      copy.find("SAMEAS URI IDENTIFIER").first().text("62000CJ0001");
+      copy
+        .find("SAMEAS")
+        .append(
+          "<URI><TYPE>celex</TYPE><IDENTIFIER>62000CJ0002</IDENTIFIER></URI>",
+        );
+    });
+    const zip = $("NOTICE > MANIFESTATION").first().clone();
+    zip.attr("manifestation-type", "zip");
+    zip.children("MANIFESTATION_TYPE").children("VALUE").text("zip");
+    zip.children("URI").children("VALUE").text("https://example.test/all.zip");
+    $("NOTICE").append(zip);
+
+    const facts = parseEcjNotice($.xml());
+
+    expect(facts.nationalJudgment).toHaveLength(2);
+    expect(facts.nationalJudgment[1]).toContain("Second referring court.");
+    expect(facts.referringCountry.map(({ code }) => code)).toContain("LUX");
+    expect(facts.procedureLanguage.map(({ code }) => code)).toContain("FRA");
+    expect(facts.procedureType.map(({ code }) => code)).toContain("APPEAL");
+    expect(facts.rapporteur).toContain("Second Rapporteur");
+    expect(facts.advocateGeneral).toContain("Second Advocate General");
+    expect(facts.recordVersion).toContain("Second record version");
+    expect(facts.decisionDate).toEqual(["2023-12-05", "2023-12-06"]);
+    expect(facts.title).toContain("Second expression title");
+    expect(facts.caseIdentifier).toContain("Second case identifier");
+    expect(facts.caseEventWorks).toContain("62000CJ0001");
+    expect(facts.caseEventWorks).toContain("62000CJ0002");
+    expect(facts.manifestations).toContainEqual({
+      type: "zip",
+      uri: "https://example.test/all.zip",
+    });
   });
 });
 
@@ -163,9 +260,9 @@ describe("what the notice adds to a stored row", () => {
     const decision = await decisionFrom(noticeEn);
 
     expect(decision.metadata).toMatchObject({
-      procedureLanguage: "NLD",
-      dossier: "case:C-128/22",
-      publishedInReports: true,
+      procedureLanguage: [{ code: "NLD", label: "Dutch" }],
+      dossier: ["case:C-128/22"],
+      publishedInReports: [true],
     });
     expect(decision.metadata["caseLawDirectory"]).toContainEqual({
       code: "1.09.03.02",
@@ -176,8 +273,10 @@ describe("what the notice adds to a stored row", () => {
       code: "4.06.01.02",
       label: "Crossing of external borders",
     });
-    expect(decision.metadata["nationalJudgment"]).toContain(
-      "Nederlandstalige rechtbank van eerste aanleg Brussel",
+    expect(decision.metadata["nationalJudgment"]).toContainEqual(
+      expect.stringContaining(
+        "Nederlandstalige rechtbank van eerste aanleg Brussel",
+      ),
     );
   });
 
@@ -200,8 +299,8 @@ describe("the Formex bibliography", () => {
     // is the only surface that states them the same way in all 24 rows.
     const bibliography = parseFormexBibliography(formexEn);
 
-    expect(bibliography.caseNumber).toBe("C-128/22");
-    expect(bibliography.author).toBe("CJ");
+    expect(bibliography.caseNumber).toEqual(["C-128/22"]);
+    expect(bibliography.author).toEqual(["CJ"]);
   });
 });
 
