@@ -2273,7 +2273,8 @@
     "compareUnsupportedReasons": {
       "missingInBase": "Dokumendiosa eksisteerib ainult sihtmärgis",
       "missingInTarget": "Dokumendiosa eksisteerib ainult baasis",
-      "notEditable": "Dokumendi osa ei ole redigeeritav"
+      "notEditable": "Dokumendi osa ei ole redigeeritav",
+      "unsupportedContent": "See versioon sisaldab sisu, mida ei saa veel võrrelda."
     },
     "compareUnverified": "Kontrollimata võrdlus",
     "compareVerificationFailures": "{count, plural, one {Üks edasi-tagasi kontroll ebaõnnestus. Vaadake võrdlus enne sellele tuginemist üle.} other {# edasi-tagasi kontrolli ebaõnnestus. Vaadake võrdlus enne sellele tuginemist üle.}}",
