@@ -24746,7 +24746,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "invoices", "create"],
                 capabilityId: "invoices.create",
                 description:
-                  "Create a draft invoice from approved, billable, not-yet-invoiced time entries in a matter, marking them billed and setting the total from their billed minutes and recorded rates. Every entry must already carry the invoice currency, since nothing is converted, and the invoice number must not already be in use. Expenses are added afterwards with invoices.entries.add.",
+                  "Create a draft invoice from approved, billable, not-yet-invoiced time entries in a matter, marking them billed and setting the total from their billed minutes and recorded rates. Every entry must already carry the invoice currency, since nothing is converted, and the optional invoice number must not already be in use. An omitted number is allocated from the document type’s default series at finalize. Credit notes require an original finalized, sent, or paid invoice in the same matter. Pass empty timeEntryIds for a draft with manual lines. Expenses are added afterwards with invoices.entries.add.",
                 access: "write",
                 flags: [
                   {
@@ -24763,9 +24763,18 @@ export const generatedRouteMap: RouteNode = {
                     repeatable: false,
                     flag: "--invoice-number",
                     prop: "invoiceNumber",
-                    required: true,
+                    required: false,
                     part: "body",
                     partPath: "invoiceNumber",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--original-invoice-id",
+                    prop: "originalInvoiceId",
+                    required: false,
+                    part: "body",
+                    partPath: "originalInvoiceId",
                   },
                   {
                     kind: "string",
@@ -24822,7 +24831,7 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "timeEntryIds",
                   },
                 ],
-                inputOnly: [],
+                inputOnly: ["body.documentType"],
                 paginated: false,
                 destructive: false,
                 scope: "billing_write",
@@ -24832,16 +24841,34 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     body: {
                       type: "object",
-                      required: [
-                        "invoiceNumber",
-                        "invoiceDate",
-                        "currency",
-                        "timeEntryIds",
-                      ],
+                      required: ["invoiceDate", "currency", "timeEntryIds"],
                       properties: {
                         invoiceNumber: {
                           minLength: 1,
                           maxLength: 64,
+                          type: "string",
+                        },
+                        documentType: {
+                          anyOf: [
+                            {
+                              const: "invoice",
+                              type: "string",
+                            },
+                            {
+                              const: "advance",
+                              type: "string",
+                            },
+                            {
+                              const: "credit_note",
+                              type: "string",
+                            },
+                          ],
+                        },
+                        originalInvoiceId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                           type: "string",
                         },
                         invoiceDate: {
@@ -24891,7 +24918,7 @@ export const generatedRouteMap: RouteNode = {
                           ],
                         },
                         timeEntryIds: {
-                          minItems: 1,
+                          minItems: 0,
                           maxItems: 500,
                           type: "array",
                           items: {
@@ -25197,7 +25224,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "invoices", "get"],
                 capabilityId: "invoices.get",
                 description:
-                  "Read one invoice with its full detail: its lines in order with quantity, unit price, VAT, and amounts; totals with the VAT breakdown by rate; seller profile, buyer, dates, currency, and status; and every attached time entry and expense with its work item. An invoice from before invoice lines lists no lines for its attached entries until its first line edit; its totals still count them. Use invoices.list for a paginated summary without lines.",
+                  "Read one invoice with its full detail: its lines in order with quantity, unit price, VAT, and amounts; totals with the VAT breakdown by rate; document type, original invoice id, seller profile, buyer, dates, currency, and status; and every attached time entry and expense with its work item. An invoice from before invoice lines lists no lines for its attached entries until its first line edit; its totals still count them. Use invoices.list for a paginated summary without lines.",
                 access: "read",
                 flags: [
                   {
@@ -25718,7 +25745,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "invoices", "list"],
                 capabilityId: "invoices.list",
                 description:
-                  "List a matter's invoices oldest first with cursor pagination, returning each invoice's number, reference, status, dates, currency, and total, but not its line items. Use invoices.get to read the attached time entries and expenses.",
+                  "List a matter's invoices oldest first with cursor pagination, returning each invoice's number (null before numbering), document type, original invoice id, reference, status, dates, currency, and total, but not its line items. Use invoices.get to read the attached time entries and expenses.",
                 access: "read",
                 flags: [
                   {
@@ -25777,7 +25804,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "invoices", "transition"],
                 capabilityId: "invoices.transition",
                 description:
-                  "Move an invoice through its lifecycle with one action: finalize (draft to finalized), send (finalized to sent), mark_paid (sent to paid), revert_to_draft (finalized back to draft), or void (from finalized, sent, or paid). Voiding also releases every attached time entry and expense back to approved, unbilled status and clears the paid timestamp. An action the invoice's current status does not allow is refused.",
+                  "Move an invoice through finalize, send, mark_paid, void, or revert_to_draft. Finalize assigns an omitted number from the document type's default series, using the issue date; configure a default number series first. Manual numbers and numbers kept after reverting to draft are preserved. A credit note must reference an eligible original and cannot exceed its total. Voiding releases attached entries and clears the paid timestamp.",
                 access: "write",
                 flags: [
                   {
@@ -25870,7 +25897,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "invoices", "update"],
                 capabilityId: "invoices.update",
                 description:
-                  "Change a draft invoice's number, issue date (invoiceDate), taxable supply date, due date, reference, notes, currency, issuing seller profile, or buyer details as they should read on the document. Omitted fields stay unchanged; null clears an optional field. Only draft invoices can be edited, and the currency cannot change while the invoice has lines or attached entries.",
+                  "Change a draft invoice's number, issue date (invoiceDate), taxable supply date, due date, reference, notes, currency, issuing seller profile, or buyer details as they should read on the document. Omitted fields stay unchanged; null clears an optional field. Only draft invoices can be edited. Type and original invoice become immutable after the first finalize, including after reverting to draft. Credit notes require an eligible original in the same matter. Currency cannot change while the invoice has lines or attached entries.",
                 access: "write",
                 flags: [
                   {
@@ -25892,13 +25919,22 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "invoiceId",
                   },
                   {
-                    kind: "string",
+                    kind: "nullable-string",
                     repeatable: false,
                     flag: "--invoice-number",
                     prop: "invoiceNumber",
                     required: false,
                     part: "body",
                     partPath: "invoiceNumber",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--original-invoice-id",
+                    prop: "originalInvoiceId",
+                    required: false,
+                    part: "body",
+                    partPath: "originalInvoiceId",
                   },
                   {
                     kind: "string",
@@ -26036,7 +26072,7 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "buyerCountry",
                   },
                 ],
-                inputOnly: [],
+                inputOnly: ["body.documentType"],
                 paginated: false,
                 destructive: false,
                 scope: "billing_write",
@@ -26048,9 +26084,48 @@ export const generatedRouteMap: RouteNode = {
                       type: "object",
                       properties: {
                         invoiceNumber: {
-                          minLength: 1,
-                          maxLength: 64,
-                          type: "string",
+                          nullable: true,
+                          anyOf: [
+                            {
+                              minLength: 1,
+                              maxLength: 64,
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                        documentType: {
+                          anyOf: [
+                            {
+                              const: "invoice",
+                              type: "string",
+                            },
+                            {
+                              const: "advance",
+                              type: "string",
+                            },
+                            {
+                              const: "credit_note",
+                              type: "string",
+                            },
+                          ],
+                        },
+                        originalInvoiceId: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              minLength: 36,
+                              maxLength: 36,
+                              pattern:
+                                "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
                         },
                         invoiceDate: {
                           format: "date",
@@ -50095,6 +50170,223 @@ export const generatedRouteMap: RouteNode = {
         "time-entries": {
           kind: "route",
           children: {
+            "approval-queue-approve": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "time-entries",
+                  "approval-queue-approve",
+                ],
+                capabilityId: "time-entries.approval-queue.approve",
+                description:
+                  "Approve up to 200 time entries in accessible matters. Only the assigned approver or an organization owner/admin may approve. Each id returns approved or a refusal reason; running timers and locked periods are refused. Approval records the actor and time, and clears the last return comment. Already approved entries can be retried safely.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string-array",
+                    repeatable: true,
+                    flag: "--ids",
+                    prop: "ids",
+                    required: true,
+                    part: "body",
+                    partPath: "ids",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "billing_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["ids"],
+                      properties: {
+                        ids: {
+                          minItems: 1,
+                          maxItems: 200,
+                          uniqueItems: true,
+                          type: "array",
+                          items: {
+                            minLength: 36,
+                            maxLength: 36,
+                            pattern:
+                              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                            type: "string",
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "approval-queue-list": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "time-entries",
+                  "approval-queue-list",
+                ],
+                capabilityId: "time-entries.approval-queue.list",
+                description:
+                  "List draft time entries awaiting the signed-in user's approval in accessible matters. Owners/admins also see drafts without an assigned approver. Optionally filter work dates (from/to, YYYY-MM-DD), timekeeper (member), and matter. Returns logged durationMinutes separately from adjusted billedMinutes and the last return comment. Follow nextCursor for the next bounded page.",
+                access: "read",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--from",
+                    prop: "from",
+                    required: false,
+                    part: "query",
+                    partPath: "from",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--to",
+                    prop: "to",
+                    required: false,
+                    part: "query",
+                    partPath: "to",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--member",
+                    prop: "member",
+                    required: false,
+                    part: "query",
+                    partPath: "member",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--matter",
+                    prop: "matter",
+                    required: false,
+                    part: "query",
+                    partPath: "matter",
+                  },
+                ],
+                inputOnly: [],
+                paginated: true,
+                paginationPart: "query",
+                itemsKey: "items",
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    query: {
+                      type: "object",
+                      properties: {
+                        from: {
+                          format: "date",
+                          type: "string",
+                        },
+                        to: {
+                          format: "date",
+                          type: "string",
+                        },
+                        member: {
+                          minLength: 1,
+                          maxLength: 128,
+                          type: "string",
+                        },
+                        matter: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        cursor: {
+                          maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
+                          type: "string",
+                        },
+                        limit: {
+                          minimum: 1,
+                          maximum: 200,
+                          type: "integer",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "approval-queue-return": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "time-entries",
+                  "approval-queue-return",
+                ],
+                capabilityId: "time-entries.approval-queue.return",
+                description:
+                  "Return one draft or approved time entry to draft with a required comment (up to 2000 characters). Only its assigned approver or an organization owner/admin may return it. Running timers and locked periods are refused. The owner keeps seeing the last comment while editing; re-approval clears it. Billed or written-off entries cannot be returned.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--id",
+                    prop: "id",
+                    required: true,
+                    part: "body",
+                    partPath: "id",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--comment",
+                    prop: "comment",
+                    required: true,
+                    part: "body",
+                    partPath: "comment",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "billing_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["id", "comment"],
+                      properties: {
+                        id: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        comment: {
+                          minLength: 1,
+                          maxLength: 2000,
+                          pattern: "\\S",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
             "batch-delete": {
               kind: "capability-leaf",
               spec: {

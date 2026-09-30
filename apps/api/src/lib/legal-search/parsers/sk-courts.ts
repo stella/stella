@@ -46,8 +46,9 @@ import {
   isSkStandaloneInstructionMarker,
   SK_CLOSING_RE,
   SK_JUDGE_TITLE_RE,
-  SK_ROMAN_DIVIDER_RE,
+  skSectionHeading,
 } from "@stll/legal-ast/slovak-document-roles";
+import type { SkDocumentSection } from "@stll/legal-ast/slovak-document-roles";
 
 import type {
   Block,
@@ -127,8 +128,7 @@ export const parseSkDecisionPdf = async (
   input: ParseSkDecisionInput,
 ): Promise<ParseSkDecisionOutput> => {
   const lines = await extractLines(input.pdfBytes);
-  const filtered = skipHeaderLines(lines);
-  const blocks = classifyLines(filtered);
+  const blocks = buildSkDecisionPdfBlocks({ lines, metadata: input });
 
   // Synthesize decision title if none detected
   const hasTitle = blocks.some(
@@ -148,7 +148,7 @@ export const parseSkDecisionPdf = async (
     });
   }
 
-  const validationHtml = buildValidationHtml(filtered.map((l) => l.text));
+  const validationHtml = buildValidationHtml(lines.map((l) => l.text));
   validateAndLog(
     { parser: "sk-courts", caseNumber: input.caseNumber },
     validationHtml,
@@ -238,11 +238,7 @@ const extractLines = async (pdfBytes: Uint8Array): Promise<PdfLine[]> => {
     }
   }
 
-  // Strip page numbers BEFORE merging — otherwise they
-  // get joined into the preceding paragraph's text.
-  const withoutPageNumbers = lines.filter((line) => !isPageNumber(line, lines));
-
-  return mergeWrappedLines(withoutPageNumbers);
+  return lines;
 };
 
 type PdfTextLine = {
@@ -397,11 +393,14 @@ const buildSpanSegments = (
 const STARTS_NEW_PARAGRAPH_RE =
   /^(?:\d{1,3}\.\s|(?:I{1,3}|IV|VI{0,3}|IX|X)\.(?:\s(?!ÚS\b)|$)|\([a-z]\)\s)/u;
 
-function isStructuralStart(line: PdfLine): boolean {
+function isStructuralStart(line: PdfLine, section: Section): boolean {
   if (line.fontSize > 14) {
     return true; // title
   }
-  if (STARTS_NEW_PARAGRAPH_RE.test(line.text)) {
+  if (
+    STARTS_NEW_PARAGRAPH_RE.test(line.text) ||
+    (line.bold && skSectionHeading(line.text, section) !== null)
+  ) {
     return true;
   }
   if (
@@ -426,8 +425,21 @@ function isStructuralStart(line: PdfLine): boolean {
 
 const mergeWrappedLines = (lines: readonly PdfLine[]): PdfLine[] => {
   const merged: PdfLine[] = [];
+  let section: Section = "preamble";
 
   for (const line of lines) {
+    if (line.bold && isSkHoldingMarker(line.text)) {
+      section = "holding";
+    }
+    if (line.bold && isSkReasoningMarker(line.text)) {
+      section = "reasoning";
+    }
+    if (line.bold && isSkInstructionMarker(line.text)) {
+      section = "instruction";
+    }
+    if (section === "instruction" && SK_CLOSING_RE.test(line.text)) {
+      section = "closing";
+    }
     const prev = merged.at(-1);
 
     // Start a new paragraph if:
@@ -453,13 +465,13 @@ const mergeWrappedLines = (lines: readonly PdfLine[]): PdfLine[] => {
       !prev.bold &&
       line.bold &&
       !fontSizeChanged &&
-      !isStructuralStart(line);
+      !isStructuralStart(line, section);
 
     const startNew =
       !prev ||
       (line.bold !== prev.bold && !boldContinuation) ||
       fontSizeChanged ||
-      isStructuralStart(line) ||
+      isStructuralStart(line, section) ||
       prev.bold;
 
     if (startNew) {
@@ -481,26 +493,33 @@ const mergeWrappedLines = (lines: readonly PdfLine[]): PdfLine[] => {
 
 // ── Header stripping ──────────────────────────────────────
 
-/** Header labels that repeat API metadata; skip from body. */
-const HEADER_LABELS = [
-  "Súd:",
-  "Spisová značka:",
-  "Identifikačné číslo",
-  "Dátum vydania",
-  "Meno a priezvisko",
-  "ECLI:",
-];
+type BuildSkDecisionPdfBlocksOptions = {
+  lines: readonly PdfLine[];
+  metadata: Pick<ParseSkDecisionInput, "court" | "caseNumber" | "ecli">;
+};
 
-const isHeaderLine = (text: string): boolean =>
-  HEADER_LABELS.some((label) => text.startsWith(label));
-
-const skipHeaderLines = (lines: readonly PdfLine[]): PdfLine[] => {
-  // Skip header lines at the start of the document
-  let i = 0;
-  while (i < lines.length && isHeaderLine(lines[i]?.text ?? "")) {
-    i++;
+/** Match a whole extracted line against metadata before merging can append body text. */
+export const buildSkDecisionPdfBlocks = ({
+  lines,
+  metadata,
+}: BuildSkDecisionPdfBlocksOptions): Block[] => {
+  const repeatedHeaders = new Set([
+    `Súd: ${metadata.court}`,
+    `Spisová značka: ${metadata.caseNumber}`,
+  ]);
+  if (metadata.ecli) {
+    repeatedHeaders.add(`ECLI: ${metadata.ecli}`);
   }
-  return lines.slice(i);
+  let firstBodyLine = 0;
+  while (
+    firstBodyLine < lines.length &&
+    repeatedHeaders.has(lines.at(firstBodyLine)?.text.trim() ?? "")
+  ) {
+    firstBodyLine++;
+  }
+  // Digits at page boundaries can be amounts or numbered points; without
+  // a source-backed pagination signal they remain source content.
+  return classifyLines(mergeWrappedLines(lines.slice(firstBodyLine)));
 };
 
 // ── Classification ────────────────────────────────────────
@@ -514,42 +533,7 @@ const boldInline = (text: string): Inline[] => [
   { type: "bold", children: [{ type: "text", text }] },
 ];
 
-type Section = "preamble" | "holding" | "reasoning" | "instruction" | "closing";
-
-/**
- * Detect page numbers using PDF page boundary info.
- *
- * A standalone number is a page number when it's the first
- * or last line on its PDF page (page headers/footers).
- * This is more robust than matching digit patterns alone.
- */
-const isPageNumber = (line: PdfLine, allLines: readonly PdfLine[]): boolean => {
-  if (!/^\d{1,4}$/u.test(line.text.trim())) {
-    return false;
-  }
-  if (line.bold) {
-    return false;
-  }
-
-  const idx = allLines.indexOf(line);
-  if (idx === -1) {
-    return false;
-  }
-
-  // First line on this page
-  const prevLine = allLines[idx - 1];
-  if (!prevLine || prevLine.pageIndex !== line.pageIndex) {
-    return true;
-  }
-
-  // Last line on this page
-  const nextLine = allLines[idx + 1];
-  if (!nextLine || nextLine.pageIndex !== line.pageIndex) {
-    return true;
-  }
-
-  return false;
-};
+type Section = SkDocumentSection;
 
 /**
  * Classify extracted PDF lines into AST blocks.
@@ -653,14 +637,8 @@ const classifyLines = (lines: readonly PdfLine[]): Block[] => {
       continue;
     }
 
-    // After the closing formula, everything is signature
-    // material (judge name, title). Standalone numbers
-    // are page numbers — drop them entirely.
+    // After the closing formula, retain all signature material.
     if (section === "closing") {
-      // Drop page numbers (standalone digits)
-      if (/^\d{1,3}$/u.test(text.trim())) {
-        continue;
-      }
       blocks.push({
         id: makeId(),
         anchorId: `p${++blockCount}`,
@@ -684,16 +662,14 @@ const classifyLines = (lines: readonly PdfLine[]): Block[] => {
       continue;
     }
 
-    // Standalone bold Roman numeral markers (I., II., III.)
-    // are sub-section dividers. Classify as level 3 headings
-    // so they render as visual separators, not plain paragraphs.
-    if (bold && SK_ROMAN_DIVIDER_RE.test(text.trim())) {
+    const sectionHeading = bold ? skSectionHeading(text, section) : null;
+    if (sectionHeading !== null) {
       blocks.push({
         id: makeId(),
         anchorId: `p${++blockCount}`,
         type: "heading",
-        level: 3,
-        inlines: boldInline(text),
+        level: sectionHeading.level,
+        inlines: segmentsToInlines(line.segments),
         plainText: text,
       });
       continue;
@@ -704,6 +680,7 @@ const classifyLines = (lines: readonly PdfLine[]): Block[] => {
     // "Argumentácia sťažovateľa"). Center it as h3.
     const prevBlock = blocks.at(-1);
     if (
+      section === "reasoning" &&
       bold &&
       text.length < 80 &&
       prevBlock?.type === "heading" &&

@@ -111,3 +111,18 @@ export const withResultSavepoint = async <T>(
   }
   return result;
 };
+
+/** Abort the database transaction when its callback returns a business failure. */
+export const resultTx = async <T>(
+  safeDb: SafeDb,
+  run: (tx: Transaction) => Promise<Result<T, HandlerError>>,
+): Promise<Result<T, HandlerError | SafeDbError>> => {
+  const result = await abortableTx(safeDb, async (tx) => {
+    const outcome = await run(tx);
+    if (outcome.isErr()) {
+      throw outcome.error;
+    }
+    return outcome.value;
+  });
+  return result;
+};

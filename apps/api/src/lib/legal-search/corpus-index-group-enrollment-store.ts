@@ -22,6 +22,7 @@ import type { Transaction } from "@/api/db/root";
 import {
   corpusIndexGenerations,
   corpusIndexGroupEnrollments,
+  corpusIndexGroupWithdrawals,
 } from "@/api/db/schema";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import {
@@ -231,6 +232,102 @@ export const attestCorpusIndexGroupEnrollmentTx = async (
       `Corpus index group cannot be attested (${readiness.reason}): ${group.indexId}`,
     );
   }
+};
+
+/** Who withdraws a group's attestation, and why. */
+export type CorpusIndexGroupWithdrawal = {
+  /**
+   * The acting process or operator as its own runtime names it, e.g.
+   * `service:corpus-index-group-provision@host`; lowercase, at most 128.
+   */
+  actor: string;
+  reason: string;
+};
+
+const WITHDRAWAL_ACTOR = /^[a-z0-9][a-z0-9:._@/-]{0,127}$/u;
+
+/** The trail's column width; a reason is a sentence, not a payload. */
+const WITHDRAWAL_REASON_LIMIT = 2048;
+
+/** A withdrawal was asked of a group whose attestation gates nothing. */
+export class CorpusIndexGroupWithdrawalRefusedError extends TaggedError(
+  "CorpusIndexGroupWithdrawalRefusedError",
+)<{ message: string; indexId: string }> {}
+
+/**
+ * Withdraw a group's attestation: an attested row returns to `pending`, so
+ * its scoped reads refuse, generation-wide reads leave its index out and no
+ * append to it starts, until it is attested anew. The binding is left as it
+ * is. Returns whether this call changed the row; an unbound or pending group
+ * is not changed.
+ *
+ * Only a group under a contract of its own can be withdrawn. A group under
+ * its manifest's contract is read by scope and appended to without asking
+ * the registry, so a withdrawal would report a group out of service that
+ * still serves; it is refused with `CorpusIndexGroupWithdrawalRefusedError`.
+ *
+ * Every withdrawal is attributed: the caller passes the actor its own
+ * process establishes (never a value read from a request) and the reason,
+ * and the transition is recorded in `corpus_index_group_withdrawals` in the
+ * same transaction. A call that changes nothing records nothing.
+ */
+export const withdrawCorpusIndexGroupEnrollmentTx = async (
+  tx: Transaction,
+  {
+    actor,
+    reason,
+    ...target
+  }: CorpusIndexGroupTarget & CorpusIndexGroupWithdrawal,
+): Promise<boolean> => {
+  const group = requireRegisteredGroup(target);
+  if (!WITHDRAWAL_ACTOR.test(actor)) {
+    return panic(`Withdrawal actor is not an actor name: ${group.indexId}`);
+  }
+  const statedReason = reason.replaceAll("\u0000", "").trim();
+  if (statedReason === "") {
+    return panic(`Withdrawal needs a reason: ${group.indexId}`);
+  }
+  if (group.contractVersion === "base") {
+    const message = `Corpus index group under its manifest's contract cannot be withdrawn: ${group.indexId}`;
+    return panic(
+      message,
+      new CorpusIndexGroupWithdrawalRefusedError({
+        message,
+        indexId: group.indexId,
+      }),
+    );
+  }
+  const withdrawn = await tx
+    .update(corpusIndexGroupEnrollments)
+    .set({
+      provisioningStatus: "pending",
+      attestedAt: null,
+      updatedAt: sql`clock_timestamp()`,
+    })
+    .where(
+      and(
+        enrollmentKey(group),
+        eq(corpusIndexGroupEnrollments.provisioningStatus, "attested"),
+      ),
+    )
+    .returning({
+      effectiveDigest: corpusIndexGroupEnrollments.effectiveDigest,
+    });
+  const [row] = withdrawn;
+  if (withdrawn.length !== 1 || row === undefined) {
+    return false;
+  }
+  // The trail names the contract the row was attested against, which differs
+  // from the declared one when the declaration moved after the attestation.
+  await tx.insert(corpusIndexGroupWithdrawals).values({
+    family: group.manifest.family,
+    generation: group.manifest.generation,
+    indexGroup: group.indexGroup,
+    effectiveDigest: row.effectiveDigest,
+    actor,
+    reason: statedReason.slice(0, WITHDRAWAL_REASON_LIMIT),
+  });
+  return true;
 };
 
 /**

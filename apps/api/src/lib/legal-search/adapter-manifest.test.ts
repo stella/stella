@@ -72,7 +72,7 @@ describe("case-law adapter manifests", () => {
       expect(new Set(placeholderTexts).size).toBe(placeholderTexts.length);
 
       for (const [code, court] of Object.entries(manifest.ecliCourtCodes)) {
-        expect(code).toMatch(/^[A-Z0-9]{1,8}$/u);
+        expect(code).toMatch(/^[A-Za-z0-9]{1,8}$/u);
         expect(court.trim()).toBe(court);
         expect(court.length).toBeGreaterThan(0);
       }

@@ -176,6 +176,7 @@ beforeAll(
         language: "cs",
         languageGroupKey: "hydration-group",
         contentHash: "hash-cze",
+        decisionType: "nález",
         citationAuthority: 2,
         citationCount: 7,
         metadata: { category: "A", legalSentence: "Právní věta." },
@@ -190,6 +191,7 @@ beforeAll(
         languageGroupKey: "hydration-group",
         contentHash: "hash-svk",
         metadata: { category: "B" },
+        decisionType: "Nález",
         citationAuthority: 1,
         citationCount: 3,
       },
@@ -201,6 +203,7 @@ beforeAll(
         country: "SVK",
         language: "sk",
         contentHash: "hash-foreign",
+        decisionType: "Nález",
         indexedHash: "hash-foreign",
       },
       {
@@ -259,6 +262,12 @@ beforeAll(
         generation: GENERATION,
         indexId: INDEX_ID,
         intentId: slovakIntentId,
+      },
+      {
+        entityId: foreignId,
+        generation: GENERATION,
+        indexId: INDEX_ID,
+        intentId: createSafeId<"corpusIndexProjectionIntent">(),
       },
       {
         entityId: closedId,
@@ -494,14 +503,14 @@ test.each([
       courtWeights,
       generation: GENERATION,
     });
-    expect(ranking.ranked.map(({ id }) => id)).toEqual(expectedIds);
+    expect(ranking.ranked.map(({ id }) => id)).toEqual([...expectedIds]);
     const rows = await readCaseLawPageDecisionRows({
       body,
       caseLawDb,
       generation: GENERATION,
       ids: [czechId, slovakId],
     });
-    expect([...rows.keys()]).toEqual(expectedIds);
+    expect([...rows.keys()]).toEqual([...expectedIds]);
   },
 );
 
@@ -539,3 +548,38 @@ test.each([true, false])(
     });
   },
 );
+
+test("corpus hydration and page reads apply the same case-insensitive type filter", async () => {
+  for (const country of ["CZE", "SVK"]) {
+    const expected = country === "CZE" ? [czechId, slovakId] : [foreignId];
+    for (const decisionType of ["nález", "Nález", "NÁLEZ"]) {
+      const hydrated: HydratedRows = new Map();
+      const scoped = {
+        body: { ...SEARCH_BODY, country, decisionType },
+        caseLawDb,
+        courtWeights,
+        generation: GENERATION,
+      };
+      await rehydrateCaseLawCandidates({
+        ...scoped,
+        candidates: candidatesOf(czechId, slovakId, foreignId, closedId),
+        hydrated,
+      });
+      // Rejected candidates stay cached as null so later rounds do not reread them.
+      const matchedIds = [...hydrated]
+        .filter(([, row]) => row !== null)
+        .map(([id]) => id);
+      expect(matchedIds.toSorted()).toEqual(expected.toSorted());
+      for (const id of [czechId, slovakId, foreignId, closedId]) {
+        if (!expected.includes(id)) {
+          expect(hydrated.get(id)).toBeNull();
+        }
+      }
+      const rows = await readCaseLawPageDecisionRows({
+        ...scoped,
+        ids: [czechId, slovakId, foreignId, closedId],
+      });
+      expect([...rows.keys()].toSorted()).toEqual(expected.toSorted());
+    }
+  }
+});
