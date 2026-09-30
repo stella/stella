@@ -131,7 +131,7 @@ const exportInvoicePdf = createSafeHandler(
           }),
       ),
     );
-    const body = yield* rendered.mapErr(
+    const body = yield* rendered.mapError(
       (error) =>
         new HandlerError({
           status: 409,

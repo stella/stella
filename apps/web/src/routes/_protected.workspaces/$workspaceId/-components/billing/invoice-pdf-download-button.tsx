@@ -9,7 +9,7 @@ import { stellaToast } from "@stll/ui/toast";
 import { useLocale as useFormattingLocale } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { apiUrl } from "@/lib/api-url";
-import { ClientOperationError } from "@/lib/errors/client";
+import { unwrapEden } from "@/lib/errors/api";
 import { getExportBaseName, getExportFileName } from "@/lib/export-download";
 import { downloadFile } from "@/lib/utils";
 
@@ -46,9 +46,9 @@ export const InvoicePdfDownloadButton = ({
         },
       );
       if (!response.ok) {
-        throw new ClientOperationError({
-          action: "downloadInvoicePdf",
-          message: "Failed to download invoice PDF",
+        unwrapEden({
+          data: null,
+          error: { status: response.status, value: await response.text() },
         });
       }
       const blob = await response.blob();

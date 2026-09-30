@@ -1,6 +1,6 @@
 import {
   PDF,
-  PDFFormXObject,
+  type PDFFormXObject,
   PdfArray,
   PdfDict,
   PdfName,
@@ -557,12 +557,11 @@ const createInvoiceWriter = async ({ pdf, lang }: InvoiceWriterOptions) => {
           ),
         );
         const ref = pdf.context.registry.register(stream);
-        const object = new PDFFormXObject(ref, {
-          x: 0,
-          y: 0,
-          width: PAGE_WIDTH,
-          height: PAGE_HEIGHT,
-        });
+        const object = {
+          type: "formxobject",
+          ref,
+          bbox: { x: 0, y: 0, width: PAGE_WIDTH, height: PAGE_HEIGHT },
+        } as const satisfies PDFFormXObject;
         const name = shapedPage.registerXObject(object);
         shapedPage.drawOperators([ops.paintXObject(name)]);
       }

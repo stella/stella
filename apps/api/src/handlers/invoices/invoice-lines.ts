@@ -576,7 +576,7 @@ const calculateInvoiceAmounts = (
   calculateDocumentTotals({
     documentType,
     lines: lines.map(toLineInput),
-  }).mapErr(
+  }).mapError(
     (error) => new HandlerError({ status: 500, message: error.message }),
   );
 
