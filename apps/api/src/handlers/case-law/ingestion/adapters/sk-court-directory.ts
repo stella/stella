@@ -49,8 +49,12 @@ export const isSkCourtRegistryUnavailable = (
   REGISTRY_UNAVAILABILITY_REASONS.some((reason) => reason === value["reason"]);
 
 const skCourtDefunctState = (stated: string | null | undefined) => {
-  if (stated === "true") {return true;}
-  if (stated === "false") {return false;}
+  if (stated === "true") {
+    return true;
+  }
+  if (stated === "false") {
+    return false;
+  }
   return "not_stated" as const;
 };
 
@@ -164,7 +168,9 @@ export const createSkCourtRegistryReader = (
           ),
         catch: registryError,
       });
-      if (fetched.isErr()) {return fetched;}
+      if (fetched.isErr()) {
+        return fetched;
+      }
       const response = fetched.value;
       const unavailable = (reason: SkCourtRegistryUnavailable["reason"]) => {
         logger.warn("case_law.ingestion.court_registry_unavailable", {
@@ -189,7 +195,9 @@ export const createSkCourtRegistryReader = (
           }),
         );
       }
-      if (!response.ok) {return unavailable("http-refusal");}
+      if (!response.ok) {
+        return unavailable("http-refusal");
+      }
       const body = await Result.tryPromise({
         try: async () =>
           response.body === null
@@ -197,20 +205,32 @@ export const createSkCourtRegistryReader = (
             : await readCappedBytes(response.body, MAX_REGISTRY_RESPONSE_BYTES),
         catch: registryError,
       });
-      if (body.isErr()) {return body;}
+      if (body.isErr()) {
+        return body;
+      }
       const bytes = body.value;
-      if (bytes === null) {return unavailable("response-too-large");}
+      if (bytes === null) {
+        return unavailable("response-too-large");
+      }
       const parsed = Result.try({
         try: (): unknown => JSON.parse(new TextDecoder().decode(bytes)),
         catch: registryError,
       });
-      if (parsed.isErr()) {return unavailable("invalid-json");}
+      if (parsed.isErr()) {
+        return unavailable("invalid-json");
+      }
       const json = parsed.value;
-      if (!isSkCourtRegistryRecord(json) || json.registreGuid !== registreGuid)
-        {return unavailable("invalid-shape");}
+      if (
+        !isSkCourtRegistryRecord(json) ||
+        json.registreGuid !== registreGuid
+      ) {
+        return unavailable("invalid-shape");
+      }
       return Result.ok({ status: "available", record: json } as const);
     })().then((result) => {
-      if (result.isErr()) {records.delete(registreGuid);}
+      if (result.isErr()) {
+        records.delete(registreGuid);
+      }
       return result;
     });
     records.set(registreGuid, pending);
