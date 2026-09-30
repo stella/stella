@@ -1,7 +1,9 @@
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { AsyncLocalStorage } from "node:async_hooks";
 
 import { env } from "@/api/env";
+import { logger } from "@/api/lib/observability/logger";
+import { emitActionResponseOversizeMetric } from "@/api/lib/observability/request-metrics";
 
 export type ActionSizePolicy = {
   requestBytes: number;
@@ -84,32 +86,36 @@ export const boundActionRequest = async (
   if (request.body === null) {
     return Result.ok(request);
   }
-  const stream: ReadableStream<Uint8Array> = request.body;
-  const chunks: Uint8Array[] = [];
+  // Meter a tee while retaining Bun's original socket-bound Request.
+  const metered = request.clone();
+  const stream: ReadableStream<Uint8Array> | null = metered.body;
+  if (stream === null) {
+    return panic("Cloned action request lost its body");
+  }
   let size = 0;
-  for await (const chunk of stream) {
-    size += chunk.byteLength;
-    if (size > maximum) {
+  const reader = stream.getReader();
+  try {
+    while (true) {
+      const chunk = await reader.read();
+      if (chunk.done) {
+        request.headers.set("content-length", String(size));
+        return Result.ok(request);
+      }
+      size += chunk.value.byteLength;
+      if (size <= maximum) {
+        continue;
+      }
+      // Both tee branches must cancel together; either alone waits for its peer.
+      await Promise.all([reader.cancel(), request.body.cancel()]);
       return Result.err(requestTooLarge());
     }
-    chunks.push(chunk);
+  } finally {
+    try {
+      await reader.cancel();
+    } finally {
+      reader.releaseLock();
+    }
   }
-  const body = new Uint8Array(size);
-  let offset = 0;
-  for (const chunk of chunks) {
-    body.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  const headers = new Headers(request.headers);
-  headers.set("content-length", String(size));
-  return Result.ok(
-    new Request(request.url, {
-      body,
-      headers,
-      method: request.method,
-      signal: request.signal,
-    }),
-  );
 };
 
 export const actionSizeErrorResponse = (
@@ -134,11 +140,31 @@ export const actionSizeErrorResponse = (
   });
 };
 
+type ActionResponseOversizeOptions = {
+  transport: "http" | "mcp";
+  operation: string;
+  bytes: number;
+  maximum: number;
+};
+
+export const recordActionResponseOversize = (
+  options: ActionResponseOversizeOptions,
+): void => {
+  logger.warn("action.response_oversize", options);
+  emitActionResponseOversizeMetric(options.transport);
+};
+
+type ActionJsonResponseOptions = {
+  maximum: number;
+  disposition: "refuse" | "preserve_success";
+  operation: string;
+};
+
 // This boundary consumes only finite JSON bodies, including their transport
 // envelopes. SSE, downloads and other streaming media keep their own owners.
 export const boundActionJsonResponse = async (
   response: Response,
-  maximum: number,
+  { maximum, disposition, operation }: ActionJsonResponseOptions,
 ): Promise<Response> => {
   if (
     response.body === null ||
@@ -148,12 +174,13 @@ export const boundActionJsonResponse = async (
   ) {
     return response;
   }
+  const effectiveDisposition = response.ok ? disposition : "refuse";
   const stream: ReadableStream<Uint8Array> = response.body;
   const chunks: Uint8Array[] = [];
   let size = 0;
   for await (const chunk of stream) {
     size += chunk.byteLength;
-    if (size > maximum) {
+    if (size > maximum && effectiveDisposition === "refuse") {
       const refused = actionSizeErrorResponse(
         new ActionSizeError({
           message:
@@ -170,6 +197,14 @@ export const boundActionJsonResponse = async (
       return new Response(refused.body, { status: refused.status, headers });
     }
     chunks.push(chunk);
+  }
+  if (size > maximum) {
+    recordActionResponseOversize({
+      transport: "http",
+      operation,
+      bytes: size,
+      maximum,
+    });
   }
   const body = new Uint8Array(size);
   let offset = 0;

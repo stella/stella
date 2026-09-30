@@ -159,6 +159,7 @@ import {
 import {
   answerRequestError,
   completeRequest,
+  withFinalResponseCompletion,
 } from "@/api/lib/observability/request-lifecycle";
 import { runWithRequestScope } from "@/api/lib/observability/request-scope";
 import { closeActionAdmissionRedis } from "@/api/lib/rate-limit/action-admission";
@@ -633,20 +634,24 @@ const scopeRequestAsyncStores = (): void => {
   api.wrap(
     (handleRequest) => (request: Request) =>
       runWithRequestScope(() => {
-        if (!env.FEATURE_ACTION_ADMISSION) {return handleRequest(request);}
-        return runTenantHttpAction(request, {
-          handleRequest: async (bounded) => {
-            // The private HOC types erase the response type; validate the
-            // framework boundary before applying serialized JSON limits.
-            const response = await handleRequest(bounded);
-            if (!(response instanceof Response)) {
-              return panic("The HTTP framework returned an invalid response");
-            }
-            return response;
-          },
-          isTenantAction,
-          decorateRefusal: decorateActionSizeRefusal,
-        });
+        if (!env.FEATURE_ACTION_ADMISSION) {
+          return handleRequest(request);
+        }
+        return withFinalResponseCompletion(request, () =>
+          runTenantHttpAction(request, {
+            handleRequest: async (bounded) => {
+              // The private HOC types erase the response type; validate the
+              // framework boundary before applying serialized JSON limits.
+              const response = await handleRequest(bounded);
+              if (!(response instanceof Response)) {
+                return panic("The HTTP framework returned an invalid response");
+              }
+              return response;
+            },
+            isTenantAction,
+            decorateRefusal: decorateActionSizeRefusal,
+          }),
+        );
       }),
   );
 };

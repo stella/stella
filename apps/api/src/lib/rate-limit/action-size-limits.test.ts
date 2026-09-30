@@ -41,13 +41,13 @@ describe("tenant action size boundaries", () => {
     for (const body of ["é", "😀", '"\\n\\\""', "plain"]) {
       const size = utf8.encode(body).byteLength;
       for (const declaredLength of [undefined, "0", "1", String(size)]) {
-        const bounded = await boundActionRequest(
-          requestWithBody(body, declaredLength),
-          size,
-        );
+        const original = requestWithBody(body, declaredLength);
+        const bounded = await boundActionRequest(original, size);
         if (Result.isError(bounded)) {
           throw bounded.error;
         }
+        expect(bounded.value).toBe(original);
+        expect(original.bodyUsed).toBe(false);
         expect(await bounded.value.text()).toBe(body);
         expect(bounded.value.headers.get("content-length")).toBe(String(size));
         expect(bounded.value.headers.get("x-request-id")).toBe("request-size");
@@ -131,7 +131,7 @@ describe("tenant action size boundaries", () => {
           status: 201,
           statusText: "Created",
         }),
-        size,
+        { maximum: size, disposition: "refuse", operation: "GET" },
       );
       expect(exact.status).toBe(201);
       expect(exact.statusText).toBe("Created");
@@ -139,7 +139,7 @@ describe("tenant action size boundaries", () => {
       expect(await exact.text()).toBe(serialized);
       const refused = await boundActionJsonResponse(
         new Response(serialized, { headers }),
-        size - 1,
+        { maximum: size - 1, disposition: "refuse", operation: "GET" },
       );
       expect(refused.status).toBe(413);
       expect(refused.headers.get("etag")).toBeNull();
@@ -177,13 +177,19 @@ describe("tenant action size boundaries", () => {
       const original = new Response(body, {
         headers: { "content-type": contentType },
       });
-      expect(await boundActionJsonResponse(original, 1)).toBe(original);
+      expect(
+        await boundActionJsonResponse(original, {
+          maximum: 1,
+          disposition: "refuse",
+          operation: "GET",
+        }),
+      ).toBe(original);
       expect(pulls).toBe(0);
       await body.cancel();
     }
     const refused = await boundActionJsonResponse(
       Response.json({ text: "oversized" }),
-      1,
+      { maximum: 1, disposition: "refuse", operation: "GET" },
     );
     expect(refused.status).toBe(413);
     expect((await refused.arrayBuffer()).byteLength).toBe(0);

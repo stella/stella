@@ -14,6 +14,7 @@ import type {
   Resource,
 } from "@modelcontextprotocol/server";
 import { panic, Result } from "better-result";
+import { AsyncLocalStorage } from "node:async_hooks";
 
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 
@@ -29,6 +30,8 @@ import {
   boundActionJsonResponse,
   boundActionRequest,
   getActionSizePolicy,
+  getTenantActionSizePolicy,
+  recordActionResponseOversize,
   withTenantActionSizePolicy,
 } from "@/api/lib/rate-limit/action-size-limits";
 import { isEventStreamResponse, withSseHeartbeat } from "@/api/lib/sse";
@@ -89,6 +92,7 @@ import {
 } from "@/api/mcp/tool-utils";
 
 const MAX_TOOL_NAME_SUGGESTION_CHARS = 128;
+const responseDisposition = new AsyncLocalStorage<{ type: "read" | "tool" }>();
 
 const mcpStructuredErrorResult = (
   args: Parameters<typeof structuredErrorResult>[0],
@@ -688,7 +692,11 @@ export const createMcpHttpRequestHandler = ({
         await readMcpResource(resourceRequest.params.uri, mode),
     );
 
-    server.setRequestHandler("tools/call", async (toolRequest) => {
+    server.setRequestHandler("tools/call", async (toolRequest, { mcpReq }) => {
+      const disposition = responseDisposition.getStore();
+      if (disposition !== undefined) {
+        disposition.type = "tool";
+      }
       const toolName = toolRequest.params.name;
       const requiredScopesHint = getMcpToolRequiredScopesHint(toolName, mode);
       const missingHintedScope = requiredScopesHint?.find(
@@ -756,6 +764,8 @@ export const createMcpHttpRequestHandler = ({
         });
       }
 
+      const resultDisposition =
+        definition.annotations?.readOnlyHint === true ? "read" : "mutation";
       const run = async (signal?: AbortSignal) => {
         signal?.throwIfAborted();
         const result = await handleMcpToolCall({
@@ -765,7 +775,44 @@ export const createMcpHttpRequestHandler = ({
           toolName,
         });
         signal?.throwIfAborted();
-        return result;
+        const policy = getTenantActionSizePolicy();
+        if (policy === undefined) {
+          return result;
+        }
+        const bytes = Buffer.byteLength(
+          JSON.stringify({ jsonrpc: "2.0", id: mcpReq.id, result }),
+          "utf-8",
+        );
+        if (bytes <= policy.responseBytes) {
+          return result;
+        }
+        recordActionResponseOversize({
+          transport: "mcp",
+          operation: toolName,
+          bytes,
+          maximum: policy.responseBytes,
+        });
+        if (resultDisposition === "read" || result.isError === true) {
+          return mcpStructuredErrorResult({
+            code: "result_too_large",
+            message: "Tool result exceeds the configured byte limit",
+            hint: "Request a smaller selection using this tool's filters or page limit.",
+          });
+        }
+        return {
+          isError: false,
+          content: [
+            {
+              type: "text",
+              text: "Action applied. The result was too large and was omitted. Do not repeat the action; use a read tool to inspect its outcome.",
+            },
+          ],
+          structuredContent: {
+            applied: true,
+            resultOmitted: true,
+            reason: "result_too_large",
+          },
+        } satisfies CallToolResult;
       };
       if (!env.FEATURE_ACTION_ADMISSION && !env.FEATURE_ACTION_COST_RECORDS) {
         return await run();
@@ -1086,14 +1133,19 @@ export const createMcpHttpRequestHandler = ({
       );
     }
     const policy = configuredPolicy.value;
+    const envelopeDisposition: { type: "read" | "tool" } = { type: "read" };
     const completeResponse = async (
       response: Response,
       session?: McpSession,
     ) => {
       const bounded =
-        policy === undefined
+        policy === undefined || envelopeDisposition.type === "tool"
           ? response
-          : await boundActionJsonResponse(response, policy.responseBytes);
+          : await boundActionJsonResponse(response, {
+              maximum: policy.responseBytes,
+              disposition: "refuse",
+              operation: "mcp",
+            });
       return withMcpCors(bounded, session, mode);
     };
     let framedRequest = incomingRequest;
@@ -1183,15 +1235,17 @@ export const createMcpHttpRequestHandler = ({
       };
       const legacyRequest = await isLegacyRequest(request);
       const dispatch = async () =>
-        legacyRequest
-          ? await serveLegacyRequest({
-              authInfo,
-              clientIp,
-              mode,
-              request,
-              session,
-            })
-          : await handlerForMode(mode).fetch(request, { authInfo });
+        responseDisposition.run(envelopeDisposition, async () =>
+          legacyRequest
+            ? await serveLegacyRequest({
+                authInfo,
+                clientIp,
+                mode,
+                request,
+                session,
+              })
+            : await handlerForMode(mode).fetch(request, { authInfo }),
+        );
       const response =
         policy === undefined
           ? await dispatch()

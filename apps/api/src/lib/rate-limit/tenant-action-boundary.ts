@@ -177,6 +177,13 @@ export const runTenantHttpAction = (
         : decorateRefusal(response, request);
     }
     const response = await handleRequest(bounded.value);
-    return await boundActionJsonResponse(response, limits.responseBytes);
+    return await boundActionJsonResponse(response, {
+      maximum: limits.responseBytes,
+      disposition:
+        request.method === "GET" || request.method === "HEAD"
+          ? "refuse"
+          : "preserve_success",
+      operation: request.method,
+    });
   });
 };

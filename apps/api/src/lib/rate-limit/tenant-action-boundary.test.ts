@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { Elysia } from "elysia";
 
+import { resolveClientAddress } from "@/api/lib/client-ip";
+
 import {
   ActionSizeError,
   getTenantActionSizePolicy,
@@ -261,7 +263,7 @@ describe("tenant HTTP action boundary", () => {
       isTenantAction: () => true,
       policy: () => Result.ok(limits),
       handleRequest: async (received) => {
-        expect(received).not.toBe(request);
+        expect(received).toBe(request);
         expect(received.headers.get("content-length")).toBe("8");
         expect(await received.text()).toBe(body);
         expect(getTenantActionSizePolicy()).toBe(limits);
@@ -271,6 +273,61 @@ describe("tenant HTTP action boundary", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ body });
     expect(getTenantActionSizePolicy()).toBeUndefined();
+  });
+
+  test("retains the native peer address while metering accepted bodies", async () => {
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch: async (request, nativeServer) =>
+        await runTenantHttpAction(request, {
+          enabled: true,
+          isTenantAction: () => true,
+          policy: () => Result.ok(limits),
+          handleRequest: async (received) => {
+            const address = resolveClientAddress(received, nativeServer);
+            return Response.json({
+              address: address?.address,
+              body: await received.text(),
+            });
+          },
+        }),
+    });
+    try {
+      const response = await fetch(server.url, { method: "POST", body: "é" });
+      expect(await response.json()).toEqual({
+        address: "127.0.0.1",
+        body: "é",
+      });
+    } finally {
+      await server.stop(true);
+    }
+  });
+
+  test("retains successful mutation statuses, headers and whole bodies above the response ceiling", async () => {
+    const payload = { result: "é".repeat(300) };
+    for (const method of ["POST", "PUT", "PATCH", "DELETE"]) {
+      let applied = 0;
+      const response = await runTenantHttpAction(
+        new Request("http://localhost/action", { method }),
+        {
+          enabled: true,
+          isTenantAction: () => true,
+          policy: () => Result.ok(limits),
+          handleRequest: () => {
+            applied += 1;
+            return Response.json(payload, {
+              status: 201,
+              headers: { "x-request-id": "completed-action" },
+            });
+          },
+        },
+      );
+      expect(applied).toBe(1);
+      expect(response.status).toBe(201);
+      expect(response.headers.get("x-request-id")).toBe("completed-action");
+      expect(await response.json()).toEqual(payload);
+    }
   });
 
   test("bounds whole serialized JSON bytes after framework encoding and preserves SSE", async () => {

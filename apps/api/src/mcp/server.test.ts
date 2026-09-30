@@ -139,6 +139,7 @@ const createModernMcpRequest = ({
       authorization: `Bearer ${token}`,
       "content-type": "application/json",
       "mcp-method": method,
+      ...(typeof params.name === "string" ? { "mcp-name": params.name } : {}),
       "mcp-protocol-version": MODERN_PROTOCOL_VERSION,
     },
     method: "POST",
@@ -1610,16 +1611,84 @@ describe("MCP transport conformance", () => {
     expect(new TextEncoder().encode(serialized).length).toBeGreaterThan(512);
     listMcpToolsMock.mockResolvedValue(tools);
     for (const protocolVersion of [undefined, MODERN_PROTOCOL_VERSION]) {
-      const request = toolsListRequest();
-      if (protocolVersion !== undefined) {
-        request.headers.set("mcp-protocol-version", protocolVersion);
-      }
+      const request =
+        protocolVersion === undefined
+          ? toolsListRequest()
+          : createModernMcpRequest({ id: 1, method: "tools/list" });
       const response = await handleMcpHttpRequest(request);
       expect(response.status).toBe(413);
       expect((await response.arrayBuffer()).byteLength).toBeLessThanOrEqual(
         512,
       );
       expect(response.headers.get("access-control-allow-origin")).toBe("*");
+    }
+  });
+
+  test("bounds tool results by declared read intent while preserving applied mutations on both transports", async () => {
+    authenticateSession();
+    actionSizePolicyMock.mockReturnValue(
+      Result.ok({ pageSize: 10, requestBytes: 2000, responseBytes: 512 }),
+    );
+    const payload = {
+      content: [{ type: "text", text: "é".repeat(400) }],
+      structuredContent: { result: "é".repeat(400) },
+    };
+    const definition = listStaticMcpToolDefinitions("default").find(
+      (tool) => tool.scope === "stella:read" && tool.annotations.readOnlyHint,
+    );
+    if (definition === undefined) {
+      panic("Missing read tool fixture");
+    }
+    for (const intent of ["read", "write", "unannotated"] as const) {
+      getMcpToolDefinitionMock.mockResolvedValue({
+        ...definition,
+        annotations:
+          intent === "unannotated"
+            ? undefined
+            : { ...definition.annotations, readOnlyHint: intent === "read" },
+      });
+      for (const protocol of ["legacy", "modern"] as const) {
+        handleMcpToolCallMock.mockClear();
+        handleMcpToolCallMock.mockResolvedValue(payload);
+        const params = { name: definition.name, arguments: {} };
+        const request =
+          protocol === "modern"
+            ? createModernMcpRequest({ id: 1, method: "tools/call", params })
+            : createMcpRequest({
+                id: 1,
+                jsonrpc: "2.0",
+                method: "tools/call",
+                params,
+              });
+        const response = await handleMcpHttpRequest(request);
+        const encoded = await response.text();
+        expect({
+          status: response.status,
+          body: response.status === 200 ? undefined : encoded,
+        }).toEqual({ status: 200, body: undefined });
+        expect(Buffer.byteLength(encoded, "utf-8")).toBeLessThanOrEqual(512);
+        const envelope: McpJsonResponse<CallToolResult> = JSON.parse(encoded);
+        expect(handleMcpToolCallMock).toHaveBeenCalledTimes(1);
+        if (intent === "read") {
+          expect(envelope.result.isError).toBe(true);
+          expect(envelope.result.content).toEqual([
+            {
+              type: "text",
+              text: expect.stringContaining('"code":"result_too_large"'),
+            },
+          ]);
+          continue;
+        }
+        expect(envelope.result.isError).toBe(false);
+        expect(envelope.result.structuredContent).toEqual({
+          applied: true,
+          resultOmitted: true,
+          reason: "result_too_large",
+        });
+        expect(envelope.result.content).toEqual([
+          { type: "text", text: expect.stringContaining("Action applied.") },
+        ]);
+      }
     }
   });
 
