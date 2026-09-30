@@ -623,54 +623,6 @@ export type WebRoutes = {
       };
     };
   };
-  operator: {
-    registrations: {
-      get: {
-        body: unknown;
-        params: T5e3ac29766;
-        query: {
-          cursor?: string;
-          limit?: string;
-          since?: string;
-        };
-        headers: unknown;
-        response: {
-          200: {
-            items: Array<{
-              id: string;
-              email: string;
-              name: string;
-              detectedCountry: Tbe0400fa4c;
-              createdAt: string;
-            }>;
-            nextCursor: Tbe0400fa4c;
-            limit: number;
-          };
-          400: T9a51b7d2bc;
-          401: T9a51b7d2bc;
-          402: T9a51b7d2bc;
-          403: T9a51b7d2bc;
-          404: T9a51b7d2bc;
-          409: T9a51b7d2bc;
-          413: T9a51b7d2bc;
-          422: (T9a51b7d2bc | {
-            type: "validation";
-            on: string;
-            summary?: string;
-            message?: string;
-            found?: unknown;
-            property?: string;
-            expected?: string;
-          });
-          428: T9a51b7d2bc;
-          429: T9a51b7d2bc;
-          500: T9a51b7d2bc;
-          502: T9a51b7d2bc;
-          503: T9a51b7d2bc;
-        };
-      };
-    };
-  };
   live: {
     get: {
       body: unknown;
