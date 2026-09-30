@@ -15,8 +15,8 @@
  * `\ansicpgN` code page (or the current font's `\fcharsetN`), `\uN?` escapes, `\par`/`\pard`, `\line`, `\tab`, the
  * character state (`\b`, `\i`, `\ul`, `\cfN`), alignment, `\trowd`/`\cell`/
  * `\row` tables, and `\footnote`. Header tables (`\fonttbl`, `\colortbl`,
- * `\stylesheet`, `\info`) and every `\*` destination are skipped, because they
- * are the writer's own metadata rather than the document's text.
+ * `\stylesheet`, `\info`) are skipped. Embedded text destinations are kept
+ * after their anchor paragraph; unsupported ignorable destinations are reported.
  *
  * What it does not recognise, it reports: `warnings` names every control word
  * outside the dialect, so an unhandled construct reaches the parse signal
@@ -40,6 +40,11 @@ import type {
   TableRow,
   TextFormatting,
 } from "@stll/docx-core/model";
+
+import {
+  RTF_EMBEDDED_CONTAINERS,
+  RTF_VISIBLE_BLOCK_DESTINATIONS,
+} from "./rtf-destinations";
 
 /**
  * Code pages `\ansicpgN` selects, and the label `TextDecoder` knows each by.
@@ -113,6 +118,22 @@ const HANDLED_CONTROL_WORDS = new Set([
   "stylesheet",
   "info",
   "generator",
+  "bin",
+  "objemb",
+  "objlink",
+  "objautlink",
+  "objw",
+  "objh",
+  "shpleft",
+  "shptop",
+  "shpright",
+  "shpbottom",
+  "shpbxpage",
+  "shpbypage",
+  "shpwr",
+  "shpfhdr",
+  "shpz",
+  "dptxbx",
   "viewkind",
   "uc",
   "red",
@@ -245,7 +266,16 @@ const SKIPPED_DESTINATIONS = new Set([
   "stylesheet",
   "info",
   "pict",
-  "object",
+  "objdata",
+  "objclass",
+  "objname",
+  "shprslt",
+  "shppict",
+  "nonshppict",
+  "sp",
+  "sn",
+  "sv",
+  "generator",
   "header",
   "headerl",
   "headerr",
@@ -309,7 +339,9 @@ type OpenFootnote = { id: number; content: Paragraph[] };
 type Destination =
   | { type: "body" }
   | { type: "footnote"; note: OpenFootnote }
-  | { type: "skipped" };
+  | { type: "embedded-container"; content: Paragraph[] }
+  | { type: "embedded-text"; content: Paragraph[] }
+  | { type: "skipped"; reason: "metadata" | "unknown" };
 
 const initialCharacterState = (): CharacterState => ({
   bold: false,
@@ -364,6 +396,7 @@ const sameFormatting = (
 type ParagraphBuffer = {
   content: ParagraphContent[];
   alignment: ParagraphAlignment | undefined;
+  following: Paragraph[];
 };
 
 /**
@@ -584,7 +617,11 @@ const readRtfInto = (
   const stack: { state: GroupState; heldParagraph: ParagraphBuffer | null }[] =
     [];
 
-  let paragraph: ParagraphBuffer = { content: [], alignment: undefined };
+  let paragraph: ParagraphBuffer = {
+    content: [],
+    alignment: undefined,
+    following: [],
+  };
   let pending: PendingText = { bytes: [], label: codePageLabel, text: "" };
   let pendingFormatting: TextFormatting | undefined;
   let hasPendingRun = false;
@@ -626,7 +663,11 @@ const readRtfInto = (
     pending = { bytes: [], label: pending.label, text: "" };
     // A skipped destination is the writer's metadata: its text is not the
     // document's, and keeping it would print a colour table into the decision.
-    if (text.length === 0 || state.destination.type === "skipped") {
+    if (
+      text.length === 0 ||
+      state.destination.type === "skipped" ||
+      state.destination.type === "embedded-container"
+    ) {
       return;
     }
     const last = paragraph.content.at(-1);
@@ -681,18 +722,29 @@ const readRtfInto = (
         : { formatting: { alignment: paragraph.alignment } }),
       content: paragraph.content,
     };
-    paragraph = { content: [], alignment: state.paragraph.alignment };
+    paragraph = {
+      content: [],
+      alignment: state.paragraph.alignment,
+      following: [],
+    };
     hasPendingRun = false;
     return built;
   };
 
   const endParagraph = (): void => {
+    const following = paragraph.following;
     const built = takeParagraph();
     switch (state.destination.type) {
       case "skipped":
         return;
+      case "embedded-container":
+        state.destination.content.push(...following);
+        return;
+      case "embedded-text":
+        state.destination.content.push(built, ...following);
+        return;
       case "footnote":
-        state.destination.note.content.push(built);
+        state.destination.note.content.push(built, ...following);
         return;
       case "body":
         if (!state.paragraph.inTable) {
@@ -703,13 +755,16 @@ const readRtfInto = (
           // paragraph mark inside a row belongs to the cell being filled.
           const cell = tableCells.at(-1);
           if (cell === undefined) {
-            tableCells.push({ type: "tableCell", content: [built] });
+            tableCells.push({
+              type: "tableCell",
+              content: [built, ...following],
+            });
             return;
           }
-          cell.content.push(built);
+          cell.content.push(built, ...following);
           return;
         }
-        blocks.push(built);
+        blocks.push(built, ...following);
         return;
       default:
         state.destination satisfies never;
@@ -726,20 +781,21 @@ const readRtfInto = (
     const frame = stack.at(-1);
     if (frame?.heldParagraph === null) {
       frame.heldParagraph = paragraph;
-      paragraph = { content: [], alignment: undefined };
+      paragraph = { content: [], alignment: undefined, following: [] };
       hasPendingRun = false;
     }
     state.destination = destination;
   };
 
   const endCell = (): void => {
+    const following = paragraph.following;
     const built = takeParagraph();
     const cell = tableCells.at(-1);
     if (cell === undefined || cell.content.length > 0) {
-      tableCells.push({ type: "tableCell", content: [built] });
+      tableCells.push({ type: "tableCell", content: [built, ...following] });
       return;
     }
-    cell.content.push(built);
+    cell.content.push(built, ...following);
   };
 
   const endRow = (): void => {
@@ -812,11 +868,33 @@ const readRtfInto = (
     word: string,
     parameter: number | undefined,
   ): void => {
+    // Only known drawing wrappers may expose nested text; a font table or
+    // an unknown ignorable destination cannot turn its children into body text.
+    const parent = stack.at(-1)?.state.destination;
+    const mayReadEmbedded =
+      state.destination.type !== "skipped" ||
+      (state.destination.reason === "unknown" && parent?.type !== "skipped");
+    if (mayReadEmbedded && RTF_EMBEDDED_CONTAINERS.has(word)) {
+      enterDestination({ type: "embedded-container", content: [] });
+      return;
+    }
+    if (mayReadEmbedded && RTF_VISIBLE_BLOCK_DESTINATIONS.has(word)) {
+      enterDestination({ type: "embedded-text", content: [] });
+      state.paragraph = initialParagraphState();
+      return;
+    }
+    if (SKIPPED_DESTINATIONS.has(word)) {
+      enterDestination({ type: "skipped", reason: "metadata" });
+      // Font/colour tables still establish decoding and formatting below.
+      if (word !== "fonttbl" && word !== "colortbl") {
+        return;
+      }
+    }
     if (!HANDLED_CONTROL_WORDS.has(word)) {
-      // Inside a destination this reader skips whole, the writer's own
-      // vocabulary is not the document's: reporting `\fname` from a font table
-      // would make every file look degraded.
-      if (state.destination.type !== "skipped") {
+      if (
+        state.destination.type !== "skipped" ||
+        state.destination.reason === "unknown"
+      ) {
         unknownWords.add(word);
       }
       return;
@@ -832,11 +910,6 @@ const readRtfInto = (
 
     if (word === "fonttbl") {
       state.fontTable = true;
-    }
-
-    if (SKIPPED_DESTINATIONS.has(word)) {
-      enterDestination({ type: "skipped" });
-      return;
     }
 
     if (applyFontWord(word, parameter)) {
@@ -978,6 +1051,30 @@ const readRtfInto = (
     }
   };
 
+  const closeGroup = (): void => {
+    flushRun();
+    const frame = stack.pop();
+    if (frame !== undefined) {
+      if (frame.heldParagraph !== null) {
+        // A note's last paragraph carries no `\par`: the group's close is
+        // what ends it, and it is the note's text either way.
+        const embedded =
+          state.destination.type === "embedded-text" ||
+          state.destination.type === "embedded-container"
+            ? state.destination.content
+            : [];
+        if (paragraph.content.length > 0 || paragraph.following.length > 0) {
+          endParagraph();
+        }
+        paragraph = frame.heldParagraph;
+        paragraph.following.push(...embedded);
+      }
+      state = frame.state;
+      pendingFormatting = formattingOf(state.character, colors);
+      hasPendingRun = false;
+    }
+  };
+
   let cursor = 0;
   while (cursor < source.length) {
     const byte = source[cursor] ?? 0;
@@ -991,21 +1088,7 @@ const readRtfInto = (
     }
 
     if (byte === 0x7d) {
-      flushRun();
-      const frame = stack.pop();
-      if (frame !== undefined) {
-        if (frame.heldParagraph !== null) {
-          // A note's last paragraph carries no `\par`: the group's close is
-          // what ends it, and it is the note's text either way.
-          if (paragraph.content.length > 0) {
-            endParagraph();
-          }
-          paragraph = frame.heldParagraph;
-        }
-        state = frame.state;
-        pendingFormatting = formattingOf(state.character, colors);
-        hasPendingRun = false;
-      }
+      closeGroup();
       cursor += 1;
       continue;
     }
@@ -1066,9 +1149,9 @@ const readRtfInto = (
       continue;
     }
     if (after === 0x2a) {
-      // `\*` marks a destination a reader that does not know it must skip
-      // whole, which is every one of them here.
-      enterDestination({ type: "skipped" });
+      // The following word may identify supported visible text. Otherwise
+      // retain a warning for the unknown destination while suppressing payload.
+      enterDestination({ type: "skipped", reason: "unknown" });
       cursor += 2;
       continue;
     }
@@ -1082,14 +1165,20 @@ const readRtfInto = (
     cursor = token.next;
     const { parameter, word } = token;
 
+    if (word === "bin" && parameter !== undefined && parameter >= 0) {
+      cursor = Math.min(source.length, cursor + parameter);
+      continue;
+    }
     applyControlWord(word, parameter);
   }
 
   // Whatever the writer left unterminated is still the document's text.
+  const following = paragraph.following;
   const trailing = takeParagraph();
   if (trailing.content.length > 0) {
     blocks.push(trailing);
   }
+  blocks.push(...following);
   closeTable();
 
   for (const { content, id } of openFootnotes) {
