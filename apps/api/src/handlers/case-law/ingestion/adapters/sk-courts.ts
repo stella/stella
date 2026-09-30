@@ -480,7 +480,7 @@ type SkCourtsDecisionParts = {
   item: SkApiItem;
   /** The per-decision record, where one was read. */
   detail: SkDetailItem | null;
-  courtRegistry?: SkCourtRegistryRecord | null;
+  courtRegistry?: SkCourtRegistryRecord | null | undefined;
 };
 
 /**
@@ -619,7 +619,7 @@ export type SkCourtsBuildResult =
   | { type: "built"; decision: IngestionResult }
   /** No docket or no court to key on; nothing can store this item. */
   | { type: "unkeyable" }
-  /** The publisher served no record for the id the listing states. */
+  /** A decision or court registry record was unavailable; reconciliation retries. */
   | { type: "detail-unavailable"; decision: IngestionResult };
 
 /**
@@ -628,8 +628,8 @@ export type SkCourtsBuildResult =
  * can key, parse or enrich an item differently from the other.
  */
 type SkCourtsBuildOptions = {
-  signal?: AbortSignal;
-  readCourt?: SkCourtRegistryReader;
+  signal?: AbortSignal | undefined;
+  readCourt?: SkCourtRegistryReader | undefined;
 };
 
 export const buildSkCourtsDecision = async (
@@ -647,8 +647,18 @@ export const buildSkCourtsDecision = async (
   }
   const fetched = await fetchDetailForItem(item, signal);
   const registreGuid = toOptionalValue(item.sud?.registreGuid);
-  const courtRegistry =
-    registreGuid === undefined ? null : await readCourt(registreGuid);
+  const registry =
+    registreGuid === undefined
+      ? Result.ok(null)
+      : await readCourt(registreGuid);
+  if (registry.isErr()) {
+    logger.warn("case_law.ingestion.court_registry_unavailable", {
+      adapterKey: ADAPTER_KEYS.SK_COURTS,
+      registreGuid: registreGuid ?? null,
+      reason: registry.error.message,
+    });
+  }
+  const courtRegistry = registry.unwrapOr(null);
   const decision = assembleSkCourtsDecision({
     item,
     detail: fetched.type === "detail" ? fetched.detail : null,
@@ -657,7 +667,7 @@ export const buildSkCourtsDecision = async (
   if (decision === null) {
     return { type: "unkeyable" };
   }
-  return fetched.type === "unavailable"
+  return fetched.type === "unavailable" || registry.isErr()
     ? { type: "detail-unavailable", decision }
     : { type: "built", decision };
 };
@@ -1079,16 +1089,16 @@ const nextClosedDay = (verifiedThrough: string): string | null => {
 const collectFrontierPage = async (
   frontier: SkCourtsFrontier,
   signal?: AbortSignal,
-): Promise<SyncPage> => {
+): Promise<Result<SyncPage, AdapterFetchError>> => {
   const day = nextClosedDay(frontier.verifiedThrough);
   if (day === null) {
-    return {
+    return Result.ok({
       decisions: [],
       nextCursor: encodeFrontierCursor({
         verifiedThrough: frontier.verifiedThrough,
         page: 0,
       }),
-    };
+    });
   }
 
   const { listed, total } = await listSkCourtsDayPage({
@@ -1098,6 +1108,25 @@ const collectFrontierPage = async (
     signal,
   });
   const readCourt = createSkCourtRegistryReader(signal);
+  const records = await mapWithConcurrency({
+    items: [
+      ...new Set(
+        listed.flatMap((item) => {
+          const id = item.sud?.registreGuid;
+          return skCourtsIdentityFields(item) === null ||
+            id === null ||
+            id === undefined
+            ? []
+            : [id];
+        }),
+      ),
+    ],
+    limit: ITEM_CONCURRENCY,
+    operation: readCourt,
+  });
+  for (const record of records) {
+    if (record.isErr()) {return record;}
+  }
   const built = await mapWithConcurrency({
     items: listed,
     limit: ITEM_CONCURRENCY,
@@ -1109,7 +1138,7 @@ const collectFrontierPage = async (
   );
 
   const nextPage = frontier.page + 1;
-  return {
+  return Result.ok({
     decisions,
     nextCursor:
       nextPage * PAGE_SIZE < total
@@ -1118,7 +1147,7 @@ const collectFrontierPage = async (
             page: nextPage,
           })
         : encodeFrontierCursor({ verifiedThrough: day, page: 0 }),
-  };
+  });
 };
 
 // ── Source fields ────────────────────────────────────────
@@ -1582,10 +1611,11 @@ export const skCourtsAdapter = defineSourceAdapter({
         nextCursor: encodeFrontierCursor(handoverFrontier()),
       });
     }
-    return await Result.tryPromise({
+    const collected = await Result.tryPromise({
       try: async () => await collectFrontierPage(frontier, signal),
       catch: adapterCatch(ADAPTER_KEYS.SK_COURTS, cursor),
     });
+    return collected.andThen((page) => page);
   },
 });
 
@@ -1632,11 +1662,14 @@ const createBackfillPage = (readCourt: SkCourtRegistryReader) =>
             : [id];
         }),
       );
-      await mapWithConcurrency({
+      const records = await mapWithConcurrency({
         items: [...courtIds],
         limit: ITEM_CONCURRENCY,
         operation: readCourt,
       });
+      for (const record of records) {
+        if (record.isErr()) {return record;}
+      }
       return Result.ok(json);
     },
 

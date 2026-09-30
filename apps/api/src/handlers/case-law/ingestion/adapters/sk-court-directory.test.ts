@@ -94,10 +94,14 @@ describe("court registry enrichment", () => {
       ["Špecializovaný trestný súd", "first-instance", "special"],
       ["Špeciálny súd", "first-instance", "special"],
     ] as const) {
-      expect(
-        skCourtDirectoryMetadata({ ...registry, typSudu }, registry.nazov)
-          .courtClassification,
-      ).toEqual({ status: "classified", level, jurisdiction });
+      const classification = skCourtDirectoryMetadata(
+        { ...registry, typSudu },
+        registry.nazov,
+      ).courtClassification;
+      expect(classification.status).toBe("classified");
+      if (classification.status !== "classified") {continue;}
+      expect(classification.level).toBe(level);
+      expect(classification.jurisdiction).toBe(jurisdiction);
     }
     expect(
       skCourtDirectoryMetadata(
@@ -146,7 +150,9 @@ describe("court registry enrichment", () => {
     const records = await Promise.all(
       Array.from({ length: 20 }, () => read(registry.registreGuid)),
     );
-    expect(records).toEqual(Array.from({ length: 20 }, () => registry));
+    expect(records.map((record) => record.unwrap())).toEqual(
+      Array.from({ length: 20 }, () => registry),
+    );
     expect(requested).toHaveLength(1);
     await createSkCourtRegistryReader()(registry.registreGuid);
     expect(requested).toHaveLength(2);
@@ -194,9 +200,12 @@ describe("court registry enrichment", () => {
       );
       const pending = createSkCourtRegistryReader()(registry.registreGuid);
       if (response === registry) {
-        expect(await pending).toEqual(registry);
+        expect((await pending).unwrap()).toEqual(registry);
       } else {
-        await expect(pending).rejects.toBeInstanceOf(AdapterFetchError);
+        const result = await pending;
+        expect(result.isErr()).toBe(true);
+        if (result.isErr())
+          {expect(result.error).toBeInstanceOf(AdapterFetchError);}
       }
     }
     expect(isSkCourtRegistryRecord({ ...registry, nadriadenySudId: 101 })).toBe(

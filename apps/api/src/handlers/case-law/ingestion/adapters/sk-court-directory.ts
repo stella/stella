@@ -1,3 +1,5 @@
+import { Result } from "better-result";
+
 import {
   SK_COURT_REGISTRY_TIERS,
   SK_COURT_TIERS,
@@ -63,7 +65,7 @@ export const skCourtDirectoryMetadata = (
     logger.warn("case_law.ingestion.unknown_court_type", {
       adapterKey: ADAPTER_KEYS.SK_COURTS,
       registreGuid: record.registreGuid,
-      type,
+      type: type ?? null,
     });
   }
   return {
@@ -78,14 +80,14 @@ export const skCourtDirectoryMetadata = (
     },
     courtClassification:
       tier === undefined
-        ? { status: "unclassified", statedType: type }
-        : { status: "classified", ...tier },
+        ? { status: "unclassified" as const, statedType: type }
+        : { status: "classified" as const, ...tier },
     // Equal registry IDs establish an alias, never a distinct court's succession.
     courtAlias:
       statedName === record.nazov
         ? undefined
         : {
-            type: "same-registry-id",
+            type: "same-registry-id" as const,
             registreGuid: record.registreGuid,
             statedName,
             registryName: record.nazov,
@@ -95,46 +97,52 @@ export const skCourtDirectoryMetadata = (
 
 export type SkCourtRegistryReader = (
   registreGuid: string,
-) => Promise<SkCourtRegistryRecord>;
+) => Promise<Result<SkCourtRegistryRecord, AdapterFetchError>>;
 
 /** Page-owned promise cache: bounded by the page, discarded on completion. */
 export const createSkCourtRegistryReader = (
   signal?: AbortSignal,
 ): SkCourtRegistryReader => {
-  const records = new Map<string, Promise<SkCourtRegistryRecord>>();
+  const records = new Map<string, ReturnType<SkCourtRegistryReader>>();
   return (registreGuid) => {
     const cached = records.get(registreGuid);
     if (cached !== undefined) {
       return cached;
     }
-    const pending = (async () => {
-      const response = await fetchPublisher(
-        `https://obcan.justice.sk/pilot/api/ress-isu-service/v1/sud/${encodeURIComponent(registreGuid)}`,
-        {
-          adapterKey: ADAPTER_KEYS.SK_COURTS,
-          signal,
-          timeoutMs: ADAPTER_TIMEOUT.REQUEST,
-          headers: { Accept: "application/json" },
-        },
-      );
-      const bytes =
-        response.ok && response.body !== null
-          ? await readCappedBytes(response.body, MAX_REGISTRY_RESPONSE_BYTES)
-          : null;
-      const json: unknown =
-        bytes === null ? null : JSON.parse(new TextDecoder().decode(bytes));
-      if (
-        !isSkCourtRegistryRecord(json) ||
-        json.registreGuid !== registreGuid
-      ) {
-        throw new AdapterFetchError({
-          adapterKey: ADAPTER_KEYS.SK_COURTS,
-          cursor: null,
-          message: `Court registry record unavailable or invalid: ${registreGuid}`,
-        });
-      }
-      return json;
-    })();
+    const registryError = (cause?: unknown) =>
+      new AdapterFetchError({
+        adapterKey: ADAPTER_KEYS.SK_COURTS,
+        cursor: null,
+        message: `Court registry record unavailable or invalid: ${registreGuid}`,
+        cause,
+      });
+    const pending = Result.tryPromise({
+      try: async (): Promise<unknown> => {
+        const response = await fetchPublisher(
+          `https://obcan.justice.sk/pilot/api/ress-isu-service/v1/sud/${encodeURIComponent(registreGuid)}`,
+          {
+            adapterKey: ADAPTER_KEYS.SK_COURTS,
+            signal,
+            timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+            headers: { Accept: "application/json" },
+          },
+        );
+        const bytes =
+          response.ok && response.body !== null
+            ? await readCappedBytes(response.body, MAX_REGISTRY_RESPONSE_BYTES)
+            : null;
+        return bytes === null
+          ? null
+          : JSON.parse(new TextDecoder().decode(bytes));
+      },
+      catch: registryError,
+    }).then((result) =>
+      result.andThen((json) =>
+        isSkCourtRegistryRecord(json) && json.registreGuid === registreGuid
+          ? Result.ok(json)
+          : Result.err(registryError()),
+      ),
+    );
     records.set(registreGuid, pending);
     return pending;
   };
