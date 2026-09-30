@@ -1010,9 +1010,7 @@ const skUsCollectionMatch = ({
       )
     );
   };
-  const entries = validated.output.filter(
-    (entry) => entry.docType === COLLECTION_DOC_TYPE && sameDecision(entry),
-  );
+  const entries = validated.output.filter(sameDecision);
   const entry = entries.at(0);
   if (entry === undefined) {
     return { status: "unresolved", reason: "no_matching_entry" };
