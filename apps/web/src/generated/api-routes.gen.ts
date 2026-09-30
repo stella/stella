@@ -3944,6 +3944,7 @@ export type WebRoutes = {
             dateOfBirthYear: T588d0ee653;
             dateOfBirthMonth: T588d0ee653;
             dateOfBirthDay: T588d0ee653;
+            sanctionsMonitoringMode: T914c41786d;
             addresses: T6124e792aa;
             bankAccounts: Tcd94cef1c0;
             billingAddress: T3b4d67e019;
@@ -4219,6 +4220,7 @@ export type WebRoutes = {
               prefix: Tbe0400fa4c;
               middleName: Tbe0400fa4c;
               suffix: Tbe0400fa4c;
+              sanctionsMonitoringMode: T914c41786d;
               addresses: T6124e792aa;
               bankAccounts: Tcd94cef1c0;
               billingAddress: T3b4d67e019;
@@ -38541,6 +38543,8 @@ type T8f584f9d60 = T8065b8ad03 | null;
 type T9021211256 = Tb86085a330 | null;
 
 type T90864899a0 = "all" | "columns";
+
+type T914c41786d = "excluded" | "included";
 
 type T921fd22a21 = {
   readonly input: Tddb0458281;
