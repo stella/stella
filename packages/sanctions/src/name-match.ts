@@ -24,6 +24,10 @@ export const spendScreeningWork = (
   budget.remaining -= cost;
   return true;
 };
+// A call, not a property read: callees spend the budget, so a narrowed
+// `budget.exhausted` would go stale across them.
+const screeningWorkExhausted = (budget: ScreeningWorkBudget): boolean =>
+  budget.exhausted;
 
 const MAX_SCORED_PATTERNS = 256;
 const MAX_FUZZY_STRINGS = 64;
@@ -436,11 +440,11 @@ const unit = ({
     text: token.folded,
     work,
   });
-  if (work.exhausted) {
+  if (screeningWorkExhausted(work)) {
     return undefined;
   }
   const raw = similarStrings({ vocabulary: index.raw, text: token.raw, work });
-  if (work.exhausted) {
+  if (screeningWorkExhausted(work)) {
     return undefined;
   }
   return { positions, folded, raw };
