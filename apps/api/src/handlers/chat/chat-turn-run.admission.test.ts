@@ -1,12 +1,19 @@
 import { EventType, StreamProcessor } from "@tanstack/ai";
 import type { StreamChunk } from "@tanstack/ai";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { chatMessages, chatTurns } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
-import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
+import { TimeoutError } from "@/api/lib/errors/tagged-errors";
+import {
+  ActionAdmissionError,
+  withActionAdmission,
+} from "@/api/lib/rate-limit/action-admission";
+import type { withTimeout } from "@/api/lib/with-timeout";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
+import { startChatExecutionAdmission } from "./chat-execution-admission";
 import {
   chatMessageContentFromMessage,
   toPersistableChatMessage,
@@ -180,7 +187,7 @@ describe("chat run admission follows owned settlement", () => {
       processor: new StreamProcessor(),
       source: source(),
     });
-    const transport = run.produce(output());
+    const transport = run.produce(output);
     const consumed = transport.text();
     await persistenceFinished.promise;
     await finalizerStarted.promise;
@@ -323,8 +330,12 @@ describe("chat run admission follows owned settlement", () => {
         update: (table: unknown) => ({
           set: (values: Record<string, unknown>) => ({
             where: () => {
-              if (table === chatMessages) {writtenMessages.push(values);}
-              if (table === chatTurns) {writtenTurns.push(values);}
+              if (table === chatMessages) {
+                writtenMessages.push(values);
+              }
+              if (table === chatTurns) {
+                writtenTurns.push(values);
+              }
               return Object.assign(Promise.resolve(undefined), {
                 returning: async () =>
                   await Promise.resolve([
@@ -422,5 +433,150 @@ describe("chat run admission follows owned settlement", () => {
       });
       expect(releases).toBe(1);
     }
+  });
+  test("bounds a hanging upstream finalizer then releases real admission and stops renewing without losing stored settlement", async () => {
+    const deadlineMs = 60_000;
+    const waitStarted = Promise.withResolvers<undefined>();
+    const timeoutAtBound = Promise.withResolvers<undefined>();
+    const finalizerStarted = Promise.withResolvers<undefined>();
+    const finalizerMayFinish = Promise.withResolvers<undefined>();
+    const nextRenewalScheduled = Promise.withResolvers<undefined>();
+    let now = 0;
+    let scheduled: { at: number; callback: () => void } | undefined;
+    let schedules = 0;
+    let renewals = 0;
+    let releases = 0;
+    let acquisitions = 0;
+    const timing = {
+      now: () => now,
+      schedule: (callback: () => void, delayMs: number) => {
+        const entry = { at: now + delayMs, callback };
+        scheduled = entry;
+        schedules += 1;
+        if (schedules === 2) {nextRenewalScheduled.resolve(undefined);}
+        return () => {
+          if (scheduled === entry) {scheduled = undefined;}
+        };
+      },
+      firePending: () => {
+        const entry = scheduled;
+        if (entry === undefined) {return false;}
+        scheduled = undefined;
+        now = entry.at;
+        entry.callback();
+        return true;
+      },
+      hasPending: () => scheduled !== undefined,
+    };
+    const redis = {
+      send: async (_command: string, args: string[]) => {
+        const script = args.at(0) ?? panic("Admission must send a script");
+        if (script.includes('redis.call("ZCARD"')) {acquisitions += 1;}
+        else if (script.includes('redis.call("ZSCORE"')) {renewals += 1;}
+        else if (script.includes('redis.call("ZREM"')) {releases += 1;}
+        else {panic("Unexpected admission operation");}
+        return await Promise.resolve(1);
+      },
+    };
+    const acquired = await startChatExecutionAdmission({
+      enabled: true,
+      organizationId: toSafeId<"organization">("organization_hanging"),
+      userId: toSafeId<"user">("user_hanging"),
+      admit: (options) =>
+        withActionAdmission({
+          ...options,
+          policy: {
+            organizationConcurrency: 1,
+            userConcurrency: 1,
+            leaseMs: 10_000,
+          },
+          redis,
+          timing,
+          createId: () => "lease_hanging",
+        }),
+    });
+    if (Result.isError(acquired)) {throw acquired.error;}
+    const admission =
+      acquired.value ?? panic("Enabled admission must acquire a lease");
+    let persisted = 0;
+    const run = new ChatTurnRun({
+      admission,
+      connectors: undefined,
+      deadlineMs,
+      heartbeat: { intervalMs: 60_000, renewEvery: 1000 },
+      ownership: new ChatTurnOwnership(),
+      waitForUpstream: async <T>(
+        operation: (signal: AbortSignal) => Promise<T>,
+        options: Parameters<typeof withTimeout>[1],
+      ): Promise<T> => {
+        expect(options.timeoutMs).toBe(deadlineMs);
+        const controller = new AbortController();
+        const sourceClosed = operation(controller.signal);
+        waitStarted.resolve(undefined);
+        return await Promise.race([
+          sourceClosed,
+          timeoutAtBound.promise.then(() => {
+            expect(now).toBe(deadlineMs);
+            const error = new TimeoutError({
+              message: "Upstream cleanup timed out",
+              label: options.label,
+              timeoutMs: options.timeoutMs,
+            });
+            controller.abort(error);
+            throw error;
+          }),
+        ]);
+      },
+      owner: {
+        execution: {
+          id: toSafeId<"chatTurn">("turn_hanging"),
+          executionId: "execution_hanging",
+        },
+        owningAssistantMessage: undefined,
+        recordAuditEvent: async () => {
+          await Promise.resolve();
+        },
+        safeDb: createScopedDbMock({}).safeDb,
+        threadId: toSafeId<"chatThread">("thread_hanging"),
+        userId: toSafeId<"user">("user_hanging"),
+        workspaceId: null,
+      },
+    });
+    const output = async function* (): AsyncIterable<StreamChunk> {
+      try {
+        await run.settle(async () => {
+          persisted += 1;
+          await Promise.resolve();
+        });
+        yield* [];
+      } finally {
+        finalizerStarted.resolve(undefined);
+        await finalizerMayFinish.promise;
+      }
+    };
+    const consumed = run.produce(output()).text();
+    await finalizerStarted.promise;
+    await waitStarted.promise;
+    expect(acquisitions).toBe(1);
+    expect(persisted).toBe(1);
+    expect(releases).toBe(0);
+    expect(timing.firePending()).toBe(true);
+    await nextRenewalScheduled.promise;
+    expect(renewals).toBe(1);
+    expect(releases).toBe(0);
+    now = deadlineMs;
+    timeoutAtBound.resolve(undefined);
+    expect(await run.settled).toBe("stored");
+    expect(releases).toBe(1);
+    expect(timing.hasPending()).toBe(false);
+    now += deadlineMs;
+    expect(timing.firePending()).toBe(false);
+    expect(renewals).toBe(1);
+    expect(persisted).toBe(1);
+    expect(admission.signal.aborted).toBe(false);
+    finalizerMayFinish.resolve(undefined);
+    await consumed;
+    expect(await run.settled).toBe("stored");
+    expect(releases).toBe(1);
   });
 });

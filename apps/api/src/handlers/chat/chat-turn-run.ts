@@ -24,9 +24,11 @@ import { detached } from "@/api/lib/analytics/capture";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { failureSink } from "@/api/lib/observability/failure";
+import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { withSseHeartbeat } from "@/api/lib/sse";
 import { abortControllerFromSignal } from "@/api/lib/tanstack-ai-generate";
+import { withTimeout } from "@/api/lib/with-timeout";
 
 // A turn's run: the part of a turn that starts at provider dispatch and ends
 // with the turn's stored outcome. The request that claimed the turn hands it
@@ -112,6 +114,8 @@ type ChatTurnRunOptions = {
   /** The run's own deadline. It takes no signal, so nothing tied to the
    *  claiming request can end it. */
   deadlineMs: number;
+  /** Same cleanup deadline in production; injectable clock for settlement tests. */
+  waitForUpstream?: typeof withTimeout | undefined;
   heartbeat?: ChatTurnRunHeartbeat | undefined;
   owner: ChatTurnRunOwner;
   /** Who tracks the run; the process by default. */
@@ -319,7 +323,9 @@ export class ChatTurnRun {
 
   /** A continuation cannot execute once its admission has been lost. */
   startContinuationProduction(): boolean {
-    if (this.control.admissionSignal?.aborted) {return false;}
+    if (this.control.admissionSignal?.aborted) {
+      return false;
+    }
     this.continuationProduction = "started";
     return true;
   }
@@ -331,8 +337,9 @@ export class ChatTurnRun {
       !this.control.admissionSignal?.aborted ||
       this.control.abortController.signal.reason === RUN_CANCEL_REASON ||
       this.control.abortController.signal.reason === CHAT_TURN_OWNER_LOST_REASON
-    )
-      {return undefined;}
+    ) {
+      return undefined;
+    }
     const { checkpoint } = this.options;
     return checkpoint !== undefined &&
       getAwaitingUserInteractions(checkpoint).length > 0
@@ -342,8 +349,9 @@ export class ChatTurnRun {
 
   private async restoreCheckpoint(checkpoint: PersistableChatMessage) {
     const interaction = getAwaitingUserInteractions(checkpoint).at(0);
-    if (interaction === undefined)
-      {return panic("A restorable chat checkpoint must await user input");}
+    if (interaction === undefined) {
+      return panic("A restorable chat checkpoint must await user input");
+    }
     const { owner } = this.options;
     return await persistTerminalAssistantTurn({
       indexThread: owner.indexThread,
@@ -654,7 +662,24 @@ export class ChatTurnRun {
     // iterator can close. Only the end receipt waits for both settlements.
     const completed = this.ownership.followUp(
       Promise.resolve(end).then(async (settled) => {
-        await upstreamClosed;
+        // A stuck SDK finalizer must not renew capacity indefinitely after
+        // fenced persistence. Cleanup gets the existing provider time budget.
+        const closed = await Result.tryPromise(
+          async () =>
+            await (this.options.waitForUpstream ?? withTimeout)(
+              async () => await upstreamClosed,
+              {
+                label: "chat-upstream-finalization",
+                timeoutMs: this.options.deadlineMs,
+              },
+            ),
+        );
+        if (Result.isError(closed)) {
+          logger.warn("chat.turn.upstream_finalization_timeout", {
+            executionId: this.execution.executionId,
+            timeoutMs: this.options.deadlineMs,
+          });
+        }
         await admission.release();
         return settled;
       }),

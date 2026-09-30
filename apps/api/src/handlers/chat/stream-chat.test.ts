@@ -898,26 +898,31 @@ describe("late admission loss retains a completed and charged response", () => {
         let charges = 0;
         const source = async function* (): AsyncIterable<StreamChunk> {
           yield* fixture;
-          if (completed) {charges += 1;}
+          if (completed) {
+            charges += 1;
+          }
           admission.abort(
             new ActionAdmissionError({
               reason: "unavailable",
               message: "Lease lost during upstream cleanup",
             }),
           );
-          if (exit === "throw")
-            {throw new HandlerError({
+          if (exit === "throw") {
+            throw new HandlerError({
               status: 503,
               message: "Upstream cleanup aborted",
-            });}
-          if (exit === "adapter-error")
-            {yield {
+            });
+          }
+          if (exit === "adapter-error") {
+            yield {
               type: EventType.RUN_ERROR,
               code: "provider_unavailable",
               message: "Cleanup aborted",
-            };}
-          if (exit === "teardown")
-            {yield { type: EventType.MESSAGES_SNAPSHOT, messages: [] };}
+            };
+          }
+          if (exit === "teardown") {
+            yield { type: EventType.MESSAGES_SNAPSHOT, messages: [] };
+          }
         };
         const { emitted, finish } = await persistNativeInterruptTurn(source(), {
           abortSignal: admission.signal,
@@ -974,13 +979,15 @@ describe("admission lost before continuation production retains the original che
         }),
       );
       const source = async function* (): AsyncIterable<StreamChunk> {
-        if (exit === "throw")
-          {throw new HandlerError({
+        if (exit === "throw") {
+          throw new HandlerError({
             status: 503,
             message: "Already aborted provider",
-          });}
-        if (exit === "teardown")
-          {yield { type: EventType.MESSAGES_SNAPSHOT, messages: [] };}
+          });
+        }
+        if (exit === "teardown") {
+          yield { type: EventType.MESSAGES_SNAPSHOT, messages: [] };
+        }
       };
       const { finish } = await persistNativeInterruptTurn(source(), {
         abortSignal: admission.signal,
