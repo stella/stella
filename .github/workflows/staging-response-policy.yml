@@ -10,6 +10,10 @@ on:
 
 permissions: {}
 
+# Dispatch only while no staging deployment is running. This group stays
+# separate from Deploy main to staging so a queued run here never cancels a
+# pending deployment; the script stops early when web and API report
+# different build commits.
 concurrency:
   group: staging-response-policy
   cancel-in-progress: false

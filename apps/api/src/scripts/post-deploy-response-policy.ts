@@ -10,16 +10,18 @@
  * - Public Knowledge JSON carries `public, max-age=300` on success and
  *   `no-store` otherwise, and sets no cookie
  *   (apps/api/src/handlers/public-knowledge/routes.ts).
- * - Member Knowledge JSON answers 401 without a session; the routes that
- *   declare `private, no-store` carry it on that answer too.
+ * - Member Knowledge JSON answers a JSON 401 without a session; the routes
+ *   that declare `private, no-store` carry it on that answer too. The test
+ *   file checks that list against the route modules.
  * - Public Knowledge pages built with the shared public head carry a robots
  *   meta tag with one of its declared values (apps/web/src/lib/public-seo.ts).
  *
  * Whether public Knowledge is enabled is detected from the API and the web
  * root head, the way the staging browser smoke does; the checks run either
  * way. Pack, template and starter ids come from the public Knowledge JSON.
- * Like post-deploy-smoke.ts it imports nothing from the app, so it runs as a
- * plain `bun` invocation.
+ * When the API and the web origin both report a build commit and the two
+ * differ, the run stops before any check. Like post-deploy-smoke.ts it
+ * imports nothing from the app, so it runs as a plain `bun` invocation.
  *
  * Prints a JSON report (statuses and headers; never bodies or secrets) and
  * exits non-zero on any failed check.
@@ -27,7 +29,8 @@
  * Env: E2E_WEB_URL (checked origin), E2E_API_URL (public Knowledge state and
  * ids), optional E2E_EDGE_HEADER_NAME / E2E_EDGE_HEADER_VALUE.
  */
-import { TaggedError } from "better-result";
+import { panic, TaggedError } from "better-result";
+import * as cheerio from "cheerio";
 import * as v from "valibot";
 
 import { loadCatalogue } from "@stll/catalogue";
@@ -64,26 +67,31 @@ const KNOWLEDGE_HTML_CACHE_CONTROL = "private, no-store";
 const PUBLIC_JSON_CACHE_CONTROL = "public, max-age=300";
 const PUBLIC_JSON_OTHER_CACHE_CONTROL = "no-store";
 /** The member Knowledge routes' `onRequest` hook. */
-const MEMBER_JSON_CACHE_CONTROL = "private, no-store";
+export const MEMBER_JSON_CACHE_CONTROL = "private, no-store";
+
+/** Where the web origin serves the API's versioned routes. */
+export const MEMBER_JSON_BASE = "/api/v1";
 
 /**
- * Member Knowledge JSON and the Cache-Control its route declares, or null
- * where the route declares none.
+ * Member Knowledge JSON whose route declares `private, no-store`: every
+ * route module under apps/api/src/handlers that declares it, and no other
+ * (the test file compares the two).
  */
-const MEMBER_JSON_ROUTES: readonly {
-  path: string;
-  cacheControl: string | null;
-}[] = [
-  { path: "/api/v1/skills/", cacheControl: null },
-  // apps/api/src/handlers/playbooks/routes.ts
-  { path: "/api/v1/playbooks/", cacheControl: MEMBER_JSON_CACHE_CONTROL },
-  // apps/api/src/handlers/templates/routes.ts
-  { path: "/api/v1/templates/", cacheControl: MEMBER_JSON_CACHE_CONTROL },
-  // apps/api/src/handlers/clauses/routes.ts
-  { path: "/api/v1/clauses/", cacheControl: MEMBER_JSON_CACHE_CONTROL },
-  // apps/api/src/handlers/catalogue/routes.ts
-  { path: "/api/v1/catalogue/", cacheControl: MEMBER_JSON_CACHE_CONTROL },
-];
+export const MEMBER_JSON_POLICY_PATHS = [
+  `${MEMBER_JSON_BASE}/playbooks/`,
+  `${MEMBER_JSON_BASE}/templates/`,
+  `${MEMBER_JSON_BASE}/clauses/`,
+  `${MEMBER_JSON_BASE}/catalogue/`,
+] as const;
+
+/** Member Knowledge JSON checked for its status only: no declared policy. */
+export const MEMBER_JSON_STATUS_ONLY_PATHS = [
+  `${MEMBER_JSON_BASE}/skills/`,
+] as const;
+
+/** Build commit markers the staging browser smoke reads. */
+const API_BUILD_PATH = "/ready";
+const WEB_BUILD_PATH = "/version.json";
 
 /** apps/web/src/lib/public-seo.ts: crawlable and not crawlable. */
 export const DECLARED_ROBOTS: ReadonlySet<string> = new Set([
@@ -191,7 +199,8 @@ export const declaredCacheControl = (
   target: Pick<Target, "responseClass" | "cacheControl">,
   { status, headers }: Pick<ResponseSnapshot, "status" | "headers">,
 ): string | null => {
-  switch (target.responseClass) {
+  const { responseClass } = target;
+  switch (responseClass) {
     case RESPONSE_CLASS.page:
     case RESPONSE_CLASS.accountPage: {
       return mediaType(headers) === "text/html"
@@ -205,6 +214,10 @@ export const declaredCacheControl = (
     }
     case RESPONSE_CLASS.memberJson: {
       return target.cacheControl ?? null;
+    }
+    default: {
+      responseClass satisfies never;
+      return panic(`Unhandled response class: ${String(responseClass)}`);
     }
   }
 };
@@ -305,9 +318,7 @@ export const evaluateStatus = (
       break;
     }
     case RESPONSE_CLASS.memberJson: {
-      if (status !== 401) {
-        failures.push(`status ${String(status)}, expected 401`);
-      }
+      expectJson(401);
       break;
     }
   }
@@ -318,35 +329,18 @@ export const evaluateStatus = (
 // Head meta tags
 // ---------------------------------------------------------------------------
 
-const META_TAG = /<meta\b[^>]*>/giu;
-const ATTRIBUTE = /([^\s=/>]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gu;
-
-const metaAttributes = (tag: string): Map<string, string> => {
-  const attributes = new Map<string, string>();
-  for (const match of tag.matchAll(ATTRIBUTE)) {
-    const [, name, doubleQuoted, singleQuoted, bare] = match;
-    if (name) {
-      attributes.set(
-        name.toLowerCase(),
-        doubleQuoted ?? singleQuoted ?? bare ?? "",
-      );
-    }
-  }
-  return attributes;
-};
-
-/** `content` of every head meta tag with this name. */
+/**
+ * `content` of every `head > meta` element with this name, read from the
+ * parsed document the way the staging browser smoke reads it
+ * (apps/web/e2e/helpers/public-knowledge-smoke.logic.ts), so text inside
+ * scripts, styles, templates and comments never counts.
+ */
 export const headMetaContents = (html: string, name: string): string[] => {
-  const headEnd = html.search(/<\/head\s*>/iu);
-  const head = headEnd === -1 ? html : html.slice(0, headEnd);
-  const contents: string[] = [];
-  for (const [tag] of head.matchAll(META_TAG)) {
-    const attributes = metaAttributes(tag);
-    if (attributes.get("name")?.toLowerCase() === name) {
-      contents.push(attributes.get("content") ?? "");
-    }
-  }
-  return contents;
+  const $ = cheerio.load(html);
+  return $("head > meta")
+    .toArray()
+    .filter((meta) => $(meta).attr("name")?.toLowerCase() === name)
+    .map((meta) => $(meta).attr("content") ?? "");
 };
 
 /** The page's robots meta tags carry one of the declared values. */
@@ -508,13 +502,45 @@ export const buildTargets = ({
       path,
       responseClass: RESPONSE_CLASS.publicJson,
     })),
-    ...MEMBER_JSON_ROUTES.map(({ path, cacheControl }) => ({
+    ...MEMBER_JSON_STATUS_ONLY_PATHS.map((path) => ({
       path,
       responseClass: RESPONSE_CLASS.memberJson,
-      cacheControl,
+      cacheControl: null,
+    })),
+    ...MEMBER_JSON_POLICY_PATHS.map((path) => ({
+      path,
+      responseClass: RESPONSE_CLASS.memberJson,
+      cacheControl: MEMBER_JSON_CACHE_CONTROL,
     })),
   ];
 };
+
+// ---------------------------------------------------------------------------
+// Build commits
+// ---------------------------------------------------------------------------
+
+const buildMarkerSchema = v.object({
+  commit: v.pipe(v.string(), v.regex(/^[0-9a-f]{7,40}$/iu)),
+});
+
+/** The commit a build marker reports, or null for none or a local build. */
+export const buildCommit = (payload: unknown): string | null => {
+  const parsed = v.safeParse(buildMarkerSchema, payload);
+  return parsed.success ? parsed.output.commit.toLowerCase() : null;
+};
+
+/** Why the run must stop, when both origins report different commits. */
+export const buildCommitMismatch = ({
+  api,
+  web,
+}: {
+  api: string | null;
+  web: string | null;
+}): string | null =>
+  api !== null && web !== null && api !== web
+    ? `web serves commit ${web}, API serves commit ${api}; ` +
+      "rerun when both serve the same build"
+    : null;
 
 // ---------------------------------------------------------------------------
 // Run
@@ -680,8 +706,33 @@ const discoverPublicIds = async (
   return templateId ? { packId, templateId, starterId } : null;
 };
 
+/** The build commit an origin reports; null when it reports none. */
+const readBuildCommit = async (
+  config: Config,
+  url: string,
+): Promise<string | null> => {
+  try {
+    const response = await deploymentFetch(url, {
+      method: "GET",
+      headers: { ...config.edgeHeaders, accept: "application/json" },
+    });
+    return buildCommit(parseJson(await response.text()));
+  } catch {
+    // Outages surface in the checks themselves.
+    return null;
+  }
+};
+
 const main = async (): Promise<boolean> => {
   const config = readConfig();
+  const [apiCommit, webCommit] = await Promise.all([
+    readBuildCommit(config, `${config.apiUrl}${API_BUILD_PATH}`),
+    readBuildCommit(config, `${config.webUrl}${WEB_BUILD_PATH}`),
+  ]);
+  const mismatch = buildCommitMismatch({ api: apiCommit, web: webCommit });
+  if (mismatch !== null) {
+    throw new ResponsePolicyError({ message: mismatch });
+  }
   const run = createRun(config);
 
   const apiProbe = await run.read(
@@ -728,6 +779,7 @@ const main = async (): Promise<boolean> => {
       {
         target: config.webUrl,
         result: passed ? "pass" : "fail",
+        commit: apiCommit ?? webCommit,
         publicKnowledge,
         publicIds,
         failures: run.failures,
