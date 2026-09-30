@@ -314,7 +314,7 @@ const assertParity = async ({
     ).toBe("binding");
     return inProduct;
   } finally {
-    await context.kill();
+    context.kill();
     if (caches === undefined) {
       await publicPool.close();
       pools.delete(publicPool);
@@ -786,7 +786,7 @@ describe("public sanctions search parity", () => {
         });
         expect(partial.status).not.toBe("clear");
       } finally {
-        await context.kill();
+        context.kill();
       }
     },
     DB_TEST_TIMEOUT_MS,

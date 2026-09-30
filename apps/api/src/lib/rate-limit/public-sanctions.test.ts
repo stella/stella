@@ -47,7 +47,7 @@ const createFixture = async (
     onRedisError: () => undefined,
   });
   const options = createPublicSanctionsRateLimitOptions();
-  await options.context.kill();
+  options.context.kill();
   const server = {
     requestIP: () => (peer === null ? null : { address: peer }),
   };
@@ -57,9 +57,9 @@ const createFixture = async (
       rateLimit({
         ...options,
         context,
-        generator: (incoming) =>
+        generator: async (incoming) =>
           addressPolicy === "default"
-            ? options.generator(incoming, server)
+            ? await options.generator(incoming, server)
             : createRedisRateLimitRequestKey({
                 counterKey: scopedRateLimitKey({
                   scope: "public-sanctions-search",
@@ -94,7 +94,7 @@ describe("anonymous sanctions search rate limiting", () => {
       ]);
       expect(options.duration).toBe(60_000);
     } finally {
-      await context.kill();
+      context.kill();
     }
   });
 
@@ -114,7 +114,7 @@ describe("anonymous sanctions search rate limiting", () => {
         "api-ratelimit:{public-sanctions-search:198.51.100.7}",
       ]);
     } finally {
-      await context.kill();
+      context.kill();
     }
   });
 
@@ -136,7 +136,7 @@ describe("anonymous sanctions search rate limiting", () => {
         "api-ratelimit:{public-sanctions-search:2001:db8:1:3::}",
       ]);
     } finally {
-      await context.kill();
+      context.kill();
     }
   });
 
@@ -152,7 +152,7 @@ describe("anonymous sanctions search rate limiting", () => {
         ["api-ratelimit:{public-sanctions-search:192.0.2.2}", 1],
       ]);
     } finally {
-      await context.kill();
+      context.kill();
     }
   });
 
@@ -171,7 +171,7 @@ describe("anonymous sanctions search rate limiting", () => {
         ["api-ratelimit:{public-sanctions-search}", 21],
       ]);
     } finally {
-      await context.kill();
+      context.kill();
     }
   });
 
@@ -193,7 +193,7 @@ describe("anonymous sanctions search rate limiting", () => {
         ["api-ratelimit:{public-sanctions-search:192.0.2.1}", 21],
       ]);
     } finally {
-      await context.kill();
+      context.kill();
     }
   });
 
@@ -211,7 +211,7 @@ describe("anonymous sanctions search rate limiting", () => {
           ["api-ratelimit:{public-sanctions-search:192.0.2.1}", 1],
         ]);
       } finally {
-        await resolved.context.kill();
+        resolved.context.kill();
       }
       const missing = await createFixture(null, "default");
       try {
@@ -221,7 +221,7 @@ describe("anonymous sanctions search rate limiting", () => {
           ["api-ratelimit:{public-sanctions-search}", 1],
         ]);
       } finally {
-        await missing.context.kill();
+        missing.context.kill();
       }
     });
   }
@@ -236,6 +236,6 @@ test("production sanctions rate limiting fails closed on Redis failure", async (
       asTestRaw<{ failurePolicy: string }>(options.context).failurePolicy,
     ).toBe("fail_closed");
   } finally {
-    await options.context.kill();
+    options.context.kill();
   }
 });

@@ -106,7 +106,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
               stellaPublicSanctionsReader.name,
               () => ingestion,
             );
-            const grant = migration.match(/DO \$\$[\s\S]*?END \$\$;/u)?.at(0);
+            const grant = /DO \$\$[\s\S]*?END \$\$;/u.exec(migration)?.at(0);
             if (grant === undefined) {
               panic("Public sanctions role grant is missing");
             }

@@ -274,6 +274,8 @@ test("long names remain screenable and register names cannot become input errors
   expect(rejected.isErr() && rejected.error.code).toBe("excess-query-tokens");
 });
 
+// The oracle exhausts 18 query/identity combinations across every partition;
+// allow its comparison time without changing any matcher work or latency bound.
 test("identity evidence preserves the exhaustive top matches among dense decoys", () => {
   const birthDate = {
     precision: "day",
@@ -380,4 +382,4 @@ test("identity evidence preserves the exhaustive top matches among dense decoys"
       }
     }
   }
-});
+}, 20_000);

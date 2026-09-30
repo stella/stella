@@ -256,6 +256,8 @@ type ScreenOptions = {
   /** Minimum score (0..1) for an entry to be reported as a possible match. */
   cutoff: number;
   limit?: number;
+  /** Optional tighter budget; callers cannot exceed the global work bound. */
+  maxWork?: number;
 };
 
 const validBirthDate = ({ year, month, day }: QueryBirthDate): boolean => {
@@ -552,13 +554,24 @@ const prepareScreeningQuery = (
 export const screen = (
   index: ScreeningIndex,
   query: ScreeningQuery,
-  { cutoff, limit = DEFAULT_LIMIT }: ScreenOptions,
+  {
+    cutoff,
+    limit = DEFAULT_LIMIT,
+    maxWork = MAX_SCREENING_WORK,
+  }: ScreenOptions,
 ): Result<ScreeningResult, ScreeningQueryError | ScreeningWorkLimitError> => {
   if (!(cutoff >= 0 && cutoff <= 1)) {
     panic(`cutoff must be within 0..1, got ${cutoff}`);
   }
   if (!Number.isInteger(limit) || limit < 1) {
     panic(`limit must be a positive integer, got ${limit}`);
+  }
+  if (
+    !Number.isInteger(maxWork) ||
+    maxWork < 1 ||
+    maxWork > MAX_SCREENING_WORK
+  ) {
+    panic(`maxWork must be within 1..${MAX_SCREENING_WORK}, got ${maxWork}`);
   }
   const prepared = prepareScreeningQuery(query);
   if (prepared.isErr()) {
@@ -580,7 +593,7 @@ export const screen = (
     return score;
   };
   const work = {
-    remaining: MAX_SCREENING_WORK,
+    remaining: maxWork,
     exhausted: false,
     selection: "complete" as const,
   };
