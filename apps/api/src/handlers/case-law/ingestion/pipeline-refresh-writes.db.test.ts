@@ -22,7 +22,13 @@ import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
-import { caseLawDecisions, caseLawSources, relations } from "@/api/db/schema";
+import {
+  caseLawCitations,
+  caseLawDecisions,
+  caseLawSources,
+  relations,
+} from "@/api/db/schema";
+import { CITATION_RESOLUTION_STATUS } from "@/api/handlers/case-law/citation-resolution-status";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
@@ -650,11 +656,16 @@ test("a directory jurisdiction's decision is written with its court id, and ever
   await ingest(withDocument("30 Cdo 900/2024", "page-v1"), canonical);
   expect(await courtIdOf("No. 19-1392")).toEqual(["scotus"]);
   expect(await courtIdOf("30 Cdo 900/2024")).toEqual([null]);
+  const usaRow = await storedRow("No. 19-1392");
+  const czechRow = await storedRow("30 Cdo 900/2024");
+  expect(await citationHeaders(usaRow.id)).toHaveLength(0);
+  expect(await citationHeaders(czechRow.id)).toHaveLength(1);
 
   // A refresh that states the same court id is not a change of the row.
   const first = await storedRow("No. 19-1392");
   await ingest(usa("page-v2"), canonical);
   expect((await storedRow("No. 19-1392")).updatedAt).toBe(first.updatedAt);
+  expect(await citationHeaders(usaRow.id)).toHaveLength(0);
 
   // A result that reaches the write path without its court id is an adapter
   // defect; nothing is written for it.
@@ -681,4 +692,51 @@ test("a directory jurisdiction's decision is written with its court id, and ever
     ),
   });
   expect(await courtIdOf("No. 20-1")).toEqual([]);
+});
+
+test("an identity-changing USA refresh leaves its outgoing citation rows untouched", async () => {
+  const decision = {
+    ...withDocument("No. 19-1393", "page-v1"),
+    court: "Supreme Court of the United States",
+    courtId: "scotus",
+    country: "USA",
+    language: "en",
+    sourceDocumentId: "scotus-19-1393",
+  } satisfies IngestionResult;
+  await ingest(decision, canonical);
+  const row =
+    (
+      await db
+        .select({ id: caseLawDecisions.id })
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.caseNumber, "No. 19-1393"))
+    ).at(0) ?? expect.unreachable();
+  const citationId = createSafeId<"caseLawCitation">();
+  await db.insert(caseLawCitations).values({
+    id: citationId,
+    citingDecisionId: row.id,
+    citationText: "347 U.S. 483",
+    resolutionStatus: CITATION_RESOLUTION_STATUS.UNMATCHED,
+    resolutionAttemptedAt: new Date("2026-09-23T12:00:00.000Z"),
+  });
+
+  await ingest(
+    { ...decision, rawHash: "page-v2", decisionDate: "2024-03-02" },
+    canonical,
+  );
+
+  const citation =
+    (
+      await db
+        .select({
+          resolutionStatus: caseLawCitations.resolutionStatus,
+          resolutionAttemptedAt: caseLawCitations.resolutionAttemptedAt,
+        })
+        .from(caseLawCitations)
+        .where(eq(caseLawCitations.id, citationId))
+    ).at(0) ?? expect.unreachable();
+  expect(citation).toEqual({
+    resolutionStatus: CITATION_RESOLUTION_STATUS.UNMATCHED,
+    resolutionAttemptedAt: new Date("2026-09-23T12:00:00.000Z"),
+  });
 });

@@ -413,7 +413,10 @@ export const runIngestionPipeline = async ({
         // byte bound goes alone, and is reported.
         logger.warn("case_law.ingestion.oversized_record", {
           adapterKey: adapter.key,
-          caseNumber: batch.decisions[0].caseNumber,
+          caseNumber: (
+            batch.decisions.at(0) ??
+            panic("An admitted page batch contains a decision")
+          ).caseNumber,
           cursor: cursor ?? "",
           encodedBytes: batch.encodedBytes,
           limitBytes: CASE_LAW_INGESTION_BATCH_LIMITS.encodedBytes,

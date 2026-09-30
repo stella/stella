@@ -56,6 +56,7 @@ const insertedRowValues = (
       incomingCitationKey,
       languageGroupKey,
       payloadColumns,
+      preparedMetadata,
     },
     rawArtifact: { sourceRawS3Key, sourceRawContentType },
   }: DecisionRowWrite,
@@ -81,8 +82,8 @@ const insertedRowValues = (
   sourceUrl: result.sourceUrl,
   documentUrl: result.documentUrl,
   metadata: storesUnpublishedWithoutDocument
-    ? markListingOnly(result.metadata)
-    : result.metadata,
+    ? markListingOnly(preparedMetadata)
+    : preparedMetadata,
   parserVersion: result.parserVersion ?? 0,
   sourceRaw: null,
   sourceRawS3Key,
@@ -168,18 +169,27 @@ const finishInsertedRowTx = async (
 
   await announceDecisionIdentifiers(tx, write, insertedId, identifierRows);
 
-  if (citations.references.length > 0) {
-    // Settled as they are written, in the transaction that writes them.
-    // One indexed lookup per citation against the fetch and parse this
-    // page already paid for; without it every new citation waits for the
-    // standing walk to come round, and the citator trails the crawl.
-    await lockCitationGraph(tx);
-    await writeDecisionCitations(tx, {
-      decisionId: insertedId,
-      citations,
-      observedAt,
-      stored: false,
-    });
+  switch (citations.disposition) {
+    case "annotation-only":
+      break;
+    case "legacy-graph":
+      if (citations.references.length > 0) {
+        // Settled as they are written, in the transaction that writes them.
+        // One indexed lookup per citation against the fetch and parse this
+        // page already paid for; without it every new citation waits for the
+        // standing walk to come round, and the citator trails the crawl.
+        await lockCitationGraph(tx);
+        await writeDecisionCitations(tx, {
+          decisionId: insertedId,
+          citations,
+          observedAt,
+          stored: false,
+        });
+      }
+      break;
+    default:
+      citations satisfies never;
+      panic("Unhandled citation disposition");
   }
   await reconcileStableProjection(tx, write, insertedId, projectionLock);
   return DECISION_ROW_WRITE_STATUS.APPLIED;
@@ -224,8 +234,16 @@ const writeDecisionRow = async (
       }
     }
     if (existing) {
-      const { replacedState, payloadNeedsGuard, set, where } =
-        await describeRowUpdateTx(tx, write, existing);
+      const {
+        replacedState,
+        payloadNeedsGuard,
+        set,
+        staleCitationScopePayload,
+        where,
+      } = await describeRowUpdateTx(tx, write, existing);
+      if (staleCitationScopePayload) {
+        return DECISION_ROW_WRITE_STATUS.STALE_PAYLOAD;
+      }
       const updated = await tx
         .update(caseLawDecisions)
         .set(set)
