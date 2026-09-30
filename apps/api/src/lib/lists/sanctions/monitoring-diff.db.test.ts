@@ -7,11 +7,11 @@ import { createHash } from "node:crypto";
 import { SANCTIONS_SOURCES } from "@stll/sanctions";
 import type { SanctionsEntry } from "@stll/sanctions";
 
+import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   contacts,
-  organization,
   organizationSettings,
   sanctionsContactMatches,
   sanctionsContactScreenings,
@@ -438,6 +438,57 @@ test(
     );
     await commit(result);
     expect(await eventsFor(contact.id)).toHaveLength(1);
+  },
+  TIMEOUT,
+);
+
+test(
+  "bulk persistence converges and unknown nationalities retain name-only screening",
+  async () => {
+    await activate("7");
+    const first = await addContact();
+    const second = await addContact();
+    const updated =
+      (
+        await db
+          .update(contacts)
+          .set({ nationalityCodes: ["unknown"] })
+          .where(eq(contacts.id, second.id))
+          .returning()
+      ).at(0) ?? panic("Contact missing");
+    const subject = monitoringSubject(updated);
+    expect(subject.type).toBe("person");
+    if (subject.type === "person") {
+      expect(subject.nationalityCodes).toEqual([]);
+    }
+    const results = await Promise.all([prepare(first), prepare(updated)]);
+    const options = {
+      db: scopedDb,
+      organizationId: orgId,
+      source: "eu",
+      results,
+      now,
+    } as const;
+    expect(await commitSanctionsMonitoringBatch(options)).toEqual([
+      first.id,
+      second.id,
+    ]);
+    await commitSanctionsMonitoringBatch(options);
+    expect(await eventsFor(first.id)).toHaveLength(1);
+    expect(await eventsFor(second.id)).toHaveLength(1);
+    await activate("6", 0);
+    await commit(await prepare(first));
+    expect((await screeningFor(first.id)).status).toBe("clear");
+    await expectFailure(
+      async () =>
+        await scopedDb(async (tx) => {
+          await tx
+            .update(sanctionsContactScreenings)
+            .set({ editionId: null })
+            .where(eq(sanctionsContactScreenings.contactId, first.id));
+        }),
+      "sanctions_contact_screenings_clear_edition_check",
+    );
   },
   TIMEOUT,
 );
