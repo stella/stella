@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { isMemberOnlySmokeRequest } from "../helpers/public-knowledge-smoke.logic";
+import messages from "../../src/i18n/langs/en.json" with { type: "json" };
+import {
+  classifyPublicKnowledgeWebProbe,
+  isMemberOnlySmokeRequest,
+} from "../helpers/public-knowledge-smoke.logic";
 
 describe("public visitor request access", () => {
   test("allows public knowledge calls on both API mounts", () => {
@@ -64,6 +68,35 @@ describe("public visitor request access", () => {
         isMemberOnlySmokeRequest({ pathname, method: "GET" }),
         pathname,
       ).toBe(true);
+    }
+  });
+});
+
+describe("public knowledge served HTML probe", () => {
+  const shell = `<body><!--$--><div class="flex w-full items-center justify-center h-dvh"><span aria-busy="true" data-slot="loader" role="status"><svg><path d="M0 0"></path></svg></span></div><!--/$--><script data-tsr-stream-part="">$_TSR.router={matches:[{i:"__root__",s:"success",ssr:!1}]}</script></body>`;
+
+  test("recognizes the flag-off 200 client loading shell", () => {
+    expect(classifyPublicKnowledgeWebProbe(shell)).toBe("disabled");
+  });
+
+  test("recognizes the existing contribute heading rendered on the server", () => {
+    expect(
+      classifyPublicKnowledgeWebProbe(
+        `<body><main><h1 class="text-lg font-semibold">${messages.publicTools.contribute.title}</h1><form></form></main></body>`,
+      ),
+    ).toBe("enabled");
+  });
+
+  test("rejects unexpected HTML rather than treating it as flag-off", () => {
+    for (const html of [
+      "",
+      "<body>Forbidden</body>",
+      "<body><h1>Sign in</h1></body>",
+      `<body><script>const heading = '<h1>${messages.publicTools.contribute.title}</h1>'</script></body>`,
+      shell.replace("ssr:!1", "ssr:!0"),
+      shell.replace("</div>", "</div><p>Failed to load</p>"),
+    ]) {
+      expect(classifyPublicKnowledgeWebProbe(html)).toBe("unexpected");
     }
   });
 });

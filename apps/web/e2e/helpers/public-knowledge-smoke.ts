@@ -6,7 +6,10 @@ import { loadCatalogue } from "@stll/catalogue";
 
 import messages from "../../src/i18n/langs/en.json" with { type: "json" };
 import { createNetworkCollector } from "./network";
-import { isMemberOnlySmokeRequest } from "./public-knowledge-smoke.logic";
+import {
+  classifyPublicKnowledgeWebProbe,
+  isMemberOnlySmokeRequest,
+} from "./public-knowledge-smoke.logic";
 
 const PACK_ID = "general-legal";
 const PUBLIC_API = "/api/v1/public/knowledge/template-packs";
@@ -80,15 +83,23 @@ export const declarePublicKnowledgeSmoke = ({
     test.beforeAll(async ({ request }) => {
       const [apiProbe, webProbe] = await Promise.all([
         request.get(PUBLIC_API, { maxRedirects: 0 }),
-        request.get("/knowledge/tools/contribute", { maxRedirects: 0 }),
+        request.get("/knowledge/tools/contribute", {
+          maxRedirects: 0,
+          headers: { "Accept-Language": "en-US" },
+        }),
       ]);
       expect([200, 404], "API probe status").toContain(apiProbe.status());
-      expect([200, 404], "web probe status").toContain(webProbe.status());
+      expect(webProbe.status(), "web probe status").toBe(200);
       expect(webProbe.headers()["content-type"], "web probe HTML").toMatch(
         /^text\/html\b/iu,
       );
       const apiEnabled = apiProbe.status() === 200;
-      const webEnabled = webProbe.status() === 200;
+      const webState = classifyPublicKnowledgeWebProbe(await webProbe.text());
+      expect(
+        webState,
+        "unexpected web probe HTML: no SSR heading or known client shell",
+      ).not.toBe("unexpected");
+      const webEnabled = webState === "enabled";
       if (!apiEnabled) {
         expect(await apiProbe.json(), "disabled API response").toEqual({
           error: "Not Found",
