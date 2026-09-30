@@ -3,6 +3,7 @@ import { panic } from "better-result";
 import { COURT_PARTITION_FIELD } from "@/api/lib/legal-search/corpus-index-group-contract";
 import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
 import { functionWordKey } from "@/api/lib/legal-search/morphology/function-words";
+import { stemSlovakUpstream } from "@/api/lib/legal-search/morphology/slovak";
 import type { MorphologyLanguage } from "@/api/lib/legal-search/morphology/stem";
 import { stemCorpusText } from "@/api/lib/legal-search/morphology/stem-text";
 
@@ -263,6 +264,26 @@ const stemLeaves = (
   return stemming.fields.map((field) => `${field}:${quoteCorpusValue(stem)}`);
 };
 
+/** Query-only compatibility with faithful stems already stored in Slovak passages. */
+const slovakLegacyStemLeaves = (
+  token: CorpusQueryToken,
+  fields: readonly string[],
+): string[] => {
+  if (token.type === "phrase") {
+    return [];
+  }
+  const faithful = corpusTokens(token.value)
+    .map((term) => {
+      const normalized = term.normalize("NFC").toLowerCase();
+      return stemSlovakUpstream(normalized) || normalized;
+    })
+    .join(" ");
+  if (faithful === stemCorpusText(token.value, "sk")) {
+    return [];
+  }
+  return fields.map((field) => `${field}:${quoteCorpusValue(faithful)}`);
+};
+
 /**
  * `field:"word"` for each extra surface field: the reader's words as typed,
  * against a field the index does not search by default.
@@ -452,7 +473,11 @@ const spendLeafBudget = (tokens: readonly TokenLeaves[]): BudgetedToken[] => {
   return budgeted;
 };
 
+const SLOVAK_LEGACY_STEM_FIELDS = new Set(["text_stem", "headnote_stem"]);
+
 export type CorpusFreeTextOptions = {
+  /** Case-law SVK compatibility; paid only from baseline allocation headroom. */
+  slovakLegacyStemFields?: readonly string[] | undefined;
   expand?: CorpusTermExpander | undefined;
   stemming?: CorpusStemming | null | undefined;
   /**
@@ -516,6 +541,7 @@ export const corpusFreeTextClause = (
     keywordFields = [],
     functionWords = null,
     legalAlternatives = null,
+    slovakLegacyStemFields = [],
   }: CorpusFreeTextOptions = {},
 ): string | null => {
   const { required } = partitionCorpusFunctionWords(
@@ -541,8 +567,40 @@ export const corpusFreeTextClause = (
     })),
   );
 
-  const clauses = budgeted.map(({ granted, token }) => {
+  let used =
+    budgeted.length +
+    budgeted.reduce(
+      (total, { granted }) =>
+        total +
+        LEAF_BUDGET_PASSES.reduce(
+          (count, group) => count + granted[group].length,
+          0,
+        ),
+      0,
+    );
+  const clauses = budgeted.map(({ granted, token }, index) => {
     const extras = LEAF_EMIT_ORDER.flatMap((group) => granted[group]);
+    // Baseline grants are immutable: compatibility spends only what all four passes left.
+    if (
+      stemming?.language === "sk" &&
+      slovakLegacyStemFields.length > 0 &&
+      granted.stem.length > 0 &&
+      used < CORPUS_QUERY_LEAF_BUDGET
+    ) {
+      const requiredToken = required.at(index);
+      if (requiredToken === undefined) {
+        return panic("Budgeted corpus token has no required token");
+      }
+      const faithful = [
+        ...new Set(
+          slovakLegacyStemLeaves(requiredToken, slovakLegacyStemFields),
+        ),
+      ].filter((leaf) => !extras.includes(leaf));
+      if (used + faithful.length <= CORPUS_QUERY_LEAF_BUDGET) {
+        extras.push(...faithful);
+        used += faithful.length;
+      }
+    }
     if (extras.length === 0) {
       return token.typed;
     }
@@ -579,6 +637,8 @@ export type CaseLawCorpusFilters = {
 
 export type CaseLawCorpusQueryOptions = {
   text: string;
+  /** Query scope, independent of whether the target index needs a filter clause. */
+  jurisdiction: string | undefined;
   filters: CaseLawCorpusFilters;
   expand?: CorpusTermExpander | undefined;
   stemming?: CorpusStemming | null | undefined;
@@ -597,6 +657,7 @@ export type CaseLawCorpusQueryOptions = {
  */
 export const caseLawCorpusQuery = ({
   text,
+  jurisdiction,
   filters,
   expand,
   stemming,
@@ -612,6 +673,12 @@ export const caseLawCorpusQuery = ({
     keywordFields,
     functionWords,
     legalAlternatives,
+    slovakLegacyStemFields:
+      jurisdiction === "SVK" && stemming?.language === "sk"
+        ? stemming.fields.filter((field) =>
+            SLOVAK_LEGACY_STEM_FIELDS.has(field),
+          )
+        : [],
   });
   if (freeText === null) {
     return null;
