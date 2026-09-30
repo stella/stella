@@ -1,6 +1,9 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
+
+import { ORGANIZATION_ACCESS_STATE } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createRedisClient } from "@/api/lib/redis-client";
 
@@ -40,6 +43,85 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
   });
 } else {
   describe("periodic action admission (valkey)", () => {
+    test("atomic Lua fences delayed evaluation expiry and stale retries before mutation", async () => {
+      for (const staleRetry of [false, true]) {
+        await withStore(async ({ client, organizationId }) => {
+          const clock = await client.send("TIME", []);
+          if (!Array.isArray(clock)) {
+            throw new TypeError("Missing store clock");
+          }
+          const storeNow = Number(clock.at(0)) * 1000;
+          const deadline = staleRetry ? storeNow + 1 : storeNow - 1;
+          const acquisitions: string[][] = [];
+          let runs = 0;
+          const result = await withActionAdmission({
+            organizationId,
+            userId,
+            enabled: true,
+            policy,
+            serviceBudgetsEnabled: true,
+            serviceBudgetConfig: {
+              periodMs: 86_400_000,
+              evaluationActions: 3,
+              selfManagedActions: 5,
+            },
+            budgetNow: () =>
+              staleRetry ? storeNow - 86_400_000 : deadline - 1,
+            readOrganizationState: async () => ({
+              state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
+              evaluationEndsAt: new Date(deadline),
+            }),
+            periodIdentity: {
+              actionKind: "chat.improve-prompt",
+              logicalPhaseId: "expired-phase",
+            },
+            redis: {
+              send: async (command, args) => {
+                const script = args.at(0);
+                if (script === undefined) {
+                  throw new Error("Missing acquisition script");
+                }
+                // The same-period case uses real Redis time. The stale case
+                // fixes only the production script's clock to cross exact expiry
+                // deterministically between attempts, without wall-clock sleeps.
+                const now = acquisitions.length === 0 ? storeNow : deadline;
+                const clockLiteral = `{${Math.floor(now / 1000)}, ${(now % 1000) * 1000}}`;
+                expect(script).toContain('redis.call("TIME")');
+                const clockedScript = staleRetry
+                  ? script.replace('redis.call("TIME")', () => clockLiteral)
+                  : script;
+                acquisitions.push([...args]);
+                return await client.send(command, [
+                  clockedScript,
+                  ...args.slice(1),
+                ]);
+              },
+            },
+            run: async () => {
+              runs += 1;
+            },
+          });
+          expect(Result.isError(result)).toBe(true);
+          if (Result.isError(result)) {
+            expect(result.error).toMatchObject({
+              code: ACTION_ADMISSION_CODES.notEnabled,
+            });
+          }
+          expect(runs).toBe(0);
+          expect(acquisitions).toHaveLength(staleRetry ? 2 : 1);
+          for (const acquire of acquisitions) {
+            expect(acquire.at(13)).toBe(String(deadline));
+            expect(await client.send("EXISTS", acquire.slice(2, 5))).toBe(0);
+          }
+          if (staleRetry) {
+            expect(acquisitions.at(1)?.at(9)).not.toBe(
+              acquisitions.at(0)?.at(9),
+            );
+          }
+        });
+      }
+    });
+
     test("atomically caps concurrent distinct phases and lets replays count once", async () => {
       await withStore(async ({ client, organizationId }) => {
         let ran = 0;

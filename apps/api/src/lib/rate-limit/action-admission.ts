@@ -1,4 +1,4 @@
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { AsyncLocalStorage } from "node:async_hooks";
 
 import {
@@ -12,9 +12,12 @@ import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { ACTION_KINDS } from "@/api/lib/rate-limit/action-kinds";
 import type { AdmittedActionIdentity } from "@/api/lib/rate-limit/action-kinds";
 import {
   ACTION_PERIOD_ACQUIRE_SCRIPT,
+  ACTION_SERVICE_DEADLINE_EXPIRED,
+  ACTION_SERVICE_DEADLINE_SCRIPT,
   actionPeriodArguments,
   staleActionPeriodTime,
   resolveActionPeriodBudget,
@@ -27,6 +30,11 @@ import {
   createRedisClient,
 } from "@/api/lib/redis-client";
 import { coordinationKey, type CoordinationKey } from "@/api/lib/redis-keys";
+import {
+  readAdmissionOrganizationState,
+  resolveOrganizationActionBudget,
+  type OrganizationActionBudgetConfig,
+} from "@/api/lib/usage/organization-action-budget";
 
 type RedisCommands = {
   send: (command: string, args: string[]) => Promise<unknown>;
@@ -101,6 +109,7 @@ type ActionAdmissionPolicy = {
 const ACQUIRE_SCRIPT = `
 local clock = redis.call("TIME")
 local now = clock[1] * 1000 + math.floor(clock[2] / 1000)
+${ACTION_SERVICE_DEADLINE_SCRIPT}
 redis.call("ZREMRANGEBYSCORE", KEYS[1], "-inf", now)
 redis.call("ZREMRANGEBYSCORE", KEYS[2], "-inf", now)
 if redis.call("ZCARD", KEYS[1]) >= tonumber(ARGV[2]) or redis.call("ZCARD", KEYS[2]) >= tonumber(ARGV[3]) then
@@ -190,6 +199,10 @@ type ActionAdmissionOptions = {
   policy?: ActionAdmissionPolicy;
   periodIdentity?: AdmittedActionIdentity;
   periodPolicy?: ActionPeriodPolicy;
+  serviceBudgetsEnabled?: boolean;
+  serviceBudgetConfig?: OrganizationActionBudgetConfig;
+  readOrganizationState?: typeof readAdmissionOrganizationState;
+  budgetNow?: () => number;
   redis?: RedisCommands;
   redisReady?: () => Promise<RedisCommands>;
   createId?: () => string;
@@ -221,6 +234,7 @@ const defaultTiming: AdmissionTiming = {
 type AdmissionExecutorOptions = {
   keys: AdmissionKeys;
   budget: ActionPeriodBudget | null;
+  serviceDeadlineMs: number | null;
   organizationId: SafeId<"organization">;
   periodIdentity: AdmittedActionIdentity | undefined;
   redis: RedisCommands | undefined;
@@ -230,6 +244,7 @@ type AdmissionExecutorOptions = {
 const createAdmissionExecutor = ({
   keys,
   budget,
+  serviceDeadlineMs,
   organizationId,
   periodIdentity,
   redis,
@@ -267,6 +282,9 @@ const createAdmissionExecutor = ({
               String(scriptKeys.length),
               ...scriptKeys,
               ...commandArgs,
+              ...(script === ACQUIRE_SCRIPT && serviceDeadlineMs !== null
+                ? [String(serviceDeadlineMs)]
+                : []),
             ]),
             commandTimeoutMs: REDIS_COMMAND_TIMEOUT_MS,
             label: "action-admission-redis-command",
@@ -323,36 +341,204 @@ const createAdmissionExecutor = ({
   return execute;
 };
 
-const validateAdmissionReply = (
-  reply: unknown,
-): Result<void, ActionAdmissionError> => {
-  if (reply === 0 || reply === -1) {
-    return Result.err(
-      new ActionAdmissionError({
-        message:
-          reply === -1
-            ? "Action period limit reached"
-            : "Concurrent action limit reached",
-        reason: reply === -1 ? "period_exhausted" : "busy",
-      }),
-    );
-  }
-  if (reply !== 1) {
-    return Result.err(
-      new ActionAdmissionError({
-        message: "Action admission returned an invalid response",
-        reason: "unavailable",
-      }),
-    );
-  }
-  return Result.ok(undefined);
-};
-
 /**
  * The disabled branch never opens Valkey or reads admission configuration.
  * Nested admission must be awaited: same-caller work shares the parent's lease
  * and signal only until that parent settles. Detached execution needs a fresh scope.
  */
+type ResolveAdmissionBudgetOptions = Pick<
+  ActionAdmissionOptions,
+  "organizationId" | "userId" | "periodIdentity" | "periodPolicy"
+> & {
+  serviceBudgetsEnabled: boolean;
+  serviceBudgetConfig: OrganizationActionBudgetConfig;
+  readOrganizationState: typeof readAdmissionOrganizationState;
+  budgetNow: () => number;
+};
+
+const resolveAdmissionBudget = async ({
+  organizationId,
+  userId,
+  periodIdentity,
+  periodPolicy,
+  serviceBudgetsEnabled,
+  serviceBudgetConfig,
+  readOrganizationState,
+  budgetNow,
+}: ResolveAdmissionBudgetOptions) => {
+  let serviceDeadlineMs: number | null = null;
+  let nowMs = budgetNow();
+  let resolvedPeriodPolicy = periodPolicy;
+  let consumesServices = true;
+  if (serviceBudgetsEnabled) {
+    if (periodIdentity === undefined) {
+      return Result.err(
+        new ActionAdmissionError({
+          message: "Action service identity is missing",
+          reason: "unavailable",
+        }),
+      );
+    }
+    consumesServices = ACTION_KINDS[periodIdentity.actionKind].consumesServices;
+    if (consumesServices) {
+      const state = await Result.tryPromise({
+        try: async () =>
+          await readOrganizationState({ organizationId, userId }),
+        catch: (cause: unknown) =>
+          new ActionAdmissionError({
+            message: "Organization action access could not be read",
+            reason: "unavailable",
+            cause,
+          }),
+      });
+      if (Result.isError(state)) {
+        return state;
+      }
+      nowMs = budgetNow();
+      const organizationBudget = resolveOrganizationActionBudget({
+        state: state.value,
+        now: new Date(nowMs),
+        ...serviceBudgetConfig,
+      });
+      switch (organizationBudget.status) {
+        case "not_enabled":
+          return Result.err(
+            new ActionAdmissionError({
+              message: "Organization service actions are not enabled",
+              reason: "not_enabled",
+            }),
+          );
+        case "unavailable":
+          return Result.err(
+            new ActionAdmissionError({
+              message: "Organization action configuration is incomplete",
+              reason: "unavailable",
+            }),
+          );
+        case "resolved":
+          resolvedPeriodPolicy = organizationBudget.policy;
+          serviceDeadlineMs = organizationBudget.serviceDeadlineMs;
+          break;
+        default:
+          organizationBudget satisfies never;
+          return panic("Unhandled organization action budget");
+      }
+    }
+  }
+  const resolvedBudget = consumesServices
+    ? resolveActionPeriodBudget({
+        organizationId,
+        identity: periodIdentity,
+        policy: resolvedPeriodPolicy,
+        nowMs,
+      })
+    : Result.ok(null);
+  return Result.map(
+    Result.mapError(
+      resolvedBudget,
+      (error) =>
+        new ActionAdmissionError({
+          message: error.message,
+          reason: "unavailable",
+          cause: error,
+        }),
+    ),
+    (budget) => ({ budget, serviceDeadlineMs }),
+  );
+};
+
+const configuredServiceBudgets = () => ({
+  periodMs: env.ACTION_ADMISSION_PERIOD_MS,
+  evaluationActions: env.SERVICE_ACTIONS_EVALUATION_PERIOD_ACTIONS,
+  selfManagedActions: env.SERVICE_ACTIONS_SELF_MANAGED_ACTIONS,
+});
+
+const acquisitionRefusal = (reply: unknown): ActionAdmissionError | null => {
+  if (reply === ACTION_SERVICE_DEADLINE_EXPIRED) {
+    return new ActionAdmissionError({
+      message: "Organization service actions are not enabled",
+      reason: "not_enabled",
+    });
+  }
+  if (reply === 0 || reply === -1) {
+    return new ActionAdmissionError({
+      message:
+        reply === -1
+          ? "Action period limit reached"
+          : "Concurrent action limit reached",
+      reason: reply === -1 ? "period_exhausted" : "busy",
+    });
+  }
+  if (reply !== 1) {
+    return new ActionAdmissionError({
+      message: "Action admission returned an invalid response",
+      reason: "unavailable",
+    });
+  }
+
+  return null;
+};
+
+type ReuseAdmissionOptions = Pick<
+  ActionAdmissionOptions,
+  "organizationId" | "periodIdentity" | "periodPolicy"
+> & {
+  scope: AdmissionScope;
+  serviceBudgetsEnabled: boolean;
+  budgetNow: () => number;
+};
+
+const reuseAdmissionScope = async <T>({
+  scope,
+  organizationId,
+  periodIdentity,
+  periodPolicy,
+  serviceBudgetsEnabled,
+  budgetNow,
+  run,
+}: ReuseAdmissionOptions & {
+  run: (signal: AbortSignal) => Promise<T>;
+}): Promise<Result<T, unknown>> => {
+  if (
+    serviceBudgetsEnabled &&
+    (periodIdentity === undefined || !periodIdentity.logicalPhaseId.trim())
+  ) {
+    return Result.err(
+      new ActionAdmissionError({
+        message: "Action service identity is incomplete",
+        reason: "unavailable",
+      }),
+    );
+  }
+  if (!serviceBudgetsEnabled) {
+    const budget = resolveActionPeriodBudget({
+      organizationId,
+      identity: periodIdentity,
+      policy: periodPolicy,
+      nowMs: budgetNow(),
+    });
+    if (Result.isError(budget)) {
+      return Result.err(
+        new ActionAdmissionError({
+          message: budget.error.message,
+          reason: "unavailable",
+          cause: budget.error,
+        }),
+      );
+    }
+  }
+  // Validate the nested boundary without reevaluating access or reserving again.
+  return await Result.tryPromise({
+    try: async () => {
+      scope.signal.throwIfAborted();
+      const value = await run(scope.signal);
+      scope.signal.throwIfAborted();
+      return value;
+    },
+    catch: (error: unknown) => error,
+  });
+};
+
 export const withActionAdmission = async <T>({
   organizationId,
   userId,
@@ -362,6 +548,10 @@ export const withActionAdmission = async <T>({
   policy,
   periodIdentity,
   periodPolicy,
+  serviceBudgetsEnabled = env.FEATURE_ORG_SERVICE_BUDGETS,
+  serviceBudgetConfig = configuredServiceBudgets(),
+  readOrganizationState = readAdmissionOrganizationState,
+  budgetNow = () => Temporal.Now.instant().epochMilliseconds,
   redis,
   redisReady = admissionRedis.ready,
   createId = () => Bun.randomUUIDv7(),
@@ -376,23 +566,6 @@ export const withActionAdmission = async <T>({
     });
   }
 
-  const resolvedBudget = resolveActionPeriodBudget({
-    organizationId,
-    identity: periodIdentity,
-    policy: periodPolicy,
-    nowMs: Temporal.Now.instant().epochMilliseconds,
-  });
-  if (Result.isError(resolvedBudget)) {
-    return Result.err(
-      new ActionAdmissionError({
-        message: resolvedBudget.error.message,
-        reason: "unavailable",
-        cause: resolvedBudget.error,
-      }),
-    );
-  }
-  const budget = resolvedBudget.value;
-
   const inherited = admissionScope.getStore();
   if (
     scope === "inherit" &&
@@ -400,15 +573,31 @@ export const withActionAdmission = async <T>({
     inherited.organizationId === organizationId &&
     inherited.userId === userId
   ) {
-    return await Result.tryPromise({
-      try: async () => {
-        inherited.signal.throwIfAborted();
-        const value = await run(inherited.signal);
-        return value;
-      },
-      catch: (error: unknown) => error,
+    return await reuseAdmissionScope({
+      scope: inherited,
+      organizationId,
+      periodIdentity,
+      periodPolicy,
+      serviceBudgetsEnabled,
+      budgetNow,
+      run,
     });
   }
+
+  const resolvedBudget = await resolveAdmissionBudget({
+    organizationId,
+    userId,
+    periodIdentity,
+    periodPolicy,
+    serviceBudgetsEnabled,
+    serviceBudgetConfig,
+    readOrganizationState,
+    budgetNow,
+  });
+  if (Result.isError(resolvedBudget)) {
+    return resolvedBudget;
+  }
+  const { budget, serviceDeadlineMs } = resolvedBudget.value;
 
   const resolvedPolicy =
     policy === undefined ? configuredPolicy() : Result.ok(policy);
@@ -422,6 +611,7 @@ export const withActionAdmission = async <T>({
   const execute = createAdmissionExecutor({
     keys,
     budget,
+    serviceDeadlineMs,
     organizationId,
     periodIdentity,
     redis,
@@ -439,9 +629,9 @@ export const withActionAdmission = async <T>({
   if (Result.isError(admitted)) {
     return admitted;
   }
-  const validated = validateAdmissionReply(admitted.value);
-  if (Result.isError(validated)) {
-    return validated;
+  const refusal = acquisitionRefusal(admitted.value);
+  if (refusal !== null) {
+    return Result.err(refusal);
   }
 
   let leaseDeadline = initialAttemptAt + limits.leaseMs;
