@@ -1,6 +1,10 @@
 import { panic, Result } from "better-result";
 
 import { mapWithConcurrency } from "@stll/concurrency";
+import {
+  skDocumentErrorDiagnostics,
+  skDocumentResponseDiagnostics,
+} from "@stll/legal-atlas/sk-document-fetch-diagnostics";
 import { parsePlainDate, Temporal } from "@stll/time";
 
 import {
@@ -63,10 +67,6 @@ import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { DOCUMENT_DELIVERY } from "@/api/lib/legal-search/ingestion-types";
 import { restrictSkCourtDocumentUrl } from "@/api/lib/legal-search/sk-court-document-url";
 import type { SkDocumentFetch } from "@/api/lib/legal-search/sk-document-backfill";
-import {
-  skDocumentErrorDiagnostics,
-  skDocumentResponseDiagnostics,
-} from "@/api/lib/legal-search/sk-document-fetch-diagnostics";
 import { logger } from "@/api/lib/observability/logger";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";

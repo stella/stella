@@ -37,6 +37,8 @@ import {
   sql,
 } from "drizzle-orm";
 
+import { skDocumentErrorDiagnostics } from "@stll/legal-atlas/sk-document-fetch-diagnostics";
+
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -96,10 +98,7 @@ import {
 } from "@/api/lib/legal-search/parsers/sk-courts";
 import { segmentDecision } from "@/api/lib/legal-search/segment-decision";
 import { restrictSkCourtDocumentUrl } from "@/api/lib/legal-search/sk-court-document-url";
-import {
-  SkDocumentNonPdfError,
-  skDocumentErrorDiagnostics,
-} from "@/api/lib/legal-search/sk-document-fetch-diagnostics";
+import { SkDocumentNonPdfError } from "@/api/lib/legal-search/sk-document-fetch-diagnostics";
 import {
   documentFetchParked,
   MAX_DOCUMENT_FETCH_ATTEMPTS,

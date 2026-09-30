@@ -1,13 +1,14 @@
 import { describe, expect, test } from "bun:test";
 
-import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-
 import {
-  SkDocumentNonPdfError,
   type SkDocumentFetchErrorKind,
   skDocumentErrorDiagnostics,
   skDocumentResponseDiagnostics,
-} from "./sk-document-fetch-diagnostics";
+} from "@stll/legal-atlas/sk-document-fetch-diagnostics";
+
+import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+
+import { SkDocumentNonPdfError } from "./sk-document-fetch-diagnostics";
 
 describe("safe SK document fetch diagnostics", () => {
   test("HTTP failures retain status without publishing error context", () => {
@@ -55,7 +56,7 @@ describe("safe SK document fetch diagnostics", () => {
         httpStatus: 200,
         httpStatusClass: "2xx",
         contentTypeClass,
-        failureKind: undefined,
+        failureKind: "none",
       });
     }
   });

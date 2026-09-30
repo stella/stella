@@ -18,15 +18,16 @@
  * and the priority handling can be exercised on their own.
  */
 
+import {
+  type SkDocumentFetchErrorDiagnostic,
+  skDocumentErrorDiagnostics,
+} from "@stll/legal-atlas/sk-document-fetch-diagnostics";
+
 import type {
   DecisionDocumentOutcome,
   DocumentFetchFailure,
   PendingDocument,
 } from "@/api/lib/legal-search/sk-document-backfill";
-import {
-  type SkDocumentFetchErrorDiagnostic,
-  skDocumentErrorDiagnostics,
-} from "@/api/lib/legal-search/sk-document-fetch-diagnostics";
 import type { PendingDocumentQueue } from "@/api/lib/legal-search/sk-document-queue";
 
 type DocumentOutcomeStatus = DecisionDocumentOutcome["status"];

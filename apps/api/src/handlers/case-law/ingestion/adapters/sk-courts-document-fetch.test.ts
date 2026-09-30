@@ -13,7 +13,7 @@ test("document downloads identify the client and preserve the caller's abort and
   const controller = new AbortController();
   expect(
     await skCourtsDocumentFetch(
-      "https://obcan.justice.sk/content/public/item/fixture-document",
+      new URL("https://obcan.justice.sk/content/public/item/fixture-document"),
       { signal: controller.signal },
     ),
   ).toBe(response);
