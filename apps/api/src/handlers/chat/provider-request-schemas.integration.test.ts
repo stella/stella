@@ -47,18 +47,16 @@ import type { OracleViolation } from "@/api/tests/helpers/chat-oracles";
 import { createPromptPrefixLedger } from "@/api/tests/helpers/chat-prompt-prefix";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
-import { emptyCompletionAnswer } from "@/api/tests/helpers/provider-reasoning-answers";
 import {
   ATTACHMENTS,
   cassetteForModel,
+  chatCombinationValues,
   combinationKey,
   enumerateChatCombinations,
   findForeignRequestArtifacts,
   modelOf,
-  pairwiseChatCombinations,
+  planCombinationRun,
   reasoningModelOf,
-  shardOf,
-  threeWiseChatCombinations,
   toolCallAnswerFor,
 } from "@/api/tests/helpers/provider-request-matrix";
 import type {
@@ -102,6 +100,7 @@ import {
   WIRE_PROMPT_SECTIONS,
 } from "@/api/tests/helpers/replayed-harness-model";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { silentAnswerOf } from "@/api/tests/helpers/turn-outcome-matrix";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
   getRlsFixture,
@@ -263,28 +262,12 @@ const combinations = enumerateChatCombinations(cassettes);
  * every combination with `all` (both nightly), either split by
  * `PROVIDER_REQUEST_SHARD=<index>/<count>`.
  */
-const runPlan = (() => {
-  const requested = process.env["PROVIDER_REQUEST_COMBINATIONS"];
-  if (requested !== "all" && requested !== "three-wise") {
-    return {
-      mode: "all-pairs",
-      runs: pairwiseChatCombinations(combinations.included),
-    } as const;
-  }
-  const shard = /^(?<index>\d+)\/(?<count>\d+)$/u.exec(
-    process.env["PROVIDER_REQUEST_SHARD"] ?? "0/1",
-  )?.groups;
-  const index = Number(shard?.["index"] ?? "0");
-  const count = Number(shard?.["count"] ?? "1");
-  const pool =
-    requested === "all"
-      ? combinations.included
-      : threeWiseChatCombinations(combinations.included);
-  return {
-    mode: `${requested === "all" ? "every combination" : "all-triples"}, shard ${String(index)} of ${String(count)}`,
-    runs: shardOf(pool, { count, index }),
-  } as const;
-})();
+const runPlan = planCombinationRun({
+  included: combinations.included,
+  mode: process.env["PROVIDER_REQUEST_COMBINATIONS"],
+  shard: process.env["PROVIDER_REQUEST_SHARD"],
+  valuesOf: chatCombinationValues,
+});
 
 /** Each provider's own model continuing its own plain history with a plain
  *  turn: the conversation the per-provider checks read, run in every mode. */
@@ -659,7 +642,7 @@ const converse = async (
   try {
     replay.serve(
       attempt === "fallback"
-        ? emptyCompletionAnswer(second.answer)
+        ? silentAnswerOf(target.provider, second.answer)
         : second.answer,
     );
     const attached = ATTACHMENTS[attachment];

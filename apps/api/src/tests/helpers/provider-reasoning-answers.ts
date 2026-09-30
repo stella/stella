@@ -18,11 +18,11 @@ import type {
 /** A signature only the provider that issued it could verify. */
 const SIGNATURE =
   "EqQBCkgIBxABGAIqQJ4xY0b8m1Zl4wWqzXv7mT8rA3hQ0pN6bE5sK2cD9fU1gH7jL3oM5nP8qR2tV4wX6yZ0aB1cD2eF3gH4iJ5kL6m";
-const REASONING_TEXT = "The user asked to delete the draft.";
+export const REASONING_TEXT = "The user asked to delete the draft.";
 
 type Answer = (cassette: ProviderWireCassette) => ProviderWireCassette;
 
-const mapTextBodies = (
+export const mapTextBodies = (
   cassette: ProviderWireCassette,
   rewrite: (text: string) => string,
 ): ProviderWireCassette => ({
@@ -43,7 +43,7 @@ const mapTextBodies = (
 });
 
 /** Every `data:` line's JSON rewritten by `rewrite`. */
-const mapDataEvents = (
+export const mapDataEvents = (
   text: string,
   rewrite: (data: Record<string, unknown>) => Record<string, unknown>,
 ): string =>
@@ -127,7 +127,7 @@ const openAiReasoning: Answer = (cassette) =>
 type GeminiPart = Record<string, unknown>;
 
 /** The first candidate's parts of a Gemini stream event, rewritten. */
-const mapGeminiParts = (
+export const mapGeminiParts = (
   data: Record<string, unknown>,
   rewrite: (parts: readonly GeminiPart[]) => GeminiPart[],
 ): Record<string, unknown> => {

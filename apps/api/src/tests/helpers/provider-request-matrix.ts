@@ -299,7 +299,7 @@ export type ExcludedCombination = {
 };
 
 /** Every assignment of one value to each dimension of `dimensions`. */
-const product = <Dimensions extends Record<string, readonly unknown[]>>(
+export const product = <Dimensions extends Record<string, readonly unknown[]>>(
   dimensions: Dimensions,
 ): { [Key in keyof Dimensions]: Dimensions[Key][number] }[] => {
   let assignments: Record<string, unknown>[] = [{}];
@@ -375,7 +375,9 @@ export const enumerateChatCombinations = (
 };
 
 /** The values one combination takes on each dimension. */
-const dimensionsOf = (combination: ChatCombination): readonly string[] => [
+export const chatCombinationValues = (
+  combination: ChatCombination,
+): readonly string[] => [
   combination.origin.provider,
   combination.origin.slot,
   combination.history,
@@ -401,7 +403,7 @@ const dimensionsOf = (combination: ChatCombination): readonly string[] => [
  * most tuples not yet covered, or else the first combination holding the
  * first uncovered tuple, so it always ends and always yields the same set.
  */
-const coveringArray = <Combination>(
+export const coveringArray = <Combination>(
   combinations: readonly Combination[],
   valuesOf: (combination: Combination) => readonly string[],
   strength: number,
@@ -523,15 +525,35 @@ const coveringArray = <Combination>(
 /** How many candidates each step of `coveringArray` weighs. */
 const COVERING_SAMPLES = 2000;
 
-/** The chat combinations' all-pairs cover, which pull requests run. */
-export const pairwiseChatCombinations = (
-  combinations: readonly ChatCombination[],
-): ChatCombination[] => coveringArray(combinations, dimensionsOf, 2);
-
-/** The chat combinations' all-triples cover, which the nightly job runs. */
-export const threeWiseChatCombinations = (
-  combinations: readonly ChatCombination[],
-): ChatCombination[] => coveringArray(combinations, dimensionsOf, 3);
+/**
+ * The combinations a run takes: the all-pairs cover by default (pull
+ * requests), the all-triples cover with `mode` `three-wise`, or every
+ * combination with `all` (both nightly), the latter two split by `shard`
+ * (`<index>/<count>`).
+ */
+export const planCombinationRun = <Combination>({
+  included,
+  mode,
+  shard,
+  valuesOf,
+}: {
+  included: readonly Combination[];
+  mode: string | undefined;
+  shard: string | undefined;
+  valuesOf: (combination: Combination) => readonly string[];
+}): { mode: string; runs: Combination[] } => {
+  if (mode !== "all" && mode !== "three-wise") {
+    return { mode: "all-pairs", runs: coveringArray(included, valuesOf, 2) };
+  }
+  const parsed = /^(?<index>\d+)\/(?<count>\d+)$/u.exec(shard ?? "0/1")?.groups;
+  const index = Number(parsed?.["index"] ?? "0");
+  const count = Number(parsed?.["count"] ?? "1");
+  const pool = mode === "all" ? included : coveringArray(included, valuesOf, 3);
+  return {
+    mode: `${mode === "all" ? "every combination" : "all-triples"}, shard ${String(index)} of ${String(count)}`,
+    runs: shardOf(pool, { count, index }),
+  };
+};
 
 /** The combinations a shard `index` of `count` runs: every `count`th. */
 export const shardOf = <Combination>(
