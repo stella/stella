@@ -1275,6 +1275,7 @@ describe("MCP anonymization canary corpus", () => {
           entryRows: [
             {
               id: "te_1",
+              activityGroup: "client",
               entityId: "00000000-0000-4000-8000-0000000e0001",
               userId: "user_2",
               dateWorked: "2026-01-01",
@@ -1324,6 +1325,7 @@ describe("MCP anonymization canary corpus", () => {
           entryRows: [
             {
               id: "00000000-0000-4000-8000-0000000f0002",
+              activityGroup: "client",
               entityId: "00000000-0000-4000-8000-0000000e0001",
               userId: "user_3",
               dateWorked: "2026-01-01",

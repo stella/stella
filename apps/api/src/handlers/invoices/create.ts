@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { t } from "elysia";
 
+import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
+
 import { abortableTx } from "@/api/db/safe-db";
 import type { SafeDbError } from "@/api/db/safe-db";
 import {
@@ -110,6 +112,7 @@ const createInvoice = createSafeHandler(
           .where(
             and(
               eq(timeEntries.workspaceId, workspaceId),
+              eq(timeEntries.activityGroup, TIME_ENTRY_ACTIVITY_GROUP.CLIENT),
               inArray(timeEntries.id, body.timeEntryIds),
             ),
           ),
@@ -213,6 +216,7 @@ const createInvoice = createSafeHandler(
         .where(
           and(
             eq(timeEntries.workspaceId, workspaceId),
+            eq(timeEntries.activityGroup, TIME_ENTRY_ACTIVITY_GROUP.CLIENT),
             inArray(timeEntries.id, body.timeEntryIds),
             eq(timeEntries.status, BILLING_STATUS.APPROVED),
             eq(timeEntries.billable, true),

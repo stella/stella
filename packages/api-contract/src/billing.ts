@@ -1,3 +1,17 @@
+export const TIME_ENTRY_ACTIVITY_GROUPS = ["client", "internal"] as const;
+export type TimeEntryActivityGroup =
+  (typeof TIME_ENTRY_ACTIVITY_GROUPS)[number];
+export const TIME_ENTRY_ACTIVITY_GROUP = {
+  CLIENT: "client",
+  INTERNAL: "internal",
+} as const satisfies Record<string, TimeEntryActivityGroup>;
+
+type MissingTimeEntryActivityGroup = Exclude<
+  TimeEntryActivityGroup,
+  (typeof TIME_ENTRY_ACTIVITY_GROUP)[keyof typeof TIME_ENTRY_ACTIVITY_GROUP]
+>;
+true satisfies MissingTimeEntryActivityGroup extends never ? true : never;
+
 export const TIME_ENTRY_STATUSES = [
   "draft",
   "approved",

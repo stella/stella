@@ -5004,6 +5004,11 @@
     "whenToUse": "Kada naudoti",
     "whenToUsePlaceholder": "Kada turėtų būti naudojamas šis šablonas? (padeda DI pasirinkti šabloną)"
   },
+  "timesheets": {
+    "day": {
+      "internalWork": "Vidaus darbas"
+    }
+  },
   "translate": {
     "dialog": {
       "aiDescription": "Naudokite „stella AI“, išsaugodami dokumento struktūrą ir formatavimą.",

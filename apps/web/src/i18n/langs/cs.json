@@ -5004,6 +5004,11 @@
     "whenToUse": "Kdy použít",
     "whenToUsePlaceholder": "Kdy se má tento vzor použít? (pomáhá AI s výběrem vzoru)"
   },
+  "timesheets": {
+    "day": {
+      "internalWork": "Interní práce"
+    }
+  },
   "translate": {
     "dialog": {
       "aiDescription": "Použít stella AI se zachováním struktury a formátování dokumentu.",

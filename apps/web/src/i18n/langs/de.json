@@ -5004,6 +5004,11 @@
     "whenToUse": "Wann verwenden",
     "whenToUsePlaceholder": "Wann sollte diese Vorlage verwendet werden? (hilft der KI bei der Vorlagenauswahl)"
   },
+  "timesheets": {
+    "day": {
+      "internalWork": "Interne Arbeit"
+    }
+  },
   "translate": {
     "dialog": {
       "aiDescription": "stella AI verwenden und dabei Struktur und Formatierung des Dokuments beibehalten.",

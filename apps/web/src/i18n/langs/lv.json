@@ -5004,6 +5004,11 @@
     "whenToUse": "Kad izmantot",
     "whenToUsePlaceholder": "Kad šī veidne būtu jāizmanto? (palīdz AI izvēlēties veidni)"
   },
+  "timesheets": {
+    "day": {
+      "internalWork": "Iekšējais darbs"
+    }
+  },
   "translate": {
     "dialog": {
       "aiDescription": "Izmantojiet stella AI, saglabājot dokumenta struktūru un formatējumu.",

@@ -7471,6 +7471,7 @@ describe("OpenAI-compatible MCP tools", () => {
         scopedDb: createSelectListScopedDb([
           {
             id: TIME_ENTRY_ID,
+            activityGroup: "client",
             entityId: "00000000-0000-4000-8000-0000000e0001",
             userId: null,
             dateWorked: "2026-02-01",
@@ -7502,6 +7503,7 @@ describe("OpenAI-compatible MCP tools", () => {
       entries: [
         {
           id: TIME_ENTRY_ID,
+          activityGroup: "client",
           entityId: "00000000-0000-4000-8000-0000000e0001",
           userId: null,
           userName: null,
