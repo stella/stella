@@ -63,6 +63,10 @@ import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { DOCUMENT_DELIVERY } from "@/api/lib/legal-search/ingestion-types";
 import { restrictSkCourtDocumentUrl } from "@/api/lib/legal-search/sk-court-document-url";
 import type { SkDocumentFetch } from "@/api/lib/legal-search/sk-document-backfill";
+import {
+  skDocumentErrorDiagnostics,
+  skDocumentResponseDiagnostics,
+} from "@/api/lib/legal-search/sk-document-fetch-diagnostics";
 import { logger } from "@/api/lib/observability/logger";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -138,12 +142,33 @@ export const skCourtsDocumentFetch: SkDocumentFetch = async (
     });
     return undefined;
   }
-  return await fetchPublisher(target.value, {
-    adapterKey: ADAPTER_KEYS.SK_COURTS,
-    redirect: "error",
-    signal,
-    timeoutMs: DOCUMENT_TIMEOUT_MS,
+  const fetched = await Result.tryPromise({
+    try: async () =>
+      await fetchPublisher(target.value, {
+        adapterKey: ADAPTER_KEYS.SK_COURTS,
+        redirect: "error",
+        signal,
+        timeoutMs: DOCUMENT_TIMEOUT_MS,
+        headers: { "User-Agent": INGESTION_USER_AGENT },
+      }),
+    catch: (error) => error,
   });
+  if (Result.isError(fetched)) {
+    logger.warn(
+      "case_law.ingestion.sk_document_fetch_failed",
+      skDocumentErrorDiagnostics(fetched.error),
+    );
+    throw fetched.error;
+  }
+  const diagnostics = skDocumentResponseDiagnostics(fetched.value);
+  if (
+    !fetched.value.ok ||
+    (diagnostics.contentTypeClass !== "pdf" &&
+      diagnostics.contentTypeClass !== "binary")
+  ) {
+    logger.warn("case_law.ingestion.sk_document_fetch_response", diagnostics);
+  }
+  return fetched.value;
 };
 
 const arrayOrEmpty = <T>(value: T[] | null | undefined): T[] => {

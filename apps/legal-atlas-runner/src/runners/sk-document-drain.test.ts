@@ -585,6 +585,7 @@ describe("sk document drain", () => {
       attempted: 1,
       failed: 1,
       lastError: failure,
+      lastErrorDiagnostic: { kind: "unknown" },
     });
   });
 });

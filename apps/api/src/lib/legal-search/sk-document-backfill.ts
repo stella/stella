@@ -97,6 +97,10 @@ import {
 import { segmentDecision } from "@/api/lib/legal-search/segment-decision";
 import { restrictSkCourtDocumentUrl } from "@/api/lib/legal-search/sk-court-document-url";
 import {
+  SkDocumentNonPdfError,
+  skDocumentErrorDiagnostics,
+} from "@/api/lib/legal-search/sk-document-fetch-diagnostics";
+import {
   documentFetchParked,
   MAX_DOCUMENT_FETCH_ATTEMPTS,
 } from "@/api/lib/legal-search/sk-document-parking-sql";
@@ -1362,11 +1366,16 @@ const parseFetchedDocument = async ({
   scopedDb,
 }: ParseFetchedDocumentOptions): Promise<ParseFetchedDocumentResult> => {
   if (!declaredMimeMatchesMagic(PDF_MIME_TYPE, bytes)) {
-    throw new AdapterFetchError({
+    const error = new SkDocumentNonPdfError({
       message: "Document fetch returned a body that is not a PDF",
       adapterKey: ADAPTER_KEYS.SK_COURTS,
       cursor: null,
     });
+    logger.warn(
+      "case_law.ingestion.sk_document_parse_failed",
+      skDocumentErrorDiagnostics(error),
+    );
+    throw error;
   }
   const parsed = await Result.tryPromise({
     try: async () => await parsePendingDocument(decision, bytes),
