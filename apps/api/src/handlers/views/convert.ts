@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import {
+  isSingleViewLayout,
   resourceRef,
   RESOURCE_TYPE,
   VIEW_LAYOUT_TYPES,
@@ -30,7 +31,7 @@ const config = {
     "Convert one view of a matter to another layout type (table, filesystem, " +
     "kanban, calendar, timeline, or avt: document verification against a " +
     "list's facts, where legal lists are enabled), carrying over as much of its filters and sorts as the " +
-    "target layout supports. Converting to overview, or to " +
+    "target layout supports. Converting to overview or correspondence, or to " +
     "the layout the view already has, is refused. Use views.update to change " +
     "a view's name or the details of its current layout.",
   permissions: { view: ["update"] },
@@ -50,11 +51,12 @@ const convertView = createSafeHandler(
     body: { targetType },
     recordAuditEvent,
   }) {
-    if (targetType === "overview") {
+    // A matter holds at most one view of these layouts, so no view becomes one.
+    if (isSingleViewLayout(targetType)) {
       return Result.err(
         new HandlerError({
           status: 400,
-          message: "Cannot convert to overview",
+          message: `Cannot convert to ${targetType}`,
         }),
       );
     }

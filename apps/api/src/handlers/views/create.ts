@@ -1,7 +1,11 @@
 import { Result } from "better-result";
 import { eq, sql } from "drizzle-orm";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import {
+  isSingleViewLayout,
+  resourceRef,
+  RESOURCE_TYPE,
+} from "@stll/api-contract";
 import { roles } from "@stll/permissions";
 
 import { abortableTx } from "@/api/db/safe-db";
@@ -35,7 +39,8 @@ const config = {
     "sorts and multiple kind filters are refused, the columns the layout " +
     "needs are created when your role may create columns, and references to " +
     "columns that do not exist are dropped. A matter may hold only one " +
-    "overview view, and a fixed maximum of views in total.",
+    "overview view and one correspondence view, and a fixed maximum of " +
+    "views in total.",
   permissions: { view: ["create"] },
   mcp: { type: "capability", reason: "workspace_schema" },
   body: tCreateViewInputSchema,
@@ -72,14 +77,15 @@ const createView = createSafeHandler(
           .where(eq(workspaceViews.workspaceId, workspaceId))
           .for("update");
 
-        const hasOverviewView = existing.some(
-          (view) => parseStoredViewLayout(view.layout).type === "overview",
-        );
-
-        if (layout.type === "overview" && hasOverviewView) {
+        if (
+          isSingleViewLayout(layout.type) &&
+          existing.some(
+            (view) => parseStoredViewLayout(view.layout).type === layout.type,
+          )
+        ) {
           throw new HandlerError({
             status: 400,
-            message: "Overview view already exists",
+            message: `A matter holds only one ${layout.type} view`,
           });
         }
 

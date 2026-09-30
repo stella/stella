@@ -80,7 +80,6 @@ import { Route as ProtectedSettingsOrganizationMembersRouteImport } from './rout
 import { Route as ProtectedSettingsOrganizationUsageRouteImport } from './routes/_protected.settings/organization.usage'
 import { Route as ProtectedWorkspacesWorkspaceIdIndexRouteImport } from './routes/_protected.workspaces/$workspaceId/index'
 import { Route as ProtectedWorkspacesWorkspaceIdViewIdRouteRouteImport } from './routes/_protected.workspaces/$workspaceId/$viewId.route'
-import { Route as ProtectedWorkspacesWorkspaceIdCorrespondenceRouteImport } from './routes/_protected.workspaces/$workspaceId/correspondence'
 import { Route as ProtectedWorkspacesWorkspaceIdExpensesRouteImport } from './routes/_protected.workspaces/$workspaceId/expenses'
 import { Route as ProtectedWorkspacesWorkspaceIdInvoicesRouteImport } from './routes/_protected.workspaces/$workspaceId/invoices'
 import { Route as ProtectedWorkspacesWorkspaceIdListsRouteImport } from './routes/_protected.workspaces/$workspaceId/lists'
@@ -486,12 +485,6 @@ const ProtectedWorkspacesWorkspaceIdViewIdRouteRoute =
     path: '/$viewId',
     getParentRoute: () => ProtectedWorkspacesWorkspaceIdRouteRoute,
   } as any)
-const ProtectedWorkspacesWorkspaceIdCorrespondenceRoute =
-  ProtectedWorkspacesWorkspaceIdCorrespondenceRouteImport.update({
-    id: '/correspondence',
-    path: '/correspondence',
-    getParentRoute: () => ProtectedWorkspacesWorkspaceIdRouteRoute,
-  } as any)
 const ProtectedWorkspacesWorkspaceIdExpensesRoute =
   ProtectedWorkspacesWorkspaceIdExpensesRouteImport.update({
     id: '/expenses',
@@ -582,9 +575,9 @@ const ProtectedWorkspacesWorkspaceIdViewIdDocumentRoute =
 const ProtectedWorkspacesWorkspaceIdCorrespondenceCorrespondenceIdRoute =
   ProtectedWorkspacesWorkspaceIdCorrespondenceCorrespondenceIdRouteImport.update(
     {
-      id: '/$correspondenceId',
-      path: '/$correspondenceId',
-      getParentRoute: () => ProtectedWorkspacesWorkspaceIdCorrespondenceRoute,
+      id: '/correspondence/$correspondenceId',
+      path: '/correspondence/$correspondenceId',
+      getParentRoute: () => ProtectedWorkspacesWorkspaceIdRouteRoute,
     } as any,
   )
 const ProtectedWorkspacesWorkspaceIdInvoicesInvoiceIdRoute =
@@ -711,7 +704,6 @@ export interface FileRoutesByFullPath {
   '/settings/organization/matter-numbering': typeof ProtectedSettingsOrganizationMatterNumberingRoute
   '/settings/organization/members': typeof ProtectedSettingsOrganizationMembersRoute
   '/settings/organization/usage': typeof ProtectedSettingsOrganizationUsageRoute
-  '/workspaces/$workspaceId/correspondence': typeof ProtectedWorkspacesWorkspaceIdCorrespondenceRouteWithChildren
   '/workspaces/$workspaceId/expenses': typeof ProtectedWorkspacesWorkspaceIdExpensesRoute
   '/workspaces/$workspaceId/invoices': typeof ProtectedWorkspacesWorkspaceIdInvoicesRouteWithChildren
   '/workspaces/$workspaceId/lists': typeof ProtectedWorkspacesWorkspaceIdListsRoute
@@ -800,7 +792,6 @@ export interface FileRoutesByTo {
   '/settings/organization/matter-numbering': typeof ProtectedSettingsOrganizationMatterNumberingRoute
   '/settings/organization/members': typeof ProtectedSettingsOrganizationMembersRoute
   '/settings/organization/usage': typeof ProtectedSettingsOrganizationUsageRoute
-  '/workspaces/$workspaceId/correspondence': typeof ProtectedWorkspacesWorkspaceIdCorrespondenceRouteWithChildren
   '/workspaces/$workspaceId/expenses': typeof ProtectedWorkspacesWorkspaceIdExpensesRoute
   '/workspaces/$workspaceId/invoices': typeof ProtectedWorkspacesWorkspaceIdInvoicesRouteWithChildren
   '/workspaces/$workspaceId/lists': typeof ProtectedWorkspacesWorkspaceIdListsRoute
@@ -900,7 +891,6 @@ export interface FileRoutesById {
   '/_protected/settings/organization/matter-numbering': typeof ProtectedSettingsOrganizationMatterNumberingRoute
   '/_protected/settings/organization/members': typeof ProtectedSettingsOrganizationMembersRoute
   '/_protected/settings/organization/usage': typeof ProtectedSettingsOrganizationUsageRoute
-  '/_protected/workspaces/$workspaceId/correspondence': typeof ProtectedWorkspacesWorkspaceIdCorrespondenceRouteWithChildren
   '/_protected/workspaces/$workspaceId/expenses': typeof ProtectedWorkspacesWorkspaceIdExpensesRoute
   '/_protected/workspaces/$workspaceId/invoices': typeof ProtectedWorkspacesWorkspaceIdInvoicesRouteWithChildren
   '/_protected/workspaces/$workspaceId/lists': typeof ProtectedWorkspacesWorkspaceIdListsRoute
@@ -1000,7 +990,6 @@ export interface FileRouteTypes {
     | '/settings/organization/matter-numbering'
     | '/settings/organization/members'
     | '/settings/organization/usage'
-    | '/workspaces/$workspaceId/correspondence'
     | '/workspaces/$workspaceId/expenses'
     | '/workspaces/$workspaceId/invoices'
     | '/workspaces/$workspaceId/lists'
@@ -1089,7 +1078,6 @@ export interface FileRouteTypes {
     | '/settings/organization/matter-numbering'
     | '/settings/organization/members'
     | '/settings/organization/usage'
-    | '/workspaces/$workspaceId/correspondence'
     | '/workspaces/$workspaceId/expenses'
     | '/workspaces/$workspaceId/invoices'
     | '/workspaces/$workspaceId/lists'
@@ -1188,7 +1176,6 @@ export interface FileRouteTypes {
     | '/_protected/settings/organization/matter-numbering'
     | '/_protected/settings/organization/members'
     | '/_protected/settings/organization/usage'
-    | '/_protected/workspaces/$workspaceId/correspondence'
     | '/_protected/workspaces/$workspaceId/expenses'
     | '/_protected/workspaces/$workspaceId/invoices'
     | '/_protected/workspaces/$workspaceId/lists'
@@ -1739,13 +1726,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProtectedWorkspacesWorkspaceIdViewIdRouteRouteImport
       parentRoute: typeof ProtectedWorkspacesWorkspaceIdRouteRoute
     }
-    '/_protected/workspaces/$workspaceId/correspondence': {
-      id: '/_protected/workspaces/$workspaceId/correspondence'
-      path: '/correspondence'
-      fullPath: '/workspaces/$workspaceId/correspondence'
-      preLoaderRoute: typeof ProtectedWorkspacesWorkspaceIdCorrespondenceRouteImport
-      parentRoute: typeof ProtectedWorkspacesWorkspaceIdRouteRoute
-    }
     '/_protected/workspaces/$workspaceId/expenses': {
       id: '/_protected/workspaces/$workspaceId/expenses'
       path: '/expenses'
@@ -1853,10 +1833,10 @@ declare module '@tanstack/react-router' {
     }
     '/_protected/workspaces/$workspaceId/correspondence/$correspondenceId': {
       id: '/_protected/workspaces/$workspaceId/correspondence/$correspondenceId'
-      path: '/$correspondenceId'
+      path: '/correspondence/$correspondenceId'
       fullPath: '/workspaces/$workspaceId/correspondence/$correspondenceId'
       preLoaderRoute: typeof ProtectedWorkspacesWorkspaceIdCorrespondenceCorrespondenceIdRouteImport
-      parentRoute: typeof ProtectedWorkspacesWorkspaceIdCorrespondenceRoute
+      parentRoute: typeof ProtectedWorkspacesWorkspaceIdRouteRoute
     }
     '/_protected/workspaces/$workspaceId/invoices/$invoiceId': {
       id: '/_protected/workspaces/$workspaceId/invoices/$invoiceId'
@@ -2148,21 +2128,6 @@ const ProtectedWorkspacesWorkspaceIdViewIdRouteRouteWithChildren =
     ProtectedWorkspacesWorkspaceIdViewIdRouteRouteChildren,
   )
 
-interface ProtectedWorkspacesWorkspaceIdCorrespondenceRouteChildren {
-  ProtectedWorkspacesWorkspaceIdCorrespondenceCorrespondenceIdRoute: typeof ProtectedWorkspacesWorkspaceIdCorrespondenceCorrespondenceIdRoute
-}
-
-const ProtectedWorkspacesWorkspaceIdCorrespondenceRouteChildren: ProtectedWorkspacesWorkspaceIdCorrespondenceRouteChildren =
-  {
-    ProtectedWorkspacesWorkspaceIdCorrespondenceCorrespondenceIdRoute:
-      ProtectedWorkspacesWorkspaceIdCorrespondenceCorrespondenceIdRoute,
-  }
-
-const ProtectedWorkspacesWorkspaceIdCorrespondenceRouteWithChildren =
-  ProtectedWorkspacesWorkspaceIdCorrespondenceRoute._addFileChildren(
-    ProtectedWorkspacesWorkspaceIdCorrespondenceRouteChildren,
-  )
-
 interface ProtectedWorkspacesWorkspaceIdInvoicesRouteChildren {
   ProtectedWorkspacesWorkspaceIdInvoicesInvoiceIdRoute: typeof ProtectedWorkspacesWorkspaceIdInvoicesInvoiceIdRoute
 }
@@ -2180,13 +2145,13 @@ const ProtectedWorkspacesWorkspaceIdInvoicesRouteWithChildren =
 
 interface ProtectedWorkspacesWorkspaceIdRouteRouteChildren {
   ProtectedWorkspacesWorkspaceIdViewIdRouteRoute: typeof ProtectedWorkspacesWorkspaceIdViewIdRouteRouteWithChildren
-  ProtectedWorkspacesWorkspaceIdCorrespondenceRoute: typeof ProtectedWorkspacesWorkspaceIdCorrespondenceRouteWithChildren
   ProtectedWorkspacesWorkspaceIdExpensesRoute: typeof ProtectedWorkspacesWorkspaceIdExpensesRoute
   ProtectedWorkspacesWorkspaceIdInvoicesRoute: typeof ProtectedWorkspacesWorkspaceIdInvoicesRouteWithChildren
   ProtectedWorkspacesWorkspaceIdListsRoute: typeof ProtectedWorkspacesWorkspaceIdListsRoute
   ProtectedWorkspacesWorkspaceIdTimesheetsRoute: typeof ProtectedWorkspacesWorkspaceIdTimesheetsRoute
   ProtectedWorkspacesWorkspaceIdWorkflowsRoute: typeof ProtectedWorkspacesWorkspaceIdWorkflowsRoute
   ProtectedWorkspacesWorkspaceIdIndexRoute: typeof ProtectedWorkspacesWorkspaceIdIndexRoute
+  ProtectedWorkspacesWorkspaceIdCorrespondenceCorrespondenceIdRoute: typeof ProtectedWorkspacesWorkspaceIdCorrespondenceCorrespondenceIdRoute
   ProtectedWorkspacesWorkspaceIdReportsExportIdRoute: typeof ProtectedWorkspacesWorkspaceIdReportsExportIdRoute
 }
 
@@ -2194,8 +2159,6 @@ const ProtectedWorkspacesWorkspaceIdRouteRouteChildren: ProtectedWorkspacesWorks
   {
     ProtectedWorkspacesWorkspaceIdViewIdRouteRoute:
       ProtectedWorkspacesWorkspaceIdViewIdRouteRouteWithChildren,
-    ProtectedWorkspacesWorkspaceIdCorrespondenceRoute:
-      ProtectedWorkspacesWorkspaceIdCorrespondenceRouteWithChildren,
     ProtectedWorkspacesWorkspaceIdExpensesRoute:
       ProtectedWorkspacesWorkspaceIdExpensesRoute,
     ProtectedWorkspacesWorkspaceIdInvoicesRoute:
@@ -2208,6 +2171,8 @@ const ProtectedWorkspacesWorkspaceIdRouteRouteChildren: ProtectedWorkspacesWorks
       ProtectedWorkspacesWorkspaceIdWorkflowsRoute,
     ProtectedWorkspacesWorkspaceIdIndexRoute:
       ProtectedWorkspacesWorkspaceIdIndexRoute,
+    ProtectedWorkspacesWorkspaceIdCorrespondenceCorrespondenceIdRoute:
+      ProtectedWorkspacesWorkspaceIdCorrespondenceCorrespondenceIdRoute,
     ProtectedWorkspacesWorkspaceIdReportsExportIdRoute:
       ProtectedWorkspacesWorkspaceIdReportsExportIdRoute,
   }
@@ -2280,3 +2245,12 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { createStart } from '@tanstack/react-start'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+  }
+}

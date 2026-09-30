@@ -444,12 +444,14 @@ export type {
 export {
   DIRECTLY_CREATABLE_VIEW_LAYOUTS,
   isRequiredViewLayout,
+  isSingleViewLayout,
   REQUIRED_VIEW_LAYOUTS,
   VIEW_LAYOUT_TYPES,
 } from "./view-layout";
 export type {
   DirectlyCreatableViewLayoutType,
   RequiredViewLayoutType,
+  SingleViewLayoutType,
   ViewLayoutType,
 } from "./view-layout";
 export type {
