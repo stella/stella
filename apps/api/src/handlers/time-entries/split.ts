@@ -190,7 +190,17 @@ const splitEntry = createSafeHandler(
         }
 
         const [current] = await tx
-          .select({ id: timeEntries.id })
+          .select({
+            id: timeEntries.id,
+            status: timeEntries.status,
+            updatedAt: timeEntries.updatedAt,
+            approverUserId: timeEntries.approverUserId,
+            approvedByUserId: timeEntries.approvedByUserId,
+            approvedAt: timeEntries.approvedAt,
+            returnedByUserId: timeEntries.returnedByUserId,
+            returnedAt: timeEntries.returnedAt,
+            returnComment: timeEntries.returnComment,
+          })
           .from(timeEntries)
           .where(
             and(
@@ -199,7 +209,17 @@ const splitEntry = createSafeHandler(
             ),
           )
           .limit(1);
-        if (!current) {
+        if (
+          !current ||
+          current.status !== original.status ||
+          current.updatedAt?.getTime() !== original.updatedAt?.getTime() ||
+          current.approverUserId !== original.approverUserId ||
+          current.approvedByUserId !== original.approvedByUserId ||
+          current.approvedAt?.getTime() !== original.approvedAt?.getTime() ||
+          current.returnedByUserId !== original.returnedByUserId ||
+          current.returnedAt?.getTime() !== original.returnedAt?.getTime() ||
+          current.returnComment !== original.returnComment
+        ) {
           return {
             ok: false as const,
             error: new HandlerError({
@@ -248,6 +268,12 @@ const splitEntry = createSafeHandler(
             organizationId: original.organizationId,
             workspaceId,
             userId: original.userId,
+            approverUserId: current.approverUserId,
+            approvedByUserId: current.approvedByUserId,
+            approvedAt: current.approvedAt,
+            returnedByUserId: current.returnedByUserId,
+            returnedAt: current.returnedAt,
+            returnComment: current.returnComment,
             workItemId: split.workItemId,
             dateWorked: original.dateWorked,
             timezoneId: original.timezoneId,

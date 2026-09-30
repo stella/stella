@@ -1,0 +1,497 @@
+import { Result } from "better-result";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  setDefaultTimeout,
+  test,
+} from "bun:test";
+import { eq, inArray } from "drizzle-orm";
+
+import { Temporal } from "@stll/time";
+
+import type { SafeDb } from "@/api/db/safe-db";
+import {
+  auditLogs,
+  organizationSettings,
+  timeEntries,
+  timeTimers,
+} from "@/api/db/schema";
+import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import { createAuditRecorder } from "@/api/lib/audit-log";
+import { DEFAULT_TIME_POLICY } from "@/api/lib/billing-time";
+import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { cents } from "@/api/lib/money";
+import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import {
+  getRlsFixture,
+  releaseRlsFixture,
+} from "@/api/tests/security/rls-fixture";
+import type { TestIds } from "@/api/tests/security/rls-helpers";
+import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+import updateTimeEntry from "../update";
+import approve from "./approve";
+import list from "./list";
+import returnEntry from "./return";
+
+setDefaultTimeout(120_000);
+type ApproveCtx = Parameters<typeof approve.handler>[0];
+type ListCtx = Parameters<typeof list.handler>[0];
+type ReturnCtx = Parameters<typeof returnEntry.handler>[0];
+type UpdateCtx = Parameters<typeof updateTimeEntry.handler>[0];
+let db: TestDatabase;
+let ids: TestIds;
+const entryIds: SafeId<"timeEntry">[] = [];
+const timerIds: SafeId<"timeTimer">[] = [];
+const DAY = Temporal.Now.plainDateISO("UTC").subtract({ days: 1 }).toString();
+const START = new Date(`${DAY}T10:00:00Z`);
+
+beforeAll(async () => {
+  const fixture = await getRlsFixture();
+  db = fixture.testDb;
+  ids = fixture.ids;
+});
+
+const cleanup = async () => {
+  if (timerIds.length) {
+    await db
+      .delete(timeTimers)
+      .where(inArray(timeTimers.id, timerIds.splice(0)));
+  }
+  if (entryIds.length) {
+    await db.delete(auditLogs).where(inArray(auditLogs.resourceId, entryIds));
+    await db
+      .delete(timeEntries)
+      .where(inArray(timeEntries.id, entryIds.splice(0)));
+  }
+  await db
+    .update(organizationSettings)
+    .set({ timeLockedThroughMonth: null })
+    .where(eq(organizationSettings.organizationId, ids.orgA));
+};
+beforeEach(cleanup);
+afterAll(async () => {
+  try {
+    await cleanup();
+  } finally {
+    await releaseRlsFixture();
+  }
+});
+
+const seedEntry = async (
+  overrides: Partial<Omit<typeof timeEntries.$inferInsert, "id">> = {},
+) => {
+  const id = createSafeId<"timeEntry">();
+  await db.insert(timeEntries).values({
+    id,
+    organizationId: ids.orgA,
+    workspaceId: ids.wsA2,
+    userId: ids.userA1,
+    approverUserId: ids.userA2,
+    dateWorked: DAY,
+    timezoneId: "UTC",
+    durationMinutes: 37,
+    billedMinutes: 42,
+    rateAtEntry: cents(0),
+    currency: "USD",
+    narrative: "Recorded work",
+    ...overrides,
+  });
+  entryIds.push(id);
+  return id;
+};
+
+const context = (actor = ids.userA2, role: "member" | "owner" = "member") => {
+  const request = new Request(
+    "https://example.test/time-entries/approval-queue",
+  );
+  const recorder = (workspaceId: SafeId<"workspace"> | null) =>
+    createAuditRecorder({
+      organizationId: ids.orgA,
+      workspaceId,
+      userId: actor,
+      request,
+      server: null,
+    });
+  return {
+    request,
+    route: "/time-entries/approval-queue",
+    session: { activeOrganizationId: ids.orgA },
+    user: { id: actor },
+    memberRole: { role },
+    safeDb: createSafeDb(db, [ids.wsA2], ids.orgA, actor),
+    scopedDb: createScopedDb(db, [ids.wsA2], ids.orgA, actor),
+    getActiveWorkspaceIds: async () => [ids.wsA2],
+    recordAuditEvent: recorder(null),
+    createAuditRecorder: (options?: {
+      workspaceId?: SafeId<"workspace"> | null;
+    }) => recorder(options?.workspaceId ?? null),
+  };
+};
+const approveFor = async (
+  selected: SafeId<"timeEntry">[],
+  actor = ids.userA2,
+  role: "member" | "owner" = "member",
+) =>
+  await approve.handler(
+    asTestRaw<ApproveCtx>({ ...context(actor, role), body: { ids: selected } }),
+  );
+const returnFor = async (id: SafeId<"timeEntry">, comment: string) =>
+  await returnEntry.handler(
+    asTestRaw<ReturnCtx>({ ...context(), params: { id }, body: { comment } }),
+  );
+const listFor = async (
+  query: ListCtx["query"] = {},
+  actor = ids.userA2,
+  role: "member" | "owner" = "member",
+) => await list.handler(asTestRaw<ListCtx>({ ...context(actor, role), query }));
+const stored = async (id: SafeId<"timeEntry">) =>
+  await db.query.timeEntries.findFirst({ where: { id: { eq: id } } });
+
+describe("approval queue authorization", () => {
+  test("an assigned member approves with server-bound actor, timestamp, and matter audit", async () => {
+    const id = await seedEntry();
+    const before = new Date();
+    expect(await approveFor([id])).toEqual({
+      results: [{ id, status: "approved" }],
+    });
+    const row = await stored(id);
+    expect(row).toMatchObject({
+      status: "approved",
+      approvedByUserId: ids.userA2,
+      returnedAt: null,
+      returnComment: null,
+    });
+    expect(row?.approvedAt?.getTime()).toBeGreaterThanOrEqual(before.getTime());
+    expect(row?.approvedAt?.getTime()).toBeLessThanOrEqual(Date.now());
+    const logs = await db
+      .select()
+      .from(auditLogs)
+      .where(eq(auditLogs.resourceId, id));
+    expect(logs).toHaveLength(1);
+    expect(logs.at(0)).toMatchObject({
+      userId: ids.userA2,
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA2,
+    });
+    expect(logs.at(0)?.createdAt.getTime()).toBeGreaterThanOrEqual(
+      before.getTime(),
+    );
+    expect(await approveFor([id])).toEqual({
+      results: [{ id, status: "approved" }],
+    });
+    expect((await stored(id))?.approvedAt).toEqual(row?.approvedAt);
+    expect(
+      await db.select().from(auditLogs).where(eq(auditLogs.resourceId, id)),
+    ).toHaveLength(1);
+  });
+
+  test("ownership alone grants no approval and null approvers belong to the admin queue", async () => {
+    const assigned = await seedEntry();
+    const unassigned = await seedEntry({ approverUserId: null });
+    expect(await approveFor([assigned, unassigned], ids.userA1)).toMatchObject({
+      results: [
+        { id: assigned, status: "refused" },
+        { id: unassigned, status: "refused" },
+      ],
+    });
+    expect((await stored(assigned))?.status).toBe("draft");
+    expect(await approveFor([unassigned], ids.userAdmin, "owner")).toEqual({
+      results: [{ id: unassigned, status: "approved" }],
+    });
+  });
+
+  test("a batch commits eligible rows while refusing unauthorized, unavailable, and non-draft rows", async () => {
+    const allowed = await seedEntry();
+    const otherApprover = await seedEntry({ approverUserId: ids.userAdmin });
+    const alreadyApproved = await seedEntry({ status: "written_off" });
+    const foreign = await seedEntry({
+      organizationId: ids.orgB,
+      workspaceId: ids.wsB1,
+      userId: ids.userB1,
+    });
+    const missing = createSafeId<"timeEntry">();
+    const result = await approveFor([
+      allowed,
+      otherApprover,
+      alreadyApproved,
+      foreign,
+      missing,
+    ]);
+    if (!("results" in result)) {
+      throw new Error(`unexpected approval: ${JSON.stringify(result)}`);
+    }
+    expect(result.results).toHaveLength(5);
+    expect(result.results.find((row) => row.id === allowed)).toEqual({
+      id: allowed,
+      status: "approved",
+    });
+    for (const id of [otherApprover, alreadyApproved, foreign, missing]) {
+      expect(result.results.find((row) => row.id === id)).toMatchObject({
+        id,
+        status: "refused",
+        reason: expect.any(String),
+      });
+    }
+    expect((await stored(foreign))?.status).toBe("draft");
+    expect((await stored(otherApprover))?.status).toBe("draft");
+    expect(await returnFor(otherApprover, "Please revise")).toMatchObject({
+      code: 409,
+    });
+    expect((await stored(otherApprover))?.returnComment).toBeNull();
+    expect(await returnFor(foreign, "Please revise")).toMatchObject({
+      code: 404,
+    });
+  });
+});
+
+describe("return and reapproval lifecycle", () => {
+  test("empty comments cannot reset approval, while returning clears provenance and keeps feedback until reapproval", async () => {
+    const id = await seedEntry();
+    await approveFor([id]);
+    for (const comment of ["", "   ", "\t\n"]) {
+      expect(await returnFor(id, comment)).toMatchObject({ code: 400 });
+      expect((await stored(id))?.status).toBe("approved");
+    }
+    expect(await returnFor(id, "Please clarify the work")).toEqual({
+      id,
+      status: "draft",
+    });
+    const returned = await stored(id);
+    expect(returned).toMatchObject({
+      status: "draft",
+      approvedByUserId: null,
+      approvedAt: null,
+      returnedByUserId: ids.userA2,
+      returnComment: "Please clarify the work",
+      returnedAt: expect.any(Date),
+    });
+    await updateTimeEntry.handler(
+      asTestRaw<UpdateCtx>({
+        ...context(ids.userA1),
+        workspaceId: ids.wsA2,
+        recordAuditEvent: createAuditRecorder({
+          organizationId: ids.orgA,
+          workspaceId: ids.wsA2,
+          userId: ids.userA1,
+          request: new Request("https://example.test/update"),
+          server: null,
+        }),
+        body: { id, narrative: "Clarified work" },
+      }),
+    );
+    expect(await stored(id)).toMatchObject({
+      narrative: "Clarified work",
+      returnComment: "Please clarify the work",
+      returnedAt: returned?.returnedAt,
+    });
+    expect(await approveFor([id])).toEqual({
+      results: [{ id, status: "approved" }],
+    });
+    expect(await stored(id)).toMatchObject({
+      returnComment: null,
+      returnedAt: null,
+      returnedByUserId: null,
+    });
+  });
+});
+
+describe("approval queue pages", () => {
+  test("filters assigned drafts by date, member, and matter while preserving logged and billed minutes", async () => {
+    const first = await seedEntry();
+    const second = await seedEntry();
+    await seedEntry({ approverUserId: ids.userA1 });
+    await seedEntry({ status: "approved" });
+    await seedEntry({
+      dateWorked: Temporal.PlainDate.from(DAY).subtract({ days: 1 }).toString(),
+    });
+    await seedEntry({
+      organizationId: ids.orgB,
+      workspaceId: ids.wsB1,
+      userId: ids.userB1,
+    });
+    const query = {
+      from: DAY,
+      to: DAY,
+      member: ids.userA1,
+      matter: ids.wsA2,
+      limit: 1,
+    };
+    const page = await listFor(query);
+    if (!("items" in page) || !page.nextCursor) {
+      throw new Error(`unexpected queue page: ${JSON.stringify(page)}`);
+    }
+    expect(page.items).toHaveLength(1);
+    expect(page.items.at(0)).toMatchObject({
+      durationMinutes: 37,
+      billedMinutes: 42,
+      approverUserId: ids.userA2,
+    });
+    const next = await listFor({ ...query, cursor: page.nextCursor });
+    if (!("items" in next)) {
+      throw new Error(`unexpected next page: ${JSON.stringify(next)}`);
+    }
+    expect(next.nextCursor).toBeNull();
+    expect(
+      [...page.items, ...next.items].map((row) => row.id).toSorted(),
+    ).toEqual([first, second].toSorted());
+  });
+
+  test("only admins include null-assignee entries", async () => {
+    const id = await seedEntry({ approverUserId: null });
+    expect(await listFor({ from: DAY, to: DAY })).toMatchObject({ items: [] });
+    const adminPage = await listFor(
+      { from: DAY, to: DAY },
+      ids.userAdmin,
+      "owner",
+    );
+    if (!("items" in adminPage)) {
+      throw new Error(`unexpected admin page: ${JSON.stringify(adminPage)}`);
+    }
+    expect(adminPage.items.map((row) => row.id)).toContain(id);
+  });
+});
+
+describe("approval lifecycle guards", () => {
+  test("a locked month refuses approval and return without changing entries", async () => {
+    const id = await seedEntry();
+    const approvedId = await seedEntry({ status: "approved" });
+    const date = Temporal.PlainDate.from(DAY);
+    await db
+      .update(organizationSettings)
+      .set({
+        timeLockedThroughMonth: date.with({ day: date.daysInMonth }).toString(),
+      })
+      .where(eq(organizationSettings.organizationId, ids.orgA));
+    expect(await approveFor([id])).toMatchObject({
+      results: [{ id, status: "refused", reason: "time_period_locked" }],
+    });
+    expect(await returnFor(approvedId, "Please revise")).toMatchObject({
+      code: 409,
+    });
+    expect((await stored(id))?.status).toBe("draft");
+    expect((await stored(approvedId))?.status).toBe("approved");
+  });
+
+  test("both private running projections and legacy running timestamps block own and other entries", async () => {
+    const own = await seedEntry({ userId: ids.userA2, timerStartedAt: START });
+    const other = await seedEntry({ userId: ids.userA1 });
+    const timerId = createSafeId<"timeTimer">();
+    await db.insert(timeTimers).values({
+      id: timerId,
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+      workspaceId: ids.wsA2,
+      legacyTimeEntryId: other,
+      state: "running",
+      startedAt: START,
+      lastResumedAt: START,
+    });
+    timerIds.push(timerId);
+    expect(
+      await createScopedDb(
+        db,
+        [ids.wsA2],
+        ids.orgA,
+        ids.userA2,
+      )((tx) => tx.select().from(timeTimers)),
+    ).toEqual([]);
+    const result = await approveFor([own, other]);
+    if (!("results" in result)) {
+      throw new Error(`unexpected running result: ${JSON.stringify(result)}`);
+    }
+    expect(result.results).toHaveLength(2);
+    expect(
+      result.results.every(
+        (row) => row.status === "refused" && row.reason === "running_timer",
+      ),
+    ).toBe(true);
+    expect((await stored(own))?.status).toBe("draft");
+    expect((await stored(other))?.status).toBe("draft");
+  });
+});
+
+describe("approval policy serialization", () => {
+  const policyCheckingContext = () => {
+    const ctx = context();
+    const safeDb: SafeDb = async (run, retry) =>
+      await ctx.safeDb(async (tx) => {
+        const result = await run(tx);
+        // A closer must acquire this row before updating the month. NOWAIT makes
+        // the conflicting writer observable without timing-dependent sleeps.
+        const closeLock = await Result.tryPromise(
+          async () =>
+            await db.transaction(
+              async (closer) =>
+                await closer
+                  .select({ id: organizationSettings.id })
+                  .from(organizationSettings)
+                  .where(eq(organizationSettings.organizationId, ids.orgA))
+                  .for("update", { noWait: true }),
+            ),
+        );
+        expect(closeLock.isErr()).toBe(true);
+        if (closeLock.isErr()) {
+          expect(
+            isPgError(closeLock.error.cause, PG_ERROR.LOCK_NOT_AVAILABLE),
+          ).toBe(true);
+        }
+        return result;
+      }, retry);
+    return { ...ctx, safeDb };
+  };
+
+  test("approval and return retain the month policy lock until the mutation commits", async () => {
+    const id = await seedEntry();
+    const approved = await approve.handler(
+      asTestRaw<ApproveCtx>({
+        ...policyCheckingContext(),
+        body: { ids: [id] },
+      }),
+    );
+    expect(approved).toEqual({ results: [{ id, status: "approved" }] });
+    const returned = await returnEntry.handler(
+      asTestRaw<ReturnCtx>({
+        ...policyCheckingContext(),
+        params: { id },
+        body: { comment: "Revise" },
+      }),
+    );
+    expect(returned).toEqual({ id, status: "draft" });
+  });
+
+  test("an absent policy is initialized with unchanged effective defaults", async () => {
+    const saved = await db.query.organizationSettings.findFirst({
+      where: { organizationId: { eq: ids.orgA } },
+    });
+    await db
+      .delete(organizationSettings)
+      .where(eq(organizationSettings.organizationId, ids.orgA));
+    const id = await seedEntry();
+    try {
+      expect(
+        await approve.handler(
+          asTestRaw<ApproveCtx>({
+            ...context(),
+            body: { ids: [id] },
+          }),
+        ),
+      ).toEqual({ results: [{ id, status: "approved" }] });
+      const initialized = await db.query.organizationSettings.findFirst({
+        where: { organizationId: { eq: ids.orgA } },
+      });
+      expect(initialized).toMatchObject(DEFAULT_TIME_POLICY);
+    } finally {
+      await db
+        .delete(organizationSettings)
+        .where(eq(organizationSettings.organizationId, ids.orgA));
+      if (saved) {
+        await db.insert(organizationSettings).values(saved);
+      }
+    }
+  });
+});
