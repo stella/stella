@@ -158,7 +158,7 @@
     }
   },
   "implicit-root-connection-shapes": {
-    "count": 18,
+    "count": 19,
     "files": {
       "apps/api/src/lib/agent-audit-principal.ts": 1,
       "apps/api/src/lib/business-registries/desktop/revocation.ts": 1,
@@ -170,7 +170,7 @@
       "apps/api/src/lib/folio-collab-rooms.ts": 1,
       "apps/api/src/lib/folio-collab-service-room.ts": 1,
       "apps/api/src/lib/public-law-read-db.ts": 1,
-      "apps/api/src/lib/root-scoped-db.ts": 2,
+      "apps/api/src/lib/root-scoped-db.ts": 3,
       "apps/api/src/lib/scheduler/runner.ts": 1,
       "apps/api/src/lib/search/index-chat.ts": 2,
       "apps/api/src/lib/search/index-entity.ts": 1,
@@ -985,7 +985,7 @@
     }
   },
   "no-db-await-in-loop-suppressions": {
-    "count": 114,
+    "count": 115,
     "files": {
       "apps/api/scripts/backfill-image-thumbnails.ts": 3,
       "apps/api/scripts/backfill-search-previews.ts": 2,
@@ -1026,6 +1026,7 @@
       "apps/api/src/lib/flows/flow-run-worker.ts": 1,
       "apps/api/src/lib/legal-search/corpus-index-projection-executor.ts": 3,
       "apps/api/src/lib/legal-search/corpus-pack-batch.ts": 1,
+      "apps/api/src/lib/lists/sanctions/screening-service.ts": 1,
       "apps/api/src/lib/scheduler/runner.ts": 2,
       "apps/api/src/lib/scheduler/tasks/desktop-edit-session-expiry.ts": 6,
       "apps/api/src/lib/scheduler/tasks/infosoud.ts": 5,
