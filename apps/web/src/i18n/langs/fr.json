@@ -428,6 +428,32 @@
     }
   },
   "billing": {
+    "absences": {
+      "approvalQueue": "En attente d’approbation",
+      "coverage": "Durée de la journée",
+      "decisionComment": "Commentaire sur la décision (facultatif)",
+      "decisionSaved": "Absence mise à jour",
+      "emptyMine": "Demandez une absence pour la voir ici.",
+      "emptyQueue": "Aucune demande d’absence n’attend votre décision.",
+      "formerMember": "Ancien membre",
+      "halfDay": "Demi-journée",
+      "halfDaySingleDay": "Une demande de demi-journée doit porter sur un seul jour.",
+      "kind": "Type d’absence",
+      "lastDay": "Dernier jour",
+      "mine": "Mes absences",
+      "rangeInvalid": "Choisissez une période valide.",
+      "rejectionComment": "Motif du refus",
+      "request": "Demander une absence",
+      "requestSaved": "Absence demandée",
+      "segment": "Partie de la journée",
+      "startDate": "Premier jour",
+      "statuses": {
+        "requested": "Demandée"
+      },
+      "title": "Congés et absences",
+      "unknownMember": "Nom du membre indisponible"
+    },
+    "activityGroup": "Groupe d’activités",
     "addEntry": "Ajouter une entrée",
     "amount": "Montant",
     "amountMustBePositive": "Le montant doit être supérieur à zéro",
@@ -436,6 +462,7 @@
     "batchActions": "Actions groupées",
     "billable": "Facturable",
     "billedAmount": "Montant facturé",
+    "clientWork": "Travail pour les clients",
     "codes": {
       "activity": "Activité",
       "activityCode": "Code d'activité",
@@ -593,6 +620,7 @@
       "unnamedRecord": "Élément du dossier"
     },
     "timerActive": "Chronomètre en cours",
+    "timers": "Chronomètres",
     "timesheets": "Feuilles de temps",
     "total": "Total",
     "writeOff": "Abandon de créance"
@@ -5020,6 +5048,7 @@
   },
   "timesheets": {
     "day": {
+      "absence": "Temps d’absence",
       "absenceKinds": {
         "other": "Autre absence",
         "sick": "Arrêt maladie",

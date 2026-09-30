@@ -1,9 +1,12 @@
+import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
+
 import type { ManualTimeEntryValues } from "@/components/billing/manual-time-entry-form";
 import { APIError } from "@/lib/errors/api";
 
 export const emptyQuickEntryValues = (
   dateWorked: string,
 ): ManualTimeEntryValues => ({
+  activityGroup: TIME_ENTRY_ACTIVITY_GROUP.CLIENT,
   dateWorked,
   durationMinutes: 0,
   narrative: "",

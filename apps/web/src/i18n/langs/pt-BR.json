@@ -428,6 +428,32 @@
     }
   },
   "billing": {
+    "absences": {
+      "approvalQueue": "Aguardando aprovação",
+      "coverage": "Duração do dia",
+      "decisionComment": "Comentário sobre a decisão (opcional)",
+      "decisionSaved": "Ausência atualizada",
+      "emptyMine": "Solicite uma ausência para vê-la aqui.",
+      "emptyQueue": "Nenhuma solicitação de ausência aguarda sua decisão.",
+      "formerMember": "Ex-membro",
+      "halfDay": "Meio dia",
+      "halfDaySingleDay": "Solicitações de meio dia devem abranger um único dia.",
+      "kind": "Tipo de ausência",
+      "lastDay": "Último dia",
+      "mine": "Minhas ausências",
+      "rangeInvalid": "Escolha um intervalo de datas válido.",
+      "rejectionComment": "Motivo da rejeição",
+      "request": "Solicitar ausência",
+      "requestSaved": "Ausência solicitada",
+      "segment": "Período do dia",
+      "startDate": "Primeiro dia",
+      "statuses": {
+        "requested": "Solicitada"
+      },
+      "title": "Ausências",
+      "unknownMember": "Nome do membro indisponível"
+    },
+    "activityGroup": "Grupo de atividades",
     "addEntry": "Adicionar entrada",
     "amount": "Valor",
     "amountMustBePositive": "O valor deve ser maior que zero",
@@ -436,6 +462,7 @@
     "batchActions": "Ações em lote",
     "billable": "Faturável",
     "billedAmount": "Valor faturado",
+    "clientWork": "Trabalho para clientes",
     "codes": {
       "activity": "Atividade",
       "activityCode": "Código de atividade",
@@ -593,6 +620,7 @@
       "unnamedRecord": "Registro do caso"
     },
     "timerActive": "Temporizador em execução",
+    "timers": "Cronômetros",
     "timesheets": "Planilhas de horas",
     "total": "Total",
     "writeOff": "Dar baixa"
@@ -5020,6 +5048,7 @@
   },
   "timesheets": {
     "day": {
+      "absence": "Ausência",
       "absenceKinds": {
         "other": "Outra ausência",
         "sick": "Licença médica",

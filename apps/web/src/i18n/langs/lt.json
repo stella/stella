@@ -428,6 +428,32 @@
     }
   },
   "billing": {
+    "absences": {
+      "approvalQueue": "Laukiama patvirtinimo",
+      "coverage": "Dienos trukmė",
+      "decisionComment": "Sprendimo komentaras (neprivalomas)",
+      "decisionSaved": "Neatvykimas atnaujintas",
+      "emptyMine": "Pateikite neatvykimo prašymą, kad jį čia matytumėte.",
+      "emptyQueue": "Jūsų sprendimo nelaukia jokie neatvykimo prašymai.",
+      "formerMember": "Buvęs narys",
+      "halfDay": "Pusė dienos",
+      "halfDaySingleDay": "Pusės dienos prašymas turi apimti vieną dieną.",
+      "kind": "Neatvykimo tipas",
+      "lastDay": "Paskutinė diena",
+      "mine": "Mano neatvykimai",
+      "rangeInvalid": "Pasirinkite tinkamą datų intervalą.",
+      "rejectionComment": "Atmetimo priežastis",
+      "request": "Prašyti neatvykimo",
+      "requestSaved": "Neatvykimo prašymas pateiktas",
+      "segment": "Dienos dalis",
+      "startDate": "Pirma diena",
+      "statuses": {
+        "requested": "Paprašyta"
+      },
+      "title": "Neatvykimai",
+      "unknownMember": "Nario vardas nepasiekiamas"
+    },
+    "activityGroup": "Veiklos grupė",
     "addEntry": "Pridėti įrašą",
     "amount": "Suma",
     "amountMustBePositive": "Suma turi būti didesnė už nulį",
@@ -436,6 +462,7 @@
     "batchActions": "Grupiniai veiksmai",
     "billable": "Apmokamas",
     "billedAmount": "Apskaičiuota suma",
+    "clientWork": "Darbas klientui",
     "codes": {
       "activity": "Veikla",
       "activityCode": "Veiklos kodas",
@@ -593,6 +620,7 @@
       "unnamedRecord": "Bylos įrašas"
     },
     "timerActive": "Laikmatis veikia",
+    "timers": "Laikmačiai",
     "timesheets": "Darbo laiko apskaita",
     "total": "Iš viso",
     "writeOff": "Nurašyti"
@@ -5020,6 +5048,7 @@
   },
   "timesheets": {
     "day": {
+      "absence": "Neatvykimas",
       "absenceKinds": {
         "other": "Kitas neatvykimas",
         "sick": "Nedarbingumas",

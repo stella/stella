@@ -428,6 +428,32 @@
     }
   },
   "billing": {
+    "absences": {
+      "approvalQueue": "Pendientes de aprobación",
+      "coverage": "Duración de la jornada",
+      "decisionComment": "Comentario sobre la decisión (opcional)",
+      "decisionSaved": "Ausencia actualizada",
+      "emptyMine": "Solicita una ausencia para verla aquí.",
+      "emptyQueue": "No hay solicitudes de ausencia pendientes de tu decisión.",
+      "formerMember": "Antiguo miembro",
+      "halfDay": "Medio día",
+      "halfDaySingleDay": "Las solicitudes de medio día deben abarcar un solo día.",
+      "kind": "Tipo de ausencia",
+      "lastDay": "Último día",
+      "mine": "Mis ausencias",
+      "rangeInvalid": "Elige un intervalo de fechas válido.",
+      "rejectionComment": "Motivo del rechazo",
+      "request": "Solicitar ausencia",
+      "requestSaved": "Ausencia solicitada",
+      "segment": "Parte del día",
+      "startDate": "Primer día",
+      "statuses": {
+        "requested": "Solicitada"
+      },
+      "title": "Ausencias",
+      "unknownMember": "Nombre del miembro no disponible"
+    },
+    "activityGroup": "Grupo de actividades",
     "addEntry": "Añadir entrada",
     "amount": "Importe",
     "amountMustBePositive": "El importe debe ser mayor que cero",
@@ -436,6 +462,7 @@
     "batchActions": "Acciones en lote",
     "billable": "Facturable",
     "billedAmount": "Importe facturado",
+    "clientWork": "Trabajo para clientes",
     "codes": {
       "activity": "Actividad",
       "activityCode": "Código de actividad",
@@ -593,6 +620,7 @@
       "unnamedRecord": "Registro del asunto"
     },
     "timerActive": "Temporizador en marcha",
+    "timers": "Temporizadores",
     "timesheets": "Hojas de horas",
     "total": "Total",
     "writeOff": "Cancelar"
@@ -5020,6 +5048,7 @@
   },
   "timesheets": {
     "day": {
+      "absence": "Ausencia",
       "absenceKinds": {
         "other": "Otra ausencia",
         "sick": "Baja por enfermedad",

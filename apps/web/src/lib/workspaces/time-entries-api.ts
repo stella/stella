@@ -42,8 +42,10 @@ type TimeEntryRequestOptions<T> = {
   path: "" | `/${string}`;
   query?: Record<string, TimeEntryQueryValue>;
   signal?: AbortSignal | undefined;
-  workspaceId: string;
-};
+} & (
+  | { scope?: "matter"; workspaceId: string }
+  | { scope: "internal"; workspaceId?: never }
+);
 
 const requestTimeEntries = async <T>({
   body,
@@ -53,10 +55,15 @@ const requestTimeEntries = async <T>({
   query,
   signal,
   workspaceId,
+  scope = "matter",
 }: TimeEntryRequestOptions<T>): Promise<T> => {
   await waitForSimulatedApiDelay();
   const url = new URL(
-    apiUrl(`/time-entries/${encodeURIComponent(workspaceId)}${path}`),
+    apiUrl(
+      scope === "internal"
+        ? `/time-entries/internal${path}`
+        : `/time-entries/${encodeURIComponent(workspaceId ?? panic("Matter request requires workspace"))}${path}`,
+    ),
   );
   if (query) {
     for (const [key, value] of Object.entries(query)) {
@@ -276,4 +283,19 @@ export const polishTimeEntryNarrative = async ({
     parse: parsePolishedTimeEntryNarrativeResponse,
     path: "/polish-narrative",
     workspaceId,
+  });
+
+export const createInternalTimeEntry = async (body: {
+  dateWorked: string;
+  timezoneId: string;
+  durationMinutes: number;
+  narrative: string;
+  narrativeLanguage?: string | null;
+}) =>
+  await requestTimeEntries({
+    scope: "internal",
+    path: "/",
+    method: "POST",
+    body,
+    parse: parseTimeEntryIdResponse,
   });

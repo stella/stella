@@ -428,6 +428,32 @@
     }
   },
   "billing": {
+    "absences": {
+      "approvalQueue": "Čeká na schválení",
+      "coverage": "Rozsah dne",
+      "decisionComment": "Komentář k rozhodnutí (volitelný)",
+      "decisionSaved": "Nepřítomnost aktualizována",
+      "emptyMine": "Požádejte o nepřítomnost, aby se zde zobrazila.",
+      "emptyQueue": "Žádné žádosti o nepřítomnost nečekají na vaše rozhodnutí.",
+      "formerMember": "Bývalý člen",
+      "halfDay": "Půl dne",
+      "halfDaySingleDay": "Žádost o půl dne se musí týkat jediného dne.",
+      "kind": "Typ nepřítomnosti",
+      "lastDay": "Poslední den",
+      "mine": "Moje nepřítomnosti",
+      "rangeInvalid": "Vyberte platné rozmezí dat.",
+      "rejectionComment": "Důvod zamítnutí",
+      "request": "Požádat o nepřítomnost",
+      "requestSaved": "Žádost o nepřítomnost odeslána",
+      "segment": "Část dne",
+      "startDate": "První den",
+      "statuses": {
+        "requested": "Požádáno"
+      },
+      "title": "Nepřítomnosti",
+      "unknownMember": "Jméno člena není dostupné"
+    },
+    "activityGroup": "Skupina činností",
     "addEntry": "Přidat záznam",
     "amount": "Částka",
     "amountMustBePositive": "Částka musí být vyšší než nula",
@@ -436,6 +462,7 @@
     "batchActions": "Hromadné akce",
     "billable": "Fakturovatelné",
     "billedAmount": "Fakturovaná částka",
+    "clientWork": "Práce pro klienta",
     "codes": {
       "activity": "Aktivita",
       "activityCode": "Kód aktivity",
@@ -593,6 +620,7 @@
       "unnamedRecord": "Záznam ve spisu"
     },
     "timerActive": "Časovač běží",
+    "timers": "Časovače",
     "timesheets": "Výkazy práce",
     "total": "Celkem",
     "writeOff": "Odepsat"
@@ -5020,6 +5048,7 @@
   },
   "timesheets": {
     "day": {
+      "absence": "Nepřítomnost",
       "absenceKinds": {
         "other": "Jiná nepřítomnost",
         "sick": "Nemocenská",

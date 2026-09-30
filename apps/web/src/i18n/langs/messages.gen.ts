@@ -431,6 +431,32 @@ type Messages = {
     };
   };
   "billing": {
+    "absences": {
+      "approvalQueue": "Approval queue";
+      "coverage": "Day coverage";
+      "decisionComment": "Decision comment (optional)";
+      "decisionSaved": "Absence updated";
+      "emptyMine": "Request an absence to see it here.";
+      "emptyQueue": "No absence requests await your decision.";
+      "formerMember": "Former member";
+      "halfDay": "Half day";
+      "halfDaySingleDay": "Half-day requests must cover one day.";
+      "kind": "Absence type";
+      "lastDay": "Last day";
+      "mine": "My absences";
+      "rangeInvalid": "Choose a valid date range.";
+      "rejectionComment": "Reason for rejection";
+      "request": "Request absence";
+      "requestSaved": "Absence requested";
+      "segment": "Half-day segment";
+      "startDate": "First day";
+      "statuses": {
+        "requested": "Requested";
+      };
+      "title": "Absences";
+      "unknownMember": "Member name unavailable";
+    };
+    "activityGroup": "Activity group";
     "addEntry": "Add entry";
     "amount": "Amount";
     "amountMustBePositive": "Amount must be greater than zero";
@@ -439,6 +465,7 @@ type Messages = {
     "batchActions": "Batch actions";
     "billable": "Billable";
     "billedAmount": "Billed amount";
+    "clientWork": "Client work";
     "codes": {
       "activity": "Activity";
       "activityCode": "Activity code";
@@ -596,6 +623,7 @@ type Messages = {
       "unnamedRecord": "Matter record";
     };
     "timerActive": "Timer running";
+    "timers": "Timers";
     "timesheets": "Timesheets";
     "total": "Total";
     "writeOff": "Write off";
@@ -5023,6 +5051,7 @@ type Messages = {
   };
   "timesheets": {
     "day": {
+      "absence": "Absence";
       "absenceKinds": {
         "other": "Other absence";
         "sick": "Sick leave";

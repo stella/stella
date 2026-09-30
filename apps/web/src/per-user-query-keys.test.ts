@@ -23,6 +23,10 @@ import {
 } from "@/lib/knowledge/queries";
 import { catalogueOptions } from "@/lib/knowledge/queries/catalogue";
 import { notificationsOptions } from "@/lib/notification-queries";
+import {
+  absencesMineInfiniteOptions,
+  absencesApprovalQueueInfiniteOptions,
+} from "@/lib/organization/absences";
 import { organizationListOptions } from "@/lib/organization/queries";
 import { searchPreviewOptions } from "@/lib/search";
 import { usageLaneOptions } from "@/lib/usage-queries";
@@ -31,6 +35,7 @@ import {
   entityViewKeys,
   entityViewsOptions,
 } from "@/lib/workspaces/queries/entity-views";
+import { globalTimeTimersOptions } from "@/lib/workspaces/queries/global-time-timers";
 import { myTimeEntriesInfiniteOptions } from "@/lib/workspaces/queries/my-time-entries";
 import { reportExportsKeys } from "@/lib/workspaces/queries/report-exports";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
@@ -92,12 +97,16 @@ const KEY_TYPE_HAS_USER = "the key argument's type requires userId";
 // Keyed by handler path under apps/api/src/handlers.
 const PER_USER_READS: Record<string, PerUserRead> = {
   "absences/mine/list.ts": {
-    kind: "no-web-caller",
+    kind: "keyed",
     calls: ["api.absences.mine.get"],
+    files: ["lib/organization/absences.ts"],
+    keys: () => [absencesMineInfiniteOptions(ORG, USER).queryKey],
   },
   "absences/approval-queue/list.ts": {
-    kind: "no-web-caller",
+    kind: "keyed",
     calls: ['api.absences["approval-queue"].get'],
+    files: ["lib/organization/absences.ts"],
+    keys: () => [absencesApprovalQueueInfiniteOptions(ORG, USER).queryKey],
   },
   "audit-logs/export.ts": { kind: "not-per-user", reason: DOWNLOAD },
   "catalogue/list.ts": {
@@ -427,8 +436,10 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     calls: ['api["time-timers"].admin.get'],
   },
   "time-timers/list.ts": {
-    kind: "no-web-caller",
+    kind: "keyed",
     calls: ['api["time-timers"].get'],
+    files: ["lib/workspaces/queries/global-time-timers.ts"],
+    keys: () => [globalTimeTimersOptions(ORG, USER).queryKey],
   },
   "usage/get-lane.ts": {
     kind: "keyed",

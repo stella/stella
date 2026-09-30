@@ -19,6 +19,7 @@ describe("quick entry reset", () => {
       };
       const reset = emptyQuickEntryValues(saved.dateWorked);
       expect(reset).toEqual({
+        activityGroup: "client",
         dateWorked: date,
         durationMinutes: 0,
         narrative: "",

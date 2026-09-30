@@ -428,6 +428,32 @@
     }
   },
   "billing": {
+    "absences": {
+      "approvalQueue": "Zur Genehmigung",
+      "coverage": "Tagesumfang",
+      "decisionComment": "Kommentar zur Entscheidung (optional)",
+      "decisionSaved": "Abwesenheit aktualisiert",
+      "emptyMine": "Beantragen Sie eine Abwesenheit, um sie hier zu sehen.",
+      "emptyQueue": "Keine Abwesenheitsanträge warten auf Ihre Entscheidung.",
+      "formerMember": "Ehemaliges Mitglied",
+      "halfDay": "Halber Tag",
+      "halfDaySingleDay": "Anträge für einen halben Tag müssen sich auf einen einzigen Tag beziehen.",
+      "kind": "Art der Abwesenheit",
+      "lastDay": "Letzter Tag",
+      "mine": "Meine Abwesenheiten",
+      "rangeInvalid": "Wählen Sie einen gültigen Zeitraum.",
+      "rejectionComment": "Ablehnungsgrund",
+      "request": "Abwesenheit beantragen",
+      "requestSaved": "Abwesenheit beantragt",
+      "segment": "Tageshälfte",
+      "startDate": "Erster Tag",
+      "statuses": {
+        "requested": "Beantragt"
+      },
+      "title": "Abwesenheiten",
+      "unknownMember": "Name des Mitglieds nicht verfügbar"
+    },
+    "activityGroup": "Tätigkeitsgruppe",
     "addEntry": "Eintrag hinzufügen",
     "amount": "Betrag",
     "amountMustBePositive": "Der Betrag muss größer als null sein",
@@ -436,6 +462,7 @@
     "batchActions": "Massenaktionen",
     "billable": "Abrechenbar",
     "billedAmount": "Abgerechneter Betrag",
+    "clientWork": "Mandantenarbeit",
     "codes": {
       "activity": "Aktivität",
       "activityCode": "Aktivitätscode",
@@ -593,6 +620,7 @@
       "unnamedRecord": "Akteneintrag"
     },
     "timerActive": "Timer läuft",
+    "timers": "Timer",
     "timesheets": "Zeiterfassung",
     "total": "Gesamt",
     "writeOff": "Abschreiben"
@@ -5020,6 +5048,7 @@
   },
   "timesheets": {
     "day": {
+      "absence": "Abwesenheit",
       "absenceKinds": {
         "other": "Sonstige Abwesenheit",
         "sick": "Krankheit",

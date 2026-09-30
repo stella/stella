@@ -428,6 +428,32 @@
     }
   },
   "billing": {
+    "absences": {
+      "approvalQueue": "Do zatwierdzenia",
+      "coverage": "Wymiar dnia",
+      "decisionComment": "Komentarz do decyzji (opcjonalny)",
+      "decisionSaved": "Nieobecność zaktualizowana",
+      "emptyMine": "Zgłoś nieobecność, aby zobaczyć ją tutaj.",
+      "emptyQueue": "Żadne wnioski o nieobecność nie czekają na Twoją decyzję.",
+      "formerMember": "Były członek",
+      "halfDay": "Pół dnia",
+      "halfDaySingleDay": "Wniosek o pół dnia musi dotyczyć jednego dnia.",
+      "kind": "Rodzaj nieobecności",
+      "lastDay": "Ostatni dzień",
+      "mine": "Moje nieobecności",
+      "rangeInvalid": "Wybierz prawidłowy zakres dat.",
+      "rejectionComment": "Powód odrzucenia",
+      "request": "Zgłoś nieobecność",
+      "requestSaved": "Nieobecność zgłoszona",
+      "segment": "Część dnia",
+      "startDate": "Pierwszy dzień",
+      "statuses": {
+        "requested": "Zgłoszona"
+      },
+      "title": "Nieobecności",
+      "unknownMember": "Nazwa członka niedostępna"
+    },
+    "activityGroup": "Grupa aktywności",
     "addEntry": "Dodaj wpis",
     "amount": "Kwota",
     "amountMustBePositive": "Kwota musi być większa od zera",
@@ -436,6 +462,7 @@
     "batchActions": "Działania zbiorcze",
     "billable": "Rozliczalne",
     "billedAmount": "Kwota rozliczona",
+    "clientWork": "Praca dla klienta",
     "codes": {
       "activity": "Czynność",
       "activityCode": "Kod czynności",
@@ -593,6 +620,7 @@
       "unnamedRecord": "Wpis w sprawie"
     },
     "timerActive": "Timer uruchomiony",
+    "timers": "Liczniki czasu",
     "timesheets": "Karta czasu pracy",
     "total": "Razem",
     "writeOff": "Umorz"
@@ -5020,6 +5048,7 @@
   },
   "timesheets": {
     "day": {
+      "absence": "Nieobecność",
       "absenceKinds": {
         "other": "Inna nieobecność",
         "sick": "Zwolnienie chorobowe",

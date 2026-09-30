@@ -2,12 +2,17 @@ import { useId, useState } from "react";
 
 import { useFormatter, useTranslations } from "use-intl";
 
+import {
+  TIME_ENTRY_ACTIVITY_GROUP,
+  type TimeEntryActivityGroup,
+} from "@stll/api-contract";
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
-import { Checkbox } from "@stll/ui/checkbox";
 import { Label } from "@stll/ui/label";
 
 import { DurationInput } from "@/components/billing/duration-input";
+import { ManualTimeEntryBillingFields } from "@/components/billing/manual-time-entry-billing-fields";
+import { manualTimeEntryValues } from "@/components/billing/manual-time-entry-form.logic";
 import {
   getTimeEntryDateBounds,
   isTimeEntryDateAllowed,
@@ -17,13 +22,21 @@ import { DatePickerPopover } from "@/components/date-picker-popover";
 import { detached } from "@/lib/detached";
 import { MEDIUM_DATE_FORMAT } from "@/lib/relative-time";
 
-export type ManualTimeEntryValues = {
+type ManualTimeEntryFields = {
   dateWorked: string;
   durationMinutes: number;
   narrative: string;
   narrativeLanguage: string | null;
-  billable: boolean;
 };
+
+export type ManualTimeEntryValues = ManualTimeEntryFields &
+  (
+    | {
+        activityGroup: typeof TIME_ENTRY_ACTIVITY_GROUP.CLIENT;
+        billable: boolean;
+      }
+    | { activityGroup: typeof TIME_ENTRY_ACTIVITY_GROUP.INTERNAL }
+  );
 
 type ManualTimeEntryFormProps = {
   defaultValues: ManualTimeEntryValues;
@@ -32,7 +45,9 @@ type ManualTimeEntryFormProps = {
   autofocusDuration?: boolean;
   narrativeRequired?: boolean;
   pending: boolean;
-  workspaceId: string;
+  workspaceId: string | null;
+  activityGroup?: TimeEntryActivityGroup;
+  canSubmit?: boolean;
   onCancel: () => void;
   onSubmit: (values: ManualTimeEntryValues) => Promise<void>;
   onSaveAndNew?: (values: ManualTimeEntryValues) => Promise<void>;
@@ -46,6 +61,8 @@ export const ManualTimeEntryForm = ({
   narrativeRequired = true,
   pending,
   workspaceId,
+  activityGroup = TIME_ENTRY_ACTIVITY_GROUP.CLIENT,
+  canSubmit = true,
   onCancel,
   onSubmit,
   onSaveAndNew,
@@ -64,9 +81,14 @@ export const ManualTimeEntryForm = ({
   const [narrativeLanguage, setNarrativeLanguage] = useState(
     defaultValues.narrativeLanguage,
   );
-  const [billable, setBillable] = useState(defaultValues.billable);
+  const [billable, setBillable] = useState(
+    defaultValues.activityGroup === TIME_ENTRY_ACTIVITY_GROUP.CLIENT
+      ? defaultValues.billable
+      : false,
+  );
 
   const valid =
+    canSubmit &&
     dateWorked.length > 0 &&
     isTimeEntryDateAllowed(dateWorked, dateBounds) &&
     Number.isInteger(durationMinutes) &&
@@ -78,13 +100,16 @@ export const ManualTimeEntryForm = ({
       return;
     }
     detached(
-      action({
-        dateWorked,
-        durationMinutes,
-        narrative: narrative.trim(),
-        narrativeLanguage,
-        billable,
-      }),
+      action(
+        manualTimeEntryValues({
+          activityGroup,
+          dateWorked,
+          durationMinutes,
+          narrative,
+          narrativeLanguage,
+          billable,
+        }),
+      ),
       "manual-time-entry-form.submit",
     );
   };
@@ -149,17 +174,19 @@ export const ManualTimeEntryForm = ({
           onLanguageChange={setNarrativeLanguage}
           narrativeLanguage={narrativeLanguage}
           value={narrative}
-          workspaceId={workspaceId}
+          workspaceId={
+            activityGroup === TIME_ENTRY_ACTIVITY_GROUP.CLIENT
+              ? workspaceId
+              : null
+          }
         />
 
-        <div className="flex min-h-11 items-center gap-2">
-          <Checkbox
-            checked={billable}
-            id={`${fieldId}-billable`}
-            onCheckedChange={setBillable}
-          />
-          <Label htmlFor={`${fieldId}-billable`}>{tBilling("billable")}</Label>
-        </div>
+        <ManualTimeEntryBillingFields
+          activityGroup={activityGroup}
+          id={`${fieldId}-billable`}
+          billable={billable}
+          onBillableChange={setBillable}
+        />
       </fieldset>
 
       <div className="flex flex-wrap justify-end gap-2">
@@ -181,16 +208,17 @@ export const ManualTimeEntryForm = ({
             {tBilling("quickEntry.saveAndNew")}
           </Button>
         )}
-        {onSaveAndAddExpense && (
-          <Button
-            disabled={!valid || pending}
-            onClick={() => submit(onSaveAndAddExpense)}
-            type="button"
-            variant="outline"
-          >
-            {tBilling("quickEntry.saveAndAddExpense")}
-          </Button>
-        )}
+        {onSaveAndAddExpense &&
+          activityGroup === TIME_ENTRY_ACTIVITY_GROUP.CLIENT && (
+            <Button
+              disabled={!valid || pending}
+              onClick={() => submit(onSaveAndAddExpense)}
+              type="button"
+              variant="outline"
+            >
+              {tBilling("quickEntry.saveAndAddExpense")}
+            </Button>
+          )}
         <Button disabled={!valid || pending} type="submit">
           {tCommon("save")}
         </Button>

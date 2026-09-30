@@ -36,7 +36,7 @@ type TimeEntryNarrativeFieldProps = {
   rows?: number | undefined;
   required?: boolean;
   value: string;
-  workspaceId: string;
+  workspaceId: string | null;
 };
 
 /** One narrative field for every time-entry form, including its safe AI polish. */
@@ -78,7 +78,7 @@ export const TimeEntryNarrativeField = ({
   const polishNarrative = async (instruction: string) => {
     const baseline = getLatestValue();
     const narrative = baseline.trim();
-    if (narrative.length === 0 || isPolishing) {
+    if (narrative.length === 0 || isPolishing || workspaceId === null) {
       return;
     }
 
@@ -126,16 +126,18 @@ export const TimeEntryNarrativeField = ({
               onLanguageChange(language);
             }}
           />
-          <AiRewriteControl
-            disabled={value.trim().length === 0}
-            isPending={isPolishing}
-            onRewrite={(instruction) => {
-              detached(
-                polishNarrative(instruction),
-                "time-entry-narrative-field.polish-narrative",
-              );
-            }}
-          />
+          {workspaceId !== null && (
+            <AiRewriteControl
+              disabled={value.trim().length === 0}
+              isPending={isPolishing}
+              onRewrite={(instruction) => {
+                detached(
+                  polishNarrative(instruction),
+                  "time-entry-narrative-field.polish-narrative",
+                );
+              }}
+            />
+          )}
         </div>
       </div>
       <Textarea

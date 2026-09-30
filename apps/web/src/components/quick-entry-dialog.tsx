@@ -2,9 +2,13 @@ import { Suspense, useId, useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
+import {
+  TIME_ENTRY_ACTIVITY_GROUP,
+  type TimeEntryActivityGroup,
+} from "@stll/api-contract";
 import {
   Dialog,
   DialogHeader,
@@ -13,6 +17,13 @@ import {
   DialogTitle,
 } from "@stll/ui/dialog";
 import { Label } from "@stll/ui/label";
+import {
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "@stll/ui/select";
 import { stellaToast } from "@stll/ui/toast";
 
 import { ExpenseForm } from "@/components/billing/expense-form";
@@ -54,6 +65,9 @@ const QuickEntryDialog = () => {
   const createExpense = useCreateExpense();
   const submitting = useRef(false);
   const matterId = useId();
+  const [activityGroup, setActivityGroup] = useState<TimeEntryActivityGroup>(
+    TIME_ENTRY_ACTIVITY_GROUP.CLIENT,
+  );
   const [matter, setMatter] = useState<MatterOption | null>(null);
   const [step, setStep] = useState<EntryStep>({
     type: "time",
@@ -67,17 +81,30 @@ const QuickEntryDialog = () => {
     values: ManualTimeEntryValues,
     action: SaveAction,
   ) => {
-    if (matter === null || step.type !== "time" || submitting.current) {
+    if (
+      (values.activityGroup === TIME_ENTRY_ACTIVITY_GROUP.CLIENT &&
+        matter === null) ||
+      (action === "expense" &&
+        (values.activityGroup === TIME_ENTRY_ACTIVITY_GROUP.INTERNAL ||
+          matter === null)) ||
+      step.type !== "time" ||
+      submitting.current
+    ) {
       return;
     }
     submitting.current = true;
     setError(null);
     const result = await Result.tryPromise(async () =>
-      createTime.mutateAsync({
-        ...values,
-        workspaceId: matter.id,
-        timezoneId: user.timezoneId,
-      }),
+      createTime.mutateAsync(
+        values.activityGroup === TIME_ENTRY_ACTIVITY_GROUP.INTERNAL
+          ? { ...values, timezoneId: user.timezoneId }
+          : {
+              ...values,
+              workspaceId:
+                matter?.id ?? panic("Client entry requires a selected matter"),
+              timezoneId: user.timezoneId,
+            },
+      ),
     );
     submitting.current = false;
     if (Result.isError(result)) {
@@ -86,7 +113,14 @@ const QuickEntryDialog = () => {
     }
     detached(
       Promise.all([
-        client.invalidateQueries({ queryKey: timeEntriesKeys.all(matter.id) }),
+        ...(values.activityGroup === TIME_ENTRY_ACTIVITY_GROUP.CLIENT &&
+        matter !== null
+          ? [
+              client.invalidateQueries({
+                queryKey: timeEntriesKeys.all(matter.id),
+              }),
+            ]
+          : []),
         client.invalidateQueries({
           queryKey: myTimeEntriesKeys.all(user.activeOrganizationId),
         }),
@@ -117,6 +151,9 @@ const QuickEntryDialog = () => {
         });
         return;
       case "expense":
+        if (matter === null) {
+          return;
+        }
         setStep({ type: "expense", matter, date: values.dateWorked });
         return;
     }
@@ -185,42 +222,77 @@ const QuickEntryDialog = () => {
           {step.type === "time" ? (
             <>
               <fieldset disabled={pending} className="flex flex-col gap-1.5">
-                <Label htmlFor={matterId}>{t("common.matter")}</Label>
-                <MatterCombobox
-                  activeOrganizationId={user.activeOrganizationId}
-                  id={matterId}
-                  order="recent"
-                  onChange={(value) => {
-                    setMatter(value);
-                    setError(null);
+                <Label htmlFor={`${matterId}-activity`}>
+                  {t("billing.activityGroup")}
+                </Label>
+                <Select
+                  value={activityGroup}
+                  onValueChange={(value) => {
+                    if (
+                      value === TIME_ENTRY_ACTIVITY_GROUP.CLIENT ||
+                      value === TIME_ENTRY_ACTIVITY_GROUP.INTERNAL
+                    ) {
+                      setActivityGroup(value);
+                      setError(null);
+                    }
                   }}
-                  value={matter}
-                />
+                >
+                  <SelectTrigger id={`${matterId}-activity`}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectPopup>
+                    <SelectItem value={TIME_ENTRY_ACTIVITY_GROUP.CLIENT}>
+                      {t("billing.clientWork")}
+                    </SelectItem>
+                    <SelectItem value={TIME_ENTRY_ACTIVITY_GROUP.INTERNAL}>
+                      {t("timesheets.day.internalWork")}
+                    </SelectItem>
+                  </SelectPopup>
+                </Select>
               </fieldset>
-              {settings !== undefined &&
+              {activityGroup === TIME_ENTRY_ACTIVITY_GROUP.CLIENT && (
+                <fieldset disabled={pending} className="flex flex-col gap-1.5">
+                  <Label htmlFor={matterId}>{t("common.matter")}</Label>
+                  <MatterCombobox
+                    activeOrganizationId={user.activeOrganizationId}
+                    id={matterId}
+                    order="recent"
+                    onChange={(value) => {
+                      setMatter(value);
+                      setError(null);
+                    }}
+                    value={matter}
+                  />
+                </fieldset>
+              )}
+              {activityGroup === TIME_ENTRY_ACTIVITY_GROUP.CLIENT &&
+                settings !== undefined &&
                 settings.timeMinimumUnitMinutes > 1 && (
                   <p className="text-muted-foreground text-sm">
                     {t("billing.quickEntry.minimumUnit")}
                   </p>
                 )}
-              {matter !== null && (
-                <ManualTimeEntryForm
-                  key={`${matter.id}:${step.revision}`}
-                  workspaceId={matter.id}
-                  defaultValues={step.defaults}
-                  autofocusDuration
-                  narrativeRequired={settings?.timeNarrativeRequired ?? false}
-                  pending={pending}
-                  onCancel={closeDialog}
-                  onSubmit={saveAndClose}
-                  onSaveAndNew={saveAndNew}
-                  {...(canCreateExpense
-                    ? {
-                        onSaveAndAddExpense: saveAndAddExpense,
-                      }
-                    : {})}
-                />
-              )}
+              <ManualTimeEntryForm
+                key={step.revision}
+                activityGroup={activityGroup}
+                canSubmit={
+                  activityGroup === TIME_ENTRY_ACTIVITY_GROUP.INTERNAL ||
+                  matter !== null
+                }
+                workspaceId={matter?.id ?? null}
+                defaultValues={step.defaults}
+                autofocusDuration
+                narrativeRequired={settings?.timeNarrativeRequired ?? false}
+                pending={pending}
+                onCancel={closeDialog}
+                onSubmit={saveAndClose}
+                onSaveAndNew={saveAndNew}
+                {...(canCreateExpense
+                  ? {
+                      onSaveAndAddExpense: saveAndAddExpense,
+                    }
+                  : {})}
+              />
             </>
           ) : (
             <Suspense fallback={<p>{t("common.loading")}</p>}>

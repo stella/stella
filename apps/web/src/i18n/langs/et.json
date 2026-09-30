@@ -428,6 +428,32 @@
     }
   },
   "billing": {
+    "absences": {
+      "approvalQueue": "Kinnitamise ootel",
+      "coverage": "Päeva ulatus",
+      "decisionComment": "Otsuse kommentaar (valikuline)",
+      "decisionSaved": "Puudumine uuendatud",
+      "emptyMine": "Taotlege puudumist, et seda siin näha.",
+      "emptyQueue": "Ükski puudumise taotlus ei oota teie otsust.",
+      "formerMember": "Endine liige",
+      "halfDay": "Pool päeva",
+      "halfDaySingleDay": "Poole päeva taotlus peab hõlmama ühte päeva.",
+      "kind": "Puudumise liik",
+      "lastDay": "Viimane päev",
+      "mine": "Minu puudumised",
+      "rangeInvalid": "Valige kehtiv kuupäevavahemik.",
+      "rejectionComment": "Tagasilükkamise põhjus",
+      "request": "Taotle puudumist",
+      "requestSaved": "Puudumise taotlus esitatud",
+      "segment": "Päeva pool",
+      "startDate": "Esimene päev",
+      "statuses": {
+        "requested": "Taotletud"
+      },
+      "title": "Puudumised",
+      "unknownMember": "Liikme nimi pole saadaval"
+    },
+    "activityGroup": "Tegevusrühm",
     "addEntry": "Lisa kanne",
     "amount": "Summa",
     "amountMustBePositive": "Summa peab olema suurem kui null",
@@ -436,6 +462,7 @@
     "batchActions": "Partiiaktsioonid",
     "billable": "Arveldatav",
     "billedAmount": "Arveldatud summa",
+    "clientWork": "Klienditöö",
     "codes": {
       "activity": "Tegevus",
       "activityCode": "Tegevuskood",
@@ -593,6 +620,7 @@
       "unnamedRecord": "Toimiku kirje"
     },
     "timerActive": "Taimer käib",
+    "timers": "Taimerid",
     "timesheets": "Tööajatabelid",
     "total": "Kokku",
     "writeOff": "Mahakandmine"
@@ -5020,6 +5048,7 @@
   },
   "timesheets": {
     "day": {
+      "absence": "Puudumine",
       "absenceKinds": {
         "other": "Muu puudumine",
         "sick": "Haiguspuhkus",

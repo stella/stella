@@ -428,6 +428,32 @@
     }
   },
   "billing": {
+    "absences": {
+      "approvalQueue": "Gaida apstiprinājumu",
+      "coverage": "Dienas ilgums",
+      "decisionComment": "Komentārs par lēmumu (neobligāts)",
+      "decisionSaved": "Prombūtne atjaunināta",
+      "emptyMine": "Piesakiet prombūtni, lai to redzētu šeit.",
+      "emptyQueue": "Neviens prombūtnes pieteikums negaida jūsu lēmumu.",
+      "formerMember": "Bijušais dalībnieks",
+      "halfDay": "Puse dienas",
+      "halfDaySingleDay": "Pusdienas pieteikumam jāaptver viena diena.",
+      "kind": "Prombūtnes veids",
+      "lastDay": "Pēdējā diena",
+      "mine": "Manas prombūtnes",
+      "rangeInvalid": "Izvēlieties derīgu datumu diapazonu.",
+      "rejectionComment": "Noraidījuma iemesls",
+      "request": "Pieteikt prombūtni",
+      "requestSaved": "Prombūtne pieteikta",
+      "segment": "Dienas daļa",
+      "startDate": "Pirmā diena",
+      "statuses": {
+        "requested": "Pieteikta"
+      },
+      "title": "Prombūtnes",
+      "unknownMember": "Dalībnieka vārds nav pieejams"
+    },
+    "activityGroup": "Darbību grupa",
     "addEntry": "Pievienot ierakstu",
     "amount": "Summa",
     "amountMustBePositive": "Summai jābūt lielākai par nulli",
@@ -436,6 +462,7 @@
     "batchActions": "Grupas darbības",
     "billable": "Apmaksājams",
     "billedAmount": "Rēķinā iekļautā summa",
+    "clientWork": "Darbs klientam",
     "codes": {
       "activity": "Darbība",
       "activityCode": "Darbības kods",
@@ -593,6 +620,7 @@
       "unnamedRecord": "Lietas ieraksts"
     },
     "timerActive": "Taimeris darbojas",
+    "timers": "Taimeri",
     "timesheets": "Darba laika uzskaite",
     "total": "Kopā",
     "writeOff": "Norakstīt"
@@ -5020,6 +5048,7 @@
   },
   "timesheets": {
     "day": {
+      "absence": "Prombūtne",
       "absenceKinds": {
         "other": "Cita prombūtne",
         "sick": "Slimības atvaļinājums",

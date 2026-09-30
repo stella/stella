@@ -1,8 +1,7 @@
 import { useSuspenseInfiniteQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
-import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { parsePlainDate, Temporal } from "@stll/time";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
@@ -11,7 +10,11 @@ import { ChevronLeftIcon, ChevronRightIcon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
 
+import { MyDayActions } from "@/components/billing/my-day-actions";
+import { MyDayRow } from "@/components/billing/my-day-row";
+import { MyDayTotals } from "@/components/billing/my-day-totals";
 import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
+import { useFormatter } from "@/i18n/formatting-context";
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
@@ -21,10 +24,7 @@ import {
   ensureRouteQueryData,
 } from "@/lib/react-query";
 import { MEDIUM_DATE_FORMAT } from "@/lib/relative-time";
-import { formatMinutes } from "@/lib/workspaces/format-duration";
 import { myTimeEntriesInfiniteOptions } from "@/lib/workspaces/queries/my-time-entries";
-
-const ABSENCE_DAY_GROUP = "absence";
 
 export const Route = createFileRoute("/_protected/time")({
   validateSearch: (search) => ({
@@ -78,7 +78,6 @@ function MyDayPage() {
   const tBilling = useTranslations("billing");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
-  const tDay = useTranslations("timesheets.day");
   const format = useFormatter();
   const date = Route.useSearch({ select: (search) => search.date });
   const organizationId = Route.useRouteContext({
@@ -92,20 +91,6 @@ function MyDayPage() {
     myTimeEntriesInfiniteOptions(organizationId, userId, date),
   );
   const entries = entriesQuery.data.pages.flatMap((page) => page.items);
-  const totalMinutes = entries.reduce(
-    (sum, entry) =>
-      sum +
-      (entry.activityGroup !== ABSENCE_DAY_GROUP &&
-      entry.timerStartedAt === null
-        ? entry.durationMinutes
-        : 0),
-    0,
-  );
-  const hasRunningEntry = entries.some(
-    (entry) =>
-      entry.activityGroup !== ABSENCE_DAY_GROUP &&
-      entry.timerStartedAt !== null,
-  );
   const moveDay = (days: number) => {
     const nextDate = Temporal.PlainDate.from(date).add({ days }).toString();
     detached(navigate({ search: { date: nextDate } }), "my-day.navigate");
@@ -115,6 +100,7 @@ function MyDayPage() {
     <div className="flex h-full flex-col">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
         <h1 className="text-sm font-medium">{tBilling("timesheets")}</h1>
+        <MyDayActions key={`${organizationId}:${userId}:${date}`} date={date} />
         <div className="flex items-center gap-2">
           <Button
             onClick={() =>
@@ -165,99 +151,24 @@ function MyDayPage() {
             </p>
           ) : (
             <>
-              {!entriesQuery.hasNextPage && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">
-                    {tBilling("total")}
-                  </span>
-                  <span className="flex items-center gap-2">
-                    <span className="font-medium tabular-nums">
-                      {formatMinutes(totalMinutes)}
-                    </span>
-                    {hasRunningEntry && (
-                      <span className="text-muted-foreground">
-                        {tCommon("running")}
-                      </span>
-                    )}
-                  </span>
-                </div>
-              )}
+              <MyDayTotals pages={entriesQuery.data.pages} />
               <ul className="divide-y rounded-lg border">
                 {entries.map((entry) => (
-                  <li
-                    className="flex flex-wrap items-start justify-between gap-3 p-4"
+                  <MyDayRow
+                    entry={entry}
                     key={`${entry.activityGroup}:${entry.id}`}
-                  >
-                    {entry.activityGroup === ABSENCE_DAY_GROUP ? (
-                      <>
-                        <div className="min-w-0 flex-1 text-sm font-medium">
-                          {tDay(`absenceKinds.${entry.kind}`)}
-                        </div>
-                        <div className="text-end text-sm">
-                          {entry.coverage === "full"
-                            ? tDay("fullDay")
-                            : tDay(`halfDaySegments.${entry.halfDaySegment}`)}
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <div className="min-w-0 flex-1 space-y-1">
-                          {entry.activityGroup ===
-                          TIME_ENTRY_ACTIVITY_GROUP.INTERNAL ? (
-                            <span className="text-sm font-medium">
-                              {tDay("internalWork")}
-                            </span>
-                          ) : (
-                            <Link
-                              className="hover:underline"
-                              params={{ workspaceId: entry.workspaceId }}
-                              to="/workspaces/$workspaceId/timesheets"
-                            >
-                              <BidiText
-                                as="span"
-                                className="text-sm font-medium"
-                              >
-                                {entry.workspaceName}
-                              </BidiText>
-                            </Link>
-                          )}
-                          {entry.activityGroup ===
-                            TIME_ENTRY_ACTIVITY_GROUP.CLIENT &&
-                            entry.workspaceReference && (
-                              <BidiText
-                                as="p"
-                                className="text-muted-foreground text-xs"
-                              >
-                                {entry.workspaceReference}
-                              </BidiText>
-                            )}
-                          {entry.narrative && (
-                            <BidiText
-                              as="p"
-                              className="text-muted-foreground text-sm"
-                            >
-                              {entry.narrative}
-                            </BidiText>
-                          )}
-                        </div>
-                        <div className="space-y-1 text-end text-sm">
-                          <p className="font-medium tabular-nums">
-                            {entry.timerStartedAt === null
-                              ? formatMinutes(entry.durationMinutes)
-                              : tCommon("running")}
-                          </p>
-                          <p className="text-muted-foreground text-xs">
-                            {tBilling(`statuses.${entry.status}`)}
-                          </p>
-                          <p className="text-muted-foreground text-xs">
-                            {tBilling(
-                              entry.billable ? "billable" : "nonBillable",
-                            )}
-                          </p>
-                        </div>
-                      </>
+                    renderMatter={(clientEntry) => (
+                      <Link
+                        className="hover:underline"
+                        params={{ workspaceId: clientEntry.workspaceId }}
+                        to="/workspaces/$workspaceId/timesheets"
+                      >
+                        <BidiText as="span" className="text-sm font-medium">
+                          {clientEntry.workspaceName}
+                        </BidiText>
+                      </Link>
                     )}
-                  </li>
+                  />
                 ))}
               </ul>
               {entriesQuery.hasNextPage && (

@@ -1,32 +1,59 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
+import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
+
 import { useAnalytics } from "@/lib/analytics/provider";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
-import { sendTimeEntryMutation } from "@/lib/workspaces/time-entries-api";
+import {
+  createInternalTimeEntry,
+  sendTimeEntryMutation,
+} from "@/lib/workspaces/time-entries-api";
 
-type CreateTimeEntryVars = {
-  workspaceId: string;
-  workItemId?: string | null;
+type CreateTimeEntryFields = {
   dateWorked: string;
   timezoneId: string;
   durationMinutes: number;
   narrative: string;
   narrativeLanguage?: string | null;
-  billable?: boolean;
-  taskCode?: string | null;
-  activityCode?: string | null;
 };
+
+type CreateTimeEntryVars = CreateTimeEntryFields &
+  (
+    | {
+        activityGroup?: typeof TIME_ENTRY_ACTIVITY_GROUP.CLIENT;
+        workspaceId: string;
+        workItemId?: string | null;
+        billable?: boolean;
+        taskCode?: string | null;
+        activityCode?: string | null;
+      }
+    | { activityGroup: typeof TIME_ENTRY_ACTIVITY_GROUP.INTERNAL }
+  );
 
 export const useCreateTimeEntry = () => {
   const analytics = useAnalytics();
 
   return useMutation({
-    mutationFn: async ({
-      workspaceId,
-      workItemId,
-      ...body
-    }: CreateTimeEntryVars) => {
+    mutationFn: async (values: CreateTimeEntryVars) => {
+      if (values.activityGroup === TIME_ENTRY_ACTIVITY_GROUP.INTERNAL) {
+        await createInternalTimeEntry({
+          dateWorked: values.dateWorked,
+          timezoneId: values.timezoneId,
+          durationMinutes: values.durationMinutes,
+          narrative: values.narrative,
+          ...(values.narrativeLanguage === undefined
+            ? {}
+            : { narrativeLanguage: values.narrativeLanguage }),
+        });
+        return;
+      }
+      const {
+        workspaceId,
+        workItemId,
+        activityGroup: _activityGroup,
+        ...body
+      } = values;
       await sendTimeEntryMutation({
         workspaceId,
         mutation: {

@@ -428,6 +428,32 @@
     }
   },
   "billing": {
+    "absences": {
+      "approvalQueue": "بانتظار الموافقة",
+      "coverage": "مدة اليوم",
+      "decisionComment": "تعليق على القرار (اختياري)",
+      "decisionSaved": "تم تحديث الغياب",
+      "emptyMine": "قدّم طلب غياب ليظهر هنا.",
+      "emptyQueue": "لا توجد طلبات غياب تنتظر قرارك.",
+      "formerMember": "عضو سابق",
+      "halfDay": "نصف يوم",
+      "halfDaySingleDay": "يجب أن يغطي طلب نصف يوم يومًا واحدًا.",
+      "kind": "نوع الغياب",
+      "lastDay": "اليوم الأخير",
+      "mine": "غياباتي",
+      "rangeInvalid": "اختر نطاق تواريخ صالحًا.",
+      "rejectionComment": "سبب الرفض",
+      "request": "طلب غياب",
+      "requestSaved": "تم طلب الغياب",
+      "segment": "الفترة من اليوم",
+      "startDate": "اليوم الأول",
+      "statuses": {
+        "requested": "مطلوب"
+      },
+      "title": "الغيابات",
+      "unknownMember": "اسم العضو غير متاح"
+    },
+    "activityGroup": "مجموعة النشاط",
     "addEntry": "إضافة إدخال",
     "amount": "المبلغ",
     "amountMustBePositive": "يجب أن يكون المبلغ أكبر من صفر",
@@ -436,6 +462,7 @@
     "batchActions": "إجراءات جماعية",
     "billable": "قابل للفوترة",
     "billedAmount": "المبلغ المُفوتر",
+    "clientWork": "عمل للعملاء",
     "codes": {
       "activity": "النشاط",
       "activityCode": "رمز النشاط",
@@ -593,6 +620,7 @@
       "unnamedRecord": "سجل في الملف القانوني"
     },
     "timerActive": "المؤقّت قيد التشغيل",
+    "timers": "مؤقتات",
     "timesheets": "سجلات الوقت",
     "total": "الإجمالي",
     "writeOff": "شطب"
@@ -5020,6 +5048,7 @@
   },
   "timesheets": {
     "day": {
+      "absence": "غياب",
       "absenceKinds": {
         "other": "غياب آخر",
         "sick": "إجازة مرضية",

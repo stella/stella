@@ -428,6 +428,32 @@
     }
   },
   "billing": {
+    "absences": {
+      "approvalQueue": "Jóváhagyásra vár",
+      "coverage": "Napi időtartam",
+      "decisionComment": "Megjegyzés a döntéshez (nem kötelező)",
+      "decisionSaved": "Távollét frissítve",
+      "emptyMine": "Kérelmezzen távollétet, hogy itt megjelenjen.",
+      "emptyQueue": "Nincs döntésére váró távolléti kérelem.",
+      "formerMember": "Korábbi tag",
+      "halfDay": "Fél nap",
+      "halfDaySingleDay": "A félnapos kérelemnek egyetlen napra kell vonatkoznia.",
+      "kind": "Távollét típusa",
+      "lastDay": "Utolsó nap",
+      "mine": "Saját távolléteim",
+      "rangeInvalid": "Válasszon érvényes dátumtartományt.",
+      "rejectionComment": "Elutasítás indoka",
+      "request": "Távollét kérelmezése",
+      "requestSaved": "Távolléti kérelem elküldve",
+      "segment": "Napszak",
+      "startDate": "Első nap",
+      "statuses": {
+        "requested": "Kérelmezve"
+      },
+      "title": "Távollétek",
+      "unknownMember": "A tag neve nem érhető el"
+    },
+    "activityGroup": "Tevékenységcsoport",
     "addEntry": "Bejegyzés hozzáadása",
     "amount": "Összeg",
     "amountMustBePositive": "Az összegnek nullánál nagyobbnak kell lennie",
@@ -436,6 +462,7 @@
     "batchActions": "Tömeges műveletek",
     "billable": "Számlázható",
     "billedAmount": "Számlázott összeg",
+    "clientWork": "Ügyfélmunka",
     "codes": {
       "activity": "Tevékenység",
       "activityCode": "Tevékenységkód",
@@ -593,6 +620,7 @@
       "unnamedRecord": "Ügyirat"
     },
     "timerActive": "Időmérő fut",
+    "timers": "Időmérők",
     "timesheets": "Munkaidő-nyilvántartás",
     "total": "Összesen",
     "writeOff": "Leírás"
@@ -5020,6 +5048,7 @@
   },
   "timesheets": {
     "day": {
+      "absence": "Távollét",
       "absenceKinds": {
         "other": "Egyéb távollét",
         "sick": "Betegszabadság",

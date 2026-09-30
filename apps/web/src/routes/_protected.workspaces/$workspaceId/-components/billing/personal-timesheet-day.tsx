@@ -7,6 +7,7 @@ import {
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import type { TimeEntrySuggestion } from "@stll/api-contract/time-entry-types";
 import { Temporal } from "@stll/time";
 import {
@@ -126,7 +127,10 @@ export const PersonalTimesheetDay = ({
   const acceptSuggestion = async (
     suggestion: TimeEntrySuggestion,
     values: Pick<
-      ManualTimeEntryValues,
+      Extract<
+        ManualTimeEntryValues,
+        { activityGroup: typeof TIME_ENTRY_ACTIVITY_GROUP.CLIENT }
+      >,
       "durationMinutes" | "narrative" | "narrativeLanguage" | "billable"
     >,
   ) => {
@@ -166,13 +170,17 @@ export const PersonalTimesheetDay = ({
   };
 
   const submit = async (values: ManualTimeEntryValues) => {
+    if (values.activityGroup !== TIME_ENTRY_ACTIVITY_GROUP.CLIENT) {
+      return;
+    }
+    const { activityGroup: _activityGroup, ...clientValues } = values;
     try {
       if (dialog.type === "edit") {
         await updateEntry.mutateAsync({
           workspaceId,
           id: dialog.id,
           timezoneId,
-          ...values,
+          ...clientValues,
         });
       } else if (dialog.type === "accept") {
         await acceptSuggestion(dialog.suggestion, values);
@@ -211,6 +219,7 @@ export const PersonalTimesheetDay = ({
   const formDefaults: ManualTimeEntryValues =
     dialog.type === "accept"
       ? {
+          activityGroup: TIME_ENTRY_ACTIVITY_GROUP.CLIENT,
           dateWorked: date,
           durationMinutes: dialog.suggestion.durationMinutes,
           narrative: dialog.narrative,
@@ -218,6 +227,7 @@ export const PersonalTimesheetDay = ({
           billable: false,
         }
       : {
+          activityGroup: TIME_ENTRY_ACTIVITY_GROUP.CLIENT,
           dateWorked: editingEntry?.dateWorked ?? date,
           durationMinutes: editingEntry?.durationMinutes ?? 0,
           narrative: editingEntry?.narrative ?? "",
