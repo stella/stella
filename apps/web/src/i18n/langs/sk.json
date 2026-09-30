@@ -586,6 +586,7 @@
       "title": "Profily dodávateľov",
       "vatId": "IČ DPH"
     },
+    "settingsTitle": "Fakturácia",
     "split": {
       "addSplit": "Pridať rozdelenie",
       "percentValue": "{value} %",

@@ -586,6 +586,7 @@
       "title": "Profils de vendeur",
       "vatId": "Numéro de TVA"
     },
+    "settingsTitle": "Facturation",
     "split": {
       "addSplit": "Ajouter une répartition",
       "percentValue": "{value} %",

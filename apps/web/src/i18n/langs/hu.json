@@ -586,6 +586,7 @@
       "title": "Eladói profilok",
       "vatId": "Áfaazonosító"
     },
+    "settingsTitle": "Számlázás",
     "split": {
       "addSplit": "Megosztás hozzáadása",
       "percentValue": "{value}%",

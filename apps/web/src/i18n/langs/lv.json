@@ -586,6 +586,7 @@
       "title": "Pārdevēja profili",
       "vatId": "PVN numurs"
     },
+    "settingsTitle": "Norēķini",
     "split": {
       "addSplit": "Pievienot sadalījumu",
       "percentValue": "{value}%",

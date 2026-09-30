@@ -586,6 +586,7 @@
       "title": "ملفات البائع",
       "vatId": "رقم ضريبة القيمة المضافة"
     },
+    "settingsTitle": "الفوترة",
     "split": {
       "addSplit": "إضافة تقسيم",
       "percentValue": "{value}٪",

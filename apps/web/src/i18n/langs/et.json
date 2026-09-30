@@ -586,6 +586,7 @@
       "title": "Müüja profiilid",
       "vatId": "Käibemaksukohustuslase number"
     },
+    "settingsTitle": "Arveldus",
     "split": {
       "addSplit": "Lisa jagamine",
       "percentValue": "{value}%",

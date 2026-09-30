@@ -586,6 +586,7 @@
       "title": "Profile sprzedawcy",
       "vatId": "Numer VAT"
     },
+    "settingsTitle": "Rozliczenia",
     "split": {
       "addSplit": "Dodaj podział",
       "percentValue": "{value}%",

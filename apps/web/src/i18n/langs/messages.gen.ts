@@ -589,6 +589,7 @@ type Messages = {
       "title": "Seller profiles";
       "vatId": "VAT ID";
     };
+    "settingsTitle": "Billing";
     "split": {
       "addSplit": "Add split";
       "percentValue": "{value}%";

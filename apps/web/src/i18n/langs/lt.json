@@ -586,6 +586,7 @@
       "title": "Pardavėjo profiliai",
       "vatId": "PVM mokėtojo kodas"
     },
+    "settingsTitle": "Atsiskaitymas",
     "split": {
       "addSplit": "Pridėti padalijimą",
       "percentValue": "{value}%",

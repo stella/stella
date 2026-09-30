@@ -586,6 +586,7 @@
       "title": "Perfiles de vendedor",
       "vatId": "Número de IVA"
     },
+    "settingsTitle": "Facturación",
     "split": {
       "addSplit": "Añadir reparto",
       "percentValue": "{value}%",

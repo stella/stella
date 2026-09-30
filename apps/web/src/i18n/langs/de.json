@@ -586,6 +586,7 @@
       "title": "Verkäuferprofile",
       "vatId": "Umsatzsteuer-ID"
     },
+    "settingsTitle": "Abrechnung",
     "split": {
       "addSplit": "Aufteilung hinzufügen",
       "percentValue": "{value}%",

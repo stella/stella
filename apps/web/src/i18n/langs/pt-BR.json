@@ -586,6 +586,7 @@
       "title": "Perfis de vendedor",
       "vatId": "Número de IVA"
     },
+    "settingsTitle": "Faturamento",
     "split": {
       "addSplit": "Adicionar divisão",
       "percentValue": "{value}%",
