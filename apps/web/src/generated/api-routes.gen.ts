@@ -11811,7 +11811,7 @@ export type WebRoutes = {
         assignments: {
           post: {
             body: {
-              assigneeUserId: (T56ed95d57c | null);
+              assigneeUserId: T630f063606;
             };
             params: T8f465d529b;
             query: Record<never, never>;
@@ -32159,6 +32159,8 @@ export type MyTimeEntriesRoutes = {
                 status: Tef030b2402;
                 source: ("manual" | "suggested" | "timer");
                 timerStartedAt: Tbe0400fa4c;
+                returnComment: Tbe0400fa4c;
+                returnedAt: Tbe0400fa4c;
               }>;
               nextCursor: Tbe0400fa4c;
               limit: number;
@@ -32184,6 +32186,156 @@ export type MyTimeEntriesRoutes = {
             500: T9a51b7d2bc;
             502: T9a51b7d2bc;
             503: T9a51b7d2bc;
+          };
+        };
+      };
+    };
+  };
+};
+
+export type TimeApprovalQueueRoutes = {
+  v1: {
+    "time-entries": {
+      approve: {
+        post: {
+          body: {
+            ids: Array<Tdb05f01858>;
+          };
+          params: T5e3ac29766;
+          query: Record<never, never>;
+          headers: Record<never, never>;
+          response: {
+            200: {
+              results: Array<{
+                id: Tdb05f01858;
+                status: "approved";
+              } | {
+                id: Tdb05f01858;
+                status: "refused";
+                reason: ("invalid_entry" | "not_approver" | "not_found" | "running_timer" | "time_period_locked" | "unpriced" | "wrong_status");
+              }>;
+            };
+            400: T9a51b7d2bc;
+            401: T9a51b7d2bc;
+            402: T9a51b7d2bc;
+            403: Tddfcdef857;
+            404: T9a51b7d2bc;
+            409: T9a51b7d2bc;
+            413: T9a51b7d2bc;
+            422: (T9a51b7d2bc | {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            });
+            428: T9a51b7d2bc;
+            429: T9a51b7d2bc;
+            500: T9a51b7d2bc;
+            502: T9a51b7d2bc;
+            503: T9a51b7d2bc;
+          };
+        };
+      };
+      "approval-queue": {
+        get: {
+          body: Record<never, never>;
+          params: T5e3ac29766;
+          query: {
+            cursor?: string;
+            limit?: number;
+            matter?: T9e07a7d6cd;
+            member?: string;
+            from?: string;
+            to?: string;
+          };
+          headers: Record<never, never>;
+          response: {
+            200: {
+              items: Array<{
+                id: Tdb05f01858;
+                workspaceId: T9e07a7d6cd;
+                userId: Tbe0400fa4c;
+                dateWorked: string;
+                timezoneId: string;
+                durationMinutes: number;
+                billedMinutes: number;
+                narrative: string;
+                billable: Tfddd645dc8;
+                status: Tef030b2402;
+                approverUserId: Tbe0400fa4c;
+                approvedByUserId: T630f063606;
+                returnedByUserId: T630f063606;
+                returnComment: Tbe0400fa4c;
+              } & {
+                approvedAt: Tbe0400fa4c;
+                returnedAt: Tbe0400fa4c;
+              }>;
+              nextCursor: Tbe0400fa4c;
+              limit: number;
+            };
+            400: T9a51b7d2bc;
+            401: T9a51b7d2bc;
+            402: T9a51b7d2bc;
+            403: Tddfcdef857;
+            404: T9a51b7d2bc;
+            409: T9a51b7d2bc;
+            413: T9a51b7d2bc;
+            422: (T9a51b7d2bc | {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            });
+            428: T9a51b7d2bc;
+            429: T9a51b7d2bc;
+            500: T9a51b7d2bc;
+            502: T9a51b7d2bc;
+            503: T9a51b7d2bc;
+          };
+        };
+      } & {
+        return: {
+          post: {
+            body: {
+              id: Tdb05f01858;
+              comment: string;
+            };
+            params: T5e3ac29766;
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                id: Tdb05f01858;
+                status: "draft";
+              };
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: Tddfcdef857;
+              404: T9a51b7d2bc;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: (T9a51b7d2bc | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
           };
         };
       };
@@ -37445,6 +37597,8 @@ type T6269a5e99e = {
 };
 
 type T62f288d6ab = "all-chats" | "matters";
+
+type T630f063606 = T56ed95d57c | null;
 
 type T631856df6b = {
   [key: string]: unknown;

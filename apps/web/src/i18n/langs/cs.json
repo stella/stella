@@ -431,6 +431,27 @@
     "addEntry": "Přidat záznam",
     "amount": "Částka",
     "amountMustBePositive": "Částka musí být vyšší než nula",
+    "approvalQueue": {
+      "approveVisible": "Schválit všechny zobrazené",
+      "billed": "Účtovaný čas",
+      "commentRequired": "Zadejte komentář s vysvětlením, co je třeba opravit.",
+      "commentTooLong": "Použijte nejvýše 2000 znaků.",
+      "empty": "Žádné časové záznamy nečekají na vaše schválení.",
+      "logged": "Zaznamenaný čas",
+      "refusals": {
+        "invalid_entry": "Před schválením záznam opravte.",
+        "not_approver": "Nejste schvalovatelem tohoto záznamu.",
+        "not_found": "Tento záznam již není dostupný.",
+        "running_timer": "Před schválením zastavte běžící časovač.",
+        "time_period_locked": "Toto časové období je uzamčené.",
+        "unpriced": "Před schválením tohoto fakturovatelného záznamu nastavte sazbu.",
+        "wrong_status": "Tento záznam nelze v aktuálním stavu schválit."
+      },
+      "returnComment": "Komentář pro autora záznamu",
+      "returnEntry": "Vrátit k opravě",
+      "selectEntry": "Vybrat časový záznam",
+      "title": "Časové záznamy ke schválení"
+    },
     "approve": "Schválit",
     "approveSelected": "Schválit vybrané",
     "batchActions": "Hromadné akce",

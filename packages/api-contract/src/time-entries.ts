@@ -55,6 +55,7 @@ type UnknownRecord = Record<string, unknown> & {
   noCharge?: unknown;
   rateAtEntry?: unknown;
   resourceType?: unknown;
+  returnComment?: unknown;
   scope?: unknown;
   signalCount?: unknown;
   source?: unknown;
@@ -115,6 +116,7 @@ const parseTimeEntry = (input: unknown): TimeEntry | null => {
     !isNullableString(input.narrativeLanguage) ||
     typeof input.noCharge !== "boolean" ||
     !isInteger(input.rateAtEntry) ||
+    !isNullableString(input.returnComment) ||
     !isTimeEntrySource(input.source) ||
     !isTimeEntryStatus(input.status) ||
     !isNullableString(input.taskCode) ||
@@ -142,6 +144,7 @@ const parseTimeEntry = (input: unknown): TimeEntry | null => {
     narrativeLanguage: input.narrativeLanguage,
     noCharge: input.noCharge,
     rateAtEntry: input.rateAtEntry,
+    returnComment: input.returnComment,
     source: input.source,
     status: input.status,
     taskCode: input.taskCode,

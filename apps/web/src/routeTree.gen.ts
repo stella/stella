@@ -54,6 +54,7 @@ import { Route as ProtectedDevAutocompleteRouteImport } from './routes/_protecte
 import { Route as ProtectedInboxIndexRouteImport } from './routes/_protected.inbox/index'
 import { Route as ProtectedSettingsIndexRouteImport } from './routes/_protected.settings/index'
 import { Route as ProtectedSettingsOrganizationRouteRouteImport } from './routes/_protected.settings/organization.route'
+import { Route as ProtectedTimeApprovalQueueRouteImport } from './routes/_protected.time_.approval-queue'
 import { Route as ProtectedVerifyCodeRouteImport } from './routes/_protected.verify.$code'
 import { Route as ProtectedWorkspacesIndexRouteImport } from './routes/_protected.workspaces/index'
 import { Route as ProtectedWorkspacesWorkspaceIdRouteRouteImport } from './routes/_protected.workspaces/$workspaceId/route'
@@ -334,6 +335,12 @@ const ProtectedSettingsOrganizationRouteRoute =
     id: '/organization',
     path: '/organization',
     getParentRoute: () => ProtectedSettingsRouteRoute,
+  } as any)
+const ProtectedTimeApprovalQueueRoute =
+  ProtectedTimeApprovalQueueRouteImport.update({
+    id: '/time_/approval-queue',
+    path: '/time/approval-queue',
+    getParentRoute: () => ProtectedRoute,
   } as any)
 const ProtectedVerifyCodeRoute = ProtectedVerifyCodeRouteImport.update({
   id: '/verify/$code',
@@ -691,6 +698,7 @@ export interface FileRoutesByFullPath {
   '/contacts/$contactId': typeof ProtectedContactsContactIdRoute
   '/contacts/import': typeof ProtectedContactsImportRoute
   '/dev/autocomplete': typeof ProtectedDevAutocompleteRoute
+  '/time/approval-queue': typeof ProtectedTimeApprovalQueueRoute
   '/verify/$code': typeof ProtectedVerifyCodeRoute
   '/auth/accept-invitation/$invitationId': typeof AuthAcceptInvitationInvitationIdRoute
   '/knowledge/templates/catalogue': typeof KnowledgeTemplatesCatalogueRouteWithChildren
@@ -782,6 +790,7 @@ export interface FileRoutesByTo {
   '/contacts/$contactId': typeof ProtectedContactsContactIdRoute
   '/contacts/import': typeof ProtectedContactsImportRoute
   '/dev/autocomplete': typeof ProtectedDevAutocompleteRoute
+  '/time/approval-queue': typeof ProtectedTimeApprovalQueueRoute
   '/verify/$code': typeof ProtectedVerifyCodeRoute
   '/auth/accept-invitation/$invitationId': typeof AuthAcceptInvitationInvitationIdRoute
   '/knowledge/templates/catalogue': typeof KnowledgeTemplatesCatalogueRouteWithChildren
@@ -882,6 +891,7 @@ export interface FileRoutesById {
   '/_protected/contacts/$contactId': typeof ProtectedContactsContactIdRoute
   '/_protected/contacts/import': typeof ProtectedContactsImportRoute
   '/_protected/dev_/autocomplete': typeof ProtectedDevAutocompleteRoute
+  '/_protected/time_/approval-queue': typeof ProtectedTimeApprovalQueueRoute
   '/_protected/verify/$code': typeof ProtectedVerifyCodeRoute
   '/auth/accept-invitation/$invitationId': typeof AuthAcceptInvitationInvitationIdRoute
   '/knowledge/templates_/catalogue': typeof KnowledgeTemplatesCatalogueRouteWithChildren
@@ -983,6 +993,7 @@ export interface FileRouteTypes {
     | '/contacts/$contactId'
     | '/contacts/import'
     | '/dev/autocomplete'
+    | '/time/approval-queue'
     | '/verify/$code'
     | '/auth/accept-invitation/$invitationId'
     | '/knowledge/templates/catalogue'
@@ -1074,6 +1085,7 @@ export interface FileRouteTypes {
     | '/contacts/$contactId'
     | '/contacts/import'
     | '/dev/autocomplete'
+    | '/time/approval-queue'
     | '/verify/$code'
     | '/auth/accept-invitation/$invitationId'
     | '/knowledge/templates/catalogue'
@@ -1173,6 +1185,7 @@ export interface FileRouteTypes {
     | '/_protected/contacts/$contactId'
     | '/_protected/contacts/import'
     | '/_protected/dev_/autocomplete'
+    | '/_protected/time_/approval-queue'
     | '/_protected/verify/$code'
     | '/auth/accept-invitation/$invitationId'
     | '/knowledge/templates_/catalogue'
@@ -1569,6 +1582,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/settings/organization'
       preLoaderRoute: typeof ProtectedSettingsOrganizationRouteRouteImport
       parentRoute: typeof ProtectedSettingsRouteRoute
+    }
+    '/_protected/time_/approval-queue': {
+      id: '/_protected/time_/approval-queue'
+      path: '/time/approval-queue'
+      fullPath: '/time/approval-queue'
+      preLoaderRoute: typeof ProtectedTimeApprovalQueueRouteImport
+      parentRoute: typeof ProtectedRoute
     }
     '/_protected/verify/$code': {
       id: '/_protected/verify/$code'
@@ -2249,6 +2269,7 @@ interface ProtectedRouteChildren {
   ProtectedContactsContactIdRoute: typeof ProtectedContactsContactIdRoute
   ProtectedContactsImportRoute: typeof ProtectedContactsImportRoute
   ProtectedDevAutocompleteRoute: typeof ProtectedDevAutocompleteRoute
+  ProtectedTimeApprovalQueueRoute: typeof ProtectedTimeApprovalQueueRoute
   ProtectedVerifyCodeRoute: typeof ProtectedVerifyCodeRoute
   ProtectedContactsIndexRoute: typeof ProtectedContactsIndexRoute
   ProtectedInboxIndexRoute: typeof ProtectedInboxIndexRoute
@@ -2265,6 +2286,7 @@ const ProtectedRouteChildren: ProtectedRouteChildren = {
   ProtectedContactsContactIdRoute: ProtectedContactsContactIdRoute,
   ProtectedContactsImportRoute: ProtectedContactsImportRoute,
   ProtectedDevAutocompleteRoute: ProtectedDevAutocompleteRoute,
+  ProtectedTimeApprovalQueueRoute: ProtectedTimeApprovalQueueRoute,
   ProtectedVerifyCodeRoute: ProtectedVerifyCodeRoute,
   ProtectedContactsIndexRoute: ProtectedContactsIndexRoute,
   ProtectedInboxIndexRoute: ProtectedInboxIndexRoute,

@@ -5,6 +5,7 @@ import type {
   CorrespondenceRoutes,
   MemoriesRoutes,
   MyTimeEntriesRoutes,
+  TimeApprovalQueueRoutes,
   WebRoutes,
 } from "@/generated/api-routes.gen";
 import {
@@ -67,3 +68,7 @@ export const publicFeedbackApi = eden.public.feedback;
 export const memoriesApi = memoriesEden.v1.memories;
 export const correspondenceApi = correspondenceEden.v1;
 export const myTimeEntriesApi = myTimeEntriesEden.v1["time-entries"].me;
+const timeApprovalQueueEden = createStellaEdenClient<
+  EdenRoutesApp<TimeApprovalQueueRoutes>
+>(browserApiBaseUrl(), clientOptions);
+export const timeApprovalQueueApi = timeApprovalQueueEden.v1["time-entries"];

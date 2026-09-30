@@ -431,6 +431,27 @@
     "addEntry": "Pridať záznam",
     "amount": "Čiastka",
     "amountMustBePositive": "Suma musí byť vyššia ako nula",
+    "approvalQueue": {
+      "approveVisible": "Schváliť všetky zobrazené",
+      "billed": "Účtovaný čas",
+      "commentRequired": "Zadajte komentár s vysvetlením, čo treba opraviť.",
+      "commentTooLong": "Použite najviac 2000 znakov.",
+      "empty": "Žiadne časové záznamy nečakajú na vaše schválenie.",
+      "logged": "Zaznamenaný čas",
+      "refusals": {
+        "invalid_entry": "Pred schválením záznam opravte.",
+        "not_approver": "Nie ste schvaľovateľom tohto záznamu.",
+        "not_found": "Tento záznam už nie je dostupný.",
+        "running_timer": "Pred schválením zastavte bežiaci časovač.",
+        "time_period_locked": "Toto časové obdobie je uzamknuté.",
+        "unpriced": "Pred schválením tohto fakturovateľného záznamu nastavte sadzbu.",
+        "wrong_status": "Tento záznam nemožno v aktuálnom stave schváliť."
+      },
+      "returnComment": "Komentár pre autora záznamu",
+      "returnEntry": "Vrátiť na opravu",
+      "selectEntry": "Vybrať časový záznam",
+      "title": "Časové záznamy na schválenie"
+    },
     "approve": "Schváliť",
     "approveSelected": "Schváliť vybrané",
     "batchActions": "Hromadné akcie",

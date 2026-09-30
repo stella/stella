@@ -89,13 +89,18 @@ beforeAll(async () => {
   });
 
   await testDb.insert(timeEntries).values([
-    entry({
-      id: visibleIds[0],
-      organizationId: ids.orgA,
-      workspaceId: ids.wsA1,
-      userId: ids.userA1,
-      dateWorked: DAY,
-    }),
+    {
+      ...entry({
+        id: visibleIds[0],
+        organizationId: ids.orgA,
+        workspaceId: ids.wsA1,
+        userId: ids.userA1,
+        dateWorked: DAY,
+      }),
+      returnComment: "Clarify the work performed.",
+      returnedAt: new Date("2024-07-01T12:00:00.000Z"),
+      returnedByUserId: ids.userA2,
+    },
     entry({
       id: visibleIds[1],
       organizationId: ids.orgA,
@@ -212,6 +217,10 @@ describe("personal time entries", () => {
       result.items.map(({ workspaceName }) => workspaceName).toSorted(),
     ).toEqual(["WS A1", "WS A2"]);
     expect(result.nextCursor).toBeNull();
+    expect(result.items.find(({ id }) => id === visibleIds[0])).toMatchObject({
+      returnComment: "Clarify the work performed.",
+      returnedAt: "2024-07-01T12:00:00.000Z",
+    });
   });
 
   test("paginates by stable entry id without repeating or skipping a matter", async () => {

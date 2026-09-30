@@ -431,6 +431,27 @@
     "addEntry": "Eintrag hinzufügen",
     "amount": "Betrag",
     "amountMustBePositive": "Der Betrag muss größer als null sein",
+    "approvalQueue": {
+      "approveVisible": "Alle sichtbaren freigeben",
+      "billed": "Abgerechnete Zeit",
+      "commentRequired": "Geben Sie einen Kommentar ein, der erklärt, was korrigiert werden muss.",
+      "commentTooLong": "Verwenden Sie höchstens 2000 Zeichen.",
+      "empty": "Keine Zeiteinträge warten auf Ihre Freigabe.",
+      "logged": "Erfasste Zeit",
+      "refusals": {
+        "invalid_entry": "Korrigieren Sie den Eintrag vor der Freigabe.",
+        "not_approver": "Sie sind nicht für die Freigabe dieses Eintrags zuständig.",
+        "not_found": "Dieser Eintrag ist nicht mehr verfügbar.",
+        "running_timer": "Stoppen Sie den laufenden Timer vor der Freigabe.",
+        "time_period_locked": "Dieser Zeitraum ist gesperrt.",
+        "unpriced": "Legen Sie vor der Freigabe dieses abrechenbaren Eintrags einen Stundensatz fest.",
+        "wrong_status": "Dieser Eintrag kann in seinem aktuellen Status nicht freigegeben werden."
+      },
+      "returnComment": "Kommentar für die erfassende Person",
+      "returnEntry": "Zur Korrektur zurückgeben",
+      "selectEntry": "Zeiteintrag auswählen",
+      "title": "Zeiteinträge zur Freigabe"
+    },
     "approve": "Freigeben",
     "approveSelected": "Auswahl freigeben",
     "batchActions": "Massenaktionen",

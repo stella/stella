@@ -431,6 +431,27 @@
     "addEntry": "Añadir entrada",
     "amount": "Importe",
     "amountMustBePositive": "El importe debe ser mayor que cero",
+    "approvalQueue": {
+      "approveVisible": "Aprobar todos los visibles",
+      "billed": "Tiempo facturado",
+      "commentRequired": "Escribe un comentario explicando qué corregir.",
+      "commentTooLong": "Usa como máximo 2000 caracteres.",
+      "empty": "No hay registros de tiempo pendientes de tu aprobación.",
+      "logged": "Tiempo registrado",
+      "refusals": {
+        "invalid_entry": "Corrige el registro antes de aprobar.",
+        "not_approver": "No eres quien debe aprobar este registro.",
+        "not_found": "Este registro ya no está disponible.",
+        "running_timer": "Detén el temporizador en marcha antes de aprobar.",
+        "time_period_locked": "Este período está bloqueado.",
+        "unpriced": "Establece una tarifa antes de aprobar este registro facturable.",
+        "wrong_status": "Este registro no se puede aprobar en su estado actual."
+      },
+      "returnComment": "Comentario para quien registró el tiempo",
+      "returnEntry": "Devolver para corregir",
+      "selectEntry": "Seleccionar registro de tiempo",
+      "title": "Cola de aprobación de tiempo"
+    },
     "approve": "Aprobar",
     "approveSelected": "Aprobar seleccionados",
     "batchActions": "Acciones en lote",

@@ -431,6 +431,27 @@
     "addEntry": "Pievienot ierakstu",
     "amount": "Summa",
     "amountMustBePositive": "Summai jābūt lielākai par nulli",
+    "approvalQueue": {
+      "approveVisible": "Apstiprināt visus redzamos",
+      "billed": "Rēķinā iekļautais laiks",
+      "commentRequired": "Ievadiet komentāru, paskaidrojot, kas jālabo.",
+      "commentTooLong": "Izmantojiet ne vairāk kā 2000 rakstzīmes.",
+      "empty": "Neviens laika ieraksts negaida jūsu apstiprinājumu.",
+      "logged": "Reģistrētais laiks",
+      "refusals": {
+        "invalid_entry": "Pirms apstiprināšanas izlabojiet ierakstu.",
+        "not_approver": "Jūs neesat šī ieraksta apstiprinātājs.",
+        "not_found": "Šis ieraksts vairs nav pieejams.",
+        "running_timer": "Pirms apstiprināšanas apturiet darbojošos taimeri.",
+        "time_period_locked": "Šis laika periods ir bloķēts.",
+        "unpriced": "Pirms šī apmaksājamā ieraksta apstiprināšanas iestatiet likmi.",
+        "wrong_status": "Šo ierakstu nevar apstiprināt pašreizējā statusā."
+      },
+      "returnComment": "Komentārs laika ieraksta autoram",
+      "returnEntry": "Atgriezt labošanai",
+      "selectEntry": "Atlasīt laika ierakstu",
+      "title": "Apstiprināšanai gaidošie laika ieraksti"
+    },
     "approve": "Apstiprināt",
     "approveSelected": "Apstiprināt atlasītos",
     "batchActions": "Grupas darbības",

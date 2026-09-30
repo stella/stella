@@ -431,6 +431,27 @@
     "addEntry": "Lisa kanne",
     "amount": "Summa",
     "amountMustBePositive": "Summa peab olema suurem kui null",
+    "approvalQueue": {
+      "approveVisible": "Kinnita kõik nähtavad",
+      "billed": "Arveldatud aeg",
+      "commentRequired": "Sisestage kommentaar, mis selgitab, mida parandada.",
+      "commentTooLong": "Kasutage kuni 2000 märki.",
+      "empty": "Ükski ajakanne ei oota teie kinnitust.",
+      "logged": "Registreeritud aeg",
+      "refusals": {
+        "invalid_entry": "Enne kinnitamist parandage kanne.",
+        "not_approver": "Teie ei ole selle kande kinnitaja.",
+        "not_found": "See kanne pole enam saadaval.",
+        "running_timer": "Enne kinnitamist peatage töötav taimer.",
+        "time_period_locked": "See ajavahemik on lukustatud.",
+        "unpriced": "Enne selle arveldatava kande kinnitamist määrake tunnihind.",
+        "wrong_status": "Seda kannet ei saa praeguses olekus kinnitada."
+      },
+      "returnComment": "Kommentaar aja registreerijale",
+      "returnEntry": "Tagasta parandamiseks",
+      "selectEntry": "Vali ajakanne",
+      "title": "Kinnitust ootavad ajakanded"
+    },
     "approve": "Kinnita",
     "approveSelected": "Kinnita valitud",
     "batchActions": "Partiiaktsioonid",

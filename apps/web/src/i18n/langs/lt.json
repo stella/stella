@@ -431,6 +431,27 @@
     "addEntry": "Pridėti įrašą",
     "amount": "Suma",
     "amountMustBePositive": "Suma turi būti didesnė už nulį",
+    "approvalQueue": {
+      "approveVisible": "Patvirtinti visus matomus",
+      "billed": "Apmokestintas laikas",
+      "commentRequired": "Įveskite komentarą, paaiškinantį, ką reikia pataisyti.",
+      "commentTooLong": "Naudokite ne daugiau kaip 2000 simbolių.",
+      "empty": "Nė vienas laiko įrašas nelaukia jūsų patvirtinimo.",
+      "logged": "Užregistruotas laikas",
+      "refusals": {
+        "invalid_entry": "Prieš patvirtindami pataisykite įrašą.",
+        "not_approver": "Jūs nesate šio įrašo tvirtintojas.",
+        "not_found": "Šis įrašas nebepasiekiamas.",
+        "running_timer": "Prieš patvirtindami sustabdykite veikiantį laikmatį.",
+        "time_period_locked": "Šis laikotarpis užrakintas.",
+        "unpriced": "Prieš patvirtindami šį apmokamą įrašą nustatykite tarifą.",
+        "wrong_status": "Šio įrašo negalima patvirtinti esamos būsenos."
+      },
+      "returnComment": "Komentaras laiko įrašo autoriui",
+      "returnEntry": "Grąžinti taisyti",
+      "selectEntry": "Pasirinkti laiko įrašą",
+      "title": "Patvirtinimo laukiantys laiko įrašai"
+    },
     "approve": "Patvirtinti",
     "approveSelected": "Patvirtinti pasirinktus",
     "batchActions": "Grupiniai veiksmai",

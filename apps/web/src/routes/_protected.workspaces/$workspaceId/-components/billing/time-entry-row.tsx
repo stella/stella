@@ -18,6 +18,7 @@ import { cn } from "@stll/ui/utils";
 
 import { formatCurrencyAmount } from "@/components/billing/format-currency";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { formatMinutes } from "@/lib/workspaces/format-duration";
 import { SplitEntryDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/split-entry-dialog";
 import { STATUS_STYLES } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/status-styles";
@@ -33,9 +34,11 @@ type TimeEntry = {
   currency: string;
   narrative: string;
   invoiceNarrative: string | null;
+  returnComment: string | null;
   billable: boolean;
   status: string;
   userName: string | null;
+  userId: string | null;
   timerStartedAt: string | null;
 };
 
@@ -50,6 +53,27 @@ type TimeEntryRowProps = {
   workspaceId: string;
 };
 
+const ReturnedEntryComment = ({
+  entry,
+  viewerUserId,
+}: {
+  entry: TimeEntry;
+  viewerUserId: string;
+}) => {
+  if (
+    entry.status !== "draft" ||
+    entry.userId !== viewerUserId ||
+    entry.returnComment === null
+  ) {
+    return null;
+  }
+  return (
+    <BidiText as="p" className="text-sm whitespace-pre-wrap">
+      {entry.returnComment}
+    </BidiText>
+  );
+};
+
 export const TimeEntryRow = ({
   entry,
   matterName,
@@ -61,6 +85,7 @@ export const TimeEntryRow = ({
   workspaceId,
 }: TimeEntryRowProps) => {
   const t = useTranslations();
+  const user = useAuthenticatedUser();
   const canUpdateEntry = usePermissions({ timeEntry: ["update"] });
   const canDeleteEntry = usePermissions({ timeEntry: ["delete"] });
   const [splitOpen, setSplitOpen] = useState(false);
@@ -120,6 +145,7 @@ export const TimeEntryRow = ({
               {entry.narrative}
             </p>
           )}
+          <ReturnedEntryComment entry={entry} viewerUserId={user.id} />
         </div>
 
         {/* Billing amount */}

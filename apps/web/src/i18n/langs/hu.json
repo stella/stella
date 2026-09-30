@@ -431,6 +431,27 @@
     "addEntry": "Bejegyzés hozzáadása",
     "amount": "Összeg",
     "amountMustBePositive": "Az összegnek nullánál nagyobbnak kell lennie",
+    "approvalQueue": {
+      "approveVisible": "Összes látható jóváhagyása",
+      "billed": "Számlázott idő",
+      "commentRequired": "Írjon megjegyzést arról, hogy mit kell javítani.",
+      "commentTooLong": "Legfeljebb 2000 karaktert használjon.",
+      "empty": "Nincsenek jóváhagyásra váró időbejegyzések.",
+      "logged": "Rögzített idő",
+      "refusals": {
+        "invalid_entry": "Jóváhagyás előtt javítsa a bejegyzést.",
+        "not_approver": "Nem Ön ennek a bejegyzésnek a jóváhagyója.",
+        "not_found": "Ez a bejegyzés már nem érhető el.",
+        "running_timer": "Jóváhagyás előtt állítsa le a futó időmérőt.",
+        "time_period_locked": "Ez az időszak zárolva van.",
+        "unpriced": "A számlázható bejegyzés jóváhagyása előtt állítson be díjat.",
+        "wrong_status": "Ez a bejegyzés jelenlegi állapotában nem hagyható jóvá."
+      },
+      "returnComment": "Megjegyzés a bejegyzés készítőjének",
+      "returnEntry": "Visszaküldés javításra",
+      "selectEntry": "Időbejegyzés kiválasztása",
+      "title": "Jóváhagyásra váró időbejegyzések"
+    },
     "approve": "Jóváhagy",
     "approveSelected": "Kijelöltek jóváhagyása",
     "batchActions": "Tömeges műveletek",

@@ -16,6 +16,7 @@ export type TimeEntry = {
   narrativeLanguage: string | null;
   noCharge: boolean;
   rateAtEntry: number;
+  returnComment: string | null;
   source: TimeEntrySource;
   status: TimeEntryStatus;
   taskCode: string | null;

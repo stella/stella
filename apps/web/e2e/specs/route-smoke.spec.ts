@@ -226,6 +226,7 @@ const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
       `/workspaces/${world.workspace.id}/correspondence/${world.correspondenceId}`,
   },
   staticRoute("/time"),
+  staticRoute("/time/approval-queue"),
   staticRoute("/settings/organization/time-policy"),
 ];
 

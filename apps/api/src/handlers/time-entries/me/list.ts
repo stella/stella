@@ -38,6 +38,8 @@ const myTimeEntryColumns = {
   status: timeEntries.status,
   source: timeEntries.source,
   timerStartedAt: timeEntries.timerStartedAt,
+  returnComment: timeEntries.returnComment,
+  returnedAt: timeEntries.returnedAt,
 };
 
 type MyTimeEntrySourceRow = typeof timeEntries.$inferSelect & {
@@ -60,6 +62,8 @@ const toMyTimeEntryItem = (
   status: row.status,
   source: row.source,
   timerStartedAt: row.timerStartedAt?.toISOString() ?? null,
+  returnComment: row.returnComment,
+  returnedAt: row.returnedAt?.toISOString() ?? null,
 });
 
 const UNPROJECTED_MY_TIME_ENTRY_COLUMNS = [
@@ -89,8 +93,6 @@ const UNPROJECTED_MY_TIME_ENTRY_COLUMNS = [
   "approvedByUserId",
   "approvedAt",
   "returnedByUserId",
-  "returnedAt",
-  "returnComment",
 ] as const satisfies readonly (keyof MyTimeEntrySourceRow)[];
 
 type MissingMyTimeEntryColumn = UnprojectedColumns<

@@ -10,6 +10,7 @@ import { ChevronLeftIcon, ChevronRightIcon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
 
+import { usePermissions } from "@/hooks/use-permissions";
 import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
@@ -20,6 +21,7 @@ import {
   ensureRouteQueryData,
 } from "@/lib/react-query";
 import { MEDIUM_DATE_FORMAT } from "@/lib/relative-time";
+import { approvalQueueOptions } from "@/lib/time-approval-queue";
 import { formatMinutes } from "@/lib/workspaces/format-duration";
 import { myTimeEntriesInfiniteOptions } from "@/lib/workspaces/queries/my-time-entries";
 
@@ -47,14 +49,24 @@ export const Route = createFileRoute("/_protected/time")({
     }
   },
   loader: async ({ context, deps }) => {
-    await ensureRouteInfiniteQueryData(
-      context.queryClient,
-      myTimeEntriesInfiniteOptions(
-        context.user.activeOrganizationId,
-        context.user.id,
-        deps.date,
+    await Promise.all([
+      ensureRouteInfiniteQueryData(
+        context.queryClient,
+        myTimeEntriesInfiniteOptions(
+          context.user.activeOrganizationId,
+          context.user.id,
+          deps.date,
+        ),
       ),
-    );
+      ensureRouteInfiniteQueryData(
+        context.queryClient,
+        approvalQueueOptions({
+          organizationId: context.user.activeOrganizationId,
+          userId: context.user.id,
+          filters: {},
+        }),
+      ),
+    ]);
   },
   pendingComponent: MyDayPending,
   component: MyDayPage,
@@ -87,6 +99,13 @@ function MyDayPage() {
   const entriesQuery = useSuspenseInfiniteQuery(
     myTimeEntriesInfiniteOptions(organizationId, userId, date),
   );
+  const queueQuery = useSuspenseInfiniteQuery(
+    approvalQueueOptions({ organizationId, userId, filters: {} }),
+  );
+  const canApprove = usePermissions({ timeEntry: ["approve"] });
+  const hasApprovalEntries = queueQuery.data.pages.some(
+    (page) => page.items.length > 0,
+  );
   const entries = entriesQuery.data.pages.flatMap((page) => page.items);
   const totalMinutes = entries.reduce(
     (sum, entry) =>
@@ -106,6 +125,11 @@ function MyDayPage() {
       <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
         <h1 className="text-sm font-medium">{tBilling("timesheets")}</h1>
         <div className="flex items-center gap-2">
+          {(canApprove || hasApprovalEntries) && (
+            <Link className="text-sm hover:underline" to="/time/approval-queue">
+              {tBilling("approvalQueue.title")}
+            </Link>
+          )}
           <Button
             onClick={() =>
               detached(
@@ -202,6 +226,14 @@ function MyDayPage() {
                           className="text-muted-foreground text-sm"
                         >
                           {entry.narrative}
+                        </BidiText>
+                      )}
+                      {entry.status === "draft" && entry.returnComment && (
+                        <BidiText
+                          as="p"
+                          className="text-sm whitespace-pre-wrap"
+                        >
+                          {entry.returnComment}
                         </BidiText>
                       )}
                     </div>

@@ -431,6 +431,27 @@
     "addEntry": "Dodaj wpis",
     "amount": "Kwota",
     "amountMustBePositive": "Kwota musi być większa od zera",
+    "approvalQueue": {
+      "approveVisible": "Zatwierdź wszystkie widoczne",
+      "billed": "Rozliczony czas",
+      "commentRequired": "Wprowadź komentarz wyjaśniający, co należy poprawić.",
+      "commentTooLong": "Użyj najwyżej 2000 znaków.",
+      "empty": "Żadne wpisy czasu nie oczekują na Twoje zatwierdzenie.",
+      "logged": "Zarejestrowany czas",
+      "refusals": {
+        "invalid_entry": "Popraw wpis przed zatwierdzeniem.",
+        "not_approver": "Nie jesteś osobą zatwierdzającą ten wpis.",
+        "not_found": "Ten wpis nie jest już dostępny.",
+        "running_timer": "Zatrzymaj działający stoper przed zatwierdzeniem.",
+        "time_period_locked": "Ten okres jest zablokowany.",
+        "unpriced": "Ustaw stawkę przed zatwierdzeniem tego rozliczalnego wpisu.",
+        "wrong_status": "Nie można zatwierdzić tego wpisu w obecnym stanie."
+      },
+      "returnComment": "Komentarz dla autora wpisu",
+      "returnEntry": "Zwróć do poprawy",
+      "selectEntry": "Wybierz wpis czasu",
+      "title": "Czas oczekujący na zatwierdzenie"
+    },
     "approve": "Zatwierdź",
     "approveSelected": "Zatwierdź zaznaczone",
     "batchActions": "Działania zbiorcze",

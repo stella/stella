@@ -431,6 +431,27 @@
     "addEntry": "Ajouter une entrée",
     "amount": "Montant",
     "amountMustBePositive": "Le montant doit être supérieur à zéro",
+    "approvalQueue": {
+      "approveVisible": "Approuver tous les éléments visibles",
+      "billed": "Temps facturé",
+      "commentRequired": "Saisissez un commentaire expliquant ce qui doit être corrigé.",
+      "commentTooLong": "Utilisez au maximum 2000 caractères.",
+      "empty": "Aucune entrée de temps n’attend votre approbation.",
+      "logged": "Temps enregistré",
+      "refusals": {
+        "invalid_entry": "Corrigez l’entrée avant l’approbation.",
+        "not_approver": "Vous n’êtes pas responsable de l’approbation de cette entrée.",
+        "not_found": "Cette entrée n’est plus disponible.",
+        "running_timer": "Arrêtez le chronomètre en cours avant l’approbation.",
+        "time_period_locked": "Cette période est verrouillée.",
+        "unpriced": "Définissez un tarif avant d’approuver cette entrée facturable.",
+        "wrong_status": "Cette entrée ne peut pas être approuvée dans son état actuel."
+      },
+      "returnComment": "Commentaire pour la personne ayant saisi le temps",
+      "returnEntry": "Renvoyer pour correction",
+      "selectEntry": "Sélectionner une entrée de temps",
+      "title": "Temps en attente d’approbation"
+    },
     "approve": "Approuver",
     "approveSelected": "Approuver la sélection",
     "batchActions": "Actions groupées",

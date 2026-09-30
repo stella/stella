@@ -434,6 +434,27 @@ type Messages = {
     "addEntry": "Add entry";
     "amount": "Amount";
     "amountMustBePositive": "Amount must be greater than zero";
+    "approvalQueue": {
+      "approveVisible": "Approve all visible";
+      "billed": "Billed time";
+      "commentRequired": "Enter a comment explaining what to correct.";
+      "commentTooLong": "Use at most 2000 characters.";
+      "empty": "No time entries await your approval.";
+      "logged": "Logged time";
+      "refusals": {
+        "invalid_entry": "Correct the entry before approval.";
+        "not_approver": "You are not the approver for this entry.";
+        "not_found": "This entry is no longer available.";
+        "running_timer": "Stop the running timer before approval.";
+        "time_period_locked": "This time period is locked.";
+        "unpriced": "Set a rate before approving this billable entry.";
+        "wrong_status": "This entry cannot be approved in its current status.";
+      };
+      "returnComment": "Comment for the timekeeper";
+      "returnEntry": "Return for correction";
+      "selectEntry": "Select time entry";
+      "title": "Time approval queue";
+    };
     "approve": "Approve";
     "approveSelected": "Approve selected";
     "batchActions": "Batch actions";

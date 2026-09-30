@@ -84,6 +84,15 @@ type MyTimeEntriesRoutes = {
   };
 };
 
+type TimeApprovalQueueRoutes = {
+  v1: {
+    "time-entries": Pick<
+      ApiV1Routes["time-entries"],
+      "approval-queue" | "approve"
+    >;
+  };
+};
+
 /**
  * Every API type apps/web consumes. apps/web never compiles the API: each
  * property is printed into apps/web/src/generated/api-routes.gen.ts by
@@ -94,6 +103,7 @@ export type WebApiContract = {
   WebRoutes: WebRoutes;
   CorrespondenceRoutes: CorrespondenceRoutes;
   MyTimeEntriesRoutes: MyTimeEntriesRoutes;
+  TimeApprovalQueueRoutes: TimeApprovalQueueRoutes;
   MemoriesRoutes: (typeof memoriesRoute)["~Routes"];
   ChatAnonRestoration: ChatAnonRestoration;
   ChatMessage: ChatMessage;

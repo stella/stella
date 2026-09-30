@@ -25,6 +25,7 @@ import { catalogueOptions } from "@/lib/knowledge/queries/catalogue";
 import { notificationsOptions } from "@/lib/notification-queries";
 import { organizationListOptions } from "@/lib/organization/queries";
 import { searchPreviewOptions } from "@/lib/search";
+import { approvalQueueOptions } from "@/lib/time-approval-queue";
 import { usageLaneOptions } from "@/lib/usage-queries";
 import { workspacesKeys } from "@/lib/workspaces/queries.logic";
 import {
@@ -385,8 +386,13 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     ],
   },
   "time-entries/approval-queue/list.ts": {
-    kind: "no-web-caller",
-    calls: ['api["time-entries"]["approval-queue"].get'],
+    kind: "keyed",
+    calls: ['timeApprovalQueueApi["approval-queue"].get'],
+    files: ["lib/time-approval-queue.ts"],
+    keys: () => [
+      approvalQueueOptions({ organizationId: ORG, userId: USER, filters: {} })
+        .queryKey,
+    ],
   },
   "time-entries/me/list.ts": {
     kind: "keyed",
