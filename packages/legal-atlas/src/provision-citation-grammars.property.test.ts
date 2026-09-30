@@ -220,19 +220,27 @@ describe("provision citation grammar properties", () => {
           const gazettes = locateGazetteCitations(text);
           expectSpans(text, provisions);
           expectSpans(text, gazettes);
-          expect(czech.locateAbbreviatedProvisions(prefix + text)).toEqual(
-            provisions.map((citation) => ({
+          const shiftedProvisions = [];
+          for (const citation of provisions) {
+            shiftedProvisions.push({
               ...citation,
               start: citation.start + prefix.length,
               end: citation.end + prefix.length,
-            })),
+            });
+          }
+          const shiftedGazettes = [];
+          for (const citation of gazettes) {
+            shiftedGazettes.push({
+              ...citation,
+              start: citation.start + prefix.length,
+              end: citation.end + prefix.length,
+            });
+          }
+          expect(czech.locateAbbreviatedProvisions(prefix + text)).toEqual(
+            shiftedProvisions,
           );
           expect(locateGazetteCitations(prefix + text)).toEqual(
-            gazettes.map((citation) => ({
-              ...citation,
-              start: citation.start + prefix.length,
-              end: citation.end + prefix.length,
-            })),
+            shiftedGazettes,
           );
           expect(performance.now() - started).toBeLessThan(2000);
         }),
