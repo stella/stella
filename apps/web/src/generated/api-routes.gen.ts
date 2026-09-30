@@ -26305,6 +26305,8 @@ export type WebRoutes = {
           response: {
             200: T13b00b267e;
             401: never;
+            403: "Organization membership not found";
+            409: "A firm-knowledge seed is already running";
             422: {
               type: "validation";
               on: string;
