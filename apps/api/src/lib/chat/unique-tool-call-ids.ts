@@ -19,8 +19,9 @@ import { isRecord } from "@/api/lib/type-guards";
 // window and compaction leave older turns out, and compaction inside a run
 // can drop the run's own earlier calls. So the ids a call must not reuse come
 // from a `ToolCallIdLedger` the caller seeds with every id the thread holds
-// and hands to each request of the run through `metadata`; a request without
-// one falls back to the ids its own history carries.
+// and binds to the run's adapter (`withRunToolCallIds`); a request through an
+// adapter without one falls back to the ids its own history carries. The
+// ledger never rides in the request, so no adapter can send it to a provider.
 
 /**
  * Where each chunk type carries a tool call id: the call a chunk starts, the
@@ -95,51 +96,20 @@ export class ToolCallIdLedger {
   }
 }
 
-const TOOL_CALL_ID_LEDGER_METADATA_KEY = "stellaToolCallIdLedger";
-
-/**
- * The `metadata` a run hands the engine so each of its requests reads
- * `ledger`. The engine passes `metadata` to every adapter request, and some
- * adapters (OpenAI Responses) send it to the provider, which accepts only
- * string values; `withoutToolCallIdLedger` keeps the ledger off the wire.
- */
-export const toolCallIdLedgerMetadata = (ledger: ToolCallIdLedger) => ({
-  [TOOL_CALL_ID_LEDGER_METADATA_KEY]: ledger,
-});
-
 type ToolCallIdRequest = {
+  /** The run's ledger; absent when the caller keeps none. */
+  ledger: ToolCallIdLedger | undefined;
   messages: readonly ModelMessage[];
-  metadata?: Record<string, unknown> | undefined;
-};
-
-/** `request` as an adapter may read it: its metadata without the ledger. */
-export const withoutToolCallIdLedger = <Request extends ToolCallIdRequest>(
-  request: Request,
-): Request => {
-  const { metadata } = request;
-  if (metadata?.[TOOL_CALL_ID_LEDGER_METADATA_KEY] === undefined) {
-    return request;
-  }
-  return {
-    ...request,
-    metadata: Object.fromEntries(
-      Object.entries(metadata).filter(
-        ([key]) => key !== TOOL_CALL_ID_LEDGER_METADATA_KEY,
-      ),
-    ),
-  };
 };
 
 /** The run's ledger with `request`'s history taken, or one for the request
  *  alone when the caller keeps none. */
-const ledgerFor = ({ messages, metadata }: ToolCallIdRequest) => {
-  const carried = metadata?.[TOOL_CALL_ID_LEDGER_METADATA_KEY];
-  const ledger =
-    carried instanceof ToolCallIdLedger ? carried : new ToolCallIdLedger([]);
+const ledgerFor = ({ ledger, messages }: ToolCallIdRequest) => {
+  const taken = ledger ?? new ToolCallIdLedger([]);
   for (const id of callIdsOf(messages)) {
-    ledger.take(id);
+    taken.take(id);
   }
-  return ledger;
+  return taken;
 };
 
 /** `id` with the first numeric suffix no call in `taken` holds. */
