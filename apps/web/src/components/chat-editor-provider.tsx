@@ -1364,64 +1364,73 @@ export const useChatEditor = ({
     [updateAttachments],
   );
 
-  const removeFile = (id: string) => {
-    updateAttachments(
-      attachmentsRef.current.filter((attachment) => attachment.id !== id),
-    );
-  };
+  const removeFile = useCallback(
+    (id: string) => {
+      updateAttachments(
+        attachmentsRef.current.filter((attachment) => attachment.id !== id),
+      );
+    },
+    [updateAttachments],
+  );
 
-  const handleDrop = (event: React.DragEvent) => {
-    const passage = readDecisionPassage(event.dataTransfer);
-    const targetEditor = editorRef.current;
-    if (passage !== null && targetEditor !== null) {
-      event.preventDefault();
-      targetEditor
-        .chain()
-        .focus()
-        .insertContent(decisionPassageContent(passage))
-        .run();
-      targetEditor.commands.setTextSelection(targetEditor.state.selection.to);
-      return;
-    }
-    if (event.dataTransfer.files.length > 0) {
-      event.preventDefault();
-      addFiles(event.dataTransfer.files);
-    }
-    // Anything else (dragged text) is the editor's own drop to handle.
-  };
+  const handleDrop = useCallback(
+    (event: React.DragEvent) => {
+      const passage = readDecisionPassage(event.dataTransfer);
+      const targetEditor = editorRef.current;
+      if (passage !== null && targetEditor !== null) {
+        event.preventDefault();
+        targetEditor
+          .chain()
+          .focus()
+          .insertContent(decisionPassageContent(passage))
+          .run();
+        targetEditor.commands.setTextSelection(targetEditor.state.selection.to);
+        return;
+      }
+      if (event.dataTransfer.files.length > 0) {
+        event.preventDefault();
+        addFiles(event.dataTransfer.files);
+      }
+      // Anything else (dragged text) is the editor's own drop to handle.
+    },
+    [addFiles],
+  );
 
-  const handlePaste = (event: React.ClipboardEvent) => {
-    const files: File[] = [];
+  const handlePaste = useCallback(
+    (event: React.ClipboardEvent) => {
+      const files: File[] = [];
 
-    for (const item of event.clipboardData.items) {
-      if (item.kind !== "file") {
-        continue;
+      for (const item of event.clipboardData.items) {
+        if (item.kind !== "file") {
+          continue;
+        }
+
+        const file = item.getAsFile();
+        if (file !== null) {
+          files.push(file);
+        }
       }
 
-      const file = item.getAsFile();
-      if (file !== null) {
-        files.push(file);
+      if (files.length === 0) {
+        // Plain-text paste collapsing happens earlier inside
+        // ProseMirror via `editorProps.handlePaste`; nothing to do
+        // at the React layer here.
+        return;
       }
-    }
 
-    if (files.length === 0) {
-      // Plain-text paste collapsing happens earlier inside
-      // ProseMirror via `editorProps.handlePaste`; nothing to do
-      // at the React layer here.
-      return;
-    }
+      event.preventDefault();
+      addFiles(files);
+    },
+    [addFiles],
+  );
 
-    event.preventDefault();
-    addFiles(files);
-  };
-
-  const openFilePicker = () => {
+  const openFilePicker = useCallback(() => {
     openBrowserFilePicker({
       accept: CHAT_FILE_INPUT_ACCEPT,
       multiple: true,
       onPick: addFiles,
     });
-  };
+  }, [addFiles]);
 
   const submit = useCallback(
     async (send: (draft: ChatInputDraft) => Promise<void> | void) => {
@@ -1489,22 +1498,45 @@ export const useChatEditor = ({
     [],
   );
 
-  return {
-    attachments,
-    blur,
-    canSubmit,
-    editor,
-    focus,
-    handleDragOver,
-    handleDrop,
-    handlePaste,
-    isEmpty,
-    openFilePicker,
-    placeholder: resolvedPlaceholder,
-    removeFile,
-    setContent,
-    setEditable,
-    setSubmitHandler,
-    submit,
-  };
+  // React Compiler leaves this hook unmemoized, so the controller and the
+  // callbacks above are memoized by hand: the page calling this hook
+  // re-renders while a response streams, and a fresh controller would
+  // re-render the composer with it.
+  return useMemo(
+    () => ({
+      attachments,
+      blur,
+      canSubmit,
+      editor,
+      focus,
+      handleDragOver,
+      handleDrop,
+      handlePaste,
+      isEmpty,
+      openFilePicker,
+      placeholder: resolvedPlaceholder,
+      removeFile,
+      setContent,
+      setEditable,
+      setSubmitHandler,
+      submit,
+    }),
+    [
+      attachments,
+      blur,
+      canSubmit,
+      editor,
+      focus,
+      handleDrop,
+      handlePaste,
+      isEmpty,
+      openFilePicker,
+      resolvedPlaceholder,
+      removeFile,
+      setContent,
+      setEditable,
+      setSubmitHandler,
+      submit,
+    ],
+  );
 };

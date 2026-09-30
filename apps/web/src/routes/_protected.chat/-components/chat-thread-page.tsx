@@ -430,7 +430,9 @@ export const ChatThreadPage = ({
     };
   }, []);
 
-  const handleSubmit = async (draft: ChatInputDraft) => {
+  // Stable across stream chunks: the composer takes this as a prop, and a
+  // closure over `messages` would re-render it once per chunk.
+  const handleSubmit = useLatestCallback(async (draft: ChatInputDraft) => {
     const newThreadMessages: string[] = [];
     const handledReserved = runReservedChatCommand(draft.html, {
       new: (args) => {
@@ -545,7 +547,7 @@ export const ChatThreadPage = ({
       return;
     }
     await sendMessage(await buildChatRequestMessage(draft));
-  };
+  });
 
   return (
     <RenderStormRegion name="chat-thread-page">
