@@ -857,71 +857,113 @@ const isBlockedIPv4 = (ip: IPv4): boolean => {
   return false;
 };
 
+type IPv6 = readonly [
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+];
+
+const expandIPv6 = (host: string): IPv6 | undefined => {
+  let hexadecimal = host;
+  if (host.includes(".")) {
+    const separator = host.lastIndexOf(":");
+    const ipv4 = parseIPv4(host.slice(separator + 1));
+    if (ipv4 === undefined) {
+      return undefined;
+    }
+    const [a, b, c, d] = ipv4;
+    hexadecimal = `${host.slice(0, separator + 1)}${(a * 256 + b).toString(16)}:${(c * 256 + d).toString(16)}`;
+  }
+
+  const [left = "", right, ...extra] = hexadecimal.split("::");
+  if (extra.length > 0) {
+    return undefined;
+  }
+  const leading = left === "" ? [] : left.split(":");
+  const trailing = right === undefined || right === "" ? [] : right.split(":");
+  const missing = 8 - leading.length - trailing.length;
+  if (right === undefined ? missing !== 0 : missing < 1) {
+    return undefined;
+  }
+  const parts = [
+    ...leading,
+    ...Array.from({ length: missing }, () => "0"),
+    ...trailing,
+  ];
+  if (parts.some((part) => !/^[0-9a-f]{1,4}$/iu.test(part))) {
+    return undefined;
+  }
+  const [a, b, c, d, e, f, g, h] = parts.map((part) =>
+    Number.parseInt(part, 16),
+  );
+  if (
+    a === undefined ||
+    b === undefined ||
+    c === undefined ||
+    d === undefined ||
+    e === undefined ||
+    f === undefined ||
+    g === undefined ||
+    h === undefined
+  ) {
+    return undefined;
+  }
+  return [a, b, c, d, e, f, g, h];
+};
+
+const ipv4FromHextets = (high: number, low: number): IPv4 => [
+  Math.trunc(high / 256),
+  high % 256,
+  Math.trunc(low / 256),
+  low % 256,
+];
+
 const isBlockedIPv6 = (host: string): boolean => {
-  const compressed = host.toLowerCase();
-
-  if (compressed === "::" || compressed === "::1") {
+  const expanded = expandIPv6(host);
+  if (expanded === undefined) {
     return true;
   }
-
-  // The first hextet of fe80::/10, fc00::/7, and ff00::/8 is always
-  // ≥ 0x1000, so URL normalization keeps all four hex digits — no
-  // leading-zero forms like `fe8::` to worry about, and matching
-  // shorter prefixes here would over-block legitimate addresses.
-
-  if (/^fe[89ab][0-9a-f]:/u.test(compressed)) {
-    return true;
-  }
-
-  if (/^f[cd][0-9a-f]{2}:/u.test(compressed)) {
-    return true;
-  }
-
-  if (/^ff[0-9a-f]{2}:/u.test(compressed)) {
-    return true;
-  }
+  const [a, b, c, d, e, f, g, h] = expanded;
 
   if (
-    compressed.startsWith("2001:db8:") ||
-    compressed.startsWith("2001:2:") ||
-    compressed.startsWith("100:")
+    (a >= 0xfe_80 && a <= 0xfe_bf) ||
+    (a >= 0xfc_00 && a <= 0xfd_ff) ||
+    a >= 0xff_00 ||
+    (a === 0x20_01 && (b === 0x0d_b8 || b === 2)) ||
+    a === 0x01_00
   ) {
     return true;
   }
 
-  const dotted = /^::(?:ffff:)?(?<dottedIp>\d{1,3}(?:\.\d{1,3}){3})$/u.exec(
-    compressed,
-  );
-  const dottedIp = dotted?.groups?.["dottedIp"];
-  if (dottedIp !== undefined) {
-    const ipv4 = parseIPv4(dottedIp);
-    if (ipv4 && isBlockedIPv4(ipv4)) {
+  if (a === 0 && b === 0 && c === 0 && d === 0 && e === 0) {
+    if (f === 0) {
+      return true;
+    }
+    if (f === 0xff_ff) {
+      return isBlockedIPv4(ipv4FromHextets(g, h));
+    }
+  }
+
+  if (a === 0x00_64 && b === 0xff_9b) {
+    if (c === 0 && d === 0 && e === 0 && f === 0) {
+      return isBlockedIPv4(ipv4FromHextets(g, h));
+    }
+    if (c === 1) {
       return true;
     }
   }
 
-  // The URL parser normalizes ::ffff:127.0.0.1 → ::ffff:7f00:1.
-  // Decode the trailing two hextets back to four IPv4 octets.
-  const hex =
-    /^::(?:ffff:)?(?<high>[0-9a-f]{1,4}):(?<low>[0-9a-f]{1,4})$/u.exec(
-      compressed,
-    );
-  const hexHigh = hex?.groups?.["high"];
-  const hexLow = hex?.groups?.["low"];
-  if (hexHigh !== undefined && hexLow !== undefined) {
-    const high = Number.parseInt(hexHigh, 16);
-    const low = Number.parseInt(hexLow, 16);
-    const ipv4: IPv4 = [
-      Math.trunc(high / 256),
-      high % 256,
-      Math.trunc(low / 256),
-      low % 256,
-    ];
-    if (isBlockedIPv4(ipv4)) {
-      return true;
-    }
+  if (a === 0x20_02) {
+    return isBlockedIPv4(ipv4FromHextets(b, c));
   }
-
+  if (a === 0x20_01 && b === 0) {
+    return isBlockedIPv4(ipv4FromHextets(0xff_ff - g, 0xff_ff - h));
+  }
   return false;
 };
 
