@@ -25,7 +25,7 @@ export type CaseLawIngestionBatchRecord =
   | RejectedCaseLawIngestionRecord;
 
 /** Column bound of `case_law_ingestion_failures.record_identity`. */
-export const RECORD_IDENTITY_MAX_LENGTH = 256;
+const RECORD_IDENTITY_MAX_LENGTH = 256;
 
 /**
  * What one applied batch may carry. The byte bound measures the records as
