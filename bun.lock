@@ -388,6 +388,7 @@
         "@stll/folio-agents": "catalog:",
         "@stll/folio-core": "catalog:",
         "@stll/folio-react": "catalog:",
+        "@stll/invoicing": "workspace:*",
         "@stll/legal-ast": "workspace:*",
         "@stll/legal-atlas": "workspace:*",
         "@stll/locales": "workspace:*",
