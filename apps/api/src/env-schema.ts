@@ -24,6 +24,9 @@ type EmailProviderInput = {
   SMTP_USERNAME?: string | undefined;
 };
 
+// Keep retention cutoffs in positive ISO years supported by timestamptz.
+const MAX_ACTION_COST_RETENTION_DAYS = 365_000;
+
 export const resolveEmailProvider = ({
   EMAIL_PROVIDER,
   SMTP_HOST,
@@ -351,7 +354,7 @@ export const envApiServerSchema = {
       v.toNumber(),
       v.integer(),
       v.minValue(1),
-      v.maxValue(100_000_000),
+      v.maxValue(MAX_ACTION_COST_RETENTION_DAYS),
     ),
   ),
   ACTION_ADMISSION_ORG_CONCURRENCY: v.optional(

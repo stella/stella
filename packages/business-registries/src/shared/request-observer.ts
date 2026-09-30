@@ -19,7 +19,11 @@ export const notifyRegistryRequest = (): void => {
       catch: (error: unknown) => error,
     });
     if (Result.isError(result)) {
-      observer.onError(result.error);
+      // A failing last-resort reporter must not prevent requests or observers.
+      Result.try({
+        try: () => observer.onError(result.error),
+        catch: (error: unknown) => error,
+      });
     }
   }
 };

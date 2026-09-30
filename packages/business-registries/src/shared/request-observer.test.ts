@@ -50,6 +50,16 @@ test("observation failures leave actual outbound attempts and responses intact",
     },
     onError: () => {
       reported += 1;
+      throw new TypeError("fixture reporter failure");
+    },
+  });
+  let laterObserved = 0;
+  const unsubscribeLater = observeRegistryRequests({
+    onRequest: () => {
+      laterObserved += 1;
+    },
+    onError: () => {
+      throw new TypeError("unexpected later observer failure");
     },
   });
   try {
@@ -64,6 +74,7 @@ test("observation failures leave actual outbound attempts and responses intact",
     expect(outbound).toBe(2);
     expect(observed).toBe(outbound);
     expect(reported).toBe(outbound);
+    expect(laterObserved).toBe(outbound);
     const controller = new AbortController();
     controller.abort(new TypeError("fixture abort"));
     const aborted = await performRegistryRequest({
@@ -80,6 +91,7 @@ test("observation failures leave actual outbound attempts and responses intact",
     expect(observed).toBe(2);
   } finally {
     unsubscribe();
+    unsubscribeLater();
     globalThis.fetch = originalFetch;
   }
 });

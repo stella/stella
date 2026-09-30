@@ -9,6 +9,7 @@ import { emitActionCostDropMetric } from "@/api/lib/observability/request-metric
 import { createObservationBuffer } from "./buffer";
 import { parseActionCostRates } from "./config";
 import type { ActionCostObservation, ActionCostRecorder } from "./context";
+import { createDropReporter } from "./drop-reporter";
 
 class ActionCostObservationError extends TaggedError(
   "ActionCostObservationError",
@@ -37,6 +38,7 @@ const reportDrop = (dropped: number, cause?: unknown): void => {
     { sink: COST_FAILURE },
   );
 };
+const drops = createDropReporter({ report: reportDrop });
 
 const createRecorder = () => {
   const estimates = parseActionCostRates(env.ACTION_COST_ESTIMATES);
@@ -59,8 +61,8 @@ const createRecorder = () => {
       const { writeActionCostObservations } = await import("./store");
       await writeActionCostObservations(batch);
     },
-    onFailure: (cause, dropped) => reportDrop(dropped, cause),
-    onOverflow: () => reportDrop(1),
+    onFailure: (cause, dropped) => drops.add(dropped, cause),
+    onOverflow: () => drops.add(1),
   });
   return {
     ...buffer,
@@ -78,7 +80,9 @@ export const getActionCostRecorder = (): ActionCostRecorder | undefined => {
 };
 
 export const flushActionCostRecords = async (): Promise<void> => {
+  drops.flush();
   await recorder?.flush();
+  drops.flush();
 };
 
-export const reportMissingActionCostIdentity = (): void => reportDrop(1);
+export const reportMissingActionCostIdentity = (): void => drops.add(1);
