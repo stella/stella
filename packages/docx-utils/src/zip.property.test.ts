@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import fc from "fast-check";
 import JSZip from "jszip";
 
@@ -256,4 +256,174 @@ test(
     );
   },
   propertyTestTimeout(5000),
+);
+
+type DirectoryFixtureOptions = {
+  names: string[];
+  count?: number;
+  sizeAdjustment?: number;
+  declaredSize?: number;
+  zip64?: "valid" | "offset" | "count" | "extension";
+};
+
+const directoryFixture = ({
+  names,
+  count = names.length,
+  sizeAdjustment = 0,
+  declaredSize = 0,
+  zip64,
+}: DirectoryFixtureOptions): Uint8Array => {
+  const encoded = names.map((name) => new TextEncoder().encode(name));
+  const localSize = encoded.reduce((sum, name) => sum + 30 + name.length, 0);
+  const directorySize = encoded.reduce(
+    (sum, name) => sum + 46 + name.length,
+    0,
+  );
+  const bytes = new Uint8Array(
+    localSize + directorySize + (zip64 ? 76 : 0) + 22,
+  );
+  const view = new DataView(bytes.buffer);
+  let local = 0;
+  let central = localSize;
+  for (const name of encoded) {
+    view.setUint32(local, 0x04_03_4b_50, true);
+    view.setUint16(local + 4, 20, true);
+    view.setUint16(local + 26, name.length, true);
+    bytes.set(name, local + 30);
+    view.setUint32(central, 0x02_01_4b_50, true);
+    view.setUint16(central + 4, 20, true);
+    view.setUint16(central + 6, 20, true);
+    view.setUint32(central + 24, declaredSize, true);
+    view.setUint16(central + 28, name.length, true);
+    view.setUint32(central + 42, local, true);
+    bytes.set(name, central + 46);
+    local += 30 + name.length;
+    central += 46 + name.length;
+  }
+  if (zip64) {
+    view.setUint32(central, 0x06_06_4b_50, true);
+    view.setBigUint64(central + 4, zip64 === "extension" ? 45n : 44n, true);
+    view.setUint16(central + 12, 45, true);
+    view.setUint16(central + 14, 45, true);
+    view.setBigUint64(central + 24, BigInt(count), true);
+    view.setBigUint64(
+      central + 32,
+      zip64 === "count" ? 0x1_00_00_00_01n : BigInt(count),
+      true,
+    );
+    view.setBigUint64(central + 40, BigInt(directorySize), true);
+    view.setBigUint64(central + 48, BigInt(localSize), true);
+    view.setUint32(central + 56, 0x07_06_4b_50, true);
+    view.setBigUint64(
+      central + 64,
+      zip64 === "offset" ? 0x1_00_00_00_00n + BigInt(central) : BigInt(central),
+      true,
+    );
+    view.setUint32(central + 72, 1, true);
+    central += 76;
+  }
+  view.setUint32(central, 0x06_05_4b_50, true);
+  view.setUint16(central + 8, zip64 ? 65_535 : count, true);
+  view.setUint16(central + 10, zip64 ? 65_535 : count, true);
+  view.setUint32(
+    central + 12,
+    zip64 ? 0xff_ff_ff_ff : directorySize + sizeAdjustment,
+    true,
+  );
+  view.setUint32(central + 16, zip64 ? 0xff_ff_ff_ff : localSize, true);
+  return bytes;
+};
+
+test(
+  "archive metadata is checked before loading",
+  async () => {
+    const loader = spyOn(JSZip, "loadAsync");
+    try {
+      await fc.assert(
+        fc.asyncProperty(fc.integer({ min: 2, max: 20 }), async (count) => {
+          const names = Array.from(
+            { length: count },
+            (_, id) => `part-${id}.bin`,
+          );
+          const fixtures = [
+            { names, count: 1 },
+            { names: Array.from({ length: count }, () => "part.bin") },
+            { names, count: count - 1 },
+            { names, sizeAdjustment: -1 },
+            { names, sizeAdjustment: 1 },
+            { names, zip64: "offset" },
+            { names, zip64: "count" },
+            { names, zip64: "extension" },
+            { names, declaredSize: DOCX_MAX_ENTRY_BYTES + 1 },
+          ] as const satisfies readonly DirectoryFixtureOptions[];
+          for (const fixture of fixtures) {
+            loader.mockClear();
+            await expectArchiveError(
+              loadDocx(directoryFixture(fixture), {
+                maxEntries:
+                  "count" in fixture && fixture.count === 1 ? count - 1 : count,
+              }),
+            );
+            expect(loader).not.toHaveBeenCalled();
+          }
+        }),
+        propertyConfig({ seed: propertySeed(), numRuns: 20 }),
+      );
+    } finally {
+      loader.mockRestore();
+    }
+  },
+  propertyTestTimeout(5000),
+);
+
+test("archive loading supports fixed ZIP64 metadata", async () => {
+  const zip = await loadDocx(
+    directoryFixture({ names: ["part.bin"], zip64: "valid" }),
+  );
+  expect(await extractText(zip, "part.bin")).toBe("");
+});
+
+test(
+  "archive loading supports representative part counts",
+  async () => {
+    const buffer = await buildZip(
+      Array.from({ length: 4000 }, (_, id) => ({
+        path: `word/part-${id}.bin`,
+        bytes: new Uint8Array([id % 256]),
+      })),
+    );
+    const zip = await loadDocx(buffer);
+    expect(Object.keys(zip.files)).toHaveLength(4000);
+    expect(
+      new Uint8Array(
+        (await extractBinary(zip, "word/part-3999.bin")) ?? new ArrayBuffer(0),
+      ),
+    ).toEqual(new Uint8Array([3999 % 256]));
+  },
+  propertyTestTimeout(15_000),
+);
+
+test(
+  "archive loading supports representative part sizes",
+  async () => {
+    const image = new Uint8Array(8 * 1024 * 1024).fill(73);
+    const buffer = await buildZip(
+      Array.from({ length: 3 }, (_, id) => ({
+        path: `word/media/image-${id}.bin`,
+        bytes: image,
+      })),
+    );
+    const zip = await loadDocx(buffer, {
+      maxEntryBytes: 9 * 1024 * 1024,
+      maxTotalBytes: 25 * 1024 * 1024,
+    });
+    for (let id = 0; id < 3; id++) {
+      const content = await extractBinary(zip, `word/media/image-${id}.bin`);
+      expect(content?.byteLength).toBe(image.length);
+      const bytes = new Uint8Array(content ?? new ArrayBuffer(0));
+      expect(bytes.at(0)).toBe(73);
+      expect(bytes.at(-1)).toBe(73);
+    }
+  },
+  propertyTestTimeout(15_000),
 );
