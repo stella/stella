@@ -851,6 +851,7 @@ export type WebRoutes = {
             message: string;
             hint?: string;
             contactUrl?: string;
+            retryable?: false | true;
             issues?: Array<Tfbf26a7023>;
             reason?: string;
             required?: number;
@@ -922,6 +923,7 @@ export type WebRoutes = {
               message: string;
               hint?: string;
               contactUrl?: string;
+              retryable?: false | true;
               issues?: Array<Tfbf26a7023>;
               reason?: string;
               required?: number;
@@ -1031,11 +1033,11 @@ export type WebRoutes = {
             400: T731ffd6028;
             401: T731ffd6028;
             402: T731ffd6028;
-            403: (T88c9f08c40 | T86f61f0431 | "Forbidden");
+            403: (T4aff756e87 | T86f61f0431 | "Forbidden");
             404: T731ffd6028;
             409: T731ffd6028;
             413: T731ffd6028;
-            422: (T88c9f08c40 | T86f61f0431 | {
+            422: (T4aff756e87 | T86f61f0431 | {
               type: "validation";
               on: string;
               summary?: string;
@@ -1052,6 +1054,7 @@ export type WebRoutes = {
               message: string;
               hint?: string;
               contactUrl?: string;
+              retryable?: false | true;
               issues?: Array<Tfbf26a7023>;
               reason?: string;
               required?: number;
@@ -1111,6 +1114,7 @@ export type WebRoutes = {
               message: string;
               hint?: string;
               contactUrl?: string;
+              retryable?: false | true;
               issues?: Array<Tfbf26a7023>;
               reason?: string;
               required?: number;
@@ -1132,12 +1136,13 @@ export type WebRoutes = {
             };
             401: T68cafa3445;
             402: T68cafa3445;
-            403: (T4b9b133dc4 | Tfa94fa9804 | "Forbidden");
+            403: (Tf1048cd75f | Tfa94fa9804 | "Forbidden");
             404: {
               code?: string;
               message: string;
               hint?: string;
               contactUrl?: string;
+              retryable?: false | true;
               issues?: Array<Tfbf26a7023>;
               reason?: string;
               required?: number;
@@ -1159,7 +1164,7 @@ export type WebRoutes = {
             };
             409: T68cafa3445;
             413: T68cafa3445;
-            422: (T4b9b133dc4 | Tfa94fa9804 | {
+            422: (Tf1048cd75f | Tfa94fa9804 | {
               type: "validation";
               on: string;
               summary?: string;
@@ -1176,6 +1181,7 @@ export type WebRoutes = {
               message: string;
               hint?: string;
               contactUrl?: string;
+              retryable?: false | true;
               issues?: Array<Tfbf26a7023>;
               reason?: string;
               required?: number;
@@ -1231,6 +1237,7 @@ export type WebRoutes = {
                 message: string;
                 hint?: string;
                 contactUrl?: string;
+                retryable?: false | true;
                 issues?: Array<Tfbf26a7023>;
                 reason?: string;
                 required?: number;
@@ -1270,6 +1277,7 @@ export type WebRoutes = {
                 message: string;
                 hint?: string;
                 contactUrl?: string;
+                retryable?: false | true;
                 issues?: Array<Tfbf26a7023>;
                 reason?: string;
                 required?: number;
@@ -2634,6 +2642,7 @@ export type WebRoutes = {
                 message: string;
                 hint?: string;
                 contactUrl?: string;
+                retryable?: false | true;
                 issues?: Array<Tfbf26a7023>;
                 reason?: string;
                 required?: number;
@@ -2659,6 +2668,7 @@ export type WebRoutes = {
                 message: string;
                 hint?: string;
                 contactUrl?: string;
+                retryable?: false | true;
                 issues?: Array<Tfbf26a7023>;
                 reason?: string;
                 required?: number;
@@ -2725,6 +2735,7 @@ export type WebRoutes = {
                   message: string;
                   hint?: string;
                   contactUrl?: string;
+                  retryable?: false | true;
                   issues?: Array<Tfbf26a7023>;
                   reason?: string;
                   required?: number;
@@ -2900,6 +2911,7 @@ export type WebRoutes = {
                 message: string;
                 hint?: string;
                 contactUrl?: string;
+                retryable?: false | true;
                 issues?: Array<Tfbf26a7023>;
                 reason?: string;
                 required?: number;
@@ -2966,6 +2978,7 @@ export type WebRoutes = {
                 message: string;
                 hint?: string;
                 contactUrl?: string;
+                retryable?: false | true;
                 issues?: Array<Tfbf26a7023>;
                 reason?: string;
                 required?: number;
@@ -2991,6 +3004,7 @@ export type WebRoutes = {
                 message: string;
                 hint?: string;
                 contactUrl?: string;
+                retryable?: false | true;
                 issues?: Array<Tfbf26a7023>;
                 reason?: string;
                 required?: number;
@@ -3056,6 +3070,7 @@ export type WebRoutes = {
                   message: string;
                   hint?: string;
                   contactUrl?: string;
+                  retryable?: false | true;
                   issues?: Array<Tfbf26a7023>;
                   reason?: string;
                   required?: number;
@@ -3081,6 +3096,7 @@ export type WebRoutes = {
                   message: string;
                   hint?: string;
                   contactUrl?: string;
+                  retryable?: false | true;
                   issues?: Array<Tfbf26a7023>;
                   reason?: string;
                   required?: number;
@@ -3105,6 +3121,7 @@ export type WebRoutes = {
                   message: string;
                   hint?: string;
                   contactUrl?: string;
+                  retryable?: false | true;
                   issues?: Array<Tfbf26a7023>;
                   reason?: string;
                   required?: number;
@@ -3206,6 +3223,7 @@ export type WebRoutes = {
                   message: string;
                   hint?: string;
                   contactUrl?: string;
+                  retryable?: false | true;
                   issues?: Array<Tfbf26a7023>;
                   reason?: string;
                   required?: number;
@@ -3267,6 +3285,7 @@ export type WebRoutes = {
                     message: string;
                     hint?: string;
                     contactUrl?: string;
+                    retryable?: false | true;
                     issues?: Array<Tfbf26a7023>;
                     reason?: string;
                     required?: number;
@@ -3292,6 +3311,7 @@ export type WebRoutes = {
                     message: string;
                     hint?: string;
                     contactUrl?: string;
+                    retryable?: false | true;
                     issues?: Array<Tfbf26a7023>;
                     reason?: string;
                     required?: number;
@@ -9275,6 +9295,7 @@ export type WebRoutes = {
               message: string;
               hint?: string;
               contactUrl?: string;
+              retryable?: false | true;
               issues?: Array<Tfbf26a7023>;
               reason?: string;
               required?: number;
@@ -9336,6 +9357,7 @@ export type WebRoutes = {
                 message: string;
                 hint?: string;
                 contactUrl?: string;
+                retryable?: false | true;
                 issues?: Array<Tfbf26a7023>;
                 reason?: string;
                 required?: number;
@@ -9399,6 +9421,7 @@ export type WebRoutes = {
                 message: string;
                 hint?: string;
                 contactUrl?: string;
+                retryable?: false | true;
                 issues?: Array<Tfbf26a7023>;
                 reason?: string;
                 required?: number;
@@ -9463,6 +9486,7 @@ export type WebRoutes = {
                 message: string;
                 hint?: string;
                 contactUrl?: string;
+                retryable?: false | true;
                 issues?: Array<Tfbf26a7023>;
                 reason?: string;
                 required?: number;
@@ -9587,6 +9611,7 @@ export type WebRoutes = {
                   message: string;
                   hint?: string;
                   contactUrl?: string;
+                  retryable?: false | true;
                   issues?: Array<Tfbf26a7023>;
                   reason?: string;
                   required?: number;
@@ -9612,6 +9637,7 @@ export type WebRoutes = {
                   message: string;
                   hint?: string;
                   contactUrl?: string;
+                  retryable?: false | true;
                   issues?: Array<Tfbf26a7023>;
                   reason?: string;
                   required?: number;
@@ -9737,6 +9763,7 @@ export type WebRoutes = {
                   message: string;
                   hint?: string;
                   contactUrl?: string;
+                  retryable?: false | true;
                   issues?: Array<Tfbf26a7023>;
                   reason?: string;
                   required?: number;
@@ -9762,6 +9789,7 @@ export type WebRoutes = {
                   message: string;
                   hint?: string;
                   contactUrl?: string;
+                  retryable?: false | true;
                   issues?: Array<Tfbf26a7023>;
                   reason?: string;
                   required?: number;
@@ -9827,6 +9855,7 @@ export type WebRoutes = {
                       message: string;
                       hint?: string;
                       contactUrl?: string;
+                      retryable?: false | true;
                       issues?: Array<Tfbf26a7023>;
                       reason?: string;
                       required?: number;
@@ -9906,6 +9935,7 @@ export type WebRoutes = {
                       message: string;
                       hint?: string;
                       contactUrl?: string;
+                      retryable?: false | true;
                       issues?: Array<Tfbf26a7023>;
                       reason?: string;
                       required?: number;
@@ -9931,6 +9961,7 @@ export type WebRoutes = {
                       message: string;
                       hint?: string;
                       contactUrl?: string;
+                      retryable?: false | true;
                       issues?: Array<Tfbf26a7023>;
                       reason?: string;
                       required?: number;
@@ -10006,6 +10037,7 @@ export type WebRoutes = {
                 message: string;
                 hint?: string;
                 contactUrl?: string;
+                retryable?: false | true;
                 issues?: Array<Tfbf26a7023>;
                 reason?: string;
                 required?: number;
@@ -10076,6 +10108,7 @@ export type WebRoutes = {
                   message: string;
                   hint?: string;
                   contactUrl?: string;
+                  retryable?: false | true;
                   issues?: Array<Tfbf26a7023>;
                   reason?: string;
                   required?: number;
@@ -14503,6 +14536,7 @@ export type WebRoutes = {
                   message: string;
                   hint?: string;
                   contactUrl?: string;
+                  retryable?: false | true;
                   issues?: Array<Tfbf26a7023>;
                   reason?: string;
                   required?: number;
@@ -14671,6 +14705,7 @@ export type WebRoutes = {
                   message: string;
                   hint?: string;
                   contactUrl?: string;
+                  retryable?: false | true;
                   issues?: Array<Tfbf26a7023>;
                   reason?: string;
                   required?: number;
@@ -16204,6 +16239,7 @@ export type WebRoutes = {
             message: string;
             hint?: string;
             contactUrl?: string;
+            retryable?: false | true;
             issues?: Array<Tfbf26a7023>;
             reason?: string;
             required?: number;
@@ -16229,6 +16265,7 @@ export type WebRoutes = {
             message: string;
             hint?: string;
             contactUrl?: string;
+            retryable?: false | true;
             issues?: Array<Tfbf26a7023>;
             reason?: string;
             required?: number;
@@ -16292,6 +16329,7 @@ export type WebRoutes = {
               message: string;
               hint?: string;
               contactUrl?: string;
+              retryable?: false | true;
               issues?: Array<Tfbf26a7023>;
               reason?: string;
               required?: number;
@@ -16319,6 +16357,7 @@ export type WebRoutes = {
               message: string;
               hint?: string;
               contactUrl?: string;
+              retryable?: false | true;
               issues?: Array<Tfbf26a7023>;
               reason?: string;
               required?: number;
@@ -16875,6 +16914,7 @@ export type WebRoutes = {
             message: string;
             hint?: string;
             contactUrl?: string;
+            retryable?: false | true;
             issues?: Array<Tfbf26a7023>;
             reason?: string;
             required?: number;
@@ -20518,6 +20558,7 @@ export type WebRoutes = {
               message: string;
               hint?: string;
               contactUrl?: string;
+              retryable?: false | true;
               issues?: Array<Tfbf26a7023>;
               reason?: string;
               required?: number;
@@ -20543,6 +20584,7 @@ export type WebRoutes = {
               message: string;
               hint?: string;
               contactUrl?: string;
+              retryable?: false | true;
               issues?: Array<Tfbf26a7023>;
               reason?: string;
               required?: number;
@@ -20600,6 +20642,7 @@ export type WebRoutes = {
                 message: string;
                 hint?: string;
                 contactUrl?: string;
+                retryable?: false | true;
                 issues?: Array<Tfbf26a7023>;
                 reason?: string;
                 required?: number;
@@ -20625,6 +20668,7 @@ export type WebRoutes = {
                 message: string;
                 hint?: string;
                 contactUrl?: string;
+                retryable?: false | true;
                 issues?: Array<Tfbf26a7023>;
                 reason?: string;
                 required?: number;
@@ -20683,6 +20727,7 @@ export type WebRoutes = {
                 message: string;
                 hint?: string;
                 contactUrl?: string;
+                retryable?: false | true;
                 issues?: Array<Tfbf26a7023>;
                 reason?: string;
                 required?: number;
@@ -20708,6 +20753,7 @@ export type WebRoutes = {
                 message: string;
                 hint?: string;
                 contactUrl?: string;
+                retryable?: false | true;
                 issues?: Array<Tfbf26a7023>;
                 reason?: string;
                 required?: number;
@@ -20782,6 +20828,7 @@ export type WebRoutes = {
                 message: string;
                 hint?: string;
                 contactUrl?: string;
+                retryable?: false | true;
                 issues?: Array<Tfbf26a7023>;
                 reason?: string;
                 required?: number;
@@ -20807,6 +20854,7 @@ export type WebRoutes = {
                 message: string;
                 hint?: string;
                 contactUrl?: string;
+                retryable?: false | true;
                 issues?: Array<Tfbf26a7023>;
                 reason?: string;
                 required?: number;
@@ -20957,6 +21005,7 @@ export type WebRoutes = {
                   message: string;
                   hint?: string;
                   contactUrl?: string;
+                  retryable?: false | true;
                   issues?: Array<Tfbf26a7023>;
                   reason?: string;
                   required?: number;
@@ -21189,6 +21238,7 @@ export type WebRoutes = {
                   message: string;
                   hint?: string;
                   contactUrl?: string;
+                  retryable?: false | true;
                   issues?: Array<Tfbf26a7023>;
                   reason?: string;
                   required?: number;
@@ -21217,6 +21267,7 @@ export type WebRoutes = {
                   message: string;
                   hint?: string;
                   contactUrl?: string;
+                  retryable?: false | true;
                   issues?: Array<Tfbf26a7023>;
                   reason?: string;
                   required?: number;
@@ -21335,6 +21386,7 @@ export type WebRoutes = {
                 message: string;
                 hint?: string;
                 contactUrl?: string;
+                retryable?: false | true;
                 issues?: Array<Tfbf26a7023>;
                 reason?: string;
                 required?: number;
@@ -21360,6 +21412,7 @@ export type WebRoutes = {
                 message: string;
                 hint?: string;
                 contactUrl?: string;
+                retryable?: false | true;
                 issues?: Array<Tfbf26a7023>;
                 reason?: string;
                 required?: number;
@@ -21427,6 +21480,7 @@ export type WebRoutes = {
                 message: string;
                 hint?: string;
                 contactUrl?: string;
+                retryable?: false | true;
                 issues?: Array<Tfbf26a7023>;
                 reason?: string;
                 required?: number;
@@ -21599,6 +21653,7 @@ export type WebRoutes = {
                 message: string;
                 hint?: string;
                 contactUrl?: string;
+                retryable?: false | true;
                 issues?: Array<Tfbf26a7023>;
                 reason?: string;
                 required?: number;
@@ -21664,6 +21719,7 @@ export type WebRoutes = {
                   message: string;
                   hint?: string;
                   contactUrl?: string;
+                  retryable?: false | true;
                   issues?: Array<Tfbf26a7023>;
                   reason?: string;
                   required?: number;
@@ -21689,6 +21745,7 @@ export type WebRoutes = {
                   message: string;
                   hint?: string;
                   contactUrl?: string;
+                  retryable?: false | true;
                   issues?: Array<Tfbf26a7023>;
                   reason?: string;
                   required?: number;
@@ -21724,6 +21781,7 @@ export type WebRoutes = {
                   message: string;
                   hint?: string;
                   contactUrl?: string;
+                  retryable?: false | true;
                   issues?: Array<Tfbf26a7023>;
                   reason?: string;
                   required?: number;
@@ -22347,6 +22405,7 @@ export type WebRoutes = {
                 message: string;
                 hint?: string;
                 contactUrl?: string;
+                retryable?: false | true;
                 issues?: Array<Tfbf26a7023>;
                 reason?: string;
                 required?: number;
@@ -22372,6 +22431,7 @@ export type WebRoutes = {
                 message: string;
                 hint?: string;
                 contactUrl?: string;
+                retryable?: false | true;
                 issues?: Array<Tfbf26a7023>;
                 reason?: string;
                 required?: number;
@@ -22485,6 +22545,7 @@ export type WebRoutes = {
                   message: string;
                   hint?: string;
                   contactUrl?: string;
+                  retryable?: false | true;
                   issues?: Array<Tfbf26a7023>;
                   reason?: string;
                   required?: number;
@@ -36786,6 +36847,7 @@ type T4498be3bc0 = {
   message: string;
   hint?: string;
   contactUrl?: string;
+  retryable?: false | true;
   issues?: Array<Tfbf26a7023>;
   reason?: string;
   required?: number;
@@ -36940,6 +37002,28 @@ type T4ada5516f7 = Td236e2b0da | null;
 
 type T4ae6d071f3 = "heading" | "listItem" | "paragraph" | "table";
 
+type T4aff756e87 = {
+  code?: string;
+  message: string;
+  hint?: string;
+  contactUrl?: string;
+  retryable?: false | true;
+  issues?: Array<Tfbf26a7023>;
+  reason?: string;
+  required?: number;
+  available?: number;
+  confirmation?: T0d3b649ce9;
+  error?: string;
+  claim?: T753574bc22;
+  registration_id?: string;
+  registration_type?: string;
+  claim_url?: string;
+  claim_token?: string;
+  claim_token_expires?: string;
+  post_claim_scopes?: Array<string>;
+  requiredFields?: Array<T81694d3f69>;
+};
+
 type T4b0612714b = {
   street: Tbe0400fa4c;
   postalCode: Tbe0400fa4c;
@@ -36959,27 +37043,6 @@ type T4b08c72cf3 = {
 } & T4d73965770;
 
 type T4b83723412 = "anthropic" | "bedrock" | "google" | "mistral" | "openai" | "openrouter";
-
-type T4b9b133dc4 = {
-  code?: string;
-  message: string;
-  hint?: string;
-  contactUrl?: string;
-  issues?: Array<Tfbf26a7023>;
-  reason?: string;
-  required?: number;
-  available?: number;
-  confirmation?: T0d3b649ce9;
-  error?: string;
-  claim?: T753574bc22;
-  registration_id?: string;
-  registration_type?: string;
-  claim_url?: string;
-  claim_token?: string;
-  claim_token_expires?: string;
-  post_claim_scopes?: Array<string>;
-  requiredFields?: Array<T81694d3f69>;
-};
 
 type T4c3eeb6df3 = {
   readonly type: "workspace";
@@ -37631,7 +37694,7 @@ type T68b623e94c = {
   file: File;
 };
 
-type T68cafa3445 = T4b9b133dc4 | Tfa94fa9804;
+type T68cafa3445 = Tf1048cd75f | Tfa94fa9804;
 
 type T690ddaefc0 = {
   documentRef: string;
@@ -37896,6 +37959,7 @@ type T7213122d77 = {
   message: string;
   hint?: string;
   contactUrl?: string;
+  retryable?: false | true;
   issues?: Array<Tfbf26a7023>;
   reason?: string;
   required?: number;
@@ -37939,7 +38003,7 @@ type T72f7776665 = {
   lastActivityAt: string;
 };
 
-type T731ffd6028 = T88c9f08c40 | T86f61f0431;
+type T731ffd6028 = T4aff756e87 | T86f61f0431;
 
 type T73467fd01f = {
   lawId: string;
@@ -38395,6 +38459,7 @@ type T880f60a469 = {
   message: string;
   hint?: string;
   contactUrl?: string;
+  retryable?: false | true;
   issues?: Array<Tfbf26a7023>;
   reason?: string;
   required?: number;
@@ -38462,27 +38527,6 @@ type T88a38d2a60 = {
 };
 
 type T88ad5a8d38 = T1b8351dd22 | null;
-
-type T88c9f08c40 = {
-  code?: string;
-  message: string;
-  hint?: string;
-  contactUrl?: string;
-  issues?: Array<Tfbf26a7023>;
-  reason?: string;
-  required?: number;
-  available?: number;
-  confirmation?: T0d3b649ce9;
-  error?: string;
-  claim?: T753574bc22;
-  registration_id?: string;
-  registration_type?: string;
-  claim_url?: string;
-  claim_token?: string;
-  claim_token_expires?: string;
-  post_claim_scopes?: Array<string>;
-  requiredFields?: Array<T81694d3f69>;
-};
 
 type T8919d5949d = {
   provider: Tcc23752159;
@@ -38793,6 +38837,7 @@ type T9a51b7d2bc = {
   message: string;
   hint?: string;
   contactUrl?: string;
+  retryable?: false | true;
   issues?: Array<Tfbf26a7023>;
   reason?: string;
   required?: number;
@@ -39561,6 +39606,7 @@ type Tb2f04eed16 = {
   message: string;
   hint?: string;
   contactUrl?: string;
+  retryable?: false | true;
   issues?: Array<Tfbf26a7023>;
   reason?: string;
   required?: number;
@@ -39684,6 +39730,7 @@ type Tb83bcd41f8 = {
   message: string;
   hint?: string;
   contactUrl?: string;
+  retryable?: false | true;
   issues?: Array<Tfbf26a7023>;
   reason?: string;
   required?: number;
@@ -39721,6 +39768,7 @@ type Tb934c8da8e = {
   message: string;
   hint?: string;
   contactUrl?: string;
+  retryable?: false | true;
   issues?: Array<Tfbf26a7023>;
   reason?: string;
   required?: number;
@@ -40031,6 +40079,7 @@ type Tc6e1fc1a97 = {
   message: string;
   hint?: string;
   contactUrl?: string;
+  retryable?: false | true;
   issues?: Array<Tfbf26a7023>;
   reason?: string;
   required?: number;
@@ -41261,6 +41310,28 @@ type Tf08a9b25af = {
   versionValidFrom: Tbe0400fa4c;
   versionValidTo: Tbe0400fa4c;
   id: Tfc8a750351;
+};
+
+type Tf1048cd75f = {
+  code?: string;
+  message: string;
+  hint?: string;
+  contactUrl?: string;
+  retryable?: false | true;
+  issues?: Array<Tfbf26a7023>;
+  reason?: string;
+  required?: number;
+  available?: number;
+  confirmation?: T0d3b649ce9;
+  error?: string;
+  claim?: T753574bc22;
+  registration_id?: string;
+  registration_type?: string;
+  claim_url?: string;
+  claim_token?: string;
+  claim_token_expires?: string;
+  post_claim_scopes?: Array<string>;
+  requiredFields?: Array<T81694d3f69>;
 };
 
 type Tf1da61a84f = {
