@@ -19,9 +19,9 @@ import { generateBatchMock } from "@/api/lib/workflow/generate-batch-mock";
 import { registerBatchGenerator } from "@/api/lib/workflow/generate-batch-provider";
 
 // Dev/test-only preload: wired via the api `dev` script's `--preload`, never
-// imported from `src/server.ts`. Registering the faker-backed mock generator here
+// imported from `src/server.ts`. Registering the mock generator here
 // (rather than referencing it from the production handlers) keeps
-// `generate-batch-mock` and `@faker-js/faker` out of the production build — both
+// `generate-batch-mock` out of the production build, including
 // the compiled binary and the knip `--production` graph.
 //
 // Who the mock answers (`mockAnswersRequest` in lib/tanstack-ai-models.ts):

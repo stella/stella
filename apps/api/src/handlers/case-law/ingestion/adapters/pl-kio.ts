@@ -1058,19 +1058,24 @@ type Requested = { status: number; body: string; url: string };
  */
 const MAX_RESPONSE_BYTES = 16 * 1024 * 1024;
 
-const request = async ({
-  cursor,
-  form,
-  path,
-  signal,
-  timeoutMs,
-}: {
+type RequestOptions = {
   cursor: string;
   form?: URLSearchParams | undefined;
   path: string;
   signal?: AbortSignal | undefined;
   timeoutMs: number;
-}): Promise<Result<Requested, AdapterFetchError>> => {
+};
+
+/** A response read up to the cap; `bytes` is null past it. */
+type Received = { status: number; bytes: Uint8Array | null; url: string };
+
+const receive = async ({
+  cursor,
+  form,
+  path,
+  signal,
+  timeoutMs,
+}: RequestOptions): Promise<Received> => {
   const target = restrictOutboundUrl({
     hostPolicy: PL_KIO_HOST_POLICY,
     rawUrl: `${ORIGIN}${path}`,
@@ -1098,20 +1103,23 @@ const request = async ({
     response.body === null
       ? new Uint8Array()
       : await readCappedBytes(response.body, MAX_RESPONSE_BYTES);
+  return { status: response.status, bytes, url: target.toString() };
+};
+
+const request = async (
+  options: RequestOptions,
+): Promise<Result<Requested, AdapterFetchError>> => {
+  const { status, bytes, url } = await receive(options);
   if (bytes === null) {
     return Result.err(
       publisherError(
-        cursor,
-        `${path} answered more than ${MAX_RESPONSE_BYTES} bytes`,
-        response.status,
+        options.cursor,
+        `${options.path} answered more than ${MAX_RESPONSE_BYTES} bytes`,
+        status,
       ),
     );
   }
-  return Result.ok({
-    status: response.status,
-    body: new TextDecoder().decode(bytes),
-    url: target.toString(),
-  });
+  return Result.ok({ status, body: new TextDecoder().decode(bytes), url });
 };
 
 type ListOptions = {
@@ -1275,19 +1283,20 @@ const fetchPlKioDecision = async ({
       ),
     );
   }
-  const contentRequested = await request({
+  const content = await receive({
     cursor,
     path: documentPathOf(id, record.kind),
     signal,
     timeoutMs: ADAPTER_TIMEOUT.PAGE,
   });
-  if (Result.isError(contentRequested)) {
-    return contentRequested;
-  }
-  const content = contentRequested.value;
-  if (content.status === 404 || content.status === 410) {
-    // A record whose document is gone is still the record: stored with no
-    // document, which the pipeline keeps unpublished and re-asks for.
+  if (
+    content.status === 404 ||
+    content.status === 410 ||
+    (content.status === 200 && content.bytes === null)
+  ) {
+    // A record whose document is gone, or past what this adapter reads, is
+    // still the record: stored with no document, which the pipeline keeps
+    // unpublished and re-asks for.
     return Result.ok(
       assemblePlKioDecision({
         item,
@@ -1296,7 +1305,7 @@ const fetchPlKioDecision = async ({
       }),
     );
   }
-  if (content.status !== 200) {
+  if (content.status !== 200 || content.bytes === null) {
     return Result.err(
       publisherError(
         cursor,
@@ -1309,7 +1318,7 @@ const fetchPlKioDecision = async ({
     assemblePlKioDecision({
       item,
       detailHtml: detail.body,
-      documentHtml: content.body,
+      documentHtml: new TextDecoder().decode(content.bytes),
     }),
   );
 };

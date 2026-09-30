@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import type { CatalogueSkill } from "./catalogue-types";
+import type { CatalogueSkill } from "@/lib/knowledge/catalogue-types";
+
 import { getToolDetailPayload } from "./tool-detail";
 
 describe("getToolDetailPayload", () => {
