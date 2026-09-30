@@ -84,8 +84,8 @@ const runDeniedTitle = async ({
       return createSelectQueryMock([]);
     },
   });
-  const admit: typeof withActionAdmission = (options) =>
-    withActionAdmission({
+  const admit: typeof withActionAdmission = async (options) =>
+    await withActionAdmission({
       ...options,
       policy: {
         organizationConcurrency: 3,

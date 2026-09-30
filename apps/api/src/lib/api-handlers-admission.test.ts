@@ -57,8 +57,8 @@ const dependencies = (acquire: 0 | 1 = 1) => {
       return 1;
     },
   };
-  const admit: typeof withActionAdmission = (options) =>
-    withActionAdmission({
+  const admit: typeof withActionAdmission = async (options) =>
+    await withActionAdmission({
       ...options,
       policy: {
         organizationConcurrency: 3,
@@ -237,8 +237,8 @@ describe("finite HTTP action admission", () => {
   test("coordination failure answers 503 before handler work", async () => {
     await withFeature(true, async () => {
       let calls = 0;
-      const admit: typeof withActionAdmission = (options) =>
-        withActionAdmission({
+      const admit: typeof withActionAdmission = async (options) =>
+        await withActionAdmission({
           ...options,
           policy: {
             organizationConcurrency: 3,
