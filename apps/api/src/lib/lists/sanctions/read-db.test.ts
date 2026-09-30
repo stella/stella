@@ -13,15 +13,16 @@ describe("anonymous sanctions role preflight", () => {
   test("shares concurrent probes and retains a successful validation", async () => {
     let probes = 0;
     const tx = asTestRaw<SanctionsReadTransaction>({
-      execute: async () => {
-        probes += 1;
-      },
+      execute: () => Promise.resolve([]),
     });
     const db = createSanctionsPublicReadDb(
       markRlsDatabase({
         transaction: async <T>(
           fn: (transaction: SanctionsReadTransaction) => Promise<T>,
-        ) => await fn(tx),
+        ) => {
+          probes += 1;
+          return await fn(tx);
+        },
       }),
     );
 
@@ -35,18 +36,21 @@ describe("anonymous sanctions role preflight", () => {
     let probes = 0;
     const privateDriverContext = "private-driver-connection-context";
     const tx = asTestRaw<SanctionsReadTransaction>({
-      execute: async () => {
-        probes += 1;
+      execute: () => {
         if (availability === "missing") {
-          throw new TypeError(privateDriverContext);
+          return Promise.reject(new TypeError(privateDriverContext));
         }
+        return Promise.resolve([]);
       },
     });
     const db = createSanctionsPublicReadDb(
       markRlsDatabase({
         transaction: async <T>(
           fn: (transaction: SanctionsReadTransaction) => Promise<T>,
-        ) => await fn(tx),
+        ) => {
+          probes += 1;
+          return await fn(tx);
+        },
       }),
     );
     const failures = await Promise.all([db.validateRole(), db.validateRole()]);
