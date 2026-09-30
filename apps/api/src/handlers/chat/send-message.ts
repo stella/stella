@@ -473,6 +473,11 @@ type CompletedTurnFollowUps = {
   resolvedResponseMessage: ChatMessage;
 };
 
+const CHECKPOINT_RESTORATION_FAILED = failureSink({
+  event: "chat.send.checkpoint_restoration_failed",
+  expected: [],
+});
+
 /**
  * Owns every resource that must be settled when a send stops before its run
  * starts. Starting the run hands the claimed turn over for good.
@@ -593,8 +598,12 @@ export class ChatSendLifecycle {
       workspaceId: this.options.workspaceId,
     });
     if (Result.isError(restored)) {
-      captureError(restored.error, {
-        source: "chat-admission-checkpoint-restoration",
+      observeFailure(restored.error, {
+        sink: CHECKPOINT_RESTORATION_FAILED,
+        ctx: {
+          source: "chat-admission-checkpoint-restoration",
+          threadId: this.options.threadId,
+        },
       });
     } else {
       this.claimedTurn = { status: "unclaimed" };

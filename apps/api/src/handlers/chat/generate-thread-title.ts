@@ -19,10 +19,17 @@ import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 
 const TITLE_GENERATION_TIMEOUT_MS = 10_000;
+
+const TITLE_ADMISSION_FAILED = failureSink({
+  event: "chat.thread_title.admission_failed",
+  expected: [],
+});
 
 type GenerateThreadTitleProps = {
   initialTitle: string;
@@ -190,7 +197,10 @@ export const generateThreadTitle = async (
     userId: props.userId,
   });
   if (Result.isError(admitted)) {
-    captureError(admitted.error, { threadId: props.threadId });
+    observeFailure(admitted.error, {
+      sink: TITLE_ADMISSION_FAILED,
+      ctx: { threadId: props.threadId },
+    });
     return;
   }
   try {
