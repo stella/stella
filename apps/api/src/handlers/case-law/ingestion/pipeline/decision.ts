@@ -213,16 +213,31 @@ const runDecisionAttempt = async ({
   }
   const rawArtifact = sourceRawArtifact.artifact;
 
-  const plan = await planDecisionWrite({
-    result,
-    existing,
-    decisionId,
-    sourceId,
-    scopedDb,
-    corpus,
-    incomingCarriesDocument: shape.incomingCarriesDocument,
-    polarityRules,
+  const planned = await Result.tryPromise({
+    try: async () =>
+      await planDecisionWrite({
+        result,
+        existing,
+        decisionId,
+        sourceId,
+        scopedDb,
+        corpus,
+        incomingCarriesDocument: shape.incomingCarriesDocument,
+        polarityRules,
+      }),
+    catch: (cause) => cause,
   });
+  if (Result.isError(planned)) {
+    await recordAbandonedRawWrite({
+      scopedDb,
+      existing,
+      rawWrites,
+      decisionId,
+      sourceId,
+    });
+    throw planned.error;
+  }
+  const plan = planned.value;
   if ("status" in plan) {
     await recordAbandonedRawWrite({
       scopedDb,
