@@ -50,7 +50,7 @@ export const decisionOutline = ({ blocks, text }: DecisionOutlineOptions) => {
           size: TITLE_LIMIT,
         }).end,
       ),
-      // Navigation skips citation lists; the initial read already supplies them.
+      // Navigation reads text without paging citation lists.
       cursor: encodePaginationCursor([start, null]),
     }));
 };

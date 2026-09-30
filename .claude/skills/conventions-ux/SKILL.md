@@ -169,6 +169,50 @@ through Folio gains one it does not have.
   visually until they _look_ centred, even if that means offset
   from the geometric centre.
 
+## Lists, Settings Pages & Search
+
+- **Inventories of named things are grouped lists, not tables.**
+  Connections, sessions, keys, integrations: use `@stll/ui/list`. A
+  `ListGroup` has a header (title + `ListGroupCount` + one quiet line +
+  an optional quiet trailing action) over one `List` surface of
+  hairline-divided rows. Row anatomy: 32px `ListItemMedia` tile, a
+  truncating title, one clamped secondary line, then trailing status or
+  actions. Use a `Table` only when people compare values across columns
+  (sorting, numbers, dates side by side).
+- **Nothing scrolls sideways.** Free text (descriptions, scope lists,
+  notes) never sits in a `whitespace-nowrap` cell or row. Clamp it
+  (`line-clamp-1`/`-2` with `min-w-0` on the column), and collapse a
+  long list into a count that opens a popover ("15 permissions"). The
+  trailing actions stay on screen at every width.
+- **Status is a dot plus a label** (`ListItemStatus` with a tone). The
+  label carries the meaning; colour is never the only signal.
+- **Anything people look up by name gets search.** Use
+  `@stll/ui/search-field`: an instant local filter, case- and
+  accent-insensitive, and Escape clears it. While a query is active,
+  hide setup and help content, show match counts in the group headers,
+  and when nothing matches, show one line plus the next action.
+- **Show things where people look for them.** When an entity is managed
+  elsewhere but people expect it on another page (integrations live in
+  Tools, yet people look for them under Connections), list it there too
+  as a read-mostly row that links to its one source of truth. Don't copy
+  the management UI.
+- **Write for a lawyer who has never heard of MCP.** The first path names
+  the tools people already use (Claude, ChatGPT) and asks for at most one
+  thing to copy. Protocol names, server variants, CLI commands and developer
+  tools (Cursor, Codex) live behind a folded "Developer access" section,
+  never in the default view.
+- **Setup steps have one source.** Product copy, onboarding and copied agent
+  instructions point to the same guide (one docs page, one shared component
+  such as `AssistantSetup`); they never carry their own step lists that can
+  drift.
+- **One-time setup is rows with copy buttons**, placed below the live
+  state: server URLs, CLI commands, keys. No stacks of paragraphs and
+  read-only inputs. Copy confirms in place (the icon turns into a check).
+- **Pick the primitive whose anatomy fits; don't bend one.** Squeezing
+  `FramePanel` to `p-1` so a heading fits inside it produced text flush
+  against the border. If a primitive needs its padding overridden to
+  work, it is the wrong one.
+
 ## Empty States & Inline Help
 
 - An empty state earns one line, and that line is an **action**
@@ -197,6 +241,11 @@ through Folio gains one it does not have.
   glowing logo (`DefaultPendingComponent`) is the last-resort
   fallback, not the default. Give each route its own
   `pendingComponent` so the route you navigate to picks its own shape.
+- **Shimmer only what you do not know yet.** Chrome that needs no data
+  (the logo, primary nav icons, rail toggles, fixed icons) renders for real
+  in a skeleton, taken from the same definitions the real chrome uses; only
+  data- or locale-dependent parts (labels, lists, the account, the page
+  body) shimmer. A grey box where the stella logo belongs reads as broken.
 - **Skeletons must be structurally drift-proof.** Generate the
   skeleton from the same source as the real UI, never a hand-copied
   parallel tree. For tables, render the header, rows, and skeleton

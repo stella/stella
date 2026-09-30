@@ -4,6 +4,7 @@ import { useTranslations } from "use-intl";
 
 import {
   BrainIcon,
+  ClockIcon,
   FlaskConicalIcon,
   GaugeIcon,
   HashIcon,
@@ -21,6 +22,7 @@ import type { LucideIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { env } from "@/env";
+import { useTimeBillingPreviewEnabled } from "@/hooks/use-time-billing-preview";
 import type { TranslationKey } from "@/i18n/types";
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
@@ -44,6 +46,7 @@ type NavTo =
   | "/settings/account/beta"
   | "/settings/organization/members"
   | "/settings/organization/matter-numbering"
+  | "/settings/organization/time-policy"
   | "/settings/organization/document-types"
   | "/settings/organization/ai"
   | "/settings/organization/anonymization"
@@ -115,6 +118,11 @@ const ORGANIZATION_SECTION = {
       icon: HashIcon,
     },
     {
+      to: "/settings/organization/time-policy",
+      labelKey: "settings.organization.timePolicy.title",
+      icon: ClockIcon,
+    },
+    {
       to: "/settings/organization/document-types",
       labelKey: "settings.organization.documentTypes.title",
       icon: TagsIcon,
@@ -172,8 +180,17 @@ function SettingsLayout() {
         items: [...accountItems, BETA_NAV_ITEM],
       } as const)
     : ({ ...ACCOUNT_SECTION, items: accountItems } as const);
+  const timeBillingPreviewEnabled = useTimeBillingPreviewEnabled();
+  const organizationSection = {
+    ...ORGANIZATION_SECTION,
+    items: ORGANIZATION_SECTION.items.filter(
+      (item) =>
+        item.to !== "/settings/organization/time-policy" ||
+        timeBillingPreviewEnabled,
+    ),
+  };
   const sections = showOrganization
-    ? [accountSection, ORGANIZATION_SECTION]
+    ? [accountSection, organizationSection]
     : [accountSection];
 
   return (
@@ -217,7 +234,7 @@ function SettingsLayout() {
           </div>
         ))}
       </nav>
-      <main className="flex min-w-0 flex-1 flex-col overflow-y-auto">
+      <main className="scrollbar-stable flex min-w-0 flex-1 flex-col overflow-y-auto">
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 p-6">
           <Outlet />
         </div>

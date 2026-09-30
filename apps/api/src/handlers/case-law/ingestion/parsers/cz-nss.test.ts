@@ -5,6 +5,8 @@ import type { Block } from "@/api/handlers/case-law/document-ast";
 import { parseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
 import type { ParseNssDecisionInput } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
 
+import { nssUnitDecisionHtml } from "./cz-nss.test-fixture";
+
 // ── Helpers ─────────────────────────────────────────────────
 
 const baseInput = (
@@ -72,61 +74,12 @@ const perLetterWrappers = (sentence: string, wordGap: () => string): string => {
 
 // ── Minimal decision HTML ───────────────────────────────────
 
-const minimalHtml = `
-<html><body>
-<p style="text-align:center">2 As 123/2025 - 42</p>
-<p style="text-align:center">[OBRÁZEK]</p>
-<p style="text-align:center">
-  <span style="font-weight:bold">ROZSUDEK</span>
-</p>
-<p style="text-align:center">
-  <span style="font-weight:bold">JMÉNEM REPUBLIKY</span>
-</p>
-<p>Nejvyšší správní soud rozhodl v senátě složeném
-z předsedy JUDr. Karla Šimky a soudců JUDr. Filipa Dienstbiera
-a JUDr. Petra Mikeše ve věci žalobce: město Kolín,
-se sídlem Karlovo náměstí 78, Kolín, zastoupeného advokátem
-Mgr. Janem Novákem, proti žalovanému: Ministerstvo životního
-prostředí, se sídlem Vršovická 1442/65, Praha 10,
-v řízení o kasační stížnosti žalobce proti rozsudku
-Krajského soudu v Praze ze dne 12. 1. 2025,
-čj. 43 A 15/2024 - 78,</p>
-<p style="text-align:center">
-  <span style="font-weight:bold;letter-spacing:3pt">
-    t a k t o :
-  </span>
-</p>
-<ol type="I">
-  <li>Kasační stížnost se <span style="font-weight:bold">zamítá</span>.</li>
-  <li>Žádný z účastníků <span style="font-weight:bold">nemá</span>
-  právo na náhradu nákladů řízení o kasační stížnosti.</li>
-</ol>
-<p style="text-align:center">
-  <span style="font-weight:bold">Odůvodnění:</span>
-</p>
-<p>[1] Žalobce (dále jen „stěžovatel") podal kasační stížnost
-proti rozsudku Krajského soudu v Praze (dále jen „krajský
-soud"), kterým byla zamítnuta jeho žaloba proti rozhodnutí
-žalovaného ze dne 5. 6. 2024, čj. MZP/2024/560/123.</p>
-<p>[2] Krajský soud v napadeném rozsudku konstatoval, že
-žalovaný postupoval v souladu se zákonem č. 114/1992 Sb.,
-o ochraně přírody a krajiny.</p>
-<p style="text-align:center">
-  <span style="font-weight:bold">Poučení:</span>
-</p>
-<p>Proti tomuto rozsudku nejsou opravné prostředky přípustné.</p>
-<p>V Brně dne 15. března 2025</p>
-<p style="text-align:center">JUDr. Karel Šimka</p>
-<p style="text-align:center">předseda senátu</p>
-</body></html>
-`;
-
 // ── Tests ───────────────────────────────────────────────────
 
 describe("parseNssDecisionHtml", () => {
   describe("basic structure", () => {
     test("parses minimal decision into all sections", () => {
-      const input = baseInput(minimalHtml);
+      const input = baseInput(nssUnitDecisionHtml);
       const { documentAst, fulltext } = parseNssDecisionHtml(input);
 
       // Has blocks
@@ -202,7 +155,7 @@ describe("parseNssDecisionHtml", () => {
 
   describe("skip patterns", () => {
     test("skips [OBRÁZEK] lines", () => {
-      const input = baseInput(minimalHtml);
+      const input = baseInput(nssUnitDecisionHtml);
       const { documentAst } = parseNssDecisionHtml(input);
 
       const texts = documentAst.blocks.map((b) => b.plainText);
@@ -314,7 +267,7 @@ describe("parseNssDecisionHtml", () => {
 
   describe("section separators", () => {
     test("normalizes spaced t a k t o : to takto:", () => {
-      const input = baseInput(minimalHtml);
+      const input = baseInput(nssUnitDecisionHtml);
       const { documentAst } = parseNssDecisionHtml(input);
 
       const headings = findAllByType(documentAst.blocks, "heading");
@@ -324,7 +277,7 @@ describe("parseNssDecisionHtml", () => {
     });
 
     test("normalizes Odůvodnění to canonical form", () => {
-      const input = baseInput(minimalHtml);
+      const input = baseInput(nssUnitDecisionHtml);
       const { documentAst } = parseNssDecisionHtml(input);
 
       const headings = findAllByType(documentAst.blocks, "heading");
@@ -333,7 +286,7 @@ describe("parseNssDecisionHtml", () => {
     });
 
     test("normalizes Poučení to canonical form", () => {
-      const input = baseInput(minimalHtml);
+      const input = baseInput(nssUnitDecisionHtml);
       const { documentAst } = parseNssDecisionHtml(input);
 
       const headings = findAllByType(documentAst.blocks, "heading");
@@ -372,7 +325,7 @@ describe("parseNssDecisionHtml", () => {
 
   describe("numbered paragraphs", () => {
     test("strips [N] prefix from numbered paragraphs", () => {
-      const input = baseInput(minimalHtml);
+      const input = baseInput(nssUnitDecisionHtml);
       const { documentAst } = parseNssDecisionHtml(input);
 
       // Paragraphs should not start with [1] or [2]
@@ -391,7 +344,7 @@ describe("parseNssDecisionHtml", () => {
 
   describe("ordered list ruling items", () => {
     test("converts <ol> items to holding paragraphs with Roman prefix", () => {
-      const input = baseInput(minimalHtml);
+      const input = baseInput(nssUnitDecisionHtml);
       const { documentAst } = parseNssDecisionHtml(input);
 
       const holdings = findAllByRole(documentAst.blocks, "holding");
@@ -567,7 +520,7 @@ describe("parseNssDecisionHtml", () => {
 
   describe("closing and signature", () => {
     test("classifies V Brně dne as closing", () => {
-      const input = baseInput(minimalHtml);
+      const input = baseInput(nssUnitDecisionHtml);
       const { documentAst } = parseNssDecisionHtml(input);
 
       const closing = findByRole(documentAst.blocks, "closing");
@@ -576,7 +529,7 @@ describe("parseNssDecisionHtml", () => {
     });
 
     test("classifies předseda senátu as signature", () => {
-      const input = baseInput(minimalHtml);
+      const input = baseInput(nssUnitDecisionHtml);
       const { documentAst } = parseNssDecisionHtml(input);
 
       const sigs = findAllByRole(documentAst.blocks, "signature");
@@ -590,7 +543,7 @@ describe("parseNssDecisionHtml", () => {
 
   describe("bold formatting", () => {
     test("preserves bold spans in inlines", () => {
-      const input = baseInput(minimalHtml);
+      const input = baseInput(nssUnitDecisionHtml);
       const { documentAst } = parseNssDecisionHtml(input);
 
       // The ruling items contain bold "zamítá"
@@ -613,7 +566,7 @@ describe("parseNssDecisionHtml", () => {
 
   describe("metadata", () => {
     test("populates DocumentAst metadata correctly", () => {
-      const input = baseInput(minimalHtml);
+      const input = baseInput(nssUnitDecisionHtml);
       const { documentAst } = parseNssDecisionHtml(input);
 
       expect(documentAst.version).toBe(1);
@@ -1096,7 +1049,7 @@ describe("parseNssDecisionHtml", () => {
 
   describe("content retention", () => {
     test("fulltext contains meaningful content from all sections", () => {
-      const input = baseInput(minimalHtml);
+      const input = baseInput(nssUnitDecisionHtml);
       const { fulltext } = parseNssDecisionHtml(input);
 
       // Ruling
@@ -1112,4 +1065,49 @@ describe("parseNssDecisionHtml", () => {
       expect(fulltext).toContain("opravné prostředky");
     });
   });
+});
+
+test("keeps every mixed body and list text once in source order", () => {
+  const markers = [
+    "bodyStart",
+    "headingOne",
+    "quoteText",
+    "divStart",
+    "paragraphText",
+    "divEnd",
+    "listStart",
+    "itemText",
+    "listEnd",
+    "cellText",
+    "bodyEnd",
+  ];
+  const { fulltext } = parseNssDecisionHtml(
+    baseInput(
+      `<body>bodyStart<h1>headingOne</h1><blockquote>quoteText</blockquote><div>divStart<p>paragraphText</p>divEnd</div><ul>listStart<li>itemText</li>listEnd</ul><table><tr><td><p>cellText</p></td></tr></table>bodyEnd</body>`,
+    ),
+  );
+  let previous = -1;
+  for (const marker of markers) {
+    expect(fulltext.split(marker)).toHaveLength(2);
+    const position = fulltext.indexOf(marker);
+    expect(position).toBeGreaterThan(previous);
+    previous = position;
+  }
+});
+
+test("preserves inline spacing around unknown wrappers and every heading", () => {
+  const { fulltext } = parseNssDecisionHtml(
+    baseInput(
+      `<body>Before <span>inline</span> after<unknown>Loose <i>formatted</i> text<p>Child paragraph</p>Tail text</unknown>${[1, 2, 3, 4, 5, 6].map((level) => `<h${level}>Heading ${level}</h${level}>`).join("")}</body>`,
+    ),
+  );
+  for (const text of [
+    "Before inline after",
+    "Loose formatted text",
+    "Child paragraph",
+    "Tail text",
+    ...[1, 2, 3, 4, 5, 6].map((level) => `Heading ${level}`),
+  ]) {
+    expect(fulltext.split(text)).toHaveLength(2);
+  }
 });

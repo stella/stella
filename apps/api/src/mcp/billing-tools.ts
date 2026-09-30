@@ -512,6 +512,7 @@ const listTimeEntriesArgsSchema = nullAsAbsent(
 /** Columns list_time_entries surfaces, shared by the list and detail branches. */
 const timeEntryColumns = {
   id: timeEntries.id,
+  activityGroup: timeEntries.activityGroup,
   entityId: timeEntries.workItemId,
   userId: timeEntries.userId,
   dateWorked: timeEntries.dateWorked,
@@ -1309,6 +1310,8 @@ const handleListInvoicesTool: TypedMcpToolHandler<
       // layer reads it to mint the line items' entity refs.
       workspaceId,
       invoiceNumber: invoiceRow.invoiceNumber,
+      documentType: invoiceRow.documentType,
+      originalInvoiceId: invoiceRow.originalInvoiceId,
       reference: invoiceRow.reference,
       status: invoiceRow.status,
       invoiceDate: invoiceRow.invoiceDate,
@@ -1403,6 +1406,8 @@ const handleListInvoicesTool: TypedMcpToolHandler<
       .select({
         id: invoices.id,
         invoiceNumber: invoices.invoiceNumber,
+        documentType: invoices.documentType,
+        originalInvoiceId: invoices.originalInvoiceId,
         reference: invoices.reference,
         status: invoices.status,
         invoiceDate: invoices.invoiceDate,
@@ -1615,7 +1620,7 @@ export const BILLING_TOOL_DEFINITIONS = [
       "VAT breakdown, taxable supply date, seller profile id, buyer details, " +
       "and attached time entries and expenses. Otherwise pass matter_id to " +
       "list the matter's " +
-      "invoices. Returns each invoice's id, number, reference, status, dates, currency, " +
+      "invoices. Returns each invoice's id, number (null before numbering), document type, original invoice id, reference, status, dates, currency, " +
       "and total (integer minor currency units).",
     inputSchema: listInvoicesArgsSchema,
     jsonSchemaProjectionWaiver: {

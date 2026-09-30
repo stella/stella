@@ -8414,7 +8414,9 @@ export type WebRoutes = {
             200: {
               items: Array<{
                 id: Tb7bcf69f62;
-                invoiceNumber: string;
+                invoiceNumber: Tbe0400fa4c;
+                documentType: Tbb2566af3f;
+                originalInvoiceId: T35ba71e459;
                 reference: Tbe0400fa4c;
                 status: Tc0f5c8e964;
                 invoiceDate: string;
@@ -8471,7 +8473,7 @@ export type WebRoutes = {
                   description: string;
                   id: T74aae47c1a;
                   source: ("expense" | "manual" | "time_entry");
-                  timeEntryId: (Tdb05f01858 | null);
+                  timeEntryId: (T4e3529b6dc | null);
                   unit: Tbe0400fa4c;
                   expenseId: (T22259c97a4 | null);
                   position: number;
@@ -8485,6 +8487,7 @@ export type WebRoutes = {
                 }>;
                 totals: T5a0acd1281;
                 paidAt: Tbe0400fa4c;
+                finalizedAt: Tbe0400fa4c;
                 createdAt: string;
                 updatedAt: string;
                 status: Tc0f5c8e964;
@@ -8492,9 +8495,11 @@ export type WebRoutes = {
                 id: Tb7bcf69f62;
                 workspaceId: T9e07a7d6cd;
                 dueDate: Tbe0400fa4c;
+                documentType: Tbb2566af3f;
                 currency: string;
                 notes: Tbe0400fa4c;
-                invoiceNumber: string;
+                invoiceNumber: Tbe0400fa4c;
+                originalInvoiceId: T35ba71e459;
                 invoiceDate: string;
                 totalAmount: stll_money_CentsAmount;
                 taxableSupplyDate: Tbe0400fa4c;
@@ -8509,8 +8514,8 @@ export type WebRoutes = {
                 buyerCountry: Tbe0400fa4c;
                 organizationId: Tb1d68817ba;
                 timeEntries: Array<{
-                  status: Tef030b2402;
-                  id: Tdb05f01858;
+                  status: T96f3e623c3;
+                  id: T4e3529b6dc;
                   currency: string;
                   narrative: string;
                   dateWorked: string;
@@ -8571,11 +8576,13 @@ export type WebRoutes = {
           body: {
             reference?: string | null;
             dueDate?: string | null;
+            documentType?: "advance" | "credit_note" | "invoice";
             notes?: string | null;
+            invoiceNumber?: string;
+            originalInvoiceId?: Tb7bcf69f62;
             currency: string;
-            invoiceNumber: string;
             invoiceDate: string;
-            timeEntryIds: Array<Tdb05f01858>;
+            timeEntryIds: Array<T4e3529b6dc>;
           };
           params: T4042d27c41;
           query: Record<never, never>;
@@ -8583,7 +8590,7 @@ export type WebRoutes = {
           response: {
             200: {
               id: Tb7bcf69f62;
-              invoiceNumber: string;
+              invoiceNumber: Tbe0400fa4c;
               totalAmount: stll_money_CentsAmount;
               entryCount: number;
             };
@@ -8618,9 +8625,11 @@ export type WebRoutes = {
             body: {
               reference?: string | null;
               dueDate?: string | null;
+              documentType?: "advance" | "credit_note" | "invoice";
               currency?: string;
               notes?: string | null;
-              invoiceNumber?: string;
+              invoiceNumber?: string | null;
+              originalInvoiceId?: Tb7bcf69f62 | null;
               invoiceDate?: string;
               taxableSupplyDate?: string | null;
               sellerProfileId?: Tfd3441c0df | null;
@@ -8758,7 +8767,7 @@ export type WebRoutes = {
           entries: {
             post: {
               body: {
-                timeEntryIds?: Array<Tdb05f01858>;
+                timeEntryIds?: Array<T4e3529b6dc>;
                 expenseIds?: Array<T22259c97a4>;
               };
               params: {
@@ -8803,7 +8812,7 @@ export type WebRoutes = {
           entries: {
             delete: {
               body: {
-                timeEntryIds?: Array<Tdb05f01858>;
+                timeEntryIds?: Array<T4e3529b6dc>;
                 expenseIds?: Array<T22259c97a4>;
               };
               params: {
@@ -8857,7 +8866,7 @@ export type WebRoutes = {
                 } | {
                   description?: string;
                   type: "time_entry";
-                  timeEntryId: Tdb05f01858;
+                  timeEntryId: T4e3529b6dc;
                 } | {
                   description?: string;
                   type: "expense";
@@ -9034,7 +9043,7 @@ export type WebRoutes = {
                 invoiceDescription: Tbe0400fa4c;
                 billable: Tfddd645dc8;
                 markup: number;
-                status: Tef030b2402;
+                status: T96f3e623c3;
                 userName: Tbe0400fa4c;
                 createdAt: string;
                 updatedAt: Tbe0400fa4c;
@@ -13192,6 +13201,7 @@ export type WebRoutes = {
           post: {
             body: {
               billable?: false | true;
+              activityGroup?: "client" | "internal";
               timezoneId: string;
             };
             params: T32313cfbba;
@@ -26296,6 +26306,8 @@ export type WebRoutes = {
           response: {
             200: T13b00b267e;
             401: never;
+            403: "Organization membership not found";
+            409: "A firm-knowledge seed is already running";
             422: {
               type: "validation";
               on: string;
@@ -28832,11 +28844,13 @@ export type WebRoutes = {
                       encrypted: T44e2cd4568;
                       entityId: Tbe0400fa4c;
                       fieldId: Tbe0400fa4c;
+                      hasThumbnail: Tfddd645dc8;
                       id: string;
                       kind: ("automation" | "correspondence" | "court" | "document" | "documentReviewRun" | "folder" | "link" | "matter" | "message" | "playbook" | "task" | "team" | "translationRun");
                       mimeType: Tbe0400fa4c;
                       name: Tbe0400fa4c;
                       pdfFileId: Tbe0400fa4c;
+                      placeholder: Tbe0400fa4c;
                       propertyId: Tbe0400fa4c;
                     };
                     trigger: {
@@ -29462,7 +29476,9 @@ export type WebRoutes = {
                 items: Array<{
                   activityAt: string;
                   entityKind: T334757ea46;
+                  fieldId: Tbe0400fa4c;
                   fileName: Tbe0400fa4c;
+                  hasThumbnail: Tfddd645dc8;
                   id: string;
                   mimeType: Tbe0400fa4c;
                   status: Tbe0400fa4c;
@@ -32136,17 +32152,32 @@ export type MyTimeEntriesRoutes = {
           response: {
             200: {
               items: Array<{
-                id: Tdb05f01858;
+                activityGroup: "client";
                 workspaceId: T9e07a7d6cd;
                 workspaceName: string;
                 workspaceReference: string;
+                id: T4e3529b6dc;
                 dateWorked: string;
                 durationMinutes: number;
                 billedMinutes: number;
                 narrative: string;
                 billable: Tfddd645dc8;
-                status: Tef030b2402;
-                source: ("manual" | "suggested" | "timer");
+                status: T96f3e623c3;
+                source: Teaca50a829;
+                timerStartedAt: Tbe0400fa4c;
+              } | {
+                activityGroup: "internal";
+                workspaceId: null;
+                workspaceName: null;
+                workspaceReference: null;
+                id: T4e3529b6dc;
+                dateWorked: string;
+                durationMinutes: number;
+                billedMinutes: number;
+                narrative: string;
+                billable: Tfddd645dc8;
+                status: T96f3e623c3;
+                source: Teaca50a829;
                 timerStartedAt: Tbe0400fa4c;
               }>;
               nextCursor: Tbe0400fa4c;
@@ -36390,6 +36421,8 @@ type T352ed14c79 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "agentSkill";
 };
 
+type T35ba71e459 = Tb7bcf69f62 | null;
+
 type T367a10cc51 = {
   readonly input: T466db84340;
   readonly output: T27875dbd24;
@@ -36955,6 +36988,10 @@ type T4e21d0f768 = {
   url: Tbe0400fa4c;
 };
 
+type T4e3529b6dc = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "timeEntry";
+};
+
 type T4e595a8315 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "playbookDefinition";
 };
@@ -37515,7 +37552,8 @@ type T66e92cdab1 = string & valibot_Brand<"SafeId"> & {
 };
 
 type T6776d3555e = {
-  id: Tdb05f01858;
+  id: T4e3529b6dc;
+  activityGroup: ("client" | "internal");
   durationMinutes: number;
   billedMinutes: number;
 };
@@ -38602,6 +38640,8 @@ type T9676908f8c = {
   registryUrl: string;
 };
 
+type T96f3e623c3 = "approved" | "billed" | "draft" | "written_off";
+
 type T9717780ffe = "contradicted" | "supported" | "tension";
 
 type T973f0d36bf = {
@@ -38818,6 +38858,7 @@ type Ta0c1d202e7 = stll_money_CentsAmount | null;
 
 type Ta0e1c4f807 = T12163e1f6a | {
   documentPending: Tfddd645dc8;
+  hasDocument: Tfddd645dc8;
   documentReadFailed: Tfddd645dc8;
   documentUnavailable: Tfddd645dc8;
   id: T406326c84f;
@@ -38938,7 +38979,9 @@ type Ta0e1c4f807 = T12163e1f6a | {
     sectionIndex: T588d0ee653;
   }>);
   citationsNextCursor: Tbe0400fa4c;
-  languageAlternates: ReadonlyArray<T32fdeee18e>;
+  languageAlternates: ReadonlyArray<(T32fdeee18e & {
+    hasDocument: Tfddd645dc8;
+  })>;
   fulltext: Tbe0400fa4c;
 };
 
@@ -40467,10 +40510,6 @@ type Tdadf537056 = {
 
 type Tdaf2e43033 = "a4" | "legal" | "letter" | "preserve";
 
-type Tdb05f01858 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "timeEntry";
-};
-
 type Tdb5805e6ca = {
   required?: false | true | undefined;
   minLength?: number | undefined;
@@ -40977,6 +41016,8 @@ type Teab768a417 = {
   }>;
 };
 
+type Teaca50a829 = "manual" | "suggested" | "timer";
+
 type Teaea18eeca = {
   workspaceId: string;
 };
@@ -41062,8 +41103,6 @@ type Teec166880c = {
   skillId?: T352ed14c79;
   skillName: string;
 };
-
-type Tef030b2402 = "approved" | "billed" | "draft" | "written_off";
 
 type Tefb102e423 = {
   "content-type": string;

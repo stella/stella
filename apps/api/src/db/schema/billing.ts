@@ -2,12 +2,19 @@ import {
   INVOICE_LINE_SOURCES,
   INVOICE_STATUS,
   INVOICE_STATUSES,
+  NUMBER_SERIES_DOCUMENT_TYPES,
   TIME_ENTRY_SUGGESTION_STATUSES,
+  TIME_ENTRY_ACTIVITY_GROUP,
+  TIME_ENTRY_ACTIVITY_GROUPS,
   type InvoiceStatus,
 } from "@stll/api-contract";
 import type { TimeEntrySuggestionEvidence } from "@stll/api-contract/time-entry-types";
 import { VAT_TREATMENTS } from "@stll/invoicing";
 import { ORGANIZATION_MANAGEMENT_ROLES } from "@stll/permissions";
+
+import { timeEntryPolicies } from "@/api/db/rls";
+import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
+import type { SafeId } from "@/api/lib/branded-types";
 
 import {
   EXPENSE_CATEGORIES,
@@ -41,6 +48,16 @@ export const ACTIVE_TIMER_INDEX_NAME =
 const TIME_ENTRY_SUGGESTION_STATUS_SQL_VALUES =
   TIME_ENTRY_SUGGESTION_STATUSES.map((status) => sql.raw(`'${status}'`));
 
+const TIME_ENTRY_APPROVAL_PROVENANCE_STATUSES = [
+  "approved",
+  "billed",
+  "written_off",
+] as const satisfies readonly (typeof TIME_ENTRY_STATUSES)[number][];
+const INTERNAL_TIME_ENTRY_STATUSES = [
+  "draft",
+  "approved",
+] as const satisfies readonly (typeof TIME_ENTRY_STATUSES)[number][];
+
 export const timeEntries = p.pgTable(
   "time_entries",
   {
@@ -48,12 +65,26 @@ export const timeEntries = p.pgTable(
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    workspaceId: safeWorkspaceId("workspace_id")
+    activityGroup: p
+      .text("activity_group", { enum: TIME_ENTRY_ACTIVITY_GROUPS })
       .notNull()
-      .references(() => workspaces.id, { onDelete: "cascade" }),
+      .default(TIME_ENTRY_ACTIVITY_GROUP.CLIENT),
+    workspaceId: safeWorkspaceId("workspace_id").references(
+      () => workspaces.id,
+      { onDelete: "cascade" },
+    ),
     userId: p
       .text("user_id")
       .references(() => user.id, { onDelete: "set null" }),
+    approverUserId: p
+      .text("approver_user_id")
+      .references(() => user.id, { onDelete: "set null" }),
+    // Retain historical actor identifiers after account records are removed.
+    approvedByUserId: p.text("approved_by_user_id").$type<SafeId<"user">>(),
+    approvedAt: timestamptz("approved_at"),
+    returnedByUserId: p.text("returned_by_user_id").$type<SafeId<"user">>(),
+    returnedAt: timestamptz("returned_at"),
+    returnComment: p.text("return_comment"),
     // A workspace is the legal matter. This optional foreign key records only
     // the document, folder, task, or other work item that provided context.
     workItemId: safeUuid<"entity">("work_item_id"),
@@ -109,10 +140,23 @@ export const timeEntries = p.pgTable(
       .index("time_entries_org_user_date_id_idx")
       .on(table.organizationId, table.userId, table.dateWorked, table.id),
     p
+      .index("time_entries_org_status_date_id_idx")
+      .on(table.organizationId, table.status, table.dateWorked, table.id),
+    p
       .index("time_entries_ws_work_item_status_idx")
       .on(table.workspaceId, table.workItemId, table.status),
     p.index("time_entries_ws_status_idx").on(table.workspaceId, table.status),
     p.index("time_entries_invoice_idx").on(table.invoiceId),
+    p
+      .index("time_entries_approval_queue_idx")
+      .on(
+        table.organizationId,
+        table.approverUserId,
+        table.status,
+        table.dateWorked,
+        table.id,
+      )
+      .where(sql`${table.status} = 'draft'`),
     p
       .uniqueIndex(ACTIVE_TIMER_INDEX_NAME)
       .on(table.userId)
@@ -125,7 +169,43 @@ export const timeEntries = p.pgTable(
       "time_entries_billed_minutes_check",
       sql`${table.billedMinutes} >= 0`,
     ),
-    ...wsOrganizationPolicies("time_entries"),
+    p.check(
+      "time_entries_approval_provenance_check",
+      sql`(${table.approvedByUserId} IS NULL AND ${table.approvedAt} IS NULL) OR (${table.approvedByUserId} IS NOT NULL AND ${table.approvedAt} IS NOT NULL AND ${table.status} IN (${sql.join(
+        TIME_ENTRY_APPROVAL_PROVENANCE_STATUSES.map((status) =>
+          sql.raw(`'${status}'`),
+        ),
+        sql`, `,
+      )}))`,
+    ),
+    p.check(
+      "time_entries_return_metadata_check",
+      sql`(${table.returnedByUserId} IS NULL AND ${table.returnedAt} IS NULL AND ${table.returnComment} IS NULL) OR (${table.returnedByUserId} IS NOT NULL AND ${table.returnedAt} IS NOT NULL AND ${table.returnComment} IS NOT NULL AND char_length(btrim(${table.returnComment})) BETWEEN 1 AND 2000 AND char_length(${table.returnComment}) <= 2000)`,
+    ),
+    p.check(
+      "time_entries_activity_group_check",
+      sql`${table.activityGroup} IN (${sql.join(
+        TIME_ENTRY_ACTIVITY_GROUPS.map((group) => sql.raw(`'${group}'`)),
+        sql`, `,
+      )})`,
+    ),
+    p.check(
+      "time_entries_client_workspace_check",
+      sql`${table.activityGroup} <> 'client' OR ${table.workspaceId} IS NOT NULL`,
+    ),
+    p.check(
+      "time_entries_internal_shape_check",
+      sql`${table.activityGroup} <> 'internal' OR (
+      ${table.workspaceId} IS NULL AND ${table.billable} = false AND ${table.noCharge} = false
+      AND ${table.billedMinutes} = 0 AND ${table.rateAtEntry} = 0 AND ${table.currency} = '${sql.raw(UNPRICED_TIME_ENTRY_CURRENCY)}'
+      AND ${table.invoiceId} IS NULL AND ${table.workItemId} IS NULL
+      AND ${table.taskCode} IS NULL AND ${table.activityCode} IS NULL AND ${table.invoiceNarrative} IS NULL
+      AND ${table.status} IN (${sql.join(
+        INTERNAL_TIME_ENTRY_STATUSES.map((status) => sql.raw(`'${status}'`)),
+        sql`, `,
+      )}))`,
+    ),
+    ...timeEntryPolicies(),
   ],
 );
 
@@ -494,11 +574,7 @@ export const sellerProfiles = p.pgTable(
   ],
 );
 
-export const NUMBER_SERIES_DOCUMENT_TYPES = [
-  "invoice",
-  "advance",
-  "credit_note",
-] as const;
+export { NUMBER_SERIES_DOCUMENT_TYPES };
 const NUMBER_SERIES_DOCUMENT_TYPE_SQL_VALUES = NUMBER_SERIES_DOCUMENT_TYPES.map(
   (documentType) => sql.raw(`'${documentType}'`),
 );
@@ -743,7 +819,14 @@ export const invoices = p.pgTable(
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
-    invoiceNumber: p.varchar("invoice_number", { length: 64 }).notNull(),
+    invoiceNumber: p.varchar("invoice_number", { length: 64 }),
+    documentType: p
+      .text("document_type", { enum: NUMBER_SERIES_DOCUMENT_TYPES })
+      .notNull()
+      .default("invoice"),
+    originalInvoiceId: safeUuid<"invoice">("original_invoice_id"),
+    // Retained on revert to draft so document type and original stay frozen.
+    finalizedAt: timestamptz("finalized_at"),
     reference: p.varchar({ length: 256 }),
     status: p
       .text("status", { enum: INVOICE_STATUSES })
@@ -789,6 +872,23 @@ export const invoices = p.pgTable(
         name: "invoices_workspace_organization_fk",
       })
       .onDelete("cascade"),
+    p.unique("invoices_id_workspace_unique").on(table.id, table.workspaceId),
+    p.foreignKey({
+      columns: [table.originalInvoiceId, table.workspaceId],
+      foreignColumns: [table.id, table.workspaceId],
+      name: "invoices_original_invoice_workspace_fk",
+    }),
+    p
+      .index("invoices_ws_original_idx")
+      .on(table.workspaceId, table.originalInvoiceId),
+    p.check(
+      "invoices_document_type_check",
+      sql`${table.documentType} in (${sql.join(NUMBER_SERIES_DOCUMENT_TYPE_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "invoices_original_invoice_check",
+      sql`(${table.documentType} = 'credit_note') = (${table.originalInvoiceId} IS NOT NULL) AND (${table.originalInvoiceId} IS NULL OR ${table.originalInvoiceId} <> ${table.id})`,
+    ),
     p.index("invoices_ws_status_idx").on(table.workspaceId, table.status),
     p
       .uniqueIndex("invoices_ws_number_uidx")
@@ -897,7 +997,7 @@ export const invoiceLines = p.pgTable(
     ),
     p.check(
       "invoice_lines_amounts_check",
-      sql`${table.quantity} >= 0 AND ${table.unitPrice} >= 0 AND ${table.netAmount} >= 0 AND ${table.vatAmount} >= 0 AND ${table.grossAmount} = ${table.netAmount} + ${table.vatAmount}`,
+      sql`${table.quantity} >= 0 AND ${table.unitPrice} >= 0 AND ((${table.netAmount} >= 0 AND ${table.vatAmount} >= 0) OR (${table.netAmount} <= 0 AND ${table.vatAmount} <= 0)) AND ${table.grossAmount} = ${table.netAmount} + ${table.vatAmount}`,
     ),
     p.check("invoice_lines_position_check", sql`${table.position} >= 0`),
     p.check(

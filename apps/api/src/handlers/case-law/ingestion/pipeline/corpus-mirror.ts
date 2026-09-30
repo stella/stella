@@ -10,11 +10,11 @@ import {
 } from "@/api/db/schema";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { segmentDecision } from "@/api/handlers/case-law/ingestion/segmenter";
+import type { SafeId } from "@/api/lib/branded-types";
 import {
   pgPayloadCarriesDocument,
   rowHoldsDocument,
-} from "@/api/handlers/case-law/stored-payload";
-import type { SafeId } from "@/api/lib/branded-types";
+} from "@/api/lib/case-law/stored-payload";
 import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
 import {
   corpusMirrorColumns,

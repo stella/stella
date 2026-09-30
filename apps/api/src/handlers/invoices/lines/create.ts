@@ -1,11 +1,12 @@
 import { panic, Result } from "better-result";
 import { and, eq, isNull, ne } from "drizzle-orm";
-import { t } from "elysia";
+import { type Static, t } from "elysia";
 
+import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import type { InvoiceTotals } from "@stll/invoicing";
 
 import type { SafeDbError } from "@/api/db/safe-db";
-import { abortableTx } from "@/api/db/safe-db";
+import { resultTx } from "@/api/db/safe-db";
 import { BILLING_STATUS, expenses, timeEntries } from "@/api/db/schema";
 import {
   checkInvoiceLineCapacity,
@@ -61,6 +62,24 @@ const createLineBodySchema = t.Object({
   vatTreatment: tVatTreatment,
 });
 
+const prepareLineInput = ({
+  source,
+  vatRateBps,
+  vatTreatment,
+}: Static<typeof createLineBodySchema>) => {
+  const vat = { vatRateBps, vatTreatment };
+  if (source.type !== "manual") {
+    return Result.ok({ manualDraft: null, vat });
+  }
+  return manualLineDraft({
+    description: source.description,
+    quantity: source.quantity,
+    unit: source.unit ?? null,
+    unitPrice: cents(source.unitPriceMinor),
+    ...vat,
+  }).map((manualDraft) => ({ manualDraft, vat }));
+};
+
 const lineParamsSchema = workspaceParams({ invoiceId: tSafeId("invoice") });
 
 type CreatedLine = { id: SafeId<"invoiceLine">; totals: InvoiceTotals };
@@ -68,7 +87,6 @@ type CreatedLine = { id: SafeId<"invoiceLine">; totals: InvoiceTotals };
 const NOT_BILLABLE_MESSAGE =
   "The entry must be approved, billable, priced in the invoice currency, and not already on an invoice";
 
-// The partial unique index prevents attaching an entry already on another line.
 const lineCreationError = (error: HandlerError | SafeDbError) =>
   DatabaseError.is(error) && error.code === PG_ERROR.UNIQUE_VIOLATION
     ? new HandlerError({ status: 409, message: NOT_BILLABLE_MESSAGE })
@@ -90,31 +108,17 @@ const createInvoiceLine = createSafeHandler(
   },
   async function* ({
     safeDb,
-    session,
     user,
+    session,
     workspaceId,
     params,
     body,
     recordAuditEvent,
   }) {
-    const vat = {
-      vatRateBps: body.vatRateBps,
-      vatTreatment: body.vatTreatment,
-    };
-    const { source } = body;
-    const manualDraft: InvoiceLineDraft | null =
-      source.type === "manual"
-        ? yield* manualLineDraft({
-            description: source.description,
-            quantity: source.quantity,
-            unit: source.unit ?? null,
-            unitPrice: cents(source.unitPriceMinor),
-            ...vat,
-          })
-        : null;
+    const { manualDraft, vat } = yield* prepareLineInput(body);
     const now = new Date();
 
-    const txResult = await abortableTx(
+    const txResult = await resultTx(
       safeDb,
       async (tx): Promise<Result<CreatedLine, HandlerError>> => {
         const runningError = await guardRunningTimeEntries({
@@ -123,13 +127,16 @@ const createInvoiceLine = createSafeHandler(
           actorUserId: user.id,
           selection: {
             type: "entries",
-            ids: source.type === "time_entry" ? [source.timeEntryId] : [],
+            ids:
+              body.source.type === "time_entry"
+                ? [body.source.timeEntryId]
+                : [],
           },
         });
         if (runningError) {
           return Result.err(runningError);
         }
-        const invoice = await lockDraftInvoiceForLines(
+        const invoiceResult = await lockDraftInvoiceForLines(
           tx,
           {
             invoiceId: params.invoiceId,
@@ -138,6 +145,10 @@ const createInvoiceLine = createSafeHandler(
           },
           recordAuditEvent,
         );
+        if (invoiceResult.isErr()) {
+          return Result.err(invoiceResult.error);
+        }
+        const invoice = invoiceResult.value;
         if (!invoice) {
           return Result.err(
             new HandlerError({
@@ -147,6 +158,17 @@ const createInvoiceLine = createSafeHandler(
           );
         }
 
+        if (
+          invoice.documentType === "credit_note" &&
+          body.source.type !== "manual"
+        ) {
+          return Result.err(
+            new HandlerError({
+              status: 422,
+              message: "Credit notes cannot bill time entries or expenses",
+            }),
+          );
+        }
         const capacity = await checkInvoiceLineCapacity(
           tx,
           { invoiceId: params.invoiceId, workspaceId },
@@ -159,7 +181,7 @@ const createInvoiceLine = createSafeHandler(
         // Read and lock the entry the line bills before writing anything, so
         // a refusal commits nothing.
         let draft: InvoiceLineDraft;
-        if (source.type === "time_entry") {
+        if (body.source.type === "time_entry") {
           const [entry] = await tx
             .select({
               id: timeEntries.id,
@@ -171,8 +193,9 @@ const createInvoiceLine = createSafeHandler(
             .from(timeEntries)
             .where(
               and(
-                eq(timeEntries.id, source.timeEntryId),
+                eq(timeEntries.id, body.source.timeEntryId),
                 eq(timeEntries.workspaceId, workspaceId),
+                eq(timeEntries.activityGroup, TIME_ENTRY_ACTIVITY_GROUP.CLIENT),
                 eq(timeEntries.status, BILLING_STATUS.APPROVED),
                 eq(timeEntries.billable, true),
                 isNull(timeEntries.invoiceId),
@@ -187,8 +210,8 @@ const createInvoiceLine = createSafeHandler(
               new HandlerError({ status: 400, message: NOT_BILLABLE_MESSAGE }),
             );
           }
-          draft = timeEntryLineDraft(entry, vat, source.description);
-        } else if (source.type === "expense") {
+          draft = timeEntryLineDraft(entry, vat, body.source.description);
+        } else if (body.source.type === "expense") {
           const [expense] = await tx
             .select({
               id: expenses.id,
@@ -200,7 +223,7 @@ const createInvoiceLine = createSafeHandler(
             .from(expenses)
             .where(
               and(
-                eq(expenses.id, source.expenseId),
+                eq(expenses.id, body.source.expenseId),
                 eq(expenses.workspaceId, workspaceId),
                 eq(expenses.status, BILLING_STATUS.APPROVED),
                 eq(expenses.billable, true),
@@ -215,7 +238,7 @@ const createInvoiceLine = createSafeHandler(
               new HandlerError({ status: 400, message: NOT_BILLABLE_MESSAGE }),
             );
           }
-          draft = expenseLineDraft(expense, vat, source.description);
+          draft = expenseLineDraft(expense, vat, body.source.description);
         } else {
           draft = manualDraft ?? panic("A manual line has no draft");
         }
@@ -239,6 +262,7 @@ const createInvoiceLine = createSafeHandler(
               and(
                 eq(timeEntries.id, draft.timeEntryId),
                 eq(timeEntries.workspaceId, workspaceId),
+                eq(timeEntries.activityGroup, TIME_ENTRY_ACTIVITY_GROUP.CLIENT),
               ),
             );
           events.push({
@@ -274,9 +298,7 @@ const createInvoiceLine = createSafeHandler(
           [draft],
           { recordAuditEvent },
         );
-        if (!line) {
-          return panic("Invoice line insert returned no row");
-        }
+        const lineId = line?.id ?? panic("Invoice line insert returned no row");
         const totals = await recalculateInvoiceTotals(
           tx,
           scope,
@@ -284,17 +306,17 @@ const createInvoiceLine = createSafeHandler(
           recordAuditEvent,
         );
 
+        if (totals.isErr()) {
+          return Result.err(totals.error);
+        }
+
         await recordAuditEvent(tx, events);
 
-        return Result.ok({ id: line.id, totals });
+        return Result.ok({ id: lineId, totals: totals.value });
       },
     );
 
-    if (Result.isError(txResult)) {
-      return Result.err(lineCreationError(txResult.error));
-    }
-
-    return txResult.value;
+    return txResult.mapError(lineCreationError);
   },
 );
 
