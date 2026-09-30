@@ -5,11 +5,16 @@
 // ceilings), and renders the result. Exit codes are set on `process.exitCode`
 // directly so stricli's `??=` never overrides them.
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { readFile } from "node:fs/promises";
 import { createInterface } from "node:readline/promises";
 import { text as readStreamText } from "node:stream/consumers";
 
+import {
+  actionAdmissionRefusalLines,
+  actionAdmissionRefusalOutput,
+  readActionAdmissionRefusal,
+} from "./action-admission-refusal.js";
 import { decodeAccessTokenClaims } from "./auth/jwt.js";
 import { RESOURCE_SCOPE_PREFIX } from "./auth/scopes.js";
 import type { Context } from "./context.js";
@@ -503,6 +508,9 @@ export const confirmDestructive = async ({
 };
 
 export const mapClientErrorExit = (error: McpClientError): ExitCode => {
+  if (error.admission !== undefined) {
+    return resolveMcpErrorCodeExit(error.admission.code) ?? EXIT_CODES.server;
+  }
   if (error.kind === "http") {
     return mapHttpStatusExit(error.httpStatus);
   }
@@ -516,6 +524,25 @@ export const mapClientErrorExit = (error: McpClientError): ExitCode => {
     return EXIT_CODES.server;
   }
   return EXIT_CODES.server;
+};
+
+export const renderClientError = ({
+  context,
+  error,
+  writers,
+  format,
+}: {
+  context: Context;
+  error: McpClientError;
+  writers: Writers;
+  format?: OutputFormat | undefined;
+}): void => {
+  writers.stderr(
+    error.admission === undefined
+      ? `${error.message}\n`
+      : actionAdmissionRefusalOutput({ refusal: error.admission, format }),
+  );
+  setExit(context, mapClientErrorExit(error));
 };
 
 /**
@@ -554,6 +581,8 @@ type ErrorEnvelope = {
   message: string;
   hint: string | undefined;
   issues: readonly ErrorIssue[];
+  retryable?: boolean;
+  contactUrl?: string;
   requestId: string | undefined;
 };
 
@@ -610,6 +639,12 @@ export const errorEnvelope = (payload: unknown): ErrorEnvelope | null => {
     hint: typeof hint === "string" ? hint : undefined,
     issues: parseErrorIssues(error),
     requestId: parseRequestId(error["requestId"]),
+    ...(typeof error["retryable"] === "boolean"
+      ? { retryable: error["retryable"] }
+      : {}),
+    ...(typeof error["contactUrl"] === "string"
+      ? { contactUrl: error["contactUrl"] }
+      : {}),
   };
 };
 
@@ -793,6 +828,10 @@ export const reservedFlagUsageError = (flags: LeafFlags): string | null => {
   return null;
 };
 
+type AllFailure =
+  | { type: "client"; error: McpClientError }
+  | { type: "tool"; result: CallToolResult };
+
 type AllOutcome = {
   payload: unknown;
   /** Where a ceiling stopped the walk short of the last page; null when complete. */
@@ -833,7 +872,7 @@ const followAll = async ({
   ) => Record<string, unknown>;
   stream?: (item: unknown) => void;
   requestTimeoutMs?: number;
-}): Promise<Result<AllOutcome, McpClientError>> => {
+}): Promise<Result<AllOutcome, AllFailure>> => {
   const items: unknown[] = [];
   let text = "";
   let firstPayload: Record<string, unknown> = {};
@@ -854,7 +893,10 @@ const followAll = async ({
         : { timeoutMs: requestTimeoutMs }),
     });
     if (Result.isError(call)) {
-      return Result.err(call.error);
+      return Result.err({ type: "client", error: call.error });
+    }
+    if (call.value.isError === true) {
+      return Result.err({ type: "tool", result: call.value });
     }
     const payload = parsePayload(call.value);
     if (pages === 0 && isRecord(payload)) {
@@ -962,9 +1004,28 @@ export const streamOrRenderAllPages = async ({
       : {}),
   });
   if (Result.isError(outcome)) {
-    writers.stderr(`${outcome.error.message}\n`);
-    setExit(context, mapClientErrorExit(outcome.error));
-    return;
+    switch (outcome.error.type) {
+      case "client":
+        renderClientError({
+          context,
+          error: outcome.error.error,
+          writers,
+          format,
+        });
+        return;
+      case "tool":
+        renderToolError({
+          context,
+          result: outcome.error.result,
+          writers,
+          format,
+        });
+        return;
+      default: {
+        outcome.error satisfies never;
+        panic("Unknown pagination failure");
+      }
+    }
   }
   if (!streaming) {
     const plan = buildRenderPlan({
@@ -1013,11 +1074,18 @@ const leafFlagPaths = (
 export const toolErrorLines = (
   envelope: {
     message: string;
+    code?: string;
+    retryable?: boolean;
+    contactUrl?: string;
     hint: string | undefined;
     issues: readonly { path: string; message: string }[];
   },
   flagPaths?: ReadonlySet<string>,
 ): string[] => {
+  const admission = readActionAdmissionRefusal(envelope);
+  if (admission !== undefined) {
+    return actionAdmissionRefusalLines(admission);
+  }
   const lines: string[] = [];
   const [only] = envelope.issues;
   if (envelope.issues.length === 1 && only?.message === envelope.message) {
@@ -1054,14 +1122,30 @@ export const renderToolError = ({
   result,
   writers,
   flagPaths,
+  format,
 }: {
   context: Context;
+  format?: OutputFormat | undefined;
   result: CallToolResult;
   writers: Writers;
   flagPaths?: ReadonlySet<string> | undefined;
 }): void => {
   const errorPayload = parsePayload(result);
   const envelope = errorEnvelope(errorPayload);
+  const admission = readActionAdmissionRefusal(errorPayload);
+  if (admission !== undefined && (format === "json" || format === "jsonl")) {
+    writers.stderr(
+      actionAdmissionRefusalOutput({
+        refusal: admission,
+        format,
+        ...(envelope?.requestId === undefined
+          ? {}
+          : { requestId: envelope.requestId }),
+      }),
+    );
+    setExit(context, classifyToolError(errorPayload));
+    return;
+  }
   if (envelope !== null) {
     for (const line of toolErrorLines(envelope, flagPaths)) {
       writers.stderr(`${line}\n`);
@@ -1101,7 +1185,7 @@ export const renderCommandResult = ({
   flagPaths,
 }: RenderCommandResultOptions): void => {
   if (result.isError) {
-    renderToolError({ context, result, writers, flagPaths });
+    renderToolError({ context, result, writers, flagPaths, format });
     return;
   }
   const payload = parsePayload(result);
@@ -1341,8 +1425,7 @@ export const runLeafCommand = async ({
       : { timeoutMs: spec.requestTimeoutMs }),
   });
   if (Result.isError(call)) {
-    writers.stderr(`${call.error.message}\n`);
-    setExit(context, mapClientErrorExit(call.error));
+    renderClientError({ context, error: call.error, writers, format });
     return;
   }
 
@@ -1489,8 +1572,12 @@ export const maybeConfirmAndRetry = async ({
     ...(timeoutMs === undefined ? {} : { timeoutMs }),
   });
   if (Result.isError(retry)) {
-    writers.stderr(`${retry.error.message}\n`);
-    setExit(context, mapClientErrorExit(retry.error));
+    renderClientError({
+      context,
+      error: retry.error,
+      writers,
+      format: readOutputFormat(flags, context),
+    });
     return true;
   }
   renderCall(retry.value);

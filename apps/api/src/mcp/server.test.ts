@@ -271,6 +271,7 @@ describe("handleMcpHttpRequest", () => {
           code: refusalError.code,
           message: refusal.message,
           retryable: refusal.retryable,
+          ...(contact ? { contactUrl: "https://example.invalid/contact" } : {}),
           hint: contact
             ? `${refusal.hint} Contact: https://example.invalid/contact`
             : refusal.hint,

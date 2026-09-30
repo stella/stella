@@ -713,6 +713,10 @@ const mapStatusResponse = (
           ? responseBody["hint"]
           : refusal.hint,
       retryable: refusal.retryable,
+      contactUrl:
+        typeof responseBody["contactUrl"] === "string"
+          ? responseBody["contactUrl"]
+          : undefined,
     });
   }
   const code = statusCodeToErrorCode(statusCode);

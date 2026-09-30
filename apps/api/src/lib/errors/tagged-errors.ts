@@ -116,6 +116,7 @@ export type HandlerErrorProps<
   /** Corrective action for agent and CLI clients; never requires parsing `message`. */
   hint?: string | undefined;
   contactUrl?: ActionAdmissionRefusal["contactUrl"];
+  retryable?: boolean | undefined;
   /**
    * OAuth-style machine-readable error identifier (e.g. `login_required`,
    * `interaction_required`, `issuer_not_enabled`). Distinct from `code`
@@ -150,6 +151,7 @@ export class HandlerError<
   declare status: TStatus;
   declare hint?: string | undefined;
   declare contactUrl?: string | undefined;
+  declare retryable?: boolean | undefined;
   declare usage?: HandlerErrorUsageDetail | undefined;
   declare confirmation?: HandlerErrorConfirmationDetail | undefined;
   declare error?: string | undefined;
@@ -164,6 +166,7 @@ export class HandlerError<
     this.status = props.status;
     this.hint = props.hint;
     this.contactUrl = props.contactUrl;
+    this.retryable = props.retryable;
     this.usage = props.usage;
     this.confirmation = props.confirmation;
     this.error = props.error;

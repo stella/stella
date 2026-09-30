@@ -798,6 +798,7 @@ export const createMcpHttpRequestHandler = ({
           code: refusal.code,
           message: refusal.message,
           hint: refusal.hint,
+          contactUrl: refusal.contactUrl,
           retryable: ACTION_ADMISSION_REFUSALS[refusal.code].retryable,
         });
       }

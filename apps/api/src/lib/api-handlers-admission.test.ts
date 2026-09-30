@@ -135,6 +135,7 @@ describe("finite HTTP action admission", () => {
           expect(body).toMatchObject({
             code: refusal.code,
             message: metadata.message,
+            retryable: metadata.retryable,
           });
           expect(JSON.stringify(body)).not.toContain(
             "private implementation detail",

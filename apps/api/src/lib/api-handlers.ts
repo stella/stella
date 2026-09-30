@@ -484,6 +484,7 @@ type SafeErrorBody = {
   /** Corrective next step for programmatic clients. */
   hint?: string;
   contactUrl?: string;
+  retryable?: boolean;
   /** Field-scoped reasons the request was rejected. */
   issues?: HandlerErrorValidationIssue[];
   /**
@@ -1341,6 +1342,7 @@ const safeErrorBody = (error: HandlerError): SafeErrorBody => ({
   message: error.message,
   ...(error.hint ? { hint: error.hint } : {}),
   ...(error.contactUrl ? { contactUrl: error.contactUrl } : {}),
+  ...(error.retryable === undefined ? {} : { retryable: error.retryable }),
   ...(error.issues ? { issues: error.issues } : {}),
   // Usage-limit 402s carry structured fields so the frontend renders the
   // "x of y units left" modal without parsing the message (see SafeErrorBody).

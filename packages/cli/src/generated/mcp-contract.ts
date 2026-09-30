@@ -60,6 +60,37 @@ export const MCP_ERROR_CODES = [
   "internal_error",
 ] as const;
 export type McpErrorCode = (typeof MCP_ERROR_CODES)[number];
+export const ACTION_ADMISSION_REFUSALS = {
+  action_period_exhausted: {
+    status: 403,
+    message: "This action is paused for your organization.",
+    hint: "Contact your administrator for help. Do not retry this call immediately.",
+    retryable: false,
+  },
+  action_concurrency_busy: {
+    status: 429,
+    message: "Other work is in progress. Please try again shortly.",
+    hint: "Wait for active work to finish, then retry this call.",
+    retryable: true,
+  },
+  action_not_enabled: {
+    status: 403,
+    message: "This action is not enabled for your organization.",
+    hint: "Contact your administrator to enable this action before retrying.",
+    retryable: false,
+  },
+  action_admission_unavailable: {
+    status: 503,
+    message: "This action is temporarily paused. Please try again shortly.",
+    hint: "Wait for the service to recover, then retry this call.",
+    retryable: true,
+  },
+} as const;
+export type ActionAdmissionCode = keyof typeof ACTION_ADMISSION_REFUSALS;
+export const isActionAdmissionCode = (
+  code: unknown,
+): code is ActionAdmissionCode =>
+  typeof code === "string" && Object.hasOwn(ACTION_ADMISSION_REFUSALS, code);
 export const MCP_CLI_TOOL_SCOPES = [
   "read",
   "contacts_write",

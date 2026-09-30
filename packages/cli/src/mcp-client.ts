@@ -15,6 +15,10 @@ import {
 } from "@modelcontextprotocol/client";
 import { Result, TaggedError, type TaggedErrorClass } from "better-result";
 
+import {
+  readHttpActionAdmissionRefusal,
+  type ActionAdmissionRefusal,
+} from "./action-admission-refusal.js";
 import { CLI_MINIMUM_HEADER } from "./cli-version-nudge.js";
 import { CLI_VERSION } from "./generated/cli-version.js";
 import { MCP_HTTP_PATH } from "./mcp-constants.js";
@@ -71,6 +75,7 @@ export class McpClientError extends McpClientErrorBase<{
   kind: "transport" | "http" | "rpc";
   httpStatus?: number;
   rpcCode?: number;
+  admission?: ActionAdmissionRefusal;
 }> {}
 
 const mcpUrl = (serverUrl: string): string =>
@@ -95,7 +100,18 @@ const requestMethod = (init: RequestInit | undefined): string | undefined => {
     : undefined;
 };
 
-const toClientError = (cause: unknown): McpClientError => {
+const toClientError = (
+  cause: unknown,
+  admission?: ActionAdmissionRefusal,
+): McpClientError => {
+  if (admission !== undefined) {
+    return new McpClientError({
+      kind: "http",
+      admission,
+      message: admission.message,
+      ...(cause instanceof SdkHttpError ? { httpStatus: cause.status } : {}),
+    });
+  }
   if (cause instanceof SdkHttpError) {
     return new McpClientError({
       kind: "http",
@@ -139,9 +155,16 @@ const runMcpOperation = async <T>({
 }): Promise<
   Result<{ value: T; evidence?: ResponseEvidence }, McpClientError>
 > => {
+  let admission: ActionAdmissionRefusal | undefined;
   let evidencePromise: Promise<ResponseEvidence | undefined> | undefined;
   const observedFetch: FetchLike = async (input, init) => {
     const response = await fetch(input, init);
+    if (!response.ok) {
+      const refusal = await readHttpActionAdmissionRefusal(response);
+      if (refusal !== undefined) {
+        admission = refusal;
+      }
+    }
     if (observeMethod !== undefined && requestMethod(init) === observeMethod) {
       const headers = new Headers(response.headers);
       evidencePromise = headers
@@ -182,7 +205,7 @@ const runMcpOperation = async <T>({
     catch: (cause) => cause,
   });
   return Result.isError(result)
-    ? Result.err(toClientError(result.error))
+    ? Result.err(toClientError(result.error, admission))
     : Result.ok(result.value);
 };
 
