@@ -5,6 +5,7 @@
  * into every decision it touches leaving the walk.
  */
 
+import { PDF } from "@libpdf/core";
 import { describe, expect, test } from "bun:test";
 
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
@@ -145,5 +146,38 @@ describe("PDF source line retention", () => {
       type: "paragraph",
       role: "signature",
     });
+  });
+});
+
+describe("PDF byte fixture text retention", () => {
+  const parseLines = async (texts: string[]) => {
+    const pdf = PDF.create();
+    const page = pdf.addPage({ size: "letter" });
+    for (const [index, text] of texts.entries()) {
+      page.drawText(text, { x: 70, y: 700 - index * 20, fontSize: 10 });
+    }
+    return await parseSkDecisionPdf({
+      pdfBytes: await pdf.save(),
+      caseNumber: "1/2026",
+      ecli: "ECLI:SK:TEST:2026:1",
+      court: "Court",
+      decisionDate: undefined,
+      decisionType: undefined,
+    });
+  };
+
+  test("does not discard body text merged after a metadata header", async () => {
+    const { fulltext } = await parseLines([
+      "ECLI: ECLI:SK:TEST:2026:1",
+      "The body survives.",
+    ]);
+    expect(fulltext).toBe("The body survives.");
+  });
+
+  test("keeps numeric content through extraction at either page boundary", async () => {
+    for (const texts of [["1234", "Body"], ["Body", "1234"], ["1"]]) {
+      const { fulltext } = await parseLines(texts);
+      expect(fulltext).toBe(texts.join(" "));
+    }
   });
 });
