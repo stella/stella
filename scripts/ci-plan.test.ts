@@ -700,6 +700,30 @@ const fastRequired = v.parse(
   JSON.parse(resultStep.env["FAST_REQUIRED"] ?? ""),
 );
 
+test("route network budgets are required on pull requests and merge groups", () => {
+  const job = "network-baseline";
+  expect(resultJob.needs).toContain(job);
+  expect(fastRequired).toContain(job);
+  expect(jobScopes[job]).toBe("e2e_core_required");
+  expect(heavyJobs).not.toContain(job);
+  const baselineJob = v.parse(
+    v.object({ needs: v.array(v.string()) }),
+    ciJobs[job],
+  );
+  expect(baselineJob.needs).toContain("web-build");
+  for (const event of [EVENT.pullRequest, EVENT.mergeGroup]) {
+    expect(evaluateResult({ event, results: { [job]: "failure" } })).toBe(1);
+    expect(evaluateResult({ event, results: { [job]: "skipped" } })).toBe(1);
+    expect(
+      evaluateResult({
+        event,
+        results: { [job]: "skipped" },
+        unplannedScopes: ["e2e_core_required"],
+      }),
+    ).toBe(0);
+  }
+});
+
 test("a fast-depth run requires each fast-required job its plan selected", () => {
   expect(fastRequired.length).toBeGreaterThan(0);
   for (const job of fastRequired) {
