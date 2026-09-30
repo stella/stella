@@ -896,44 +896,43 @@ describe("the document", () => {
     expect(content.unmappedMarkup).toEqual([]);
   });
 
-  test.each([
-    [
-      "xPart",
-      `<xPart><xCOLGROUPx>${layoutPayload}</xCOLGROUPx></xPart>`,
-      "xCOLGROUPx",
-    ],
-    [
-      "xRows",
-      `<xPart><xRows><xCOLGROUPx>${layoutPayload}</xCOLGROUPx></xRows></xPart>`,
-      "xCOLGROUPx",
-    ],
-    [
-      "xRow",
-      `<xPart><xRows><xRow><xCOLx>${layoutPayload}</xCOLx></xRow></xRows></xPart>`,
-      "xCOLx",
-    ],
-    [
-      "xClmn",
-      `<xPart><xRows><xRow><xClmn><xCOLGROUPx>${layoutPayload}</xCOLGROUPx></xClmn></xRow></xRows></xPart>`,
-      "xCOLGROUPx",
-    ],
-    [
-      "xEnum",
-      `<xPart><xEnum><xCOLx>${layoutPayload}</xCOLx><xEnumElem><xText>list item</xText></xEnumElem></xEnum></xPart>`,
-      "xCOLx",
-    ],
-    [
-      "xEnumElem",
-      `<xPart><xEnum><xEnumElem><xCOLGROUPx>${layoutPayload}</xCOLGROUPx></xEnumElem></xEnum></xPart>`,
-      "xCOLGROUPx",
-    ],
-  ])(
-    "visible layout text survives in %s",
-    (_container, layoutXml, layoutTag) => {
+  for (const { container, layoutXml, layoutTag } of [
+    {
+      container: "xPart",
+      layoutXml: `<xPart><xCOLGROUPx>${layoutPayload}</xCOLGROUPx></xPart>`,
+      layoutTag: "xCOLGROUPx",
+    },
+    {
+      container: "xRows",
+      layoutXml: `<xPart><xRows><xCOLGROUPx>${layoutPayload}</xCOLGROUPx></xRows></xPart>`,
+      layoutTag: "xCOLGROUPx",
+    },
+    {
+      container: "xRow",
+      layoutXml: `<xPart><xRows><xRow><xCOLx>${layoutPayload}</xCOLx></xRow></xRows></xPart>`,
+      layoutTag: "xCOLx",
+    },
+    {
+      container: "xClmn",
+      layoutXml: `<xPart><xRows><xRow><xClmn><xCOLGROUPx>${layoutPayload}</xCOLGROUPx></xClmn></xRow></xRows></xPart>`,
+      layoutTag: "xCOLGROUPx",
+    },
+    {
+      container: "xEnum",
+      layoutXml: `<xPart><xEnum><xCOLx>${layoutPayload}</xCOLx><xEnumElem><xText>list item</xText></xEnumElem></xEnum></xPart>`,
+      layoutTag: "xCOLx",
+    },
+    {
+      container: "xEnumElem",
+      layoutXml: `<xPart><xEnum><xEnumElem><xCOLGROUPx>${layoutPayload}</xCOLGROUPx></xEnumElem></xEnum></xPart>`,
+      layoutTag: "xCOLGROUPx",
+    },
+  ]) {
+    test(`visible layout text survives in ${container}`, () => {
       const content =
         readPlNcourtContent(layoutXml) ?? panic("the document did not read");
       const expectedParagraphs = ["before", "nested", "cdata", "after"];
-      if (_container === "xEnum") {
+      if (container === "xEnum") {
         expectedParagraphs.push("list item");
       }
       expect(content.sourceParagraphs).toEqual(expectedParagraphs);
@@ -950,7 +949,7 @@ describe("the document", () => {
         content: content.html,
         keywords: [],
         statutes: [],
-        documentId: `layout-${_container}`,
+        documentId: `layout-${container}`,
       });
       const positions = expectedParagraphs.map((text) =>
         parsed.fulltext.indexOf(text),
@@ -959,8 +958,8 @@ describe("the document", () => {
       expect(positions).toEqual(
         positions.toSorted((left, right) => left - right),
       );
-    },
-  );
+    });
+  }
 
   test("CDATA inside a paragraph stays beside its inline text", () => {
     const content =
