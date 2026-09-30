@@ -117,12 +117,13 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
       await withStore(async ({ client, organizationId }) => {
         const acquisitions: string[][] = [];
         let acceptedCount: unknown;
+        let acceptedFields: unknown;
         const result = await withActionAdmission({
           organizationId,
           userId,
           enabled: true,
           policy,
-          periodPolicy: { periodMs: 250, limit: 1 },
+          periodPolicy: { periodMs: 86_400_000, limit: 1 },
           periodIdentity: {
             actionKind: "chat.send",
             logicalPhaseId: "delayed-phase",
@@ -132,12 +133,30 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
               if (!args.at(0)?.includes("ZREMRANGEBYSCORE")) {
                 return await client.send(command, args);
               }
-              acquisitions.push(args);
-              if (acquisitions.length === 1) {
-                await Bun.sleep(
-                  Math.max(0, Number(args.at(10)) - Date.now()) + 20,
-                );
+              if (acquisitions.length === 0) {
+                const clock = await client.send("TIME", []);
+                if (!Array.isArray(clock)) {
+                  throw new TypeError("Missing store clock");
+                }
+                // Deliver yesterday's planned window to the real atomic script;
+                // no wall-clock sleep or sub-second expiry race is needed.
+                const stale = resolveActionPeriodBudget({
+                  organizationId,
+                  identity: {
+                    actionKind: "chat.send",
+                    logicalPhaseId: "delayed-phase",
+                  },
+                  policy: { periodMs: 86_400_000, limit: 1 },
+                  nowMs: Number(clock.at(0)) * 1000 - 86_400_000,
+                });
+                if (Result.isError(stale) || stale.value === null) {
+                  throw new Error("Missing stale budget");
+                }
+                args[4] = stale.value.key;
+                args[9] = String(stale.value.startMs);
+                args[10] = String(stale.value.endMs);
               }
+              acquisitions.push([...args]);
               const reply = await client.send(command, args);
               if (acquisitions.length === 2) {
                 const key = args.at(4);
@@ -145,6 +164,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
                   throw new Error("Missing retry period key");
                 }
                 acceptedCount = await client.send("HGET", [key, "count"]);
+                acceptedFields = await client.send("HLEN", [key]);
               }
               return reply;
             },
@@ -154,9 +174,13 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
         expect(result).toEqual(Result.ok("accepted in current period"));
         expect(acquisitions).toHaveLength(2);
         expect(acceptedCount).toBe("1");
+        // One phase member, plus the count field.
+        expect(acceptedFields).toBe(2);
         const first = acquisitions.at(0);
         const second = acquisitions.at(1);
-        expect(second?.at(9)).toBe(first?.at(10));
+        expect(Number(second?.at(9))).toBeGreaterThanOrEqual(
+          Number(first?.at(10)),
+        );
         expect(second?.at(8)).toBe(first?.at(8));
         expect(second?.at(12)).toBe(first?.at(12));
         const oldKey = first?.at(4);

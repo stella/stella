@@ -17,11 +17,18 @@ import type {
 import { panic, Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { Temporal } from "@stll/time";
+
+import { env } from "@/api/env";
 import {
   resetAnalyticsForTesting,
   setAnalyticsForTesting,
 } from "@/api/lib/analytics/client";
 import type { ServerAnalyticsCaptureParams } from "@/api/lib/analytics/server-analytics";
+import { toSafeId } from "@/api/lib/branded-types";
+import { closeActionAdmissionRedis } from "@/api/lib/rate-limit/action-admission";
+import { resolveActionPeriodBudget } from "@/api/lib/rate-limit/action-period-budget";
+import { createRedisClient } from "@/api/lib/redis-client";
 import { recordMcpSessionInitialized } from "@/api/mcp/client-identity";
 import {
   MCP_ALL_RESOURCE_SCOPES,
@@ -194,6 +201,93 @@ describe("handleMcpHttpRequest", () => {
     resolveMcpSessionContextMock.mockReset();
     resetAnalyticsForTesting();
   });
+
+  const storeTest =
+    process.env["STELLA_RUN_VALKEY_TESTS"] === "true" &&
+    process.env["REDIS_URL"]
+      ? test
+      : test.skip;
+  storeTest(
+    "tools/call dispatches sharing a client RPC id consume distinct actions",
+    async () => {
+      const previous = {
+        FEATURE_ACTION_ADMISSION: env.FEATURE_ACTION_ADMISSION,
+        ACTION_ADMISSION_ORG_CONCURRENCY: env.ACTION_ADMISSION_ORG_CONCURRENCY,
+        ACTION_ADMISSION_USER_CONCURRENCY:
+          env.ACTION_ADMISSION_USER_CONCURRENCY,
+        ACTION_ADMISSION_LEASE_MS: env.ACTION_ADMISSION_LEASE_MS,
+        ACTION_ADMISSION_PERIOD_MS: env.ACTION_ADMISSION_PERIOD_MS,
+        ACTION_ADMISSION_PERIOD_ACTIONS: env.ACTION_ADMISSION_PERIOD_ACTIONS,
+      };
+      const organizationId = toSafeId<"organization">(
+        `mcp_period_${Bun.randomUUIDv7()}`,
+      );
+      const userId = toSafeId<"user">("mcp_period_user");
+      const client = createRedisClient();
+      closeActionAdmissionRedis();
+      Object.assign(env, {
+        FEATURE_ACTION_ADMISSION: true,
+        ACTION_ADMISSION_ORG_CONCURRENCY: 2,
+        ACTION_ADMISSION_USER_CONCURRENCY: 2,
+        ACTION_ADMISSION_LEASE_MS: 120_000,
+        ACTION_ADMISSION_PERIOD_MS: 86_400_000,
+        ACTION_ADMISSION_PERIOD_ACTIONS: 2,
+      });
+      authenticateMcpRequestMock.mockResolvedValue(
+        Result.ok({ organizationId, userId, scopes: ["stella:read"] }),
+      );
+      resolveMcpSessionContextMock.mockResolvedValue({
+        organizationId,
+        userId,
+      });
+      getMcpToolDefinitionMock.mockResolvedValue({
+        access: "read",
+        scope: "stella:read",
+        name: "list_matters",
+        anonymized: { exposure: "excluded", reason: "test" },
+        description: "List matters",
+        inputSchema: { type: "object", properties: {} },
+      });
+      handleMcpToolCallMock.mockResolvedValue({
+        content: [{ type: "text", text: "ok" }],
+      });
+      try {
+        await client.connect();
+        for (let dispatch = 0; dispatch < 2; dispatch += 1) {
+          const response = await handleMcpHttpRequest(
+            createMcpRequest({
+              id: 7,
+              jsonrpc: "2.0",
+              method: "tools/call",
+              params: { name: "list_matters", arguments: {} },
+            }),
+          );
+          expect(response.status).toBe(200);
+          const body =
+            await readTestJson<McpJsonResponse<CallToolResult>>(response);
+          expect(body.result.isError).not.toBe(true);
+        }
+        expect(handleMcpToolCallMock).toHaveBeenCalledTimes(2);
+        const budget = resolveActionPeriodBudget({
+          organizationId,
+          identity: { actionKind: "mcp.tools/call", logicalPhaseId: "lookup" },
+          policy: { periodMs: 86_400_000, limit: 2 },
+          nowMs: Temporal.Now.instant().epochMilliseconds,
+        });
+        if (Result.isError(budget) || budget.value === null) {
+          throw new Error("Missing MCP budget");
+        }
+        expect(await client.send("HGET", [budget.value.key, "count"])).toBe(
+          "2",
+        );
+        expect(await client.send("HLEN", [budget.value.key])).toBe(3);
+      } finally {
+        client.close();
+        closeActionAdmissionRedis();
+        Object.assign(env, previous);
+      }
+    },
+  );
 
   test("returns a generic 401 for token validation failures", async () => {
     authenticateMcpRequestMock.mockResolvedValue(
