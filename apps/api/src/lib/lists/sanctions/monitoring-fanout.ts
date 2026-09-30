@@ -8,7 +8,6 @@ import {
   sanctionsOrganizationMarks,
   sanctionsSources,
 } from "@/api/db/schema";
-import { createIngestionDb } from "@/api/db/scoped";
 import { readSanctionsFreshness } from "@/api/lib/lists/sanctions/freshness";
 import { sanctionsSourceIds } from "@/api/lib/lists/sanctions/source-config";
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
@@ -151,8 +150,8 @@ const consumeOrganizationRequest = async (db: SchedulerDb) =>
   });
 
 const queueFreshnessTransitions = async (db: SchedulerDb, now: Date) => {
-  const ingestionDb = createIngestionDb(db);
-  await ingestionDb(async (tx) => {
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
     const rows = await readSanctionsFreshness({
       now,
       db: async (run) => await run(tx),

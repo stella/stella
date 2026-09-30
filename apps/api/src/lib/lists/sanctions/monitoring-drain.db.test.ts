@@ -1,8 +1,10 @@
 import { panic, Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, TransactionRollbackError } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { readFileSync } from "node:fs";
+import { loadavg } from "node:os";
 
 import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -40,6 +42,27 @@ const orgId = toSafeId<"organization">("drain-org");
 const otherOrg = toSafeId<"organization">("drain-other");
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
+// PGlite raw execution returns { rows }; the production Bun driver returns the row array.
+// Adapt once where the test hands the real transaction to production code.
+const productionTransaction = (
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+) => {
+  const { delete: deleteRows } = tx;
+  return asTestRaw<Transaction>({
+    select: tx.select.bind(tx),
+    insert: tx.insert.bind(tx),
+    update: tx.update.bind(tx),
+    delete: deleteRows.bind(tx),
+    execute: async (query: SQL) => (await tx.execute(query)).rows,
+    rollback: tx.rollback.bind(tx),
+  });
+};
+const productionSchedulerDb = () =>
+  asTestRaw<SchedulerDb>({
+    select: db.select.bind(db),
+    transaction: async (run: (tx: Transaction) => Promise<unknown>) =>
+      await db.transaction(async (tx) => await run(productionTransaction(tx))),
+  });
 const scopedFor =
   (organizationId: typeof orgId): ScopedDb =>
   async (run) =>
@@ -48,7 +71,7 @@ const scopedFor =
       await tx.execute(
         sql`SELECT set_config('app.organization_id', ${organizationId}, true)`,
       );
-      return await run(asTestRaw<Transaction>(tx));
+      return await run(productionTransaction(tx));
     });
 const scopedDb = scopedFor(orgId);
 const futureNow = () => new Date(Date.now() + 1000);
@@ -680,7 +703,7 @@ test(
         await requestSanctionsMonitoringRefresh(tx, { organizationId }),
     );
     const now = futureNow();
-    const systemDb = asTestRaw<SchedulerDb>(db);
+    const systemDb = productionSchedulerDb();
     const first = await queueSanctionsMonitoringBackfills({
       db: systemDb,
       now,
@@ -730,35 +753,117 @@ test(
 );
 
 test(
-  "measure statement-trigger cost for a 10000-contact import",
+  "measure three quiet-load imports and unrelated updates with and without triggers",
   async () => {
-    const insert = async () =>
-      await scopedDb(async (tx) => {
+    const organizationId = toSafeId<"organization">("trigger-benchmark");
+    await db.insert(organization).values({
+      id: organizationId,
+      name: "Trigger benchmark",
+      slug: organizationId,
+      createdAt: new Date(),
+    });
+    const tenant = scopedFor(organizationId);
+    const importRows = async (tx: Transaction) =>
+      await tx.execute(sql`
+      INSERT INTO public.contacts (id, organization_id, type, display_name)
+      SELECT gen_random_uuid(), ${organizationId}, 'person', 'Import Person' FROM generate_series(1, 10000)
+    `);
+    const importSample = async () => {
+      let elapsed: number | undefined;
+      try {
+        await tenant(async (tx) => {
+          const started = performance.now();
+          await importRows(tx);
+          elapsed = performance.now() - started;
+          tx.rollback();
+        });
+      } catch (error) {
+        if (!(error instanceof TransactionRollbackError)) {
+          throw error;
+        }
+      }
+      return elapsed ?? panic("Import sample missing");
+    };
+    const updateSample = async () =>
+      await tenant(async (tx) => {
         const started = performance.now();
-        await tx.execute(sql`INSERT INTO public.contacts (id, organization_id, type, display_name)
-       SELECT gen_random_uuid(), ${orgId}, 'person', 'Import Person' FROM generate_series(1, 10000)`);
+        await tx.execute(
+          sql`UPDATE public.contacts SET notes = gen_random_uuid()::text WHERE organization_id = ${organizationId}`,
+        );
         return performance.now() - started;
       });
-    await client.exec(
-      "ALTER TABLE public.contacts DISABLE TRIGGER contacts_sanctions_mark_insert",
+    const measure = async (operation: "import" | "unrelated-update") => {
+      const trigger =
+        operation === "import"
+          ? "contacts_sanctions_mark_insert"
+          : "contacts_sanctions_mark_update";
+      const measureSample =
+        operation === "import" ? importSample : updateSample;
+      const runs: {
+        baselineMs: number;
+        triggeredMs: number;
+        ratio: number;
+        load: number | undefined;
+      }[] = [];
+      const setTrigger = async (enabled: boolean) =>
+        await client.exec(
+          `ALTER TABLE public.contacts ${enabled ? "ENABLE" : "DISABLE"} TRIGGER ${trigger}`,
+        );
+      const measureNextRun = async (index: number): Promise<void> => {
+        if (index === 3) {
+          return;
+        }
+        const load = loadavg().at(0);
+        // Alternate ordering so a warmed cache does not always favor the same case.
+        const triggeredFirst = index % 2 === 1;
+        await setTrigger(triggeredFirst);
+        const first = await measureSample();
+        await setTrigger(!triggeredFirst);
+        const second = await measureSample();
+        const baselineMs = triggeredFirst ? second : first;
+        const triggeredMs = triggeredFirst ? first : second;
+        runs.push({
+          baselineMs,
+          triggeredMs,
+          ratio: triggeredMs / baselineMs,
+          load,
+        });
+        await measureNextRun(index + 1);
+      };
+      try {
+        await measureNextRun(0);
+      } finally {
+        await setTrigger(true);
+      }
+      console.log(
+        JSON.stringify({
+          benchmark: `sanctions-contact-${operation}`,
+          database: "pglite",
+          contacts: 10_000,
+          runs,
+          medianRatio: runs
+            .map(({ ratio }) => ratio)
+            .toSorted((a, b) => a - b)
+            .at(1),
+        }),
+      );
+      expect(runs).toHaveLength(3);
+    };
+    await measure("import");
+    await tenant(importRows);
+    await measure("unrelated-update");
+    const marks = await tenant(
+      async (tx) =>
+        await tx.execute<{
+          count: number;
+          minimum: string;
+          maximum: string;
+        }>(sql`
+      SELECT count(*)::integer AS count, min(generation)::text AS minimum, max(generation)::text AS maximum
+      FROM public.sanctions_contact_marks WHERE organization_id = ${organizationId}
+    `),
     );
-    const baselineMs = await insert();
-    await client.exec(
-      "ALTER TABLE public.contacts ENABLE TRIGGER contacts_sanctions_mark_insert",
-    );
-    const markedMs = await insert();
-    console.log(
-      JSON.stringify({
-        benchmark: "sanctions-contact-import",
-        database: "pglite",
-        contacts: 10_000,
-        baselineMs,
-        markedMs,
-        overheadMs: markedMs - baselineMs,
-        ratio: markedMs / baselineMs,
-      }),
-    );
-    expect(markedMs).toBeGreaterThan(0);
+    expect(marks.at(0)).toEqual({ count: 10_000, minimum: "1", maximum: "1" });
   },
   TIMEOUT,
 );
