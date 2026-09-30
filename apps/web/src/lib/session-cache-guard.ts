@@ -21,8 +21,8 @@ type ReloadDocumentAt = (href: string) => void;
 // Clients whose next page loads as a new document, with how to load it.
 const freshDocumentPending = new WeakMap<QueryClient, ReloadDocumentAt>();
 
-const isSessionQuery = (query: Query) =>
-  query.queryHash === hashKey(rootKeys.session);
+const isSessionQuery = ({ queryHash }: Pick<Query, "queryHash">) =>
+  queryHash === hashKey(rootKeys.session);
 
 type TransitionPolicy = "organization" | "identity";
 type TransitionState = {
@@ -78,7 +78,7 @@ const cleanup = async (
 ) => {
   const pending = queryClient.cancelQueries({ predicate });
   queryClient.removeQueries({ predicate });
-  return await pending;
+  await pending;
 };
 
 const removedBy = (policy: TransitionPolicy) => (query: Query) => {

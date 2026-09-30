@@ -1,4 +1,4 @@
-import { isCancelledError, QueryClient } from "@tanstack/react-query";
+import { CancelledError, QueryClient } from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
 
 import { publicKnowledgeKeys } from "@/features/knowledge/public/public-knowledge-queries";
@@ -19,8 +19,12 @@ const installGuard = (queryClient: QueryClient, isAuthFlowPage: boolean) => {
   const reloads: string[] = [];
   const uninstall = installSessionCacheGuard(queryClient, {
     isAuthFlowPage: () => isAuthFlowPage,
-    reloadDocument: () => reloads.push("current"),
-    reloadDocumentAt: (href) => reloads.push(href),
+    reloadDocument: () => {
+      reloads.push("current");
+    },
+    reloadDocumentAt: (href) => {
+      reloads.push(href);
+    },
   });
   return { reloads, uninstall };
 };
@@ -40,11 +44,11 @@ describe("auth transition cache policy", () => {
     const read = queryClient
       .query({
         queryKey: heldKey,
-        queryFn: ({ signal }) => {
+        queryFn: async ({ signal }) => {
           signal.addEventListener("abort", () => {
             aborted = true;
           });
-          return response.promise;
+          return await response.promise;
         },
       })
       .catch((error: unknown) => error);
@@ -57,7 +61,7 @@ describe("auth transition cache policy", () => {
       queryClient.setQueryData(rootKeys.session, null);
       await settleAuthTransition(queryClient);
       expect(aborted).toBe(true);
-      expect(isCancelledError(await read)).toBe(true);
+      expect((await read) instanceof CancelledError).toBe(true);
       response.resolve("late playbooks");
       await response.promise;
       expect(queryClient.getQueryState(memberKey)).toBeUndefined();
