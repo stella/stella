@@ -7,7 +7,7 @@
   },
   "tools": {
     "check_counterparty": {
-      "default": {"title": 18, "description": 700, "inputSchema": 1943, "outputSchema": 2351, "annotations": 95, "payloadUtf8Bytes": 5213}
+      "default": {"title": 18, "description": 809, "inputSchema": 4634, "outputSchema": 3998, "annotations": 95, "payloadUtf8Bytes": 9660}
     },
     "compare_documents": {
       "default": {"title": 25, "description": 770, "inputSchema": 3326, "outputSchema": 1144, "annotations": 126, "payloadUtf8Bytes": 5493},
