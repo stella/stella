@@ -27,7 +27,7 @@ export type IntegrationConnection = {
   enabled: boolean;
 };
 
-export type IntegrationStatus = {
+type IntegrationStatus = {
   tone: StatusTone;
   labelKey: TranslationKey;
 };
@@ -39,18 +39,30 @@ export type IntegrationStatus = {
 export const integrationStatus = (
   authType: "none" | "bearer" | "oauth",
   connection: IntegrationConnection | undefined,
-): IntegrationStatus | null => {
+) => {
   if (connection === undefined || connection.status === "revoked") {
     if (authType === "none") {
       return null;
     }
-    return { tone: "neutral", labelKey: "settings.connections.notConnected" };
+    return {
+      tone: "neutral",
+      labelKey: "settings.connections.notConnected",
+    } as const satisfies IntegrationStatus;
   }
   if (connection.status === "needs_reauth") {
-    return { tone: "warning", labelKey: "knowledge.mcp.needsReauth" };
+    return {
+      tone: "warning",
+      labelKey: "knowledge.mcp.needsReauth",
+    } as const satisfies IntegrationStatus;
   }
   if (!connection.enabled) {
-    return { tone: "neutral", labelKey: "settings.connections.turnedOff" };
+    return {
+      tone: "neutral",
+      labelKey: "settings.connections.turnedOff",
+    } as const satisfies IntegrationStatus;
   }
-  return { tone: "success", labelKey: "settings.connections.connected" };
+  return {
+    tone: "success",
+    labelKey: "settings.connections.connected",
+  } as const satisfies IntegrationStatus;
 };
