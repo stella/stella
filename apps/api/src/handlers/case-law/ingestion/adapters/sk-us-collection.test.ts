@@ -33,7 +33,19 @@ const fixture = async () => {
   if (!isRecord(listing) || !isRecord(entry)) {
     return panic("The collection fixture must contain both document rows");
   }
-  return { listing, entry };
+  const documentId = listing["documentId"];
+  const ecli = listing["mkECLI"];
+  const headnote = entry["mkClauseTitle"];
+  const legalSentence = entry["mkClauseText"];
+  if (
+    typeof documentId !== "string" ||
+    typeof ecli !== "string" ||
+    typeof headnote !== "string" ||
+    typeof legalSentence !== "string"
+  ) {
+    return panic("The collection fixture must state identity and clause text");
+  }
+  return { listing, entry, documentId, ecli, headnote, legalSentence };
 };
 
 type ReplayOptions = {
@@ -90,7 +102,8 @@ const replay = async ({
 
 describe("ÚS collection identity and publication", () => {
   test("joins a separate collection document without changing the decision identity or stated metadata", async () => {
-    const { listing, entry } = await fixture();
+    const { listing, entry, documentId, ecli, headnote, legalSentence } =
+      await fixture();
     expect(entry["documentId"]).not.toBe(listing["documentId"]);
     expect(entry["mkClauseText"]).toBeString();
     const withoutClauses = {
@@ -99,15 +112,15 @@ describe("ÚS collection identity and publication", () => {
       mkClauseText: null,
     };
     const result = await replay({ listing: withoutClauses, entries: [entry] });
-    expect(result.sourceDocumentId).toBe(listing["documentId"]);
-    expect(result.ecli).toBe(listing["mkECLI"]);
+    expect(result.sourceDocumentId).toBe(documentId);
+    expect(result.ecli).toBe(ecli);
     expect(result.textFields.headnote).toEqual({
       type: "present",
-      text: entry["mkClauseTitle"],
+      text: headnote,
     });
     expect(result.textFields.legalSentence).toEqual({
       type: "present",
-      text: entry["mkClauseText"],
+      text: legalSentence,
     });
     expect(result.metadata["includeToZnaU"]).toBe(listing["mkIncludeToZnaU"]);
     expect(result.metadata["publishedInCollection"]).toEqual({
