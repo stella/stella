@@ -72,6 +72,13 @@ const UNPROJECTED_CONFIRMED_ENTRY_COLUMNS = [
   "timerStoppedAt",
   "createdAt",
   "updatedAt",
+  // The approval queue owns approval and return metadata.
+  "approverUserId",
+  "approvedByUserId",
+  "approvedAt",
+  "returnedByUserId",
+  "returnedAt",
+  "returnComment",
 ] as const satisfies readonly (keyof TimeEntryRow)[];
 type MissingConfirmedEntryColumn = UnprojectedColumns<
   TimeEntryRow,

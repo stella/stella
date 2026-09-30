@@ -1,6 +1,15 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import {
+  chmodSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -11,6 +20,7 @@ import {
 import {
   createFixtureTemplatePackCatalogue,
   FIXTURE_TEMPLATE_PACKS as FIXTURE_PACKS,
+  fixtureTemplatePackContentRoot,
 } from "./fixtures/catalogue";
 import { GENERATED_TEMPLATE_PACKS } from "./packs.gen";
 import { PUBLIC_PACK_IDS } from "./public-packs";
@@ -75,6 +85,118 @@ describe("template pack catalogue", () => {
       rmSync(contentRoot, { recursive: true, force: true });
     }
   });
+
+  test.each([
+    "zero-byte",
+    "directory",
+    "inaccessible-ancestor",
+    "unreadable",
+    "io-error",
+  ] as const)(
+    "public availability is strict while member availability preserves existence (%s)",
+    async (state) => {
+      const contentRoot = mkdtempSync(
+        path.join(tmpdir(), "template-availability-"),
+      );
+      cpSync(fixtureTemplatePackContentRoot(), contentRoot, {
+        recursive: true,
+      });
+      const file = path.join(
+        contentRoot,
+        "packs",
+        fixturePack.id,
+        fixtureTemplate.file,
+      );
+      try {
+        switch (state) {
+          case "zero-byte":
+            writeFileSync(file, "");
+            break;
+          case "directory":
+            rmSync(file);
+            mkdirSync(file);
+            break;
+          case "inaccessible-ancestor":
+            chmodSync(path.join(contentRoot, "packs"), 0);
+            break;
+          case "unreadable":
+            chmodSync(file, 0);
+            break;
+          case "io-error":
+            rmSync(file);
+            symlinkSync(path.basename(file), file);
+            break;
+        }
+        const member = createTemplatePackCatalogue({
+          packs: [fixturePack],
+          contentRoot,
+        });
+        expect(member.list()).toHaveLength(existsSync(file) ? 1 : 0);
+        const catalogue = createTemplatePackCatalogue({
+          packs: [fixturePack],
+          contentRoot,
+          availability: "readable",
+        });
+        expect(catalogue.list()).toEqual([]);
+        expect(catalogue.get(fixturePack.id)).toBeNull();
+        expect(
+          Result.isError(
+            await catalogue.readTemplateDocx({
+              packId: fixturePack.id,
+              slug: fixtureTemplate.slug,
+            }),
+          ),
+        ).toBe(true);
+      } finally {
+        chmodSync(path.join(contentRoot, "packs"), 0o755);
+        rmSync(contentRoot, { recursive: true, force: true });
+      }
+    },
+  );
+
+  test.each(["removed", "unreadable", "io-error"] as const)(
+    "a byte read failure after catalogue creation returns a typed error (%s)",
+    async (state) => {
+      const contentRoot = mkdtempSync(path.join(tmpdir(), "template-read-"));
+      cpSync(fixtureTemplatePackContentRoot(), contentRoot, {
+        recursive: true,
+      });
+      const file = path.join(
+        contentRoot,
+        "packs",
+        fixturePack.id,
+        fixtureTemplate.file,
+      );
+      try {
+        const catalogue = createTemplatePackCatalogue({
+          packs: [fixturePack],
+          contentRoot,
+          availability: "readable",
+        });
+        expect(catalogue.list()).toHaveLength(1);
+        if (state === "unreadable") {
+          chmodSync(file, 0);
+        } else {
+          rmSync(file);
+          if (state === "io-error") {
+            symlinkSync(path.basename(file), file);
+          }
+        }
+        const result = await catalogue.readTemplateDocx({
+          packId: fixturePack.id,
+          slug: fixtureTemplate.slug,
+        });
+        expect(Result.isError(result)).toBe(true);
+        if (Result.isError(result)) {
+          expect(result.error.message).toBe(
+            "Bundled template content is unavailable",
+          );
+        }
+      } finally {
+        rmSync(contentRoot, { recursive: true, force: true });
+      }
+    },
+  );
 
   test("reads DOCX bytes whose hash matches the manifest", async () => {
     const catalogue = createFixtureTemplatePackCatalogue(FIXTURE_PACKS);

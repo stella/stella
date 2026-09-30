@@ -4,7 +4,8 @@
 # A release is recognized only as a ready pull request into main whose head
 # branch lives in this repository (pushing one takes write access) and whose
 # title starts with "chore: release v". Both the Version Packages workflow and
-# the merge queue's release hold read releases through this one rule.
+# the merge queue's release hold read releases through this one rule. List open
+# pull requests directly so recognition does not depend on the search index.
 #
 # Usage: release-pull-requests.sh --repo <owner/name> [--number <pull request>]
 # Prints:
@@ -39,18 +40,21 @@ if [[ -n "$number" && ! "$number" =~ ^[0-9]+$ ]]; then
   exit 2
 fi
 
-# The search narrows the listing to release titles on the server, so the limit
-# counts candidates only, never unrelated open pull requests.
-releases=$(gh pr list --repo "$repo" --state open --base main \
-  --search '"chore: release v" in:title -is:draft' \
-  --limit 100 --json number,title,isDraft,isCrossRepository \
-  --jq '[
+# A complete listing is required before reporting that no release is open.
+listing_limit=500
+pull_requests=$(gh pr list --repo "$repo" --state open --base main \
+  --limit "$listing_limit" --json number,title,isDraft,isCrossRepository)
+if [[ "$(jq 'length' <<<"$pull_requests")" -ge "$listing_limit" ]]; then
+  echo "release-pull-requests.sh: open pull request listing reached the $listing_limit limit; refusing partial release state" >&2
+  exit 1
+fi
+releases=$(jq -r '[
     .[]
     | select(.title | startswith("chore: release v"))
     | select(.isDraft | not)
     | select(.isCrossRepository | not)
     | .number
-  ] | map(tostring) | join(" ")')
+  ] | map(tostring) | join(" ")' <<<"$pull_requests")
 
 open_other=0
 current_is_release=false

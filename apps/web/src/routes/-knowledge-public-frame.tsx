@@ -7,6 +7,7 @@ import { Separator } from "@stll/ui/separator";
 
 import { PublicWorkspaceShell } from "@/components/public-workspace-shell";
 import { SidebarTrigger, useSidebar } from "@/components/sidebar";
+import { publicKnowledgeSource } from "@/features/knowledge/public/public-knowledge";
 import { knowledgeSections } from "@/lib/knowledge/navigation";
 
 /** Knowledge for a visitor without an account: the public shell with a
@@ -41,7 +42,12 @@ const KnowledgePublicTopBar = () => {
   const entryName = useRouterState({
     select: (state) => routeDisplayName(state.matches.at(-1)?.loaderData),
   });
-  const section = knowledgeSections.find(
+  const { available: templatesAvailable } =
+    publicKnowledgeSource.useCatalogueTemplatesAvailable();
+  const visibleSections = knowledgeSections.filter(
+    ({ key }) => key !== "templates" || templatesAvailable,
+  );
+  const section = visibleSections.find(
     ({ to }) => pathname === to || pathname.startsWith(`${to}/`),
   );
 

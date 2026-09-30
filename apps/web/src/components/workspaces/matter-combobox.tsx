@@ -15,6 +15,7 @@ import {
 } from "@stll/ui/combobox";
 import { SearchIcon } from "@stll/ui/icons";
 
+import { selectRecentWorkspaces } from "@/components/app-sidebar.logic";
 import { detached } from "@/lib/detached";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 
@@ -37,6 +38,7 @@ type MatterComboboxProps = {
   id: string;
   onChange: (matter: MatterOption | null) => void;
   value: MatterOption | null;
+  order?: "recent" | "default";
 };
 
 /**
@@ -52,6 +54,7 @@ export const MatterCombobox = ({
   id,
   onChange,
   value,
+  order = "default",
 }: MatterComboboxProps) => {
   const t = useTranslations();
   const [search, setSearch] = useState("");
@@ -63,12 +66,23 @@ export const MatterCombobox = ({
     refetch,
   } = useQuery({
     ...workspacesNavigationOptions(activeOrganizationId),
-    select: (data) =>
-      data.workspaces.map((matter) => ({
+    select: (data) => {
+      const ordered =
+        order === "recent"
+          ? selectRecentWorkspaces({
+              activeWorkspaceId: undefined,
+              chatActivityByWorkspaceId: new Map(),
+              limit: data.workspaces.length,
+              pinnedIds: new Set(),
+              workspaces: data.workspaces,
+            })
+          : data.workspaces;
+      return ordered.map((matter) => ({
         clientName: matter.client?.displayName ?? null,
         id: matter.id,
         name: matter.name,
-      })),
+      }));
+    },
   });
 
   const term = deferredSearch.trim().toLocaleLowerCase();

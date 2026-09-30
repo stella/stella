@@ -8,14 +8,14 @@ import { Button } from "@stll/ui/button";
 import { PlayIcon, SquareIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
+import { MatterCombobox } from "@/components/billing/matter-combobox";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { activeTimerOptions } from "@/lib/workspaces/queries/time-entries";
-import { MatterCombobox } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/matter-combobox";
 import {
   useStartTimer,
   useStopTimer,
-} from "@/routes/_protected.workspaces/$workspaceId/-mutations/time-entries";
+} from "@/lib/workspaces/mutations/time-entries";
+import { activeTimerOptions } from "@/lib/workspaces/queries/time-entries";
 
 type TimerControlsProps = {
   workspaceId: string;

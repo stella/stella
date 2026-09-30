@@ -80,9 +80,9 @@ import {
   listReconciliationSlice,
   MAX_SLICE_PAGES,
 } from "@/api/handlers/case-law/ingestion/slice-listing";
-import { rowHoldsDocument } from "@/api/handlers/case-law/stored-payload";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decisionAbsorptionSql } from "@/api/lib/case-law/decision-absorption";
+import { rowHoldsDocument } from "@/api/lib/case-law/stored-payload";
 import {
   errorFingerprint,
   errorSystemFields,
@@ -94,7 +94,6 @@ import type {
   HeldRowRules,
   IngestionResult,
   ListingIdentity,
-  ReconciliationBuildOutcome,
   ReconciliationListingItem,
   SourceAdapter,
   SourceReconciliation,
@@ -1203,13 +1202,13 @@ type IngestItemOptions = {
   item: KeyedListingItem;
   lease: CaseLawSourceIngestionLease;
   now: Date;
+  buildDecision: SourceReconciliation["buildDecision"];
   reconciliation: SourceReconciliation;
   reparseStoredRaw: SourceAdapter["reparseStoredRaw"];
   scopedDb: ScopedDb;
   slice: string;
   sourceId: SafeId<"caseLawSource">;
   summary: ReconciliationUnitSummary;
-  buildDecision?: (signal: AbortSignal) => Promise<ReconciliationBuildOutcome>;
   failureDisposition?: "park" | "hold";
 };
 
@@ -1226,13 +1225,13 @@ const ingestListedItem = async ({
   item,
   lease,
   now,
+  buildDecision,
   reconciliation,
   reparseStoredRaw,
   scopedDb,
   slice,
   sourceId,
   summary,
-  buildDecision,
   failureDisposition = "park",
 }: IngestItemOptions): Promise<void> => {
   const park = async (tag: string): Promise<void> => {
@@ -1256,11 +1255,10 @@ const ingestListedItem = async ({
   };
 
   try {
-    const signal = AbortSignal.timeout(ITEM_FETCH_TIMEOUT_MS);
-    const built =
-      buildDecision === undefined
-        ? await reconciliation.buildDecision(item.payload, signal)
-        : await buildDecision(signal);
+    const built = await buildDecision(
+      item.payload,
+      AbortSignal.timeout(ITEM_FETCH_TIMEOUT_MS),
+    );
     switch (built.type) {
       case "unkeyable": {
         if (failureDisposition === "hold") {
@@ -1510,6 +1508,8 @@ const walkSlice = async ({
   );
   summary.scheduled = missing.length - untracked.length;
 
+  const buildDecision =
+    reconciliation.createSliceBuildDecision?.() ?? reconciliation.buildDecision;
   const fillable = untracked.slice(0, ingestBudget);
   summary.deferred = untracked.length - fillable.length;
   for (const [index, item] of fillable.entries()) {
@@ -1531,6 +1531,7 @@ const walkSlice = async ({
       item,
       lease,
       now: now(),
+      buildDecision,
       reconciliation,
       reparseStoredRaw,
       scopedDb,
@@ -1706,7 +1707,7 @@ const recheckTextlessHeldRows = async ({
       slice: item.slice,
       sourceId,
       summary,
-      buildDecision: async (signal) =>
+      buildDecision: async (_payload, signal) =>
         await recheck.buildDecisionFromStored(stored, signal),
       failureDisposition: "hold",
     });
@@ -1789,6 +1790,10 @@ const retryParkedItems = async ({
     ({ identityKey }) => !held.has(identityKey),
   );
   const ingestEndsAtMs = now().getTime() + RECONCILIATION_INGEST_BUDGET_MS;
+  const sliceBuilders = new Map<
+    string,
+    SourceReconciliation["buildDecision"]
+  >();
   let fetched = 0;
   for (const [index, item] of unheld.entries()) {
     if (fetched > 0) {
@@ -1801,6 +1806,13 @@ const retryParkedItems = async ({
       summary.deferred += unheld.length - index;
       break;
     }
+    let buildDecision = sliceBuilders.get(item.slice);
+    if (buildDecision === undefined) {
+      buildDecision =
+        reconciliation.createSliceBuildDecision?.() ??
+        reconciliation.buildDecision;
+      sliceBuilders.set(item.slice, buildDecision);
+    }
     fetched += 1;
     // db-await-in-loop: paced publisher fetch per due item, under a lease and a clock budget
     await ingestListedItem({
@@ -1808,6 +1820,7 @@ const retryParkedItems = async ({
       item,
       lease,
       now: now(),
+      buildDecision,
       reconciliation,
       reparseStoredRaw,
       scopedDb,
