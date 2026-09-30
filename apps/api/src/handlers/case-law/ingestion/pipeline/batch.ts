@@ -145,7 +145,6 @@ const logIngestionFailures = async (
       // A row that names its record's identity lands once: a replay of the
       // same record meets the partial unique index and keeps the row already
       // there. Only that index's conflict is absorbed.
-      // audit: skip — background case-law ingestion pipeline; public case-law data, not user actions
       await tx
         .insert(caseLawIngestionFailures)
         .values(identified)
