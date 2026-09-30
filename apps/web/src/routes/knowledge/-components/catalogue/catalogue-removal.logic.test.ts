@@ -1,11 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
-import { catalogueRemoval } from "./catalogue-removal.logic";
 import type {
   CatalogueMcp,
   CatalogueNativeTool,
   CatalogueSkill,
-} from "./catalogue-types";
+} from "@/lib/knowledge/catalogue-types";
+
+import { catalogueRemoval } from "./catalogue-removal.logic";
 
 describe("catalogue removal", () => {
   test("removing an installed skill asks for confirmation", () => {
