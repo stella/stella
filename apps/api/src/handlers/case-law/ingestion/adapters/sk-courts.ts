@@ -63,6 +63,7 @@ import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
+import { decisionTypeKey } from "@/api/lib/case-law/decision-type-key";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { DOCUMENT_DELIVERY } from "@/api/lib/legal-search/ingestion-types";
@@ -589,6 +590,7 @@ export const assembleSkCourtsDecision = ({
       court,
       decisionDate,
       decisionType,
+      decisionTypeKey: decisionTypeKey(decisionType),
       guid: toOptionalValue(item.guid),
       identifikacneCislo: toOptionalValue(item.identifikacneCislo),
       // The name this service states for a decision is the judge's or a

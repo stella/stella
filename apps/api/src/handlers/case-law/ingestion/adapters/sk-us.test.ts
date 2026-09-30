@@ -27,6 +27,7 @@ import {
 import { readGzipJson } from "@/api/lib/gzip-json";
 import {
   decodeSourceRawEnvelope,
+  encodeSourceRawEnvelope,
   listingIdentityKey,
   SOURCE_DOCUMENT_ID_MAX_LENGTH,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
@@ -1108,10 +1109,48 @@ describe("sk-us crawl and reconciliation dispose of a missing document different
     // what the listing proves — flagged, so a later refresh cannot overwrite
     // detail a successful fetch recovered.
     expect(built.decision.caseNumber).toBe("I. ÚS 132/93");
+    expect(built.decision.decisionType).toBe(
+      CHAMBER_RESOLUTION.mkFormOfDecision,
+    );
+    expect(built.decision.metadata["decisionType"]).toBe(
+      CHAMBER_RESOLUTION.mkFormOfDecision,
+    );
+    expect(built.decision.metadata["decisionTypeKey"]).toBe("uznesenie");
     expect(built.decision.isListingOnly).toBe(true);
     expect(built.decision.sourceRawContentType).toBe(
       SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
     );
+  });
+
+  test("stored-raw replay keeps the stated type and derives the same comparison key", async () => {
+    const outcome = await skUsAdapter.reparseStoredRaw?.({
+      raw: new TextEncoder().encode(
+        encodeSourceRawEnvelope({
+          listing: JSON.stringify(CHAMBER_RESOLUTION),
+        }),
+      ),
+      contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+      caseNumber: CHAMBER_RESOLUTION.mkRSAPNumberOfFile,
+      sourceDocumentId: CHAMBER_RESOLUTION.documentId,
+      language: "sk",
+      court: "Ústavný súd SR",
+      ecli: null,
+      decisionDate: null,
+      decisionType: null,
+      sourceUrl: null,
+      documentUrl: null,
+      metadata: {},
+    });
+    expect(outcome).toMatchObject({
+      type: "parsed",
+      result: {
+        decisionType: CHAMBER_RESOLUTION.mkFormOfDecision,
+        metadata: {
+          decisionType: CHAMBER_RESOLUTION.mkFormOfDecision,
+          decisionTypeKey: "uznesenie",
+        },
+      },
+    });
   });
 
   test("holds a row whose document download fails and reports the download", async () => {
