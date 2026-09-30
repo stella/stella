@@ -2,7 +2,9 @@
 
 The NS parser emits typed complaint cells: `date` (ISO `value`), `text`, or
 `unresolved-date`. Each cell retains the official `sourceValue` verbatim;
-`defects` identifies repeated values, conflicting dates, and invalid dates.
+`defects` identifies repeated values, embedded newlines, US date format,
+conflicting dates, and invalid dates. The ISO `value` sits next to the unchanged
+`sourceValue`; it never replaces it.
 No date is inferred from the decision body, linked decision, or docket.
 The raw source and the related-proceedings AST table remain unchanged.
 

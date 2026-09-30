@@ -107,10 +107,10 @@ export const parseNsDecisionHtml = (
 
 // ── Metadata extraction ────────────────────────────────────
 
+const DOMINO_DATE_RE = /^(?<month>\d{1,2})\/(?<day>\d{1,2})\/(?<year>\d{4})$/u;
+
 const parseDominoDate = (raw: string): string | null => {
-  const match = /^(?<month>\d{1,2})\/(?<day>\d{1,2})\/(?<year>\d{4})$/u.exec(
-    raw,
-  );
+  const match = DOMINO_DATE_RE.exec(raw);
   if (!match) {
     return null;
   }
@@ -126,11 +126,30 @@ const parseDominoDate = (raw: string): string | null => {
 };
 
 type NsComplaintCell =
-  | { type: "date"; value: string; sourceValue: string; defects: NsComplaintDefect[] }
-  | { type: "text"; value: string; sourceValue: string; defects: NsComplaintDefect[] }
-  | { type: "unresolved-date"; sourceValue: string; defects: NsComplaintDefect[] };
+  | {
+      type: "date";
+      value: string;
+      sourceValue: string;
+      defects: NsComplaintDefect[];
+    }
+  | {
+      type: "text";
+      value: string;
+      sourceValue: string;
+      defects: NsComplaintDefect[];
+    }
+  | {
+      type: "unresolved-date";
+      sourceValue: string;
+      defects: NsComplaintDefect[];
+    };
 
-type NsComplaintDefect = "duplicated-value" | "conflicting-values" | "invalid-date";
+type NsComplaintDefect =
+  | "duplicated-value"
+  | "embedded-newlines"
+  | "us-date-format"
+  | "conflicting-values"
+  | "invalid-date";
 
 type NsSourceMetadata = Record<string, unknown> & {
   ustavniStiznost?: Record<string, NsComplaintCell>[];
@@ -138,23 +157,43 @@ type NsSourceMetadata = Record<string, unknown> & {
 
 // Domino publishes dates as month/day/year. Keep the cell's exact text even
 // when its display repeats the same value; unrelated dates never replace it.
-const complaintCell = (header: string, sourceValue: string): NsComplaintCell => {
-  const parts = sourceValue.split(/\r?\n/u).map((part) => part.trim()).filter(Boolean);
+const complaintCell = (
+  header: string,
+  sourceValue: string,
+): NsComplaintCell => {
+  const parts = sourceValue
+    .split(/\r?\n/u)
+    .map((part) => part.trim())
+    .filter(Boolean);
   const distinct = [...new Set(parts)];
   const defects: NsComplaintDefect[] = [];
   if (parts.length > distinct.length) {
     defects.push("duplicated-value");
   }
+  if (/[\r\n]/u.test(sourceValue)) {
+    defects.push("embedded-newlines");
+  }
   const value = distinct.join("\n");
   if (!header.startsWith("datum")) {
     return { type: "text", value, sourceValue, defects };
   }
+  if (distinct.some((part) => DOMINO_DATE_RE.test(part))) {
+    defects.push("us-date-format");
+  }
   if (distinct.length > 1) {
-    return { type: "unresolved-date", sourceValue, defects: [...defects, "conflicting-values"] };
+    return {
+      type: "unresolved-date",
+      sourceValue,
+      defects: [...defects, "conflicting-values"],
+    };
   }
   const iso = parseDominoDate(value);
   if (iso === null) {
-    return { type: "unresolved-date", sourceValue, defects: [...defects, "invalid-date"] };
+    return {
+      type: "unresolved-date",
+      sourceValue,
+      defects: [...defects, "invalid-date"],
+    };
   }
   return { type: "date", value: iso, sourceValue, defects };
 };
@@ -196,21 +235,24 @@ export const extractNsMetadata = ($: cheerio.CheerioAPI): MetadataResult => {
         const nestedTable = singleTd.find("table");
         if (nestedTable.length > 0) {
           const rows: TableCell[][] = [];
-          nestedTable.first().find("> tbody > tr, > tr").each((__, innerTr) => {
-            const row: TableCell[] = [];
-            $(innerTr)
-              .find("> td")
-              .each((___, td) => {
-                const inlines = walkInlines($, $(td));
-                row.push({
-                  inlines,
-                  plainText: inlinesToPlainText(inlines),
+          nestedTable
+            .first()
+            .find("> tbody > tr, > tr")
+            .each((__, innerTr) => {
+              const row: TableCell[] = [];
+              $(innerTr)
+                .find("> td")
+                .each((___, td) => {
+                  const inlines = walkInlines($, $(td));
+                  row.push({
+                    inlines,
+                    plainText: inlinesToPlainText(inlines),
+                  });
                 });
-              });
-            if (row.length > 0) {
-              rows.push(row);
-            }
-          });
+              if (row.length > 0) {
+                rows.push(row);
+              }
+            });
           relatedProceedingsTable = rows.length > 0 ? rows : null;
 
           if (rows.length > 1) {
