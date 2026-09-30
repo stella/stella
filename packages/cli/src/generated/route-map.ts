@@ -716,7 +716,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["case-law", "read"],
             toolName: "read_case_law_decision",
-            description: "Read case-law decisions by id.",
+            description: "Read decisions by id.",
             flags: [
               {
                 flag: "--decision-ids",
@@ -726,6 +726,17 @@ export const generatedRouteMap: RouteNode = {
                 description:
                   "The decisions to read, at most 20 per call. Each id is answered on its own, so one unknown id does not sink the rest.",
                 required: true,
+              },
+              {
+                flag: "--max-chars",
+                prop: "max_chars",
+                kind: "int",
+                min: 1,
+                max: 8000,
+                repeatable: false,
+                description:
+                  "Text window size, 1–8000 characters. Accepted only alongside a single decision id. Use a JSON number; a value outside the range is clamped to it.",
+                required: false,
               },
             ],
             inputOnly: [],
@@ -751,6 +762,17 @@ export const generatedRouteMap: RouteNode = {
                   maxItems: 20,
                   description:
                     "The decisions to read, at most 20 per call. Each id is answered on its own, so one unknown id does not sink the rest.",
+                },
+                max_chars: {
+                  type: "integer",
+                  minimum: 1,
+                  maximum: 8000,
+                  description:
+                    "Text window size, 1–8000 characters. Accepted only alongside a single decision id. Use a JSON number; a value outside the range is clamped to it.",
+                  "x-stella-agent-input": {
+                    kind: "number",
+                    range: "clamp",
+                  },
                 },
                 cursor: {
                   type: "string",
