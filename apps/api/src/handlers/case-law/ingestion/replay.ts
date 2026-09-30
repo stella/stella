@@ -682,6 +682,38 @@ const storedPayloadMatches = async ({
 };
 
 /**
+ * Whether the write would change a described column the row holds.
+ *
+ * Read as the write stores them: an unstated field leaves the column as it
+ * is, and a stated date the sanitizer rejects clears it.
+ */
+const describedColumnsChanged = ({
+  input,
+  result,
+  row,
+}: {
+  input: IngestionResult;
+  result: IngestionResult;
+  row: ReplayDecisionRow;
+}): boolean => {
+  const decisionDate =
+    result.decisionDate === undefined && input.decisionDate !== undefined
+      ? null
+      : result.decisionDate;
+  const described = [
+    [row.court, result.court],
+    [row.ecli, result.ecli],
+    [row.decisionDate, decisionDate],
+    [row.decisionType, result.decisionType],
+    [row.sourceUrl, result.sourceUrl],
+    [row.documentUrl, result.documentUrl],
+  ] as const;
+  return described.some(
+    ([stored, incoming]) => incoming !== undefined && incoming !== stored,
+  );
+};
+
+/**
  * Whether replaying this result would change what the row holds.
  *
  * The source-side refresh check and sanitized canonical payload are compared
@@ -714,6 +746,9 @@ const replayWouldChangeRow = async ({
     row.caseNumber !== storedCaseNumberOf(result) ||
     row.caseNumberType !== parsePrimaryReferenceType(result.caseNumberType)
   ) {
+    return true;
+  }
+  if (describedColumnsChanged({ input, result, row })) {
     return true;
   }
   const sourceChanged = !shouldSkipRefresh({

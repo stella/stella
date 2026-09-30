@@ -832,6 +832,9 @@ test.each(["row-columns", "content-hash"])(
           .where(eq(caseLawDecisions.id, fixture.id))
       ).at(0);
     const before = await readRow();
+    if (before === undefined) {
+      throw new TypeError("Expected the fixture row");
+    }
     const dry = await fixture.replay(null);
     if (dry.type !== "ran") {
       throw new TypeError("Expected replay to run");
@@ -941,5 +944,51 @@ test("a stamp cannot overwrite a version written after the row was selected", as
   expect(fake.requests.filter(({ method }) => method === "PUT")).toHaveLength(
     0,
   );
+  await lease.release();
+});
+
+test("a version bump that changes only a described column goes through the pipeline", async () => {
+  const fixture = await replayConvergenceFixture("Unchanged body text.");
+  await db
+    .update(caseLawDecisions)
+    .set({ parserVersion: 3, decisionType: "order" })
+    .where(eq(caseLawDecisions.id, fixture.id));
+  const lease = await acquireCaseLawSourceIngestionLease({
+    scopedDb,
+    sourceId: fixture.sourceId,
+  });
+  if (lease === null) {
+    throw new TypeError("Expected the source ingestion lease to be free");
+  }
+  const run = await replayCaseLawSource({
+    adapter: stubAdapter(() => ({
+      type: "parsed",
+      result: { ...fixture.result, decisionType: "judgment" },
+    })),
+    scopedDb,
+    sourceId: fixture.sourceId,
+    sourceLease: lease,
+    scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
+    readStoredRaw: async () => new TextEncoder().encode(STORED_PAYLOAD),
+    bound: { type: "at-most", limit: 10 },
+    pageSize: 10,
+  });
+  if (run.type !== "ran") {
+    throw new TypeError("Expected replay to run");
+  }
+  expect(run.report.outcomes[REPLAY_ROW_OUTCOME.APPLIED]).toBe(1);
+  const [row] = await db
+    .select({
+      decisionType: caseLawDecisions.decisionType,
+      version: caseLawDecisions.parserVersion,
+    })
+    .from(caseLawDecisions)
+    .where(eq(caseLawDecisions.id, fixture.id));
+  expect(row).toEqual({ decisionType: "judgment", version: 4 });
+  const [source] = await db
+    .select({ order: caseLawSources.observationOrder })
+    .from(caseLawSources)
+    .where(eq(caseLawSources.id, fixture.sourceId));
+  expect(source?.order).toBe(1n);
   await lease.release();
 });
