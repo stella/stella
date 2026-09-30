@@ -34,6 +34,7 @@ type TimeEntryNarrativeFieldProps = {
   onLanguageChange: (language: string | null) => void;
   narrativeLanguage: string | null;
   rows?: number | undefined;
+  required?: boolean;
   value: string;
   workspaceId: string;
 };
@@ -45,6 +46,7 @@ export const TimeEntryNarrativeField = ({
   onLanguageChange,
   narrativeLanguage,
   rows = 4,
+  required = true,
   value,
   workspaceId,
 }: TimeEntryNarrativeFieldProps) => {
@@ -141,7 +143,7 @@ export const TimeEntryNarrativeField = ({
         maxLength={10_000}
         onChange={(event) => onChange(event.currentTarget.value)}
         placeholder={tBilling("narrativePlaceholder")}
-        required
+        required={required}
         rows={rows}
         value={value}
       />

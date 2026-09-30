@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 
 import { useFormatter, useTranslations } from "use-intl";
 
@@ -29,20 +29,29 @@ type ManualTimeEntryFormProps = {
   defaultValues: ManualTimeEntryValues;
   /** The day is fixed by the caller (a suggestion belongs to its day). */
   dateLocked?: boolean;
+  autofocusDuration?: boolean;
+  narrativeRequired?: boolean;
   pending: boolean;
   workspaceId: string;
   onCancel: () => void;
   onSubmit: (values: ManualTimeEntryValues) => Promise<void>;
+  onSaveAndNew?: (values: ManualTimeEntryValues) => Promise<void>;
+  onSaveAndAddExpense?: (values: ManualTimeEntryValues) => Promise<void>;
 };
 
 export const ManualTimeEntryForm = ({
   defaultValues,
   dateLocked = false,
+  autofocusDuration = false,
+  narrativeRequired = true,
   pending,
   workspaceId,
   onCancel,
   onSubmit,
+  onSaveAndNew,
+  onSaveAndAddExpense,
 }: ManualTimeEntryFormProps) => {
+  const fieldId = useId();
   const tBilling = useTranslations("billing");
   const tCommon = useTranslations("common");
   const format = useFormatter();
@@ -62,88 +71,98 @@ export const ManualTimeEntryForm = ({
     isTimeEntryDateAllowed(dateWorked, dateBounds) &&
     Number.isInteger(durationMinutes) &&
     durationMinutes > 0 &&
-    narrative.trim().length > 0;
+    (!narrativeRequired || narrative.trim().length > 0);
+
+  const submit = (action: ManualTimeEntryFormProps["onSubmit"]) => {
+    if (!valid || pending) {
+      return;
+    }
+    detached(
+      action({
+        dateWorked,
+        durationMinutes,
+        narrative: narrative.trim(),
+        narrativeLanguage,
+        billable,
+      }),
+      "manual-time-entry-form.submit",
+    );
+  };
 
   return (
     <form
       className="flex flex-col gap-4"
       onSubmit={(event) => {
         event.preventDefault();
-        if (!valid || pending) {
-          return;
-        }
-        detached(
-          onSubmit({
-            dateWorked,
-            durationMinutes,
-            narrative: narrative.trim(),
-            narrativeLanguage,
-            billable,
-          }),
-          "manual-time-entry-form.submit",
-        );
+        submit(onSubmit);
       }}
     >
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div className="flex flex-col gap-1.5">
-          <Label id="time-entry-date-label" htmlFor="time-entry-date">
-            {tCommon("date")}
-          </Label>
-          {dateLocked ? (
-            <output
-              aria-labelledby="time-entry-date-label"
-              className="bg-muted flex min-h-11 items-center rounded-md border px-3 text-sm"
-              id="time-entry-date"
-            >
-              {format.dateTime(
-                Temporal.PlainDate.from(dateWorked).toZonedDateTime({
-                  plainTime: Temporal.PlainTime.from("00:00"),
-                  timeZone: "UTC",
-                }).epochMilliseconds,
-                { ...MEDIUM_DATE_FORMAT, timeZone: "UTC" },
-              )}
-            </output>
-          ) : (
-            <DatePickerPopover
-              id="time-entry-date"
-              labelledBy="time-entry-date-label"
-              maxDate={dateBounds.today}
-              minDate={dateBounds.earliestDate}
-              onChange={(value) => setDateWorked(value ?? "")}
-              value={dateWorked}
+      <fieldset className="flex min-w-0 flex-col gap-4" disabled={pending}>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="flex flex-col gap-1.5">
+            <Label id={`${fieldId}-date-label`} htmlFor={`${fieldId}-date`}>
+              {tCommon("date")}
+            </Label>
+            {dateLocked ? (
+              <output
+                aria-labelledby={`${fieldId}-date-label`}
+                className="bg-muted flex min-h-11 items-center rounded-md border px-3 text-sm"
+                id={`${fieldId}-date`}
+              >
+                {format.dateTime(
+                  Temporal.PlainDate.from(dateWorked).toZonedDateTime({
+                    plainTime: Temporal.PlainTime.from("00:00"),
+                    timeZone: "UTC",
+                  }).epochMilliseconds,
+                  { ...MEDIUM_DATE_FORMAT, timeZone: "UTC" },
+                )}
+              </output>
+            ) : (
+              <DatePickerPopover
+                id={`${fieldId}-date`}
+                labelledBy={`${fieldId}-date-label`}
+                maxDate={dateBounds.today}
+                minDate={dateBounds.earliestDate}
+                onChange={(value) => setDateWorked(value ?? "")}
+                value={dateWorked}
+              />
+            )}
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label id={`${fieldId}-duration-label`}>
+              {tBilling("duration")}
+            </Label>
+            <DurationInput
+              autoFocus={autofocusDuration}
+              id={`${fieldId}-duration`}
+              labelledBy={`${fieldId}-duration-label`}
+              onChange={setDurationMinutes}
+              value={durationMinutes}
             />
-          )}
+          </div>
         </div>
-        <div className="flex flex-col gap-1.5">
-          <Label id="time-entry-duration-label">{tBilling("duration")}</Label>
-          <DurationInput
-            id="time-entry-duration"
-            labelledBy="time-entry-duration-label"
-            onChange={setDurationMinutes}
-            value={durationMinutes}
-          />
-        </div>
-      </div>
 
-      <TimeEntryNarrativeField
-        id="time-entry-narrative"
-        onChange={setNarrative}
-        onLanguageChange={setNarrativeLanguage}
-        narrativeLanguage={narrativeLanguage}
-        value={narrative}
-        workspaceId={workspaceId}
-      />
-
-      <div className="flex min-h-11 items-center gap-2">
-        <Checkbox
-          checked={billable}
-          id="time-entry-billable"
-          onCheckedChange={setBillable}
+        <TimeEntryNarrativeField
+          required={narrativeRequired}
+          id={`${fieldId}-narrative`}
+          onChange={setNarrative}
+          onLanguageChange={setNarrativeLanguage}
+          narrativeLanguage={narrativeLanguage}
+          value={narrative}
+          workspaceId={workspaceId}
         />
-        <Label htmlFor="time-entry-billable">{tBilling("billable")}</Label>
-      </div>
 
-      <div className="flex justify-end gap-2">
+        <div className="flex min-h-11 items-center gap-2">
+          <Checkbox
+            checked={billable}
+            id={`${fieldId}-billable`}
+            onCheckedChange={setBillable}
+          />
+          <Label htmlFor={`${fieldId}-billable`}>{tBilling("billable")}</Label>
+        </div>
+      </fieldset>
+
+      <div className="flex flex-wrap justify-end gap-2">
         <Button
           disabled={pending}
           onClick={onCancel}
@@ -152,6 +171,26 @@ export const ManualTimeEntryForm = ({
         >
           {tCommon("cancel")}
         </Button>
+        {onSaveAndNew && (
+          <Button
+            disabled={!valid || pending}
+            onClick={() => submit(onSaveAndNew)}
+            type="button"
+            variant="outline"
+          >
+            {tBilling("quickEntry.saveAndNew")}
+          </Button>
+        )}
+        {onSaveAndAddExpense && (
+          <Button
+            disabled={!valid || pending}
+            onClick={() => submit(onSaveAndAddExpense)}
+            type="button"
+            variant="outline"
+          >
+            {tBilling("quickEntry.saveAndAddExpense")}
+          </Button>
+        )}
         <Button disabled={!valid || pending} type="submit">
           {tCommon("save")}
         </Button>

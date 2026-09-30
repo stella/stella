@@ -10,6 +10,9 @@ import { ENTITIES_PER_WORKSPACE_MAX } from "@stll/api-contract";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useTimeBillingPreviewEnabled } from "@/hooks/use-time-billing-preview";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { useQuickEntryStore } from "@/lib/time/quick-entry-store";
 import { useEffectiveShortcutGroups } from "@/lib/use-effective-shortcuts";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { useCreateTask } from "@/lib/workspaces/mutations/tasks";
@@ -38,6 +41,11 @@ type UseCommandActionsResult = {
 
 export function useCommandActions(open: boolean): UseCommandActionsResult {
   const t = useTranslations();
+  const user = useAuthenticatedUser();
+  const previewEnabled = useTimeBillingPreviewEnabled();
+  const canCreateTimeEntry = usePermissions({ timeEntry: ["create"] });
+  const canLogTime = previewEnabled && canCreateTimeEntry;
+  const openQuickEntry = useQuickEntryStore((state) => state.openDialog);
   const workspaceId = useParams({
     strict: false,
     select: (params) => params.workspaceId,
@@ -72,8 +80,14 @@ export function useCommandActions(open: boolean): UseCommandActionsResult {
   const context: CommandActionContext = useMemo(
     () => ({
       canCreateMatter,
+      canLogTime,
       canUploadDocument: canCreateEntity,
       canCreateTask,
+      openLogTime: () =>
+        openQuickEntry({
+          userId: user.id,
+          organizationId: user.activeOrganizationId,
+        }),
       openUploadDocument: () => setUploadRequest({ type: "open", workspaceId }),
       createTask: () => {
         if (workspaceId === undefined) {
@@ -96,6 +110,10 @@ export function useCommandActions(open: boolean): UseCommandActionsResult {
       canCreateMatter,
       canCreateEntity,
       canCreateTask,
+      canLogTime,
+      openQuickEntry,
+      user.id,
+      user.activeOrganizationId,
       createTask,
       openChat,
       openCreateMatterDialog,
