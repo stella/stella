@@ -6155,12 +6155,17 @@ export async function seed(organizationId?: string, userId?: string) {
         }
       };
       const content = await buildContent();
-      const docText =
-        format.type === "email"
-          ? parsedEmailToText(
-              await parseEmail(Uint8Array.from(content).buffer, EML_MIME_TYPE),
-            )
-          : configuredDocText;
+      let docText = configuredDocText;
+      if (format.type === "email") {
+        const parsedResult = await parseEmail(
+          Uint8Array.from(content).buffer,
+          EML_MIME_TYPE,
+        );
+        if (parsedResult.isErr()) {
+          panic(`Could not parse seed email ${fileName}`, parsedResult.error);
+        }
+        docText = parsedEmailToText(parsedResult.value);
+      }
 
       const sha256Hex = new Bun.CryptoHasher("sha256")
         .update(content)
