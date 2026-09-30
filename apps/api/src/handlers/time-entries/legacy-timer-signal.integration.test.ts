@@ -16,6 +16,7 @@ import {
   workspaceMembers,
 } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
+import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import { createSafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
 import {
@@ -24,8 +25,6 @@ import {
 } from "@/api/tests/security/rls-helpers";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
-
-import { guardRunningTimeEntries } from "./running";
 
 setDefaultTimeout(120_000);
 const ids = createTestIds();
