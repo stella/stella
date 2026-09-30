@@ -16,11 +16,10 @@
  * the fill boundary injects the adapter (see `buildAiOccurrenceAdapter`).
  */
 
-import JSZip from "jszip";
-
 import { placeholderPattern, resolvePath } from "@stll/template-conditions";
 
 import { arrayOrEmpty } from "@/api/lib/array";
+import { loadDocx } from "@/api/lib/docx-archive";
 import { derivedScannedFile } from "@/api/lib/file-scan/document-parsers";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 
@@ -91,8 +90,7 @@ export const adaptAiFields = async ({
     return unchanged;
   }
 
-  // oxlint-disable-next-line no-raw-zip-load/no-raw-zip-load -- unbounded archive read predating loadDocxArchive; frozen by the rule budget
-  const zip = await JSZip.loadAsync(file.bytes);
+  const zip = await loadDocx(file.bytes);
   // Sorted for a deterministic occurrence order; the patch pass below walks
   // the same list, so occurrence indices always line up with extraction.
   const partNames = templateContentPartPaths(Object.keys(zip.files));

@@ -219,3 +219,26 @@ test("verifies only a complete DKIM signature over the exact attached original b
     status: "unverified",
   });
 });
+
+for (const separator of ["\r\n\r\n", "\n\n", ""]) {
+  test.each([-1, 0, 1, 1024])(
+    `bounds original headers before creating a DNS resolver (separator ${JSON.stringify(separator)}, offset %d)`,
+    async (offset) => {
+      const headerBytes = INBOUND_MAIL_LIMITS.headerBytes + offset;
+      const prefix = "X-Padding: ";
+      const body = separator === "" ? "" : "Body";
+      const raw = Buffer.from(
+        prefix + "a".repeat(headerBytes - prefix.length) + separator + body,
+      );
+      expect(raw.byteLength).toBe(headerBytes + separator.length + body.length);
+      let resolverCreations = 0;
+      const verify = createOriginalSignatureVerifier(() => {
+        resolverCreations += 1;
+        return { resolve: async () => [], cancel: () => {} };
+      });
+      const result = await verify(raw);
+      expect(result.unwrap()).toEqual({ status: "unverified" });
+      expect(resolverCreations).toBe(offset <= 0 ? 1 : 0);
+    },
+  );
+}
