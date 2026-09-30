@@ -20,7 +20,7 @@ export type SkCollectionIssue = {
 };
 
 /** The complete persistence allowlist; no issue bytes or surrounding prose. */
-export type SkCollectionAnnotation = {
+type SkCollectionAnnotation = {
   series: SkCollectionSeries;
   statedNumber: string;
   publicationYear: number;
