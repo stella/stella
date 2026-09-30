@@ -963,6 +963,13 @@ const visitTable = (
   builder: BlockBuilder,
   $table: cheerio.Cheerio<AnyNode>,
 ): void => {
+  $table.children("caption").each((_, caption) => {
+    const inlines = walkEcjInlines($, $(caption));
+    const plainText = inlinesToPlainText(inlines).trim();
+    if (plainText) {
+      pushParagraph(builder, { ...roleOf(builder.zone), inlines, plainText });
+    }
+  });
   // A spec-compliant tree builder gives every row an explicit section
   // parent, but that parent is `<tbody>` only for rows the source left
   // unsectioned: rows the source put in `<thead>` or `<tfoot>` stay
