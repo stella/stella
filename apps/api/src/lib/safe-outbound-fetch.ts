@@ -1114,7 +1114,9 @@ const isBlockedIPv6 = (host: string): boolean => {
     case IPV6_POLICY_VERDICT.ipv4SixToFour:
       return isBlockedIPv4(ipv4FromHextets(expanded[1], expanded[2]));
     case IPV6_POLICY_VERDICT.ipv4Teredo:
-      return isBlockedIPv4(ipv4FromHextets(0xff_ff - g, 0xff_ff - h));
+      return isBlockedIPv4(
+        ipv4FromHextets(0xff_ff - tailHigh, 0xff_ff - tailLow),
+      );
     default:
       verdict satisfies never;
       return panic(`Unhandled IPv6 policy verdict: ${String(verdict)}`);
