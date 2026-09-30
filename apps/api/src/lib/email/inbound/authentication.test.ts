@@ -156,7 +156,7 @@ test("local authentication bounds adversarial From header parsing", async () => 
     },
   }).then(
     () => null,
-    (error) => error,
+    (error: unknown) => error,
   );
   const elapsed = performance.now() - started;
   expect(elapsed).toBeLessThan(1000);
