@@ -265,7 +265,8 @@ export const listPublicDecisionLanguageAlternates = async ({
     )
     .limit(LIMITS.caseLawLanguageAlternatesPerGroupMax);
   const byId = new Map(presence.map((row) => [row.id, row.hasDocument]));
-  return alternates.map((alternate) =>
-    ({ ...alternate, hasDocument: byId.get(alternate.id) === true,}),
-  );
+  return alternates.map((alternate) => ({
+    ...alternate,
+    hasDocument: byId.get(alternate.id) === true,
+  }));
 };
