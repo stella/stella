@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+set -euo pipefail
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+subject="$script_dir/check-main-merge-hold.sh"
+stub_dir="$(mktemp -d)"
+trap 'rm -rf "$stub_dir"' EXIT
+
+cat > "$stub_dir/gh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+[[ "$1 $2" == 'pr list' ]] || exit 99
+if [[ "$STELLA_TEST_RELEASE_NUMBERS" == error ]]; then
+  echo 'release listing unavailable' >&2
+  exit 1
+fi
+# Support the baseline helper and its independent unfiltered-listing fix.
+if [[ "$*" == *--jq* ]]; then
+  printf '%s\n' "$STELLA_TEST_RELEASE_NUMBERS"
+else
+  jq -cn --arg numbers "$STELLA_TEST_RELEASE_NUMBERS" '[($numbers | split(" ")[] | select(length > 0) | tonumber) | {number:.,title:"chore: release v0.9.43",isDraft:false,isCrossRepository:false}]'
+fi
+EOF
+chmod +x "$stub_dir/gh"
+
+run_hold() {
+  EVENT_NAME="$1" STELLA_MERGE_HOLD="$2" MERGE_GROUP_HEAD_REF="$3" \
+    STELLA_TEST_RELEASE_NUMBERS="$4" REPOSITORY=stella/stella PATH="$stub_dir:$PATH" \
+    bash "$subject" >"$stub_dir/output" 2>"$stub_dir/error"
+}
+ref='refs/heads/gh-readonly-queue/main/pr-123-abcdef'
+run_hold pull_request 'release pending' malformed error
+run_hold merge_group '' malformed error
+run_hold merge_group 'release pending' "$ref" 123
+if run_hold merge_group 'release pending' "$ref" 456; then
+  echo 'FAIL ordinary queued PR must be held' >&2; exit 1
+fi
+grep -q 'MERGE HOLD: release pending' "$stub_dir/error"
+if run_hold merge_group ' ' "$ref" ''; then
+  echo 'FAIL whitespace must activate the hold' >&2; exit 1
+fi
+if run_hold merge_group 'release pending' malformed 123; then
+  echo 'FAIL malformed queue refs must be refused' >&2; exit 1
+fi
+grep -q 'does not name a pull request' "$stub_dir/error"
+if run_hold merge_group 'release pending' "$ref" error; then
+  echo 'FAIL release listing errors must be refused' >&2; exit 1
+fi
+grep -q 'release listing unavailable' "$stub_dir/error"
+echo 'check-main-merge-hold.test.sh: ok'
