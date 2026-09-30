@@ -11,6 +11,7 @@ export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
   caseLawCorpusTombstones: "case_law_corpus_tombstones",
   caseLawCourtDirectoryRanks: "case_law_court_directory_ranks",
   caseLawCourtWeights: "case_law_court_weights",
+  caseLawDecisionAliases: "case_law_decision_aliases",
   caseLawDecisionIdentifiers: "case_law_decision_identifiers",
   caseLawDecisionJudges: "case_law_decision_judges",
   caseLawDecisions: "case_law_decisions",
@@ -146,6 +147,10 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     tier: "required",
     tier_label: "required",
     weight: "required",
+  },
+  case_law_decision_aliases: {
+    retired_decision_id: "required",
+    canonical_decision_id: "required",
   },
   case_law_decision_identifiers: {
     decision_id: "required",

@@ -1,6 +1,6 @@
 import type { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import Elysia, { t } from "elysia";
 
@@ -9,7 +9,12 @@ import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { projectionDigest } from "@stll/legal-ast/projection-digest";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
-import { caseLawDecisions, caseLawSources, relations } from "@/api/db/schema";
+import {
+  caseLawDecisionAliases,
+  caseLawDecisions,
+  caseLawSources,
+  relations,
+} from "@/api/db/schema";
 import { readDecisionHandler } from "@/api/handlers/case-law/decisions/get";
 import { createSafePublicSubjectHandler } from "@/api/handlers/case-law/decisions/public-subject";
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
@@ -566,6 +571,247 @@ test(
         });
       }
     }
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test(
+  "retired UUID links survive deletion and leave direct Czech reads unchanged",
+  async () => {
+    const db = drizzle({ client });
+    const retiredId = createSafeId<"caseLawDecision">();
+    const survivorId = createSafeId<"caseLawDecision">();
+    const beforeCz = await (await get(`/d/${openId}`)).json();
+    await db.insert(caseLawDecisions).values([
+      {
+        id: retiredId,
+        sourceId: openSourceId,
+        country: "CZE",
+        court: "Nejvyšší soud",
+        language: "cs",
+        caseNumber: "1Cdo/1/2026",
+      },
+      {
+        id: survivorId,
+        sourceId: openSourceId,
+        country: "CZE",
+        court: "Nejvyšší soud",
+        language: "cs",
+        caseNumber: "1Cdo/1/2026",
+      },
+    ]);
+    await db.insert(caseLawDecisionAliases).values({
+      retiredDecisionId: retiredId,
+      canonicalDecisionId: survivorId,
+    });
+    await db.delete(caseLawDecisions).where(eq(caseLawDecisions.id, retiredId));
+    const response = await get(`/d/${retiredId}`);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      reached: survivorId,
+      readOnHandle: 0,
+      resolution: { type: DECISION_READ_RESOLUTION.DIRECT },
+    });
+    const decision = await withRedistributableSubject(
+      caseLawDb,
+      { kind: "id", id: retiredId },
+      async (subject) =>
+        await readDecisionHandler({
+          subject,
+          readCourtWeights: async () => await Promise.resolve(new Map()),
+        }),
+    );
+    expect(decision).toMatchObject({ id: survivorId, country: "CZE" });
+    expect(await (await get(`/d/${openId}`)).json()).toEqual(beforeCz);
+    await expect(
+      db.insert(caseLawDecisions).values({
+        id: retiredId,
+        sourceId: openSourceId,
+        country: "CZE",
+        court: "Nejvyšší soud",
+        language: "cs",
+        caseNumber: "recreated",
+      }),
+    ).rejects.toMatchObject({
+      cause: { message: expect.stringContaining("Decision UUID is retired") },
+    });
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test(
+  "alias writes flatten chains, preserve retries, and refuse cycles, conflicts and stale targets",
+  async () => {
+    const db = drizzle({ client });
+    const first = createSafeId<"caseLawDecision">();
+    const middle = createSafeId<"caseLawDecision">();
+    const final = createSafeId<"caseLawDecision">();
+    await db.insert(caseLawDecisions).values(
+      [first, middle, final].map((id) => ({
+        id,
+        sourceId: openSourceId,
+        country: "CZE",
+        court: "Nejvyšší soud",
+        language: "cs",
+        caseNumber: id,
+      })),
+    );
+    const alias = { retiredDecisionId: first, canonicalDecisionId: middle };
+    await db.insert(caseLawDecisionAliases).values(alias);
+    await db
+      .insert(caseLawDecisionAliases)
+      .values(alias)
+      .onConflictDoUpdate({
+        target: caseLawDecisionAliases.retiredDecisionId,
+        set: { canonicalDecisionId: middle },
+      });
+    await expect(
+      db
+        .update(caseLawDecisionAliases)
+        .set({ canonicalDecisionId: final })
+        .where(eq(caseLawDecisionAliases.retiredDecisionId, first)),
+    ).rejects.toMatchObject({
+      cause: {
+        message: expect.stringContaining("Conflicting decision alias target"),
+      },
+    });
+    await expect(
+      db
+        .insert(caseLawDecisionAliases)
+        .values({ retiredDecisionId: middle, canonicalDecisionId: first }),
+    ).rejects.toMatchObject({
+      cause: { message: expect.stringContaining("Decision alias cycle") },
+    });
+    await expect(
+      db
+        .insert(caseLawDecisionAliases)
+        .values({ retiredDecisionId: middle, canonicalDecisionId: missingId }),
+    ).rejects.toMatchObject({
+      cause: {
+        message: expect.stringContaining("Decision alias target is not live"),
+      },
+    });
+    await expect(
+      db.delete(caseLawDecisions).where(eq(caseLawDecisions.id, middle)),
+    ).rejects.toMatchObject({ cause: { code: "23503" } });
+    await db
+      .insert(caseLawDecisionAliases)
+      .values({ retiredDecisionId: middle, canonicalDecisionId: final });
+    await db.delete(caseLawDecisions).where(eq(caseLawDecisions.id, middle));
+    await db.delete(caseLawDecisions).where(eq(caseLawDecisions.id, first));
+    // A retry still naming the former survivor resolves to the same terminal target.
+    await db
+      .insert(caseLawDecisionAliases)
+      .values(alias)
+      .onConflictDoUpdate({
+        target: caseLawDecisionAliases.retiredDecisionId,
+        set: { canonicalDecisionId: middle },
+      });
+    const rows = await db
+      .select({ target: caseLawDecisionAliases.canonicalDecisionId })
+      .from(caseLawDecisionAliases)
+      .where(eq(caseLawDecisionAliases.retiredDecisionId, first));
+    expect(rows).toEqual([{ target: final }]);
+    expect(await (await get(`/d/${first}`)).json()).toMatchObject({
+      reached: final,
+    });
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test(
+  "retired UUIDs cannot expose unpublished, redacted, restricted or unavailable-country survivors",
+  async () => {
+    const db = drizzle({ client });
+    const unpublished = createSafeId<"caseLawDecision">();
+    const redacted = createSafeId<"caseLawDecision">();
+    await db.insert(caseLawDecisions).values([
+      {
+        id: unpublished,
+        sourceId: openSourceId,
+        country: "CZE",
+        court: "Court",
+        language: "cs",
+        caseNumber: "alias-unpublished",
+        metadata: metadataMarkedListingOnly(sql`'{}'::jsonb`),
+      },
+      {
+        id: redacted,
+        sourceId: openSourceId,
+        country: "CZE",
+        court: "Court",
+        language: "cs",
+        caseNumber: "alias-redacted",
+        redactedAt: new Date("2026-01-01T00:00:00Z"),
+      },
+    ]);
+    for (const { target, sourceId } of [
+      { target: unpublished, sourceId: openSourceId },
+      { target: redacted, sourceId: openSourceId },
+      { target: closedId, sourceId: closedSourceId },
+      { target: unavailableCountryId, sourceId: openSourceId },
+    ]) {
+      const retiredId = createSafeId<"caseLawDecision">();
+      await db.insert(caseLawDecisions).values({
+        id: retiredId,
+        sourceId,
+        country: "CZE",
+        court: "Court",
+        language: "cs",
+        caseNumber: retiredId,
+      });
+      await db
+        .insert(caseLawDecisionAliases)
+        .values({ retiredDecisionId: retiredId, canonicalDecisionId: target });
+      await db
+        .delete(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, retiredId));
+      expect((await get(`/d/${retiredId}`)).status).toBe(404);
+    }
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test(
+  "only ingestion can register aliases; the public reader can resolve but cannot mutate",
+  async () => {
+    const db = drizzle({ client });
+    const retiredId = createSafeId<"caseLawDecision">();
+    await db.insert(caseLawDecisions).values({
+      id: retiredId,
+      sourceId: openSourceId,
+      country: "CZE",
+      court: "Court",
+      language: "cs",
+      caseNumber: retiredId,
+    });
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
+      await tx
+        .insert(caseLawDecisionAliases)
+        .values({ retiredDecisionId: retiredId, canonicalDecisionId: openId });
+    });
+    await expect(
+      db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL ROLE stella_public_law_reader`);
+        await tx
+          .update(caseLawDecisionAliases)
+          .set({ canonicalDecisionId: variantId })
+          .where(eq(caseLawDecisionAliases.retiredDecisionId, retiredId));
+      }),
+    ).rejects.toMatchObject({
+      cause: { message: expect.stringContaining("permission denied") },
+    });
+    await expect(
+      db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
+        await tx
+          .delete(caseLawDecisionAliases)
+          .where(eq(caseLawDecisionAliases.retiredDecisionId, retiredId));
+      }),
+    ).rejects.toMatchObject({
+      cause: { message: expect.stringContaining("permission denied") },
+    });
   },
   DB_TEST_TIMEOUT_MS,
 );

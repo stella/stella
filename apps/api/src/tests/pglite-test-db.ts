@@ -17,6 +17,7 @@ import {
 } from "@/api/lib/public-law-relations";
 import {
   createSchemaPglite,
+  installPgliteDecisionAliases,
   installPgliteChatRunLogRls,
   installPgliteChatTurnRunIdLookup,
   installPgliteAgentSkillRevisionTrigger,
@@ -264,6 +265,7 @@ const CORPUS_PROJECTION_REVISION_TABLE_SQL = quoteSqlIdentifier(
 // workspace-access objects, and the role grants. Suites that never SET ROLE
 // simply ignore the grants.
 export const ROLE_GRANT_STATEMENTS = [
+  `GRANT SELECT, INSERT, UPDATE ON TABLE "case_law_decision_aliases" TO stella_ingestion`,
   `
     GRANT SELECT, INSERT, UPDATE, DELETE
       ON ALL TABLES IN SCHEMA public TO stella
@@ -437,6 +439,7 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_corpus_upload_intents",
       "case_law_corpus_pack_refs",
       "case_law_decision_source_identities",
+      "case_law_decision_aliases",
       "case_law_raw_sweeps",
       "case_law_decision_supplements",
       "case_law_citation_reviews"
@@ -672,6 +675,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   }
   await installPgliteWorkspaceAccessObjects(db);
   await installPgliteAgentSkillRevisionTrigger(db);
+  await installPgliteDecisionAliases(db);
   await installPgliteCorpusProjectionRevisionFence(db);
   await installPgliteStatuteCitationCounts(db);
   await installPgliteLegislationPayloadRevision(db);

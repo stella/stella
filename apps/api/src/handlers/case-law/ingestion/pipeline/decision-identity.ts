@@ -21,6 +21,7 @@ import {
 import { planSupplementComposition } from "@/api/handlers/case-law/ingestion/supplement-composition";
 import { rowHoldsDocumentFor } from "@/api/handlers/case-law/stored-payload";
 import type { SafeId } from "@/api/lib/branded-types";
+import { canonicalDecisionIdSql } from "@/api/lib/case-law/decision-alias";
 import { resolveDecisionCourtId } from "@/api/lib/case-law/decision-court-identity";
 import { DANGEROUS_CHARS } from "@/api/lib/legal-search/corpus-sanitize";
 import {
@@ -433,14 +434,24 @@ export const resolveDecisionIdentityTx = async (
   const claims =
     sourceIdentityCandidates.length === 0
       ? []
-      : await tx.query.caseLawDecisionSourceIdentities.findMany({
-          where: {
-            sourceId: { eq: sourceId },
-            sourceDocumentId: { in: sourceIdentityCandidates },
-          },
-          columns: { decisionId: true, sourceDocumentId: true },
-          limit: MAX_SOURCE_IDENTITY_CANDIDATES,
-        });
+      : await tx
+          .select({
+            decisionId: canonicalDecisionIdSql(
+              caseLawDecisionSourceIdentities.decisionId,
+            ),
+            sourceDocumentId: caseLawDecisionSourceIdentities.sourceDocumentId,
+          })
+          .from(caseLawDecisionSourceIdentities)
+          .where(
+            and(
+              eq(caseLawDecisionSourceIdentities.sourceId, sourceId),
+              inArray(
+                caseLawDecisionSourceIdentities.sourceDocumentId,
+                sourceIdentityCandidates,
+              ),
+            ),
+          )
+          .limit(MAX_SOURCE_IDENTITY_CANDIDATES);
   const exactClaimedDecisionIds = [
     ...new Set(
       claims

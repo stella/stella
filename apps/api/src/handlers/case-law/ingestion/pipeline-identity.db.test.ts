@@ -1,10 +1,11 @@
 import { beforeAll, describe, expect, test } from "bun:test";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawDecisionSourceIdentities,
+  caseLawDecisionAliases,
   caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
@@ -106,6 +107,17 @@ if (!databaseUrl || !runPostgresTests) {
 
     cleanUp(async () => {
       if (sourceId) {
+        await db
+          .delete(caseLawDecisionAliases)
+          .where(
+            inArray(
+              caseLawDecisionAliases.canonicalDecisionId,
+              db
+                .select({ id: caseLawDecisions.id })
+                .from(caseLawDecisions)
+                .where(eq(caseLawDecisions.sourceId, sourceId)),
+            ),
+          );
         await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
       }
     });
@@ -130,6 +142,75 @@ if (!databaseUrl || !runPostgresTests) {
         "Okresný súd Prievidza",
         "Okresný súd Trenčín",
       ]);
+    });
+
+    test("publisher replay of a retired UUID resolves to the survivor without recreating a row", async () => {
+      const retiredId = createSafeId<"caseLawDecision">();
+      const survivorId = createSafeId<"caseLawDecision">();
+      await db.insert(caseLawDecisions).values([
+        {
+          id: retiredId,
+          sourceId,
+          sourceDocumentId: "retired-publisher",
+          country: "SVK",
+          court: "Najvyšší súd SR",
+          language: "sk",
+          caseNumber: "1Cdo/1/2026",
+        },
+        {
+          id: survivorId,
+          sourceId,
+          sourceDocumentId: "survivor-publisher",
+          country: "SVK",
+          court: "Najvyšší súd SR",
+          language: "sk",
+          caseNumber: "1Cdo/1/2026",
+        },
+      ]);
+      await db.insert(caseLawDecisionSourceIdentities).values({
+        sourceId,
+        sourceDocumentId: "retired-publisher",
+        decisionId: retiredId,
+      });
+      await db.insert(caseLawDecisionAliases).values({
+        retiredDecisionId: retiredId,
+        canonicalDecisionId: survivorId,
+      });
+      await db
+        .delete(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, retiredId));
+      const input = {
+        ...decisionAt("Najvyšší súd SR", "retired-publisher"),
+        caseNumber: "1Cdo/1/2026",
+      };
+      for (const observationOrder of [1n, 2n]) {
+        await processDecision({
+          input,
+          observationOrder,
+          sourceId,
+          scopedDb,
+          observedAt: new Date("2026-09-30T09:00:00Z"),
+        });
+      }
+      const rows = await db
+        .select({ id: caseLawDecisions.id })
+        .from(caseLawDecisions)
+        .where(inArray(caseLawDecisions.id, [retiredId, survivorId]));
+      expect(rows).toEqual([{ id: survivorId }]);
+      const claims = await db
+        .select({ decisionId: caseLawDecisionSourceIdentities.decisionId })
+        .from(caseLawDecisionSourceIdentities)
+        .where(
+          and(
+            eq(caseLawDecisionSourceIdentities.sourceId, sourceId),
+            eq(
+              caseLawDecisionSourceIdentities.sourceDocumentId,
+              "retired-publisher",
+            ),
+          ),
+        );
+      // The durable publisher receipt may retain the old UUID; replay resolves it.
+      expect(claims).toEqual([{ decisionId: retiredId }]);
     });
 
     test("treats the same publisher id as the same decision on replay", async () => {
