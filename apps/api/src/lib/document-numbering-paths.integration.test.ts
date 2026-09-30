@@ -510,8 +510,9 @@ describe("numbering paths preserve issued stamps across counter state", () => {
         .select({ reference: workspaces.reference })
         .from(workspaces)
         .where(eq(workspaces.id, duplicateMatterId));
-      if (!duplicateMatter?.reference)
-        {panic("Duplicated matter has no reference");}
+      if (!duplicateMatter?.reference) {
+        panic("Duplicated matter has no reference");
+      }
       const duplicateReference = duplicateMatter.reference;
       expect(duplicateMatter?.reference).toBe(
         scenario.ledger === "present"
