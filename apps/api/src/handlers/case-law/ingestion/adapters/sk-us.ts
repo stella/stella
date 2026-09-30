@@ -89,6 +89,7 @@ import {
   absentDecisionTextFields,
   checkedDecisionMetadata,
 } from "@/api/lib/case-law/decision-text";
+import { decisionTypeKey } from "@/api/lib/case-law/decision-type-key";
 import {
   AdapterFetchError,
   FetchBoundaryError,
@@ -876,6 +877,8 @@ const skUsMetadata = ({
 }: SkUsMetadataOptions): Record<string, unknown> => ({
   caseNumber: doc.mkRSAPNumberOfFile,
   ecli: doc.mkECLI,
+  decisionType: doc.mkFormOfDecision,
+  decisionTypeKey: decisionTypeKey(doc.mkFormOfDecision),
   documentId: doc.documentId,
   docType: doc.docType,
   title: doc.title,
@@ -950,7 +953,7 @@ export const buildSkUsDecision = async (
   const page = context ?? createSkUsPageContext();
 
   const decisionDate = parseApiDate(doc.mkDateOfDecision);
-  const decisionType = doc.mkFormOfDecision?.toLowerCase();
+  const decisionType = doc.mkFormOfDecision;
   const ecli = doc.mkECLI ?? undefined;
   const court = "Ústavný súd SR";
   const documentUrl = `${DOC_DOWNLOAD_URL}/${documentId}`;
@@ -1979,7 +1982,7 @@ const reparseStoredRaw = (
   }
 
   const decisionDate = parseApiDate(listing.mkDateOfDecision);
-  const decisionType = listing.mkFormOfDecision?.toLowerCase();
+  const decisionType = listing.mkFormOfDecision;
   const court = stored.court;
   const documentUrl = `${DOC_DOWNLOAD_URL}/${fields.documentId}`;
   const documentXhtml = parts?.["document"];

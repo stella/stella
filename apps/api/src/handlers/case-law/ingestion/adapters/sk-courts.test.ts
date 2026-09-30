@@ -269,6 +269,7 @@ describe("a stored record reaches the targets the inventory declares", () => {
     expect(outcome.result.court).toBe("Okresný súd Bratislava I");
     expect(outcome.result.decisionDate).toBe("1997-06-20");
     expect(outcome.result.decisionType).toBe("Rozsudok");
+    expect(metadata["decisionTypeKey"]).toBe("rozsudok");
     expect(metadata["identifikacneCislo"]).toBe("1191896318");
     expect(metadata["subArea"]).toEqual(["Ostatné"]);
     expect(metadata["decisionNature"]).toEqual(["Zmeňujúce"]);
