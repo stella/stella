@@ -89,7 +89,9 @@ const SellerProfilesCardBody = ({
     if (mutation.isPending) {
       return;
     }
-    const result = await Result.tryPromise(() => mutation.mutateAsync(command));
+    const result = await Result.tryPromise(async () =>
+      mutation.mutateAsync(command),
+    );
     if (Result.isOk(result)) {
       setDialog({ type: "closed" });
       mutation.reset();
