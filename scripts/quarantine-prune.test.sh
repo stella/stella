@@ -57,11 +57,11 @@ assert_calls $'lookup\narm:42'
 LOOKUP_NUMBER=''
 run_step
 assert_calls lookup
-rg -q 'No open quarantine removal PR found' "$GITHUB_STEP_SUMMARY"
+[[ $(cat "$GITHUB_STEP_SUMMARY") == *'No open quarantine removal PR found'* ]]
 # Gate refusal is visible without failing the scheduled job.
 LOOKUP_NUMBER=42
 GATE_STATUS=1
 run_step
 assert_calls $'lookup\narm:42'
-rg -q 'Merge gate refused removal PR #42' "$GITHUB_STEP_SUMMARY"
+[[ $(cat "$GITHUB_STEP_SUMMARY") == *'Merge gate refused removal PR #42'* ]]
 echo 'quarantine prune arm scenarios passed'
