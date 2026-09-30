@@ -5,12 +5,19 @@ import { parsePlainDate, Temporal } from "@stll/time";
 export const MAX_VAT_RATE_BPS = 2_147_483_647;
 
 export const parseVatRatePercent = (raw: string): number | null => {
-  const match = /^(\d+)(?:[.,](\d{1,2}))?$/u.exec(raw.trim());
-  if (match === null) {
+  const parts = raw.trim().split(/[.,]/u);
+  const wholeText = parts.at(0);
+  const fractionText = parts.at(1);
+  if (
+    parts.length > 2 ||
+    wholeText === undefined ||
+    !/^\d+$/u.test(wholeText) ||
+    (fractionText !== undefined && !/^\d{1,2}$/u.test(fractionText))
+  ) {
     return null;
   }
-  const whole = Number(match.at(1));
-  const fraction = Number((match.at(2) ?? "").padEnd(2, "0"));
+  const whole = Number(wholeText);
+  const fraction = Number((fractionText ?? "").padEnd(2, "0"));
   const rateBps = whole * 100 + fraction;
   if (!Number.isSafeInteger(rateBps) || rateBps > MAX_VAT_RATE_BPS) {
     return null;
@@ -19,10 +26,16 @@ export const parseVatRatePercent = (raw: string): number | null => {
 };
 
 export const vatRatePercentInput = (rateBps: number) => {
-  const fraction = String(rateBps % 100)
-    .padStart(2, "0")
-    .replace(/0+$/u, "");
-  return `${Math.floor(rateBps / 100)}${fraction === "" ? "" : `.${fraction}`}`;
+  const whole = Math.floor(rateBps / 100);
+  const remainder = rateBps % 100;
+  if (remainder === 0) {
+    return String(whole);
+  }
+  const fraction =
+    remainder % 10 === 0
+      ? String(remainder / 10)
+      : String(remainder).padStart(2, "0");
+  return `${whole}.${fraction}`;
 };
 
 export const isVatPeriodValid = ({
@@ -87,7 +100,14 @@ export const vatRateFormSchema = (messages: VatRateValidationMessages) =>
         v.transform((date) => (date === "" ? null : date)),
       ),
     }),
-    v.forward(v.check(isVatPeriodValid, messages.invalidPeriod), ["validTo"]),
+    v.forward(
+      v.partialCheck(
+        [["validFrom"], ["validTo"]],
+        ({ validFrom, validTo }) => isVatPeriodValid({ validFrom, validTo }),
+        messages.invalidPeriod,
+      ),
+      ["validTo"],
+    ),
     v.transform(({ ratePercent, ...value }) => ({
       ...value,
       rateBps: ratePercent,

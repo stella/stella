@@ -19,7 +19,7 @@ export const vatRatesOptions = (organizationId: string) =>
   infiniteQueryOptions({
     queryKey: vatRatesKeys.all(organizationId),
     initialPageParam: stringCursorSeed(),
-    queryFn: ({ pageParam, signal }) => listVatRates(pageParam, signal),
+    queryFn: async ({ pageParam, signal }) => listVatRates(pageParam, signal),
     getNextPageParam: (page) => page.nextCursor ?? undefined,
   });
 export type VatRate = Awaited<ReturnType<typeof listVatRates>>["items"][number];

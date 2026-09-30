@@ -147,8 +147,11 @@ export const VatRateForm = ({
                 </FieldLabel>
                 <DatePickerPopover
                   id={`${id}-from`}
-                  disabled={disabled}
-                  onChange={(date) => field.handleChange(date ?? "")}
+                  onChange={(date) => {
+                    if (!disabled) {
+                      field.handleChange(date ?? "");
+                    }
+                  }}
                   value={field.state.value}
                 />
                 <FieldError />
@@ -163,8 +166,11 @@ export const VatRateForm = ({
                 </FieldLabel>
                 <DatePickerPopover
                   id={`${id}-to`}
-                  disabled={disabled}
-                  onChange={(date) => field.handleChange(date ?? "")}
+                  onChange={(date) => {
+                    if (!disabled) {
+                      field.handleChange(date ?? "");
+                    }
+                  }}
                   value={field.state.value || null}
                 />
                 <FieldDescription>

@@ -14,8 +14,8 @@ import {
 } from "@/routes/_protected.settings/-components/organization/vat-rate-display";
 
 const LOCALES = [
-  { locale: "en", messages: en, percent: "21.25%" },
-  { locale: "ar", messages: ar, percent: "٢١٫٢٥٪؜" },
+  { locale: "en", messages: en },
+  { locale: "ar", messages: ar },
 ] as const;
 
 const PERIOD = {
@@ -24,14 +24,18 @@ const PERIOD = {
 } as const satisfies Pick<VatRate, "validFrom" | "validTo">;
 
 describe("VAT rate display", () => {
-  for (const { locale, messages, percent } of LOCALES) {
+  for (const { locale, messages } of LOCALES) {
     test(`shows fractional percentage precision in ${locale}`, () => {
       const markup = renderToStaticMarkup(
         <IntlProvider locale={locale} messages={messages} timeZone="UTC">
           <VatRatePercentage rateBps={2125} />
         </IntlProvider>,
       );
-      expect(markup).toBe(percent);
+      const expected = new Intl.NumberFormat(locale, {
+        style: "percent",
+        maximumFractionDigits: 2,
+      }).format(0.2125);
+      expect(markup).toBe(expected);
     });
 
     test(`translates overlap and keeps server failures private in ${locale}`, () => {

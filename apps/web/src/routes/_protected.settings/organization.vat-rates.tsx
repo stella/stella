@@ -19,7 +19,11 @@ export const Route = createFileRoute(
         role,
       })
     ) {
-      throw redirect({ to: "/settings/organization/members", replace: true });
+      redirect({
+        to: "/settings/organization/members",
+        replace: true,
+        throw: true,
+      });
     }
   },
   component: VatRateSettingsPage,

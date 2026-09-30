@@ -77,7 +77,10 @@ const VatRatesCardBody = ({ organizationId }: { organizationId: string }) => {
     mutationFn: sendVatRateCommand,
     invalidate: vatRatesKeys.all(organizationId),
   });
-  const rates = query.data?.pages.flatMap((page) => page.items) ?? [];
+  const rates =
+    query.data === undefined
+      ? []
+      : query.data.pages.flatMap((page) => page.items);
   const today = localISODate();
   const statusLabels = {
     current: "billing.vatRates.current",
@@ -94,7 +97,9 @@ const VatRatesCardBody = ({ organizationId }: { organizationId: string }) => {
     if (mutation.isPending) {
       return;
     }
-    const result = await Result.tryPromise(() => mutation.mutateAsync(command));
+    const result = await Result.tryPromise(async () =>
+      mutation.mutateAsync(command),
+    );
     if (Result.isOk(result)) {
       setDialog({ type: "closed" });
       mutation.reset();
