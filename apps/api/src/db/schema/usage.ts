@@ -123,6 +123,9 @@ export const usagePolicies = p.pgTable(
     // and deployments that have not opted in).
     dailyAllowanceMicroUnits: p.integer("daily_allowance_micro_units"),
     fallbackWeeklyMicroUnits: p.integer("fallback_weekly_micro_units"),
+    storageBytesPerAssignment: p.bigint("storage_bytes_per_assignment", {
+      mode: "bigint",
+    }),
     // Operator-seeded member bound, read through the
     // `organization_member_capacity` database function together with the
     // seat count of a per-seat policy. Null = the policy sets no bound.
@@ -177,6 +180,10 @@ export const usagePolicies = p.pgTable(
     p.check(
       "usage_policies_fallback_weekly_nonneg",
       sql`fallback_weekly_micro_units IS NULL OR fallback_weekly_micro_units >= 0`,
+    ),
+    p.check(
+      "usage_policies_storage_bytes_nonneg",
+      sql`storage_bytes_per_assignment IS NULL OR storage_bytes_per_assignment >= 0`,
     ),
     p.check(
       "usage_policies_max_members_positive",
@@ -684,6 +691,143 @@ export const usageSeatAssignments = p.pgTable(
     p.pgPolicy("usage_seat_assignments_no_update", {
       as: "restrictive",
       for: "update",
+      to: stella,
+      using: sql`false`,
+    }),
+  ],
+);
+
+export const FILE_USAGE_OBJECT_STATUSES = ["reserved", "committed"] as const;
+const FILE_USAGE_OBJECT_STATUS_SQL_VALUES = FILE_USAGE_OBJECT_STATUSES.map(
+  (status) => sql.raw(`'${status}'`),
+);
+const currentUserOwnsOrganizationFileUsage = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.organization_file_usage'::regclass)`;
+const currentUserOwnsOrganizationFileObjects = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.organization_file_objects'::regclass)`;
+
+export const organizationFileUsage = p.pgTable(
+  "organization_file_usage",
+  {
+    organizationId: safeOrganizationId("organization_id")
+      .primaryKey()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    committedBytes: p
+      .bigint("committed_bytes", { mode: "bigint" })
+      .notNull()
+      .default(0n),
+    reservedBytes: p
+      .bigint("reserved_bytes", { mode: "bigint" })
+      .notNull()
+      .default(0n),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  () => [
+    p.check(
+      "organization_file_usage_nonneg",
+      sql`committed_bytes >= 0 AND reserved_bytes >= 0`,
+    ),
+    p.pgPolicy("organization_file_usage_owner_access", {
+      for: "all",
+      to: "public",
+      using: currentUserOwnsOrganizationFileUsage,
+      withCheck: currentUserOwnsOrganizationFileUsage,
+    }),
+    p.pgPolicy("organization_file_usage_select", {
+      for: "select",
+      to: stella,
+      using: organizationCheck,
+    }),
+    p.pgPolicy("organization_file_usage_no_insert", {
+      as: "restrictive",
+      for: "insert",
+      to: stella,
+      withCheck: sql`false`,
+    }),
+    p.pgPolicy("organization_file_usage_no_update", {
+      as: "restrictive",
+      for: "update",
+      to: stella,
+      using: sql`false`,
+    }),
+    p.pgPolicy("organization_file_usage_no_delete", {
+      as: "restrictive",
+      for: "delete",
+      to: stella,
+      using: sql`false`,
+    }),
+  ],
+);
+
+export const organizationFileObjects = p.pgTable(
+  "organization_file_objects",
+  {
+    objectKey: p.text("object_key").primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    sizeBytes: p.bigint("size_bytes", { mode: "bigint" }).notNull(),
+    pendingSizeBytes: p.bigint("pending_size_bytes", { mode: "bigint" }),
+    writeId: p.text("write_id"),
+    expectedSha256Hex: p.text("expected_sha256_hex"),
+    reservationStartedAt: timestamptz("reservation_started_at"),
+    status: p.text({ enum: FILE_USAGE_OBJECT_STATUSES }).notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p
+      .index("organization_file_objects_org_key_idx")
+      .on(table.organizationId, table.objectKey),
+    p
+      .index("organization_file_objects_pending_reconcile_idx")
+      .on(table.updatedAt, table.objectKey)
+      .where(sql`${table.writeId} IS NOT NULL`),
+    p
+      .index("organization_file_objects_org_pending_reconcile_idx")
+      .on(table.organizationId, table.updatedAt, table.objectKey)
+      .where(sql`${table.writeId} IS NOT NULL`),
+    p.check("organization_file_objects_size_nonneg", sql`size_bytes >= 0`),
+    p.check(
+      "organization_file_objects_pending_size_nonneg",
+      sql`pending_size_bytes IS NULL OR pending_size_bytes >= 0`,
+    ),
+    p.check(
+      "organization_file_objects_pending_committed",
+      sql`status = 'committed' OR pending_size_bytes IS NULL`,
+    ),
+    p.check(
+      "organization_file_objects_reservation_identity",
+      sql`(write_id IS NULL AND reservation_started_at IS NULL AND expected_sha256_hex IS NULL AND pending_size_bytes IS NULL) OR (write_id IS NOT NULL AND reservation_started_at IS NOT NULL)`,
+    ),
+    p.check(
+      "organization_file_objects_status_domain",
+      sql`status IN (${sql.join(FILE_USAGE_OBJECT_STATUS_SQL_VALUES, sql`, `)})`,
+    ),
+    p.pgPolicy("organization_file_objects_owner_access", {
+      for: "all",
+      to: "public",
+      using: currentUserOwnsOrganizationFileObjects,
+      withCheck: currentUserOwnsOrganizationFileObjects,
+    }),
+    p.pgPolicy("organization_file_objects_select", {
+      for: "select",
+      to: stella,
+      using: organizationCheck,
+    }),
+    p.pgPolicy("organization_file_objects_no_insert", {
+      as: "restrictive",
+      for: "insert",
+      to: stella,
+      withCheck: sql`false`,
+    }),
+    p.pgPolicy("organization_file_objects_no_update", {
+      as: "restrictive",
+      for: "update",
+      to: stella,
+      using: sql`false`,
+    }),
+    p.pgPolicy("organization_file_objects_no_delete", {
+      as: "restrictive",
+      for: "delete",
       to: stella,
       using: sql`false`,
     }),

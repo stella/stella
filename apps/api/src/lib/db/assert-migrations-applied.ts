@@ -12,11 +12,16 @@ import {
   applicationRlsRolePostureViolation,
   type DatabaseLoginPosture,
   databaseLoginPostureNotes,
+  type IngestionRolePosture,
+  ingestionRolePostureViolation,
 } from "@/api/lib/db/rls-role-posture";
 import { logger } from "@/api/lib/observability/logger";
 
 import { assertOnlineMigrationsApplied } from "../../db/online-migrations";
-import { APPLICATION_RLS_ROLE_NAME } from "../../db/role-names";
+import {
+  APPLICATION_RLS_ROLE_NAME,
+  INGESTION_ROLE_NAME,
+} from "../../db/role-names";
 
 const MIGRATIONS_DIR = nodePath.resolve(process.cwd(), "drizzle");
 const ESCAPE_HATCH_ENV = "SKIP_MIGRATION_CHECK";
@@ -39,6 +44,18 @@ export const assertApplicationRlsRolePosture = async (): Promise<void> => {
     WHERE app_role.rolname = ${APPLICATION_RLS_ROLE_NAME}
   `);
   const violation = applicationRlsRolePostureViolation(result.at(0));
+  if (violation !== null) {
+    panic(violation);
+  }
+};
+
+export const assertIngestionRolePosture = async (): Promise<void> => {
+  const result = await rootDb.execute<IngestionRolePosture>(sql`
+    SELECT pg_has_role(CURRENT_USER, ingestion_role.oid, 'SET') AS "canAssumeRole"
+    FROM pg_catalog.pg_roles ingestion_role
+    WHERE ingestion_role.rolname = ${INGESTION_ROLE_NAME}
+  `);
+  const violation = ingestionRolePostureViolation(result.at(0));
   if (violation !== null) {
     panic(violation);
   }
@@ -86,6 +103,7 @@ const queryAppliedRows = async (): Promise<readonly AppliedMigration[]> => {
 
 export const assertMigrationsApplied = async (): Promise<void> => {
   await assertApplicationRlsRolePosture();
+  await assertIngestionRolePosture();
   await reportDatabaseLoginPosture();
   if (process.env[ESCAPE_HATCH_ENV] === "true") {
     logger.warn("startup.migration_check_disabled", {

@@ -30,7 +30,12 @@ const TURBO_CONFIG = "turbo.json";
 const TURBO_ROOT_INPUT_PREFIX = "$TURBO_ROOT$/";
 const RECURSIVE_GLOB_SUFFIX = "/**";
 const TEST_TASK_SUFFIX = "#test";
-const TEST_FILE_GLOB = "**/*.test.{ts,tsx}";
+// Shared test helpers read fixtures on a test's behalf, so their literals count
+// as the test's reads.
+const TEST_FILE_GLOBS = [
+  "**/*.test.{ts,tsx}",
+  "**/tests/helpers/**/*.{ts,tsx}",
+];
 const WORKSPACE_DEPENDENCY_PROTOCOL = "workspace:";
 
 /**
@@ -587,10 +592,16 @@ export const readTestInputs = (
 
 const testFiles = (root: string, workspaceDir: string): readonly string[] =>
   [
-    ...new Bun.Glob(TEST_FILE_GLOB).scanSync({
-      cwd: path.join(root, workspaceDir),
-      onlyFiles: true,
-    }),
+    ...new Set(
+      TEST_FILE_GLOBS.flatMap((pattern) =>
+        Array.from(
+          new Bun.Glob(pattern).scanSync({
+            cwd: path.join(root, workspaceDir),
+            onlyFiles: true,
+          }),
+        ),
+      ),
+    ),
   ]
     .filter(
       (file) =>

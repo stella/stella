@@ -411,6 +411,15 @@ const PER_USER_READS: Record<string, PerUserRead> = {
       timeEntriesKeys.teamSummary(WORKSPACE, USER, "2026-01-01", "2026-01-31"),
     ],
   },
+  // Matter visibility depends on the caller; a future cache key needs org + user.
+  "time-timers/admin/list.ts": {
+    kind: "no-web-caller",
+    calls: ['api["time-timers"].admin.get'],
+  },
+  "time-timers/list.ts": {
+    kind: "no-web-caller",
+    calls: ['api["time-timers"].get'],
+  },
   "usage/get-lane.ts": {
     kind: "keyed",
     calls: ["api.usage.lane.get"],

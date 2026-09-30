@@ -31,6 +31,7 @@ import type { RouteErrorLifecycleController } from "@/lib/analytics/route-error-
 import { RouteErrorLifecycleProvider } from "@/lib/analytics/route-error-lifecycle-context";
 import { isPublicSsrPath } from "@/lib/public-ssr-paths";
 import { requireFreshDocument } from "@/lib/session-cache-guard";
+import { AppFrameHost } from "@/routes/-app-frame-host";
 import "@/styles/app.css";
 
 const isDev = import.meta.env.DEV;
@@ -158,7 +159,9 @@ function RootApp() {
   return (
     <div className="flex h-dvh w-full flex-col" id="app">
       <ApiVersionMismatchProvider>
-        <Outlet />
+        <AppFrameHost>
+          <Outlet />
+        </AppFrameHost>
         {DevRoot ? (
           <ClientOnly>
             <Suspense fallback={null}>

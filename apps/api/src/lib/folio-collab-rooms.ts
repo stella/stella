@@ -1,4 +1,4 @@
-import { panic, Result } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
@@ -20,6 +20,7 @@ import {
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
+import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -34,6 +35,9 @@ import {
 } from "@/api/lib/buffer-intent-reconciliation";
 import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
 import { lockDocxEditTarget } from "@/api/lib/entity-versions/desktop-edit-session-utils";
+import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
+import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
+import type { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
 import { createFileKey } from "@/api/lib/files/utils";
 import { FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE } from "@/api/lib/folio-collab-mime";
 import {
@@ -45,7 +49,6 @@ import {
 import { isMemberRole } from "@/api/lib/member-roles";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import {
-  deleteS3ObjectWithSignal,
   readS3ObjectIfPresent,
   S3_OBJECT_WRITE_CERTAINTY,
   writeS3ObjectWithRetry,
@@ -133,12 +136,19 @@ const deleteStoredRoomFile = async ({
     workspaceId,
   });
 
-  await deleteS3ObjectWithSignal(
-    key,
-    AbortSignal.timeout(FOLIO_COLLAB_S3_DELETE_TIMEOUT_MS),
-  ).catch((error: unknown) => {
-    captureError(error, { roomId, storageKey: key });
-  });
+  const deleted = Result.flatten(
+    await Result.tryPromise({
+      try: async () =>
+        await deleteOrganizationFileWithSignal(
+          key,
+          AbortSignal.timeout(FOLIO_COLLAB_S3_DELETE_TIMEOUT_MS),
+        ),
+      catch: (cause) => cause,
+    }),
+  );
+  if (Result.isError(deleted)) {
+    captureError(deleted.error, { roomId, storageKey: key });
+  }
 };
 
 export const deleteFolioCollabStoredRoomFiles = async ({
@@ -761,6 +771,19 @@ export const decideFolioCollabSnapshotStore = ({
   return { status: "accepted" };
 };
 
+class FolioCollabSnapshotStoreError extends TaggedError(
+  "FolioCollabSnapshotStoreError",
+)<{
+  message: string;
+  cause: unknown;
+}> {}
+
+const snapshotStoreFailure = (cause: unknown) =>
+  new FolioCollabSnapshotStoreError({
+    message: "Collaborative snapshot could not be stored.",
+    cause,
+  });
+
 export const storeFolioCollabSnapshot = async ({
   authority,
   expectedGeneration,
@@ -773,7 +796,12 @@ export const storeFolioCollabSnapshot = async ({
   expectedSnapshotRevision: number;
   snapshotBytes: Uint8Array;
   value: FolioCollabSnapshotTarget;
-}): Promise<StoreFolioCollabSnapshotResult> => {
+}): Promise<
+  Result<
+    StoreFolioCollabSnapshotResult,
+    FolioCollabSnapshotStoreError | OrganizationFileUsageError
+  >
+> => {
   const nextSnapshotFileId = createSafeId<"userFile">();
   const nextCleanupIntentId = createSafeId<"pendingUpload">();
   const nextKey = createFileKey({
@@ -782,34 +810,43 @@ export const storeFolioCollabSnapshot = async ({
     organizationId: value.organizationId,
     workspaceId: value.workspaceId,
   });
-  await value.scopedDb(async (tx) => {
-    await lockOrganizationObjectIntentsForWriter(tx, value.organizationId);
-    await lockActiveWorkspaceForBufferIntent(tx, value.workspaceId);
-    // Reserve cleanup ownership before the object can exist. A process crash
-    // after PUT therefore leaves a durable exact-key tombstone for recovery.
-    await tx.insert(bufferObjectCleanupIntents).values({
-      id: nextCleanupIntentId,
-      nextAttemptAt: new Date(
-        Temporal.Now.instant().epochMilliseconds +
-          OBJECT_WRITE_RECOVERY_DELAY_MS,
-      ),
-      objectKey: nextKey,
-      organizationId: value.organizationId,
-      status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.WRITING,
-      workspaceId: value.workspaceId,
-    });
+  const reserved = await Result.tryPromise({
+    try: async () =>
+      await value.scopedDb(async (tx) => {
+        await lockOrganizationObjectIntentsForWriter(tx, value.organizationId);
+        await lockActiveWorkspaceForBufferIntent(tx, value.workspaceId);
+        // Reserve cleanup ownership before the object can exist. A process crash
+        // after PUT therefore leaves a durable exact-key tombstone for recovery.
+        await tx.insert(bufferObjectCleanupIntents).values({
+          id: nextCleanupIntentId,
+          nextAttemptAt: new Date(
+            Temporal.Now.instant().epochMilliseconds +
+              OBJECT_WRITE_RECOVERY_DELAY_MS,
+          ),
+          objectKey: nextKey,
+          organizationId: value.organizationId,
+          status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.WRITING,
+          workspaceId: value.workspaceId,
+        });
+      }),
+    catch: snapshotStoreFailure,
   });
+  if (Result.isError(reserved)) {
+    return Result.err(reserved.error);
+  }
   const discardNewObject = async (
     writeCertainty: S3ObjectWriteCertainty,
   ): Promise<void> => {
-    const cleanup = await Result.tryPromise({
-      try: async () =>
-        await deleteS3ObjectWithSignal(
-          nextKey,
-          AbortSignal.timeout(FOLIO_COLLAB_S3_DELETE_TIMEOUT_MS),
-        ),
-      catch: (cause) => cause,
-    });
+    const cleanup = Result.flatten(
+      await Result.tryPromise({
+        try: async () =>
+          await deleteOrganizationFileWithSignal(
+            nextKey,
+            AbortSignal.timeout(FOLIO_COLLAB_S3_DELETE_TIMEOUT_MS),
+          ),
+        catch: (cause) => cause,
+      }),
+    );
     if (Result.isError(cleanup)) {
       captureError(cleanup.error, {
         roomId: value.roomId,
@@ -832,18 +869,36 @@ export const storeFolioCollabSnapshot = async ({
         captureError(error, { roomId: value.roomId, storageKey: nextKey });
       });
   };
-  const written = await Result.tryPromise({
-    try: async () =>
-      await writeS3ObjectWithRetry({
-        contentType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
-        data: snapshotBytes,
-        key: nextKey,
-      }),
-    catch: (cause) => cause,
-  });
+  const written = Result.flatten(
+    await Result.tryPromise({
+      try: async () => {
+        if (!env.FEATURE_FILE_USAGE_LIMITS) {
+          return Result.ok(
+            await writeS3ObjectWithRetry({
+              contentType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
+              data: snapshotBytes,
+              key: nextKey,
+            }),
+          );
+        }
+        return await writeOrganizationFile({
+          organizationId: value.organizationId,
+          objectKey: nextKey,
+          sizeBytes: snapshotBytes.byteLength,
+          write: async () =>
+            await writeS3ObjectWithRetry({
+              contentType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
+              data: snapshotBytes,
+              key: nextKey,
+            }),
+        });
+      },
+      catch: snapshotStoreFailure,
+    }),
+  );
   if (Result.isError(written)) {
     await discardNewObject(S3_OBJECT_WRITE_CERTAINTY.UNCERTAIN);
-    throw written.error;
+    return Result.err(written.error);
   }
   const writeCertainty = written.value;
 
@@ -985,25 +1040,25 @@ export const storeFolioCollabSnapshot = async ({
           status: "stored",
         } as const;
       }),
-    catch: (cause) => cause,
+    catch: snapshotStoreFailure,
   });
 
   if (Result.isError(transactionResult)) {
     await discardNewObject(writeCertainty);
-    throw transactionResult.error;
+    return Result.err(transactionResult.error);
   }
 
   const result = transactionResult.value;
 
   if (result.status !== "stored") {
     await discardNewObject(writeCertainty);
-    return result;
+    return Result.ok(result);
   }
 
-  return {
+  return Result.ok({
     status: "stored",
     snapshotRevision: result.snapshotRevision,
     storedAt,
     sizeBytes: snapshotBytes.byteLength,
-  };
+  });
 };

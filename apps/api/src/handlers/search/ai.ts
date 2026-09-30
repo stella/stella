@@ -426,7 +426,6 @@ export const refineSearchQuery = async ({
       continue;
     }
 
-    // db-await-in-loop: bounded retry: the next attempt's prompt depends on this validation failure
     const postgresValidation = await validateSearchQueryWithPostgres({
       query: refinedQuery,
       scopedDb,

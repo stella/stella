@@ -310,6 +310,9 @@ const fixtureRuleOverrides = [
     "public-law-read-boundary/require-language-alternate-counts",
     "public-law-read-boundary/require-configured-read-transaction",
   ]),
+  fixtureRuleOverride("require-running-entry-guard.fixture.ts", [
+    "require-running-entry-guard/require-running-entry-guard",
+  ]),
   fixtureRuleOverride("require-audit-on-mutation.fixture.ts", [
     "require-audit-on-mutation/require-audit-on-mutation",
   ]),
@@ -920,7 +923,10 @@ export default defineConfig({
     "no-static-catalogue-route-import/no-static-catalogue-route-import": [
       "error",
       {
-        routeFiles: ["apps/web/src/routes/_protected.knowledge/tools.tsx"],
+        routeFiles: [
+          "apps/web/src/routes/knowledge/tools.tsx",
+          "apps/web/src/routes/knowledge/-member/member-tools-page.tsx",
+        ],
       },
     ],
     "suppression-hygiene/require-description": "error",
@@ -1230,6 +1236,7 @@ export default defineConfig({
     "./.oxlint-plugins/decision-shaped-output-schema.ts",
     "./.oxlint-plugins/require-complete-compaction-generation.ts",
     "./.oxlint-plugins/require-audit-on-mutation.ts",
+    "./.oxlint-plugins/require-running-entry-guard.ts",
     "./.oxlint-plugins/require-transaction-abort.ts",
     "./.oxlint-plugins/no-direct-audit-log-insert.ts",
     "./.oxlint-plugins/scanned-file-boundary.ts",
@@ -1394,7 +1401,7 @@ export default defineConfig({
         "apps/web/src/components/chat-editor-provider.tsx",
         "apps/web/src/components/inspector/anonymization-facet.tsx",
         "apps/web/src/components/inspector/inspector-panel.tsx",
-        "apps/web/src/routes/_protected.knowledge/-components/template-studio-chat.tsx",
+        "apps/web/src/routes/knowledge/-components/template-studio-chat.tsx",
         "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view.tsx",
         "apps/web/src/components/workspaces/cell-metadata-flags.tsx",
         "packages/ui/src/components/hex-color-picker.tsx",
@@ -1665,19 +1672,19 @@ export default defineConfig({
               "apps/web/src/routes/_protected.chat/-components/chat-thread-recap.tsx",
               "apps/web/src/routes/_protected.contacts/-procuracao-extraction.tsx",
               "apps/web/src/routes/_protected.contacts/import.tsx",
-              "apps/web/src/routes/_protected.knowledge/-components/blueprint-gallery-sheet.tsx",
-              "apps/web/src/routes/_protected.knowledge/-components/catalogue/add-mcp-server-sheet.tsx",
-              "apps/web/src/routes/_protected.knowledge/-components/catalogue/catalogue-browser.tsx",
-              "apps/web/src/routes/_protected.knowledge/-components/catalogue/install-pack-button.tsx",
-              "apps/web/src/routes/_protected.knowledge/-components/catalogue/tool-detail-view.tsx",
-              "apps/web/src/routes/_protected.knowledge/-components/clause-detail.tsx",
-              "apps/web/src/routes/_protected.knowledge/-components/clause-editor.tsx",
-              "apps/web/src/routes/_protected.knowledge/-components/import-skill-dialog.tsx",
-              "apps/web/src/routes/_protected.knowledge/-components/template-clauses-tab.tsx",
-              "apps/web/src/routes/_protected.knowledge/-components/template-studio-chat.tsx",
-              "apps/web/src/routes/_protected.knowledge/-components/template-studio-fields.tsx",
-              "apps/web/src/routes/_protected.knowledge/-components/template-studio-inspector.tsx",
-              "apps/web/src/routes/_protected.knowledge/-components/template-studio-selection-gesture.tsx",
+              "apps/web/src/routes/knowledge/-components/blueprint-gallery-sheet.tsx",
+              "apps/web/src/routes/knowledge/-components/catalogue/add-mcp-server-sheet.tsx",
+              "apps/web/src/routes/knowledge/-components/catalogue/catalogue-browser.tsx",
+              "apps/web/src/routes/knowledge/-components/catalogue/install-pack-button.tsx",
+              "apps/web/src/routes/knowledge/-components/catalogue/tool-detail-view.tsx",
+              "apps/web/src/routes/knowledge/-components/clause-detail.tsx",
+              "apps/web/src/routes/knowledge/-components/clause-editor.tsx",
+              "apps/web/src/routes/knowledge/-components/import-skill-dialog.tsx",
+              "apps/web/src/routes/knowledge/-components/template-clauses-tab.tsx",
+              "apps/web/src/routes/knowledge/-components/template-studio-chat.tsx",
+              "apps/web/src/routes/knowledge/-components/template-studio-fields.tsx",
+              "apps/web/src/routes/knowledge/-components/template-studio-inspector.tsx",
+              "apps/web/src/routes/knowledge/-components/template-studio-selection-gesture.tsx",
               "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx",
               "apps/web/src/routes/_protected.settings/account.profile.tsx",
               "apps/web/src/routes/_protected.settings/organization.usage.tsx",
@@ -1832,9 +1839,7 @@ export default defineConfig({
       // oxlint's type-aware pass resolves the editor to `error`-typed here
       // (the only web consumer of toggleBold/toggleHeading/isActive), while
       // tsc --noEmit type-checks the file clean.
-      files: [
-        "apps/web/src/routes/_protected.knowledge/-components/clause-editor.tsx",
-      ],
+      files: ["apps/web/src/routes/knowledge/-components/clause-editor.tsx"],
       rules: {
         "typescript/no-unsafe-assignment": "off",
         "typescript/no-unsafe-call": "off",
@@ -3159,6 +3164,9 @@ export default defineConfig({
         "apps/web/src/components/sidebar.tsx",
         "apps/web/src/routes/__root.tsx",
         "apps/web/src/routes/tools/**/*.{ts,tsx}",
+        "apps/web/src/routes/knowledge/-public/**/*.{ts,tsx}",
+        "apps/web/src/features/knowledge/public/tools/**/*.{ts,tsx}",
+        "apps/web/src/routes/knowledge/tools_.*.{ts,tsx}",
       ],
       rules: {
         ...publicSsrAmbientStateRules,
@@ -3278,6 +3286,7 @@ export default defineConfig({
         "apps/web/src/**/workspace-table.tsx",
         "apps/web/src/**/workspace-table/**/*.tsx",
         "apps/web/src/**/template-preview.tsx",
+        "apps/web/src/**/template-preview-view.tsx",
         "apps/web/src/**/page-citation.tsx",
         // Generated message types: UI copy may legitimately contain words
         // like "right-click"; these strings are never class names.
@@ -3309,6 +3318,7 @@ export default defineConfig({
       // fiber. See apps/web/src/hooks/use-chrome-query.ts.
       files: [
         "apps/web/src/routes/_protected.tsx",
+        "apps/web/src/routes/-protected-app.tsx",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/sidebar-user-menu.tsx",
         "apps/web/src/components/require-ai-key.tsx",
@@ -3549,6 +3559,17 @@ export default defineConfig({
       excludeFiles: ["apps/api/src/handlers/**/*.test.ts"],
       rules: {
         "require-audit-on-mutation/require-audit-on-mutation": "error",
+      },
+    },
+    {
+      files: ["apps/api/src/handlers/**/*.ts"],
+      excludeFiles: [
+        "apps/api/src/handlers/**/*.test.ts",
+        // The authenticated local fixture reset clears the whole seeded organization.
+        "apps/api/src/handlers/dev/routes.ts",
+      ],
+      rules: {
+        "require-running-entry-guard/require-running-entry-guard": "error",
       },
     },
     {

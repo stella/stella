@@ -7,6 +7,7 @@ import type { Transaction } from "@/api/db/root";
 import { entities, workspaces } from "@/api/db/schema";
 import type { entityVersions } from "@/api/db/schema";
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
+import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -22,6 +23,8 @@ import {
 import { carryVerificationCodes } from "@/api/lib/entity-versions/insert-entity-version";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
+import { copyOrganizationFiles } from "@/api/lib/files/copy-organization-files";
+import { deleteOrganizationFilesWithSignal } from "@/api/lib/files/delete-organization-file";
 import {
   allocateFileObject,
   fileContentWithMintedObject,
@@ -30,10 +33,10 @@ import {
 } from "@/api/lib/files/file-object-ids";
 import { pdfDerivativeStateForFile } from "@/api/lib/files/gotenberg";
 import { thumbnailDerivativeStateForFile } from "@/api/lib/files/image-derivative";
+import type { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
 import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
-import { getS3 } from "@/api/lib/s3";
-import { copyObject } from "@/api/lib/s3-presign";
+import { copyObject, headObject } from "@/api/lib/s3-presign";
 import type { S3PresignError } from "@/api/lib/s3-presign";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import {
@@ -314,6 +317,8 @@ export const collectFileCopySources = ({
   return sources;
 };
 
+const FILE_COPY_CONCURRENCY = 16;
+
 type CopyFileObjectOptions = FileCopySource & {
   organizationId: SafeId<"organization">;
   targetWorkspaceId: SafeId<"workspace">;
@@ -326,35 +331,25 @@ type CopyFileObjectOptions = FileCopySource & {
  * are derived from the file ID, and entity deletion deletes the
  * underlying objects.
  */
-export const copyFileObject = async ({
-  sourceEntityId,
-  sourceFileId,
-  sourceKey,
-  mimeType,
-  organizationId,
-  targetWorkspaceId,
-  copiedS3Keys,
-}: CopyFileObjectOptions): Promise<Result<FileMapping, S3PresignError>> => {
-  const newFileId = allocateFileObject();
-  const targetKey = createFileKey({
-    organizationId,
-    workspaceId: targetWorkspaceId,
-    fileId: newFileId,
-    mimeType,
+export const copyFileObject = async (
+  options: CopyFileObjectOptions,
+): Promise<
+  Result<FileMapping, S3PresignError | OrganizationFileUsageError>
+> => {
+  const copied = await stageAndCopyFiles({
+    sources: [options],
+    organizationId: options.organizationId,
+    targetWorkspaceId: options.targetWorkspaceId,
+    copiedS3Keys: options.copiedS3Keys,
   });
-  // Reserve the deterministic destination before starting the copy. A timed-out
-  // request may still have completed in S3, so rollback must delete this key even
-  // when the client never observes a successful response.
-  copiedS3Keys.push(targetKey);
-  const copied = await copyObject(sourceKey, targetKey);
-  return copied.map(() => ({
-    sourceEntityId,
-    sourceFileId,
-    sourceKey,
-    targetKey,
-    newFileId,
-    mimeType,
-  }));
+  if (Result.isError(copied)) {
+    return Result.err(copied.error);
+  }
+  const mapping = copied.value.at(0);
+  if (!mapping) {
+    panic("A successful file copy must have a destination mapping");
+  }
+  return Result.ok(mapping);
 };
 
 type CopyFileObjectsOptions = {
@@ -369,51 +364,76 @@ class FileObjectCopyError extends TaggedError("FileObjectCopyError")<{
   cause?: unknown;
 }> {}
 
-export const copyFileObjects = async ({
+const stageAndCopyFiles = async ({
   sources,
   organizationId,
   targetWorkspaceId,
   copiedS3Keys,
 }: CopyFileObjectsOptions): Promise<
-  Result<FileMapping[], FileObjectCopyError>
+  Result<FileMapping[], S3PresignError | OrganizationFileUsageError>
 > => {
-  const results = await Promise.allSettled(
-    sources.map(
-      async (source) =>
-        await copyFileObject({
-          ...source,
-          organizationId,
-          targetWorkspaceId,
-          copiedS3Keys,
-        }),
-    ),
-  );
-
-  const mappings: FileMapping[] = [];
-  const failures: unknown[] = [];
-
-  for (const result of results) {
-    if (result.status === "rejected") {
-      failures.push(result.reason);
-      continue;
+  const mappings = sources.map((source) => {
+    const newFileId = allocateFileObject();
+    const targetKey = createFileKey({
+      organizationId,
+      workspaceId: targetWorkspaceId,
+      fileId: newFileId,
+      mimeType: source.mimeType,
+    });
+    copiedS3Keys.push(targetKey);
+    return { ...source, targetKey, newFileId };
+  });
+  const prepareFile = async ({ sourceKey, targetKey }: FileMapping) => {
+    const source = env.FEATURE_FILE_USAGE_LIMITS
+      ? await headObject(sourceKey)
+      : Result.ok({ contentLength: 0 });
+    if (Result.isError(source)) {
+      return Result.err(source.error);
     }
-    if (Result.isError(result.value)) {
-      failures.push(result.value.error);
-      continue;
-    }
-    mappings.push(result.value.value);
-  }
-
-  if (failures.length > 0) {
-    return Result.err(
-      new FileObjectCopyError({
-        message: "Failed to copy file object",
-        cause: failures.at(0),
-      }),
+    return Result.ok({
+      organizationId,
+      objectKey: targetKey,
+      sizeBytes: source.value.contentLength,
+      copy: async () => await copyObject(sourceKey, targetKey),
+    });
+  };
+  const prepared: Awaited<ReturnType<typeof prepareFile>>[] = [];
+  for (let start = 0; start < mappings.length; start += FILE_COPY_CONCURRENCY) {
+    prepared.push(
+      ...(await Promise.all(
+        mappings.slice(start, start + FILE_COPY_CONCURRENCY).map(prepareFile),
+      )),
     );
   }
+  const inputs = Result.all(prepared);
+  if (Result.isError(inputs)) {
+    return Result.err(inputs.error);
+  }
+  const copied = await copyOrganizationFiles({
+    inputs: inputs.value,
+    concurrency: FILE_COPY_CONCURRENCY,
+  });
+  if (Result.isError(copied)) {
+    return Result.err(copied.error);
+  }
+  const completed = Result.all(copied.value);
+  return Result.isError(completed)
+    ? Result.err(completed.error)
+    : Result.ok(mappings);
+};
 
-  return Result.ok(mappings);
+export const copyFileObjects = async (
+  options: CopyFileObjectsOptions,
+): Promise<Result<FileMapping[], FileObjectCopyError>> => {
+  const copied = await stageAndCopyFiles(options);
+  return Result.isError(copied)
+    ? Result.err(
+        new FileObjectCopyError({
+          message: "Failed to copy file object",
+          cause: copied.error,
+        }),
+      )
+    : Result.ok(copied.value);
 };
 
 /**
@@ -500,14 +520,19 @@ const remapFieldFileId = ({
  * it is reported: the object stays in the bucket, billed and unreferenced.
  */
 export const rollbackS3Copies = async (keys: string[]): Promise<void> => {
-  const s3 = getS3();
-  await Promise.all(
-    keys.map(async (key) => {
-      await s3.delete(key).catch((error: unknown) => {
-        captureError(error, { source: "entity-copy-rollback" });
-      });
+  const result = Result.flatten(
+    await Result.tryPromise({
+      try: async () =>
+        await deleteOrganizationFilesWithSignal(
+          keys,
+          AbortSignal.timeout(10_000),
+        ),
+      catch: (error: unknown) => error,
     }),
   );
+  if (Result.isError(result)) {
+    captureError(result.error, { source: "entity-copy-rollback" });
+  }
 };
 
 const trailingSuffixRe = /_\d+$/u;

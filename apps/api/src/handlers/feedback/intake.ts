@@ -40,6 +40,7 @@ import {
 import { FEEDBACK_REQUEST_ID_PATTERN } from "@/api/handlers/feedback/sanitize-report";
 import { submitFeedbackReport } from "@/api/handlers/feedback/submit";
 import type { SubmitFeedbackDependencies } from "@/api/handlers/feedback/submit";
+import { normalizeRateLimitClientAddress } from "@/api/lib/client-ip";
 import type { McpErrorCode } from "@/api/mcp/error-codes";
 
 // Coarse raw-body string cap enforced at the route before JSON parsing: bounds
@@ -240,7 +241,10 @@ export const receivePublicFeedback = async ({
     const guards = deps?.guards ?? feedbackIntakeGuards;
     const withinRate = await guards.consumeCounter({
       bucket: "ip",
-      key: clientIp ?? UNKNOWN_IP_KEY,
+      key:
+        clientIp === null
+          ? UNKNOWN_IP_KEY
+          : normalizeRateLimitClientAddress(clientIp),
       windowMs: RATE_LIMIT_WINDOW_MS,
       max: RATE_LIMIT_MAX_PER_IP,
     });

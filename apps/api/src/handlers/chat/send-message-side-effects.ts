@@ -9,7 +9,10 @@ import {
   deleteUploadedChatFiles,
   uploadMessageFiles,
 } from "@/api/handlers/chat/upload-files";
-import type { UploadedChatFile } from "@/api/handlers/chat/upload-files";
+import type {
+  UploadedChatFile,
+  UploadMessageFilesError,
+} from "@/api/handlers/chat/upload-files";
 import { captureError } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -30,7 +33,7 @@ type UploadMessageFilesWithRollbackResult = Result<
     message: PersistableChatMessage;
     uploadedFiles: UploadedChatFile[];
   },
-  HandlerError<400 | 422 | 500> | SafeDbError
+  UploadMessageFilesError
 >;
 
 export const uploadMessageFilesWithRollback = async ({

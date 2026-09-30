@@ -1,0 +1,366 @@
+import { create } from "zustand";
+
+import type { DirectiveRange, TemplatePreviewValue } from "@stll/folio-react";
+
+import type { GroupDirectiveKind } from "@/features/knowledge/views/templates/directive-kinds";
+import type { TemplateRecipeDefinition } from "@/lib/api-contract";
+import type { ReplacementSpec } from "@/routes/knowledge/-components/template-studio-suggestions";
+import {
+  templateValueSourceTransition,
+  type TemplateEditableField,
+} from "@/routes/knowledge/-components/template-value-source";
+
+// The Studio's editable manifest data + live document selection. Lives in a
+// module-level store (not the inspector tab payload, which must be
+// structured-cloneable) so the full-width Folio page and the Fields/Clauses/
+// History tab — rendered in the global inspector, a separate React tree — share
+// one source of truth. Only one template is authored at a time.
+
+export type StudioField = TemplateEditableField & {
+  aiPrompt: string | undefined;
+  /** Person fills a stub; AI rewords it per occurrence to fit the context. */
+  aiAdapt: boolean;
+  /** AI-only field opt-in: inject the document text into the generator
+   *  prompt so the draft can reference the surrounding contract. */
+  aiSeesDocument: boolean;
+};
+export const defaultStudioField = (path: string): StudioField => ({
+  path,
+  kind: "string",
+  label: "",
+  inputType: "text",
+  required: false,
+  options: [],
+  valueSource: { type: "input" },
+  aiPrompt: undefined,
+  aiAdapt: false,
+  aiSeesDocument: false,
+});
+
+type TemplateStudioSession = {
+  templateId: string;
+  fields: StudioField[];
+};
+
+/** One deferred link-row slot rename in the replay log
+ *  (see {@link TemplateStudioState.pendingSlotRenames}). `fromSlot` is the
+ *  name the step renames away from: until the flush lands, the server row
+ *  (first step) or the replay sequence (intermediate steps) still claims it,
+ *  so new-slot pickers must treat both names as reserved. */
+type PendingSlotRename = { linkId: string; slotName: string; fromSlot: string };
+
+/** Document actions the page owns; the inspector tab renders the buttons. */
+export type StudioActions = {
+  toggleDirectives: () => void;
+  insertField: () => void;
+  insertCondition: () => void;
+  insertLoop: () => void;
+  insertClause: () => void;
+  /** Insert a `{{ clause("Name") }}` slot bound to a linked clause's slot name. */
+  insertClauseSlot: (slotName: string) => void;
+  /** Insert a raw marker (e.g. `{{ loop.index }}`) inline at the caret. */
+  insertText: (text: string) => void;
+  /** True when the document caret sits inside a `{% for %}`…`{% endfor %}` body,
+   *  so loop counters (`{{ loop.index }}`, `{{ loop.length }}`) are meaningful there. */
+  isCaretInLoop: () => boolean;
+  makeField: () => void;
+  /** Persist the document + manifest. Resolves true only on a successful
+   *  save, so callers (e.g. "Save and leave") can await it before navigating
+   *  away and unmounting the page (which resets the shared store). */
+  save: () => Promise<boolean>;
+  /** Rewrite the path's markers in the document and rename the field.
+   *  Returns false when the new path is invalid or already taken. */
+  renameFieldPath: (oldPath: string, newPath: string) => boolean;
+  /** Rewrite the document's `{{ clause("oldSlot") }}` markers (preserving any
+   *  version modifier) to a new slot name. Returns false when the new name is
+   *  invalid, unchanged, or already used by another clause slot. Document-only:
+   *  callers must keep any linked clause row's slotName in sync themselves. */
+  renameClauseSlot: (oldSlot: string, newSlot: string) => boolean;
+  /** Rewrite the selected `{% if … %}` / `{% elif … %}` opener with a new
+   *  expression. Returns false when nothing suitable is selected or the
+   *  expression is invalid. */
+  rewriteConditionExpr: (next: string) => boolean;
+  /** Inline-wrap this field's own marker in `{% if condition %}`…`{% endif %}` so the
+   *  field renders only when the condition holds. Returns false when the
+   *  field's marker could not be wrapped. */
+  wrapFieldInCondition: (path: string) => boolean;
+  /** Rewrite the `{% if … %}` opener of the block that encloses this field's
+   *  marker. Returns false when no enclosing `if` block exists or the
+   *  expression is invalid. */
+  rewriteFieldConditionExpr: (path: string, next: string) => boolean;
+  /** Remove the `{% if … %}` / `{% endif %}` pair around this field's marker (keep
+   *  the field). Returns false when the block holds more than this field's
+   *  marker or could not be rewritten. */
+  unwrapFieldCondition: (path: string) => boolean;
+  /** Return to the template overview: move the document caret just past the
+   *  selected marker (so selection sync doesn't immediately re-derive the
+   *  same face) and clear the selection. */
+  deselect: () => void;
+  /** Move the document caret to the next/previous field marker. */
+  focusAdjacentField: (direction: 1 | -1) => void;
+  /** Move the document caret into the first marker of the given field. */
+  focusField: (path: string) => void;
+  /** Move the document caret to an exact document position. */
+  focusPosition: (pos: number) => void;
+  /** Restore keyboard focus without moving the selection, and return the
+   * editor element for overlay focus-management contracts. */
+  focusEditor: () => HTMLElement | null;
+  /** Live fill preview in the document: path → value (plain text, or
+   *  formatted spans for lookup renderings), or null to clear. */
+  setFillPreview: (values: Record<string, TemplatePreviewValue> | null) => void;
+  /** Replace the selection (or insert at the caret) with an existing field's
+   *  marker; replacing text flips the field to AI-adapted wording. For a
+   *  multi-format lookup field, `formatKey` selects a non-default output
+   *  (`{{ path.key }}`); omit it to insert the default (`{{ path }}`). */
+  insertExistingField: (path: string, formatKey?: string) => void;
+  /** Insert (or wrap the selection in) a `{% if expr %}`…`{% endif %}` block for an
+   *  existing condition's expression, so the open condition can be placed in
+   *  the document the same way a field marker is. */
+  insertExistingCondition: (expr: string) => void;
+  /** Remove every marker of the path from the document and drop the field. */
+  deleteField: (path: string) => void;
+  /** Insert a saved recipe at the caret: loop recipes add the `{% for %}`
+   *  block with one marker paragraph per field, plain recipes add the
+   *  markers inline; the pre-configured fields register in the session
+   *  (existing paths are kept and the recipe's get a `_2` suffix). */
+  insertRecipe: (definition: TemplateRecipeDefinition) => void;
+  /** Make the field repeat per loop item (wrap its marker's containing
+   *  paragraph in `{% for … in path %}` / `{% endfor %}` and re-path the field to
+   *  the loop-item convention, `path` → `path.value`), or undo it (remove
+   *  the enclosing loop tags and re-path back to the loop's name).
+   *  Returns false when the document could not be rewritten. */
+  setFieldRepeatable: (path: string, repeatable: boolean) => boolean;
+};
+
+/** A bilingual-mirror proposal the page queues for the chat surface — the
+ *  Studio's only AISuggestion decoration writer — to place in-document as
+ *  an accept/reject suggestion. */
+export type MirrorSuggestionRequest = {
+  spec: ReplacementSpec;
+  /** Runs once when the placed suggestion is accepted. */
+  onAccepted?: (() => void) | undefined;
+};
+
+/** Page-owned UI state the inspector's action row reflects. */
+export type StudioUiState = {
+  metaLabel: string;
+  showDirectives: boolean;
+  hasSelection: boolean;
+  isSaving: boolean;
+};
+
+const DEFAULT_UI: StudioUiState = {
+  metaLabel: "",
+  showDirectives: true,
+  hasSelection: false,
+  isSaving: false,
+};
+
+export type OutlineNode =
+  | { type: "field"; path: string; from: number }
+  | { type: "clause"; name: string; from: number }
+  | {
+      type: "group";
+      kind: GroupDirectiveKind;
+      expr: string;
+      /** Loop variable of a `for` opener (`{% for row in items %}` ⇒ `row`);
+       *  unset for conditional groups. */
+      alias?: string;
+      from: number;
+      children: OutlineNode[];
+    };
+
+type TemplateStudioState = {
+  /** Null until a template page mounts and seeds the session. */
+  templateId: string | null;
+  fields: StudioField[];
+  /** The directive the document caret currently sits in, or null. */
+  selected: DirectiveRange | null;
+  /** Unsaved manifest or document edits since the last load/save. */
+  isDirty: boolean;
+  /** Fill-facet ("Vyplnit") values, kept here so they survive a facet switch
+   *  (e.g. editing a field and returning) instead of remounting away. Cleared
+   *  when the session is (re)initialised or reset for another template. */
+  fillValues: Record<string, unknown> | null;
+  setFillValues: (values: Record<string, unknown> | null) => void;
+  actions: StudioActions | null;
+  ui: StudioUiState;
+  setActions: (actions: StudioActions | null) => void;
+  patchUi: (patch: Partial<StudioUiState>) => void;
+  init: (session: TemplateStudioSession) => void;
+  /** Clear the session on page unmount, but only if it still owns it. */
+  reset: (templateId: string) => void;
+  upsertField: (path: string, patch: Partial<StudioField>) => void;
+  removeField: (path: string) => void;
+  renameField: (oldPath: string, newPath: string) => void;
+  /** Deferred link-row slot renames as an ordered replay log: each recorded
+   *  rename APPENDS a step, preserving edit order; the log is never collapsed.
+   *  Recorded when a LINKED clause slot is renamed in the document: the
+   *  `clause(...)` markers rewrite immediately (marking the session dirty
+   *  via `renameClauseSlot`), while the stored link rows' slotNames are only
+   *  flushed to the API in the save flow, replayed step by step in this order.
+   *  Replaying the full log (not a collapsed final state) is what makes chained
+   *  or cyclic renames — e.g. a slot-name swap where every single-pass order
+   *  collides on the per-template unique-slot constraint — resolvable: each step
+   *  was validated against the live document when recorded, so the log order is
+   *  always replayable. Leaving without saving discards the document edit and
+   *  this log together (cleared on init/reset), so a link row never ends up
+   *  pointing at a slot name the stored document lacks. */
+  pendingSlotRenames: PendingSlotRename[];
+  /** Append a replay step for a linked clause's slot rename. */
+  setPendingSlotRename: (
+    linkId: string,
+    slotName: string,
+    fromSlot: string,
+  ) => void;
+  /** Remove every pending step for a link (unlink-side cleanup). */
+  clearPendingSlotRename: (linkId: string) => void;
+  /** Drop the given replayed steps (matched by identity), keeping any
+   *  unresolved steps pending for the next save's retry. */
+  dropPendingSlotRenames: (flushed: readonly PendingSlotRename[]) => void;
+  /** Document structure tree, rebuilt by the editor on every scan. */
+  outline: OutlineNode[];
+  setOutline: (outline: OutlineNode[]) => void;
+  setSelected: (selected: DirectiveRange | null) => void;
+  markDirty: () => void;
+  markSaved: () => void;
+  /** Bilingual-mirror proposals waiting for the chat surface to place. */
+  pendingMirrorRequests: MirrorSuggestionRequest[];
+  enqueueMirrorRequests: (requests: MirrorSuggestionRequest[]) => void;
+  clearMirrorRequests: () => void;
+};
+
+export const useTemplateStudioStore = create<TemplateStudioState>((set) => ({
+  templateId: null,
+  fields: [],
+  outline: [],
+  setOutline: (outline) => set({ outline }),
+  selected: null,
+  isDirty: false,
+  fillValues: null,
+  setFillValues: (fillValues) => set({ fillValues }),
+  actions: null,
+  ui: DEFAULT_UI,
+  setActions: (actions) => set({ actions }),
+  patchUi: (patch) => set((state) => ({ ui: { ...state.ui, ...patch } })),
+  init: (session) =>
+    set({
+      templateId: session.templateId,
+      fields: session.fields,
+      selected: null,
+      isDirty: false,
+      fillValues: null,
+      pendingMirrorRequests: [],
+      pendingSlotRenames: [],
+    }),
+  reset: (templateId) =>
+    set((state) =>
+      // Skip the reset while a save is in flight: handleSave reads `fields`
+      // after the network round-trip, so clearing them here (e.g. on a
+      // "Save and leave" unmount) would persist an empty field list.
+      state.templateId === templateId && !state.ui.isSaving
+        ? {
+            templateId: null,
+            fields: [],
+            selected: null,
+            isDirty: false,
+            fillValues: null,
+            actions: null,
+            ui: DEFAULT_UI,
+            pendingMirrorRequests: [],
+            pendingSlotRenames: [],
+          }
+        : state,
+    ),
+  pendingMirrorRequests: [],
+  enqueueMirrorRequests: (requests) =>
+    set((state) => ({
+      pendingMirrorRequests: [...state.pendingMirrorRequests, ...requests],
+    })),
+  clearMirrorRequests: () => set({ pendingMirrorRequests: [] }),
+  upsertField: (path, patch) =>
+    set((state) => {
+      const exists = state.fields.some((f) => f.path === path);
+      if (!exists) {
+        const field = defaultStudioField(path);
+        const next = { ...field, ...patch };
+        return {
+          fields: [
+            ...state.fields,
+            {
+              ...next,
+              ...templateValueSourceTransition({
+                field,
+                patch,
+                preserveDraft: true,
+              }),
+            },
+          ],
+          isDirty: true,
+        };
+      }
+      const fields = state.fields.map((field) => {
+        if (field.path !== path) {
+          return field;
+        }
+        const next = { ...field, ...patch };
+        return {
+          ...next,
+          ...templateValueSourceTransition({
+            field,
+            patch,
+            preserveDraft: true,
+          }),
+        };
+      });
+      return { fields, isDirty: true };
+    }),
+  removeField: (path) =>
+    set((state) => ({
+      fields: state.fields.filter((f) => f.path !== path),
+    })),
+  renameField: (oldPath, newPath) =>
+    set((state) => ({
+      fields: state.fields.map((f) =>
+        f.path === oldPath ? { ...f, path: newPath } : f,
+      ),
+      isDirty: true,
+    })),
+  pendingSlotRenames: [],
+  setPendingSlotRename: (linkId, slotName, fromSlot) =>
+    set((state) => ({
+      pendingSlotRenames: [
+        ...state.pendingSlotRenames,
+        { linkId, slotName, fromSlot },
+      ],
+    })),
+  clearPendingSlotRename: (linkId) =>
+    set((state) => {
+      const remaining = state.pendingSlotRenames.filter(
+        (step) => step.linkId !== linkId,
+      );
+      if (remaining.length === state.pendingSlotRenames.length) {
+        return state;
+      }
+      return { pendingSlotRenames: remaining };
+    }),
+  dropPendingSlotRenames: (flushed) =>
+    set((state) => {
+      if (flushed.length === 0) {
+        return state;
+      }
+      // Remove by step identity, not by position: if any other path ever
+      // removes a step while a flush is in flight, a positional slice would
+      // drop the wrong entries. Steps are frozen object literals appended
+      // once, so reference equality identifies exactly the replayed ones.
+      const flushedSet = new Set(flushed);
+      return {
+        pendingSlotRenames: state.pendingSlotRenames.filter(
+          (step) => !flushedSet.has(step),
+        ),
+      };
+    }),
+  setSelected: (selected) => set({ selected }),
+  markDirty: () => set({ isDirty: true }),
+  markSaved: () => set({ isDirty: false }),
+}));

@@ -7,13 +7,13 @@ import {
   timeEntryStatusSchema,
 } from "@/api/db/billing-validators";
 import { timeEntries } from "@/api/db/schema";
-import { canApproveTimeEntries } from "@/api/handlers/time-entries/authorization";
 import { timeEntryReadColumns } from "@/api/handlers/time-entries/time-entry-columns";
 import {
   selectTimekeeperNames,
   timekeeperIdsOf,
 } from "@/api/handlers/time-entries/timekeeper-names";
 import { createSafeHandler } from "@/api/lib/api-handlers";
+import { canApproveTimeEntries } from "@/api/lib/billing/time-entry-authorization";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   tPaginationCursor,

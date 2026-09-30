@@ -2772,6 +2772,62 @@ export const caseLawSearchDocuments = p.pgTable(
   ],
 );
 
+export const CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUSES = [
+  "cooldown",
+  "parked",
+] as const;
+
+export const CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS = {
+  COOLDOWN: CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUSES[0],
+  PARKED: CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUSES[1],
+} as const;
+
+export const caseLawSearchBackfillFailures = p.pgTable(
+  "case_law_search_backfill_failures",
+  {
+    decisionId: safeUuid<"caseLawDecision">("decision_id").primaryKey(),
+    sourceUpdatedAt: timestamptz("source_updated_at").notNull(),
+    attemptCount: p.integer("attempt_count").notNull(),
+    lastErrorClass: p.varchar("last_error_class", { length: 80 }).notNull(),
+    status: p
+      .varchar({ length: 16, enum: CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUSES })
+      .notNull(),
+    nextEligibleAt: timestamptz("next_eligible_at"),
+    lastFailedAt: timestamptz("last_failed_at").notNull(),
+  },
+  (t) => [
+    p
+      .foreignKey({
+        name: "case_law_search_backfill_failure_decision_fk",
+        columns: [t.decisionId],
+        foreignColumns: [caseLawDecisions.id],
+      })
+      .onDelete("cascade"),
+    p
+      .index("case_law_search_backfill_failures_status_idx")
+      .on(t.status)
+      .where(eq(t.status, CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS.PARKED)),
+    p.check(
+      "case_law_search_backfill_failures_attempt_nonnegative",
+      sql`${t.attemptCount} >= 0`,
+    ),
+    p.check(
+      "case_law_search_backfill_failures_status_values",
+      sql`${t.status} IN (${sql.join(
+        Object.values(CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS).map(
+          (value) => sql`${value}`,
+        ),
+        sql`, `,
+      )})`,
+    ),
+    p.check(
+      "case_law_search_backfill_failures_schedule_shape",
+      sql`(${t.status} = ${CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS.COOLDOWN} AND ${t.nextEligibleAt} IS NOT NULL) OR (${t.status} = ${CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS.PARKED} AND ${t.nextEligibleAt} IS NULL)`,
+    ),
+    ...caseLawIngestionOnlyPolicies(),
+  ],
+);
+
 export const caseLawSearchDocumentPreviewPassages = p.pgTable(
   "case_law_search_document_preview_passages",
   {

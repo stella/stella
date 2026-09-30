@@ -24,6 +24,7 @@
  */
 import { sql } from "drizzle-orm";
 
+import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
 import { openCaseLawReadOnlySession } from "@/api/lib/case-law/maintenance-lane";
 import { zstdCompress } from "@/api/lib/compression";
 import { executedRows } from "@/api/lib/db/executed-rows";
@@ -48,7 +49,7 @@ import { isRecord } from "@/api/lib/type-guards";
 
 const DEFAULT_CHUNK_SIZE = 1000;
 /** Per-chunk ceiling. A measured chunk costs ~2s; this is the stall bound. */
-const CHUNK_STATEMENT_TIMEOUT = "60s";
+const CHUNK_STATEMENT_TIMEOUT_MS = 60_000;
 /** Corpus document frequency a token needs before it is worth bucketing. */
 const DEFAULT_MIN_DOCUMENT_FREQUENCY = 50;
 /**
@@ -178,9 +179,7 @@ type VocabularyChunk = {
  */
 const chunkVocabulary = async (afterId: string): Promise<VocabularyChunk> =>
   await ingestionDb(async (tx) => {
-    await tx.execute(
-      sql`SELECT set_config('statement_timeout', ${CHUNK_STATEMENT_TIMEOUT}, true)`,
-    );
+    await setSharedStatementTimeout(tx, CHUNK_STATEMENT_TIMEOUT_MS);
 
     const bounds = executedRows(
       await tx.execute(sql`

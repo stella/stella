@@ -16,6 +16,7 @@ import {
   folioCollabPublications,
   folioCollabRooms,
 } from "@/api/db/schema";
+import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -42,8 +43,10 @@ import type { WriteFileVersionResult } from "@/api/lib/entity-versions/write-fil
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { enqueuePdfDerivativeOrMarkFailed } from "@/api/lib/file-derivative-queue";
 import { scanFile } from "@/api/lib/file-scan/scan";
+import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 import type { MintedFileId } from "@/api/lib/files/file-object-ids";
+import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
 import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
 import { createFileKey } from "@/api/lib/files/utils";
 import {
@@ -53,7 +56,6 @@ import {
 import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import {
-  deleteS3ObjectWithSignal,
   readS3ArrayBuffer,
   S3_OBJECT_WRITE_CERTAINTY,
   writeS3ObjectWithRetry,
@@ -343,6 +345,7 @@ type PublicationSource = {
   cleanupIntentId: SafeId<"pendingUpload">;
   fileId: MintedFileId;
   key: string;
+  organizationId: SafeId<"organization">;
 };
 
 type CleanupPublicationSourceOptions = {
@@ -358,11 +361,16 @@ const cleanupPublicationSource = async ({
   source,
   writeCertainty,
 }: CleanupPublicationSourceOptions): Promise<void> => {
-  const cleanup = await Result.tryPromise({
-    try: async () =>
-      await deleteS3ObjectWithSignal(source.key, AbortSignal.timeout(10_000)),
-    catch: (cause) => cause,
-  });
+  const cleanup = Result.flatten(
+    await Result.tryPromise({
+      try: async () =>
+        await deleteOrganizationFileWithSignal(
+          source.key,
+          AbortSignal.timeout(10_000),
+        ),
+      catch: (cause) => cause,
+    }),
+  );
   if (Result.isError(cleanup)) {
     captureError(cleanup.error, { roomId, storageKey: source.key });
   }
@@ -392,15 +400,30 @@ const storePublicationSource = async ({
   safeDb,
   source,
 }: StorePublicationSourceOptions) => {
-  const written = await Result.tryPromise({
-    try: async () =>
-      await writeS3ObjectWithRetry({
-        contentType: DOCX_MIME_TYPE,
-        data: bytes,
-        key: source.key,
-      }),
-    catch: (cause) => cause,
-  });
+  const written = !env.FEATURE_FILE_USAGE_LIMITS
+    ? await Result.tryPromise({
+        try: async () =>
+          await writeS3ObjectWithRetry({
+            contentType: DOCX_MIME_TYPE,
+            data: bytes,
+            key: source.key,
+          }),
+        catch: (cause) => cause,
+      })
+    : Result.mapError(
+        await writeOrganizationFile({
+          organizationId: source.organizationId,
+          objectKey: source.key,
+          sizeBytes: bytes.byteLength,
+          write: async () =>
+            await writeS3ObjectWithRetry({
+              contentType: DOCX_MIME_TYPE,
+              data: bytes,
+              key: source.key,
+            }),
+        }),
+        (cause): unknown => cause,
+      );
   if (Result.isError(written)) {
     await cleanupPublicationSource({
       roomId,
@@ -959,6 +982,7 @@ const publishFolioCollabVersion = createSafeHandler(
       cleanupIntentId: sourceCleanupIntentId,
       fileId: sourceFileId,
       key: sourceKey,
+      organizationId,
     } satisfies PublicationSource;
     const writeCertainty = yield* Result.await(
       storePublicationSource({

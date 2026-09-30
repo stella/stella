@@ -2,6 +2,21 @@ import { Result, TaggedError, panic } from "better-result";
 
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 
+/** An upstream record that cannot safely become a decision. */
+export type RejectedCaseLawIngestionRecord = {
+  type: "rejected";
+  recordKey: string;
+  recordHash: string;
+  language: string;
+  primaryLabel?: string;
+  reason: string;
+  message: string;
+};
+
+export type CaseLawIngestionBatchRecord =
+  | { type: "decision"; decision: IngestionResult }
+  | RejectedCaseLawIngestionRecord;
+
 /**
  * What one applied batch may carry. The byte bound measures the records as
  * handed in (text as UTF-8, binary payloads at their length), not what their
@@ -14,11 +29,26 @@ export const CASE_LAW_INGESTION_BATCH_LIMITS = {
 
 export const CASE_LAW_BATCH_BOUNDS_REASON = {
   EMPTY: "empty",
+  INVALID_RECORD: "invalid-record",
   TOO_MANY_RECORDS: "too-many-records",
   TOO_MANY_BYTES: "too-many-bytes",
   /** One record alone exceeds the byte bound; no split can carry it. */
   RECORD_TOO_LARGE: "record-too-large",
 } as const;
+
+const validRejectedText = (value: unknown): value is string =>
+  typeof value === "string" && value.length > 0;
+
+const isValidRejectedRecord = (
+  record: RejectedCaseLawIngestionRecord,
+): boolean =>
+  validRejectedText(record.recordKey) &&
+  validRejectedText(record.recordHash) &&
+  validRejectedText(record.language) &&
+  (record.primaryLabel === undefined ||
+    validRejectedText(record.primaryLabel)) &&
+  validRejectedText(record.reason) &&
+  validRejectedText(record.message);
 
 type CaseLawBatchBoundsReason =
   (typeof CASE_LAW_BATCH_BOUNDS_REASON)[keyof typeof CASE_LAW_BATCH_BOUNDS_REASON];
@@ -139,6 +169,13 @@ export const encodedIngestionResultBytes = (
   decision: IngestionResult,
 ): number => encodedValueBytes(decision, new Set());
 
+const encodedBatchRecordBytes = (
+  record: CaseLawIngestionBatchRecord,
+): number =>
+  record.type === "decision"
+    ? encodedIngestionResultBytes(record.decision)
+    : encodedValueBytes(record, new Set());
+
 export const DECISION_ADMISSION = {
   WITHIN_BOUNDS: "within-bounds",
   /** One record that alone exceeds the byte bound, admitted by itself. */
@@ -154,12 +191,14 @@ export type AdmittedDecisions =
       readonly [ADMITTED]: true;
       readonly admission: typeof DECISION_ADMISSION.WITHIN_BOUNDS;
       readonly decisions: readonly IngestionResult[];
+      readonly batchRecords: readonly CaseLawIngestionBatchRecord[];
       readonly encodedBytes: number;
     }
   | {
       readonly [ADMITTED]: true;
       readonly admission: typeof DECISION_ADMISSION.OVERSIZED_RECORD;
-      readonly decisions: readonly [IngestionResult];
+      readonly decisions: readonly IngestionResult[];
+      readonly batchRecords: readonly [CaseLawIngestionBatchRecord];
       readonly encodedBytes: number;
     };
 
@@ -179,29 +218,34 @@ type AdmittedPart = {
  * bounds, except a record over the byte bound on its own, which is a part of
  * its own and says so.
  */
-const admitParts = (decisions: readonly IngestionResult[]): AdmittedPart[] => {
+const admitParts = (
+  batchRecords: readonly CaseLawIngestionBatchRecord[],
+): AdmittedPart[] => {
   const { records, encodedBytes } = CASE_LAW_INGESTION_BATCH_LIMITS;
   const parts: AdmittedPart[] = [];
   let run: IngestionResult[] = [];
+  let recordRun: CaseLawIngestionBatchRecord[] = [];
   let runStart = 0;
   let runBytes = 0;
   const closeRun = (): void => {
-    if (run.length > 0) {
+    if (recordRun.length > 0) {
       parts.push({
         start: runStart,
         admitted: {
           [ADMITTED]: true,
           admission: DECISION_ADMISSION.WITHIN_BOUNDS,
           decisions: run,
+          batchRecords: recordRun,
           encodedBytes: runBytes,
         },
       });
     }
     run = [];
+    recordRun = [];
     runBytes = 0;
   };
-  for (const [index, decision] of decisions.entries()) {
-    const bytes = encodedIngestionResultBytes(decision);
+  for (const [index, record] of batchRecords.entries()) {
+    const bytes = encodedBatchRecordBytes(record);
     if (bytes > encodedBytes) {
       closeRun();
       parts.push({
@@ -209,19 +253,23 @@ const admitParts = (decisions: readonly IngestionResult[]): AdmittedPart[] => {
         admitted: {
           [ADMITTED]: true,
           admission: DECISION_ADMISSION.OVERSIZED_RECORD,
-          decisions: [decision],
+          decisions: record.type === "decision" ? [record.decision] : [],
+          batchRecords: [record],
           encodedBytes: bytes,
         },
       });
       continue;
     }
-    if (run.length >= records || runBytes + bytes > encodedBytes) {
+    if (recordRun.length >= records || runBytes + bytes > encodedBytes) {
       closeRun();
     }
-    if (run.length === 0) {
+    if (recordRun.length === 0) {
       runStart = index;
     }
-    run.push(decision);
+    recordRun.push(record);
+    if (record.type === "decision") {
+      run.push(record.decision);
+    }
     runBytes += bytes;
   }
   closeRun();
@@ -231,7 +279,10 @@ const admitParts = (decisions: readonly IngestionResult[]): AdmittedPart[] => {
 /** A page's records as admitted parts, applied one after another. */
 export const admitPageDecisions = (
   decisions: readonly IngestionResult[],
-): AdmittedDecisions[] => admitParts(decisions).map(({ admitted }) => admitted);
+): AdmittedDecisions[] =>
+  admitParts(decisions.map((decision) => ({ type: "decision", decision }))).map(
+    ({ admitted }) => admitted,
+  );
 
 const boundsError = (
   reason: CaseLawBatchBoundsReason,
@@ -240,9 +291,9 @@ const boundsError = (
 ): Result<never, CaseLawBatchBoundsError> =>
   Result.err(new CaseLawBatchBoundsError({ message, reason, index }));
 
-type PrepareCaseLawIngestionBatchOptions = {
-  decisions: readonly IngestionResult[];
-};
+type PrepareCaseLawIngestionBatchOptions =
+  | { decisions: readonly IngestionResult[]; records?: never }
+  | { records: readonly CaseLawIngestionBatchRecord[]; decisions?: never };
 
 /**
  * Admit records into one batch, or refuse them before any write: at least
@@ -251,24 +302,53 @@ type PrepareCaseLawIngestionBatchOptions = {
  */
 export const prepareCaseLawIngestionBatch = ({
   decisions,
+  records: inputRecords,
 }: PrepareCaseLawIngestionBatchOptions): Result<
   BoundedCaseLawIngestionBatch,
   CaseLawBatchBoundsError
 > => {
+  const inputBatchRecords =
+    inputRecords ??
+    decisions.map((decision) => ({ type: "decision" as const, decision }));
   const { records, encodedBytes } = CASE_LAW_INGESTION_BATCH_LIMITS;
-  if (decisions.length === 0) {
+  if (inputBatchRecords.length === 0) {
     return boundsError(
       CASE_LAW_BATCH_BOUNDS_REASON.EMPTY,
       "A batch holds at least one record",
     );
   }
-  if (decisions.length > records) {
+  if (inputBatchRecords.length > records) {
     return boundsError(
       CASE_LAW_BATCH_BOUNDS_REASON.TOO_MANY_RECORDS,
-      `A batch holds at most ${records} records, not ${decisions.length}`,
+      `A batch holds at most ${records} records, not ${inputBatchRecords.length}`,
     );
   }
-  const parts = admitParts(decisions);
+  const batchRecords: CaseLawIngestionBatchRecord[] = [];
+  for (const [index, record] of inputBatchRecords.entries()) {
+    if (record.type === "decision") {
+      batchRecords.push(record);
+      continue;
+    }
+    if (!isValidRejectedRecord(record)) {
+      return boundsError(
+        CASE_LAW_BATCH_BOUNDS_REASON.INVALID_RECORD,
+        `Rejected record ${index} must use text fields`,
+        index,
+      );
+    }
+    batchRecords.push({
+      type: "rejected",
+      recordKey: record.recordKey,
+      recordHash: record.recordHash,
+      language: record.language,
+      ...(record.primaryLabel === undefined
+        ? {}
+        : { primaryLabel: record.primaryLabel }),
+      reason: record.reason,
+      message: record.message,
+    });
+  }
+  const parts = admitParts(batchRecords);
   const oversized = parts.find(
     ({ admitted }) =>
       admitted.admission === DECISION_ADMISSION.OVERSIZED_RECORD,

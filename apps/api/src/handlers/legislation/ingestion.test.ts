@@ -559,6 +559,38 @@ test("a document naming a foreign source is stored under the source being run", 
   expect(rows).toEqual([{ sourceId: runnerSourceId }]);
 });
 
+test("a page the runner fetched is a live listing, so it restores a version withdrawn for being unlisted", async () => {
+  const run = async () =>
+    await runLegislationIngestion({
+      adapter: runnerAdapter({
+        documents: [runnerDocument("SVK/act/5", `${PUBLISHER_ORIGIN}/act/5`)],
+        nextCursor: null,
+      }),
+      source: { id: runnerSourceId, syncCursor: null },
+      scopedDb,
+      signal: new AbortController().signal,
+    });
+  const disposition = async () =>
+    await db
+      .select({ disposition: legislationDocuments.windowDisposition })
+      .from(legislationDocuments)
+      .where(eq(legislationDocuments.eli, "SVK/act/5"));
+
+  await run();
+  await db
+    .update(legislationDocuments)
+    .set({
+      windowDisposition: "withdrawn",
+      windowDispositionBasis: "publisher-unlisted",
+    })
+    .where(eq(legislationDocuments.eli, "SVK/act/5"));
+  const withdrawn = await disposition();
+  await run();
+
+  expect(withdrawn).toEqual([{ disposition: "withdrawn" }]);
+  expect(await disposition()).toEqual([{ disposition: "effective" }]);
+});
+
 test("a page the adapter could not fetch holds the cursor", async () => {
   const adapter = runnerAdapter({ documents: [], nextCursor: null });
   let fetchCalls = 0;

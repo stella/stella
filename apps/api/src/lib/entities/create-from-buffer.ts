@@ -8,6 +8,7 @@ import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { entities, fields, pendingUploads, workspaces } from "@/api/db/schema";
 import type { PendingUploadFinalizedResult } from "@/api/db/schema";
+import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -33,19 +34,22 @@ import {
   enqueueImageThumbnailOrMarkFailed,
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
+import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import {
   allocateFileObject,
   fileContentWithMintedObject,
 } from "@/api/lib/files/file-object-ids";
 import { pdfDerivativeStateForFile } from "@/api/lib/files/gotenberg";
 import { thumbnailDerivativeStateForFile } from "@/api/lib/files/image-derivative";
+import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
+import type { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
 import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
 import { createFileKey } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
-import { deleteS3ObjectWithSignal, putS3ObjectWithSignal } from "@/api/lib/s3";
+import { putS3ObjectWithSignal } from "@/api/lib/s3";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import {
   processExtraction,
@@ -137,6 +141,7 @@ export type CreateEntityFromBufferResult = Result<
   | EntityLimitError
   | InvalidParentError
   | MissingFilePropertyError
+  | OrganizationFileUsageError
 >;
 
 /**
@@ -258,17 +263,20 @@ export const createEntityFromBuffer = async ({
 
   try {
     const cleanupObject = async (): Promise<boolean> => {
-      const cleanup = await Result.tryPromise({
-        try: async () =>
-          await withTimeout(
-            async (signal) => await deleteS3ObjectWithSignal(s3Key, signal),
-            {
-              label: "buffer-entity-writer-cleanup.delete",
-              timeoutMs: BUFFER_INTENT_DELETE_TIMEOUT_MS,
-            },
-          ),
-        catch: (cause) => cause,
-      });
+      const cleanup = Result.flatten(
+        await Result.tryPromise({
+          try: async () =>
+            await withTimeout(
+              async (signal) =>
+                await deleteOrganizationFileWithSignal(s3Key, signal),
+              {
+                label: "buffer-entity-writer-cleanup.delete",
+                timeoutMs: BUFFER_INTENT_DELETE_TIMEOUT_MS,
+              },
+            ),
+          catch: (cause) => cause,
+        }),
+      );
       if (Result.isError(cleanup)) {
         captureError(cleanup.error, { entityId, objectKey: s3Key });
         return false;
@@ -276,16 +284,7 @@ export const createEntityFromBuffer = async ({
       return true;
     };
 
-    try {
-      await withTimeout(
-        async (signal) =>
-          await putS3ObjectWithSignal(s3Key, bytes, mimeType, signal),
-        {
-          label: "buffer-entity-writer-put",
-          timeoutMs: BUFFER_INTENT_WRITE_TIMEOUT_MS,
-        },
-      );
-    } catch (error) {
+    const settleUncertainWrite = async () => {
       // A transport failure is ambiguous: S3 may publish after this immediate
       // delete completes. Keep the intent recoverable so later sweeps remove
       // any late publication; the heartbeat stops in finally below.
@@ -306,6 +305,40 @@ export const createEntityFromBuffer = async ({
           });
         }
       }
+    };
+
+    try {
+      if (!env.FEATURE_FILE_USAGE_LIMITS) {
+        await withTimeout(
+          async (signal) =>
+            await putS3ObjectWithSignal(s3Key, bytes, mimeType, signal),
+          {
+            label: "buffer-entity-writer-put",
+            timeoutMs: BUFFER_INTENT_WRITE_TIMEOUT_MS,
+          },
+        );
+      } else {
+        const fileWrite = await writeOrganizationFile({
+          organizationId,
+          objectKey: s3Key,
+          sizeBytes: bytes.byteLength,
+          write: async () =>
+            await withTimeout(
+              async (signal) =>
+                await putS3ObjectWithSignal(s3Key, bytes, mimeType, signal),
+              {
+                label: "buffer-entity-writer-put",
+                timeoutMs: BUFFER_INTENT_WRITE_TIMEOUT_MS,
+              },
+            ),
+        });
+        if (Result.isError(fileWrite)) {
+          await settleUncertainWrite();
+          return Result.err(fileWrite.error);
+        }
+      }
+    } catch (error) {
+      await settleUncertainWrite();
       throw error;
     }
 

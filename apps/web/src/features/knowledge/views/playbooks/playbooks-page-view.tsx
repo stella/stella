@@ -208,6 +208,22 @@ const PlaybookStarterCards = ({
     );
   }
 
+  if (starters.status === "error") {
+    const { retry } = starters;
+    return (
+      <div className="flex flex-wrap items-center gap-3">
+        <p className="text-muted-foreground text-sm">
+          {t("knowledge.catalogue.unavailable")}
+        </p>
+        {retry && (
+          <Button onClick={retry} size="sm" type="button" variant="outline">
+            {t("common.retry")}
+          </Button>
+        )}
+      </div>
+    );
+  }
+
   return (
     <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
       {starters.items.map((starter) => {

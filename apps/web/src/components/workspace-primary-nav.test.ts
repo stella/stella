@@ -7,6 +7,7 @@ const ALL_GATES_OPEN = {
   includePublicLaw: true,
   includePublicTools: true,
   includeTimesheets: true,
+  publicKnowledge: false,
 };
 
 const navIds = (overrides: Partial<typeof ALL_GATES_OPEN>) =>
@@ -14,13 +15,25 @@ const navIds = (overrides: Partial<typeof ALL_GATES_OPEN>) =>
     (item) => item.id,
   );
 
-const publicNavIds = getWorkspacePrimaryNavItems(ALL_GATES_OPEN)
-  .filter((item) => item.audience === "public")
-  .map((item) => item.id);
+const publicNavIds = (overrides: Partial<typeof ALL_GATES_OPEN>) =>
+  getWorkspacePrimaryNavItems({ ...ALL_GATES_OPEN, ...overrides })
+    .filter((item) => item.audience === "public")
+    .map((item) => item.id);
 
 describe("workspace primary nav", () => {
   test("keeps guest access beside the canonical destination", () => {
-    expect(publicNavIds).toEqual(["caseLaw", "tools"]);
+    expect(publicNavIds({})).toEqual(["caseLaw", "tools"]);
+  });
+
+  test("offers Knowledge to guests, with the tools inside it, once it is readable without an account", () => {
+    expect(publicNavIds({ publicKnowledge: true })).toEqual([
+      "caseLaw",
+      "knowledge",
+    ]);
+    expect(navIds({ publicKnowledge: true })).not.toContain("tools");
+    expect(
+      navIds({ publicKnowledge: true, includePublicTools: false }),
+    ).toContain("knowledge");
   });
 
   test("keeps every entry while all gates are open", () => {

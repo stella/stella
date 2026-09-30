@@ -3,8 +3,10 @@ import { describe, expect, test } from "bun:test";
 import {
   defectiveJunctions,
   storedWindow,
+  windowDisposition,
   windowJunction,
 } from "@/api/handlers/legislation/version-windows";
+import type { VersionWindow } from "@/api/lib/legal-search/legislation-ingestion-types";
 
 describe("the publisher's window in the corpus's terms", () => {
   test("an unversioned work has no window", () => {
@@ -126,6 +128,170 @@ describe("the publisher's window in the corpus's terms", () => {
       { type: "inclusive-end" },
       { type: "inclusive-end" },
     ]);
+  });
+});
+
+describe("a window that cannot apply, stored as stated", () => {
+  test("each basis stores the publisher's dates with its disposition", () => {
+    const cases = [
+      // Closed the day before it opened, because the next version opened
+      // that day: an empty window, never in force.
+      [
+        {
+          type: "never-in-force",
+          validFrom: "2019-01-01",
+          end: { type: "last-day-in-force", on: "2018-12-31" },
+          basis: "replaced-same-day",
+        },
+        { versionValidFrom: "2019-01-01", versionValidTo: "2019-01-01" },
+      ],
+      // The publisher's own flag, on a version with no dates at all.
+      [
+        {
+          type: "never-in-force",
+          validFrom: null,
+          end: { type: "open" },
+          basis: "publisher-flag",
+        },
+        { versionValidFrom: null, versionValidTo: null },
+      ],
+      [
+        {
+          type: "invalid-window",
+          validFrom: "2017-01-01",
+          end: { type: "last-day-in-force", on: "2016-06-30" },
+          basis: "reversed",
+        },
+        { versionValidFrom: "2017-01-01", versionValidTo: "2016-07-01" },
+      ],
+      [
+        {
+          type: "invalid-window",
+          validFrom: "2022-01-01",
+          end: { type: "exclusive", on: "2022-01-01" },
+          basis: "zero-length-window",
+        },
+        { versionValidFrom: "2022-01-01", versionValidTo: "2022-01-01" },
+      ],
+      [
+        {
+          type: "invalid-window",
+          validFrom: null,
+          end: { type: "last-day-in-force", on: "2020-03-31" },
+          basis: "missing-start",
+        },
+        { versionValidFrom: null, versionValidTo: "2020-04-01" },
+      ],
+    ] as const satisfies readonly (readonly [
+      VersionWindow,
+      ReturnType<typeof storedWindow>,
+    ])[];
+
+    for (const [version, stored] of cases) {
+      expect(storedWindow(version)).toEqual(stored);
+      expect(windowDisposition(version)).toEqual({
+        windowDisposition: version.type,
+        windowDispositionBasis: version.basis,
+      });
+    }
+    expect(
+      windowDisposition({
+        type: "consolidation",
+        validFrom: "2020-01-01",
+        end: { type: "open" },
+      }),
+    ).toEqual({ windowDisposition: "effective", windowDispositionBasis: null });
+  });
+
+  test("a basis its dates contradict is refused", () => {
+    const contradicted = [
+      // A "reversed" window that holds a day.
+      {
+        type: "invalid-window",
+        validFrom: "2017-01-01",
+        end: { type: "exclusive", on: "2017-02-01" },
+        basis: "reversed",
+      },
+      // A "zero-length" window that runs backwards.
+      {
+        type: "invalid-window",
+        validFrom: "2017-01-01",
+        end: { type: "exclusive", on: "2016-12-01" },
+        basis: "zero-length-window",
+      },
+      // A "missing-start" window with a start.
+      {
+        type: "invalid-window",
+        validFrom: "2017-01-01",
+        end: { type: "open" },
+        basis: "missing-start",
+      },
+      // A "reversed" window with nothing to reverse.
+      {
+        type: "invalid-window",
+        validFrom: null,
+        end: { type: "exclusive", on: "2016-12-01" },
+        basis: "reversed",
+      },
+      // Replaced the same day, yet in force for a month.
+      {
+        type: "never-in-force",
+        validFrom: "2019-01-01",
+        end: { type: "last-day-in-force", on: "2019-01-31" },
+        basis: "replaced-same-day",
+      },
+    ] as const satisfies readonly VersionWindow[];
+
+    for (const version of contradicted) {
+      expect(() => storedWindow(version)).toThrow("does not match its basis");
+    }
+  });
+
+  test("a connector's untyped input is named, not stored or thrown as a TypeError", () => {
+    // What a connector outside the type system can still pass.
+    const untyped = (value: unknown): VersionWindow =>
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- stands in for a connector that bypasses the contract's types
+      value as VersionWindow;
+
+    expect(() =>
+      storedWindow(
+        untyped({
+          type: "consolidation",
+          validFrom: null,
+          end: { type: "open" },
+        }),
+      ),
+    ).toThrow("has no start");
+    for (const [type, basis] of [
+      ["invalid-window", "publisher-flag"],
+      ["never-in-force", "reversed"],
+      ["never-in-force", "not-a-basis"],
+    ] as const) {
+      expect(() =>
+        storedWindow(
+          untyped({ type, validFrom: null, end: { type: "open" }, basis }),
+        ),
+      ).toThrow("basis is not its disposition's");
+    }
+  });
+
+  test("a window that cannot apply is still read strictly", () => {
+    expect(() =>
+      storedWindow({
+        type: "invalid-window",
+        validFrom: "1.1.2017",
+        end: { type: "open" },
+        basis: "missing-start",
+      }),
+    ).toThrow("not an ISO calendar day");
+    expect(() =>
+      storedWindow({
+        type: "never-in-force",
+        validFrom: null,
+        end: { type: "exclusive", on: "2017-01-01T00:00:00Z" },
+        basis: "publisher-flag",
+      }),
+    ).toThrow("not an ISO calendar day");
   });
 });
 

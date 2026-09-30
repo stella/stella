@@ -75,8 +75,16 @@ describe("custom oxlint guardrails", () => {
     const organizationConstsSource = readRootFixture(
       "apps/web/src/lib/organization/consts.ts",
     );
-    const protectedRouteSource = readRootFixture(
+    // The signed-in guard and frame live beside the `_protected` route, which
+    // only wires them up.
+    const protectedRouteFileSource = readRootFixture(
       "apps/web/src/routes/_protected.tsx",
+    );
+    const protectedGuardSource = readRootFixture(
+      "apps/web/src/routes/-protected-guard.ts",
+    );
+    const protectedFrameSource = readRootFixture(
+      "apps/web/src/routes/-protected-app.tsx",
     );
     const sidebarUserMenuSource = readRootFixture(
       "apps/web/src/components/sidebar-user-menu.tsx",
@@ -91,41 +99,37 @@ describe("custom oxlint guardrails", () => {
       "apps/web/src/lib/workspaces/queries.ts",
     );
 
-    expect(protectedRouteSource).not.toContain("ensureRouteQueryData");
-    expect(protectedRouteSource).toContain("prefetchRouteQuery");
-    expect(protectedRouteSource).toContain("aiAvailabilityOptions");
-    expect(protectedRouteSource).toContain("roleOptions");
-    expect(protectedRouteSource).not.toContain("organizationOptions");
+    expect(protectedGuardSource).not.toContain("ensureRouteQueryData");
+    expect(protectedGuardSource).toContain("prefetchRouteQuery");
+    expect(protectedGuardSource).toContain("aiAvailabilityOptions");
+    expect(protectedGuardSource).toContain("roleOptions");
+    expect(protectedGuardSource).not.toContain("organizationOptions");
 
     // The route definition (beforeLoad, loader) must never seed the matter
     // list: route commit cannot wait on it. The rendered shell may subscribe
     // to it, but only as deferred chrome, which dedupes with the sidebar's
     // identical subscription instead of adding a request.
-    const routeDefinitionStart = protectedRouteSource.indexOf(
-      'export const Route = createFileRoute("/_protected")({',
+    expect(protectedRouteFileSource).toContain(
+      "beforeLoad: loadProtectedContext,",
     );
-    const routeDefinitionEnd = protectedRouteSource.indexOf(
-      "component: ProtectedComponent,",
-      routeDefinitionStart,
+    expect(protectedRouteFileSource).toContain(
+      "loader: prefetchProtectedShell,",
     );
-    expect(routeDefinitionStart).toBeGreaterThan(-1);
-    expect(routeDefinitionEnd).toBeGreaterThan(routeDefinitionStart);
-    const routeDefinition = protectedRouteSource.slice(
-      routeDefinitionStart,
-      routeDefinitionEnd,
+    expect(protectedGuardSource).toContain(
+      "export const loadProtectedContext = async",
     );
-    expect(routeDefinition).not.toContain("workspacesNavigationOptions");
+    expect(protectedGuardSource).not.toContain("workspacesNavigationOptions");
     const navigationListReads =
-      protectedRouteSource.match(/workspacesNavigationOptions\(/gu) ?? [];
+      protectedFrameSource.match(/workspacesNavigationOptions\(/gu) ?? [];
     const chromeNavigationListReads =
-      protectedRouteSource.match(
+      protectedFrameSource.match(
         /useChromeQuery\(\s*workspacesNavigationOptions\(/gu,
       ) ?? [];
     expect(chromeNavigationListReads).toHaveLength(navigationListReads.length);
 
-    expect(protectedRouteSource).toContain("AIAvailabilityProvider");
-    expect(protectedRouteSource).toContain("AppSidebar");
-    expect(protectedRouteSource).toContain("ChatMentionProviders");
+    expect(protectedFrameSource).toContain("AIAvailabilityProvider");
+    expect(protectedFrameSource).toContain("AppSidebar");
+    expect(protectedFrameSource).toContain("ChatMentionProviders");
     expect(sidebarUserMenuSource).not.toContain("organizationOptions");
     expect(sidebarUserMenuSource).toContain("organizationListOptions");
     expect(aiConfigQuerySource).toContain("ROUTE_QUERY_STALE_TIME_MS");
@@ -217,21 +221,26 @@ describe("custom oxlint guardrails", () => {
 
   test("tools route keeps heavy catalogue UI behind Suspense", () => {
     const toolsRouteSource = readRootFixture(
-      "apps/web/src/routes/_protected.knowledge/tools.tsx",
+      "apps/web/src/routes/knowledge/tools.tsx",
+    );
+    const memberToolsSource = readRootFixture(
+      "apps/web/src/routes/knowledge/-member/member-tools-page.tsx",
     );
     const pluginSource = readRootFixture(
       ".oxlint-plugins/no-static-catalogue-route-import.ts",
     );
     const configSource = readRootFixture("oxlint.config.ts");
 
-    expect(toolsRouteSource).toContain("const LazyCatalogueBrowser = lazy");
-    expect(toolsRouteSource).toContain("catalogue/catalogue-browser");
-    expect(toolsRouteSource).toContain(
+    expect(toolsRouteSource).toContain("const LazyMemberToolsPage = lazy");
+    expect(memberToolsSource).toContain("const LazyCatalogueBrowser = lazy");
+    expect(memberToolsSource).toContain("catalogue/catalogue-browser");
+    expect(memberToolsSource).toContain(
       "return { default: module.CatalogueBrowserWithRouteData };",
     );
-    expect(toolsRouteSource).toContain("Route.useLoaderData");
-    expect(toolsRouteSource).toContain("canManageCustomTools");
-    expect(toolsRouteSource).toContain("practiceJurisdictions");
+    expect(memberToolsSource).toContain("useSuspenseQueries");
+    expect(memberToolsSource).toContain("canManageCustomTools");
+    expect(memberToolsSource).toContain("practiceJurisdictions");
+    expect(memberToolsSource).not.toContain("import { CatalogueBrowser");
     expect(toolsRouteSource).toContain("const LazyToolDetailView = lazy");
     expect(toolsRouteSource).toContain("const LazyToolDetailRailIcon = lazy");
     expect(toolsRouteSource).not.toContain("import { CatalogueBrowser");
@@ -247,8 +256,9 @@ describe("custom oxlint guardrails", () => {
     expect(configSource).toContain(
       "no-static-catalogue-route-import/no-static-catalogue-route-import",
     );
+    expect(configSource).toContain("apps/web/src/routes/knowledge/tools.tsx");
     expect(configSource).toContain(
-      "apps/web/src/routes/_protected.knowledge/tools.tsx",
+      "apps/web/src/routes/knowledge/-member/member-tools-page.tsx",
     );
   });
 

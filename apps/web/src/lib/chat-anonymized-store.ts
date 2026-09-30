@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { createJSONStorage, persist } from "zustand/middleware";
 
 import {
   CHAT_SEND_MODE,
@@ -10,6 +10,10 @@ import {
 } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 
+import {
+  followStorageOwner,
+  userScopedStateStorage,
+} from "@/lib/account/user-scoped-storage";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { getChatThreadKey } from "@/lib/chat-thread-ref";
 
@@ -150,6 +154,7 @@ export const useChatAnonymizedStore = create<ChatAnonymizedStore>()(
     }),
     {
       name: "stella.chat.anonymized",
+      storage: createJSONStorage(() => userScopedStateStorage(localStorage)),
       partialize: ({ defaultSendMode, sendModes }) => ({
         defaultSendMode,
         sendModes,
@@ -163,6 +168,8 @@ export const useChatAnonymizedStore = create<ChatAnonymizedStore>()(
     },
   ),
 );
+
+followStorageOwner(useChatAnonymizedStore);
 
 export const getChatSendMode = (threadRef: ChatThreadRef): ChatSendMode => {
   const { defaultSendMode, sendModes } = useChatAnonymizedStore.getState();

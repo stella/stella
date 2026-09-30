@@ -1,9 +1,10 @@
 import { Result } from "better-result";
-import { Worker } from "bullmq";
+import { DelayedError, Worker } from "bullmq";
 import { and, eq, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -13,6 +14,7 @@ import type {
   DerivativeFailureReason,
   FieldContent,
 } from "@/api/db/schema-validators";
+import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -34,6 +36,7 @@ import type { QueueRequeueOutcome } from "@/api/lib/bullmq-requeue";
 import { errorTag } from "@/api/lib/errors/utils";
 import { decidePdfDerivativeAction } from "@/api/lib/file-derivative-decision";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
+import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import {
   allocateFileObject,
   resolveQueuedFileObject,
@@ -47,17 +50,18 @@ import {
   shouldGenerateImageThumbnail,
   THUMBNAIL_MIME_TYPE,
 } from "@/api/lib/files/image-derivative";
+import {
+  FILE_RESERVATION_ABANDON_DELAY_MS,
+  OrganizationFileUsageError,
+  writeOrganizationFile,
+} from "@/api/lib/files/organization-file-usage";
 import { createFileKey } from "@/api/lib/files/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
-import {
-  deleteS3ObjectWithSignal,
-  putS3ObjectWithSignal,
-  readS3ArrayBuffer,
-} from "@/api/lib/s3";
+import { putS3ObjectWithSignal, readS3ArrayBuffer } from "@/api/lib/s3";
 import {
   brandPersistedEntityId,
   brandPersistedFieldId,
@@ -73,6 +77,32 @@ const GENERATE_PDF_JOB_NAME = "generate-pdf";
 const GENERATE_THUMBNAIL_JOB_NAME = "generate-thumbnail";
 const WORKER_CONCURRENCY = 3;
 const DEFAULT_JOB_ATTEMPTS = 3;
+const RESERVATION_RETRY_DELAY_MS = FILE_RESERVATION_ABANDON_DELAY_MS + 60_000;
+
+export const deferFileDerivativeForPendingReservation = async ({
+  error,
+  job,
+  now = Temporal.Now.instant().epochMilliseconds,
+}: {
+  error: unknown;
+  job: {
+    moveToDelayed: (timestamp: number, token?: string) => Promise<void>;
+    token?: string;
+  };
+  now?: number;
+}): Promise<never> => {
+  if (
+    !(error instanceof OrganizationFileUsageError) ||
+    error.reason !== "reservation_busy"
+  ) {
+    throw error;
+  }
+
+  // The same-key reservation cannot be reused until its object-state grace
+  // expires. BullMQ's delayed transition leaves the attempt budget intact.
+  await job.moveToDelayed(now + RESERVATION_RETRY_DELAY_MS, job.token);
+  throw new DelayedError();
+};
 
 const lockActiveWorkspaceForDerivative = async (
   tx: Transaction,
@@ -101,17 +131,20 @@ const cleanupUnpublishedDerivative = async ({
   telemetry: Record<string, string>;
   writeState: "confirmed" | "uncertain";
 }): Promise<void> => {
-  const cleanup = await Result.tryPromise({
-    try: async () =>
-      await withTimeout(
-        async (signal) => await deleteS3ObjectWithSignal(objectKey, signal),
-        {
-          label: "file-derivative-compensating-delete",
-          timeoutMs: BUFFER_INTENT_DELETE_TIMEOUT_MS,
-        },
-      ),
-    catch: (cause) => cause,
-  });
+  const cleanup = Result.flatten(
+    await Result.tryPromise({
+      try: async () =>
+        await withTimeout(
+          async (signal) =>
+            await deleteOrganizationFileWithSignal(objectKey, signal),
+          {
+            label: "file-derivative-compensating-delete",
+            timeoutMs: BUFFER_INTENT_DELETE_TIMEOUT_MS,
+          },
+        ),
+      catch: (cause) => cause,
+    }),
+  );
   if (Result.isError(cleanup)) {
     captureError(cleanup.error, telemetry);
   }
@@ -302,11 +335,15 @@ export const initFileDerivativeWorker = () => {
   const worker = new Worker<FileDerivativeJobData>(
     QUEUE_NAME,
     async (job) => {
-      if (job.name === GENERATE_THUMBNAIL_JOB_NAME) {
-        await processImageThumbnailJob(job.data);
-        return;
+      try {
+        if (job.name === GENERATE_THUMBNAIL_JOB_NAME) {
+          await processImageThumbnailJob(job.data);
+          return;
+        }
+        await processPdfDerivativeJob(job.data);
+      } catch (error) {
+        await deferFileDerivativeForPendingReservation({ error, job });
       }
-      await processPdfDerivativeJob(job.data);
     },
     {
       connection: workerConnection,
@@ -462,19 +499,40 @@ const processPdfDerivativeJob = async ({
 
   let writeState: "confirmed" | "uncertain" = "uncertain";
   try {
-    await withTimeout(
-      async (signal) =>
-        await putS3ObjectWithSignal(
-          pdfKey,
-          new Uint8Array(conversionResult.value.buffer),
-          PDF_MIME_TYPE,
-          signal,
-        ),
-      {
-        label: "file-derivative-pdf-put",
-        timeoutMs: BUFFER_INTENT_WRITE_TIMEOUT_MS,
-      },
-    );
+    const pdfBytes = new Uint8Array(conversionResult.value.buffer);
+    if (!env.FEATURE_FILE_USAGE_LIMITS) {
+      await withTimeout(
+        async (signal) =>
+          await putS3ObjectWithSignal(pdfKey, pdfBytes, PDF_MIME_TYPE, signal),
+        {
+          label: "file-derivative-pdf-put",
+          timeoutMs: BUFFER_INTENT_WRITE_TIMEOUT_MS,
+        },
+      );
+    } else {
+      const fileWrite = await writeOrganizationFile({
+        organizationId: branded.organizationId,
+        objectKey: pdfKey,
+        sizeBytes: pdfBytes.byteLength,
+        write: async () =>
+          await withTimeout(
+            async (signal) =>
+              await putS3ObjectWithSignal(
+                pdfKey,
+                pdfBytes,
+                PDF_MIME_TYPE,
+                signal,
+              ),
+            {
+              label: "file-derivative-pdf-put",
+              timeoutMs: BUFFER_INTENT_WRITE_TIMEOUT_MS,
+            },
+          ),
+      });
+      if (Result.isError(fileWrite)) {
+        throw fileWrite.error;
+      }
+    }
     writeState = "confirmed";
     const publication = await scopedDb(async (tx) => {
       if (!(await lockActiveWorkspaceForDerivative(tx, branded.workspaceId))) {
@@ -684,19 +742,44 @@ const processImageThumbnailJob = async ({
 
   let writeState: "confirmed" | "uncertain" = "uncertain";
   try {
-    await withTimeout(
-      async (signal) =>
-        await putS3ObjectWithSignal(
-          thumbnailKey,
-          thumbnailResult.value.webp,
-          THUMBNAIL_MIME_TYPE,
-          signal,
-        ),
-      {
-        label: "file-derivative-thumbnail-put",
-        timeoutMs: BUFFER_INTENT_WRITE_TIMEOUT_MS,
-      },
-    );
+    if (!env.FEATURE_FILE_USAGE_LIMITS) {
+      await withTimeout(
+        async (signal) =>
+          await putS3ObjectWithSignal(
+            thumbnailKey,
+            thumbnailResult.value.webp,
+            THUMBNAIL_MIME_TYPE,
+            signal,
+          ),
+        {
+          label: "file-derivative-thumbnail-put",
+          timeoutMs: BUFFER_INTENT_WRITE_TIMEOUT_MS,
+        },
+      );
+    } else {
+      const fileWrite = await writeOrganizationFile({
+        organizationId: branded.organizationId,
+        objectKey: thumbnailKey,
+        sizeBytes: thumbnailResult.value.webp.byteLength,
+        write: async () =>
+          await withTimeout(
+            async (signal) =>
+              await putS3ObjectWithSignal(
+                thumbnailKey,
+                thumbnailResult.value.webp,
+                THUMBNAIL_MIME_TYPE,
+                signal,
+              ),
+            {
+              label: "file-derivative-thumbnail-put",
+              timeoutMs: BUFFER_INTENT_WRITE_TIMEOUT_MS,
+            },
+          ),
+      });
+      if (Result.isError(fileWrite)) {
+        throw fileWrite.error;
+      }
+    }
     writeState = "confirmed";
     const publication = await scopedDb(async (tx) => {
       if (!(await lockActiveWorkspaceForDerivative(tx, branded.workspaceId))) {

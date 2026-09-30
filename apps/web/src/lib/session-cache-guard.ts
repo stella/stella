@@ -26,7 +26,7 @@ const isSessionQuery = (query: Query) => query.queryHash === SESSION_QUERY_HASH;
  * The signed-in user's id in a cached session, if there is one.
  * Typed `unknown` on purpose: it reads the cached session as data.
  */
-const signedInUserId = (session: unknown): string | undefined =>
+export const signedInUserId = (session: unknown): string | undefined =>
   typeof session === "object" &&
   session !== null &&
   "user" in session &&

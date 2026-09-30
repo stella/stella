@@ -4,13 +4,13 @@
 import { lazy } from "react";
 
 // expect-clean: no-static-catalogue-route-import/no-static-catalogue-route-import
-import type { CatalogueBrowserFilterKind } from "@/routes/_protected.knowledge/-components/catalogue/catalogue-browser";
+import type { CatalogueBrowserFilterKind } from "@/routes/knowledge/-components/catalogue/catalogue-browser";
 // oxlint-disable-next-line no-static-catalogue-route-import/no-static-catalogue-route-import
-import { CatalogueBrowser } from "@/routes/_protected.knowledge/-components/catalogue/catalogue-browser";
+import { CatalogueBrowser } from "@/routes/knowledge/-components/catalogue/catalogue-browser";
 
 const LazyCatalogueBrowser = lazy(async () => {
   const module =
-    await import("@/routes/_protected.knowledge/-components/catalogue/catalogue-browser");
+    await import("@/routes/knowledge/-components/catalogue/catalogue-browser");
   return { default: module.CatalogueBrowserWithRouteData };
 });
 

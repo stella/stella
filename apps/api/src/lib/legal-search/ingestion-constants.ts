@@ -33,6 +33,13 @@ export const ADAPTER_KEYS = {
 
 export type AdapterKey = (typeof ADAPTER_KEYS)[keyof typeof ADAPTER_KEYS];
 
+/** Import discovery is owned by callers, never the crawl scheduler. */
+export const IMPORT_SOURCE_KEYS = {
+  COURTLISTENER: "us-courtlistener",
+} as const;
+export type ImportSourceKey =
+  (typeof IMPORT_SOURCE_KEYS)[keyof typeof IMPORT_SOURCE_KEYS];
+
 /**
  * Parser output version for each source.
  *
@@ -69,7 +76,7 @@ export const PARSER_VERSIONS = {
   [ADAPTER_KEYS.EU_ECJ]: 6,
   [ADAPTER_KEYS.HU_BHGY]: 4,
   [ADAPTER_KEYS.PL_KIS]: 2,
-  [ADAPTER_KEYS.PL_UODO]: 2,
+  [ADAPTER_KEYS.PL_UODO]: 3,
   [ADAPTER_KEYS.PL_UOKIK]: 1,
 } as const satisfies Record<AdapterKey, number>;
 

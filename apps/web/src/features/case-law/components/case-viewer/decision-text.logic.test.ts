@@ -351,6 +351,34 @@ describe("footnote parts", () => {
     expect([...backJumpAnchorByLastId]).toEqual([["b2", "b-0"]]);
   });
 
+  test("a table between note paragraphs stays inside the same reader note", () => {
+    const blocks: Block[] = [
+      ...noteBlocks([{ type: "footnote", label: "5", noteId: "n5" }]),
+      {
+        id: "table",
+        anchorId: "table-anchor",
+        type: "table",
+        note: { type: "footnote", label: "5", noteId: "n5" },
+        rows: [
+          [{ inlines: [{ type: "text", text: "Data" }], plainText: "Data" }],
+        ],
+        plainText: "Data",
+      },
+      {
+        id: "b2",
+        anchorId: "b-2",
+        type: "paragraph",
+        note: { type: "footnote", label: "5", noteId: "n5" },
+        inlines: [{ type: "text", text: "Note" }],
+        plainText: "Note",
+      },
+    ];
+    const { headIds, backJumpAnchorByLastId } = footnoteParts(blocks);
+
+    expect([...headIds]).toEqual(["b0"]);
+    expect([...backJumpAnchorByLastId]).toEqual([["b2", "b-0"]]);
+  });
+
   test("notes with no shared identity are each complete by themselves", () => {
     const { headIds, backJumpAnchorByLastId } = footnoteParts(
       noteBlocks([

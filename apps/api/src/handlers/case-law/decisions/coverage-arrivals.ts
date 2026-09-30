@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 
 import { DAY_IN_MS } from "@stll/time";
 
+import { withSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { publishedCaseLawDecisionSqlFor } from "@/api/lib/case-law/published-decisions";
@@ -38,7 +39,7 @@ const WEEK_IN_MS = 7 * DAY_IN_MS;
  * value this far above that is what turns a cold or missing index into a fast,
  * visible degradation instead of a public page stalled on a shared pool.
  */
-const ARRIVALS_STATEMENT_TIMEOUT = "3s";
+const ARRIVALS_STATEMENT_TIMEOUT_MS = 3000;
 
 export type CaseLawSourceArrivals = {
   /** Decisions published for the source in the last seven days. */
@@ -59,23 +60,6 @@ const toCount = (value: unknown): number => {
   return Number.isFinite(count) ? count : 0;
 };
 
-/**
- * The transaction's current statement timeout, so the bound this read sets can
- * be handed back. Null when the setting cannot be read, which leaves the bound
- * in place for the rest of the transaction rather than guessing a value to
- * restore.
- */
-const readStatementTimeout = async (
-  tx: CaseLawPublicReadTransaction,
-): Promise<string | null> => {
-  const result: unknown = await tx.execute(
-    sql`SELECT current_setting('statement_timeout') AS statement_timeout`,
-  );
-  const row = executedRows(result).at(0);
-  const value = isRecord(row) ? row["statement_timeout"] : undefined;
-  return typeof value === "string" ? value : null;
-};
-
 export const readCaseLawArrivalsQuery = definePublicLawSharedQuery(
   PUBLIC_LAW_SHARED_QUERY.caseLawCoverageArrivals,
   async (
@@ -88,16 +72,11 @@ export const readCaseLawArrivalsQuery = definePublicLawSharedQuery(
     const sinceWeek = new Date(now.getTime() - WEEK_IN_MS);
     const published = sql.raw(publishedCaseLawDecisionSqlFor("d"));
 
-    // Transaction-local and handed back below: the coverage read is one of
-    // several this transaction runs, and the next of them must not inherit
-    // this bound. `set_config(..., true)` reverts with the transaction, so a
-    // cancelled statement needs no unwinding of its own.
-    const previousTimeout = await readStatementTimeout(tx);
-    await tx.execute(
-      sql`SELECT set_config('statement_timeout', ${ARRIVALS_STATEMENT_TIMEOUT}, true)`,
-    );
-
-    const result: unknown = await tx.execute(sql`
+    const result: unknown = await withSharedStatementTimeout(
+      tx,
+      ARRIVALS_STATEMENT_TIMEOUT_MS,
+      async () =>
+        await tx.execute(sql`
       SELECT
         named.source_id AS source_id,
         recent.added_last_week AS added_last_week
@@ -111,12 +90,8 @@ export const readCaseLawArrivalsQuery = definePublicLawSharedQuery(
           AND ${published}
       ) recent ON true
       ORDER BY named.ordinality
-    `);
-    if (previousTimeout !== null) {
-      await tx.execute(
-        sql`SELECT set_config('statement_timeout', ${previousTimeout}, true)`,
-      );
-    }
+    `),
+    );
 
     const rows = executedRows(result).filter(isRecord);
     return new Map(

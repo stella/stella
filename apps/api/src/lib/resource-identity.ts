@@ -268,6 +268,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
     type: "resource",
     resourceType: RESOURCE_TYPE.SELLER_PROFILE,
   },
+  vatRate: { type: "resource", resourceType: RESOURCE_TYPE.VAT_RATE },
   numberSeries: {
     type: "resource",
     resourceType: RESOURCE_TYPE.NUMBER_SERIES,
@@ -295,6 +296,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   },
   timeEntry: { type: "resource", resourceType: RESOURCE_TYPE.TIME_ENTRY },
   timeEntrySuggestion: { type: "non_resource", reason: "workflow" },
+  timeTimer: { type: "non_resource", reason: "workflow" },
   user: { type: "resource", resourceType: RESOURCE_TYPE.USER },
   userFile: { type: "resource", resourceType: RESOURCE_TYPE.USER_FILE },
   workspace: { type: "resource", resourceType: RESOURCE_TYPE.WORKSPACE },

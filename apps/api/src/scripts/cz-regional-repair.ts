@@ -326,7 +326,6 @@ const heldIdentitiesChunked = async (
   const documentIds = new Set<string>();
   const caseNumbers = new Set<string>();
   for (let index = 0; index < items.length; index += HELD_LOOKUP_CHUNK) {
-    // db-await-in-loop: one bounded lookup per chunk; HELD_LOOKUP_CHUNK caps how many items one lookup may name
     const held = await heldIdentities(
       items.slice(index, index + HELD_LOOKUP_CHUNK),
     );
