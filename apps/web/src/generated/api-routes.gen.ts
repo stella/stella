@@ -10395,9 +10395,9 @@ export type WebRoutes = {
                   title: string;
                   language: string;
                   country: string;
+                  eli: string;
                   sourceUrl: Tbe0400fa4c;
                   headline: Tbe0400fa4c;
-                  eli: string;
                   documentType: Tbe0400fa4c;
                   effectiveDate: Tbe0400fa4c;
                   documentId: string;

@@ -2439,7 +2439,13 @@ describe("OpenAI-compatible MCP tools", () => {
       async ({ query }: { query: string }) => ({
         facets: {
           court: [],
-          year: [],
+          year: [
+            {
+              value: query === "duty of care" ? "2024" : "2025",
+              count: 3,
+              label: null,
+            },
+          ],
           decisionType: [],
           source: [],
           language: [],
@@ -2492,8 +2498,14 @@ describe("OpenAI-compatible MCP tools", () => {
     ]);
     // The hit kept is the one from the query that ranked it highest.
     expect(payload.results.at(0)?.snippet).toBe("c from second");
-    // Facets and a count describe one query's result set, not a union.
-    expect(payload.facets).toBeNull();
+    // Facets describe the first phrasing; overlapping counts are not summed.
+    expect(payload.facets).toEqual({
+      court: [],
+      year: [{ value: "2024", count: 3, label: null }],
+      decisionType: [],
+      source: [],
+      language: [],
+    });
     expect(payload.total).toEqual({ type: SEARCH_TOTAL_TYPE.NOT_COUNTED });
     // `limit` bounds the merged page, so each phrasing was asked for half.
     expect(
@@ -4415,6 +4427,153 @@ describe("OpenAI-compatible MCP tools", () => {
     });
     expect(anonymizeTextFieldsMock).not.toHaveBeenCalled();
   });
+
+  test.each([
+    {
+      cursor: undefined,
+      include: undefined,
+      fields: ["details", "metadata", "textFields", "source", "citations"],
+    },
+    {
+      cursor: encodePaginationCursor([1, null]),
+      include: undefined,
+      fields: [],
+    },
+    { cursor: undefined, include: [], fields: [] },
+    {
+      cursor: encodePaginationCursor([1, null]),
+      include: ["metadata", "textFields"],
+      fields: ["metadata", "textFields"],
+    },
+    {
+      cursor: encodePaginationCursor([1, null]),
+      include: "source",
+      fields: ["source"],
+    },
+    {
+      cursor: encodePaginationCursor([1, null]),
+      include: ["details", "citations"],
+      fields: ["details", "citations"],
+    },
+  ])(
+    "read_case_law_decision selects static fields per window (%j)",
+    async ({ cursor, include, fields }) => {
+      readDecisionHandlerMock.mockResolvedValue(createReadDecisionResult());
+      const payload = asTestRaw<{
+        items: { decision: Record<string, unknown> }[];
+      }>(
+        parseToolPayload(
+          await handleMcpToolCall({
+            args: {
+              decision_ids: [DECISION_ID],
+              ...(cursor === undefined ? {} : { cursor }),
+              ...(include === undefined ? {} : { include }),
+            },
+            context: createContext(),
+            toolName: "read_case_law_decision",
+          }),
+        ),
+      );
+      const decision =
+        payload.items.at(0)?.decision ?? panic("Missing decision");
+      expect(decision).toMatchObject({
+        decisionId: DECISION_ID,
+        caseNumber: "29 Cdo 123/2024",
+      });
+      expect(decision).toHaveProperty("text");
+      for (const [field, key] of [
+        ["details", "court"],
+        ["metadata", "metadata"],
+        ["textFields", "textFields"],
+        ["source", "source"],
+        ["citations", "citationsTo"],
+        ["citations", "citationsFrom"],
+      ] as const) {
+        expect(Object.hasOwn(decision, key)).toBe(
+          fields.some((expected) => expected === field),
+        );
+      }
+    },
+  );
+
+  test.each([{ include: [] }, { include: ["source"] }])(
+    "read_case_law_decision preserves omitted citation pages (%j)",
+    async ({ include }) => {
+      const base = createReadDecisionResult();
+      const firstCitation =
+        base.citationsTo.at(0) ?? panic("Missing citation fixture");
+      readDecisionHandlerMock.mockImplementation(
+        async ({ citationsCursor }: { citationsCursor?: string | null }) => ({
+          ...base,
+          documentAst: null,
+          fulltext: "Decision text. ".repeat(2000),
+          citationsFrom: [],
+          citationsTo:
+            citationsCursor === undefined
+              ? base.citationsTo
+              : [{ ...firstCitation, id: "c_page_2" }],
+          citationsNextCursor:
+            citationsCursor === undefined ? "citations-next" : null,
+        }),
+      );
+      type CitationSelectionPage = {
+        items: {
+          nextCursor: string | null;
+          decision: { text: string | null; citationsTo?: { id: string }[] };
+        }[];
+      };
+      const readWindow = async (args: Record<string, unknown>) => {
+        const payload = asTestRaw<CitationSelectionPage>(
+          parseToolPayload(
+            await handleMcpToolCall({
+              args: { decision_ids: [DECISION_ID], ...args },
+              context: createContext(),
+              toolName: "read_case_law_decision",
+            }),
+          ),
+        );
+        return payload.items.at(0) ?? panic("Missing decision window");
+      };
+      const first = await readWindow({ include });
+      expect(first.decision.citationsTo).toBeUndefined();
+      expect(first.nextCursor).not.toBeNull();
+      const second = await readWindow({
+        cursor: first.nextCursor,
+        include: ["citations"],
+      });
+      expect(second.decision.citationsTo).toEqual(base.citationsTo);
+      expect(second.nextCursor).not.toBeNull();
+      const omitted = await readWindow({ cursor: second.nextCursor, include });
+      expect(omitted.decision.citationsTo).toBeUndefined();
+      expect(omitted.nextCursor).not.toBeNull();
+      const resumed = await readWindow({
+        cursor: omitted.nextCursor,
+        include: ["citations"],
+      });
+      expect(resumed.decision.citationsTo?.at(0)?.id).toBe("c_page_2");
+      expect(resumed.nextCursor).toBeNull();
+    },
+  );
+
+  test.each([{ include: [] }, { include: ["source"] }])(
+    "read_case_law_decision ends when omitted citations are the only remaining data (%j)",
+    async ({ include }) => {
+      readDecisionHandlerMock.mockResolvedValue({
+        ...createReadDecisionResult(),
+        citationsNextCursor: "citations-next",
+      });
+      const payload = asTestRaw<{ items: { nextCursor: string | null }[] }>(
+        parseToolPayload(
+          await handleMcpToolCall({
+            args: { decision_ids: [DECISION_ID], include },
+            context: createContext(),
+            toolName: "read_case_law_decision",
+          }),
+        ),
+      );
+      expect(payload.items.at(0)?.nextCursor).toBeNull();
+    },
+  );
 
   test("read_case_law_decision pages citation lists via the compound cursor", async () => {
     const base = createReadDecisionResult();
