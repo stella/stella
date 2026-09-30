@@ -53,7 +53,8 @@
 // continues; a later exit still requires no `continue` targeting the loop.
 // One DB hit per constant-bounded round is exempt: canonical chunked inputs
 // (literal/const size >= 2), array slice-step loops with that stride, fixed
-// sets of at most 16 elements, and nonnegative constant-start counters bounded by <= 16.
+// sets of at most 16 elements (readonly tuples use const bindings without
+// spread initializers), and nonnegative constant-start counters bounded by <= 16.
 // The counter must not be written in the body. Multiple DB hits, fan-out,
 // enclosing loops or fan-out callbacks, dynamic sizes and keyset walks stay
 // flagged; bounded rounds cannot hide per-row work in a nested loop.
@@ -165,6 +166,7 @@ const PROMISE_FAN_OUT_METHODS: ReadonlySet<string> = new Set([
 // A helper found at an awaited site is followed this many function bodies
 // deep: its own body, and the body of one helper it calls.
 const HELPER_HOPS = 2;
+const MAX_FIXED_ROUND_SIZE = 16;
 
 export type DbAwaitInLoopKind = "query" | "handle" | "helper";
 
@@ -947,6 +949,27 @@ export const scanDbAwaitInLoop = ({
     );
   };
 
+  const hasFixedTupleBinding = (
+    expression: ts.Expression,
+    seen = new Set<ts.Symbol>(),
+  ): boolean => {
+    const value = unwrap(expression);
+    if (ts.isArrayLiteralExpression(value)) {
+      return !value.elements.some(ts.isSpreadElement);
+    }
+    const symbol = symbolOf(value);
+    if (symbol === undefined || seen.has(symbol)) {
+      return false;
+    }
+    seen.add(symbol);
+    return (symbol.declarations ?? []).some(
+      (declaration) =>
+        isConstDeclaration(declaration) &&
+        (declaration.initializer === undefined ||
+          hasFixedTupleBinding(declaration.initializer, seen)),
+    );
+  };
+
   const fixedSetLength = (expression: ts.Expression): number | null => {
     const value = unwrap(expression);
     if (ts.isArrayLiteralExpression(value)) {
@@ -982,6 +1005,7 @@ export const scanDbAwaitInLoop = ({
     }
     const type = checker.getTypeAtLocation(value);
     if (
+      !hasFixedTupleBinding(value) ||
       !checker.isTupleType(type) ||
       !("target" in type) ||
       typeof type.target !== "object" ||
@@ -1113,7 +1137,7 @@ export const scanDbAwaitInLoop = ({
     }
     const bound = literalNumber(condition.right);
     if (bound !== null) {
-      return step === 1 && bound >= 0 && bound <= 16;
+      return step === 1 && bound >= 0 && bound <= MAX_FIXED_ROUND_SIZE;
     }
     const right = unwrap(condition.right);
     return (
@@ -1139,7 +1163,7 @@ export const scanDbAwaitInLoop = ({
       return iterable.arguments.length === 2 && number !== null && number >= 2;
     }
     const length = fixedSetLength(iterable);
-    return length !== null && length <= 16;
+    return length !== null && length <= MAX_FIXED_ROUND_SIZE;
   };
 
   const hasEnclosingIteration = (loop: ts.IterationStatement): boolean => {

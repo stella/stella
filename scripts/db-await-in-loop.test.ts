@@ -52,15 +52,25 @@ export const chunked = <T>(items: readonly T[], size: number): T[][] => {
   return chunks;
 };
 `,
+  "fixed-tuples.ts": `
+export const importedTuple = ["one", "two"] as const;
+export const importedSpread = [...importedTuple] as const;
+export let importedMutableBinding = ["one", "two"] as const;
+`,
   "bounded-rounds.ts": `
 import { rootDb, items, type Transaction } from "./db/root";
 import { chunked, chunked as batches } from "./chunked";
 import { writeOne } from "./helpers";
 import { Result } from "./result";
+import { importedTuple, importedSpread, importedMutableBinding } from "./fixed-tuples";
 declare const ids: number[];
 const SIZE = 8;
 const SIZES = { batch: 4 } as const;
 const tuple = [1, 2, 3] as const;
+const typedTuple: readonly [number, number] = [1, 2];
+const optionalTuple: readonly [number, number?] = [1];
+const tupleAlias = importedTuple;
+const maximumTuple = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16] as const;
 const registry = { first: 1, second: 2 } as const;
 const readonlyRegistry: { readonly first: number; readonly second: number } = { first: 1, second: 2 };
 const alias = batches;
@@ -73,6 +83,12 @@ export const accepted = async () => {
     await rootDb.select().from(items);
   }
   for (const kind of tuple) { await rootDb.select().from(items); }
+  for (const kind of typedTuple) { await rootDb.select().from(items); }
+  for (const kind of optionalTuple) { await rootDb.select().from(items); }
+  for (const kind of importedTuple) { await rootDb.select().from(items); }
+  for (const kind of tupleAlias) { await rootDb.select().from(items); }
+  for (const kind of maximumTuple) { await rootDb.select().from(items); }
+  for (const kind of [1, 2] as const) { await rootDb.select().from(items); }
   for (const kind of tuple.entries()) { await rootDb.select().from(items); }
   for (const kind of tuple.keys()) { await rootDb.select().from(items); }
   for (const kind of tuple.values()) { await rootDb.select().from(items); }
@@ -168,6 +184,35 @@ export const rejected = async (size: number, narrowSize: 8, cursor: string | nul
     await rootDb.select().from(items); // expect: query
   }
   for (const kind of [1, ...ids]) {
+    await rootDb.select().from(items); // expect: query
+  }
+  const plainArray = [1, 2];
+  for (const kind of plainArray) {
+    await rootDb.select().from(items); // expect: query
+  }
+  let mutableReadonlyTuple = [1, 2] as const;
+  for (const kind of mutableReadonlyTuple) {
+    await rootDb.select().from(items); // expect: query
+  }
+  const mutableAlias = mutableReadonlyTuple;
+  for (const kind of mutableAlias) {
+    await rootDb.select().from(items); // expect: query
+  }
+  const spreadTuple = [...tuple] as const;
+  for (const kind of spreadTuple) {
+    await rootDb.select().from(items); // expect: query
+  }
+  for (const kind of [...tuple] as const) {
+    await rootDb.select().from(items); // expect: query
+  }
+  for (const kind of importedSpread) {
+    await rootDb.select().from(items); // expect: query
+  }
+  for (const kind of importedMutableBinding) {
+    await rootDb.select().from(items); // expect: query
+  }
+  const variadicTuple: readonly [number, ...number[]] = [1, 2];
+  for (const kind of variadicTuple) {
     await rootDb.select().from(items); // expect: query
   }
   let mutableTuple: [number, number] = [1, 2];
@@ -681,7 +726,7 @@ describe("db-await-in-loop", () => {
     expect(observed("bounded-rounds.ts")).toEqual(
       expectedFromMarkers(sourceOf("bounded-rounds.ts")),
     );
-    expect(report.boundedRoundHits).toBe(16);
+    expect(report.boundedRoundHits).toBe(22);
   });
 
   test("helpers reached from a flagged site are not reported on their own", () => {
