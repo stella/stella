@@ -356,7 +356,7 @@ jobs:
                 ;;
             esac
             case "$file" in
-              apps/web/src/lib/analytics/posthog.ts|apps/web/src/lib/analytics/stack-redaction.ts|apps/web/src/lib/analytics/error-diagnostics.ts|apps/web/e2e/stack-redaction/*|apps/web/e2e/playwright.stack-redaction.config.ts|apps/web/e2e/tsconfig.json|apps/web/tsconfig.json|apps/web/package.json|scripts/retry.sh|bunfig.toml|package.json|bun.lock|.npmrc|.github/workflows/ci.yml)
+              apps/web/src/lib/analytics/posthog.ts|apps/web/src/lib/analytics/stack-redaction.ts|apps/web/src/lib/analytics/error-diagnostics.ts|apps/web/e2e/stack-redaction/*|apps/web/e2e/playwright.stack-redaction.config.ts|apps/web/e2e/tsconfig.json|apps/web/tsconfig.json|apps/web/package.json|scripts/retry.sh|.github/actions/setup-playwright/*|bunfig.toml|package.json|bun.lock|.npmrc|.github/workflows/ci.yml)
                 stack_redaction_browsers_required=true
                 ;;
             esac
@@ -1743,9 +1743,13 @@ jobs:
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.suite_depth == 'full'
     runs-on: ubuntu-latest
-    # The Playwright system dependencies come from the runner's apt mirror,
-    # whose throughput varies widely between runs.
     timeout-minutes: 35
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
+      options: --init --ipc=host
+    defaults:
+      run:
+        shell: bash
     permissions:
       contents: read
 
@@ -1766,7 +1770,7 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
         run: |
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]] || ! git diff --quiet "origin/$BASE_REF"...HEAD -- \
-            .github/actions/setup-playwright/action.yml \
+            .github/actions/setup-playwright \
             .github/workflows/ci.yml \
             apps/desktop \
             apps/web/e2e/playwright.ui-playground.config.ts \
@@ -1805,7 +1809,7 @@ jobs:
         # contract, or the browser runtime changed.
         run: |
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]] || ! git diff --quiet "origin/$BASE_REF"...HEAD -- \
-            .github/actions/setup-playwright/action.yml \
+            .github/actions/setup-playwright \
             .github/workflows/ci.yml \
             apps/extension \
             packages/api-contract/src/browser-control.ts \
@@ -1821,9 +1825,20 @@ jobs:
       # cached tarballs would bypass this job's full dependency scan.
       - name: Setup Bun
         if: steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version-file: "package.json"
+        env:
+          NPM_TOKEN: ""
+        # The Playwright image has npm but no unzip. Install Bun's native
+        # package without lifecycle scripts or another apt dependency.
+        run: |
+          version=$(node -p 'require("./package.json").packageManager.split("@")[1]')
+          bootstrap="$RUNNER_TEMP/bun-bootstrap"
+          bin="$RUNNER_TEMP/bun-bin"
+          npm install --prefix "$bootstrap" --ignore-scripts --no-audit --no-fund --no-save "@oven/bun-linux-x64@$version"
+          mkdir -p "$bin"
+          ln -s "$bootstrap/node_modules/@oven/bun-linux-x64/bin/bun" "$bin/bun"
+          ln -s "$bin/bun" "$bin/bunx"
+          echo "$bin" >> "$GITHUB_PATH"
+          "$bin/bun" --version
 
       - name: Install Safe Chain
         if: steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
@@ -1855,11 +1870,10 @@ jobs:
         if: steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
         uses: ./.github/actions/setup-playwright
         with:
-          # The desktop suite runs both engines; installing WebKit here keeps
-          # it in the same version-keyed cache as Chromium instead of
-          # redownloading it per run.
+          # The pinned image includes both desktop engines and screenshot fonts.
+          # Verify launches without downloading browsers or invoking apt.
           browsers: chromium webkit
-          dependency-mode: full
+          dependency-mode: preinstalled
 
       - name: Test UI browser interactions
         if: steps.ui-browser-tests.outputs.required == 'true'
@@ -2840,7 +2854,9 @@ jobs:
           fi
 
       - name: Install Firefox and WebKit
-        run: bunx playwright install --with-deps firefox webkit
+        run: |
+          bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/install-deps.sh" firefox webkit
+          bunx playwright install firefox webkit
 
       - name: Test browser stack redaction
         run: bun --filter @stll/web test:e2e:stack-redaction

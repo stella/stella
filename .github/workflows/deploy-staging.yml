@@ -395,7 +395,10 @@ jobs:
 
       - name: Install Playwright browser
         if: steps.current.outputs.promoted == 'true'
-        run: cd apps/web && bunx playwright install --with-deps chromium
+        run: |
+          cd apps/web
+          bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/install-deps.sh" chromium
+          bunx playwright install chromium
 
       - name: Run staging web smoke
         if: steps.current.outputs.promoted == 'true'
