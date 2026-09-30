@@ -113,6 +113,16 @@ const mockJustice = (routes: {
         }
         return input.url;
       })();
+      if (new URL(url).pathname.includes("/v1/sud/")) {
+        const registreGuid = new URL(url).pathname.split("/").at(-1);
+        return new Response(
+          JSON.stringify({
+            registreGuid,
+            nazov: "Registry court",
+            typSudu: "Okresný súd",
+          }),
+        );
+      }
       requestedUrls.push(url);
 
       const route = isDetailRequest(url) ? routes.detail : routes.list;
