@@ -127,6 +127,8 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   // A group's contract binding and readiness: ingestion binds and attests,
   // request code only asks whether a group may be read.
   "corpus_index_group_enrollments",
+  // Withdrawal history is read by requests and appended only by ingestion.
+  "corpus_index_group_withdrawals",
   // Mutation revisions are appended and pruned only by ingestion triggers;
   // request code may read the current proof watermark.
   "corpus_index_projection_revisions",

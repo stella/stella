@@ -559,6 +559,15 @@ export const ROLE_GRANT_STATEMENTS = [
     GRANT UPDATE (provisioning_status, attested_at, updated_at)
       ON TABLE "corpus_index_group_enrollments" TO stella_ingestion
   `,
+  // The withdrawal trail is append-only: ingestion records, the app reads.
+  `
+    REVOKE INSERT, UPDATE, DELETE ON TABLE "corpus_index_group_withdrawals"
+    FROM stella
+  `,
+  `
+    GRANT SELECT, INSERT ON TABLE "corpus_index_group_withdrawals"
+    TO stella_ingestion
+  `,
   `
     GRANT INSERT, UPDATE ON TABLE
       ${CORPUS_PROJECTION_HISTORY_TABLES_SQL}
