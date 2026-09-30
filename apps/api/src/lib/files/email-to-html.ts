@@ -28,7 +28,10 @@ import {
   MAX_EMAIL_CITATION_BLOCKS,
   MAX_EMAIL_CITATION_BLOCK_TEXT_LENGTH,
 } from "@stll/api-contract";
-import { MSG_MIME_TYPE } from "@stll/api-contract/email-mime-types";
+import {
+  EML_MIME_TYPE,
+  MSG_MIME_TYPE,
+} from "@stll/api-contract/email-mime-types";
 
 import { arrayOrEmpty } from "@/api/lib/array";
 import { MAX_EMAIL_ATTACHMENT_DESCRIPTORS } from "@/api/lib/files/email-attachment-token";
@@ -123,11 +126,13 @@ export const emailToHtml = async (
       return renderEmailHtml(parsed);
     },
     catch: (cause) =>
-      new EmailParseError({
-        message: "Failed to parse email into HTML",
-        mimeType,
-        cause,
-      }),
+      cause instanceof EmailParseError
+        ? cause
+        : new EmailParseError({
+            message: "Failed to parse email into HTML",
+            mimeType,
+            cause,
+          }),
   });
 
 type EmailPreviewOptions = {
@@ -144,11 +149,13 @@ export const emailToPreview = async (
     try: async () =>
       buildEmailPreview(await parseEmail(fileBuffer, mimeType), options),
     catch: (cause) =>
-      new EmailParseError({
-        message: "Failed to parse email preview",
-        mimeType,
-        cause,
-      }),
+      cause instanceof EmailParseError
+        ? cause
+        : new EmailParseError({
+            message: "Failed to parse email preview",
+            mimeType,
+            cause,
+          }),
   });
 
 export const buildEmailPreview = (
@@ -385,7 +392,19 @@ const parseEml = async (fileBuffer: ArrayBuffer): Promise<ParsedEmail> => {
   const parser = new PostalMime({
     attachmentEncoding: "arraybuffer",
   });
-  const email = await parser.parse(fileBuffer);
+  const parsed = await Result.tryPromise({
+    try: async () => await parser.parse(fileBuffer),
+    catch: (cause) =>
+      new EmailParseError({
+        message: "Failed to parse email",
+        mimeType: EML_MIME_TYPE,
+        cause,
+      }),
+  });
+  if (parsed.isErr()) {
+    throw parsed.error;
+  }
+  const email = parsed.value;
   const attachmentCharsets = buildPostalMimeAttachmentCharsetLookup(parser);
 
   const inlineImages: InlineImage[] = [];
