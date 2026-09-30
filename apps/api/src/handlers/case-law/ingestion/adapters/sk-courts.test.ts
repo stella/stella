@@ -25,6 +25,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type { StoredRawReparseOutcome } from "@/api/handlers/case-law/ingestion/adapter";
 import {
+  assembleSkCourtsDecision,
   skCourtsAdapter,
   SK_COURTS_SOURCE_FIELD_PATHS,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
@@ -277,6 +278,7 @@ describe("a stored record reaches the targets the inventory declares", () => {
     expect(metadata["documentExtension"]).toBe("PDF");
     expect(metadata["documentSize"]).toBe(95_553);
     expect(metadata["updateDate"]).toBe("26.09.2023");
+    expect(metadata["updateDateIso"]).toBe("2023-09-26");
     // The name is the judge's or a senior court officer's and the record says
     // which nowhere, so it stays a stated name rather than a bench role.
     expect(metadata["judge"]).toBe("JUDr. Anton Mihalovits");
@@ -347,4 +349,65 @@ describe("the census and the registry agree about this adapter", () => {
     expect(backlog.toSorted()).toEqual(["bulk-dump", "document"]);
     expect(skCourtsAdapter.key).toBe(ADAPTER_KEYS.SK_COURTS);
   });
+});
+
+describe("derived general-court metadata", () => {
+  const item = {
+    spisovaZnacka: "1C/1/2024",
+    guid: "decision-id",
+    sud: { nazov: "Okresný súd" },
+  };
+
+  test("absent documents have no public API link and absent text is not published", () => {
+    const decision = assembleSkCourtsDecision({ item, detail: null });
+    expect(decision?.sourceUrl).toBeUndefined();
+    expect(decision?.metadata["sourceUrlStatus"]).toBe(
+      "not-published-by-source",
+    );
+    expect(decision?.textFields.headnote).toEqual({
+      type: "absent",
+      reason: "not_published",
+    });
+    expect(decision?.textFields.legalSentence).toEqual({
+      type: "absent",
+      reason: "not_published",
+    });
+  });
+
+  test("published documents remain the public link, independently of a listing guid", () => {
+    const url = "https://obcan.justice.sk/content/public/decision.pdf";
+    const decision = assembleSkCourtsDecision({
+      item: { ...item, guid: null },
+      detail: { dokument: { url } },
+    });
+    expect(decision?.sourceUrl).toBe(url);
+    expect(decision?.metadata["sourceUrlStatus"]).toBe("published");
+  });
+
+  test("calendar-invalid dates remain stated and carry a derived defect", () => {
+    for (const updateDate of ["31.02.2024", "unknown", ""]) {
+      const decision = assembleSkCourtsDecision({
+        item,
+        detail: { updateDate },
+      });
+      expect(decision?.metadata["updateDate"]).toBe(updateDate);
+      expect(decision?.metadata["updateDateIso"]).toBeUndefined();
+      expect(decision?.metadata["updateDateDefect"]).toEqual({
+        type: "invalid-publisher-date",
+        value: updateDate,
+      });
+    }
+  });
+});
+
+test("rejected source links preserve the publisher-stated URL", () => {
+  for (const url of ["data:text/plain,blocked", "not a URL", "", "   "]) {
+    const decision = assembleSkCourtsDecision({
+      item: { spisovaZnacka: "1C/1/2024", sud: { nazov: "Okresný súd" } },
+      detail: { dokument: { url } },
+    });
+    expect(decision?.sourceUrl).toBeUndefined();
+    expect(decision?.metadata["sourceUrlStatus"]).toBe("rejected-url");
+    expect(decision?.metadata["statedSourceUrl"]).toBe(url);
+  }
 });

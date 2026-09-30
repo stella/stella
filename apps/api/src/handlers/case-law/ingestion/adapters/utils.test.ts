@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   hashContent,
+  normalizeMetadataValues,
   parseCeDate,
   stripHtml,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
@@ -60,5 +61,28 @@ describe("parseCeDate", () => {
     expect(parseCeDate("not a date")).toBeUndefined();
     expect(parseCeDate("")).toBeUndefined();
     expect(parseCeDate("2026-03-01")).toBeUndefined();
+  });
+});
+
+describe("derived metadata lists", () => {
+  test("normalization is a stable fixed point and preserves first occurrence order", () => {
+    const composed = "Občianske právo";
+    const decomposed = composed.normalize("NFD");
+    expect(decomposed).not.toBe(composed);
+    const stated = [
+      `  ${composed}`,
+      `${decomposed}\u00a0`,
+      "Trestné\n  právo",
+      "",
+      "\t",
+      "Trestné právo",
+    ];
+    const original = [...stated];
+    const normalized = normalizeMetadataValues(stated);
+    expect(normalized).toEqual([composed, "Trestné právo"]);
+    expect(normalizeMetadataValues(normalized)).toEqual(normalized);
+    expect(stated).toEqual(original);
+    expect(normalizeMetadataValues(null)).toEqual([]);
+    expect(normalizeMetadataValues(undefined)).toEqual([]);
   });
 });

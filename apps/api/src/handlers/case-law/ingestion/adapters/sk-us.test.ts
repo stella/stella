@@ -1249,6 +1249,30 @@ describe("sk-us rows as the court sends them", () => {
     ...Object.fromEntries(LIST_FIELDS.map(([key]) => [key, value])),
   });
 
+  test("stated lists survive beside trimmed Unicode-normalized derived lists", async () => {
+    mockFetch({ search: [] });
+    const values = [
+      " Ústavná sťažnosť ",
+      "Ústavná sťažnosť".normalize("NFD"),
+      "",
+      "Iné",
+    ];
+    const outcome = await reconciliation.buildDecision({
+      ...withListFields(values),
+      mkWordRegister: values,
+    });
+    expect(outcome.type).toBe("built");
+    if (outcome.type !== "built") {
+      throw new TypeError("the metadata fixture must build");
+    }
+    expect(outcome.decision.metadata["proceedingSubject"]).toEqual(values);
+    expect(outcome.decision.metadata["challengedLegislation"]).toEqual(values);
+    expect(outcome.decision.metadata["normalizedValues"]).toMatchObject({
+      proceedingSubject: ["Ústavná sťažnosť", "Iné"],
+      challengedLegislation: ["Ústavná sťažnosť", "Iné"],
+    });
+  });
+
   test("every recorded row builds on the reconciliation path", async () => {
     mockFetch({ search: [] });
     const rows = await recordedRows();
