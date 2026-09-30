@@ -213,12 +213,16 @@ export const createSanctionsMatcherPool = ({
     ): Promise<T | null> => {
       const controller = new AbortController();
       const failed = Promise.withResolvers<null>();
-      let leased: Slot | null = null;
-      let retirement: Promise<void> | null = null;
+      // Written inside `work` and `fail`, read in `finally`: a holder, so
+      // the checker does not pin either to its initial `null` across closures.
+      const lease: { slot: Slot | null; retirement: Promise<void> | null } = {
+        slot: null,
+        retirement: null,
+      };
       const fail = () => {
         controller.abort();
-        if (leased !== null && retirement === null) {
-          retirement = retireMatcherSlot(leased);
+        if (lease.slot !== null && lease.retirement === null) {
+          lease.retirement = retireMatcherSlot(lease.slot);
         }
         failed.resolve(null);
       };
@@ -226,11 +230,11 @@ export const createSanctionsMatcherPool = ({
       const expiresAt = performance.now() + durationMs;
       const timer = setTimeout(fail, durationMs);
       const work = async (): Promise<T | null> => {
-        leased = await acquire(controller.signal);
-        if (leased === null || controller.signal.aborted) {
+        lease.slot = await acquire(controller.signal);
+        if (lease.slot === null || controller.signal.aborted) {
           return null;
         }
-        const slot = leased;
+        const slot = lease.slot;
         slot.fail = fail;
         if (slot.worker === null) {
           const created = Result.try(createWorker);
@@ -317,8 +321,8 @@ export const createSanctionsMatcherPool = ({
       } finally {
         clearTimeout(timer);
         controller.abort();
-        if (leased !== null) {
-          const slot = leased;
+        if (lease.slot !== null) {
+          const slot = lease.slot;
           slot.fail = null;
           // Admission owns unfinished acquisition/page reads too, even after
           // the caller deadline. Reuse only after both work and retirement settle.
@@ -333,7 +337,7 @@ export const createSanctionsMatcherPool = ({
                 () => undefined,
                 () => undefined,
               ),
-              retirement ?? Promise.resolve(),
+              lease.retirement ?? Promise.resolve(),
             ]).then(release),
             "sanctions.matcher-retire",
           );
