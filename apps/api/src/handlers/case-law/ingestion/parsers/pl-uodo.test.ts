@@ -302,6 +302,53 @@ describe("publisher emphasis", () => {
 });
 
 describe("containers and text this reader has no rule for", () => {
+  const parseBody = (body: string) => {
+    const result = parsePlUodoDecisionXml({
+      xml: `<xPart><xName>Decyzja</xName>${body}</xPart>`,
+      documentId: "x",
+      caseNumber: "x",
+      court: "x",
+      decisionDate: undefined,
+      decisionType: undefined,
+      sourceUrl: undefined,
+    });
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    return result.value;
+  };
+
+  test("a marker-only unit is retained before its nested units", () => {
+    const parsed = parseBody(`<xBlock>
+      <xUnit xType="pass"><xName xSffx=")">1</xName>
+        <xUnit xType="pass"><xName xSffx=")">a</xName><xText>child text</xText></xUnit>
+      </xUnit>
+      <xUnit xType="pass"><xName xSffx=")">2</xName><xTitle>Second</xTitle>
+        <xUnit xType="pass"><xName xSffx=")">a</xName><xText>nested heading child</xText></xUnit>
+      </xUnit>
+      <xUnit><xName xSffx=")">3</xName><xText>   </xText></xUnit>
+      <xUnit><xText>unmarked text</xText></xUnit>
+    </xBlock>`);
+    expect(parsed.documentAst.blocks.map((block) => block.plainText)).toEqual([
+      "Decyzja",
+      "1) ",
+      "a) child text",
+      "2) Second",
+      "a) nested heading child",
+      "3) ",
+      "unmarked text",
+    ]);
+    expect(parsed.documentAst.blocks.slice(1, 3)).toMatchObject([
+      { type: "paragraph", listDepth: 1 },
+      { type: "paragraph", listDepth: 2 },
+    ]);
+    expect(parsed.documentAst.blocks.at(3)).toMatchObject({
+      type: "heading",
+      plainText: "2) Second",
+    });
+    expect(parsed.validationIssues).toEqual([]);
+  });
+
   test.each(["root", "unit"])(
     "unknown wrappers at the %s keep nested units, markers and separate paragraphs",
     (position) => {
@@ -339,22 +386,6 @@ describe("containers and text this reader has no rule for", () => {
     ]);
     expect(parsed.unmappedMarkup).toEqual(["xText"]);
   });
-  const parseBody = (body: string) => {
-    const result = parsePlUodoDecisionXml({
-      xml: `<xPart><xName>Decyzja</xName>${body}</xPart>`,
-      documentId: "x",
-      caseNumber: "x",
-      court: "x",
-      decisionDate: undefined,
-      decisionType: undefined,
-      sourceUrl: undefined,
-    });
-    if (Result.isError(result)) {
-      throw result.error;
-    }
-    return result.value;
-  };
-
   test("every child of a block survives in document order and is reported", () => {
     const parsed = parseBody(`<xBlock>
       <xUnit><xText>pierwszy tekst</xText></xUnit>

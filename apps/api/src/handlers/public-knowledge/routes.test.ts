@@ -1,14 +1,27 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import {
+  chmodSync,
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import nodePath from "node:path";
 import * as v from "valibot";
 
 import {
   createBundledTemplatePackCatalogue,
+  createTemplatePackCatalogue,
   TemplatePackContentError,
 } from "@stll/template-packs";
 import {
   createFixtureTemplatePackCatalogue,
   FIXTURE_TEMPLATE_PACKS,
+  fixtureTemplatePackContentRoot,
 } from "@stll/template-packs/fixtures";
 
 import { env } from "@/api/env";
@@ -104,6 +117,108 @@ describe("public knowledge routes", () => {
       }
     });
   });
+
+  test.each([
+    "missing",
+    "empty",
+    "zero-byte",
+    "directory",
+    "inaccessible-ancestor",
+    "unreadable",
+    "io-error",
+  ] as const)(
+    "unavailable template content returns an empty public list (%s)",
+    async (state) => {
+      const fixture =
+        FIXTURE_TEMPLATE_PACKS.at(0) ?? panic("Fixture pack missing");
+      const publicPack = { ...fixture, publicDisplay: true };
+      expect(
+        createFixtureTemplatePackCatalogue([publicPack]).list(),
+      ).toHaveLength(1);
+      const directory = mkdtempSync(
+        nodePath.join(tmpdir(), "public-template-content-"),
+      );
+      const contentRoot = nodePath.join(directory, "content");
+      try {
+        if (state !== "missing") {
+          mkdirSync(nodePath.join(contentRoot, "packs"), { recursive: true });
+        }
+        if (state === "zero-byte" || state === "directory") {
+          for (const template of publicPack.templates) {
+            const file = nodePath.join(
+              contentRoot,
+              "packs",
+              publicPack.id,
+              template.file,
+            );
+            mkdirSync(nodePath.dirname(file), { recursive: true });
+            if (state === "directory") {
+              mkdirSync(file, { recursive: true });
+            } else {
+              writeFileSync(file, "");
+            }
+          }
+        }
+        if (
+          state === "inaccessible-ancestor" ||
+          state === "unreadable" ||
+          state === "io-error"
+        ) {
+          cpSync(fixtureTemplatePackContentRoot(), contentRoot, {
+            recursive: true,
+          });
+          const template =
+            publicPack.templates.at(0) ?? panic("Fixture template missing");
+          const file = nodePath.join(
+            contentRoot,
+            "packs",
+            publicPack.id,
+            template.file,
+          );
+          if (state === "inaccessible-ancestor") {
+            chmodSync(nodePath.join(contentRoot, "packs"), 0);
+          } else if (state === "unreadable") {
+            chmodSync(file, 0);
+          } else {
+            rmSync(file);
+            symlinkSync(nodePath.basename(file), file);
+          }
+        }
+        const catalogue = createTemplatePackCatalogue({
+          packs: [publicPack],
+          contentRoot,
+          availability: "readable",
+        });
+        const route = createPublicKnowledgeRoute(() => catalogue);
+        await withFeature(true, async () => {
+          const response = await route.handle(
+            new Request("http://localhost/public/knowledge/template-packs"),
+          );
+          expect(response.status).toBe(200);
+          expect(await response.json()).toEqual({ items: [] });
+          const template =
+            publicPack.templates.at(0) ?? panic("Fixture template missing");
+          const packPath = `/public/knowledge/template-packs/${publicPack.id}`;
+          for (const path of [
+            packPath,
+            `${packPath}/templates/${template.slug}`,
+            `${packPath}/templates/${template.slug}/preview`,
+          ]) {
+            const missing = await route.handle(
+              new Request(`http://localhost${path}`),
+            );
+            expect(missing.status).toBe(404);
+            expect(missing.headers.get("Cache-Control")).toBe("no-store");
+          }
+        });
+      } finally {
+        if (state === "inaccessible-ancestor") {
+          chmodSync(nodePath.join(contentRoot, "packs"), 0o755);
+        }
+        rmSync(directory, { recursive: true, force: true });
+      }
+    },
+  );
 
   test("two preview requests scan and render the static bytes once", async () => {
     await withFeature(true, async () => {
@@ -203,6 +318,66 @@ describe("public knowledge routes", () => {
       expect(renders).toBe(0);
     });
   });
+
+  test.each(["unreadable", "io-error"] as const)(
+    "content becoming unavailable after advertisement returns a typed preview failure (%s)",
+    async (state) => {
+      const fixture =
+        FIXTURE_TEMPLATE_PACKS.at(0) ?? panic("Fixture pack missing");
+      const template =
+        fixture.templates.at(0) ?? panic("Fixture template missing");
+      const pack = { ...fixture, publicDisplay: true };
+      const contentRoot = mkdtempSync(
+        nodePath.join(tmpdir(), "public-template-read-"),
+      );
+      cpSync(fixtureTemplatePackContentRoot(), contentRoot, {
+        recursive: true,
+      });
+      try {
+        const catalogue = createTemplatePackCatalogue({
+          packs: [pack],
+          contentRoot,
+          availability: "readable",
+        });
+        expect(catalogue.list()).toHaveLength(1);
+        const route = createPublicKnowledgeRoute(() => catalogue);
+        const file = nodePath.join(
+          contentRoot,
+          "packs",
+          pack.id,
+          template.file,
+        );
+        if (state === "unreadable") {
+          chmodSync(file, 0);
+        } else {
+          rmSync(file);
+          symlinkSync(nodePath.basename(file), file);
+        }
+        await withFeature(true, async () => {
+          const packPath = `/public/knowledge/template-packs/${pack.id}`;
+          for (const path of [
+            packPath,
+            `${packPath}/templates/${template.slug}`,
+          ]) {
+            expect(
+              (await route.handle(new Request(`http://localhost${path}`)))
+                .status,
+            ).toBe(200);
+          }
+          const response = await route.handle(
+            new Request(
+              `http://localhost${packPath}/templates/${template.slug}/preview`,
+            ),
+          );
+          expect(response.status).toBe(503);
+          expect(response.headers.get("Cache-Control")).toBe("no-store");
+          expect(await response.text()).not.toContain(contentRoot);
+        });
+      } finally {
+        rmSync(contentRoot, { recursive: true, force: true });
+      }
+    },
+  );
 
   test("unreadable bytes for an advertised template are a server fault", async () => {
     await withFeature(true, async () => {

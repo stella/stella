@@ -359,7 +359,7 @@ COPY --chown=stella:stella --from=builder /app/apps/api/src/lib/file-scan/yara /
 # Bundled template packs: the manifest is compiled into the binary, the DOCX
 # bytes are read from TEMPLATE_PACKS_CONTENT_DIR when a pack is installed.
 # Copied from the unpruned context stage. A build whose context has no content
-# submodule copies the empty mount point, and the catalogue is then empty.
+# submodule fails the runtime-asset smoke below.
 COPY --chown=stella:stella --from=install-inputs \
     /app/packages/template-packs/content/ \
     /app/template-packs-content/

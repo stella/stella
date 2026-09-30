@@ -117,7 +117,7 @@ const comparisonTextOf = (node: AnyNode): string => {
     return "";
   }
   if (node.name === "xBRx") {
-    return " ";
+    return ` ${node.children.map(comparisonTextOf).join("")}`;
   }
   const children = node.children.map(comparisonTextOf).join("");
   return node.name === "xSUPx" ? ` ${children}` : children;
@@ -143,7 +143,7 @@ const renderInline = (node: AnyNode, state: RenderState): string => {
     return `<span class="${ANONYMIZED_CLASS}">${children()}</span>`;
   }
   if (name === "xBRx") {
-    return "<br/>";
+    return `<br/>${children()}`;
   }
   if (name === "xLexLink") {
     const reference: PlNcourtLegalReference = {
