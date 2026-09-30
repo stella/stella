@@ -2,6 +2,7 @@ import { panic, Result, TaggedError } from "better-result";
 import { and, asc, eq, inArray, lt } from "drizzle-orm";
 
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
+import { drainFanOut } from "@stll/concurrency";
 import { Temporal } from "@stll/time";
 
 import type { rootDb, Transaction } from "@/api/db/root";
@@ -588,12 +589,21 @@ export const loadInputDocuments = async (
     }),
   );
 
-  return Promise.all(
-    rows.map(async (row) => ({
-      label: row.entity?.name ?? "Document",
-      text: await decryptContent(organizationId, row.ciphertext, row.iv),
-    })),
-  );
+  const drained = await drainFanOut({
+    items: rows,
+    signal: new AbortController().signal,
+    operation: async (row, signal) => {
+      signal.throwIfAborted();
+      return {
+        label: row.entity?.name ?? "Document",
+        text: await decryptContent(organizationId, row.ciphertext, row.iv),
+      };
+    },
+  });
+  if (Result.isError(drained)) {
+    throw drained.error;
+  }
+  return drained.value;
 };
 
 /**

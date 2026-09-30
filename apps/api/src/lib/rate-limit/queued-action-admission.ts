@@ -5,7 +5,11 @@ import { Temporal } from "@stll/time";
 
 import type { SafeId } from "@/api/lib/branded-types";
 
-import { ActionAdmissionError, withActionAdmission } from "./action-admission";
+import {
+  ActionAdmissionError,
+  withActionAdmission,
+  reserveQueuedKickoffPeriod,
+} from "./action-admission";
 
 export const QUEUED_ACTION_KIND = {
   extraction: "workflow.start",
@@ -13,14 +17,32 @@ export const QUEUED_ACTION_KIND = {
 } as const;
 
 // BullMQ delays do not consume the job's failure attempts. A busy pool never hot-loops.
-const ADMISSION_RETRY_DELAY_MS = 5000;
+const MIN_ADMISSION_RETRY_MS = 1000;
+const INITIAL_ADMISSION_RETRY_MS = 10_000;
+const MAX_ADMISSION_RETRY_MS = 60_000;
+
+export const admissionRetryDelayMs = (
+  attemptsStarted: number,
+  random: () => number = Math.random,
+) => {
+  const ceiling = Math.min(
+    MAX_ADMISSION_RETRY_MS,
+    INITIAL_ADMISSION_RETRY_MS *
+      2 ** Math.min(6, Math.max(0, attemptsStarted - 1)),
+  );
+  return (
+    MIN_ADMISSION_RETRY_MS +
+    Math.floor(random() * (ceiling - MIN_ADMISSION_RETRY_MS))
+  );
+};
 
 type QueuedKickoffOptions<T> = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   actionKind: (typeof QUEUED_ACTION_KIND)[keyof typeof QUEUED_ACTION_KIND];
   logicalPhaseId: string;
-  run: (signal: AbortSignal) => Promise<T>;
+  run: (signal: AbortSignal, reservePeriod: () => Promise<void>) => Promise<T>;
+  periodReservation?: "on-acceptance";
   admission?: typeof withActionAdmission;
 };
 
@@ -29,6 +51,7 @@ export const runQueuedKickoff = async <T>({
   userId,
   actionKind,
   logicalPhaseId,
+  periodReservation,
   run,
   admission = withActionAdmission,
 }: QueuedKickoffOptions<T>): Promise<T> => {
@@ -37,7 +60,8 @@ export const runQueuedKickoff = async <T>({
     userId,
     execution: "queued-kickoff",
     periodIdentity: { actionKind, logicalPhaseId },
-    run,
+    periodReservation,
+    run: async (signal) => await run(signal, reserveQueuedKickoffPeriod),
   });
   if (Result.isError(result)) {
     throw result.error;
@@ -50,12 +74,14 @@ type BackgroundJobOptions<T> = {
   userId: SafeId<"user">;
   job: {
     token?: string;
+    attemptsStarted?: number;
     moveToDelayed: (timestamp: number, token?: string) => Promise<void>;
   };
   signal: AbortSignal;
   run: (signal: AbortSignal) => Promise<T>;
   admission?: typeof withActionAdmission;
   now?: () => number;
+  random?: () => number;
 };
 
 export const runBackgroundJob = async <T>({
@@ -66,6 +92,7 @@ export const runBackgroundJob = async <T>({
   run,
   admission = withActionAdmission,
   now = () => Temporal.Now.instant().epochMilliseconds,
+  random = Math.random,
 }: BackgroundJobOptions<T>): Promise<T> => {
   const result = await admission({
     organizationId,
@@ -81,6 +108,9 @@ export const runBackgroundJob = async <T>({
     throw result.error;
   }
   // Busy capacity and coordination loss leave durable work queued for a fresh lease.
-  await job.moveToDelayed(now() + ADMISSION_RETRY_DELAY_MS, job.token);
+  await job.moveToDelayed(
+    now() + admissionRetryDelayMs(job.attemptsStarted ?? 1, random),
+    job.token,
+  );
   throw new DelayedError();
 };

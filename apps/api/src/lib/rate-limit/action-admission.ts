@@ -1,4 +1,4 @@
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { AsyncLocalStorage } from "node:async_hooks";
 
 import {
@@ -114,6 +114,19 @@ redis.call("PEXPIRE", KEYS[2], ARGV[1])
 return 1
 `;
 
+// Reserve against the current owner without acquiring another concurrency slot.
+const RESERVE_PERIOD_SCRIPT = `
+local clock = redis.call("TIME")
+local now = clock[1] * 1000 + math.floor(clock[2] / 1000)
+local orgExpiry = redis.call("ZSCORE", KEYS[1], ARGV[4])
+local userExpiry = redis.call("ZSCORE", KEYS[2], ARGV[4])
+if orgExpiry == false or userExpiry == false or tonumber(orgExpiry) <= now or tonumber(userExpiry) <= now then return -2 end
+${ACTION_PERIOD_ACQUIRE_SCRIPT}
+return 1
+`;
+const reservesPeriod = (script: string) =>
+  script === ACQUIRE_SCRIPT || script === RESERVE_PERIOD_SCRIPT;
+
 const RENEW_SCRIPT = `
 local clock = redis.call("TIME")
 local now = clock[1] * 1000 + math.floor(clock[2] / 1000)
@@ -197,6 +210,7 @@ type ActionAdmissionOptions = {
   scope?: "inherit" | "independent";
   policy?: ActionAdmissionPolicy;
   execution?: "queued-kickoff" | "background-job";
+  periodReservation?: "on-acceptance";
   periodIdentity?: AdmittedActionIdentity;
   periodPolicy?: ActionPeriodPolicy;
   redis?: RedisCommands;
@@ -216,6 +230,8 @@ type AdmissionScope = {
   signal: AbortSignal;
   status: "active" | "settled";
   pool: "interactive" | "background";
+  leaseId: string;
+  reservePeriod: () => Promise<void>;
 };
 
 const admissionScope = new AsyncLocalStorage<AdmissionScope>();
@@ -268,7 +284,7 @@ const createAdmissionExecutor = ({
         ) => {
           // Renewal and release touch concurrency keys alone.
           const scriptKeys =
-            script === ACQUIRE_SCRIPT && window !== null
+            reservesPeriod(script) && window !== null
               ? [keys.organization, keys.user, window.key]
               : [keys.organization, keys.user];
           return await withCommandTimeout({
@@ -283,8 +299,9 @@ const createAdmissionExecutor = ({
           });
         };
         const reply = await send(budget, args);
-        const storeNow =
-          script === ACQUIRE_SCRIPT ? staleActionPeriodTime(reply) : null;
+        const storeNow = reservesPeriod(script)
+          ? staleActionPeriodTime(reply)
+          : null;
         if (budget === null || storeNow === null) {
           return Result.ok(reply);
         }
@@ -333,30 +350,44 @@ const createAdmissionExecutor = ({
   return execute;
 };
 
-const validateAdmissionReply = (
-  reply: unknown,
-): Result<void, ActionAdmissionError> => {
-  if (reply === 0 || reply === -1) {
-    return Result.err(
-      new ActionAdmissionError({
-        message:
-          reply === -1
-            ? "Action period limit reached"
-            : "Concurrent action limit reached",
-        reason: reply === -1 ? "period_exhausted" : "busy",
-      }),
+export const reserveQueuedKickoffPeriod = async (): Promise<void> => {
+  if (!env.FEATURE_ACTION_ADMISSION) {
+    return;
+  }
+  const scope = admissionScope.getStore();
+  if (scope?.status !== "active") {
+    return panic(
+      "Queued period reservation requires an active admission scope",
     );
   }
-  if (reply !== 1) {
-    return Result.err(
-      new ActionAdmissionError({
-        message: "Action admission returned an invalid response",
-        reason: "unavailable",
-      }),
-    );
-  }
-  return Result.ok(undefined);
+  scope.signal.throwIfAborted();
+  await scope.reservePeriod();
 };
+
+type PeriodReservationOptions = AdmissionExecutorOptions & { leaseId: string };
+const createPeriodReservation =
+  ({ leaseId, ...options }: PeriodReservationOptions) =>
+  async () => {
+    if (options.budget === null) {
+      return;
+    }
+    const result = await createAdmissionExecutor(options)(
+      RESERVE_PERIOD_SCRIPT,
+      ["0", "0", "0", leaseId, ...actionPeriodArguments(options.budget)],
+    );
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    if (result.value !== 1) {
+      throw new ActionAdmissionError({
+        message:
+          result.value === -1
+            ? "Action period limit reached"
+            : "Action period reservation is unavailable",
+        reason: result.value === -1 ? "period_exhausted" : "unavailable",
+      });
+    }
+  };
 
 type AdmissionBudgetOptions = Pick<
   ActionAdmissionOptions,
@@ -401,6 +432,90 @@ const resolveAdmissionBudget = ({
   return Result.ok(budget);
 };
 
+type InheritedAdmissionOptions<T> = Pick<
+  ActionAdmissionOptions,
+  | "organizationId"
+  | "userId"
+  | "periodIdentity"
+  | "redis"
+  | "execution"
+  | "periodReservation"
+> & {
+  inherited: AdmissionScope;
+  budget: ActionPeriodBudget | null;
+  redisReady: () => Promise<RedisCommands>;
+  run: (signal: AbortSignal) => Promise<T>;
+};
+const runInheritedAdmission = async <T>({
+  inherited,
+  organizationId,
+  userId,
+  budget,
+  periodIdentity,
+  redis,
+  redisReady,
+  execution,
+  periodReservation,
+  run,
+}: InheritedAdmissionOptions<T>) => {
+  const nested = {
+    ...inherited,
+    reservePeriod: createPeriodReservation({
+      keys: admissionKeys({ organizationId, userId, pool: inherited.pool }),
+      budget,
+      organizationId,
+      periodIdentity,
+      redis,
+      redisReady,
+      leaseId: inherited.leaseId,
+    }),
+  };
+  try {
+    return await Result.tryPromise({
+      try: async () =>
+        await admissionScope.run(nested, async () => {
+          inherited.signal.throwIfAborted();
+          if (
+            execution === "queued-kickoff" &&
+            periodReservation !== "on-acceptance"
+          ) {
+            await nested.reservePeriod();
+          }
+          const value = await run(inherited.signal);
+          inherited.signal.throwIfAborted();
+          return value;
+        }),
+      catch: (error: unknown) => error,
+    });
+  } finally {
+    nested.status = "settled";
+  }
+};
+
+const validateAdmissionReply = (reply: unknown) => {
+  if (reply === 0 || reply === -1) {
+    return Result.err(
+      new ActionAdmissionError({
+        message:
+          reply === -1
+            ? "Action period limit reached"
+            : "Concurrent action limit reached",
+        reason: reply === -1 ? "period_exhausted" : "busy",
+      }),
+    );
+  }
+  if (reply !== 1) {
+    return Result.err(
+      new ActionAdmissionError({
+        message: "Action admission returned an invalid response",
+        reason: "unavailable",
+      }),
+    );
+  }
+
+  return Result.ok(undefined);
+};
+
 /**
  * The disabled branch never opens Valkey or reads admission configuration.
  * Nested admission must be awaited: same-caller work shares the parent's lease
@@ -416,6 +531,7 @@ export const withActionAdmission = async <T>({
   periodIdentity,
   periodPolicy,
   execution,
+  periodReservation,
   redis,
   redisReady = admissionRedis.ready,
   createId = () => Bun.randomUUIDv7(),
@@ -445,19 +561,23 @@ export const withActionAdmission = async <T>({
   const inherited = admissionScope.getStore();
   if (
     scope === "inherit" &&
-    execution === undefined &&
+    execution !== "background-job" &&
     inherited?.status === "active" &&
     inherited.pool === pool &&
     inherited.organizationId === organizationId &&
     inherited.userId === userId
   ) {
-    return await Result.tryPromise({
-      try: async () => {
-        inherited.signal.throwIfAborted();
-        const value = await run(inherited.signal);
-        return value;
-      },
-      catch: (error: unknown) => error,
+    return await runInheritedAdmission({
+      inherited,
+      organizationId,
+      userId,
+      budget,
+      periodIdentity,
+      redis,
+      redisReady,
+      execution,
+      periodReservation,
+      run,
     });
   }
 
@@ -469,10 +589,11 @@ export const withActionAdmission = async <T>({
   const limits = resolvedPolicy.value;
   const keys = admissionKeys({ organizationId, userId, pool });
   const leaseId = createId();
-  const periodArgs = actionPeriodArguments(budget);
+  const initialBudget = periodReservation === "on-acceptance" ? null : budget;
+  const periodArgs = actionPeriodArguments(initialBudget);
   const execute = createAdmissionExecutor({
     keys,
-    budget,
+    budget: initialBudget,
     organizationId,
     periodIdentity,
     redis,
@@ -572,6 +693,16 @@ export const withActionAdmission = async <T>({
     signal: controller.signal,
     status: "active",
     pool,
+    leaseId,
+    reservePeriod: createPeriodReservation({
+      keys,
+      budget,
+      organizationId,
+      periodIdentity,
+      redis,
+      redisReady,
+      leaseId,
+    }),
   };
   try {
     outcome = await Result.tryPromise({

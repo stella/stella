@@ -7,6 +7,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 
 import { ActionAdmissionError, withActionAdmission } from "./action-admission";
 import {
+  admissionRetryDelayMs,
   QUEUED_ACTION_KIND,
   runBackgroundJob,
   runQueuedKickoff,
@@ -151,8 +152,8 @@ describe("queued action admission", () => {
     };
     const planningStarted = Promise.withResolvers<undefined>();
     const finishPlanningAndEnqueue = Promise.withResolvers<undefined>();
-    const admission: typeof withActionAdmission = (options) =>
-      withActionAdmission({
+    const admission: typeof withActionAdmission = async (options) =>
+      await withActionAdmission({
         ...options,
         enabled: true,
         policy: admissionPolicy,
@@ -184,5 +185,93 @@ describe("queued action admission", () => {
     expect(calls.filter((args) => args.at(0)?.includes("ZREM"))).toHaveLength(
       1,
     );
+  });
+  test("denied contenders spread their retries and progress after the owner settles", async () => {
+    let active = 0;
+    let completed = 0;
+    const entered = Promise.withResolvers<undefined>();
+    const finish = Promise.withResolvers<undefined>();
+    const redis = {
+      send: async (_command: string, args: string[]) => {
+        if (args.at(0)?.includes("ZREMRANGEBYSCORE")) {
+          if (active === 1) {
+            return 0;
+          }
+          active += 1;
+          return 1;
+        }
+        if (args.at(0)?.includes("ZREM")) {
+          active -= 1;
+        }
+        return 1;
+      },
+    };
+    const admission: typeof withActionAdmission = async (options) =>
+      await withActionAdmission({
+        ...options,
+        enabled: true,
+        redis,
+        policy: {
+          organizationConcurrency: 1,
+          userConcurrency: 1,
+          leaseMs: 120_000,
+        },
+      });
+    const owner = runBackgroundJob({
+      organizationId,
+      userId,
+      admission,
+      job: { moveToDelayed: async () => undefined },
+      signal: new AbortController().signal,
+      run: async () => {
+        entered.resolve(undefined);
+        await finish.promise;
+      },
+    });
+    await entered.promise;
+    const deferred: { index: number; at: number }[] = [];
+    const contender = async (index: number) =>
+      await runBackgroundJob({
+        organizationId,
+        userId,
+        admission,
+        now: () => 0,
+        random: () => index / 32,
+        job: {
+          attemptsStarted: 1,
+          moveToDelayed: async (at) => {
+            deferred.push({ index, at });
+          },
+        },
+        signal: new AbortController().signal,
+        run: async () => {
+          completed += 1;
+        },
+      });
+    const firstAttempts = await Promise.allSettled(
+      Array.from({ length: 32 }, async (_, index) => await contender(index)),
+    );
+    expect(
+      firstAttempts.every(
+        (result) =>
+          result.status === "rejected" && result.reason instanceof DelayedError,
+      ),
+    ).toBe(true);
+    expect(new Set(deferred.map(({ at }) => at)).size).toBe(32);
+    expect(completed).toBe(0);
+    finish.resolve(undefined);
+    await owner;
+    // Advance the simulated queue to each distinct scheduled retry; no sleeps or hot-loop.
+    for (const { index } of deferred.toSorted(
+      (left, right) => left.at - right.at,
+    )) {
+      await contender(index);
+    }
+    expect(completed).toBe(32);
+    expect(active).toBe(0);
+    expect(admissionRetryDelayMs(1, () => 0)).toBe(1000);
+    expect(admissionRetryDelayMs(1, () => 0.999)).toBeLessThan(10_000);
+    expect(admissionRetryDelayMs(2, () => 0.999)).toBeGreaterThan(10_000);
+    expect(admissionRetryDelayMs(100, () => 0.999)).toBeLessThanOrEqual(60_000);
   });
 });

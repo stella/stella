@@ -182,7 +182,10 @@ export const startAutomatedFlowRun = async (
   }
 
   const runId = createSafeId<"flowRun">();
-  const createAndEnqueue = async (signal?: AbortSignal) => {
+  const createAndEnqueue = async (
+    signal?: AbortSignal,
+    reservePeriod?: () => Promise<void>,
+  ) => {
     const rows = buildFlowRunRows({
       runId,
       workspaceId,
@@ -194,7 +197,12 @@ export const startAutomatedFlowRun = async (
 
     signal?.throwIfAborted();
     const insertResult = await Result.tryPromise({
-      try: async () => await insertWithinCap({ definitionId, rows }),
+      try: async () =>
+        await insertWithinCap({
+          definitionId,
+          rows,
+          ...(reservePeriod && { reservePeriod }),
+        }),
       catch: (cause) => cause,
     });
     if (Result.isError(insertResult)) {
@@ -252,6 +260,7 @@ export const startAutomatedFlowRun = async (
         userId: brandPersistedUserId(createdByUserId),
         actionKind: QUEUED_ACTION_KIND.flow,
         logicalPhaseId: runId,
+        periodReservation: "on-acceptance",
         run: createAndEnqueue,
       }),
     catch: (cause) => cause,

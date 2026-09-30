@@ -5,6 +5,7 @@ import { sleep } from "bun";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
+import { drainFanOut } from "@stll/concurrency";
 import { Temporal } from "@stll/time";
 
 import { jsonField } from "@/api/db/json-utils";
@@ -1392,25 +1393,28 @@ const processEntityJob = async (
     // Process all batches at this level in parallel
     // (same level = independent dependencies)
     // db-await-in-loop: levels run in dependency order; a level must finish before the next starts. Same-level batches process a single entity's properties in parallel, so the fan-out width is bounded by the workspace's configured property count, not tenant row volume
-    await Promise.all(
-      batches.map(
-        async (batch) =>
-          await processOneBatch({
-            workspaceId: branded.workspaceId,
-            organizationId: branded.organizationId,
-            entityId: brandedEntityId,
-            batch,
-            level,
-            scopedDb,
-            safeDb,
-            requestId,
-            signal,
-            serviceTier,
-            userId,
-            forcedPropertyIds,
-          }),
-      ),
-    );
+    const drained = await drainFanOut({
+      items: batches,
+      signal,
+      operation: async (batch, batchSignal) =>
+        await processOneBatch({
+          workspaceId: branded.workspaceId,
+          organizationId: branded.organizationId,
+          entityId: brandedEntityId,
+          batch,
+          level,
+          scopedDb,
+          safeDb,
+          requestId,
+          signal: batchSignal,
+          serviceTier,
+          userId,
+          forcedPropertyIds,
+        }),
+    });
+    if (Result.isError(drained)) {
+      throw drained.error;
+    }
   }
 
   // Final checkpoint — if abort fired between the last batch and
