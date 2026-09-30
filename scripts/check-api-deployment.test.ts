@@ -55,6 +55,27 @@ describe("API deployment health receipt", () => {
     expect(releasePin).toBe(setupPin);
   });
 
+  test("staging checks share their access configuration", async () => {
+    const workflow = await Bun.file(
+      new URL("../.github/workflows/deploy-staging.yml", import.meta.url),
+    ).text();
+    const headerNames = Array.from(
+      workflow.matchAll(/^\s+(?:E2E_)?EDGE_HEADER_NAME: (?<value>.+)$/gmu),
+      (match) => match.groups?.["value"],
+    );
+    const headerValues = Array.from(
+      workflow.matchAll(/^\s+(?:E2E_)?EDGE_HEADER_VALUE: (?<value>.+)$/gmu),
+      (match) => match.groups?.["value"],
+    );
+
+    expect(headerNames.length).toBeGreaterThan(0);
+    expect(headerValues).toHaveLength(headerNames.length);
+    expect(new Set(headerNames)).toEqual(new Set(["x-stella-edge-token"]));
+    expect(new Set(headerValues)).toEqual(
+      new Set([`\${{ secrets.STAGING_VIEWER_ACCESS_TOKEN }}`]),
+    );
+  });
+
   test("ties staging promotion to the current health gate", async () => {
     const workflow = await Bun.file(
       new URL("../.github/workflows/deploy-staging.yml", import.meta.url),
