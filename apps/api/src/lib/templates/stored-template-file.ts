@@ -13,6 +13,7 @@ import { Result } from "better-result";
 import type { SafeDb } from "@/api/db/safe-db";
 import type { StoredFileScanState } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { validateDocxArchive } from "@/api/lib/docx-archive";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { scanErrorForHandler } from "@/api/lib/file-scan/scan-upload";
 import type { scanUpload } from "@/api/lib/file-scan/scan-upload";
@@ -71,12 +72,17 @@ export const readStoredTemplateFile = async ({
         cause,
       }),
   });
-  return read.andThen((scanned) =>
-    Result.mapError(scanned, (error) =>
+  const scanned = read.andThen((result) =>
+    Result.mapError(result, (error) =>
       scanErrorForHandler(
         error,
         "Retry the request; the stored template was not changed.",
       ),
     ),
   );
+  if (Result.isError(scanned)) {
+    return scanned;
+  }
+  const validated = await validateDocxArchive(scanned.value.bytes);
+  return validated.map(() => scanned.value);
 };

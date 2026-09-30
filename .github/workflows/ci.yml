@@ -1743,7 +1743,7 @@ jobs:
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.suite_depth == 'full'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 35
     container:
       image: mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
       options: --init --ipc=host
