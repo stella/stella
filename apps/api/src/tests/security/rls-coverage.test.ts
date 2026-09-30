@@ -778,8 +778,12 @@ describe("policy coverage", () => {
       expect(policy?.command).toBe(command);
       expect(policy?.permissive).toBe(true);
       const expressions = [];
-      if (command !== "a") {expressions.push(policy?.using_expr);}
-      if (command !== "r") {expressions.push(policy?.check_expr);}
+      if (command !== "a") {
+        expressions.push(policy?.using_expr);
+      }
+      if (command !== "r") {
+        expressions.push(policy?.check_expr);
+      }
       for (const expression of expressions) {
         const normalized = expression?.replaceAll('"', "");
         expect(normalized).toContain(SETTING_ORGANIZATION_ID);
@@ -787,7 +791,7 @@ describe("policy coverage", () => {
         expect(normalized).toMatch(/\borganization_id\s*=/u);
         expect(normalized).toContain("EXISTS");
         expect(normalized).toMatch(
-          /m\.organization_id\s*=\s*absences\.organization_id/u,
+          /m\.organization_id\s*=\s*\(?absences\.organization_id\b/u,
         );
         expect(normalized).toMatch(
           /m\.user_id\s*=\s*\(\s*SELECT current_setting\('app\.user_id'/u,
