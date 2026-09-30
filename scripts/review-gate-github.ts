@@ -60,6 +60,7 @@ const CONFIG_PATH = ".github/review-gate.yml";
 // Bounded reads. Past these, the gate reports "unknown", never a count.
 const THREAD_PAGES = 3;
 const DISCOVERY_PAGES = 6;
+const CONTEXT_PAGES = 5;
 // Pull requests one sweep re-evaluates beyond the queued and armed ones.
 const SWEEP_BUDGET = 25;
 const SWEEP_INTERVAL_MS = 10 * 60_000;
@@ -99,17 +100,20 @@ const runGh = (args: readonly string[], input?: string): string => {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+export type RunGh = (args: readonly string[], input?: string) => string;
+
 // A GraphQL response with `errors` is partial: it fails the read even when
 // `data` came back, so a missing field never reads as an empty list.
 const graphql = (
   query: string,
   variables: Record<string, string | number>,
+  gh: RunGh = runGh,
 ): Record<string, unknown> => {
   const args = ["api", "graphql", "-f", `query=${query}`];
   for (const [key, value] of Object.entries(variables)) {
     args.push(typeof value === "number" ? "-F" : "-f", `${key}=${value}`);
   }
-  const parsed: unknown = JSON.parse(runGh(args));
+  const parsed: unknown = JSON.parse(gh(args));
   if (!isRecord(parsed) || parsed["errors"] !== undefined) {
     return fail(`GraphQL errors: ${JSON.stringify(parsed).slice(0, 500)}`);
   }
@@ -182,6 +186,25 @@ query($owner: String!, $name: String!, $oid: GitObjectID!) {
   }
 }`;
 
+const CONTEXTS_FIELDS = `
+  pageInfo { hasNextPage endCursor }
+  nodes {
+    __typename
+    ... on CheckRun { name status conclusion }
+    ... on StatusContext { context state description }
+  }`;
+
+// A busy head carries more checks and statuses than one page holds, and a
+// reviewer's status can be anywhere among them.
+const CONTEXTS_PAGE_QUERY = `
+query($owner: String!, $name: String!, $oid: GitObjectID!, $cursor: String!) {
+  repository(owner: $owner, name: $name) {
+    object(oid: $oid) { ... on Commit {
+      statusCheckRollup { contexts(first: 100, after: $cursor) { ${CONTEXTS_FIELDS} } }
+    } }
+  }
+}`;
+
 const PULL_REQUEST_QUERY = `
 query($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
@@ -200,11 +223,7 @@ query($owner: String!, $name: String!, $number: Int!) {
         nodes { ... on ReadyForReviewEvent { createdAt } }
       }
       commits(last: 1) { nodes { commit {
-        statusCheckRollup { contexts(first: 100) { nodes {
-          __typename
-          ... on CheckRun { name status conclusion }
-          ... on StatusContext { context state description }
-        } } }
+        statusCheckRollup { contexts(first: 100) { ${CONTEXTS_FIELDS} } }
         ${GATE_RUNS_FIELDS}
       } } }
       reviewThreads(first: 100) { ${THREADS_FIELDS} }
@@ -251,7 +270,7 @@ query($owner: String!, $name: String!, $branch: String!, $cursor: String) {
     pullRequests(states: OPEN, baseRefName: $branch, first: 50, after: $cursor) {
       pageInfo { hasNextPage endCursor }
       nodes {
-        number isDraft
+        number isDraft headRefOid
         autoMergeRequest { enabledAt }
         mergeQueueEntry { position }
         commits(last: 1) { nodes { commit { ${GATE_RUNS_FIELDS} } } }
@@ -315,24 +334,41 @@ export type Gateway = {
   dequeue: (id: string) => void;
 };
 
-export const parsePullRequest = (
+// The head's first page of checks and statuses, and the cursor of the next.
+export const firstContexts = (
   pr: unknown,
-  read: Pick<
-    PullRequestRead,
-    "number" | "threads" | "headClockStartedAt" | "readAt"
-  >,
-): PullRequestRead => {
-  const files = field(pr, "files");
-  const fileNodes = list(files, "nodes");
-  const readyEvent = list(pr, "timelineItems", "nodes").at(0);
+): { nodes: readonly unknown[]; after: string | null } => {
   const rollup = field(
     list(pr, "commits", "nodes").at(0),
     "commit",
     "statusCheckRollup",
   );
   // GitHub returns null before a new head has any checks or statuses.
-  // A missing field is a broken read and still fails below.
-  const contexts = rollup === null ? [] : list(rollup, "contexts", "nodes");
+  // A missing field is a broken read and still fails here.
+  if (rollup === null) {
+    return { nodes: [], after: null };
+  }
+  const contexts = field(rollup, "contexts");
+  return {
+    nodes: list(contexts, "nodes"),
+    after:
+      field(contexts, "pageInfo", "hasNextPage") === true
+        ? text(contexts, "pageInfo", "endCursor")
+        : null,
+  };
+};
+
+export const parsePullRequest = (
+  pr: unknown,
+  read: Pick<
+    PullRequestRead,
+    "number" | "threads" | "headClockStartedAt" | "readAt"
+  >,
+  contexts: readonly unknown[] = firstContexts(pr).nodes,
+): PullRequestRead => {
+  const files = field(pr, "files");
+  const fileNodes = list(files, "nodes");
+  const readyEvent = list(pr, "timelineItems", "nodes").at(0);
   return {
     ...read,
     id: text(pr, "id"),
@@ -410,6 +446,7 @@ const parseOpenPullRequest = (node: unknown): OpenPullRequest => {
   const latest = latestRun(parseRuns(commit));
   return {
     number: integer(node, "number"),
+    headSha: text(node, "headRefOid"),
     isDraft: field(node, "isDraft") === true,
     queued: isRecord(field(node, "mergeQueueEntry")),
     armed: isRecord(field(node, "autoMergeRequest")),
@@ -417,11 +454,94 @@ const parseOpenPullRequest = (node: unknown): OpenPullRequest => {
   };
 };
 
-const createGateway = (repo: string, baseBranch: string): Gateway => {
+// The repository one gateway reads, for the readers that page through it.
+type Source = {
+  ask: (
+    query: string,
+    variables: Record<string, string | number>,
+  ) => Record<string, unknown>;
+  owner: string;
+  name: string;
+  baseBranch: string;
+};
+
+const collectContexts = (
+  { ask, owner, name }: Source,
+  sha: string,
+  pr: unknown,
+): readonly unknown[] => {
+  const first = firstContexts(pr);
+  const nodes = [...first.nodes];
+  let after = first.after;
+  for (let read = 1; after !== null; read += 1) {
+    if (read >= CONTEXT_PAGES) {
+      return fail(
+        `${sha.slice(0, 10)} has more than ${CONTEXT_PAGES * 100} checks and statuses`,
+      );
+    }
+    const contexts = field(
+      ask(CONTEXTS_PAGE_QUERY, { owner, name, oid: sha, cursor: after }),
+      "repository",
+      "object",
+      "statusCheckRollup",
+      "contexts",
+    );
+    nodes.push(...list(contexts, "nodes"));
+    after =
+      field(contexts, "pageInfo", "hasNextPage") === true
+        ? text(contexts, "pageInfo", "endCursor")
+        : null;
+  }
+  return nodes;
+};
+
+const discoverOpenPullRequests = ({
+  ask,
+  owner,
+  name,
+  baseBranch,
+}: Source): readonly OpenPullRequest[] => {
+  const found: OpenPullRequest[] = [];
+  let cursor: string | null = null;
+  for (let page = 0; page < DISCOVERY_PAGES; page += 1) {
+    const variables: Record<string, string | number> = {
+      owner,
+      name,
+      branch: baseBranch,
+    };
+    if (cursor !== null) {
+      variables["cursor"] = cursor;
+    }
+    const connection = field(
+      ask(DISCOVERY_QUERY, variables),
+      "repository",
+      "pullRequests",
+    );
+    for (const node of list(connection, "nodes")) {
+      found.push(parseOpenPullRequest(node));
+    }
+    if (field(connection, "pageInfo", "hasNextPage") !== true) {
+      return found;
+    }
+    cursor = text(connection, "pageInfo", "endCursor");
+  }
+  return fail(
+    `More than ${DISCOVERY_PAGES * 50} open pull requests; sweep incomplete`,
+  );
+};
+
+export const createGateway = (
+  repo: string,
+  baseBranch: string,
+  gh: RunGh = runGh,
+): Gateway => {
   const [owner, name] = repo.split("/");
   if (owner === undefined || name === undefined) {
     return fail(`Expected owner/name, got ${repo}`);
   }
+  const ask = (query: string, variables: Record<string, string | number>) =>
+    graphql(query, variables, gh);
+  const source: Source = { ask, owner, name, baseBranch };
 
   const collectThreads = (number: number, firstPage: unknown): Threads => {
     const unresolved: { url: string; path: string | null }[] = [];
@@ -442,7 +562,7 @@ const createGateway = (repo: string, baseBranch: string): Gateway => {
         return { complete: false };
       }
       page = field(
-        graphql(THREADS_PAGE_QUERY, {
+        ask(THREADS_PAGE_QUERY, {
           owner,
           name,
           number,
@@ -457,7 +577,7 @@ const createGateway = (repo: string, baseBranch: string): Gateway => {
 
   const readRuns = (sha: string): readonly PublishedRun[] => {
     const commit = field(
-      graphql(RUNS_QUERY, { owner, name, oid: sha }),
+      ask(RUNS_QUERY, { owner, name, oid: sha }),
       "repository",
       "object",
     );
@@ -468,21 +588,25 @@ const createGateway = (repo: string, baseBranch: string): Gateway => {
     readPullRequest: (number) => {
       const readAt = new Date().toISOString();
       const pr = field(
-        graphql(PULL_REQUEST_QUERY, { owner, name, number }),
+        ask(PULL_REQUEST_QUERY, { owner, name, number }),
         "repository",
         "pullRequest",
       );
       const commit = field(list(pr, "commits", "nodes").at(0), "commit");
-      return parsePullRequest(pr, {
-        number,
-        readAt,
-        threads: collectThreads(number, field(pr, "reviewThreads")),
-        headClockStartedAt: headClockStart(parseRuns(commit), number),
-      });
+      return parsePullRequest(
+        pr,
+        {
+          number,
+          readAt,
+          threads: collectThreads(number, field(pr, "reviewThreads")),
+          headClockStartedAt: headClockStart(parseRuns(commit), number),
+        },
+        collectContexts(source, text(pr, "headRefOid"), pr),
+      );
     },
     revalidate: (number) => {
       const pr = field(
-        graphql(REVALIDATE_QUERY, { owner, name, number }),
+        ask(REVALIDATE_QUERY, { owner, name, number }),
         "repository",
         "pullRequest",
       );
@@ -494,7 +618,7 @@ const createGateway = (repo: string, baseBranch: string): Gateway => {
     },
     readQueue: () => {
       const queue = field(
-        graphql(QUEUE_QUERY, { owner, name, branch: baseBranch }),
+        ask(QUEUE_QUERY, { owner, name, branch: baseBranch }),
         "repository",
         "mergeQueue",
       );
@@ -524,13 +648,13 @@ const createGateway = (repo: string, baseBranch: string): Gateway => {
         ...(conclusion === null ? {} : { conclusion }),
         output: { title: output.title, summary: output.summary },
       };
-      runGh(
+      gh(
         ["api", "-X", "POST", `repos/${repo}/check-runs`, "--input", "-"],
         JSON.stringify(body),
       );
     },
     restampRun: (id, identity) => {
-      runGh(
+      gh(
         [
           "api",
           "-X",
@@ -543,54 +667,28 @@ const createGateway = (repo: string, baseBranch: string): Gateway => {
       );
     },
     readHead: (number) =>
-      runGh([
-        "api",
-        `repos/${repo}/pulls/${number}`,
-        "--jq",
-        ".head.sha",
-      ]).trim(),
+      gh(["api", `repos/${repo}/pulls/${number}`, "--jq", ".head.sha"]).trim(),
     pullRequestsForSha: (sha) => {
       const pulls: unknown = JSON.parse(
-        runGh(["api", `repos/${repo}/commits/${sha}/pulls`]),
+        gh(["api", `repos/${repo}/commits/${sha}/pulls`]),
       );
       if (!Array.isArray(pulls)) {
         return fail("Expected a list of pull requests");
       }
-      return pulls
+      const open = pulls
         .filter((pull) => field(pull, "state") === "open")
         .map((pull) => integer(pull, "number"));
+      // A fork's commit is not this repository's, so GitHub associates it
+      // with no pull request; its head is still found among the open ones.
+      return open.length > 0
+        ? open
+        : discoverOpenPullRequests(source)
+            .filter(({ headSha }) => headSha === sha)
+            .map(({ number }) => number);
     },
-    discoverOpenPullRequests: () => {
-      const found: OpenPullRequest[] = [];
-      let cursor: string | null = null;
-      for (let page = 0; page < DISCOVERY_PAGES; page += 1) {
-        const variables: Record<string, string | number> = {
-          owner,
-          name,
-          branch: baseBranch,
-        };
-        if (cursor !== null) {
-          variables["cursor"] = cursor;
-        }
-        const connection = field(
-          graphql(DISCOVERY_QUERY, variables),
-          "repository",
-          "pullRequests",
-        );
-        for (const node of list(connection, "nodes")) {
-          found.push(parseOpenPullRequest(node));
-        }
-        if (field(connection, "pageInfo", "hasNextPage") !== true) {
-          return found;
-        }
-        cursor = text(connection, "pageInfo", "endCursor");
-      }
-      return fail(
-        `More than ${DISCOVERY_PAGES * 50} open pull requests; sweep incomplete`,
-      );
-    },
+    discoverOpenPullRequests: () => discoverOpenPullRequests(source),
     dequeue: (id) => {
-      graphql(DEQUEUE_MUTATION, { id });
+      ask(DEQUEUE_MUTATION, { id });
     },
   };
 };

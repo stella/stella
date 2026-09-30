@@ -17,6 +17,7 @@ import {
   type RunIdentity,
 } from "./review-gate";
 import {
+  createGateway,
   createRun,
   evaluateGroupTarget,
   evaluatePullRequestTarget,
@@ -25,6 +26,7 @@ import {
   publish,
   type Gateway,
   type PullRequestRead,
+  type RunGh,
 } from "./review-gate-github";
 
 const OPENED = "2026-09-28T10:00:00Z";
@@ -162,7 +164,11 @@ describe("a head's check rollup", () => {
   test("a new head with a null or empty rollup has no checks yet", () => {
     for (const commit of [
       { statusCheckRollup: null },
-      { statusCheckRollup: { contexts: { nodes: [] } } },
+      {
+        statusCheckRollup: {
+          contexts: { pageInfo: { hasNextPage: false }, nodes: [] },
+        },
+      },
     ]) {
       const result = parse(commit);
       expect(result.statuses).toEqual([]);
@@ -179,9 +185,153 @@ describe("a head's check rollup", () => {
       { statusCheckRollup: {} },
       { statusCheckRollup: { contexts: { nodes: null } } },
       { statusCheckRollup: { contexts: { nodes: {} } } },
+      { statusCheckRollup: { contexts: { nodes: [] } } },
     ]) {
       expect(() => parse(commit)).toThrow(/Expected (object|list) at/u);
     }
+  });
+});
+
+describe("reading GitHub", () => {
+  const HEAD = headOf(7);
+  const status = (context: string) => ({
+    __typename: "StatusContext",
+    context,
+    state: "SUCCESS",
+    description: null,
+  });
+  const page = (nodes: readonly unknown[], after: string | null) => ({
+    pageInfo: { hasNextPage: after !== null, endCursor: after },
+    nodes,
+  });
+  const noRuns = { checkSuites: { totalCount: 0, nodes: [] } };
+  const pullRequestNode = (contexts: unknown) => ({
+    id: "PR_7",
+    number: 7,
+    headRefOid: HEAD,
+    baseRefName: "main",
+    isDraft: false,
+    createdAt: OPENED,
+    author: { login: "pr-author" },
+    autoMergeRequest: null,
+    mergeQueueEntry: null,
+    files: { totalCount: 0, nodes: [] },
+    reviews: { nodes: [] },
+    reactions: { nodes: [] },
+    comments: { nodes: [] },
+    timelineItems: { nodes: [] },
+    commits: {
+      nodes: [{ commit: { statusCheckRollup: { contexts }, ...noRuns } }],
+    },
+    reviewThreads: page([], null),
+  });
+  // Answers each gh call by what it asks for, and records the asks.
+  const fakeGh = (answer: (query: string) => unknown) => {
+    const asked: string[] = [];
+    const gh: RunGh = (args) => {
+      const query = args.find((arg) => arg.startsWith("query="));
+      const key = query ?? args.join(" ");
+      asked.push(key);
+      return JSON.stringify(answer(key));
+    };
+    return { gh, asked };
+  };
+
+  test("finds a reviewer's status past the first page of a busy head", () => {
+    const first = Array.from({ length: 100 }, (_, index) =>
+      status(`ci-${index}`),
+    );
+    const { gh, asked } = fakeGh((query) =>
+      query.includes("contexts(first: 100, after: $cursor)")
+        ? {
+            data: {
+              repository: {
+                object: {
+                  statusCheckRollup: {
+                    contexts: page([status("CodeRabbit")], null),
+                  },
+                },
+              },
+            },
+          }
+        : {
+            data: {
+              repository: {
+                pullRequest: pullRequestNode(page(first, "cursor-1")),
+              },
+            },
+          },
+    );
+    const read = createGateway("o/r", "main", gh).readPullRequest(7);
+    expect(read.statuses).toHaveLength(101);
+    expect(read.statuses.at(-1)?.context).toBe("CodeRabbit");
+    expect(asked).toHaveLength(2);
+  });
+
+  test("a head with more checks than the pages it reads fails the read", () => {
+    const { gh } = fakeGh((query) =>
+      query.includes("contexts(first: 100, after: $cursor)")
+        ? {
+            data: {
+              repository: {
+                object: {
+                  statusCheckRollup: {
+                    contexts: page([status("more")], "cursor-n"),
+                  },
+                },
+              },
+            },
+          }
+        : {
+            data: {
+              repository: {
+                pullRequest: pullRequestNode(page([], "cursor-1")),
+              },
+            },
+          },
+    );
+    expect(() => createGateway("o/r", "main", gh).readPullRequest(7)).toThrow(
+      /more than 500 checks and statuses/u,
+    );
+  });
+
+  test("finds a fork's pull request by its head when GitHub associates none", () => {
+    const { gh, asked } = fakeGh((query) =>
+      query.includes("/pulls")
+        ? []
+        : {
+            data: {
+              repository: {
+                pullRequests: page(
+                  [8, 7].map((number) => ({
+                    number,
+                    isDraft: false,
+                    headRefOid: headOf(number),
+                    autoMergeRequest: null,
+                    mergeQueueEntry: null,
+                    commits: { nodes: [{ commit: noRuns }] },
+                  })),
+                  null,
+                ),
+              },
+            },
+          },
+    );
+    expect(createGateway("o/r", "main", gh).pullRequestsForSha(HEAD)).toEqual([
+      7,
+    ]);
+    expect(asked).toHaveLength(2);
+  });
+
+  test("an associated open pull request needs no discovery", () => {
+    const { gh, asked } = fakeGh(() => [
+      { number: 7, state: "open" },
+      { number: 3, state: "closed" },
+    ]);
+    expect(createGateway("o/r", "main", gh).pullRequestsForSha(HEAD)).toEqual([
+      7,
+    ]);
+    expect(asked).toHaveLength(1);
   });
 });
 

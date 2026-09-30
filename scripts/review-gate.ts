@@ -1036,6 +1036,7 @@ export const outputOf = (run: PublishedRun): GateOutput | null => {
 
 export type OpenPullRequest = {
   number: number;
+  headSha: string;
   isDraft: boolean;
   queued: boolean;
   armed: boolean;
