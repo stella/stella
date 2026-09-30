@@ -122,6 +122,13 @@ const QuickEntryDialog = () => {
     }
   };
 
+  const saveAndClose = async (values: ManualTimeEntryValues) =>
+    await saveTime(values, "close");
+  const saveAndNew = async (values: ManualTimeEntryValues) =>
+    await saveTime(values, "new");
+  const saveAndAddExpense = async (values: ManualTimeEntryValues) =>
+    await saveTime(values, "expense");
+
   const saveExpense = async (values: ExpenseFormValues) => {
     if (step.type !== "expense" || submitting.current) {
       return;
@@ -205,13 +212,11 @@ const QuickEntryDialog = () => {
                   narrativeRequired={settings?.timeNarrativeRequired ?? false}
                   pending={pending}
                   onCancel={closeDialog}
-                  onSubmit={async (values) => saveTime(values, "close")}
-                  onSaveAndNew={async (values) => saveTime(values, "new")}
+                  onSubmit={saveAndClose}
+                  onSaveAndNew={saveAndNew}
                   {...(canCreateExpense
                     ? {
-                        onSaveAndAddExpense: async (
-                          values: ManualTimeEntryValues,
-                        ) => saveTime(values, "expense"),
+                        onSaveAndAddExpense: saveAndAddExpense,
                       }
                     : {})}
                 />
