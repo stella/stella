@@ -643,6 +643,38 @@ test("a withdrawn attestation makes the group unready until attested again", asy
   });
 });
 
+test("a withdrawal records the contract the row was attested against", async () => {
+  const earlierDigest = "0".repeat(64);
+  await inTx(async (tx) => await bindCorpusIndexGroupEnrollmentTx(tx, USA));
+  await inTx(
+    async (tx) => await attestCorpusIndexGroupEnrollmentTx(tx, ATTEST_USA),
+  );
+  // Attested under an earlier contract; the declared contract moved since.
+  await db
+    .update(corpusIndexGroupEnrollments)
+    .set({ effectiveDigest: earlierDigest })
+    .where(eq(corpusIndexGroupEnrollments.indexGroup, "usa"));
+  expect(await readiness()).toEqual({
+    type: "unready",
+    reason: "contract_mismatch",
+  });
+
+  expect(
+    await inTx(
+      async (tx) =>
+        await withdrawCorpusIndexGroupEnrollmentTx(tx, {
+          ...USA,
+          ...WITHDRAWN_BY,
+        }),
+    ),
+  ).toBe(true);
+  expect(
+    await db
+      .select({ effectiveDigest: corpusIndexGroupWithdrawals.effectiveDigest })
+      .from(corpusIndexGroupWithdrawals),
+  ).toEqual([{ effectiveDigest: earlierDigest }]);
+});
+
 test("a generation's enrollments leave with its registration", async () => {
   await inTx(async (tx) => await bindCorpusIndexGroupEnrollmentTx(tx, USA));
   await db.delete(corpusIndexGenerations).where(sql`true`);

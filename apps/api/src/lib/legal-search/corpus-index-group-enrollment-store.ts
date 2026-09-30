@@ -310,15 +310,20 @@ export const withdrawCorpusIndexGroupEnrollmentTx = async (
         eq(corpusIndexGroupEnrollments.provisioningStatus, "attested"),
       ),
     )
-    .returning({ indexGroup: corpusIndexGroupEnrollments.indexGroup });
-  if (withdrawn.length !== 1) {
+    .returning({
+      effectiveDigest: corpusIndexGroupEnrollments.effectiveDigest,
+    });
+  const [row] = withdrawn;
+  if (withdrawn.length !== 1 || row === undefined) {
     return false;
   }
+  // The trail names the contract the row was attested against, which differs
+  // from the declared one when the declaration moved after the attestation.
   await tx.insert(corpusIndexGroupWithdrawals).values({
     family: group.manifest.family,
     generation: group.manifest.generation,
     indexGroup: group.indexGroup,
-    effectiveDigest: group.effectiveDigest,
+    effectiveDigest: row.effectiveDigest,
     actor,
     reason: statedReason.slice(0, WITHDRAWAL_REASON_LIMIT),
   });
