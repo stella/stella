@@ -237,7 +237,7 @@ test(
       return value;
     };
     const now = futureNow();
-    await expect(
+    expect(
       drainSanctionsContactMarks({
         db: abortAfterClaim,
         organizationId: orgId,
@@ -309,7 +309,7 @@ test(
     await db
       .delete(sanctionsContactMarks)
       .where(eq(sanctionsContactMarks.contactId, contact.id));
-    await expect(
+    expect(
       scopedDb(async (tx) => {
         await requestSanctionsMonitoringRefresh(tx, {
           organizationId: orgId,
@@ -332,7 +332,7 @@ test(
       await requestSanctionsMonitoringRefresh(tx, { organizationId: orgId });
     });
     expect((await markFor(contact.id))?.generation).toBe(1n);
-    await expect(
+    expect(
       scopedDb(
         async (tx) =>
           await requestSanctionsMonitoringRefresh(tx, {
@@ -463,9 +463,7 @@ test(
     let newerEdition: typeof nextEdition | undefined;
     const activateAfterClaim: ScopedDb = async (run) => {
       const value = await scopedDb(run);
-      if (newerEdition === undefined) {
-        newerEdition = await emptyEdition();
-      }
+      newerEdition ??= await emptyEdition();
       return value;
     };
     expect(
