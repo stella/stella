@@ -331,10 +331,8 @@ export const parsePullRequest = (
     "statusCheckRollup",
   );
   // GitHub returns null before a new head has any checks or statuses.
-  const contexts =
-    rollup === null || rollup === undefined
-      ? []
-      : list(rollup, "contexts", "nodes");
+  // A missing field is a broken read and still fails below.
+  const contexts = rollup === null ? [] : list(rollup, "contexts", "nodes");
   return {
     ...read,
     id: text(pr, "id"),

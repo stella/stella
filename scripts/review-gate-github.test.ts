@@ -159,10 +159,9 @@ describe("a head's check rollup", () => {
       },
     );
 
-  test("a new head with a null, missing, or empty rollup has no checks yet", () => {
+  test("a new head with a null or empty rollup has no checks yet", () => {
     for (const commit of [
       { statusCheckRollup: null },
-      {},
       { statusCheckRollup: { contexts: { nodes: [] } } },
     ]) {
       const result = parse(commit);
@@ -172,9 +171,10 @@ describe("a head's check rollup", () => {
     }
   });
 
-  test("malformed commits and non-null rollups still fail the read", () => {
+  test("malformed commits and missing or non-null rollups still fail the read", () => {
     for (const commit of [
       null,
+      {},
       { statusCheckRollup: false },
       { statusCheckRollup: {} },
       { statusCheckRollup: { contexts: { nodes: null } } },
