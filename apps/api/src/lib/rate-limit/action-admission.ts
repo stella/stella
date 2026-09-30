@@ -359,8 +359,12 @@ const validateAdmissionReply = (
 
 type ObservedAdmissionRunOptions<T> = Pick<
   ActionAdmissionOptions,
-  "organizationId" | "userId" | "periodIdentity" | "costRecorder"
-> & { run: (signal: AbortSignal) => Promise<T> };
+  "organizationId" | "userId"
+> & {
+  periodIdentity: ActionAdmissionOptions["periodIdentity"];
+  costRecorder: ActionAdmissionOptions["costRecorder"];
+  run: (signal: AbortSignal) => Promise<T>;
+};
 
 const createObservedAdmissionRun = <T>({
   organizationId,
@@ -414,13 +418,6 @@ export const withActionAdmission = async <T>({
   timing = defaultTiming,
   costRecorder,
 }: ActionAdmissionOptions<T>): Promise<Result<T, unknown>> => {
-  if (!enabled) {
-    return await Result.tryPromise({
-      try: async () => await run(new AbortController().signal),
-      catch: (error: unknown) => error,
-    });
-  }
-
   const observedRun = createObservedAdmissionRun({
     organizationId,
     userId,
@@ -428,6 +425,12 @@ export const withActionAdmission = async <T>({
     costRecorder,
     run,
   });
+  if (!enabled) {
+    return await Result.tryPromise({
+      try: async () => await observedRun(new AbortController().signal),
+      catch: (error: unknown) => error,
+    });
+  }
 
   const resolvedBudget = resolveActionPeriodBudget({
     organizationId,

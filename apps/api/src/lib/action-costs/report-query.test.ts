@@ -13,8 +13,10 @@ test("operator reports reject invalid and unbounded time ranges", () => {
     new Date("2021-05-01"),
     new Date("invalid"),
   ]) {
-    expect(() => actionCostReportQuery({ organizationId, start, end })).toThrow(
-      "report period is invalid",
-    );
+    const query = actionCostReportQuery({ organizationId, start, end });
+    expect(query.isErr()).toBe(true);
+    if (query.isErr()) {
+      expect(query.error.message).toContain("report period is invalid");
+    }
   }
 });

@@ -125,10 +125,31 @@ test("tenant role cannot read or write operator observations and schema indexes 
         [config.name],
       );
       expect(actual.rows.map((row) => row.indexname).toSorted()).toEqual(
-        config.indexes.map((index) => index.config.name).toSorted(),
+        config.indexes
+          .map((index) => {
+            const name = index.config.name;
+            if (name === undefined) {
+              throw new TypeError("Fixture indexes must have explicit names");
+            }
+            return name;
+          })
+          .toSorted(),
       );
     }
     await apply(db, [admitted, call]);
+    await db.exec(`
+      create role fixture_observation_owner;
+      alter table action_cost_records owner to fixture_observation_owner;
+      alter table action_cost_calls owner to fixture_observation_owner;
+      set role fixture_observation_owner;
+    `);
+    expect(
+      (await db.query("select * from action_cost_records")).rows,
+    ).toHaveLength(1);
+    expect(
+      (await db.query("select * from action_cost_calls")).rows,
+    ).toHaveLength(1);
+    await db.exec("reset role;");
     await db.exec(
       "grant select, insert on action_cost_records, action_cost_calls to stella; set role stella;",
     );
@@ -207,7 +228,7 @@ test("report separates unknown and parentless calls and model estimates without 
         organizationId,
         start: new Date("2021-03-04"),
         end: new Date("2021-03-05"),
-      }),
+      }).unwrap(),
     );
     const report = await db.query(query.sql, query.params);
     expect(report.rows).toEqual([

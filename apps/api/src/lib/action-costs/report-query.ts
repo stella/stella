@@ -1,4 +1,4 @@
-import { TaggedError } from "better-result";
+import { Result, TaggedError } from "better-result";
 import { sql } from "drizzle-orm";
 
 import { DAY_IN_MS } from "@stll/time";
@@ -30,11 +30,13 @@ export const actionCostReportQuery = ({
     periodMs <= 0 ||
     periodMs > MAX_REPORT_PERIOD_MS
   ) {
-    throw new ActionCostReportError({
-      message: "Action cost report period is invalid",
-    });
+    return Result.err(
+      new ActionCostReportError({
+        message: "Action cost report period is invalid",
+      }),
+    );
   }
-  return sql`
+  return Result.ok(sql`
     with records as (
       select * from action_cost_records
       where organization_id = ${organizationId} and admitted_at >= ${start}::timestamptz and admitted_at < ${end}::timestamptz
@@ -88,5 +90,5 @@ export const actionCostReportQuery = ({
     left join models m using (action_kind, logical_phase_id)
     group by i.action_kind order by i.action_kind
     limit ${MAX_ACTION_COST_REPORT_KINDS + 1}
-  `;
+  `);
 };

@@ -41,6 +41,12 @@ export const actionCostRecords = p.pgTable(
       "action_cost_records_time_order",
       sql`settled_at IS NULL OR settled_at >= admitted_at`,
     ),
+    p.pgPolicy("action_cost_records_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.action_cost_records'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.action_cost_records'::regclass)`,
+    }),
     ...denyStellaAccessPolicies(),
   ],
 );
@@ -77,6 +83,12 @@ export const actionCostCalls = p.pgTable(
       "action_cost_calls_measured_nonneg",
       sql`measured_micro_units IS NULL OR measured_micro_units >= 0`,
     ),
+    p.pgPolicy("action_cost_calls_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.action_cost_calls'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.action_cost_calls'::regclass)`,
+    }),
     ...denyStellaAccessPolicies(),
   ],
 );

@@ -6,24 +6,56 @@ import {
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 
 export const SWEEP_ACTION_COSTS_TASK = "actions.sweepCosts" as const;
-export const sweepActionCostRecords: SchedulerTask = async ({ db, signal }) => {
+const MAX_RETENTION_BATCHES_PER_RUN = 16;
+
+type DrainActionCostsOptions = {
+  signal: AbortSignal;
+  sweep: () => ReturnType<typeof sweepActionCosts>;
+  scheduleContinuation: (nextRunAt: Date) => void;
+};
+
+export const drainActionCosts = async ({
+  signal,
+  sweep,
+  scheduleContinuation,
+}: DrainActionCostsOptions) => {
+  for (let batch = 0; batch < MAX_RETENTION_BATCHES_PER_RUN; batch += 1) {
+    if (signal.aborted) {
+      return;
+    }
+    const swept = await sweep();
+    if (
+      swept.callsDeleted < ACTION_COST_RETENTION_BATCH_SIZE &&
+      swept.recordsDeleted < ACTION_COST_RETENTION_BATCH_SIZE
+    ) {
+      return;
+    }
+  }
+  if (!signal.aborted) {
+    scheduleContinuation(new Date());
+  }
+};
+
+export const sweepActionCostRecords: SchedulerTask = async ({
+  db,
+  signal,
+  scheduleContinuation,
+}) => {
   if (
     !env.FEATURE_ACTION_COST_RECORDS ||
     env.ACTION_COST_RETENTION_DAYS === undefined
   ) {
     return;
   }
-  for (let batch = 0; batch < 16 && !signal.aborted; batch += 1) {
-    const swept = await sweepActionCosts({
-      db,
-      retentionDays: env.ACTION_COST_RETENTION_DAYS,
-      now: new Date(),
-    });
-    if (
-      swept.callsDeleted < ACTION_COST_RETENTION_BATCH_SIZE &&
-      swept.recordsDeleted < ACTION_COST_RETENTION_BATCH_SIZE
-    ) {
-      break;
-    }
-  }
+  const retentionDays = env.ACTION_COST_RETENTION_DAYS;
+  await drainActionCosts({
+    signal,
+    scheduleContinuation,
+    sweep: async () =>
+      await sweepActionCosts({
+        db,
+        retentionDays,
+        now: new Date(),
+      }),
+  });
 };

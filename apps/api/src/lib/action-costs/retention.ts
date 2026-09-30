@@ -7,7 +7,7 @@ import type { SchedulerDb } from "@/api/lib/scheduler/types";
 export const ACTION_COST_RETENTION_BATCH_SIZE = 128;
 
 export const actionCostRetentionQueries = (cutoff: Date) => ({
-  // Each pass has a fixed work envelope; scheduler ticks drain the remainder.
+  // Each pass has a fixed work envelope; durable continuations drain the remainder.
   calls: sql`
     delete from action_cost_calls where ctid in (
       select ctid from action_cost_calls where occurred_at < ${cutoff}::timestamptz

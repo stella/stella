@@ -33,45 +33,54 @@ const admissionOptions = {
   redis: { send: async () => 1 },
 };
 
-for (const actionKind of ["fixture_http", "fixture_chat", "fixture_mcp"]) {
-  test(`${actionKind} admission captures one logical identity through settlement`, async () => {
-    const observations: ActionCostObservation[] = [];
-    const periodIdentity = { actionKind, logicalPhaseId: "fixture-phase" };
-    const outcome = await withActionAdmission({
-      ...admissionOptions,
-      periodIdentity,
-      costRecorder: recorderFor(observations),
-      run: async () => {
-        expect(currentActionCostIdentity(organizationId)).toEqual({
-          organizationId,
-          ...periodIdentity,
-        });
-        expect(
-          currentActionCostIdentity(toSafeId<"organization">("other-org")),
-        ).toBeUndefined();
-        recordExternalActionCall("fixture_provider");
-        return "done";
-      },
+for (const enabled of [true, false]) {
+  for (const actionKind of ["fixture_http", "fixture_chat", "fixture_mcp"]) {
+    test(`${actionKind} captures one identity with admission enabled=${enabled}`, async () => {
+      const observations: ActionCostObservation[] = [];
+      const periodIdentity = { actionKind, logicalPhaseId: "fixture-phase" };
+      const outcome = await withActionAdmission({
+        ...admissionOptions,
+        enabled,
+        redis: {
+          send: async () => {
+            expect(enabled).toBe(true);
+            return 1;
+          },
+        },
+        periodIdentity,
+        costRecorder: recorderFor(observations),
+        run: async () => {
+          expect(currentActionCostIdentity(organizationId)).toEqual({
+            organizationId,
+            ...periodIdentity,
+          });
+          expect(
+            currentActionCostIdentity(toSafeId<"organization">("other-org")),
+          ).toBeUndefined();
+          recordExternalActionCall("fixture_provider");
+          return "done";
+        },
+      });
+      expect(Result.isOk(outcome)).toBe(true);
+      expect(observations.map((row) => row.type)).toEqual([
+        "action",
+        "call",
+        "action",
+      ]);
+      const first = observations.at(0);
+      const last = observations.at(-1);
+      expect(first?.record).toMatchObject({
+        ...periodIdentity,
+        settledAt: null,
+        estimatedMicroUnits: 17,
+      });
+      expect(last?.record).toMatchObject({
+        ...periodIdentity,
+        settledAt: expect.any(Date),
+      });
+      expect(currentActionCostIdentity(organizationId)).toBeUndefined();
     });
-    expect(Result.isOk(outcome)).toBe(true);
-    expect(observations.map((row) => row.type)).toEqual([
-      "action",
-      "call",
-      "action",
-    ]);
-    const first = observations.at(0);
-    const last = observations.at(-1);
-    expect(first?.record).toMatchObject({
-      ...periodIdentity,
-      settledAt: null,
-      estimatedMicroUnits: 17,
-    });
-    expect(last?.record).toMatchObject({
-      ...periodIdentity,
-      settledAt: expect.any(Date),
-    });
-    expect(currentActionCostIdentity(organizationId)).toBeUndefined();
-  });
+  }
 }
 
 test("refused actions produce no observations and disabled recording produces no writes", async () => {

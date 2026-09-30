@@ -2,7 +2,7 @@ SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 
 CREATE TABLE "action_cost_records" (
-  "organization_id" text NOT NULL,
+  "organization_id" varchar(128) NOT NULL,
   "action_kind" text NOT NULL,
   "logical_phase_id" text NOT NULL,
   "user_id" text,
@@ -18,10 +18,15 @@ CREATE TABLE "action_cost_records" (
 CREATE INDEX "action_cost_records_org_period_kind_idx" ON "action_cost_records" ("organization_id", "admitted_at", "action_kind");--> statement-breakpoint
 CREATE INDEX "action_cost_records_retention_idx" ON "action_cost_records" ("admitted_at");--> statement-breakpoint
 ALTER TABLE "action_cost_records" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "action_cost_records" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
+REVOKE ALL PRIVILEGES ON TABLE "action_cost_records" FROM stella;--> statement-breakpoint
+CREATE POLICY "action_cost_records_owner_access" ON "action_cost_records" FOR ALL TO public
+  USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.action_cost_records'::regclass))
+  WITH CHECK (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.action_cost_records'::regclass));--> statement-breakpoint
 CREATE POLICY "auth_no_stella_access" ON "action_cost_records" FOR ALL TO stella USING (false) WITH CHECK (false);--> statement-breakpoint
 
 CREATE TABLE "action_cost_calls" (
-  "organization_id" text NOT NULL,
+  "organization_id" varchar(128) NOT NULL,
   "action_kind" text NOT NULL,
   "logical_phase_id" text NOT NULL,
   "call_id" text NOT NULL,
@@ -35,6 +40,11 @@ CREATE TABLE "action_cost_calls" (
 CREATE INDEX "action_cost_calls_org_period_kind_idx" ON "action_cost_calls" ("organization_id", "occurred_at", "action_kind");--> statement-breakpoint
 CREATE INDEX "action_cost_calls_retention_idx" ON "action_cost_calls" ("occurred_at");--> statement-breakpoint
 ALTER TABLE "action_cost_calls" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "action_cost_calls" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
+REVOKE ALL PRIVILEGES ON TABLE "action_cost_calls" FROM stella;--> statement-breakpoint
+CREATE POLICY "action_cost_calls_owner_access" ON "action_cost_calls" FOR ALL TO public
+  USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.action_cost_calls'::regclass))
+  WITH CHECK (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.action_cost_calls'::regclass));--> statement-breakpoint
 CREATE POLICY "auth_no_stella_access" ON "action_cost_calls" FOR ALL TO stella USING (false) WITH CHECK (false);--> statement-breakpoint
 
 ALTER TABLE "usage_events" ADD COLUMN "action_kind" text;--> statement-breakpoint

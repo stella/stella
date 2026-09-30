@@ -12,13 +12,16 @@ if (!organizationId || !start || !end) {
   );
   process.exit(1);
 }
-const rows = await rootDb.execute(
-  actionCostReportQuery({
-    organizationId: brandPersistedOrganizationId(organizationId),
-    start: new Date(start),
-    end: new Date(end),
-  }),
-);
+const query = actionCostReportQuery({
+  organizationId: brandPersistedOrganizationId(organizationId),
+  start: new Date(start),
+  end: new Date(end),
+});
+if (query.isErr()) {
+  process.stderr.write(`${query.error.message}\n`);
+  process.exit(1);
+}
+const rows = await rootDb.execute(query.value);
 if (rows.length > MAX_ACTION_COST_REPORT_KINDS) {
   process.stderr.write("Too many action kinds; narrow the report period.\n");
   process.exit(1);
