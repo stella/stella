@@ -2272,7 +2272,8 @@
     "compareUnsupportedReasons": {
       "missingInBase": "A dokumentum rész csak a célban létezik",
       "missingInTarget": "A dokumentum rész csak az alapban létezik",
-      "notEditable": "A dokumentum rész nem szerkeszthető"
+      "notEditable": "A dokumentum rész nem szerkeszthető",
+      "unsupportedContent": "Ez a verzió olyan tartalmat tartalmaz, amely egyelőre nem hasonlítható össze."
     },
     "compareUnverified": "Ellenőrizetlen összehasonlítás",
     "compareVerificationFailures": "{count, plural, one {Egy oda-vissza ellenőrzés sikertelen volt. Ellenőrizze az összehasonlítást, mielőtt támaszkodik rá.} other {# oda-vissza ellenőrzés sikertelen volt. Ellenőrizze az összehasonlítást, mielőtt támaszkodik rá.}}",

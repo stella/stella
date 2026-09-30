@@ -187,7 +187,9 @@ const cellParagraphsOf = (content: readonly BlockContent[]): FolioParagraph[] =>
     if (item.type === "paragraph") {
       return [item];
     }
-    return item.type === "blockSdt" ? cellParagraphsOf(item.content) : [];
+    return item.type === "blockSdt" || item.type === "blockCustomXml"
+      ? cellParagraphsOf(item.content)
+      : [];
   });
 
 const tableOf = (table: FolioTable): DocTable => ({
@@ -217,6 +219,7 @@ const itemsOf = (content: readonly BlockContent[]): DocItem[] =>
       case "table":
         return [{ type: "table", table: tableOf(block) }];
       case "blockSdt":
+      case "blockCustomXml":
         // A content control is a wrapper; its children are the document's.
         return itemsOf(block.content);
       // No line of the decision: a preserved block is opaque markup folio does

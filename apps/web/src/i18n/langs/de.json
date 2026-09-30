@@ -2272,7 +2272,8 @@
     "compareUnsupportedReasons": {
       "missingInBase": "Dokumentteil existiert nur im Ziel",
       "missingInTarget": "Dokumentteil existiert nur in der Basis",
-      "notEditable": "Der Dokumentteil kann nicht bearbeitet werden"
+      "notEditable": "Der Dokumentteil kann nicht bearbeitet werden",
+      "unsupportedContent": "Diese Version enthält Inhalte, die noch nicht verglichen werden können."
     },
     "compareUnverified": "Nicht verifizierter Vergleich",
     "compareVerificationFailures": "{count, plural, one {Eine Round-Trip-Prüfung ist fehlgeschlagen. Prüfen Sie diesen Vergleich, bevor Sie sich darauf verlassen.} other {# Round-Trip-Prüfungen sind fehlgeschlagen. Prüfen Sie diesen Vergleich, bevor Sie sich darauf verlassen.}}",

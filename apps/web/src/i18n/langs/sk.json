@@ -2272,7 +2272,8 @@
     "compareUnsupportedReasons": {
       "missingInBase": "Časť dokumentu existuje iba v cieli",
       "missingInTarget": "Časť dokumentu existuje iba v základni",
-      "notEditable": "Časť dokumentu nie je možné upravovať"
+      "notEditable": "Časť dokumentu nie je možné upravovať",
+      "unsupportedContent": "Táto verzia obsahuje obsah, ktorý zatiaľ nemožno porovnať."
     },
     "compareUnverified": "Neoverené porovnanie",
     "compareVerificationFailures": "{count, plural, one {Jedna obojsmerná kontrola zlyhala. Skontrolujte porovnanie skôr, ako sa naň spoľahnete.} few {# obojsmerné kontroly zlyhali. Skontrolujte porovnanie skôr, ako sa naň spoľahnete.} other {# obojsmerných kontrol zlyhalo. Skontrolujte porovnanie skôr, ako sa naň spoľahnete.}}",

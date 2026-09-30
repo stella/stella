@@ -2272,7 +2272,8 @@
     "compareUnsupportedReasons": {
       "missingInBase": "A parte do documento existe apenas no destino",
       "missingInTarget": "A parte do documento existe apenas na base",
-      "notEditable": "Parte do documento não é editável"
+      "notEditable": "Parte do documento não é editável",
+      "unsupportedContent": "Esta versão contém conteúdo que ainda não pode ser comparado."
     },
     "compareUnverified": "Comparação não verificada",
     "compareVerificationFailures": "{count, plural, one {Uma verificação de ida e volta falhou. Revise esta comparação antes de confiar nela.} other {# verificações de ida e volta falharam. Revise esta comparação antes de confiar nela.}}",

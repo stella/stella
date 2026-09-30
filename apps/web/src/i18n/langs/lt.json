@@ -2272,7 +2272,8 @@
     "compareUnsupportedReasons": {
       "missingInBase": "Dokumento dalis egzistuoja tik taikinyje",
       "missingInTarget": "Dokumento dalis egzistuoja tik bazėje",
-      "notEditable": "Dokumento dalis neredaguojama"
+      "notEditable": "Dokumento dalis neredaguojama",
+      "unsupportedContent": "Šioje versijoje yra turinio, kurio dar negalima palyginti."
     },
     "compareUnverified": "Nepatvirtintas palyginimas",
     "compareVerificationFailures": "{count, plural, one {Vienas abipusis patikrinimas nepavyko. Prieš pasikliaudami rezultatu, peržiūrėkite palyginimą.} few {Nepavyko # abipusiai patikrinimai. Prieš pasikliaudami rezultatu, peržiūrėkite palyginimą.} other {Nepavyko # abipusių patikrinimų. Prieš pasikliaudami rezultatu, peržiūrėkite palyginimą.}}",

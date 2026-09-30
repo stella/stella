@@ -2272,7 +2272,8 @@
     "compareUnsupportedReasons": {
       "missingInBase": "Dokumenta daļa pastāv tikai mērķī",
       "missingInTarget": "Dokumenta daļa pastāv tikai bāzē",
-      "notEditable": "Dokumenta daļa nav rediģējama"
+      "notEditable": "Dokumenta daļa nav rediģējama",
+      "unsupportedContent": "Šajā versijā ir saturs, ko pagaidām nevar salīdzināt."
     },
     "compareUnverified": "Nepārbaudīts salīdzinājums",
     "compareVerificationFailures": "{count, plural, zero {Neviena divvirzienu pārbaude neizdevās.} one {Viena divvirzienu pārbaude neizdevās. Pārskatiet salīdzinājumu, pirms uz to paļaujaties.} other {# divvirzienu pārbaudes neizdevās. Pārskatiet salīdzinājumu, pirms uz to paļaujaties.}}",
