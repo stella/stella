@@ -1,4 +1,5 @@
 -- requires: 20260429152450_entity-version-ai-summaries
+-- requires: 20260902090000_case_law_court_weight_seed
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 
