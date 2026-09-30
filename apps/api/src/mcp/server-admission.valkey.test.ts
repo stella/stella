@@ -1,5 +1,5 @@
 import type { CallToolResult } from "@modelcontextprotocol/server";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { Temporal } from "@stll/time";
@@ -11,7 +11,7 @@ import { resolveActionPeriodBudget } from "@/api/lib/rate-limit/action-period-bu
 import { createRedisClient } from "@/api/lib/redis-client";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { createMcpHttpRequestHandler } from "@/api/mcp/server-core";
-import type { McpToolDefinition } from "@/api/mcp/tool-types";
+import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
 import { asTestRaw, readTestJson } from "@/api/tests/helpers/test-tool-set";
 
 const runValkeyTests = process.env["STELLA_RUN_VALKEY_TESTS"] === "true";
@@ -38,20 +38,12 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
       const client = createRedisClient();
       const errors: unknown[] = [];
       let dispatches = 0;
-      const tool = {
-        access: "read",
-        scope: "stella:read",
-        name: "list_matters",
-        annotations: {
-          readOnlyHint: true,
-          destructiveHint: false,
-          idempotentHint: true,
-          openWorldHint: false,
-        },
-        anonymized: { exposure: "passthrough" },
-        description: "List matters",
-        inputSchema: { type: "object", properties: {} },
-      } satisfies McpToolDefinition;
+      const tool = listStaticMcpToolDefinitions().find(
+        ({ name }) => name === "list_matters",
+      );
+      if (!tool) {
+        panic("Missing list_matters tool definition");
+      }
       const handleRequest = createMcpHttpRequestHandler({
         authenticateMcpRequest: async () =>
           Result.ok({ organizationId, userId, scopes: ["stella:read"] }),
