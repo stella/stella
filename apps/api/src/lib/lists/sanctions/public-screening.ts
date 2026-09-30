@@ -5,6 +5,7 @@ import { DEFAULT_CUTOFF } from "@stll/sanctions";
 import {
   SANCTIONS_MATCHER_CONFIG,
   sharedSanctionsMatcherPool,
+  isSanctionsMatcherCancelled,
 } from "./matcher-pool";
 import { loadEditionEntries } from "./screening-index";
 import {
@@ -23,7 +24,7 @@ export const createPublicSanctionsScreening = ({
   pool = sharedSanctionsMatcherPool,
   loadEntries = loadEditionEntries,
 }: PublicScreeningOptions = {}): typeof screenSanctionsSubject => {
-  let warming: Promise<unknown> | null = null;
+  const warming: { pending: Promise<unknown> | null } = { pending: null };
   const coldLoads = new Map<string, ReturnType<typeof loadEditionEntries>>();
   const execute = async (
     props: ScreenSanctionsSubjectProps,
@@ -34,7 +35,7 @@ export const createPublicSanctionsScreening = ({
         await screenSanctionsSubject({
           ...props,
           matcher: async ({ db, source, edition, query }) => {
-            if (session.signal.aborted) {
+            if (isSanctionsMatcherCancelled(session.signal)) {
               return null;
             }
             let entries = null;
@@ -57,7 +58,7 @@ export const createPublicSanctionsScreening = ({
               entries = await pending;
             }
             if (
-              session.signal.aborted ||
+              isSanctionsMatcherCancelled(session.signal) ||
               (entries !== null && entries.length !== edition.entryCount)
             ) {
               return null;
@@ -89,10 +90,10 @@ export const createPublicSanctionsScreening = ({
   };
   return async (props) => {
     const result = await execute(props);
-    if (result === null && warming === null) {
+    if (result === null && warming.pending === null) {
       // A large cold edition can exceed the request deadline. Rebuild without
       // identity input in one bounded background lease so it can become usable.
-      warming = execute(
+      warming.pending = execute(
         {
           db: props.db,
           subject: {
@@ -106,20 +107,21 @@ export const createPublicSanctionsScreening = ({
         {
           deadlineMs: SANCTIONS_MATCHER_CONFIG.warmupDeadlineMs,
           onSettled: () => {
-            warming = null;
+            warming.pending = null;
           },
         },
       );
     }
-    return result === null
-      ? Result.ok(
-          unavailableSanctionsScreening({
-            reason: "load-failed",
-            practiceJurisdictions: props.practiceJurisdictions,
-            now: props.now,
-          }),
-        )
-      : result;
+    return (
+      result ??
+      Result.ok(
+        unavailableSanctionsScreening({
+          reason: "load-failed",
+          practiceJurisdictions: props.practiceJurisdictions,
+          now: props.now,
+        }),
+      )
+    );
   };
 };
 

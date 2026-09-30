@@ -300,9 +300,11 @@ test("late retired-worker errors cannot release a held acquisition or a replacem
       return asTestRaw<Worker>(
         Object.assign(state.events, {
           unref: () => state.events,
-          terminate: () => {
+          terminate: async () => {
             state.terminations += 1;
-            return ordinal === 0 ? termination.promise : Promise.resolve(0);
+            return await (ordinal === 0
+              ? termination.promise
+              : Promise.resolve(0));
           },
         }),
       );

@@ -42,18 +42,22 @@ type Slot = {
   termination: Promise<void> | null;
 };
 
-const retireMatcherSlot = (slot: Slot) => {
+// Deadlines mutate this signal across awaits; do not reuse a narrowed property.
+export const isSanctionsMatcherCancelled = (signal: AbortSignal): boolean =>
+  signal.aborted;
+
+const retireMatcherSlot = async (slot: Slot) => {
   const worker = slot.worker;
   slot.worker = null;
   slot.editions.clear();
   if (worker === null) {
-    return slot.termination ?? Promise.resolve();
+    return await (slot.termination ?? Promise.resolve());
   }
   slot.termination = worker.terminate().then(() => {
     slot.termination = null;
     return undefined;
   });
-  return slot.termination;
+  return await slot.termination;
 };
 
 const createMatcherWorker = () =>
@@ -74,16 +78,16 @@ type ExchangeMatcherMessageOptions = {
   fail: () => void;
 };
 
-const exchangeMatcherMessage = ({
+const exchangeMatcherMessage = async ({
   worker,
   signal,
   message,
   fail,
 }: ExchangeMatcherMessageOptions): Promise<SanctionsMatcherReply> => {
   if (signal.aborted) {
-    return Promise.resolve({ status: "unavailable" });
+    return { status: "unavailable" };
   }
-  return new Promise((resolve) => {
+  return await new Promise((resolve) => {
     const abort = () => {
       worker.off("message", reply);
       resolve({ status: "unavailable" });
@@ -231,7 +235,10 @@ export const createSanctionsMatcherPool = ({
       const timer = setTimeout(fail, durationMs);
       const work = async (): Promise<T | null> => {
         lease.slot = await acquire(controller.signal);
-        if (lease.slot === null || controller.signal.aborted) {
+        if (
+          lease.slot === null ||
+          isSanctionsMatcherCancelled(controller.signal)
+        ) {
           return null;
         }
         const slot = lease.slot;
@@ -288,7 +295,7 @@ export const createSanctionsMatcherPool = ({
           hasEdition: (source, editionId) =>
             slot.editions.get(source) === editionId,
           match: async (request) => {
-            if (controller.signal.aborted) {
+            if (isSanctionsMatcherCancelled(controller.signal)) {
               return { status: "unavailable" };
             }
             const response = await matchSanctionsRequest({
@@ -298,7 +305,7 @@ export const createSanctionsMatcherPool = ({
               fail,
             });
             if (
-              !controller.signal.aborted &&
+              !isSanctionsMatcherCancelled(controller.signal) &&
               (response.status === "screened" || request.list !== null)
             ) {
               slot.editions.set(request.source, request.editionId);
