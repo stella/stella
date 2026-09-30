@@ -43,10 +43,10 @@ import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
 import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
 import {
+  allocateMatterReference,
   DEFAULT_MATTER_NUMBER_PADDING,
   DEFAULT_MATTER_NUMBER_PATTERN,
 } from "@/api/lib/matter-reference";
-import { allocateMatterReference } from "@/api/lib/matter-reference-counter";
 import {
   assertPropertyDependencyReadWithinLimit,
   propertyDependencyReadLimit,

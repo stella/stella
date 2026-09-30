@@ -50,14 +50,14 @@ export const runNumberingUpload = async ({
     server: null,
   };
   const context = {
-    getActiveWorkspaceIds: async () => [workspaceId],
-    getAccessibleWorkspaces: async () => [
-      { id: workspaceId, status: "active" as const },
-    ],
-    getWorkspaceAccess: async () => ({
-      id: workspaceId,
-      status: "active" as const,
-    }),
+    getActiveWorkspaceIds: async () => await Promise.resolve([workspaceId]),
+    getAccessibleWorkspaces: async () =>
+      await Promise.resolve([{ id: workspaceId, status: "active" as const }]),
+    getWorkspaceAccess: async () =>
+      await Promise.resolve({
+        id: workspaceId,
+        status: "active" as const,
+      }),
     pinServerValidatedWorkspaceId: (candidate: SafeId<"workspace">) =>
       candidate === workspaceId,
     createAuditRecorder: () => createAuditRecorder(auditBindings),

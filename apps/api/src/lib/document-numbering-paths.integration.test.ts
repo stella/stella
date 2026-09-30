@@ -27,7 +27,7 @@ import { createWorkspaceHandler } from "@/api/handlers/workspaces/create";
 import { createDuplicateWorkspace } from "@/api/handlers/workspaces/duplicate";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import { createSafeId, toSafeId } from "@/api/lib/branded-types";
+import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toScopeKey } from "@/api/lib/matter-reference";
 import { runNumberingCopy } from "@/api/tests/helpers/document-numbering-copy";
@@ -324,6 +324,7 @@ describe("numbering paths preserve issued stamps across counter state", () => {
             id: clippedState.matter,
             status: "active",
           }),
+          memberRole: { role: "owner" },
           body: { title: "Clipped source", url: "https://example.test/source" },
           createAuditRecorder: () => recordAuditEvent,
           recordAuditEvent,
@@ -337,12 +338,12 @@ describe("numbering paths preserve issued stamps across counter state", () => {
           workspaceId: clippedState.matter,
         }),
       );
-      expect(clipped).toMatchObject({ entityId: expect.any(String) });
       if (!("entityId" in clipped)) {
         panic("Clipping did not return the created entity");
       }
+      expect(typeof clipped.entityId).toBe("string");
       await assertMatterIssuance({
-        entityIds: [toSafeId<"entity">(clipped.entityId)],
+        entityIds: [clipped.entityId],
         expectedLastValue: expectedInitialFloor(scenario) + 1,
         matter: clippedState.matter,
         reference: clipReference,
@@ -503,12 +504,15 @@ describe("numbering paths preserve issued stamps across counter state", () => {
       ) {
         panic("Matter duplication did not return the new matter ID");
       }
-      const duplicateMatterId = toSafeId<"workspace">(duplicate.workspaceId);
+      const duplicateMatterId = duplicate.workspaceId;
       createdWorkspaceIds.push(duplicateMatterId);
       const [duplicateMatter] = await testDb
         .select({ reference: workspaces.reference })
         .from(workspaces)
         .where(eq(workspaces.id, duplicateMatterId));
+      if (!duplicateMatter?.reference)
+        {panic("Duplicated matter has no reference");}
+      const duplicateReference = duplicateMatter.reference;
       expect(duplicateMatter?.reference).toBe(
         scenario.ledger === "present"
           ? `PATH-${index}-DUP-002`
@@ -540,15 +544,11 @@ describe("numbering paths preserve issued stamps across counter state", () => {
           ),
         );
       const newDuplicateStamps = duplicateStamps.flatMap(({ stamp }) =>
-        stamp !== null && stamp.startsWith(`${duplicateMatter?.reference}/`)
-          ? [stamp]
-          : [],
+        stamp?.startsWith(`${duplicateReference}/`) ? [stamp] : [],
       );
       expect(duplicateEntities.length).toBeGreaterThan(0);
       expect(new Set(newDuplicateStamps).size).toBe(newDuplicateStamps.length);
-      expect(newDuplicateStamps).toEqual([
-        `${duplicateMatter?.reference}/001.v1`,
-      ]);
+      expect(newDuplicateStamps).toEqual([`${duplicateReference}/001.v1`]);
       const [destinationLedger] = await testDb
         .select({ lastValue: documentReferenceCounters.lastValue })
         .from(documentReferenceCounters)
@@ -565,7 +565,7 @@ describe("numbering paths preserve issued stamps across counter state", () => {
         Math.max(
           0,
           ...newDuplicateStamps.map((stamp) =>
-            Number(stamp.match(/\/(\d+)\.v/u)?.[1] ?? 0),
+            Number(/\/(\d+)\.v/u.exec(stamp)?.[1] ?? 0),
           ),
         ),
       );

@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { documentReferenceBase } from "@stll/api-contract";
 import { compareCodeUnit } from "@stll/collation";
@@ -88,10 +88,7 @@ export const allocateEntityStamps = async ({
           documentReferenceCounters.reference,
         ],
         set: { workspaceId: sql`excluded.workspace_id` },
-        setWhere: or(
-          isNull(documentReferenceCounters.workspaceId),
-          eq(documentReferenceCounters.lastValue, 0),
-        ),
+        setWhere: sql`${documentReferenceCounters.workspaceId} IS NULL OR ${documentReferenceCounters.lastValue} = 0`,
       });
 
     const ledgerRows = await tx
