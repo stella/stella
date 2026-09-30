@@ -37,7 +37,9 @@ export const applyResponseCachePolicy = ({
   const contentType =
     response instanceof Response
       ? response.headers.get("content-type")
-      : new Headers(set.headers).get("content-type");
+      : Object.entries(set.headers)
+          .find(([key]) => key.toLowerCase() === "content-type")?.[1]
+          ?.toString();
   const isEventStream =
     contentType?.split(";").at(0)?.trim().toLowerCase() === SSE_MEDIA_TYPE;
   const cacheControl =
