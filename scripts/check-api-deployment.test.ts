@@ -167,7 +167,7 @@ describe("API deployment health receipt", () => {
     expect(production).toContain(
       '"VITE_PUBLIC_KNOWLEDGE_INDEXING_ENABLED": "false"',
     );
-    expect(production).toContain('"VITE_SEO_INDEXABLE": "false"');
+    expect(production).not.toContain('"VITE_SEO_INDEXABLE"');
   });
 
   test("release promotion preserves the full online-migration window", async () => {
