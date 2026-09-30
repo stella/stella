@@ -21,9 +21,9 @@
   "dependencies": {
     "@stll/country-codes": "workspace:*",
     "@stll/fuzzy-search": "catalog:",
+    "@stll/time": "workspace:*",
     "better-result": "catalog:",
-    "saxes": "catalog:",
-    "temporal-polyfill": "catalog:"
+    "saxes": "catalog:"
   },
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",
