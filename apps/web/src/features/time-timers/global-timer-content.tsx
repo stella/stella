@@ -67,7 +67,8 @@ export const GlobalTimerContent = ({
   const canCreate = usePermissions({ timeEntry: ["create"] });
   const canUpdate = usePermissions({ timeEntry: ["update"] });
   const canDelete = usePermissions({ timeEntry: ["delete"] });
-  const active = runningTimer(timers.data ?? []);
+  const active =
+    timers.data === undefined ? undefined : runningTimer(timers.data);
   const elapsed = (timer: TimeTimer) =>
     formatTimerSeconds({
       seconds: elapsedTimerSeconds(timer, now),
