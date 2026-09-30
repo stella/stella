@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 
+import type { TanStackAIProvider } from "@stll/ai-catalog";
 import { Temporal } from "@stll/time";
 
 import { isLocalDevOpen } from "@/api/runtime-mode";
@@ -197,4 +198,75 @@ export const emitChatRunLogMetric = (metric: ChatRunLogMetric): void => {
     },
     ...payload.values,
   });
+};
+
+const PROMPT_CACHE_METRIC = {
+  cachedInputTokens: "PromptCachedInputTokens",
+  hitRate: "PromptCacheHitRate",
+  inputTokens: "PromptInputTokens",
+} as const;
+
+/** The AI surfaces whose prompt caching is measured: a closed set, so the
+ *  `surface` dimension stays bounded. */
+export type PromptCacheMetricSurface = "chat";
+
+type PromptCacheMetricInput = {
+  /** Input tokens the provider read from its prompt cache. */
+  cachedInputTokens: number;
+  /** Every input token of the run: uncached, cache reads and cache writes. */
+  inputTokens: number;
+  provider: TanStackAIProvider;
+  surface: PromptCacheMetricSurface;
+};
+
+/**
+ * One run's prompt-cache use (every model call of it summed), as EMF
+ * dimensioned by surface and provider: its input tokens, the tokens the
+ * provider served from its cache, and that share as a percentage. An alarm on
+ * a drop divides the summed counts, which weighs each run by its size; the
+ * per-run rate is for dashboards. Cardinality is the surface set times the
+ * provider set; no model, tenant or thread id becomes a dimension.
+ */
+const buildPromptCacheRecord = ({
+  cachedInputTokens,
+  inputTokens,
+  provider,
+  surface,
+  timestamp,
+}: PromptCacheMetricInput & { timestamp: number }) => ({
+  _aws: {
+    Timestamp: timestamp,
+    CloudWatchMetrics: [
+      {
+        Namespace: METRIC_NAMESPACE,
+        Dimensions: [["surface", "provider"]],
+        Metrics: [
+          { Name: PROMPT_CACHE_METRIC.inputTokens, Unit: "Count" },
+          { Name: PROMPT_CACHE_METRIC.cachedInputTokens, Unit: "Count" },
+          { Name: PROMPT_CACHE_METRIC.hitRate, Unit: "Percent" },
+        ],
+      },
+    ],
+  },
+  provider,
+  surface,
+  [PROMPT_CACHE_METRIC.inputTokens]: inputTokens,
+  [PROMPT_CACHE_METRIC.cachedInputTokens]: cachedInputTokens,
+  [PROMPT_CACHE_METRIC.hitRate]:
+    inputTokens > 0
+      ? Math.round((cachedInputTokens / inputTokens) * 10_000) / 100
+      : 0,
+});
+
+/** A run that reported no input tokens emits nothing: it has no rate. */
+export const emitPromptCacheMetric = (input: PromptCacheMetricInput): void => {
+  if (input.inputTokens <= 0) {
+    return;
+  }
+  writeMetricLine(
+    buildPromptCacheRecord({
+      ...input,
+      timestamp: Temporal.Now.instant().epochMilliseconds,
+    }),
+  );
 };

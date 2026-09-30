@@ -66,6 +66,11 @@ type StellaOpenRouterTextModelOptions = Omit<
   // Supported by OpenRouter Chat Completions and its SDK, but currently
   // omitted from @tanstack/ai-openrouter's public model-options type.
   serviceTier?: "default" | "flex" | undefined;
+  // The request-level prompt-cache marker OpenRouter forwards to Anthropic
+  // models; the adapter spreads it into the SDK request, whose type has it.
+  cacheControl?:
+    | { ttl?: "5m" | "1h" | undefined; type: "ephemeral" }
+    | undefined;
   // Narrowed from the SDK's open enum: an effort must be proven
   // against the target model's declared capability
   // (`resolveReasoningEffort`) before it can be sent.

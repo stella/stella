@@ -29,6 +29,8 @@ import {
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
+import { emitPromptCacheMetric } from "@/api/lib/observability/request-metrics";
+import type { PromptCacheMetricSurface } from "@/api/lib/observability/request-metrics";
 import {
   getTanStackTextModelInfoById,
   getTanStackTextModelInfoForRole,
@@ -70,6 +72,9 @@ type RunAnalyticsState = {
     totalTokens: number;
   };
   usageReported: boolean;
+  /** Every model call's input tokens, and those the provider served from
+   *  its prompt cache, normalized across providers. */
+  promptCache: { cachedInputTokens: number; inputTokens: number };
   /** What the call that failed reported before it failed, for its
    *  generation record. */
   failedCallUsage: { promptTokens: number; completionTokens: number } | null;
@@ -116,6 +121,12 @@ type TanStackAIAnalyticsProps = {
    * organization from `usageMetering` and may omit this.
    */
   organizationId?: SafeId<"organization"> | null;
+  /**
+   * The surface whose runs report their prompt-cache hit rate and input
+   * tokens as a metric (`emitPromptCacheMetric`), one line per finished run.
+   * Omitted: no metric.
+   */
+  promptCacheSurface?: PromptCacheMetricSurface | undefined;
   usageMetering?: TanStackAIUsageMetering;
 };
 
@@ -375,6 +386,7 @@ export const createTanStackAIAnalyticsCallbacks = ({
       toolCount: 0,
       usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
       usageReported: false,
+      promptCache: { cachedInputTokens: 0, inputTokens: 0 },
       failedCallUsage: null,
     };
     runs.set(ctx.runId, created);
@@ -611,6 +623,31 @@ export const createTanStackAIAnalyticsCallbacks = ({
     run.usage.completionTokens += usageSnapshot.value.completionTokens;
     run.usage.totalTokens += usageSnapshot.value.totalTokens;
     run.usageReported = true;
+    if (config.promptCacheSurface !== undefined) {
+      const promptTokens = Result.try({
+        try: () =>
+          normalizeProviderPromptTokens({
+            provider: resolvedModelInfo.provider,
+            modelId: resolvedModelInfo.modelId,
+            promptTokens: usage.promptTokens,
+            cacheReadTokens: usage.promptTokensDetails?.cachedTokens ?? 0,
+            cacheWriteTokens: usage.promptTokensDetails?.cacheWriteTokens ?? 0,
+          }),
+        catch: (error) => error,
+      });
+      if (Result.isOk(promptTokens)) {
+        const { cacheReadTokens, cacheWriteTokens, uncachedInputTokens } =
+          promptTokens.value;
+        run.promptCache.cachedInputTokens += cacheReadTokens;
+        run.promptCache.inputTokens +=
+          uncachedInputTokens + cacheReadTokens + cacheWriteTokens;
+      } else {
+        captureTelemetryError(promptTokens.error, {
+          source: "usage.tanstack_ai",
+          trace_id: config.traceId,
+        });
+      }
+    }
 
     const metering = config.usageMetering;
     if (metering) {
@@ -749,6 +786,15 @@ export const createTanStackAIAnalyticsCallbacks = ({
         const resolvedModelInfo = resolveAnalyticsModelInfo();
         if (!resolvedModelInfo) {
           return;
+        }
+
+        if (config.promptCacheSurface !== undefined && run !== undefined) {
+          emitPromptCacheMetric({
+            cachedInputTokens: run.promptCache.cachedInputTokens,
+            inputTokens: run.promptCache.inputTokens,
+            provider: resolvedModelInfo.provider,
+            surface: config.promptCacheSurface,
+          });
         }
 
         analytics.capture({

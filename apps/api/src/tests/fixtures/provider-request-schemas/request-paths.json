@@ -118,6 +118,9 @@
     "tools[].type"
   ],
   "anthropic": [
+    "cache_control",
+    "cache_control.ttl",
+    "cache_control.type",
     "max_tokens",
     "messages",
     "messages[]",

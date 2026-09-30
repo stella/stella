@@ -24,6 +24,7 @@ import {
   mergeGenerationOptions,
   streamTanStackObjectForRole,
   streamTanStackTextForRole,
+  systemPromptsPatch,
 } from "@/api/lib/tanstack-ai-generate";
 import {
   type ResolvedTanStackTextModel,
@@ -1601,6 +1602,152 @@ describe("TanStack AI text generation", () => {
       message: "OpenAI rate limit exceeded.",
       status: 502,
     });
+  });
+});
+
+describe("prompt caching at the layer boundaries", () => {
+  const caching = {
+    enabled: true,
+    scopeKey: "organization:contract-probe",
+    ttl: "5m",
+  } satisfies CachingDecision;
+  const marker = { cache_control: { ttl: "5m", type: "ephemeral" } };
+  const layered = {
+    organization: "\n\nUser generally practices law in: Czechia.",
+    static: "You are an AI inside stella.",
+    turn: "\n\nUser registered as: First Member",
+  } as const;
+  const joined = `${layered.static}${layered.organization}${layered.turn}`;
+  const modelOf = (
+    provider: ResolvedTanStackTextModel["provider"],
+    modelId: string,
+  ) =>
+    // SAFETY: the patch and the option merge read provider, modelId and
+    // modelOptions only; the adapter is irrelevant here.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
+    ({
+      adapter: {},
+      keySource: "instance",
+      modelId,
+      modelOptions: {},
+      provider,
+    }) as ResolvedTanStackTextModel;
+  const markerModels = [
+    modelOf("anthropic", "claude-sonnet-4-6"),
+    modelOf("openrouter", "anthropic/claude-sonnet-5.5"),
+  ];
+  const stringModels = [
+    modelOf("openai", "gpt-5.5"),
+    modelOf("openrouter", "openai/gpt-5.5"),
+    modelOf("google", "gemini-3.5-flash"),
+    modelOf("bedrock", "us.anthropic.claude-sonnet-4-5-20250929-v1:0"),
+    modelOf("mistral", "mistral-medium-latest"),
+  ];
+
+  test("marks the static and organization layers where the provider caches at markers", () => {
+    for (const model of markerModels) {
+      expect(systemPromptsPatch({ caching, model, system: layered })).toEqual({
+        systemPrompts: [
+          { content: layered.static, metadata: marker },
+          { content: layered.organization, metadata: marker },
+          layered.turn,
+        ],
+      });
+      expect(
+        systemPromptsPatch({
+          caching,
+          model,
+          system: { ...layered, organization: "" },
+        }),
+      ).toEqual({
+        systemPrompts: [
+          { content: layered.static, metadata: marker },
+          layered.turn,
+        ],
+      });
+    }
+  });
+
+  test("sends every other provider, and any request without caching, the layers as one string", () => {
+    for (const model of [...stringModels, ...markerModels]) {
+      expect(
+        systemPromptsPatch({
+          caching: noCaching,
+          model,
+          system: layered,
+        }),
+      ).toEqual({ systemPrompts: [joined] });
+    }
+    for (const model of stringModels) {
+      expect(systemPromptsPatch({ caching, model, system: layered })).toEqual({
+        systemPrompts: [joined],
+      });
+    }
+  });
+
+  test("keeps a plain prompt's single end-of-prompt marker on Anthropic only", () => {
+    const [anthropic, openRouterAnthropic] = markerModels;
+    if (anthropic === undefined || openRouterAnthropic === undefined) {
+      throw new TypeError("Both marker models are listed.");
+    }
+    expect(
+      systemPromptsPatch({ caching, model: anthropic, system: joined }),
+    ).toEqual({ systemPrompts: [{ content: joined, metadata: marker }] });
+    expect(
+      systemPromptsPatch({
+        caching,
+        model: openRouterAnthropic,
+        system: joined,
+      }),
+    ).toEqual({ systemPrompts: [joined] });
+  });
+
+  test("adds the request-level marker only to a layered request on a marker-caching provider", () => {
+    const optionsOf = (
+      model: ResolvedTanStackTextModel,
+      cacheConversation: boolean,
+      decision: CachingDecision = caching,
+    ) =>
+      mergeGenerationOptions({
+        cacheConversation,
+        caching: decision,
+        maxOutputTokens: 1000,
+        model,
+        serviceTier: "standard",
+        temperature: undefined,
+      });
+    const [anthropic, openRouterAnthropic] = markerModels;
+    if (anthropic === undefined || openRouterAnthropic === undefined) {
+      throw new TypeError("Both marker models are listed.");
+    }
+    expect(optionsOf(anthropic, true)).toHaveProperty(
+      "cache_control",
+      marker.cache_control,
+    );
+    expect(optionsOf(openRouterAnthropic, true)).toHaveProperty(
+      "cacheControl",
+      marker.cache_control,
+    );
+    for (const model of markerModels) {
+      expect(optionsOf(model, false)).toEqual(
+        mergeGenerationOptions({
+          caching,
+          maxOutputTokens: 1000,
+          model,
+          serviceTier: "standard",
+          temperature: undefined,
+        }),
+      );
+      expect(optionsOf(model, true, noCaching)).not.toHaveProperty(
+        "cache_control",
+      );
+      expect(optionsOf(model, true, noCaching)).not.toHaveProperty(
+        "cacheControl",
+      );
+    }
+    for (const model of stringModels) {
+      expect(optionsOf(model, true)).toEqual(optionsOf(model, false));
+    }
   });
 });
 

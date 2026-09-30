@@ -11,10 +11,8 @@ import * as v from "valibot";
 
 import { BYOK_DEFAULT_MODELS, BYOK_MODEL_OPTIONS } from "@stll/ai-catalog";
 
-import {
-  chatAttemptRequestOptions,
-  classifyRunErrorChunk,
-} from "@/api/handlers/chat/stream-chat";
+import { chatAttemptRequestOptions } from "@/api/handlers/chat/chat-request";
+import { classifyRunErrorChunk } from "@/api/handlers/chat/stream-chat";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { chatToolMapToArray } from "@/api/lib/chat/chat-tool-types";

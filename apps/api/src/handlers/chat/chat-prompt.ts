@@ -370,6 +370,18 @@ const chatCacheStablePrefixSchema = v.pipe(
   v.string(),
   v.brand("ChatCacheStablePrefix"),
 );
+const chatOrganizationPromptLayerSchema = v.pipe(
+  v.string(),
+  v.brand("ChatOrganizationPromptLayer"),
+);
+const chatUserPromptSectionSchema = v.pipe(
+  v.string(),
+  v.brand("ChatUserPromptSection"),
+);
+const chatVolatilePromptSectionSchema = v.pipe(
+  v.string(),
+  v.brand("ChatVolatilePromptSection"),
+);
 const chatSafePromptSchema = v.pipe(v.string(), v.brand("ChatSafePrompt"));
 const chatUntrustedPromptSuffixSchema = v.pipe(
   v.string(),
@@ -383,6 +395,38 @@ export type ChatCacheStablePrefix = v.InferOutput<
 
 export type ChatSafePrompt = v.InferOutput<typeof chatSafePromptSchema>;
 
+// The system prompt's layers, in prompt order: static (the cache-stable
+// prefix: the same for every organization), the organization's, then the
+// per-user and per-turn tail. A provider that caches at markers gets one after
+// the static and the organization layer (`systemPromptsPatch`), so the prefix
+// before each is shared by every organization and by every user of one. Each
+// layer has its own brand, minted only here: text built from a user's or a
+// turn's data is a user or volatile section, which neither the static nor the
+// organization slot of `ChatSafePromptLayers` accepts.
+
+/** Text every user of one organization is told: its practice jurisdictions,
+ *  and the fixed anonymized-mode guidance. Empty, or starts with the section
+ *  separator. */
+type ChatOrganizationPromptLayer = v.InferOutput<
+  typeof chatOrganizationPromptLayerSchema
+>;
+
+/** A section built from one user's data: their profile, their skills. */
+type ChatUserPromptSection = v.InferOutput<typeof chatUserPromptSectionSchema>;
+
+/** A section built from one turn's context: the matter, the open file, the
+ *  date, memory, requested skills. */
+type ChatVolatilePromptSection = v.InferOutput<
+  typeof chatVolatilePromptSectionSchema
+>;
+
+/** The cacheable layers: the prompt's safe half, split where the cache
+ *  boundaries sit. `safePrompt` is their concatenation. */
+export type ChatSafePromptLayers = {
+  readonly organization: ChatOrganizationPromptLayer;
+  readonly static: ChatCacheStablePrefix;
+};
+
 export type ChatUntrustedPromptSuffix = v.InferOutput<
   typeof chatUntrustedPromptSuffixSchema
 >;
@@ -391,6 +435,7 @@ type ChatFullPrompt = v.InferOutput<typeof chatFullPromptSchema>;
 
 export type ChatPromptParts = {
   cacheStablePrefix: ChatCacheStablePrefix;
+  safeLayers: ChatSafePromptLayers;
   /**
    * Server-built scaffold: product copy, skill catalog,
    * jurisdictions, workspace metadata. Carries no third-party PII
@@ -422,6 +467,39 @@ const brandChatCacheStablePrefix = (text: string): ChatCacheStablePrefix =>
 const brandChatSafePrompt = (text: string): ChatSafePrompt =>
   v.parse(chatSafePromptSchema, text);
 
+const brandChatOrganizationPromptLayer = (
+  text: string,
+): ChatOrganizationPromptLayer =>
+  v.parse(chatOrganizationPromptLayerSchema, text);
+
+const chatUserPromptSection = (text: string): ChatUserPromptSection =>
+  v.parse(chatUserPromptSectionSchema, text);
+
+/** Brands text built from one turn's context. The volatile tail is the one
+ *  layer any text may join, so this is the only layer minter exported. */
+export const chatVolatilePromptSection = (
+  text: string,
+): ChatVolatilePromptSection => v.parse(chatVolatilePromptSectionSchema, text);
+
+/** The safe half as one string: the static layer, then the organization's. */
+export const chatSafePromptText = ({
+  organization,
+  static: stable,
+}: ChatSafePromptLayers): ChatSafePrompt =>
+  brandChatSafePrompt(`${stable}${organization}`);
+
+/** The organization layer: the sections every user of one organization is
+ *  told, each after the section separator. */
+const buildOrganizationPromptLayer = (
+  sections: readonly string[],
+): ChatOrganizationPromptLayer =>
+  brandChatOrganizationPromptLayer(
+    sections
+      .filter((section) => section.length > 0)
+      .map((section) => `\n\n${section}`)
+      .join(""),
+  );
+
 const brandChatUntrustedPromptSuffix = (
   text: string,
 ): ChatUntrustedPromptSuffix => v.parse(chatUntrustedPromptSuffixSchema, text);
@@ -446,14 +524,20 @@ const buildChatFullPrompt = ({
 const nonEmptyPromptPart = (part: string | null | undefined): part is string =>
   part !== null && part !== undefined && part.length > 0;
 
+/** Anonymized mode's fixed guidance, at the end of the organization layer:
+ *  every anonymized thread of the organization shares it. */
 export const appendAnonymizedModeHintToChatSafePrompt = (
-  base: ChatSafePrompt,
-): ChatSafePrompt =>
-  brandChatSafePrompt(joinPromptSections([base, ANONYMIZED_MODE_SYSTEM_HINT]));
+  base: ChatSafePromptLayers,
+): ChatSafePromptLayers => ({
+  organization: brandChatOrganizationPromptLayer(
+    `${base.organization}${buildOrganizationPromptLayer([ANONYMIZED_MODE_SYSTEM_HINT])}`,
+  ),
+  static: base.static,
+});
 
 export const extendChatUntrustedPromptSuffix = (
   base: ChatUntrustedPromptSuffix,
-  additions: readonly (string | null | undefined)[],
+  additions: readonly (ChatVolatilePromptSection | null | undefined)[],
 ): ChatUntrustedPromptSuffix => {
   const parts = [base, ...additions].filter(nonEmptyPromptPart);
   return brandChatUntrustedPromptSuffix(parts.join("\n\n"));
@@ -843,6 +927,7 @@ export const buildChatSystemPromptParts = async ({
       activeTemplateSection,
       memorySection,
     ]
+      .map(chatVolatilePromptSection)
       .filter((section) => section.length > 0)
       .map((section) => `\n\n${section}`)
       .join("");
@@ -856,6 +941,7 @@ export const buildChatSystemPromptParts = async ({
 
     return Result.ok({
       cacheStablePrefix: safeParts.cacheStablePrefix,
+      safeLayers: safeParts.safeLayers,
       safePrompt: safeParts.safePrompt,
       untrustedSuffix,
       fullPrompt: buildChatFullPrompt({
@@ -2838,15 +2924,15 @@ const buildPromptParts = ({
     ]),
   );
   // Safe half: scaffold + jurisdiction labels. Both are
-  // server-defined catalogs with no third-party PII.
-  const safeSections: string[] = [cacheStablePrefix];
-  const practiceJurisdictionLine = buildPracticeJurisdictionLine(
-    practiceJurisdictions,
-  );
-  if (practiceJurisdictionLine) {
-    safeSections.push(practiceJurisdictionLine);
-  }
-  const safePrompt = brandChatSafePrompt(joinPromptSections(safeSections));
+  // server-defined catalogs with no third-party PII. The jurisdictions are the
+  // organization's setting, so they open the organization layer.
+  const safeLayers: ChatSafePromptLayers = {
+    organization: buildOrganizationPromptLayer([
+      buildPracticeJurisdictionLine(practiceJurisdictions),
+    ]),
+    static: cacheStablePrefix,
+  };
+  const safePrompt = chatSafePromptText(safeLayers);
 
   // Untrusted half: anything that interpolates user-controlled
   // text into the prompt. Installed skill names/descriptions are
@@ -2854,10 +2940,15 @@ const buildPromptParts = ({
   // `Connected to matter "..."` line (matter names commonly carry
   // client / opposing-party names); `userContextBlock` echoes the
   // user's own profile (name, email). All must cross the
-  // anonymizer in anonymized mode.
-  const untrustedSections: string[] = [
-    buildSkillCatalogSection(installedSkillMetadata),
-    ...requestContextSections,
+  // anonymizer in anonymized mode. The tail carries no cache marker, so its
+  // user and volatile sections keep the order they have always had.
+  const untrustedSections: (
+    | ChatUserPromptSection
+    | ChatVolatilePromptSection
+  )[] = [
+    // Team skills and the user's own (`listAvailableChatSkillMetadata`).
+    chatUserPromptSection(buildSkillCatalogSection(installedSkillMetadata)),
+    ...requestContextSections.map(chatVolatilePromptSection),
   ];
   const userContextBlock = buildUserContextBlock(userContext);
   if (userContextBlock) {
@@ -2871,6 +2962,7 @@ const buildPromptParts = ({
 
   return {
     cacheStablePrefix,
+    safeLayers,
     safePrompt,
     untrustedSuffix,
     fullPrompt: buildChatFullPrompt({ safePrompt, untrustedSuffix }),
@@ -2934,7 +3026,9 @@ const buildSkillCatalogSection = (
   ].join("\n");
 };
 
-export const buildUserContextBlock = (userContext: UserContext | null) => {
+export const buildUserContextBlock = (
+  userContext: UserContext | null,
+): ChatUserPromptSection | "" => {
   if (!userContext) {
     return "";
   }
@@ -2953,6 +3047,8 @@ export const buildUserContextBlock = (userContext: UserContext | null) => {
     lines.push(`DOCX edit shortcut: ${userContext.wordEditShortcut}`);
   }
 
+  // The date is per turn, not per user, but stays in this block: the tail
+  // carries no cache marker, so where it sits in the tail costs nothing.
   if (userContext.timezone) {
     lines.push(
       `Current date: ${formatDateInTimeZone({
@@ -2961,7 +3057,7 @@ export const buildUserContextBlock = (userContext: UserContext | null) => {
     );
   }
 
-  return lines.join("\n");
+  return chatUserPromptSection(lines.join("\n"));
 };
 
 // Untrusted multi-line content embedded in the prompt (document bodies,

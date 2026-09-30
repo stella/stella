@@ -1202,6 +1202,72 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     });
   });
 
+  test("reports a run's prompt-cache hit rate over every model call, once, for a measured surface", async () => {
+    const { createTanStackAIAnalyticsCallbacks } =
+      await loadTanStackAIAnalytics();
+    const { resetMetricLineSinkForTesting, setMetricLineSinkForTesting } =
+      await import("@/api/lib/observability/request-metrics");
+    const lines: string[] = [];
+    setMetricLineSinkForTesting((line) => {
+      lines.push(line);
+    });
+    try {
+      const runOn = async (promptCacheSurface: "chat" | undefined) => {
+        const callbacks = createTanStackAIAnalyticsCallbacks({
+          analytics: {
+            capture: () => undefined,
+            flush: async () => undefined,
+            identifyOrganizationGroup: () => undefined,
+          },
+          feature: "chat.stream",
+          orgAIConfig: createAnthropicOrgAIConfig(),
+          promptCacheSurface,
+          traceId: "trace_prompt_cache",
+        });
+        // A tool-calling turn on a warm Anthropic cache: the first call
+        // writes the prefix, the second reads it. Anthropic's input count
+        // excludes both.
+        const ctx0 = createMiddlewareContext({ iteration: 0 });
+        const ctx1 = createMiddlewareContext({ iteration: 1 });
+        await callbacks.middleware.onUsage?.(ctx0, {
+          completionTokens: 40,
+          promptTokens: 100,
+          promptTokensDetails: { cachedTokens: 0, cacheWriteTokens: 900 },
+          totalTokens: 140,
+        });
+        const last = {
+          completionTokens: 60,
+          promptTokens: 200,
+          promptTokensDetails: { cachedTokens: 900, cacheWriteTokens: 0 },
+          totalTokens: 260,
+        } satisfies TokenUsage;
+        await callbacks.middleware.onUsage?.(ctx1, last);
+        await callbacks.middleware.onFinish?.(ctx1, {
+          content: "Done",
+          duration: 1000,
+          finishReason: "stop",
+          usage: last,
+        });
+      };
+
+      await runOn(undefined);
+      expect(lines).toEqual([]);
+
+      await runOn("chat");
+      expect(lines).toHaveLength(1);
+      // 100 + 900 written, then 200 + 900 read: 900 of 2100 from the cache.
+      expect(JSON.parse(lines.at(0) ?? "null")).toMatchObject({
+        PromptCacheHitRate: 42.86,
+        PromptCachedInputTokens: 900,
+        PromptInputTokens: 2100,
+        provider: "anthropic",
+        surface: "chat",
+      });
+    } finally {
+      resetMetricLineSinkForTesting();
+    }
+  });
+
   test("keeps concurrent runs on one callbacks instance apart", async () => {
     const { createTanStackAIAnalyticsCallbacks } =
       await loadTanStackAIAnalytics();

@@ -45,11 +45,12 @@ import {
   appendAnonymizedModeHintToChatSafePrompt,
   buildChatPromptCacheKey,
   buildChatSystemPromptParts,
+  chatVolatilePromptSection,
   extendChatUntrustedPromptSuffix,
   extractTitle,
 } from "@/api/handlers/chat/chat-prompt";
 import type {
-  ChatSafePrompt,
+  ChatSafePromptLayers,
   ChatToolAvailability,
   ChatUntrustedPromptSuffix,
 } from "@/api/handlers/chat/chat-prompt";
@@ -1590,7 +1591,7 @@ const prepareValidatedIncomingMessage = async ({
 
 type AssembleTurnSystemPromptOptions = {
   chatContext: {
-    systemSafe: ChatSafePrompt;
+    systemSafe: ChatSafePromptLayers;
     systemUntrusted: ChatUntrustedPromptSuffix;
   };
   externalMcpTools: LoadedExternalMcpTools | undefined;
@@ -1621,7 +1622,7 @@ const assembleTurnSystemPrompt = ({
         externalMcpTools === undefined ? [] : externalMcpTools.connectors,
       ),
       requestedSkillsPrompt,
-    ],
+    ].map(chatVolatilePromptSection),
   ),
 });
 
@@ -2870,7 +2871,7 @@ type PrepareChatContextResult = Result<
     /**
      * Server-built scaffold. Safe to send to the LLM verbatim.
      */
-    systemSafe: ChatSafePrompt;
+    systemSafe: ChatSafePromptLayers;
     /**
      * Dynamic user-supplied context (active file body, decision
      * text, external source, matter labels). Pass through the
@@ -2985,7 +2986,7 @@ const prepareChatContext = async ({
 
     return Result.ok({
       promptCacheKey: buildChatPromptCacheKey(systemPrompt.cacheStablePrefix),
-      systemSafe: systemPrompt.safePrompt,
+      systemSafe: systemPrompt.safeLayers,
       systemUntrusted: systemPrompt.untrustedSuffix,
       skillMetadata: systemPrompt.skillMetadata,
       activeSkillContext: systemPrompt.activeSkillContext,
