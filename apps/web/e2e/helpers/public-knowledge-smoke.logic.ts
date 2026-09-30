@@ -35,7 +35,6 @@ export const classifyPublicKnowledgeWebProbe = (
 ): "enabled" | "disabled" | "unexpected" => {
   const window = new Window({
     settings: {
-      disableJavaScriptEvaluation: true,
       disableJavaScriptFileLoading: true,
       disableCSSFileLoading: true,
     },
