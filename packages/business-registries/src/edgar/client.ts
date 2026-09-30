@@ -1,3 +1,4 @@
+import { encodeRegistryComponent } from "../shared/encode-registry-component.js";
 import { isRecord } from "../shared/guards.js";
 import { registryFetch } from "../shared/http.js";
 import {
@@ -146,7 +147,7 @@ export const lookupByCik = async (
   }
 
   const padded = padCik(cik);
-  const url = `${SUBMISSIONS_BASE}/CIK${padded}.json`;
+  const url = `${SUBMISSIONS_BASE}/CIK${encodeRegistryComponent(padded)}.json`;
   const raw = await edgarGet(url, config.userAgent);
   if (!raw) {
     return null;

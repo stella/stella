@@ -1,3 +1,4 @@
+import { encodeRegistryComponent } from "../shared/encode-registry-component.js";
 import { isRecord } from "../shared/guards.js";
 import {
   performRegistryRequest,
@@ -288,13 +289,13 @@ export const lookupByIco = async (
 
   // Fetch RES (always) and VR (optionally, in parallel)
   const resPromise = aresGet({
-    url: `${RES_URL}/${normalized}`,
+    url: `${RES_URL}/${encodeRegistryComponent(normalized)}`,
     isExpectedShape: isAresResResponse,
     signal: options?.signal,
   });
   const vrPromise = includeVr
     ? aresGet({
-        url: `${VR_URL}/${normalized}`,
+        url: `${VR_URL}/${encodeRegistryComponent(normalized)}`,
         isExpectedShape: isAresVrResponse,
         signal: optionalVrSignal,
       })

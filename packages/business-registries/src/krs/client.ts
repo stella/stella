@@ -1,3 +1,4 @@
+import { encodeRegistryComponent } from "../shared/encode-registry-component.js";
 import { isRecord } from "../shared/guards.js";
 import {
   performRegistryRequest,
@@ -220,7 +221,7 @@ const buildLookupUrl = (
     rejestr: shortCode,
     format: "json",
   });
-  return `${BASE}/OdpisAktualny/${krsNumber}?${params.toString()}`;
+  return `${BASE}/OdpisAktualny/${encodeRegistryComponent(krsNumber)}?${params.toString()}`;
 };
 
 export type LookupOptions = RegistryClientOptions & {

@@ -4575,6 +4575,28 @@ export default defineConfig({
       },
     },
     {
+      files: ["packages/business-registries/src/**/*.ts"],
+      excludeFiles: [
+        "packages/business-registries/src/**/*.test.ts",
+        "packages/business-registries/src/shared/encode-registry-component.ts",
+      ],
+      rules: {
+        "no-restricted-globals": [
+          "error",
+          {
+            globals: [
+              {
+                name: "encodeURIComponent",
+                message:
+                  "Use encodeRegistryComponent from shared/encode-registry-component.js for registry URL components.",
+              },
+            ],
+            checkGlobalObject: true,
+          },
+        ],
+      },
+    },
+    {
       // Bare localeCompare is locale-nondeterministic (runtime default) and
       // rebuilds ICU tailoring per call; route through the cached collation
       // helper. Scoped to apps/web, apps/api and the helper's own package,

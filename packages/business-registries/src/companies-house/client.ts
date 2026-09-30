@@ -1,3 +1,4 @@
+import { encodeRegistryComponent } from "../shared/encode-registry-component.js";
 import { isRecord } from "../shared/guards.js";
 import { registryFetch } from "../shared/http.js";
 import { clampSearchLimit } from "../shared/search.js";
@@ -238,7 +239,7 @@ export const lookupByCompanyNumber = async (
       `Invalid UK company number: ${input}`,
     );
   }
-  const url = `${COMPANIES_HOUSE_BASE}/company/${encodeURIComponent(normalized)}`;
+  const url = `${COMPANIES_HOUSE_BASE}/company/${encodeRegistryComponent(normalized)}`;
   const raw = await companiesHouseGet<CompaniesHouseRawCompanyProfile>(
     url,
     config.apiKey,
@@ -361,7 +362,7 @@ export const lookupOfficersByCompanyNumber = async (
       items_per_page: String(OFFICERS_PAGE_SIZE),
       start_index: String(page * OFFICERS_PAGE_SIZE),
     });
-    const url = `${COMPANIES_HOUSE_BASE}/company/${encodeURIComponent(normalized)}/officers?${params.toString()}`;
+    const url = `${COMPANIES_HOUSE_BASE}/company/${encodeRegistryComponent(normalized)}/officers?${params.toString()}`;
     const raw = await companiesHouseGet<CompaniesHouseRawOfficersResponse>(
       url,
       config.apiKey,

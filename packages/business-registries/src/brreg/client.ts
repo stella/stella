@@ -1,3 +1,4 @@
+import { encodeRegistryComponent } from "../shared/encode-registry-component.js";
 import { isRecord } from "../shared/guards.js";
 import { registryFetch } from "../shared/http.js";
 import { clampSearchLimit } from "../shared/search.js";
@@ -180,14 +181,17 @@ export const lookupByOrgnr = async (
     throw new BrregValidationError(`Invalid orgnr: ${orgnr}`);
   }
 
-  const enhet = await brregGet(`${ENHETER_URL}/${normalized}`, isBrregRawEnhet);
+  const enhet = await brregGet(
+    `${ENHETER_URL}/${encodeRegistryComponent(normalized)}`,
+    isBrregRawEnhet,
+  );
   if (enhet) {
     return parseEnhet(enhet, "enhet");
   }
 
   if (options?.includeSubEntities ?? true) {
     const sub = await brregGet(
-      `${UNDERENHETER_URL}/${normalized}`,
+      `${UNDERENHETER_URL}/${encodeRegistryComponent(normalized)}`,
       isBrregRawEnhet,
     );
     if (sub) {

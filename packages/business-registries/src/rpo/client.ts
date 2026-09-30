@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 
+import { encodeRegistryComponent } from "../shared/encode-registry-component.js";
 import { isRecord } from "../shared/guards.js";
 import {
   performRegistryRequest,
@@ -261,7 +262,7 @@ export const lookupByIco = async (
   // The API reads only the literal `true` as true.
   const query = current ? "" : "?showHistoricalData=true";
   const entity = await rpoGet(
-    `${ENTITY_URL}/${encodeURIComponent(String(hit.id))}${query}`,
+    `${ENTITY_URL}/${encodeRegistryComponent(String(hit.id))}${query}`,
     isRpoEntity,
     signal,
   );
