@@ -271,9 +271,11 @@ describe("the publisher's concurrency", () => {
 });
 
 describe("the relay", () => {
-  test("coalesces reviews by PR and gives merge groups a unique run", () => {
+  test("coalesces reviews only on the same PR head and gives merge groups a unique run", () => {
     const concurrency = isRecord(relay.concurrency) ? relay.concurrency : {};
-    expect(concurrency["group"]).toContain("github.event.pull_request.number");
+    expect(concurrency["group"]).toContain(
+      "format('pr-{0}-head-{1}', github.event.pull_request.number, github.event.pull_request.head.sha)",
+    );
     expect(concurrency["group"]).toContain("github.run_id");
     expect(concurrency["cancel-in-progress"]).toContain(
       "github.event_name == 'pull_request_review'",

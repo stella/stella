@@ -155,7 +155,7 @@ jobs:
       artifact-metadata: write
     concurrency:
       group: staging-api-build
-      cancel-in-progress: false
+      cancel-in-progress: true
     outputs:
       digest: ${{ steps.build.outputs.digest }}
       release-ref: ${{ steps.ref.outputs.release_ref }}
@@ -230,7 +230,7 @@ jobs:
       artifact-metadata: write
     concurrency:
       group: staging-web-build
-      cancel-in-progress: false
+      cancel-in-progress: true
     outputs:
       digest: ${{ steps.build.outputs.digest }}
 

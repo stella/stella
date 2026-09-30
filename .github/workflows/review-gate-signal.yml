@@ -14,8 +14,11 @@ on:
   merge_group:
     types: [checks_requested]
 
+# Only events for the same PR head replace one another, so the replacement
+# reports the same signal check on that commit. A newer head cannot cancel
+# the older head's visible check; merge-group signals remain isolated.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number && format('pr-{0}', github.event.pull_request.number) || format('run-{0}', github.run_id) }}
+  group: ${{ github.workflow }}-${{ (github.event_name == 'pull_request_review' || github.event_name == 'pull_request_review_comment') && format('pr-{0}-head-{1}', github.event.pull_request.number, github.event.pull_request.head.sha) || format('run-{0}', github.run_id) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request_review' || github.event_name == 'pull_request_review_comment' }}
 
 permissions: {}

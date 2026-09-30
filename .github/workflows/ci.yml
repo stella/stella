@@ -18,10 +18,11 @@ on:
         options: [fast, full]
         default: fast
 
-# Superseded pull request runs cancel; merge groups and manual runs stay isolated.
+# PR runs supersede their predecessors. Manual runs supersede only older
+# manual runs on the same branch; merge-group runs remain isolated.
 concurrency:
-  group: ${{ github.workflow }}-${{ (github.event_name == 'pull_request') && format('pr-{0}', github.event.pull_request.number || github.ref) || format('run-{0}', github.run_id) }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number || github.ref) || github.event_name == 'workflow_dispatch' && format('ci-dispatch-{0}', github.ref) || format('run-{0}', github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' }}
 
 permissions: {}
 
