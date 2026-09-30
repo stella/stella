@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
 export const DEV_QUICK_START_PHASE = {
   authenticate: "authenticate",
@@ -20,6 +20,114 @@ export type DevQuickStartAttempt = {
   completedPhase: DevQuickStartPhase | null;
   identity: DevQuickStartIdentity;
   organizationId: string | null;
+};
+
+export const DEV_QUICK_START_STAGE = {
+  authenticate: "authenticate",
+  continue: "continue",
+} as const;
+
+type DevQuickStartStage =
+  (typeof DEV_QUICK_START_STAGE)[keyof typeof DEV_QUICK_START_STAGE];
+
+type SingleFlightOptions = {
+  stage: DevQuickStartStage;
+  run: () => Promise<void>;
+};
+
+/** Owns one tab's attempt across component lifetimes, including failed retries. */
+export const createDevQuickStartRuntime = () => {
+  let attempt: DevQuickStartAttempt | null = null;
+  let phase: DevQuickStartPhase | null = null;
+  let flight: { stage: DevQuickStartStage; promise: Promise<void> } | null =
+    null;
+  const listeners = new Set<() => void>();
+
+  const setPhase = (nextPhase: DevQuickStartPhase | null) => {
+    phase = nextPhase;
+    for (const listener of listeners) {
+      listener();
+    }
+  };
+
+  const runSingleFlight = ({
+    stage,
+    run,
+  }: SingleFlightOptions): Promise<void> => {
+    if (flight !== null) {
+      if (flight.stage === stage) {
+        return flight.promise;
+      }
+      // Navigation can mount the continuation before authentication settles.
+      return flight.promise.then(() => runSingleFlight({ stage, run }));
+    }
+
+    const promise = Promise.resolve()
+      .then(run)
+      .finally(() => {
+        flight = null;
+        setPhase(null);
+      });
+    flight = { stage, promise };
+    return promise;
+  };
+
+  return {
+    getAttempt: (restore: () => DevQuickStartAttempt) => {
+      attempt ??= restore();
+      return attempt;
+    },
+    getPhase: () => phase,
+    runSingleFlight,
+    setAttempt: (nextAttempt: DevQuickStartAttempt) => {
+      attempt = nextAttempt;
+    },
+    setPhase,
+    subscribe: (listener: () => void) => {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+  };
+};
+
+type ResolveDevQuickStartOrganizationOptions = {
+  identity: DevQuickStartIdentity;
+  listOrganizations: () => Promise<readonly { id: string; slug: string }[]>;
+  createOrganization: (identity: DevQuickStartIdentity) => Promise<string>;
+};
+
+export const resolveDevQuickStartOrganization = async ({
+  identity,
+  listOrganizations,
+  createOrganization,
+}: ResolveDevQuickStartOrganizationOptions): Promise<string> => {
+  const organizations = await listOrganizations();
+  const existing = organizations.find(
+    ({ slug }) => slug === identity.organizationSlug,
+  );
+  if (existing) {
+    return existing.id;
+  }
+
+  const created = await Result.tryPromise({
+    try: () => createOrganization(identity),
+    catch: (cause) => cause,
+  });
+  if (Result.isOk(created)) {
+    return created.value;
+  }
+
+  // A competing create or a lost response can leave the exact org already owned.
+  const relisted = await listOrganizations();
+  const recovered = relisted.find(
+    ({ slug }) => slug === identity.organizationSlug,
+  );
+  if (recovered) {
+    return recovered.id;
+  }
+  throw created.error;
 };
 
 const DEV_QUICK_START_EMAIL = "dev-quick-start@stella.dev";

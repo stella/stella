@@ -2,8 +2,12 @@ import { describe, expect, test } from "bun:test";
 
 import {
   createDevQuickStartIdentity,
+  createDevQuickStartRuntime,
   DEV_QUICK_START_PHASE,
+  DEV_QUICK_START_STAGE,
+  type DevQuickStartAttempt,
   type DevQuickStartPhase,
+  resolveDevQuickStartOrganization,
   runDevQuickStart,
 } from "./dev-quick-start.logic";
 
@@ -18,6 +22,268 @@ describe("createDevQuickStartIdentity", () => {
       organizationSlug: "dev-quick-start-018f1f7e89ab7def8123456789abcdef",
       selectionSeed: RANDOM_ID,
     });
+  });
+});
+
+describe("quick-start run ownership", () => {
+  test("shares one flight and its progress across concurrent continuation starts", async () => {
+    const runtime = createDevQuickStartRuntime();
+    const blockedImport = Promise.withResolvers<undefined>();
+    const importStarted = Promise.withResolvers<undefined>();
+    const calls: string[] = [];
+    const initialAttempt = {
+      completedPhase: DEV_QUICK_START_PHASE.authenticate,
+      identity: createDevQuickStartIdentity(RANDOM_ID),
+      organizationId: null,
+    } satisfies DevQuickStartAttempt;
+    const run = () =>
+      runDevQuickStart({
+        attempt: runtime.getAttempt(() => initialAttempt),
+        authenticate: async () => {
+          calls.push("authenticate");
+        },
+        createOrganization: async () => {
+          calls.push("organization");
+          return ORGANIZATION_ID;
+        },
+        onAttemptUpdated: runtime.setAttempt,
+        onPhase: runtime.setPhase,
+        startMatterImport: async () => {
+          calls.push("matters");
+          importStarted.resolve(undefined);
+          await blockedImport.promise;
+        },
+      });
+    const first = runtime.runSingleFlight({
+      stage: DEV_QUICK_START_STAGE.continue,
+      run,
+    });
+    const second = runtime.runSingleFlight({
+      stage: DEV_QUICK_START_STAGE.continue,
+      run,
+    });
+    expect(second).toBe(first);
+    await importStarted.promise;
+
+    // A remount joins after organization setup and observes the active phase.
+    const phases: (DevQuickStartPhase | null)[] = [runtime.getPhase()];
+    const unsubscribe = runtime.subscribe(() => {
+      phases.push(runtime.getPhase());
+    });
+    const remounted = runtime.runSingleFlight({
+      stage: DEV_QUICK_START_STAGE.continue,
+      run,
+    });
+    expect(remounted).toBe(first);
+    blockedImport.resolve(undefined);
+    await Promise.all([first, second, remounted]);
+    unsubscribe();
+
+    expect(calls).toEqual(["organization", "matters"]);
+    expect(phases).toEqual([DEV_QUICK_START_PHASE.matters, null]);
+    expect(runtime.getAttempt(() => initialAttempt)).toEqual({
+      completedPhase: DEV_QUICK_START_PHASE.matters,
+      identity: initialAttempt.identity,
+      organizationId: ORGANIZATION_ID,
+    });
+  });
+
+  test("serializes a mounted continuation behind sign-in and coalesces queued mounts", async () => {
+    const runtime = createDevQuickStartRuntime();
+    const signedIn = Promise.withResolvers<undefined>();
+    const calls: string[] = [];
+    const authentication = runtime.runSingleFlight({
+      stage: DEV_QUICK_START_STAGE.authenticate,
+      run: async () => {
+        calls.push("authenticate");
+        await signedIn.promise;
+        calls.push("authenticated");
+      },
+    });
+    const continueRun = async () => {
+      calls.push("continue");
+    };
+    const continuation = runtime.runSingleFlight({
+      stage: DEV_QUICK_START_STAGE.continue,
+      run: continueRun,
+    });
+    const remounted = runtime.runSingleFlight({
+      stage: DEV_QUICK_START_STAGE.continue,
+      run: continueRun,
+    });
+    signedIn.resolve(undefined);
+    await Promise.all([authentication, continuation, remounted]);
+
+    expect(calls).toEqual(["authenticate", "authenticated", "continue"]);
+  });
+
+  test("retains a completed attempt when persistence is cleared before navigation", async () => {
+    const runtime = createDevQuickStartRuntime();
+    const initialAttempt = {
+      completedPhase: DEV_QUICK_START_PHASE.authenticate,
+      identity: createDevQuickStartIdentity(RANDOM_ID),
+      organizationId: null,
+    } satisfies DevQuickStartAttempt;
+    let savedAttempt: DevQuickStartAttempt | null = initialAttempt;
+    let restores = 0;
+    const calls: string[] = [];
+    const run = () =>
+      runDevQuickStart({
+        attempt: runtime.getAttempt(() => {
+          restores += 1;
+          return (
+            savedAttempt ?? {
+              completedPhase: DEV_QUICK_START_PHASE.authenticate,
+              identity: createDevQuickStartIdentity("new-identity"),
+              organizationId: null,
+            }
+          );
+        }),
+        authenticate: async () => undefined,
+        createOrganization: async () => {
+          calls.push("organization");
+          return ORGANIZATION_ID;
+        },
+        onAttemptUpdated: (attempt) => {
+          runtime.setAttempt(attempt);
+          savedAttempt = attempt;
+        },
+        onPhase: runtime.setPhase,
+        startMatterImport: async () => {
+          calls.push("matters");
+        },
+      });
+
+    await runtime.runSingleFlight({
+      stage: DEV_QUICK_START_STAGE.continue,
+      run,
+    });
+    savedAttempt = null;
+    await runtime.runSingleFlight({
+      stage: DEV_QUICK_START_STAGE.continue,
+      run,
+    });
+
+    expect(restores).toBe(1);
+    expect(calls).toEqual(["organization", "matters"]);
+    expect(runtime.getAttempt(() => initialAttempt).identity).toBe(
+      initialAttempt.identity,
+    );
+  });
+
+  test("retries a lost import response with the same organization and seed to attach to the running job", async () => {
+    const runtime = createDevQuickStartRuntime();
+    const initialAttempt = {
+      completedPhase: DEV_QUICK_START_PHASE.authenticate,
+      identity: createDevQuickStartIdentity(RANDOM_ID),
+      organizationId: null,
+    } satisfies DevQuickStartAttempt;
+    const startedJobs = new Map<
+      string,
+      { organizationId: string; selectionSeed: string }
+    >();
+    let importRequests = 0;
+    let organizationCreates = 0;
+    const run = () =>
+      runDevQuickStart({
+        attempt: runtime.getAttempt(() => initialAttempt),
+        authenticate: async () => undefined,
+        createOrganization: async () => {
+          organizationCreates += 1;
+          return ORGANIZATION_ID;
+        },
+        onAttemptUpdated: runtime.setAttempt,
+        onPhase: runtime.setPhase,
+        startMatterImport: async ({ selectionSeed }, organizationId) => {
+          importRequests += 1;
+          const request = { organizationId, selectionSeed };
+          const running = startedJobs.get("job-1");
+          if (running) {
+            expect(request).toEqual(running);
+            return;
+          }
+          startedJobs.set("job-1", request);
+          throw new Error("import response lost");
+        },
+      });
+
+    await expect(
+      runtime.runSingleFlight({
+        stage: DEV_QUICK_START_STAGE.continue,
+        run,
+      }),
+    ).rejects.toThrow("import response lost");
+    expect(runtime.getPhase()).toBeNull();
+    await runtime.runSingleFlight({
+      stage: DEV_QUICK_START_STAGE.continue,
+      run,
+    });
+
+    expect(importRequests).toBe(2);
+    expect(organizationCreates).toBe(1);
+    expect(startedJobs.size).toBe(1);
+    expect(startedJobs.get("job-1")).toEqual({
+      organizationId: ORGANIZATION_ID,
+      selectionSeed: RANDOM_ID,
+    });
+    expect(runtime.getAttempt(() => initialAttempt).completedPhase).toBe(
+      DEV_QUICK_START_PHASE.matters,
+    );
+  });
+});
+
+describe("quick-start organization recovery", () => {
+  test("uses an existing organization without creating another", async () => {
+    const identity = createDevQuickStartIdentity(RANDOM_ID);
+    let creates = 0;
+    const organizationId = await resolveDevQuickStartOrganization({
+      identity,
+      listOrganizations: async () => [
+        { id: ORGANIZATION_ID, slug: identity.organizationSlug },
+      ],
+      createOrganization: async () => {
+        creates += 1;
+        return "unexpected-organization";
+      },
+    });
+    expect(organizationId).toBe(ORGANIZATION_ID);
+    expect(creates).toBe(0);
+  });
+
+  test("re-lists and reuses the exact slug after a competing organization create", async () => {
+    const identity = createDevQuickStartIdentity(RANDOM_ID);
+    let listed = 0;
+    const organizationId = await resolveDevQuickStartOrganization({
+      identity,
+      listOrganizations: async () => {
+        listed += 1;
+        return listed === 1
+          ? []
+          : [
+              { id: "unrelated-organization", slug: "unrelated-slug" },
+              { id: ORGANIZATION_ID, slug: identity.organizationSlug },
+            ];
+      },
+      createOrganization: async () => {
+        throw new Error("duplicate organization slug");
+      },
+    });
+    expect(organizationId).toBe(ORGANIZATION_ID);
+    expect(listed).toBe(2);
+  });
+
+  test("propagates a create failure when the attempt's organization does not exist", async () => {
+    await expect(
+      resolveDevQuickStartOrganization({
+        identity: createDevQuickStartIdentity(RANDOM_ID),
+        listOrganizations: async () => [
+          { id: "unrelated-organization", slug: "unrelated-slug" },
+        ],
+        createOrganization: async () => {
+          throw new Error("organization create failed");
+        },
+      }),
+    ).rejects.toThrow("organization create failed");
   });
 });
 
@@ -64,7 +330,7 @@ describe("runDevQuickStart", () => {
     const calls: string[] = [];
     const identity = createDevQuickStartIdentity(RANDOM_ID);
 
-    expect(
+    await expect(
       runDevQuickStart({
         attempt: { completedPhase: null, identity, organizationId: null },
         authenticate: async () => {
