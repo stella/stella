@@ -19,6 +19,10 @@ import type {
 } from "@stll/docx-core/model";
 import { propertyConfig } from "@stll/property-testing";
 
+import {
+  embeddedTextFixtures,
+  embeddedTextRtf,
+} from "@/api/lib/legal-search/parsers/rtf-destinations.fixtures";
 import { isRtf, readRtf } from "@/api/lib/legal-search/parsers/rtf-reader";
 
 /**
@@ -396,6 +400,17 @@ describe("character state", () => {
 });
 
 describe("header tables and destinations", () => {
+  test("starred metadata subgroups stay invisible without unsupported-destination warnings", () => {
+    for (const metadata of [String.raw`\fonttbl`, String.raw`\info`]) {
+      const rtf = String.raw`{\rtf1{${metadata}{\*\fname Hidden name{\*\unknownmetadata{\shptxt Hidden text}}}}Visible\par}`;
+      const document = readRtf(bytesOf(rtf));
+      expect(document.package.document.content.map(textOf)).toEqual([
+        "Visible",
+      ]);
+      expect(document.warnings ?? []).toEqual([]);
+    }
+  });
+
   test("the colour table's own text never reaches the document", () => {
     expect(paragraphsOf(`${HEADER}body\\par }`)).toEqual(["body"]);
   });
@@ -448,9 +463,9 @@ describe("footnotes", () => {
 
 describe("what the reader does not recognise", () => {
   test("an unknown control word is reported rather than dropped in silence", () => {
-    const document = readRtf(bytesOf(`${HEADER}a\\shpinst b\\par }`));
+    const document = readRtf(bytesOf(`${HEADER}a\\unknownprobe b\\par }`));
     expect(document.warnings).toEqual([
-      "rtf: unhandled control word \\shpinst",
+      "rtf: unhandled control word \\unknownprobe",
     ]);
   });
 
@@ -469,5 +484,44 @@ describe("recognising RTF at all", () => {
     expect(isRtf(bytesOf("{\\rtf1\\ansi"))).toBe(true);
     expect(isRtf(Uint8Array.from([0x50, 0x4b, 0x03, 0x04]))).toBe(false);
     expect(isRtf(Uint8Array.from([]))).toBe(false);
+  });
+});
+
+describe("embedded RTF text destinations", () => {
+  for (const { name, group } of embeddedTextFixtures) {
+    test(`keeps ${name} as separate paragraphs after its anchor`, () => {
+      const rtf = embeddedTextRtf(group);
+      expect(paragraphsOf(rtf).filter((text) => text.trim())).toEqual([
+        "Anchor start  anchor end",
+        "Box one",
+        "Box two",
+        "Next paragraph",
+      ]);
+      const box = readRtf(bytesOf(rtf)).package.document.content.find(
+        (block) => textOf(block) === "Box one",
+      );
+      expect(box?.type).toBe("paragraph");
+      if (box?.type === "paragraph") {
+        expect(runsOf(box).at(0)?.formatting?.bold).toBe(true);
+      }
+    });
+  }
+
+  test("does not expose visible destinations nested in metadata or unknown groups", () => {
+    const rtf = String.raw`{\rtf1 Before {\info{\shptxt Hidden metadata}}{\*\unknownprobe{\result Hidden unknown}} After\par}`;
+    expect(paragraphsOf(rtf).filter((text) => text.trim())).toEqual([
+      "Before  After",
+    ]);
+    expect(readRtf(bytesOf(rtf)).warnings).toContain(
+      "rtf: unhandled control word \\unknownprobe",
+    );
+  });
+
+  test("skips binary bytes without mistaking their braces for group boundaries", () => {
+    const rtf = String.raw`{\rtf1 Before {\object{\*\objdata\bin3 }{} }{\result Box}} After\par}`;
+    expect(paragraphsOf(rtf).filter((text) => text.trim())).toEqual([
+      "Before  After",
+      "Box",
+    ]);
   });
 });

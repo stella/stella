@@ -78,6 +78,7 @@ import { Route as ProtectedSettingsOrganizationDocumentTypesRouteImport } from '
 import { Route as ProtectedSettingsOrganizationMatterNumberingRouteImport } from './routes/_protected.settings/organization.matter-numbering'
 import { Route as ProtectedSettingsOrganizationMembersRouteImport } from './routes/_protected.settings/organization.members'
 import { Route as ProtectedSettingsOrganizationNumberSeriesRouteImport } from './routes/_protected.settings/organization.number-series'
+import { Route as ProtectedSettingsOrganizationTimePolicyRouteImport } from './routes/_protected.settings/organization.time-policy'
 import { Route as ProtectedSettingsOrganizationUsageRouteImport } from './routes/_protected.settings/organization.usage'
 import { Route as ProtectedWorkspacesWorkspaceIdIndexRouteImport } from './routes/_protected.workspaces/$workspaceId/index'
 import { Route as ProtectedWorkspacesWorkspaceIdViewIdRouteRouteImport } from './routes/_protected.workspaces/$workspaceId/$viewId.route'
@@ -475,6 +476,12 @@ const ProtectedSettingsOrganizationNumberSeriesRoute =
     path: '/number-series',
     getParentRoute: () => ProtectedSettingsOrganizationRouteRoute,
   } as any)
+const ProtectedSettingsOrganizationTimePolicyRoute =
+  ProtectedSettingsOrganizationTimePolicyRouteImport.update({
+    id: '/time-policy',
+    path: '/time-policy',
+    getParentRoute: () => ProtectedSettingsOrganizationRouteRoute,
+  } as any)
 const ProtectedSettingsOrganizationUsageRoute =
   ProtectedSettingsOrganizationUsageRouteImport.update({
     id: '/usage',
@@ -718,6 +725,7 @@ export interface FileRoutesByFullPath {
   '/settings/organization/matter-numbering': typeof ProtectedSettingsOrganizationMatterNumberingRoute
   '/settings/organization/members': typeof ProtectedSettingsOrganizationMembersRoute
   '/settings/organization/number-series': typeof ProtectedSettingsOrganizationNumberSeriesRoute
+  '/settings/organization/time-policy': typeof ProtectedSettingsOrganizationTimePolicyRoute
   '/settings/organization/usage': typeof ProtectedSettingsOrganizationUsageRoute
   '/workspaces/$workspaceId/correspondence': typeof ProtectedWorkspacesWorkspaceIdCorrespondenceRouteWithChildren
   '/workspaces/$workspaceId/expenses': typeof ProtectedWorkspacesWorkspaceIdExpensesRoute
@@ -808,6 +816,7 @@ export interface FileRoutesByTo {
   '/settings/organization/matter-numbering': typeof ProtectedSettingsOrganizationMatterNumberingRoute
   '/settings/organization/members': typeof ProtectedSettingsOrganizationMembersRoute
   '/settings/organization/number-series': typeof ProtectedSettingsOrganizationNumberSeriesRoute
+  '/settings/organization/time-policy': typeof ProtectedSettingsOrganizationTimePolicyRoute
   '/settings/organization/usage': typeof ProtectedSettingsOrganizationUsageRoute
   '/workspaces/$workspaceId/correspondence': typeof ProtectedWorkspacesWorkspaceIdCorrespondenceRouteWithChildren
   '/workspaces/$workspaceId/expenses': typeof ProtectedWorkspacesWorkspaceIdExpensesRoute
@@ -909,6 +918,7 @@ export interface FileRoutesById {
   '/_protected/settings/organization/matter-numbering': typeof ProtectedSettingsOrganizationMatterNumberingRoute
   '/_protected/settings/organization/members': typeof ProtectedSettingsOrganizationMembersRoute
   '/_protected/settings/organization/number-series': typeof ProtectedSettingsOrganizationNumberSeriesRoute
+  '/_protected/settings/organization/time-policy': typeof ProtectedSettingsOrganizationTimePolicyRoute
   '/_protected/settings/organization/usage': typeof ProtectedSettingsOrganizationUsageRoute
   '/_protected/workspaces/$workspaceId/correspondence': typeof ProtectedWorkspacesWorkspaceIdCorrespondenceRouteWithChildren
   '/_protected/workspaces/$workspaceId/expenses': typeof ProtectedWorkspacesWorkspaceIdExpensesRoute
@@ -1010,6 +1020,7 @@ export interface FileRouteTypes {
     | '/settings/organization/matter-numbering'
     | '/settings/organization/members'
     | '/settings/organization/number-series'
+    | '/settings/organization/time-policy'
     | '/settings/organization/usage'
     | '/workspaces/$workspaceId/correspondence'
     | '/workspaces/$workspaceId/expenses'
@@ -1100,6 +1111,7 @@ export interface FileRouteTypes {
     | '/settings/organization/matter-numbering'
     | '/settings/organization/members'
     | '/settings/organization/number-series'
+    | '/settings/organization/time-policy'
     | '/settings/organization/usage'
     | '/workspaces/$workspaceId/correspondence'
     | '/workspaces/$workspaceId/expenses'
@@ -1200,6 +1212,7 @@ export interface FileRouteTypes {
     | '/_protected/settings/organization/matter-numbering'
     | '/_protected/settings/organization/members'
     | '/_protected/settings/organization/number-series'
+    | '/_protected/settings/organization/time-policy'
     | '/_protected/settings/organization/usage'
     | '/_protected/workspaces/$workspaceId/correspondence'
     | '/_protected/workspaces/$workspaceId/expenses'
@@ -1738,6 +1751,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProtectedSettingsOrganizationNumberSeriesRouteImport
       parentRoute: typeof ProtectedSettingsOrganizationRouteRoute
     }
+    '/_protected/settings/organization/time-policy': {
+      id: '/_protected/settings/organization/time-policy'
+      path: '/time-policy'
+      fullPath: '/settings/organization/time-policy'
+      preLoaderRoute: typeof ProtectedSettingsOrganizationTimePolicyRouteImport
+      parentRoute: typeof ProtectedSettingsOrganizationRouteRoute
+    }
     '/_protected/settings/organization/usage': {
       id: '/_protected/settings/organization/usage'
       path: '/usage'
@@ -2093,6 +2113,7 @@ interface ProtectedSettingsOrganizationRouteRouteChildren {
   ProtectedSettingsOrganizationMatterNumberingRoute: typeof ProtectedSettingsOrganizationMatterNumberingRoute
   ProtectedSettingsOrganizationMembersRoute: typeof ProtectedSettingsOrganizationMembersRoute
   ProtectedSettingsOrganizationNumberSeriesRoute: typeof ProtectedSettingsOrganizationNumberSeriesRoute
+  ProtectedSettingsOrganizationTimePolicyRoute: typeof ProtectedSettingsOrganizationTimePolicyRoute
   ProtectedSettingsOrganizationUsageRoute: typeof ProtectedSettingsOrganizationUsageRoute
   ProtectedSettingsOrganizationIndexRoute: typeof ProtectedSettingsOrganizationIndexRoute
 }
@@ -2114,6 +2135,8 @@ const ProtectedSettingsOrganizationRouteRouteChildren: ProtectedSettingsOrganiza
       ProtectedSettingsOrganizationMembersRoute,
     ProtectedSettingsOrganizationNumberSeriesRoute:
       ProtectedSettingsOrganizationNumberSeriesRoute,
+    ProtectedSettingsOrganizationTimePolicyRoute:
+      ProtectedSettingsOrganizationTimePolicyRoute,
     ProtectedSettingsOrganizationUsageRoute:
       ProtectedSettingsOrganizationUsageRoute,
     ProtectedSettingsOrganizationIndexRoute:

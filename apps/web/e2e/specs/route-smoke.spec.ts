@@ -229,6 +229,7 @@ const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
   staticRoute("/settings/organization/number-series", {
     expectation: { kind: "settles" },
   }),
+  staticRoute("/settings/organization/time-policy"),
 ];
 
 // Redirect targets for workspace-scoped aliases depend on the runtime view id,

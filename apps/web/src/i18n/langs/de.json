@@ -876,6 +876,7 @@
         "publishedOnWeb": "Im Web veröffentlicht"
       },
       "statutes": "Anwendbare Vorschriften",
+      "textNotYetAvailable": "Das Gericht hat den Entscheidungstext nicht veröffentlicht, oder er ist hier noch nicht verfügbar.",
       "textPending": "Der Entscheidungstext wird noch abgerufen",
       "textReadFailed": "Der Entscheidungstext konnte nicht geladen werden",
       "textUnavailable": "Für diese Entscheidung liegt kein Text vor"
@@ -4345,6 +4346,20 @@
       "renameDescription": "Mitglieder sehen den neuen Namen sofort.",
       "renameTitle": "Organisation umbenennen",
       "renameTypeToConfirm": "Geben Sie zur Bestätigung den neuen Namen ein: {name}",
+      "timePolicy": {
+        "description": "Legen Sie Zeitrundung, Bearbeitungsfristen und Monatssperren fest.",
+        "editWindow": "Bearbeitungsfrist (Tage)",
+        "editWindowHelp": "Bei null sind Änderungen nur am Tag der geleisteten Arbeit erlaubt.",
+        "invalidEditWindow": "Geben Sie eine ganze Anzahl von Tagen ein, mindestens null.",
+        "invalidLockedMonth": "Wählen Sie einen abgeschlossenen Monat.",
+        "invalidMinimumUnit": "Wählen Sie eine Zeiteinheit, die 60 Minuten ohne Rest teilt.",
+        "lockedThrough": "Gesperrt bis einschließlich",
+        "lockedThroughHelp": "Einträge in diesem und früheren Monaten können nicht bearbeitet werden.",
+        "minimumUnit": "Kleinste Zeiteinheit",
+        "minimumUnitHelp": "Zeit wird in Vielfachen dieser Minutenzahl abgerechnet.",
+        "narrativeRequired": "Beschreibungstext erforderlich",
+        "title": "Regeln zur Zeiterfassung"
+      },
       "usage": "Nutzung",
       "usageDescription": "Nutzungslimits und Berechtigungsstatus für diese Organisation",
       "usageEmptyDescription": "Konfigurieren Sie eine Nutzungsberechtigung, um gemessene KI-Funktionen für diese Organisation zu aktivieren.",

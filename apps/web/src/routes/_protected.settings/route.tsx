@@ -4,6 +4,7 @@ import { useTranslations } from "use-intl";
 
 import {
   BrainIcon,
+  ClockIcon,
   FlaskConicalIcon,
   GaugeIcon,
   HashIcon,
@@ -47,6 +48,7 @@ type NavTo =
   | "/settings/organization/members"
   | "/settings/organization/matter-numbering"
   | "/settings/organization/number-series"
+  | "/settings/organization/time-policy"
   | "/settings/organization/document-types"
   | "/settings/organization/ai"
   | "/settings/organization/anonymization"
@@ -123,6 +125,11 @@ const ORGANIZATION_SECTION = {
       icon: HashIcon,
     },
     {
+      to: "/settings/organization/time-policy",
+      labelKey: "settings.organization.timePolicy.title",
+      icon: ClockIcon,
+    },
+    {
       to: "/settings/organization/document-types",
       labelKey: "settings.organization.documentTypes.title",
       icon: TagsIcon,
@@ -180,15 +187,19 @@ function SettingsLayout() {
         items: [...accountItems, BETA_NAV_ITEM],
       } as const)
     : ({ ...ACCOUNT_SECTION, items: accountItems } as const);
+  const timeBillingPreviewEnabled = useTimeBillingPreviewEnabled();
   const billingAccessible = isBillingSettingsAccessible({
-    previewEnabled: useTimeBillingPreviewEnabled(),
+    previewEnabled: timeBillingPreviewEnabled,
     role,
   });
   const organizationSection = {
     ...ORGANIZATION_SECTION,
     items: ORGANIZATION_SECTION.items.filter(
       (item) =>
-        item.to !== "/settings/organization/number-series" || billingAccessible,
+        (item.to !== "/settings/organization/number-series" ||
+          billingAccessible) &&
+        (item.to !== "/settings/organization/time-policy" ||
+          timeBillingPreviewEnabled),
     ),
   };
   const sections = showOrganization

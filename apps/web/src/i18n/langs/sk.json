@@ -876,6 +876,7 @@
         "publishedOnWeb": "Zverejnené na webe"
       },
       "statutes": "Aplikované predpisy",
+      "textNotYetAvailable": "Súd text rozhodnutia nezverejnil alebo tu zatiaľ nie je dostupný.",
       "textPending": "Text rozhodnutia sa stále načítava",
       "textReadFailed": "Text rozhodnutia sa nepodarilo načítať",
       "textUnavailable": "K tomuto rozhodnutiu nie je k dispozícii text"
@@ -4345,6 +4346,20 @@
       "renameDescription": "Členovia uvidia nový názov okamžite.",
       "renameTitle": "Premenovať organizáciu",
       "renameTypeToConfirm": "Pre potvrdenie napíšte nový názov: {name}",
+      "timePolicy": {
+        "description": "Nastavte zaokrúhľovanie času, obmedzenia úprav a uzamykanie mesiacov.",
+        "editWindow": "Lehota na úpravy (dni)",
+        "editWindowHelp": "Nula povoľuje úpravy iba v deň vykonania práce.",
+        "invalidEditWindow": "Zadajte celé nezáporné číslo udávajúce počet dní.",
+        "invalidLockedMonth": "Vyberte už ukončený mesiac.",
+        "invalidMinimumUnit": "Vyberte časovú jednotku, ktorá bezo zvyšku delí 60 minút.",
+        "lockedThrough": "Uzamknuté do",
+        "lockedThroughHelp": "Záznamy v tomto mesiaci a predchádzajúcich mesiacoch nemožno upravovať.",
+        "minimumUnit": "Minimálna časová jednotka",
+        "minimumUnitHelp": "Čas sa účtuje v násobkoch tohto počtu minút.",
+        "narrativeRequired": "Vyžadovať popis",
+        "title": "Pravidlá vykazovania času"
+      },
       "usage": "Využitie",
       "usageDescription": "Limity využitia a stav oprávnenia pre túto organizáciu",
       "usageEmptyDescription": "Nakonfigurujte oprávnenie na využitie, aby organizácia mohla používať merané funkcie AI.",

@@ -121,6 +121,11 @@ const parseDominoDate = (raw: string): string | null => {
   return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
 };
 
+type SourceMetadataTable = {
+  captions: string[];
+  rows: { type: "header" | "data"; text: string }[][];
+};
+
 type MetadataResult = {
   canonical: DocumentAstMetadata;
   source: Record<string, unknown>;
@@ -147,10 +152,24 @@ export const extractNsMetadata = ($: cheerio.CheerioAPI): MetadataResult => {
     });
 
   const metaTable = $("#box-table-a");
+  const metadataTable: SourceMetadataTable = {
+    captions: metaTable
+      .children("caption")
+      .toArray()
+      .map((caption) => $(caption).text().trim()),
+    rows: [],
+  };
+  source["metadataTable"] = metadataTable;
   metaTable.find("> tbody > tr, > tr").each((_, tr) => {
-    const tds = $(tr).find("> td");
+    const tds = $(tr).children("td, th");
+    metadataTable.rows.push(
+      tds.toArray().map((cell) => ({
+        type: $(cell).is("th") ? "header" : "data",
+        text: $(cell).text().trim(),
+      })),
+    );
     if (tds.length < 2) {
-      const singleTd = $(tr).find("> td");
+      const singleTd = tds;
       if (
         singleTd.length === 1 &&
         singleTd.text().includes("ústavní stížnost")
@@ -161,7 +180,7 @@ export const extractNsMetadata = ($: cheerio.CheerioAPI): MetadataResult => {
           nestedTable.find("tr").each((__, innerTr) => {
             const row: TableCell[] = [];
             $(innerTr)
-              .find("td")
+              .children("td, th")
               .each((___, td) => {
                 const inlines = walkInlines($, $(td));
                 row.push({
@@ -377,17 +396,24 @@ export const extractRawChunks = ($: cheerio.CheerioAPI): RawChunk[] => {
     // Block-level elements: flush buffer, then process
     if (tag === "table") {
       flushBuffer();
+      $node.children("caption").each((_, caption) => {
+        flushInlines(walkInlines($, $(caption)), false);
+      });
       const rows: TableCell[][] = [];
       $node.find("tr").each((_, tr) => {
         const row: TableCell[] = [];
         $(tr)
-          .find("td")
+          .children("td, th")
           .each((__, td) => {
             const inlines = walkInlines($, $(td));
-            row.push({
+            const cell: TableCell = {
               inlines,
               plainText: inlinesToPlainText(inlines),
-            });
+            };
+            if ($(td).is("th")) {
+              cell.header = true;
+            }
+            row.push(cell);
           });
         if (row.length > 0) {
           rows.push(row);
