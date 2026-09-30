@@ -1,4 +1,5 @@
 import {
+  ClockIcon as Clock,
   MessageSquareIcon as MessageSquare,
   PlusIcon as Plus,
   UploadIcon as Upload,
@@ -8,6 +9,17 @@ import {
 import type { CommandAction } from "./types";
 
 export const COMMAND_ACTIONS: readonly CommandAction[] = [
+  {
+    id: "log-time",
+    group: "create",
+    titleKey: "common.logTime",
+    icon: Clock,
+    shortcutId: "logTime",
+    isAvailable: (ctx) => ctx.canLogTime,
+    run: (ctx) => {
+      ctx.openLogTime();
+    },
+  },
   {
     id: "new-matter",
     group: "create",
