@@ -2439,7 +2439,13 @@ describe("OpenAI-compatible MCP tools", () => {
       async ({ query }: { query: string }) => ({
         facets: {
           court: [],
-          year: [],
+          year: [
+            {
+              value: query === "duty of care" ? "2024" : "2025",
+              count: 3,
+              label: null,
+            },
+          ],
           decisionType: [],
           source: [],
           language: [],
@@ -2492,8 +2498,14 @@ describe("OpenAI-compatible MCP tools", () => {
     ]);
     // The hit kept is the one from the query that ranked it highest.
     expect(payload.results.at(0)?.snippet).toBe("c from second");
-    // Facets and a count describe one query's result set, not a union.
-    expect(payload.facets).toBeNull();
+    // Facets describe the first phrasing; overlapping counts are not summed.
+    expect(payload.facets).toEqual({
+      court: [],
+      year: [{ value: "2024", count: 3, label: null }],
+      decisionType: [],
+      source: [],
+      language: [],
+    });
     expect(payload.total).toEqual({ type: SEARCH_TOTAL_TYPE.NOT_COUNTED });
     // `limit` bounds the merged page, so each phrasing was asked for half.
     expect(
@@ -4415,6 +4427,63 @@ describe("OpenAI-compatible MCP tools", () => {
     });
     expect(anonymizeTextFieldsMock).not.toHaveBeenCalled();
   });
+
+  test.each([
+    {
+      cursor: undefined,
+      include: undefined,
+      fields: ["details", "metadata", "textFields", "source", "citations"],
+    },
+    { cursor: encodePaginationCursor([1, null]), include: undefined, fields: [] },
+    { cursor: undefined, include: [], fields: [] },
+    {
+      cursor: encodePaginationCursor([1, null]),
+      include: ["metadata", "textFields"],
+      fields: ["metadata", "textFields"],
+    },
+    {
+      cursor: encodePaginationCursor([1, null]),
+      include: "source",
+      fields: ["source"],
+    },
+    {
+      cursor: encodePaginationCursor([1, null]),
+      include: ["details", "citations"],
+      fields: ["details", "citations"],
+    },
+  ])(
+    "read_case_law_decision selects static fields per window (%j)",
+    async ({ cursor, include, fields }) => {
+      readDecisionHandlerMock.mockResolvedValue(createReadDecisionResult());
+      const payload = asTestRaw<{
+        items: { decision: Record<string, unknown> }[];
+      }>(
+        parseToolPayload(
+          await handleMcpToolCall({
+            args: { decision_ids: [DECISION_ID], cursor, include },
+            context: createContext(),
+            toolName: "read_case_law_decision",
+          }),
+        ),
+      );
+      const decision = payload.items.at(0)?.decision ?? panic("Missing decision");
+      expect(decision).toMatchObject({
+        decisionId: DECISION_ID,
+        caseNumber: "29 Cdo 123/2024",
+      });
+      expect(decision).toHaveProperty("text");
+      for (const [field, key] of [
+        ["details", "court"],
+        ["metadata", "metadata"],
+        ["textFields", "textFields"],
+        ["source", "source"],
+        ["citations", "citationsTo"],
+        ["citations", "citationsFrom"],
+      ] as const) {
+        expect(Object.hasOwn(decision, key)).toBe(fields.includes(field));
+      }
+    },
+  );
 
   test("read_case_law_decision pages citation lists via the compound cursor", async () => {
     const base = createReadDecisionResult();
