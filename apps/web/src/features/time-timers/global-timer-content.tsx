@@ -254,7 +254,10 @@ export const GlobalTimerContent = ({
               <TimerError error={mutation.error} />
               {canCreate && (
                 <Button
-                  disabled={mutation.isPending}
+                  disabled={
+                    mutation.isPending ||
+                    (workspaceId !== undefined && matters.isPending)
+                  }
                   onClick={() => setPanel({ type: "start" })}
                 >
                   {t("billing.startTimer")}
