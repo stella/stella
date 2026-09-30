@@ -33,6 +33,46 @@ const monitoringPolicies = (tableName: string) => {
   ];
 };
 
+export const sanctionsContactMarks = p.pgTable(
+  "sanctions_contact_marks",
+  {
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    contactId: safeUuid<"contact">("contact_id").notNull(),
+    generation: p.bigint({ mode: "bigint" }).notNull().default(1n),
+    scheduledAt: timestamptz("scheduled_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p.primaryKey({ columns: [table.organizationId, table.contactId] }),
+    p
+      .index("sanctions_contact_marks_due_idx")
+      .on(table.scheduledAt, table.organizationId, table.contactId),
+    p.check(
+      "sanctions_contact_marks_generation_check",
+      sql`${table.generation} > 0`,
+    ),
+    p
+      .foreignKey({
+        columns: [table.organizationId, table.contactId],
+        foreignColumns: [contacts.organizationId, contacts.id],
+      })
+      .onDelete("cascade"),
+    ...monitoringPolicies("sanctions_contact_marks"),
+  ],
+);
+
+export const sanctionsOrganizationMarks = p.pgTable(
+  "sanctions_organization_marks",
+  {
+    organizationId: safeOrganizationId("organization_id")
+      .primaryKey()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    generation: p.bigint({ mode: "bigint" }).notNull().default(1n),
+  },
+  () => monitoringPolicies("sanctions_organization_marks"),
+);
+
 export const sanctionsContactScreenings = p.pgTable(
   "sanctions_contact_screenings",
   {

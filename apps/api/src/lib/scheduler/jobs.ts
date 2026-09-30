@@ -42,6 +42,7 @@ import { MEMORY_CURATOR_TASK } from "@/api/lib/scheduler/tasks/memory-curator";
 import { MEMORY_EXTRACTOR_TASK } from "@/api/lib/scheduler/tasks/memory-extractor";
 import { RECORD_MISSING_ORGANIZATION_ACCESS_STATES_TASK } from "@/api/lib/scheduler/tasks/organization-access-state-reconcile";
 import { RECONCILE_REPORT_EXPORTS_TASK } from "@/api/lib/scheduler/tasks/report-export-reconcile";
+import { DRAIN_SANCTIONS_MONITORING_TASK } from "@/api/lib/scheduler/tasks/sanctions-monitoring";
 import { REFRESH_SANCTIONS_SOURCES_TASK } from "@/api/lib/scheduler/tasks/sanctions-refresh";
 import { REPAIR_CHAT_SEARCH_INDEX_TASK } from "@/api/lib/scheduler/tasks/search-chat-index";
 import { REPAIR_SEARCH_PROJECTIONS_TASK } from "@/api/lib/scheduler/tasks/search-projection-repair";
@@ -429,6 +430,13 @@ export const DECLARED_SCHEDULER_JOBS = [
       timeZone: "Europe/Prague",
     },
     task: INFO_SOUD_SYNC_TRACKED_CASES_TASK,
+  },
+  {
+    description: "Drain contact screening work",
+    id: "sanctions.drainMonitoring.minute",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 60_000 },
+    task: DRAIN_SANCTIONS_MONITORING_TASK,
   },
   {
     description: "Refresh global reference lists",
