@@ -851,6 +851,7 @@
         "publishedOnWeb": "Paskelbta internete"
       },
       "statutes": "Taikomi teisės aktai",
+      "textNotYetAvailable": "Teismas nepaskelbė sprendimo teksto arba jis čia dar neprieinamas.",
       "textPending": "Sprendimo tekstas dar gaunamas",
       "textReadFailed": "Nepavyko įkelti sprendimo teksto",
       "textUnavailable": "Šiam sprendimui teksto nėra"

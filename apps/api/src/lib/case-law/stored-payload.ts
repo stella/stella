@@ -14,7 +14,7 @@ import { notInArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { caseLawDecisions } from "@/api/db/schema";
-import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
+import { hasUsableAst } from "@/api/lib/case-law/document-ast";
 import type { CorpusPayload } from "@/api/lib/legal-search/corpus-storage";
 import {
   EMPTY_CORPUS_CONTENT_HASHES,
@@ -51,7 +51,10 @@ const pgPayloadCarriesDocumentFor = ({
   fulltext,
   documentAst,
   sections,
-}: DecisionPayloadColumns): SQL<boolean> => sql<boolean>`(
+}: Pick<
+  DecisionPayloadColumns,
+  "fulltext" | "documentAst" | "sections"
+>): SQL<boolean> => sql<boolean>`(
   coalesce(${fulltext}, '') <> ''
   or ${jsonbArrayLength(sql`${documentAst} -> 'blocks'`)} > 0
   or ${jsonbArrayLength(sections)} > 0
@@ -72,6 +75,26 @@ export const rowHoldsDocumentFor = (
 )`;
 
 export const rowHoldsDocument = rowHoldsDocumentFor(caseLawDecisions);
+
+/**
+ * Public reads cannot inspect the normalized corpus key. Confirm the readable
+ * pointers instead: completed corpus writes persist all keys atomically, and
+ * an isolated normalized key is never a confirmed document write.
+ */
+export const publicRowHoldsDocumentFor = (
+  table: Omit<DecisionPayloadColumns, "normalizedS3Key">,
+): SQL<boolean> => sql<boolean>`(
+  ${pgPayloadCarriesDocumentFor(table)}
+  or (
+    ${table.textS3Key} is not null
+    and ${table.astS3Key} is not null
+    and ${table.contentHash} is not null
+    and ${notInArray(table.contentHash, [...EMPTY_CORPUS_CONTENT_HASHES])}
+  )
+)`;
+
+export const publicRowHoldsDocument =
+  publicRowHoldsDocumentFor(caseLawDecisions);
 
 /**
  * The same question as `pgPayloadCarriesDocument`, asked of a payload

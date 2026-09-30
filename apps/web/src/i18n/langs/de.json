@@ -851,6 +851,7 @@
         "publishedOnWeb": "Im Web veröffentlicht"
       },
       "statutes": "Anwendbare Vorschriften",
+      "textNotYetAvailable": "Das Gericht hat den Entscheidungstext nicht veröffentlicht, oder er ist hier noch nicht verfügbar.",
       "textPending": "Der Entscheidungstext wird noch abgerufen",
       "textReadFailed": "Der Entscheidungstext konnte nicht geladen werden",
       "textUnavailable": "Für diese Entscheidung liegt kein Text vor"

@@ -128,8 +128,7 @@ export const parseSkDecisionPdf = async (
   input: ParseSkDecisionInput,
 ): Promise<ParseSkDecisionOutput> => {
   const lines = await extractLines(input.pdfBytes);
-  const filtered = skipHeaderLines(lines);
-  const blocks = classifyLines(filtered);
+  const blocks = buildSkDecisionPdfBlocks({ lines, metadata: input });
 
   // Synthesize decision title if none detected
   const hasTitle = blocks.some(
@@ -149,7 +148,7 @@ export const parseSkDecisionPdf = async (
     });
   }
 
-  const validationHtml = buildValidationHtml(filtered.map((l) => l.text));
+  const validationHtml = buildValidationHtml(lines.map((l) => l.text));
   validateAndLog(
     { parser: "sk-courts", caseNumber: input.caseNumber },
     validationHtml,
@@ -239,11 +238,7 @@ const extractLines = async (pdfBytes: Uint8Array): Promise<PdfLine[]> => {
     }
   }
 
-  // Strip page numbers BEFORE merging — otherwise they
-  // get joined into the preceding paragraph's text.
-  const withoutPageNumbers = lines.filter((line) => !isPageNumber(line, lines));
-
-  return mergeWrappedLines(withoutPageNumbers);
+  return lines;
 };
 
 type PdfTextLine = {
@@ -498,26 +493,33 @@ const mergeWrappedLines = (lines: readonly PdfLine[]): PdfLine[] => {
 
 // ── Header stripping ──────────────────────────────────────
 
-/** Header labels that repeat API metadata; skip from body. */
-const HEADER_LABELS = [
-  "Súd:",
-  "Spisová značka:",
-  "Identifikačné číslo",
-  "Dátum vydania",
-  "Meno a priezvisko",
-  "ECLI:",
-];
+type BuildSkDecisionPdfBlocksOptions = {
+  lines: readonly PdfLine[];
+  metadata: Pick<ParseSkDecisionInput, "court" | "caseNumber" | "ecli">;
+};
 
-const isHeaderLine = (text: string): boolean =>
-  HEADER_LABELS.some((label) => text.startsWith(label));
-
-const skipHeaderLines = (lines: readonly PdfLine[]): PdfLine[] => {
-  // Skip header lines at the start of the document
-  let i = 0;
-  while (i < lines.length && isHeaderLine(lines[i]?.text ?? "")) {
-    i++;
+/** Match a whole extracted line against metadata before merging can append body text. */
+export const buildSkDecisionPdfBlocks = ({
+  lines,
+  metadata,
+}: BuildSkDecisionPdfBlocksOptions): Block[] => {
+  const repeatedHeaders = new Set([
+    `Súd: ${metadata.court}`,
+    `Spisová značka: ${metadata.caseNumber}`,
+  ]);
+  if (metadata.ecli) {
+    repeatedHeaders.add(`ECLI: ${metadata.ecli}`);
   }
-  return lines.slice(i);
+  let firstBodyLine = 0;
+  while (
+    firstBodyLine < lines.length &&
+    repeatedHeaders.has(lines.at(firstBodyLine)?.text.trim() ?? "")
+  ) {
+    firstBodyLine++;
+  }
+  // Digits at page boundaries can be amounts or numbered points; without
+  // a source-backed pagination signal they remain source content.
+  return classifyLines(mergeWrappedLines(lines.slice(firstBodyLine)));
 };
 
 // ── Classification ────────────────────────────────────────
@@ -532,41 +534,6 @@ const boldInline = (text: string): Inline[] => [
 ];
 
 type Section = SkDocumentSection;
-
-/**
- * Detect page numbers using PDF page boundary info.
- *
- * A standalone number is a page number when it's the first
- * or last line on its PDF page (page headers/footers).
- * This is more robust than matching digit patterns alone.
- */
-const isPageNumber = (line: PdfLine, allLines: readonly PdfLine[]): boolean => {
-  if (!/^\d{1,4}$/u.test(line.text.trim())) {
-    return false;
-  }
-  if (line.bold) {
-    return false;
-  }
-
-  const idx = allLines.indexOf(line);
-  if (idx === -1) {
-    return false;
-  }
-
-  // First line on this page
-  const prevLine = allLines[idx - 1];
-  if (!prevLine || prevLine.pageIndex !== line.pageIndex) {
-    return true;
-  }
-
-  // Last line on this page
-  const nextLine = allLines[idx + 1];
-  if (!nextLine || nextLine.pageIndex !== line.pageIndex) {
-    return true;
-  }
-
-  return false;
-};
 
 /**
  * Classify extracted PDF lines into AST blocks.
@@ -670,14 +637,8 @@ const classifyLines = (lines: readonly PdfLine[]): Block[] => {
       continue;
     }
 
-    // After the closing formula, everything is signature
-    // material (judge name, title). Standalone numbers
-    // are page numbers — drop them entirely.
+    // After the closing formula, retain all signature material.
     if (section === "closing") {
-      // Drop page numbers (standalone digits)
-      if (/^\d{1,3}$/u.test(text.trim())) {
-        continue;
-      }
       blocks.push({
         id: makeId(),
         anchorId: `p${++blockCount}`,

@@ -519,9 +519,7 @@ export const extractRawChunks = ($: cheerio.CheerioAPI): RawChunk[] => {
     // into the previous paragraph.
     if (tag === "ul" || tag === "ol") {
       flushBuffer();
-      // children() (elements only) avoids raw text nodes
-      // inside <ul> leaking into the preceding chunk.
-      $node.children().each((_, child) => {
+      $node.contents().each((_, child) => {
         processNode(child, parentCentered);
       });
       flushBuffer();

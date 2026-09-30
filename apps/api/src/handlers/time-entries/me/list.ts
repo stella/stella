@@ -84,6 +84,13 @@ const UNPROJECTED_MY_TIME_ENTRY_COLUMNS = [
   "timerStoppedAt",
   "createdAt",
   "updatedAt",
+  // Approval metadata is exposed by the approval queue.
+  "approverUserId",
+  "approvedByUserId",
+  "approvedAt",
+  "returnedByUserId",
+  "returnedAt",
+  "returnComment",
 ] as const satisfies readonly (keyof MyTimeEntrySourceRow)[];
 
 type MissingMyTimeEntryColumn = UnprojectedColumns<
