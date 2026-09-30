@@ -183,6 +183,9 @@ export const RESULT_BOUNDARY_GLOBS = [
   // rolls back the fenced write transaction.
   "apps/api/src/lib/chat/run-log.ts",
   "apps/api/src/lib/workflow-queue.ts",
+  // Adapts admission Results to BullMQ's DelayedError/rejection protocol and
+  // reservation callbacks whose rejection rolls back the kickoff transaction.
+  "apps/api/src/lib/rate-limit/queued-action-admission.ts",
   "apps/api/src/scripts/**",
   "apps/api/src/handlers/mcp-app-sandbox/**",
   // Web worker entry modules. The browser, not our code, invokes the message

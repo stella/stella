@@ -5,6 +5,7 @@ import { env } from "@/api/env";
 import { toSafeId } from "@/api/lib/branded-types";
 
 import {
+  ActionAdmissionError,
   withActionAdmission,
   reserveQueuedKickoffPeriod,
 } from "./action-admission";
@@ -113,6 +114,65 @@ describe("background action admission", () => {
     expect(releases).toBe(1);
   });
 
+  test("a refused nested period reservation returns an error without starting work", async () => {
+    for (const reply of [-1, -2] as const) {
+      let acquisitions = 0;
+      let releases = 0;
+      let executions = 0;
+      const redis = {
+        send: async (_command: string, args: string[]) => {
+          const script = args.at(0) ?? "";
+          if (script.includes("ZREMRANGEBYSCORE")) {
+            acquisitions += 1;
+            return 1;
+          }
+          if (script.includes("HEXISTS")) {
+            return reply;
+          }
+          if (script.includes('redis.call("ZREM",')) {
+            releases += 1;
+          }
+          return 1;
+        },
+      };
+      const parent = await withActionAdmission({
+        organizationId,
+        userId,
+        enabled: true,
+        policy,
+        redis,
+        run: async () =>
+          await withActionAdmission({
+            organizationId,
+            userId,
+            enabled: true,
+            redis,
+            execution: "queued-kickoff",
+            periodIdentity: {
+              actionKind: "workflow.start",
+              logicalPhaseId: `refused-run-${reply}`,
+            },
+            periodPolicy: { periodMs: 86_400_000, limit: 10 },
+            run: async () => {
+              executions += 1;
+            },
+          }),
+      });
+      expect(Result.isOk(parent)).toBe(true);
+      const nested = parent.unwrap();
+      expect(Result.isError(nested)).toBe(true);
+      if (Result.isError(nested)) {
+        expect(nested.error).toBeInstanceOf(ActionAdmissionError);
+        expect(nested.error).toMatchObject({
+          reason: reply === -1 ? "busy" : "unavailable",
+        });
+      }
+      expect(executions).toBe(0);
+      expect(acquisitions).toBe(1);
+      expect(releases).toBe(1);
+    }
+  });
+
   test("an explicit background job nested inside the same pool acquires a fresh lease", async () => {
     const acquisitions: string[][] = [];
     const redis = {
@@ -215,7 +275,9 @@ describe("background action admission", () => {
           run: async () => {
             expect(reservations).toBe(0);
             if (outcome === "accepted") {
-              await reserveQueuedKickoffPeriod();
+              expect(await reserveQueuedKickoffPeriod()).toEqual(
+                Result.ok(undefined),
+              );
             }
             return outcome;
           },

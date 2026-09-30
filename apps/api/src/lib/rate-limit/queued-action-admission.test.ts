@@ -142,6 +142,47 @@ describe("queued action admission", () => {
     });
   });
 
+  test("a deferred period refusal rejects kickoff before enqueue", async () => {
+    const previous = env.FEATURE_ACTION_ADMISSION;
+    env.FEATURE_ACTION_ADMISSION = true;
+    let enqueued = false;
+    const admission: typeof withActionAdmission = async (options) =>
+      await withActionAdmission({
+        ...options,
+        enabled: true,
+        policy: admissionPolicy,
+        periodPolicy,
+        redis: {
+          send: async (_command, args) => {
+            const script = args.at(0) ?? "";
+            if (script.includes("ZREMRANGEBYSCORE")) {
+              return 1;
+            }
+            return script.includes("HEXISTS") ? -1 : 1;
+          },
+        },
+      });
+    try {
+      await expect(
+        runQueuedKickoff({
+          organizationId,
+          userId,
+          actionKind: QUEUED_ACTION_KIND.flow,
+          logicalPhaseId: "refused-run",
+          periodReservation: "on-acceptance",
+          admission,
+          run: async (_signal, reservePeriod) => {
+            await reservePeriod();
+            enqueued = true;
+          },
+        }),
+      ).rejects.toBeInstanceOf(ActionAdmissionError);
+      expect(enqueued).toBe(false);
+    } finally {
+      env.FEATURE_ACTION_ADMISSION = previous;
+    }
+  });
+
   test("holds the admission lease until planning and enqueue work settles", async () => {
     const calls: string[][] = [];
     const redis = {

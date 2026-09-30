@@ -209,11 +209,11 @@ type ActionAdmissionOptions = {
   enabled?: boolean;
   scope?: "inherit" | "independent";
   policy?: ActionAdmissionPolicy;
-  execution?: "queued-kickoff" | "background-job";
-  periodReservation?: "on-acceptance";
-  periodIdentity?: AdmittedActionIdentity;
-  periodPolicy?: ActionPeriodPolicy;
-  redis?: RedisCommands;
+  execution?: "queued-kickoff" | "background-job" | undefined;
+  periodReservation?: "on-acceptance" | undefined;
+  periodIdentity?: AdmittedActionIdentity | undefined;
+  periodPolicy?: ActionPeriodPolicy | undefined;
+  redis?: RedisCommands | undefined;
   redisReady?: () => Promise<RedisCommands>;
   createId?: () => string;
   timing?: AdmissionTiming;
@@ -231,7 +231,7 @@ type AdmissionScope = {
   status: "active" | "settled";
   pool: "interactive" | "background";
   leaseId: string;
-  reservePeriod: () => Promise<void>;
+  reservePeriod: () => Promise<Result<void, ActionAdmissionError>>;
 };
 
 const admissionScope = new AsyncLocalStorage<AdmissionScope>();
@@ -350,9 +350,9 @@ const createAdmissionExecutor = ({
   return execute;
 };
 
-export const reserveQueuedKickoffPeriod = async (): Promise<void> => {
+export const reserveQueuedKickoffPeriod = async () => {
   if (!env.FEATURE_ACTION_ADMISSION) {
-    return;
+    return Result.ok(undefined);
   }
   const scope = admissionScope.getStore();
   if (scope?.status !== "active") {
@@ -360,8 +360,10 @@ export const reserveQueuedKickoffPeriod = async (): Promise<void> => {
       "Queued period reservation requires an active admission scope",
     );
   }
-  scope.signal.throwIfAborted();
-  await scope.reservePeriod();
+  if (scope.signal.aborted) {
+    return Result.err(scope.signal.reason);
+  }
+  return await scope.reservePeriod();
 };
 
 type PeriodReservationOptions = AdmissionExecutorOptions & { leaseId: string };
@@ -369,24 +371,27 @@ const createPeriodReservation =
   ({ leaseId, ...options }: PeriodReservationOptions) =>
   async () => {
     if (options.budget === null) {
-      return;
+      return Result.ok(undefined);
     }
     const result = await createAdmissionExecutor(options)(
       RESERVE_PERIOD_SCRIPT,
       ["0", "0", "0", leaseId, ...actionPeriodArguments(options.budget)],
     );
     if (Result.isError(result)) {
-      throw result.error;
+      return result;
     }
     if (result.value !== 1) {
-      throw new ActionAdmissionError({
-        message:
-          result.value === -1
-            ? "Action period limit reached"
-            : "Action period reservation is unavailable",
-        reason: result.value === -1 ? "period_exhausted" : "unavailable",
-      });
+      return Result.err(
+        new ActionAdmissionError({
+          message:
+            result.value === -1
+              ? "Action period limit reached"
+              : "Action period reservation is unavailable",
+          reason: result.value === -1 ? "period_exhausted" : "unavailable",
+        }),
+      );
     }
+    return Result.ok(undefined);
   };
 
 type AdmissionBudgetOptions = Pick<
@@ -471,19 +476,23 @@ const runInheritedAdmission = async <T>({
     }),
   };
   try {
-    return await Result.tryPromise({
-      try: async () =>
-        await admissionScope.run(nested, async () => {
-          inherited.signal.throwIfAborted();
-          if (
-            execution === "queued-kickoff" &&
-            periodReservation !== "on-acceptance"
-          ) {
-            await nested.reservePeriod();
-          }
-          return await run(inherited.signal);
-        }),
-      catch: (error: unknown) => error,
+    return await admissionScope.run(nested, async () => {
+      if (inherited.signal.aborted) {
+        return Result.err(inherited.signal.reason);
+      }
+      if (
+        execution === "queued-kickoff" &&
+        periodReservation !== "on-acceptance"
+      ) {
+        const reserved = await nested.reservePeriod();
+        if (Result.isError(reserved)) {
+          return reserved;
+        }
+      }
+      return await Result.tryPromise({
+        try: async () => await run(inherited.signal),
+        catch: (error: unknown) => error,
+      });
     });
   } finally {
     nested.status = "settled";

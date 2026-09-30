@@ -61,7 +61,13 @@ export const runQueuedKickoff = async <T>({
     execution: "queued-kickoff",
     periodIdentity: { actionKind, logicalPhaseId },
     periodReservation,
-    run: async (signal) => await run(signal, reserveQueuedKickoffPeriod),
+    run: async (signal) =>
+      await run(signal, async () => {
+        const reserved = await reserveQueuedKickoffPeriod();
+        if (Result.isError(reserved)) {
+          throw reserved.error;
+        }
+      }),
   });
   if (Result.isError(result)) {
     throw result.error;
