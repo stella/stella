@@ -223,8 +223,8 @@ if (!runPostgresTests || databaseUrl === undefined) {
         await admin
           .delete(organization)
           .where(eq(organization.id, organizationId));
+        // Fixture cleanup uses the owner; ingestion deliberately has no DELETE grant.
         await admin.transaction(async (tx) => {
-          await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
           await tx
             .delete(sanctionsEditions)
             .where(eq(sanctionsEditions.id, editionId));

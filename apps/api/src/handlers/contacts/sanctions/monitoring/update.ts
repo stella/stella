@@ -29,7 +29,10 @@ export default createSafeRootHandler(
           body.mode === "included"
             ? await includeSanctionsContact(tx, options)
             : await excludeSanctionsContact(tx, options);
-        return updated.map(({ mode }) => ({ mode }));
+        if (updated.isErr()) {
+          return updated;
+        }
+        return Result.ok({ mode: updated.value.mode });
       }),
     );
     return result;
