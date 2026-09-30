@@ -40,6 +40,9 @@ export const BASELINE_PATHS = {
   /** apps/api/src/handlers/case-law/ingestion/adapters/source-surface-census.test.ts */
   caseLawSourceSurfaceBacklog:
     "apps/api/src/handlers/case-law/ingestion/adapters/source-surface-backlog-baseline.json",
+  /** apps/api/src/handlers/case-law/ingestion/adapters/silent-drop-guard.test.ts */
+  caseLawSilentDrop:
+    "apps/api/src/handlers/case-law/ingestion/adapters/silent-drop-guard-baseline.json",
   /** apps/web/e2e/helpers/network.ts */
   webNetwork: "apps/web/e2e/network-baseline.json",
   // The i18n pair is produced by `packages/scripts/src/i18n-*.ts` against the

@@ -9,7 +9,8 @@ type CommandActionId =
   | "new-matter"
   | "new-chat"
   | "upload-document"
-  | "new-task";
+  | "new-task"
+  | "log-time";
 
 /**
  * No-argument TranslationKeys usable as command action labels, narrowed like
@@ -19,6 +20,7 @@ type CommandActionId =
 type CommandActionTextKey = Extract<
   TranslationKey,
   | "common.newMatter"
+  | "common.logTime"
   | "chat.newChat"
   | "workspaces.kanban.uploadDocument"
   | "tasks.newTask"
@@ -26,12 +28,14 @@ type CommandActionTextKey = Extract<
 
 export type CommandActionContext = {
   canCreateMatter: boolean;
+  canLogTime: boolean;
   canUploadDocument: boolean;
   canCreateTask: boolean;
   openUploadDocument: () => void;
   createTask: () => void;
   openCreateMatterDialog: () => void;
   openNewChat: () => void;
+  openLogTime: () => void;
 };
 
 export type CommandAction = {
