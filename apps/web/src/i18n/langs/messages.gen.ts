@@ -1316,6 +1316,7 @@ type Messages = {
       "output": "Output";
       "sourceCode": "Source code";
       "toggleDetails": "Toggle details";
+      "unrestoredFields": "{count, plural, one {# field} other {# fields}} could not be filled with real values in anonymized mode. Review: {fields}";
     };
     "unsupportedFileType": "Unsupported file type";
     "uploadFailed": "Failed to process file";

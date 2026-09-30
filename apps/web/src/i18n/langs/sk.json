@@ -1312,7 +1312,8 @@
       "interrupted": "Prerušené pred dokončením",
       "output": "Výstup",
       "sourceCode": "Zdrojový kód",
-      "toggleDetails": "Prepnúť podrobnosti"
+      "toggleDetails": "Prepnúť podrobnosti",
+      "unrestoredFields": "{count, plural, one {# pole sa nepodarilo} few {# polia sa nepodarilo} many {# poľa sa nepodarilo} other {# polí sa nepodarilo}} v anonymizovanom režime vyplniť skutočnými hodnotami. Skontrolujte: {fields}"
     },
     "unsupportedFileType": "Nepodporovaný typ súboru",
     "uploadFailed": "Spracovanie súboru zlyhalo",

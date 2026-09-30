@@ -1312,7 +1312,8 @@
       "interrupted": "Przerwano przed ukończeniem",
       "output": "Wynik",
       "sourceCode": "Kod źródłowy",
-      "toggleDetails": "Przełącz szczegóły"
+      "toggleDetails": "Przełącz szczegóły",
+      "unrestoredFields": "W trybie anonimizacji nie udało się wypełnić prawdziwymi wartościami {count, plural, one {# pola} few {# pól} many {# pól} other {# pola}}. Sprawdź: {fields}"
     },
     "unsupportedFileType": "Nieobsługiwany typ pliku",
     "uploadFailed": "Przetwarzanie pliku nie powiodło się",

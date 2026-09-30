@@ -1312,7 +1312,8 @@
       "interrupted": "Befejezés előtt megszakadt",
       "output": "Kimenet",
       "sourceCode": "Forráskód",
-      "toggleDetails": "Részletek megjelenítése"
+      "toggleDetails": "Részletek megjelenítése",
+      "unrestoredFields": "Anonimizált módban {count, plural, one {# mezőt} other {# mezőt}} nem sikerült valódi értékekkel kitölteni. Ellenőrizze: {fields}"
     },
     "unsupportedFileType": "Nem támogatott fájltípus",
     "uploadFailed": "A fájl feldolgozása sikertelen",

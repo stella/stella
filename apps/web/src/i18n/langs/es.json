@@ -1312,7 +1312,8 @@
       "interrupted": "Interrumpido antes de finalizar",
       "output": "Salida",
       "sourceCode": "Código fuente",
-      "toggleDetails": "Mostrar detalles"
+      "toggleDetails": "Mostrar detalles",
+      "unrestoredFields": "{count, plural, one {# campo no se pudo} other {# campos no se pudieron}} rellenar con valores reales en el modo anonimizado. Revise: {fields}"
     },
     "unsupportedFileType": "Tipo de archivo no compatible",
     "uploadFailed": "Error al procesar el archivo",

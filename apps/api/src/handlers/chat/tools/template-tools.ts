@@ -4,8 +4,9 @@ import * as v from "valibot";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
-  deanonymizeFromBoundary,
+  holdsUnrestoredPlaceholder,
   prepareTextForThirdParty,
+  restoreTextFromBoundary,
 } from "@/api/handlers/chat/third-party-boundary";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
@@ -73,7 +74,9 @@ export const FILL_TEMPLATE_DESCRIPTION =
   "omitting or emptying it rejects the fill with the exact missing " +
   "fields instead of guessing a value or leaving a placeholder unfilled " +
   "— ask the user for those values and retry. Returns the rendered text " +
-  "plus any placeholders left unfilled.";
+  "plus any placeholders left unfilled, and `unrestoredFields` naming any " +
+  "field whose value could not be filled with real values; ask the user to " +
+  "review those.";
 
 type CreateTemplateToolsArgs = {
   scopedDb: ScopedDb;
@@ -153,7 +156,7 @@ export const createTemplateTools = ({
   // The fill service builds these only when the manifest declares an AI field.
   // tenantWorkspaceIds is empty: a chat-driven template action is org-scoped,
   // not bound to a matter (see buildTemplateAiAnalytics below).
-  const aiCollaborators = () => {
+  const aiCollaborators = (unrestoredFields: Set<string>) => {
     const shared = {
       orgAIConfig: orgAIConfig ?? null,
       organizationId,
@@ -166,10 +169,14 @@ export const createTemplateTools = ({
       }),
       tenantWorkspaceIds: [],
     };
-    return templateAiCollaboratorsForBoundary(thirdPartyBoundary, {
-      generateAiValue: buildAiFieldGenerator(shared),
-      decideAiCondition: buildAiConditionDecider(shared),
-      adaptAiValue: buildAiOccurrenceAdapter(shared),
+    return templateAiCollaboratorsForBoundary({
+      boundary: thirdPartyBoundary,
+      collaborators: {
+        generateAiValue: buildAiFieldGenerator(shared),
+        decideAiCondition: buildAiConditionDecider(shared),
+        adaptAiValue: buildAiOccurrenceAdapter(shared),
+      },
+      unrestoredFields,
     });
   };
 
@@ -232,13 +239,23 @@ export const createTemplateTools = ({
       ),
     }).server(async ({ templateId, values }) => {
       const branded = brandPersistedTemplateId(templateId);
+      // In anonymized mode the values arrive restored from the model's
+      // placeholders; one it made up stays a placeholder, and so does one in
+      // an AI draft. Both are reported instead of passing as filled.
+      const unrestoredFields = new Set(
+        Object.entries(values)
+          .filter(([, value]) =>
+            holdsUnrestoredPlaceholder(thirdPartyBoundary, value),
+          )
+          .map(([fieldPath]) => fieldPath),
+      );
       const result = await fillStoredTemplate({
         templateId: branded,
         values,
         scopedDb,
         organizationId,
         requiredFields: "enforce",
-        aiCollaborators,
+        aiCollaborators: () => aiCollaborators(unrestoredFields),
       });
       if ("requiredFieldsRejection" in result) {
         // A required, non-AI-fillable field was omitted or empty: reject
@@ -269,7 +286,9 @@ export const createTemplateTools = ({
             }),
         ).catch(captureError);
       }
-      return result;
+      return unrestoredFields.size === 0
+        ? result
+        : { ...result, unrestoredFields: [...unrestoredFields].toSorted() };
     }),
   };
 };
@@ -305,23 +324,28 @@ const defaultTemplateAuthoringToolDependencies = {
 const restoreSuggestion = (
   boundary: ChatThirdPartyBoundary,
   suggestion: SuggestedTemplateField,
-): SuggestedTemplateField => {
-  const restore = (text: string) => deanonymizeFromBoundary({ boundary, text });
+): { complete: boolean; suggestion: SuggestedTemplateField } => {
+  const literal = restoreTextFromBoundary(boundary, suggestion.literalText);
+  const restore = (text: string) =>
+    restoreTextFromBoundary(boundary, text).text;
   return {
-    ...suggestion,
-    literalText: restore(suggestion.literalText),
-    ...(suggestion.label === undefined
-      ? {}
-      : { label: restore(suggestion.label) }),
-    ...(suggestion.exampleValue === undefined
-      ? {}
-      : { exampleValue: restore(suggestion.exampleValue) }),
-    ...(suggestion.aiPrompt === undefined
-      ? {}
-      : { aiPrompt: restore(suggestion.aiPrompt) }),
-    ...(suggestion.hint === undefined
-      ? {}
-      : { hint: restore(suggestion.hint) }),
+    complete: literal.complete,
+    suggestion: {
+      ...suggestion,
+      literalText: literal.text,
+      ...(suggestion.label === undefined
+        ? {}
+        : { label: restore(suggestion.label) }),
+      ...(suggestion.exampleValue === undefined
+        ? {}
+        : { exampleValue: restore(suggestion.exampleValue) }),
+      ...(suggestion.aiPrompt === undefined
+        ? {}
+        : { aiPrompt: restore(suggestion.aiPrompt) }),
+      ...(suggestion.hint === undefined
+        ? {}
+        : { hint: restore(suggestion.hint) }),
+    },
   };
 };
 
@@ -409,10 +433,20 @@ export const createTemplateAuthoringTools = ({
           organizationId,
           aiAnalytics,
         });
+        const restored = suggestions.map((suggestion) =>
+          restoreSuggestion(thirdPartyBoundary, suggestion),
+        );
+        // A suggestion whose literal text keeps a placeholder the boundary
+        // cannot restore matches nothing in the document: it is withheld and
+        // named instead.
+        const unrestoredFields = restored
+          .filter(({ complete }) => !complete)
+          .map(({ suggestion }) => suggestion.fieldPath);
         return {
-          suggestions: suggestions.map((suggestion) =>
-            restoreSuggestion(thirdPartyBoundary, suggestion),
-          ),
+          suggestions: restored
+            .filter(({ complete }) => complete)
+            .map(({ suggestion }) => suggestion),
+          ...(unrestoredFields.length === 0 ? {} : { unrestoredFields }),
         };
       } catch (error) {
         aiAnalytics.captureError(error);

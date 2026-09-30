@@ -34,8 +34,9 @@ const boundaryFor = (sendMode: ChatSendMode) =>
   });
 
 /** Collaborators that record what each nested request would send, and draft
- *  from it the way a model would: echoing the name it was given. */
-const recordingCollaborators = () => {
+ *  from it the way a model would: echoing the name it was given, in new
+ *  sentences around it. */
+const recordingCollaborators = (draftSuffix = "") => {
   const sent: unknown[] = [];
   return {
     collaborators: {
@@ -57,7 +58,7 @@ const recordingCollaborators = () => {
         sent.push(input);
         return {
           type: "drafted",
-          value: `Signed by ${String(input.values["party"])}`,
+          value: `Dear ${String(input.values["party"])}, signed.${draftSuffix}`,
         } as const;
       },
     },
@@ -65,12 +66,14 @@ const recordingCollaborators = () => {
   };
 };
 
-const runAll = async (sendMode: ChatSendMode) => {
-  const { collaborators, sent } = recordingCollaborators();
-  const wrapped = templateAiCollaboratorsForBoundary(
-    boundaryFor(sendMode),
+const runAll = async (sendMode: ChatSendMode, draftSuffix = "") => {
+  const { collaborators, sent } = recordingCollaborators(draftSuffix);
+  const unrestoredFields = new Set<string>();
+  const wrapped = templateAiCollaboratorsForBoundary({
+    boundary: boundaryFor(sendMode),
     collaborators,
-  );
+    unrestoredFields,
+  });
   const drafted = await wrapped.generateAiValue?.({
     fieldPath: "clause",
     prompt: `Draft a signature line for ${NAME}.`,
@@ -88,7 +91,7 @@ const runAll = async (sendMode: ChatSendMode) => {
     prompt: undefined,
     stub: NAME,
   });
-  return { adapted, drafted, sent };
+  return { adapted, drafted, sent, unrestoredFields };
 };
 
 describe("template AI fields in a chat turn", () => {
@@ -99,9 +102,33 @@ describe("template AI fields in a chat turn", () => {
     expect(JSON.stringify(anonymized.sent)).toContain("[PERSON_1]");
     expect(anonymized.drafted).toEqual({
       type: "drafted",
-      value: `Signed by ${NAME}`,
+      value: `Dear ${NAME}, signed.`,
     });
     expect(anonymized.adapted).toEqual([`${NAME}, as signatory`]);
+    expect([...anonymized.unrestoredFields]).toEqual([]);
+  });
+
+  test("restore a placeholder the model wrote without its brackets", async () => {
+    const turn = await runAll(CHAT_SEND_MODE.anonymized, " Witness: PERSON_1.");
+
+    expect(turn.drafted).toEqual({
+      type: "drafted",
+      value: `Dear ${NAME}, signed. Witness: ${NAME}.`,
+    });
+    expect([...turn.unrestoredFields]).toEqual([]);
+  });
+
+  test("name a field whose draft keeps a placeholder that cannot be restored", async () => {
+    const turn = await runAll(
+      CHAT_SEND_MODE.anonymized,
+      " Witness: [PERSON_7].",
+    );
+
+    expect(turn.drafted).toEqual({
+      type: "drafted",
+      value: `Dear ${NAME}, signed. Witness: [PERSON_7].`,
+    });
+    expect([...turn.unrestoredFields]).toEqual(["clause"]);
   });
 
   test("send the values as they are in raw mode", async () => {
@@ -110,7 +137,7 @@ describe("template AI fields in a chat turn", () => {
     expect(JSON.stringify(raw.sent)).toContain(NAME);
     expect(raw.drafted).toEqual({
       type: "drafted",
-      value: `Signed by ${NAME}`,
+      value: `Dear ${NAME}, signed.`,
     });
   });
 });

@@ -1312,7 +1312,8 @@
       "interrupted": "Pārtraukts pirms pabeigšanas",
       "output": "Izvade",
       "sourceCode": "Pirmkods",
-      "toggleDetails": "Pārslēgt detaļas"
+      "toggleDetails": "Pārslēgt detaļas",
+      "unrestoredFields": "Anonimizētajā režīmā ar īstajām vērtībām neizdevās aizpildīt {count, plural, zero {# laukus} one {# lauku} other {# laukus}}. Pārbaudiet: {fields}"
     },
     "unsupportedFileType": "Neatbalstīts faila tips",
     "uploadFailed": "Neizdevās apstrādāt failu",

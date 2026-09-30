@@ -1312,7 +1312,8 @@
       "interrupted": "توقّف قبل الاكتمال",
       "output": "المخرجات",
       "sourceCode": "الشيفرة المصدرية",
-      "toggleDetails": "إظهار/إخفاء التفاصيل"
+      "toggleDetails": "إظهار/إخفاء التفاصيل",
+      "unrestoredFields": "تعذّر ملء {count, plural, zero {# حقل} one {حقل واحد} two {حقلين} few {# حقول} many {# حقلًا} other {# حقل}} بالقيم الحقيقية في وضع إخفاء الهوية. راجِع: {fields}"
     },
     "unsupportedFileType": "نوع ملف غير مدعوم",
     "uploadFailed": "تعذّرت معالجة الملف",

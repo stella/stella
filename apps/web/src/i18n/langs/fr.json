@@ -1312,7 +1312,8 @@
       "interrupted": "Interrompu avant la fin",
       "output": "Résultat",
       "sourceCode": "Code source",
-      "toggleDetails": "Afficher les détails"
+      "toggleDetails": "Afficher les détails",
+      "unrestoredFields": "En mode anonymisé, {count, plural, one {# champ n’a pas pu être rempli} other {# champs n’ont pas pu être remplis}} avec des valeurs réelles. À vérifier : {fields}"
     },
     "unsupportedFileType": "Type de fichier non pris en charge",
     "uploadFailed": "Échec du traitement du fichier",

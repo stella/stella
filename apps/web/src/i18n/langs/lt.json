@@ -1312,7 +1312,8 @@
       "interrupted": "Nutraukta nebaigus",
       "output": "Išvestis",
       "sourceCode": "Pirminis kodas",
-      "toggleDetails": "Perjungti detales"
+      "toggleDetails": "Perjungti detales",
+      "unrestoredFields": "Anonimizuotu režimu nepavyko tikromis reikšmėmis užpildyti {count, plural, one {# lauko} few {# laukų} many {# lauko} other {# laukų}}. Patikrinkite: {fields}"
     },
     "unsupportedFileType": "Nepalaikomas failo tipas",
     "uploadFailed": "Nepavyko apdoroti failo",

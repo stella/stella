@@ -158,7 +158,12 @@ describe("createTemplateAuthoringTools", () => {
       dependencies: {
         suggestTemplateFields: async ({ documentText }) => {
           sentTexts.push(documentText);
-          return [{ fieldPath: "party.name", literalText: "[PERSON_1]" }];
+          return [
+            { fieldPath: "party.name", literalText: "[PERSON_1]" },
+            // A placeholder the turn never sent matches nothing in the
+            // document.
+            { fieldPath: "witness.name", literalText: "[PERSON_4]" },
+          ];
         },
       },
     });
@@ -175,6 +180,7 @@ describe("createTemplateAuthoringTools", () => {
     expect(sentTexts).toEqual(["Signed by [PERSON_1]."]);
     expect(result).toEqual({
       suggestions: [{ fieldPath: "party.name", literalText: "Dana Novotná" }],
+      unrestoredFields: ["witness.name"],
     });
   });
 });

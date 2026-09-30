@@ -1,9 +1,9 @@
 import { panic, Result } from "better-result";
 
 import {
-  deanonymizeFromBoundary,
   prepareTextForThirdParty,
   prepareUnknownForThirdParty,
+  restoreTextFromBoundary,
 } from "@/api/handlers/chat/third-party-boundary";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -38,20 +38,36 @@ const prepareValues = async (
       );
 };
 
+type TemplateAiCollaboratorsForBoundaryOptions = {
+  boundary: ChatThirdPartyBoundary;
+  collaborators: AiFillCollaborators;
+  /** Collects the path of every field whose draft kept a placeholder the
+   *  boundary cannot restore. */
+  unrestoredFields: Set<string>;
+};
+
 /**
  * A chat template fill's AI collaborators behind the turn's boundary. The
  * tool receives the turn's real values; each nested request is prepared like
  * the turn itself, and what the model drafts comes back with those values
- * restored before it enters the document.
+ * restored before it enters the document. A draft that keeps a placeholder
+ * the boundary never sent is reported in `unrestoredFields`.
  */
-export const templateAiCollaboratorsForBoundary = (
-  boundary: ChatThirdPartyBoundary,
-  { adaptAiValue, decideAiCondition, generateAiValue }: AiFillCollaborators,
-): AiFillCollaborators => {
+export const templateAiCollaboratorsForBoundary = ({
+  boundary,
+  collaborators: { adaptAiValue, decideAiCondition, generateAiValue },
+  unrestoredFields,
+}: TemplateAiCollaboratorsForBoundaryOptions): AiFillCollaborators => {
   if (boundary.type === "raw") {
     return { adaptAiValue, decideAiCondition, generateAiValue };
   }
-  const restore = (text: string) => deanonymizeFromBoundary({ boundary, text });
+  const restore = (fieldPath: string, text: string) => {
+    const restored = restoreTextFromBoundary(boundary, text);
+    if (!restored.complete) {
+      unrestoredFields.add(fieldPath);
+    }
+    return restored.text;
+  };
 
   return {
     ...(generateAiValue === undefined
@@ -80,7 +96,10 @@ export const templateAiCollaboratorsForBoundary = (
             }
             const draft = await generateAiValue(prepared.value);
             return draft.type === "drafted"
-              ? { type: "drafted", value: restore(draft.value) }
+              ? {
+                  type: "drafted",
+                  value: restore(input.fieldPath, draft.value),
+                }
               : draft;
           },
         }),
@@ -143,7 +162,7 @@ export const templateAiCollaboratorsForBoundary = (
               return undefined;
             }
             const adapted = await adaptAiValue(prepared.value);
-            return adapted?.map(restore);
+            return adapted?.map((text) => restore(input.fieldPath, text));
           },
         }),
   };

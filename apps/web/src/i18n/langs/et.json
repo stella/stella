@@ -1312,7 +1312,8 @@
       "interrupted": "Katkes enne lõpetamist",
       "output": "Väljund",
       "sourceCode": "Lähtekood",
-      "toggleDetails": "Üksikasjade lülitamine"
+      "toggleDetails": "Üksikasjade lülitamine",
+      "unrestoredFields": "Anonüümitud režiimis ei õnnestunud {count, plural, one {# välja} other {# välja}} tegelike väärtustega täita. Kontrollige: {fields}"
     },
     "unsupportedFileType": "Toetamata failitüüp",
     "uploadFailed": "Faili töötlemine ebaõnnestus",

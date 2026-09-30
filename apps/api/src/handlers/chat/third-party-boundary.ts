@@ -565,6 +565,60 @@ export const deanonymizeUnknownStringsFromBoundary = (
     : walkLenient(deanonymized, literalLenient);
 };
 
+const INDEXED_PLACEHOLDER_ANYWHERE = /\[[A-Z][A-Z0-9_]*_\d+\]/u;
+
+type RestoredText = {
+  /** False when a placeholder this boundary cannot name stays in the text. */
+  complete: boolean;
+  text: string;
+};
+
+/**
+ * Restore model-written text that will be saved or shown with the real
+ * values: every placeholder this boundary sent, bracketed or bare, becomes
+ * its original. A placeholder it never sent (one the model made up) cannot
+ * be restored, so the result says the text is incomplete instead of letting
+ * it pass as filled.
+ */
+export const restoreTextFromBoundary = (
+  boundary: ChatThirdPartyBoundary,
+  text: string,
+): RestoredText => {
+  if (boundary.type === "raw") {
+    return { complete: true, text };
+  }
+  const restored = deanonymizeUnknownStringsFromBoundary(
+    boundary,
+    text,
+    "lenient",
+  );
+  const restoredText = typeof restored === "string" ? restored : text;
+  return {
+    complete: !INDEXED_PLACEHOLDER_ANYWHERE.test(restoredText),
+    text: restoredText,
+  };
+};
+
+/** Whether a restored value tree still holds a placeholder the boundary
+ *  cannot name, anywhere in its strings. */
+export const holdsUnrestoredPlaceholder = (
+  boundary: ChatThirdPartyBoundary,
+  value: unknown,
+): boolean => {
+  if (boundary.type === "raw") {
+    return false;
+  }
+  if (typeof value === "string") {
+    return INDEXED_PLACEHOLDER_ANYWHERE.test(value);
+  }
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  return Object.values(value).some((nested) =>
+    holdsUnrestoredPlaceholder(boundary, nested),
+  );
+};
+
 const walkStrict = (value: unknown, map: Map<string, string>): unknown => {
   if (typeof value === "string") {
     return PLACEHOLDER_LIKE.test(value) ? deanonymise(value, map) : value;

@@ -1312,7 +1312,8 @@
       "interrupted": "Interrompido antes de concluir",
       "output": "Saída",
       "sourceCode": "Código-fonte",
-      "toggleDetails": "Alternar detalhes"
+      "toggleDetails": "Alternar detalhes",
+      "unrestoredFields": "{count, plural, one {# campo não pôde ser preenchido} other {# campos não puderam ser preenchidos}} com valores reais no modo anonimizado. Revise: {fields}"
     },
     "unsupportedFileType": "Tipo de arquivo não suportado",
     "uploadFailed": "Falha ao processar o arquivo",

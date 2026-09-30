@@ -1312,7 +1312,8 @@
       "interrupted": "Vor Abschluss unterbrochen",
       "output": "Ausgabe",
       "sourceCode": "Quellcode",
-      "toggleDetails": "Details ein-/ausblenden"
+      "toggleDetails": "Details ein-/ausblenden",
+      "unrestoredFields": "{count, plural, one {# Feld konnte} other {# Felder konnten}} im anonymisierten Modus nicht mit echten Werten gefüllt werden. Bitte prüfen: {fields}"
     },
     "unsupportedFileType": "Nicht unterstützter Dateityp",
     "uploadFailed": "Datei konnte nicht verarbeitet werden",
