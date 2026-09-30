@@ -91,15 +91,16 @@ export const withResultSavepoint = async <T>(
   ) => Promise<Result<T, HandlerError | SafeDbError>>,
 ) => {
   let refusal: HandlerError | SafeDbError | undefined;
-  const result = await Result.tryPromise(() =>
-    tx.transaction(async (savepoint) => {
-      const outcome = await run(savepoint);
-      if (outcome.isErr()) {
-        refusal = outcome.error;
-        return savepoint.rollback();
-      }
-      return outcome.value;
-    }),
+  const result = await Result.tryPromise(
+    async () =>
+      await tx.transaction(async (savepoint) => {
+        const outcome = await run(savepoint);
+        if (outcome.isErr()) {
+          refusal = outcome.error;
+          return savepoint.rollback();
+        }
+        return outcome.value;
+      }),
   );
   if (
     result.isErr() &&

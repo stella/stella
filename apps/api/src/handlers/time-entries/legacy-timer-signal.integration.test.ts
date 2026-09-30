@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -108,16 +109,25 @@ const memberGuard = async (entryId: typeof timeEntries.$inferSelect.id) =>
     [ids.wsA2],
     ids.orgA,
     ids.userA2,
-  )((tx) =>
-    guardRunningTimeEntries({
-      tx,
-      workspaceId: ids.wsA2,
-      actorUserId: ids.userA2,
-      selection: { type: "entries", ids: [entryId] },
-    }),
+  )(
+    async (tx) =>
+      await guardRunningTimeEntries({
+        tx,
+        workspaceId: ids.wsA2,
+        actorUserId: ids.userA2,
+        selection: { type: "entries", ids: [entryId] },
+      }),
   );
 
 const ownerDb = () => createScopedDb(db, [], ids.orgA, ids.userA1);
+
+const expectForbidden = async (operation: Promise<unknown>) => {
+  const outcome = await Result.tryPromise(async () => await operation);
+  expect(outcome.isErr()).toBe(true);
+  if (outcome.isErr()) {
+    expect(outcome.error.cause).toMatchObject({ cause: { code: "42501" } });
+  }
+};
 
 test("members see the running signal even when the linked timer is private", async () => {
   const entryId = await createEntry();
@@ -241,7 +251,7 @@ test("signal writes cannot hide a running clock or expose another organization's
     ),
   ).toEqual([]);
   expect(await signal(entryId)).toBe("running");
-  await expect(
+  await expectForbidden(
     createScopedDb(
       db,
       [ids.wsA2],
@@ -253,14 +263,14 @@ test("signal writes cannot hide a running clock or expose another organization's
         .set({ state: "paused" })
         .where(eq(timeEntryTimerStates.entryId, entryId)),
     ),
-  ).rejects.toMatchObject({ cause: { code: "42501" } });
-  await expect(
+  );
+  await expectForbidden(
     ownerDb()((tx) =>
       tx
         .delete(timeEntryTimerStates)
         .where(eq(timeEntryTimerStates.entryId, entryId)),
     ),
-  ).rejects.toMatchObject({ cause: { code: "42501" } });
+  );
   expect(await signal(entryId)).toBe("running");
   expect(
     await createScopedDb(
@@ -274,7 +284,7 @@ test("signal writes cannot hide a running clock or expose another organization's
 
 test("a paused signal cannot be fabricated for a direct running entry", async () => {
   const entryId = await createEntry();
-  await expect(
+  await expectForbidden(
     ownerDb()((tx) =>
       tx.insert(timeEntryTimerStates).values({
         entryId,
@@ -283,7 +293,7 @@ test("a paused signal cannot be fabricated for a direct running entry", async ()
         state: "paused",
       }),
     ),
-  ).rejects.toMatchObject({ cause: { code: "42501" } });
+  );
   expect(await signal(entryId)).toBeUndefined();
   expect(await memberGuard(entryId)).toMatchObject({ code: "running_timer" });
 });
@@ -298,14 +308,14 @@ test("a paused signal cannot be moved onto a direct running entry", async () => 
       .where(eq(timeTimers.id, timerId)),
   );
   const directId = await createEntry();
-  await expect(
+  await expectForbidden(
     ownerDb()((tx) =>
       tx
         .update(timeEntryTimerStates)
         .set({ entryId: directId })
         .where(eq(timeEntryTimerStates.entryId, projectedId)),
     ),
-  ).rejects.toMatchObject({ cause: { code: "42501" } });
+  );
   expect(await signal(projectedId)).toBe("paused");
   expect(await signal(directId)).toBeUndefined();
   expect(await memberGuard(directId)).toMatchObject({ code: "running_timer" });

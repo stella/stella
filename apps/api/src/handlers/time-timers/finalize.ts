@@ -91,7 +91,7 @@ true satisfies UnexpectedConfirmedEntryColumn extends never ? true : never;
 const transactionHandle =
   (tx: Transaction): SafeDb =>
   async (run) =>
-    Result.tryPromise(() => run(tx));
+    await Result.tryPromise(async () => await run(tx));
 
 type ReadConfirmationOptions = {
   tx: Transaction;
@@ -486,7 +486,9 @@ const finalizeTimerInSavepoint = async ({
   });
 };
 
-export const finalizeTimer = ({ tx, ...options }: FinalizeTimerOptions) =>
-  withResultSavepoint(tx, (savepoint) =>
-    finalizeTimerInSavepoint({ tx: savepoint, ...options }),
+export const finalizeTimer = async ({ tx, ...options }: FinalizeTimerOptions) =>
+  await withResultSavepoint(
+    tx,
+    async (savepoint) =>
+      await finalizeTimerInSavepoint({ tx: savepoint, ...options }),
   );

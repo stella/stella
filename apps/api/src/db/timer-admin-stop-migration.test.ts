@@ -1,9 +1,22 @@
 import { PGlite } from "@electric-sql/pglite";
+import { Result } from "better-result";
 import { expect, test } from "bun:test";
 
 const RUNNING_TIMER_ID = "00000000-0000-4000-8000-000000000001";
 const PAUSED_TIMER_ID = "00000000-0000-4000-8000-000000000002";
 const FOREIGN_TIMER_ID = "00000000-0000-4000-8000-000000000003";
+
+const assertRlsRefusal = async (operation: () => Promise<unknown>) => {
+  const refused = await Result.tryPromise({
+    try: operation,
+    catch: (cause) => cause,
+  });
+  expect(refused.isErr()).toBe(true);
+  if (refused.isErr()) {
+    expect(refused.error).toMatchObject({ code: "42501" });
+    expect(String(refused.error)).toMatch(/row-level security/u);
+  }
+};
 
 const createDatabase = async (role: string) => {
   const db = await PGlite.create();
@@ -82,11 +95,12 @@ test.each(["owner", "admin"])(
         )
       ).rows,
     ).toEqual([]);
-    await expect(
-      db.exec(
-        `INSERT INTO time_timers (id, organization_id, user_id, state, started_at) VALUES (gen_random_uuid(), 'org-a', 'member-a', 'paused', now())`,
-      ),
-    ).rejects.toThrow(/row-level security/u);
+    await assertRlsRefusal(
+      async () =>
+        await db.exec(
+          `INSERT INTO time_timers (id, organization_id, user_id, state, started_at) VALUES (gen_random_uuid(), 'org-a', 'member-a', 'paused', now())`,
+        ),
+    );
     expect(
       (
         await db.query("DELETE FROM time_timers WHERE id = $1 RETURNING id", [
@@ -134,12 +148,13 @@ test.each(["member", "intern", "external"])(
     expect(
       (await db.query("DELETE FROM time_timers RETURNING id")).rows,
     ).toEqual([]);
-    await expect(
-      db.query(
-        "INSERT INTO time_timer_confirmations (timer_id, organization_id, user_id) VALUES ($1, 'org-a', 'member-a')",
-        [RUNNING_TIMER_ID],
-      ),
-    ).rejects.toThrow(/row-level security/u);
+    await assertRlsRefusal(
+      async () =>
+        await db.query(
+          "INSERT INTO time_timer_confirmations (timer_id, organization_id, user_id) VALUES ($1, 'org-a', 'member-a')",
+          [RUNNING_TIMER_ID],
+        ),
+    );
     await db.exec("SET app.user_id = 'member-a'");
     expect(
       (await db.query("SELECT id FROM time_timers ORDER BY id")).rows,
@@ -167,12 +182,13 @@ test("admin receipt replay stays in the active organization and cannot alter rec
     (await db.query("DELETE FROM time_timer_confirmations RETURNING timer_id"))
       .rows,
   ).toEqual([]);
-  await expect(
-    db.query(
-      "INSERT INTO time_timer_confirmations (timer_id, organization_id, user_id) VALUES ($1, 'org-b', 'member-b')",
-      [FOREIGN_TIMER_ID],
-    ),
-  ).rejects.toThrow(/row-level security/u);
+  await assertRlsRefusal(
+    async () =>
+      await db.query(
+        "INSERT INTO time_timer_confirmations (timer_id, organization_id, user_id) VALUES ($1, 'org-b', 'member-b')",
+        [FOREIGN_TIMER_ID],
+      ),
+  );
   await db.exec("RESET ROLE");
   await db.query(
     "INSERT INTO time_timer_confirmations (timer_id, organization_id, user_id) VALUES ($1, 'org-b', 'member-b')",
@@ -227,57 +243,64 @@ test("admin access still requires current target and actor membership and FORCE 
 
 test("admin receipt insertion requires a current target and matching nonnull entry", async () => {
   await using db = await createDatabase("admin");
-  await expect(
-    db.query(
-      "INSERT INTO time_timer_confirmations (timer_id, organization_id, user_id, time_entry_id) VALUES ('00000000-0000-4000-8000-000000000001', 'org-a', 'member-b', $1)",
-      [RUNNING_TIMER_ID],
-    ),
-  ).rejects.toThrow(/row-level security/u);
-  await expect(
-    db.query(
-      "INSERT INTO time_timer_confirmations (timer_id, organization_id, user_id, time_entry_id) VALUES ('00000000-0000-4000-8000-000000000001', 'org-a', 'member-a', $1)",
-      [FOREIGN_TIMER_ID],
-    ),
-  ).rejects.toThrow(/row-level security/u);
-  await expect(
-    db.exec(
-      "INSERT INTO time_timer_confirmations (timer_id, organization_id, user_id) VALUES ('00000000-0000-4000-8000-000000000001', 'org-a', 'member-a')",
-    ),
-  ).rejects.toThrow(/row-level security/u);
+  await assertRlsRefusal(
+    async () =>
+      await db.query(
+        "INSERT INTO time_timer_confirmations (timer_id, organization_id, user_id, time_entry_id) VALUES ('00000000-0000-4000-8000-000000000001', 'org-a', 'member-b', $1)",
+        [RUNNING_TIMER_ID],
+      ),
+  );
+  await assertRlsRefusal(
+    async () =>
+      await db.query(
+        "INSERT INTO time_timer_confirmations (timer_id, organization_id, user_id, time_entry_id) VALUES ('00000000-0000-4000-8000-000000000001', 'org-a', 'member-a', $1)",
+        [FOREIGN_TIMER_ID],
+      ),
+  );
+  await assertRlsRefusal(
+    async () =>
+      await db.exec(
+        "INSERT INTO time_timer_confirmations (timer_id, organization_id, user_id) VALUES ('00000000-0000-4000-8000-000000000001', 'org-a', 'member-a')",
+      ),
+  );
   await db.exec(
     "RESET ROLE; UPDATE time_entries SET user_id = 'manager' WHERE organization_id = 'org-a'; SET ROLE stella;",
   );
-  await expect(
-    db.query(
-      "INSERT INTO time_timer_confirmations (timer_id, organization_id, user_id, time_entry_id) VALUES ('00000000-0000-4000-8000-000000000001', 'org-a', 'member-a', $1)",
-      [RUNNING_TIMER_ID],
-    ),
-  ).rejects.toThrow(/row-level security/u);
+  await assertRlsRefusal(
+    async () =>
+      await db.query(
+        "INSERT INTO time_timer_confirmations (timer_id, organization_id, user_id, time_entry_id) VALUES ('00000000-0000-4000-8000-000000000001', 'org-a', 'member-a', $1)",
+        [RUNNING_TIMER_ID],
+      ),
+  );
   await db.exec(
     "RESET ROLE; UPDATE time_entries SET user_id = 'member-a' WHERE organization_id = 'org-a'; DELETE FROM member WHERE user_id = 'member-a'; SET ROLE stella;",
   );
-  await expect(
-    db.query(
-      "INSERT INTO time_timer_confirmations (timer_id, organization_id, user_id, time_entry_id) VALUES ('00000000-0000-4000-8000-000000000001', 'org-a', 'member-a', $1)",
-      [RUNNING_TIMER_ID],
-    ),
-  ).rejects.toThrow(/row-level security/u);
+  await assertRlsRefusal(
+    async () =>
+      await db.query(
+        "INSERT INTO time_timer_confirmations (timer_id, organization_id, user_id, time_entry_id) VALUES ('00000000-0000-4000-8000-000000000001', 'org-a', 'member-a', $1)",
+        [RUNNING_TIMER_ID],
+      ),
+  );
 });
 
 test("admin cannot forge a receipt for a missing or paused timer", async () => {
   await using db = await createDatabase("admin");
-  await expect(
-    db.query(
-      "INSERT INTO time_timer_confirmations (timer_id, organization_id, user_id, time_entry_id) VALUES (gen_random_uuid(), 'org-a', 'member-a', $1)",
-      [RUNNING_TIMER_ID],
-    ),
-  ).rejects.toThrow(/row-level security/u);
-  await expect(
-    db.query(
-      "INSERT INTO time_timer_confirmations (timer_id, organization_id, user_id, time_entry_id) VALUES ($1, 'org-a', 'member-a', $2)",
-      [PAUSED_TIMER_ID, RUNNING_TIMER_ID],
-    ),
-  ).rejects.toThrow(/row-level security/u);
+  await assertRlsRefusal(
+    async () =>
+      await db.query(
+        "INSERT INTO time_timer_confirmations (timer_id, organization_id, user_id, time_entry_id) VALUES (gen_random_uuid(), 'org-a', 'member-a', $1)",
+        [RUNNING_TIMER_ID],
+      ),
+  );
+  await assertRlsRefusal(
+    async () =>
+      await db.query(
+        "INSERT INTO time_timer_confirmations (timer_id, organization_id, user_id, time_entry_id) VALUES ($1, 'org-a', 'member-a', $2)",
+        [PAUSED_TIMER_ID, RUNNING_TIMER_ID],
+      ),
+  );
 });
 
 test("admin deletion requires a receipt matching timer identity and a nonnull entry", async () => {
