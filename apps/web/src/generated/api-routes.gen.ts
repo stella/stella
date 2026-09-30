@@ -38831,6 +38831,7 @@ type Ta0c1d202e7 = stll_money_CentsAmount | null;
 
 type Ta0e1c4f807 = T12163e1f6a | {
   documentPending: Tfddd645dc8;
+  hasDocument: Tfddd645dc8;
   documentReadFailed: Tfddd645dc8;
   documentUnavailable: Tfddd645dc8;
   id: T406326c84f;
@@ -38951,7 +38952,9 @@ type Ta0e1c4f807 = T12163e1f6a | {
     sectionIndex: T588d0ee653;
   }>);
   citationsNextCursor: Tbe0400fa4c;
-  languageAlternates: ReadonlyArray<T32fdeee18e>;
+  languageAlternates: ReadonlyArray<(T32fdeee18e & {
+    hasDocument: Tfddd645dc8;
+  })>;
   fulltext: Tbe0400fa4c;
 };
 
