@@ -42,6 +42,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { cents, type CentsAmount } from "@/api/lib/money";
+import type {
+  UnprojectedColumns,
+  UnbackedProjectionKeys,
+} from "@/api/lib/projection-totality";
 
 /** Stored quantity scale: `invoice_lines.quantity` is `numeric(18, 4)`. */
 const QUANTITY_SCALE = 4;
@@ -777,3 +781,25 @@ export const INVOICE_LINE_COLUMNS = {
   expenseId: true,
   releasedAt: true,
 } as const;
+
+// Tenant and parent identifiers come from the scoped invoice detail; line
+// persistence timestamps belong to audit bookkeeping, not the document line.
+const INVOICE_LINE_OMITTED_COLUMNS = [
+  "organizationId",
+  "workspaceId",
+  "invoiceId",
+  "createdAt",
+  "updatedAt",
+] as const satisfies readonly (keyof typeof invoiceLines.$inferSelect)[];
+type MissingInvoiceLineColumn = UnprojectedColumns<
+  typeof invoiceLines.$inferSelect,
+  typeof INVOICE_LINE_COLUMNS,
+  (typeof INVOICE_LINE_OMITTED_COLUMNS)[number]
+>;
+type ExtraInvoiceLineColumn = UnbackedProjectionKeys<
+  typeof invoiceLines.$inferSelect,
+  typeof INVOICE_LINE_COLUMNS,
+  (typeof INVOICE_LINE_OMITTED_COLUMNS)[number]
+>;
+true satisfies MissingInvoiceLineColumn extends never ? true : never;
+true satisfies ExtraInvoiceLineColumn extends never ? true : never;
