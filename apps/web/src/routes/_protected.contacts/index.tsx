@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 
-import { useForm } from "@tanstack/react-form";
+import { useForm, useSelector } from "@tanstack/react-form";
 import {
   useInfiniteQuery,
   useQuery,
@@ -13,7 +13,6 @@ import {
   Link,
   useNavigate,
 } from "@tanstack/react-router";
-import { useSelector } from "@tanstack/react-store";
 import {
   createColumnHelper,
   createCoreRowModel,
