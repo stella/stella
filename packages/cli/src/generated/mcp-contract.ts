@@ -42,6 +42,10 @@ export const CLI_REQUIRED_RESOURCE_SCOPES = [
   "stella:feedback",
 ] as const;
 export const MCP_ERROR_CODES = [
+  "action_period_exhausted",
+  "action_concurrency_busy",
+  "action_not_enabled",
+  "action_admission_unavailable",
   "validation_error",
   "missing_scope",
   "feature_disabled",

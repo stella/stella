@@ -60,6 +60,7 @@ import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { AnyPermissiveRouteSchema } from "@/api/lib/permissive-route-schema";
 import {
   ActionAdmissionError,
+  actionAdmissionRefusal,
   withActionAdmission,
 } from "@/api/lib/rate-limit/action-admission";
 import type { ActionKind } from "@/api/lib/rate-limit/action-kinds";
@@ -482,6 +483,7 @@ type SafeErrorBody = {
   message: string;
   /** Corrective next step for programmatic clients. */
   hint?: string;
+  contactUrl?: string;
   /** Field-scoped reasons the request was rejected. */
   issues?: HandlerErrorValidationIssue[];
   /**
@@ -866,13 +868,7 @@ const runAdmittedFiniteHandler = async function* <
       Result.mapError(admitted, (error) => {
         if (ActionAdmissionError.is(error)) {
           return new HandlerError({
-            status: error.reason === "busy" ? 429 : 503,
-            code:
-              error.reason === "busy" ? "rate_limited" : "service_unavailable",
-            message:
-              error.reason === "busy"
-                ? error.message
-                : "Action admission is unavailable",
+            ...actionAdmissionRefusal(error),
             cause: error,
           });
         }
@@ -1344,6 +1340,7 @@ const safeErrorBody = (error: HandlerError): SafeErrorBody => ({
   ...(error.code ? { code: error.code } : {}),
   message: error.message,
   ...(error.hint ? { hint: error.hint } : {}),
+  ...(error.contactUrl ? { contactUrl: error.contactUrl } : {}),
   ...(error.issues ? { issues: error.issues } : {}),
   // Usage-limit 402s carry structured fields so the frontend renders the
   // "x of y units left" modal without parsing the message (see SafeErrorBody).

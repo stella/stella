@@ -339,6 +339,9 @@ export const envApiServerSchema = {
   FEATURE_TODOS: featureFlagSchema,
   FEATURE_MCP: featureFlagSchema,
   FEATURE_ACTION_ADMISSION: featureFlagSchema,
+  ACTION_LIMIT_CONTACT_URL: v.optional(
+    v.pipe(v.string(), v.url(), v.regex(/^https?:\/\//u)),
+  ),
   ACTION_ADMISSION_ORG_CONCURRENCY: v.optional(
     v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1)),
   ),

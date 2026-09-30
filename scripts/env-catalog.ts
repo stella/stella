@@ -242,6 +242,8 @@ const EXAMPLE_VALUES: Record<string, string> = {
 };
 
 const DESCRIPTION_OVERRIDES: Record<string, string> = {
+  ACTION_LIMIT_CONTACT_URL:
+    "Public http(s) contact link shown when an action is paused or not enabled.",
   AGENT_SANDBOX_DOCKER_NETWORK:
     "Locked-down Docker network used by agent sandboxes. It must deny arbitrary egress.",
   AGENT_SANDBOX_DOCKER_SOCKET:
@@ -609,7 +611,7 @@ export const requirementFor = (schema: v.GenericSchema): EnvRequirement => {
 };
 
 const exposureFor = (name: string, owner: EnvOwner): EnvExposure => {
-  if (owner === ENV_OWNER.web) {
+  if (owner === ENV_OWNER.web || name === "ACTION_LIMIT_CONTACT_URL") {
     return ENV_EXPOSURE.public;
   }
   if (INTERNAL_SERVER_KEYS.has(name)) {
