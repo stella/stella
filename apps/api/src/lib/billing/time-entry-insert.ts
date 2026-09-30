@@ -309,7 +309,7 @@ type PrepareInternalTimeEntryOptions = {
   dateWindow?: "entry" | "timer_completion";
 };
 
-export const prepareInternalTimeEntryInsert = async function* ({
+export const prepareInternalTimeEntryInsert = function* ({
   policy,
   canApprove,
   body,
