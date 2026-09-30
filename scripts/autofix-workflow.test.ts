@@ -245,7 +245,7 @@ describe("changed-file autofix boundary", () => {
     expect(job.slice(planStep, runStep)).not.toContain("GH_TOKEN:");
     expect(
       job.slice(restrictionStep, job.indexOf("- name: Push autofixes")),
-    ).not.toContain("bun ");
+    ).toContain("--check-improvements-only");
     expect(job).toContain(
       'if [[ "$(git rev-parse HEAD)" != "$HEAD_SHA" ]]; then',
     );
@@ -263,6 +263,7 @@ describe("changed-file autofix boundary", () => {
     ).toBeLessThan(ordered.findIndex(({ id }) => id === "cli-registry"));
     expect(ordered.map(({ id }) => id).toSorted()).toEqual(
       [
+        "ratchet-improvements",
         "capability-catalog",
         "cli-registry",
         "mcp-app-bundles",
@@ -360,7 +361,9 @@ describe("changed-file autofix boundary", () => {
       "mapfile -d '' -t changed < \"$RUNNER_TEMP/autofix-changed-paths\"",
     );
     expect(fix).toContain('[[ -f "$path" && ! -L "$path" ]]');
-    expect(fix).toContain('if [[ "$path" == .github/workflows/* ]]; then');
+    expect(fix).toContain(
+      'if [[ "$path" == .github/workflows/* || "$path" == scripts/ratchet-baseline.json ]]; then',
+    );
     expect(fix).toContain(
       `bun --bun oxlint -c oxlint.config.ts --no-error-on-unmatched-pattern --fix "\${lint_paths[@]}"`,
     );
@@ -379,7 +382,7 @@ describe("changed-file autofix boundary", () => {
       'excludes+=(":(exclude,literal)$path")',
     );
     expect(job.slice(restrictionStep, pushStep)).toContain(
-      'if [[ "$path" == .github/workflows/* ]]; then',
+      'if [[ "$path" == .github/workflows/* || "$path" == scripts/ratchet-baseline.json ]]; then',
     );
     expect(job).not.toContain("git commit");
     expect(job).not.toContain("git push");
