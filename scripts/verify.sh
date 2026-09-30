@@ -272,6 +272,7 @@ run_knip() {
       bun --no-env-file run knip --production --strict --no-progress \
       --include unlisted,unresolved --workspace "$workspace" || return 1
   done
+  bun run dependencies:check
 }
 
 run_knip_exports() {

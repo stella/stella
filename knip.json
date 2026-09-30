@@ -1,6 +1,10 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "workspaces": {
+    // Include present and future workspace packages; exact entries below
+    // retain the entry points their frameworks cannot infer.
+    "apps/*": {},
+    "packages/*": {},
     ".": {
       "entry": [
         "scripts/*.ts",
@@ -164,6 +168,9 @@
     "packages/template-conditions": {
       "entry": ["src/index.ts", "src/**/*.test.ts"]
     },
+    "packages/typescript-config": {
+      "entry": ["*.json", "**/*.test.ts"]
+    },
     "packages/transactional": {
       "entry": ["emails/*.tsx"],
       "ignoreDependencies": ["react-dom", "@react-email/preview-server"]
@@ -192,8 +199,5 @@
   },
   "exclude": ["exports", "types"],
   "ignoreBinaries": ["docker", "oxfmt", "tsc", "bun", "tail"],
-  "ignoreDependencies": ["@stll/typescript-config"],
-  // packages/typescript-config ships JSON compiler presets and no TypeScript
-  // source, so there is nothing for knip to analyse there.
-  "ignoreWorkspaces": ["packages/typescript-config"]
+  "ignoreDependencies": ["@stll/typescript-config"]
 }
