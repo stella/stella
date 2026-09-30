@@ -20,6 +20,7 @@ import {
   parseFolioCollabRoomName,
 } from "@stll/api-contract/folio-collab";
 import { FetchBoundaryError } from "@stll/errors";
+import type { RedisConnectionSettings } from "@stll/redis-config";
 import { Temporal } from "@stll/time";
 
 import { isSecureCollabRedisUrl, isSecureStellaApiUrl } from "./env-schema";
@@ -76,11 +77,13 @@ type CreateCollabServerOptions = CreateCollabServerBaseOptions &
     | {
         mode: "redis";
         redisTlsRejectUnauthorized?: boolean;
+        redisSettings?: RedisConnectionSettings;
         redisUrl: string;
       }
     | {
         mode?: "single-process";
         redisTlsRejectUnauthorized?: never;
+        redisSettings?: never;
         redisUrl?: never;
       }
   );
@@ -311,10 +314,11 @@ export const createCollabServer = async (
           awaitInitialSyncTimeout: REDIS_INITIAL_SYNC_TIMEOUT_MS,
           createClient: () =>
             new RedisClient(
-              collabRedisConnectionOptions(
-                options.redisUrl,
-                options.redisTlsRejectUnauthorized,
-              ),
+              collabRedisConnectionOptions({
+                redisUrl: options.redisUrl,
+                rejectUnauthorized: options.redisTlsRejectUnauthorized,
+                settings: options.redisSettings,
+              }),
             ),
           lockTimeout: REDIS_LOCK_TIMEOUT_MS,
           prefix: FOLIO_COLLAB_REDIS_SCOPE,

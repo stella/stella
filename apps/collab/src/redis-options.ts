@@ -1,15 +1,27 @@
 import type { RedisOptions } from "ioredis";
 
-/**
- * ioredis does not infer a deployment's certificate policy from `rediss://`.
- * Verification stays on unless the deployment explicitly opts out for a
- * private endpoint whose certificate has no trusted chain.
- */
-export const collabRedisConnectionOptions = (
-  redisUrl: string,
+import {
+  redisConnectionConfig,
+  type RedisConnectionSettings,
+} from "@stll/redis-config";
+
+type CollabRedisConnectionOptions = {
+  redisUrl: string;
+  rejectUnauthorized?: boolean;
+  settings?: RedisConnectionSettings;
+};
+
+export const collabRedisConnectionOptions = ({
+  redisUrl,
   rejectUnauthorized = true,
-): Omit<RedisOptions, "replyMapping"> => {
-  const url = new URL(redisUrl);
+  settings = {},
+}: CollabRedisConnectionOptions): Omit<RedisOptions, "replyMapping"> => {
+  const config = redisConnectionConfig({
+    url: redisUrl,
+    settings,
+    rejectUnauthorized,
+  });
+  const url = new URL(config.url);
   const options: Omit<RedisOptions, "replyMapping"> = {
     host: url.hostname.replace(/^\[|\]$/gu, ""),
     ...(url.port === "" ? {} : { port: Number(url.port) }),
@@ -25,7 +37,16 @@ export const collabRedisConnectionOptions = (
     ...(url.searchParams.get("db") === null
       ? {}
       : { db: Number(url.searchParams.get("db")) }),
-    ...(url.protocol === "rediss:" ? { tls: { rejectUnauthorized } } : {}),
+    ...(config.tls === undefined
+      ? {}
+      : {
+          tls: {
+            rejectUnauthorized: config.tls.rejectUnauthorized,
+            ...(config.mode === "enforced"
+              ? { ca: config.tls.ca, servername: config.tls.serverName }
+              : {}),
+          },
+        }),
   };
 
   return options;

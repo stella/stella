@@ -10,6 +10,8 @@
 import { createEnv } from "@t3-oss/env-core";
 import { panic } from "better-result";
 
+import { redisConnectionConfig } from "@stll/redis-config";
+
 import { resolveDatabaseUrl } from "@/api/db-url";
 import {
   envBaseInvariantViolation,
@@ -43,6 +45,17 @@ const invariantViolation = envBaseInvariantViolation({
 });
 if (invariantViolation !== null) {
   panic(invariantViolation);
+}
+
+if (envBase.REDIS_URL !== undefined) {
+  const { mode } = redisConnectionConfig({
+    url: envBase.REDIS_URL,
+    settings: envBase,
+    rejectUnauthorized: envBase.REDIS_TLS_REJECT_UNAUTHORIZED,
+  });
+  process.stdout.write(
+    `${JSON.stringify({ event: "redis.connection.mode", mode })}\n`,
+  );
 }
 
 /**
