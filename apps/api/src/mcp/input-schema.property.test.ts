@@ -89,12 +89,15 @@ describe("MCP input contracts", () => {
           },
         );
         if (definition.name === "preview_template_conditions") {
-          fc.assert(property, {
-            seed: -232_809_522,
-            path: "19:0:0:0:0:0:0:0:2",
-            numRuns: 1,
-            endOnFailure: true,
-          });
+          fc.assert(
+            property,
+            propertyConfig({
+              seed: -232_809_522,
+              path: "19:0:0:0:0:0:0:0:2",
+              numRuns: 1,
+              endOnFailure: true,
+            }),
+          );
         }
         fc.assert(
           property,
