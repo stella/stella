@@ -69,6 +69,23 @@ export const MODEL_RATES = {
     outputPerMTok: 150_000,
     cachedInputPerMTok: 2500,
   },
+  // models.dev: openai:gpt-6.1-sol
+  "gpt-6.1-sol": {
+    kind: "input-token-tiered",
+    inputTokenThreshold: 272_000,
+    standard: {
+      inputPerMTok: 200_000,
+      outputPerMTok: 1_000_000,
+      cachedInputPerMTok: 10_000,
+      cachedWriteInputPerMTok: 250_000,
+    },
+    aboveThreshold: {
+      inputPerMTok: 400_000,
+      outputPerMTok: 1_500_000,
+      cachedInputPerMTok: 20_000,
+      cachedWriteInputPerMTok: 500_000,
+    },
+  },
   // models.dev: openai:gpt-6-astra
   "gpt-6-astra": {
     kind: "input-token-tiered",
