@@ -431,14 +431,6 @@ export const DOC_SOURCE_EXCLUSIONS = [
       reason: "no-llms-txt",
     },
     {
-      checkedAt: "2026-09-27T00:00:00.000Z",
-      dependency: "fast-xml-validator",
-      explanation:
-        "The project publishes no llms.txt. Use the README at https://github.com/NaturalIntelligence/fast-xml-validator and the typed API in its package (src/fxv.d.ts) directly.",
-      expiresAt: "2026-10-27T00:00:00.000Z",
-      reason: "no-llms-txt",
-    },
-    {
       checkedAt: "2026-09-26T00:00:00.000Z",
       dependency: "cldr-misc-full",
       explanation:
