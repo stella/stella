@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import type { Request } from "@playwright/test";
 import { panic } from "better-result";
 import * as v from "valibot";
 
@@ -75,7 +76,13 @@ export const declarePublicKnowledgeSmoke = ({
   mode,
 }: DeclarePublicKnowledgeSmokeOptions) => {
   // Known flag-off targets never create fixtures or contact a live service.
-  const describe = mode === "disabled" ? test.describe.skip : test.describe;
+  const describe = (title: string, declare: () => void) => {
+    if (mode === "disabled") {
+      test.describe.skip(title, declare);
+      return;
+    }
+    test.describe(title, declare);
+  };
   describe("public visitor routes", () => {
     test.use({ storageState: { cookies: [], origins: [] }, locale: "en-US" });
     let catalogue: VisitorCatalogue = { status: "unprobed" };
@@ -138,11 +145,12 @@ export const declarePublicKnowledgeSmoke = ({
         const requests: string[] = [];
         const unauthorized: string[] = [];
         const forbidden: string[] = [];
+        const pendingRequests = new Set<Request>();
         const origin = new URL(
           testInfo.project.use.baseURL ?? panic("smoke base URL missing"),
         ).origin;
         const origins = new Set([origin]);
-        const apiBaseURL = testInfo.config.metadata["apiBaseURL"];
+        const apiBaseURL: unknown = testInfo.config.metadata["apiBaseURL"];
         if (typeof apiBaseURL === "string") {
           origins.add(new URL(apiBaseURL).origin);
         }
@@ -152,6 +160,7 @@ export const declarePublicKnowledgeSmoke = ({
             return;
           }
           requests.push(url.pathname);
+          pendingRequests.add(request);
           if (
             isMemberOnlySmokeRequest({
               pathname: url.pathname,
@@ -161,6 +170,11 @@ export const declarePublicKnowledgeSmoke = ({
             forbidden.push(url.pathname);
           }
         });
+        const settleRequest = (request: Request) => {
+          pendingRequests.delete(request);
+        };
+        page.on("requestfinished", settleRequest);
+        page.on("requestfailed", settleRequest);
         page.on("response", (response) => {
           if (
             origins.has(new URL(response.url()).origin) &&
@@ -195,10 +209,18 @@ export const declarePublicKnowledgeSmoke = ({
             minimumObservationMs: 1000,
             timeoutMs: 3000,
           });
+          await expect
+            .poll(() => pendingRequests.size, {
+              message: "observed requests settle",
+              timeout: 5000,
+            })
+            .toBe(0);
           expect(forbidden, "member-only requests").toEqual([]);
           expect(unauthorized, "unauthorized responses").toEqual([]);
         } finally {
           detach();
+          page.off("requestfinished", settleRequest);
+          page.off("requestfailed", settleRequest);
           await testInfo.attach("public-network", {
             body: JSON.stringify({ requests, forbidden, unauthorized }),
             contentType: "application/json",

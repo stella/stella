@@ -1,4 +1,6 @@
-import { PUBLIC_KNOWLEDGE_META } from "../../src/lib/root-head";
+import { Window } from "happy-dom";
+
+import { PUBLIC_KNOWLEDGE_META } from "../../src/routes/-root-head";
 
 const normalizeMountedApiPath = (pathname: string): string =>
   pathname.replace(/^\/api(?=\/(?:v1|auth)(?:\/|$))/u, "");
@@ -31,31 +33,19 @@ export const isMemberOnlySmokeRequest = ({
 export const classifyPublicKnowledgeWebProbe = (
   html: string,
 ): "enabled" | "disabled" | "unexpected" => {
-  const markup = html
-    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/giu, "")
-    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/giu, "")
-    .replace(/<!--[\s\S]*?-->/gu, "");
-  const head = /<head\b[^>]*>([\s\S]*?)<\/head>/iu.exec(markup)?.at(1) ?? "";
+  const window = new Window({
+    settings: {
+      disableJavaScriptEvaluation: true,
+      disableJavaScriptFileLoading: true,
+      disableCSSFileLoading: true,
+    },
+  });
+  const document = new window.DOMParser().parseFromString(html, "text/html");
   let state: "enabled" | "disabled" = "disabled";
-  for (const meta of head.matchAll(
-    /<meta\b((?:"[^"]*"|'[^']*'|[^'">])*)>/giu,
+  for (const meta of document.querySelectorAll(
+    `head > meta[name="${PUBLIC_KNOWLEDGE_META.name}"]`,
   )) {
-    const attributes = new Map<string, string>();
-    for (const attribute of (meta.at(1) ?? "").matchAll(
-      /([^\s=/>]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/gu,
-    )) {
-      const name = attribute.at(1);
-      if (name) {
-        attributes.set(
-          name.toLowerCase(),
-          attribute.at(2) ?? attribute.at(3) ?? attribute.at(4) ?? "",
-        );
-      }
-    }
-    if (attributes.get("name") !== PUBLIC_KNOWLEDGE_META.name) {
-      continue;
-    }
-    if (attributes.get("content") !== PUBLIC_KNOWLEDGE_META.content) {
+    if (meta.getAttribute("content") !== PUBLIC_KNOWLEDGE_META.content) {
       return "unexpected";
     }
     state = "enabled";

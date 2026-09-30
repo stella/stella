@@ -31,9 +31,9 @@ import type { RouteErrorLifecycleController } from "@/lib/analytics/route-error-
 import { RouteErrorLifecycleProvider } from "@/lib/analytics/route-error-lifecycle-context";
 import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launch";
 import { isPublicSsrPath } from "@/lib/public-ssr-paths";
-import { createRootHead } from "@/lib/root-head";
 import { requireFreshDocument } from "@/lib/session-cache-guard";
 import { AppFrameHost } from "@/routes/-app-frame-host";
+import { createRootHead } from "@/routes/-root-head";
 import "@/styles/app.css";
 
 const isDev = import.meta.env.DEV;

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { createRootHead } from "./root-head";
+import { createRootHead } from "./-root-head";
 
 describe("root document feature marker", () => {
   test("emits the public knowledge marker only with the flag enabled", () => {

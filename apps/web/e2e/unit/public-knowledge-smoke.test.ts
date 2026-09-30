@@ -92,6 +92,8 @@ describe("public knowledge root-head marker", () => {
       "<title>stella</title>",
       '<meta name="other" content="enabled">',
       `<script>const marker = '<meta name="public-knowledge" content="enabled">'</script>`,
+      `<style>body::before { content: '<meta name="public-knowledge" content="enabled">'; }</style>`,
+      '<template><meta name="public-knowledge" content="enabled"></template>',
       '<!-- <meta name="public-knowledge" content="enabled"> -->',
     ]) {
       expect(
