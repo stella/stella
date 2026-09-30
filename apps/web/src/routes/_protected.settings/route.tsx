@@ -234,7 +234,7 @@ function SettingsLayout() {
           </div>
         ))}
       </nav>
-      <main className="flex min-w-0 flex-1 flex-col overflow-y-auto">
+      <main className="scrollbar-stable flex min-w-0 flex-1 flex-col overflow-y-auto">
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 p-6">
           <Outlet />
         </div>
