@@ -341,20 +341,24 @@ const releaseJobs = workflowJobs(
 const resultJob = v.parse(
   v.object({
     needs: v.array(v.string()),
-    steps: v.array(
-      v.object({
-        run: v.string(),
-        env: v.record(v.string(), v.string()),
-      }),
-    ),
+    steps: v.array(v.unknown()),
   }),
   ciJobs["ci-result"],
 );
 
-const resultStep = resultJob.steps.at(0);
-if (resultJob.steps.length !== 1 || !resultStep) {
+const evaluationSteps = resultJob.steps.filter((step) =>
+  v.is(v.object({ name: v.literal("Evaluate CI outcome") }), step),
+);
+if (evaluationSteps.length !== 1) {
   throw new TypeError("CI result must have exactly one evaluation step");
 }
+const resultStep = v.parse(
+  v.object({
+    run: v.string(),
+    env: v.record(v.string(), v.string()),
+  }),
+  evaluationSteps.at(0),
+);
 
 const jobScopes = v.parse(
   v.record(v.string(), v.nullable(v.string())),

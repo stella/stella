@@ -34,13 +34,13 @@ import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestio
 import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-policy";
 import { composeWithStoredSupplements } from "@/api/handlers/case-law/ingestion/supplement-composition";
-import {
-  corpusCarriesDocument,
-  payloadCarriesDocument,
-} from "@/api/handlers/case-law/stored-payload";
 import { withdrawCaseLawDecisionDocument } from "@/api/handlers/case-law/withdraw-document";
 import type { WithdrawCaseLawDecisionDocumentOutcome } from "@/api/handlers/case-law/withdraw-document";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  corpusCarriesDocument,
+  payloadCarriesDocument,
+} from "@/api/lib/case-law/stored-payload";
 import type { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { corpusContentHash } from "@/api/lib/legal-search/corpus-storage";
