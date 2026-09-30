@@ -403,7 +403,7 @@ const missingFrom = ({
   fulltext: string;
   unmapped: unknown;
 }): string[] => {
-  const reported = JSON.stringify(unmapped) ?? "";
+  const reported = unmapped === undefined ? "" : JSON.stringify(unmapped);
   return tokens.filter(
     (token) => !fulltext.includes(token) && !reported.includes(token),
   );
@@ -504,7 +504,9 @@ for (const adapter of replayAdapters) {
           fulltext: `${result?.fulltext ?? ""}\n${astPlainText(result?.documentAst).join("\n")}`,
           unmapped: result?.metadata["unmappedMarkup"],
         })) {
-          misses.push(`${slotIndex}:${kind}:${token.split("_").at(-1)}`);
+          const position =
+            token.split("_").at(-1) ?? panic("Probe marker has no position");
+          misses.push(`${slotIndex}:${kind}:${position}`);
         }
       }
     }
