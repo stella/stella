@@ -2951,7 +2951,7 @@ const buildPromptParts = ({
     ...requestContextSections.map(chatVolatilePromptSection),
   ];
   const userContextBlock = buildUserContextBlock(userContext);
-  if (userContextBlock) {
+  if (userContextBlock !== "") {
     untrustedSections.push(userContextBlock);
   }
   const untrustedSuffix = brandChatUntrustedPromptSuffix(

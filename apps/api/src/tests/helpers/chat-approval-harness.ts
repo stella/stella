@@ -379,7 +379,7 @@ export const createApprovalHarness = ({
       // The profile the page sends with every message.
       const userContext = { ...user.context };
       Object.assign(body.forwardedProps, { userContext });
-      if (typeof body.data === "object" && body.data !== null) {
+      if (typeof body.data === "object") {
         Object.assign(body.data, { userContext });
       }
     }

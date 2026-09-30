@@ -1,4 +1,5 @@
 import type { SystemPrompt } from "@tanstack/ai";
+import { panic } from "better-result";
 
 import type { ModelRole } from "@stll/ai-catalog";
 
@@ -100,10 +101,9 @@ const systemPromptsFor = ({
  */
 export const chatSystemPrompts = (
   input: ChatSystemPromptInput & { system: string },
-): SystemPrompt[] => {
-  const { systemPrompts } = systemPromptsFor(input);
-  return systemPrompts === undefined ? [] : systemPrompts;
-};
+): SystemPrompt[] =>
+  systemPromptsFor(input).systemPrompts ??
+  panic("A non-empty system prompt yields system prompts");
 
 type ChatRequestOptionsInput = ChatSystemPromptInput & {
   maxOutputTokens: number | undefined;

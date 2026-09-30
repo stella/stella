@@ -42,6 +42,7 @@ import type {
   RecordingAnalytics,
   RecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 // The real `chat()` engine runs here; only the provider boundary is faked.
 // Replacing the engine instead lets a fixture invent public chunk shapes the
@@ -1622,16 +1623,15 @@ describe("prompt caching at the layer boundaries", () => {
     provider: ResolvedTanStackTextModel["provider"],
     modelId: string,
   ) =>
-    // SAFETY: the patch and the option merge read provider, modelId and
-    // modelOptions only; the adapter is irrelevant here.
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
-    ({
+    // The patch and the option merge read provider, modelId and modelOptions
+    // only; the adapter is irrelevant here.
+    asTestRaw<ResolvedTanStackTextModel>({
       adapter: {},
       keySource: "instance",
       modelId,
       modelOptions: {},
       provider,
-    }) as ResolvedTanStackTextModel;
+    });
   const markerModels = [
     modelOf("anthropic", "claude-sonnet-4-6"),
     modelOf("openrouter", "anthropic/claude-sonnet-5.5"),
