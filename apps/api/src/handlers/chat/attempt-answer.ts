@@ -34,6 +34,26 @@ const PART_ANSWER_POLICY = {
   "call" | "content" | "none" | "text"
 >;
 
+const mayAnswer = (part: ChatPart): boolean =>
+  PART_ANSWER_POLICY[part.type] !== "none";
+
+/** Whether a part the run added is an answer on its own. */
+const partIsAnswer = (part: ChatPart): boolean => {
+  const policy = PART_ANSWER_POLICY[part.type];
+  switch (policy) {
+    case "call":
+    case "content":
+      return true;
+    case "none":
+      return false;
+    case "text":
+      return part.type === "text" && part.content.trim().length > 0;
+    default:
+      policy satisfies never;
+      return panic(`Unhandled part policy: ${String(policy)}`);
+  }
+};
+
 type AttemptProducedAnswerOptions = {
   /** The parts the run produced or continued, as it ends. */
   after: readonly ChatPart[];
@@ -48,51 +68,41 @@ type AttemptProducedAnswerOptions = {
  * held before the run, because a continuation's message already carries the
  * call the user answered, and that is not the model answering.
  *
- * Parts are matched by what they hold, not by position: the SDK writes a
- * run's text over a text part the message ends with, and adds a result
- * beside its call.
+ * Parts that can answer are matched by position: the SDK keeps the parts a
+ * message held, in order, writes the run's text over a text part the message
+ * ends with, and appends everything else. Where it puts a part that never
+ * answers (thinking, a tool result) does not matter.
+ * `attempt-answer.test.ts` pins that layout.
  */
 export const attemptProducedAnswer = ({
   after,
   before,
 }: AttemptProducedAnswerOptions): boolean => {
-  const heldToolCallIds = new Set<string>();
-  const heldTexts = new Map<string, number>();
-  let heldContent = 0;
-  for (const part of before) {
-    if (part.type === "tool-call") {
-      heldToolCallIds.add(part.id);
-    } else if (part.type === "text") {
-      heldTexts.set(part.content, (heldTexts.get(part.content) ?? 0) + 1);
-    } else if (PART_ANSWER_POLICY[part.type] === "content") {
-      heldContent += 1;
-    }
-  }
-
-  let content = 0;
-  for (const part of after) {
-    if (part.type === "tool-call") {
-      if (!heldToolCallIds.has(part.id)) {
+  const heldParts = before.filter(mayAnswer);
+  for (const [index, part] of after.filter(mayAnswer).entries()) {
+    const held = heldParts.at(index);
+    if (held === undefined) {
+      if (partIsAnswer(part)) {
         return true;
       }
       continue;
     }
-    if (part.type === "text") {
-      const held = heldTexts.get(part.content) ?? 0;
-      if (held > 0) {
-        heldTexts.set(part.content, held - 1);
-        continue;
-      }
-      if (part.content.trim().length > 0) {
+    if (part.type === "text" && held.type === "text") {
+      if (part.content !== held.content && partIsAnswer(part)) {
         return true;
       }
       continue;
     }
-    if (PART_ANSWER_POLICY[part.type] === "content") {
-      content += 1;
+    if (
+      part.type !== held.type ||
+      (part.type === "tool-call" &&
+        held.type === "tool-call" &&
+        part.id !== held.id)
+    ) {
+      panic("A continued message no longer starts with the parts it held");
     }
   }
-  return content > heldContent;
+  return false;
 };
 
 type RunProducedAnswerOptions = {
