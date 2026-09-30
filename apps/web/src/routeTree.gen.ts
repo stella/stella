@@ -88,6 +88,7 @@ import { Route as ProtectedWorkspacesWorkspaceIdListsRouteImport } from './route
 import { Route as ProtectedWorkspacesWorkspaceIdTimesheetsRouteImport } from './routes/_protected.workspaces/$workspaceId/timesheets'
 import { Route as ProtectedWorkspacesWorkspaceIdWorkflowsRouteImport } from './routes/_protected.workspaces/$workspaceId/workflows'
 import { Route as KnowledgeCompanyFormatsRegistryCompanyIdRouteImport } from './routes/knowledge/company-formats.$registry.$companyId'
+import { Route as KnowledgeTemplatesCatalogueIndexRouteImport } from './routes/knowledge/templates_.catalogue.index'
 import { Route as KnowledgeToolsEntryDownloadRouteImport } from './routes/knowledge/tools_.$entry_.download'
 import { Route as LawCountryStatutesIndexRouteImport } from './routes/law/$country/statutes/index'
 import { Route as LawCasesResearchIndexRouteImport } from './routes/law/cases/research/index'
@@ -535,6 +536,12 @@ const KnowledgeCompanyFormatsRegistryCompanyIdRoute =
     path: '/company-formats/$registry/$companyId',
     getParentRoute: () => KnowledgeRouteRoute,
   } as any)
+const KnowledgeTemplatesCatalogueIndexRoute =
+  KnowledgeTemplatesCatalogueIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => KnowledgeTemplatesCatalogueRoute,
+  } as any)
 const KnowledgeToolsEntryDownloadRoute =
   KnowledgeToolsEntryDownloadRouteImport.update({
     id: '/tools_/$entry_/download',
@@ -731,6 +738,7 @@ export interface FileRoutesByFullPath {
   '/sitemaps/law-statutes/$country/{$bucket}.xml': typeof SitemapsLawStatutesCountryChar123bucketChar125DotxmlRoute
   '/settings/organization/': typeof ProtectedSettingsOrganizationIndexRoute
   '/workspaces/$workspaceId/': typeof ProtectedWorkspacesWorkspaceIdIndexRoute
+  '/knowledge/templates/catalogue/': typeof KnowledgeTemplatesCatalogueIndexRoute
   '/law/$country/statutes/': typeof LawCountryStatutesIndexRoute
   '/law/cases/research/': typeof LawCasesResearchIndexRoute
   '/chat/workspaces/$workspaceId/$threadId': typeof ProtectedChatWorkspacesWorkspaceIdThreadIdRoute
@@ -784,7 +792,6 @@ export interface FileRoutesByTo {
   '/dev/autocomplete': typeof ProtectedDevAutocompleteRoute
   '/verify/$code': typeof ProtectedVerifyCodeRoute
   '/auth/accept-invitation/$invitationId': typeof AuthAcceptInvitationInvitationIdRoute
-  '/knowledge/templates/catalogue': typeof KnowledgeTemplatesCatalogueRouteWithChildren
   '/knowledge/tools/$entry': typeof KnowledgeToolsEntryRoute
   '/knowledge/tools/contribute': typeof KnowledgeToolsContributeRoute
   '/sitemaps/law-statutes/{$country}.xml': typeof SitemapsLawStatutesChar123countryChar125DotxmlRoute
@@ -821,6 +828,7 @@ export interface FileRoutesByTo {
   '/sitemaps/law-statutes/$country/{$bucket}.xml': typeof SitemapsLawStatutesCountryChar123bucketChar125DotxmlRoute
   '/settings/organization': typeof ProtectedSettingsOrganizationIndexRoute
   '/workspaces/$workspaceId': typeof ProtectedWorkspacesWorkspaceIdIndexRoute
+  '/knowledge/templates/catalogue': typeof KnowledgeTemplatesCatalogueIndexRoute
   '/law/$country/statutes': typeof LawCountryStatutesIndexRoute
   '/law/cases/research': typeof LawCasesResearchIndexRoute
   '/chat/workspaces/$workspaceId/$threadId': typeof ProtectedChatWorkspacesWorkspaceIdThreadIdRoute
@@ -922,6 +930,7 @@ export interface FileRoutesById {
   '/sitemaps/law-statutes/$country/{$bucket}.xml': typeof SitemapsLawStatutesCountryChar123bucketChar125DotxmlRoute
   '/_protected/settings/organization/': typeof ProtectedSettingsOrganizationIndexRoute
   '/_protected/workspaces/$workspaceId/': typeof ProtectedWorkspacesWorkspaceIdIndexRoute
+  '/knowledge/templates_/catalogue/': typeof KnowledgeTemplatesCatalogueIndexRoute
   '/law/$country/statutes/': typeof LawCountryStatutesIndexRoute
   '/law/cases/research/': typeof LawCasesResearchIndexRoute
   '/_protected/chat/workspaces/$workspaceId/$threadId': typeof ProtectedChatWorkspacesWorkspaceIdThreadIdRoute
@@ -1023,6 +1032,7 @@ export interface FileRouteTypes {
     | '/sitemaps/law-statutes/$country/{$bucket}.xml'
     | '/settings/organization/'
     | '/workspaces/$workspaceId/'
+    | '/knowledge/templates/catalogue/'
     | '/law/$country/statutes/'
     | '/law/cases/research/'
     | '/chat/workspaces/$workspaceId/$threadId'
@@ -1076,7 +1086,6 @@ export interface FileRouteTypes {
     | '/dev/autocomplete'
     | '/verify/$code'
     | '/auth/accept-invitation/$invitationId'
-    | '/knowledge/templates/catalogue'
     | '/knowledge/tools/$entry'
     | '/knowledge/tools/contribute'
     | '/sitemaps/law-statutes/{$country}.xml'
@@ -1113,6 +1122,7 @@ export interface FileRouteTypes {
     | '/sitemaps/law-statutes/$country/{$bucket}.xml'
     | '/settings/organization'
     | '/workspaces/$workspaceId'
+    | '/knowledge/templates/catalogue'
     | '/law/$country/statutes'
     | '/law/cases/research'
     | '/chat/workspaces/$workspaceId/$threadId'
@@ -1213,6 +1223,7 @@ export interface FileRouteTypes {
     | '/sitemaps/law-statutes/$country/{$bucket}.xml'
     | '/_protected/settings/organization/'
     | '/_protected/workspaces/$workspaceId/'
+    | '/knowledge/templates_/catalogue/'
     | '/law/$country/statutes/'
     | '/law/cases/research/'
     | '/_protected/chat/workspaces/$workspaceId/$threadId'
@@ -1808,6 +1819,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof KnowledgeCompanyFormatsRegistryCompanyIdRouteImport
       parentRoute: typeof KnowledgeRouteRoute
     }
+    '/knowledge/templates_/catalogue/': {
+      id: '/knowledge/templates_/catalogue/'
+      path: '/'
+      fullPath: '/knowledge/templates/catalogue/'
+      preLoaderRoute: typeof KnowledgeTemplatesCatalogueIndexRouteImport
+      parentRoute: typeof KnowledgeTemplatesCatalogueRoute
+    }
     '/knowledge/tools_/$entry_/download': {
       id: '/knowledge/tools_/$entry_/download'
       path: '/tools/$entry/download'
@@ -1967,11 +1985,14 @@ const AuthRouteRouteWithChildren = AuthRouteRoute._addFileChildren(
 )
 
 interface KnowledgeTemplatesCatalogueRouteChildren {
+  KnowledgeTemplatesCatalogueIndexRoute: typeof KnowledgeTemplatesCatalogueIndexRoute
   KnowledgeTemplatesCataloguePackIdTemplateIdRoute: typeof KnowledgeTemplatesCataloguePackIdTemplateIdRoute
 }
 
 const KnowledgeTemplatesCatalogueRouteChildren: KnowledgeTemplatesCatalogueRouteChildren =
   {
+    KnowledgeTemplatesCatalogueIndexRoute:
+      KnowledgeTemplatesCatalogueIndexRoute,
     KnowledgeTemplatesCataloguePackIdTemplateIdRoute:
       KnowledgeTemplatesCataloguePackIdTemplateIdRoute,
   }
