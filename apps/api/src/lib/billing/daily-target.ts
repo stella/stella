@@ -11,7 +11,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
-export const DAILY_TARGET_MAX_MINUTES = 1440;
+const DAILY_TARGET_MAX_MINUTES = 1440;
 export const dailyTargetBody = t.Object({
   minutes: t.Nullable(
     Type.Integer({ minimum: 1, maximum: DAILY_TARGET_MAX_MINUTES }),

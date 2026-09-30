@@ -1120,7 +1120,7 @@ const TASKS: readonly Task[] = [
     cli: {
       kind: "command",
       path: ["capability", "time-entries", "me-daily-target-update"],
-      flags: { minutes: 480 },
+      flags: { minutes: "480" },
     },
   },
   {
