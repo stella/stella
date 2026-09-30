@@ -75,6 +75,10 @@ const runBatch = async (
 ) =>
   await batchUpdate.handler(
     asTestRaw<BatchContext>({
+      request: new Request("https://example.test/time-entries/batch", {
+        method: "PATCH",
+      }),
+      route: "/time-entries/batch",
       body,
       memberRole: { role: "owner" },
       session: { activeOrganizationId: ids.orgA },

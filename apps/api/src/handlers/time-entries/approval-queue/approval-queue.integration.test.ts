@@ -1,4 +1,3 @@
-import { Result } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -8,7 +7,8 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
+import { pgTable, text, integer, boolean } from "drizzle-orm/pg-core";
 
 import { Temporal } from "@stll/time";
 
@@ -24,7 +24,6 @@ import { createAuditRecorder } from "@/api/lib/audit-log";
 import { DEFAULT_TIME_POLICY } from "@/api/lib/billing-time";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
-import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -415,31 +414,34 @@ describe("approval lifecycle guards", () => {
   });
 });
 
+// PGlite has one backend, so verify held locks rather than starting a second transaction.
+const pgLocks = pgTable("pg_locks", {
+  locktype: text("locktype"),
+  mode: text("mode"),
+  relation: integer("relation"),
+  pid: integer("pid"),
+  granted: boolean("granted"),
+});
+
 describe("approval policy serialization", () => {
   const policyCheckingContext = () => {
     const ctx = context();
     const safeDb: SafeDb = async (run, retry) =>
       await ctx.safeDb(async (tx) => {
         const result = await run(tx);
-        // A closer must acquire this row before updating the month. NOWAIT makes
-        // the conflicting writer observable without timing-dependent sleeps.
-        const closeLock = await Result.tryPromise(
-          async () =>
-            await db.transaction(
-              async (closer) =>
-                await closer
-                  .select({ id: organizationSettings.id })
-                  .from(organizationSettings)
-                  .where(eq(organizationSettings.organizationId, ids.orgA))
-                  .for("update", { noWait: true }),
+        const heldPolicyLocks = await tx
+          .select({ mode: pgLocks.mode })
+          .from(pgLocks)
+          .where(
+            and(
+              eq(pgLocks.locktype, "relation"),
+              eq(pgLocks.mode, "RowShareLock"),
+              eq(pgLocks.granted, true),
+              sql`${pgLocks.relation} = 'organization_settings'::regclass`,
+              sql`${pgLocks.pid} = pg_backend_pid()`,
             ),
-        );
-        expect(closeLock.isErr()).toBe(true);
-        if (closeLock.isErr()) {
-          expect(
-            isPgError(closeLock.error.cause, PG_ERROR.LOCK_NOT_AVAILABLE),
-          ).toBe(true);
-        }
+          );
+        expect(heldPolicyLocks).toHaveLength(1);
         return result;
       }, retry);
     return { ...ctx, safeDb };
