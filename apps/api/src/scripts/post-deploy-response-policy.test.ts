@@ -227,7 +227,7 @@ describe("evaluateCachePolicy", () => {
     expect(
       evaluateCachePolicy(publicJson, {
         status: 404,
-        headers: cdnHeaders({ "cache-control": "no-store" }),
+        headers: cdnHeaders({ "cache-control": "private, no-store" }),
       }),
     ).toEqual([]);
     expect(

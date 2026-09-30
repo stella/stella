@@ -18,7 +18,10 @@ const isCacheControlLiteral = (value: string): boolean => {
   ) {
     return false;
   }
-  return directives.some((directive) => CACHE_DIRECTIVE.test(directive));
+  return (
+    directives.every((directive) => /^[\w-]+(?:\s*=.*)?$/u.test(directive)) &&
+    directives.some((directive) => CACHE_DIRECTIVE.test(directive))
+  );
 };
 
 export default eslintCompatPlugin({

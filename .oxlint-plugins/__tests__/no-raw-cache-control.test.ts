@@ -29,6 +29,7 @@ describe("no-raw-cache-control", () => {
           'const state = "private";',
           'const audience = "public";',
           'const description = "public matter metadata";',
+          'const label = "the user, private";',
         ].join("\n"),
       ),
     ).toEqual([]);

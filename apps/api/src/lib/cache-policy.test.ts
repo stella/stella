@@ -150,8 +150,8 @@ describe("response cache policy", () => {
       const mapped = finalizeResponseCachePolicy({ response, set });
       expect(mapped).toBeInstanceOf(Response);
       if (mapped instanceof Response) {
-        expect(mapped?.status).toBe(code);
-        expect(mapped?.headers.get("cache-control")).toBe("private, no-store");
+        expect(mapped.status).toBe(code);
+        expect(mapped.headers.get("cache-control")).toBe("private, no-store");
       }
     }
   });
@@ -167,8 +167,8 @@ describe("response cache policy", () => {
       const mapped = finalizeResponseCachePolicy({ response, set });
       expect(mapped).toBeInstanceOf(Response);
       if (mapped instanceof Response) {
-        expect(mapped?.status).toBe(innerStatus);
-        expect(mapped?.headers.get("Cache-Control")).toBe(
+        expect(mapped.status).toBe(innerStatus);
+        expect(mapped.headers.get("Cache-Control")).toBe(
           innerStatus === 200
             ? "public, max-age=300, stale-while-revalidate=60"
             : "private, no-store",

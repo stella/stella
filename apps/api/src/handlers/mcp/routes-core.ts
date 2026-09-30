@@ -1,7 +1,11 @@
-import { Result } from "better-result";
 import Elysia from "elysia";
 
-import { createSafePublicHandler } from "@/api/lib/api-handlers";
+import {
+  readAnonymizedMetadata,
+  readDefaultMetadata,
+  readDocumentsMetadata,
+  readLawMetadata,
+} from "@/api/handlers/mcp/read-discovery-metadata";
 import { resolveRateLimitClientAddress } from "@/api/lib/client-ip";
 import {
   MCP_ANONYMIZED_DISCOVERY_PATH,
@@ -19,7 +23,6 @@ import {
   createMcpDiscoveryPreflightHeaders,
   createMcpMetadataHeaders,
   createMcpPreflightHeaders,
-  getMcpProtectedResourceMetadata,
 } from "@/api/mcp/metadata";
 
 type HandleMcpHttpRequest = (
@@ -111,21 +114,6 @@ const discoveryOptionsHandler = ({ set }: { set: RouteSet }) => {
   return "";
 };
 
-const discoveryHandler = (mode?: McpMode) =>
-  createSafePublicHandler(
-    {
-      cache: { kind: "public", maxAge: 300 },
-      mcp: { type: "internal", reason: "auth_plumbing" },
-    },
-    async function* ({ set }) {
-      applyHeaders({ headers: createMcpMetadataHeaders(), set });
-      const metadata = yield* Result.try(() =>
-        getMcpProtectedResourceMetadata(mode),
-      );
-      return Result.ok(metadata);
-    },
-  ).handler;
-
 export const createMcpRoute = ({
   handleMcpHttpRequest,
 }: {
@@ -154,15 +142,15 @@ export const createMcpRoute = ({
 
   return new Elysia()
     .options(ROOT_MCP_DISCOVERY_PATH, discoveryOptionsHandler)
-    .get(ROOT_MCP_DISCOVERY_PATH, discoveryHandler())
+    .get(ROOT_MCP_DISCOVERY_PATH, readDefaultMetadata.handler)
     .options(MCP_ANONYMIZED_DISCOVERY_PATH, discoveryOptionsHandler)
-    .get(MCP_ANONYMIZED_DISCOVERY_PATH, discoveryHandler("anonymized"))
+    .get(MCP_ANONYMIZED_DISCOVERY_PATH, readAnonymizedMetadata.handler)
     .options(MCP_DISCOVERY_PATH, discoveryOptionsHandler)
-    .get(MCP_DISCOVERY_PATH, discoveryHandler())
+    .get(MCP_DISCOVERY_PATH, readDefaultMetadata.handler)
     .options(MCP_DOCUMENTS_DISCOVERY_PATH, discoveryOptionsHandler)
-    .get(MCP_DOCUMENTS_DISCOVERY_PATH, discoveryHandler("documents"))
+    .get(MCP_DOCUMENTS_DISCOVERY_PATH, readDocumentsMetadata.handler)
     .options(MCP_LAW_DISCOVERY_PATH, discoveryOptionsHandler)
-    .get(MCP_LAW_DISCOVERY_PATH, discoveryHandler("law"))
+    .get(MCP_LAW_DISCOVERY_PATH, readLawMetadata.handler)
     .all(
       MCP_HTTP_PATH,
       async ({ request, server, set }) =>

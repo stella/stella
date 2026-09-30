@@ -15,7 +15,9 @@ const readManifest = createSafePublicHandler(
     for (const [key, value] of Object.entries(AGENT_AUTH_MANIFEST_HEADERS)) {
       set.headers[key] = value;
     }
-    const manifest = yield* Result.try(getAgentAuthManifest);
+    const manifest = yield* Result.await(
+      Promise.resolve(Result.try(getAgentAuthManifest)),
+    );
     return Result.ok(manifest);
   },
 );

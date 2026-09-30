@@ -9,7 +9,9 @@ const readClientMetadata = createSafePublicHandler(
     mcp: { type: "internal", reason: "auth_plumbing" },
   },
   async function* () {
-    const metadata = yield* Result.try(buildMcpClientMetadataDocument);
+    const metadata = yield* Result.await(
+      Promise.resolve(Result.try(buildMcpClientMetadataDocument)),
+    );
     return Result.ok(metadata);
   },
 );
