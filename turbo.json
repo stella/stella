@@ -20,7 +20,11 @@
   "globalDependencies": ["patches/**"],
   "tasks": {
     "@stll/redis-config#test": {
-      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/apps/**", "$TURBO_ROOT$/packages/**"]
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/apps/**",
+        "$TURBO_ROOT$/packages/**"
+      ]
     },
     "transit": {
       "dependsOn": ["^transit"]
