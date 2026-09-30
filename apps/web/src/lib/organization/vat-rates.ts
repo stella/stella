@@ -1,4 +1,5 @@
 import { infiniteQueryOptions } from "@tanstack/react-query";
+import { panic } from "better-result";
 
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
@@ -38,5 +39,8 @@ export const sendVatRateCommand = async (command: VatRateCommand) => {
       return unwrapEden(await rate.patch(command.values));
     case "archive":
       return unwrapEden(await rate.archive.post());
+    default:
+      command satisfies never;
+      return panic("Unexpected VAT rate command");
   }
 };
