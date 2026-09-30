@@ -21,6 +21,7 @@ import { envBase } from "@/api/env-base";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { DocxArchiveError } from "@/api/lib/docx-archive";
 import type { adaptAiFields } from "@/api/lib/docx/adapt-ai-fields";
 import type { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
 import type { discoverClauseSlots } from "@/api/lib/docx/discover-clause-slots";
@@ -225,6 +226,25 @@ const scannerDown: typeof scanUpload = async () =>
   );
 
 describe("stored template files", () => {
+  test("stored archive validation returns a client error", async () => {
+    const bytes = new TextEncoder().encode("Invalid document.");
+    const templateId = await seedTemplate(bytes);
+    await testDb
+      .update(templates)
+      .set({ scanState: "scanned" })
+      .where(eq(templates.id, templateId));
+    const error = expectErr(
+      await readStoredTemplateFile({
+        safeDb,
+        organizationId: ids.orgA,
+        row: await templateRow(templateId),
+      }),
+    );
+    expect(error.status).toBe(422);
+    expect(error.cause).toBeInstanceOf(DocxArchiveError);
+    expect(error.cause).toMatchObject({ reason: "load-failed" });
+  });
+
   test("an existing template is scanned on its first read, marked, and then read without a scan", async () => {
     const templateId = await seedTemplate(
       await docxWithMarkers(["client_name"]),
