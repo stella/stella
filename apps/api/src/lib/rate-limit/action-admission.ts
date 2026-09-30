@@ -497,7 +497,12 @@ export const withActionAdmission = async <T>({
   }
   // A settled success may already have committed or charged. Losing the lease
   // cannot replace it with an infrastructure error that invites duplicate work.
-  if (Result.isError(outcome) && controller.signal.aborted) {
+  if (
+    Result.isError(outcome) &&
+    controller.signal.aborted &&
+    (outcome.error === controller.signal.reason ||
+      (outcome.error instanceof Error && outcome.error.name === "AbortError"))
+  ) {
     return Result.err(controller.signal.reason);
   }
   return outcome;

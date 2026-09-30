@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   ActionAdmissionError,
   withActionAdmission,
@@ -581,7 +582,7 @@ describe("shared action admission", () => {
             "abort",
             () => {
               observedAbort = true;
-              reject(new Error("Action aborted", { cause: signal.reason }));
+              reject(new DOMException("Action aborted", "AbortError"));
             },
             { once: true },
           );
@@ -594,4 +595,53 @@ describe("shared action admission", () => {
     expect(await failure).toMatchObject({ reason: "unavailable" });
     expect(observedAbort).toBe(true);
   });
+  for (const failureKind of [
+    "signal-reason",
+    "abort-error",
+    "handler-error",
+  ] as const) {
+    test(`lease loss preserves error identity for ${failureKind}`, async () => {
+      const redis = sharedRedis({ onRenew: async () => 0 });
+      const timing = manualTiming(redis);
+      const started = deferred();
+      const pending = deferred();
+      const conflict = new HandlerError({
+        status: 409,
+        message: "The resource changed",
+      });
+      const admitted = withActionAdmission({
+        enabled: true,
+        organizationId,
+        userId: firstUser,
+        policy: { ...policy, leaseMs: 100 },
+        redis,
+        timing,
+        run: async (signal) => {
+          started.finish();
+          await pending.promise;
+          expect(signal.aborted).toBe(true);
+          switch (failureKind) {
+            case "signal-reason":
+              throw signal.reason;
+            case "abort-error":
+              throw new DOMException("Action aborted", "AbortError");
+            case "handler-error":
+              throw conflict;
+          }
+        },
+      });
+      const failure = failureOf(admitted);
+      await started.promise;
+      await timing.fireNext();
+      pending.finish();
+      const error = await failure;
+      if (failureKind === "handler-error") {
+        expect(error).toBe(conflict);
+        expect(error).toMatchObject({ status: 409 });
+      } else {
+        expect(ActionAdmissionError.is(error)).toBe(true);
+        expect(error).toMatchObject({ reason: "unavailable" });
+      }
+    });
+  }
 });

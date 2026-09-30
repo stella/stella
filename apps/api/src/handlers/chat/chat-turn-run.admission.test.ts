@@ -5,7 +5,8 @@ import { describe, expect, test } from "bun:test";
 
 import { chatMessages, chatTurns } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
-import { TimeoutError } from "@/api/lib/errors/tagged-errors";
+import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
+import { HandlerError, TimeoutError } from "@/api/lib/errors/tagged-errors";
 import {
   ActionAdmissionError,
   withActionAdmission,
@@ -19,10 +20,110 @@ import {
   toPersistableChatMessage,
 } from "./chat-message-parts";
 import { ChatTurnOwnership, ChatTurnRun } from "./chat-turn-run";
-import { processServerChatStream } from "./stream-chat";
+import { processServerChatStream, toChatMessage } from "./stream-chat";
 import { createChatMessageIdMapper } from "./stream-message-identity";
 
 describe("chat run admission follows owned settlement", () => {
+  test("persists once and releases admission when processor finalization throws after lease loss", async () => {
+    for (const exit of ["drain", "throw"] as const) {
+      const admission = new AbortController();
+      let releases = 0;
+      let persisted = 0;
+      let finalizations = 0;
+      const run = new ChatTurnRun({
+        admission: {
+          signal: admission.signal,
+          release: async () => {
+            releases += 1;
+            await Promise.resolve();
+          },
+        },
+        connectors: undefined,
+        deadlineMs: 60_000,
+        heartbeat: { intervalMs: 60_000, renewEvery: 1000 },
+        ownership: new ChatTurnOwnership(),
+        owner: {
+          execution: {
+            id: toSafeId<"chatTurn">("turn_processor_failure"),
+            executionId: "execution_processor_failure",
+          },
+          owningAssistantMessage: undefined,
+          recordAuditEvent: async () => {
+            await Promise.resolve();
+          },
+          safeDb: createScopedDbMock({}).safeDb,
+          threadId: toSafeId<"chatThread">("thread_processor_failure"),
+          userId: toSafeId<"user">("user_processor_failure"),
+          workspaceId: null,
+        },
+      });
+      const { processor, message } = createStreamMessageCapture({
+        initialMessages: [],
+        capture: toChatMessage,
+      });
+      const finalize = processor.finalizeStream.bind(processor);
+      processor.finalizeStream = () => {
+        finalizations += 1;
+        finalize();
+        throw new HandlerError({
+          status: 500,
+          message: "Processor finalization failed",
+        });
+      };
+      const source = async function* (): AsyncIterable<StreamChunk> {
+        yield {
+          type: EventType.TEXT_MESSAGE_START,
+          messageId: "assistant-1",
+          role: "assistant",
+        };
+        yield {
+          type: EventType.TEXT_MESSAGE_CONTENT,
+          messageId: "assistant-1",
+          delta: "Partial answer",
+        };
+        admission.abort(
+          new ActionAdmissionError({
+            message: "Admission lease lost",
+            reason: "unavailable",
+          }),
+        );
+        if (exit === "throw")
+          {throw new HandlerError({ status: 503, message: "Provider aborted" });}
+      };
+      const output = processServerChatStream({
+        abortSignal: run.control.providerAbortController.signal,
+        runSignal: run.control.abortController.signal,
+        deadlineSignal: run.control.deadlineSignal,
+        getResponseMessage: message,
+        mapMessageId: createChatMessageIdMapper(() =>
+          toSafeId<"chatMessage">("11111111-1111-4111-8111-111111111111"),
+        ),
+        processor,
+        source: source(),
+        onFinish: async ({ outcome, responseMessage }) => {
+          expect(outcome).toEqual({
+            type: "failed",
+            error: "provider_unavailable",
+          });
+          expect(responseMessage?.parts).toContainEqual({
+            type: "text",
+            content: "Partial answer",
+          });
+          await run.settle(async () => {
+            persisted += 1;
+            await Promise.resolve();
+          });
+        },
+      });
+      await run.produce(output).text();
+      expect(await run.settled).toBe("stored");
+      expect(persisted).toBe(1);
+      expect(releases).toBe(1);
+      expect(finalizations).toBe(1);
+      expect(run.control.abortController.signal.aborted).toBe(false);
+    }
+  });
+
   test("holds through provider, persistence and heartbeat completion without aborting durable ownership", async () => {
     const beatStarted = Promise.withResolvers<undefined>();
     const beatMayFinish = Promise.withResolvers<undefined>();

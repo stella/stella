@@ -445,6 +445,8 @@ type ClaimedChatTurnOwnership =
   | { status: "handed-over" };
 
 type ChatSendLifecycleOptions = {
+  startAdmission?: typeof startChatExecutionAdmission;
+  indexThread: typeof upsertChatThreadSearchDocument;
   externalMcpToolsLoader: LazyExternalMcpToolsLoader;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
@@ -533,7 +535,9 @@ export class ChatSendLifecycle {
     organizationId: SafeId<"organization">;
     checkpoint: PersistableChatMessage | undefined;
   }): Promise<Result<void, HandlerError>> {
-    const acquired = await startChatExecutionAdmission({
+    const acquired = await (
+      this.options.startAdmission ?? startChatExecutionAdmission
+    )({
       organizationId,
       userId: this.options.userId,
     });
@@ -578,6 +582,7 @@ export class ChatSendLifecycle {
     // No tools have executed before handoff. Restore only this original
     // awaiting snapshot, through the same execution fence as normal settlement.
     const restored = await persistTerminalAssistantTurn({
+      indexThread: this.options.indexThread,
       execution: this.claimedTurn.execution,
       outcome: { type: "awaiting-user", interaction },
       owningAssistantMessage: this.checkpoint,
@@ -613,6 +618,7 @@ export class ChatSendLifecycle {
       connectors,
       deadlineMs: CHAT_METERED_PROVIDER_TIMEOUT_MS,
       owner: {
+        indexThread: this.options.indexThread,
         execution: this.claimedTurn.execution,
         owningAssistantMessage: this.claimedTurn.owningAssistantMessage,
         recordAuditEvent: this.options.recordAuditEvent,
@@ -2049,6 +2055,7 @@ export const createSendMessage = (
           }),
       );
       const lifecycle = new ChatSendLifecycle({
+        indexThread: dependencies.indexThread,
         externalMcpToolsLoader,
         recordAuditEvent,
         safeDb,

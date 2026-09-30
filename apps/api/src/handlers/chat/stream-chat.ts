@@ -1825,7 +1825,7 @@ export const processServerChatStream = async function* ({
     for (const chunk of deferredRunFinishedChunks) {
       processor.processChunk(chunk);
     }
-    processor.finalizeStream();
+    finalizeResponseProcessor(processor);
     const interaction = getAwaitingUserInteractions(getResponseMessage()).find(
       (candidate) =>
         toolCallsWithCompleteInput.has(candidate.toolCallId) &&
