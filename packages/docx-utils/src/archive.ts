@@ -194,15 +194,12 @@ const readZip64Directory = (
 const readDirectory = (
   view: DataView,
 ): Result<DirectoryMetadata, DocxArchiveError> => {
-  let end = view.byteLength - 22;
+  const bytes = Buffer.from(view.buffer, view.byteOffset, view.byteLength);
+  const end = bytes.lastIndexOf(new Uint8Array([80, 75, 5, 6]));
   const earliest = Math.max(0, view.byteLength - 65_535 - 22);
-  for (; end >= earliest; end--) {
-    if (view.getUint32(end, true) === 0x06_05_4b_50) {
-      break;
-    }
-  }
   if (
     end < earliest ||
+    end > view.byteLength - 22 ||
     end + 22 + view.getUint16(end + 20, true) !== view.byteLength
   ) {
     return invalid();
@@ -218,16 +215,17 @@ const readDirectory = (
   let size = BigInt(view.getUint32(end + 12, true));
   let start = BigInt(view.getUint32(end + 16, true));
   let directoryEnd = end;
-  const locator = end - 20;
-  const hasLocator =
-    locator >= 0 && view.getUint32(locator, true) === 0x07_06_4b_50;
+  const locator = bytes.lastIndexOf(new Uint8Array([80, 75, 6, 7]));
   const needsZip64 =
     count === 65_535n ||
     diskCount === 65_535n ||
     size === 0xff_ff_ff_ffn ||
     start === 0xff_ff_ff_ffn;
-  if (needsZip64 || hasLocator) {
-    if (!hasLocator) {
+  if (!needsZip64 && locator !== -1) {
+    return invalid();
+  }
+  if (needsZip64) {
+    if (locator === -1 || locator !== end - 20) {
       return invalid();
     }
     const zip64 = readZip64Directory(view, locator);

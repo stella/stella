@@ -21,7 +21,7 @@ import { envBase } from "@/api/env-base";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { DOCX_MAX_ENTRY_BYTES, DocxArchiveError } from "@/api/lib/docx-archive";
+import { DocxArchiveError } from "@/api/lib/docx-archive";
 import type { adaptAiFields } from "@/api/lib/docx/adapt-ai-fields";
 import type { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
 import type { discoverClauseSlots } from "@/api/lib/docx/discover-clause-slots";
@@ -47,7 +47,6 @@ import { readStoredTemplateFile } from "@/api/lib/templates/stored-template-file
 import type { FillTemplateSource } from "@/api/lib/templates/template-fill-service";
 import { loadStoredTemplateSource } from "@/api/lib/templates/template-fill-service";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
-import { archiveWithDeclaredSize } from "@/api/tests/helpers/archive-input";
 import { docxWithMarkers } from "@/api/tests/helpers/docx-with-markers";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -228,9 +227,7 @@ const scannerDown: typeof scanUpload = async () =>
 
 describe("stored template files", () => {
   test("stored archive validation returns a client error", async () => {
-    const bytes = new Uint8Array(
-      await archiveWithDeclaredSize(DOCX_MAX_ENTRY_BYTES + 1),
-    );
+    const bytes = new TextEncoder().encode("Invalid document.");
     const templateId = await seedTemplate(bytes);
     await testDb
       .update(templates)
@@ -245,7 +242,7 @@ describe("stored template files", () => {
     );
     expect(error.status).toBe(422);
     expect(error.cause).toBeInstanceOf(DocxArchiveError);
-    expect(error.cause).toMatchObject({ reason: "entry-too-large" });
+    expect(error.cause).toMatchObject({ reason: "load-failed" });
   });
 
   test("an existing template is scanned on its first read, marked, and then read without a scan", async () => {

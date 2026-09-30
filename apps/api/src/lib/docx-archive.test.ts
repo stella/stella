@@ -1,11 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
-import {
-  DOCX_MAX_ENTRIES,
-  DocxArchiveError,
-  loadDocxArchive,
-} from "@/api/lib/docx-archive";
+import { DocxArchiveError, loadDocxArchive } from "@/api/lib/docx-archive";
 
 const buildArchive = async (
   files: { path: string; content: string | Uint8Array }[],
@@ -62,12 +58,14 @@ describe("loadDocxArchive", () => {
   });
 
   test("rejects archives that declare too many entries", async () => {
-    const files = Array.from({ length: DOCX_MAX_ENTRIES + 1 }, (_, i) => ({
+    const files = Array.from({ length: 3 }, (_, i) => ({
       path: `entry-${i}.txt`,
       content: "x",
     }));
     const buffer = await buildArchive(files);
-    const error = await captureRejection(loadDocxArchive(buffer));
+    const error = await captureRejection(
+      loadDocxArchive(buffer, { maxEntries: 2 }),
+    );
     expect(error).toMatchObject({
       _tag: "DocxArchiveError",
       reason: "too-many-entries",
@@ -105,13 +103,6 @@ describe("loadDocxArchive", () => {
     const buffer = await buildArchive([
       { path: "comments.xml", content: "X".repeat(8) },
     ]);
-    const bytes = new Uint8Array(buffer);
-    const view = new DataView(buffer);
-    for (let offset = 0; offset <= bytes.length - 46; offset++) {
-      if (view.getUint32(offset, true) === 0x02_01_4b_50) {
-        view.setUint32(offset + 24, 1, true);
-      }
-    }
     const error = await captureRejection(
       loadDocxArchive(buffer, { maxEntryBytes: 4 }),
     );

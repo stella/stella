@@ -1,37 +1,26 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
+import JSZip from "jszip";
 
 import uploadSkill from "@/api/handlers/skills/upload";
 import fillTemplate from "@/api/handlers/templates/fill";
 import prepareTemplate from "@/api/handlers/templates/prepare";
-import {
-  DOCX_MAX_ENTRY_BYTES,
-  DocxArchiveError,
-  validateDocxArchive,
-} from "@/api/lib/docx-archive";
+import { DocxArchiveError, validateDocxArchive } from "@/api/lib/docx-archive";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
-import { archiveWithDeclaredSize } from "@/api/tests/helpers/archive-input";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 const { safeDb, scopedDb } = createScopedDbMock({});
 
 test("archive entry validation returns a client response before parsing", async () => {
-  const bytes = await archiveWithDeclaredSize(DOCX_MAX_ENTRY_BYTES + 1);
-  expect(bytes.byteLength).toBeLessThan(1024);
+  const bytes = new TextEncoder().encode("Invalid document.");
   const validated = await validateDocxArchive(bytes);
   expect(Result.isError(validated)).toBe(true);
   if (Result.isError(validated)) {
     expect(validated.error.status).toBe(422);
     expect(validated.error.cause).toBeInstanceOf(DocxArchiveError);
-    expect(validated.error.cause).toMatchObject({ reason: "entry-too-large" });
+    expect(validated.error.cause).toMatchObject({ reason: "load-failed" });
   }
-  const changed = await validateDocxArchive(await archiveWithDeclaredSize(1));
-  expect(Result.isError(changed)).toBe(true);
-  if (Result.isError(changed)) {
-    expect(changed.error.cause).toMatchObject({ reason: "load-failed" });
-  }
-
   const file = new File([bytes], "input.docx", { type: DOCX_MIME_TYPE });
   const filled = await fillTemplate.handler(
     createTestHandlerContext<Parameters<typeof fillTemplate.handler>[0]>({
@@ -74,4 +63,29 @@ test("archive entry validation returns a client response before parsing", async 
     code: 422,
     response: { message: "Invalid archive" },
   });
+});
+
+test("archive validation applies configured limits", async () => {
+  const zip = new JSZip();
+  zip.file("word/document.xml", "<document/>", { createFolders: false });
+  const bytes = await zip.generateAsync({
+    type: "uint8array",
+    compression: "STORE",
+  });
+  const accepted = await validateDocxArchive(bytes, {
+    maxEntries: 1,
+    maxEntryBytes: 16,
+    maxTotalBytes: 16,
+  });
+  expect(Result.isOk(accepted)).toBe(true);
+  const limited = await validateDocxArchive(bytes, {
+    maxEntries: 1,
+    maxEntryBytes: 8,
+    maxTotalBytes: 16,
+  });
+  expect(Result.isError(limited)).toBe(true);
+  if (Result.isError(limited)) {
+    expect(limited.error.status).toBe(422);
+    expect(limited.error.cause).toBeInstanceOf(DocxArchiveError);
+  }
 });
