@@ -569,22 +569,23 @@ export const requireDraftInvoiceForEntryChanges = async (
   return Result.ok(result.value);
 };
 
+const calculateInvoiceAmounts = (
+  lines: readonly LineAmountInput[],
+  documentType: InvoiceDocumentType,
+) =>
+  calculateDocumentTotals({
+    documentType,
+    lines: lines.map(toLineInput),
+  }).mapErr(
+    (error) => new HandlerError({ status: 500, message: error.message }),
+  );
+
 /** Invoice totals and VAT breakdown over the given lines. */
 export const invoiceTotals = (
   lines: readonly LineAmountInput[],
   documentType: InvoiceDocumentType = "invoice",
-): Result<InvoiceTotals, HandlerError> => {
-  const calculated = calculateDocumentTotals({
-    documentType,
-    lines: lines.map(toLineInput),
-  });
-  if (calculated.isErr()) {
-    return Result.err(
-      new HandlerError({ status: 500, message: calculated.error.message }),
-    );
-  }
-  return Result.ok(calculated.value.totals);
-};
+): Result<InvoiceTotals, HandlerError> =>
+  calculateInvoiceAmounts(lines, documentType).map(({ totals }) => totals);
 
 type InvoiceForReadTotals = {
   documentType: InvoiceDocumentType;
@@ -609,11 +610,9 @@ type InvoiceForReadTotals = {
  * entries, so its stored total stands as a net at 0 % VAT, which is how
  * totals were written before lines.
  */
-export const readInvoiceTotals = (
-  invoice: InvoiceForReadTotals,
-): Result<InvoiceTotals, HandlerError> => {
+export const readInvoiceAmounts = (invoice: InvoiceForReadTotals) => {
   if (invoice.netAmount !== null) {
-    return invoiceTotals(invoice.lines, invoice.documentType);
+    return calculateInvoiceAmounts(invoice.lines, invoice.documentType);
   }
   const linedTimeEntries = new Set<string>();
   const linedExpenses = new Set<string>();
@@ -644,8 +643,11 @@ export const readInvoiceTotals = (
       ...ATTACHED_ENTRY_LINE_VAT,
     });
   }
-  return invoiceTotals(lines, invoice.documentType);
+  return calculateInvoiceAmounts(lines, invoice.documentType);
 };
+
+export const readInvoiceTotals = (invoice: InvoiceForReadTotals) =>
+  readInvoiceAmounts(invoice).map(({ totals }) => totals);
 
 /**
  * Recomputes the invoice's stored totals from all of its lines (a voided

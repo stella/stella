@@ -158,6 +158,7 @@
         "slimdom": "^4.3.5",
         "ssf": "catalog:",
         "tldts": "7.4.13",
+        "uqr": "^0.1.3",
         "valibot": "catalog:",
       },
       "devDependencies": {
