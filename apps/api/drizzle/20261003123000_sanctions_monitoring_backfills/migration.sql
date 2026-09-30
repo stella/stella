@@ -2,12 +2,12 @@
 SET LOCAL lock_timeout = '1s';--> statement-breakpoint
 SET LOCAL statement_timeout = '5s';--> statement-breakpoint
 CREATE TABLE public.sanctions_monitoring_backfills (
- organization_id varchar(128) NOT NULL REFERENCES public.organization(id) ON DELETE CASCADE,
- source_id text NOT NULL REFERENCES public.sanctions_sources(id),
- edition_id uuid REFERENCES public.sanctions_editions(id),
+ organization_id varchar(128) NOT NULL CONSTRAINT sanctions_backfills_organization_fk REFERENCES public.organization(id) ON DELETE CASCADE,
+ source_id text NOT NULL CONSTRAINT sanctions_backfills_source_fk REFERENCES public.sanctions_sources(id),
+ edition_id uuid CONSTRAINT sanctions_backfills_edition_fk REFERENCES public.sanctions_editions(id),
  cursor_contact_id uuid,
  generation bigint NOT NULL DEFAULT 1 CHECK (generation > 0),
- state text NOT NULL DEFAULT 'pending' CHECK (state IN ('pending', 'complete')),
+ state text NOT NULL DEFAULT 'pending' CONSTRAINT "sanctions_monitoring_backfills_state_check" CHECK (state IN ('pending', 'complete')),
  scheduled_at timestamptz NOT NULL DEFAULT now(),
  PRIMARY KEY (organization_id, source_id)
 );--> statement-breakpoint
@@ -24,8 +24,8 @@ CREATE TABLE public.sanctions_edition_fanouts (
  source_id text PRIMARY KEY REFERENCES public.sanctions_sources(id),
  edition_id uuid REFERENCES public.sanctions_editions(id),
  cursor_organization_id varchar(128),
- freshness_status text NOT NULL DEFAULT 'unknown' CONSTRAINT sanctions_edition_fanouts_freshness_check CHECK (freshness_status IN ('unknown', 'fresh', 'unavailable')),
- state text NOT NULL DEFAULT 'pending' CHECK (state IN ('pending', 'complete'))
+ freshness_status text NOT NULL DEFAULT 'unknown' CONSTRAINT "sanctions_edition_fanouts_freshness_check" CHECK (freshness_status IN ('unknown', 'fresh', 'unavailable')),
+ state text NOT NULL DEFAULT 'pending' CONSTRAINT "sanctions_edition_fanouts_state_check" CHECK (state IN ('pending', 'complete'))
 );--> statement-breakpoint
 ALTER TABLE public.sanctions_edition_fanouts ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE public.sanctions_edition_fanouts FORCE ROW LEVEL SECURITY;--> statement-breakpoint

@@ -10,6 +10,7 @@ import {
 } from "@/api/db/schema";
 import { readSanctionsFreshness } from "@/api/lib/lists/sanctions/freshness";
 import { sanctionsSourceIds } from "@/api/lib/lists/sanctions/source-config";
+import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
 
 const ORGANIZATION_FANOUT_BATCH_SIZE = 100;
@@ -50,11 +51,14 @@ const fanOutEditionPage = async (db: SchedulerDb) =>
       )
       .orderBy(asc(organization.id))
       .limit(ORGANIZATION_FANOUT_BATCH_SIZE);
+    const organizations = orgs.map(({ id }) => ({
+      id: brandPersistedOrganizationId(id),
+    }));
     if (orgs.length > 0) {
       await tx
         .insert(sanctionsMonitoringBackfills)
         .values(
-          orgs.map(({ id }) => ({
+          organizations.map(({ id }) => ({
             organizationId: id,
             sourceId: fanout.sourceId,
             editionId: fanout.editionId,
@@ -78,7 +82,8 @@ const fanOutEditionPage = async (db: SchedulerDb) =>
     await tx
       .update(sanctionsEditionFanouts)
       .set({
-        cursorOrganizationId: orgs.at(-1)?.id ?? fanout.cursorOrganizationId,
+        cursorOrganizationId:
+          organizations.at(-1)?.id ?? fanout.cursorOrganizationId,
         state:
           orgs.length < ORGANIZATION_FANOUT_BATCH_SIZE ? "complete" : "pending",
       })

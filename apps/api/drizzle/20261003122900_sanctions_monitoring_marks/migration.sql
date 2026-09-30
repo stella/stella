@@ -7,7 +7,7 @@ CREATE TABLE public.sanctions_contact_marks (
  generation bigint NOT NULL DEFAULT 1 CHECK (generation > 0),
  scheduled_at timestamptz NOT NULL DEFAULT now(),
  PRIMARY KEY (organization_id, contact_id),
- FOREIGN KEY (organization_id, contact_id) REFERENCES public.contacts(organization_id, id) ON DELETE CASCADE
+ CONSTRAINT sanctions_marks_contact_fk FOREIGN KEY (organization_id, contact_id) REFERENCES public.contacts(organization_id, id) ON DELETE CASCADE
 );--> statement-breakpoint
 CREATE INDEX sanctions_contact_marks_due_idx ON public.sanctions_contact_marks (scheduled_at, organization_id, contact_id);--> statement-breakpoint
 CREATE TABLE public.sanctions_organization_marks (

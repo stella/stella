@@ -55,6 +55,7 @@ export const sanctionsContactMarks = p.pgTable(
     ),
     p
       .foreignKey({
+        name: "sanctions_marks_contact_fk",
         columns: [table.organizationId, table.contactId],
         foreignColumns: [contacts.organizationId, contacts.id],
       })
@@ -80,22 +81,32 @@ const BACKFILL_STATES = ["pending", "complete"] as const;
 export const sanctionsMonitoringBackfills = p.pgTable(
   "sanctions_monitoring_backfills",
   {
-    organizationId: safeOrganizationId("organization_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
-    sourceId: p
-      .text("source_id")
-      .notNull()
-      .references(() => sanctionsSources.id),
-    editionId: safeUuid<"sanctionsEdition">("edition_id").references(
-      () => sanctionsEditions.id,
-    ),
+    organizationId: safeOrganizationId("organization_id").notNull(),
+    sourceId: p.text("source_id").notNull(),
+    editionId: safeUuid<"sanctionsEdition">("edition_id"),
     cursorContactId: safeUuid<"contact">("cursor_contact_id"),
     generation: p.bigint({ mode: "bigint" }).notNull().default(1n),
     state: p.text({ enum: BACKFILL_STATES }).notNull().default("pending"),
     scheduledAt: timestamptz("scheduled_at").notNull().defaultNow(),
   },
   (table) => [
+    p
+      .foreignKey({
+        name: "sanctions_backfills_organization_fk",
+        columns: [table.organizationId],
+        foreignColumns: [organization.id],
+      })
+      .onDelete("cascade"),
+    p.foreignKey({
+      name: "sanctions_backfills_source_fk",
+      columns: [table.sourceId],
+      foreignColumns: [sanctionsSources.id],
+    }),
+    p.foreignKey({
+      name: "sanctions_backfills_edition_fk",
+      columns: [table.editionId],
+      foreignColumns: [sanctionsEditions.id],
+    }),
     p.primaryKey({ columns: [table.organizationId, table.sourceId] }),
     p
       .index("sanctions_monitoring_backfills_due_idx")
