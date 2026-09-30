@@ -100,10 +100,10 @@ const E2E_CREATE_DOCUMENT_REPLY =
   "and the effective date.";
 
 // Added to the create-document marker, this makes the mock stream the call's
-// arguments as a few hundred small deltas in under two seconds: the shape of a
-// real provider writing a large tool input, and the densest update rate the
-// chat client sees. A page that commits once per delta trips the web app's
-// render-storm canary.
+// arguments as about five hundred small deltas over two to three seconds: the
+// shape of a real provider writing a large tool input, and the densest update
+// rate the chat client sees. A page that commits once per delta trips the web
+// app's render-storm canary.
 const E2E_STREAMED_TOOL_ARGS_MARKER = "streaming the arguments";
 const STREAMED_TOOL_ARGS_CLAUSE_COUNT = 40;
 const STREAMED_TOOL_ARGS_DELTA_LENGTH = 12;
