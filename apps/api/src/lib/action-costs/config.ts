@@ -21,15 +21,10 @@ export const parseActionCostRates = (value: string | undefined) => {
   if (value === undefined) {
     return Result.ok(v.parse(ratesSchema, {}));
   }
-  return Result.try({
+  const decoded = Result.try({
     try: () => {
-      const decoded: unknown = JSON.parse(value);
-      if (!isRecord(decoded)) {
-        throw new ActionCostConfigError({
-          message: "Action cost rates must be an object",
-        });
-      }
-      return v.parse(ratesSchema, decoded);
+      const parsed: unknown = JSON.parse(value);
+      return parsed;
     },
     catch: (cause) =>
       new ActionCostConfigError({
@@ -37,4 +32,24 @@ export const parseActionCostRates = (value: string | undefined) => {
         cause,
       }),
   });
+  if (Result.isError(decoded)) {
+    return decoded;
+  }
+  if (!isRecord(decoded.value)) {
+    return Result.err(
+      new ActionCostConfigError({
+        message: "Action cost rates must be an object",
+      }),
+    );
+  }
+  const parsed = v.safeParse(ratesSchema, decoded.value);
+  if (!parsed.success) {
+    return Result.err(
+      new ActionCostConfigError({
+        message: "Action cost rates are invalid",
+        cause: parsed.issues,
+      }),
+    );
+  }
+  return Result.ok(parsed.output);
 };

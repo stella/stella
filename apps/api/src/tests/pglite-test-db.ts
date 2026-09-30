@@ -273,6 +273,12 @@ export const ROLE_GRANT_STATEMENTS = [
       FROM stella
   `,
   `
+    REVOKE ALL PRIVILEGES ON TABLE
+      ${quoteSqlIdentifier(getTableName(schema.actionCostRecords))},
+      ${quoteSqlIdentifier(getTableName(schema.actionCostCalls))}
+      FROM stella
+  `,
+  `
     REVOKE ALL PRIVILEGES ON TABLE ${AUTH_TABLES_SQL} FROM stella
   `,
   `
