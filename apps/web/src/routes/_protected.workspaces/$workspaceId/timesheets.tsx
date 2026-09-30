@@ -9,6 +9,10 @@ import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronLeftIcon, ChevronRightIcon } from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
 
+import {
+  getTimeEntryDateBounds,
+  isTimeEntryDateAllowed,
+} from "@/components/billing/time-entry-date.logic";
 import { toISODate } from "@/components/workspaces/entity-utils";
 import { usePermissions } from "@/hooks/use-permissions";
 import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
@@ -25,10 +29,6 @@ import {
   timeEntrySummaryOptions,
 } from "@/lib/workspaces/queries/time-entries";
 import { PersonalTimesheetDay } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/personal-timesheet-day";
-import {
-  getTimeEntryDateBounds,
-  isTimeEntryDateAllowed,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-date.logic";
 
 const RateManagementDialog = lazy(async () => {
   const module =

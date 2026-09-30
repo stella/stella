@@ -8,12 +8,7 @@
     ".": {
       // Include compiler-only ambient types from the tooling/test projects.
       "typescript": { "config": ["tsconfig*.json", "package.json"] },
-      "entry": [
-        "scripts/*.ts",
-        "i18n-unused.config.js",
-        "oxlint.config.ts",
-        "oxlint.design.config.ts"
-      ],
+      "entry": ["scripts/*.ts", "oxlint.config.ts", "oxlint.design.config.ts"],
       "ignoreDependencies": [
         // tsc-native.ts constructs this compiler binary path dynamically.
         "@typescript/native",
@@ -25,10 +20,8 @@
         "eslint-plugin-drizzle",
         "oxlint-tsgolint",
         "ultracite",
-        "i18n-unused",
         "oxlint",
-        "squawk-cli",
-        "vite"
+        "squawk-cli"
       ],
       "ignoreBinaries": ["scripts/dev.sh"]
     },

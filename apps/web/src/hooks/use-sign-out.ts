@@ -51,6 +51,7 @@ export const useSignOut = () => {
 
       analytics.reset();
 
+      // The document reload disposes all client state instead of invoking the reset owner.
       await navigate({
         to: "/auth",
         search: { redirectTo: routeLocation.pathname },

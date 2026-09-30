@@ -27,6 +27,7 @@ import {
 import { readGzipJson } from "@/api/lib/gzip-json";
 import {
   decodeSourceRawEnvelope,
+  encodeSourceRawEnvelope,
   listingIdentityKey,
   SOURCE_DOCUMENT_ID_MAX_LENGTH,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
@@ -185,6 +186,7 @@ type MockOptions = {
   dissenters?: readonly string[];
   /** Every supplementary surface answers nothing, as this service does under load. */
   supplementaryUnavailable?: boolean;
+  collection?: SearchStub;
 };
 
 /**
@@ -270,6 +272,7 @@ const mockFetch = ({
   search,
   searchFor,
   supplementaryUnavailable = false,
+  collection = { type: "page", documents: [], numFound: 0 },
 }: MockOptions): MockHandle => {
   let searchCall = 0;
   let downloadCall = 0;
@@ -280,6 +283,13 @@ const mockFetch = ({
       const url = new URL(input instanceof Request ? input.url : String(input));
       if (url.pathname === SEARCH_PATH) {
         const body = parseSearchBody(init);
+        if (body.docType === "USSR_ZNAU") {
+          return Promise.resolve(
+            supplementaryUnavailable
+              ? unavailable()
+              : searchResponse(collection),
+          );
+        }
         if (isFacetQuery(body)) {
           facetCall += 1;
           return Promise.resolve(
@@ -859,6 +869,73 @@ describe("sk-us buildDecision", () => {
     );
   });
 
+  test("collection enrichment survives stored replay and never substitutes the collection document identity", async () => {
+    mockFetch({ search: [] });
+    const entry = {
+      documentId: "11111111-2222-4333-8444-555555555555",
+      docType: "USSR_ZNAU",
+      mkRSAPNumberOfFile: PLENARY_OPINION.mkRSAPNumberOfFile,
+      mkDateOfDecision: PLENARY_OPINION.mkDateOfDecision,
+      mkTypeOfDecision: ["nález"],
+      mkClauseTitle: "Preskúmanie zákonnosti",
+      mkClauseText: "Rozhodnutie musí byť preskúmateľné.",
+      mkLawReportsNumber: "4",
+      mkYearOfLawReports: 2020,
+    };
+    const collectionJson = JSON.stringify({ documents: [entry], numFound: 1 });
+    const built = await buildSkUsDecision(PLENARY_OPINION, {
+      context: {
+        collectionListing: async ({ caseNumber, decisionDate }) => {
+          expect(caseNumber).toBe(PLENARY_OPINION.mkRSAPNumberOfFile);
+          expect(decisionDate).toBe("2020-03-12");
+          return await Promise.resolve(collectionJson);
+        },
+        facets: async () =>
+          await Promise.resolve(
+            JSON.stringify({ documents: [PLENARY_OPINION], numFound: 1 }),
+          ),
+        courtFile: async () => await Promise.resolve(undefined),
+        codelist: async () => await Promise.resolve(undefined),
+      },
+    });
+    if (built.type !== "built") {
+      throw new Error(`expected a built decision, got ${built.type}`);
+    }
+    const { decision } = built;
+    expect(decision.sourceDocumentId).toBe(PLENARY_OPINION.documentId);
+    expect(decision.textFields.legalSentence).toEqual({
+      type: "present",
+      text: entry.mkClauseText,
+    });
+    expect(
+      decodeSourceRawEnvelope(decision.sourceRaw ?? "")?.["collection-listing"],
+    ).toBe(collectionJson);
+    const reparse = skUsAdapter.reparseStoredRaw;
+    if (reparse === undefined) {
+      throw new Error("sk-us must support stored replay");
+    }
+    const replayed = await reparse({
+      raw: new TextEncoder().encode(decision.sourceRaw),
+      contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+      caseNumber: decision.caseNumber,
+      sourceDocumentId: decision.sourceDocumentId ?? null,
+      court: decision.court,
+      language: decision.language,
+      ecli: decision.ecli ?? null,
+      decisionDate: decision.decisionDate ?? null,
+      decisionType: decision.decisionType ?? null,
+      sourceUrl: decision.sourceUrl ?? null,
+      documentUrl: decision.documentUrl ?? null,
+      metadata: decision.metadata,
+    });
+    expect(replayed.type).toBe("parsed");
+    if (replayed.type !== "parsed") {
+      throw new Error("the captured collection must be reparsable");
+    }
+    expect(replayed.result.textFields).toEqual(decision.textFields);
+    expect(replayed.result.metadata).toEqual(decision.metadata);
+  });
+
   test("every response the court served for the decision is in the envelope", async () => {
     mockFetch({ search: [], dissenters: ["Peter Straka"] });
 
@@ -872,6 +949,7 @@ describe("sk-us buildDecision", () => {
     // was the one response a decision with a document kept none of.
     expect(Object.keys(parts ?? {}).toSorted()).toEqual([
       "codelists",
+      "collection-listing",
       "document",
       "facets",
       "file",
@@ -888,6 +966,67 @@ describe("sk-us buildDecision", () => {
       },
     });
   });
+
+  test.each([204, 500])(
+    "collection listing failure (%s) remains visible beside the publisher inclusion flag",
+    async (status) => {
+      const logs = installRecordingLogger();
+      try {
+        for (const [includeToZnaU, publicationStatus] of [
+          [true, "selected"],
+          [false, "not_included"],
+        ] as const) {
+          mockFetch({ search: [], collection: { type: "status", status } });
+          const built = await buildSkUsDecision({
+            ...PLENARY_OPINION,
+            mkIncludeToZnaU: includeToZnaU,
+          });
+          if (built.type !== "built") {
+            throw new Error(`expected a built decision, got ${built.type}`);
+          }
+          expect(built.decision.metadata["publishedInCollection"]).toEqual({
+            status: publicationStatus,
+            reason: "unavailable",
+          });
+          expect(
+            decodeSourceRawEnvelope(built.decision.sourceRaw ?? "")?.[
+              "collection-listing"
+            ],
+          ).toBeUndefined();
+        }
+        expect(
+          logs
+            .at("WARN")
+            .filter(
+              ({ message }) =>
+                message === "case_law.ingestion.collection_fetch_failed",
+            ),
+        ).toHaveLength(2);
+        expect(
+          logs
+            .at("WARN")
+            .filter(
+              ({ message }) =>
+                message === "case_law.ingestion.collection_fetch_failed",
+            )
+            .map(({ attributes }) => attributes),
+        ).toEqual([
+          expect.objectContaining({
+            adapterKey: "sk-us",
+            caseNumber: PLENARY_OPINION.mkRSAPNumberOfFile,
+            reason: "unavailable",
+          }),
+          expect.objectContaining({
+            adapterKey: "sk-us",
+            caseNumber: PLENARY_OPINION.mkRSAPNumberOfFile,
+            reason: "unavailable",
+          }),
+        ]);
+      } finally {
+        logs.restore();
+      }
+    },
+  );
 
   test("the judges the source states structurally reach the row", async () => {
     mockFetch({ search: [], dissenters: ["Peter Straka"] });
@@ -1108,10 +1247,48 @@ describe("sk-us crawl and reconciliation dispose of a missing document different
     // what the listing proves — flagged, so a later refresh cannot overwrite
     // detail a successful fetch recovered.
     expect(built.decision.caseNumber).toBe("I. ÚS 132/93");
+    expect(built.decision.decisionType).toBe(
+      CHAMBER_RESOLUTION.mkFormOfDecision,
+    );
+    expect(built.decision.metadata["decisionType"]).toBe(
+      CHAMBER_RESOLUTION.mkFormOfDecision,
+    );
+    expect(built.decision.metadata["decisionTypeKey"]).toBe("uznesenie");
     expect(built.decision.isListingOnly).toBe(true);
     expect(built.decision.sourceRawContentType).toBe(
       SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
     );
+  });
+
+  test("stored-raw replay keeps the stated type and derives the same comparison key", async () => {
+    const outcome = await skUsAdapter.reparseStoredRaw?.({
+      raw: new TextEncoder().encode(
+        encodeSourceRawEnvelope({
+          listing: JSON.stringify(CHAMBER_RESOLUTION),
+        }),
+      ),
+      contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+      caseNumber: CHAMBER_RESOLUTION.mkRSAPNumberOfFile,
+      sourceDocumentId: CHAMBER_RESOLUTION.documentId,
+      language: "sk",
+      court: "Ústavný súd SR",
+      ecli: null,
+      decisionDate: null,
+      decisionType: null,
+      sourceUrl: null,
+      documentUrl: null,
+      metadata: {},
+    });
+    expect(outcome).toMatchObject({
+      type: "parsed",
+      result: {
+        decisionType: CHAMBER_RESOLUTION.mkFormOfDecision,
+        metadata: {
+          decisionType: CHAMBER_RESOLUTION.mkFormOfDecision,
+          decisionTypeKey: "uznesenie",
+        },
+      },
+    });
   });
 
   test("holds a row whose document download fails and reports the download", async () => {
@@ -1208,6 +1385,30 @@ describe("sk-us rows as the court sends them", () => {
   const withListFields = (value: unknown): Record<string, unknown> => ({
     ...PLENARY_OPINION,
     ...Object.fromEntries(LIST_FIELDS.map(([key]) => [key, value])),
+  });
+
+  test("stated lists survive beside trimmed Unicode-normalized derived lists", async () => {
+    mockFetch({ search: [] });
+    const values = [
+      " Ústavná sťažnosť ",
+      "Ústavná sťažnosť".normalize("NFD"),
+      "",
+      "Iné",
+    ];
+    const outcome = await reconciliation.buildDecision({
+      ...withListFields(values),
+      mkWordRegister: values,
+    });
+    expect(outcome.type).toBe("built");
+    if (outcome.type !== "built") {
+      throw new TypeError("the metadata fixture must build");
+    }
+    expect(outcome.decision.metadata["proceedingSubject"]).toEqual(values);
+    expect(outcome.decision.metadata["challengedLegislation"]).toEqual(values);
+    expect(outcome.decision.metadata["normalizedValues"]).toMatchObject({
+      proceedingSubject: ["Ústavná sťažnosť", "Iné"],
+      challengedLegislation: ["Ústavná sťažnosť", "Iné"],
+    });
   });
 
   test("every recorded row builds on the reconciliation path", async () => {

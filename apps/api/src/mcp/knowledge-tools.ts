@@ -71,6 +71,7 @@ import type {
 import { PLAYBOOK_RUN_PROJECTION } from "@/api/lib/workflow/playbook-run-projection";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
+import { plainRecord } from "@/api/mcp/input-schemas";
 import {
   mergePlaybookPositions,
   playbookPositionInputSchema,
@@ -1080,7 +1081,7 @@ const saveClauseArgsSchema = nullAsAbsent(
       ),
       metadata: v.optional(
         v.pipe(
-          v.nullable(v.record(v.string(), v.unknown())),
+          v.nullable(plainRecord(v.unknown())),
           v.description("Free-form metadata object; pass null to clear"),
         ),
       ),

@@ -1,7 +1,12 @@
 import { Result } from "better-result";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, ne, sql } from "drizzle-orm";
 import { t } from "elysia";
 
+import { INVOICE_LINE_SOURCE } from "@stll/api-contract";
+import type { InvoiceDocumentType } from "@stll/invoicing";
+
+import type { Transaction } from "@/api/db/root";
+import { resultTx } from "@/api/db/safe-db";
 import {
   expenses,
   INVOICE_STATUS,
@@ -14,6 +19,7 @@ import { lockInvoiceInStatus } from "@/api/handlers/invoices/lock-invoice";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { FieldDiffs } from "@/api/lib/audit-log";
+import type { SafeId } from "@/api/lib/branded-types";
 import {
   tCurrencyCode,
   tSafeId,
@@ -22,8 +28,15 @@ import {
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { pickDefined } from "@/api/lib/pick-defined";
 
+import { tInvoiceDocumentType, validateInvoiceDocument } from "./document-type";
+import { recalculateInvoiceTotals } from "./invoice-lines";
+
 const updateInvoiceBodySchema = t.Object({
-  invoiceNumber: t.Optional(t.String({ minLength: 1, maxLength: 64 })),
+  invoiceNumber: t.Optional(
+    t.Nullable(t.String({ minLength: 1, maxLength: 64 })),
+  ),
+  documentType: t.Optional(tInvoiceDocumentType),
+  originalInvoiceId: t.Optional(t.Nullable(tSafeId("invoice"))),
   invoiceDate: t.Optional(t.String({ format: "date" })),
   dueDate: t.Optional(t.Nullable(t.String({ format: "date" }))),
   reference: t.Optional(t.Nullable(t.String({ maxLength: 256 }))),
@@ -58,7 +71,9 @@ type InvoiceUpdateSource = {
   currency: string;
   dueDate: string | null;
   invoiceDate: string;
-  invoiceNumber: string;
+  invoiceNumber: string | null;
+  documentType: InvoiceDocumentType;
+  originalInvoiceId: string | null;
   notes: string | null;
   reference: string | null;
   sellerProfileId: string | null;
@@ -68,7 +83,7 @@ type InvoiceUpdateSource = {
 type InvoiceUpdateChanges = Partial<InvoiceUpdateSource>;
 
 type InvoiceUpdateResult =
-  | { status: "updated"; id: string }
+  | { status: "updated"; id: SafeId<"invoice"> }
   | { status: "not-updated" }
   | { status: "currency-has-entries" }
   | { status: "seller-profile-not-found" };
@@ -78,6 +93,11 @@ const buildInvoiceUpdateAuditChanges = (
   changedFields: InvoiceUpdateChanges,
 ): FieldDiffs => {
   const changes: FieldDiffs = {};
+  for (const field of ["documentType", "originalInvoiceId"] as const) {
+    if (changedFields[field] !== undefined) {
+      changes[field] = { old: existing[field], new: changedFields[field] };
+    }
+  }
   if (changedFields.invoiceNumber !== undefined) {
     changes["invoiceNumber"] = {
       old: existing.invoiceNumber,
@@ -126,6 +146,62 @@ const buildInvoiceUpdateAuditChanges = (
   return changes;
 };
 
+type InvoiceEntriesScope = {
+  invoiceId: SafeId<"invoice">;
+  workspaceId: SafeId<"workspace">;
+  lines: "all" | "entry-sourced";
+};
+const invoiceHasEntries = async (
+  tx: Transaction,
+  { invoiceId, workspaceId, lines }: InvoiceEntriesScope,
+) => {
+  const line = await tx
+    .select({ id: invoiceLines.id })
+    .from(invoiceLines)
+    .where(
+      and(
+        eq(invoiceLines.invoiceId, invoiceId),
+        eq(invoiceLines.workspaceId, workspaceId),
+        lines === "entry-sourced"
+          ? ne(invoiceLines.source, INVOICE_LINE_SOURCE.MANUAL)
+          : undefined,
+      ),
+    )
+    .limit(1);
+  if (line.at(0)) {
+    return true;
+  }
+
+  const attachedTimeEntry = await tx
+    .select({ id: timeEntries.id })
+    .from(timeEntries)
+    .where(
+      and(
+        eq(timeEntries.invoiceId, invoiceId),
+        eq(timeEntries.workspaceId, workspaceId),
+      ),
+    )
+    .limit(1);
+  if (attachedTimeEntry.at(0)) {
+    return true;
+  }
+
+  const attachedExpense = await tx
+    .select({ id: expenses.id })
+    .from(expenses)
+    .where(
+      and(
+        eq(expenses.invoiceId, invoiceId),
+        eq(expenses.workspaceId, workspaceId),
+      ),
+    )
+    .limit(1);
+  if (attachedExpense.at(0)) {
+    return true;
+  }
+  return false;
+};
+
 const updateInvoice = createSafeHandler(
   {
     description:
@@ -133,7 +209,9 @@ const updateInvoice = createSafeHandler(
       "supply date, due date, reference, notes, currency, issuing seller " +
       "profile, or buyer details as they should read on the document. " +
       "Omitted fields stay unchanged; null clears an optional field. Only " +
-      "draft invoices can be edited, and the currency cannot change while " +
+      "draft invoices can be edited. Type and original invoice become immutable " +
+      "after the first finalize, including after reverting to draft. Credit notes " +
+      "require an eligible original in the same matter. Currency cannot change while " +
       "the invoice has lines or attached entries.",
     permissions: { invoice: ["update"] },
     mcp: { type: "capability", reason: "billing_admin" },
@@ -150,6 +228,8 @@ const updateInvoice = createSafeHandler(
   }) {
     const changedFields = pickDefined(body, [
       "invoiceNumber",
+      "documentType",
+      "originalInvoiceId",
       "invoiceDate",
       "dueDate",
       "reference",
@@ -166,117 +246,159 @@ const updateInvoice = createSafeHandler(
     };
 
     const result = yield* Result.await(
-      safeDb(async (tx) => {
-        const existing = await lockInvoiceInStatus(tx, {
-          invoiceId: params.invoiceId,
-          workspaceId,
-          status: INVOICE_STATUS.DRAFT,
-        });
-        if (!existing) {
-          return { status: "not-updated" } satisfies InvoiceUpdateResult;
-        }
-
-        const { sellerProfileId } = changedFields;
-        if (sellerProfileId !== undefined && sellerProfileId !== null) {
-          const [profile] = await tx
-            .select({ id: sellerProfiles.id })
-            .from(sellerProfiles)
-            .where(
-              and(
-                eq(sellerProfiles.id, sellerProfileId),
-                eq(sellerProfiles.organizationId, session.activeOrganizationId),
-                isNull(sellerProfiles.archivedAt),
-              ),
-            )
-            .limit(1);
-          if (!profile) {
-            return {
-              status: "seller-profile-not-found",
-            } satisfies InvoiceUpdateResult;
-          }
-        }
-
-        if (
-          changedFields.currency !== undefined &&
-          changedFields.currency !== existing.currency
-        ) {
-          const line = await tx
-            .select({ id: invoiceLines.id })
-            .from(invoiceLines)
-            .where(
-              and(
-                eq(invoiceLines.invoiceId, params.invoiceId),
-                eq(invoiceLines.workspaceId, workspaceId),
-              ),
-            )
-            .limit(1);
-          if (line.at(0)) {
-            return {
-              status: "currency-has-entries",
-            } satisfies InvoiceUpdateResult;
-          }
-
-          const attachedTimeEntry = await tx
-            .select({ id: timeEntries.id })
-            .from(timeEntries)
-            .where(
-              and(
-                eq(timeEntries.invoiceId, params.invoiceId),
-                eq(timeEntries.workspaceId, workspaceId),
-              ),
-            )
-            .limit(1);
-          if (attachedTimeEntry.at(0)) {
-            return {
-              status: "currency-has-entries",
-            } satisfies InvoiceUpdateResult;
-          }
-
-          const attachedExpense = await tx
-            .select({ id: expenses.id })
-            .from(expenses)
-            .where(
-              and(
-                eq(expenses.invoiceId, params.invoiceId),
-                eq(expenses.workspaceId, workspaceId),
-              ),
-            )
-            .limit(1);
-          if (attachedExpense.at(0)) {
-            return {
-              status: "currency-has-entries",
-            } satisfies InvoiceUpdateResult;
-          }
-        }
-
-        const updated = await tx
-          .update(invoices)
-          .set(set)
-          .where(
-            and(
-              eq(invoices.id, params.invoiceId),
-              eq(invoices.workspaceId, workspaceId),
-              eq(invoices.status, INVOICE_STATUS.DRAFT),
-            ),
-          )
-          .returning({ id: invoices.id });
-
-        const row = updated.at(0);
-        if (row) {
-          await recordAuditEvent(tx, {
-            action: AUDIT_ACTION.UPDATE,
-            resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
-            resourceId: row.id,
-            changes: buildInvoiceUpdateAuditChanges(existing, changedFields),
-            // Buyer details are personal data: record which changed, not values.
-            metadata: { changedBuyerFields: Object.keys(changedBuyerFields) },
+      resultTx(
+        safeDb,
+        async (tx): Promise<Result<InvoiceUpdateResult, HandlerError>> => {
+          const existing = await lockInvoiceInStatus(tx, {
+            invoiceId: params.invoiceId,
+            workspaceId,
+            status: INVOICE_STATUS.DRAFT,
           });
-        }
-        if (!row) {
-          return { status: "not-updated" } satisfies InvoiceUpdateResult;
-        }
-        return { status: "updated", id: row.id } satisfies InvoiceUpdateResult;
-      }),
+          if (!existing) {
+            return Result.ok({ status: "not-updated" });
+          }
+
+          const documentType =
+            changedFields.documentType ?? existing.documentType;
+          const originalInvoiceId =
+            changedFields.originalInvoiceId === undefined
+              ? existing.originalInvoiceId
+              : changedFields.originalInvoiceId;
+          if (
+            existing.finalizedAt !== null &&
+            (documentType !== existing.documentType ||
+              originalInvoiceId !== existing.originalInvoiceId ||
+              changedFields.invoiceNumber === null)
+          ) {
+            return Result.err(
+              new HandlerError({
+                status: 409,
+                message:
+                  "Document type, original invoice, and assigned number cannot be cleared or changed after finalize",
+              }),
+            );
+          }
+          if (
+            documentType === "credit_note" &&
+            documentType !== existing.documentType &&
+            (await invoiceHasEntries(tx, {
+              invoiceId: params.invoiceId,
+              workspaceId,
+              lines: "entry-sourced",
+            }))
+          ) {
+            return Result.err(
+              new HandlerError({
+                status: 422,
+                message: "Credit notes cannot bill time entries or expenses",
+              }),
+            );
+          }
+          const valid = await validateInvoiceDocument(tx, {
+            invoiceId: params.invoiceId,
+            workspaceId,
+            documentType,
+            originalInvoiceId,
+            currency: changedFields.currency ?? existing.currency,
+            totalAmount: existing.totalAmount,
+          });
+          if (valid.isErr()) {
+            return Result.err(valid.error);
+          }
+
+          const { sellerProfileId } = changedFields;
+          if (sellerProfileId !== undefined && sellerProfileId !== null) {
+            const [profile] = await tx
+              .select({ id: sellerProfiles.id })
+              .from(sellerProfiles)
+              .where(
+                and(
+                  eq(sellerProfiles.id, sellerProfileId),
+                  eq(
+                    sellerProfiles.organizationId,
+                    session.activeOrganizationId,
+                  ),
+                  isNull(sellerProfiles.archivedAt),
+                ),
+              )
+              .limit(1);
+            if (!profile) {
+              return Result.ok({ status: "seller-profile-not-found" });
+            }
+          }
+
+          if (
+            changedFields.currency !== undefined &&
+            changedFields.currency !== existing.currency &&
+            (await invoiceHasEntries(tx, {
+              invoiceId: params.invoiceId,
+              workspaceId,
+              lines: "all",
+            }))
+          ) {
+            return Result.ok({ status: "currency-has-entries" });
+          }
+
+          const signChanged =
+            (documentType === "credit_note") !==
+            (existing.documentType === "credit_note");
+          if (signChanged) {
+            await tx
+              .update(invoiceLines)
+              .set({
+                netAmount: sql`-${invoiceLines.netAmount}`,
+                vatAmount: sql`-${invoiceLines.vatAmount}`,
+                grossAmount: sql`-${invoiceLines.grossAmount}`,
+                updatedAt: set.updatedAt,
+              })
+              .where(
+                and(
+                  eq(invoiceLines.invoiceId, params.invoiceId),
+                  eq(invoiceLines.workspaceId, workspaceId),
+                ),
+              );
+          }
+
+          const updated = await tx
+            .update(invoices)
+            .set(set)
+            .where(
+              and(
+                eq(invoices.id, params.invoiceId),
+                eq(invoices.workspaceId, workspaceId),
+                eq(invoices.status, INVOICE_STATUS.DRAFT),
+              ),
+            )
+            .returning({ id: invoices.id });
+
+          if (signChanged) {
+            const totals = await recalculateInvoiceTotals(
+              tx,
+              { invoiceId: params.invoiceId, workspaceId },
+              set.updatedAt,
+              recordAuditEvent,
+            );
+            if (totals.isErr()) {
+              return Result.err(totals.error);
+            }
+          }
+          const row = updated.at(0);
+          if (row) {
+            await recordAuditEvent(tx, {
+              action: AUDIT_ACTION.UPDATE,
+              resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
+              resourceId: row.id,
+              changes: buildInvoiceUpdateAuditChanges(existing, changedFields),
+              // Buyer details are personal data: record which changed, not values.
+              metadata: { changedBuyerFields: Object.keys(changedBuyerFields) },
+            });
+          }
+          if (!row) {
+            return Result.ok({ status: "not-updated" });
+          }
+          return Result.ok({ status: "updated", id: row.id });
+        },
+      ),
     );
 
     if (result.status === "seller-profile-not-found") {
