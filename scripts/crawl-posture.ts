@@ -45,7 +45,7 @@ import path from "node:path";
 import {
   createPublicCrawlRules,
   PUBLIC_CRAWL_ROUTES,
-} from "../apps/web/src/lib/public-crawl-policy";
+} from "../apps/web/src/public-crawl-policy";
 
 const SCRIPTS_DIR = import.meta.dir;
 const REPO_ROOT = path.resolve(SCRIPTS_DIR, "..");

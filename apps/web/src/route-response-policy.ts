@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 
-import { isPublicCrawlPath } from "@/lib/public-crawl-policy";
-import type { PublicCrawlOptions } from "@/lib/public-crawl-policy";
+import { isPublicCrawlPath } from "@/public-crawl-policy";
+import type { PublicCrawlOptions } from "@/public-crawl-policy";
 import type { FileRouteTypes } from "@/routeTree.gen";
 
 export type CacheClass =

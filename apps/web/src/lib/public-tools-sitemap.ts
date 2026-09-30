@@ -1,5 +1,4 @@
 import { publicToolsBasePath } from "@/lib/knowledge/public-tools-path";
-import { publicToolCrawlPaths } from "@/lib/public-crawl-policy";
 import {
   assertSitemapXmlWithinProtocolLimits,
   escapeSitemapXml,
@@ -8,6 +7,7 @@ import {
 } from "@/lib/public-sitemap";
 import { isPublicToolsSitemapEnabled } from "@/lib/public-tools-launch";
 import { createPublicToolsCanonicalUrl } from "@/lib/public-tools-seo";
+import { publicToolCrawlPaths } from "@/public-crawl-policy";
 
 export { SITEMAP_XML_RESPONSE_HEADERS, TOOLS_SITEMAP_PATH };
 

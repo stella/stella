@@ -86,31 +86,14 @@ const resolveLocalImport = (
   return null;
 };
 
-// Static imports only: `import ... from "x"`, `export ... from "x"`, and
-// bare `import "x"`. Dynamic `import("x")` has no `from` clause and is
-// intentionally not matched. Server/loader modules reached dynamically are
-// explicit roots above; client-only islands remain the sanctioned escape
-// hatch for the auth/install path.
-const collectStaticImportSpecifiers = (source: string): readonly string[] => {
-  const specifiers: string[] = [];
-  for (const match of source.matchAll(
-    /\bfrom\s*["'](?<specifier>[^"']+)["']/gu,
-  )) {
-    const specifier = match.groups?.["specifier"];
-    if (specifier !== undefined) {
-      specifiers.push(specifier);
-    }
-  }
-  for (const match of source.matchAll(
-    /(?:^|[\n;])\s*import\s+["'](?<specifier>[^"']+)["']/gu,
-  )) {
-    const specifier = match.groups?.["specifier"];
-    if (specifier !== undefined) {
-      specifiers.push(specifier);
-    }
-  }
-  return specifiers;
-};
+// Follow the emitted static graph: type imports are erased, and client-only
+// dynamic imports remain outside the server module graph.
+const importScanner = new Bun.Transpiler({ loader: "tsx" });
+const collectStaticImportSpecifiers = (source: string): readonly string[] =>
+  importScanner
+    .scanImports(source)
+    .filter(({ kind }) => kind === "import-statement")
+    .map(({ path }) => path);
 
 type Violation = {
   module: string;
@@ -159,6 +142,23 @@ const walkSsrGraph = (entries: readonly string[]): WalkResult => {
 };
 
 describe("public tools security invariants", () => {
+  test("follows static value imports and exports", () => {
+    expect(
+      collectStaticImportSpecifiers(`
+        import type { TypeOnly } from "./types";
+        import { type MixedType, value } from "./mixed";
+        import { type InlineType } from "./inline-types";
+        export type { ExportType } from "./export-types";
+        export { forwarded } from "./forwarded";
+        export * from "./all";
+        import "./side-effect";
+        const lazy = import("./lazy");
+        // import commented from "./comment";
+        const text = 'from "./text"';
+      `),
+    ).toEqual(["./mixed", "./forwarded", "./all", "./side-effect"]);
+  });
+
   test("no SSR-reachable tools module statically imports an authed query, the auth client, or the install path", () => {
     const entries = SSR_ENTRY_MODULES.map((path) =>
       nodePath.resolve(repoRoot, path),

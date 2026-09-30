@@ -3,8 +3,7 @@ import nodePath from "node:path";
 
 // Type-only, so the decision reader's component graph never loads here.
 import type { DecisionWorkspaceProps } from "@/features/case-law/components/case-viewer/decision-workspace";
-
-import { publicToolCrawlPaths } from "./public-crawl-policy";
+import { publicToolCrawlPaths } from "@/public-crawl-policy";
 
 /** Whether an AI-mode branch carries the authenticated availability gate. */
 type CarriesAvailabilityGate<TMode> = "ensureAIAvailable" extends keyof TMode

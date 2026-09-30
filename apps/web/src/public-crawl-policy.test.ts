@@ -44,10 +44,13 @@ describe("public crawl policy", () => {
       expect(rules).toEqual([
         { path: toolsBasePath, scope: "exact" },
         { path: `${toolsBasePath}/contribute`, scope: "exact" },
-        ...loadCatalogue().map(({ slug }) => ({
-          path: `${toolsBasePath}/${slug}`,
-          scope: "exact",
-        })),
+        ...loadCatalogue().map(
+          ({ slug }) =>
+            ({
+              path: `${toolsBasePath}/${slug}`,
+              scope: "exact",
+            }) as const,
+        ),
       ]);
       for (const { path } of rules) {
         expect(isPublicCrawlPath(path, enabled)).toBe(true);

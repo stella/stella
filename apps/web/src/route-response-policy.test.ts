@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 
-import { isPublicCrawlPath } from "@/lib/public-crawl-policy";
-import type { PublicCrawlOptions } from "@/lib/public-crawl-policy";
+import { isPublicCrawlPath } from "@/public-crawl-policy";
+import type { PublicCrawlOptions } from "@/public-crawl-policy";
 import {
   documentResponsePolicyHeaders,
   ROUTE_CACHE_CLASSES,

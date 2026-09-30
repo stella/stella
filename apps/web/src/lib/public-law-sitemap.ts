@@ -20,7 +20,6 @@ import {
 import { ClientOperationError } from "@/lib/errors/client";
 import { isPublicKnowledgeCrawlAllowed } from "@/lib/knowledge/public-knowledge-launch";
 import { publicToolsBasePath } from "@/lib/knowledge/public-tools-path";
-import { createPublicCrawlRules } from "@/lib/public-crawl-policy";
 import {
   isPublicLawCrawlAllowed,
   isPublicLawSitemapEnabled,
@@ -37,6 +36,7 @@ import {
   isPublicToolsSitemapEnabled,
 } from "@/lib/public-tools-launch";
 import { isPublicStatuteCountry } from "@/lib/statute-route";
+import { createPublicCrawlRules } from "@/public-crawl-policy";
 
 const LAW_SITEMAP_PATH = "/sitemaps/law.xml";
 const LAW_CASES_SITEMAP_BASE_PATH = "/sitemaps/law-cases";
