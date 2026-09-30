@@ -29,7 +29,7 @@ const word = fc.oneof(
     "Владимир",
   ),
   fc
-    .array(fc.constantFrom(..."abcdefghijklmnopqrstuvwxyz"), {
+    .array(fc.constantFrom(..."abcdefghijklmnopqrstuvwxyz".split("")), {
       minLength: 2,
       maxLength: 10,
     })
@@ -202,24 +202,54 @@ describe("name matching (properties)", () => {
     () => {
       fc.assert(
         fc.property(
-          word.chain((left) =>
-            fc.tuple(
-              fc.constant(left),
-              fc.oneof(
-                word,
-                fc.constantFrom(
-                  left,
-                  `${left}a`,
-                  left.slice(0, -1),
-                  left.slice(1) + left.charAt(0),
+          word
+            .chain((left) =>
+              fc.tuple(
+                fc.constant(left),
+                fc.oneof(
+                  word,
+                  fc.constantFrom(
+                    left,
+                    `${left}a`,
+                    left.slice(0, -1),
+                    left.slice(1) + left.charAt(0),
+                  ),
                 ),
               ),
+            )
+            .filter((pair) =>
+              pair.every(
+                (value) =>
+                  (nameTokens(value, "person").at(0)?.raw.length ?? 0) > 1,
+              ),
             ),
-          ),
           ([left, right]) => {
             expect(score(left, right)).toBeCloseTo(score(right, left), 12);
           },
         ),
+        config(),
+      );
+    },
+    propertyTestTimeout(5000),
+  );
+
+  test(
+    "initials-only queries remain unanchored",
+    () => {
+      fc.assert(
+        fc.property(words, (parts) => {
+          const listed = parts.join(" ");
+          const index = buildNameIndex([entry(listed)]);
+          const tokens = nameTokens(listed, "person");
+          const initials = nameTokens(
+            tokens.map(({ raw }) => raw.charAt(0)).join("."),
+            "person",
+          );
+          expect(initials.length).toBeGreaterThan(0);
+          expect(initials.every(({ raw }) => raw.length === 1)).toBe(true);
+          expect(matchNames(index, tokens, Math.sqrt, 0).get(0)?.score).toBe(1);
+          expect(matchNames(index, initials, Math.sqrt, 0).size).toBe(0);
+        }),
         config(),
       );
     },

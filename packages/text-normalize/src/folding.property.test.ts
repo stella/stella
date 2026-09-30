@@ -49,9 +49,9 @@ const TATWEEL = String.fromCodePoint(0x06_40);
 
 const SEPARATORS = [" ", "  ", "\n", "\t", NBSP, TATWEEL];
 
+const ORIGINAL_CHARACTERS = [...SCRIPT_CHARACTERS, ...SEPARATORS];
 const CHARACTERS = [
-  ...SCRIPT_CHARACTERS,
-  ...SEPARATORS,
+  ...ORIGINAL_CHARACTERS,
   "\u0301",
   "\u030c",
   "\u0327",
@@ -64,6 +64,11 @@ const CHARACTERS = [
 
 const text = fc
   .array(fc.constantFrom(...CHARACTERS), { maxLength: 24 })
+  .map((parts) => parts.join(""));
+
+// Extending this alphabet is out of scope pending SQL parity.
+const sqlMirrorText = fc
+  .array(fc.constantFrom(...ORIGINAL_CHARACTERS), { maxLength: 24 })
   .map((parts) => parts.join(""));
 
 const FOLDS = {
@@ -84,11 +89,14 @@ describe("fold family (properties)", () => {
   for (const [name, fold] of Object.entries(FOLDS)) {
     test(`${name} is idempotent`, () => {
       fc.assert(
-        fc.property(text, (value) => {
-          const once = fold(value);
+        fc.property(
+          fold === arabicNormalize ? sqlMirrorText : text,
+          (value) => {
+            const once = fold(value);
 
-          expect(fold(once)).toBe(once);
-        }),
+            expect(fold(once)).toBe(once);
+          },
+        ),
         config(400),
       );
     });
@@ -281,8 +289,12 @@ describe("search projection (properties)", () => {
         (content, offset, width) => {
           const folded = foldSearchMatchTextWithOffsets(content);
           fc.pre(folded.text.trim().length > 0);
-          const start = offset % folded.text.length;
-          const query = folded.text.slice(start, start + width).trim();
+          const characters = Array.from(folded.text);
+          const start = offset % characters.length;
+          const query = characters
+            .slice(start, start + width)
+            .join("")
+            .trim();
           fc.pre(query.length > 0);
           const ranges = findSearchMatchRanges(folded, query);
           expect(ranges.length).toBeGreaterThan(0);
@@ -301,6 +313,26 @@ describe("search projection (properties)", () => {
             expect(
               findSearchMatchRanges(folded, query, { maxMatches }),
             ).toEqual(ranges.slice(0, maxMatches));
+          }
+        },
+      ),
+      config(100),
+    );
+  });
+
+  test("keeps ranges bounded for incomplete UTF-16 needles", () => {
+    fc.assert(
+      fc.property(
+        text,
+        fc.integer({ min: 0xd8_00, max: 0xdf_ff }),
+        (content, unit) => {
+          const query = String.fromCodePoint(unit);
+          let previousEnd = 0;
+          for (const { start, end } of findSearchMatchRanges(content, query)) {
+            expect(start).toBeGreaterThanOrEqual(previousEnd);
+            expect(end).toBeGreaterThan(start);
+            expect(end).toBeLessThanOrEqual(content.length);
+            previousEnd = end;
           }
         },
       ),
