@@ -1,4 +1,5 @@
 import { Result, panic } from "better-result";
+import type { InferOk } from "better-result";
 import { eq } from "drizzle-orm";
 
 import { readsUsReporterCitations } from "@stll/api-contract/us-reporter-citation";
@@ -136,9 +137,9 @@ const verifyStoredCitationScopes = async ({
   reusedCitationScopeEnvelope,
   scopedDb,
   corpus,
-}: VerifyStoredCitationScopesOptions): Promise<boolean> => {
+}: VerifyStoredCitationScopesOptions) => {
   if (existing === undefined || reusedCitationScopeEnvelope === undefined) {
-    return false;
+    return Result.ok(false);
   }
   const snapshot = await storedScopeState({
     decisionId: existing.id,
@@ -150,7 +151,7 @@ const verifyStoredCitationScopes = async ({
       sortDeep(snapshot.row?.metadata?.[CITATION_SCOPE_METADATA_KEY] ?? null),
     ) !== JSON.stringify(sortDeep(reusedCitationScopeEnvelope))
   ) {
-    return true;
+    return Result.ok(true);
   }
   const ast = pendingMirrorPayload?.ast ?? snapshot.ast;
   const verified = validatedCitationScopes(snapshot.row?.metadata ?? {}, ast);
@@ -160,11 +161,11 @@ const verifyStoredCitationScopes = async ({
       JSON.stringify(sortDeep(latest)) !==
       JSON.stringify(sortDeep(snapshot.row))
     ) {
-      return true;
+      return Result.ok(true);
     }
-    throw verified.error;
+    return Result.err(verified.error);
   }
-  return false;
+  return Result.ok(false);
 };
 
 type ReportStoredDocumentQualityOptions = {
@@ -512,24 +513,28 @@ export const planDecisionWrite = async ({
     !incomingCarriesDocument && existing?.metadata
       ? existing.metadata[CITATION_SCOPE_METADATA_KEY]
       : undefined;
-  if (
-    await verifyStoredCitationScopes({
-      scopedDb,
-      corpus,
-      existing,
-      pendingMirrorPayload,
-      reusedCitationScopeEnvelope,
-    })
-  ) {
-    return RECONCILE_CONTENTION;
+  const verified = await verifyStoredCitationScopes({
+    scopedDb,
+    corpus,
+    existing,
+    pendingMirrorPayload,
+    reusedCitationScopeEnvelope,
+  });
+  if (Result.isError(verified)) {
+    return Result.err(verified.error);
+  }
+  if (verified.value) {
+    return Result.ok(RECONCILE_CONTENTION);
   }
 
   if (result.citationScopes && !hasUsableAst(result.documentAst)) {
-    throw new CitationScopesRejectedError({
-      message: "Citation scopes require a document AST",
-      defect: "invalid-envelope",
-      opinionId: "",
-    });
+    return Result.err(
+      new CitationScopesRejectedError({
+        message: "Citation scopes require a document AST",
+        defect: "invalid-envelope",
+        opinionId: "",
+      }),
+    );
   }
   const extraction = extractDecisionCitations({
     country: result.country,
@@ -540,7 +545,7 @@ export const planDecisionWrite = async ({
     citationScopes: result.citationScopes,
   });
   if (Result.isError(extraction)) {
-    throw extraction.error;
+    return Result.err(extraction.error);
   }
   const finalAst = extraction.value.documentAst ?? result.documentAst;
   const {
@@ -628,7 +633,7 @@ export const planDecisionWrite = async ({
     caseNumber: result.caseNumber,
     caseNumberType,
   });
-  return {
+  return Result.ok({
     // Built here, outside the write transaction: classifying a citation
     // reads the polarity rules, and the write path must not hold a row
     // lock across that read. The citing row is either the one identity
@@ -658,11 +663,11 @@ export const planDecisionWrite = async ({
     payloadColumns,
     pendingMirrorPayload,
     storedPayloadUnchanged,
-  };
+  });
 };
 
 /** What the row write is given to write, as planned before it. */
 export type DecisionWritePlan = Exclude<
-  Awaited<ReturnType<typeof planDecisionWrite>>,
+  InferOk<Awaited<ReturnType<typeof planDecisionWrite>>>,
   typeof RECONCILE_CONTENTION
 >;

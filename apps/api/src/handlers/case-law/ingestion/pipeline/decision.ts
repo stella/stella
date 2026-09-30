@@ -213,9 +213,9 @@ const runDecisionAttempt = async ({
   }
   const rawArtifact = sourceRawArtifact.artifact;
 
-  const planned = await Result.tryPromise({
-    try: async () =>
-      await planDecisionWrite({
+  const attempted = await Result.tryPromise({
+    try: async () => {
+      const planned = await planDecisionWrite({
         result,
         existing,
         decisionId,
@@ -224,47 +224,38 @@ const runDecisionAttempt = async ({
         corpus,
         incomingCarriesDocument: shape.incomingCarriesDocument,
         polarityRules,
-      }),
+      });
+      if (planned.isErr()) {
+        return Result.err(planned.error);
+      }
+      const plan = planned.value;
+      if ("status" in plan) {
+        return Result.ok(RECONCILE_CONTENTION);
+      }
+      const write: DecisionRowWrite = {
+        ...identity,
+        persistedDecisionDate: observation.persistedDecisionDate,
+        sourceId,
+        decisionId,
+        result: plan.preparedResult,
+        composedSupplements,
+        observedAt,
+        observationOrder,
+        shape,
+        plan,
+        rawArtifact,
+        rawWrites,
+        judges,
+      };
+      const rowWrite = await writeDecisionRowWithSlug(scopedDb, write);
+      if (Result.isError(rowWrite)) {
+        return Result.err(rowWrite.error);
+      }
+      return Result.ok({ write, writeStatus: rowWrite.value });
+    },
     catch: (cause) => cause,
   });
-  if (Result.isError(planned)) {
-    await recordAbandonedRawWrite({
-      scopedDb,
-      existing,
-      rawWrites,
-      decisionId,
-      sourceId,
-    });
-    throw planned.error;
-  }
-  const plan = planned.value;
-  if ("status" in plan) {
-    await recordAbandonedRawWrite({
-      scopedDb,
-      existing,
-      rawWrites,
-      decisionId,
-      sourceId,
-    });
-    return RECONCILE_CONTENTION;
-  }
-
-  const write: DecisionRowWrite = {
-    ...identity,
-    persistedDecisionDate: observation.persistedDecisionDate,
-    sourceId,
-    decisionId,
-    result: plan.preparedResult,
-    composedSupplements,
-    observedAt,
-    observationOrder,
-    shape,
-    plan,
-    rawArtifact,
-    rawWrites,
-    judges,
-  };
-  const rowWrite = await writeDecisionRowWithSlug(scopedDb, write);
+  const rowWrite = attempted.andThen((outcome) => outcome);
 
   if (Result.isError(rowWrite)) {
     await recordAbandonedRawWrite({
@@ -280,13 +271,25 @@ const runDecisionAttempt = async ({
     throw rowWrite.error;
   }
 
+  if ("status" in rowWrite.value) {
+    await recordAbandonedRawWrite({
+      scopedDb,
+      existing,
+      rawWrites,
+      decisionId,
+      sourceId,
+    });
+    return RECONCILE_CONTENTION;
+  }
+  const { write, writeStatus } = rowWrite.value;
+
   const settled = await settleRowWriteStatus({
     scopedDb,
     sourceId,
     decisionId,
     composedSupplements,
     observationOrder,
-    writeStatus: rowWrite.value,
+    writeStatus,
   });
   if (settled !== null) {
     return settled;

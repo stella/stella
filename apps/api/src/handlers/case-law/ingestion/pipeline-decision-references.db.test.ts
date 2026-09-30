@@ -404,7 +404,7 @@ const plannedContent = async (
   sourceId: SafeId<"caseLawSource">,
   reviews: ReadonlyMap<string, string>,
 ): Promise<string[]> => {
-  const plan = await planDecisionWrite({
+  const planned = await planDecisionWrite({
     result: input,
     existing: undefined,
     decisionId: citingDecisionId,
@@ -414,6 +414,7 @@ const plannedContent = async (
     incomingCarriesDocument: true,
     polarityRules: undefined,
   });
+  const plan = planned.unwrap();
   if ("status" in plan) {
     throw new TypeError("A new decision produces a citation write plan");
   }
