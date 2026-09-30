@@ -18963,7 +18963,7 @@ export type WebRoutes = {
               reasoning: T8aea504e13;
             };
             providers: Array<{
-              region?: "global";
+              region?: "ch" | "eu" | "global";
               apiKey?: string;
               provider: T4b83723412;
             }>;
