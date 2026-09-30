@@ -1089,6 +1089,10 @@ export type SourceReconciliation = SourceSliceWalk & {
     payload: unknown,
     signal?: AbortSignal,
   ) => Promise<ReconciliationBuildOutcome>;
+  /** Creates a reader owned by one slice walk or one slice's bounded retry batch. */
+  createSliceBuildDecision?:
+    | (() => SourceReconciliation["buildDecision"])
+    | undefined;
 };
 
 /**

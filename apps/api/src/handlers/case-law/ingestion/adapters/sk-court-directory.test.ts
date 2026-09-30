@@ -13,6 +13,7 @@ import {
   assembleSkCourtsDecision,
   skCourtsAdapter,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
+import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
@@ -47,7 +48,7 @@ describe("court registry enrichment", () => {
       const result = assembleSkCourtsDecision({
         item: { ...item, sud: { ...item.sud, nazov: name } },
         detail: null,
-        courtRegistry: registry,
+        courtRegistry: { status: "available", record: registry },
       });
       expect(result?.court).toBe(name);
       expect(result?.metadata["courtRegistry"]).toMatchObject(registry);
@@ -99,7 +100,9 @@ describe("court registry enrichment", () => {
         registry.nazov,
       ).courtClassification;
       expect(classification.status).toBe("classified");
-      if (classification.status !== "classified") {continue;}
+      if (classification.status !== "classified") {
+        continue;
+      }
       expect(classification.level).toBe(level);
       expect(classification.jurisdiction).toBe(jurisdiction);
     }
@@ -151,7 +154,10 @@ describe("court registry enrichment", () => {
       Array.from({ length: 20 }, () => read(registry.registreGuid)),
     );
     expect(records.map((record) => record.unwrap())).toEqual(
-      Array.from({ length: 20 }, () => registry),
+      Array.from({ length: 20 }, () => ({
+        status: "available",
+        record: registry,
+      })),
     );
     expect(requested).toHaveLength(1);
     await createSkCourtRegistryReader()(registry.registreGuid);
@@ -174,7 +180,11 @@ describe("court registry enrichment", () => {
 
   test("court metadata changes affect the content hash while registry presentation does not", () => {
     const build = (courtRegistry: typeof registry) =>
-      assembleSkCourtsDecision({ item, detail: null, courtRegistry });
+      assembleSkCourtsDecision({
+        item,
+        detail: null,
+        courtRegistry: { status: "available", record: courtRegistry },
+      });
     const before = build(registry);
     const after = build({ ...registry, ukonceny_string: "true" });
     expect(before).not.toBeNull();
@@ -183,34 +193,183 @@ describe("court registry enrichment", () => {
     const withPhoto = assembleSkCourtsDecision({
       item,
       detail: null,
-      courtRegistry: { ...registry, foto: "changed" },
+      courtRegistry: {
+        status: "available",
+        record: { ...registry, foto: "changed" },
+      },
     });
     expect(withPhoto?.rawHash).toBe(before?.rawHash);
   });
 
-  test("refuses invalid, mismatched, and unavailable registry responses", async () => {
-    for (const response of [
-      registry,
-      { ...registry, registreGuid: "other" },
-      { ...registry, typSudu: 42 },
-      null,
-    ]) {
+  test("classifies permanent refusals and malformed JSON separately from transient failures", async () => {
+    for (const [body, status, reason] of [
+      ["not found", 404, "http-refusal"],
+      ["gone", 410, "http-refusal"],
+      ["<html>not JSON</html>", 200, "invalid-json"],
+      [
+        JSON.stringify({ ...registry, registreGuid: "other" }),
+        200,
+        "invalid-shape",
+      ],
+      [JSON.stringify({ ...registry, typSudu: 42 }), 200, "invalid-shape"],
+      ["x".repeat(1024 * 1024 + 1), 200, "response-too-large"],
+    ] as const) {
       globalThis.fetch = asFetchMock(
-        async () => new Response(JSON.stringify(response)),
+        async () => new Response(body, { status }),
       );
-      const pending = createSkCourtRegistryReader()(registry.registreGuid);
-      if (response === registry) {
-        expect((await pending).unwrap()).toEqual(registry);
-      } else {
-        const result = await pending;
-        expect(result.isErr()).toBe(true);
-        if (result.isErr())
-          {expect(result.error).toBeInstanceOf(AdapterFetchError);}
-      }
+      const result = await createSkCourtRegistryReader()(registry.registreGuid);
+      expect(result.unwrap()).toEqual({
+        status: "unavailable",
+        httpStatus: status,
+        reason,
+      });
+    }
+    for (const status of [408, 425, 429, 503]) {
+      globalThis.fetch = asFetchMock(
+        async () => new Response("retry", { status }),
+      );
+      const result = await createSkCourtRegistryReader()(registry.registreGuid);
+      expect(result.isErr()).toBe(true);
+      if (result.isErr())
+        {expect(result.error).toBeInstanceOf(AdapterFetchError);}
     }
     expect(isSkCourtRegistryRecord({ ...registry, nadriadenySudId: 101 })).toBe(
       false,
     );
+  });
+
+  test("permanent registry refusals keep the decision and advance the page", async () => {
+    for (const [body, status, reason] of [
+      ["not found", 404, "http-refusal"],
+      ["<html>not JSON</html>", 200, "invalid-json"],
+      [JSON.stringify({ typSudu: 42 }), 200, "invalid-shape"],
+      ["x".repeat(1024 * 1024 + 1), 200, "response-too-large"],
+    ] as const) {
+      globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
+        const url = new URL(
+          input instanceof Request ? input.url : String(input),
+        );
+        if (url.pathname.includes("/v1/sud/"))
+          {return new Response(body, { status });}
+        if (url.searchParams.has("page"))
+          {return new Response(
+            JSON.stringify({ numFound: 1, rozhodnutieList: [item] }),
+          );}
+        return new Response(JSON.stringify(item));
+      });
+      const page = await skCourtsAdapter.fetchPage(null, {});
+      expect(page.isOk()).toBe(true);
+      if (page.isErr()) {continue;}
+      const decision = page.value.decisions.at(0);
+      expect(decision?.caseNumber).toBe(item.spisovaZnacka);
+      expect(decision?.court).toBe(item.sud.nazov);
+      expect(decision?.metadata["courtRegistry"]).toEqual({
+        status: "unavailable",
+        httpStatus: status,
+        reason,
+      });
+      expect(page.value.nextCursor).not.toBeNull();
+    }
+  });
+
+  test("a transient failure is not cached into later reconciliation attempts", async () => {
+    let calls = 0;
+    globalThis.fetch = asFetchMock(async () => {
+      calls += 1;
+      return calls === 1
+        ? new Response("retry", { status: 503 })
+        : new Response(JSON.stringify(registry));
+    });
+    const read = createSkCourtRegistryReader();
+    expect((await read(registry.registreGuid)).isErr()).toBe(true);
+    expect((await read(registry.registreGuid)).unwrap()).toEqual({
+      status: "available",
+      record: registry,
+    });
+    expect(calls).toBe(2);
+  });
+
+  test("defunct classification preserves the stated flag", () => {
+    for (const [ukonceny_string, defunct] of [
+      ["true", true],
+      ["false", false],
+      [null, "not_stated"],
+    ] as const) {
+      const metadata = skCourtDirectoryMetadata(
+        { ...registry, ukonceny_string },
+        registry.nazov,
+      );
+      expect(metadata.courtRegistry.ukonceny_string).toBe(ukonceny_string);
+      expect(metadata.courtRegistry.defunct).toBe(defunct);
+    }
+    const unstated = skCourtDirectoryMetadata(
+      { registreGuid: registry.registreGuid, nazov: registry.nazov },
+      registry.nazov,
+    );
+    expect(unstated.courtRegistry.defunct).toBe("not_stated");
+  });
+
+  test("a reconciliation slice shares its registry reader and the next slice refreshes it", async () => {
+    let registryCalls = 0;
+    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      if (url.pathname.includes("/v1/sud/")) {
+        registryCalls += 1;
+        return new Response(JSON.stringify(registry));
+      }
+      return new Response(JSON.stringify(item));
+    });
+    const reconciliation = requireReconciliation(skCourtsAdapter);
+    const createBuild = reconciliation.createSliceBuildDecision;
+    expect(createBuild).toBeDefined();
+    if (createBuild === undefined) {return;}
+    const build = createBuild();
+    expect((await build(item)).type).toBe("built");
+    expect(
+      (await build({ ...item, guid: "another", spisovaZnacka: "7C/222/1991" }))
+        .type,
+    ).toBe("built");
+    expect(registryCalls).toBe(1);
+    expect((await createBuild()(item)).type).toBe("built");
+    expect(registryCalls).toBe(2);
+  });
+
+  test("replay retains the typed permanent refusal without inventing a registry record", async () => {
+    const observation = {
+      status: "unavailable",
+      httpStatus: 404,
+      reason: "http-refusal",
+    } as const;
+    const decision = assembleSkCourtsDecision({
+      item,
+      detail: null,
+      courtRegistry: observation,
+    });
+    expect(decision).not.toBeNull();
+    if (decision === null) {return;}
+    const parts = decodeSourceRawEnvelope(decision.sourceRaw ?? "");
+    expect(parts?.["court-registry"]).toBeUndefined();
+    expect(JSON.parse(parts?.["court-registry-unavailable"] ?? "null")).toEqual(
+      observation,
+    );
+    const outcome = await skCourtsAdapter.reparseStoredRaw?.({
+      raw: new TextEncoder().encode(decision.sourceRaw),
+      contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+      caseNumber: item.spisovaZnacka,
+      sourceDocumentId: null,
+      language: "sk",
+      court: item.sud.nazov,
+      ecli: null,
+      decisionDate: null,
+      decisionType: null,
+      sourceUrl: null,
+      documentUrl: null,
+      metadata: {},
+    });
+    expect(outcome?.type).toBe("parsed");
+    if (outcome?.type !== "parsed") {return;}
+    expect(outcome.result.metadata["courtRegistry"]).toEqual(observation);
+    expect(outcome.result.rawHash).toBe(decision.rawHash);
   });
 
   test("replay retains registry enrichment, aliases, raw fields, and its hash", async () => {
@@ -218,7 +377,7 @@ describe("court registry enrichment", () => {
     const decision = assembleSkCourtsDecision({
       item,
       detail: null,
-      courtRegistry: record,
+      courtRegistry: { status: "available", record },
     });
     expect(decision).not.toBeNull();
     if (decision === null) {
