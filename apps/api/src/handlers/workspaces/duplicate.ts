@@ -2,15 +2,12 @@ import { panic, Result } from "better-result";
 import { and, count, eq, ilike, inArray, sql } from "drizzle-orm";
 import { t } from "elysia";
 
-import { renderMatterReference } from "@stll/api-contract";
-
 import { member } from "@/api/db/auth-schema";
 import { SETTING_WORKSPACE_IDS } from "@/api/db/rls";
 import { transactionAbortError } from "@/api/db/safe-db";
 import {
   type entities,
   type fields,
-  matterCounters,
   properties,
   propertyDependencies,
   workspaceContacts,
@@ -48,8 +45,8 @@ import { LIMITS } from "@/api/lib/limits";
 import {
   DEFAULT_MATTER_NUMBER_PADDING,
   DEFAULT_MATTER_NUMBER_PATTERN,
-  toScopeKey,
 } from "@/api/lib/matter-reference";
+import { allocateMatterReference } from "@/api/lib/matter-reference-counter";
 import {
   assertPropertyDependencyReadWithinLimit,
   propertyDependencyReadLimit,
@@ -653,33 +650,11 @@ export const createDuplicateWorkspace = (
         const padding =
           settings?.matterNumberPadding ?? DEFAULT_MATTER_NUMBER_PADDING;
         const now = new Date();
-        const scopeKey = toScopeKey(pattern, now);
-        const counter = await tx
-          .insert(matterCounters)
-          .values({
-            id: createSafeId<"matterCounter">(),
-            organizationId,
-            scopeKey,
-            lastValue: 1,
-          })
-          .onConflictDoUpdate({
-            target: [matterCounters.organizationId, matterCounters.scopeKey],
-            set: { lastValue: sql`${matterCounters.lastValue} + 1` },
-          })
-          .returning({ lastValue: matterCounters.lastValue })
-          .then((rows) => rows.at(0));
-
-        if (!counter) {
-          throw new HandlerError({
-            status: 500,
-            message: "Failed to create matter counter",
-          });
-        }
-
-        const reference = renderMatterReference({
+        const reference = await allocateMatterReference({
+          tx,
+          organizationId,
           pattern,
           now,
-          seq: counter.lastValue,
           padding,
         });
 

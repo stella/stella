@@ -142,7 +142,8 @@ const checkReferenceNotRetired = async ({
         eq(documentReferenceCounters.reference, reference),
       ),
     )
-    .limit(1);
+    .limit(1)
+    .for("update");
 
   const ledger = ledgerRows.at(0);
   if (!ledger || ledger.lastValue === 0 || ledger.workspaceId === workspaceId) {

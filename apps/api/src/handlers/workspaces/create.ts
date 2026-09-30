@@ -3,14 +3,11 @@ import { and, count, eq, ilike, inArray, sql } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
-import { renderMatterReference } from "@stll/api-contract";
-
 import { member } from "@/api/db/auth-schema";
 import { SETTING_WORKSPACE_IDS } from "@/api/db/rls";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   contacts,
-  matterCounters,
   properties,
   workspaceMembers,
   workspaces,
@@ -21,7 +18,6 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
-import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   tDefaultVarchar,
@@ -34,8 +30,8 @@ import { LIMITS } from "@/api/lib/limits";
 import {
   DEFAULT_MATTER_NUMBER_PADDING,
   DEFAULT_MATTER_NUMBER_PATTERN,
-  toScopeKey,
 } from "@/api/lib/matter-reference";
+import { allocateMatterReference } from "@/api/lib/matter-reference-counter";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-queue";
@@ -194,34 +190,11 @@ export const createWorkspaceHandler = async function* ({
       const padding =
         settings?.matterNumberPadding ?? DEFAULT_MATTER_NUMBER_PADDING;
       const now = new Date();
-      const scopeKey = toScopeKey(pattern, now);
-
-      // Atomic counter increment (upsert)
-      const counter = await tx
-        .insert(matterCounters)
-        .values({
-          id: createSafeId<"matterCounter">(),
-          organizationId,
-          scopeKey,
-          lastValue: 1,
-        })
-        .onConflictDoUpdate({
-          target: [matterCounters.organizationId, matterCounters.scopeKey],
-          set: {
-            lastValue: sql`${matterCounters.lastValue} + 1`,
-          },
-        })
-        .returning({ lastValue: matterCounters.lastValue })
-        .then((r) => r.at(0));
-
-      if (!counter) {
-        panic("Failed to create matter counter");
-      }
-
-      const reference = renderMatterReference({
+      const reference = await allocateMatterReference({
+        tx,
+        organizationId,
         pattern,
         now,
-        seq: counter.lastValue,
         padding,
       });
 

@@ -4,6 +4,7 @@ import { member } from "@/api/db/auth-schema";
 import {
   auditLogs,
   documentCounters,
+  documentReferenceCounters,
   entities,
   entityVersions,
   fields,
@@ -217,6 +218,13 @@ describe("duplicateWorkspace", () => {
         },
       },
       select: (selectedFields: Record<string, unknown>) => {
+        if (selectedFields["id"] === documentReferenceCounters.id) {
+          return {
+            from: () => ({
+              where: () => ({ limit: () => ({ for: async () => [] }) }),
+            }),
+          };
+        }
         if ("total" in selectedFields) {
           return {
             from: () => ({
@@ -358,6 +366,13 @@ describe("duplicateWorkspace", () => {
         },
       },
       select: (selectedFields: Record<string, unknown>) => {
+        if (selectedFields["id"] === documentReferenceCounters.id) {
+          return {
+            from: () => ({
+              where: () => ({ limit: () => ({ for: async () => [] }) }),
+            }),
+          };
+        }
         if ("total" in selectedFields) {
           return {
             from: () => ({
@@ -525,6 +540,13 @@ describe("duplicateWorkspace", () => {
         },
       },
       select: (selectedFields: Record<string, unknown>) => {
+        if (selectedFields["id"] === documentReferenceCounters.id) {
+          return {
+            from: () => ({
+              where: () => ({ limit: () => ({ for: async () => [] }) }),
+            }),
+          };
+        }
         if ("total" in selectedFields) {
           return {
             from: () => ({
@@ -764,6 +786,13 @@ describe("duplicateWorkspace", () => {
         },
       },
       select: (selectedFields: Record<string, unknown>) => {
+        if (selectedFields["id"] === documentReferenceCounters.id) {
+          return {
+            from: () => ({
+              where: () => ({ limit: () => ({ for: async () => [] }) }),
+            }),
+          };
+        }
         if ("total" in selectedFields) {
           return { from: () => ({ where: async () => [{ total: 0 }] }) };
         }
