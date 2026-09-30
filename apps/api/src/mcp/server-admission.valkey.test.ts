@@ -11,6 +11,7 @@ import { resolveActionPeriodBudget } from "@/api/lib/rate-limit/action-period-bu
 import { createRedisClient } from "@/api/lib/redis-client";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { createMcpHttpRequestHandler } from "@/api/mcp/server-core";
+import type { McpToolDefinition } from "@/api/mcp/tool-types";
 import { asTestRaw, readTestJson } from "@/api/tests/helpers/test-tool-set";
 
 const runValkeyTests = process.env["STELLA_RUN_VALKEY_TESTS"] === "true";
@@ -37,26 +38,27 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
       const client = createRedisClient();
       const errors: unknown[] = [];
       let dispatches = 0;
+      const tool = {
+        access: "read",
+        scope: "stella:read",
+        name: "list_matters",
+        annotations: {
+          readOnlyHint: true,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: false,
+        },
+        anonymized: { exposure: "passthrough" },
+        description: "List matters",
+        inputSchema: { type: "object", properties: {} },
+      } satisfies McpToolDefinition;
       const handleRequest = createMcpHttpRequestHandler({
         authenticateMcpRequest: async () =>
           Result.ok({ organizationId, userId, scopes: ["stella:read"] }),
         captureError: (error) => {
           errors.push(error);
         },
-        getMcpToolDefinition: async () => ({
-          access: "read",
-          scope: "stella:read",
-          name: "list_matters",
-          annotations: {
-            readOnlyHint: true,
-            destructiveHint: false,
-            idempotentHint: true,
-            openWorldHint: false,
-          },
-          anonymized: { exposure: "passthrough" },
-          description: "List matters",
-          inputSchema: { type: "object", properties: {} },
-        }),
+        getMcpToolDefinition: async () => tool,
         getMcpToolRequiredScopesHint: () => ["stella:read"],
         handleMcpToolCall: async () => {
           dispatches += 1;
