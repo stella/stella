@@ -163,7 +163,11 @@ describe("API deployment health receipt", () => {
       '"VITE_PUBLIC_KNOWLEDGE_INDEXING_ENABLED": "false"',
     );
     expect(staging).toContain('"VITE_SEO_INDEXABLE": "false"');
-    expect(production).not.toContain('"VITE_PUBLIC_KNOWLEDGE_ENABLED"');
+    expect(production).toContain('"VITE_PUBLIC_KNOWLEDGE_ENABLED": "true"');
+    expect(production).toContain(
+      '"VITE_PUBLIC_KNOWLEDGE_INDEXING_ENABLED": "false"',
+    );
+    expect(production).toContain('"VITE_SEO_INDEXABLE": "false"');
   });
 
   test("release promotion preserves the full online-migration window", async () => {

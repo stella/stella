@@ -11,6 +11,9 @@
     "VITE_POSTHOG_HOST": "https://e.stll.app",
     "VITE_POSTHOG_UI_HOST": "https://eu.posthog.com",
     "VITE_PUBLIC_APP_URL": "https://my.stll.app",
-    "VITE_PUBLIC_LAW_ENABLED": "true"
+    "VITE_PUBLIC_KNOWLEDGE_ENABLED": "true",
+    "VITE_PUBLIC_KNOWLEDGE_INDEXING_ENABLED": "false",
+    "VITE_PUBLIC_LAW_ENABLED": "true",
+    "VITE_SEO_INDEXABLE": "false"
   }
 }
