@@ -63,7 +63,7 @@ const lint = async (source: string) => {
 
 const imports = `
 import { timeEntries as entries } from "@/api/db/schema";
-import { guardRunningTimeEntries as guard } from "@/api/handlers/time-entries/running";
+import { guardRunningTimeEntries as guard } from "@/api/lib/billing/time-entry-running";
 `;
 const mutation = "await tx.update(entries).set({ narrative: 'changed' });";
 const guard =
@@ -101,7 +101,7 @@ test("the running-entry rule rejects late, nested, unawaited and ignored guards"
 test("a foreign or shadowed helper does not satisfy the running-entry rule", async () => {
   expect(
     await lint(
-      `${imports.replace("@/api/handlers/time-entries/running", "./fake")} const write = async tx => { ${guard} ${mutation} };`,
+      `${imports.replace("@/api/lib/billing/time-entry-running", "./fake")} const write = async tx => { ${guard} ${mutation} };`,
     ),
   ).toBe(1);
   expect(

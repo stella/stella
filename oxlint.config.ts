@@ -3565,8 +3565,6 @@ export default defineConfig({
       files: ["apps/api/src/handlers/**/*.ts"],
       excludeFiles: [
         "apps/api/src/handlers/**/*.test.ts",
-        // Timer consumption is the transition the running-entry guard requires.
-        "apps/api/src/handlers/time-timers/shared.ts",
         // The authenticated local fixture reset clears the whole seeded organization.
         "apps/api/src/handlers/dev/routes.ts",
       ],

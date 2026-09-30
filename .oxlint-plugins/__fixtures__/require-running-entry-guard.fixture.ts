@@ -1,5 +1,5 @@
 import { timeEntries } from "@/api/db/schema";
-import { guardRunningTimeEntries } from "@/api/handlers/time-entries/running";
+import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 
 declare const tx: Parameters<typeof guardRunningTimeEntries>[0]["tx"];
 declare const options: Parameters<typeof guardRunningTimeEntries>[0];

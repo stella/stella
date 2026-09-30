@@ -6,17 +6,18 @@ import { isOrganizationManagementRole } from "@stll/permissions";
 
 import { timeTimerConfirmations, timeTimers } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { timerNotFound, timerParams } from "@/api/lib/billing/time-timers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 import { finalizeTimer } from "../finalize";
-import { timerNotFound, timerParams } from "@/api/lib/billing/time-timers";
 
 const stopMemberTimer = createSafeRootHandler(
   {
     description:
       "End a member's running timer in the active organization into that member's draft entry. Only organization owners and admins can end timers. Uses the timer description first; supply narrative when it is empty and policy requires one. Refuses inaccessible matters and locked months without changing the timer. Retry the same ID to retrieve the original entry. The work date uses the timer owner's timezone.",
     permissions: { timeEntry: ["approve"] },
+    access: "write",
     mcp: { type: "capability", reason: "billing_admin" },
     params: timerParams,
     body: t.Object({

@@ -15,7 +15,62 @@ import {
   encodePaginationCursor,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import type {
+  UnbackedProjectionKeys,
+  UnprojectedColumns,
+} from "@/api/lib/projection-totality";
 import { brandPersistedTimeTimerId } from "@/api/lib/safe-id-boundaries";
+
+const ADMIN_TIMER_COLUMNS = {
+  id: timeTimers.id,
+  ownerId: timeTimers.userId,
+  matterId: workspaces.id,
+  startedAt: timeTimers.startedAt,
+  accumulatedSeconds: timeTimers.accumulatedSeconds,
+  lastResumedAt: timeTimers.lastResumedAt,
+};
+type TimerRow = typeof timeTimers.$inferSelect;
+type AdminTimerProjectionSource = Omit<TimerRow, "userId" | "workspaceId"> & {
+  ownerId: TimerRow["userId"];
+  matterId: TimerRow["workspaceId"];
+};
+type AdminTimerItemSource = Pick<
+  AdminTimerProjectionSource,
+  keyof typeof ADMIN_TIMER_COLUMNS
+>;
+const adminTimerItem = (row: AdminTimerItemSource) => ({
+  id: row.id,
+  ownerId: row.ownerId,
+  matterId: row.matterId,
+  accumulatedSeconds: row.accumulatedSeconds,
+  startedAt: row.startedAt.toISOString(),
+  lastResumedAt: row.lastResumedAt?.toISOString() ?? null,
+});
+const UNPROJECTED_ADMIN_TIMER_COLUMNS = [
+  // The active organization already scopes every row.
+  "organizationId",
+  // Listing running clocks needs no owner narrative.
+  "description",
+  // Migration linkage remains internal to completion.
+  "legacyTimeEntryId",
+  // This endpoint returns only running timers.
+  "state",
+  // Elapsed-time fields describe the clock; persistence timestamps add no action.
+  "createdAt",
+  "updatedAt",
+] as const satisfies readonly (keyof AdminTimerProjectionSource)[];
+type MissingAdminTimerColumn = UnprojectedColumns<
+  AdminTimerProjectionSource,
+  ReturnType<typeof adminTimerItem>,
+  (typeof UNPROJECTED_ADMIN_TIMER_COLUMNS)[number]
+>;
+type UnexpectedAdminTimerColumn = UnbackedProjectionKeys<
+  AdminTimerProjectionSource,
+  ReturnType<typeof adminTimerItem>,
+  (typeof UNPROJECTED_ADMIN_TIMER_COLUMNS)[number]
+>;
+true satisfies MissingAdminTimerColumn extends never ? true : never;
+true satisfies UnexpectedAdminTimerColumn extends never ? true : never;
 
 const listRunningMemberTimers = createSafeRootHandler(
   {
@@ -57,14 +112,7 @@ const listRunningMemberTimers = createSafeRootHandler(
     const rows = yield* Result.await(
       safeDb((tx) =>
         tx
-          .select({
-            id: timeTimers.id,
-            ownerId: timeTimers.userId,
-            matterId: workspaces.id,
-            startedAt: timeTimers.startedAt,
-            accumulatedSeconds: timeTimers.accumulatedSeconds,
-            lastResumedAt: timeTimers.lastResumedAt,
-          })
+          .select(ADMIN_TIMER_COLUMNS)
           .from(timeTimers)
           .leftJoin(
             workspaces,
@@ -100,14 +148,7 @@ const listRunningMemberTimers = createSafeRootHandler(
     });
     return Result.ok({
       ...page,
-      items: page.items.map((row) => ({
-        id: row.id,
-        ownerId: row.ownerId,
-        matterId: row.matterId,
-        accumulatedSeconds: row.accumulatedSeconds,
-        startedAt: row.startedAt.toISOString(),
-        lastResumedAt: row.lastResumedAt?.toISOString() ?? null,
-      })),
+      items: page.items.map(adminTimerItem),
     });
   },
 );

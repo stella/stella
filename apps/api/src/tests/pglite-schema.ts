@@ -577,7 +577,7 @@ export const installPgliteTimeEntryTimerSignals = async (
   const statements = readMigrationStatements(
     nodePath.join(
       DRIZZLE_DIR,
-      "20261003122400_timer_admin_stop",
+      "20261003122600_timer_admin_stop",
       "migration.sql",
     ),
   ).filter((statement) => {

@@ -95,7 +95,7 @@ const guardedBefore = (context: RuleContext, mutation: AstNode) => {
       !isImportedFrom({
         context,
         node: call.callee,
-        modules: ["apps/api/src/handlers/time-entries/running"],
+        modules: ["apps/api/src/lib/billing/time-entry-running"],
         names: GUARD_EXPORTS,
       })
     ) {

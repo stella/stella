@@ -1235,6 +1235,12 @@ export const CAPABILITY_DISPATCH = {
   "time-entries.update": {
     load: async () => await import("@/api/handlers/time-entries/update"),
   },
+  "time-timers.admin.list": {
+    load: async () => await import("@/api/handlers/time-timers/admin/list"),
+  },
+  "time-timers.admin.stop": {
+    load: async () => await import("@/api/handlers/time-timers/admin/stop"),
+  },
   "time-timers.confirm": {
     load: async () => await import("@/api/handlers/time-timers/confirm"),
   },

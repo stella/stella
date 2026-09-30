@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
@@ -20,7 +21,8 @@ type GuardRunningTimeEntriesOptions = {
   workspaceId: SafeId<"workspace">;
   selection:
     | { type: "entries"; ids: SafeId<"timeEntry">[] }
-    | { type: "invoice"; invoiceId: SafeId<"invoice"> };
+    | { type: "invoice"; invoiceId: SafeId<"invoice"> }
+    | { type: "none" };
   actorUserId: SafeId<"user">;
 };
 
@@ -30,11 +32,22 @@ export const guardRunningTimeEntries = async ({
   selection,
   actorUserId,
 }: GuardRunningTimeEntriesOptions) => {
+  const selectedEntries = (() => {
+    switch (selection.type) {
+      case "entries":
+        return inArray(timeEntries.id, selection.ids);
+      case "invoice":
+        return eq(timeEntries.invoiceId, selection.invoiceId);
+      case "none":
+        return sql`false`;
+      default:
+        selection satisfies never;
+        return panic("Unknown time entry selection");
+    }
+  })();
   const condition = and(
     eq(timeEntries.workspaceId, workspaceId),
-    selection.type === "entries"
-      ? inArray(timeEntries.id, selection.ids)
-      : eq(timeEntries.invoiceId, selection.invoiceId),
+    selectedEntries,
   );
   const snapshot = await tx
     .select({ id: timeEntries.id })
