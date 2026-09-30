@@ -133,7 +133,7 @@
     "driver.js": "1.8.0",
     "immer": "^11.1.18",
     "jszip": "catalog:",
-    "katex": "^0.18.7",
+    "katex": "^0.16.47",
     "lucide-react": "catalog:",
     "pdfjs-dist": "^6.3.289",
     "posthog-js": "^1.434.10",
