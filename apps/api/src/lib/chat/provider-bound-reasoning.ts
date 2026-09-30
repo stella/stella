@@ -19,7 +19,8 @@ import { isRecord } from "@/api/lib/type-guards";
 // - Anthropic's adapter keeps the signature the API streamed, an opaque
 //   base64 string.
 // Gemini keeps its thought signatures on the tool call, where only its own
-// adapter reads them, and the other adapters return no signed reasoning.
+// adapter reads them. The other adapters (Bedrock Converse included) neither
+// return signed reasoning nor send any back.
 
 type ReasoningSignatureFormat = "anthropic-messages" | "openai-responses";
 

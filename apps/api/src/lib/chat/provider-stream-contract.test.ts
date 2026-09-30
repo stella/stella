@@ -224,7 +224,9 @@ const recordingFetch = (answer: () => Response) => {
   return { bodies, fetch };
 };
 
-const eventStream = (events: readonly { type: string }[]) =>
+const eventStream = (
+  events: readonly ({ type: string } & Record<string, unknown>)[],
+) =>
   new Response(
     events
       .map(
