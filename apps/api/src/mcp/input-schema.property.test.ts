@@ -27,7 +27,7 @@ describe("MCP input contracts", () => {
       fc.property(fc.jsonValue(), (input) => {
         const parsed = v.safeParse(schema, input);
         expect(parsed.success).toBe(isRecord(input));
-        if (parsed.success) {
+        if (parsed.success && isRecord(input)) {
           expect(parsed.output).toEqual(input);
         }
       }),
