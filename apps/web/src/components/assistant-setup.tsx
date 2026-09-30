@@ -126,7 +126,7 @@ const GuideTile = ({
 }: React.PropsWithChildren<{ href: string; label: string; name: string }>) => (
   <a
     aria-label={label}
-    className="bg-muted/60 text-foreground hover:bg-muted flex min-h-11 flex-1 items-center justify-center gap-2.5 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors duration-150"
+    className="bg-muted/60 text-foreground hover:bg-muted flex min-h-11 flex-1 items-center justify-center gap-2.5 rounded-xl px-4 py-2.5 text-sm font-medium"
     href={sanitizeHref(href)}
     rel="noreferrer"
     target="_blank"

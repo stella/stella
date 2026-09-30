@@ -7,8 +7,8 @@ import { LoaderIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
 import { detached } from "@/lib/detached";
+import type { CatalogueEntry } from "@/lib/knowledge/catalogue-types";
 
-import type { CatalogueEntry } from "./catalogue-types";
 import { useInstallEntry } from "./use-install-entry";
 
 type InstallPackButtonProps = {

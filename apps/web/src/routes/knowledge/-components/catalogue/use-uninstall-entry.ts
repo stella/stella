@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import type { CatalogueEntry } from "@/lib/knowledge/catalogue-types";
 import { knowledgeKeys } from "@/lib/knowledge/queries";
 import { catalogueKeys } from "@/lib/knowledge/queries/catalogue";
 import {
@@ -14,8 +15,6 @@ import {
   mcpQueryRoot,
 } from "@/lib/resource-query-roots.logic";
 import { toSafeId } from "@/lib/safe-id";
-
-import type { CatalogueEntry } from "./catalogue-types";
 
 /**
  * Uninstalls a catalogue entry by routing to the right backend

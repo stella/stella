@@ -28,12 +28,12 @@ import {
 import { CatalogueEntryIcon } from "@/components/catalogue/catalogue-entry-icon";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { mcpConnectionsOptions } from "@/lib/knowledge/queries";
-import { catalogueOptions } from "@/lib/knowledge/queries/catalogue";
 import {
   isEffectivelyInstalled,
   type CatalogueMcp,
-} from "@/routes/knowledge/-components/catalogue/catalogue-types";
+} from "@/lib/knowledge/catalogue-types";
+import { mcpConnectionsOptions } from "@/lib/knowledge/queries";
+import { catalogueOptions } from "@/lib/knowledge/queries/catalogue";
 
 import {
   integrationStatus,

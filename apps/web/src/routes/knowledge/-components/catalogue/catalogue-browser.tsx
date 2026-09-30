@@ -37,6 +37,10 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
+import {
+  isEffectivelyInstalled,
+  type CatalogueEntry,
+} from "@/lib/knowledge/catalogue-types";
 import { useChatUnavailableSkills } from "@/lib/prompts/use-chat-unavailable-skills";
 import {
   BlueprintGallerySheet,
@@ -46,7 +50,6 @@ import { ImportSkillDialog } from "@/routes/knowledge/-components/import-skill-d
 
 import { addCustomActions } from "./add-custom-actions.logic";
 import { AddMcpServerSheet } from "./add-mcp-server-sheet";
-import { isEffectivelyInstalled, type CatalogueEntry } from "./catalogue-types";
 import { InstallPackButton } from "./install-pack-button";
 import { getToolDetailPayload, toolDetailTabId } from "./tool-detail";
 import { useCatalogueRemoval } from "./use-catalogue-removal";

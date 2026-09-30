@@ -18,8 +18,11 @@ import type { KnowledgeToolDetail } from "@/features/knowledge/views/tools/tools
 import { SIDE_RAIL_TAB_ICON_SIZE_PX, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import {
+  isEffectivelyInstalled,
+  type CatalogueEntry,
+} from "@/lib/knowledge/catalogue-types";
 
-import { isEffectivelyInstalled, type CatalogueEntry } from "./catalogue-types";
 import { useCatalogueRemoval } from "./use-catalogue-removal";
 import { useInstallEntry } from "./use-install-entry";
 import { useUninstallEntry } from "./use-uninstall-entry";

@@ -1,6 +1,9 @@
 import { panic } from "better-result";
 
-import { isEffectivelyInstalled, type CatalogueEntry } from "./catalogue-types";
+import {
+  isEffectivelyInstalled,
+  type CatalogueEntry,
+} from "@/lib/knowledge/catalogue-types";
 
 /**
  * How the catalogue's Remove action treats an entry: not offered, done at once

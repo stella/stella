@@ -1,4 +1,5 @@
-import type { CatalogueEntry } from "./catalogue-types";
+import type { CatalogueEntry } from "@/lib/knowledge/catalogue-types";
+
 import type { ToolDetailKind, ToolDetailPayload } from "./tool-detail-view";
 
 /**

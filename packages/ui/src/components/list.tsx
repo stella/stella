@@ -133,7 +133,7 @@ const ListItem = ({
     className: cn(
       "flex min-h-14 w-full items-center gap-3 px-4 py-2.5 text-start",
       render !== undefined &&
-        "hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:ring-ring cursor-pointer transition-colors duration-150 outline-none focus-visible:ring-2 focus-visible:ring-inset",
+        "hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:ring-ring cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-inset",
       className,
     ),
     "data-slot": "list-item",
