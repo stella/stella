@@ -49,6 +49,7 @@ CREATE TRIGGER sanctions_active_edition_fanout AFTER UPDATE OF active_edition_id
  EXECUTE FUNCTION public.enqueue_sanctions_edition_fanout();--> statement-breakpoint
 
 -- Initialize the bounded reference registry before a tenant drain can store unavailable coverage.
+SET LOCAL ROLE stella_ingestion;--> statement-breakpoint
 INSERT INTO public.sanctions_sources (id, issuer, marker_url) VALUES
 ('eu', 'European Union', 'https://data.europa.eu/api/hub/repo/datasets/consolidated-list-of-persons-groups-and-entities-subject-to-eu-financial-sanctions'),
 ('un', 'United Nations', 'https://scsanctions.un.org/resources/xml/en/consolidated.xml'),
@@ -57,4 +58,5 @@ INSERT INTO public.sanctions_sources (id, issuer, marker_url) VALUES
 ('us-non-sdn', 'United States', 'https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/CONSOLIDATED.XML'),
 ('uk', 'United Kingdom', 'https://sanctionslist.fcdo.gov.uk/docs/UK-Sanctions-List.xml'),
 ('ch', 'Switzerland', 'https://www.sesam.search.admin.ch/sesam-search-web/pages/downloadXmlGesamtliste.xhtml?action=downloadXmlGesamtlisteAction&lang=de')
-ON CONFLICT ON CONSTRAINT sanctions_sources_pkey DO NOTHING;
+ON CONFLICT ON CONSTRAINT sanctions_sources_pkey DO NOTHING;--> statement-breakpoint
+RESET ROLE;

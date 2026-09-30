@@ -15,6 +15,7 @@ import {
   sanctionsEditionFanouts,
   sanctionsOrganizationMarks,
   sanctionsContactScreenings,
+  sanctionsScreeningEvents,
   sanctionsSources,
   sanctionsEditions,
 } from "@/api/db/schema";
@@ -24,11 +25,13 @@ import {
   drainSanctionsContactMarks,
   SANCTIONS_MARK_LEASE_MS,
 } from "@/api/lib/lists/sanctions/monitoring-drain";
+import { queueSanctionsMonitoringBackfills } from "@/api/lib/lists/sanctions/monitoring-fanout";
 import { requestSanctionsMonitoringRefresh } from "@/api/lib/lists/sanctions/monitoring-refresh";
 import {
   SANCTIONS_SOURCE_CONFIG,
   sanctionsSourceIds,
 } from "@/api/lib/lists/sanctions/source-config";
+import type { SchedulerDb } from "@/api/lib/scheduler/types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -479,6 +482,243 @@ test(
         ({ sourceId }) => sourceId === "eu",
       )?.editionId,
     ).toBe(newerEdition);
+  },
+  TIMEOUT,
+);
+
+const expiredWorkerRace = async (mode: "activation" | "stale") => {
+  const organizationId = toSafeId<"organization">(`expired-${mode}`);
+  await db.insert(organization).values({
+    id: organizationId,
+    name: mode,
+    slug: organizationId,
+    createdAt: new Date(),
+  });
+  const tenant = scopedFor(organizationId);
+  await emptyEdition();
+  if (mode === "activation") {
+    await db
+      .update(sanctionsSources)
+      .set({
+        lastSuccessfulVerifiedAt: new Date(Date.now() - 49 * 60 * 60 * 1000),
+      })
+      .where(eq(sanctionsSources.id, "eu"));
+  }
+  await tenant(
+    async (tx) =>
+      await tx.insert(contacts).values({
+        organizationId,
+        type: "person",
+        displayName: "Expired Worker",
+      }),
+  );
+  const now = futureNow();
+  const snapshot = async () =>
+    await tenant(async (tx) => ({
+      coverage: await tx.select().from(sanctionsContactScreenings),
+      events: await tx.select().from(sanctionsScreeningEvents),
+    }));
+  let replacement: Awaited<ReturnType<typeof snapshot>> | undefined;
+  const stallAfterFreshnessRead: ScopedDb = async (run) => {
+    const value = await tenant(run);
+    const first = Array.isArray(value) ? value.at(0) : undefined;
+    if (
+      replacement === undefined &&
+      typeof first === "object" &&
+      first !== null &&
+      "activeEditionId" in first
+    ) {
+      if (mode === "activation") {
+        await emptyEdition();
+      } else {
+        await db
+          .update(sanctionsSources)
+          .set({
+            lastSuccessfulVerifiedAt: new Date(
+              Date.now() - 49 * 60 * 60 * 1000,
+            ),
+          })
+          .where(eq(sanctionsSources.id, "eu"));
+      }
+      await drainSanctionsContactMarks({
+        db: tenant,
+        organizationId,
+        now: new Date(now.getTime() + SANCTIONS_MARK_LEASE_MS + 1),
+        signal: new AbortController().signal,
+      });
+      replacement = await snapshot();
+      expect(
+        replacement.coverage.find(({ sourceId }) => sourceId === "eu")?.status,
+      ).toBe(mode === "activation" ? "clear" : "unavailable");
+    }
+    return value;
+  };
+  const expired = await drainSanctionsContactMarks({
+    db: stallAfterFreshnessRead,
+    organizationId,
+    now,
+    signal: new AbortController().signal,
+  });
+  expect(replacement).toBeDefined();
+  expect(expired.terminal).toBe(0);
+  expect(await snapshot()).toEqual(replacement);
+  expect(
+    await tenant(async (tx) => await tx.select().from(sanctionsContactMarks)),
+  ).toEqual([]);
+};
+
+test(
+  "expired unavailable work cannot overwrite a replacement edition's success",
+  async () => await expiredWorkerRace("activation"),
+  TIMEOUT,
+);
+test(
+  "expired clear work cannot overwrite same-edition stale coverage",
+  async () => await expiredWorkerRace("stale"),
+  TIMEOUT,
+);
+
+test(
+  "a crash between contact pages preserves the cursor and resumes to completion",
+  async () => {
+    const organizationId = toSafeId<"organization">("cursor-org");
+    await db.insert(organization).values({
+      id: organizationId,
+      name: "Cursor",
+      slug: organizationId,
+      createdAt: new Date(),
+    });
+    const tenant = scopedFor(organizationId);
+    const editionId = await emptyEdition();
+    await tenant(async (tx) => {
+      await tx.insert(contacts).values(
+        Array.from({ length: 105 }, () => ({
+          organizationId,
+          type: "person" as const,
+          displayName: "Cursor Person",
+        })),
+      );
+      await tx
+        .insert(sanctionsMonitoringBackfills)
+        .values({ organizationId, sourceId: "eu", editionId });
+    });
+    const advance = async (
+      scoped: ScopedDb,
+      now: Date,
+      signal = new AbortController().signal,
+    ) =>
+      await advanceSanctionsMonitoringBackfill({
+        db: scoped,
+        organizationId,
+        sourceId: "eu",
+        now,
+        signal,
+      });
+    const now = futureNow();
+    expect(await advance(tenant, now)).toBe("advanced");
+    const job = async () =>
+      (
+        await tenant(
+          async (tx) => await tx.select().from(sanctionsMonitoringBackfills),
+        )
+      ).at(0) ?? panic("Job missing");
+    const firstPage = await job();
+    expect(firstPage.state).toBe("pending");
+    expect(firstPage.cursorContactId).not.toBeNull();
+    const abort = new AbortController();
+    const crashAfterClaim: ScopedDb = async (run) => {
+      const result = await tenant(run);
+      abort.abort(new Error("synthetic mid-cursor crash"));
+      return result;
+    };
+    const crashed = await Result.tryPromise(
+      async () => await advance(crashAfterClaim, now, abort.signal),
+    );
+    expect(crashed.isErr()).toBe(true);
+    if (crashed.isErr()) {
+      expect(errorMessages(crashed.error)).toContain(
+        "synthetic mid-cursor crash",
+      );
+    }
+    expect((await job()).cursorContactId).toBe(firstPage.cursorContactId);
+    expect(
+      await advance(
+        tenant,
+        new Date(now.getTime() + SANCTIONS_MARK_LEASE_MS + 1),
+      ),
+    ).toBe("advanced");
+    expect((await job()).state).toBe("complete");
+    expect(
+      await tenant(
+        async (tx) => await tx.select().from(sanctionsContactScreenings),
+      ),
+    ).toHaveLength(105);
+  },
+  TIMEOUT,
+);
+
+test(
+  "activation fans out bounded organization pages and refreshes unavailable coverage",
+  async () => {
+    const organizationId = toSafeId<"organization">("fanout-000");
+    await db.insert(organization).values(
+      Array.from({ length: 105 }, (_, i) => ({
+        id: `fanout-${String(i).padStart(3, "0")}`,
+        name: "Fanout",
+        createdAt: new Date(),
+        slug: `fanout-${String(i).padStart(3, "0")}`,
+      })),
+    );
+    await scopedFor(organizationId)(
+      async (tx) =>
+        await requestSanctionsMonitoringRefresh(tx, { organizationId }),
+    );
+    const now = futureNow();
+    const systemDb = asTestRaw<SchedulerDb>(db);
+    const first = await queueSanctionsMonitoringBackfills({
+      db: systemDb,
+      now,
+    });
+    expect(first.fanned).toBe(100);
+    const second = await queueSanctionsMonitoringBackfills({
+      db: systemDb,
+      now,
+    });
+    expect(second.fanned).toBeGreaterThan(0);
+    expect(second.fanned).toBeLessThan(100);
+    expect(
+      await scopedFor(organizationId)(
+        async (tx) => await tx.select().from(sanctionsMonitoringBackfills),
+      ),
+    ).toHaveLength(sanctionsSourceIds().length);
+    const eu = async () =>
+      (
+        await db
+          .select()
+          .from(sanctionsEditionFanouts)
+          .where(eq(sanctionsEditionFanouts.sourceId, "eu"))
+      ).at(0) ?? panic("Fanout missing");
+    expect((await eu()).freshnessStatus).toBe("fresh");
+    await queueSanctionsMonitoringBackfills({
+      db: systemDb,
+      now: new Date(now.getTime() + 49 * 60 * 60 * 1000),
+    });
+    expect((await eu()).freshnessStatus).toBe("unavailable");
+    expect((await eu()).cursorOrganizationId).toBeNull();
+    const denied = await Result.tryPromise(
+      async () =>
+        await scopedFor(organizationId)(
+          async (tx) =>
+            await tx
+              .update(sanctionsEditionFanouts)
+              .set({ state: "complete" })
+              .where(eq(sanctionsEditionFanouts.sourceId, "eu")),
+        ),
+    );
+    expect(denied.isErr()).toBe(true);
+    if (denied.isErr()) {
+      expect(errorMessages(denied.error)).toContain("permission denied");
+    }
   },
   TIMEOUT,
 );

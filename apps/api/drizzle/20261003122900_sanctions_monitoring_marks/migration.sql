@@ -39,7 +39,7 @@ BEGIN
 END;
 $$;--> statement-breakpoint
 CREATE TRIGGER contacts_sanctions_mark_insert AFTER INSERT ON public.contacts
- REFERENCING NEW TABLE AS new_rows 
+ REFERENCING NEW TABLE AS new_rows
  FOR EACH STATEMENT EXECUTE FUNCTION public.mark_sanctions_contact_insert();--> statement-breakpoint
 CREATE FUNCTION public.mark_sanctions_organization_insert() RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, public AS $$
 BEGIN
@@ -50,7 +50,7 @@ BEGIN
 END;
 $$;--> statement-breakpoint
 CREATE TRIGGER organization_sanctions_mark_insert AFTER INSERT ON public.organization_settings
- REFERENCING NEW TABLE AS new_rows 
+ REFERENCING NEW TABLE AS new_rows
  FOR EACH STATEMENT EXECUTE FUNCTION public.mark_sanctions_organization_insert();--> statement-breakpoint
 CREATE FUNCTION public.mark_sanctions_contact_update() RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, public AS $$
 BEGIN

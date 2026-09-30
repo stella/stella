@@ -39,6 +39,10 @@ type CommitMonitoringBatchOptions = {
   source: SanctionsSource;
   results: readonly SanctionsMonitoringResult[];
   now: Date;
+  claim?: {
+    leaseExpiresAt: Date;
+    marks: readonly { contactId: SafeId<"contact">; generation: bigint }[];
+  };
 };
 
 const comparableMatch = ({
@@ -313,7 +317,8 @@ export const commitSanctionsMonitoringBatch = async ({
   organizationId,
   source,
   results,
-  now,
+  now: preparedAt,
+  claim,
 }: CommitMonitoringBatchOptions) => {
   if (results.length > SANCTIONS_MONITORING_BATCH_SIZE) {
     panic("Sanctions monitoring batch exceeds its bound");
@@ -358,6 +363,24 @@ export const commitSanctionsMonitoringBatch = async ({
         .orderBy(asc(contacts.id))
         .limit(SANCTIONS_MONITORING_BATCH_SIZE)
         .for("no key update");
+      // Contact writers take contact -> mark; acquire marks only after the ordered contact locks.
+      const owned =
+        claim === undefined
+          ? undefined
+          : new Set(
+              (
+                await tx.execute<{ contactId: SafeId<"contact"> }>(sql`
+        SELECT mark.contact_id AS "contactId" FROM sanctions_contact_marks AS mark
+        JOIN jsonb_to_recordset(${JSON.stringify(claim.marks.map(({ contactId, generation }) => ({ contactId, generation: generation.toString() })))}::text::jsonb)
+          AS claimed("contactId" uuid, generation bigint)
+          ON mark.contact_id = claimed."contactId" AND mark.generation = claimed.generation
+        WHERE mark.organization_id = ${organizationId} AND mark.scheduled_at = ${claim.leaseExpiresAt}::timestamptz
+        ORDER BY mark.contact_id FOR UPDATE OF mark
+      `)
+              ).map(({ contactId }) => contactId),
+            );
+      // Durable workers evaluate freshness after acquiring their fences, not at claim time.
+      const now = claim === undefined ? preparedAt : new Date();
       const freshness = (
         await readSanctionsFreshness({
           db: async (read) => await read(tx),
@@ -372,7 +395,10 @@ export const commitSanctionsMonitoringBatch = async ({
       const eligible: SanctionsMonitoringResult[] = [];
       for (const item of items) {
         const contact = byContact.get(item.contactId);
-        if (contact === undefined) {
+        if (
+          contact === undefined ||
+          (owned !== undefined && !owned.has(item.contactId))
+        ) {
           continue;
         }
         const excluded =

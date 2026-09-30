@@ -99,6 +99,7 @@ export const drainSanctionsContactMarks = async ({
         source,
         results,
         now,
+        claim: { leaseExpiresAt, marks: claimed.marks },
       }),
     );
     for (const id of terminal) {
