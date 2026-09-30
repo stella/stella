@@ -282,7 +282,7 @@ export const extractNsMetadata = ($: cheerio.CheerioAPI): MetadataResult => {
             const headers = headerRow.map((c) =>
               c.plainText.trim().toLowerCase(),
             );
-            source["ustavniStiznost"] = rows.slice(1).map((row) => {
+            source.ustavniStiznost = rows.slice(1).map((row) => {
               const entry: Record<string, NsComplaintCell> = {};
               for (let i = 0; i < headers.length; i++) {
                 const h = headers[i] ?? `col${i}`;
