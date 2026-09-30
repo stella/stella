@@ -230,8 +230,9 @@ describe("court registry enrichment", () => {
       );
       const result = await createSkCourtRegistryReader()(registry.registreGuid);
       expect(result.isErr()).toBe(true);
-      if (result.isErr())
-        {expect(result.error).toBeInstanceOf(AdapterFetchError);}
+      if (result.isErr()) {
+        expect(result.error).toBeInstanceOf(AdapterFetchError);
+      }
     }
     expect(isSkCourtRegistryRecord({ ...registry, nadriadenySudId: 101 })).toBe(
       false,
@@ -249,17 +250,21 @@ describe("court registry enrichment", () => {
         const url = new URL(
           input instanceof Request ? input.url : String(input),
         );
-        if (url.pathname.includes("/v1/sud/"))
-          {return new Response(body, { status });}
-        if (url.searchParams.has("page"))
-          {return new Response(
+        if (url.pathname.includes("/v1/sud/")) {
+          return new Response(body, { status });
+        }
+        if (url.searchParams.has("page")) {
+          return new Response(
             JSON.stringify({ numFound: 1, rozhodnutieList: [item] }),
-          );}
+          );
+        }
         return new Response(JSON.stringify(item));
       });
       const page = await skCourtsAdapter.fetchPage(null, {});
       expect(page.isOk()).toBe(true);
-      if (page.isErr()) {continue;}
+      if (page.isErr()) {
+        continue;
+      }
       const decision = page.value.decisions.at(0);
       expect(decision?.caseNumber).toBe(item.spisovaZnacka);
       expect(decision?.court).toBe(item.sud.nazov);
@@ -322,7 +327,9 @@ describe("court registry enrichment", () => {
     const reconciliation = requireReconciliation(skCourtsAdapter);
     const createBuild = reconciliation.createSliceBuildDecision;
     expect(createBuild).toBeDefined();
-    if (createBuild === undefined) {return;}
+    if (createBuild === undefined) {
+      return;
+    }
     const build = createBuild();
     expect((await build(item)).type).toBe("built");
     expect(
@@ -346,7 +353,9 @@ describe("court registry enrichment", () => {
       courtRegistry: observation,
     });
     expect(decision).not.toBeNull();
-    if (decision === null) {return;}
+    if (decision === null) {
+      return;
+    }
     const parts = decodeSourceRawEnvelope(decision.sourceRaw ?? "");
     expect(parts?.["court-registry"]).toBeUndefined();
     expect(JSON.parse(parts?.["court-registry-unavailable"] ?? "null")).toEqual(
@@ -367,7 +376,9 @@ describe("court registry enrichment", () => {
       metadata: {},
     });
     expect(outcome?.type).toBe("parsed");
-    if (outcome?.type !== "parsed") {return;}
+    if (outcome?.type !== "parsed") {
+      return;
+    }
     expect(outcome.result.metadata["courtRegistry"]).toEqual(observation);
     expect(outcome.result.rawHash).toBe(decision.rawHash);
   });
