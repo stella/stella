@@ -42,6 +42,9 @@ describe("period identity coverage", () => {
           }
         }
       }
+      if (file === "lib/rate-limit/queued-action-admission.ts") {
+        admissionNames.add("admission");
+      }
       if (file === "lib/api-handlers.ts") {
         admissionNames.add("admit");
       }
@@ -81,7 +84,14 @@ describe("period identity coverage", () => {
                 ts.isPropertyAssignment(property) &&
                 propertyName(property.name) === "periodIdentity",
             );
-            if (hasIndependentScope && !hasPeriodIdentity) {
+            const isBackgroundJob = options.properties.some(
+              (property) =>
+                ts.isPropertyAssignment(property) &&
+                propertyName(property.name) === "execution" &&
+                ts.isStringLiteral(property.initializer) &&
+                property.initializer.text === "background-job",
+            );
+            if ((hasIndependentScope || isBackgroundJob) && !hasPeriodIdentity) {
               concurrencyOnlyCallers.push(file);
             } else {
               callers.push(file);
@@ -139,10 +149,12 @@ describe("period identity coverage", () => {
     }
     expect(callers.toSorted()).toEqual([
       "lib/api-handlers.ts",
+      "lib/rate-limit/queued-action-admission.ts",
       "mcp/server-core.ts",
     ]);
-    expect(concurrencyOnlyCallers).toEqual([
+    expect(concurrencyOnlyCallers.toSorted()).toEqual([
       "handlers/chat/chat-execution-admission.ts",
+      "lib/rate-limit/queued-action-admission.ts",
     ]);
     expect(declarations.toSorted()).toEqual([
       "handlers/chat/improve-prompt.ts",

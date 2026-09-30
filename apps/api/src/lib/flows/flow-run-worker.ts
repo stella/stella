@@ -1,8 +1,9 @@
-import { Worker } from "bullmq";
+import { Worker, type Job } from "bullmq";
 import { and, asc, gt, inArray, lt, sql } from "drizzle-orm";
 
 import type { rootDb } from "@/api/db/root";
 import { flowRuns } from "@/api/db/schema";
+import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
@@ -11,6 +12,7 @@ import {
   executeFlowStep,
   failFlowRunFromWorker,
 } from "@/api/lib/flows/flow-executor";
+import { resolveActorUserId } from "@/api/lib/flows/flow-run-actor";
 import {
   enqueueFlowStep,
   FLOW_RUN_QUEUE_NAME,
@@ -18,7 +20,9 @@ import {
 } from "@/api/lib/flows/flow-run-queue";
 import { logger } from "@/api/lib/observability/logger";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
+import { runBackgroundJob } from "@/api/lib/rate-limit/queued-action-admission";
 import { createBullMqConnection } from "@/api/lib/redis-client";
+import { brandPersistedFlowRunId } from "@/api/lib/safe-id-boundaries";
 
 // The BullMQ worker side of the flow-run engine. It lives in its own module so
 // the executor can depend on the queue's `enqueueFlowStep` without a cycle: the
@@ -43,6 +47,48 @@ const FLOW_STEP_JOB_TIMEOUT_MS = 4 * 60 * 1000;
 // backlog larger than one batch is still fully recovered.
 const ORPHAN_SCAN_BATCH_SIZE = 1000;
 
+type AdmittedFlowStepOptions = {
+  job: Job<FlowStepJobData>;
+  signal: AbortSignal;
+  database: BullMqWorkerContext["db"];
+};
+
+const executeAdmittedFlowStep = async ({
+  job,
+  signal,
+  database,
+}: AdmittedFlowStepOptions) => {
+  const run = async (executionSignal: AbortSignal) =>
+    await executeFlowStep(job.data, executionSignal, { database });
+  if (!env.FEATURE_ACTION_ADMISSION) {
+    await run(signal);
+    return;
+  }
+  // This worker door resolves tenant and actor from the durable run, never job-supplied identity.
+  const row = await database.query.flowRuns.findFirst({
+    where: { id: { eq: brandPersistedFlowRunId(job.data.runId) } },
+  });
+  if (!row || (row.status !== "pending" && row.status !== "running")) {
+    return;
+  }
+  const workspace = await database.query.workspaces.findFirst({
+    where: { id: { eq: row.workspaceId } },
+    columns: { organizationId: true },
+  });
+  const actor = await resolveActorUserId(row, database);
+  if (!workspace || !actor) {
+    await run(signal);
+    return;
+  }
+  await runBackgroundJob({
+    organizationId: workspace.organizationId,
+    userId: actor,
+    job,
+    signal,
+    run,
+  });
+};
+
 /**
  * Initialize the BullMQ worker for flow runs. Call once at API startup
  * (mirrors `initWorkflowWorker`). The worker owns a dedicated blocking Redis
@@ -63,7 +109,11 @@ export const initFlowRunWorker = ({ db }: BullMqWorkerContext) => {
         );
       }, FLOW_STEP_JOB_TIMEOUT_MS);
       try {
-        await executeFlowStep(job.data, controller.signal, { database: db });
+        await executeAdmittedFlowStep({
+          job,
+          signal: controller.signal,
+          database: db,
+        });
         // Surface a late abort so BullMQ marks the attempt failed rather than
         // completed if the signal fired after the last awaited call.
         controller.signal.throwIfAborted();

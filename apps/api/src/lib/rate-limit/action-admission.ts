@@ -143,28 +143,36 @@ type AdmissionKeys = {
 const admissionKeys = ({
   organizationId,
   userId,
+  pool,
 }: {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
+  pool: "interactive" | "background";
 }): AdmissionKeys => ({
   organization: coordinationKey({
     scope: "action-admission",
     slot: organizationId,
-    suffix: "organization",
+    suffix: pool === "background" ? "background:organization" : "organization",
   }),
   user: coordinationKey({
     scope: "action-admission",
     slot: organizationId,
-    suffix: `user:${userId}`,
+    suffix:
+      pool === "background" ? `background:user:${userId}` : `user:${userId}`,
   }),
 });
 
-const configuredPolicy = (): Result<
-  ActionAdmissionPolicy,
-  ActionAdmissionError
-> => {
-  const organizationConcurrency = env.ACTION_ADMISSION_ORG_CONCURRENCY;
-  const userConcurrency = env.ACTION_ADMISSION_USER_CONCURRENCY;
+const configuredPolicy = (
+  pool: "interactive" | "background",
+): Result<ActionAdmissionPolicy, ActionAdmissionError> => {
+  const organizationConcurrency =
+    pool === "background"
+      ? env.ACTION_ADMISSION_BACKGROUND_ORG_CONCURRENCY
+      : env.ACTION_ADMISSION_ORG_CONCURRENCY;
+  const userConcurrency =
+    pool === "background"
+      ? env.ACTION_ADMISSION_BACKGROUND_USER_CONCURRENCY
+      : env.ACTION_ADMISSION_USER_CONCURRENCY;
   const leaseMs = env.ACTION_ADMISSION_LEASE_MS;
   if (
     organizationConcurrency === undefined ||
@@ -188,6 +196,7 @@ type ActionAdmissionOptions = {
   enabled?: boolean;
   scope?: "inherit" | "independent";
   policy?: ActionAdmissionPolicy;
+  execution?: "queued-kickoff" | "background-job";
   periodIdentity?: AdmittedActionIdentity;
   periodPolicy?: ActionPeriodPolicy;
   redis?: RedisCommands;
@@ -206,6 +215,7 @@ type AdmissionScope = {
   userId: SafeId<"user">;
   signal: AbortSignal;
   status: "active" | "settled";
+  pool: "interactive" | "background";
 };
 
 const admissionScope = new AsyncLocalStorage<AdmissionScope>();
@@ -348,6 +358,49 @@ const validateAdmissionReply = (
   return Result.ok(undefined);
 };
 
+type AdmissionBudgetOptions = Pick<
+  ActionAdmissionOptions,
+  "organizationId" | "execution" | "periodIdentity" | "periodPolicy"
+>;
+
+const resolveAdmissionBudget = ({
+  organizationId,
+  execution,
+  periodIdentity,
+  periodPolicy,
+}: AdmissionBudgetOptions) => {
+  const resolvedBudget =
+    execution === "background-job"
+      ? Result.ok(null)
+      : resolveActionPeriodBudget({
+          organizationId,
+          identity: periodIdentity,
+          policy: periodPolicy,
+          nowMs: Temporal.Now.instant().epochMilliseconds,
+        });
+  if (Result.isError(resolvedBudget)) {
+    return Result.err(
+      new ActionAdmissionError({
+        message: resolvedBudget.error.message,
+        reason: "unavailable",
+        cause: resolvedBudget.error,
+      }),
+    );
+  }
+  const budget = resolvedBudget.value;
+  // A queued kickoff relinquishes its slot after enqueue; its period cap bounds backlog.
+  if (execution === "queued-kickoff" && budget === null) {
+    return Result.err(
+      new ActionAdmissionError({
+        message: "Queued action admission requires a configured period budget",
+        reason: "unavailable",
+      }),
+    );
+  }
+
+  return Result.ok(budget);
+};
+
 /**
  * The disabled branch never opens Valkey or reads admission configuration.
  * Nested admission must be awaited: same-caller work shares the parent's lease
@@ -362,6 +415,7 @@ export const withActionAdmission = async <T>({
   policy,
   periodIdentity,
   periodPolicy,
+  execution,
   redis,
   redisReady = admissionRedis.ready,
   createId = () => Bun.randomUUIDv7(),
@@ -376,27 +430,24 @@ export const withActionAdmission = async <T>({
     });
   }
 
-  const resolvedBudget = resolveActionPeriodBudget({
+  const pool = execution === "background-job" ? "background" : "interactive";
+  const resolvedBudget = resolveAdmissionBudget({
     organizationId,
-    identity: periodIdentity,
-    policy: periodPolicy,
-    nowMs: Temporal.Now.instant().epochMilliseconds,
+    execution,
+    periodIdentity,
+    periodPolicy,
   });
   if (Result.isError(resolvedBudget)) {
-    return Result.err(
-      new ActionAdmissionError({
-        message: resolvedBudget.error.message,
-        reason: "unavailable",
-        cause: resolvedBudget.error,
-      }),
-    );
+    return resolvedBudget;
   }
   const budget = resolvedBudget.value;
 
   const inherited = admissionScope.getStore();
   if (
     scope === "inherit" &&
+    execution === undefined &&
     inherited?.status === "active" &&
+    inherited.pool === pool &&
     inherited.organizationId === organizationId &&
     inherited.userId === userId
   ) {
@@ -411,12 +462,12 @@ export const withActionAdmission = async <T>({
   }
 
   const resolvedPolicy =
-    policy === undefined ? configuredPolicy() : Result.ok(policy);
+    policy === undefined ? configuredPolicy(pool) : Result.ok(policy);
   if (Result.isError(resolvedPolicy)) {
     return resolvedPolicy;
   }
   const limits = resolvedPolicy.value;
-  const keys = admissionKeys({ organizationId, userId });
+  const keys = admissionKeys({ organizationId, userId, pool });
   const leaseId = createId();
   const periodArgs = actionPeriodArguments(budget);
   const execute = createAdmissionExecutor({
@@ -520,6 +571,7 @@ export const withActionAdmission = async <T>({
     userId,
     signal: controller.signal,
     status: "active",
+    pool,
   };
   try {
     outcome = await Result.tryPromise({

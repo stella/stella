@@ -2,6 +2,7 @@ import { Result, TaggedError } from "better-result";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { flowRuns, flowRunSteps } from "@/api/db/schema";
+import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -12,6 +13,11 @@ import type {
   FlowStep,
   FlowTriggerSource,
 } from "@/api/lib/flows/flow-types";
+import {
+  runQueuedKickoff,
+  QUEUED_ACTION_KIND,
+} from "@/api/lib/rate-limit/queued-action-admission";
+import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 /**
  * Start a flow run: snapshot the definition, insert the run + all its step
@@ -148,7 +154,13 @@ export const startFlowRun = async ({
             id: { eq: definitionId },
             organizationId: { eq: organizationId },
           },
-          columns: { id: true, name: true, steps: true, enabled: true },
+          columns: {
+            id: true,
+            name: true,
+            steps: true,
+            enabled: true,
+            createdByUserId: true,
+          },
         }),
       ),
     );
@@ -183,41 +195,82 @@ export const startFlowRun = async ({
     }
 
     const runId = createSafeId<"flowRun">();
-    const rows = buildFlowRunRows({
-      runId,
-      workspaceId,
-      definitionId,
-      definition,
-      triggerSource,
-      inputEntityIds,
-    });
+    const actorId =
+      triggerSource.type === "manual"
+        ? triggerSource.userId
+        : definition.createdByUserId;
+    const createAndEnqueue = async (signal?: AbortSignal) =>
+      await Result.gen(async function* () {
+        const rows = buildFlowRunRows({
+          runId,
+          workspaceId,
+          definitionId,
+          definition,
+          triggerSource,
+          inputEntityIds,
+        });
 
-    yield* Result.await(
-      safeDb(async (tx) => {
-        await tx.insert(flowRuns).values(rows.run);
-        await tx.insert(flowRunSteps).values(rows.steps);
-      }),
-    );
+        signal?.throwIfAborted();
+        yield* Result.await(
+          safeDb(async (tx) => {
+            await tx.insert(flowRuns).values(rows.run);
+            await tx.insert(flowRunSteps).values(rows.steps);
+          }),
+        );
 
-    // Enqueue after the rows commit. A failure here leaves the run `pending`;
-    // the worker's boot reconciler re-enqueues its current step, so the run is
-    // never permanently stranded.
-    yield* Result.await(
+        signal?.throwIfAborted();
+        // Enqueue after the rows commit. A failure here leaves the run `pending`;
+        // the worker's boot reconciler re-enqueues its current step, so the run is
+        // never permanently stranded.
+        yield* Result.await(
+          Result.tryPromise({
+            try: async () =>
+              await enqueueStep({
+                runId,
+                stepIndex: 0,
+                ...(enqueueDelayMs !== undefined && {
+                  delayMs: enqueueDelayMs,
+                }),
+              }),
+            catch: (cause) =>
+              new FlowRunStartError({
+                reason: "enqueue-failed",
+                message: "Could not enqueue the flow run.",
+                cause,
+              }),
+          }),
+        );
+
+        return Result.ok({ runId, status: "pending" as const });
+      });
+    if (!env.FEATURE_ACTION_ADMISSION) {
+      return await createAndEnqueue();
+    }
+    if (!actorId) {
+      return Result.err(
+        new FlowRunStartError({
+          reason: "admission-refused",
+          message: "Flow run actor is unavailable",
+        }),
+      );
+    }
+    const started = yield* Result.await(
       Result.tryPromise({
         try: async () =>
-          await enqueueStep({
-            runId,
-            stepIndex: 0,
-            ...(enqueueDelayMs !== undefined && { delayMs: enqueueDelayMs }),
+          await runQueuedKickoff({
+            organizationId,
+            userId: brandPersistedUserId(actorId),
+            actionKind: QUEUED_ACTION_KIND.flow,
+            logicalPhaseId: runId,
+            run: createAndEnqueue,
           }),
         catch: (cause) =>
           new FlowRunStartError({
-            reason: "enqueue-failed",
-            message: "Could not enqueue the flow run.",
+            reason: "admission-refused",
+            message: "Flow action admission refused",
             cause,
           }),
       }),
     );
-
-    return Result.ok({ runId, status: "pending" as const });
+    return started;
   });

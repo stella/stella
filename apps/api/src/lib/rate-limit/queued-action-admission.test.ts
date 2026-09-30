@@ -1,0 +1,188 @@
+import { Result } from "better-result";
+import { DelayedError } from "bullmq";
+import { describe, expect, test } from "bun:test";
+
+import { env } from "@/api/env";
+import { toSafeId } from "@/api/lib/branded-types";
+
+import { ActionAdmissionError, withActionAdmission } from "./action-admission";
+import {
+  QUEUED_ACTION_KIND,
+  runBackgroundJob,
+  runQueuedKickoff,
+} from "./queued-action-admission";
+
+const organizationId = toSafeId<"organization">("queued_org");
+const userId = toSafeId<"user">("queued_user");
+const admissionPolicy = {
+  organizationConcurrency: 2,
+  userConcurrency: 2,
+  leaseMs: 120_000,
+};
+const periodPolicy = { periodMs: 86_400_000, limit: 10 };
+
+describe("queued action admission", () => {
+  test("defers a busy or unavailable background job without running it", async () => {
+    for (const reason of ["busy", "unavailable"] as const) {
+      let ran = false;
+      const delays: { timestamp: number; token: string | undefined }[] = [];
+      const admission: typeof withActionAdmission = async () =>
+        Result.err(
+          new ActionAdmissionError({
+            message: `admission ${reason}`,
+            reason,
+          }),
+        );
+      const controller = new AbortController();
+
+      const operation = runBackgroundJob({
+        organizationId,
+        userId,
+        job: {
+          token: "bull-lock-token",
+          moveToDelayed: async (timestamp, token) => {
+            delays.push({ timestamp, token });
+          },
+        },
+        signal: controller.signal,
+        now: () => 1234,
+        admission,
+        run: async () => {
+          ran = true;
+        },
+      });
+
+      await expect(operation).rejects.toBeInstanceOf(DelayedError);
+      expect(ran).toBe(false);
+      expect(delays).toHaveLength(1);
+      expect(delays.at(0)?.timestamp).toBeGreaterThan(1234);
+      expect(delays.at(0)?.token).toBe("bull-lock-token");
+    }
+  });
+
+  test("combines caller timeout and admission lease loss signals", async () => {
+    for (const source of ["job-timeout", "lease-loss"] as const) {
+      const lease = new AbortController();
+      const jobTimeout = new AbortController();
+      let executionSignal: AbortSignal | undefined;
+      const admission: typeof withActionAdmission = async ({ run }) =>
+        await Result.tryPromise({
+          try: async () => await run(lease.signal),
+          catch: (error: unknown) => error,
+        });
+
+      const result = await runBackgroundJob({
+        organizationId,
+        userId,
+        job: { moveToDelayed: async () => undefined },
+        signal: jobTimeout.signal,
+        admission,
+        run: async (signal) => {
+          executionSignal = signal;
+          return "started";
+        },
+      });
+
+      expect(result).toBe("started");
+      expect(executionSignal).toBeDefined();
+      const reason = new Error(source);
+      (source === "job-timeout" ? jobTimeout : lease).abort(reason);
+      expect(executionSignal?.aborted).toBe(true);
+      expect(executionSignal?.reason).toBe(reason);
+    }
+  });
+
+  test("feature flag off runs a queued kickoff without opening admission storage", async () => {
+    const previous = env.FEATURE_ACTION_ADMISSION;
+    env.FEATURE_ACTION_ADMISSION = false;
+    try {
+      await expect(
+        runQueuedKickoff({
+          organizationId,
+          userId,
+          actionKind: QUEUED_ACTION_KIND.flow,
+          logicalPhaseId: "manual-run:request-1",
+          run: async () => "completed",
+        }),
+      ).resolves.toBe("completed");
+    } finally {
+      env.FEATURE_ACTION_ADMISSION = previous;
+    }
+  });
+
+  test("queued kickoff sends its stable phase identity to admission", async () => {
+    const calls: Parameters<typeof withActionAdmission>[0][] = [];
+    const admission: typeof withActionAdmission = async (options) => {
+      calls.push(options);
+      return await Result.tryPromise({
+        try: async () => await options.run(new AbortController().signal),
+        catch: (error: unknown) => error,
+      });
+    };
+
+    await expect(
+      runQueuedKickoff({
+        organizationId,
+        userId,
+        actionKind: QUEUED_ACTION_KIND.extraction,
+        logicalPhaseId: "server-run-7",
+        admission,
+        run: async () => "accepted",
+      }),
+    ).resolves.toBe("accepted");
+
+    expect(calls).toHaveLength(1);
+    expect(calls.at(0)).toMatchObject({
+      execution: "queued-kickoff",
+      periodIdentity: {
+        actionKind: QUEUED_ACTION_KIND.extraction,
+        logicalPhaseId: "server-run-7",
+      },
+    });
+  });
+
+  test("holds the admission lease until planning and enqueue work settles", async () => {
+    const calls: string[][] = [];
+    const redis = {
+      send: async (_command: string, args: string[]) => {
+        calls.push(args);
+        return 1;
+      },
+    };
+    const planningStarted = Promise.withResolvers<undefined>();
+    const finishPlanningAndEnqueue = Promise.withResolvers<undefined>();
+    const admission: typeof withActionAdmission = (options) =>
+      withActionAdmission({
+        ...options,
+        enabled: true,
+        policy: admissionPolicy,
+        periodPolicy,
+        redis,
+      });
+
+    const operation = runQueuedKickoff({
+      organizationId,
+      userId,
+      actionKind: QUEUED_ACTION_KIND.flow,
+      logicalPhaseId: "manual-run:request-2",
+      admission,
+      run: async () => {
+        planningStarted.resolve(undefined);
+        await finishPlanningAndEnqueue.promise;
+        return "enqueued";
+      },
+    });
+
+    await planningStarted.promise;
+    expect(
+      calls.filter((args) => args.at(0)?.includes("ZREMRANGEBYSCORE")),
+    ).toHaveLength(1);
+    expect(calls.some((args) => args.at(0)?.includes("ZREM"))).toBe(false);
+
+    finishPlanningAndEnqueue.resolve(undefined);
+    await expect(operation).resolves.toBe("enqueued");
+    expect(calls.filter((args) => args.at(0)?.includes("ZREM"))).toHaveLength(
+      1,
+    );
+  });
+});
