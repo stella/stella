@@ -92,6 +92,20 @@ export const createDevQuickStartRuntime = () => {
   };
 };
 
+export const startDevQuickStartAttempt = (
+  attempt: DevQuickStartAttempt,
+  createIdentity: () => DevQuickStartIdentity,
+): DevQuickStartAttempt => {
+  if (attempt.completedPhase !== DEV_QUICK_START_PHASE.matters) {
+    return attempt;
+  }
+  return {
+    completedPhase: null,
+    identity: createIdentity(),
+    organizationId: null,
+  };
+};
+
 type ResolveDevQuickStartOrganizationOptions = {
   identity: DevQuickStartIdentity;
   listOrganizations: () => Promise<readonly { id: string; slug: string }[]>;

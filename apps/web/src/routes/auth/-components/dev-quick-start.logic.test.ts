@@ -9,6 +9,7 @@ import {
   type DevQuickStartPhase,
   resolveDevQuickStartOrganization,
   runDevQuickStart,
+  startDevQuickStartAttempt,
 } from "./dev-quick-start.logic";
 
 const RANDOM_ID = "018f1f7e-89ab-7def-8123-456789abcdef";
@@ -26,6 +27,98 @@ describe("createDevQuickStartIdentity", () => {
 });
 
 describe("quick-start run ownership", () => {
+  test("an explicit start replaces a stored or cached completed attempt with a new org and seed", async () => {
+    const completedAttempt = {
+      completedPhase: DEV_QUICK_START_PHASE.matters,
+      identity: createDevQuickStartIdentity(RANDOM_ID),
+      organizationId: ORGANIZATION_ID,
+    } satisfies DevQuickStartAttempt;
+    const nextIdentity = createDevQuickStartIdentity(
+      "118f1f7e-89ab-7def-8123-456789abcdef",
+    );
+    expect(nextIdentity.organizationSlug).not.toBe(
+      completedAttempt.identity.organizationSlug,
+    );
+    expect(nextIdentity.selectionSeed).not.toBe(
+      completedAttempt.identity.selectionSeed,
+    );
+
+    for (const source of ["stored", "cached"] as const) {
+      const runtime = createDevQuickStartRuntime();
+      if (source === "cached") {
+        runtime.setAttempt(completedAttempt);
+      }
+      let generatedIdentities = 0;
+      const freshAttempt = startDevQuickStartAttempt(
+        runtime.getAttempt(() => completedAttempt),
+        () => {
+          generatedIdentities += 1;
+          return nextIdentity;
+        },
+      );
+      runtime.setAttempt(freshAttempt);
+      expect(freshAttempt).toEqual({
+        completedPhase: null,
+        identity: nextIdentity,
+        organizationId: null,
+      });
+      expect(freshAttempt.identity.email).toBe(completedAttempt.identity.email);
+      expect(generatedIdentities).toBe(1);
+
+      const calls: string[] = [];
+      await runDevQuickStart({
+        attempt: freshAttempt,
+        authenticate: async (identity) => {
+          expect(identity).toBe(nextIdentity);
+          calls.push("authenticate");
+        },
+        createOrganization: async (identity) => {
+          expect(identity).toBe(nextIdentity);
+          calls.push("organization");
+          return "fresh-organization";
+        },
+        onAttemptUpdated: runtime.setAttempt,
+        onPhase: runtime.setPhase,
+        startMatterImport: async ({ selectionSeed }, organizationId) => {
+          expect(selectionSeed).toBe(nextIdentity.selectionSeed);
+          expect(organizationId).toBe("fresh-organization");
+          calls.push("matters");
+        },
+      });
+      expect(calls).toEqual(["authenticate", "organization", "matters"]);
+      expect(runtime.getAttempt(() => completedAttempt)).toEqual({
+        completedPhase: DEV_QUICK_START_PHASE.matters,
+        identity: nextIdentity,
+        organizationId: "fresh-organization",
+      });
+    }
+  });
+
+  test("an explicit start resumes every unfinished phase without generating another identity", () => {
+    for (const completedPhase of [
+      null,
+      DEV_QUICK_START_PHASE.authenticate,
+      DEV_QUICK_START_PHASE.organization,
+    ]) {
+      const attempt = {
+        completedPhase,
+        identity: createDevQuickStartIdentity(RANDOM_ID),
+        organizationId:
+          completedPhase === DEV_QUICK_START_PHASE.organization
+            ? ORGANIZATION_ID
+            : null,
+      } satisfies DevQuickStartAttempt;
+      let generatedIdentities = 0;
+      const resumed = startDevQuickStartAttempt(attempt, () => {
+        generatedIdentities += 1;
+        return createDevQuickStartIdentity("unexpected-identity");
+      });
+
+      expect(resumed).toBe(attempt);
+      expect(generatedIdentities).toBe(0);
+    }
+  });
+
   test("shares one flight and its progress across concurrent continuation starts", async () => {
     const runtime = createDevQuickStartRuntime();
     const blockedImport = Promise.withResolvers<undefined>();

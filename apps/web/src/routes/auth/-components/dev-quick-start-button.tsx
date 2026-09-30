@@ -30,6 +30,7 @@ import {
   type DevQuickStartPhase,
   resolveDevQuickStartOrganization,
   runDevQuickStart,
+  startDevQuickStartAttempt,
 } from "./dev-quick-start.logic";
 
 const QUICK_START_MATTER_COUNT = 3;
@@ -179,15 +180,19 @@ export const DevQuickStartButton = ({ redirectTo }: { redirectTo: string }) => {
   const currentPhaseLabel = phase === null ? null : PHASE_LABELS[phase];
 
   const runQuickStart = async () => {
-    const attempt = devQuickStartRuntime.getAttempt(
+    const createIdentity = () =>
+      createDevQuickStartIdentity(crypto.randomUUID());
+    const retainedAttempt = devQuickStartRuntime.getAttempt(
       () =>
         readDevQuickStartAttempt() ??
         ({
           completedPhase: null,
-          identity: createDevQuickStartIdentity(crypto.randomUUID()),
+          identity: createIdentity(),
           organizationId: null,
         } satisfies DevQuickStartAttempt),
     );
+    const attempt = startDevQuickStartAttempt(retainedAttempt, createIdentity);
+    devQuickStartRuntime.setAttempt(attempt);
     writeDevQuickStartAttempt(attempt);
     devQuickStartRuntime.setPhase(DEV_QUICK_START_PHASE.authenticate);
 
