@@ -37,7 +37,8 @@
     "@stll/api": "workspace:*",
     "@stll/legal-atlas": "workspace:*",
     "@stll/time": "workspace:*",
-    "better-result": "catalog:"
+    "better-result": "catalog:",
+    "drizzle-orm": "catalog:"
   },
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",

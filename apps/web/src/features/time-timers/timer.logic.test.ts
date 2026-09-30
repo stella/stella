@@ -96,13 +96,21 @@ describe("one running timer", () => {
     expect(runningTimer([running, paused])).toBe(running);
   });
 
-  test("rejects multiple running timers", () => {
-    expect(() =>
-      runningTimer([
-        running,
-        { ...running, id: toSafeId<"timeTimer">("timer-other") },
-      ]),
-    ).toThrow("Multiple running timers returned for one user");
+  test("selects the latest resume from overlapping page snapshots regardless of page order", () => {
+    const latest = {
+      ...running,
+      id: toSafeId<"timeTimer">("timer-other"),
+      lastResumedAt: "2026-09-30T14:00:01+02:00",
+    };
+    for (const timers of [
+      [running, latest, paused],
+      [latest, paused, running],
+    ]) {
+      const before = [...timers];
+      expect(runningTimer(timers)).toBe(latest);
+      expect(runningTimer(timers)).toBe(latest);
+      expect(timers).toEqual(before);
+    }
   });
 });
 

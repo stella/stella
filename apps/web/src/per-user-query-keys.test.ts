@@ -382,6 +382,10 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     files: ["lib/workspaces/queries/time-entries.ts"],
     keys: () => [timeEntriesKeys.list(WORKSPACE, USER, {})],
   },
+  "time-entries/approval-queue/list.ts": {
+    kind: "no-web-caller",
+    calls: ['api["time-entries"]["approval-queue"].get'],
+  },
   "time-entries/me/list.ts": {
     kind: "keyed",
     calls: ["myTimeEntriesApi.get"],

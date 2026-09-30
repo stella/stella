@@ -1,5 +1,7 @@
 import { Panic, UnhandledException } from "better-result";
 
+import { DocxArchiveError } from "@stll/docx-utils";
+
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 /** How far a typed status is followed through transport wrappers. */
@@ -17,6 +19,31 @@ const isTransportWrapper = (
 ): value is Panic | UnhandledException =>
   TRANSPORT_WRAPPERS.some((wrapper) => wrapper.is(value));
 
+const archiveHandlerError = (error: unknown): HandlerError<422> | null => {
+  let candidate = error;
+  for (let depth = 0; depth <= MAX_TRANSPORT_WRAPPER_DEPTH; depth++) {
+    if (DocxArchiveError.is(candidate)) {
+      return new HandlerError({
+        status: 422,
+        message: "Invalid archive",
+        cause: candidate,
+      });
+    }
+    if (HandlerError.is(candidate)) {
+      if (candidate.status !== 500) {
+        return null;
+      }
+      candidate = candidate.cause;
+      continue;
+    }
+    if (!isTransportWrapper(candidate)) {
+      return null;
+    }
+    candidate = candidate.cause;
+  }
+  return null;
+};
+
 /**
  * The typed `HandlerError` an error carries, or null.
  *
@@ -29,6 +56,10 @@ const isTransportWrapper = (
  * pipeline answers it.
  */
 export const resolveHandlerError = (error: unknown): HandlerError | null => {
+  const archive = archiveHandlerError(error);
+  if (archive !== null) {
+    return archive;
+  }
   let candidate = error;
   for (let depth = 0; depth <= MAX_TRANSPORT_WRAPPER_DEPTH; depth++) {
     if (HandlerError.is(candidate)) {

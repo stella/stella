@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { TaggedError } from "better-result";
 import { useFormatter, useNow, useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
@@ -23,7 +24,9 @@ import {
   runningTimer,
   type TimeTimer,
 } from "@/features/time-timers/timer.logic";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
@@ -33,6 +36,13 @@ type TimerPanelState =
   | { type: "start" }
   | { type: "confirm"; timer: TimeTimer };
 
+class TimerSnapshotConflictError extends TaggedError(
+  "TimerSnapshotConflictError",
+)<{
+  message: string;
+  runningCount: number;
+}> {}
+
 export const GlobalTimerContent = ({
   workspaceId,
 }: {
@@ -41,6 +51,7 @@ export const GlobalTimerContent = ({
   const t = useTranslations();
   const format = useFormatter();
   const user = useAuthenticatedUser();
+  const analytics = useAnalytics();
   const now = useNow({ updateInterval: 1000 }).getTime();
   const [open, setOpen] = useState(false);
   const [panel, setPanel] = useState<TimerPanelState>({ type: "list" });
@@ -57,6 +68,18 @@ export const GlobalTimerContent = ({
   const timerItems = timers.data?.pages.flatMap((page) => page.items);
   const active =
     timerItems === undefined ? undefined : runningTimer(timerItems);
+  const runningCount =
+    timerItems?.filter((timer) => timer.state === "running").length ?? 0;
+  useExternalSyncEffect(() => {
+    if (runningCount > 1) {
+      analytics.captureError(
+        new TimerSnapshotConflictError({
+          message: "Multiple running timers in paginated snapshot",
+          runningCount,
+        }),
+      );
+    }
+  }, [analytics, runningCount]);
   const elapsed = (timer: TimeTimer) =>
     formatTimerSeconds({
       seconds: elapsedTimerSeconds(timer, now),

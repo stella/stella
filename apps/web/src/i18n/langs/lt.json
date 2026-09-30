@@ -862,6 +862,7 @@
         "publishedOnWeb": "Paskelbta internete"
       },
       "statutes": "Taikomi teisės aktai",
+      "textNotYetAvailable": "Teismas nepaskelbė sprendimo teksto arba jis čia dar neprieinamas.",
       "textPending": "Sprendimo tekstas dar gaunamas",
       "textReadFailed": "Nepavyko įkelti sprendimo teksto",
       "textUnavailable": "Šiam sprendimui teksto nėra"
@@ -2283,7 +2284,8 @@
     "compareUnsupportedReasons": {
       "missingInBase": "Dokumento dalis egzistuoja tik taikinyje",
       "missingInTarget": "Dokumento dalis egzistuoja tik bazėje",
-      "notEditable": "Dokumento dalis neredaguojama"
+      "notEditable": "Dokumento dalis neredaguojama",
+      "unsupportedContent": "Šioje versijoje yra turinio, kurio dar negalima palyginti."
     },
     "compareUnverified": "Nepatvirtintas palyginimas",
     "compareVerificationFailures": "{count, plural, one {Vienas abipusis patikrinimas nepavyko. Prieš pasikliaudami rezultatu, peržiūrėkite palyginimą.} few {Nepavyko # abipusiai patikrinimai. Prieš pasikliaudami rezultatu, peržiūrėkite palyginimą.} other {Nepavyko # abipusių patikrinimų. Prieš pasikliaudami rezultatu, peržiūrėkite palyginimą.}}",
@@ -4331,6 +4333,20 @@
       "renameDescription": "Nariai naują pavadinimą matys iš karto.",
       "renameTitle": "Pervadinti organizaciją",
       "renameTypeToConfirm": "Norėdami patvirtinti, įveskite naują pavadinimą: {name}",
+      "timePolicy": {
+        "description": "Nustatykite laiko apvalinimą, redagavimo terminus ir mėnesių užrakinimą.",
+        "editWindow": "Redagavimo terminas (dienomis)",
+        "editWindowHelp": "Nulis leidžia redaguoti tik darbo atlikimo dieną.",
+        "invalidEditWindow": "Įveskite sveikąjį dienų skaičių, lygų nuliui arba didesnį.",
+        "invalidLockedMonth": "Pasirinkite jau pasibaigusį mėnesį.",
+        "invalidMinimumUnit": "Pasirinkite laiko vienetą, iš kurio 60 minučių dalijasi be liekanos.",
+        "lockedThrough": "Užrakinta iki",
+        "lockedThroughHelp": "Šio ir ankstesnių mėnesių įrašų redaguoti negalima.",
+        "minimumUnit": "Mažiausias laiko vienetas",
+        "minimumUnitHelp": "Laikas apmokestinamas šio minučių skaičiaus kartotiniais.",
+        "narrativeRequired": "Reikalauti aprašo",
+        "title": "Laiko apskaitos taisyklės"
+      },
       "usage": "Naudojimas",
       "usageDescription": "Šios organizacijos naudojimo limitai ir teisės būsena",
       "usageEmptyDescription": "Sukonfigūruokite naudojimo teisę, kad šiai organizacijai būtų įjungtos matuojamos DI funkcijos.",
@@ -5028,6 +5044,11 @@
     "whenNotToUsePlaceholder": "Kada šio šablono vengti?",
     "whenToUse": "Kada naudoti",
     "whenToUsePlaceholder": "Kada turėtų būti naudojamas šis šablonas? (padeda DI pasirinkti šabloną)"
+  },
+  "timesheets": {
+    "day": {
+      "internalWork": "Vidaus darbas"
+    }
   },
   "translate": {
     "dialog": {

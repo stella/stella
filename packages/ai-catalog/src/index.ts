@@ -161,6 +161,20 @@ export const FIRST_PARTY_MODEL_PROVIDERS: Exclude<
   : never = FIRST_PARTY_MODEL_PROVIDER_VALUES;
 
 /**
+ * Provider IDs for the GPT-6.1 family, kept in one row per member like GPT-6
+ * below.
+ */
+const GPT_61_MODEL_IDS = {
+  sol: { openai: "gpt-6.1-sol", openrouter: "openai/gpt-6.1-sol" },
+} as const;
+const GPT_61_OPENAI_MODEL_IDS = Object.values(GPT_61_MODEL_IDS).map(
+  ({ openai }) => openai,
+);
+const GPT_61_OPENROUTER_MODEL_IDS = Object.values(GPT_61_MODEL_IDS).map(
+  ({ openrouter }) => openrouter,
+);
+
+/**
  * Provider IDs for the GPT-6 family. Like GPT-5.6 below, one row feeds both
  * the OpenAI and the OpenRouter picker.
  */
@@ -300,6 +314,7 @@ export const BYOK_MODEL_OPTIONS = {
     "claude-haiku-4-5-20251001",
   ],
   openai: [
+    ...GPT_61_OPENAI_MODEL_IDS,
     ...GPT_6_OPENAI_MODEL_IDS,
     ...GPT_56_OPENAI_MODEL_IDS,
     "gpt-5.5",
@@ -309,6 +324,7 @@ export const BYOK_MODEL_OPTIONS = {
     "gpt-5.2",
   ],
   openrouter: [
+    ...GPT_61_OPENROUTER_MODEL_IDS,
     ...GPT_6_OPENROUTER_MODEL_IDS,
     ...GPT_56_OPENROUTER_MODEL_IDS,
     "google/gemini-3.8-flash",
@@ -443,6 +459,10 @@ export const MODEL_DISPLAY_METADATA = {
     displayName: "Claude Haiku 4.5",
     iconProvider: "anthropic",
   },
+  [GPT_61_MODEL_IDS.sol.openai]: {
+    displayName: "GPT-6.1 Sol",
+    iconProvider: "openai",
+  },
   [GPT_6_MODEL_IDS.astra.openai]: {
     displayName: "GPT-6 Astra",
     iconProvider: "openai",
@@ -480,6 +500,10 @@ export const MODEL_DISPLAY_METADATA = {
     iconProvider: "openai",
   },
   "gpt-5.2": { displayName: "GPT-5.2", iconProvider: "openai" },
+  [GPT_61_MODEL_IDS.sol.openrouter]: {
+    displayName: "GPT-6.1 Sol",
+    iconProvider: "openai",
+  },
   [GPT_6_MODEL_IDS.astra.openrouter]: {
     displayName: "GPT-6 Astra",
     iconProvider: "openai",
@@ -934,6 +958,7 @@ export const MODEL_STREAMING_TOOL_USE = {
   "gemini-3.1-pro-preview": "supported",
   "gemini-3.5-flash": "supported",
   "gemini-3.1-flash-lite": "supported",
+  "openai/gpt-6.1-sol": "supported",
   "openai/gpt-6-astra": "supported",
   "openai/gpt-6-sol": "supported",
   "openai/gpt-6-luna": "supported",
@@ -954,6 +979,7 @@ export const MODEL_STREAMING_TOOL_USE = {
   "anthropic/claude-sonnet-4.6": "supported",
   "openai/gpt-5.5": "supported",
   "openai/gpt-5.4-mini": "supported",
+  "gpt-6.1-sol": "supported",
   "gpt-6-astra": "supported",
   "gpt-6-sol": "supported",
   "gpt-6-luna": "supported",
@@ -1166,6 +1192,7 @@ export const CONTEXT_WINDOW_TOKENS = {
   "gpt-5.4-mini": 400_000,
   "gpt-5.4": 400_000,
   "gpt-5.5": 400_000,
+  "gpt-6.1-sol": 922_000,
   "gpt-6-astra": 922_000,
   "gpt-6-sol": 922_000,
   "gpt-6-luna": 922_000,
@@ -1204,6 +1231,7 @@ export const CONTEXT_WINDOW_TOKENS = {
   "anthropic/claude-opus-5": 1_000_000,
   "anthropic/claude-opus-4.8": 200_000,
   "anthropic/claude-sonnet-4.6": 200_000,
+  "openai/gpt-6.1-sol": 922_000,
   "openai/gpt-6-astra": 922_000,
   "openai/gpt-6-sol": 922_000,
   "openai/gpt-6-luna": 922_000,

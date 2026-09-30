@@ -69,6 +69,24 @@ type OnlineIndex = RequiredMigrationIndex & {
 export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   {
     createSql:
+      'CREATE INDEX CONCURRENTLY "time_entries_org_status_date_id_idx" ON public."time_entries" USING btree ("organization_id", "status", "date_worked", "id")',
+    definitionBody:
+      "ON public.time_entries USING btree (organization_id, status, date_worked, id)",
+    isUnique: false,
+    name: "time_entries_org_status_date_id_idx",
+    tableName: "time_entries",
+  },
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "time_entries_approval_queue_idx" ON public."time_entries" USING btree ("organization_id", "approver_user_id", "status", "date_worked", "id") WHERE "status" = \'draft\'',
+    definitionBody:
+      "ON public.time_entries USING btree (organization_id, approver_user_id, status, date_worked, id) WHERE (status = 'draft'::text)",
+    isUnique: false,
+    name: "time_entries_approval_queue_idx",
+    tableName: "time_entries",
+  },
+  {
+    createSql:
       'CREATE UNIQUE INDEX CONCURRENTLY "invoices_id_workspace_unique" ON public."invoices" USING btree ("id", "workspace_id")',
     definitionBody: "ON public.invoices USING btree (id, workspace_id)",
     isUnique: true,
@@ -233,6 +251,15 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     isUnique: true,
     name: "chat_turns_org_run_id_uidx",
     tableName: "chat_turns",
+  },
+  {
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "case_law_ingestion_failures_source_record_uidx" ON public."case_law_ingestion_failures" USING btree ("source_id", "record_identity") WHERE "record_identity" IS NOT NULL',
+    definitionBody:
+      "ON public.case_law_ingestion_failures USING btree (source_id, record_identity) WHERE (record_identity IS NOT NULL)",
+    isUnique: true,
+    name: "case_law_ingestion_failures_source_record_uidx",
+    tableName: "case_law_ingestion_failures",
   },
   ...REWRITTEN_MIGRATION_INDEXES,
 ];

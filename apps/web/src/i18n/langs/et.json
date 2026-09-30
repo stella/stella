@@ -862,6 +862,7 @@
         "publishedOnWeb": "Veebis avaldatud"
       },
       "statutes": "Kohaldatavad õigusaktid",
+      "textNotYetAvailable": "Kohus ei ole lahendi teksti avaldanud või ei ole see siin veel kättesaadav.",
       "textPending": "Lahendi teksti alles hangitakse",
       "textReadFailed": "Lahendi teksti ei õnnestunud laadida",
       "textUnavailable": "Selle lahendi teksti ei ole saadaval"
@@ -2283,7 +2284,8 @@
     "compareUnsupportedReasons": {
       "missingInBase": "Dokumendiosa eksisteerib ainult sihtmärgis",
       "missingInTarget": "Dokumendiosa eksisteerib ainult baasis",
-      "notEditable": "Dokumendi osa ei ole redigeeritav"
+      "notEditable": "Dokumendi osa ei ole redigeeritav",
+      "unsupportedContent": "See versioon sisaldab sisu, mida ei saa veel võrrelda."
     },
     "compareUnverified": "Kontrollimata võrdlus",
     "compareVerificationFailures": "{count, plural, one {Üks edasi-tagasi kontroll ebaõnnestus. Vaadake võrdlus enne sellele tuginemist üle.} other {# edasi-tagasi kontrolli ebaõnnestus. Vaadake võrdlus enne sellele tuginemist üle.}}",
@@ -4331,6 +4333,20 @@
       "renameDescription": "Liikmed näevad uut nime kohe.",
       "renameTitle": "Nimeta organisatsioon ümber",
       "renameTypeToConfirm": "Kinnitamiseks sisesta uus nimi: {name}",
+      "timePolicy": {
+        "description": "Määrake aja ümardamine, muutmise tähtajad ja kuude lukustamine.",
+        "editWindow": "Muutmise tähtaeg (päevades)",
+        "editWindowHelp": "Null lubab muudatusi ainult töö tegemise kuupäeval.",
+        "invalidEditWindow": "Sisestage päevade arv täisarvuna, null või rohkem.",
+        "invalidLockedMonth": "Valige juba lõppenud kuu.",
+        "invalidMinimumUnit": "Valige ajaühik, mis jagab 60 minutit jäägita.",
+        "lockedThrough": "Lukustatud kuni",
+        "lockedThroughHelp": "Selle kuu ja varasemate kuude kandeid ei saa muuta.",
+        "minimumUnit": "Väikseim ajaühik",
+        "minimumUnitHelp": "Aega arveldatakse selle minutite arvu kordsetena.",
+        "narrativeRequired": "Nõua selgitust",
+        "title": "Ajaarvestuse reeglid"
+      },
       "usage": "Kasutus",
       "usageDescription": "Selle organisatsiooni kasutuslimiidid ja õiguse olek",
       "usageEmptyDescription": "Seadista kasutusõigus, et lubada selles organisatsioonis mõõdetud AI-funktsioonid.",
@@ -5028,6 +5044,11 @@
     "whenNotToUsePlaceholder": "Millal tuleks seda malli vältida?",
     "whenToUse": "Millal kasutada",
     "whenToUsePlaceholder": "Millal tuleks seda malli kasutada? (aitab AI-l malli valida)"
+  },
+  "timesheets": {
+    "day": {
+      "internalWork": "Sisemine töö"
+    }
   },
   "translate": {
     "dialog": {

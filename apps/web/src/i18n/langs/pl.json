@@ -862,6 +862,7 @@
         "publishedOnWeb": "Opublikowano w sieci"
       },
       "statutes": "Powołane przepisy",
+      "textNotYetAvailable": "Sąd nie opublikował treści orzeczenia lub nie jest ona jeszcze tutaj dostępna.",
       "textPending": "Tekst orzeczenia jest wciąż pobierany",
       "textReadFailed": "Nie udało się wczytać tekstu orzeczenia",
       "textUnavailable": "Do tego orzeczenia nie ma dostępnego tekstu"
@@ -2283,7 +2284,8 @@
     "compareUnsupportedReasons": {
       "missingInBase": "Część dokumentu istnieje tylko w miejscu docelowym",
       "missingInTarget": "Część dokumentu istnieje tylko w bazie",
-      "notEditable": "Część dokumentu nie podlega edycji"
+      "notEditable": "Część dokumentu nie podlega edycji",
+      "unsupportedContent": "Ta wersja zawiera treść, której nie można jeszcze porównać."
     },
     "compareUnverified": "Niesprawdzone porównanie",
     "compareVerificationFailures": "{count, plural, one {Jedna kontrola dwukierunkowa nie powiodła się. Sprawdź porównanie, zanim na nim polegasz.} few {# kontrole dwukierunkowe nie powiodły się. Sprawdź porównanie, zanim na nim polegasz.} many {# kontroli dwukierunkowych nie powiodło się. Sprawdź porównanie, zanim na nim polegasz.} other {# kontroli dwukierunkowych nie powiodło się. Sprawdź porównanie, zanim na nim polegasz.}}",
@@ -4331,6 +4333,20 @@
       "renameDescription": "Członkowie od razu zobaczą nową nazwę.",
       "renameTitle": "Zmień nazwę organizacji",
       "renameTypeToConfirm": "Aby potwierdzić, wpisz nową nazwę: {name}",
+      "timePolicy": {
+        "description": "Ustaw zaokrąglanie czasu, terminy edycji i blokady miesięcy.",
+        "editWindow": "Termin edycji (dni)",
+        "editWindowHelp": "Zero pozwala na edycję tylko w dniu wykonania pracy.",
+        "invalidEditWindow": "Wprowadź całkowitą liczbę dni, równą zero lub większą.",
+        "invalidLockedMonth": "Wybierz zakończony miesiąc.",
+        "invalidMinimumUnit": "Wybierz jednostkę czasu, która dzieli 60 minut bez reszty.",
+        "lockedThrough": "Zablokowane do",
+        "lockedThroughHelp": "Wpisów z tego miesiąca i wcześniejszych miesięcy nie można edytować.",
+        "minimumUnit": "Minimalna jednostka czasu",
+        "minimumUnitHelp": "Czas jest rozliczany w wielokrotnościach tej liczby minut.",
+        "narrativeRequired": "Wymagaj opisu",
+        "title": "Zasady ewidencji czasu"
+      },
       "usage": "Użycie",
       "usageDescription": "Limity użycia i stan uprawnień tej organizacji",
       "usageEmptyDescription": "Skonfiguruj uprawnienie do użycia, aby włączyć mierzone funkcje AI w tej organizacji.",
@@ -5028,6 +5044,11 @@
     "whenNotToUsePlaceholder": "Kiedy unikać tego szablonu?",
     "whenToUse": "Kiedy używać",
     "whenToUsePlaceholder": "Kiedy należy używać tego szablonu? (pomaga AI w wyborze szablonu)"
+  },
+  "timesheets": {
+    "day": {
+      "internalWork": "Praca wewnętrzna"
+    }
   },
   "translate": {
     "dialog": {

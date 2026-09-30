@@ -49,10 +49,17 @@ export const formatTimerSeconds = ({
 
 export const runningTimer = (timers: TimeTimer[]) => {
   const running = timers.filter((timer) => timer.state === "running");
-  if (running.length > 1) {
-    return panic("Multiple running timers returned for one user");
-  }
-  return running.at(0);
+  return running
+    .map((timer) => {
+      if (timer.lastResumedAt === null) {
+        return panic("Running timer has no resume timestamp");
+      }
+      return { timer, resumedAt: Temporal.Instant.from(timer.lastResumedAt) };
+    })
+    .toSorted((left, right) =>
+      Temporal.Instant.compare(right.resumedAt, left.resumedAt),
+    )
+    .at(0)?.timer;
 };
 
 const TIMER_REFUSALS = {

@@ -862,6 +862,7 @@
         "publishedOnWeb": "Publicēts tīmeklī"
       },
       "statutes": "Piemērojamie tiesību akti",
+      "textNotYetAvailable": "Tiesa nav publicējusi nolēmuma tekstu, vai tas šeit vēl nav pieejams.",
       "textPending": "Nolēmuma teksts vēl tiek saņemts",
       "textReadFailed": "Nolēmuma tekstu neizdevās ielādēt",
       "textUnavailable": "Šim nolēmumam teksts nav pieejams"
@@ -2283,7 +2284,8 @@
     "compareUnsupportedReasons": {
       "missingInBase": "Dokumenta daļa pastāv tikai mērķī",
       "missingInTarget": "Dokumenta daļa pastāv tikai bāzē",
-      "notEditable": "Dokumenta daļa nav rediģējama"
+      "notEditable": "Dokumenta daļa nav rediģējama",
+      "unsupportedContent": "Šajā versijā ir saturs, ko pagaidām nevar salīdzināt."
     },
     "compareUnverified": "Nepārbaudīts salīdzinājums",
     "compareVerificationFailures": "{count, plural, zero {Neviena divvirzienu pārbaude neizdevās.} one {Viena divvirzienu pārbaude neizdevās. Pārskatiet salīdzinājumu, pirms uz to paļaujaties.} other {# divvirzienu pārbaudes neizdevās. Pārskatiet salīdzinājumu, pirms uz to paļaujaties.}}",
@@ -4331,6 +4333,20 @@
       "renameDescription": "Dalībnieki jauno nosaukumu redzēs uzreiz.",
       "renameTitle": "Pārdēvēt organizāciju",
       "renameTypeToConfirm": "Lai apstiprinātu, ievadiet jauno nosaukumu: {name}",
+      "timePolicy": {
+        "description": "Iestatiet laika noapaļošanu, rediģēšanas termiņus un mēnešu bloķēšanu.",
+        "editWindow": "Rediģēšanas termiņš (dienas)",
+        "editWindowHelp": "Nulle atļauj rediģēšanu tikai darba veikšanas datumā.",
+        "invalidEditWindow": "Ievadiet veselu dienu skaitu, kas ir nulle vai lielāks.",
+        "invalidLockedMonth": "Izvēlieties jau noslēgušos mēnesi.",
+        "invalidMinimumUnit": "Izvēlieties laika vienību, ar kuru 60 minūtes dalās bez atlikuma.",
+        "lockedThrough": "Bloķēts līdz",
+        "lockedThroughHelp": "Šī mēneša un iepriekšējo mēnešu ierakstus nevar rediģēt.",
+        "minimumUnit": "Minimālā laika vienība",
+        "minimumUnitHelp": "Laiku rēķinā iekļauj šī minūšu skaita daudzkārtņos.",
+        "narrativeRequired": "Pieprasīt aprakstu",
+        "title": "Laika uzskaites noteikumi"
+      },
       "usage": "Lietojums",
       "usageDescription": "Šīs organizācijas lietojuma limiti un tiesību statuss",
       "usageEmptyDescription": "Konfigurējiet lietojuma tiesības, lai šai organizācijai iespējotu mērītas AI funkcijas.",
@@ -5028,6 +5044,11 @@
     "whenNotToUsePlaceholder": "Kad no šīs veidnes izvairīties?",
     "whenToUse": "Kad izmantot",
     "whenToUsePlaceholder": "Kad šī veidne būtu jāizmanto? (palīdz AI izvēlēties veidni)"
+  },
+  "timesheets": {
+    "day": {
+      "internalWork": "Iekšējais darbs"
+    }
   },
   "translate": {
     "dialog": {

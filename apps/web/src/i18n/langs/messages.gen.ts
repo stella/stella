@@ -865,6 +865,7 @@ type Messages = {
         "publishedOnWeb": "Published on web";
       };
       "statutes": "Applicable statutes";
+      "textNotYetAvailable": "The court has not published the decision text, or it is not available here yet.";
       "textPending": "The decision text is still being retrieved";
       "textReadFailed": "The decision text could not be loaded";
       "textUnavailable": "No text is available for this decision";
@@ -2287,6 +2288,7 @@ type Messages = {
       "missingInBase": "Document part exists only in the target";
       "missingInTarget": "Document part exists only in the base";
       "notEditable": "Document part is not editable";
+      "unsupportedContent": "This version contains content that can't be compared yet.";
     };
     "compareUnverified": "Unverified comparison";
     "compareVerificationFailures": "{count, plural, one {One round-trip check failed. Review this comparison before relying on it.} other {# round-trip checks failed. Review this comparison before relying on it.}}";
@@ -4334,6 +4336,20 @@ type Messages = {
       "renameDescription": "Members will see the new name immediately.";
       "renameTitle": "Rename organization";
       "renameTypeToConfirm": "Type the new name to confirm: {name}";
+      "timePolicy": {
+        "description": "Set time rounding, editing limits and monthly locks.";
+        "editWindow": "Editing window (days)";
+        "editWindowHelp": "Zero allows edits only on the work date.";
+        "invalidEditWindow": "Enter a whole number of days, zero or more.";
+        "invalidLockedMonth": "Choose a completed month.";
+        "invalidMinimumUnit": "Choose a time unit that divides 60 minutes.";
+        "lockedThrough": "Locked through";
+        "lockedThroughHelp": "Entries in this month and earlier months cannot be edited.";
+        "minimumUnit": "Minimum time unit";
+        "minimumUnitHelp": "Time is billed in multiples of this many minutes.";
+        "narrativeRequired": "Require a narrative";
+        "title": "Time policy";
+      };
       "usage": "Usage";
       "usageDescription": "Usage limits and entitlement state for this organisation";
       "usageEmptyDescription": "Configure a usage entitlement to enable metered AI features for this organisation.";
@@ -5031,6 +5047,11 @@ type Messages = {
     "whenNotToUsePlaceholder": "When should this template be avoided?";
     "whenToUse": "When to use";
     "whenToUsePlaceholder": "When should this template be used? (guides AI template selection)";
+  };
+  "timesheets": {
+    "day": {
+      "internalWork": "Internal work";
+    };
   };
   "translate": {
     "dialog": {
