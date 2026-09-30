@@ -1202,7 +1202,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     });
   });
 
-  test("reports a run's prompt-cache hit rate over every model call, once, for a measured surface", async () => {
+  test("reports each model call's prompt-cache hit rate for a measured surface, a parked run's included", async () => {
     const { createTanStackAIAnalyticsCallbacks } =
       await loadTanStackAIAnalytics();
     const { resetMetricLineSinkForTesting, setMetricLineSinkForTesting } =
@@ -1235,18 +1235,12 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
           promptTokensDetails: { cachedTokens: 0, cacheWriteTokens: 900 },
           totalTokens: 140,
         });
-        const last = {
+        // The run then parks at an approval: no terminal hook follows.
+        await callbacks.middleware.onUsage?.(ctx1, {
           completionTokens: 60,
           promptTokens: 200,
           promptTokensDetails: { cachedTokens: 900, cacheWriteTokens: 0 },
           totalTokens: 260,
-        } satisfies TokenUsage;
-        await callbacks.middleware.onUsage?.(ctx1, last);
-        await callbacks.middleware.onFinish?.(ctx1, {
-          content: "Done",
-          duration: 1000,
-          finishReason: "stop",
-          usage: last,
         });
       };
 
@@ -1254,15 +1248,23 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       expect(lines).toEqual([]);
 
       await runOn("chat");
-      expect(lines).toHaveLength(1);
-      // 100 + 900 written, then 200 + 900 read: 900 of 2100 from the cache.
-      expect(JSON.parse(lines.at(0) ?? "null")).toMatchObject({
-        PromptCacheHitRate: 42.86,
-        PromptCachedInputTokens: 900,
-        PromptInputTokens: 2100,
-        provider: "anthropic",
-        surface: "chat",
-      });
+      // 100 + 900 written, then 200 + 900 read.
+      expect(lines.map((line): unknown => JSON.parse(line))).toMatchObject([
+        {
+          PromptCacheHitRate: 0,
+          PromptCachedInputTokens: 0,
+          PromptInputTokens: 1000,
+          provider: "anthropic",
+          surface: "chat",
+        },
+        {
+          PromptCacheHitRate: 81.82,
+          PromptCachedInputTokens: 900,
+          PromptInputTokens: 1100,
+          provider: "anthropic",
+          surface: "chat",
+        },
+      ]);
     } finally {
       resetMetricLineSinkForTesting();
     }

@@ -24,6 +24,33 @@ describe.serial("no-ad-hoc-chat-request", () => {
     ).toEqual([1, 2, 3]);
   });
 
+  test("reports the builders however their module is named", async () => {
+    expect(
+      await lint([
+        'import { systemPromptsPatch } from "../../lib/tanstack-ai-generate.ts";',
+        'import * as generate from "@/api/lib/tanstack-ai-generate";',
+        'import * as projection from "../../lib/chat/provider-tool-projection";',
+        "export const used = [",
+        "  systemPromptsPatch,",
+        "  generate.mergeGenerationOptions,",
+        '  generate["systemPromptsPatch"],',
+        "  generate.resolveTanStackTextModel,",
+        "  projection.projectChatToolSchemasForProvider,",
+        "];",
+      ]),
+    ).toEqual([1, 6, 7, 9]);
+  });
+
+  test("accepts system prompts from the request module imported by a relative path", async () => {
+    expect(
+      await lint([
+        'import { chatSystemPrompts } from "./chat-request";',
+        "declare const input: never;",
+        "export const a = { systemPrompts: chatSystemPrompts(input) };",
+      ]),
+    ).toEqual([]);
+  });
+
   test("reports system prompts assembled by hand", async () => {
     expect(
       await lint([

@@ -15,6 +15,7 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import {
+  canonicalModuleId,
   filenameForContext,
   getImportedName,
   getImportLocalName,
@@ -23,23 +24,35 @@ import {
   isIdentifier,
   isStringLiteral,
   isTestFile,
+  memberPropertyName,
+  repoRelativeFilename,
 } from "./utils.ts";
 
 const CHAT_DIRECTORY = "apps/api/src/handlers/chat/";
-const REQUEST_MODULE = "apps/api/src/handlers/chat/chat-request.ts";
-const REQUEST_MODULE_SPECIFIER = "@/api/handlers/chat/chat-request";
+const REQUEST_MODULE = "apps/api/src/handlers/chat/chat-request";
 
 /** The builders only the request module may call, by the module that
- *  exports them. */
+ *  exports them, as canonical repository paths: an alias, a relative path
+ *  and an extension all name the same module. */
 const OWNED_BUILDERS: Readonly<Record<string, readonly string[]>> = {
-  "@/api/lib/chat/provider-tool-projection": [
+  "apps/api/src/lib/chat/provider-tool-projection": [
     "projectChatToolSchemasForProvider",
   ],
-  "@/api/lib/tanstack-ai-generate": [
+  "apps/api/src/lib/tanstack-ai-generate": [
     "mergeGenerationOptions",
     "systemPromptsPatch",
   ],
 };
+
+/** A module id names `path` when it ends with it (a file outside the
+ *  repository root resolves to an absolute id). */
+const namesModule = (moduleId: string, path: string): boolean =>
+  moduleId === path || moduleId.endsWith(`/${path}`);
+
+const ownedBuildersOf = (moduleId: string): readonly string[] =>
+  Object.entries(OWNED_BUILDERS).find(([path]) =>
+    namesModule(moduleId, path),
+  )?.[1] ?? [];
 
 export default eslintCompatPlugin({
   meta: { name: "no-ad-hoc-chat-request" },
@@ -60,6 +73,9 @@ export default eslintCompatPlugin({
       },
       createOnce(context) {
         const requestBuilders = new Set<string>();
+        /** Namespace imports of a module that owns a builder, with the
+         *  builders it owns. */
+        const ownerNamespaces = new Map<string, readonly string[]>();
         /** A value taken straight from a request-module call. */
         const isRequestModuleCall = (node: unknown): boolean =>
           isAstNode(node) &&
@@ -69,10 +85,11 @@ export default eslintCompatPlugin({
         return {
           before() {
             requestBuilders.clear();
+            ownerNamespaces.clear();
             const filename = filenameForContext(context);
             return (
               filename.includes(CHAT_DIRECTORY) &&
-              !filename.endsWith(REQUEST_MODULE) &&
+              !canonicalModuleId(filename, filename).endsWith(REQUEST_MODULE) &&
               !isTestFile(filename)
             );
           },
@@ -83,20 +100,42 @@ export default eslintCompatPlugin({
             ) {
               return;
             }
-            const source = node.source.value;
-            const owned = OWNED_BUILDERS[source];
+            const moduleId = canonicalModuleId(
+              node.source.value,
+              repoRelativeFilename(context),
+            );
+            const owned = ownedBuildersOf(moduleId);
+            const isRequestModule = namesModule(moduleId, REQUEST_MODULE);
             for (const specifier of node.specifiers) {
-              const imported = getImportedName(specifier);
-              if (source === REQUEST_MODULE_SPECIFIER) {
+              if (
+                isAstNode(specifier) &&
+                specifier.type === "ImportNamespaceSpecifier" &&
+                isIdentifier(specifier.local) &&
+                owned.length > 0
+              ) {
+                ownerNamespaces.set(specifier.local.name, owned);
+                continue;
+              }
+              if (isRequestModule) {
                 const local = getImportLocalName(specifier);
                 if (local !== null) {
                   requestBuilders.add(local);
                 }
                 continue;
               }
-              if (imported !== null && owned?.includes(imported) === true) {
+              const imported = getImportedName(specifier);
+              if (imported !== null && owned.includes(imported)) {
                 context.report({ node: specifier, messageId: "ownedBuilder" });
               }
+            }
+          },
+          MemberExpression(node) {
+            const owned = isIdentifier(node.object)
+              ? ownerNamespaces.get(node.object.name)
+              : undefined;
+            const name = memberPropertyName(node);
+            if (owned !== undefined && name !== null && owned.includes(name)) {
+              context.report({ node, messageId: "ownedBuilder" });
             }
           },
           Property(node) {

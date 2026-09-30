@@ -213,18 +213,18 @@ export type PromptCacheMetricSurface = "chat";
 type PromptCacheMetricInput = {
   /** Input tokens the provider read from its prompt cache. */
   cachedInputTokens: number;
-  /** Every input token of the run: uncached, cache reads and cache writes. */
+  /** Every input token of the call: uncached, cache reads and cache writes. */
   inputTokens: number;
   provider: TanStackAIProvider;
   surface: PromptCacheMetricSurface;
 };
 
 /**
- * One run's prompt-cache use (every model call of it summed), as EMF
+ * One model call's prompt-cache use, as EMF
  * dimensioned by surface and provider: its input tokens, the tokens the
  * provider served from its cache, and that share as a percentage. An alarm on
- * a drop divides the summed counts, which weighs each run by its size; the
- * per-run rate is for dashboards. Cardinality is the surface set times the
+ * a drop divides the summed counts, which weighs each call by its size; the
+ * per-call rate is for dashboards. Cardinality is the surface set times the
  * provider set; no model, tenant or thread id becomes a dimension.
  */
 const buildPromptCacheRecord = ({
@@ -258,7 +258,7 @@ const buildPromptCacheRecord = ({
       : 0,
 });
 
-/** A run that reported no input tokens emits nothing: it has no rate. */
+/** A call that reported no input tokens emits nothing: it has no rate. */
 export const emitPromptCacheMetric = (input: PromptCacheMetricInput): void => {
   if (input.inputTokens <= 0) {
     return;

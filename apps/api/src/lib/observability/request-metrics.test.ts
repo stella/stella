@@ -92,7 +92,7 @@ test("prompt-cache metrics emit a run's input, cached input and hit rate by surf
       provider: "anthropic",
       surface: "chat",
     });
-    // A run that reported no input has no rate to report.
+    // A call that reported no input has no rate to report.
     emitPromptCacheMetric({
       cachedInputTokens: 0,
       inputTokens: 0,
