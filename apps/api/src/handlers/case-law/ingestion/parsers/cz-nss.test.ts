@@ -1113,3 +1113,48 @@ describe("parseNssDecisionHtml", () => {
     });
   });
 });
+
+test("keeps every mixed body and list text once in source order", () => {
+  const markers = [
+    "bodyStart",
+    "headingOne",
+    "quoteText",
+    "divStart",
+    "paragraphText",
+    "divEnd",
+    "listStart",
+    "itemText",
+    "listEnd",
+    "cellText",
+    "bodyEnd",
+  ];
+  const { fulltext } = parseNssDecisionHtml(
+    baseInput(
+      `<body>bodyStart<h1>headingOne</h1><blockquote>quoteText</blockquote><div>divStart<p>paragraphText</p>divEnd</div><ul>listStart<li>itemText</li>listEnd</ul><table><tr><td><p>cellText</p></td></tr></table>bodyEnd</body>`,
+    ),
+  );
+  let previous = -1;
+  for (const marker of markers) {
+    expect(fulltext.split(marker)).toHaveLength(2);
+    const position = fulltext.indexOf(marker);
+    expect(position).toBeGreaterThan(previous);
+    previous = position;
+  }
+});
+
+test("preserves inline spacing around unknown wrappers and every heading", () => {
+  const { fulltext } = parseNssDecisionHtml(
+    baseInput(
+      `<body>Before <span>inline</span> after<unknown>Loose <i>formatted</i> text<p>Child paragraph</p>Tail text</unknown>${[1, 2, 3, 4, 5, 6].map((level) => `<h${level}>Heading ${level}</h${level}>`).join("")}</body>`,
+    ),
+  );
+  for (const text of [
+    "Before inline after",
+    "Loose formatted text",
+    "Child paragraph",
+    "Tail text",
+    ...[1, 2, 3, 4, 5, 6].map((level) => `Heading ${level}`),
+  ]) {
+    expect(fulltext.split(text)).toHaveLength(2);
+  }
+});

@@ -3,7 +3,7 @@ import type fc from "fast-check";
 /**
  * Shared fast-check configuration for the repo's property tests.
  *
- * Two CI concerns are centralized here so individual tests do not have to
+ * Three CI concerns are centralized here so individual tests do not have to
  * repeat them (issue #83):
  *
  *  1. Longer nightly runtime. A dedicated nightly job runs the property
@@ -15,7 +15,10 @@ import type fc from "fast-check";
  *     run log carries the full list of shrunk failing values (not only the
  *     final counterexample). The seed + counterexample fast-check already
  *     prints on failure are enough to replay a failure locally with
- *     `fc.assert(prop, { seed, path })`.
+ *     `fc.assert(prop, propertyConfig({ seed, path }))`.
+ *
+ *  3. Deterministic PR inputs. Unless the caller supplies a seed, the tier
+ *     policy supplies the fixed seed for PRs and explores during nightly runs.
  */
 
 const NUM_RUNS_FACTOR_ENV = "PROPERTY_TEST_NUM_RUNS_FACTOR";
@@ -46,18 +49,21 @@ const isCi = (): boolean => {
 /**
  * Build the `fc.assert` parameters for a property test: pass the per-test
  * tuning you want in PR CI (typically just `numRuns`) and this scales it for
- * the nightly sweep and enables verbose reporting under CI.
+ * the nightly sweep and enables verbose reporting under CI. An omitted seed
+ * defaults to propertySeed(): fixed in PR CI, exploratory in the nightly sweep.
+ * An explicit seed is preserved.
  *
  * ```ts
  * fc.assert(fc.property(arb, predicate), propertyConfig({ numRuns: 200 }));
  * ```
  */
-export const propertyConfig = <Ts>({
-  seed,
-  ...params
-}: Omit<fc.Parameters<Ts>, "seed"> & {
-  seed?: number | undefined;
-} = {}): fc.Parameters<Ts> => {
+export const propertyConfig = <Ts>(
+  options: Omit<fc.Parameters<Ts>, "seed"> & {
+    seed?: number | undefined;
+  } = {},
+): fc.Parameters<Ts> => {
+  const { seed: requestedSeed, ...params } = options;
+  const seed = "seed" in options ? requestedSeed : propertySeed();
   const factor = readNumRunsFactor(process.env[NUM_RUNS_FACTOR_ENV]);
   const baseNumRuns = params.numRuns ?? FAST_CHECK_DEFAULT_NUM_RUNS;
   return {
@@ -94,7 +100,7 @@ export class PropertyTestConfigError extends Error {
  * fast-check draws a fresh one) during the nightly sweep.
  *
  * ```ts
- * fc.assert(prop, propertyConfig({ numRuns: 300, seed: propertySeed() }));
+ * fc.assert(prop, propertyConfig({ numRuns: 300 }));
  * ```
  *
  * The two runs answer different questions. PR CI is a regression gate: it
