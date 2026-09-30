@@ -220,12 +220,31 @@ export const createApprovalHarness = ({
   ids,
   model,
   organizationAIConfig = orgAIConfig,
+  promptCachingEnabled = false,
   safeDb,
   scopedDb,
+  sources = {},
   testDb,
   withDirectRefTool = false,
 }: {
   ids: TestIds;
+  /**
+   * What a turn can draw on beyond Stella's own tools: the matters in its
+   * context, the organization's web search and URL fetcher, and the
+   * organization's external tools listed for lazy discovery. None by
+   * default.
+   */
+  sources?: {
+    contextMatterIds?: readonly SafeId<"workspace">[] | undefined;
+    lazyExternalTools?:
+      | Parameters<typeof createStellaMcpToolSource>[0]["sourceTools"]
+      | undefined;
+    web?: Awaited<
+      ReturnType<SendMessageDependencies["loadWebSearchProviders"]>
+    >;
+  };
+  /** The organization's prompt caching setting; off by default. */
+  promptCachingEnabled?: boolean | undefined;
   /** Registers `DIRECT_REF_TOOL_NAME` too. */
   withDirectRefTool?: boolean | undefined;
   /** Defaults to the scripted provider. */
@@ -284,7 +303,7 @@ export const createApprovalHarness = ({
         connectors: [],
         source: createStellaMcpToolSource({
           closeClients: close,
-          sourceTools: {},
+          sourceTools: sources.lazyExternalTools ?? {},
         }),
         tools: {
           [APPROVAL_TOOL_NAME]: approvalTool,
@@ -295,10 +314,9 @@ export const createApprovalHarness = ({
       });
     },
     loadWebSearchProviders: async () =>
-      await Promise.resolve({
-        urlFetcher: null,
-        webSearchProvider: null,
-      }),
+      await Promise.resolve(
+        sources.web ?? { urlFetcher: null, webSearchProvider: null },
+      ),
     rollbackSideEffects: rollbackUnpersistedChatSideEffects,
     compactMessagesForContext,
     streamResponse: streamChat,
@@ -337,6 +355,15 @@ export const createApprovalHarness = ({
       signal,
       url: "http://localhost/v1/chat/send",
     });
+    if (sources.contextMatterIds !== undefined) {
+      // The matters the page's context names, as its composer sends them
+      // (TanStack mirrors the forwarded props as `data`).
+      const contextMatterIds = [...sources.contextMatterIds];
+      Object.assign(body.forwardedProps, { contextMatterIds });
+      if (typeof body.data === "object" && body.data !== null) {
+        Object.assign(body.data, { contextMatterIds });
+      }
+    }
     const ctx = asTestRaw<SendMessageCtx>({
       body,
       // A recorder reads the request it is built for.
@@ -356,7 +383,7 @@ export const createApprovalHarness = ({
       orgAIConfig: organizationAIConfig,
       orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
       pinServerValidatedWorkspaceId: () => false,
-      promptCachingEnabled: false,
+      promptCachingEnabled,
       recordAuditEvent: async () => await Promise.resolve(),
       request: request.request,
       route: "/v1/chat/send",

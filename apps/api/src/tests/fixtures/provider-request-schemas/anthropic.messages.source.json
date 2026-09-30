@@ -1,0 +1,17 @@
+{
+  "extractedBy": "apps/api/scripts/provider-request-schemas.ts",
+  "label": "anthropic messages",
+  "notes": [
+    "The source is the OpenAPI specification the official TypeScript SDK's .stats.yml names (openapi_spec_url); when it names none, the last one it named."
+  ],
+  "selection": {
+    "format": "openapi",
+    "method": "post",
+    "path": "/v1/messages?beta=true"
+  },
+  "source": {
+    "retrievedAt": "2026-09-30",
+    "sha256": "2209eb0618d71aadc51e5aeb17676d6a744e336f85febc02ff396a4bd74bc3fd",
+    "url": "https://storage.googleapis.com/stainless-sdk-openapi-specs/anthropic/anthropic-465bff21a179090915396565d1ae8f705cf8596e2ec920eb121072f25b8a7d68.yml"
+  }
+}

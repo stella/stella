@@ -1,3 +1,4 @@
+import type { ContentPart } from "@tanstack/ai";
 import type { UIMessage } from "@tanstack/ai-client";
 import { panic } from "better-result";
 
@@ -106,7 +107,7 @@ type WebChatModules = {
   sanitizeRunningToolCalls: (messages: readonly UIMessage[]) => UIMessage[];
   sendThreadChatMessage: (
     runtime: WebChatRuntime,
-    message: { content: string; id: string },
+    message: { content: string | ContentPart[]; id: string },
   ) => Promise<void>;
 };
 
@@ -270,6 +271,9 @@ export type WebChatClient = {
     stopStatus: WebChatSnapshot["stop"]["status"];
   };
   sendUserMessage: (id: string, text: string) => Promise<void>;
+  /** Sends a message whose content is parts, as the composer sends one with
+   *  attachments (`buildChatRequestMessage`). */
+  sendUserContent: (id: string, content: ContentPart[]) => Promise<void>;
   /** Sends a message and returns once the live view satisfies `until`,
    *  without waiting for the turn to end. */
   startUserMessage: (
@@ -436,6 +440,11 @@ export const createWebChatClient = async ({
       await act(
         async () =>
           await web.sendThreadChatMessage(runtime, { content: text, id }),
+      );
+    },
+    sendUserContent: async (id, content) => {
+      await act(
+        async () => await web.sendThreadChatMessage(runtime, { content, id }),
       );
     },
     runClientTool: async (toolCallId, tool, output) => {
