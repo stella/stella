@@ -106,7 +106,7 @@ describe("chat run admission follows owned settlement", () => {
             type: "failed",
             error: "provider_unavailable",
           });
-          expect(responseMessage?.parts).toContainEqual({
+          expect(responseMessage.parts).toContainEqual({
             type: "text",
             content: "Partial answer",
           });
@@ -438,7 +438,7 @@ describe("chat run admission follows owned settlement", () => {
               if (table === chatTurns) {
                 writtenTurns.push(values);
               }
-              return Object.assign(Promise.resolve(undefined), {
+              return {
                 returning: async () =>
                   await Promise.resolve([
                     {
@@ -447,7 +447,7 @@ describe("chat run admission follows owned settlement", () => {
                       runId: null,
                     },
                   ]),
-              });
+              };
             },
           }),
         }),
@@ -509,7 +509,7 @@ describe("chat run admission follows owned settlement", () => {
           mapMessageId: createChatMessageIdMapper(() => checkpoint.id),
           onFinish: async ({ outcome, responseMessage }) => {
             expect(outcome.type).toBe("awaiting-user");
-            expect(responseMessage?.parts).toEqual(checkpoint.parts);
+            expect(responseMessage.parts).toEqual(checkpoint.parts);
             await run.settle(async () => {
               discardedPersistence += 1;
               await Promise.resolve();
@@ -595,8 +595,8 @@ describe("chat run admission follows owned settlement", () => {
       enabled: true,
       organizationId: toSafeId<"organization">("organization_hanging"),
       userId: toSafeId<"user">("user_hanging"),
-      admit: (options) =>
-        withActionAdmission({
+      admit: async (options) =>
+        await withActionAdmission({
           ...options,
           policy: {
             organizationConcurrency: 1,

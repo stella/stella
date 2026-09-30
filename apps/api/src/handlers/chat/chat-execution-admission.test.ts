@@ -56,8 +56,8 @@ const coordination = ({
       return 1;
     },
   };
-  const admit: typeof withActionAdmission = (options) =>
-    withActionAdmission({
+  const admit: typeof withActionAdmission = async (options) =>
+    await withActionAdmission({
       ...options,
       policy: { organizationConcurrency: 3, userConcurrency, leaseMs: 120_000 },
       redis,

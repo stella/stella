@@ -48,7 +48,7 @@ describe("send lifecycle checkpoint indexing", () => {
               if (table === chatTurns) {
                 writtenTurns.push(values);
               }
-              return Object.assign(Promise.resolve(undefined), {
+              return {
                 returning: async () => [
                   {
                     id: "turn_lifecycle",
@@ -56,7 +56,7 @@ describe("send lifecycle checkpoint indexing", () => {
                     runId: null,
                   },
                 ],
-              });
+              };
             },
           }),
         }),
