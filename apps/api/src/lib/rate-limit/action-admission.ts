@@ -204,8 +204,8 @@ const createAdmissionExecutor = ({
           actionKind: periodIdentity.actionKind,
           logicalPhaseId: periodIdentity.logicalPhaseId,
         };
-  const execute = async (script: string, args: string[]) =>
-    await Result.tryPromise({
+  const execute = async (script: string, args: string[]) => {
+    const outcome = await Result.tryPromise({
       try: async () => {
         const client: RedisCommands =
           redis ??
@@ -238,7 +238,7 @@ const createAdmissionExecutor = ({
         const storeNow =
           script === ACQUIRE_SCRIPT ? staleActionPeriodTime(reply) : null;
         if (budget === null || storeNow === null) {
-          return reply;
+          return Result.ok(reply);
         }
 
         // A stale window has not reserved anything. Retry once using store time,
@@ -253,15 +253,23 @@ const createAdmissionExecutor = ({
           nowMs: storeNow,
         });
         if (Result.isError(refreshed)) {
-          throw refreshed.error;
+          return Result.err(
+            new ActionAdmissionError({
+              message: "Action admission is unavailable",
+              reason: "unavailable",
+              cause: refreshed.error,
+            }),
+          );
         }
         if (refreshed.value === null) {
-          return -2;
+          return Result.ok(-2);
         }
-        return await send(refreshed.value, [
-          ...args.slice(0, 4),
-          ...actionPeriodArguments(refreshed.value),
-        ]);
+        return Result.ok(
+          await send(refreshed.value, [
+            ...args.slice(0, 4),
+            ...actionPeriodArguments(refreshed.value),
+          ]),
+        );
       },
       catch: (error: unknown) =>
         new ActionAdmissionError({
@@ -270,6 +278,9 @@ const createAdmissionExecutor = ({
           cause: error,
         }),
     });
+
+    return Result.isError(outcome) ? outcome : outcome.value;
+  };
 
   return execute;
 };
