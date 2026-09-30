@@ -46,9 +46,13 @@ export const injectMarkers = (
     const marker = `${stem}${suffixes[placement.spelling]}`;
     expect(slots.some(({ read }) => read().includes(marker))).toBe(false);
     const offset = placement.offset % (Array.from(slot.read()).length + 1);
-    const group = edits.get(slotIndex) ?? [];
-    group.push({ offset, marker, ordinal });
-    edits.set(slotIndex, group);
+    const group = edits.get(slotIndex);
+    const edit = { offset, marker, ordinal };
+    if (group === undefined) {
+      edits.set(slotIndex, [edit]);
+    } else {
+      group.push(edit);
+    }
   }
   const ordered: string[] = [];
   for (const [slotIndex, slot] of slots.entries()) {
