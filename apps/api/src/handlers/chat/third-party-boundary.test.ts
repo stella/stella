@@ -131,16 +131,24 @@ const STORED_PART_CENSUS = {
       mimeType: "audio/mpeg",
     },
   },
-  document: createChatAttachmentPart({
-    filename: "notes.txt",
-    mimeType: TEXT_PLAIN_MIME_TYPE,
-    url: textDataUrl(`Notes on ${STORED_PART_VALUE}.`),
-  }),
-  image: createChatAttachmentPart({
-    filename: `${STORED_PART_VALUE}.png`,
-    mimeType: "image/png",
-    url: "data:image/png;base64,iVBORw0KGgo=",
-  }),
+  document: {
+    type: "document",
+    source: {
+      type: "url",
+      value: textDataUrl(`Notes on ${STORED_PART_VALUE}.`),
+      mimeType: TEXT_PLAIN_MIME_TYPE,
+    },
+    metadata: { filename: "notes.txt" },
+  },
+  image: {
+    type: "image",
+    source: {
+      type: "url",
+      value: "data:image/png;base64,iVBORw0KGgo=",
+      mimeType: "image/png",
+    },
+    metadata: { filename: `${STORED_PART_VALUE}.png` },
+  },
   "structured-output": {
     type: "structured-output",
     status: "complete",
@@ -196,7 +204,7 @@ const STORED_PART_CENSUS = {
       mimeType: "video/mp4",
     },
   },
-} as const satisfies {
+} satisfies {
   [Type in PersistableChatPartType]: Extract<ChatPart, { type: Type }>;
 };
 
