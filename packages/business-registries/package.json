@@ -99,7 +99,8 @@
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/business-registries",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/business-registries",
     "format": "bun ../../scripts/run-oxfmt.ts .",
-    "prepack": "bun run build"
+    "prepack": "bun run build",
+    "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlF 'fc.assert' src --include='*.test.ts')"
   },
   "dependencies": {
     "@stll/country-codes": "workspace:*",
