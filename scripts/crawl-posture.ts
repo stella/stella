@@ -109,7 +109,8 @@ type ViolationCode =
   | "mixed-lib-no-default-deny"
   | "mixed-lib-constant-unused"
   | "mixed-allow-not-in-constant"
-  | "mixed-prefix-no-route";
+  | "mixed-prefix-no-route"
+  | "mixed-html-no-public-head";
 
 type Violation = {
   readonly app: string;
@@ -624,7 +625,40 @@ const checkMixed = (appDir: string, app: string): Violation[] => {
   }
 
   const routesDir = path.join(appDir, MIXED_ROUTES_DIR);
-  for (const { route } of PUBLIC_CRAWL_ROUTES) {
+  const routeFiles = isDirectory(routesDir)
+    ? [...new Bun.Glob("**/*.tsx").scanSync({ cwd: routesDir })]
+    : [];
+  for (const { route, format } of PUBLIC_CRAWL_ROUTES) {
+    if (format === "html") {
+      const headSources = routeFiles
+        .filter((file) => {
+          const routePath = `/${file
+            .replace(/\.tsx$/u, "")
+            .replaceAll(".", "/")
+            .replaceAll("_", "")
+            .replace(/\/(?:index|route)$/u, "")}`;
+          return routePath === route;
+        })
+        .map((file) =>
+          stripSourceComments(
+            readFileSync(path.join(routesDir, file), "utf-8"),
+          ),
+        );
+      if (
+        !headSources.some(
+          (source) =>
+            /head\s*:/u.test(source) &&
+            /createPublic\w*Head\s*\(/u.test(source),
+        )
+      ) {
+        violations.push({
+          app,
+          code: "mixed-html-no-public-head",
+          message: `public crawl policy lists HTML route \`${route}\` without public head metadata.`,
+          fix: "add a head using the shared public SEO builder.",
+        });
+      }
+    }
     if (!routeExistsForPrefix(routesDir, route)) {
       violations.push({
         app,
@@ -842,12 +876,14 @@ const layoutValidMixed = (root: string, app: string): void => {
   writeFixtureFile(root, path.join(app, "package.json"), pkg("mixed"));
   writeFixtureFile(root, path.join(app, MIXED_ROBOTS_ROUTE), ROUTE_STUB);
   writeFixtureFile(root, path.join(app, MIXED_SITEMAP_ROUTE), ROUTE_STUB);
-  for (const { route } of PUBLIC_CRAWL_ROUTES) {
+  for (const { route, format } of PUBLIC_CRAWL_ROUTES) {
     const filename = `${route.slice(1).replaceAll(".", "[.]")}.tsx`;
     writeFixtureFile(
       root,
       path.join(app, MIXED_ROUTES_DIR, filename),
-      ROUTE_STUB,
+      format === "html"
+        ? 'export const Route = createFileRoute("/")({ head: () => createPublicHead({}) });'
+        : ROUTE_STUB,
     );
   }
   writeFixtureFile(root, path.join(app, MIXED_ROBOTS_LIB), MIXED_LIB_VALID);
@@ -1188,6 +1224,25 @@ const runSelfTest = (): number => {
     }),
     "mixed-prefix-no-route",
   );
+
+  for (const { route, format } of PUBLIC_CRAWL_ROUTES) {
+    if (format !== "html") {
+      continue;
+    }
+    expectCode(
+      `mixed HTML route without public head: ${route}`,
+      reportForSingleApp((root, app) => {
+        layoutValidMixed(root, app);
+        const filename = `${route.slice(1).replaceAll(".", "[.]")}.tsx`;
+        writeFixtureFile(
+          root,
+          path.join(app, MIXED_ROUTES_DIR, filename),
+          ROUTE_STUB,
+        );
+      }),
+      "mixed-html-no-public-head",
+    );
+  }
 
   // 19. mixed robots lib missing entirely.
   expectCode(

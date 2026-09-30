@@ -5,34 +5,51 @@ type PublicCrawlRoute = {
   route: `/${string}`;
   scope: "exact" | "subtree" | "catalogue";
   permission: "law" | "tools" | "knowledge";
+  format: "html" | "xml";
 };
 
 export const PUBLIC_CRAWL_ROUTES = [
-  { path: "/law", route: "/law", scope: "subtree", permission: "law" },
+  {
+    path: "/law",
+    route: "/law",
+    scope: "subtree",
+    permission: "law",
+    format: "html",
+  },
   {
     path: "/sitemap.xml",
     route: "/sitemap.xml",
     scope: "exact",
     permission: "law",
+    format: "xml",
   },
   {
     path: "/sitemaps",
     route: "/sitemaps/law.xml",
     scope: "subtree",
     permission: "law",
+    format: "xml",
   },
-  { path: "/tools", route: "/tools", scope: "catalogue", permission: "tools" },
+  {
+    path: "/tools",
+    route: "/tools",
+    scope: "catalogue",
+    permission: "tools",
+    format: "html",
+  },
   {
     path: "/knowledge/tools",
     route: "/knowledge/tools",
     scope: "catalogue",
     permission: "tools",
+    format: "html",
   },
   {
     path: "/knowledge/templates/catalogue",
     route: "/knowledge/templates/catalogue",
     scope: "subtree",
     permission: "knowledge",
+    format: "html",
   },
 ] as const satisfies readonly PublicCrawlRoute[];
 
