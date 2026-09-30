@@ -873,13 +873,13 @@ const skUsMetadata = ({
   header,
 }: SkUsMetadataOptions): Record<string, unknown> => {
   const multiValueMetadata = {
-    typeOfDecision: doc.mkTypeOfDecision ?? [],
-    typeOfNegotiation: doc.mkTypeOfNegotiation ?? [],
-    legalBasis: doc.mkDecisionInTermsOf ?? [],
-    result: doc.mkResultOfNegotiation ?? [],
-    cause: doc.mkCause ?? [],
-    proceedingSubject: doc.mkWordRegister ?? [],
-    subjectIndex: doc.mkMaterialRegister ?? [],
+    typeOfDecision: doc.mkTypeOfDecision,
+    typeOfNegotiation: doc.mkTypeOfNegotiation,
+    legalBasis: doc.mkDecisionInTermsOf,
+    result: doc.mkResultOfNegotiation,
+    cause: doc.mkCause,
+    proceedingSubject: doc.mkWordRegister,
+    subjectIndex: doc.mkMaterialRegister,
     challengedLegislation: publisherList(doc, "mkComplainedLegalRegulation"),
     clarificationOfLegalRegulation: publisherList(
       doc,

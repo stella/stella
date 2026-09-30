@@ -58,7 +58,10 @@ export const toOptionalValue = <T>(
 export const normalizeMetadataValues = (
   values: readonly string[] | null | undefined,
 ): string[] => {
-  const normalized = (values ?? []).map((value) =>
+  if (values === null || values === undefined) {
+    return [];
+  }
+  const normalized = values.map((value) =>
     value.normalize("NFC").replaceAll(/\s+/gu, " ").trim(),
   );
   return [...new Set(normalized.filter((value) => value.length > 0))];

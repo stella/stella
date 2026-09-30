@@ -18,11 +18,17 @@ describe("Slovak Roman section headings", () => {
       "XI",
       "XII",
     ]) {
-      expect(skSectionHeading(`${numeral}.`)).toEqual({ level: 3 });
-      expect(skSectionHeading(` ${numeral}. Ústavná sťažnosť `)).toEqual({
+      expect(skSectionHeading(`${numeral}.`, "reasoning")).toEqual({
         level: 3,
       });
-      expect(skSectionHeading(`${numeral}. A) Argumentácia`)).toEqual({
+      expect(
+        skSectionHeading(` ${numeral}. Ústavná sťažnosť `, "reasoning"),
+      ).toEqual({
+        level: 3,
+      });
+      expect(
+        skSectionHeading(`${numeral}. A) Argumentácia`, "reasoning"),
+      ).toEqual({
         level: 4,
       });
     }
@@ -34,7 +40,15 @@ describe("Slovak Roman section headings", () => {
       "1. Argumentácia",
       `I. ${"text ".repeat(50)}`,
     ]) {
-      expect(skSectionHeading(text)).toBeNull();
+      expect(skSectionHeading(text, "reasoning")).toBeNull();
     }
   });
+});
+
+test("Roman titled items are prose outside reasoning while bare dividers remain structural", () => {
+  const sections = ["preamble", "holding", "instruction", "closing"] as const;
+  for (const section of sections) {
+    expect(skSectionHeading("I. Súd žalobu zamieta.", section)).toBeNull();
+    expect(skSectionHeading("I.", section)).toEqual({ level: 3 });
+  }
 });

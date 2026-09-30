@@ -398,3 +398,15 @@ describe("derived general-court metadata", () => {
     }
   });
 });
+
+test("rejected source links preserve the publisher-stated URL", () => {
+  for (const url of ["data:text/plain,blocked", "not a URL", "", "   "]) {
+    const decision = assembleSkCourtsDecision({
+      item: { spisovaZnacka: "1C/1/2024", sud: { nazov: "Okresný súd" } },
+      detail: { dokument: { url } },
+    });
+    expect(decision?.sourceUrl).toBeUndefined();
+    expect(decision?.metadata["sourceUrlStatus"]).toBe("rejected-url");
+    expect(decision?.metadata["statedSourceUrl"]).toBe(url);
+  }
+});

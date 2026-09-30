@@ -35,6 +35,7 @@ import {
   SK_JUDGE_TITLE_RE,
   skSectionHeading,
 } from "@stll/legal-ast/slovak-document-roles";
+import type { SkDocumentSection } from "@stll/legal-ast/slovak-document-roles";
 
 import type {
   Block,
@@ -177,7 +178,7 @@ const readMarkupLines = ($: cheerio.CheerioAPI): MarkupLine[] => {
 /** A number on a line of its own, which is this court's page footer. */
 const PAGE_NUMBER_PATTERN = /^\d{1,4}$/u;
 
-type Section = "preamble" | "holding" | "reasoning" | "instruction" | "closing";
+type Section = SkDocumentSection;
 
 const headingBlock = ({
   id,
@@ -333,7 +334,7 @@ const classifyLines = (lines: readonly MarkupLine[]): Block[] => {
       continue;
     }
 
-    const sectionHeading = skSectionHeading(line.text);
+    const sectionHeading = skSectionHeading(line.text, state.section);
     if (sectionHeading !== null) {
       flushParagraph();
       blocks.push(

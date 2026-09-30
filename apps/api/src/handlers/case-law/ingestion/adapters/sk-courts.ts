@@ -458,7 +458,8 @@ type SkCourtsMetadata = Record<string, unknown> & {
   updateDateDefect:
     | { type: "invalid-publisher-date"; value: string }
     | undefined;
-  sourceUrlStatus: "published" | "not-published-by-source";
+  statedSourceUrl: string | undefined;
+  sourceUrlStatus: "published" | "not-published-by-source" | "rejected-url";
 };
 
 type SkCourtsDecisionParts = {
@@ -532,7 +533,14 @@ export const assembleSkCourtsDecision = ({
     parsedUpdateDate === undefined
       ? undefined
       : parsePlainDate(parsedUpdateDate)?.toString();
-  const sourceUrl = sanitizeUrl(detail?.dokument?.url);
+  const statedSourceUrl = toOptionalValue(detail?.dokument?.url);
+  const sourceUrl = sanitizeUrl(statedSourceUrl);
+  const sourceUrlStatus = (() => {
+    if (statedSourceUrl === undefined) {
+      return "not-published-by-source";
+    }
+    return sourceUrl === undefined ? "rejected-url" : "published";
+  })();
 
   return {
     caseNumber,
@@ -578,8 +586,8 @@ export const assembleSkCourtsDecision = ({
         updateDate !== undefined && updateDateIso === undefined
           ? { type: "invalid-publisher-date", value: updateDate }
           : undefined,
-      sourceUrlStatus:
-        sourceUrl === undefined ? "not-published-by-source" : "published",
+      statedSourceUrl,
+      sourceUrlStatus,
       originCourt: toOptionalValue(detail?.povodnySud?.nazov),
       originCourtRegistreGuid: toOptionalValue(
         detail?.povodnySud?.registreGuid,
