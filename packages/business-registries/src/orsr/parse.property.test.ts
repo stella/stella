@@ -386,7 +386,7 @@ test.each(["search", "extract", "history", "documents", "related"] as const)(
         const endpoint = endpointForUrl(url);
         return payloads[endpoint];
       },
-      () => lookupFullRecordByIco("31333532"),
+      async () => lookupFullRecordByIco("31333532"),
     );
     expect(baseline?.company.ico).toBe("31333532");
     expect(baseline?.history.status).toBe("loaded");
@@ -416,7 +416,7 @@ test.each(["search", "extract", "history", "documents", "related"] as const)(
         return endpoint === kind ? mutated : payloads[endpoint];
       };
       if (kind === "search") {
-        const results = await expectRegistryResponses(responseOf, () =>
+        const results = await expectRegistryResponses(responseOf, async () =>
           searchByName("ESET"),
         );
         if (results) {
@@ -428,7 +428,7 @@ test.each(["search", "extract", "history", "documents", "related"] as const)(
         }
         return;
       }
-      const record = await expectRegistryResponses(responseOf, () =>
+      const record = await expectRegistryResponses(responseOf, async () =>
         lookupFullRecordByIco("31333532"),
       );
       if (!record) {
@@ -505,9 +505,7 @@ test.each(["search", "extract", "history", "documents", "related"] as const)(
           expect(
             row.typeCode === null || typeof row.typeCode === "number",
           ).toBe(true);
-          expect(row.medium === "paper" || row.medium === "electronic").toBe(
-            true,
-          );
+          expect(["paper", "electronic"]).toContain(row.medium);
         }
       }
       if (record.related.status === "loaded") {

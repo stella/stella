@@ -217,7 +217,7 @@ test("legal entity response mutations retain typed nested data or registry failu
           per_page: 1,
           total_pages: 1,
         };
-        const operation = () => lookupBySiren("780129987");
+        const operation = async () => lookupBySiren("780129987");
         expect(await expectRegistryResponse(original, operation)).toMatchObject(
           { siren: "780129987", name: raw.nom_complet },
         );
@@ -289,7 +289,7 @@ test("every consumed response field supports missing, null and wrong-type mutati
     per_page: 1,
     total_pages: 1,
   };
-  const operation = () => lookupBySiret("78012998704037");
+  const operation = async () => lookupBySiret("78012998704037");
   expect(await expectRegistryResponse(original, operation)).toMatchObject({
     siren: "780129987",
     name: "Société",

@@ -68,12 +68,12 @@ test(
   async () => {
     await fc.assert(
       fc.asyncProperty(response, async (raw) => {
-        const original = await expectRegistryResponse(raw, () =>
+        const original = await expectRegistryResponse(raw, async () =>
           validateVat("DE136695976"),
         );
         expect(original?.requestDate).toBe(raw.requestDate);
         await forEachRegistryMutation(raw, async (payload) => {
-          const parsed = await expectRegistryResponse(payload, () =>
+          const parsed = await expectRegistryResponse(payload, async () =>
             validateVat("DE136695976"),
           );
           if (parsed === undefined) {

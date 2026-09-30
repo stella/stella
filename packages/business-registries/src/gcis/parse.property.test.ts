@@ -136,7 +136,7 @@ test("company response mutations retain typed dates and capital or registry fail
               : undefined,
           },
         ];
-        const operation = () => lookupByTaxId("22099131");
+        const operation = async () => lookupByTaxId("22099131");
         expect(await expectRegistryResponse(original, operation)).toMatchObject(
           { taxId: "22099131", name: raw.Company_Name?.trim() || "22099131" },
         );
@@ -174,7 +174,7 @@ test("every consumed response field supports missing, null and wrong-type mutati
       Sus_End_Date: "1160101",
     } satisfies GcisRawCompany,
   ];
-  const operation = () => lookupByTaxId("22099131");
+  const operation = async () => lookupByTaxId("22099131");
   expect(await expectRegistryResponse(original, operation)).toMatchObject({
     taxId: "22099131",
     name: "公司",

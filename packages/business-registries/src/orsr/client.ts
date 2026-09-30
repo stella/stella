@@ -238,7 +238,7 @@ const isOrsrExtractResponse = (
   value: unknown,
 ): value is OrsrRawExtractResponse =>
   isRecord(value) &&
-  hasOptionalNullableString(value, "courtName") &&
+  hasOptionalString(value, "courtName") &&
   isOrsrFileReference(value["fileReference"]) &&
   isOrsrLegalPerson(value["legalPerson"]);
 

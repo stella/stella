@@ -333,8 +333,9 @@ test.each(["profile", "search", "officers"] as const)(
           result.serviceAddress,
         ]) {
           if (parsedAddress) {
-            for (const value of Object.values(parsedAddress))
-              {expectNullableString(value);}
+            for (const value of Object.values(parsedAddress)) {
+              expectNullableString(value);
+            }
           }
         }
         for (const code of result.sicCodes) {

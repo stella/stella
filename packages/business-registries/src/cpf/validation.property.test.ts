@@ -19,18 +19,16 @@ const digits = fc.array(fc.integer({ min: 0, max: 9 }), {
 // weights modulo 11; the second digit includes the first at position 9.
 const cpfDigits = (prefix: string): string => {
   const first =
-    ([...prefix].reduce(
-      (sum, digit, index) => sum + Number(digit) * (index + 1),
-      0,
-    ) %
+    (prefix
+      .split("")
+      .reduce((sum, digit, index) => sum + Number(digit) * (index + 1), 0) %
       11) %
     10;
   const extended = `${prefix}${first}`;
   const second =
-    ([...extended].reduce(
-      (sum, digit, index) => sum + Number(digit) * index,
-      0,
-    ) %
+    (extended
+      .split("")
+      .reduce((sum, digit, index) => sum + Number(digit) * index, 0) %
       11) %
     10;
   return `${first}${second}`;

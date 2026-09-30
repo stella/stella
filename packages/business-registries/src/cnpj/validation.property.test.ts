@@ -12,7 +12,8 @@ import { normalizeCnpj, validateCnpj } from "./validation.js";
 
 const checkDigit = (prefix: string): string => {
   const remainder =
-    [...prefix]
+    prefix
+      .split("")
       .toReversed()
       .reduce(
         (sum, digit, index) => sum + Number(digit) * (2 + (index % 8)),

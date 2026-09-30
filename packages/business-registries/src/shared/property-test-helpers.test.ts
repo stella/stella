@@ -88,7 +88,7 @@ export const expectRegistryResponses = async <T>(
   return result.value;
 };
 
-export const expectRegistryResponse = <T>(
+export const expectRegistryResponse = async <T>(
   payload: unknown,
   operation: () => Promise<T>,
 ): Promise<T | undefined> => expectRegistryResponses(() => payload, operation);

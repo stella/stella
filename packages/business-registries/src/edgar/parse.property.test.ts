@@ -211,7 +211,7 @@ test("submission response mutations retain typed nested filings or registry fail
       registryMutation,
       async (raw, selected, mutation) => {
         const original = { ...raw, cik: "0000320193" };
-        const operation = () =>
+        const operation = async () =>
           lookupByCik("320193", {
             userAgent: "Property Tests property@example.test",
           });
@@ -270,7 +270,7 @@ test("every consumed response field supports missing, null and wrong-type mutati
       },
     },
   } satisfies EdgarRawSubmission;
-  const operation = () =>
+  const operation = async () =>
     lookupByCik("320193", {
       userAgent: "Property Tests property@example.test",
     });
