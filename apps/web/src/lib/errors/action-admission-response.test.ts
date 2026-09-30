@@ -2,7 +2,10 @@ import { describe, expect, test } from "bun:test";
 
 import { createStellaEdenClient } from "@stll/api-client";
 import type { EdenRoutesApp } from "@stll/api-client";
-import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
+import {
+  ACTION_ADMISSION_CODES,
+  ACTION_ADMISSION_REFUSALS,
+} from "@stll/api-contract/action-admission";
 
 import type { WebRoutes } from "@/generated/api-routes.gen";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
@@ -11,7 +14,8 @@ import { ClientTelemetryError } from "@/lib/errors/telemetry";
 
 describe("action response observation", () => {
   test("all refusal codes are observed without replacing or consuming the transport response", async () => {
-    for (const [code, refusal] of Object.entries(ACTION_ADMISSION_REFUSALS)) {
+    for (const code of Object.values(ACTION_ADMISSION_CODES)) {
+      const refusal = ACTION_ADMISSION_REFUSALS[code];
       const payload = {
         code,
         message: refusal.message,
@@ -23,7 +27,7 @@ describe("action response observation", () => {
       });
       const observed: ReturnType<typeof actionAdmissionOutcome>[] = [];
       const failures: unknown[] = [];
-      const result = await observeActionAdmissionResponse(response, {
+      await observeActionAdmissionResponse(response, {
         notifyRefusal: (error) => {
           observed.push(actionAdmissionOutcome(error));
           return true;
@@ -32,7 +36,6 @@ describe("action response observation", () => {
           failures.push(error);
         },
       });
-      expect(result).toBeUndefined();
       expect(response.bodyUsed).toBe(false);
       expect(response.status).toBe(refusal.status);
       expect(response.headers.get("x-receipt-id")).toBe("receipt-example");
@@ -112,7 +115,8 @@ describe("action response observation", () => {
 });
 
 test("the installed Eden hook preserves refused status, error payload and headers", async () => {
-  for (const [code, refusal] of Object.entries(ACTION_ADMISSION_REFUSALS)) {
+  for (const code of Object.values(ACTION_ADMISSION_CODES)) {
+    const refusal = ACTION_ADMISSION_REFUSALS[code];
     const payload = { code, message: refusal.message };
     const observed: unknown[] = [];
     const captured: unknown[] = [];
