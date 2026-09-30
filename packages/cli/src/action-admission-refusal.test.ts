@@ -143,9 +143,11 @@ for (const code of Object.keys(EXPECTED_EXITS)) {
         }
         const body = v.parse(
           v.object({
-            id: v.optional(v.union([v.string(), v.number()])),
+            id: v.exactOptional(v.union([v.string(), v.number()])),
             method: v.string(),
-            params: v.optional(v.object({ name: v.optional(v.string()) })),
+            params: v.exactOptional(
+              v.object({ name: v.exactOptional(v.string()) }),
+            ),
           }),
           await request.json(),
         );

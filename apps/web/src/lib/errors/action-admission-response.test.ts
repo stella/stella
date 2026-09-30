@@ -21,11 +21,11 @@ describe("action response observation", () => {
         status: refusal.status,
         headers: { "x-receipt-id": "receipt-example" },
       });
-      const observed = [];
+      const observed: ReturnType<typeof actionAdmissionOutcome>[] = [];
       const failures: unknown[] = [];
       const result = await observeActionAdmissionResponse(response, {
         notifyRefusal: (error) => {
-          observed.push(actionAdmissionOutcome(error)?.code);
+          observed.push(actionAdmissionOutcome(error));
           return true;
         },
         captureError: (error) => {
@@ -37,7 +37,7 @@ describe("action response observation", () => {
       expect(response.status).toBe(refusal.status);
       expect(response.headers.get("x-receipt-id")).toBe("receipt-example");
       expect(await response.json()).toEqual(payload);
-      expect(observed).toEqual([code]);
+      expect(observed.map((outcome) => outcome?.code)).toEqual([code]);
       expect(failures).toEqual([]);
     }
   });
@@ -143,7 +143,9 @@ test("the installed Eden hook preserves refused status, error payload and header
     expect(result.status).toBe(refusal.status);
     expect(result.data).toBeNull();
     expect(result.error?.value).toEqual(payload);
-    expect(result.headers.get("x-receipt-id")).toBe("receipt-example");
+    expect(new Headers(result.headers).get("x-receipt-id")).toBe(
+      "receipt-example",
+    );
     expect(observed).toEqual([code]);
     expect(captured).toEqual([]);
   }

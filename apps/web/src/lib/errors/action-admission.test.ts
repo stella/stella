@@ -17,7 +17,8 @@ const expectedMessages = Object.values(messages.errors.actionAdmission).filter(
 describe("action refusal presentation", () => {
   test("every refusal preserves its typed outcome, localized message and retry disposition", () => {
     const observedMessages = [];
-    for (const [code, refusal] of Object.entries(ACTION_ADMISSION_REFUSALS)) {
+    for (const code of Object.values(ACTION_ADMISSION_CODES)) {
+      const refusal = ACTION_ADMISSION_REFUSALS[code];
       const response = {
         status: refusal.status,
         value: {
@@ -53,7 +54,7 @@ describe("action refusal presentation", () => {
     expect(
       actionAdmissionOutcome(new Error("Transport failed", { cause: error }))
         ?.code,
-    ).toBe(error.code);
+    ).toBe(ACTION_ADMISSION_CODES.notEnabled);
   });
 
   test.each([
@@ -78,6 +79,12 @@ describe("action refusal presentation", () => {
         new APIError({ status: 503, message: "Unavailable" }),
       ),
     ).toBeUndefined();
+    const unknownCode = toAPIError({
+      status: 403,
+      value: { code: "unrecognized_action", message: "Refused" },
+    });
+    expect(unknownCode.code).toBe("unrecognized_action");
+    expect(actionAdmissionOutcome(unknownCode)).toBeUndefined();
     expect(actionAdmissionOutcome(null)).toBeUndefined();
   });
 });
