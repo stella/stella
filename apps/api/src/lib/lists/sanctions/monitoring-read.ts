@@ -172,7 +172,9 @@ export const readContactSanctions = async (
       Object.assign(row, {
         classification: classifySource(row.sourceId),
         reviewTarget: {
-          source: row.sourceId,
+          source: isSanctionsSource(row.sourceId)
+            ? row.sourceId
+            : panic("Stored sanctions match has an unknown source"),
           sourceEntryId: row.sourceEntryId,
           expectedContactFingerprint: row.contactFingerprint,
           expectedEntryHash: row.entryHash,

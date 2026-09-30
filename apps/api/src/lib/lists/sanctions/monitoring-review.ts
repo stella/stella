@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import type { SanctionsSource } from "@stll/sanctions";
@@ -131,21 +131,22 @@ export const reviewSanctionsMatch = async (
   ) {
     return Result.ok(match);
   }
-  const reviewed = (
-    await tx
-      .update(sanctionsContactMatches)
-      .set({
-        disposition,
-        reviewedBy: reviewerId,
-        reviewReason: trimmedReason,
-        reviewedAt: now,
-        reviewedContactFingerprint: match.contactFingerprint,
-        reviewedEntryHash: match.entryHash,
-        updatedAt: now,
-      })
-      .where(predicate)
-      .returning()
-  ).at(0);
+  const reviewed =
+    (
+      await tx
+        .update(sanctionsContactMatches)
+        .set({
+          disposition,
+          reviewedBy: reviewerId,
+          reviewReason: trimmedReason,
+          reviewedAt: now,
+          reviewedContactFingerprint: match.contactFingerprint,
+          reviewedEntryHash: match.entryHash,
+          updatedAt: now,
+        })
+        .where(predicate)
+        .returning()
+    ).at(0) ?? panic("Locked sanctions match disappeared during review");
   await tx.insert(sanctionsScreeningEvents).values({
     organizationId,
     contactId,

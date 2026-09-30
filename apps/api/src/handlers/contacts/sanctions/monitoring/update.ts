@@ -19,18 +19,18 @@ export default createSafeRootHandler(
   },
   async function* ({ safeDb, session, params, body, recordAuditEvent }) {
     const result = yield* Result.await(
-      safeDb(
-        async (tx) =>
-          await (
-            body.mode === "included"
-              ? includeSanctionsContact
-              : excludeSanctionsContact
-          )(tx, {
-            organizationId: session.activeOrganizationId,
-            contactId: params.contactId,
-            recordAuditEvent,
-          }),
-      ),
+      safeDb(async (tx) => {
+        const options = {
+          organizationId: session.activeOrganizationId,
+          contactId: params.contactId,
+          recordAuditEvent,
+        };
+        const updated =
+          body.mode === "included"
+            ? await includeSanctionsContact(tx, options)
+            : await excludeSanctionsContact(tx, options);
+        return updated.map(({ mode }) => ({ mode }));
+      }),
     );
     return result;
   },

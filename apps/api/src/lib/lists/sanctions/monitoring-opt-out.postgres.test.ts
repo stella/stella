@@ -15,6 +15,7 @@ import {
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 
 import { commitSanctionsMonitoringBatch } from "./monitoring-diff";
 import type { SanctionsMonitoringResult } from "./monitoring-diff";
@@ -37,13 +38,17 @@ if (!runPostgresTests || databaseUrl === undefined) {
       const admin = openClient().db;
       const commitDb = openClient().db;
       const optOutDb = openClient().db;
-      const organizationId = createSafeId<"organization">();
+      const organizationId = mintAuthProviderId<"organization">();
       const editionId = createSafeId<"sanctionsEdition">();
       const now = new Date();
       const editionHash = createHash("sha256").update(editionId).digest("hex");
-      const existingSource = await admin.query.sanctionsSources.findFirst({
-        where: { id: { eq: "eu" } },
-      });
+      const existingSource = (
+        await admin
+          .select()
+          .from(sanctionsSources)
+          .where(eq(sanctionsSources.id, "eu"))
+          .limit(1)
+      ).at(0);
       await admin.insert(organization).values({
         id: organizationId,
         name: "Synthetic monitoring organization",
