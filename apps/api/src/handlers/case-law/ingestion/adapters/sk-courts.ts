@@ -1,6 +1,10 @@
 import { panic, Result } from "better-result";
 
 import { mapWithConcurrency } from "@stll/concurrency";
+import {
+  skDocumentErrorDiagnostics,
+  skDocumentResponseDiagnostics,
+} from "@stll/legal-atlas/sk-document-fetch-diagnostics";
 import { parsePlainDate, Temporal } from "@stll/time";
 
 import {
@@ -138,12 +142,33 @@ export const skCourtsDocumentFetch: SkDocumentFetch = async (
     });
     return undefined;
   }
-  return await fetchPublisher(target.value, {
-    adapterKey: ADAPTER_KEYS.SK_COURTS,
-    redirect: "error",
-    signal,
-    timeoutMs: DOCUMENT_TIMEOUT_MS,
+  const fetched = await Result.tryPromise({
+    try: async () =>
+      await fetchPublisher(target.value, {
+        adapterKey: ADAPTER_KEYS.SK_COURTS,
+        redirect: "error",
+        signal,
+        timeoutMs: DOCUMENT_TIMEOUT_MS,
+        headers: { "User-Agent": INGESTION_USER_AGENT },
+      }),
+    catch: (error) => error,
   });
+  if (Result.isError(fetched)) {
+    logger.warn(
+      "case_law.ingestion.sk_document_fetch_failed",
+      skDocumentErrorDiagnostics(fetched.error),
+    );
+    throw fetched.error;
+  }
+  const diagnostics = skDocumentResponseDiagnostics(fetched.value);
+  if (
+    !fetched.value.ok ||
+    (diagnostics.contentTypeClass !== "pdf" &&
+      diagnostics.contentTypeClass !== "binary")
+  ) {
+    logger.warn("case_law.ingestion.sk_document_fetch_response", diagnostics);
+  }
+  return fetched.value;
 };
 
 const arrayOrEmpty = <T>(value: T[] | null | undefined): T[] => {
