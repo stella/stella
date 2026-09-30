@@ -19,9 +19,9 @@ import { Field, FieldError, FieldLabel } from "@stll/ui/field";
 import { Form } from "@stll/ui/form";
 import { Textarea } from "@stll/ui/textarea";
 
+import type { ApprovalEntry } from "@/features/time-approval-queue/queries";
 import { detached } from "@/lib/detached";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
-import type { ApprovalEntry } from "@/lib/time-approval-queue";
 
 import {
   RETURN_COMMENT_MAX_LENGTH,

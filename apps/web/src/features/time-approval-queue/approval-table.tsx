@@ -23,9 +23,12 @@ import {
 } from "@stll/ui/table";
 
 import { TableSkeletonRows } from "@/components/table-skeleton-rows";
+import type {
+  ApprovalEntry,
+  ApprovalResult,
+} from "@/features/time-approval-queue/queries";
 import type { TranslationKey } from "@/i18n/types";
 import { MEDIUM_DATE_FORMAT } from "@/lib/relative-time";
-import type { ApprovalEntry, ApprovalResult } from "@/lib/time-approval-queue";
 
 import { APPROVAL_REFUSAL_KEYS } from "./approval-state";
 

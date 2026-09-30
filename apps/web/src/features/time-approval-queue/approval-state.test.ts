@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
+import type {
+  ApprovalEntry,
+  ApprovalResult,
+} from "@/features/time-approval-queue/queries";
 import { toSafeId } from "@/lib/safe-id";
-import type { ApprovalEntry, ApprovalResult } from "@/lib/time-approval-queue";
 
 import {
   applyApprovalResults,

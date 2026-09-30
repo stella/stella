@@ -17,7 +17,14 @@ import {
   ApprovalTable,
   ApprovalTablePending,
 } from "@/features/time-approval-queue/approval-table";
+import { normalizeApprovalFilters } from "@/features/time-approval-queue/filters.logic";
+import type { ApprovalFilters } from "@/features/time-approval-queue/filters.logic";
 import { useApprovalMutations } from "@/features/time-approval-queue/mutations";
+import { approvalQueueOptions } from "@/features/time-approval-queue/queries";
+import type {
+  ApprovalEntry,
+  ApprovalResult,
+} from "@/features/time-approval-queue/queries";
 import { ReturnDialog } from "@/features/time-approval-queue/return-dialog";
 import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { authClient } from "@/lib/auth-client";
@@ -30,10 +37,6 @@ import {
   ensureRouteInfiniteQueryData,
   ensureRouteQueryData,
 } from "@/lib/react-query";
-import { normalizeApprovalFilters } from "@/lib/time-approval-filters";
-import type { ApprovalFilters } from "@/lib/time-approval-filters";
-import { approvalQueueOptions } from "@/lib/time-approval-queue";
-import type { ApprovalEntry, ApprovalResult } from "@/lib/time-approval-queue";
 import { workspacesRouteOptions } from "@/lib/workspaces/queries";
 
 const optionalDate = (value: unknown) =>

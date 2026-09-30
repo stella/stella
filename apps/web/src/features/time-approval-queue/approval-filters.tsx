@@ -15,7 +15,7 @@ import {
 } from "@stll/ui/select";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
-import type { ApprovalFilters } from "@/lib/time-approval-filters";
+import type { ApprovalFilters } from "@/features/time-approval-queue/filters.logic";
 
 const ALL_ITEMS = "__all__";
 

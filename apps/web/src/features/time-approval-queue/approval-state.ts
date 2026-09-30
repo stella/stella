@@ -1,7 +1,10 @@
 import { panic } from "better-result";
 
+import type {
+  ApprovalEntry,
+  ApprovalResult,
+} from "@/features/time-approval-queue/queries";
 import type { TranslationKey } from "@/i18n/types";
-import type { ApprovalEntry, ApprovalResult } from "@/lib/time-approval-queue";
 
 type ApprovalRefusal = Extract<ApprovalResult, { status: "refused" }>["reason"];
 export const APPROVAL_REFUSAL_KEYS = {

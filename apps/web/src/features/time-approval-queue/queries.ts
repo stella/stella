@@ -2,13 +2,13 @@ import { infiniteQueryOptions } from "@tanstack/react-query";
 
 import { mapWithConcurrency } from "@stll/concurrency";
 
+import { normalizeApprovalFilters } from "@/features/time-approval-queue/filters.logic";
+import type { ApprovalFilters } from "@/features/time-approval-queue/filters.logic";
 import { timeApprovalQueueApi } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
-import { normalizeApprovalFilters } from "@/lib/time-approval-filters";
-import type { ApprovalFilters } from "@/lib/time-approval-filters";
 
 const APPROVAL_PAGE_SIZE = 50;
 const APPROVAL_BATCH_SIZE = 200;

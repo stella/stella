@@ -8,6 +8,7 @@ import { companyFormatKeys } from "@/components/company-format-library";
 import { readerAnnotationKeys } from "@/components/legal-reader/annotations/reader-annotations-query";
 import { savedSearchKeys } from "@/components/saved-searches.logic";
 import { chatKeys } from "@/features/chat/chat-query-contract";
+import { approvalQueueOptions } from "@/features/time-approval-queue/queries";
 import {
   linkedAccountsOptions,
   pendingDeletionTasksOptions,
@@ -25,7 +26,6 @@ import { catalogueOptions } from "@/lib/knowledge/queries/catalogue";
 import { notificationsOptions } from "@/lib/notification-queries";
 import { organizationListOptions } from "@/lib/organization/queries";
 import { searchPreviewOptions } from "@/lib/search";
-import { approvalQueueOptions } from "@/lib/time-approval-queue";
 import { usageLaneOptions } from "@/lib/usage-queries";
 import { workspacesKeys } from "@/lib/workspaces/queries.logic";
 import {
@@ -388,7 +388,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
   "time-entries/approval-queue/list.ts": {
     kind: "keyed",
     calls: ['timeApprovalQueueApi["approval-queue"].get'],
-    files: ["lib/time-approval-queue.ts"],
+    files: ["features/time-approval-queue/queries.ts"],
     keys: () => [
       approvalQueueOptions({ organizationId: ORG, userId: USER, filters: {} })
         .queryKey,

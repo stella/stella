@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { normalizeApprovalFilters } from "./time-approval-filters";
+import { normalizeApprovalFilters } from "./filters.logic";
 
 describe("approval filter boundaries", () => {
   test("cleared filters are absent, selected values survive, and normalization is a fixed point", () => {
@@ -16,9 +16,9 @@ describe("approval filter boundaries", () => {
       for (const [key, value] of Object.entries(filters)) {
         expect(Object.hasOwn(normalized, key)).toBe(value !== undefined);
       }
-      expect(Object.entries(normalized)).toEqual(
+      expect(
         Object.entries(filters).filter(([, value]) => value !== undefined),
-      );
+      ).toEqual(Object.entries(normalized));
       expect(normalizeApprovalFilters(normalized)).toEqual(normalized);
     }
   });

@@ -2,12 +2,12 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { stellaToast } from "@stll/ui/toast";
 
-import { useAnalytics } from "@/lib/analytics/provider";
 import {
   approveTimeEntries,
   approvalQueueKeys,
   returnTimeEntry,
-} from "@/lib/time-approval-queue";
+} from "@/features/time-approval-queue/queries";
+import { useAnalytics } from "@/lib/analytics/provider";
 import { myTimeEntriesKeys } from "@/lib/workspaces/queries/my-time-entries";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
 

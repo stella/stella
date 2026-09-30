@@ -3,9 +3,12 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
+import type {
+  ApprovalEntry,
+  ApprovalResult,
+} from "@/features/time-approval-queue/queries";
 import messages from "@/i18n/langs/en.json";
 import { toSafeId } from "@/lib/safe-id";
-import type { ApprovalEntry, ApprovalResult } from "@/lib/time-approval-queue";
 
 import { ApprovalTable } from "./approval-table";
 
