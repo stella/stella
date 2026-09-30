@@ -26,9 +26,12 @@ import { panic } from "better-result";
 import type {
   BlockContent,
   Document as FolioDocument,
+  Hyperlink as FolioHyperlink,
   Paragraph as FolioParagraph,
+  ParagraphContent as FolioParagraphContent,
   Run as FolioRun,
   RunContent as FolioRunContent,
+  TrackedRunContent,
   Table as FolioTable,
   TextFormatting,
 } from "@stll/docx-core/model";
@@ -126,10 +129,18 @@ const runContentText = (item: FolioRunContent): string => {
   }
 };
 
+type FolioInlineContent =
+  | FolioParagraphContent
+  | TrackedRunContent
+  | FolioHyperlink["children"][number];
+
 const runsOf = (paragraph: FolioParagraph): DocRun[] => {
   const runs: DocRun[] = [];
-  const pushRun = (run: FolioRun): void => {
-    const formatting: TextFormatting | undefined = run.formatting;
+  const pushRun = (
+    run: FolioRun,
+    fallbackFormatting?: TextFormatting,
+  ): void => {
+    const formatting = run.formatting ?? fallbackFormatting;
     const text = run.content.map(runContentText).join("");
     if (text.length === 0) {
       return;
@@ -143,20 +154,69 @@ const runsOf = (paragraph: FolioParagraph): DocRun[] => {
     });
   };
 
-  for (const item of paragraph.content) {
-    if (item.type === "run") {
-      pushRun(item);
-      continue;
-    }
-    if (item.type === "hyperlink") {
-      for (const child of item.children) {
-        if (child.type === "run") {
-          pushRun(child);
-        }
+  const visit = (items: readonly FolioInlineContent[]): void => {
+    for (const item of items) {
+      switch (item.type) {
+        case "run":
+          pushRun(item);
+          break;
+        case "hyperlink":
+          visit(item.children);
+          break;
+        case "simpleField":
+          visit(item.content);
+          break;
+        case "complexField":
+          for (const result of item.fieldResult) {
+            pushRun(result, item.formatting);
+          }
+          break;
+        case "inlineSdt":
+        case "inlineWrapper":
+        case "insertion":
+        case "moveTo":
+          visit(item.content);
+          break;
+        case "mathEquation":
+          if (item.plainText) {
+            runs.push({
+              text: item.plainText,
+              bold: false,
+              italic: false,
+              colored: false,
+            });
+          }
+          break;
+        case "preservedInline":
+          if (item.text) {
+            runs.push({
+              text: item.text,
+              bold: false,
+              italic: false,
+              colored: false,
+            });
+          }
+          break;
+        case "deletion":
+        case "moveFrom":
+        case "bookmarkStart":
+        case "bookmarkEnd":
+        case "moveFromRangeStart":
+        case "moveFromRangeEnd":
+        case "moveToRangeStart":
+        case "moveToRangeEnd":
+        case "commentRangeStart":
+        case "commentRangeEnd":
+        case "commentReference":
+          break;
+        default:
+          item satisfies never;
+          panic("Unhandled paragraph content");
       }
     }
-    // Bookmarks, comment anchors and tracked-change markers carry no text.
-  }
+  };
+
+  visit(paragraph.content);
   return runs;
 };
 
