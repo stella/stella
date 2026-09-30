@@ -1,7 +1,6 @@
 -- requires: 20261003122900_action_cost_records
 SET lock_timeout = '1s';--> statement-breakpoint
-SET statement_timeout = '60s';--> statement-breakpoint
-ALTER TABLE "usage_events" VALIDATE CONSTRAINT "usage_events_action_identity_pair";--> statement-breakpoint
+SET statement_timeout = '5s';--> statement-breakpoint
 
 -- Build against the append-only event table without blocking new events.
 -- squawk-ignore transaction-nesting
