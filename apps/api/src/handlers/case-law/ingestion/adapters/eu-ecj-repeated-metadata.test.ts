@@ -64,8 +64,8 @@ test("every archive member survives stored replay and repeated bibliography stay
     ecli: "ECLI:EU:C:2026:1",
     decisionDate: "2026-01-01",
     decisionType: "judgment",
-    sourceUrl: undefined,
-    documentUrl: undefined,
+    sourceUrl: null,
+    documentUrl: null,
     metadata: { celex: "62026CJ0001" },
   });
   expect(outcome.type).toBe("parsed");
