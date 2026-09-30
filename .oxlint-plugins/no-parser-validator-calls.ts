@@ -10,6 +10,11 @@ import {
   getPropertyName,
   isAstNode,
   isIdentifier,
+  isIdentifierReference,
+  isStringLiteral,
+  resolveImportedExpression,
+  resolveVariable,
+  stableInitializer,
   staticStringValue,
   unwrapExpression,
 } from "./utils.ts";
@@ -77,6 +82,12 @@ export default eslintCompatPlugin({
           if (!isAstNode(node) || node.importKind === "type") {
             return false;
           }
+          if (
+            node.type === "ExportNamedDeclaration" &&
+            (node.source === null || node.source === undefined)
+          ) {
+            return false;
+          }
           const source = staticStringValue(node.source);
           if (source !== null && ORACLE_MODULE.test(source)) {
             return (
@@ -92,14 +103,37 @@ export default eslintCompatPlugin({
           return (
             Array.isArray(node.specifiers) &&
             node.specifiers.some((specifier) => {
-              const imported = getImportedName(specifier);
+              const imported =
+                specifier.type === "ExportSpecifier"
+                  ? getPropertyName(specifier.local)
+                  : getImportedName(specifier);
               return (
                 specifier.importKind !== "type" &&
+                specifier.exportKind !== "type" &&
                 imported !== null &&
                 VALIDATOR_NAMES.has(imported)
               );
             })
           );
+        };
+
+        const computedPropertyName = (property: unknown): string | null => {
+          const expression = unwrapExpression(property);
+          const literal = staticStringValue(expression);
+          if (literal !== null || !isIdentifierReference(expression)) {
+            return literal;
+          }
+          const variable = resolveVariable(context, expression);
+          const definition = variable?.defs.at(0);
+          if (
+            variable === null ||
+            definition?.type !== "Variable" ||
+            definition.parent?.kind !== "const"
+          ) {
+            return null;
+          }
+          const initializer = unwrapExpression(stableInitializer(variable));
+          return isStringLiteral(initializer) ? initializer.value : null;
         };
 
         return {
@@ -169,8 +203,18 @@ export default eslintCompatPlugin({
               return;
             }
             if (isAstNode(callee) && callee.type === "MemberExpression") {
-              const name = getPropertyName(callee.property);
-              if (name !== null && VALIDATOR_NAMES.has(name)) {
+              const name =
+                callee.computed === true
+                  ? computedPropertyName(callee.property)
+                  : getPropertyName(callee.property);
+              const binding =
+                name === null && callee.computed === true
+                  ? resolveImportedExpression(context, callee.object)
+                  : null;
+              if (
+                (name !== null && VALIDATOR_NAMES.has(name)) ||
+                (binding !== null && ORACLE_MODULE.test(binding.source))
+              ) {
                 record(node, "call");
               }
             }

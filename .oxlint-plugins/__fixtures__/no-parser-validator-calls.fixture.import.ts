@@ -12,3 +12,8 @@ const imported = import("@/api/lib/legal-search/parsers/validate-ast");
 
 export { buildValidationHtml, imported, oracle };
 export type { ValidationResult };
+
+// oxlint-disable-next-line no-parser-validator-calls/no-parser-validator-calls -- fixture: renamed validator re-exports from facades charge the import budget
+export { validateAndLog as check } from "./validator-facade";
+// expect-clean: no-parser-validator-calls/no-parser-validator-calls
+export type { validateAst as ValidatorType } from "./validator-facade";
