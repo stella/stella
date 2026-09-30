@@ -1,7 +1,6 @@
-export type CatalogueKind = "skill" | "mcp" | "native-tool";
-export type CatalogueCost = "free" | "paid";
-export type CatalogueSetup = "none" | "account" | "api-key";
-export type CatalogueInstallState = "installed" | "available" | "unavailable";
+import type { CatalogueCost, CatalogueSetup } from "@stll/catalogue";
+
+type CatalogueInstallState = "installed" | "available" | "unavailable";
 
 type CommonFields = {
   slug: string;
