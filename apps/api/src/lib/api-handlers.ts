@@ -794,6 +794,113 @@ const runSafeHandler = async <
   }
 };
 
+type FiniteHandlerGuard<TResult> = [Extract<TResult, Response>] extends [never]
+  ? unknown
+  : never;
+
+type ConfiguredFiniteHandlerGuard<TConfig, TResult> = TConfig extends {
+  actionAdmission: "handler";
+}
+  ? FiniteHandlerGuard<NoInfer<TResult>>
+  : unknown;
+
+type FiniteActionContext = SafeHandlerLogContext & {
+  user: { id: SafeId<"user"> };
+  session: { activeOrganizationId: SafeId<"organization"> };
+  actionSignal?: AbortSignal;
+};
+
+type FiniteActionOptions<TContext, TResult extends SafeHandlerPayload> = {
+  ctx: TContext;
+  handler: SafeHandlerFn<TContext, TResult>;
+  admit?: typeof withActionAdmission;
+};
+
+const runAdmittedFiniteHandler = async function* <
+  TContext extends FiniteActionContext,
+  TResult extends SafeHandlerPayload,
+>({
+  ctx,
+  handler,
+  admit = withActionAdmission,
+}: FiniteActionOptions<TContext, TResult>): SafeHandlerGenerator<TResult> {
+  return yield* Result.await(
+    admit({
+      organizationId: ctx.session.activeOrganizationId,
+      userId: ctx.user.id,
+      run: async (signal) => {
+        ctx.actionSignal = AbortSignal.any([ctx.request.signal, signal]);
+        ctx.actionSignal.throwIfAborted();
+        const outcome = await Result.gen(() => handler(ctx));
+        ctx.actionSignal.throwIfAborted();
+        if (Result.isOk(outcome) && outcome.value instanceof Response) {
+          // Cancel the producer too: a rejected stream must not keep running after release.
+          await outcome.value.body?.cancel();
+          return Result.err(
+            new HandlerError({
+              status: 500,
+              code: API_ERROR_CODE.internalServerError,
+              message: "Internal server error",
+              cause: new UnhandledException({
+                cause: "Finite handlers cannot return a Response",
+              }),
+            }),
+          );
+        }
+        return outcome;
+      },
+    }).then((admitted) =>
+      Result.mapError(admitted, (error) => {
+        if (ActionAdmissionError.is(error)) {
+          return new HandlerError({
+            status: error.reason === "busy" ? 429 : 503,
+            code:
+              error.reason === "busy" ? "rate_limited" : "service_unavailable",
+            message:
+              error.reason === "busy"
+                ? "Concurrent action limit reached"
+                : "Action admission is unavailable",
+            cause: error,
+          });
+        }
+        const handlerError = resolveHandlerError(error);
+        if (handlerError !== null) {
+          return handlerError;
+        }
+        if (DatabaseError.is(error) || DatabaseRlsError.is(error)) {
+          return error;
+        }
+        return new UnhandledException({ cause: error });
+      }),
+    ),
+  );
+};
+
+/**
+ * Call after resource authorization and the operation's usage preflight.
+ * @yields Typed failures for the owning safe-handler boundary.
+ */
+export const admitFiniteAction = async function* <
+  TContext extends FiniteActionContext,
+  TResult extends SafeHandlerPayload,
+>({
+  ctx,
+  handler,
+  admit,
+}: FiniteActionOptions<TContext, TResult> & {
+  handler: SafeHandlerFn<TContext, TResult> &
+    FiniteHandlerGuard<NoInfer<TResult>>;
+}): SafeHandlerGenerator<TResult> {
+  if (!env.FEATURE_ACTION_ADMISSION) {
+    return yield* handler(ctx);
+  }
+  return yield* runAdmittedFiniteHandler({
+    ctx,
+    handler,
+    ...(admit === undefined ? {} : { admit }),
+  });
+};
+
 type HandlerAdmissionDependencies = {
   admit?: typeof withActionAdmission;
 };
@@ -855,46 +962,9 @@ const createSafeScopedHandler = <
       return await runSafeHandler(ctx, handler);
     }
 
-    return await runSafeHandler(ctx, async function* () {
-      return yield* Result.await(
-        admit({
-          organizationId: ctx.session.activeOrganizationId,
-          userId: ctx.user.id,
-          run: async (signal) => {
-            ctx.actionSignal = AbortSignal.any([ctx.request.signal, signal]);
-            ctx.actionSignal.throwIfAborted();
-            const outcome = await Result.gen(() => handler(ctx));
-            ctx.actionSignal.throwIfAborted();
-            return outcome;
-          },
-        }).then((admitted) =>
-          Result.mapError(admitted, (error) => {
-            if (ActionAdmissionError.is(error)) {
-              return new HandlerError({
-                status: error.reason === "busy" ? 429 : 503,
-                code:
-                  error.reason === "busy"
-                    ? "rate_limited"
-                    : "service_unavailable",
-                message:
-                  error.reason === "busy"
-                    ? "Concurrent action limit reached"
-                    : "Action admission is unavailable",
-                cause: error,
-              });
-            }
-            const handlerError = resolveHandlerError(error);
-            if (handlerError !== null) {
-              return handlerError;
-            }
-            if (DatabaseError.is(error) || DatabaseRlsError.is(error)) {
-              return error;
-            }
-            return new UnhandledException({ cause: error });
-          }),
-        ),
-      );
-    });
+    return await runSafeHandler(ctx, (input) =>
+      runAdmittedFiniteHandler({ ctx: input, handler, admit }),
+    );
   },
 });
 
@@ -1275,7 +1345,8 @@ export const createSafeRootHandler = <
   TResult extends SafeHandlerPayload,
 >(
   config: TConfig,
-  handler: SafeHandlerFn<RootHandlerContext<TConfig>, TResult>,
+  handler: SafeHandlerFn<RootHandlerContext<TConfig>, TResult> &
+    ConfiguredFiniteHandlerGuard<TConfig, TResult>,
   dependencies?: HandlerAdmissionDependencies,
 ): SafeHandlerDefinition<TConfig, RootHandlerContext<TConfig>, TResult> =>
   createSafeScopedHandler(config, handler, dependencies);
@@ -1285,7 +1356,8 @@ export const createSafeHandler = <
   TResult extends SafeHandlerPayload,
 >(
   config: TConfig,
-  handler: SafeHandlerFn<WorkspaceHandlerContext<TConfig>, TResult>,
+  handler: SafeHandlerFn<WorkspaceHandlerContext<TConfig>, TResult> &
+    ConfiguredFiniteHandlerGuard<TConfig, TResult>,
 ): SafeHandlerDefinition<TConfig, WorkspaceHandlerContext<TConfig>, TResult> =>
   createSafeScopedHandler(config, (ctx) => {
     // Elysia may expand validateAuth again after validateWorkspaceAccess when a

@@ -166,7 +166,11 @@ const defaultTiming: AdmissionTiming = {
   },
 };
 
-/** The disabled branch never opens Valkey or reads admission configuration. */
+/**
+ * The disabled branch never opens Valkey or reads admission configuration.
+ * Nested admission must be awaited: same-caller work shares the parent's lease
+ * and signal only until that parent settles. Detached execution needs a fresh scope.
+ */
 export const withActionAdmission = async <T>({
   organizationId,
   userId,

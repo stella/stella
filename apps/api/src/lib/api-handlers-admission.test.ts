@@ -28,6 +28,20 @@ const config = {
   mcp: { type: "internal", reason: "assistant_chat" },
 } satisfies HandlerConfig;
 
+// These checks bind the finite declaration to the factories' real handler parameter.
+type MustBeNever<T extends never> = T;
+type ResponseHandler = MustBeNever<
+  Parameters<typeof createSafeRootHandler<typeof config, Response>>[1]
+>;
+type MixedResponseHandler = MustBeNever<
+  Parameters<
+    typeof createSafeRootHandler<typeof config, Response | { value: string }>
+  >[1]
+>;
+true satisfies [ResponseHandler, MixedResponseHandler] extends [never, never]
+  ? true
+  : false;
+
 const dependencies = (acquire: 0 | 1 = 1) => {
   let acquisitions = 0;
   let releases = 0;
@@ -144,6 +158,34 @@ describe("finite HTTP action admission", () => {
         ok: true,
       });
       expect(deps.counts()).toEqual({ acquisitions: 0, releases: 0 });
+    });
+  });
+
+  test("finite admission rejects a dynamically widened Response and cancels its producer", async () => {
+    await withFeature(true, async () => {
+      const deps = dependencies();
+      let cancelled = false;
+      // Widening models a payload whose runtime class was hidden by a caller's type.
+      const payload: object = new Response(
+        new ReadableStream({
+          cancel: () => {
+            cancelled = true;
+          },
+        }),
+      );
+      const endpoint = createSafeRootHandler(
+        config,
+        async function* () {
+          return Result.ok(payload);
+        },
+        deps,
+      );
+      expect(await endpoint.handler(asTestRaw(context()))).toMatchObject({
+        code: 500,
+        response: { code: "internal_server_error" },
+      });
+      expect(cancelled).toBe(true);
+      expect(deps.counts()).toEqual({ acquisitions: 1, releases: 1 });
     });
   });
 
