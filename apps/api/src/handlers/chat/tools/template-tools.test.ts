@@ -162,18 +162,15 @@ describe("createTemplateAuthoringTools", () => {
         },
       },
     });
-    // SAFETY: invoke the tool's execute directly with a stub call context.
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    const execute = tools[SUGGEST_TEMPLATE_FIELDS_TOOL_NAME]
-      .execute as unknown as (
-      input: { instructions: string | null; text: string },
-      options: unknown,
-    ) => Promise<unknown>;
+    const execute: unknown = tools[SUGGEST_TEMPLATE_FIELDS_TOOL_NAME].execute;
+    if (typeof execute !== "function") {
+      throw new TypeError("Expected a server tool");
+    }
 
-    const result = await execute(
+    const result: unknown = await Reflect.apply(execute, undefined, [
       { instructions: null, text: "Signed by Dana Novotná." },
       {},
-    );
+    ]);
 
     expect(sentTexts).toEqual(["Signed by [PERSON_1]."]);
     expect(result).toEqual({
