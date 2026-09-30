@@ -40,6 +40,10 @@ import {
   type ImportSourceKey,
 } from "@/api/lib/legal-search/ingestion-constants";
 
+import {
+  ADAPTER_SOURCE_FORMATS,
+  IMPORT_SOURCE_FORMATS,
+} from "../text-retention/source-formats";
 import { courtListenerImport } from "./courtlistener/import";
 import { checkedSourceRegistrations } from "./source-registrations";
 
@@ -105,11 +109,21 @@ const IMPORT_REGISTRY = {
 const SOURCE_REGISTRATIONS = [
   ...Object.values(ADAPTER_KEYS).map(
     (key) =>
-      ({ key, capability: "crawl", source: ADAPTER_REGISTRY[key] }) as const,
+      ({
+        key,
+        capability: "crawl",
+        source: ADAPTER_REGISTRY[key],
+        format: ADAPTER_SOURCE_FORMATS[key],
+      }) as const,
   ),
   ...Object.values(IMPORT_SOURCE_KEYS).map(
     (key) =>
-      ({ key, capability: "import", source: IMPORT_REGISTRY[key] }) as const,
+      ({
+        key,
+        capability: "import",
+        source: IMPORT_REGISTRY[key],
+        format: IMPORT_SOURCE_FORMATS[key],
+      }) as const,
   ),
 ];
 
