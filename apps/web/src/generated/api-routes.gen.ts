@@ -28841,11 +28841,13 @@ export type WebRoutes = {
                       encrypted: T44e2cd4568;
                       entityId: Tbe0400fa4c;
                       fieldId: Tbe0400fa4c;
+                      hasThumbnail: Tfddd645dc8;
                       id: string;
                       kind: ("automation" | "correspondence" | "court" | "document" | "documentReviewRun" | "folder" | "link" | "matter" | "message" | "playbook" | "task" | "team" | "translationRun");
                       mimeType: Tbe0400fa4c;
                       name: Tbe0400fa4c;
                       pdfFileId: Tbe0400fa4c;
+                      placeholder: Tbe0400fa4c;
                       propertyId: Tbe0400fa4c;
                     };
                     trigger: {
@@ -29471,7 +29473,9 @@ export type WebRoutes = {
                 items: Array<{
                   activityAt: string;
                   entityKind: T334757ea46;
+                  fieldId: Tbe0400fa4c;
                   fileName: Tbe0400fa4c;
+                  hasThumbnail: Tfddd645dc8;
                   id: string;
                   mimeType: Tbe0400fa4c;
                   status: Tbe0400fa4c;
