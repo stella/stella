@@ -236,7 +236,7 @@ describe("windowTextByCursor", () => {
           windowTextByCursor({ cursor, maxChars, text }),
         );
         expect(window.text).not.toMatch(/[\uD800-\uDFFF]/u);
-        expect([...window.text].length).toBeLessThanOrEqual(maxChars);
+        expect(window.text.match(/./gsu)?.length).toBeLessThanOrEqual(maxChars);
         expect(window.text.length).toBeGreaterThan(0);
         parts.push(window.text);
         expect(parts.length).toBeLessThanOrEqual(text.length);
