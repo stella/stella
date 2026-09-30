@@ -37,6 +37,8 @@
   "apps/api/src/handlers/case-law/ingestion/parsers/pl-tk.ts::import::1",
   "apps/api/src/handlers/case-law/ingestion/parsers/pl-uodo.ts::call::1",
   "apps/api/src/handlers/case-law/ingestion/parsers/pl-uodo.ts::import::1",
+  "apps/api/src/handlers/case-law/ingestion/parsers/sk-us.ts::call::1",
+  "apps/api/src/handlers/case-law/ingestion/parsers/sk-us.ts::import::1",
   "apps/api/src/lib/legal-search/parsers/sk-courts.ts::call::1",
   "apps/api/src/lib/legal-search/parsers/sk-courts.ts::import::1"
 ]
