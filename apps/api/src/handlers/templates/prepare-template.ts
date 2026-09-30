@@ -9,10 +9,9 @@
  * rewrite in apply-field-suggestions.ts.
  */
 
-import JSZip from "jszip";
-
 import { filtersFromFieldConfig } from "@stll/template-conditions";
 
+import { loadDocx } from "@/api/lib/docx-archive";
 import {
   applyFieldSuggestions,
   type FieldSuggestion,
@@ -54,8 +53,7 @@ export const prepareTemplateFromDocument = async ({
     return { file, fields: [], unapplied: [] };
   }
 
-  // oxlint-disable-next-line no-raw-zip-load/no-raw-zip-load -- unbounded archive read predating loadDocxArchive; frozen by the rule budget
-  const zip = await JSZip.loadAsync(file.bytes);
+  const zip = await loadDocx(file.bytes);
   if (!zip.file(MAIN_DOCUMENT_PART_PATH)) {
     return { file, fields: [], unapplied: suggestions };
   }

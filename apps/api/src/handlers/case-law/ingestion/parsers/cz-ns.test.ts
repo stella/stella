@@ -183,6 +183,37 @@ describe("extractRawChunks", () => {
   });
 });
 
+describe("list text", () => {
+  test("keeps bare text in ordered and unordered lists in source order", () => {
+    const input = baseInput(`
+      ${metaTableHtml}
+      <ul>before unordered <li>first item</li>between unordered<li>second item</li>after unordered</ul>
+      <ol>before ordered <li>third item</li>between ordered<li>fourth item</li>after ordered</ol>
+    `);
+
+    const { fulltext } = parseNsDecisionHtml(input);
+
+    const expectedOrder = [
+      "before unordered",
+      "first item",
+      "between unordered",
+      "second item",
+      "after unordered",
+      "before ordered",
+      "third item",
+      "between ordered",
+      "fourth item",
+      "after ordered",
+    ];
+    const positions = expectedOrder.map((text) => fulltext.indexOf(text));
+
+    expect(positions.every((position) => position >= 0)).toBe(true);
+    expect(positions).toEqual(
+      positions.toSorted((left, right) => left - right),
+    );
+  });
+});
+
 describe("blocksToPlainText", () => {
   test("joins block plainTexts with double newlines", () => {
     const blocks: Block[] = [

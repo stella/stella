@@ -716,7 +716,8 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["case-law", "read"],
             toolName: "read_case_law_decision",
-            description: "Read case-law decisions by id.",
+            description:
+              "Read decisions by `decision_ids[]`, answered in input order: `found` carries a decision, `not_found` and `pending` carry a message.",
             flags: [
               {
                 flag: "--decision-ids",
@@ -726,6 +727,22 @@ export const generatedRouteMap: RouteNode = {
                 description:
                   "The decisions to read, at most 20 per call. Each id is answered on its own, so one unknown id does not sink the rest.",
                 required: true,
+              },
+              {
+                flag: "--include",
+                prop: "include",
+                kind: "enum-array",
+                enum: [
+                  "details",
+                  "metadata",
+                  "textFields",
+                  "source",
+                  "citations",
+                ],
+                repeatable: true,
+                description:
+                  "Optional fields to return: details (court, dates, identifiers and URLs), metadata, textFields (abstract, headnote, legalSentence, summary), source, citations (both directions). Omit for all on the cursor-less window and only unfinished citation pages on continuations. An empty list returns text and identity only. Pass selected fields again with a cursor to request them on that window. Use a JSON array of strings; a single string is read as a one-item list.",
+                required: false,
               },
             ],
             inputOnly: [],
@@ -758,6 +775,24 @@ export const generatedRouteMap: RouteNode = {
                   maxLength: 512,
                   description:
                     "Opaque cursor from a previous call to read the next window of one decision's text and citations. Accepted only alongside a single decision id.",
+                },
+                include: {
+                  type: "array",
+                  items: {
+                    enum: [
+                      "details",
+                      "metadata",
+                      "textFields",
+                      "source",
+                      "citations",
+                    ],
+                    type: "string",
+                  },
+                  description:
+                    "Optional fields to return: details (court, dates, identifiers and URLs), metadata, textFields (abstract, headnote, legalSentence, summary), source, citations (both directions). Omit for all on the cursor-less window and only unfinished citation pages on continuations. An empty list returns text and identity only. Pass selected fields again with a cursor to request them on that window. Use a JSON array of strings; a single string is read as a one-item list.",
+                  "x-stella-agent-input": {
+                    kind: "string-list",
+                  },
                 },
               },
             },

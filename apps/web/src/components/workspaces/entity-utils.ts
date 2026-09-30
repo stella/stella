@@ -130,6 +130,15 @@ export const getEntityName = (entity: WorkspaceEntity): string => {
   })();
 };
 
+/**
+ * Whether a file field has a generated preview image the matter file
+ * thumbnail route can serve. An encrypted file never does.
+ */
+export const fileHasThumbnail = (content: {
+  encrypted?: boolean | null | undefined;
+  thumbnailFileId?: string | null | undefined;
+}): boolean => Boolean(content.thumbnailFileId) && content.encrypted !== true;
+
 export const getFirstFile = (entity: WorkspaceEntity) => {
   for (const field of Object.values(entity.fields)) {
     if (!field) {
@@ -146,6 +155,7 @@ export const getFirstFile = (entity: WorkspaceEntity) => {
         encrypted: field.content.encrypted,
         pdfFileId: field.content.pdfFileId,
         sizeBytes: field.content.sizeBytes,
+        hasThumbnail: fileHasThumbnail(field.content),
       };
     }
   }

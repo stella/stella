@@ -2273,7 +2273,8 @@
     "compareUnsupportedReasons": {
       "missingInBase": "Część dokumentu istnieje tylko w miejscu docelowym",
       "missingInTarget": "Część dokumentu istnieje tylko w bazie",
-      "notEditable": "Część dokumentu nie podlega edycji"
+      "notEditable": "Część dokumentu nie podlega edycji",
+      "unsupportedContent": "Ta wersja zawiera treść, której nie można jeszcze porównać."
     },
     "compareUnverified": "Niesprawdzone porównanie",
     "compareVerificationFailures": "{count, plural, one {Jedna kontrola dwukierunkowa nie powiodła się. Sprawdź porównanie, zanim na nim polegasz.} few {# kontrole dwukierunkowe nie powiodły się. Sprawdź porównanie, zanim na nim polegasz.} many {# kontroli dwukierunkowych nie powiodło się. Sprawdź porównanie, zanim na nim polegasz.} other {# kontroli dwukierunkowych nie powiodło się. Sprawdź porównanie, zanim na nim polegasz.}}",
