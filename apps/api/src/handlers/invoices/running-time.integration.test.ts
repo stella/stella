@@ -227,7 +227,7 @@ type InvoiceClaimOptions = {
 const claimOperations = [
   {
     name: "create invoice",
-    run: async ({ entryId, actor }: InvoiceClaimOptions) =>
+    run: async ({ entryId, actor = "owner" }: InvoiceClaimOptions) =>
       await createInvoice.handler(
         context(createInvoice.handler, {
           actor,
@@ -242,7 +242,7 @@ const claimOperations = [
   },
   {
     name: "add entries",
-    run: async ({ invoiceId, entryId, actor }: InvoiceClaimOptions) =>
+    run: async ({ invoiceId, entryId, actor = "owner" }: InvoiceClaimOptions) =>
       await addEntries.handler(
         context(addEntries.handler, {
           actor,
@@ -253,7 +253,7 @@ const claimOperations = [
   },
   {
     name: "add time line",
-    run: async ({ invoiceId, entryId, actor }: InvoiceClaimOptions) =>
+    run: async ({ invoiceId, entryId, actor = "owner" }: InvoiceClaimOptions) =>
       await createLine.handler(
         context(createLine.handler, {
           actor,
@@ -275,7 +275,7 @@ const releaseOperations = [
   {
     name: "delete invoice",
     status: INVOICE_STATUS.DRAFT,
-    run: async ({ invoiceId, actor }: InvoiceReleaseOptions) =>
+    run: async ({ invoiceId, actor = "owner" }: InvoiceReleaseOptions) =>
       await deleteInvoice.handler(
         context(deleteInvoice.handler, {
           actor,
@@ -286,7 +286,7 @@ const releaseOperations = [
   {
     name: "void invoice",
     status: INVOICE_STATUS.FINALIZED,
-    run: async ({ invoiceId, actor }: InvoiceReleaseOptions) =>
+    run: async ({ invoiceId, actor = "owner" }: InvoiceReleaseOptions) =>
       await transitionInvoice.handler(
         context(transitionInvoice.handler, {
           actor,
@@ -298,7 +298,11 @@ const releaseOperations = [
   {
     name: "remove entries",
     status: INVOICE_STATUS.DRAFT,
-    run: async ({ invoiceId, entryId, actor }: InvoiceReleaseOptions) =>
+    run: async ({
+      invoiceId,
+      entryId,
+      actor = "owner",
+    }: InvoiceReleaseOptions) =>
       await removeEntries.handler(
         context(removeEntries.handler, {
           actor,
@@ -310,7 +314,11 @@ const releaseOperations = [
   {
     name: "delete time line",
     status: INVOICE_STATUS.DRAFT,
-    run: async ({ invoiceId, lineId, actor }: InvoiceReleaseOptions) =>
+    run: async ({
+      invoiceId,
+      lineId,
+      actor = "owner",
+    }: InvoiceReleaseOptions) =>
       await deleteLine.handler(
         context(deleteLine.handler, {
           actor,

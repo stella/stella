@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
+import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 
-import type { Transaction } from "@/api/db/root";
 import { timeEntries, timeEntryTimerStates } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -17,7 +17,7 @@ const timeEntryIsRunning = () => sql`COALESCE((
 ), ${timeEntries.timerStartedAt} IS NOT NULL AND ${timeEntries.timerStoppedAt} IS NULL)`;
 
 type GuardRunningTimeEntriesOptions = {
-  tx: Transaction;
+  tx: Pick<PgAsyncDatabase<PgQueryResultHKT>, "select" | "execute">;
   workspaceId: SafeId<"workspace">;
   selection:
     | { type: "entries"; ids: SafeId<"timeEntry">[] }

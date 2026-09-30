@@ -329,6 +329,7 @@
         "$TURBO_ROOT$/apps/**",
         "$TURBO_ROOT$/packages/**",
         "$TURBO_ROOT$/.oxlint-plugins/**",
+        "$TURBO_ROOT$/oxlint.config.ts",
         "$TURBO_ROOT$/scripts/**"
       ]
     },
