@@ -75,7 +75,11 @@ import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
 import { abortControllerFromSignal } from "@/api/lib/tanstack-ai-generate";
 import { toUserFileUrl } from "@/api/lib/user-files/types";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
-import { buildEngineSnapshot } from "@/api/tests/helpers/chat-fixtures";
+import {
+  buildEngineSnapshot,
+  buildWireSnapshot,
+  unsafeFixture,
+} from "@/api/tests/helpers/chat-fixtures";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { richChatParts } from "./__fixtures__/rich-chat-parts";
@@ -775,7 +779,7 @@ const persistAdmissionLoss = async ({
     }
     if (exit === "teardown") {
       // A forwarded snapshot lets the consumer close while a terminal finish is still buffered.
-      yield { type: EventType.MESSAGES_SNAPSHOT, messages: [] };
+      yield buildEngineSnapshot([]);
       throw new HandlerError({
         status: 500,
         message: "Consumer failed to tear down",
@@ -924,7 +928,7 @@ describe("late admission loss retains a completed and charged response", () => {
             };
           }
           if (exit === "teardown") {
-            yield { type: EventType.MESSAGES_SNAPSHOT, messages: [] };
+            yield buildEngineSnapshot([]);
           }
         };
         const { emitted, finish } = await persistNativeInterruptTurn(source(), {
@@ -989,7 +993,7 @@ describe("admission lost before continuation production retains the original che
           });
         }
         if (exit === "teardown") {
-          yield { type: EventType.MESSAGES_SNAPSHOT, messages: [] };
+          yield buildEngineSnapshot([]);
         }
       };
       const { finish } = await persistNativeInterruptTurn(source(), {
@@ -1804,54 +1808,51 @@ describe("outgoing chat stream message ids", () => {
         existingMessageIds,
         mapMessageId: createChatMessageIdMapper(() => messageId),
         source: streamChunks([
-          {
-            type: EventType.MESSAGES_SNAPSHOT,
-            messages: [
-              {
-                id: "user-1",
-                role: "user",
-                content: "Please continue",
-              },
-              {
-                id: "assistant-previous",
-                role: "assistant",
-                content: "Earlier answer",
-              },
-              {
-                id: "provider-message-1",
-                role: "assistant",
-                content: "Checking the request",
-                toolCalls: [
-                  {
-                    id: "tool-lookup",
-                    type: "function",
-                    function: { name: "list_templates", arguments: "{}" },
+          buildWireSnapshot([
+            {
+              id: "user-1",
+              role: "user",
+              content: "Please continue",
+            },
+            {
+              id: "assistant-previous",
+              role: "assistant",
+              content: "Earlier answer",
+            },
+            {
+              id: "provider-message-1",
+              role: "assistant",
+              content: "Checking the request",
+              toolCalls: [
+                {
+                  id: "tool-lookup",
+                  type: "function",
+                  function: { name: "list_templates", arguments: "{}" },
+                },
+              ],
+            },
+            {
+              id: "tool-lookup-result",
+              role: "tool",
+              toolCallId: "tool-lookup",
+              content: '{"templates":[]}',
+            },
+            {
+              id: "provider-message-2",
+              role: "assistant",
+              content: "Waiting for approval",
+              toolCalls: [
+                {
+                  id: "tool-draft",
+                  type: "function",
+                  function: {
+                    name: "create-document",
+                    arguments: '{"name":"NDA","source":"@title NDA"}',
                   },
-                ],
-              },
-              {
-                id: "tool-lookup-result",
-                role: "tool",
-                toolCallId: "tool-lookup",
-                content: '{"templates":[]}',
-              },
-              {
-                id: "provider-message-2",
-                role: "assistant",
-                content: "Waiting for approval",
-                toolCalls: [
-                  {
-                    id: "tool-draft",
-                    type: "function",
-                    function: {
-                      name: "create-document",
-                      arguments: '{"name":"NDA","source":"@title NDA"}',
-                    },
-                  },
-                ],
-              },
-            ],
-          },
+                },
+              ],
+            },
+          ]),
           {
             type: EventType.TOOL_CALL_RESULT,
             content: '{"approved":true}',
@@ -1873,50 +1874,47 @@ describe("outgoing chat stream message ids", () => {
       }),
     );
     expect(chunks).toEqual([
-      {
-        type: EventType.MESSAGES_SNAPSHOT,
-        messages: [
-          {
-            id: "user-1",
-            role: "user",
-            content: "Please continue",
-          },
-          {
-            id: "assistant-previous",
-            role: "assistant",
-            content: "Earlier answer",
-          },
-          // One assistant message per persisted turn: both iterations' text and
-          // tool calls, under the turn's stable id, tool messages anchoring by
-          // toolCallId behind it.
-          {
-            id: messageId,
-            role: "assistant",
-            content: "Checking the request\n\nWaiting for approval",
-            toolCalls: [
-              {
-                id: "tool-lookup",
-                type: "function",
-                function: { name: "list_templates", arguments: "{}" },
+      buildWireSnapshot([
+        {
+          id: "user-1",
+          role: "user",
+          content: "Please continue",
+        },
+        {
+          id: "assistant-previous",
+          role: "assistant",
+          content: "Earlier answer",
+        },
+        // One assistant message per persisted turn: both iterations' text and
+        // tool calls, under the turn's stable id, tool messages anchoring by
+        // toolCallId behind it.
+        {
+          id: messageId,
+          role: "assistant",
+          content: "Checking the request\n\nWaiting for approval",
+          toolCalls: [
+            {
+              id: "tool-lookup",
+              type: "function",
+              function: { name: "list_templates", arguments: "{}" },
+            },
+            {
+              id: "tool-draft",
+              type: "function",
+              function: {
+                name: "create-document",
+                arguments: '{"name":"NDA","source":"@title NDA"}',
               },
-              {
-                id: "tool-draft",
-                type: "function",
-                function: {
-                  name: "create-document",
-                  arguments: '{"name":"NDA","source":"@title NDA"}',
-                },
-              },
-            ],
-          },
-          {
-            id: "tool-lookup-result",
-            role: "tool",
-            toolCallId: "tool-lookup",
-            content: '{"templates":[]}',
-          },
-        ],
-      },
+            },
+          ],
+        },
+        {
+          id: "tool-lookup-result",
+          role: "tool",
+          toolCallId: "tool-lookup",
+          content: '{"templates":[]}',
+        },
+      ]),
       {
         type: EventType.TOOL_CALL_RESULT,
         content: '{"approved":true}',
@@ -1963,30 +1961,27 @@ describe("outgoing chat stream message ids", () => {
         existingMessageIds: new Set(["user-1", owningMessageId]),
         mapMessageId: createTurnMessageIdMapper(owningMessageId),
         source: streamChunks([
-          {
-            type: EventType.MESSAGES_SNAPSHOT,
-            messages: [
-              { id: "user-1", role: "user", content: "Save the draft" },
-              {
-                id: owningMessageId,
-                role: "assistant",
-                content: "Saving the draft",
-                toolCalls: [savedCall],
-              },
-              {
-                id: "call-1-result",
-                role: "tool",
-                toolCallId: "call-1",
-                content: '{"playbookId":"playbook-1"}',
-              },
-              {
-                id: "provider-message-2",
-                role: "assistant",
-                content: "Saving another",
-                toolCalls: [nextCall],
-              },
-            ],
-          },
+          buildWireSnapshot([
+            { id: "user-1", role: "user", content: "Save the draft" },
+            {
+              id: owningMessageId,
+              role: "assistant",
+              content: "Saving the draft",
+              toolCalls: [savedCall],
+            },
+            {
+              id: "call-1-result",
+              role: "tool",
+              toolCallId: "call-1",
+              content: '{"playbookId":"playbook-1"}',
+            },
+            {
+              id: "provider-message-2",
+              role: "assistant",
+              content: "Saving another",
+              toolCalls: [nextCall],
+            },
+          ]),
           {
             type: EventType.TOOL_CALL_START,
             parentMessageId: "provider-message-2",
@@ -1997,26 +1992,23 @@ describe("outgoing chat stream message ids", () => {
       }),
     );
     expect(chunks).toEqual([
-      {
-        type: EventType.MESSAGES_SNAPSHOT,
-        messages: [
-          { id: "user-1", role: "user", content: "Save the draft" },
-          // The resumed run's iteration folds into the message it continues,
-          // which the snapshot already carries from history.
-          {
-            id: owningMessageId,
-            role: "assistant",
-            content: "Saving the draft\n\nSaving another",
-            toolCalls: [savedCall, nextCall],
-          },
-          {
-            id: "call-1-result",
-            role: "tool",
-            toolCallId: "call-1",
-            content: '{"playbookId":"playbook-1"}',
-          },
-        ],
-      },
+      buildWireSnapshot([
+        { id: "user-1", role: "user", content: "Save the draft" },
+        // The resumed run's iteration folds into the message it continues,
+        // which the snapshot already carries from history.
+        {
+          id: owningMessageId,
+          role: "assistant",
+          content: "Saving the draft\n\nSaving another",
+          toolCalls: [savedCall, nextCall],
+        },
+        {
+          id: "call-1-result",
+          role: "tool",
+          toolCallId: "call-1",
+          content: '{"playbookId":"playbook-1"}',
+        },
+      ]),
       {
         type: EventType.TOOL_CALL_START,
         parentMessageId: owningMessageId,
@@ -4409,40 +4401,43 @@ describe("chat stream refs", () => {
         initialRestorationPlaceholders: new Set(),
         restorationPairs: [],
         source: streamChunks([
-          {
-            type: EventType.MESSAGES_SNAPSHOT,
-            messages: [
-              {
-                id: "assistant-1",
-                role: "assistant",
-                toolCalls: [
-                  {
-                    id: "tool-1",
-                    type: "function",
-                    function: {
-                      arguments: JSON.stringify({ matter_id: matterRef }),
-                      name: "list_matters",
+          unsafeFixture(
+            "Unsupported activity role intentionally exercises non-engine snapshot extension preservation",
+            {
+              type: EventType.MESSAGES_SNAPSHOT,
+              messages: [
+                {
+                  id: "assistant-1",
+                  role: "assistant",
+                  toolCalls: [
+                    {
+                      id: "tool-1",
+                      type: "function",
+                      function: {
+                        arguments: JSON.stringify({ matter_id: matterRef }),
+                        name: "list_matters",
+                      },
                     },
-                  },
-                ],
-              },
-              {
-                id: "tool-result-1",
-                role: "tool",
-                toolCallId: "tool-1",
-                content: JSON.stringify({
-                  decisionId: matterRef,
-                  matters: [{ decisionId: matterRef, id: matterRef }],
-                }),
-              },
-              {
-                id: "activity-1",
-                role: "activity",
-                activityType: "review",
-                content: { matterRef },
-              },
-            ],
-          },
+                  ],
+                },
+                {
+                  id: "tool-result-1",
+                  role: "tool",
+                  toolCallId: "tool-1",
+                  content: JSON.stringify({
+                    decisionId: matterRef,
+                    matters: [{ decisionId: matterRef, id: matterRef }],
+                  }),
+                },
+                {
+                  id: "activity-1",
+                  role: "activity",
+                  activityType: "review",
+                  content: { matterRef },
+                },
+              ],
+            },
+          ),
         ]),
         resolveAssistantToolInputRefs: ({ input, toolName }) =>
           resolveRegistryToolInputRefs({
@@ -4460,40 +4455,45 @@ describe("chat stream refs", () => {
       }),
     );
 
-    expect(snapshot).toEqual({
-      type: EventType.MESSAGES_SNAPSHOT,
-      messages: [
+    expect(snapshot).toEqual(
+      unsafeFixture(
+        "Unsupported activity role intentionally exercises non-engine snapshot extension preservation",
         {
-          id: "assistant-1",
-          role: "assistant",
-          toolCalls: [
+          type: EventType.MESSAGES_SNAPSHOT,
+          messages: [
             {
-              id: "tool-1",
-              type: "function",
-              function: {
-                arguments: JSON.stringify({ matter_id: workspaceId }),
-                name: "list_matters",
-              },
+              id: "assistant-1",
+              role: "assistant",
+              toolCalls: [
+                {
+                  id: "tool-1",
+                  type: "function",
+                  function: {
+                    arguments: JSON.stringify({ matter_id: workspaceId }),
+                    name: "list_matters",
+                  },
+                },
+              ],
+            },
+            {
+              id: "tool-result-1",
+              role: "tool",
+              toolCallId: "tool-1",
+              content: JSON.stringify({
+                decisionId: matterRef,
+                matters: [{ decisionId: matterRef, id: workspaceId }],
+              }),
+            },
+            {
+              id: "activity-1",
+              role: "activity",
+              activityType: "review",
+              content: { matterRef },
             },
           ],
         },
-        {
-          id: "tool-result-1",
-          role: "tool",
-          toolCallId: "tool-1",
-          content: JSON.stringify({
-            decisionId: matterRef,
-            matters: [{ decisionId: matterRef, id: workspaceId }],
-          }),
-        },
-        {
-          id: "activity-1",
-          role: "activity",
-          activityType: "review",
-          content: { matterRef },
-        },
-      ],
-    });
+      ),
+    );
   });
 });
 
@@ -4620,29 +4620,32 @@ describe("anonymized outgoing chat stream", () => {
     ]);
   });
 
-  test("restores native AG-UI snapshots and interrupt bindings", async () => {
+  test("restores non-engine activity snapshot extensions and interrupt bindings", async () => {
     const boundary = createBoundary([["[PERSON_1]", "Jan Novak"]]);
     const stream = transformOutgoingStream({
       boundary,
       initialRestorationPlaceholders: new Set(),
       restorationPairs: [],
       source: streamChunks([
-        {
-          type: EventType.MESSAGES_SNAPSHOT,
-          messages: [
-            {
-              id: "message-1",
-              role: "assistant",
-              content: "Review [PERSON_1]",
-            },
-            {
-              id: "activity-1",
-              role: "activity",
-              activityType: "review",
-              content: { id: "[PERSON_1]", status: "[PERSON_1]" },
-            },
-          ],
-        },
+        unsafeFixture(
+          "Unsupported activity role intentionally exercises non-engine snapshot extension preservation",
+          {
+            type: EventType.MESSAGES_SNAPSHOT,
+            messages: [
+              {
+                id: "message-1",
+                role: "assistant",
+                content: "Review [PERSON_1]",
+              },
+              {
+                id: "activity-1",
+                role: "activity",
+                activityType: "review",
+                content: { id: "[PERSON_1]", status: "[PERSON_1]" },
+              },
+            ],
+          },
+        ),
         {
           type: EventType.RUN_FINISHED,
           threadId: "thread-1",
@@ -4680,22 +4683,25 @@ describe("anonymized outgoing chat stream", () => {
           pairs: [{ placeholder: "[PERSON_1]", original: "Jan Novak" }],
         },
       },
-      {
-        type: EventType.MESSAGES_SNAPSHOT,
-        messages: [
-          {
-            id: "message-1",
-            role: "assistant",
-            content: "Review Jan Novak",
-          },
-          {
-            id: "activity-1",
-            role: "activity",
-            activityType: "review",
-            content: { id: "Jan Novak", status: "Jan Novak" },
-          },
-        ],
-      },
+      unsafeFixture(
+        "Unsupported activity role intentionally exercises non-engine snapshot extension preservation",
+        {
+          type: EventType.MESSAGES_SNAPSHOT,
+          messages: [
+            {
+              id: "message-1",
+              role: "assistant",
+              content: "Review Jan Novak",
+            },
+            {
+              id: "activity-1",
+              role: "activity",
+              activityType: "review",
+              content: { id: "Jan Novak", status: "Jan Novak" },
+            },
+          ],
+        },
+      ),
       {
         type: EventType.RUN_FINISHED,
         threadId: "thread-1",
