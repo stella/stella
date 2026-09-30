@@ -181,7 +181,7 @@
     "ip-address": "10.7.2",
     "lucide-react": "1.41.0",
     "mailauth/joi": "18.2.9",
-    "mailauth/nodemailer": "9.1.0",
+    "mailauth/nodemailer": "10.0.10",
     "nanoid": "3.3.18",
     "postcss": "8.5.28",
     "prosemirror-model": "1.25.12",
