@@ -99,6 +99,7 @@ const projectCommentMetadata = (comment: FolioReviewComment) =>
     text: null,
     anchoredText: null,
     blockId: null,
+    story: comment.story,
     replies: comment.replies
       .toSorted((left, right) => left.id - right.id)
       .map(projectReplyMetadata),

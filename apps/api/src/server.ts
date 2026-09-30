@@ -107,6 +107,7 @@ import {
   templatesRoute,
 } from "@/api/handlers/templates/routes";
 import { timeApprovalQueueRoute } from "@/api/handlers/time-entries/approval-queue/routes";
+import { internalTimeEntriesRoute } from "@/api/handlers/time-entries/internal/routes";
 import { myTimeEntriesRoute } from "@/api/handlers/time-entries/me/routes";
 import { timeEntriesRoute } from "@/api/handlers/time-entries/routes";
 import { timeTimersRoute } from "@/api/handlers/time-timers/routes";
@@ -125,7 +126,6 @@ import { workspacesRoute } from "@/api/handlers/workspaces/routes";
 import { detached } from "@/api/lib/analytics/capture";
 import { getAuth, realtimeAuthorizers } from "@/api/lib/auth";
 import { shouldRejectBrowserMutation } from "@/api/lib/browser-origin-guard";
-import { finalizeResponseCachePolicy } from "@/api/lib/cache-policy";
 import {
   resolveClientAddress,
   resolveSignupRateLimitClientIp,
@@ -171,7 +171,10 @@ import { createSchedulerTaskRegistry } from "@/api/lib/scheduler/registry";
 import { startSchedulerLoop } from "@/api/lib/scheduler/runner";
 import { createReapOwnerlessChatTurnsTask } from "@/api/lib/scheduler/tasks/chat-turn-reaper";
 import { securityCanaryInterceptor } from "@/api/lib/security-canary";
-import { setSecurityHeaders } from "@/api/lib/security-headers";
+import {
+  finalizeResponseCachePolicy,
+  setSecurityHeaders,
+} from "@/api/lib/security-headers";
 import { startSse, stopSse } from "@/api/lib/sse";
 import { clearByokAdapterCache } from "@/api/lib/tanstack-ai-models";
 import { isUploadRateLimitedPath } from "@/api/lib/upload-rate-limit";
@@ -255,6 +258,9 @@ if (isLocalDevOpen()) {
 const CORS_PREFLIGHT_MAX_AGE_SECONDS = 60 * 60;
 
 const api = new Elysia()
+  .mapResponse(({ responseValue, set }) =>
+    finalizeResponseCachePolicy({ response: responseValue, set }),
+  )
   // Body parsing is decided before any route runs, so the multipart parser has
   // to sit ahead of every route registration.
   .use(multipartFormParser)
@@ -347,9 +353,6 @@ const api = new Elysia()
   )
   .onError((context) => answerRequestError(context))
   .onAfterHandle(async (context) => await completeRequest(context))
-  .mapResponse(({ responseValue, set }) =>
-    finalizeResponseCachePolicy({ response: responseValue, set }),
-  )
   .use(authUiRoute)
   .use(authMetadataRoute)
   .use(
@@ -405,6 +408,7 @@ const api = new Elysia()
   .use(
     new Elysia()
       .use(timeApprovalQueueRoute)
+      .use(internalTimeEntriesRoute)
       .use(myTimeEntriesRoute)
       .use(timeTimersRoute),
   )

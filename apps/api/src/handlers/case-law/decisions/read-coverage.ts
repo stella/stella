@@ -3,8 +3,8 @@ import { Result } from "better-result";
 import { readCaseLawCoverageHandler } from "@/api/handlers/case-law/decisions/coverage";
 import { createSafePublicHandler } from "@/api/lib/api-handlers";
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
-import { preventPublicCaching } from "@/api/lib/cache-policy";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import { preventPublicCaching } from "@/api/lib/security-headers";
 
 const config = {
   cache: { kind: "public", maxAge: 900, swr: 3600 },

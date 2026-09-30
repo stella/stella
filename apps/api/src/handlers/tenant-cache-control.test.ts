@@ -7,7 +7,7 @@ import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import api from "@/api/server";
 
 // TTL changes and new shared-cache routes require an explicit review decision.
-const PUBLIC_CACHE_HEADERS: Record<string, string> = {
+const PUBLIC_CACHE_HEADERS = {
   "GET /.well-known/oauth-authorization-server": "public, max-age=300",
   "GET /.well-known/oauth-authorization-server/api/auth": "public, max-age=300",
   "GET /.well-known/openid-configuration": "public, max-age=300",
@@ -32,7 +32,7 @@ const PUBLIC_CACHE_HEADERS: Record<string, string> = {
     "public, max-age=300",
   "GET /v1/public/knowledge/playbook-starters": "public, max-age=300",
   "GET /v1/public/knowledge/playbook-starters/:id": "public, max-age=300",
-};
+} as const satisfies Record<string, string>;
 
 // Elysia stores lifecycle hook containers outside LocalHook's declared type.
 const firstRouteHook = (hooks: unknown, name: string) => {

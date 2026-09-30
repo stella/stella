@@ -7,11 +7,11 @@ import {
 } from "@stll/api-contract";
 
 import { env } from "@/api/env";
+import { frontendOrigins } from "@/api/lib/dev-origins";
 import {
   CACHE_CONTROL_HEADER,
   PRIVATE_CACHE_CONTROL,
-} from "@/api/lib/cache-policy";
-import { frontendOrigins } from "@/api/lib/dev-origins";
+} from "@/api/lib/security-headers";
 import { runtimeMode } from "@/api/runtime-mode";
 
 const allowedHostOrigins = frontendOrigins({

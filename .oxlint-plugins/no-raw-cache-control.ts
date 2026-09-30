@@ -2,10 +2,7 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import { filenameForContext, isStringLiteral } from "./utils.ts";
 
-const CACHE_POLICY_OWNERS = [
-  "apps/api/src/lib/cache-policy.ts",
-  "apps/api/src/lib/security-headers.ts",
-] as const;
+const CACHE_POLICY_OWNERS = ["apps/api/src/lib/security-headers.ts"] as const;
 
 const CACHE_DIRECTIVE =
   /^(?:no-cache|no-store|no-transform|must-revalidate|proxy-revalidate|must-understand|private|public|immutable|stale-while-revalidate|stale-if-error|max-age|s-maxage)(?:\s*=.*)?$/iu;

@@ -3,7 +3,7 @@ import { panic } from "better-result";
 
 import { getAgentAuthMetadataBlock } from "@/api/agent-auth/metadata";
 import { getAuth } from "@/api/lib/auth";
-import { CACHE_CONTROL_HEADER } from "@/api/lib/cache-policy";
+import { CACHE_CONTROL_HEADER } from "@/api/lib/security-headers";
 
 type AuthWithOAuthServerConfig = ReturnType<typeof getAuth> & {
   api: {

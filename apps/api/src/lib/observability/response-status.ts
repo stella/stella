@@ -47,3 +47,22 @@ export const resolveResponseStatus = ({
 
   return DEFAULT_RESPONSE_STATUS;
 };
+
+/** Copy raw responses with the effective status and mutable headers. */
+export const normalizeResponseStatus = ({
+  response,
+  set,
+}: ResolveResponseStatusOptions) => {
+  let raw = response;
+  while (raw instanceof ElysiaCustomStatusResponse) {
+    raw = raw.response;
+  }
+  if (!(raw instanceof Response)) {
+    return undefined;
+  }
+  return new Response(raw.body, {
+    headers: raw.headers,
+    status: resolveResponseStatus({ response, set }),
+    statusText: raw.statusText,
+  });
+};

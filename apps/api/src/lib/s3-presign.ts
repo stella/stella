@@ -36,10 +36,10 @@ import { Temporal } from "@stll/time";
 
 import { envBase } from "@/api/env-base";
 import { detached } from "@/api/lib/analytics/capture";
-import { PRIVATE_CACHE_CONTROL } from "@/api/lib/cache-policy";
 import { contentDisposition } from "@/api/lib/content-disposition";
 import { resolveS3Credentials, TEMP_UPLOAD_TAGGING } from "@/api/lib/s3";
 import { createS3CredentialGuard } from "@/api/lib/s3/credential-guard";
+import { PRIVATE_CACHE_CONTROL } from "@/api/lib/security-headers";
 
 export class S3PresignError extends TaggedError("S3PresignError")<{
   message: string;

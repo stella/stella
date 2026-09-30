@@ -34,9 +34,8 @@ describe("no-raw-cache-control", () => {
     ).toEqual([]);
   });
 
-  test("leaves both canonical policy modules to own their literals", async () => {
+  test("leaves the canonical policy module to own its literals", async () => {
     const source = 'const policy = "private, no-store";';
-    expect(await lint(source, "apps/api/src/lib/cache-policy.ts")).toEqual([]);
     expect(await lint(source, "apps/api/src/lib/security-headers.ts")).toEqual(
       [],
     );

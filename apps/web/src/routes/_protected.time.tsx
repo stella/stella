@@ -2,6 +2,7 @@ import { useSuspenseInfiniteQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useFormatter, useTranslations } from "use-intl";
 
+import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { parsePlainDate, Temporal } from "@stll/time";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
@@ -75,6 +76,7 @@ function MyDayPage() {
   const tBilling = useTranslations("billing");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
+  const tDay = useTranslations("timesheets.day");
   const format = useFormatter();
   const date = Route.useSearch({ select: (search) => search.date });
   const organizationId = Route.useRouteContext({
@@ -179,23 +181,32 @@ function MyDayPage() {
                     key={entry.id}
                   >
                     <div className="min-w-0 flex-1 space-y-1">
-                      <Link
-                        className="hover:underline"
-                        params={{ workspaceId: entry.workspaceId }}
-                        to="/workspaces/$workspaceId/timesheets"
-                      >
-                        <BidiText as="span" className="text-sm font-medium">
-                          {entry.workspaceName}
-                        </BidiText>
-                      </Link>
-                      {entry.workspaceReference && (
-                        <BidiText
-                          as="p"
-                          className="text-muted-foreground text-xs"
+                      {entry.activityGroup ===
+                      TIME_ENTRY_ACTIVITY_GROUP.INTERNAL ? (
+                        <span className="text-sm font-medium">
+                          {tDay("internalWork")}
+                        </span>
+                      ) : (
+                        <Link
+                          className="hover:underline"
+                          params={{ workspaceId: entry.workspaceId }}
+                          to="/workspaces/$workspaceId/timesheets"
                         >
-                          {entry.workspaceReference}
-                        </BidiText>
+                          <BidiText as="span" className="text-sm font-medium">
+                            {entry.workspaceName}
+                          </BidiText>
+                        </Link>
                       )}
+                      {entry.activityGroup ===
+                        TIME_ENTRY_ACTIVITY_GROUP.CLIENT &&
+                        entry.workspaceReference && (
+                          <BidiText
+                            as="p"
+                            className="text-muted-foreground text-xs"
+                          >
+                            {entry.workspaceReference}
+                          </BidiText>
+                        )}
                       {entry.narrative && (
                         <BidiText
                           as="p"

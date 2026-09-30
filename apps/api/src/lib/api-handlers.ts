@@ -25,10 +25,6 @@ import { captureObservedError } from "@/api/lib/analytics/capture";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
-import {
-  applyResponseCachePolicy,
-  type CachePolicy,
-} from "@/api/lib/cache-policy";
 import type { CapabilityTransport } from "@/api/lib/capability-transport";
 import type { WorkspaceParamsSchema } from "@/api/lib/custom-schema";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
@@ -66,6 +62,10 @@ import {
   ActionAdmissionError,
   withActionAdmission,
 } from "@/api/lib/rate-limit/action-admission";
+import {
+  applyResponseCachePolicy,
+  type CachePolicy,
+} from "@/api/lib/security-headers";
 import {
   getTanStackTextModelInfoForRole,
   resolveEffectiveServiceTierForProvider,

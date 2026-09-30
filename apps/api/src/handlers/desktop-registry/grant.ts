@@ -11,11 +11,11 @@ import {
   DESKTOP_REGISTRY_KEY_SECONDS,
   DESKTOP_REGISTRY_PERMISSION,
 } from "@/api/lib/business-registries/desktop/config";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   CACHE_CONTROL_HEADER,
   PRIVATE_CACHE_CONTROL,
-} from "@/api/lib/cache-policy";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+} from "@/api/lib/security-headers";
 
 export default createSafeRootHandler(
   {

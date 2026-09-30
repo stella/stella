@@ -20,8 +20,8 @@ import {
 } from "@/api/lib/agent-auth-idjag";
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
 import { createSafePublicHandler } from "@/api/lib/api-handlers";
-import { PRAGMA_NO_CACHE } from "@/api/lib/cache-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { PRAGMA_NO_CACHE } from "@/api/lib/security-headers";
 
 /**
  * Profile-specific token exchange hosting two grants better-auth's closed

@@ -5,10 +5,6 @@ import { timingSafeEqual } from "node:crypto";
 import { Temporal } from "@stll/time";
 
 import { env } from "@/api/env";
-import {
-  CACHE_CONTROL_HEADER,
-  PRIVATE_CACHE_CONTROL,
-} from "@/api/lib/cache-policy";
 import { errorTag } from "@/api/lib/errors/utils";
 import {
   MACHINE_API_KEY_LENGTH,
@@ -19,6 +15,10 @@ import { getRequestId } from "@/api/lib/observability/request-context";
 import { withCommandTimeout } from "@/api/lib/rate-limit/redis-command-timeout";
 import { createRedisClient } from "@/api/lib/redis-client";
 import { coordinationKey } from "@/api/lib/redis-keys";
+import {
+  CACHE_CONTROL_HEADER,
+  PRIVATE_CACHE_CONTROL,
+} from "@/api/lib/security-headers";
 
 const BEARER_SCHEME = "bearer";
 const SHA256_HEX_PATTERN = /^[a-f0-9]{64}$/u;

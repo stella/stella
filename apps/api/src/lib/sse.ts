@@ -9,11 +9,6 @@ import type {
 import { SSE_HEARTBEAT_FRAME } from "@stll/api-contract/sse-heartbeat";
 
 import type { SafeId } from "@/api/lib/branded-types";
-import {
-  CACHE_CONTROL_HEADER,
-  SSE_CACHE_CONTROL,
-  SSE_MEDIA_TYPE,
-} from "@/api/lib/cache-policy";
 import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
@@ -24,6 +19,11 @@ import {
   brandPersistedUserId,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
+import {
+  CACHE_CONTROL_HEADER,
+  SSE_CACHE_CONTROL,
+  SSE_MEDIA_TYPE,
+} from "@/api/lib/security-headers";
 import {
   INSTANCE_ID,
   parseRedisPayload,

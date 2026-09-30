@@ -73,19 +73,6 @@ export type WebRoutes = {
         headers: unknown;
         response: {
           200: Response;
-          400: T9a51b7d2bc;
-          401: T9a51b7d2bc;
-          402: T9a51b7d2bc;
-          403: T9a51b7d2bc;
-          404: T9a51b7d2bc;
-          409: T9a51b7d2bc;
-          413: T9a51b7d2bc;
-          422: T9a51b7d2bc;
-          428: T9a51b7d2bc;
-          429: T9a51b7d2bc;
-          500: T9a51b7d2bc;
-          502: T9a51b7d2bc;
-          503: T9a51b7d2bc;
         };
       };
     };
@@ -116,19 +103,6 @@ export type WebRoutes = {
             headers: unknown;
             response: {
               200: Response;
-              400: T9a51b7d2bc;
-              401: T9a51b7d2bc;
-              402: T9a51b7d2bc;
-              403: T9a51b7d2bc;
-              404: T9a51b7d2bc;
-              409: T9a51b7d2bc;
-              413: T9a51b7d2bc;
-              422: T9a51b7d2bc;
-              428: T9a51b7d2bc;
-              429: T9a51b7d2bc;
-              500: T9a51b7d2bc;
-              502: T9a51b7d2bc;
-              503: T9a51b7d2bc;
             };
           };
         };
@@ -155,19 +129,6 @@ export type WebRoutes = {
         headers: unknown;
         response: {
           200: Response;
-          400: T9a51b7d2bc;
-          401: T9a51b7d2bc;
-          402: T9a51b7d2bc;
-          403: T9a51b7d2bc;
-          404: T9a51b7d2bc;
-          409: T9a51b7d2bc;
-          413: T9a51b7d2bc;
-          422: T9a51b7d2bc;
-          428: T9a51b7d2bc;
-          429: T9a51b7d2bc;
-          500: T9a51b7d2bc;
-          502: T9a51b7d2bc;
-          503: T9a51b7d2bc;
         };
       };
     };
@@ -205,19 +166,6 @@ export type WebRoutes = {
         headers: unknown;
         response: {
           200: T244a503d33;
-          400: T9a51b7d2bc;
-          401: T9a51b7d2bc;
-          402: T9a51b7d2bc;
-          403: T9a51b7d2bc;
-          404: T9a51b7d2bc;
-          409: T9a51b7d2bc;
-          413: T9a51b7d2bc;
-          422: T9a51b7d2bc;
-          428: T9a51b7d2bc;
-          429: T9a51b7d2bc;
-          500: T9a51b7d2bc;
-          502: T9a51b7d2bc;
-          503: T9a51b7d2bc;
         };
       };
     };
@@ -245,19 +193,6 @@ export type WebRoutes = {
           headers: unknown;
           response: {
             200: T244a503d33;
-            400: T9a51b7d2bc;
-            401: T9a51b7d2bc;
-            402: T9a51b7d2bc;
-            403: T9a51b7d2bc;
-            404: T9a51b7d2bc;
-            409: T9a51b7d2bc;
-            413: T9a51b7d2bc;
-            422: T9a51b7d2bc;
-            428: T9a51b7d2bc;
-            429: T9a51b7d2bc;
-            500: T9a51b7d2bc;
-            502: T9a51b7d2bc;
-            503: T9a51b7d2bc;
           };
         };
       };
@@ -286,19 +221,6 @@ export type WebRoutes = {
           headers: unknown;
           response: {
             200: T244a503d33;
-            400: T9a51b7d2bc;
-            401: T9a51b7d2bc;
-            402: T9a51b7d2bc;
-            403: T9a51b7d2bc;
-            404: T9a51b7d2bc;
-            409: T9a51b7d2bc;
-            413: T9a51b7d2bc;
-            422: T9a51b7d2bc;
-            428: T9a51b7d2bc;
-            429: T9a51b7d2bc;
-            500: T9a51b7d2bc;
-            502: T9a51b7d2bc;
-            503: T9a51b7d2bc;
           };
         };
       };
@@ -327,19 +249,6 @@ export type WebRoutes = {
           headers: unknown;
           response: {
             200: T244a503d33;
-            400: T9a51b7d2bc;
-            401: T9a51b7d2bc;
-            402: T9a51b7d2bc;
-            403: T9a51b7d2bc;
-            404: T9a51b7d2bc;
-            409: T9a51b7d2bc;
-            413: T9a51b7d2bc;
-            422: T9a51b7d2bc;
-            428: T9a51b7d2bc;
-            429: T9a51b7d2bc;
-            500: T9a51b7d2bc;
-            502: T9a51b7d2bc;
-            503: T9a51b7d2bc;
           };
         };
       };
@@ -368,43 +277,29 @@ export type WebRoutes = {
           headers: unknown;
           response: {
             200: T244a503d33;
-            400: T9a51b7d2bc;
-            401: T9a51b7d2bc;
-            402: T9a51b7d2bc;
-            403: T9a51b7d2bc;
-            404: T9a51b7d2bc;
-            409: T9a51b7d2bc;
-            413: T9a51b7d2bc;
-            422: T9a51b7d2bc;
-            428: T9a51b7d2bc;
-            429: T9a51b7d2bc;
-            500: T9a51b7d2bc;
-            502: T9a51b7d2bc;
-            503: T9a51b7d2bc;
           };
         };
       };
     };
   };
-  public: {
-    feedback: {
-      post: {
-        body: string;
-        params: T5e3ac29766;
-        query: unknown;
-        headers: unknown;
-        response: {
-          200: Response;
-          422: {
-            type: "validation";
-            on: string;
-            summary?: string;
-            message?: string;
-            found?: unknown;
-            property?: string;
-            expected?: string;
-          };
-        };
+  "auth.md": {
+    options: {
+      body: unknown;
+      params: T5e3ac29766;
+      query: unknown;
+      headers: unknown;
+      response: {
+        200: string;
+      };
+    };
+  } & {
+    get: {
+      body: unknown;
+      params: T5e3ac29766;
+      query: unknown;
+      headers: unknown;
+      response: {
+        200: string;
       };
     };
   };
@@ -441,37 +336,25 @@ export type WebRoutes = {
       };
     };
   };
-  "auth.md": {
-    options: {
-      body: unknown;
-      params: T5e3ac29766;
-      query: unknown;
-      headers: unknown;
-      response: {
-        200: string;
-      };
-    };
-  } & {
-    get: {
-      body: unknown;
-      params: T5e3ac29766;
-      query: unknown;
-      headers: unknown;
-      response: {
-        200: string;
-        400: T9a51b7d2bc;
-        401: T9a51b7d2bc;
-        402: T9a51b7d2bc;
-        403: T9a51b7d2bc;
-        404: T9a51b7d2bc;
-        409: T9a51b7d2bc;
-        413: T9a51b7d2bc;
-        422: T9a51b7d2bc;
-        428: T9a51b7d2bc;
-        429: T9a51b7d2bc;
-        500: T9a51b7d2bc;
-        502: T9a51b7d2bc;
-        503: T9a51b7d2bc;
+  public: {
+    feedback: {
+      post: {
+        body: string;
+        params: T5e3ac29766;
+        query: unknown;
+        headers: unknown;
+        response: {
+          200: Response;
+          422: {
+            type: "validation";
+            on: string;
+            summary?: string;
+            message?: string;
+            found?: unknown;
+            property?: string;
+            expected?: string;
+          };
+        };
       };
     };
   };
@@ -927,271 +810,6 @@ export type WebRoutes = {
                 microsoft: Tfddd645dc8;
               };
               transactionalEmail: Tfddd645dc8;
-            };
-          };
-        };
-      };
-    };
-    public: {
-      knowledge: {
-        "template-packs": {
-          get: {
-            body: unknown;
-            params: T5e3ac29766;
-            query: unknown;
-            headers: unknown;
-            response: {
-              200: (T1791c676c5 | {
-                items: Array<{
-                  id: string;
-                  name: string;
-                  version: string;
-                  description: string;
-                  license: string;
-                  licenseUrl: Tbe0400fa4c;
-                  source: Tdc9ed49116;
-                  authors: ReadonlyArray<T8f22b22b9e>;
-                  jurisdictions: ReadonlyArray<T61d3076ac0>;
-                  languages: ReadonlyArray<string>;
-                  legalAreas: ReadonlyArray<string>;
-                  lastReviewedAt: Tbe0400fa4c;
-                  disclaimer: Tbe0400fa4c;
-                  templateCount: number;
-                }>;
-              });
-              400: T9a51b7d2bc;
-              401: T9a51b7d2bc;
-              402: T9a51b7d2bc;
-              403: T9a51b7d2bc;
-              404: T9a51b7d2bc;
-              409: T9a51b7d2bc;
-              413: T9a51b7d2bc;
-              422: T9a51b7d2bc;
-              428: T9a51b7d2bc;
-              429: T9a51b7d2bc;
-              500: T9a51b7d2bc;
-              502: T9a51b7d2bc;
-              503: T9a51b7d2bc;
-            };
-          };
-        };
-      };
-    } & {
-      knowledge: {
-        "template-packs": {
-          ":packId": {
-            get: {
-              body: unknown;
-              params: {
-                packId: string;
-              };
-              query: unknown;
-              headers: unknown;
-              response: {
-                200: (T1791c676c5 | {
-                  templates: Array<Tfd0bde727d>;
-                  id: string;
-                  name: string;
-                  version: string;
-                  description: string;
-                  license: string;
-                  licenseUrl: Tbe0400fa4c;
-                  source: Tdc9ed49116;
-                  authors: ReadonlyArray<T8f22b22b9e>;
-                  jurisdictions: ReadonlyArray<T61d3076ac0>;
-                  languages: ReadonlyArray<string>;
-                  legalAreas: ReadonlyArray<string>;
-                  lastReviewedAt: Tbe0400fa4c;
-                  disclaimer: Tbe0400fa4c;
-                  templateCount: number;
-                });
-                400: T9a51b7d2bc;
-                401: T9a51b7d2bc;
-                402: T9a51b7d2bc;
-                403: T9a51b7d2bc;
-                404: T9a51b7d2bc;
-                409: T9a51b7d2bc;
-                413: T9a51b7d2bc;
-                422: (T9a51b7d2bc | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: T9a51b7d2bc;
-                429: T9a51b7d2bc;
-                500: T9a51b7d2bc;
-                502: T9a51b7d2bc;
-                503: T9a51b7d2bc;
-              };
-            };
-          };
-        };
-      };
-    } & {
-      knowledge: {
-        "template-packs": {
-          ":packId": {
-            templates: {
-              ":templateId": {
-                get: {
-                  body: unknown;
-                  params: T33b1882b1b;
-                  query: unknown;
-                  headers: unknown;
-                  response: {
-                    200: (T1791c676c5 | Tfd0bde727d);
-                    400: T9a51b7d2bc;
-                    401: T9a51b7d2bc;
-                    402: T9a51b7d2bc;
-                    403: T9a51b7d2bc;
-                    404: T9a51b7d2bc;
-                    409: T9a51b7d2bc;
-                    413: T9a51b7d2bc;
-                    422: (T9a51b7d2bc | {
-                      type: "validation";
-                      on: string;
-                      summary?: string;
-                      message?: string;
-                      found?: unknown;
-                      property?: string;
-                      expected?: string;
-                    });
-                    428: T9a51b7d2bc;
-                    429: T9a51b7d2bc;
-                    500: T9a51b7d2bc;
-                    502: T9a51b7d2bc;
-                    503: T9a51b7d2bc;
-                  };
-                };
-              };
-            };
-          };
-        };
-      };
-    } & {
-      knowledge: {
-        "template-packs": {
-          ":packId": {
-            templates: {
-              ":templateId": {
-                preview: {
-                  get: {
-                    body: unknown;
-                    params: T33b1882b1b;
-                    query: unknown;
-                    headers: unknown;
-                    response: {
-                      200: (Tb26a03bcf4 | T1791c676c5);
-                      400: T9a51b7d2bc;
-                      401: T9a51b7d2bc;
-                      402: T9a51b7d2bc;
-                      403: T9a51b7d2bc;
-                      404: T9a51b7d2bc;
-                      409: T9a51b7d2bc;
-                      413: T9a51b7d2bc;
-                      422: (T9a51b7d2bc | {
-                        type: "validation";
-                        on: string;
-                        summary?: string;
-                        message?: string;
-                        found?: unknown;
-                        property?: string;
-                        expected?: string;
-                      });
-                      428: T9a51b7d2bc;
-                      429: T9a51b7d2bc;
-                      500: T9a51b7d2bc;
-                      502: T9a51b7d2bc;
-                      503: T9a51b7d2bc;
-                    };
-                  };
-                };
-              };
-            };
-          };
-        };
-      };
-    } & {
-      knowledge: {
-        "playbook-starters": {
-          get: {
-            body: unknown;
-            params: T5e3ac29766;
-            query: unknown;
-            headers: unknown;
-            response: {
-              200: (T1791c676c5 | {
-                items: Array<{
-                  id: T15dbebb935;
-                  name: string;
-                  description: string;
-                  documentTypeKey: string;
-                  positionCount: number;
-                }>;
-              });
-              400: T9a51b7d2bc;
-              401: T9a51b7d2bc;
-              402: T9a51b7d2bc;
-              403: T9a51b7d2bc;
-              404: T9a51b7d2bc;
-              409: T9a51b7d2bc;
-              413: T9a51b7d2bc;
-              422: T9a51b7d2bc;
-              428: T9a51b7d2bc;
-              429: T9a51b7d2bc;
-              500: T9a51b7d2bc;
-              502: T9a51b7d2bc;
-              503: T9a51b7d2bc;
-            };
-          };
-        };
-      };
-    } & {
-      knowledge: {
-        "playbook-starters": {
-          ":id": {
-            get: {
-              body: unknown;
-              params: {
-                id: string;
-              };
-              query: unknown;
-              headers: unknown;
-              response: {
-                200: (T1791c676c5 | {
-                  positions: Tc892bdfad5;
-                  id: T15dbebb935;
-                  name: string;
-                  description: string;
-                  documentTypeKey: string;
-                  positionCount: number;
-                });
-                400: T9a51b7d2bc;
-                401: T9a51b7d2bc;
-                402: T9a51b7d2bc;
-                403: T9a51b7d2bc;
-                404: T9a51b7d2bc;
-                409: T9a51b7d2bc;
-                413: T9a51b7d2bc;
-                422: (T9a51b7d2bc | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: T9a51b7d2bc;
-                429: T9a51b7d2bc;
-                500: T9a51b7d2bc;
-                502: T9a51b7d2bc;
-                503: T9a51b7d2bc;
-              };
             };
           };
         };
@@ -1715,8 +1333,8 @@ export type WebRoutes = {
         post: {
           body: {
             name: string;
-            registry: T347d72c6fa;
             format: string;
+            registry: T347d72c6fa;
           };
           params: T5e3ac29766;
           query: Record<never, never>;
@@ -1946,8 +1564,8 @@ export type WebRoutes = {
         post: {
           body: {
             number: string;
-            registry: T347d72c6fa;
             format: Tbe0400fa4c;
+            registry: T347d72c6fa;
           };
           params: T5e3ac29766;
           query: Record<never, never>;
@@ -4236,8 +3854,8 @@ export type WebRoutes = {
         headers: Record<never, never>;
         response: {
           200: {
-            type: T1dacb02040;
             tags: T51e1843fb9;
+            type: T1dacb02040;
             metadata: Te06446a5fa;
             id: Tbf83a7d346;
             createdAt: string;
@@ -4514,8 +4132,8 @@ export type WebRoutes = {
                 roles: Array<Tdedb951219>;
               }>;
               partyCount: number;
-              type: T1dacb02040;
               tags: T51e1843fb9;
+              type: T1dacb02040;
               metadata: Te06446a5fa;
               id: Tbf83a7d346;
               createdAt: string;
@@ -4583,8 +4201,8 @@ export type WebRoutes = {
       ":contactId": {
         post: {
           body: {
-            type?: "organization" | "person";
             tags?: Array<string> | null;
+            type?: "organization" | "person";
             metadata?: {
               dataBoxes?: Array<{
                 label?: string;
@@ -5023,8 +4641,8 @@ export type WebRoutes = {
               purpose: "entity_version";
             } | {
               name: string;
-              mimeType: string;
               scope: T7906e8b72f;
+              mimeType: string;
               size: number;
               sha256Hex: string;
               purpose: "agent_skill";
@@ -6136,8 +5754,8 @@ export type WebRoutes = {
               email: Tbe0400fa4c;
             }> | null;
             recurrence?: {
-              range: Tbe0400fa4c;
               pattern: Tbe0400fa4c;
+              range: Tbe0400fa4c;
             } | null;
             ownerUserId?: T56ed95d57c;
             workingTargetDate?: string | null;
@@ -6213,8 +5831,8 @@ export type WebRoutes = {
               email: Tbe0400fa4c;
             }> | null;
             recurrence?: {
-              range: Tbe0400fa4c;
               pattern: Tbe0400fa4c;
+              range: Tbe0400fa4c;
             } | null;
             workflowReason?: string;
             taskId: Tf742ada503;
@@ -6338,7 +5956,6 @@ export type WebRoutes = {
                 name: string;
                 status: Tbe0400fa4c;
                 location: Tbe0400fa4c;
-                priority: Tbe0400fa4c;
                 kind: T334757ea46;
                 metadata: {
                   url: string;
@@ -6350,6 +5967,7 @@ export type WebRoutes = {
                 id: Tf742ada503;
                 workspaceId: T9e07a7d6cd;
                 createdAt: string;
+                priority: Tbe0400fa4c;
                 listItemType: Tcdfc93c4d1;
                 dueDate: Tbe0400fa4c;
                 updatedAt: Tdf2b0d1150;
@@ -6387,9 +6005,9 @@ export type WebRoutes = {
                   name: string;
                   status: Tbe0400fa4c;
                   location: Tbe0400fa4c;
-                  priority: Tbe0400fa4c;
                   id: Tf742ada503;
                   createdAt: string;
+                  priority: Tbe0400fa4c;
                   listItemType: Tcdfc93c4d1;
                   dueDate: Tbe0400fa4c;
                   startAt: Tdf2b0d1150;
@@ -7739,22 +7357,22 @@ export type WebRoutes = {
     chat: {
       post: {
         body: {
-          data: Tc3caec9098;
-          state: Record<never, never>;
           context: Array<Te8eee0ded7>;
+          data: Tafed4f08a4;
+          state: Record<never, never>;
           runId: string;
           threadId: Taf779979ed;
           messages: Array<T9281829eb5>;
-          forwardedProps: Tc3caec9098;
+          forwardedProps: Tafed4f08a4;
           tools: Array<Te8d0e5a977>;
         } | {
-          data: Taec2e0d8c2;
-          state: Record<never, never>;
           context: Array<Te8eee0ded7>;
+          data: T9d6ede4452;
+          state: Record<never, never>;
           runId: string;
           threadId: Taf779979ed;
           messages: Array<T9281829eb5>;
-          forwardedProps: Taec2e0d8c2;
+          forwardedProps: T9d6ede4452;
           tools: Array<Te8d0e5a977>;
           parentRunId: string;
           resume: Array<Tacbaeed0d6>;
@@ -8855,7 +8473,7 @@ export type WebRoutes = {
                   description: string;
                   id: T74aae47c1a;
                   source: ("expense" | "manual" | "time_entry");
-                  timeEntryId: (Tdb05f01858 | null);
+                  timeEntryId: (T4e3529b6dc | null);
                   unit: Tbe0400fa4c;
                   expenseId: (T22259c97a4 | null);
                   position: number;
@@ -8896,8 +8514,8 @@ export type WebRoutes = {
                 buyerCountry: Tbe0400fa4c;
                 organizationId: Tb1d68817ba;
                 timeEntries: Array<{
-                  status: Tef030b2402;
-                  id: Tdb05f01858;
+                  status: T96f3e623c3;
+                  id: T4e3529b6dc;
                   currency: string;
                   narrative: string;
                   dateWorked: string;
@@ -8964,7 +8582,7 @@ export type WebRoutes = {
             originalInvoiceId?: Tb7bcf69f62;
             currency: string;
             invoiceDate: string;
-            timeEntryIds: Array<Tdb05f01858>;
+            timeEntryIds: Array<T4e3529b6dc>;
           };
           params: T4042d27c41;
           query: Record<never, never>;
@@ -9149,7 +8767,7 @@ export type WebRoutes = {
           entries: {
             post: {
               body: {
-                timeEntryIds?: Array<Tdb05f01858>;
+                timeEntryIds?: Array<T4e3529b6dc>;
                 expenseIds?: Array<T22259c97a4>;
               };
               params: {
@@ -9194,7 +8812,7 @@ export type WebRoutes = {
           entries: {
             delete: {
               body: {
-                timeEntryIds?: Array<Tdb05f01858>;
+                timeEntryIds?: Array<T4e3529b6dc>;
                 expenseIds?: Array<T22259c97a4>;
               };
               params: {
@@ -9248,7 +8866,7 @@ export type WebRoutes = {
                 } | {
                   description?: string;
                   type: "time_entry";
-                  timeEntryId: Tdb05f01858;
+                  timeEntryId: T4e3529b6dc;
                 } | {
                   description?: string;
                   type: "expense";
@@ -9425,7 +9043,7 @@ export type WebRoutes = {
                 invoiceDescription: Tbe0400fa4c;
                 billable: Tfddd645dc8;
                 markup: number;
-                status: Tef030b2402;
+                status: T96f3e623c3;
                 userName: Tbe0400fa4c;
                 createdAt: string;
                 updatedAt: Tbe0400fa4c;
@@ -10455,9 +10073,9 @@ export type WebRoutes = {
           body: Record<never, never>;
           params: T5e3ac29766;
           query: {
-            text?: string;
             title?: string;
             cursor?: string;
+            text?: string;
             limit?: number;
             dateFrom?: string;
             dateTo?: string;
@@ -10777,9 +10395,9 @@ export type WebRoutes = {
                   title: string;
                   language: string;
                   country: string;
+                  eli: string;
                   sourceUrl: Tbe0400fa4c;
                   headline: Tbe0400fa4c;
-                  eli: string;
                   documentType: Tbe0400fa4c;
                   effectiveDate: Tbe0400fa4c;
                   documentId: string;
@@ -10861,19 +10479,6 @@ export type WebRoutes = {
                 response_types: Array<string>;
                 token_endpoint_auth_method: "none";
               };
-              400: T9a51b7d2bc;
-              401: T9a51b7d2bc;
-              402: T9a51b7d2bc;
-              403: T9a51b7d2bc;
-              404: T9a51b7d2bc;
-              409: T9a51b7d2bc;
-              413: T9a51b7d2bc;
-              422: T9a51b7d2bc;
-              428: T9a51b7d2bc;
-              429: T9a51b7d2bc;
-              500: T9a51b7d2bc;
-              502: T9a51b7d2bc;
-              503: T9a51b7d2bc;
             };
           };
         };
@@ -11352,6 +10957,271 @@ export type WebRoutes = {
               500: T9a51b7d2bc;
               502: T9a51b7d2bc;
               503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    };
+    public: {
+      knowledge: {
+        "template-packs": {
+          get: {
+            body: unknown;
+            params: T5e3ac29766;
+            query: unknown;
+            headers: unknown;
+            response: {
+              200: (T1791c676c5 | {
+                items: Array<{
+                  id: string;
+                  name: string;
+                  version: string;
+                  description: string;
+                  license: string;
+                  licenseUrl: Tbe0400fa4c;
+                  source: Tdc9ed49116;
+                  authors: ReadonlyArray<T8f22b22b9e>;
+                  jurisdictions: ReadonlyArray<T61d3076ac0>;
+                  languages: ReadonlyArray<string>;
+                  legalAreas: ReadonlyArray<string>;
+                  lastReviewedAt: Tbe0400fa4c;
+                  disclaimer: Tbe0400fa4c;
+                  templateCount: number;
+                }>;
+              });
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: T9a51b7d2bc;
+              404: T9a51b7d2bc;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: T9a51b7d2bc;
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    } & {
+      knowledge: {
+        "template-packs": {
+          ":packId": {
+            get: {
+              body: unknown;
+              params: {
+                packId: string;
+              };
+              query: unknown;
+              headers: unknown;
+              response: {
+                200: (T1791c676c5 | {
+                  templates: Array<Tfd0bde727d>;
+                  id: string;
+                  name: string;
+                  version: string;
+                  description: string;
+                  license: string;
+                  licenseUrl: Tbe0400fa4c;
+                  source: Tdc9ed49116;
+                  authors: ReadonlyArray<T8f22b22b9e>;
+                  jurisdictions: ReadonlyArray<T61d3076ac0>;
+                  languages: ReadonlyArray<string>;
+                  legalAreas: ReadonlyArray<string>;
+                  lastReviewedAt: Tbe0400fa4c;
+                  disclaimer: Tbe0400fa4c;
+                  templateCount: number;
+                });
+                400: T9a51b7d2bc;
+                401: T9a51b7d2bc;
+                402: T9a51b7d2bc;
+                403: T9a51b7d2bc;
+                404: T9a51b7d2bc;
+                409: T9a51b7d2bc;
+                413: T9a51b7d2bc;
+                422: (T9a51b7d2bc | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: T9a51b7d2bc;
+                429: T9a51b7d2bc;
+                500: T9a51b7d2bc;
+                502: T9a51b7d2bc;
+                503: T9a51b7d2bc;
+              };
+            };
+          };
+        };
+      };
+    } & {
+      knowledge: {
+        "template-packs": {
+          ":packId": {
+            templates: {
+              ":templateId": {
+                get: {
+                  body: unknown;
+                  params: T33b1882b1b;
+                  query: unknown;
+                  headers: unknown;
+                  response: {
+                    200: (T1791c676c5 | Tfd0bde727d);
+                    400: T9a51b7d2bc;
+                    401: T9a51b7d2bc;
+                    402: T9a51b7d2bc;
+                    403: T9a51b7d2bc;
+                    404: T9a51b7d2bc;
+                    409: T9a51b7d2bc;
+                    413: T9a51b7d2bc;
+                    422: (T9a51b7d2bc | {
+                      type: "validation";
+                      on: string;
+                      summary?: string;
+                      message?: string;
+                      found?: unknown;
+                      property?: string;
+                      expected?: string;
+                    });
+                    428: T9a51b7d2bc;
+                    429: T9a51b7d2bc;
+                    500: T9a51b7d2bc;
+                    502: T9a51b7d2bc;
+                    503: T9a51b7d2bc;
+                  };
+                };
+              };
+            };
+          };
+        };
+      };
+    } & {
+      knowledge: {
+        "template-packs": {
+          ":packId": {
+            templates: {
+              ":templateId": {
+                preview: {
+                  get: {
+                    body: unknown;
+                    params: T33b1882b1b;
+                    query: unknown;
+                    headers: unknown;
+                    response: {
+                      200: (Tb26a03bcf4 | T1791c676c5);
+                      400: T9a51b7d2bc;
+                      401: T9a51b7d2bc;
+                      402: T9a51b7d2bc;
+                      403: T9a51b7d2bc;
+                      404: T9a51b7d2bc;
+                      409: T9a51b7d2bc;
+                      413: T9a51b7d2bc;
+                      422: (T9a51b7d2bc | {
+                        type: "validation";
+                        on: string;
+                        summary?: string;
+                        message?: string;
+                        found?: unknown;
+                        property?: string;
+                        expected?: string;
+                      });
+                      428: T9a51b7d2bc;
+                      429: T9a51b7d2bc;
+                      500: T9a51b7d2bc;
+                      502: T9a51b7d2bc;
+                      503: T9a51b7d2bc;
+                    };
+                  };
+                };
+              };
+            };
+          };
+        };
+      };
+    } & {
+      knowledge: {
+        "playbook-starters": {
+          get: {
+            body: unknown;
+            params: T5e3ac29766;
+            query: unknown;
+            headers: unknown;
+            response: {
+              200: (T1791c676c5 | {
+                items: Array<{
+                  id: T15dbebb935;
+                  name: string;
+                  description: string;
+                  documentTypeKey: string;
+                  positionCount: number;
+                }>;
+              });
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: T9a51b7d2bc;
+              404: T9a51b7d2bc;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: T9a51b7d2bc;
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    } & {
+      knowledge: {
+        "playbook-starters": {
+          ":id": {
+            get: {
+              body: unknown;
+              params: {
+                id: string;
+              };
+              query: unknown;
+              headers: unknown;
+              response: {
+                200: (T1791c676c5 | {
+                  positions: Tc892bdfad5;
+                  id: T15dbebb935;
+                  name: string;
+                  description: string;
+                  documentTypeKey: string;
+                  positionCount: number;
+                });
+                400: T9a51b7d2bc;
+                401: T9a51b7d2bc;
+                402: T9a51b7d2bc;
+                403: T9a51b7d2bc;
+                404: T9a51b7d2bc;
+                409: T9a51b7d2bc;
+                413: T9a51b7d2bc;
+                422: (T9a51b7d2bc | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: T9a51b7d2bc;
+                429: T9a51b7d2bc;
+                500: T9a51b7d2bc;
+                502: T9a51b7d2bc;
+                503: T9a51b7d2bc;
+              };
             };
           };
         };
@@ -13331,6 +13201,7 @@ export type WebRoutes = {
           post: {
             body: {
               billable?: false | true;
+              activityGroup?: "client" | "internal";
               timezoneId: string;
             };
             params: T32313cfbba;
@@ -13447,12 +13318,12 @@ export type WebRoutes = {
     } & {
       post: {
         body: {
-          description?: string;
           scope?: {
             perspective?: "buyer" | "neutral" | "seller";
             documentTypeKey?: string;
             trigger?: "manual" | "onClassified";
           };
+          description?: string;
           name: string;
           positions: {
             items: Array<{
@@ -13778,12 +13649,12 @@ export type WebRoutes = {
       ":playbookId": {
         put: {
           body: {
-            description?: string;
             scope?: {
               perspective?: "buyer" | "neutral" | "seller";
               documentTypeKey?: string;
               trigger?: "manual" | "onClassified";
             };
+            description?: string;
             expectedUpdatedAt?: string;
             name: string;
             positions: {
@@ -16779,9 +16650,9 @@ export type WebRoutes = {
               installedConnectorSlug: Tbe0400fa4c;
               enabled: T44e2cd4568;
             } | {
-              url: string;
               tags: Array<T85c0da56d3>;
               kind: "mcp";
+              url: string;
               description: string;
               $schema?: string | undefined;
               jurisdictions: Array<string>;
@@ -16810,9 +16681,9 @@ export type WebRoutes = {
               installedConnectorSlug: Tbe0400fa4c;
               enabled: T44e2cd4568;
             } | {
-              url?: string | undefined;
               tags: Array<T85c0da56d3>;
               kind: "native-tool";
+              url?: string | undefined;
               description: string;
               $schema?: string | undefined;
               jurisdictions: Array<string>;
@@ -20582,7 +20453,7 @@ export type WebRoutes = {
               items: Array<{
                 id: T406326c84f;
                 caseNumber: string;
-                caseNumberType: Tcd5c3f23bb;
+                caseNumberType: Tdf198f5601;
                 slug: Tbe0400fa4c;
                 ecli: Tbe0400fa4c;
                 court: string;
@@ -21013,13 +20884,48 @@ export type WebRoutes = {
             get: {
               body: unknown;
               params: {
-                decisionId: string;
-              } & Record<never, never>;
-              query: unknown;
+                decisionId: T406326c84f;
+              };
+              query: {
+                cursor?: string;
+                direction: never;
+              };
               headers: unknown;
               response: {
-                200: T62fc9cc8f5;
-                400: T655a3efcc3;
+                200: (T12163e1f6a | {
+                  items: Array<{
+                    id: T6685765ee4;
+                    citationText: string;
+                    sectionIndex: T588d0ee653;
+                    treatment: Tf8140c6ae1;
+                    decision: (T3cf2d0a2c7 | null);
+                  }>;
+                  nextCursor: Tbe0400fa4c;
+                  limit: number;
+                });
+                400: {
+                  code?: string;
+                  message: string;
+                  hint?: string;
+                  issues?: Array<Tfbf26a7023>;
+                  reason?: string;
+                  required?: number;
+                  available?: number;
+                  confirmation?: T0d3b649ce9;
+                  error?: string;
+                  claim?: T753574bc22;
+                  registration_id?: string;
+                  registration_type?: string;
+                  claim_url?: string;
+                  claim_token?: string;
+                  claim_token_expires?: string;
+                  post_claim_scopes?: Array<string>;
+                  requiredFields?: Array<T81694d3f69>;
+                } | {
+                  readonly message: string;
+                } | {
+                  readonly message: "Invalid cursor";
+                };
                 401: T9a51b7d2bc;
                 402: T9a51b7d2bc;
                 403: T9a51b7d2bc;
@@ -21053,13 +20959,23 @@ export type WebRoutes = {
               get: {
                 body: unknown;
                 params: {
-                  decisionId: string;
-                } & Record<never, never>;
+                  decisionId: T406326c84f;
+                };
                 query: unknown;
                 headers: unknown;
                 response: {
-                  200: T62fc9cc8f5;
-                  400: T655a3efcc3;
+                  200: (T12163e1f6a | {
+                    incoming: T2b15184b07;
+                    outgoing: T2b15184b07;
+                    capped: {
+                      incoming: Tfddd645dc8;
+                      outgoing: Tfddd645dc8;
+                    };
+                    incomingByYear: Array<(T2b15184b07 & {
+                      year: number;
+                    })>;
+                  });
+                  400: Tb2f04eed16;
                   401: T9a51b7d2bc;
                   402: T9a51b7d2bc;
                   403: T9a51b7d2bc;
@@ -21094,13 +21010,23 @@ export type WebRoutes = {
               get: {
                 body: unknown;
                 params: {
-                  decisionId: string;
-                } & Record<never, never>;
-                query: unknown;
+                  decisionId: T406326c84f;
+                };
+                query: {
+                  direction: never;
+                };
                 headers: unknown;
                 response: {
-                  200: T62fc9cc8f5;
-                  400: T655a3efcc3;
+                  200: (T12163e1f6a | {
+                    items: Array<{
+                      id: T6685765ee4;
+                      citationText: string;
+                      sectionIndex: T588d0ee653;
+                      treatment: Tf8140c6ae1;
+                      decision: T3cf2d0a2c7;
+                    }>;
+                  });
+                  400: Tb2f04eed16;
                   401: T9a51b7d2bc;
                   402: T9a51b7d2bc;
                   403: T9a51b7d2bc;
@@ -21492,12 +21418,12 @@ export type WebRoutes = {
         search: {
           post: {
             body: {
-              strict?: false | true;
               cursor?: string;
               limit?: number;
               court?: string;
               language?: string;
               sort?: "newest" | "relevance";
+              strict?: false | true;
               decisionType?: string;
               sourceId?: Tec26b7abb5;
               dateFrom?: string;
@@ -21542,7 +21468,7 @@ export type WebRoutes = {
                   ecli: Tbe0400fa4c;
                   decisionDate: Tbe0400fa4c;
                   caseNumber: string;
-                  caseNumberType: Tcd5c3f23bb;
+                  caseNumberType: Tdf198f5601;
                   decisionId: string;
                   decisionType: Tbe0400fa4c;
                   citationAuthority: number;
@@ -22785,8 +22711,8 @@ export type WebRoutes = {
           command?: string;
           name: string;
           body: string;
-          description: string;
           scope: T7906e8b72f;
+          description: string;
         };
         params: T5e3ac29766;
         query: Record<never, never>;
@@ -24785,8 +24711,8 @@ export type WebRoutes = {
             body: {
               candidates: Array<{
                 status?: string | null;
-                priority?: string | null;
                 description?: string | null;
+                priority?: string | null;
                 dueDate?: string | null;
                 suggestedAssigneeUserIds?: Array<T56ed95d57c>;
                 name: string;
@@ -27277,8 +27203,8 @@ export type WebRoutes = {
                 };
                 timeZone: string;
                 labels: {
-                  date: string;
                   location: string;
+                  date: string;
                   reason: string;
                   signedBy: string;
                 };
@@ -28886,11 +28812,11 @@ export type WebRoutes = {
                 workspaceId: T8d02a37b3f;
               };
               query: {
-                from?: string;
                 cursor?: string;
                 limit?: number;
                 action?: "add" | "all" | "cancel" | "create" | "delete" | "execute" | "remove" | "review" | "update";
                 category?: "all" | "automation" | "correspondence" | "court" | "documents" | "matter" | "tasks" | "team";
+                from?: string;
                 actorId?: string;
                 toExclusive?: string;
               };
@@ -28918,11 +28844,13 @@ export type WebRoutes = {
                       encrypted: T44e2cd4568;
                       entityId: Tbe0400fa4c;
                       fieldId: Tbe0400fa4c;
+                      hasThumbnail: Tfddd645dc8;
                       id: string;
                       kind: ("automation" | "correspondence" | "court" | "document" | "documentReviewRun" | "folder" | "link" | "matter" | "message" | "playbook" | "task" | "team" | "translationRun");
                       mimeType: Tbe0400fa4c;
                       name: Tbe0400fa4c;
                       pdfFileId: Tbe0400fa4c;
+                      placeholder: Tbe0400fa4c;
                       propertyId: Tbe0400fa4c;
                     };
                     trigger: {
@@ -29017,9 +28945,9 @@ export type WebRoutes = {
                   workspaceId: T8d02a37b3f;
                 };
                 query: {
-                  from?: string;
                   action?: "add" | "all" | "cancel" | "create" | "delete" | "execute" | "remove" | "review" | "update";
                   category?: "all" | "automation" | "correspondence" | "court" | "documents" | "matter" | "tasks" | "team";
+                  from?: string;
                   actorId?: string;
                   toExclusive?: string;
                   format: ("csv" | "json");
@@ -29548,7 +29476,9 @@ export type WebRoutes = {
                 items: Array<{
                   activityAt: string;
                   entityKind: T334757ea46;
+                  fieldId: Tbe0400fa4c;
                   fileName: Tbe0400fa4c;
+                  hasThumbnail: Tfddd645dc8;
                   id: string;
                   mimeType: Tbe0400fa4c;
                   status: Tbe0400fa4c;
@@ -30619,8 +30549,8 @@ export type WebRoutes = {
                   } | {
                     kind: "lower-weight";
                   } | {
-                    text: string;
                     kind: "other";
+                    text: string;
                   };
                   subject: string;
                 }>;
@@ -32222,17 +32152,32 @@ export type MyTimeEntriesRoutes = {
           response: {
             200: {
               items: Array<{
-                id: Tdb05f01858;
+                activityGroup: "client";
                 workspaceId: T9e07a7d6cd;
                 workspaceName: string;
                 workspaceReference: string;
+                id: T4e3529b6dc;
                 dateWorked: string;
                 durationMinutes: number;
                 billedMinutes: number;
                 narrative: string;
                 billable: Tfddd645dc8;
-                status: Tef030b2402;
-                source: ("manual" | "suggested" | "timer");
+                status: T96f3e623c3;
+                source: Teaca50a829;
+                timerStartedAt: Tbe0400fa4c;
+              } | {
+                activityGroup: "internal";
+                workspaceId: null;
+                workspaceName: null;
+                workspaceReference: null;
+                id: T4e3529b6dc;
+                dateWorked: string;
+                durationMinutes: number;
+                billedMinutes: number;
+                narrative: string;
+                billable: Tfddd645dc8;
+                status: T96f3e623c3;
+                source: Teaca50a829;
                 timerStartedAt: Tbe0400fa4c;
               }>;
               nextCursor: Tbe0400fa4c;
@@ -34903,12 +34848,12 @@ type T0bdd08f6e7 = {
 };
 
 type T0c07d42a21 = {
-  from?: string;
   cursor?: string;
   workspaceId?: T9e07a7d6cd;
   limit?: number;
   userId?: string;
   action?: string;
+  from?: string;
   to?: string;
   resourceType?: string;
   resourceId?: string;
@@ -35710,6 +35655,15 @@ type T2a109871bb = {
 type T2a53b33d09 = {
   readonly type: "entity";
   readonly id: stll_api_contract_SafeId<"entity">;
+};
+
+type T2b15184b07 = {
+  neutral: number;
+  negative: number;
+  positive: number;
+  supportive: number;
+  mixed: number;
+  unclassified: number;
 };
 
 type T2b5a9a8bf4 = {
@@ -36610,6 +36564,22 @@ type T3c3fa57c15 = {
   line1: string;
 };
 
+type T3cf2d0a2c7 = {
+  id: T406326c84f;
+  caseNumber: string;
+  caseNumberType: Tdf198f5601;
+  country: string;
+  court: string;
+  decisionDate: Tbe0400fa4c;
+  decisionType: Tbe0400fa4c;
+  ecli: Tbe0400fa4c;
+  language: string;
+  languageAlternates: ReadonlyArray<T32fdeee18e>;
+  slug: Tbe0400fa4c;
+} & {
+  citationAuthority: number;
+};
+
 type T3dc3e2ca32 = {
   label?: string;
   text: string;
@@ -37016,6 +36986,10 @@ type T4e21d0f768 = {
   insolvencyDeclaredOn: Tbe0400fa4c;
   insolvencyEndedOn: Tbe0400fa4c;
   url: Tbe0400fa4c;
+};
+
+type T4e3529b6dc = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "timeEntry";
 };
 
 type T4e595a8315 = string & valibot_Brand<"SafeId"> & {
@@ -37496,8 +37470,6 @@ type T6269a5e99e = {
 
 type T62f288d6ab = "all-chats" | "matters";
 
-type T62fc9cc8f5 = T5e3ac29766 | T12163e1f6a;
-
 type T631856df6b = {
   [key: string]: unknown;
 };
@@ -37555,28 +37527,6 @@ type T653f0c375b = {
   updatedAt: string;
 };
 
-type T655a3efcc3 = {
-  code?: string;
-  message: string;
-  hint?: string;
-  issues?: Array<Tfbf26a7023>;
-  reason?: string;
-  required?: number;
-  available?: number;
-  confirmation?: T0d3b649ce9;
-  error?: string;
-  claim?: T753574bc22;
-  registration_id?: string;
-  registration_type?: string;
-  claim_url?: string;
-  claim_token?: string;
-  claim_token_expires?: string;
-  post_claim_scopes?: Array<string>;
-  requiredFields?: Array<T81694d3f69>;
-} | {
-  readonly message: string;
-};
-
 type T658a00d740 = {
   address: string;
   name: Tbe0400fa4c;
@@ -37591,6 +37541,10 @@ type T667bb98824 = {
   day: number;
 };
 
+type T6685765ee4 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "caseLawCitation";
+};
+
 type T66d278db93 = "cancelled" | "committed" | "failed" | "queued" | "review" | "running";
 
 type T66e92cdab1 = string & valibot_Brand<"SafeId"> & {
@@ -37598,7 +37552,8 @@ type T66e92cdab1 = string & valibot_Brand<"SafeId"> & {
 };
 
 type T6776d3555e = {
-  id: Tdb05f01858;
+  id: T4e3529b6dc;
+  activityGroup: ("client" | "internal");
   durationMinutes: number;
   billedMinutes: number;
 };
@@ -38069,6 +38024,14 @@ type T7a3ee17d2d = {
 };
 
 type T7aebf701ec = "company-id" | "person" | "tax-id";
+
+type T7af392baeb = {
+  fileFieldId?: T6993bee61f;
+  docxEditSnapshot?: T94af9a40b9;
+  supportsDocxEdits?: false | true;
+  entityId: Tf742ada503;
+  fileName: string;
+};
 
 type T7afaf18a37 = {
   url: string;
@@ -38598,8 +38561,8 @@ type T94af9a40b9 = {
     displayLabel?: string;
     styleId?: string;
     blockTextHash?: string;
-    text: string;
     kind: ("heading" | "listItem" | "paragraph");
+    text: string;
     id: string;
   }>;
 };
@@ -38621,14 +38584,6 @@ type T953b8b828f = {
 
 type T9546dfa359 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "flowDefinition";
-};
-
-type T95879c8ef6 = {
-  fileName: string;
-  toolCallId: string;
-  originChatMessageId: T66e92cdab1;
-  originChatThreadId: Taf779979ed;
-  docxEditSnapshot: T94af9a40b9;
 };
 
 type T95d0de5680 = {
@@ -38684,6 +38639,8 @@ type T9676908f8c = {
   }>;
   registryUrl: string;
 };
+
+type T96f3e623c3 = "approved" | "billed" | "draft" | "written_off";
 
 type T9717780ffe = "contradicted" | "supported" | "tension";
 
@@ -38806,6 +38763,38 @@ type T9c598ec048 = {
   latestAcceptedFixText: Tbe0400fa4c;
 };
 
+type T9d6ede4452 = {
+  workspaceId?: T9e07a7d6cd;
+  contextMatterIds?: Array<T9e07a7d6cd>;
+  truncateAfterMessageId?: T66e92cdab1;
+  turnIntent?: "regenerate";
+  toolScope?: "suggest-template-fields";
+  runMode?: "agent";
+  userContext?: T129008ae9b;
+  activeDraft?: Tdaa8eea194;
+  activeFile?: T7af392baeb;
+  activeTemplate?: Teca103477f;
+  activeDecision?: Tfc773e48e5;
+  activeExternal?: Tc42c89297d;
+  activeSkill?: Teec166880c;
+  activeStatute?: T576bcbcea8;
+  browserClient?: Tf9e246ce28;
+  editApplyMode?: "auto" | "manual";
+  docxEditRepresentation?: "direct" | "tracked-changes";
+  devModelId?: string;
+  message: {
+    metadata?: unknown;
+    id: T66e92cdab1;
+    role: "assistant";
+    parts: Array<unknown>;
+  };
+  runId: string;
+  threadId: Taf779979ed;
+  sendMode: T00bc2c60de;
+  parentRunId: string;
+  resume: Array<Tacbaeed0d6>;
+};
+
 type T9d8da34b19 = {
   system: string;
   documentId: string;
@@ -38881,7 +38870,7 @@ type Ta0e1c4f807 = T12163e1f6a | {
     anchorPrefix: string;
   };
   caseNumber: string;
-  caseNumberType: Tcd5c3f23bb;
+  caseNumberType: Tdf198f5601;
   slug: Tbe0400fa4c;
   ecli: Tbe0400fa4c;
   identifiers: T3fbc5ba165;
@@ -38978,13 +38967,13 @@ type Ta0e1c4f807 = T12163e1f6a | {
     } | null;
   }>;
   citationsFrom: (Array<never> | Array<{
-    id: Tdc8c649ac7;
+    id: T6685765ee4;
     citationText: string;
     citedDecisionId: (T406326c84f | null);
     sectionIndex: T588d0ee653;
   }>);
   citationsTo: (Array<never> | Array<{
-    id: Tdc8c649ac7;
+    id: T6685765ee4;
     citationText: string;
     citingDecisionId: T406326c84f;
     sectionIndex: T588d0ee653;
@@ -39113,12 +39102,6 @@ type Ta5b5eca36c = {
 type Ta5e56d2d42 = "AR" | "BG" | "CS" | "DA" | "DE" | "EL" | "EN-GB" | "EN-US" | "ES" | "ES-419" | "ET" | "FI" | "FR" | "HU" | "ID" | "IT" | "JA" | "KO" | "LT" | "LV" | "NB" | "NL" | "PL" | "PT-BR" | "PT-PT" | "RO" | "RU" | "SK" | "SL" | "SV" | "TR" | "UK" | "ZH" | "ZH-HANS" | "ZH-HANT";
 
 type Ta62bb7ae6f = "awaiting_review" | "cancelled" | "completed" | "failed" | "pending" | "running";
-
-type Ta6844ff25e = {
-  docxEditSnapshot?: T94af9a40b9;
-  templateId: Td4824cf25d;
-  fileName: string;
-};
 
 type Ta70c642bca = {
   type: "tool-call";
@@ -39295,38 +39278,6 @@ type Taeaa3ad44e = {
   markdown: string;
 };
 
-type Taec2e0d8c2 = {
-  workspaceId?: T9e07a7d6cd;
-  contextMatterIds?: Array<T9e07a7d6cd>;
-  truncateAfterMessageId?: T66e92cdab1;
-  turnIntent?: "regenerate";
-  toolScope?: "suggest-template-fields";
-  runMode?: "agent";
-  userContext?: T129008ae9b;
-  activeDraft?: T95879c8ef6;
-  activeFile?: Tef0eed2463;
-  activeTemplate?: Ta6844ff25e;
-  activeDecision?: Tfc773e48e5;
-  activeExternal?: Tc42c89297d;
-  activeSkill?: Teec166880c;
-  activeStatute?: T576bcbcea8;
-  browserClient?: Tf9e246ce28;
-  editApplyMode?: "auto" | "manual";
-  docxEditRepresentation?: "direct" | "tracked-changes";
-  devModelId?: string;
-  message: {
-    metadata?: unknown;
-    id: T66e92cdab1;
-    role: "assistant";
-    parts: Array<unknown>;
-  };
-  runId: string;
-  threadId: Taf779979ed;
-  sendMode: T00bc2c60de;
-  parentRunId: string;
-  resume: Array<Tacbaeed0d6>;
-};
-
 type Taec8e40e3e = {
   readonly "~standard": {
     readonly jsonSchema: Tc49e8b2305;
@@ -39404,6 +39355,36 @@ type Taf56293cce = {
 
 type Taf779979ed = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "chatThread";
+};
+
+type Tafed4f08a4 = {
+  workspaceId?: T9e07a7d6cd;
+  contextMatterIds?: Array<T9e07a7d6cd>;
+  truncateAfterMessageId?: T66e92cdab1;
+  turnIntent?: "regenerate";
+  toolScope?: "suggest-template-fields";
+  runMode?: "agent";
+  userContext?: T129008ae9b;
+  activeDraft?: Tdaa8eea194;
+  activeFile?: T7af392baeb;
+  activeTemplate?: Teca103477f;
+  activeDecision?: Tfc773e48e5;
+  activeExternal?: Tc42c89297d;
+  activeSkill?: Teec166880c;
+  activeStatute?: T576bcbcea8;
+  browserClient?: Tf9e246ce28;
+  editApplyMode?: "auto" | "manual";
+  docxEditRepresentation?: "direct" | "tracked-changes";
+  devModelId?: string;
+  message: {
+    metadata?: unknown;
+    id: T66e92cdab1;
+    role: Tbc3d04c5ab;
+    parts: Array<unknown>;
+  };
+  runId: string;
+  threadId: Taf779979ed;
+  sendMode: T00bc2c60de;
 };
 
 type Tb13124e7c6 = {
@@ -39495,6 +39476,28 @@ type Tb2b1f765a2 = {
     status: "failed";
     error: string;
   }>;
+};
+
+type Tb2f04eed16 = {
+  code?: string;
+  message: string;
+  hint?: string;
+  issues?: Array<Tfbf26a7023>;
+  reason?: string;
+  required?: number;
+  available?: number;
+  confirmation?: T0d3b649ce9;
+  error?: string;
+  claim?: T753574bc22;
+  registration_id?: string;
+  registration_type?: string;
+  claim_url?: string;
+  claim_token?: string;
+  claim_token_expires?: string;
+  post_claim_scopes?: Array<string>;
+  requiredFields?: Array<T81694d3f69>;
+} | {
+  readonly message: string;
 };
 
 type Tb33a71380a = {
@@ -39867,36 +39870,6 @@ type Tc38488b75b = {
   status: "error";
 };
 
-type Tc3caec9098 = {
-  workspaceId?: T9e07a7d6cd;
-  contextMatterIds?: Array<T9e07a7d6cd>;
-  truncateAfterMessageId?: T66e92cdab1;
-  turnIntent?: "regenerate";
-  toolScope?: "suggest-template-fields";
-  runMode?: "agent";
-  userContext?: T129008ae9b;
-  activeDraft?: T95879c8ef6;
-  activeFile?: Tef0eed2463;
-  activeTemplate?: Ta6844ff25e;
-  activeDecision?: Tfc773e48e5;
-  activeExternal?: Tc42c89297d;
-  activeSkill?: Teec166880c;
-  activeStatute?: T576bcbcea8;
-  browserClient?: Tf9e246ce28;
-  editApplyMode?: "auto" | "manual";
-  docxEditRepresentation?: "direct" | "tracked-changes";
-  devModelId?: string;
-  message: {
-    metadata?: unknown;
-    id: T66e92cdab1;
-    role: Tbc3d04c5ab;
-    parts: Array<unknown>;
-  };
-  runId: string;
-  threadId: Taf779979ed;
-  sendMode: T00bc2c60de;
-};
-
 type Tc42c89297d = {
   text?: string;
   snippet?: string;
@@ -40182,8 +40155,6 @@ type Tcd21978e37 = {
   currency: string;
   amountCents: number;
 };
-
-type Tcd5c3f23bb = "case-number" | "neutral-citation" | "reporter-citation";
 
 type Tcd94cef1c0 = Array<{
   iban?: string;
@@ -40497,6 +40468,14 @@ type Tda8f0f96e8 = {
   output?: unknown;
 } & T4d73965770;
 
+type Tdaa8eea194 = {
+  fileName: string;
+  toolCallId: string;
+  originChatMessageId: T66e92cdab1;
+  originChatThreadId: Taf779979ed;
+  docxEditSnapshot: T94af9a40b9;
+};
+
 type Tdadf537056 = {
   body: {
     alignment: T635a859ab7;
@@ -40531,10 +40510,6 @@ type Tdadf537056 = {
 
 type Tdaf2e43033 = "a4" | "legal" | "letter" | "preserve";
 
-type Tdb05f01858 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "timeEntry";
-};
-
 type Tdb5805e6ca = {
   required?: false | true | undefined;
   minLength?: number | undefined;
@@ -40563,10 +40538,6 @@ type Tdc2a8db8cb = {
 };
 
 type Tdc6c8f5a77 = "date" | "int" | "multi-select" | "single-select" | "text";
-
-type Tdc8c649ac7 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "caseLawCitation";
-};
 
 type Tdc9ed49116 = {
   name: string;
@@ -40648,6 +40619,8 @@ type Tdf07e1b328 = {
   text: string;
   id: string;
 };
+
+type Tdf198f5601 = "case-number" | "neutral-citation" | "reporter-citation";
 
 type Tdf2b0d1150 = string | null;
 
@@ -41043,6 +41016,8 @@ type Teab768a417 = {
   }>;
 };
 
+type Teaca50a829 = "manual" | "suggested" | "timer";
+
 type Teaea18eeca = {
   workspaceId: string;
 };
@@ -41099,6 +41074,12 @@ type Tec5d6ccf29 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "aiMemory";
 };
 
+type Teca103477f = {
+  docxEditSnapshot?: T94af9a40b9;
+  templateId: Td4824cf25d;
+  fileName: string;
+};
+
 type Teced05ac51 = "active" | "archived";
 
 type Tee12b2a0c6 = {
@@ -41121,16 +41102,6 @@ type Tee36eb0f81 = {
 type Teec166880c = {
   skillId?: T352ed14c79;
   skillName: string;
-};
-
-type Tef030b2402 = "approved" | "billed" | "draft" | "written_off";
-
-type Tef0eed2463 = {
-  fileFieldId?: T6993bee61f;
-  docxEditSnapshot?: T94af9a40b9;
-  supportsDocxEdits?: false | true;
-  entityId: Tf742ada503;
-  fileName: string;
 };
 
 type Tefb102e423 = {
@@ -41378,6 +41349,8 @@ type Tf7a762d6ad = {
   listLevel?: number;
   text: string;
 };
+
+type Tf8140c6ae1 = "mixed" | "negative" | "neutral" | "positive" | "supportive" | "unclassified";
 
 type Tf8218060a3 = "accepted" | "draft" | "proposed" | "rejected";
 

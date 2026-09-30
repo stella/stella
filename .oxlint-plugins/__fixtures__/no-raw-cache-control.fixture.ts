@@ -10,8 +10,9 @@ const noStore = "no-store";
 // oxlint-disable-next-line no-raw-cache-control/no-raw-cache-control -- raw directive must use its owner
 const publicResponse = "public, max-age=300";
 
+const maxAge = Math.round(300);
 // oxlint-disable-next-line no-raw-cache-control/no-raw-cache-control -- interpolated directives must use their owner
-const dynamicPolicy = `private, max-age=${300}`;
+const dynamicPolicy = `private, max-age=${maxAge}`;
 
 // expect-clean: no-raw-cache-control/no-raw-cache-control
 const unrelated = "public matter metadata";

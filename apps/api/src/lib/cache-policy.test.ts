@@ -5,8 +5,8 @@ import {
   applyResponseCachePolicy,
   finalizeResponseCachePolicy,
   preventPublicCaching,
-} from "@/api/lib/cache-policy";
-import { setSecurityHeaders } from "@/api/lib/security-headers";
+  setSecurityHeaders,
+} from "@/api/lib/security-headers";
 
 const publicPolicy = { kind: "public", maxAge: 300, swr: 60 } as const;
 
@@ -56,8 +56,8 @@ describe("response cache policy", () => {
       const response = new Response("example", { status: code });
       applyResponseCachePolicy({ cache: publicPolicy, response, set });
       const mapped = finalizeResponseCachePolicy({ response, set });
-      expect(mapped.status).toBe(code);
-      expect(mapped.headers.get("cache-control")).toBe("private, no-store");
+      expect(mapped?.status).toBe(code);
+      expect(mapped?.headers.get("cache-control")).toBe("private, no-store");
       applyResponseCachePolicy({
         cache: publicPolicy,
         response: status(code, "failure"),
@@ -92,7 +92,7 @@ describe("response cache policy", () => {
     const set = createSet();
     const response = new Response("example");
     expect(
-      finalizeResponseCachePolicy({ response, set }).headers.get(
+      finalizeResponseCachePolicy({ response, set })?.headers.get(
         "cache-control",
       ),
     ).toBe("private, no-store");
@@ -110,7 +110,7 @@ describe("response cache policy", () => {
         });
         applyResponseCachePolicy({ cache, response, set });
         const mapped = finalizeResponseCachePolicy({ response, set });
-        expect(mapped.headers.get("cache-control")).toBe(
+        expect(mapped?.headers.get("cache-control")).toBe(
           "private, no-cache, no-store, no-transform",
         );
         expect(new Headers(set.headers).get("cache-control")).toBe(
@@ -138,8 +138,8 @@ describe("response cache policy", () => {
     const set = createSet();
     applyResponseCachePolicy({ cache: publicPolicy, response, set });
     const mapped = finalizeResponseCachePolicy({ response, set });
-    expect(mapped.status).toBe(302);
-    expect(mapped.headers.get("Cache-Control")).toBe("private, no-store");
+    expect(mapped?.status).toBe(302);
+    expect(mapped?.headers.get("Cache-Control")).toBe("private, no-store");
     expect(response.headers.get("Cache-Control")).toBeNull();
   });
 
@@ -150,8 +150,8 @@ describe("response cache policy", () => {
       const mapped = finalizeResponseCachePolicy({ response, set });
       expect(mapped).toBeInstanceOf(Response);
       if (mapped instanceof Response) {
-        expect(mapped.status).toBe(code);
-        expect(mapped.headers.get("cache-control")).toBe("private, no-store");
+        expect(mapped?.status).toBe(code);
+        expect(mapped?.headers.get("cache-control")).toBe("private, no-store");
       }
     }
   });
@@ -167,8 +167,8 @@ describe("response cache policy", () => {
       const mapped = finalizeResponseCachePolicy({ response, set });
       expect(mapped).toBeInstanceOf(Response);
       if (mapped instanceof Response) {
-        expect(mapped.status).toBe(innerStatus);
-        expect(mapped.headers.get("Cache-Control")).toBe(
+        expect(mapped?.status).toBe(innerStatus);
+        expect(mapped?.headers.get("Cache-Control")).toBe(
           innerStatus === 200
             ? "public, max-age=300, stale-while-revalidate=60"
             : "private, no-store",
@@ -221,7 +221,7 @@ describe("response cache policy", () => {
       ["/public", "public, max-age=300, stale-while-revalidate=60"],
       ["/missing", "private, no-store"],
       ["/stream", "private, no-cache, no-store, no-transform"],
-    ]) {
+    ] as const) {
       const response = await app.handle(new Request(`http://localhost${path}`));
       expect(response.headers.get("cache-control")).toBe(expected);
     }
