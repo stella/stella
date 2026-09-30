@@ -195,7 +195,7 @@ export const toMajorUnits = ({
   amountCents / 10 ** currencyMinorUnitDigits(currency);
 
 export type FormatMoneyCentsParams = {
-  amountCents: number;
+  amountCents: number | bigint;
   currency: string;
   locale: string;
   /**
@@ -203,6 +203,59 @@ export type FormatMoneyCentsParams = {
    * exponent; pass 0 for a rounded summary that has no room for decimals.
    */
   fractionDigits?: number;
+};
+
+/** Exact decimal text for a minor-unit integer, suitable for amount inputs. */
+export const minorUnitsToDecimal = (
+  amount: bigint,
+  currency: string,
+): string => {
+  const digits = currencyMinorUnitDigits(currency);
+  const scale = 10n ** BigInt(digits);
+  const magnitude = amount < 0n ? -amount : amount;
+  const fraction = (magnitude % scale).toString().padStart(digits, "0");
+  return `${amount < 0n ? "-" : ""}${magnitude / scale}${digits === 0 ? "" : `.${fraction}`}`;
+};
+
+const formatBigIntMoney = ({
+  amount,
+  currency,
+  locale,
+  digits,
+}: {
+  amount: bigint;
+  currency: string;
+  locale: string;
+  digits: number;
+}) => {
+  const currencyDigits = currencyMinorUnitDigits(currency);
+  const magnitude = amount < 0n ? -amount : amount;
+  const divisor = 10n ** BigInt(Math.max(0, currencyDigits - digits));
+  const rounded = (magnitude + divisor / 2n) / divisor;
+  const scaled = rounded * 10n ** BigInt(Math.max(0, digits - currencyDigits));
+  const scale = 10n ** BigInt(digits);
+  const whole = scaled / scale;
+  const fraction = scaled % scale;
+  const signedWhole = amount < 0n ? -whole : whole;
+  const formatted = Result.try(() => {
+    const formatter = new Intl.NumberFormat(locale, {
+      style: "currency",
+      currency,
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
+    });
+    const fractionText = new Intl.NumberFormat(locale, {
+      useGrouping: false,
+      minimumIntegerDigits: Math.max(1, digits),
+      maximumFractionDigits: 0,
+    }).format(fraction);
+    return formatter
+      .formatToParts(amount < 0n && whole === 0n ? -0 : signedWhole)
+      .map((part) => (part.type === "fraction" ? fractionText : part.value))
+      .join("");
+  });
+  const decimal = `${amount < 0n ? "-" : ""}${whole}${digits === 0 ? "" : `.${fraction.toString().padStart(digits, "0")}`}`;
+  return formatted.isErr() ? `${decimal} ${currency}` : formatted.value;
 };
 
 /**
@@ -219,8 +272,11 @@ export const formatMoneyCents = ({
   locale,
   fractionDigits,
 }: FormatMoneyCentsParams): string => {
-  const major = toMajorUnits({ amountCents, currency });
   const digits = fractionDigits ?? currencyMinorUnitDigits(currency);
+  if (typeof amountCents === "bigint") {
+    return formatBigIntMoney({ amount: amountCents, currency, locale, digits });
+  }
+  const major = toMajorUnits({ amountCents, currency });
   const formatted = Result.try(() =>
     new Intl.NumberFormat(locale, {
       style: "currency",

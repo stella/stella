@@ -4,10 +4,95 @@ import { cents } from "./cents";
 import {
   currencyMinorUnitDigits,
   formatMoneyCents,
+  minorUnitsToDecimal,
   toMajorUnits,
   toMinorUnits,
   tryToMinorUnits,
 } from "./format";
+
+describe("exact aggregate formatting", () => {
+  test("preserves signed minor-unit decimals across every scale and unsafe magnitudes", () => {
+    for (const currency of ["JPY", "USD", "KWD"]) {
+      const scale = 10n ** BigInt(currencyMinorUnitDigits(currency));
+      for (let exponent = 0; exponent <= 40; exponent += 1) {
+        for (const sign of [-1n, 1n]) {
+          const amount = sign * (10n ** BigInt(exponent) + 7n);
+          const text = minorUnitsToDecimal(amount, currency);
+          const parts = text.replace("-", "").split(".");
+          const reconstructed =
+            BigInt(parts[0] ?? "0") * scale + BigInt(parts[1] ?? "0");
+          expect(reconstructed * sign).toBe(amount);
+        }
+      }
+    }
+  });
+
+  test("matches currency formatting for bounded positive and negative amounts, including fractions below one", () => {
+    for (const locale of ["en-US", "de-DE", "ar-EG", "fr-FR"]) {
+      for (const currency of ["JPY", "USD", "KWD"]) {
+        for (const amount of [-10_005, -101, -1, 0, 1, 101, 10_005]) {
+          expect(
+            formatMoneyCents({ amountCents: BigInt(amount), currency, locale }),
+          ).toBe(
+            new Intl.NumberFormat(locale, {
+              style: "currency",
+              currency,
+            }).format(amount / 10 ** currencyMinorUnitDigits(currency)),
+          );
+        }
+      }
+    }
+  });
+
+  test("keeps huge integral and fractional digits exact and localized", () => {
+    expect(
+      formatMoneyCents({
+        amountCents: 900_719_925_474_099_301n,
+        currency: "USD",
+        locale: "en-US",
+      }),
+    ).toBe("$9,007,199,254,740,993.01");
+    expect(
+      formatMoneyCents({
+        amountCents: -9_007_199_254_740_993_007n,
+        currency: "KWD",
+        locale: "de-DE",
+      }),
+    ).toBe("-9.007.199.254.740.993,007\u00a0KWD");
+    expect(
+      formatMoneyCents({
+        amountCents: 9_007_199_254_740_993n,
+        currency: "JPY",
+        locale: "ar-EG",
+      }),
+    ).toContain("٩٬٠٠٧٬١٩٩٬٢٥٤٬٧٤٠٬٩٩٣");
+    expect(
+      formatMoneyCents({ amountCents: -1n, currency: "USD", locale: "ar-EG" }),
+    ).toContain("٠٫٠١");
+  });
+
+  test("fraction overrides round half away from zero without unsafe multiplication", () => {
+    for (const sign of [-1n, 1n]) {
+      const amount = sign * 900_719_925_474_099_350n;
+      expect(
+        formatMoneyCents({
+          amountCents: amount,
+          currency: "USD",
+          locale: "en-US",
+          fractionDigits: 0,
+        }),
+      ).toBe(`${sign < 0n ? "-" : ""}$9,007,199,254,740,994`);
+    }
+    expect(
+      formatMoneyCents({
+        amountCents: 123n,
+        currency: "USD",
+        locale: "en-US",
+        fractionDigits: 3,
+      }),
+    ).toBe("$1.230");
+  });
+});
 
 describe("currencyMinorUnitDigits", () => {
   test("asks the currency, not the reader", () => {
