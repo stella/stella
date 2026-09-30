@@ -779,12 +779,15 @@
       "name": "@stll/docx-utils",
       "version": "0.1.2",
       "dependencies": {
+        "better-result": "catalog:",
         "jszip": "catalog:",
         "slimdom": "^4.3.5",
       },
       "devDependencies": {
+        "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
+        "fast-check": "catalog:",
         "tsdown": "catalog:",
       },
     },

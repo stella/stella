@@ -101,14 +101,19 @@ describe("loadDocxArchive", () => {
     });
   });
 
-  test("streaming read rejects an entry that exceeds the per-entry cap", async () => {
+  test("applies entry budgets during validation", async () => {
     const buffer = await buildArchive([
-      { path: "word/document.xml", content: "<doc/>" },
-      { path: "word/comments.xml", content: "X".repeat(8) },
+      { path: "comments.xml", content: "X".repeat(8) },
     ]);
-    const archive = await loadDocxArchive(buffer, { maxEntryBytes: 4 });
+    const bytes = new Uint8Array(buffer);
+    const view = new DataView(buffer);
+    for (let offset = 0; offset <= bytes.length - 46; offset++) {
+      if (view.getUint32(offset, true) === 0x02_01_4b_50) {
+        view.setUint32(offset + 24, 1, true);
+      }
+    }
     const error = await captureRejection(
-      archive.readEntryString("word/comments.xml"),
+      loadDocxArchive(buffer, { maxEntryBytes: 4 }),
     );
     expect(error).toMatchObject({
       _tag: "DocxArchiveError",
