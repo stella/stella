@@ -431,12 +431,12 @@ export const screenSanctionsSubject = async ({
     );
   }
   const lists: SanctionsListOutcome[] = [];
-  // db-await-in-loop: one bounded read per sanctions source; sequential macrotask yields prevent warm indexes from monopolizing the event loop
   for (const sourceFreshness of freshness.value) {
     await new Promise<void>((resolve) => {
       setImmediate(resolve);
     });
     lists.push(
+      // db-await-in-loop: one bounded read per sanctions source; sequential macrotask yields prevent warm indexes from monopolizing the event loop
       await screenList({
         db,
         freshness: sourceFreshness,
