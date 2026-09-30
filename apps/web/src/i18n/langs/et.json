@@ -521,6 +521,20 @@
     "noActiveTimer": "Aktiivset taimerit pole",
     "noEntries": "Selle perioodi ajakandeid pole",
     "nonBillable": "Mittearveldatav",
+    "quickEntry": {
+      "entrySaved": "Aja kanne salvestatud",
+      "expenseSaved": "Kulu salvestatud",
+      "expenseTitle": "Lisa kulu",
+      "futureDate": "Valige tänane või varasem kuupäev.",
+      "invalidDate": "Valige kehtiv töö kuupäev.",
+      "minimumUnit": "Aeg ümardatakse üles väikseima arveldusühikuni.",
+      "narrativeRequired": "Enne aja salvestamist lisage kirjeldus.",
+      "outsideEditWindow": "See kuupäev jääb muutmise tähtajast välja.",
+      "periodLocked": "See kuu on lukustatud.",
+      "saveAndAddExpense": "Salvesta ja lisa kulu",
+      "saveAndNew": "Salvesta ja lisa järgmine",
+      "viewDay": "Vaata päeva"
+    },
     "rates": {
       "addRate": "Lisa määr",
       "createRateTable": "Loo määratabel",

@@ -192,6 +192,9 @@ const unitLabel = (element: Element | undefined): string => {
 const childElements = (element: Element): Element[] =>
   element.children.filter((child): child is Element => isTag(child));
 
+const isEmptyLayoutElement = (element: Element): boolean =>
+  LAYOUT_TAGS.has(element.name) && textOf(element).trim().length === 0;
+
 /**
  * A table's or a list's children in document order: each run of its items
  * rendered together by `renderRun`, and any other child as a block of its
@@ -247,7 +250,7 @@ const renderTable = (element: Element, state: RenderState): string =>
           const cells = row.children
             .filter((cell) =>
               isTag(cell)
-                ? !LAYOUT_TAGS.has(cell.name)
+                ? !isEmptyLayoutElement(cell)
                 : textOf(cell).trim().length > 0,
             )
             .map(
@@ -258,7 +261,7 @@ const renderTable = (element: Element, state: RenderState): string =>
           return `<tr>${cells}</tr>`;
         })
         .join("\n")}</table>`,
-    skip: (child) => LAYOUT_TAGS.has(child.name),
+    skip: isEmptyLayoutElement,
   });
 
 const renderList = (element: Element, state: RenderState): string => {
@@ -276,7 +279,7 @@ const renderList = (element: Element, state: RenderState): string => {
           (item) => `<dt>${marker}</dt>\n<dd>${renderBlocks(item, state)}</dd>`,
         )
         .join("\n")}</dl>`,
-    skip: (child) => child === bullet || LAYOUT_TAGS.has(child.name),
+    skip: (child) => child === bullet || isEmptyLayoutElement(child),
   });
 };
 
@@ -351,7 +354,11 @@ const renderBlock = (element: AnyNode, state: RenderState): string => {
       return renderBlocks(element, state);
     default: {
       if (LAYOUT_TAGS.has(element.name)) {
-        return "";
+        if (isEmptyLayoutElement(element)) {
+          return "";
+        }
+        state.unmapped.add(element.name);
+        return renderBlocks(element, state);
       }
       state.unmapped.add(element.name);
       if (hasStructuralDescendant(element)) {
