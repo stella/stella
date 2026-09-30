@@ -1,5 +1,5 @@
 import { encodeRegistryComponent } from "../shared/encode-registry-component.js";
-import { isRecord } from "../shared/guards.js";
+import { isOptionalRecord, isRecord } from "../shared/guards.js";
 import { registryFetch } from "../shared/http.js";
 import {
   EdgarAPIError,
@@ -7,7 +7,11 @@ import {
   EdgarValidationError,
 } from "./errors.js";
 import { parseSubmission } from "./parse.js";
-import type { EdgarCompany, EdgarRawSubmission } from "./types.js";
+import type {
+  EdgarCompany,
+  EdgarRawRecentFilings,
+  EdgarRawSubmission,
+} from "./types.js";
 import { padCik, validateCik } from "./validation.js";
 
 const SUBMISSIONS_BASE = "https://data.sec.gov/submissions";
@@ -43,8 +47,29 @@ const isOptionalStringArray = (value: unknown): boolean =>
   value === undefined ||
   (Array.isArray(value) && value.every((item) => typeof item === "string"));
 
-const isOptionalRecord = (value: unknown): boolean =>
-  value === undefined || isRecord(value);
+const RECENT_FILING_COLUMNS = {
+  accessionNumber: isOptionalStringArray,
+  filingDate: isOptionalStringArray,
+  reportDate: isOptionalStringArray,
+  acceptanceDateTime: isOptionalStringArray,
+  form: isOptionalStringArray,
+  primaryDocument: isOptionalStringArray,
+  primaryDocDescription: isOptionalStringArray,
+} as const satisfies Record<
+  keyof EdgarRawRecentFilings,
+  typeof isOptionalStringArray
+>;
+
+const isEdgarRecentFilings = (value: unknown): boolean =>
+  isRecord(value) &&
+  Object.entries(RECENT_FILING_COLUMNS).every(([key, guard]) =>
+    guard(value[key]),
+  );
+
+const isEdgarFilings = (value: unknown): boolean =>
+  value === undefined ||
+  (isRecord(value) &&
+    (value["recent"] === undefined || isEdgarRecentFilings(value["recent"])));
 
 const isEdgarFormerName = (value: unknown): boolean =>
   isRecord(value) && typeof value["name"] === "string";
@@ -59,7 +84,7 @@ const isEdgarRawSubmission = (value: unknown): value is EdgarRawSubmission =>
   (value["formerNames"] === undefined ||
     (Array.isArray(value["formerNames"]) &&
       value["formerNames"].every(isEdgarFormerName))) &&
-  isOptionalRecord(value["filings"]);
+  isEdgarFilings(value["filings"]);
 
 const edgarGet = async (
   url: string,

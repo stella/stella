@@ -33,10 +33,6 @@ export const registryString: fc.Arbitrary<string> = fc.oneof(
     .map(([fragment, count]) => fragment.repeat(count)),
 );
 
-export const optionalRegistryString: fc.Arbitrary<string | undefined> =
-  fc.option(registryString, {
-    nil: undefined,
-  });
 export const nullableRegistryString: fc.Arbitrary<string | null> = fc.option(
   registryString,
   { nil: null },
