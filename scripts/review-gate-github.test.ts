@@ -323,6 +323,94 @@ describe("reading GitHub", () => {
     expect(asked).toHaveLength(2);
   });
 
+  const latestObservation = "2026-09-28T10:05:00Z";
+  test.each([
+    [null, null],
+    ["unrecognized", null],
+    [`rg1;pr=7;at=${latestObservation}`, latestObservation],
+  ])(
+    "discovery uses the latest gate identity's observation (%s)",
+    (externalId, observedAt) => {
+      const runs = [
+        {
+          databaseId: 1,
+          externalId: `rg1;pr=7;at=${OPENED}`,
+          status: "COMPLETED",
+          conclusion: "SUCCESS",
+          title: "passed",
+          summary: "passed",
+          startedAt: OPENED,
+        },
+        {
+          databaseId: 2,
+          externalId,
+          status: "IN_PROGRESS",
+          conclusion: null,
+          title: "pending",
+          summary: "pending",
+          startedAt: latestObservation,
+        },
+      ];
+      const { gh, asked } = fakeGh(() => ({
+        data: {
+          repository: {
+            pullRequests: page(
+              [
+                {
+                  ...pullRequestNode(page([], null)),
+                  commits: {
+                    nodes: [
+                      {
+                        commit: {
+                          checkSuites: {
+                            totalCount: 1,
+                            nodes: [
+                              {
+                                checkRuns: {
+                                  totalCount: runs.length,
+                                  nodes: runs,
+                                },
+                              },
+                            ],
+                          },
+                        },
+                      },
+                    ],
+                  },
+                },
+                { ...pullRequestNode(page([], null)), number: 8 },
+              ],
+              null,
+            ),
+          },
+        },
+      }));
+      expect(
+        createGateway("o/r", "main", gh).discoverOpenPullRequests(),
+      ).toEqual([
+        {
+          number: 7,
+          headSha: HEAD,
+          isDraft: false,
+          queued: false,
+          armed: false,
+          gate: "pending",
+          observedAt,
+        },
+        {
+          number: 8,
+          headSha: HEAD,
+          isDraft: false,
+          queued: false,
+          armed: false,
+          gate: null,
+          observedAt: null,
+        },
+      ]);
+      expect(asked).toHaveLength(1);
+    },
+  );
+
   test("an associated open pull request needs no discovery", () => {
     const { gh, asked } = fakeGh(() => [
       { number: 7, state: "open" },

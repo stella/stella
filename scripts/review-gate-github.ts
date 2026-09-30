@@ -63,7 +63,6 @@ const DISCOVERY_PAGES = 6;
 const CONTEXT_PAGES = 5;
 // Pull requests one sweep re-evaluates beyond the queued and armed ones.
 const SWEEP_BUDGET = 25;
-const SWEEP_INTERVAL_MS = 10 * 60_000;
 // A merge_group event can arrive before the queue lists its entry's commit.
 const MEMBERSHIP_ATTEMPTS = 3;
 const MEMBERSHIP_RETRY_MS = 5000;
@@ -451,6 +450,7 @@ const parseOpenPullRequest = (node: unknown): OpenPullRequest => {
     queued: isRecord(field(node, "mergeQueueEntry")),
     armed: isRecord(field(node, "autoMergeRequest")),
     gate: gateState(latest),
+    observedAt: latest?.identity?.observedAt ?? null,
   };
 };
 
@@ -1037,7 +1037,7 @@ const sweep = (run: Run): void => {
   const targets = selectSweepTargets(
     run.gateway.discoverOpenPullRequests(),
     SWEEP_BUDGET,
-    Math.floor(Date.now() / SWEEP_INTERVAL_MS),
+    now(),
   );
   for (const number of targets) {
     startPass(run);

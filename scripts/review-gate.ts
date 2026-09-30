@@ -1042,31 +1042,67 @@ export type OpenPullRequest = {
   armed: boolean;
   // The latest `review-gate` state on the head, or null when none exists.
   gate: "success" | "failure" | "pending" | null;
+  observedAt: string | null;
 };
 
+const SWEEP_RECHECK_MS = {
+  pending: 10 * 60_000,
+  failure: 30 * 60_000,
+} as const satisfies Record<
+  Exclude<OpenPullRequest["gate"], "success" | null>,
+  number
+>;
+
+const SWEEP_PRIORITY = {
+  pending: 0,
+  missing: 1,
+  failure: 2,
+  success: 3,
+} as const satisfies Record<
+  NonNullable<OpenPullRequest["gate"]> | "missing",
+  number
+>;
+
 /**
- * What one sweep re-evaluates. Queued and armed pull requests are the ones
- * about to land, so they are always included whatever their last verdict: a
- * missed event may have left a success standing. Then every pull request
- * whose gate is pending, failed or missing: timeouts to apply and failures
- * that may have been resolved. Past the budget, the rest rotates by sweep
- * so none starves.
+ * Queued and armed non-draft pull requests are always re-evaluated: a missed
+ * event may have left a success standing. Other unsettled gates are due when
+ * missing an observation, pending for 10 minutes (timeouts), or failed for
+ * 30 minutes (thread resolution has no event). Fill the remaining budget with
+ * due pending, missing, then failed gates, oldest observation first.
  */
 export const selectSweepTargets = (
   pullRequests: readonly OpenPullRequest[],
   budget: number,
-  rotation: number,
+  now: string,
 ): readonly number[] => {
   const ready = pullRequests.filter(({ isDraft }) => !isDraft);
   const landing = ready.filter(({ queued, armed }) => queued || armed);
-  const unsettled = ready.filter(
-    ({ queued, armed, gate }) => !queued && !armed && gate !== "success",
-  );
+  const nowMs = Date.parse(now);
+  const due = ready.filter(({ queued, armed, gate, observedAt }) => {
+    if (queued || armed || gate === "success") {
+      return false;
+    }
+    if (gate === null || observedAt === null) {
+      return true;
+    }
+    return nowMs - Date.parse(observedAt) >= SWEEP_RECHECK_MS[gate];
+  });
+  due.sort((a, b) => {
+    const priority =
+      SWEEP_PRIORITY[a.gate ?? "missing"] - SWEEP_PRIORITY[b.gate ?? "missing"];
+    if (priority !== 0) {
+      return priority;
+    }
+    if (a.observedAt === null) {
+      return b.observedAt === null ? 0 : -1;
+    }
+    if (b.observedAt === null) {
+      return 1;
+    }
+    return Date.parse(a.observedAt) - Date.parse(b.observedAt);
+  });
   const room = Math.max(budget - landing.length, 0);
-  const offset =
-    unsettled.length === 0 ? 0 : (rotation * room) % unsettled.length;
-  const rotated = [...unsettled.slice(offset), ...unsettled.slice(0, offset)];
-  return [...landing, ...rotated.slice(0, room)].map(({ number }) => number);
+  return [...landing, ...due.slice(0, room)].map(({ number }) => number);
 };
 
 /**

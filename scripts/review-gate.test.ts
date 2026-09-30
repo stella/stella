@@ -877,65 +877,95 @@ describe("publishing", () => {
 });
 
 describe("sweep", () => {
+  const now = minutesAfter(OPENED, 60);
   const open = (
     number: number,
     overrides: Partial<OpenPullRequest> = {},
   ): OpenPullRequest => ({
     number,
+    headSha: String(number).padStart(40, "0"),
     isDraft: false,
     queued: false,
     armed: false,
     gate: "success",
+    observedAt: now,
     ...overrides,
   });
 
-  test("queued and armed pull requests are always re-evaluated, whatever their verdict", () => {
+  test("queued and armed pull requests are always re-evaluated, even beyond the budget", () => {
     const targets = selectSweepTargets(
       [
         open(1, { queued: true }),
-        open(2, { armed: true }),
-        open(3),
-        open(4, { isDraft: true, gate: null }),
+        open(2, { armed: true, gate: "pending" }),
+        open(3, { armed: true, gate: "failure" }),
+        open(4),
+        open(5, { isDraft: true, gate: null }),
+        open(6, { isDraft: true, queued: true }),
       ],
-      10,
-      0,
+      1,
+      now,
     );
-    expect(targets).toEqual([1, 2]);
+    expect(targets).toEqual([1, 2, 3]);
   });
 
-  test("pending, failed and missing gates are re-evaluated; settled successes are not", () => {
+  test.each([
+    ["pending", 10],
+    ["failure", 30],
+  ] as const)("%s gates are due at their %i minute boundary", (gate, delay) => {
     const targets = selectSweepTargets(
       [
-        open(1),
-        open(2, { gate: "failure" }),
-        open(3, { gate: "pending" }),
-        open(4, { gate: null }),
+        open(1, { gate, observedAt: minutesAfter(now, -delay + 1) }),
+        open(2, { gate, observedAt: minutesAfter(now, -delay) }),
+        open(3, { gate, observedAt: minutesAfter(now, -delay - 1) }),
+        open(4, { gate, observedAt: minutesAfter(now, 1) }),
       ],
       10,
-      0,
+      now,
     );
-    expect(targets).toEqual([2, 3, 4]);
+    expect(targets).toEqual([3, 2]);
   });
 
-  test("past the budget, the rest rotates so none starves", () => {
+  test("missing gates and observations are always due; successes stay settled", () => {
+    const targets = selectSweepTargets(
+      [
+        open(1, { observedAt: null }),
+        open(2, { gate: "failure", observedAt: null }),
+        open(3, { gate: "pending", observedAt: null }),
+        open(4, { gate: null }),
+        open(5, { gate: null, observedAt: null }),
+      ],
+      10,
+      now,
+    );
+    expect(targets).toEqual([3, 5, 4, 2]);
+  });
+
+  test("due gates prioritize pending, missing, then failure; oldest observations first", () => {
+    const targets = selectSweepTargets(
+      [
+        open(1, { gate: "failure", observedAt: OPENED }),
+        open(2, { gate: null, observedAt: minutesAfter(OPENED, 20) }),
+        open(3, { gate: "pending", observedAt: minutesAfter(OPENED, 40) }),
+        open(4, { gate: "failure", observedAt: minutesAfter(OPENED, 10) }),
+        open(5, { gate: "pending", observedAt: minutesAfter(OPENED, 30) }),
+        open(6, { gate: null, observedAt: minutesAfter(OPENED, 10) }),
+        open(7, { gate: "pending", observedAt: null }),
+      ],
+      10,
+      now,
+    );
+    expect(targets).toEqual([7, 5, 3, 6, 2, 1, 4]);
+  });
+
+  test("due gates fill only the budget remaining after landing pull requests", () => {
     const pullRequests = [
       open(1, { queued: true }),
       ...[10, 11, 12, 13, 14].map((number) =>
-        open(number, { gate: "pending" }),
+        open(number, { gate: "pending", observedAt: OPENED }),
       ),
     ];
-    const seen = new Set<number>();
-    for (let rotation = 0; rotation < 3; rotation += 1) {
-      const targets = selectSweepTargets(pullRequests, 3, rotation);
-      expect(targets[0]).toBe(1);
-      expect(targets).toHaveLength(3);
-      for (const number of targets) {
-        seen.add(number);
-      }
-    }
-    expect([...seen].toSorted((a, b) => a - b)).toEqual([
-      1, 10, 11, 12, 13, 14,
-    ]);
+    expect(selectSweepTargets(pullRequests, 3, now)).toEqual([1, 10, 11]);
+    expect(selectSweepTargets(pullRequests, 0, now)).toEqual([1]);
   });
 });
 
