@@ -9,6 +9,7 @@ import {
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
+import { lockSanctionsMonitoring } from "@/api/lib/lists/sanctions/monitoring-lock";
 import { brandPersistedContactId } from "@/api/lib/safe-id-boundaries";
 
 type RequestSanctionsMonitoringRefreshOptions = {
@@ -21,6 +22,7 @@ export const requestSanctionsMonitoringRefresh = async (
   tx: Transaction,
   { organizationId, contactIds }: RequestSanctionsMonitoringRefreshOptions,
 ) => {
+  await lockSanctionsMonitoring(tx, organizationId);
   if (contactIds === undefined) {
     // The organization queue starts/supersedes the same cursor jobs as enablement.
     await tx

@@ -3,6 +3,7 @@ export const SANCTIONS_CONTACT_MODES = ["included", "excluded"] as const;
 export const SANCTIONS_REVIEW_DISPOSITIONS = [
   "needs-review",
   "dismissed",
+  "confirmed",
 ] as const;
 export const SANCTIONS_MATCH_STATES = ["active", "lapsed"] as const;
 export const SANCTIONS_MONITORING_EVENT_TYPES = [
@@ -12,6 +13,7 @@ export const SANCTIONS_MONITORING_EVENT_TYPES = [
   "reopened",
   "dismissed",
   "review-restored",
+  "confirmed",
 ] as const;
 
 export const SANCTIONS_SCREENING_STATUSES = [
@@ -20,3 +22,9 @@ export const SANCTIONS_SCREENING_STATUSES = [
   "unavailable",
   "excluded",
 ] as const;
+
+/** Changed evidence stays in history; only new and reopened hits notify. */
+export const SANCTIONS_NOTIFICATION_EVENT_TYPES = [
+  "new",
+  "reopened",
+] as const satisfies readonly (typeof SANCTIONS_MONITORING_EVENT_TYPES)[number][];

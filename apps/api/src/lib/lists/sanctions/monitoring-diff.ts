@@ -18,6 +18,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { readSanctionsFreshness } from "@/api/lib/lists/sanctions/freshness";
 import { monitoringFingerprint } from "@/api/lib/lists/sanctions/monitoring-input";
 import { SANCTIONS_SCREENING_BATCH_SIZE } from "@/api/lib/lists/sanctions/screening-service";
+import { lockSanctionsMonitoring } from "@/api/lib/lists/sanctions/monitoring-lock";
 import type {
   SanctionsListOutcome,
   SanctionsPossibleMatch,
@@ -66,7 +67,7 @@ const matchTransition = ({
   }
   if (
     old.state === "lapsed" ||
-    (old.disposition === "dismissed" && identityChanged)
+    (old.disposition !== "needs-review" && identityChanged)
   ) {
     return "reopened";
   }
@@ -82,6 +83,7 @@ const EVENT_REASONS = {
   changed: "evidence-changed",
   lapsed: "absent-from-full-screening",
   dismissed: "review-dismissed",
+  confirmed: "review-confirmed",
   "review-restored": "review-restored",
 } as const satisfies Record<
   typeof sanctionsScreeningEvents.$inferSelect.type,
@@ -155,6 +157,11 @@ const buildMonitoringDiff = ({
         disposition: preserveReview ? old.disposition : "needs-review",
         reviewedBy: preserveReview ? old.reviewedBy : null,
         reviewReason: preserveReview ? old.reviewReason : null,
+        reviewedAt: preserveReview ? old.reviewedAt : null,
+        reviewedContactFingerprint: preserveReview
+          ? old.reviewedContactFingerprint
+          : null,
+        reviewedEntryHash: preserveReview ? old.reviewedEntryHash : null,
         contactFingerprint,
         entryHash,
         match: hit,
@@ -218,16 +225,19 @@ const persistMonitoringDiff = async (
     await tx.execute(sql`
       INSERT INTO sanctions_contact_matches
         (organization_id, contact_id, source_id, source_entry_id, edition_id, state,
-         disposition, reviewed_by, review_reason, contact_fingerprint, entry_hash, match, updated_at)
+         disposition, reviewed_by, review_reason, reviewed_at, reviewed_contact_fingerprint, reviewed_entry_hash, contact_fingerprint, entry_hash, match, updated_at)
       SELECT x."organizationId", x."contactId", x."sourceId", x."sourceEntryId", x."editionId",
-        x.state, x.disposition, x."reviewedBy", x."reviewReason", x."contactFingerprint", x."entryHash", x.match, x."updatedAt"
+        x.state, x.disposition, x."reviewedBy", x."reviewReason", x."reviewedAt", x."reviewedContactFingerprint", x."reviewedEntryHash", x."contactFingerprint", x."entryHash", x.match, x."updatedAt"
       FROM jsonb_to_recordset(${JSON.stringify(matches)}::text::jsonb) AS x(
         "organizationId" varchar(128), "contactId" uuid, "sourceId" text, "sourceEntryId" text,
         "editionId" uuid, state text, disposition text, "reviewedBy" text, "reviewReason" text,
+        "reviewedAt" timestamptz, "reviewedContactFingerprint" text, "reviewedEntryHash" text,
         "contactFingerprint" text, "entryHash" text, match jsonb, "updatedAt" timestamptz)
       ON CONFLICT (organization_id, contact_id, source_id, source_entry_id) DO UPDATE SET
         edition_id = excluded.edition_id, state = excluded.state, disposition = excluded.disposition,
         reviewed_by = excluded.reviewed_by, review_reason = excluded.review_reason,
+        reviewed_at = excluded.reviewed_at, reviewed_contact_fingerprint = excluded.reviewed_contact_fingerprint,
+        reviewed_entry_hash = excluded.reviewed_entry_hash,
         contact_fingerprint = excluded.contact_fingerprint, entry_hash = excluded.entry_hash,
         match = excluded.match, updated_at = excluded.updated_at
     `);
@@ -341,6 +351,7 @@ export const commitSanctionsMonitoringBatch = async ({
       if (items.length === 0) {
         return terminalContactIds;
       }
+      await lockSanctionsMonitoring(tx, organizationId);
       const settings = (
         await tx
           .select()
@@ -447,6 +458,22 @@ export const commitSanctionsMonitoringBatch = async ({
         if (item.outcome.editionId === editionId) {
           eligible.push(item);
         }
+      }
+      const excludedIds = checkpoint.rows
+        .filter((row) => row.status === "excluded")
+        .map((row) => row.contactId);
+      if (excludedIds.length > 0) {
+        await tx
+          .update(sanctionsContactMatches)
+          .set({ state: "lapsed", updatedAt: now })
+          .where(
+            and(
+              eq(sanctionsContactMatches.organizationId, organizationId),
+              eq(sanctionsContactMatches.sourceId, source),
+              inArray(sanctionsContactMatches.contactId, excludedIds),
+              eq(sanctionsContactMatches.state, "active"),
+            ),
+          );
       }
       if (eligible.length === 0) {
         return terminalContactIds;

@@ -219,6 +219,9 @@ export const sanctionsContactMatches = p.pgTable(
       .text("reviewed_by")
       .references(() => user.id, { onDelete: "set null" }),
     reviewReason: p.text("review_reason"),
+    reviewedAt: timestamptz("reviewed_at"),
+    reviewedContactFingerprint: p.text("reviewed_contact_fingerprint"),
+    reviewedEntryHash: p.text("reviewed_entry_hash"),
     contactFingerprint: p.text("contact_fingerprint").notNull(),
     entryHash: p.text("entry_hash").notNull(),
     match: p.jsonb().$type<SanctionsPossibleMatch>().notNull(),
@@ -254,6 +257,16 @@ export const sanctionsContactMatches = p.pgTable(
       })
       .onDelete("cascade"),
     p.index("sanctions_contact_matches_reviewed_by_idx").on(table.reviewedBy),
+    p
+      .index("sanctions_contact_matches_org_open_cursor_idx")
+      .on(
+        table.organizationId,
+        table.state,
+        table.disposition,
+        table.contactId,
+        table.sourceId,
+        table.sourceEntryId,
+      ),
     ...monitoringPolicies("sanctions_contact_matches"),
   ],
 );
@@ -279,6 +292,9 @@ export const sanctionsScreeningEvents = p.pgTable(
       .notNull()
       .references(() => sanctionsEditions.id),
     reason: p.text().notNull(),
+    reviewerId: p.text("reviewer_id"),
+    contactFingerprint: p.text("contact_fingerprint"),
+    entryHash: p.text("entry_hash"),
     oldMatch: p.jsonb("old_match").$type<SanctionsPossibleMatch>(),
     newMatch: p.jsonb("new_match").$type<SanctionsPossibleMatch>(),
     createdAt: timestamptz("created_at").notNull(),
