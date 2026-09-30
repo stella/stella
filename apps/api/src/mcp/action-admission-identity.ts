@@ -2,19 +2,8 @@ import type { ActionPeriodIdentity } from "@/api/lib/rate-limit/action-period-bu
 
 const MCP_TOOL_CALL_ACTION_KIND = "mcp.tools/call";
 
-type McpActionIdentityOptions = {
-  sessionId: string | undefined;
-  rpcId: string | number;
-  requestId: string;
-};
-
-export const mcpActionPeriodIdentity = ({
-  sessionId,
-  rpcId,
-  requestId,
-}: McpActionIdentityOptions): ActionPeriodIdentity => ({
+export const mcpActionPeriodIdentity = (): ActionPeriodIdentity => ({
   actionKind: MCP_TOOL_CALL_ACTION_KIND,
-  // JSON encoding preserves both the session boundary and the RPC ID's type.
-  logicalPhaseId:
-    sessionId === undefined ? requestId : JSON.stringify([sessionId, rpcId]),
+  // RPC IDs are client-chosen correlation tokens, not idempotency keys.
+  logicalPhaseId: Bun.randomUUIDv7(),
 });
