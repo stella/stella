@@ -95,6 +95,7 @@ export const tokenizeCorpusFreeText = (text: string): CorpusQueryToken[] => {
 
     const end = findPhraseEnd(text, index + 1, closers);
     if (end === -1) {
+      plain += char;
       index += 1;
       continue;
     }

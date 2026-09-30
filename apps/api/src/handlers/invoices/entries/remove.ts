@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 import { t } from "elysia";
 
+import { resultTx } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
   expenses,
@@ -10,7 +11,7 @@ import {
   timeEntries,
 } from "@/api/db/schema";
 import {
-  lockDraftInvoiceForLines,
+  requireDraftInvoiceForEntryChanges,
   recalculateInvoiceTotals,
 } from "@/api/handlers/invoices/invoice-lines";
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -104,8 +105,8 @@ const removeEntries = createSafeHandler(
   },
   async function* ({
     safeDb,
-    session,
     user,
+    session,
     workspaceId,
     params,
     body,
@@ -152,8 +153,16 @@ const removeEntries = createSafeHandler(
 
     const now = new Date();
 
+    const entryChangeScope = {
+      invoiceId: params.invoiceId,
+      organizationId: session.activeOrganizationId,
+      workspaceId,
+      recordAuditEvent,
+      conflictMessage: "Invoice status changed concurrently; please retry",
+    };
+
     const txResult = yield* Result.await(
-      safeDb(async (tx) => {
+      resultTx(safeDb, async (tx) => {
         const runningError = await guardRunningTimeEntries({
           tx,
           workspaceId,
@@ -163,21 +172,14 @@ const removeEntries = createSafeHandler(
             : { type: "none" },
         });
         if (runningError) {
-          return runningError;
+          return Result.err(runningError);
         }
-        // The running-entry guard locks timer owners, the matter and entries first;
-        // lock the invoice next, before changing its lines or totals.
-        const invoiceCheck = await lockDraftInvoiceForLines(
+        const invoiceResult = await requireDraftInvoiceForEntryChanges(
           tx,
-          {
-            invoiceId: params.invoiceId,
-            organizationId: session.activeOrganizationId,
-            workspaceId,
-          },
-          recordAuditEvent,
+          entryChangeScope,
         );
-        if (!invoiceCheck) {
-          return { ok: false as const };
+        if (invoiceResult.isErr()) {
+          return Result.err(invoiceResult.error);
         }
 
         const timeEntryIds = body.timeEntryIds;
@@ -245,12 +247,16 @@ const removeEntries = createSafeHandler(
             );
         }
 
-        await recalculateInvoiceTotals(
+        const totals = await recalculateInvoiceTotals(
           tx,
           { invoiceId: params.invoiceId, workspaceId },
           now,
           recordAuditEvent,
         );
+
+        if (totals.isErr()) {
+          return Result.err(totals.error);
+        }
 
         await recordAuditEvent(
           tx,
@@ -261,23 +267,11 @@ const removeEntries = createSafeHandler(
           }),
         );
 
-        return { ok: true as const };
+        return Result.ok({ success: true });
       }),
     );
 
-    if (HandlerError.is(txResult)) {
-      return Result.err(txResult);
-    }
-    if (!txResult.ok) {
-      return Result.err(
-        new HandlerError({
-          status: 409,
-          message: "Invoice status changed concurrently; please retry",
-        }),
-      );
-    }
-
-    return Result.ok({ success: true });
+    return Result.ok(txResult);
   },
 );
 

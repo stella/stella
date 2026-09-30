@@ -81,6 +81,7 @@ import {
   INGESTION_USER_AGENT,
   adapterCatch,
   hashContent,
+  normalizeMetadataValues,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseSkUsDocumentXhtml } from "@/api/handlers/case-law/ingestion/parsers/sk-us";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
@@ -685,9 +686,6 @@ const courtFileHeader = (
   );
 };
 
-const dedupe = (arr: readonly string[] | null | undefined): string[] =>
-  arr ? [...new Set(arr)] : [];
-
 /** The keys the service sends as one value on a decision and several on an archived one. */
 type PublisherListField =
   | "mkComplainedLegalRegulation"
@@ -873,59 +871,71 @@ const skUsMetadata = ({
   doc,
   facetsJson,
   header,
-}: SkUsMetadataOptions): Record<string, unknown> => ({
-  caseNumber: doc.mkRSAPNumberOfFile,
-  ecli: doc.mkECLI,
-  documentId: doc.documentId,
-  docType: doc.docType,
-  title: doc.title,
-  contentType: doc.contentType,
-  documentType: doc.mkDocumentType,
-  rvpNumber: doc.mkRVPNumberOfFile,
-  typeOfDecision: dedupe(doc.mkTypeOfDecision),
-  typeOfProceeding: doc.mkTypeOfProceeding,
-  typeOfNegotiation: dedupe(doc.mkTypeOfNegotiation),
-  legalBasis: dedupe(doc.mkDecisionInTermsOf),
-  result: dedupe(doc.mkResultOfNegotiation),
-  cause: dedupe(doc.mkCause),
-  dissentingOpinion: doc.mkDifferentView,
-  proceedingSubject: dedupe(doc.mkWordRegister),
-  subjectIndex: dedupe(doc.mkMaterialRegister),
-  challengedLegislation: publisherList(doc, "mkComplainedLegalRegulation"),
-  clarificationOfLegalRegulation: publisherList(
-    doc,
-    "mkClarificationOfLegalRegulation",
-  ),
-  legalForceDate: parseApiDate(doc.mkDateOfLegalForce),
-  publicationDate: parseApiDate(doc.mkPublicationDate),
-  fileReference: doc.mkFileReference,
-  typeOfProposer: publisherList(doc, "mkTypeOfProposer"),
-  affectedLegalRegulation: doc.mkAffectedLegalRegulation,
-  underage: doc.mkUnderage,
-  includeToZnaU: doc.mkIncludeToZnaU,
-  formOfEntry: doc.mkFormOfEntry,
-  typeOfEntry: doc.mkTypeOfEntry,
-  parentDecisionKind: doc.mkParentIdDecision,
-  lawReportsNumber: doc.mkLawReportsNumber,
-  volumeOfLawReports: doc.mkVolumeOfLawReports,
-  yearOfLawReports: doc.mkYearOfLawReports,
-  collectionPeriod: doc.mkTimePeriodZNaU,
-  webTitle: doc.mkWebTitle,
-  // The docket file answers the two the decision row leaves empty: when the
-  // petition arrived, and what other files this one refers to.
-  entryDate: parseApiDate(doc.mkEntryDate ?? header?.mkEntryDate),
-  references: doc.mkReferences ?? header?.mkReferences,
-  courtFileId: header?.documentId,
-  defendant: facetValues(facetsJson, "mkDefendant"),
-  publicDefendant: facetValues(facetsJson, "mkPublicDefendant"),
-  violator: facetValues(facetsJson, "mkViolator"),
-  formOfProposer: facetValues(facetsJson, "mkFormOfProposer"),
-  kindOfOtherProposer: facetValues(facetsJson, "mkKindOfOtherProposer"),
-  defendantProceedingFileNumber: facetValues(
-    facetsJson,
-    "mkFileNumberOfDefendantProceeding",
-  ),
-});
+}: SkUsMetadataOptions): Record<string, unknown> => {
+  const multiValueMetadata = {
+    typeOfDecision: doc.mkTypeOfDecision,
+    typeOfNegotiation: doc.mkTypeOfNegotiation,
+    legalBasis: doc.mkDecisionInTermsOf,
+    result: doc.mkResultOfNegotiation,
+    cause: doc.mkCause,
+    proceedingSubject: doc.mkWordRegister,
+    subjectIndex: doc.mkMaterialRegister,
+    challengedLegislation: publisherList(doc, "mkComplainedLegalRegulation"),
+    clarificationOfLegalRegulation: publisherList(
+      doc,
+      "mkClarificationOfLegalRegulation",
+    ),
+    typeOfProposer: publisherList(doc, "mkTypeOfProposer"),
+    defendant: facetValues(facetsJson, "mkDefendant"),
+    publicDefendant: facetValues(facetsJson, "mkPublicDefendant"),
+    violator: facetValues(facetsJson, "mkViolator"),
+    formOfProposer: facetValues(facetsJson, "mkFormOfProposer"),
+    kindOfOtherProposer: facetValues(facetsJson, "mkKindOfOtherProposer"),
+    defendantProceedingFileNumber: facetValues(
+      facetsJson,
+      "mkFileNumberOfDefendantProceeding",
+    ),
+  };
+  const normalizedValues = Object.fromEntries(
+    Object.entries(multiValueMetadata).map(([key, values]) => [
+      key,
+      normalizeMetadataValues(values),
+    ]),
+  );
+  return {
+    ...multiValueMetadata,
+    normalizedValues,
+    caseNumber: doc.mkRSAPNumberOfFile,
+    ecli: doc.mkECLI,
+    documentId: doc.documentId,
+    docType: doc.docType,
+    title: doc.title,
+    contentType: doc.contentType,
+    documentType: doc.mkDocumentType,
+    rvpNumber: doc.mkRVPNumberOfFile,
+    typeOfProceeding: doc.mkTypeOfProceeding,
+    dissentingOpinion: doc.mkDifferentView,
+    legalForceDate: parseApiDate(doc.mkDateOfLegalForce),
+    publicationDate: parseApiDate(doc.mkPublicationDate),
+    fileReference: doc.mkFileReference,
+    affectedLegalRegulation: doc.mkAffectedLegalRegulation,
+    underage: doc.mkUnderage,
+    includeToZnaU: doc.mkIncludeToZnaU,
+    formOfEntry: doc.mkFormOfEntry,
+    typeOfEntry: doc.mkTypeOfEntry,
+    parentDecisionKind: doc.mkParentIdDecision,
+    lawReportsNumber: doc.mkLawReportsNumber,
+    volumeOfLawReports: doc.mkVolumeOfLawReports,
+    yearOfLawReports: doc.mkYearOfLawReports,
+    collectionPeriod: doc.mkTimePeriodZNaU,
+    webTitle: doc.mkWebTitle,
+    // The docket file answers the two the decision row leaves empty: when the
+    // petition arrived, and what other files this one refers to.
+    entryDate: parseApiDate(doc.mkEntryDate ?? header?.mkEntryDate),
+    references: doc.mkReferences ?? header?.mkReferences,
+    courtFileId: header?.documentId,
+  };
+};
 
 /**
  * Build one decision from a search-listing item, fetching every other

@@ -13,7 +13,7 @@ const readInvoiceById = createSafeHandler(
     description:
       "Read one invoice with its full detail: its lines in order with " +
       "quantity, unit price, VAT, and amounts; totals with the VAT breakdown " +
-      "by rate; seller profile, buyer, dates, currency, and status; and every " +
+      "by rate; document type, original invoice id, seller profile, buyer, dates, currency, and status; and every " +
       "attached time entry and expense with its work item. An invoice from " +
       "before invoice lines lists no lines for its attached entries until " +
       "its first line edit; its totals still count them. Use " +
@@ -60,6 +60,7 @@ const readInvoiceById = createSafeHandler(
       })),
       totals: totals.value,
       paidAt: invoice.paidAt?.toISOString() ?? null,
+      finalizedAt: invoice.finalizedAt?.toISOString() ?? null,
       createdAt: invoice.createdAt.toISOString(),
       updatedAt: invoice.updatedAt.toISOString(),
     });
