@@ -27,8 +27,8 @@ export const BOOTSTRAP_PAGE_SIZE = 1000;
  * `BOOTSTRAP_PAGE_SIZE` decisions each) and the next scheduled run resumes.
  */
 export const PROVISION_BACKFILL_UNITS_PER_RUN = 200;
-const LOCK_TIMEOUT = "30s";
-const STATEMENT_TIMEOUT = "1min";
+const LOCK_TIMEOUT_MS = 30_000;
+const STATEMENT_TIMEOUT_MS = 60_000;
 
 type ScopeKey = { country: string; language: string };
 
@@ -72,8 +72,8 @@ const readBoolean = (row: unknown, key: string): boolean => {
 };
 
 const PAGE_BUDGET = {
-  lockTimeout: LOCK_TIMEOUT,
-  statementTimeout: STATEMENT_TIMEOUT,
+  lockTimeout: LOCK_TIMEOUT_MS,
+  statementTimeout: STATEMENT_TIMEOUT_MS,
 } as const;
 
 const inTransaction = async (

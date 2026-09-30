@@ -6,6 +6,7 @@ import { Temporal } from "@stll/time";
 
 import type { rootDb } from "@/api/db/root";
 import { styleSets } from "@/api/db/schema";
+import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
@@ -21,6 +22,10 @@ import type {
 } from "@/api/lib/bullmq-requeue";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { errorTag } from "@/api/lib/errors/utils";
+import {
+  deleteOrganizationFileWithSignal,
+  deleteOrganizationFilesWithSignal,
+} from "@/api/lib/files/delete-organization-file";
 import { logger } from "@/api/lib/observability/logger";
 import {
   RECONCILE_SCAN_PAGE_SIZE,
@@ -266,7 +271,13 @@ export const deleteQueuedStyleSetPackages = async (
   const s3Keys = jobs
     .filter((job) => job.data.styleSetId === styleSetId)
     .map((job) => job.data.s3Key);
-  await Promise.all(s3Keys.map(async (s3Key) => await getS3().delete(s3Key)));
+  const deleted = await deleteOrganizationFilesWithSignal(
+    s3Keys,
+    AbortSignal.timeout(10_000),
+  );
+  deleted.unwrap(
+    "Queued style set package deletion must succeed before cleanup completes",
+  );
 };
 
 /**
@@ -296,7 +307,17 @@ export const deleteUnreferencedStyleSetPackage = async (
     });
     return;
   }
-  await getS3().delete(s3Key);
+  if (env.FEATURE_FILE_USAGE_LIMITS) {
+    const deleted = await deleteOrganizationFileWithSignal(
+      s3Key,
+      AbortSignal.timeout(10_000),
+    );
+    deleted.unwrap(
+      "Unreferenced style set package deletion must succeed before clearing its cleanup key",
+    );
+  } else {
+    await getS3().delete(s3Key);
+  }
   // audit: skip — cleanup metadata on the already-audited style set.
   await db
     .update(styleSets)

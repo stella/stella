@@ -176,7 +176,7 @@ const readCapturedDocument = (html: string): CapturedDocument => {
           ),
         );
       });
-    scopes.push({ opinionId, blockIds });
+    scopes.push({ opinionId, blockIds, boundaries: "proven" });
   });
 
   return {

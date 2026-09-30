@@ -722,7 +722,8 @@ export const atRisStoredValues = (
       // the two keyed stores are projected here.
       case "document":
       case "identity":
-      case "result": {
+      case "result":
+      case "raw": {
         return;
       }
       default: {

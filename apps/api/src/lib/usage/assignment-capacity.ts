@@ -63,3 +63,17 @@ export const trimAssignmentsToCapacity = async (
   );
   return excess.length;
 };
+
+/** Lock a batch in stable organization order before reading roster capacity. */
+export const lockAssignmentCapacities = async (
+  tx: Transaction,
+  organizationIds: readonly SafeId<"organization">[],
+): Promise<void> => {
+  if (organizationIds.length === 0) {
+    return;
+  }
+  await tx.execute(sql`
+    select pg_advisory_xact_lock(${ASSIGNMENT_CAPACITY_LOCK_NAMESPACE}, hashtext(id))
+    from (select distinct id from jsonb_array_elements_text(${JSON.stringify(organizationIds)}::text::jsonb) as ids(id) order by id) ordered
+  `);
+};

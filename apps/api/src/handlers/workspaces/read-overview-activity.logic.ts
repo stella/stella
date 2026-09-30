@@ -203,6 +203,7 @@ export const ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE = {
   file_comparison: null,
   template_lookup_format: null,
   time_entry: null,
+  time_timer: null,
   usage_allocation: null,
   usage_entitlement: null,
   usage_event: null,

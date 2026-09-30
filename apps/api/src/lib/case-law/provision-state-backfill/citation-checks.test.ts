@@ -17,6 +17,9 @@ const fakeConnection = (
   validated: Set<string>,
   statements: string[],
 ): ProvisionBackfillSession => ({
+  setTransactionBudget: async (budget) => {
+    statements.push(`budget ${JSON.stringify(budget)}`);
+  },
   execute: async (query) => {
     statements.push(query);
     const validatedName = /VALIDATE CONSTRAINT "([a-z_]+)"/u.exec(query)?.[1];
@@ -43,8 +46,7 @@ describe("provision citation CHECK validation", () => {
 
     expect(statements).toEqual([
       "BEGIN",
-      "SET LOCAL lock_timeout = '10s'",
-      "SET LOCAL statement_timeout = '25min'",
+      'budget {"lockTimeout":10000,"statementTimeout":1500000}',
       'ALTER TABLE public."case_law_provision_citations" VALIDATE CONSTRAINT "provision_citations_target_status_values"',
       "COMMIT",
     ]);

@@ -66,6 +66,7 @@ type DocumentDelivery =
 export type CitationOpinionScope = {
   opinionId: string;
   blockIds: readonly string[];
+  boundaries: "proven" | "unproven";
 };
 
 /** Result of parsing a single court decision from a source. */
@@ -1150,6 +1151,13 @@ export const sourceTotalRead = (value: number): SourceTotalCount =>
  * a result field is a column of the row, and the last two are not fields at all.
  */
 export type SourceFieldTarget =
+  /** Exact JSON field retained in a named raw part; `*` visits every array row. */
+  | {
+      readonly type: "raw";
+      readonly part: string;
+      readonly path: readonly string[];
+      readonly reason: string;
+    }
   /** `metadata[key]` on the stored row. */
   | { readonly type: "metadata"; readonly key: string }
   /** A publisher-authored field represented by the decision text contract. */

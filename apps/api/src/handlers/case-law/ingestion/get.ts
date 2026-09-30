@@ -14,6 +14,7 @@ import {
   RECONCILIATION_ITEM_STATUS,
 } from "@/api/db/schema";
 import type { SourceTotalOrigin } from "@/api/db/schema";
+import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -388,9 +389,7 @@ export const getIngestionStatus = async (
   const oneDayAgo = new Date(now.getTime() - DAY_IN_MS);
 
   return await scopedDb(async (db) => {
-    await db.execute(
-      sql`SELECT set_config('statement_timeout', ${String(STATUS_STATEMENT_TIMEOUT_MS)}, true)`,
-    );
+    await setSharedStatementTimeout(db, STATUS_STATEMENT_TIMEOUT_MS);
     const sources = await boundedAll({
       invariant: CASE_LAW_SOURCE_ROWS_INVARIANT,
       max: CASE_LAW_SOURCE_ROWS_BOUND,

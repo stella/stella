@@ -1,0 +1,21 @@
+{
+  "source": "CourtListener public bulk data",
+  "snapshotDate": "2026-06-30",
+  "snapshotManifest": "dev/MANIFEST.md",
+  "sourceDataset": "dev-clusters-full.ndjson.gz",
+  "clusterId": "3256685",
+  "opinionId": "3258941",
+  "column": "html_with_citations",
+  "sourceRecord": "opinion 3258941 column html_with_citations",
+  "fixtureSelection": "Complete field value copied byte-for-byte from the named row in the bounded development snapshot.",
+  "sha256": "2bc211413ae8d5c65a95b4ef45de9336b90b046ed006692c03a77b0700a78f1e",
+  "recordIdentityUrl": "https://www.courtlistener.com/api/rest/v3/opinions/3258941/",
+  "sourceArtifact": {
+    "url": "https://com-courtlistener-storage.s3-us-west-2.amazonaws.com/bulk-data/opinions-2026-06-30.csv.bz2",
+    "etag": "150e073ae1e7adad94ca9a57fb449980-6505",
+    "compressedByteRange": {
+      "start": 0,
+      "end": 209715199
+    }
+  }
+}

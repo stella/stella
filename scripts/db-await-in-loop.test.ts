@@ -45,6 +45,168 @@ export const Result = {
   tryPromise: async <T>(fn: () => Promise<T>): Promise<T> => await fn(),
 };
 `,
+  "chunked.ts": `
+export const chunked = <T>(items: readonly T[], size: number): T[][] => {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size));
+  return chunks;
+};
+`,
+  "bounded-rounds.ts": `
+import { rootDb, items, type Transaction } from "./db/root";
+import { chunked, chunked as batches } from "./chunked";
+import { writeOne } from "./helpers";
+import { Result } from "./result";
+declare const ids: number[];
+const SIZE = 8;
+const SIZES = { batch: 4 } as const;
+const tuple = [1, 2, 3] as const;
+const registry = { first: 1, second: 2 } as const;
+const readonlyRegistry: { readonly first: number; readonly second: number } = { first: 1, second: 2 };
+const alias = batches;
+export const accepted = async () => {
+  for (const group of chunked(ids, SIZE)) { await rootDb.select().from(items); }
+  for (const group of batches(ids, SIZES.batch)) { await rootDb.select().from(items); }
+  for (const group of alias(ids, 4)) { await rootDb.select().from(items); }
+  for (let i = 0; i < ids.length; i += SIZE) {
+    const group = ids.slice(i, i + SIZE);
+    await rootDb.select().from(items);
+  }
+  for (const kind of tuple) { await rootDb.select().from(items); }
+  for (const kind of tuple.entries()) { await rootDb.select().from(items); }
+  for (const kind of tuple.keys()) { await rootDb.select().from(items); }
+  for (const kind of tuple.values()) { await rootDb.select().from(items); }
+  for (const kind of [1, 2, 3]) { await rootDb.select().from(items); }
+  for (const kind of Object.values(registry)) { await rootDb.select().from(items); }
+  for (const kind of Object.keys(readonlyRegistry)) { await rootDb.select().from(items); }
+  for (const kind of Object.entries(registry)) { await rootDb.select().from(items); }
+  for (let i = 0; i < 16; i++) { await rootDb.select().from(items); }
+  for (let i = 0; i <= 3; i += 1) { await rootDb.select().from(items); }
+  for (let i = 1; i <= 3; i++) { await rootDb.select().from(items); }
+};
+export const signalBound = async (signal: AbortSignal) => {
+  for (let i = 0; i < 3 && !signal.aborted; i++) { await rootDb.select().from(items); }
+};
+export async function* yieldedFanOut(tx: Transaction) {
+  for (const group of chunked(ids, SIZE)) {
+    yield* Result.await(Promise.all(group.map(id => writeOne(tx, id)))); // expect: handle
+  }
+}
+export const rejected = async (size: number, narrowSize: 8, cursor: string | null, tx: Transaction) => {
+  const mutableView: { first: number; second: number } = registry;
+  for (const kind of Object.values(mutableView)) {
+    await rootDb.select().from(items); // expect: query
+  }
+  for (const id of ids) {
+    await rootDb.select().from(items); // expect: query
+  }
+  for (const group of chunked(ids, size)) {
+    await rootDb.select().from(items); // expect: query
+  }
+  for (const group of chunked(ids, narrowSize)) {
+    await rootDb.select().from(items); // expect: query
+  }
+  let variableSize = 4;
+  for (const group of chunked(ids, variableSize)) {
+    await rootDb.select().from(items); // expect: query
+  }
+  for (const group of chunked(ids, Math.min(4, size))) {
+    await rootDb.select().from(items); // expect: query
+  }
+  for (const group of chunked(ids, 1)) {
+    await rootDb.select().from(items); // expect: query
+  }
+  for (const group of chunked(ids, SIZE)) {
+    await rootDb.select().from(items); // expect: query
+    if (group.length === 0) return await rootDb.select().from(items);
+  }
+  for (const group of chunked(ids, SIZE)) {
+    await rootDb.select().from(items); // expect: query
+    await rootDb.select().from(items); // expect: query
+  }
+  for (const id of ids) {
+    for (const group of chunked(ids, SIZE)) {
+      await rootDb.select().from(items); // expect: query
+    }
+  }
+  for (const group of chunked(ids, SIZE)) {
+    for (const row of group) {
+      await rootDb.select().from(items); // expect: query
+    }
+  }
+  for (const group of chunked(ids, SIZE)) {
+    await Promise.all(group.map(id => writeOne(tx, id))); // expect: handle
+  }
+  await Promise.all(ids.map(async id => {
+    for (const group of chunked(ids, SIZE)) {
+      await rootDb.select().from(items); // expect: query
+    }
+  }));
+  const tooMany = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17] as const;
+  for (const kind of tooMany) {
+    await rootDb.select().from(items); // expect: query
+  }
+  const record: Record<string, number> = registry;
+  for (const kind of Object.values(record)) {
+    await rootDb.select().from(items); // expect: query
+  }
+  for (let i = 0; i < 3; i++) {
+    i -= 1;
+    await rootDb.select().from(items); // expect: query
+  }
+  for (let i = 0; i < ids.length; i += SIZE) {
+    i = 0;
+    await rootDb.select().from(items); // expect: query
+  }
+  for (let i = 0; i < ids.length; i += size) {
+    await rootDb.select().from(items); // expect: query
+  }
+  for (let i = 0; i < 17; i++) {
+    await rootDb.select().from(items); // expect: query
+  }
+  for (let i = -100; i < 3; i++) {
+    await rootDb.select().from(items); // expect: query
+  }
+  for (const kind of [1, ...ids]) {
+    await rootDb.select().from(items); // expect: query
+  }
+  let mutableTuple: [number, number] = [1, 2];
+  for (const kind of mutableTuple) {
+    mutableTuple.push(kind);
+    await rootDb.select().from(items); // expect: query
+  }
+  const mutableConstTuple: [number, number] = [1, 2];
+  for (const kind of mutableConstTuple) {
+    mutableConstTuple.push(kind);
+    await rootDb.select().from(items); // expect: query
+  }
+  let mutableTupleWithoutPush: [number, number] = [1, 2];
+  for (const kind of mutableTupleWithoutPush) {
+    await rootDb.select().from(items); // expect: query
+  }
+  const mutableRegistry: { first: number; second: number } = { first: 1, second: 2 };
+  for (const kind of Object.values(mutableRegistry)) {
+    await rootDb.select().from(items); // expect: query
+  }
+  for (const kind of Object.keys(mutableRegistry)) {
+    await rootDb.select().from(items); // expect: query
+  }
+  for (const kind of Object.entries(mutableRegistry)) {
+    await rootDb.select().from(items); // expect: query
+  }
+  for (const kind of Object.values({ first: 1, second: 2 })) {
+    await rootDb.select().from(items); // expect: query
+  }
+  let readonlyRegistry = { first: 1, second: 2 } as const;
+  for (const kind of Object.values(readonlyRegistry)) {
+    await rootDb.select().from(items); // expect: query
+  }
+  while (cursor) {
+    await rootDb.select().from(items); // expect: query
+    cursor = null;
+  }
+};
+`,
   "helpers.ts": `
 import { inArray } from "drizzle-orm";
 import { items, rootDb, type Transaction } from "./db/root";
@@ -179,6 +341,26 @@ export const exits = async () => {
   for (const id of ids) {
     await saveOne(id);
     throw new Error(String(id));
+  }
+};
+
+export const returnWithContinue = async () => {
+  for (const id of ids) {
+    if (id === 0) continue;
+    return await saveOne(id);
+  }
+};
+export const immediateExitWithContinue = async () => {
+  for (const id of ids) {
+    if (id === 0) continue;
+    await saveOne(id);
+    return;
+  }
+};
+export const nonExitWithContinue = async () => {
+  for (const id of ids) {
+    if (id === 0) continue;
+    await saveOne(id); // expect: helper
   }
 };
 
@@ -431,6 +613,7 @@ let fixtureRoot = "";
 let report: DbAwaitInLoopReport = {
   hits: [],
   suppressedHits: 0,
+  boundedRoundHits: 0,
   directiveCounts: {},
   directiveProblems: [],
   unclassified: [],
@@ -464,6 +647,7 @@ beforeAll(() => {
     repositoryRoot: fixtureRoot,
     isInScope: (relative) => !relative.startsWith("db/"),
     handleDeclarationFiles: HANDLE_MODULES,
+    chunkHelperFiles: ["chunked.ts"],
   });
 });
 
@@ -491,6 +675,13 @@ describe("db-await-in-loop", () => {
     expect(observed("cases.ts")).toEqual(
       expectedFromMarkers(sourceOf("cases.ts")),
     );
+  });
+
+  test("accepts constant-bounded rounds while retaining per-row and nested hits", () => {
+    expect(observed("bounded-rounds.ts")).toEqual(
+      expectedFromMarkers(sourceOf("bounded-rounds.ts")),
+    );
+    expect(report.boundedRoundHits).toBe(16);
   });
 
   test("helpers reached from a flagged site are not reported on their own", () => {

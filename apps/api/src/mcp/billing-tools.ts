@@ -10,7 +10,6 @@ import { invoices, timeEntries } from "@/api/db/schema";
 import { INVOICE_DETAIL_RELATIONS } from "@/api/handlers/invoices/invoice-detail";
 import { readInvoiceTotals } from "@/api/handlers/invoices/invoice-lines";
 import { deleteTimeEntryHandler } from "@/api/handlers/time-entries/delete";
-import { createTimeEntryHandler } from "@/api/handlers/time-entries/time-entry-insert";
 import { updateTimeEntryHandler } from "@/api/handlers/time-entries/update";
 import { readOrgEntitlementHandler } from "@/api/handlers/usage/entitlement/get";
 import { TIME_ENTRY_VISIBILITY } from "@/api/lib/billing-constants";
@@ -19,6 +18,7 @@ import {
   NARRATIVE_LANGUAGE_PATTERN,
 } from "@/api/lib/billing/narrative-language";
 import { resolveRate } from "@/api/lib/billing/rates";
+import { createTimeEntryHandler } from "@/api/lib/billing/time-entry-insert";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   DELETE_TIME_ENTRY_PROJECTION,

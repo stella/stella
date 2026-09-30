@@ -1,6 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { is } from "drizzle-orm";
-import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
+import {
+  foreignKey,
+  getTableConfig,
+  pgTable,
+  PgTable,
+  text,
+} from "drizzle-orm/pg-core";
+import type { PgColumn } from "drizzle-orm/pg-core";
 
 import * as authSchema from "@/api/db/auth-schema";
 import * as schema from "@/api/db/schema";
@@ -19,17 +26,47 @@ const allTables = Object.values(allSchemaExports).filter(isPgTable);
 
 type ForeignKeyEdge = {
   child: PgTable;
+  columns: PgColumn[];
+  foreignColumns: PgColumn[];
   onDelete: string | undefined;
   parent: PgTable;
 };
 
 const foreignKeyEdges = (): ForeignKeyEdge[] =>
   allTables.flatMap((child) =>
-    getTableConfig(child).foreignKeys.map((foreignKey) => ({
+    getTableConfig(child).foreignKeys.map((key) => ({
       child,
-      onDelete: foreignKey.onDelete,
-      parent: foreignKey.reference().foreignTable,
+      columns: key.reference().columns,
+      foreignColumns: key.reference().foreignColumns,
+      onDelete: key.onDelete,
+      parent: key.reference().foreignTable,
     })),
+  );
+
+// MATCH SIMPLE exempts a composite FK after a matching nullable pointer is
+// cleared. RESTRICT checks may run before referential actions and are not safe.
+const clearedBySiblingForeignKey = (
+  edge: ForeignKeyEdge,
+  edges: ForeignKeyEdge[],
+) =>
+  (edge.onDelete === "no action" || edge.onDelete === undefined) &&
+  edges.some(
+    (sibling) =>
+      sibling.child === edge.child &&
+      sibling.parent === edge.parent &&
+      sibling.onDelete === "set null" &&
+      sibling.columns.length > 0 &&
+      sibling.columns.every((column, index) => {
+        if (column.notNull) {
+          return false;
+        }
+        const pairedParent = sibling.foreignColumns.at(index);
+        return edge.columns.some(
+          (edgeColumn, edgeIndex) =>
+            edgeColumn.name === column.name &&
+            edge.foreignColumns.at(edgeIndex)?.name === pairedParent?.name,
+        );
+      }),
   );
 
 const deletionClosure = (): Set<PgTable> => {
@@ -71,11 +108,13 @@ describe("workspace deletion coverage", () => {
 
   test("every restrictive edge into the deletion closure is manually or transitively covered", () => {
     const closure = deletionClosure();
-    const uncovered = foreignKeyEdges().filter(
+    const edges = foreignKeyEdges();
+    const uncovered = edges.filter(
       (edge) =>
         closure.has(edge.parent) &&
         edge.onDelete !== "cascade" &&
         edge.onDelete !== "set null" &&
+        !clearedBySiblingForeignKey(edge, edges) &&
         !closure.has(edge.child),
     );
     expect(
@@ -96,7 +135,8 @@ describe("workspace deletion coverage", () => {
             edge.child === table &&
             closure.has(edge.parent) &&
             edge.onDelete !== "cascade" &&
-            edge.onDelete !== "set null",
+            edge.onDelete !== "set null" &&
+            !clearedBySiblingForeignKey(edge, edges),
         ),
     );
     expect(stale.map((table) => getTableConfig(table).name)).toEqual([]);
@@ -156,4 +196,74 @@ describe("workspace deletion coverage", () => {
       Object.keys(WORKSPACE_STORAGE_REFERENCE_DISPOSITION).toSorted(),
     );
   });
+});
+
+const pointerParent = pgTable("coverage_parent", {
+  id: text("id").notNull(),
+  organizationId: text("organization_id").notNull(),
+});
+const pointerChild = pgTable(
+  "coverage_child",
+  {
+    parentId: text("parent_id").references(() => pointerParent.id, {
+      onDelete: "set null",
+    }),
+    organizationId: text("organization_id").notNull(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.parentId, table.organizationId],
+      foreignColumns: [pointerParent.id, pointerParent.organizationId],
+    }),
+  ],
+);
+const pointerEdges = getTableConfig(pointerChild).foreignKeys.map((key) => ({
+  child: pointerChild,
+  parent: key.reference().foreignTable,
+  columns: key.reference().columns,
+  foreignColumns: key.reference().foreignColumns,
+  onDelete: key.onDelete,
+}));
+
+test("nullable matching SET NULL pointers cover NO ACTION composite checks only", () => {
+  const composite = pointerEdges.find((edge) => edge.columns.length === 2);
+  const pointer = pointerEdges.find((edge) => edge.columns.length === 1);
+  expect(composite).toBeDefined();
+  expect(pointer).toBeDefined();
+  if (!composite || !pointer) {
+    return;
+  }
+  expect(clearedBySiblingForeignKey(composite, pointerEdges)).toBe(true);
+  expect(clearedBySiblingForeignKey(composite, [composite])).toBe(false);
+  expect(
+    clearedBySiblingForeignKey(
+      { ...composite, onDelete: "restrict" },
+      pointerEdges,
+    ),
+  ).toBe(false);
+  expect(
+    clearedBySiblingForeignKey(composite, [
+      {
+        ...pointer,
+        columns: [pointerChild.organizationId],
+        foreignColumns: [pointerParent.organizationId],
+      },
+    ]),
+  ).toBe(false);
+  expect(
+    clearedBySiblingForeignKey(composite, [
+      { ...pointer, foreignColumns: [pointerParent.organizationId] },
+    ]),
+  ).toBe(false);
+  expect(
+    clearedBySiblingForeignKey(composite, [{ ...pointer, parent: workspaces }]),
+  ).toBe(false);
+  expect(
+    clearedBySiblingForeignKey(composite, [{ ...pointer, child: workspaces }]),
+  ).toBe(false);
+  expect(
+    clearedBySiblingForeignKey(composite, [
+      { ...pointer, onDelete: "no action" },
+    ]),
+  ).toBe(false);
 });

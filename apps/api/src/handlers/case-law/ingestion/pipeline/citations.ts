@@ -48,10 +48,19 @@ type ReadReference = {
 };
 
 /** A decision's references as the writer publishes them. */
-type DecisionCitations = {
+type LegacyGraphCitationPlan = {
+  disposition: "legacy-graph";
   citingDecisionId: SafeId<"caseLawDecision">;
   references: readonly ReadReference[];
 };
+
+export type CitationPlan =
+  | LegacyGraphCitationPlan
+  | { disposition: "annotation-only" };
+
+export const annotationOnlyCitationPlan = (): CitationPlan => ({
+  disposition: "annotation-only",
+});
 
 /**
  * Every reference of one decision (see `deriveDecisionReferences`: what each
@@ -85,7 +94,7 @@ export const planDecisionCitations = async ({
   proceduralKeys,
   scopedDb,
   sections,
-}: PlanDecisionCitationsOptions): Promise<DecisionCitations> => {
+}: PlanDecisionCitationsOptions): Promise<LegacyGraphCitationPlan> => {
   const { references } = deriveDecisionReferences({
     citingDecisionId,
     citations,
@@ -93,10 +102,11 @@ export const planDecisionCitations = async ({
     sections,
   });
   if (references.length === 0) {
-    return { citingDecisionId, references: [] };
+    return { disposition: "legacy-graph", citingDecisionId, references: [] };
   }
   const rules = await loadRules(language, scopedDb, polarityRules);
   return {
+    disposition: "legacy-graph",
     citingDecisionId,
     references: references.map((reference) => ({
       reference,
@@ -140,7 +150,7 @@ const citationRowOf = (
 export const citationRowsOf = ({
   citingDecisionId,
   references,
-}: DecisionCitations): CitationRow[] =>
+}: LegacyGraphCitationPlan): CitationRow[] =>
   references.map((reference) => citationRowOf(citingDecisionId, reference));
 
 /** Each rule that labelled one of these citations, and how many it labelled. */
@@ -293,7 +303,7 @@ export const writeDecisionCitations = async (
     stored,
   }: {
     decisionId: SafeId<"caseLawDecision">;
-    citations: DecisionCitations;
+    citations: LegacyGraphCitationPlan;
     observedAt: Date;
     /** Whether the decision may already hold citation rows. */
     stored: boolean;

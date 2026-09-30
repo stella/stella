@@ -261,7 +261,11 @@ test("a replay keeps a withdrawn version's stored kind, so its payload revision 
 });
 
 test("a withdrawn version erases, a replay of its stored payload keeps it withdrawn, and a live listing restores it", async () => {
-  const live = { ...input("current"), eli: "eli/cz/sb/2012/91" };
+  const live = {
+    ...input("current"),
+    eli: "eli/cz/sb/2012/91",
+    origin: "live",
+  } as const;
   const replay = { ...live, origin: "stored-raw-replay" } as const;
 
   const first = await processLegislationDocument(live, scopedDb, { corpus });

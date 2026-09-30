@@ -21,6 +21,7 @@ import {
   templateVersions,
 } from "@/api/db/schema";
 import type { TemplateKind, TemplateOrigin } from "@/api/db/schema";
+import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeHandlerGenerator } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -31,6 +32,8 @@ import { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { writeScannedObject } from "@/api/lib/file-scan/stored-object";
+import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
+import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
 import { LIMITS } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
@@ -108,11 +111,19 @@ export const createStoredTemplate = async function* ({
 
   // Pre-generate the ID so the S3 key and DB row stay in sync.
   const templateId = createSafeId<"template">();
-  const { object: stored } = await writeScannedObject({
-    file,
-    key: buildTemplateS3Key(organizationId, templateId),
-  });
-  const s3Key = stored.key;
+  const s3Key = buildTemplateS3Key(organizationId, templateId);
+  const writeObject = async () =>
+    await writeScannedObject({ file, key: s3Key });
+  const { object: stored } = env.FEATURE_FILE_USAGE_LIMITS
+    ? yield* Result.await(
+        writeOrganizationFile({
+          organizationId,
+          objectKey: s3Key,
+          sizeBytes: file.bytes.byteLength,
+          write: writeObject,
+        }),
+      )
+    : await writeObject();
 
   const versionId = createSafeId<"templateVersion">();
 
@@ -220,7 +231,17 @@ export const createStoredTemplate = async function* ({
   // (limit reached, or a lost race for the last slot) leaves an unreferenced
   // object behind. Best-effort delete it so failed creates don't accrue S3 junk.
   if (!txResult.ok) {
-    getS3().delete(s3Key).catch(captureError);
+    const deleteCandidate = env.FEATURE_FILE_USAGE_LIMITS
+      ? deleteOrganizationFileWithSignal(s3Key, AbortSignal.timeout(10_000))
+      : getS3().delete(s3Key);
+    deleteCandidate
+      .then((deleted) => {
+        if (deleted) {
+          deleted.match({ err: captureError, ok: () => undefined });
+        }
+        return undefined;
+      })
+      .catch(captureError);
     return Result.err(
       txResult.reason === "duplicate_origin"
         ? new HandlerError({
@@ -234,7 +255,17 @@ export const createStoredTemplate = async function* ({
     );
   }
   if (!txResult.row) {
-    getS3().delete(s3Key).catch(captureError);
+    const deleteCandidate = env.FEATURE_FILE_USAGE_LIMITS
+      ? deleteOrganizationFileWithSignal(s3Key, AbortSignal.timeout(10_000))
+      : getS3().delete(s3Key);
+    deleteCandidate
+      .then((deleted) => {
+        if (deleted) {
+          deleted.match({ err: captureError, ok: () => undefined });
+        }
+        return undefined;
+      })
+      .catch(captureError);
     return Result.err(
       new HandlerError({
         status: 500,

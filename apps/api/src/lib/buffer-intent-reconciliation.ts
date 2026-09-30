@@ -17,13 +17,18 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createFileKey } from "@/api/lib/file-key";
+import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import { LIMITS } from "@/api/lib/limits";
-import {
-  deleteS3ObjectWithSignal,
-  S3_OBJECT_WRITE_CERTAINTY,
-} from "@/api/lib/s3";
+import { S3_OBJECT_WRITE_CERTAINTY } from "@/api/lib/s3";
 import type { S3ObjectWriteCertainty } from "@/api/lib/s3";
 import { withTimeout } from "@/api/lib/with-timeout";
+
+type DeleteObject = (
+  key: string,
+  signal: AbortSignal,
+) => Promise<
+  Awaited<ReturnType<typeof deleteOrganizationFileWithSignal>> | undefined
+>;
 
 export const BUFFER_INTENT_TTL_MS = 5 * 60 * 1000;
 export const BUFFER_INTENT_STALE_MS = 60 * 1000;
@@ -691,13 +696,13 @@ const reconcileStaleBufferIntentBatch = async ({
   scope,
   limit,
   signal,
-  deleteObject = deleteS3ObjectWithSignal,
+  deleteObject = deleteOrganizationFileWithSignal,
 }: {
   safeDb: SafeDb;
   scope?: BufferIntentScope | undefined;
   limit: number;
   signal?: AbortSignal | undefined;
-  deleteObject?: typeof deleteS3ObjectWithSignal;
+  deleteObject?: DeleteObject;
 }): Promise<number> => {
   signal?.throwIfAborted();
   const reconcileClaimId = Bun.randomUUIDv7().slice(0, 64);
@@ -783,11 +788,14 @@ const reconcileStaleBufferIntentBatch = async ({
           ),
         catch: (cause) => cause,
       });
-      if (Result.isError(cleanup)) {
+      const deleted = Result.flatten(
+        cleanup.map((value) => value ?? Result.ok(undefined)),
+      );
+      if (Result.isError(deleted)) {
         if (signal?.aborted) {
           return null;
         }
-        captureError(cleanup.error, {
+        captureError(deleted.error, {
           objectKey,
           pendingUploadId: row.id,
           stage: `buffer-${row.purpose}-intent-reconcile`,
@@ -848,12 +856,12 @@ export const reconcileBufferObjectCleanupIntents = async ({
   safeDb,
   limit,
   signal,
-  deleteObject = deleteS3ObjectWithSignal,
+  deleteObject = deleteOrganizationFileWithSignal,
 }: {
   safeDb: SafeDb;
   limit: number;
   signal?: AbortSignal | undefined;
-  deleteObject?: typeof deleteS3ObjectWithSignal;
+  deleteObject?: DeleteObject;
 }): Promise<number> => {
   if (limit === 0) {
     return 0;
@@ -919,13 +927,16 @@ export const reconcileBufferObjectCleanupIntents = async ({
           ),
         catch: (cause) => cause,
       });
-      if (Result.isError(cleanup) && !signal?.aborted) {
-        captureError(cleanup.error, {
+      const deleted = Result.flatten(
+        cleanup.map((value) => value ?? Result.ok(undefined)),
+      );
+      if (Result.isError(deleted) && !signal?.aborted) {
+        captureError(deleted.error, {
           pendingUploadId: row.id,
           stage: "buffer-object-cleanup-reconcile",
         });
       }
-      if (Result.isError(cleanup)) {
+      if (Result.isError(deleted)) {
         return null;
       }
       if (row.status === BUFFER_OBJECT_CLEANUP_INTENT_STATUS.ORPHANED) {
@@ -1000,12 +1011,12 @@ export const reconcileStaleBufferIntentsGlobally = async ({
   safeDb,
   limit,
   signal,
-  deleteObject = deleteS3ObjectWithSignal,
+  deleteObject = deleteOrganizationFileWithSignal,
 }: {
   safeDb: SafeDb;
   limit: number;
   signal?: AbortSignal | undefined;
-  deleteObject?: typeof deleteS3ObjectWithSignal;
+  deleteObject?: DeleteObject;
 }): Promise<number> => {
   const pendingLimit = Math.ceil(limit / 2);
   const transferredLimit = Math.floor(limit / 2);

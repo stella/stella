@@ -155,13 +155,13 @@ export type ParagraphNote = {
   /** The note's mark as printed ("3", "[3]", "*"). */
   label: string;
   /**
-   * Identity of the note this paragraph is part of.
+   * Identity of the note this block is part of.
    *
-   * A footnote that runs over several paragraphs is several ADJACENT
-   * footnote paragraphs sharing one `noteId` and repeating the SAME
+   * A footnote that spans multiple blocks is several ADJACENT footnote
+   * paragraphs or tables sharing one `noteId` and repeating the SAME
    * `label`; a reader shows the label once, on the first, and the return
-   * arrow once, on the last. A footnote paragraph with no `noteId` is
-   * complete by itself.
+   * arrow once, on the last. A footnote block with no `noteId` is complete
+   * by itself.
    */
   noteId?: string | undefined;
 };
@@ -212,6 +212,8 @@ export type TableBlock = {
   anchorId: string;
   type: "table";
   role?: TableRole | undefined;
+  /** Publisher-authored footnote membership, shared with adjacent note paragraphs. */
+  note?: ParagraphNote | undefined;
   rows: TableCell[][];
   plainText: string;
 };
@@ -634,20 +636,20 @@ const headingEntries = {
   inlines: inlineArraySchema,
 };
 
+const paragraphNoteSchema = v.variant("type", [
+  v.object({
+    type: v.literal("footnote"),
+    label: v.string(),
+    noteId: v.optional(v.string()),
+  }),
+]);
+
 const paragraphEntries = {
   id: v.string(),
   anchorId: v.string(),
   type: v.literal("paragraph"),
   role: v.optional(v.picklist(PARAGRAPH_ROLES)),
-  note: v.optional(
-    v.variant("type", [
-      v.object({
-        type: v.literal("footnote"),
-        label: v.string(),
-        noteId: v.optional(v.string()),
-      }),
-    ]),
-  ),
+  note: v.optional(paragraphNoteSchema),
   listDepth: v.optional(v.picklist([1, 2, 3, 4])),
   number: v.optional(v.pipe(v.number(), v.finite())),
   inlines: inlineArraySchema,
@@ -676,6 +678,7 @@ const tableEntries = {
   anchorId: v.string(),
   type: v.literal("table"),
   role: v.optional(v.picklist(TABLE_ROLES)),
+  note: v.optional(paragraphNoteSchema),
   plainText: v.string(),
 };
 
@@ -894,12 +897,13 @@ const documentAstMetadataSchema: v.GenericSchema<DocumentAstMetadata> =
   });
 
 const footnoteOf = (block: Block): ParagraphNote | null =>
-  block.type === "paragraph" && block.note?.type === "footnote"
+  (block.type === "paragraph" || block.type === "table") &&
+  block.note?.type === "footnote"
     ? block.note
     : null;
 
 /**
- * Whether every run of adjacent footnote paragraphs sharing a `noteId`
+ * Whether every run of adjacent footnote blocks sharing a `noteId`
  * repeats one label. The parts of one footnote are grouped by `noteId`
  * alone on read, so two notes written under one id with different labels
  * would render as one note with the second label lost; a writer must not
@@ -934,7 +938,7 @@ export const documentAstSchema: v.GenericSchema<DocumentAst> = v.pipe(
   }),
   v.check(
     ({ blocks }) => footnoteGroupsShareLabels(blocks),
-    "Adjacent footnote paragraphs sharing a noteId must repeat one label",
+    "Adjacent footnote blocks sharing a noteId must repeat one label",
   ),
 );
 

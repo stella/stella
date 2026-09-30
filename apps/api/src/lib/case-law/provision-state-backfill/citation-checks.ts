@@ -38,12 +38,12 @@ const CONSTRAINT_NAMES = [
 
 // A short wait for the lock: vacuum or DDL holding the table means trying
 // again on the next run, not queueing behind it.
-const VALIDATE_LOCK_TIMEOUT = "10s";
+const VALIDATE_LOCK_TIMEOUT_MS = 10_000;
 // One scan of a table of this size reads tens of gigabytes of heap: minutes
 // at sequential-read speed. The budget leaves room for a slow disk and stays
 // below the scheduler's 30-minute run ceiling, so the statement fails before
 // the run is abandoned.
-const VALIDATE_STATEMENT_TIMEOUT = "25min";
+const VALIDATE_STATEMENT_TIMEOUT_MS = 25 * 60_000;
 
 const READ_COMPLETION_SQL = `
   SELECT constraint_state.conname AS name,
@@ -106,8 +106,8 @@ const validateOne = async (
   await inBackfillTransaction(
     connection,
     {
-      lockTimeout: VALIDATE_LOCK_TIMEOUT,
-      statementTimeout: VALIDATE_STATEMENT_TIMEOUT,
+      lockTimeout: VALIDATE_LOCK_TIMEOUT_MS,
+      statementTimeout: VALIDATE_STATEMENT_TIMEOUT_MS,
     },
     async () => {
       await connection.execute(

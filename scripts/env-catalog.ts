@@ -113,6 +113,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "FEATURE_CHAT",
   "FEATURE_CONTACTS",
   "FEATURE_DESKTOP_EDITING",
+  "FEATURE_FILE_USAGE_LIMITS",
   "FEATURE_GOVERNED_WORKFLOW",
   "FEATURE_INBOX_DOCUMENT_SCOUTS",
   "FEATURE_KNOWLEDGE_TEMPLATES",
@@ -321,6 +322,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Enable first-class legal lists across REST, agents, and task UI.",
   FEATURE_ORG_ACCESS_STATE:
     "Enforce the per-organization access state before a model call falls back to the instance provider.",
+  FEATURE_FILE_USAGE_LIMITS:
+    "Enforce organization file byte reservations at storage writes.",
   ORG_EVALUATION_PERIOD_DAYS:
     "Length in days of the evaluation period a new organization starts.",
   FEATURE_PUBLIC_TOOLS:
@@ -805,6 +808,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "CANARY_STATE_PATH",
   "CHAT_SAVED_STATE_WRITE",
   "CHAT_TRANSCRIPTS_WRITE",
+  // Exact-base CI rehearsal: loopback URL for the separate disposable clean cluster.
+  "CLEAN_DATABASE_URL",
   "CODEX_API_KEY",
   "DEV_API_PROXY_TARGET",
   "DEV_LINKED_PACKAGE_ROOTS",

@@ -93,6 +93,7 @@
     "check:published-package-lists": "bun scripts/check-published-package-lists.ts --check",
     "check:result-consumption": "bun packages/scripts/src/result-consumption.ts",
     "check:db-await-in-loop": "bun scripts/db-await-in-loop.ts",
+    "check:api-timeout-mutations": "bun scripts/check-api-timeout-mutations.ts",
     "check:query-cache-types": "bun --filter @stll/scripts test -- src/query-cache-types.test.ts && bun packages/scripts/src/query-cache-types.ts",
     "check:docs-sources": "bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error .claude/mcp/doc-sources.ts",
     "check:instruction-references": "bun scripts/check-instruction-references.ts --check",
@@ -179,6 +180,7 @@
     "fast-xml-parser": "5.11.1",
     "ip-address": "10.7.2",
     "lucide-react": "1.41.0",
+    "mailauth/joi": "18.2.9",
     "mailauth/nodemailer": "9.1.0",
     "nanoid": "3.3.18",
     "postcss": "8.5.28",
@@ -187,7 +189,7 @@
     "prosemirror-view": "1.42.5",
     "react-native-screens": "4.26.2",
     "svgo": "4.1.0",
-    "undici": "8.10.0"
+    "undici": "8.10.2"
   },
   "packageManager": "bun@1.4.2",
   "catalog": {

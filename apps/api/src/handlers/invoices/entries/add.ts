@@ -23,6 +23,7 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
+import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -298,6 +299,7 @@ const addEntries = createSafeHandler(
   },
   async function* ({
     safeDb,
+    user,
     session,
     workspaceId,
     params,
@@ -315,11 +317,17 @@ const addEntries = createSafeHandler(
     const { timeEntryIds, expenseIds } = body;
 
     const txResult = await resultTx(safeDb, async (tx) => {
-      // Lock the invoice row before touching any child rows: `delete.ts`
-      // and other invoice mutation handlers lock the invoice first, then
-      // mutate `time_entries`/`expenses`, so this handler must follow the
-      // same order or a concurrent transaction can deadlock (see
-      // `lockInvoiceInStatus`'s doc comment).
+      const runningError = await guardRunningTimeEntries({
+        tx,
+        workspaceId,
+        actorUserId: user.id,
+        selection: body.timeEntryIds
+          ? { type: "entries", ids: body.timeEntryIds }
+          : { type: "none" },
+      });
+      if (runningError) {
+        return Result.err(runningError);
+      }
       const invoiceResult = await lockDraftInvoiceForLines(
         tx,
         {

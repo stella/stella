@@ -24689,7 +24689,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "invoices", "create"],
                 capabilityId: "invoices.create",
                 description:
-                  "Create a draft invoice from approved, billable, not-yet-invoiced time entries in a matter, marking them billed and setting the total from their billed minutes and recorded rates. Every entry must already carry the invoice currency, since nothing is converted, and the optional invoice number must not already be in use. An omitted number is allocated from the document type’s default series at finalize. Credit notes require an original finalized, sent, or paid invoice in the same matter. Pass empty timeEntryIds for a draft with manual lines. Expenses are added afterwards with invoices.entries.add.",
+                  "Create a draft invoice from approved, billable, not-yet-invoiced time entries in a matter, marking them billed and setting the total from their billed minutes and recorded rates. Every entry must already carry the invoice currency, since nothing is converted, and the invoice number must not already be in use. Expenses are added afterwards with invoices.entries.add.",
                 access: "write",
                 flags: [
                   {
@@ -24706,18 +24706,9 @@ export const generatedRouteMap: RouteNode = {
                     repeatable: false,
                     flag: "--invoice-number",
                     prop: "invoiceNumber",
-                    required: false,
+                    required: true,
                     part: "body",
                     partPath: "invoiceNumber",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--original-invoice-id",
-                    prop: "originalInvoiceId",
-                    required: false,
-                    part: "body",
-                    partPath: "originalInvoiceId",
                   },
                   {
                     kind: "string",
@@ -24774,7 +24765,7 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "timeEntryIds",
                   },
                 ],
-                inputOnly: ["body.documentType"],
+                inputOnly: [],
                 paginated: false,
                 destructive: false,
                 scope: "billing_write",
@@ -24784,34 +24775,16 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     body: {
                       type: "object",
-                      required: ["invoiceDate", "currency", "timeEntryIds"],
+                      required: [
+                        "invoiceNumber",
+                        "invoiceDate",
+                        "currency",
+                        "timeEntryIds",
+                      ],
                       properties: {
                         invoiceNumber: {
                           minLength: 1,
                           maxLength: 64,
-                          type: "string",
-                        },
-                        documentType: {
-                          anyOf: [
-                            {
-                              const: "invoice",
-                              type: "string",
-                            },
-                            {
-                              const: "advance",
-                              type: "string",
-                            },
-                            {
-                              const: "credit_note",
-                              type: "string",
-                            },
-                          ],
-                        },
-                        originalInvoiceId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                           type: "string",
                         },
                         invoiceDate: {
@@ -24861,7 +24834,7 @@ export const generatedRouteMap: RouteNode = {
                           ],
                         },
                         timeEntryIds: {
-                          minItems: 0,
+                          minItems: 1,
                           maxItems: 500,
                           type: "array",
                           items: {
@@ -25167,7 +25140,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "invoices", "get"],
                 capabilityId: "invoices.get",
                 description:
-                  "Read one invoice with its full detail: its lines in order with quantity, unit price, VAT, and amounts; totals with the VAT breakdown by rate; document type, original invoice id, seller profile, buyer, dates, currency, and status; and every attached time entry and expense with its work item. An invoice from before invoice lines lists no lines for its attached entries until its first line edit; its totals still count them. Use invoices.list for a paginated summary without lines.",
+                  "Read one invoice with its full detail: its lines in order with quantity, unit price, VAT, and amounts; totals with the VAT breakdown by rate; seller profile, buyer, dates, currency, and status; and every attached time entry and expense with its work item. An invoice from before invoice lines lists no lines for its attached entries until its first line edit; its totals still count them. Use invoices.list for a paginated summary without lines.",
                 access: "read",
                 flags: [
                   {
@@ -25688,7 +25661,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "invoices", "list"],
                 capabilityId: "invoices.list",
                 description:
-                  "List a matter's invoices oldest first with cursor pagination, returning each invoice's number (null before numbering), document type, original invoice id, reference, status, dates, currency, and total, but not its line items. Use invoices.get to read the attached time entries and expenses.",
+                  "List a matter's invoices oldest first with cursor pagination, returning each invoice's number, reference, status, dates, currency, and total, but not its line items. Use invoices.get to read the attached time entries and expenses.",
                 access: "read",
                 flags: [
                   {
@@ -25747,7 +25720,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "invoices", "transition"],
                 capabilityId: "invoices.transition",
                 description:
-                  "Move an invoice through finalize, send, mark_paid, void, or revert_to_draft. Finalize assigns an omitted number from the document type's default series, using the issue date; configure a default number series first. Manual numbers and numbers kept after reverting to draft are preserved. A credit note must reference an eligible original and cannot exceed its total. Voiding releases attached entries and clears the paid timestamp.",
+                  "Move an invoice through its lifecycle with one action: finalize (draft to finalized), send (finalized to sent), mark_paid (sent to paid), revert_to_draft (finalized back to draft), or void (from finalized, sent, or paid). Voiding also releases every attached time entry and expense back to approved, unbilled status and clears the paid timestamp. An action the invoice's current status does not allow is refused.",
                 access: "write",
                 flags: [
                   {
@@ -25840,7 +25813,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "invoices", "update"],
                 capabilityId: "invoices.update",
                 description:
-                  "Change a draft invoice's number, issue date (invoiceDate), taxable supply date, due date, reference, notes, currency, issuing seller profile, or buyer details as they should read on the document. Omitted fields stay unchanged; null clears an optional field. Only draft invoices can be edited. Type and original invoice become immutable after the first finalize, including after reverting to draft. Credit notes require an eligible original in the same matter. Currency cannot change while the invoice has lines or attached entries.",
+                  "Change a draft invoice's number, issue date (invoiceDate), taxable supply date, due date, reference, notes, currency, issuing seller profile, or buyer details as they should read on the document. Omitted fields stay unchanged; null clears an optional field. Only draft invoices can be edited, and the currency cannot change while the invoice has lines or attached entries.",
                 access: "write",
                 flags: [
                   {
@@ -25862,22 +25835,13 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "invoiceId",
                   },
                   {
-                    kind: "nullable-string",
+                    kind: "string",
                     repeatable: false,
                     flag: "--invoice-number",
                     prop: "invoiceNumber",
                     required: false,
                     part: "body",
                     partPath: "invoiceNumber",
-                  },
-                  {
-                    kind: "nullable-string",
-                    repeatable: false,
-                    flag: "--original-invoice-id",
-                    prop: "originalInvoiceId",
-                    required: false,
-                    part: "body",
-                    partPath: "originalInvoiceId",
                   },
                   {
                     kind: "string",
@@ -26015,7 +25979,7 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "buyerCountry",
                   },
                 ],
-                inputOnly: ["body.documentType"],
+                inputOnly: [],
                 paginated: false,
                 destructive: false,
                 scope: "billing_write",
@@ -26027,48 +25991,9 @@ export const generatedRouteMap: RouteNode = {
                       type: "object",
                       properties: {
                         invoiceNumber: {
-                          nullable: true,
-                          anyOf: [
-                            {
-                              minLength: 1,
-                              maxLength: 64,
-                              type: "string",
-                            },
-                            {
-                              type: "null",
-                            },
-                          ],
-                        },
-                        documentType: {
-                          anyOf: [
-                            {
-                              const: "invoice",
-                              type: "string",
-                            },
-                            {
-                              const: "advance",
-                              type: "string",
-                            },
-                            {
-                              const: "credit_note",
-                              type: "string",
-                            },
-                          ],
-                        },
-                        originalInvoiceId: {
-                          nullable: true,
-                          anyOf: [
-                            {
-                              minLength: 36,
-                              maxLength: 36,
-                              pattern:
-                                "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                              type: "string",
-                            },
-                            {
-                              type: "null",
-                            },
-                          ],
+                          minLength: 1,
+                          maxLength: 64,
+                          type: "string",
                         },
                         invoiceDate: {
                           format: "date",
@@ -51540,143 +51465,6 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            "timer-start": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "time-entries", "timer-start"],
-                capabilityId: "time-entries.timer.start",
-                description:
-                  "Start a running timer for the signed-in user in the current matter, creating a draft time entry dated today in the timezoneId you pass and optionally attached to a work item. The user's effective rate is resolved at start and an entry with no resolvable rate is recorded as non-billable. A narrative can be added before the draft is approved. Refused when the user already has a running timer.",
-                access: "write",
-                flags: [
-                  {
-                    flag: "--matter-id",
-                    prop: "matterId",
-                    kind: "string",
-                    required: true,
-                    repeatable: false,
-                    part: "params",
-                    partPath: "matterId",
-                  },
-                  {
-                    kind: "nullable-string",
-                    repeatable: false,
-                    flag: "--work-item-id",
-                    prop: "workItemId",
-                    required: false,
-                    part: "body",
-                    partPath: "workItemId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--timezone-id",
-                    prop: "timezoneId",
-                    required: true,
-                    part: "body",
-                    partPath: "timezoneId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--narrative",
-                    prop: "narrative",
-                    required: false,
-                    part: "body",
-                    partPath: "narrative",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                scope: "billing_write",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    body: {
-                      type: "object",
-                      required: ["timezoneId"],
-                      properties: {
-                        workItemId: {
-                          nullable: true,
-                          anyOf: [
-                            {
-                              minLength: 36,
-                              maxLength: 36,
-                              pattern:
-                                "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                              type: "string",
-                            },
-                            {
-                              type: "null",
-                            },
-                          ],
-                        },
-                        timezoneId: {
-                          minLength: 1,
-                          maxLength: 64,
-                          type: "string",
-                        },
-                        narrative: {
-                          maxLength: 10000,
-                          type: "string",
-                        },
-                      },
-                    },
-                    params: {
-                      type: "object",
-                      properties: {
-                        matterId: {
-                          type: "string",
-                        },
-                      },
-                      required: ["matterId"],
-                    },
-                  },
-                },
-              },
-            },
-            "timer-stop": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "time-entries", "timer-stop"],
-                capabilityId: "time-entries.timer.stop",
-                description:
-                  "Stop the signed-in user's running timer in the current matter, writing the elapsed minutes onto its draft time entry and rounding the billed minutes up to the billing increment. Fails when that user has no running timer in this matter.",
-                access: "write",
-                flags: [
-                  {
-                    flag: "--matter-id",
-                    prop: "matterId",
-                    kind: "string",
-                    required: true,
-                    repeatable: false,
-                    part: "params",
-                    partPath: "matterId",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                scope: "billing_write",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    params: {
-                      type: "object",
-                      properties: {
-                        matterId: {
-                          type: "string",
-                        },
-                      },
-                      required: ["matterId"],
-                    },
-                  },
-                },
-              },
-            },
             update: {
               kind: "capability-leaf",
               spec: {
@@ -51925,6 +51713,525 @@ export const generatedRouteMap: RouteNode = {
                         },
                       },
                       required: ["matterId"],
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        "time-timers": {
+          kind: "route",
+          children: {
+            "admin-list": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "time-timers", "admin-list"],
+                capabilityId: "time-timers.admin.list",
+                description:
+                  "List running timers in the active organization as an organization owner or admin. Use the timer ID with time-timers.admin.stop to end it into its owner's draft entry. Follow nextCursor to read the next page.",
+                access: "read",
+                flags: [],
+                inputOnly: [],
+                paginated: true,
+                paginationPart: "query",
+                itemsKey: "items",
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    query: {
+                      type: "object",
+                      properties: {
+                        limit: {
+                          minimum: 1,
+                          maximum: 200,
+                          type: "integer",
+                        },
+                        cursor: {
+                          maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "admin-stop": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "time-timers", "admin-stop"],
+                capabilityId: "time-timers.admin.stop",
+                description:
+                  "End a member's running timer in the active organization into that member's draft entry. Only organization owners and admins can end timers. Uses the timer description first; supply narrative when it is empty and policy requires one. Refuses inaccessible matters and locked months without changing the timer. Retry the same ID to retrieve the original entry. The work date uses the timer owner's timezone.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--id",
+                    prop: "id",
+                    required: true,
+                    part: "params",
+                    partPath: "id",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--narrative",
+                    prop: "narrative",
+                    required: false,
+                    part: "body",
+                    partPath: "narrative",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "billing_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      properties: {
+                        narrative: {
+                          maxLength: 10000,
+                          type: "string",
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["id"],
+                      properties: {
+                        id: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            confirm: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "time-timers", "confirm"],
+                capabilityId: "time-timers.confirm",
+                description:
+                  "Confirm your timer into a draft time entry and remove it. Assign a matter with update first. Rounds billed minutes to the organization's minimum unit and enforces narrative and monthly locks. Retry with the same timer ID to get the original entry ID without creating another entry. timezoneId is an IANA timezone for the work date; timers without an effective rate default to non-billable.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--id",
+                    prop: "id",
+                    required: true,
+                    part: "params",
+                    partPath: "id",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--timezone-id",
+                    prop: "timezoneId",
+                    required: true,
+                    part: "body",
+                    partPath: "timezoneId",
+                  },
+                  {
+                    kind: "boolean",
+                    repeatable: false,
+                    flag: "--billable",
+                    prop: "billable",
+                    required: false,
+                    part: "body",
+                    partPath: "billable",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "billing_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["timezoneId"],
+                      properties: {
+                        timezoneId: {
+                          minLength: 1,
+                          maxLength: 64,
+                          type: "string",
+                        },
+                        billable: {
+                          type: "boolean",
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["id"],
+                      properties: {
+                        id: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            discard: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "time-timers", "discard"],
+                capabilityId: "time-timers.discard",
+                description:
+                  "Discard your timer and its unconfirmed time. This creates no time entry.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--id",
+                    prop: "id",
+                    required: true,
+                    part: "params",
+                    partPath: "id",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: true,
+                scope: "billing_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["id"],
+                      properties: {
+                        id: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            list: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "time-timers", "list"],
+                capabilityId: "time-timers.list",
+                description:
+                  "List your running and paused timers in the active organization. Use each returned timer ID to update, pause, resume, confirm or discard it. Follow nextCursor to read the next page.",
+                access: "read",
+                flags: [],
+                inputOnly: [],
+                paginated: true,
+                paginationPart: "query",
+                itemsKey: "items",
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    query: {
+                      type: "object",
+                      properties: {
+                        limit: {
+                          minimum: 1,
+                          maximum: 200,
+                          type: "integer",
+                        },
+                        cursor: {
+                          maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            pause: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "time-timers", "pause"],
+                capabilityId: "time-timers.pause",
+                description:
+                  "Pause your timer without creating a time entry. Pausing an already paused timer leaves its elapsed time unchanged.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--id",
+                    prop: "id",
+                    required: true,
+                    part: "params",
+                    partPath: "id",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "billing_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["id"],
+                      properties: {
+                        id: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            resume: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "time-timers", "resume"],
+                capabilityId: "time-timers.resume",
+                description:
+                  "Resume your paused timer and automatically pause your other running timer. Resuming an already running timer leaves its elapsed time unchanged.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--id",
+                    prop: "id",
+                    required: true,
+                    part: "params",
+                    partPath: "id",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "billing_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["id"],
+                      properties: {
+                        id: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            start: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "time-timers", "start"],
+                capabilityId: "time-timers.start",
+                description:
+                  "Start your timer in the active organization, optionally assigning a matter and description. Automatically pauses your running timer. Returns its ID for pause, resume, update, confirm or discard.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    required: false,
+                    part: "body",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--description",
+                    prop: "description",
+                    required: false,
+                    part: "body",
+                    partPath: "description",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "billing_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      properties: {
+                        matterId: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              minLength: 36,
+                              maxLength: 36,
+                              pattern:
+                                "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                        description: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              maxLength: 10000,
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            update: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "time-timers", "update"],
+                capabilityId: "time-timers.update",
+                description:
+                  "Set your timer's description or matter. Pass null to clear either field. Confirm requires a matter and any narrative required by the organization.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--id",
+                    prop: "id",
+                    required: true,
+                    part: "params",
+                    partPath: "id",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    required: false,
+                    part: "body",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--description",
+                    prop: "description",
+                    required: false,
+                    part: "body",
+                    partPath: "description",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "billing_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      properties: {
+                        matterId: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              minLength: 36,
+                              maxLength: 36,
+                              pattern:
+                                "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                        description: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              maxLength: 10000,
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["id"],
+                      properties: {
+                        id: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
                     },
                   },
                 },

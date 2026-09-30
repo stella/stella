@@ -21,6 +21,7 @@ import {
   allocateNumber,
   findDefaultNumberSeries,
 } from "@/api/lib/billing/number-series";
+import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -121,6 +122,7 @@ const buildVoidEvents = (params: {
 };
 
 type ReleaseInvoiceEntriesOptions = {
+  actorUserId: SafeId<"user">;
   invoiceId: SafeId<"invoice">;
   workspaceId: SafeId<"workspace">;
   previousStatus: InvoiceStatus;
@@ -135,8 +137,19 @@ const releaseInvoiceEntries = async (
     previousStatus,
     now,
     recordAuditEvent,
+    actorUserId,
   }: ReleaseInvoiceEntriesOptions,
 ) => {
+  // The caller acquires these locks before the invoice; guard the release too.
+  const runningError = await guardRunningTimeEntries({
+    tx,
+    workspaceId,
+    actorUserId,
+    selection: { type: "invoice", invoiceId },
+  });
+  if (runningError) {
+    return Result.err(runningError);
+  }
   const revertedTimeEntries = await tx
     .update(timeEntries)
     .set({
@@ -189,6 +202,7 @@ const releaseInvoiceEntries = async (
       revertedExpenses,
     }),
   );
+  return Result.ok(undefined);
 };
 
 const transitionInvoice = createSafeHandler(
@@ -205,12 +219,30 @@ const transitionInvoice = createSafeHandler(
     params: invoiceParamsSchema,
     body: transitionInvoiceBodySchema,
   },
-  async function* ({ safeDb, workspaceId, params, body, recordAuditEvent }) {
+  async function* ({
+    safeDb,
+    user,
+    workspaceId,
+    params,
+    body,
+    recordAuditEvent,
+  }) {
     const transition = TRANSITIONS[body.action];
     const now = new Date();
     const result = await resultTx(
       safeDb,
       async (tx): Promise<Result<{ id: SafeId<"invoice"> }, HandlerError>> => {
+        if (body.action === "void") {
+          const runningError = await guardRunningTimeEntries({
+            tx,
+            workspaceId,
+            actorUserId: user.id,
+            selection: { type: "invoice", invoiceId: params.invoiceId },
+          });
+          if (runningError) {
+            return Result.err(runningError);
+          }
+        }
         const existing = await lockInvoiceInStatus(tx, {
           invoiceId: params.invoiceId,
           workspaceId,
@@ -319,13 +351,17 @@ const transitionInvoice = createSafeHandler(
           );
         }
         if (body.action === "void") {
-          await releaseInvoiceEntries(tx, {
+          const release = await releaseInvoiceEntries(tx, {
+            actorUserId: user.id,
             invoiceId: row.id,
             workspaceId,
             previousStatus: existing.status,
             now,
             recordAuditEvent,
           });
+          if (release.isErr()) {
+            return Result.err(release.error);
+          }
         } else {
           await recordAuditEvent(tx, {
             action: AUDIT_ACTION.UPDATE,

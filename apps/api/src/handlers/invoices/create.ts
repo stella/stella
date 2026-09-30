@@ -18,6 +18,7 @@ import {
 } from "@/api/handlers/invoices/invoice-lines";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tCurrencyCode, tSafeId } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -148,22 +149,14 @@ const createInvoice = createSafeHandler(
     mcp: { type: "capability", reason: "billing_admin" },
     body: createInvoiceBodySchema,
   },
-  async function* ({ safeDb, session, workspaceId, body, recordAuditEvent }) {
-    const totalInvoices = yield* Result.await(
-      safeDb((tx) =>
-        tx.$count(invoices, eq(invoices.workspaceId, workspaceId)),
-      ),
-    );
-
-    if (totalInvoices >= LIMITS.invoicesPerWorkspace) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Invoice limit reached for this workspace",
-        }),
-      );
-    }
-
+  async function* ({
+    safeDb,
+    user,
+    session,
+    workspaceId,
+    body,
+    recordAuditEvent,
+  }) {
     const entries = yield* Result.await(
       validateEntries(safeDb, workspaceId, body),
     );
@@ -174,6 +167,27 @@ const createInvoice = createSafeHandler(
     const txResult = await resultTx(
       safeDb,
       async (tx): Promise<Result<CreateInvoiceResult, HandlerError>> => {
+        const runningError = await guardRunningTimeEntries({
+          tx,
+          workspaceId,
+          actorUserId: user.id,
+          selection: { type: "entries", ids: body.timeEntryIds },
+        });
+        if (runningError) {
+          return Result.err(runningError);
+        }
+        const totalInvoices = await tx.$count(
+          invoices,
+          eq(invoices.workspaceId, workspaceId),
+        );
+        if (totalInvoices >= LIMITS.invoicesPerWorkspace) {
+          return Result.err(
+            new HandlerError({
+              status: 400,
+              message: "Invoice limit reached for this workspace",
+            }),
+          );
+        }
         const documentType = body.documentType ?? "invoice";
         const originalInvoiceId = body.originalInvoiceId ?? null;
         if (documentType === "credit_note" && body.timeEntryIds.length > 0) {

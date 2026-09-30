@@ -1,5 +1,6 @@
 import { queryOptions, type QueryClient } from "@tanstack/react-query";
 
+import { signalSessionChange } from "@/lib/account/session-signal";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { resetKnowledgeCache } from "@/lib/knowledge/knowledge-cache";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
@@ -20,6 +21,7 @@ export const refreshAuthQueries = async (queryClient: QueryClient) => {
     queryClient.refetchQueries({ queryKey: rootKeys.session, type: "all" }),
     queryClient.refetchQueries({ queryKey: rootKeys.role, type: "all" }),
   ]);
+  signalSessionChange();
 };
 
 /**

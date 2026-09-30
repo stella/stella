@@ -46,6 +46,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useI18nStore } from "@/i18n/i18n-store";
+import { userStorageKey } from "@/lib/account/user-scoped-storage";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
@@ -128,7 +129,9 @@ export const ExistingFileOrganizerDialog = ({
   const locale = useI18nStore((s) => s.loadedLang);
   const queryClient = useQueryClient();
   const analytics = useAnalytics();
-  const userInstructionsKey = `stella.organize-suggestions.user-instructions.${workspaceId}`;
+  const userInstructionsKey = userStorageKey(
+    `stella.organize-suggestions.user-instructions.${workspaceId}`,
+  );
   const [userInstructions, setUserInstructions] = useState(() => {
     if (typeof window === "undefined") {
       return "";

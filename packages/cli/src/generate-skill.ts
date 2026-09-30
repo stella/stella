@@ -17,6 +17,7 @@ import {
 } from "./generate-route-map.js";
 import { DOCUMENT_VERSION_UPLOAD_TRANSPORT } from "./generated/document-version-upload-transport.js";
 import {
+  buildCompactInputUnionHints,
   buildInputContractHelp,
   formatInputExample,
 } from "./input-contract-help.js";
@@ -174,13 +175,23 @@ const requiredFlagLine = (flag: FlagSpec): string => {
  */
 const commandFlagsBlock = (spec: LeafCommandSpec): string => {
   const command = `stella ${spec.commandPath.join(" ")}`;
+  const unionHints = buildCompactInputUnionHints({
+    schema: spec.inputSchema,
+    inputOnly: spec.inputOnly,
+  }).map(({ path, variants, example }) => {
+    const suffix =
+      example.status === "complete"
+        ? `. Example: \`${formatInputExample(example.value)}\``
+        : "";
+    return `  - ${path}: ${variants}${suffix}`;
+  });
   const flags = spec.flags.filter((flag) => !CONVENTION_FLAGS.has(flag.flag));
   if (flags.length === 0) {
     const hint =
       spec.inputOnly.length > 0
         ? `no flags; pass \`--input\` with ${spec.inputOnly.join(", ")}`
         : "no arguments";
-    return `- \`${command}\` — ${hint}`;
+    return [`- \`${command}\` — ${hint}`, ...unionHints].join("\n");
   }
   const required = flags.filter((flag) => flag.required);
   const optional = flags
@@ -203,6 +214,7 @@ const commandFlagsBlock = (spec: LeafCommandSpec): string => {
   if (spec.inputOnly.length > 0) {
     lines.push(`  - via \`--input\` only: ${spec.inputOnly.join(", ")}`);
   }
+  lines.push(...unionHints);
   return lines.join("\n");
 };
 
@@ -215,7 +227,7 @@ const renderCommandFlagsSection = (
     "Required: `--flag — description (type)`. Optional: one `optional: --a,",
     "--b (enum1|enum2)` line, names only (`--help` has full descriptions).",
     "Global flags (output/cursor/limit/all/yes/input; see Conventions above)",
-    "are omitted here.",
+    "are omitted here. Input union keys are required unless marked `?`.",
     "",
     leaves.map((spec) => commandFlagsBlock(spec)).join("\n"),
   ].join("\n");

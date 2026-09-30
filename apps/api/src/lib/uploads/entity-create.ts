@@ -36,6 +36,7 @@ import {
   properties,
   workspaces,
 } from "@/api/db/schema";
+import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -52,6 +53,7 @@ import {
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import {
   allocateFileObject,
   fileContentWithMintedObject,
@@ -590,15 +592,24 @@ export const finalizeEntityCreate = async function* ({
     | { status: EntityCreateWriteFailureStatus };
 
   const cleanupFinalObject = async (stage: string) => {
-    await getS3()
-      .delete(finalKey)
-      .catch((deleteError: unknown) =>
-        captureError(deleteError, {
-          entityId,
-          fieldId,
-          stage,
-        }),
-      );
+    const deleted = Result.flatten(
+      await Result.tryPromise({
+        try: async () => {
+          if (env.FEATURE_FILE_USAGE_LIMITS) {
+            return await deleteOrganizationFileWithSignal(
+              finalKey,
+              AbortSignal.timeout(10_000),
+            );
+          }
+          await getS3().delete(finalKey);
+          return Result.ok(undefined);
+        },
+        catch: (cause) => cause,
+      }),
+    );
+    if (Result.isError(deleted)) {
+      captureError(deleted.error, { entityId, fieldId, stage });
+    }
   };
 
   const parentId = purposeData.parentId ?? null;

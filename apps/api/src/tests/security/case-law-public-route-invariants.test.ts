@@ -64,6 +64,7 @@ const LANGUAGE_ALTERNATES_FILE =
 const SITEMAP_DECISIONS_FILE =
   "apps/api/src/handlers/case-law/decisions/sitemap.ts";
 const PUBLIC_READ_DB_FILE = "apps/api/src/lib/public-law-read-db.ts";
+const SHARED_POOL_TIMEOUTS_FILE = "apps/api/src/db/shared-pool-timeouts.ts";
 const DECISION_PROVISIONS_FILE =
   "apps/api/src/handlers/case-law/provisions/list-for-decision.ts";
 const CITING_DECISIONS_FILE =
@@ -366,9 +367,10 @@ describe("public case-law route boundary", () => {
 
   test("external role validation is bounded and retries after failure", async () => {
     const source = await readPublicReadDbSource();
+    const timeoutSource = await readSource(SHARED_POOL_TIMEOUTS_FILE);
     const guards = source.slice(
       source.indexOf("const PUBLIC_LAW_READ_GUARDS"),
-      source.indexOf("const localSettings"),
+      source.indexOf("export const configureReadTransaction"),
     );
     const readConfiguration = source.slice(
       source.indexOf("const configureReadTransaction"),
@@ -377,6 +379,13 @@ describe("public case-law route boundary", () => {
     const validation = source.slice(
       source.indexOf("const startRoleValidation"),
       source.indexOf("const ensureRoleValidated"),
+    );
+    const publicRead = source.slice(
+      source.indexOf("export const publicLawReadDb"),
+    );
+    const sharedReadGuards = timeoutSource.slice(
+      timeoutSource.indexOf("export const setSharedReadTransactionGuards"),
+      timeoutSource.indexOf("const readCurrentStatementTimeoutMs"),
     );
 
     expect(source).toContain(
@@ -387,10 +396,29 @@ describe("public case-law route boundary", () => {
     expect(guards).toContain('["lock_timeout", "1s"]');
     expect(guards).toContain('["idle_in_transaction_session_timeout", "30s"]');
     expect(readConfiguration).toContain(
-      "await tx.execute(localSettings(guards))",
+      "await setSharedReadTransactionGuards(tx, {",
     );
+    expect(readConfiguration).toContain(
+      "if (!readOnly || statementTimeoutMs === undefined)",
+    );
+    expect(sharedReadGuards).toContain("await tx.execute(sql`");
+    expect(sharedReadGuards).toContain(
+      "set_config('transaction_read_only', 'on', true)",
+    );
+    expect(sharedReadGuards).toContain("set_config('statement_timeout',");
+    expect(sharedReadGuards).toContain("set_config('lock_timeout',");
+    expect(sharedReadGuards).toContain(
+      "set_config('idle_in_transaction_session_timeout',",
+    );
+    expect(validation).toContain("configureReadTransaction(");
+    expect(validation).toContain("validateExternalPublicLawDatabase(tx)");
     expect(validation.indexOf("configureReadTransaction(")).toBeLessThan(
       validation.indexOf("validateExternalPublicLawDatabase(tx)"),
+    );
+    expect(publicRead).toContain("configureReadTransaction(");
+    expect(publicRead).toContain("return await fn(tx)");
+    expect(publicRead.indexOf("configureReadTransaction(")).toBeLessThan(
+      publicRead.indexOf("return await fn(tx)"),
     );
     expect(validation).toContain(
       'external.roleValidation = { status: "idle" }',

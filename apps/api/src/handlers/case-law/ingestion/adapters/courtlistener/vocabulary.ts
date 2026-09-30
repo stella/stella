@@ -1,6 +1,8 @@
 import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
+import { compareCanonicalIds } from "./snapshot-columns";
+
 /**
  * What an opinion row's `type` says about the decision, before its text is
  * read. `010combined` proves neither class: a combined row holds whatever the
@@ -50,6 +52,17 @@ export type OpinionType = keyof typeof OPINION_TYPES;
 
 export const isOpinionType = (value: string): value is OpinionType =>
   Object.hasOwn(OPINION_TYPES, value);
+
+/**
+ * The documented order of a cluster's rows: type prefix, then numeric ID.
+ * Input order and timestamps carry no meaning.
+ */
+export const compareOpinionOrder = (
+  left: { readonly type: OpinionType; readonly row: { readonly id: string } },
+  right: { readonly type: OpinionType; readonly row: { readonly id: string } },
+): number =>
+  OPINION_TYPES[left.type].rank - OPINION_TYPES[right.type].rank ||
+  compareCanonicalIds(left.row.id, right.row.id);
 
 /**
  * The citation row types, by the decimal the CSV holds. Type 8 is a

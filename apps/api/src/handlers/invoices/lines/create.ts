@@ -4,6 +4,7 @@ import { type Static, t } from "elysia";
 
 import type { InvoiceTotals } from "@stll/invoicing";
 
+import type { SafeDbError } from "@/api/db/safe-db";
 import { resultTx } from "@/api/db/safe-db";
 import { BILLING_STATUS, expenses, timeEntries } from "@/api/db/schema";
 import {
@@ -25,6 +26,7 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
+import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   tMinorUnitAmount,
@@ -59,22 +61,23 @@ const createLineBodySchema = t.Object({
   vatTreatment: tVatTreatment,
 });
 
-const prepareManualDraft = ({
+const prepareLineInput = ({
   source,
   vatRateBps,
   vatTreatment,
 }: Static<typeof createLineBodySchema>) => {
-  if (source.type !== "manual") {
-    return Result.ok(null);
-  }
-  return manualLineDraft({
-    description: source.description,
-    quantity: source.quantity,
-    unit: source.unit ?? null,
-    unitPrice: cents(source.unitPriceMinor),
-    vatRateBps,
-    vatTreatment,
-  });
+  const vat = { vatRateBps, vatTreatment };
+  const draft =
+    source.type === "manual"
+      ? manualLineDraft({
+          description: source.description,
+          quantity: source.quantity,
+          unit: source.unit ?? null,
+          unitPrice: cents(source.unitPriceMinor),
+          ...vat,
+        })
+      : Result.ok(null);
+  return draft.map((manualDraft) => ({ manualDraft, vat }));
 };
 
 const lineParamsSchema = workspaceParams({ invoiceId: tSafeId("invoice") });
@@ -83,6 +86,11 @@ type CreatedLine = { id: SafeId<"invoiceLine">; totals: InvoiceTotals };
 
 const NOT_BILLABLE_MESSAGE =
   "The entry must be approved, billable, priced in the invoice currency, and not already on an invoice";
+
+const lineCreationError = (error: HandlerError | SafeDbError) =>
+  DatabaseError.is(error) && error.code === PG_ERROR.UNIQUE_VIOLATION
+    ? new HandlerError({ status: 409, message: NOT_BILLABLE_MESSAGE })
+    : error;
 
 const createInvoiceLine = createSafeHandler(
   {
@@ -100,23 +108,34 @@ const createInvoiceLine = createSafeHandler(
   },
   async function* ({
     safeDb,
+    user,
     session,
     workspaceId,
     params,
     body,
     recordAuditEvent,
   }) {
-    const vat = {
-      vatRateBps: body.vatRateBps,
-      vatTreatment: body.vatTreatment,
-    };
-    const { source } = body;
-    const manualDraft = yield* prepareManualDraft(body);
+    const { manualDraft, vat } = yield* prepareLineInput(body);
     const now = new Date();
 
     const txResult = await resultTx(
       safeDb,
       async (tx): Promise<Result<CreatedLine, HandlerError>> => {
+        const runningError = await guardRunningTimeEntries({
+          tx,
+          workspaceId,
+          actorUserId: user.id,
+          selection: {
+            type: "entries",
+            ids:
+              body.source.type === "time_entry"
+                ? [body.source.timeEntryId]
+                : [],
+          },
+        });
+        if (runningError) {
+          return Result.err(runningError);
+        }
         const invoiceResult = await lockDraftInvoiceForLines(
           tx,
           {
@@ -141,7 +160,7 @@ const createInvoiceLine = createSafeHandler(
 
         if (
           invoice.documentType === "credit_note" &&
-          source.type !== "manual"
+          body.source.type !== "manual"
         ) {
           return Result.err(
             new HandlerError({
@@ -162,7 +181,7 @@ const createInvoiceLine = createSafeHandler(
         // Read and lock the entry the line bills before writing anything, so
         // a refusal commits nothing.
         let draft: InvoiceLineDraft;
-        if (source.type === "time_entry") {
+        if (body.source.type === "time_entry") {
           const [entry] = await tx
             .select({
               id: timeEntries.id,
@@ -174,7 +193,7 @@ const createInvoiceLine = createSafeHandler(
             .from(timeEntries)
             .where(
               and(
-                eq(timeEntries.id, source.timeEntryId),
+                eq(timeEntries.id, body.source.timeEntryId),
                 eq(timeEntries.workspaceId, workspaceId),
                 eq(timeEntries.status, BILLING_STATUS.APPROVED),
                 eq(timeEntries.billable, true),
@@ -190,8 +209,8 @@ const createInvoiceLine = createSafeHandler(
               new HandlerError({ status: 400, message: NOT_BILLABLE_MESSAGE }),
             );
           }
-          draft = timeEntryLineDraft(entry, vat, source.description);
-        } else if (source.type === "expense") {
+          draft = timeEntryLineDraft(entry, vat, body.source.description);
+        } else if (body.source.type === "expense") {
           const [expense] = await tx
             .select({
               id: expenses.id,
@@ -203,7 +222,7 @@ const createInvoiceLine = createSafeHandler(
             .from(expenses)
             .where(
               and(
-                eq(expenses.id, source.expenseId),
+                eq(expenses.id, body.source.expenseId),
                 eq(expenses.workspaceId, workspaceId),
                 eq(expenses.status, BILLING_STATUS.APPROVED),
                 eq(expenses.billable, true),
@@ -218,7 +237,7 @@ const createInvoiceLine = createSafeHandler(
               new HandlerError({ status: 400, message: NOT_BILLABLE_MESSAGE }),
             );
           }
-          draft = expenseLineDraft(expense, vat, source.description);
+          draft = expenseLineDraft(expense, vat, body.source.description);
         } else {
           draft = manualDraft ?? panic("A manual line has no draft");
         }
@@ -297,14 +316,7 @@ const createInvoiceLine = createSafeHandler(
       },
     );
 
-    return txResult.mapError((error) =>
-      DatabaseError.is(error) && error.code === PG_ERROR.UNIQUE_VIOLATION
-        ? new HandlerError({
-            status: 409,
-            message: NOT_BILLABLE_MESSAGE,
-          })
-        : error,
-    );
+    return txResult.mapError(lineCreationError);
   },
 );
 

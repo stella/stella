@@ -13,6 +13,7 @@ import {
   rateLookupKey,
   resolveRatesInTransaction,
 } from "@/api/lib/billing/rates";
+import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -154,7 +155,14 @@ const batchUpdate = createSafeHandler(
     access: "write",
     body: batchUpdateBodySchema,
   },
-  async function* ({ safeDb, session, workspaceId, body, recordAuditEvent }) {
+  async function* ({
+    safeDb,
+    session,
+    user,
+    workspaceId,
+    body,
+    recordAuditEvent,
+  }) {
     const { ids, action } = body;
     const policy = yield* Result.await(
       readTimePolicy({
@@ -173,6 +181,15 @@ const batchUpdate = createSafeHandler(
       case "approve": {
         const rows = yield* Result.await(
           safeDb(async (tx) => {
+            const runningError = await guardRunningTimeEntries({
+              tx,
+              workspaceId,
+              selection: { type: "entries", ids },
+              actorUserId: user.id,
+            });
+            if (runningError) {
+              return { type: "policy" as const, error: runningError, rows: [] };
+            }
             const blockers = await tx
               .select({
                 billable: timeEntries.billable,
@@ -247,6 +264,15 @@ const batchUpdate = createSafeHandler(
       case "revert_to_draft": {
         const rows = yield* Result.await(
           safeDb(async (tx) => {
+            const runningError = await guardRunningTimeEntries({
+              tx,
+              workspaceId,
+              selection: { type: "entries", ids },
+              actorUserId: user.id,
+            });
+            if (runningError) {
+              return { type: "policy" as const, error: runningError, rows: [] };
+            }
             const candidates = await tx
               .select({
                 dateWorked: timeEntries.dateWorked,
@@ -288,6 +314,15 @@ const batchUpdate = createSafeHandler(
       case "mark_billable": {
         const result = yield* Result.await(
           safeDb(async (tx) => {
+            const runningError = await guardRunningTimeEntries({
+              tx,
+              workspaceId,
+              selection: { type: "entries", ids },
+              actorUserId: user.id,
+            });
+            if (runningError) {
+              return { type: "policy" as const, error: runningError, rows: [] };
+            }
             const candidates = await tx
               .select({
                 currency: timeEntries.currency,
@@ -448,6 +483,15 @@ const batchUpdate = createSafeHandler(
       case "mark_non_billable": {
         const rows = yield* Result.await(
           safeDb(async (tx) => {
+            const runningError = await guardRunningTimeEntries({
+              tx,
+              workspaceId,
+              selection: { type: "entries", ids },
+              actorUserId: user.id,
+            });
+            if (runningError) {
+              return { type: "policy" as const, error: runningError, rows: [] };
+            }
             const candidates = await tx
               .select({
                 dateWorked: timeEntries.dateWorked,

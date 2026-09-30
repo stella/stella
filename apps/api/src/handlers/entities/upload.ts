@@ -21,6 +21,7 @@ import {
   fields,
   workspaces,
 } from "@/api/db/schema";
+import { env } from "@/api/env";
 import {
   UPLOAD_ENTITY_ORIGIN,
   uploadTriggeredFlowPolicy,
@@ -46,18 +47,23 @@ import {
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
 import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload";
+import { deleteOrganizationFilesWithSignal } from "@/api/lib/files/delete-organization-file";
 import {
   allocateFileObject,
   fileContentWithMintedObject,
 } from "@/api/lib/files/file-object-ids";
 import { pdfDerivativeStateForFile } from "@/api/lib/files/gotenberg";
 import { thumbnailDerivativeStateForFile } from "@/api/lib/files/image-derivative";
+import {
+  organizationFileUsageHandlerError,
+  writeOrganizationFile,
+} from "@/api/lib/files/organization-file-usage";
 import { isEncryptedPdf } from "@/api/lib/files/pdf-utils";
 import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
 import { createFileKey } from "@/api/lib/files/utils";
 import { maybeStartUploadTriggeredFlows } from "@/api/lib/flows/maybe-start-upload-triggered-flows";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
-import { getS3, writeS3ObjectWithRetry } from "@/api/lib/s3";
+import { writeS3ObjectWithRetry } from "@/api/lib/s3";
 import type { SanitizedFileName } from "@/api/lib/sanitize-filename";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import {
@@ -263,7 +269,7 @@ type CleanupUploadedS3KeysOptions = {
  * Best-effort delete of S3 objects written before an authoritative
  * cap check (or an unexpected error) aborts the upload. Every key's
  * delete is attempted independently (`allSettled`, not `all`) so one
- * rejection doesn't stop cleanup of the rest; any rejection is
+ * rejection doesn't stop cleanup of the rest; any failure is
  * captured instead of silently dropped, since a swallowed failure
  * here leaves an orphaned S3 object with no telemetry trail.
  */
@@ -272,18 +278,22 @@ const cleanupUploadedS3Keys = async ({
   fileId,
   workspaceId,
 }: CleanupUploadedS3KeysOptions): Promise<void> => {
-  const results = await Promise.allSettled(
-    keys.map(async (key) => await getS3().delete(key)),
+  const cleanup = Result.flatten(
+    await Result.tryPromise({
+      try: async () =>
+        await deleteOrganizationFilesWithSignal(
+          keys,
+          AbortSignal.timeout(10_000),
+        ),
+      catch: (cause) => cause,
+    }),
   );
-
-  for (const result of results) {
-    if (result.status === "rejected") {
-      captureError(result.reason, {
-        operation: "upload-s3-cleanup",
-        fileId,
-        workspaceId,
-      });
-    }
+  if (Result.isError(cleanup)) {
+    captureError(cleanup.error, {
+      operation: "upload-s3-cleanup",
+      fileId,
+      workspaceId,
+    });
   }
 };
 
@@ -904,18 +914,41 @@ const uploadEntityHandler = async function* ({
   });
 
   const s3Keys = [sourceKey];
-
-  await writeS3ObjectWithRetry({
-    contentType: file.type,
-    data: storedBytes,
-    key: sourceKey,
-  });
-
+  if (!env.FEATURE_FILE_USAGE_LIMITS) {
+    await writeS3ObjectWithRetry({
+      contentType: file.type,
+      data: storedBytes,
+      key: sourceKey,
+    });
+  }
   // `yield*` on an Err suspends this generator via `.return()`, not `.throw()`,
   // so a database error here skips `catch` entirely (finally still runs).
   // Track intent to keep the object instead of relying on catch to clean it up.
   let keepUploadedFile = false;
+  let writeOutcomeUncertain = false;
   try {
+    if (env.FEATURE_FILE_USAGE_LIMITS) {
+      const organizationFileWrite = await writeOrganizationFile({
+        organizationId,
+        objectKey: sourceKey,
+        sizeBytes: storedSizeBytes,
+        write: async () =>
+          await writeS3ObjectWithRetry({
+            contentType: file.type,
+            data: storedBytes,
+            key: sourceKey,
+          }),
+      });
+      if (Result.isError(organizationFileWrite)) {
+        // A storage timeout or failed ledger commit can leave an object behind.
+        // The reservation remains until object-state reconciliation settles it.
+        writeOutcomeUncertain =
+          organizationFileWrite.error.reason === "storage_unavailable";
+        return Result.err(
+          organizationFileUsageHandlerError(organizationFileWrite.error),
+        );
+      }
+    }
     const entityId = createSafeId<"entity">();
     const entityVersionId = createSafeId<"entityVersion">();
     const fieldId = createSafeId<"field">();
@@ -1242,7 +1275,7 @@ const uploadEntityHandler = async function* ({
       renamed: fileName.renamed,
     });
   } finally {
-    if (!keepUploadedFile) {
+    if (!keepUploadedFile && !writeOutcomeUncertain) {
       await cleanupUploadedS3Keys({ keys: s3Keys, fileId, workspaceId });
     }
   }
