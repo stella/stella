@@ -13,7 +13,10 @@ import {
   rateLookupKey,
   resolveRatesInTransaction,
 } from "@/api/lib/billing/rates";
-import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
+import {
+  guardRunningTimeEntries,
+  timeEntryIsRunning,
+} from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -197,7 +200,7 @@ const batchUpdate = createSafeHandler(
                 dateWorked: timeEntries.dateWorked,
                 narrative: timeEntries.narrative,
                 timezoneId: timeEntries.timezoneId,
-                timerStartedAt: timeEntries.timerStartedAt,
+                running: timeEntryIsRunning(),
               })
               .from(timeEntries)
               .where(
@@ -214,9 +217,7 @@ const batchUpdate = createSafeHandler(
             if (violation) {
               return { type: "policy" as const, error: violation, rows: [] };
             }
-            const hasRunningTimer = blockers.some(
-              (entry) => entry.timerStartedAt !== null,
-            );
+            const hasRunningTimer = blockers.some((entry) => entry.running);
             if (hasRunningTimer) {
               return { type: "running_timer" as const, rows: [] };
             }
@@ -230,7 +231,15 @@ const batchUpdate = createSafeHandler(
             }
             const updated = await tx
               .update(timeEntries)
-              .set({ status: BILLING_STATUS.APPROVED, updatedAt: new Date() })
+              .set({
+                status: BILLING_STATUS.APPROVED,
+                approvedByUserId: user.id,
+                approvedAt: now,
+                returnedAt: null,
+                returnedByUserId: null,
+                returnComment: null,
+                updatedAt: now,
+              })
               .where(
                 and(condition, eq(timeEntries.status, BILLING_STATUS.DRAFT)),
               )
@@ -296,7 +305,12 @@ const batchUpdate = createSafeHandler(
             }
             const updated = await tx
               .update(timeEntries)
-              .set({ status: BILLING_STATUS.DRAFT, updatedAt: new Date() })
+              .set({
+                status: BILLING_STATUS.DRAFT,
+                approvedByUserId: null,
+                approvedAt: null,
+                updatedAt: now,
+              })
               .where(
                 and(condition, eq(timeEntries.status, BILLING_STATUS.APPROVED)),
               )

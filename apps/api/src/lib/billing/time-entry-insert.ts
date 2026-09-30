@@ -214,12 +214,23 @@ export const insertPreparedTimeEntry = async ({
   prepared,
   recordAuditEvent,
 }: InsertPreparedTimeEntryOptions): Promise<{ id: SafeId<"timeEntry"> }> => {
+  const matter = await tx.query.workspaces.findFirst({
+    where: {
+      id: { eq: workspaceId },
+      organizationId: { eq: organizationId },
+    },
+    columns: { leadUserId: true },
+  });
+  if (!matter) {
+    return panic("Authorized matter disappeared before time entry creation");
+  }
   const [entry] = await tx
     .insert(timeEntries)
     .values({
       organizationId,
       workspaceId,
       userId,
+      approverUserId: matter.leadUserId,
       workItemId: prepared.workItemId,
       dateWorked: prepared.dateWorked,
       timezoneId: prepared.timezoneId,

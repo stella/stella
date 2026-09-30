@@ -42,8 +42,14 @@
 //
 // Usage:
 //   bun scripts/merge-bar.ts <pr-number> [--repo owner/name] [--dry-run]
+//
+// A non-empty STELLA_MERGE_HOLD repository variable holds ordinary pull requests;
+// recognized release pull requests remain exempt, including --jump.
+// Set: gh variable set STELLA_MERGE_HOLD --repo stella/stella --body "<reason>"
+// Lift: gh variable delete STELLA_MERGE_HOLD --repo stella/stella
 
-import { panic } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
+import { fileURLToPath } from "node:url";
 
 import { findMigrationIdentityViolation } from "./check-migration-order";
 
@@ -54,6 +60,42 @@ const MERGE_COMMIT_POLL_ATTEMPTS = 5;
 const PULL_NUMBER_PATTERN = /^\d+$/u;
 const MIGRATION_ALIAS_INVENTORY =
   "apps/api/src/lib/db/migration-alias-inventory.json";
+
+export class MergeHoldReadError extends TaggedError("MergeHoldReadError")<{
+  message: string;
+}> {}
+
+class MergeHoldError extends TaggedError("MergeHoldError")<{
+  message: string;
+}> {}
+
+type CheckMergeHoldOptions = {
+  readVariable: () => Result<string | null, MergeHoldReadError>;
+  readIsRelease: () => Result<boolean, MergeHoldReadError>;
+  checkedByWorkflow?: string | undefined;
+  githubActions?: string | undefined;
+};
+
+export const checkMergeHold = ({
+  readVariable,
+  readIsRelease,
+  checkedByWorkflow,
+  githubActions,
+}: CheckMergeHoldOptions) => {
+  if (checkedByWorkflow === "1" && githubActions === "true") {
+    return Result.ok({ source: "workflow" } as const);
+  }
+  return readVariable().andThen((reason) => {
+    if (reason === null || reason === "") {
+      return Result.ok({ source: "repository-variable" } as const);
+    }
+    return readIsRelease().andThen((isRelease) =>
+      isRelease
+        ? Result.ok({ source: "repository-variable" } as const)
+        : Result.err(new MergeHoldError({ message: `MERGE HOLD: ${reason}` })),
+    );
+  });
+};
 
 // --- Repository policy --------------------------------------------------------
 
@@ -780,27 +822,96 @@ const readMember = <T extends string>(
 
 // Automation can supply a workflow read token without widening the release
 // App's permissions. Only the two merge operations use the write credential.
+const githubEnvironment = (access: "read" | "write") => ({
+  ...process.env,
+  GH_TOKEN:
+    access === "read"
+      ? (process.env["GH_READ_TOKEN"] ?? process.env["GH_TOKEN"])
+      : process.env["GH_TOKEN"],
+});
+
+const runGhProcess = (
+  args: readonly string[],
+  access: "read" | "write" = "read",
+) =>
+  Bun.spawnSync(["gh", ...args], {
+    env: githubEnvironment(access),
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+
 const runGh = (
   args: readonly string[],
   access: "read" | "write" = "read",
 ): string => {
-  const result = Bun.spawnSync(["gh", ...args], {
-    env: {
-      ...process.env,
-      GH_TOKEN:
-        access === "read"
-          ? (process.env["GH_READ_TOKEN"] ?? process.env["GH_TOKEN"])
-          : process.env["GH_TOKEN"],
-    },
-    stdout: "pipe",
-    stderr: "pipe",
-  });
+  const result = runGhProcess(args, access);
   if (result.exitCode !== 0) {
     panic(
       `gh ${args.join(" ")} failed (${result.exitCode}): ${result.stderr.toString()}`,
     );
   }
   return result.stdout.toString();
+};
+
+const readRepositoryMergeHold = (repo: string) => {
+  const result = runGhProcess([
+    "variable",
+    "get",
+    "STELLA_MERGE_HOLD",
+    "--repo",
+    repo,
+  ]);
+  if (result.exitCode === 0) {
+    // gh appends a newline; whitespace in the variable itself still activates a hold.
+    return Result.ok(result.stdout.toString().replace(/\r?\n$/u, ""));
+  }
+  if (
+    result.stderr.toString().trim() ===
+    "variable STELLA_MERGE_HOLD was not found"
+  ) {
+    return Result.ok(null);
+  }
+  return Result.err(
+    new MergeHoldReadError({
+      message: `Cannot read STELLA_MERGE_HOLD (${result.exitCode}): ${result.stderr.toString()}`,
+    }),
+  );
+};
+
+const readReleaseRecognition = (repo: string, pullNumber: number) => {
+  const result = Bun.spawnSync(
+    [
+      "bash",
+      fileURLToPath(new URL("release-pull-requests.sh", import.meta.url)),
+      "--repo",
+      repo,
+      "--number",
+      String(pullNumber),
+    ],
+    {
+      env: githubEnvironment("read"),
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  );
+  if (result.exitCode !== 0) {
+    return Result.err(
+      new MergeHoldReadError({
+        message: `Cannot recognize release pull request (${result.exitCode}): ${result.stderr.toString()}`,
+      }),
+    );
+  }
+  const match = /^current_is_release=(true|false)$/mu.exec(
+    result.stdout.toString(),
+  );
+  if (match === null) {
+    return Result.err(
+      new MergeHoldReadError({
+        message: "Invalid release recognition response",
+      }),
+    );
+  }
+  return Result.ok(match[1] === "true");
 };
 
 const runGhJson = (args: readonly string[]): unknown => JSON.parse(runGh(args));
@@ -1367,6 +1478,25 @@ if (import.meta.main) {
     pullNumber: options.pullNumber,
     migrationDirectory: repositoryMigrationDirectory(options.repo),
   });
+
+  // Version Packages uses this CLI as release-pr.yml's auto-merge-command too.
+  const hold = checkMergeHold({
+    readVariable: () => readRepositoryMergeHold(options.repo),
+    readIsRelease: () =>
+      readReleaseRecognition(options.repo, options.pullNumber),
+    checkedByWorkflow: process.env["STELLA_MERGE_HOLD_CHECKED_BY_WORKFLOW"],
+    githubActions: process.env["GITHUB_ACTIONS"],
+  });
+  if (hold.isErr()) {
+    console.error(hold.error.message);
+    process.exit(1);
+  }
+
+  if (hold.value.source === "workflow") {
+    console.log(
+      "merge hold: checked by the calling workflow; final CI verdict enforces it",
+    );
+  }
 
   const pullRequest = readSettledPullRequest(gateway);
   const policy = readLiveRepositoryPolicy(

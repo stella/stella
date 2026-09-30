@@ -685,8 +685,22 @@ describe("fields the API adds later", () => {
  * some marks as spaces; the words and their order are what must agree.
  */
 const withoutWhitespace = (text: string): string => text.replace(/\s+/gu, "");
+const layoutPayload = "before <xText>nested</xText><![CDATA[cdata]]> after";
 
 describe("the document", () => {
+  test("a line break keeps its nested text and CDATA", () => {
+    const content =
+      readPlNcourtContent(
+        "<xPart><xBlock><xText>Before<xBRx>after <![CDATA[inside]]><xBx> bold</xBx></xBRx><xBRx/></xText></xBlock></xPart>",
+      ) ?? panic("the document did not read");
+    expect(content.html).toBe(
+      "<p>Before<br/>after inside<strong> bold</strong><br/></p>",
+    );
+    expect(content.sourceParagraphs).toEqual(["Beforeafter inside bold"]);
+    expect(content.comparisonParagraphs).toEqual(["Before after inside bold"]);
+    expect(content.unmappedMarkup).toEqual([]);
+  });
+
   test.each([PAIR, LIST_DOC, TABLE_DOC])(
     "%s reads to the blocks and text the API's own HTML rendering reads to",
     async (id) => {
@@ -862,7 +876,103 @@ describe("the document", () => {
       "Source paragraph",
       "Source note",
     ]);
+    expect(content.html).toBe("<p>Source paragraph</p>\n<p>Source note</p>");
+    expect(content.unmappedMarkup).toEqual(["xCOLGROUPx", "xCOLx", "#cdata"]);
+
+    const parsed = parsePlDecisionContent({
+      caseNumber: "I C 1/15",
+      ecli: undefined,
+      court: "",
+      decisionDate: undefined,
+      decisionType: undefined,
+      sourceUrl: undefined,
+      documentUrl: undefined,
+      content: content.html,
+      keywords: [],
+      statutes: [],
+      documentId: "layout-text",
+    });
+    const text = parsed.fulltext;
+    expect(text.indexOf("Source paragraph")).toBeGreaterThanOrEqual(0);
+    expect(text.indexOf("Source note")).toBeGreaterThan(
+      text.indexOf("Source paragraph"),
+    );
   });
+
+  test("empty layout elements remain omitted", () => {
+    const content =
+      readPlNcourtContent(
+        "<xPart><xCOLGROUPx><xCOLx/></xCOLGROUPx><xText>Visible</xText></xPart>",
+      ) ?? panic("the document did not read");
+
+    expect(content.html).toBe("\n<p>Visible</p>");
+    expect(content.unmappedMarkup).toEqual([]);
+  });
+
+  for (const { container, layoutXml, layoutTag } of [
+    {
+      container: "xPart",
+      layoutXml: `<xPart><xCOLGROUPx>${layoutPayload}</xCOLGROUPx></xPart>`,
+      layoutTag: "xCOLGROUPx",
+    },
+    {
+      container: "xRows",
+      layoutXml: `<xPart><xRows><xCOLGROUPx>${layoutPayload}</xCOLGROUPx></xRows></xPart>`,
+      layoutTag: "xCOLGROUPx",
+    },
+    {
+      container: "xRow",
+      layoutXml: `<xPart><xRows><xRow><xCOLx>${layoutPayload}</xCOLx></xRow></xRows></xPart>`,
+      layoutTag: "xCOLx",
+    },
+    {
+      container: "xClmn",
+      layoutXml: `<xPart><xRows><xRow><xClmn><xCOLGROUPx>${layoutPayload}</xCOLGROUPx></xClmn></xRow></xRows></xPart>`,
+      layoutTag: "xCOLGROUPx",
+    },
+    {
+      container: "xEnum",
+      layoutXml: `<xPart><xEnum><xCOLx>${layoutPayload}</xCOLx><xEnumElem><xText>list item</xText></xEnumElem></xEnum></xPart>`,
+      layoutTag: "xCOLx",
+    },
+    {
+      container: "xEnumElem",
+      layoutXml: `<xPart><xEnum><xEnumElem><xCOLGROUPx>${layoutPayload}</xCOLGROUPx></xEnumElem></xEnum></xPart>`,
+      layoutTag: "xCOLGROUPx",
+    },
+  ]) {
+    test(`visible layout text survives in ${container}`, () => {
+      const content =
+        readPlNcourtContent(layoutXml) ?? panic("the document did not read");
+      const expectedParagraphs = ["before", "nested", "cdata", "after"];
+      if (container === "xEnum") {
+        expectedParagraphs.push("list item");
+      }
+      expect(content.sourceParagraphs).toEqual(expectedParagraphs);
+      expect(content.unmappedMarkup).toEqual([layoutTag, "#text", "#cdata"]);
+
+      const parsed = parsePlDecisionContent({
+        caseNumber: "I C 1/15",
+        ecli: undefined,
+        court: "",
+        decisionDate: undefined,
+        decisionType: undefined,
+        sourceUrl: undefined,
+        documentUrl: undefined,
+        content: content.html,
+        keywords: [],
+        statutes: [],
+        documentId: `layout-${container}`,
+      });
+      const positions = expectedParagraphs.map((text) =>
+        parsed.fulltext.indexOf(text),
+      );
+      expect(positions.every((position) => position >= 0)).toBe(true);
+      expect(positions).toEqual(
+        positions.toSorted((left, right) => left - right),
+      );
+    });
+  }
 
   test("CDATA inside a paragraph stays beside its inline text", () => {
     const content =

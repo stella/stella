@@ -144,7 +144,6 @@
     "eslint": "catalog:",
     "eslint-plugin-drizzle": "catalog:",
     "fast-check": "catalog:",
-    "i18n-unused": "^0.20.0",
     "knip": "^6.37.0",
     "lefthook": "^2.1.14",
     "oxc-transform-react": "catalog:",
@@ -161,8 +160,7 @@
     "turbo": "2.11.3",
     "typescript": "catalog:",
     "ultracite": "catalog:",
-    "valibot": "catalog:",
-    "vite": "catalog:"
+    "valibot": "catalog:"
   },
   "resolutions": {
     "@atlaskit/pragmatic-drag-and-drop": "3.1.0",
@@ -211,7 +209,7 @@
     "@stll/folio-agents": "0.14.2",
     "@stll/folio-core": "0.52.0",
     "@stll/folio-react": "0.23.1",
-    "@stll/fuzzy-search": "1.1.4",
+    "@stll/fuzzy-search": "1.1.5",
     "@t3-oss/env-core": "0.13.11",
     "@tailwindcss/postcss": "4.3.3",
     "@tailwindcss/vite": "4.3.3",
@@ -289,8 +287,7 @@
     "@tanstack/ai-mistral@0.6.10": "patches/@tanstack%2Fai-mistral@0.6.10.patch",
     "@tanstack/ai-mcp@0.4.6": "patches/@tanstack%2Fai-mcp@0.4.6.patch",
     "@tanstack/ai-openrouter@0.19.20": "patches/@tanstack%2Fai-openrouter@0.19.20.patch",
-    "@tanstack/ai-anthropic@0.19.1": "patches/@tanstack%2Fai-anthropic@0.19.1.patch",
-    "@stll/fuzzy-search@1.1.4": "patches/@stll%2Ffuzzy-search@1.1.4.patch"
+    "@tanstack/ai-anthropic@0.19.1": "patches/@tanstack%2Fai-anthropic@0.19.1.patch"
   },
   "trustedDependencies": [
     "lefthook"

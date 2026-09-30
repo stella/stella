@@ -12,7 +12,7 @@ import type {
 } from "@/api/lib/business-registries/dispatch";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
-export type LookupBusinessRegistryProps = {
+type LookupBusinessRegistryProps = {
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   registry: BusinessRegistrySlug;
