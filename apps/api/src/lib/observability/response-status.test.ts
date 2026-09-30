@@ -22,6 +22,9 @@ const EXPECTED_STATUS_BY_PATH = {
   "/raw-response-set-error-named": 403,
   "/raw-response-late-error": 500,
   "/raw-error-retains-status": 502,
+  "/wrapped-raw-response": 403,
+  "/wrapped-raw-error": 502,
+  "/nested-status-response": 202,
 } as const;
 
 describe("resolveResponseStatus", () => {
@@ -62,6 +65,13 @@ describe("resolveResponseStatus", () => {
         return new Response("upstream");
       })
       .get("/raw-response-late-error", () => new Response("upstream"))
+      .get("/wrapped-raw-response", () => status(403, new Response("response")))
+      .get("/wrapped-raw-error", () =>
+        status(200, new Response("response", { status: 502 })),
+      )
+      .get("/nested-status-response", () =>
+        status(200, status(202, { ok: true })),
+      )
       .get("/raw-error-retains-status", ({ set }) => {
         set.status = 500;
         return new Response("upstream", { status: 502 });

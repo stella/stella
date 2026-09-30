@@ -5,6 +5,10 @@ import { timingSafeEqual } from "node:crypto";
 import { Temporal } from "@stll/time";
 
 import { env } from "@/api/env";
+import {
+  CACHE_CONTROL_HEADER,
+  PRIVATE_CACHE_CONTROL,
+} from "@/api/lib/cache-policy";
 import { errorTag } from "@/api/lib/errors/utils";
 import {
   MACHINE_API_KEY_LENGTH,
@@ -252,7 +256,7 @@ export const createSecurityCanaryInterceptor =
     }
 
     set.status = 403;
-    set.headers["cache-control"] = "no-store";
+    set.headers[CACHE_CONTROL_HEADER] = PRIVATE_CACHE_CONTROL;
     set.headers[SECURITY_CANARY_WARNING_HEADER] = SECURITY_CANARY_WARNING;
     return { message: SECURITY_CANARY_WARNING };
   };

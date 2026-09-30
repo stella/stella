@@ -125,6 +125,7 @@ import { workspacesRoute } from "@/api/handlers/workspaces/routes";
 import { detached } from "@/api/lib/analytics/capture";
 import { getAuth, realtimeAuthorizers } from "@/api/lib/auth";
 import { shouldRejectBrowserMutation } from "@/api/lib/browser-origin-guard";
+import { finalizeResponseCachePolicy } from "@/api/lib/cache-policy";
 import {
   resolveClientAddress,
   resolveSignupRateLimitClientIp,
@@ -257,10 +258,11 @@ const api = new Elysia()
   // Body parsing is decided before any route runs, so the multipart parser has
   // to sit ahead of every route registration.
   .use(multipartFormParser)
+  .onRequest(({ set }) => {
+    setSecurityHeaders(set);
+  })
   .onRequest(async (context) => {
     const { request, set } = context;
-
-    setSecurityHeaders(set);
 
     const rawSessionId = request.headers.get(SESSION_ID_HEADER);
     const sessionId =
@@ -345,6 +347,9 @@ const api = new Elysia()
   )
   .onError((context) => answerRequestError(context))
   .onAfterHandle(async (context) => await completeRequest(context))
+  .onMapResponse(({ responseValue, set }) =>
+    finalizeResponseCachePolicy({ response: responseValue, set }),
+  )
   .use(authUiRoute)
   .use(authMetadataRoute)
   .use(

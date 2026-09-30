@@ -1,5 +1,7 @@
+import { Result } from "better-result";
 import Elysia from "elysia";
 
+import { createSafePublicHandler } from "@/api/lib/api-handlers";
 import { resolveRateLimitClientAddress } from "@/api/lib/client-ip";
 import {
   MCP_ANONYMIZED_DISCOVERY_PATH,
@@ -109,15 +111,20 @@ const discoveryOptionsHandler = ({ set }: { set: RouteSet }) => {
   return "";
 };
 
-const discoveryHandler =
-  (mode?: McpMode) =>
-  ({ set }: { set: RouteSet }) => {
-    applyHeaders({
-      headers: createMcpMetadataHeaders(),
-      set,
-    });
-    return getMcpProtectedResourceMetadata(mode);
-  };
+const discoveryHandler = (mode?: McpMode) =>
+  createSafePublicHandler(
+    {
+      cache: { kind: "public", maxAge: 300 },
+      mcp: { type: "internal", reason: "auth_plumbing" },
+    },
+    async function* ({ set }) {
+      applyHeaders({ headers: createMcpMetadataHeaders(), set });
+      const metadata = yield* Result.try(() =>
+        getMcpProtectedResourceMetadata(mode),
+      );
+      return Result.ok(metadata);
+    },
+  ).handler;
 
 export const createMcpRoute = ({
   handleMcpHttpRequest,

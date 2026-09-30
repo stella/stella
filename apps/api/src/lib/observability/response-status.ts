@@ -22,30 +22,27 @@ export const resolveResponseStatus = ({
   response,
   set,
 }: ResolveResponseStatusOptions): number => {
-  // `code` is generic over the status the call site passed, so it only
-  // narrows to a number once the instance is checked.
-  if (
-    response instanceof ElysiaCustomStatusResponse &&
-    typeof response.code === "number"
+  let value = response;
+  let selectedStatus = set.status;
+  // Each status wrapper replaces set.status before Elysia maps its payload.
+  while (
+    value instanceof ElysiaCustomStatusResponse &&
+    typeof value.code === "number"
   ) {
-    return response.code;
+    selectedStatus = value.code;
+    value = value.response;
   }
 
-  // Elysia's raw-response mapper lets an explicit set.status override a 200
-  // Response; other raw statuses retain their own status.
-  if (
-    response instanceof Response &&
-    response.status !== DEFAULT_RESPONSE_STATUS
-  ) {
-    return response.status;
+  if (value instanceof Response && value.status !== DEFAULT_RESPONSE_STATUS) {
+    return value.status;
   }
 
-  if (typeof set.status === "number") {
-    return set.status;
+  if (typeof selectedStatus === "number") {
+    return selectedStatus;
   }
 
-  if (typeof set.status === "string") {
-    return StatusMap[set.status];
+  if (typeof selectedStatus === "string") {
+    return StatusMap[selectedStatus];
   }
 
   return DEFAULT_RESPONSE_STATUS;

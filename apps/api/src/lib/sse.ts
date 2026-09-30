@@ -9,6 +9,10 @@ import type {
 import { SSE_HEARTBEAT_FRAME } from "@stll/api-contract/sse-heartbeat";
 
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  CACHE_CONTROL_HEADER,
+  PRIVATE_CACHE_CONTROL,
+} from "@/api/lib/cache-policy";
 import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
@@ -119,12 +123,11 @@ const HEARTBEAT_CHUNK = encoder.encode(SSE_HEARTBEAT_FRAME);
 const SSE_MEDIA_TYPE = "text/event-stream";
 
 /**
- * `no-store` and `no-transform` together: an intermediary must neither keep a
- * copy of a per-request stream nor buffer or recode it, and `x-accel-buffering`
- * says the same to a reverse proxy that reads it.
+ * Streams use the same private cache policy as other API responses;
+ * `x-accel-buffering` also prevents buffering by reverse proxies.
  */
 const SSE_HEADERS = {
-  "cache-control": "no-cache, no-store, no-transform",
+  [CACHE_CONTROL_HEADER]: PRIVATE_CACHE_CONTROL,
   connection: "keep-alive",
   "content-type": SSE_MEDIA_TYPE,
   "x-accel-buffering": "no",

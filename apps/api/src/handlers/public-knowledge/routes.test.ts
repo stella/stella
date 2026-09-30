@@ -71,7 +71,7 @@ describe("public knowledge routes", () => {
       ]) {
         const response = await request(path);
         expect(response.status).toBe(404);
-        expect(response.headers.get("Cache-Control")).toBe("no-store");
+        expect(response.headers.get("Cache-Control")).toBe("private, no-store");
       }
     });
   });
@@ -86,13 +86,13 @@ describe("public knowledge routes", () => {
       ]) {
         const response = await request(path);
         expect(response.status).toBe(404);
-        expect(response.headers.get("Cache-Control")).toBe("no-store");
+        expect(response.headers.get("Cache-Control")).toBe("private, no-store");
       }
       const invalid = await request(
         `/public/knowledge/template-packs/${"a".repeat(65)}`,
       );
       expect(invalid.status).toBeGreaterThanOrEqual(400);
-      expect(invalid.headers.get("Cache-Control")).toBe("no-store");
+      expect(invalid.headers.get("Cache-Control")).toBe("private, no-store");
       const privatePack = FIXTURE_TEMPLATE_PACKS.at(0);
       if (!privatePack) {
         throw new Error("Fixture pack missing");
@@ -113,7 +113,7 @@ describe("public knowledge routes", () => {
           new Request(`http://localhost${path}`),
         );
         expect(response.status).toBe(404);
-        expect(response.headers.get("Cache-Control")).toBe("no-store");
+        expect(response.headers.get("Cache-Control")).toBe("private, no-store");
       }
     });
   });
@@ -208,7 +208,9 @@ describe("public knowledge routes", () => {
               new Request(`http://localhost${path}`),
             );
             expect(missing.status).toBe(404);
-            expect(missing.headers.get("Cache-Control")).toBe("no-store");
+            expect(missing.headers.get("Cache-Control")).toBe(
+              "private, no-store",
+            );
           }
         });
       } finally {
@@ -308,7 +310,7 @@ describe("public knowledge routes", () => {
           new Request(`http://localhost${path}`),
         );
         expect(response.status).toBe(503);
-        expect(response.headers.get("Cache-Control")).toBe("no-store");
+        expect(response.headers.get("Cache-Control")).toBe("private, no-store");
         const body = await response.text();
         expect(body).toContain("Preview unavailable");
         expect(body).not.toContain("not a zip");
@@ -370,7 +372,9 @@ describe("public knowledge routes", () => {
             ),
           );
           expect(response.status).toBe(503);
-          expect(response.headers.get("Cache-Control")).toBe("no-store");
+          expect(response.headers.get("Cache-Control")).toBe(
+            "private, no-store",
+          );
           expect(await response.text()).not.toContain(contentRoot);
         });
       } finally {
@@ -406,7 +410,7 @@ describe("public knowledge routes", () => {
         ),
       );
       expect(response.status).toBe(503);
-      expect(response.headers.get("cache-control")).toBe("no-store");
+      expect(response.headers.get("cache-control")).toBe("private, no-store");
       expect(await response.text()).not.toContain("hash mismatch");
     });
   });
@@ -432,7 +436,7 @@ describe("public knowledge routes", () => {
         ),
       );
       expect(response.status).toBe(500);
-      expect(response.headers.get("Cache-Control")).toBe("no-store");
+      expect(response.headers.get("Cache-Control")).toBe("private, no-store");
     });
   });
 

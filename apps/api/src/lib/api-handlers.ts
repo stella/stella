@@ -25,6 +25,10 @@ import { captureObservedError } from "@/api/lib/analytics/capture";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  applyResponseCachePolicy,
+  type CachePolicy,
+} from "@/api/lib/cache-policy";
 import type { CapabilityTransport } from "@/api/lib/capability-transport";
 import type { WorkspaceParamsSchema } from "@/api/lib/custom-schema";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
@@ -1449,6 +1453,7 @@ export const createSafeTokenHandler = <
 export type PublicHandlerConfig = InputSchema &
   CapabilityDescription &
   CapabilityAccess & {
+    cache: CachePolicy;
     mcp: McpExposure;
   };
 
@@ -1461,7 +1466,10 @@ export type PublicHandlerContext<
  * mounted handler is in here, which a naming convention cannot guarantee:
  * a raw function passed to `.get()` reads the same at the call site.
  */
-const safePublicHandlers = new WeakSet<object>();
+const safePublicHandlers = new WeakMap<object, CachePolicy>();
+
+export const getPublicHandlerCachePolicy = (handler: unknown) =>
+  typeof handler === "function" ? safePublicHandlers.get(handler) : undefined;
 
 /** Whether a mounted route handler came out of `createSafePublicHandler`. */
 export const isSafePublicHandler = (handler: unknown): boolean =>
@@ -1479,8 +1487,19 @@ export const createSafePublicHandler = <
   config: TConfig,
   handler: SafeHandlerFn<PublicHandlerContext<TConfig>, TResult>,
 ): SafeHandlerDefinition<TConfig, PublicHandlerContext<TConfig>, TResult> => {
-  const definition = createSafeDirectHandler(config, handler);
-  safePublicHandlers.add(definition.handler);
+  const definition = {
+    config,
+    handler: async (ctx: PublicHandlerContext<TConfig>) => {
+      const response = await runSafeHandler(ctx, handler);
+      applyResponseCachePolicy({
+        cache: config.cache,
+        response,
+        set: ctx.set,
+      });
+      return response;
+    },
+  };
+  safePublicHandlers.set(definition.handler, config.cache);
   return definition;
 };
 

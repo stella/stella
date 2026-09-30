@@ -3,6 +3,7 @@ import { panic } from "better-result";
 
 import { getAgentAuthMetadataBlock } from "@/api/agent-auth/metadata";
 import { getAuth } from "@/api/lib/auth";
+import { CACHE_CONTROL_HEADER } from "@/api/lib/cache-policy";
 
 type AuthWithOAuthServerConfig = ReturnType<typeof getAuth> & {
   api: {
@@ -36,7 +37,6 @@ export const createAuthMetadataHeaders = () =>
   new Headers({
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET, OPTIONS",
-    "Cache-Control": "public, max-age=300",
   });
 
 const withAuthMetadataHeaders = (response: Response) => {
@@ -48,6 +48,7 @@ const withAuthMetadataHeaders = (response: Response) => {
     }
   }
 
+  headers.delete(CACHE_CONTROL_HEADER);
   return new Response(response.body, {
     headers,
     status: response.status,
@@ -84,6 +85,7 @@ export const handleOAuthAuthorizationServerMetadataRequest = async (
       headers.set(key, value);
     }
   }
+  headers.delete(CACHE_CONTROL_HEADER);
   headers.set("Content-Type", "application/json");
   headers.delete("Content-Length");
 
