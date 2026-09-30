@@ -23,11 +23,15 @@ export const encodeEcjFormexArchive = (
 
 /** Historical raw parts contain a single XML stream instead of an archive. */
 export const ecjFormexDocuments = (payload: string): readonly string[] => {
-  if (!payload.startsWith(FORMEX_ARCHIVE_PREFIX)) {return [payload];}
+  if (!payload.startsWith(FORMEX_ARCHIVE_PREFIX)) {
+    return [payload];
+  }
   const entries = decodeSourceRawEnvelope(
     payload.slice(FORMEX_ARCHIVE_PREFIX.length),
   );
-  if (entries === null) {panic("Invalid stored Formex archive envelope");}
+  if (entries === null) {
+    panic("Invalid stored Formex archive envelope");
+  }
   return Object.values(entries).map((encoded) =>
     Buffer.from(encoded, "base64").toString("utf-8"),
   );

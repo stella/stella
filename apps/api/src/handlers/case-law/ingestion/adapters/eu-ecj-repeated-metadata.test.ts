@@ -45,7 +45,9 @@ test("every archive member survives stored replay and repeated bibliography stay
 
   const reparse = euEcjAdapter.reparseStoredRaw;
   expect(reparse).toBeDefined();
-  if (reparse === undefined) {return;}
+  if (reparse === undefined) {
+    return;
+  }
   const outcome = await reparse({
     raw: new TextEncoder().encode(
       encodeSourceRawEnvelope({
@@ -67,7 +69,9 @@ test("every archive member survives stored replay and repeated bibliography stay
     metadata: { celex: "62026CJ0001" },
   });
   expect(outcome.type).toBe("parsed");
-  if (outcome.type !== "parsed") {return;}
+  if (outcome.type !== "parsed") {
+    return;
+  }
   expect(outcome.result.metadata["publisherCaseNumber"]).toEqual([
     "C-1/26",
     "C-2/26",
