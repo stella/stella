@@ -35,8 +35,6 @@
     "@tailwindcss/vite": "catalog:",
     "astro": "^7.3.4",
     "better-result": "catalog:",
-    "buffer": "^6.0.3",
-    "lucide-react": "catalog:",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
     "tailwindcss": "catalog:",
