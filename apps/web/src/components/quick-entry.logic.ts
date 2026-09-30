@@ -26,6 +26,8 @@ export const quickEntryRefusalKey = (error: unknown) => {
       return "billing.quickEntry.narrativeRequired";
     case "time_period_locked":
       return "billing.quickEntry.periodLocked";
+    case undefined:
+      return "errors.actionFailed";
     default:
       return "errors.actionFailed";
   }

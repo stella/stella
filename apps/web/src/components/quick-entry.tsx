@@ -7,7 +7,9 @@ import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
 import { useQuickEntryStore } from "@/lib/workspaces/quick-entry-store";
 import { useQuickEntryHotkey } from "@/lib/workspaces/use-quick-entry-hotkey";
 
-const QuickEntryDialog = lazy(() => import("@/components/quick-entry-dialog"));
+const QuickEntryDialog = lazy(
+  async () => import("@/components/quick-entry-dialog"),
+);
 
 export const QuickEntry = () => {
   const user = useAuthenticatedUser();

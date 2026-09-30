@@ -72,7 +72,7 @@ const QuickEntryDialog = () => {
     }
     submitting.current = true;
     setError(null);
-    const result = await Result.tryPromise(() =>
+    const result = await Result.tryPromise(async () =>
       createTime.mutateAsync({
         ...values,
         workspaceId: matter.id,
@@ -128,7 +128,7 @@ const QuickEntryDialog = () => {
     }
     submitting.current = true;
     setError(null);
-    const result = await Result.tryPromise(() =>
+    const result = await Result.tryPromise(async () =>
       createExpense.mutateAsync({
         ...values,
         workspaceId: step.matter.id,
@@ -205,12 +205,13 @@ const QuickEntryDialog = () => {
                   narrativeRequired={settings?.timeNarrativeRequired ?? false}
                   pending={pending}
                   onCancel={closeDialog}
-                  onSubmit={(values) => saveTime(values, "close")}
-                  onSaveAndNew={(values) => saveTime(values, "new")}
+                  onSubmit={async (values) => saveTime(values, "close")}
+                  onSaveAndNew={async (values) => saveTime(values, "new")}
                   {...(canCreateExpense
                     ? {
-                        onSaveAndAddExpense: (values: ManualTimeEntryValues) =>
-                          saveTime(values, "expense"),
+                        onSaveAndAddExpense: async (
+                          values: ManualTimeEntryValues,
+                        ) => saveTime(values, "expense"),
                       }
                     : {})}
                 />
