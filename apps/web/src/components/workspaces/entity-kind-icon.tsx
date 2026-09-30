@@ -12,6 +12,7 @@ import {
 import { cn } from "@stll/ui/utils";
 
 import { DocumentIcon } from "@/components/document-icon";
+import type { MatterFileThumbnailRef } from "@/components/file-thumbnail";
 import {
   STATUS_COLORS,
   STATUS_ICONS,
@@ -88,6 +89,8 @@ type EntityKindIconProps = {
   folderState?: FolderState | undefined;
   mimeType?: string | null | undefined;
   status?: string | null | undefined;
+  /** A document's matter file, so an image can show its thumbnail. */
+  thumbnail?: MatterFileThumbnailRef | null | undefined;
 };
 
 /**
@@ -103,6 +106,7 @@ export const EntityKindIcon = ({
   folderState,
   mimeType,
   status,
+  thumbnail,
 }: EntityKindIconProps) => {
   switch (kind) {
     case "task": {
@@ -131,6 +135,7 @@ export const EntityKindIcon = ({
           className={className}
           fileName={fileName}
           mimeType={mimeType}
+          thumbnail={thumbnail}
         />
       ) : (
         <FileIcon className={className} />

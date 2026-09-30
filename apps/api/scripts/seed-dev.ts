@@ -40,6 +40,7 @@ import {
   chatMessages,
   chatThreads,
   contacts,
+  documentReferenceCounters,
   documentTypes,
   entities,
   entityVersions,
@@ -5497,6 +5498,9 @@ export async function seed(organizationId?: string, userId?: string) {
         seedId(`extra-ws-${workspace.reference}`),
       ),
     ];
+    const seedReferences = [...seedWorkspaces, ...MORE_WORKSPACES].map(
+      (workspace) => workspace.reference,
+    );
     if (allSeedWorkspaceIds.length > 0) {
       await db.transaction(
         async (tx) =>
@@ -5520,12 +5524,19 @@ export async function seed(organizationId?: string, userId?: string) {
               sql`${propertyDependencies.workspaceId} IN ${allSeedWorkspaceIds}`,
             ),
       );
-      await db.transaction(
-        async (tx) =>
-          await tx
-            .delete(workspaces)
-            .where(sql`${workspaces.id} IN ${allSeedWorkspaceIds}`),
-      );
+      await db.transaction(async (tx) => {
+        await tx
+          .delete(workspaces)
+          .where(sql`${workspaces.id} IN ${allSeedWorkspaceIds}`);
+        await tx
+          .delete(documentReferenceCounters)
+          .where(
+            and(
+              eq(documentReferenceCounters.organizationId, ORG_ID),
+              inArray(documentReferenceCounters.reference, seedReferences),
+            ),
+          );
+      });
     }
     if (allSeedContactIds.length === 0) {
       return;

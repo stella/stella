@@ -13,10 +13,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { QueryKey } from "@tanstack/react-query";
 import Bold from "@tiptap/extension-bold";
 import HardBreak from "@tiptap/extension-hard-break";
-import History from "@tiptap/extension-history";
 import Paragraph from "@tiptap/extension-paragraph";
-import Placeholder from "@tiptap/extension-placeholder";
 import Text from "@tiptap/extension-text";
+import { Placeholder, UndoRedo } from "@tiptap/extensions";
 import type {
   EditorState,
   Plugin,
@@ -1039,7 +1038,7 @@ export const useChatEditor = ({
     Placeholder.configure({
       placeholder: () => placeholderRef.current,
     }),
-    History,
+    UndoRedo,
     ChatMention.configure({
       suggestion: createChatSuggestion(
         getMentionItems,

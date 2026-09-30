@@ -2,10 +2,9 @@ import { useMemo, useRef, useState } from "react";
 
 import { useInfiniteQuery } from "@tanstack/react-query";
 import type { AnyExtension } from "@tiptap/core";
-import History from "@tiptap/extension-history";
 import Paragraph from "@tiptap/extension-paragraph";
-import Placeholder from "@tiptap/extension-placeholder";
 import Text from "@tiptap/extension-text";
+import { Placeholder, UndoRedo } from "@tiptap/extensions";
 import type { EditorProps } from "@tiptap/pm/view";
 import { useEditor } from "@tiptap/react";
 import type { Editor } from "@tiptap/react";
@@ -220,7 +219,7 @@ export const AIPromptInput = ({
     PromptSlash.configure({
       suggestion: createPromptSlashSuggestion(getSlashItems),
     }),
-    History,
+    UndoRedo,
   ]);
   const [editorProps] = useState<EditorProps>(() => ({
     attributes: () => ({ class: getEditorClassName() }),

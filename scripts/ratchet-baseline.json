@@ -343,7 +343,7 @@
     "files": {}
   },
   "throw-outside-boundary": {
-    "count": 900,
+    "count": 896,
     "files": {
       "apps/api/src/handlers/case-law/decisions/latest.ts": 3,
       "apps/api/src/handlers/case-law/ingestion/adapters/at-courts.ts": 9,
@@ -442,7 +442,6 @@
       "apps/api/src/lib/delete-account.ts": 4,
       "apps/api/src/lib/deployment-feature-route.ts": 1,
       "apps/api/src/lib/document-processing-ocr-result.ts": 3,
-      "apps/api/src/lib/docx-archive.ts": 4,
       "apps/api/src/lib/email/ses.ts": 1,
       "apps/api/src/lib/email/smtp.ts": 1,
       "apps/api/src/lib/entities/create-from-buffer.ts": 2,
@@ -716,7 +715,6 @@
       "apps/api/src/lib/delete-account.ts": 1,
       "apps/api/src/lib/dev-origins.ts": 1,
       "apps/api/src/lib/document-processing-idle-exit.ts": 1,
-      "apps/api/src/lib/docx-archive.ts": 1,
       "apps/api/src/lib/docx-stamp.ts": 1,
       "apps/api/src/lib/docx/ai-field-generator.ts": 2,
       "apps/api/src/lib/docx/resolve-ai-fields.ts": 1,
@@ -969,19 +967,10 @@
     }
   },
   "no-raw-zip-load-suppressions": {
-    "count": 13,
+    "count": 2,
     "files": {
       "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts": 1,
-      "apps/api/src/handlers/chat/export/create-chat-export-docx.ts": 1,
-      "apps/api/src/handlers/templates/prepare-template.ts": 1,
-      "apps/api/src/lib/docx/adapt-ai-fields.ts": 1,
-      "apps/api/src/lib/docx/discover-clause-slots.ts": 1,
-      "apps/api/src/lib/docx/discover-placeholders.ts": 1,
-      "apps/api/src/lib/docx/discover-template.ts": 1,
-      "apps/api/src/lib/docx/patch-template.ts": 3,
-      "apps/api/src/lib/docx/strip-custom-xml-manifest.ts": 1,
-      "apps/api/src/lib/docx/write-field-filters.ts": 1,
-      "apps/api/src/lib/skills/skill-package.ts": 1
+      "apps/api/src/handlers/chat/export/create-chat-export-docx.ts": 1
     }
   },
   "no-db-await-in-loop-suppressions": {

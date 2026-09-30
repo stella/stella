@@ -30,6 +30,16 @@ type Messages = {
     "errorNotFound": "We couldn't find a pending request for that code. Check the code and try again.";
     "title": "Connect your agent";
   };
+  "agentSetup": {
+    "addressLabel": "Your assistant will ask for this address";
+    "copiedToast": "Instructions copied. Paste them into a chat with your assistant.";
+    "copy": "Copy instructions for it";
+    "description": "Ask Claude or ChatGPT about your matters and documents. Choose your assistant for a short guide; it takes about a minute.";
+    "instructions": "Connect me to stella, my legal workspace. Follow the “Instructions for AI agents” at {guideUrl} and use this server address: {mcpUrl}";
+    "openGuide": "Open the guide for {assistant}";
+    "selfSetupHint": "Using Claude Code or Codex?";
+    "title": "Use stella in your AI assistant";
+  };
   "ai": {
     "chooseRewriteInstruction": "Rewrite options";
     "editWithAI": "Edit with AI";
@@ -2277,6 +2287,7 @@ type Messages = {
       "missingInBase": "Document part exists only in the target";
       "missingInTarget": "Document part exists only in the base";
       "notEditable": "Document part is not editable";
+      "unsupportedContent": "This version contains content that can't be compared yet.";
     };
     "compareUnverified": "Unverified comparison";
     "compareVerificationFailures": "{count, plural, one {One round-trip check failed. Review this comparison before relying on it.} other {# round-trip checks failed. Review this comparison before relying on it.}}";
@@ -3694,7 +3705,6 @@ type Messages = {
     "aiTitle": "Connect your AI provider";
     "appsSubtitle": "stella also works outside the browser: on your desktop and inside your AI assistant. You can come back to this setup anytime later.";
     "appsTitle": "Get stella everywhere";
-    "assistantDocsLink": "How to connect your assistant";
     "catalogueAlwaysOn": "Always on";
     "catalogueClearSearch": "Clear search";
     "catalogueCommunityHeading": "Others";
@@ -4221,31 +4231,40 @@ type Messages = {
       "wordEditShortcutPlaceholder": "e.g. JK";
     };
     "connections": {
+      "accessTitle": "{clientName} can";
+      "browseIntegrations": "Add a service";
       "cliDescription": "Install the stella command-line client and sign in to script matters, documents, and templates from a terminal.";
-      "cliHelpHint": "Run \"stella --help\" for the full list of commands.";
       "cliInstallLabel": "Install";
       "cliLoginLabel": "Log in";
       "cliTitle": "Command-line interface";
-      "connectedAppsDescription": "Applications and tools you have authorized to access your account.";
-      "connectedAppsEmpty": "Apps you authorize, like Claude or the stella CLI, will appear here.";
-      "connectedAppsTitle": "Connected apps";
-      "connectedColumn": "Connected";
-      "description": "Connect MCP clients and the command-line interface to your account.";
+      "connected": "Connected";
+      "connectedAgo": "Connected {time}";
+      "connectedAppsDescription": "Apps you have signed in to stella with. Disconnect any you no longer use.";
+      "connectedAppsEmpty": "Nothing yet. Set up Claude or ChatGPT above and it will appear here.";
+      "connectedAppsTitle": "Apps with access";
+      "description": "Use stella from your AI assistant and see what can access your account.";
+      "developerDescription": "Server addresses and the command-line tool, for technical setups.";
+      "developerTitle": "Developer access";
       "disconnectConfirmDescription": "This revokes {clientName}'s access to your account, along with any tokens it has issued. You can reconnect at any time.";
       "disconnectConfirmTitle": "Disconnect {clientName}?";
       "disconnectSuccess": "Disconnected {clientName}";
+      "integrationsDescription": "Outside services the AI can use for you, such as your document drive.";
+      "integrationsEmpty": "Add your first service";
+      "integrationsTitle": "Connected services";
       "mcpAnonymizedLabel": "Anonymized endpoint";
-      "mcpAnonymizedNote": "An anonymized endpoint is also available; it exposes the same tools with personal data masked.";
-      "mcpDescription": "Connect an MCP-compatible client, such as Claude or Cursor, to your stella account using this server URL.";
+      "mcpAnonymizedShortNote": "The same tools, with personal data masked.";
+      "mcpFullNote": "Full access to your matters and documents.";
       "mcpLawLabel": "Legal corpus endpoint";
-      "mcpLawNote": "A legal corpus endpoint is also available; it exposes public case law and legislation only, and does not access matter data.";
-      "mcpStep1": "Add the URL above as a custom connector or MCP server in your client.";
-      "mcpStep2": "Sign in when the browser prompts you.";
-      "mcpStep3": "Approve access on the consent screen.";
+      "mcpLawShortNote": "Public case law and legislation only, no matter data.";
+      "mcpSetupHint": "Add a URL as a custom connector in Claude, Cursor or another MCP client, then sign in and approve access.";
       "mcpTitle": "MCP server";
       "mcpUrlLabel": "Server URL";
-      "scopesLabel": "Access";
+      "noMatches": "No connections match “{query}”";
+      "notConnected": "Not connected";
+      "permissionCount": "{count, plural, one {# permission} other {# permissions}}";
+      "searchPlaceholder": "Search connections";
       "title": "Connections";
+      "turnedOff": "Turned off";
     };
     "organization": {
       "activeMembers": "Active members";
@@ -5035,6 +5054,11 @@ type Messages = {
     "whenNotToUsePlaceholder": "When should this template be avoided?";
     "whenToUse": "When to use";
     "whenToUsePlaceholder": "When should this template be used? (guides AI template selection)";
+  };
+  "timesheets": {
+    "day": {
+      "internalWork": "Internal work";
+    };
   };
   "translate": {
     "dialog": {

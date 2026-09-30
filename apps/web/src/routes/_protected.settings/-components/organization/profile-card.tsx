@@ -1,8 +1,7 @@
 import { useState } from "react";
 
-import { useForm } from "@tanstack/react-form";
+import { useForm, useSelector } from "@tanstack/react-form";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
-import { useSelector } from "@tanstack/react-store";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
