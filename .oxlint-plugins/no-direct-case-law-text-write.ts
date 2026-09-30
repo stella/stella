@@ -38,7 +38,14 @@ const MIRROR_OWNERS = [
 const FIXTURE_SEED_OWNER = "apps/api/scripts/seed-case-law.ts";
 const CORPUS_MODULE = "apps/api/src/lib/legal-search/corpus-storage";
 const RAW_STORAGE_MODULE = "apps/api/src/lib/legal-search/raw-source-storage";
-const TABLES = new Set(["caseLawDecisions", "caseLawDecisionSupplements"]);
+const VERDICT_OWNER =
+  "apps/api/src/lib/legal-search/text-retention/verdict-storage.ts";
+const VERDICT_TABLE = "caseLawTextRetentionVerdicts";
+const TABLES = new Map([
+  ["caseLawDecisions", "case_law_decisions"],
+  ["caseLawDecisionSupplements", "case_law_decision_supplements"],
+  [VERDICT_TABLE, "case_law_text_retention_verdicts"],
+]);
 const PROTECTED_COLUMNS = new Set(
   Object.keys({
     fulltext: null,
@@ -61,7 +68,36 @@ const MAX_AST_DEPTH = 64;
 
 const isSchemaModule = (moduleId: string) =>
   moduleId === "apps/api/src/db/schema" ||
-  moduleId === "apps/api/src/db/schema/case-law";
+  moduleId === "apps/api/src/db/schema/case-law" ||
+  moduleId === "apps/api/src/db/schema/case-law-text-retention";
+
+const payloadWriter = (context: Parameters<typeof resolveImport>[0]) => {
+  const filename = filenameForContext(context);
+  return (
+    PAYLOAD_OWNERS.some((owner) => filename.endsWith(owner)) ||
+    filename.endsWith(FIXTURE_SEED_OWNER)
+  );
+};
+
+const verdictWriter = (context: Parameters<typeof resolveImport>[0]) =>
+  filenameForContext(context).endsWith(VERDICT_OWNER);
+
+const inspectFile = (context: Parameters<typeof resolveImport>[0]) => {
+  const filename = filenameForContext(context);
+  return (
+    filename.includes(
+      ".oxlint-plugins/__fixtures__/no-direct-case-law-text-write.fixture",
+    ) ||
+    (filename.includes("apps/api/") &&
+      !isTestFile(filename) &&
+      !filename.includes("apps/api/src/tests/"))
+  );
+};
+
+const sqlWritesVerdict = (source: string) =>
+  /\b(?:UPDATE|INSERT\s+INTO|MERGE\s+INTO)\s+(?:"?\w+"?\.)?"?case_law_text_retention_verdicts"?(?=\s|\()/iu.test(
+    source.replace(/\/\*[\s\S]*?\*\/|--[^\n]*/gu, " "),
+  );
 
 const isNull = (node: unknown) => {
   const value = unwrapExpression(node);
@@ -135,34 +171,34 @@ const resolvedValue = ({
 
 type OwnsMutationOptions = ResolveValueOptions & { depth?: number };
 
-const ownsMutation = ({
+const mutationTable = ({
   context,
   node,
   depth = 0,
-}: OwnsMutationOptions): boolean => {
+}: OwnsMutationOptions): string | null => {
   if (depth > MAX_AST_DEPTH) {
-    return false;
+    return null;
   }
   const expression = resolvedValue({ context, node });
   if (expression?.type !== "CallExpression") {
-    return false;
+    return null;
   }
   const callee = unwrapExpression(expression.callee);
   if (callee?.type !== "MemberExpression") {
-    return false;
+    return null;
   }
   const method = memberPropertyName(callee);
   if (method === "update" || method === "insert") {
     const table = Array.isArray(expression.arguments)
       ? resolveImport(context, expression.arguments.at(0))
       : null;
-    return (
-      table !== null &&
+    return table !== null &&
       isSchemaModule(table.moduleId) &&
       TABLES.has(table.imported)
-    );
+      ? table.imported
+      : null;
   }
-  return ownsMutation({ context, node: callee.object, depth: depth + 1 });
+  return mutationTable({ context, node: callee.object, depth: depth + 1 });
 };
 
 type IsCorpusExportOptions = ResolveValueOptions & { name: string };
@@ -182,21 +218,124 @@ const sqlTemplateText = ({ context, node }: SqlTemplateTextOptions) => {
   for (let index = 0; index < node.quasi.quasis.length; index++) {
     chunks.push(node.quasi.quasis.at(index)?.value.cooked ?? "");
     const imported = resolveImport(context, node.quasi.expressions.at(index));
-    if (
-      imported !== null &&
-      isSchemaModule(imported.moduleId) &&
-      TABLES.has(imported.imported)
-    ) {
-      chunks.push(
-        imported.imported === "caseLawDecisions"
-          ? "case_law_decisions"
-          : "case_law_decision_supplements",
-      );
+    const tableName =
+      imported !== null && isSchemaModule(imported.moduleId)
+        ? TABLES.get(imported.imported)
+        : undefined;
+    if (tableName !== undefined) {
+      chunks.push(tableName);
     } else {
       chunks.push(" ? ");
     }
   }
   return chunks.join("");
+};
+
+const safePayload = ({
+  context,
+  node,
+  depth = 0,
+}: OwnsMutationOptions): boolean => {
+  if (depth > MAX_AST_DEPTH) {
+    return false;
+  }
+  if (
+    isCorpusExport({
+      context,
+      node,
+      name: "TRIMMED_CORPUS_PAYLOAD_COLUMNS",
+    })
+  ) {
+    return true;
+  }
+  const value = resolvedValue({ context, node });
+  if (value === null) {
+    return false;
+  }
+  if (value.type === "Identifier" && value !== unwrapExpression(node)) {
+    return safePayload({ context, node: value, depth: depth + 1 });
+  }
+  if (value.type === "ConditionalExpression") {
+    return (
+      safePayload({ context, node: value.consequent, depth: depth + 1 }) &&
+      safePayload({ context, node: value.alternate, depth: depth + 1 })
+    );
+  }
+  if (value.type === "CallExpression") {
+    const imported = resolveImport(context, value.callee);
+    if (
+      imported?.moduleId === RAW_STORAGE_MODULE &&
+      imported.imported === "confirmedRawRelocationColumns"
+    ) {
+      return true;
+    }
+  }
+  if (
+    value.type === "CallExpression" &&
+    isCorpusExport({
+      context,
+      node: value.callee,
+      name: "corpusMirrorColumns",
+    })
+  ) {
+    const state = Array.isArray(value.arguments)
+      ? resolvedValue({ context, node: value.arguments.at(0) })
+      : null;
+    const clear =
+      state?.type === "ObjectExpression" &&
+      Array.isArray(state.properties) &&
+      state.properties.some(
+        (property: unknown) =>
+          isAstNode(property) &&
+          getPropertyName(property.key) === "written" &&
+          isNull(property.value),
+      );
+    return (
+      clear ||
+      MIRROR_OWNERS.some((owner) => filenameForContext(context).endsWith(owner))
+    );
+  }
+  if (value.type === "ArrayExpression") {
+    return (
+      Array.isArray(value.elements) &&
+      value.elements.every((element) =>
+        safePayload({ context, node: element, depth: depth + 1 }),
+      )
+    );
+  }
+  if (isEmptyObject(value)) {
+    return true;
+  }
+  if (value.type !== "ObjectExpression" || !Array.isArray(value.properties)) {
+    return false;
+  }
+  return value.properties.every((property: unknown) => {
+    if (!isAstNode(property)) {
+      return false;
+    }
+    if (property.type === "SpreadElement") {
+      return safePayload({
+        context,
+        node: property.argument,
+        depth: depth + 1,
+      });
+    }
+    const name = getPropertyName(property.key);
+    if (
+      property.type !== "Property" ||
+      name === null ||
+      (property.computed === true && !isStringLiteral(property.key))
+    ) {
+      return false;
+    }
+    return (
+      !PROTECTED_COLUMNS.has(name) ||
+      isNull(property.value) ||
+      (name === "fulltext" &&
+        isStringLiteral(unwrapExpression(property.value)) &&
+        unwrapExpression(property.value)?.value === "")
+    );
+  });
 };
 
 export default eslintCompatPlugin({
@@ -208,133 +347,21 @@ export default eslintCompatPlugin({
         schema: [],
         messages: {
           directTextWrite:
-            "Persist case-law text, ASTs, raw payloads and storage pointers through a validated pipeline writer; only literal null clears and the canonical verified relocation/trim helpers may bypass it.",
+            "Persist case-law text, ASTs, raw payloads and storage pointers through a validated pipeline writer; verdict creation and updates belong to verdict-storage.ts. Only literal payload clears and canonical verified relocation/trim helpers may bypass payload ownership.",
         },
       },
       createOnce(context) {
-        const safePayload = (node: unknown, depth = 0): boolean => {
-          if (depth > MAX_AST_DEPTH) {
-            return false;
-          }
-          if (
-            isCorpusExport({
-              context,
-              node,
-              name: "TRIMMED_CORPUS_PAYLOAD_COLUMNS",
-            })
-          ) {
-            return true;
-          }
-          const value = resolvedValue({ context, node });
-          if (value === null) {
-            return false;
-          }
-          if (value.type === "Identifier" && value !== unwrapExpression(node)) {
-            return safePayload(value, depth + 1);
-          }
-          if (value.type === "ConditionalExpression") {
-            return (
-              safePayload(value.consequent, depth + 1) &&
-              safePayload(value.alternate, depth + 1)
-            );
-          }
-          if (value.type === "CallExpression") {
-            const imported = resolveImport(context, value.callee);
-            if (
-              imported?.moduleId === RAW_STORAGE_MODULE &&
-              imported.imported === "confirmedRawRelocationColumns"
-            ) {
-              return true;
-            }
-          }
-          if (
-            value.type === "CallExpression" &&
-            isCorpusExport({
-              context,
-              node: value.callee,
-              name: "corpusMirrorColumns",
-            })
-          ) {
-            const state = Array.isArray(value.arguments)
-              ? resolvedValue({ context, node: value.arguments.at(0) })
-              : null;
-            const clear =
-              state?.type === "ObjectExpression" &&
-              Array.isArray(state.properties) &&
-              state.properties.some(
-                (property: unknown) =>
-                  isAstNode(property) &&
-                  getPropertyName(property.key) === "written" &&
-                  isNull(property.value),
-              );
-            return (
-              clear ||
-              MIRROR_OWNERS.some((owner) =>
-                filenameForContext(context).endsWith(owner),
-              )
-            );
-          }
-          if (value.type === "ArrayExpression") {
-            return (
-              Array.isArray(value.elements) &&
-              value.elements.every((element) => safePayload(element, depth + 1))
-            );
-          }
-          if (isEmptyObject(value)) {
-            return true;
-          }
-          if (
-            value.type !== "ObjectExpression" ||
-            !Array.isArray(value.properties)
-          ) {
-            return false;
-          }
-          return value.properties.every((property: unknown) => {
-            if (!isAstNode(property)) {
-              return false;
-            }
-            if (property.type === "SpreadElement") {
-              return safePayload(property.argument, depth + 1);
-            }
-            const name = getPropertyName(property.key);
-            if (
-              property.type !== "Property" ||
-              name === null ||
-              (property.computed === true && !isStringLiteral(property.key))
-            ) {
-              return false;
-            }
-            return (
-              !PROTECTED_COLUMNS.has(name) ||
-              isNull(property.value) ||
-              (name === "fulltext" &&
-                isStringLiteral(unwrapExpression(property.value)) &&
-                unwrapExpression(property.value)?.value === "")
-            );
-          });
-        };
         const inspectSql = (node: AstNode, source: string) => {
-          if (sqlWritesPayload(source)) {
+          if (
+            (!verdictWriter(context) && sqlWritesVerdict(source)) ||
+            (!payloadWriter(context) && sqlWritesPayload(source))
+          ) {
             context.report({ node, messageId: "directTextWrite" });
           }
         };
         return {
           before() {
-            const filename = filenameForContext(context);
-            if (
-              filename.includes(
-                ".oxlint-plugins/__fixtures__/no-direct-case-law-text-write.fixture",
-              )
-            ) {
-              return true;
-            }
-            return (
-              filename.includes("apps/api/") &&
-              !isTestFile(filename) &&
-              !filename.includes("apps/api/src/tests/") &&
-              !PAYLOAD_OWNERS.some((owner) => filename.endsWith(owner)) &&
-              !filename.endsWith(FIXTURE_SEED_OWNER)
-            );
+            return inspectFile(context);
           },
           CallExpression(node) {
             const callee = unwrapExpression(node.callee);
@@ -354,10 +381,22 @@ export default eslintCompatPlugin({
                 inspectSql(node, source.value);
               }
             }
-            if (
-              method === "select" &&
-              ownsMutation({ context, node: callee.object })
-            ) {
+            const table = mutationTable({ context, node: callee.object });
+            if (table === VERDICT_TABLE) {
+              if (
+                !verdictWriter(context) &&
+                ["select", "set", "values", "onConflictDoUpdate"].includes(
+                  method ?? "",
+                )
+              ) {
+                context.report({ node, messageId: "directTextWrite" });
+              }
+              return;
+            }
+            if (payloadWriter(context)) {
+              return;
+            }
+            if (method === "select" && table !== null) {
               context.report({ node, messageId: "directTextWrite" });
               return;
             }
@@ -365,7 +404,7 @@ export default eslintCompatPlugin({
               (method !== "set" &&
                 method !== "values" &&
                 method !== "onConflictDoUpdate") ||
-              !ownsMutation({ context, node: callee.object })
+              table === null
             ) {
               return;
             }
@@ -383,7 +422,7 @@ export default eslintCompatPlugin({
                 )?.value;
               }
             }
-            if (!safePayload(payload)) {
+            if (!safePayload({ context, node: payload })) {
               context.report({ node, messageId: "directTextWrite" });
             }
           },

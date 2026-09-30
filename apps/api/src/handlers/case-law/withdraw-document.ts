@@ -16,6 +16,7 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawDecisions,
+  caseLawTextRetentionVerdicts,
 } from "@/api/db/schema";
 import { eraseCorpusObjects } from "@/api/handlers/case-law/erasure";
 import type { CorpusObjectErasure } from "@/api/handlers/case-law/erasure";
@@ -208,6 +209,12 @@ export const withdrawCaseLawDecisionDocument = async ({
       decisionId,
       reason,
     });
+    // A verdict describes the withdrawn payload, so remove it under the
+    // same decision lock used by certification and the payload clear.
+    // audit: skip — withdrawal recorded by recordCorpusWithdrawalAuditEvent
+    await tx
+      .delete(caseLawTextRetentionVerdicts)
+      .where(eq(caseLawTextRetentionVerdicts.decisionId, decisionId));
     await tx
       .update(caseLawDecisions)
       .set({

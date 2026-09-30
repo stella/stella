@@ -57,6 +57,35 @@ export type PayloadAssessment = {
 const digest = (bytes: Uint8Array) =>
   new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
 
+type CompositionFingerprintOptions = {
+  rawFingerprint: string | null;
+  payloadFingerprint: string;
+  components: readonly Pick<
+    ComponentAssessment,
+    "id" | "rawFingerprint" | "payloadFingerprint"
+  >[];
+};
+
+export const retentionCompositionFingerprint = ({
+  rawFingerprint,
+  payloadFingerprint,
+  components,
+}: CompositionFingerprintOptions) =>
+  digest(
+    new TextEncoder().encode(
+      JSON.stringify({
+        root: { rawFingerprint, payloadFingerprint },
+        components: components.map(
+          ({ id, rawFingerprint: raw, payloadFingerprint: payload }) => ({
+            id,
+            rawFingerprint: raw,
+            payloadFingerprint: payload,
+          }),
+        ),
+      }),
+    ),
+  );
+
 type WorstAssessmentOptions = { current: Assessment; candidate: Assessment };
 /** An unassessed or defective component cannot be offset by a stronger aggregate. */
 const worstAssessment = ({
@@ -163,14 +192,11 @@ export const assessRawPayload = async ({
       payloadFingerprint: corpusContentHash(componentPayload),
     }),
   );
-  const compositionFingerprint = digest(
-    new TextEncoder().encode(
-      JSON.stringify({
-        root: { rawFingerprint, payloadFingerprint },
-        components: componentFingerprints,
-      }),
-    ),
-  );
+  const compositionFingerprint = retentionCompositionFingerprint({
+    rawFingerprint,
+    payloadFingerprint,
+    components: componentFingerprints,
+  });
   const assessedComponents: ComponentAssessment[] = [];
   const baselines = new Map<string, Promise<SourceBaseline>>();
   const sharedBinaryCache = new Map<string, Uint8Array>();

@@ -18,7 +18,7 @@ export class TextOracleError extends TaggedError("TextOracleError")<{
   message: string;
   reason: "malformed" | "resource_limit" | "unsupported" | "no_text_layer";
   cause?: unknown;
-}>() {}
+}> {}
 
 /** Limits apply before decoding and while walking; exhaustion never means clean. */
 export const TEXT_ORACLE_LIMITS = {

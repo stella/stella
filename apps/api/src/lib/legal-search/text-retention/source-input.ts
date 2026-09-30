@@ -39,7 +39,7 @@ export class SourceInputError extends TaggedError("SourceInputError")<{
   message: string;
   reason: "unavailable" | "malformed" | "unsupported" | "resource_limit";
   cause?: unknown;
-}>() {}
+}> {}
 
 type SourceFailure = SourceInputError | TextOracleError;
 type BaselineResult = Result<TextBaseline, SourceFailure>;

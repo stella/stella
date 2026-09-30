@@ -70,6 +70,10 @@ import {
   resolveValidationSourceKey,
   validateDecisionPlan,
 } from "./text-validation";
+import {
+  certifyUnchangedDecision,
+  hasCurrentRetentionVerdict,
+} from "./verdict-transition";
 
 type SettleRowWriteStatusOptions = {
   scopedDb: ScopedDb;
@@ -357,9 +361,10 @@ const runDecisionAttempt = async ({
   if (existingPolicyOutcome !== null) {
     if (
       existing !== undefined &&
-      existingPolicyOutcome.status === PROCESS_DECISION_STATUS.COMPLETE
+      existingPolicyOutcome.status === PROCESS_DECISION_STATUS.COMPLETE &&
+      !(await hasCurrentRetentionVerdict(scopedDb, decisionId, rawArtifact))
     ) {
-      await assessStoredDecision({
+      const assessed = await assessStoredDecision({
         scopedDb,
         decisionId,
         sourceId,
@@ -371,6 +376,7 @@ const runDecisionAttempt = async ({
         rawArtifact,
         readBytes: corpus.readBytes,
       });
+      await certifyUnchangedDecision({ scopedDb, decisionId, assessed });
     }
     return existingPolicyOutcome;
   }

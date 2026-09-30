@@ -18,6 +18,10 @@ import {
 import { DECISION_NOT_FOUND } from "@/api/handlers/case-law/decisions/public-subject";
 import { readServedDecisionAst } from "@/api/handlers/case-law/decisions/served-ast";
 import {
+  publicTextRetentionSummary,
+  readPublicTextRetentionRecord,
+} from "@/api/handlers/case-law/decisions/text-retention";
+import {
   hasUsableAst,
   omitDerivablePlainText,
 } from "@/api/handlers/case-law/document-ast";
@@ -332,6 +336,7 @@ export const decisionRecordQuery = (
       astS3Key: true,
       textS3Key: true,
       contentHash: true,
+      parserVersion: true,
       redactedAt: true,
       // fulltext: only as fallback when no AST
     },
@@ -387,6 +392,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
       judges,
       citationsFromPage,
       citationsToPage,
+      retentionRecord,
     ] = await Promise.all([
       // Bounded and degraded to no badge: a slow registry read must cost the
       // decision its chip, not the reader its decision.
@@ -410,6 +416,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
             cursor: citationPageCursor(citationCursors.to),
             decisionId,
           }),
+      readPublicTextRetentionRecord(tx, decisionId),
     ]);
 
     if (!("items" in citationsFromPage)) {
@@ -504,6 +511,15 @@ export const readDecisionHandler = definePublicLawSharedQuery(
     });
 
     return {
+      textRetention: publicTextRetentionSummary({
+        record: retentionRecord,
+        current: {
+          contentHash: decision.contentHash,
+          parserVersion: decision.parserVersion,
+          redactedAt: decision.redactedAt,
+          payloadState: documentReadFailed ? "unavailable" : "available",
+        },
+      }),
       documentPending,
       documentReadFailed,
       documentUnavailable,

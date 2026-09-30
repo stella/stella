@@ -28,6 +28,7 @@ export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
   caseLawStatuteCitationCounts: "case_law_statute_citation_counts",
   caseLawStatuteCitationCountState: "case_law_statute_citation_count_state",
   caseLawSources: "case_law_sources",
+  caseLawTextRetentionVerdicts: "case_law_text_retention_verdicts",
   corpusIndexGenerations: "corpus_index_generations",
   corpusIndexGroupEnrollments: "corpus_index_group_enrollments",
   corpusIndexProjectionStates: "corpus_index_projection_states",
@@ -196,6 +197,7 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     indexed_hash: "permitted",
     created_at: "required",
     updated_at: "required",
+    parser_version: "required",
   },
   // The text-search configuration a language's query is parsed with. It is
   // read from the database whose search documents it has to match.
@@ -302,6 +304,18 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     reported_total_origin: "required",
     stored_total: "required",
     stored_total_as_of: "required",
+  },
+  case_law_text_retention_verdicts: {
+    decision_id: "required",
+    payload_fingerprint: "required",
+    parser_version: "required",
+    oracle_version: "required",
+    exclusion_version: "required",
+    checked_at: "required",
+    status: "required",
+    retained_ratio: "required",
+    defect: "required",
+    reason: "required",
   },
   corpus_index_generations: {
     family: "required",

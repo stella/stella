@@ -9,6 +9,7 @@ import {
   caseLawDecisionSupplements,
   caseLawDecisions,
   caseLawIndexJobs,
+  caseLawTextRetentionVerdicts,
 } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -343,6 +344,12 @@ export const redactCaseLawDecision = async ({
       return { type: "missing" };
     }
 
+    // The decision lock also fences certification: no raw or sample digest
+    // survives the transaction that redacts its document.
+    // audit: skip — GDPR redaction; recorded in case_law_index_jobs below
+    await tx
+      .delete(caseLawTextRetentionVerdicts)
+      .where(eq(caseLawTextRetentionVerdicts.decisionId, decisionId));
     // audit: skip — GDPR redaction; recorded in case_law_index_jobs below
     await tx
       .update(caseLawDecisions)

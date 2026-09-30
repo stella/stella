@@ -41,9 +41,35 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { ActiveCorpusProjectionSourceLock } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { lockActiveCorpusProjectionSourceByIdTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { markListingOnly } from "@/api/lib/legal-search/ingestion-normalization";
+import { writeRetentionVerdictTx } from "@/api/lib/legal-search/text-retention/verdict-storage";
 import { logger } from "@/api/lib/observability/logger";
 import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
+
+const certifyWrittenRowTx = async (
+  tx: Transaction,
+  write: DecisionRowWrite,
+) => {
+  const row = (
+    await tx
+      .select({
+        sourceId: caseLawDecisions.sourceId,
+        sourceHash: caseLawDecisions.sourceHash,
+        rawS3Key: caseLawDecisions.sourceRawS3Key,
+      })
+      .from(caseLawDecisions)
+      .where(eq(caseLawDecisions.id, write.decisionId))
+      .limit(1)
+  ).at(0);
+  if (row === undefined) {
+    return panic("Winning decision write disappeared");
+  }
+  await writeRetentionVerdictTx(tx, {
+    decisionId: write.decisionId,
+    ...row,
+    assessment: write.plan.assessment,
+  });
+};
 
 const pointRetainedSupplementRawTx = async (
   tx: Transaction,
@@ -232,6 +258,7 @@ const finishInsertedRowTx = async (
       panic("Unhandled citation disposition");
   }
   await reconcileStableProjection(tx, write, insertedId, projectionLock);
+  await certifyWrittenRowTx(tx, write);
   return DECISION_ROW_WRITE_STATUS.APPLIED;
 };
 
@@ -370,13 +397,17 @@ const writeDecisionRow = async (
         await writeDecisionJudges(tx, write, existing.id);
       }
 
-      return await finishRefreshedRowTx(
+      const status = await finishRefreshedRowTx(
         tx,
         write,
         existing,
         replacedState,
         projectionLock,
       );
+      if (status === DECISION_ROW_WRITE_STATUS.APPLIED) {
+        await certifyWrittenRowTx(tx, write);
+      }
+      return status;
     }
 
     if (slugLadder === undefined) {

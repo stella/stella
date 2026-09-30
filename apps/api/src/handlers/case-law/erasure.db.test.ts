@@ -11,11 +11,14 @@ import {
   caseLawIndexJobs,
   caseLawRawSweeps,
   caseLawSources,
+  caseLawTextRetentionVerdicts,
   corpusIndexGenerations,
   corpusIndexProjectionStates,
+  TEXT_RETENTION_STATUSES,
 } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
 import { redactCaseLawDecision } from "@/api/handlers/case-law/erasure";
+import { withdrawCaseLawDecisionDocument } from "@/api/handlers/case-law/withdraw-document";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   CORPUS_INDEX_MANIFESTS,
@@ -155,6 +158,68 @@ test("redaction queues the erase the projection worker applies", async () => {
       .where(eq(caseLawDecisions.id, DECISION_ID)),
   ).toEqual([{ contentHash: null, fulltext: null }]);
 });
+
+test.each(["redaction", "withdrawal"] as const)(
+  "%s removes raw and missing-text verdict fingerprints without deleting the decision",
+  async (operation) => {
+    await db.insert(caseLawTextRetentionVerdicts).values({
+      decisionId: DECISION_ID,
+      sourceId: SOURCE_ID,
+      rawS3Key: "legal-source-raw/case-law/sensitive-snapshot.txt",
+      rawFingerprint: "b".repeat(64),
+      payloadFingerprint: "a".repeat(64),
+      compositionFingerprint: "c".repeat(64),
+      sourceHash: "d".repeat(64),
+      parserVersion: 1,
+      oracleVersion: 1,
+      exclusionVersion: 1,
+      status: TEXT_RETENTION_STATUSES.assessed,
+      retainedRatio: 0.5,
+      defect: "text_loss_suspected",
+      missingSampleHash: "e".repeat(64),
+      components: [],
+    });
+    expect(
+      await db
+        .select({
+          rawFingerprint: caseLawTextRetentionVerdicts.rawFingerprint,
+          missingSampleHash: caseLawTextRetentionVerdicts.missingSampleHash,
+        })
+        .from(caseLawTextRetentionVerdicts)
+        .where(eq(caseLawTextRetentionVerdicts.decisionId, DECISION_ID)),
+    ).toEqual([
+      {
+        rawFingerprint: "b".repeat(64),
+        missingSampleHash: "e".repeat(64),
+      },
+    ]);
+
+    const outcome =
+      operation === "redaction"
+        ? await redactCaseLawDecision({ decisionId: DECISION_ID, scopedDb })
+        : await withdrawCaseLawDecisionDocument({
+            decisionId: DECISION_ID,
+            reason: "Fixture document withdrawn",
+            scopedDb,
+          });
+
+    expect(Result.isOk(outcome) && outcome.value.type).toBe(
+      operation === "redaction" ? "redacted" : "withdrawn",
+    );
+    expect(
+      await db
+        .select({ id: caseLawDecisions.id })
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, DECISION_ID)),
+    ).toEqual([{ id: DECISION_ID }]);
+    expect(
+      await db
+        .select()
+        .from(caseLawTextRetentionVerdicts)
+        .where(eq(caseLawTextRetentionVerdicts.decisionId, DECISION_ID)),
+    ).toEqual([]);
+  },
+);
 
 test("redaction records one audit row naming no generation", async () => {
   await redactCaseLawDecision({ decisionId: DECISION_ID, scopedDb });

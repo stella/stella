@@ -10,14 +10,20 @@ import { panic } from "better-result";
  * Runs in the nightly Postgres job; skipped elsewhere.
  */
 import { beforeAll, describe, expect, test } from "bun:test";
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
-import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import {
+  caseLawDecisions,
+  caseLawSources,
+  caseLawTextRetentionVerdicts,
+} from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import { readDecisionHandler } from "@/api/handlers/case-law/decisions/get";
 import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
+import { ORACLE_VERSION } from "@/api/lib/legal-search/text-retention/types";
+import { EXCLUSION_VERSION } from "@/api/lib/legal-search/text-retention/validation";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -106,6 +112,59 @@ if (!databaseUrl || !runPostgresTests) {
           .delete(caseLawDecisions)
           .where(inArray(caseLawDecisions.id, created));
       }
+    });
+
+    test("decision detail reads the public verdict and suppresses a superseded pass", async () => {
+      const id = await insertDecision("Retained decision text.");
+      const fingerprint = "a".repeat(64);
+      await db
+        .update(caseLawDecisions)
+        .set({ contentHash: fingerprint, parserVersion: 7 })
+        .where(eq(caseLawDecisions.id, id));
+      const readDetail = async () => {
+        const detail = await withRedistributableSubject(
+          caseLawPublicReadDb,
+          { kind: "id", id },
+          async (subject) => await readDecisionHandler({ subject }),
+        );
+        if (detail === null || !("textRetention" in detail)) {
+          return panic("Expected readable detail with retention status");
+        }
+        return detail.textRetention;
+      };
+      expect(await readDetail()).toMatchObject({
+        status: "missing",
+        reason: "not_checked",
+      });
+      await db.insert(caseLawTextRetentionVerdicts).values({
+        decisionId: id,
+        sourceId,
+        payloadFingerprint: fingerprint,
+        compositionFingerprint: "b".repeat(64),
+        parserVersion: 7,
+        oracleVersion: ORACLE_VERSION,
+        exclusionVersion: EXCLUSION_VERSION,
+        status: "assessed",
+        retainedRatio: 1,
+        components: [],
+      });
+      const checked = await readDetail();
+      expect(checked).toMatchObject({
+        status: "assessed",
+        retainedRatio: 1,
+        parserVersion: 7,
+      });
+      expect(Object.keys(checked)).not.toContain("payloadFingerprint");
+      expect(Object.keys(checked)).not.toContain("rawS3Key");
+      await db
+        .update(caseLawDecisions)
+        .set({ parserVersion: 8 })
+        .where(eq(caseLawDecisions.id, id));
+      expect(await readDetail()).toMatchObject({
+        status: "unavailable",
+        reason: "stale_verdict",
+        retainedRatio: null,
+      });
     });
 
     test("a decision nobody has fetched is pending", async () => {

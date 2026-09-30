@@ -40,6 +40,7 @@ import { writeOwnedRawPayload } from "./retained-raw";
 import { SourceInputError } from "./source-input";
 import { readStoredRawFromS3 } from "./stored-raw";
 import { assessRawPayload } from "./validation";
+import { writeRetentionVerdictTx } from "./verdict-storage";
 
 export type DeferredRawStorage = {
   readRaw: StoredRawResultReader;
@@ -268,6 +269,15 @@ export const applyDeferredDocumentTx = async (
       ),
     )
     .returning({ id: caseLawDecisions.id });
+  if (applied.length > 0) {
+    await writeRetentionVerdictTx(tx, {
+      decisionId,
+      sourceId: validation.sourceId,
+      sourceHash: validation.snapshot.sourceHash,
+      rawS3Key: preparedRaw?.key ?? validation.snapshot.sourceRawS3Key,
+      assessment: validation.assessment,
+    });
+  }
   const { assessment } = validation;
   const { verdict } = assessment;
   if (

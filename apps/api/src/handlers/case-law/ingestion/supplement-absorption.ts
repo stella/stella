@@ -37,6 +37,7 @@ import {
   caseLawDecisionIdentifiers,
   caseLawDecisionSupplements,
   caseLawDecisions,
+  caseLawTextRetentionVerdicts,
 } from "@/api/db/schema";
 import {
   lockCitationGraph,
@@ -57,6 +58,7 @@ import type { DecisionSupplementKind } from "@/api/lib/legal-search/decision-sup
 import { metadataMarkedListingOnly } from "@/api/lib/legal-search/partial-observation-sql";
 import {
   classifyCaseLawRawKey,
+  confirmedRawRelocationColumns,
   copyRawObject,
   deleteRawKeys,
   eraseRawDocument,
@@ -166,8 +168,15 @@ export const rehomeSupplementRaw = async ({
       await tx
         .update(caseLawDecisionSupplements)
         .set({
-          sourceRawS3Key: to,
-          sourceRawContentType: to === null ? null : read.pointer?.contentType,
+          ...(to === null
+            ? { sourceRawS3Key: null, sourceRawContentType: null }
+            : confirmedRawRelocationColumns({
+                type: "copy",
+                owner,
+                storedKey: from,
+                writtenKey: to,
+                contentType: read.pointer?.contentType ?? null,
+              })),
           updatedAt: new Date(),
         })
         .where(
@@ -381,6 +390,12 @@ export const absorbStandaloneSupplementRow = async ({
     if (!observationStillOwns(locked, observationOrder)) {
       return "superseded";
     }
+    // Withdrawal ran earlier; invalidate any verdict issued between that
+    // transaction and this locked transition to an absorbed row.
+    // audit: skip — background case-law ingestion; public case-law data
+    await tx
+      .delete(caseLawTextRetentionVerdicts)
+      .where(eq(caseLawTextRetentionVerdicts.decisionId, row.id));
     // audit: skip — background case-law ingestion; public case-law data
     await tx
       .delete(caseLawCitations)

@@ -23,6 +23,7 @@ import {
 import { onDemandDocumentDeps } from "@/api/handlers/case-law/decisions/document-on-demand-deps";
 import { readDecisionHandler } from "@/api/handlers/case-law/decisions/get";
 import { transientDecisionAstProjection } from "@/api/handlers/case-law/decisions/served-ast";
+import { publicTextRetentionSummary } from "@/api/handlers/case-law/decisions/text-retention";
 import { omitDerivablePlainText } from "@/api/handlers/case-law/document-ast";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import type { DecisionSubjectLocator } from "@/api/lib/case-law/public-subject";
@@ -83,6 +84,15 @@ const reparsedForDev = async (
           resolvedAst: documentAst,
           wireAst: documentAst,
         })),
+        textRetention: publicTextRetentionSummary({
+          record: undefined,
+          current: {
+            contentHash: null,
+            parserVersion: null,
+            redactedAt: null,
+            payloadState: "transient",
+          },
+        }),
         documentPending: false,
         fulltext: null,
       };
@@ -156,6 +166,15 @@ const hydrate = async (
       resolvedAst: document.documentAst,
       wireAst: omitDerivablePlainText(document.documentAst),
     })),
+    textRetention: publicTextRetentionSummary({
+      record: undefined,
+      current: {
+        contentHash: null,
+        parserVersion: null,
+        redactedAt: null,
+        payloadState: "transient",
+      },
+    }),
     documentPending: false,
     // Mirrors the read: text is the fallback for a decision without a
     // usable AST, and a parsed document always has one.
