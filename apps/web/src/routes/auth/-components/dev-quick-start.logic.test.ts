@@ -156,7 +156,6 @@ describe("quick-start run ownership", () => {
       stage: DEV_QUICK_START_STAGE.continue,
       run,
     });
-    expect(second).toBe(first);
     await importStarted.promise;
 
     // A remount joins after organization setup and observes the active phase.
@@ -168,9 +167,16 @@ describe("quick-start run ownership", () => {
       stage: DEV_QUICK_START_STAGE.continue,
       run,
     });
-    expect(remounted).toBe(first);
+    let completedCallers = 0;
+    const callers = [first, second, remounted].map(async (promise) => {
+      await promise;
+      completedCallers += 1;
+    });
+    await Promise.resolve();
+    expect(completedCallers).toBe(0);
     blockedImport.resolve(undefined);
-    await Promise.all([first, second, remounted]);
+    await Promise.all(callers);
+    expect(completedCallers).toBe(3);
     unsubscribe();
 
     expect(calls).toEqual(["organization", "matters"]);

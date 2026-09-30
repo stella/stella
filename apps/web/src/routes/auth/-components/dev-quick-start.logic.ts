@@ -50,7 +50,7 @@ export const createDevQuickStartRuntime = () => {
     }
   };
 
-  const runSingleFlight = ({
+  const runSingleFlight = async ({
     stage,
     run,
   }: SingleFlightOptions): Promise<void> => {
@@ -59,7 +59,8 @@ export const createDevQuickStartRuntime = () => {
         return flight.promise;
       }
       // Navigation can mount the continuation before authentication settles.
-      return flight.promise.then(() => runSingleFlight({ stage, run }));
+      await flight.promise;
+      return runSingleFlight({ stage, run });
     }
 
     const promise = Promise.resolve()
@@ -150,7 +151,7 @@ export const resolveDevQuickStartOrganization = async ({
   }
 
   const created = await Result.tryPromise({
-    try: () => createOrganization(identity),
+    try: async () => createOrganization(identity),
     catch: toOrganizationError,
   });
   if (Result.isOk(created)) {

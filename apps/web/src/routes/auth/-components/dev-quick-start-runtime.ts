@@ -23,7 +23,15 @@ const isDevQuickStartRuntime = (
     (key) => typeof Reflect.get(value, key) === "function",
   );
 
-const restoredRuntime: unknown = import.meta.hot?.data[DEV_QUICK_START_HMR_KEY];
+// Bun declares hot as always present; Vite only supplies it in development.
+const hot = import.meta.env.DEV ? import.meta.hot : undefined;
+const hotData: unknown = hot?.data;
+const restoredRuntime: unknown =
+  typeof hotData === "object" &&
+  hotData !== null &&
+  DEV_QUICK_START_HMR_KEY in hotData
+    ? hotData[DEV_QUICK_START_HMR_KEY]
+    : undefined;
 
 export const devQuickStartRuntime = (() => {
   if (restoredRuntime === undefined) {
@@ -36,9 +44,9 @@ export const devQuickStartRuntime = (() => {
 })();
 
 // Keep the flight and its attempt even when this module itself is hot-replaced.
-if (import.meta.hot) {
-  import.meta.hot.accept();
-  import.meta.hot.dispose((data: Record<string, unknown>) => {
+if (hot !== undefined) {
+  hot.accept();
+  hot.dispose((data: Record<string, unknown>) => {
     data[DEV_QUICK_START_HMR_KEY] = devQuickStartRuntime;
   });
 }
