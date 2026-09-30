@@ -5006,6 +5006,16 @@
   },
   "timesheets": {
     "day": {
+      "absenceKinds": {
+        "other": "Iná neprítomnosť",
+        "sick": "Práceneschopnosť",
+        "vacation": "Dovolenka"
+      },
+      "fullDay": "Celý deň",
+      "halfDaySegments": {
+        "afternoon": "Popoludnie (pol dňa)",
+        "morning": "Dopoludnie (pol dňa)"
+      },
       "internalWork": "Interná práca"
     }
   },

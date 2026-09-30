@@ -5006,6 +5006,16 @@
   },
   "timesheets": {
     "day": {
+      "absenceKinds": {
+        "other": "Kitas neatvykimas",
+        "sick": "Nedarbingumas",
+        "vacation": "Atostogos"
+      },
+      "fullDay": "Visa diena",
+      "halfDaySegments": {
+        "afternoon": "Popietė (pusė dienos)",
+        "morning": "Rytas (pusė dienos)"
+      },
       "internalWork": "Vidaus darbas"
     }
   },

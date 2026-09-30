@@ -74,6 +74,7 @@ export const AUDIT_RESOURCE_TYPE = {
   TEMPLATE: "template",
   TEMPLATE_LOOKUP_FORMAT: "template_lookup_format",
   TIME_ENTRY: "time_entry",
+  ABSENCE: "absence",
   TIME_TIMER: "time_timer",
   USER_FILE: "user_file",
   VIEW: "view",

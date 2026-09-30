@@ -26,6 +26,7 @@ import {
 } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
+  absences,
   accountDeletionEffectChunks,
   accountDeletionRequests,
   agentSkills,
@@ -1242,6 +1243,25 @@ export const recordAccountDeletionRequest = async ({
   }
 };
 
+const ANONYMIZE_ABSENCE_HISTORY_TABLES = [
+  absences,
+] as const satisfies readonly PgTable[];
+
+// Account deletion retains the user row, so SET NULL foreign keys never run.
+export const anonymizeAbsenceHistory = async (
+  tx: Transaction,
+  userId: SafeId<"user">,
+) => {
+  await tx
+    .update(absences)
+    .set({ userId: null })
+    .where(eq(absences.userId, userId));
+  await tx
+    .update(absences)
+    .set({ approverUserId: null })
+    .where(eq(absences.approverUserId, userId));
+};
+
 /**
  * Every table with a direct foreign key to the auth `user` table that is
  * explicitly deleted, cleared, or reassigned by a step in
@@ -1253,6 +1273,7 @@ export const recordAccountDeletionRequest = async ({
  * the schema.
  */
 export const ACCOUNT_DELETION_MANUAL_TABLES = [
+  ...ANONYMIZE_ABSENCE_HISTORY_TABLES,
   ...REVOKE_AUTH_CREDENTIALS_TABLES,
   ...REVOKE_OAUTH_TOKENS_TABLES,
   ...DELETE_MCP_CREDENTIALS_TABLES,

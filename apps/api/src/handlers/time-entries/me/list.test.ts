@@ -3,10 +3,10 @@ import { inArray } from "drizzle-orm";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 
-import { timeEntries, workspaces } from "@/api/db/schema";
+import { absences, timeEntries, workspaces } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
-import { createSafeId } from "@/api/lib/branded-types";
+import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
 import { encodePaginationCursor } from "@/api/lib/pagination";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -207,10 +207,16 @@ describe("personal time entries", () => {
       [...visibleIds].toSorted(),
     );
     expect(
-      result.items.map(({ workspaceId }) => workspaceId).toSorted(),
+      result.items
+        .filter((item) => item.activityGroup !== "absence")
+        .map(({ workspaceId }) => workspaceId)
+        .toSorted(),
     ).toEqual([ids.wsA1, ids.wsA2].toSorted());
     expect(
-      result.items.map(({ workspaceName }) => workspaceName).toSorted(),
+      result.items
+        .filter((item) => item.activityGroup !== "absence")
+        .map(({ workspaceName }) => workspaceName)
+        .toSorted(),
     ).toEqual(["WS A1", "WS A2"]);
     expect(result.nextCursor).toBeNull();
   });
@@ -320,5 +326,90 @@ test("my day includes the owner's internal work without exposing other members o
     await testDb
       .delete(timeEntries)
       .where(inArray(timeEntries.id, [own, other, foreign]));
+  }
+});
+
+test("mixed day pages include approved owner absences in days, including equal IDs without omissions", async () => {
+  const full = toSafeId<"absence">(visibleIds[0]);
+  const half = createSafeId<"absence">();
+  const excluded = [
+    createSafeId<"absence">(),
+    createSafeId<"absence">(),
+    createSafeId<"absence">(),
+    createSafeId<"absence">(),
+  ] as const;
+  const approved = {
+    organizationId: ids.orgA,
+    userId: ids.userA1,
+    kind: "vacation",
+    startDate: DAY,
+    endDate: AFTER_DAY,
+    timezoneId: "Europe/Prague",
+    coverage: "full",
+    status: "approved",
+    decidedAt: new Date(),
+  } as const;
+  await testDb.insert(absences).values([
+    { ...approved, id: full },
+    {
+      ...approved,
+      id: half,
+      coverage: "half",
+      halfDaySegment: "afternoon",
+      kind: "sick",
+    },
+    { ...approved, id: excluded[0], userId: ids.userA2 },
+    { ...approved, id: excluded[1], organizationId: ids.orgB },
+    { ...approved, id: excluded[2], status: "requested", decidedAt: null },
+    { ...approved, id: excluded[3], startDate: BEFORE_DAY, endDate: DAY },
+  ]);
+  try {
+    const all = await listFor({ date: DAY });
+    if (!isPage(all)) {
+      throw new Error(`Unexpected mixed day: ${JSON.stringify(all)}`);
+    }
+    const fullItem = all.items.find(
+      (item) => item.activityGroup === "absence" && item.id === full,
+    );
+    expect(fullItem).toMatchObject({
+      activityGroup: "absence",
+      coverage: "full",
+      days: 1,
+      date: DAY,
+    });
+    expect(fullItem).not.toHaveProperty("durationMinutes");
+    expect(fullItem).not.toHaveProperty("billedMinutes");
+    expect(all.items.find((item) => item.id === half)).toMatchObject({
+      coverage: "half",
+      days: 0.5,
+      halfDaySegment: "afternoon",
+    });
+    expect(all.items).toHaveLength(4);
+    const keys: string[] = [];
+    let cursor: string | null = null;
+    do {
+      const page = await listFor({
+        date: DAY,
+        limit: 1,
+        ...(cursor ? { cursor } : {}),
+      });
+      if (!isPage(page)) {
+        throw new Error(`Unexpected mixed page: ${JSON.stringify(page)}`);
+      }
+      expect(page.items).toHaveLength(1);
+      keys.push(
+        ...page.items.map((item) => `${item.activityGroup}:${item.id}`),
+      );
+      cursor = page.nextCursor;
+      expect(keys.length).toBeLessThanOrEqual(4);
+    } while (cursor);
+    expect(new Set(keys).size).toBe(4);
+    expect(keys.toSorted()).toEqual(
+      all.items.map((item) => `${item.activityGroup}:${item.id}`).toSorted(),
+    );
+  } finally {
+    await testDb
+      .delete(absences)
+      .where(inArray(absences.id, [full, half, ...excluded]));
   }
 });

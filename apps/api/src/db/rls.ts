@@ -1184,6 +1184,34 @@ export const timeEntryPolicies = () => [
   }),
 ];
 
+const absenceAccessCheck = sql`(${organizationCheck} AND EXISTS (
+  SELECT 1 FROM member m
+  WHERE m.organization_id = absences.organization_id
+    AND m.user_id = (SELECT current_setting('${sql.raw(SETTING_USER_ID)}', true))
+    AND (absences.user_id = (SELECT current_setting('${sql.raw(SETTING_USER_ID)}', true))
+      OR m.role IN (${organizationManagementRoleValues}))
+))`;
+const absenceInsertCheck = sql`(${absenceAccessCheck} AND ${userCheck})`;
+
+export const absencePolicies = () => [
+  p.pgPolicy("absences_owner_or_manager_select", {
+    for: "select",
+    to: stella,
+    using: absenceAccessCheck,
+  }),
+  p.pgPolicy("absences_owner_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: absenceInsertCheck,
+  }),
+  p.pgPolicy("absences_owner_or_manager_update", {
+    for: "update",
+    to: stella,
+    using: absenceAccessCheck,
+    withCheck: absenceAccessCheck,
+  }),
+];
+
 /**
  * Who may write a skill row: owners and admins for team skills, the author for
  * private ones. Members who can see a team skill propose and comment on it

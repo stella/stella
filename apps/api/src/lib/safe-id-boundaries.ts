@@ -388,3 +388,6 @@ export const brandPersistedCorrespondenceDropId = (
 
 export const brandPersistedTimeTimerId = (id: string): SafeId<"timeTimer"> =>
   toSafeId<"timeTimer">(id);
+
+export const brandPersistedAbsenceId = (id: string): SafeId<"absence"> =>
+  toSafeId<"absence">(id);

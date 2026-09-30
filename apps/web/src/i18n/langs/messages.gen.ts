@@ -5009,6 +5009,16 @@ type Messages = {
   };
   "timesheets": {
     "day": {
+      "absenceKinds": {
+        "other": "Other absence";
+        "sick": "Sick leave";
+        "vacation": "Vacation";
+      };
+      "fullDay": "Full day";
+      "halfDaySegments": {
+        "afternoon": "Afternoon (half day)";
+        "morning": "Morning (half day)";
+      };
       "internalWork": "Internal work";
     };
   };

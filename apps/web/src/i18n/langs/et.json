@@ -5006,6 +5006,16 @@
   },
   "timesheets": {
     "day": {
+      "absenceKinds": {
+        "other": "Muu puudumine",
+        "sick": "Haiguspuhkus",
+        "vacation": "Puhkus"
+      },
+      "fullDay": "Terve päev",
+      "halfDaySegments": {
+        "afternoon": "Pärastlõuna (pool päeva)",
+        "morning": "Hommik (pool päeva)"
+      },
       "internalWork": "Sisemine töö"
     }
   },

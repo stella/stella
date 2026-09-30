@@ -5006,6 +5006,16 @@
   },
   "timesheets": {
     "day": {
+      "absenceKinds": {
+        "other": "Sonstige Abwesenheit",
+        "sick": "Krankheit",
+        "vacation": "Urlaub"
+      },
+      "fullDay": "Ganzer Tag",
+      "halfDaySegments": {
+        "afternoon": "Nachmittag (halber Tag)",
+        "morning": "Vormittag (halber Tag)"
+      },
       "internalWork": "Interne Arbeit"
     }
   },

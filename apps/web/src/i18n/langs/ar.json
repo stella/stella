@@ -5006,6 +5006,16 @@
   },
   "timesheets": {
     "day": {
+      "absenceKinds": {
+        "other": "غياب آخر",
+        "sick": "إجازة مرضية",
+        "vacation": "إجازة"
+      },
+      "fullDay": "يوم كامل",
+      "halfDaySegments": {
+        "afternoon": "بعد الظهر (نصف يوم)",
+        "morning": "صباحًا (نصف يوم)"
+      },
       "internalWork": "العمل الداخلي"
     }
   },

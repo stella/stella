@@ -5006,6 +5006,16 @@
   },
   "timesheets": {
     "day": {
+      "absenceKinds": {
+        "other": "Cita prombūtne",
+        "sick": "Slimības atvaļinājums",
+        "vacation": "Atvaļinājums"
+      },
+      "fullDay": "Pilna diena",
+      "halfDaySegments": {
+        "afternoon": "Pēcpusdiena (puse dienas)",
+        "morning": "Priekšpusdiena (puse dienas)"
+      },
       "internalWork": "Iekšējais darbs"
     }
   },

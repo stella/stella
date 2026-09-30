@@ -5006,6 +5006,16 @@
   },
   "timesheets": {
     "day": {
+      "absenceKinds": {
+        "other": "Inna nieobecność",
+        "sick": "Zwolnienie chorobowe",
+        "vacation": "Urlop"
+      },
+      "fullDay": "Cały dzień",
+      "halfDaySegments": {
+        "afternoon": "Popołudnie (pół dnia)",
+        "morning": "Przedpołudnie (pół dnia)"
+      },
       "internalWork": "Praca wewnętrzna"
     }
   },

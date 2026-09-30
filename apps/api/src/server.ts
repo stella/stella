@@ -10,6 +10,7 @@ import {
 import { initApiBackgroundWorkers } from "@/api/api-background-workers";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
+import { absencesRoute } from "@/api/handlers/absences/routes";
 import {
   agentAuthConfirmRoute,
   agentAuthRoute,
@@ -400,6 +401,7 @@ const api = new Elysia()
   .use(notificationsRoute)
   .use(
     new Elysia()
+      .use(absencesRoute)
       .use(timeApprovalQueueRoute)
       .use(internalTimeEntriesRoute)
       .use(myTimeEntriesRoute)

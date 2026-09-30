@@ -1,3 +1,10 @@
+export {
+  ABSENCE_KINDS,
+  ABSENCE_COVERAGES,
+  ABSENCE_HALF_DAY_SEGMENTS,
+  ABSENCE_STATUSES,
+} from "./absences";
+
 /** Version of the public REST request and response contract. */
 export const STELLA_REST_API_CONTRACT_VERSION = 4 as const;
 

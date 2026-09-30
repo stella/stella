@@ -1,14 +1,13 @@
 import { panic, Result } from "better-result";
-import { and, asc, eq, gt, ne, or } from "drizzle-orm";
+import { and, asc, eq, gt, lte, ne, or } from "drizzle-orm";
 import { t } from "elysia";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { parsePlainDate } from "@stll/time";
 
-import { timeEntries, workspaces } from "@/api/db/schema";
+import { absences, timeEntries, workspaces } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import type { SafeId } from "@/api/lib/branded-types";
 import { tPaginationCursor, tPaginationLimit } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -22,7 +21,10 @@ import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
-import { brandPersistedTimeEntryId } from "@/api/lib/safe-id-boundaries";
+import {
+  brandPersistedAbsenceId,
+  brandPersistedTimeEntryId,
+} from "@/api/lib/safe-id-boundaries";
 
 const DELETING_WORKSPACE_STATUS = "deleting" as const;
 
@@ -138,9 +140,9 @@ true satisfies UnexpectedMyTimeEntryColumn extends never ? true : never;
 
 const config = {
   description:
-    "List the signed-in user's client and internal time entries for one work date " +
+    "List the signed-in user's client work, internal work, and approved absences for one local date " +
     "in the active organization. Client rows include an accessible matter; internal rows have no matter. " +
-    "Follow the cursor for the next page.",
+    "Absences report days (1 or 0.5), with no inferred minutes. Follow the mixed-source cursor for the next page.",
   permissions: { timeEntry: ["read"] },
   mcp: { type: "capability", reason: "billing_admin" },
   access: "read",
@@ -154,10 +156,86 @@ const config = {
   }),
 } satisfies HandlerConfig;
 
-const decodeCursor = (cursor: string): SafeId<"timeEntry"> | null => {
+const ABSENCE_DAY_GROUP = "absence";
+const DAY_TABLE = { ABSENCE: "absence", TIME_ENTRY: "time_entry" } as const;
+const decodeCursor = (cursor: string) => {
   const parts = decodePaginationCursor(cursor);
   const id = parts?.at(0);
-  return isUuidPaginationCursorPart(id) ? brandPersistedTimeEntryId(id) : null;
+  const table = parts?.at(1);
+  if (parts?.length !== 2 || !isUuidPaginationCursorPart(id)) {
+    return null;
+  }
+  if (table !== DAY_TABLE.ABSENCE && table !== DAY_TABLE.TIME_ENTRY) {
+    return null;
+  }
+  return { id, table };
+};
+
+const absenceDayColumns = {
+  id: absences.id,
+  kind: absences.kind,
+  startDate: absences.startDate,
+  endDate: absences.endDate,
+  timezoneId: absences.timezoneId,
+  coverage: absences.coverage,
+  halfDaySegment: absences.halfDaySegment,
+};
+const UNPROJECTED_ABSENCE_DAY_COLUMNS = [
+  // Tenant and owner are pinned by the request; only approved rows enter the day.
+  "organizationId",
+  "userId",
+  "status",
+  // Decisions and versioning belong to the absence management endpoints.
+  "approverUserId",
+  "decidedAt",
+  "decisionComment",
+  "version",
+  "createdAt",
+  "updatedAt",
+] as const satisfies readonly (keyof typeof absences.$inferSelect)[];
+type MissingAbsenceDayColumn = UnprojectedColumns<
+  typeof absences.$inferSelect,
+  typeof absenceDayColumns,
+  (typeof UNPROJECTED_ABSENCE_DAY_COLUMNS)[number]
+>;
+type ExtraAbsenceDayColumn = UnbackedProjectionKeys<
+  typeof absences.$inferSelect,
+  typeof absenceDayColumns,
+  (typeof UNPROJECTED_ABSENCE_DAY_COLUMNS)[number]
+>;
+true satisfies MissingAbsenceDayColumn extends never ? true : never;
+true satisfies ExtraAbsenceDayColumn extends never ? true : never;
+
+const toAbsenceDayItem = (
+  row: Pick<typeof absences.$inferSelect, keyof typeof absenceDayColumns>,
+  date: string,
+) => {
+  const common = {
+    id: row.id,
+    activityGroup: ABSENCE_DAY_GROUP,
+    kind: row.kind,
+    date,
+    startDate: row.startDate,
+    endDate: row.endDate,
+    timezoneId: row.timezoneId,
+  } as const;
+  switch (row.coverage) {
+    case "full":
+      return { ...common, coverage: row.coverage, days: 1 } as const;
+    case "half":
+      if (!row.halfDaySegment) {
+        return panic("Half-day absence is missing its segment");
+      }
+      return {
+        ...common,
+        coverage: row.coverage,
+        halfDaySegment: row.halfDaySegment,
+        days: 0.5,
+      } as const;
+    default:
+      row.coverage satisfies never;
+      return panic("Unknown absence coverage");
+  }
 };
 
 const listMyTimeEntries = createSafeRootHandler(
@@ -187,8 +265,8 @@ const listMyTimeEntries = createSafeRootHandler(
 
     const limit = query.limit ?? LIMITS.timeEntriesPageSizeDefault;
     const rows = yield* Result.await(
-      safeDb((tx) =>
-        tx
+      safeDb(async (tx) => {
+        const workRows = await tx
           .select(myTimeEntryColumns)
           .from(timeEntries)
           .leftJoin(
@@ -203,7 +281,14 @@ const listMyTimeEntries = createSafeRootHandler(
               eq(timeEntries.organizationId, session.activeOrganizationId),
               eq(timeEntries.userId, user.id),
               eq(timeEntries.dateWorked, query.date),
-              cursor ? gt(timeEntries.id, cursor) : undefined,
+              cursor
+                ? or(
+                    gt(timeEntries.id, brandPersistedTimeEntryId(cursor.id)),
+                    cursor.table === DAY_TABLE.ABSENCE
+                      ? eq(timeEntries.id, brandPersistedTimeEntryId(cursor.id))
+                      : undefined,
+                  )
+                : undefined,
               or(
                 eq(
                   timeEntries.activityGroup,
@@ -221,18 +306,52 @@ const listMyTimeEntries = createSafeRootHandler(
             ),
           )
           .orderBy(asc(timeEntries.id))
-          .limit(limit + 1),
-      ),
+          .limit(limit + 1);
+        const absenceRows = await tx
+          .select(absenceDayColumns)
+          .from(absences)
+          .where(
+            and(
+              eq(absences.organizationId, session.activeOrganizationId),
+              eq(absences.userId, user.id),
+              eq(absences.status, "approved"),
+              lte(absences.startDate, query.date),
+              gt(absences.endDate, query.date),
+              cursor
+                ? gt(absences.id, brandPersistedAbsenceId(cursor.id))
+                : undefined,
+            ),
+          )
+          .orderBy(asc(absences.id))
+          .limit(limit + 1);
+        return [
+          ...workRows.map(toMyTimeEntryItem),
+          ...absenceRows.map((row) => toAbsenceDayItem(row, query.date)),
+        ].toSorted((left, right) => {
+          if (left.id < right.id) {return -1;}
+          if (left.id > right.id) {return 1;}
+          return (
+            Number(left.activityGroup !== ABSENCE_DAY_GROUP) -
+            Number(right.activityGroup !== ABSENCE_DAY_GROUP)
+          );
+        });
+      }),
     );
 
     const page = createCursorPage({
       rows,
       limit,
-      cursorForItem: ({ id }) => encodePaginationCursor([id]),
+      cursorForItem: ({ id, activityGroup }) =>
+        encodePaginationCursor([
+          id,
+          activityGroup === ABSENCE_DAY_GROUP
+            ? DAY_TABLE.ABSENCE
+            : DAY_TABLE.TIME_ENTRY,
+        ]),
     });
     return Result.ok({
       ...page,
-      items: page.items.map(toMyTimeEntryItem),
+      items: page.items,
     });
   },
 );

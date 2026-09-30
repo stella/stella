@@ -24,6 +24,8 @@ import { MEDIUM_DATE_FORMAT } from "@/lib/relative-time";
 import { formatMinutes } from "@/lib/workspaces/format-duration";
 import { myTimeEntriesInfiniteOptions } from "@/lib/workspaces/queries/my-time-entries";
 
+const ABSENCE_DAY_GROUP = "absence";
+
 export const Route = createFileRoute("/_protected/time")({
   validateSearch: (search) => ({
     date:
@@ -92,11 +94,17 @@ function MyDayPage() {
   const entries = entriesQuery.data.pages.flatMap((page) => page.items);
   const totalMinutes = entries.reduce(
     (sum, entry) =>
-      sum + (entry.timerStartedAt === null ? entry.durationMinutes : 0),
+      sum +
+      (entry.activityGroup !== ABSENCE_DAY_GROUP &&
+      entry.timerStartedAt === null
+        ? entry.durationMinutes
+        : 0),
     0,
   );
   const hasRunningEntry = entries.some(
-    (entry) => entry.timerStartedAt !== null,
+    (entry) =>
+      entry.activityGroup !== ABSENCE_DAY_GROUP &&
+      entry.timerStartedAt !== null,
   );
   const moveDay = (days: number) => {
     const nextDate = Temporal.PlainDate.from(date).add({ days }).toString();
@@ -178,57 +186,77 @@ function MyDayPage() {
                 {entries.map((entry) => (
                   <li
                     className="flex flex-wrap items-start justify-between gap-3 p-4"
-                    key={entry.id}
+                    key={`${entry.activityGroup}:${entry.id}`}
                   >
-                    <div className="min-w-0 flex-1 space-y-1">
-                      {entry.activityGroup ===
-                      TIME_ENTRY_ACTIVITY_GROUP.INTERNAL ? (
-                        <span className="text-sm font-medium">
-                          {tDay("internalWork")}
-                        </span>
-                      ) : (
-                        <Link
-                          className="hover:underline"
-                          params={{ workspaceId: entry.workspaceId }}
-                          to="/workspaces/$workspaceId/timesheets"
-                        >
-                          <BidiText as="span" className="text-sm font-medium">
-                            {entry.workspaceName}
-                          </BidiText>
-                        </Link>
-                      )}
-                      {entry.activityGroup ===
-                        TIME_ENTRY_ACTIVITY_GROUP.CLIENT &&
-                        entry.workspaceReference && (
-                          <BidiText
-                            as="p"
-                            className="text-muted-foreground text-xs"
-                          >
-                            {entry.workspaceReference}
-                          </BidiText>
-                        )}
-                      {entry.narrative && (
-                        <BidiText
-                          as="p"
-                          className="text-muted-foreground text-sm"
-                        >
-                          {entry.narrative}
-                        </BidiText>
-                      )}
-                    </div>
-                    <div className="space-y-1 text-end text-sm">
-                      <p className="font-medium tabular-nums">
-                        {entry.timerStartedAt === null
-                          ? formatMinutes(entry.durationMinutes)
-                          : tCommon("running")}
-                      </p>
-                      <p className="text-muted-foreground text-xs">
-                        {tBilling(`statuses.${entry.status}`)}
-                      </p>
-                      <p className="text-muted-foreground text-xs">
-                        {tBilling(entry.billable ? "billable" : "nonBillable")}
-                      </p>
-                    </div>
+                    {entry.activityGroup === ABSENCE_DAY_GROUP ? (
+                      <>
+                        <div className="min-w-0 flex-1 text-sm font-medium">
+                          {tDay(`absenceKinds.${entry.kind}`)}
+                        </div>
+                        <div className="text-end text-sm">
+                          {entry.coverage === "full"
+                            ? tDay("fullDay")
+                            : tDay(`halfDaySegments.${entry.halfDaySegment}`)}
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="min-w-0 flex-1 space-y-1">
+                          {entry.activityGroup ===
+                          TIME_ENTRY_ACTIVITY_GROUP.INTERNAL ? (
+                            <span className="text-sm font-medium">
+                              {tDay("internalWork")}
+                            </span>
+                          ) : (
+                            <Link
+                              className="hover:underline"
+                              params={{ workspaceId: entry.workspaceId }}
+                              to="/workspaces/$workspaceId/timesheets"
+                            >
+                              <BidiText
+                                as="span"
+                                className="text-sm font-medium"
+                              >
+                                {entry.workspaceName}
+                              </BidiText>
+                            </Link>
+                          )}
+                          {entry.activityGroup ===
+                            TIME_ENTRY_ACTIVITY_GROUP.CLIENT &&
+                            entry.workspaceReference && (
+                              <BidiText
+                                as="p"
+                                className="text-muted-foreground text-xs"
+                              >
+                                {entry.workspaceReference}
+                              </BidiText>
+                            )}
+                          {entry.narrative && (
+                            <BidiText
+                              as="p"
+                              className="text-muted-foreground text-sm"
+                            >
+                              {entry.narrative}
+                            </BidiText>
+                          )}
+                        </div>
+                        <div className="space-y-1 text-end text-sm">
+                          <p className="font-medium tabular-nums">
+                            {entry.timerStartedAt === null
+                              ? formatMinutes(entry.durationMinutes)
+                              : tCommon("running")}
+                          </p>
+                          <p className="text-muted-foreground text-xs">
+                            {tBilling(`statuses.${entry.status}`)}
+                          </p>
+                          <p className="text-muted-foreground text-xs">
+                            {tBilling(
+                              entry.billable ? "billable" : "nonBillable",
+                            )}
+                          </p>
+                        </div>
+                      </>
+                    )}
                   </li>
                 ))}
               </ul>

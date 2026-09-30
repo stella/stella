@@ -288,6 +288,7 @@ export const LIMITS = {
   rateEntriesPageSizeMax: 500,
   timeEntriesPerWorkspace: 50_000,
   internalTimeEntriesPerUser: 50_000,
+  absencesPerUser: 50_000,
   timeEntriesPageSizeDefault: 100,
   timeEntriesPageSizeMax: 200,
   timeEntriesApprovalBatchMax: 200,

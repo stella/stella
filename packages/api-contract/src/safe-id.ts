@@ -1,6 +1,7 @@
 import * as v from "valibot";
 
 export type SafeIdType =
+  | "absence"
   | "accountDeletionRequest"
   | "agentSkill"
   | "agentSkillComment"

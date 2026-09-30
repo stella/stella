@@ -5006,6 +5006,16 @@
   },
   "timesheets": {
     "day": {
+      "absenceKinds": {
+        "other": "Egyéb távollét",
+        "sick": "Betegszabadság",
+        "vacation": "Szabadság"
+      },
+      "fullDay": "Egész nap",
+      "halfDaySegments": {
+        "afternoon": "Délután (fél nap)",
+        "morning": "Délelőtt (fél nap)"
+      },
       "internalWork": "Belső munka"
     }
   },

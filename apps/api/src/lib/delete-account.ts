@@ -11,6 +11,7 @@ import {
 } from "@/api/lib/account-deletion-cleanup-queue";
 import {
   ACCOUNT_DELETION_ERROR_CODE,
+  anonymizeAbsenceHistory,
   assertUserIsNotSoleOrgOwner,
   clearWorkspaceLeadRole,
   collectUserOrganizationAndWorkspaceIds,
@@ -357,6 +358,7 @@ export const verifyAndDeleteUser = async (
           s3KeysToDelete,
         });
 
+        await anonymizeAbsenceHistory(tx, currentUserId);
         await anonymizeDeletedAccountRow(tx, currentUserId);
       });
 
