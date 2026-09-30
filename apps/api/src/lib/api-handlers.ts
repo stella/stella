@@ -1,6 +1,6 @@
 import type { TSchema } from "@sinclair/typebox";
-import type { Err, UnhandledException } from "better-result";
-import { Result } from "better-result";
+import type { Err } from "better-result";
+import { Result, UnhandledException } from "better-result";
 import type {
   Context,
   ElysiaCustomStatusResponse,
@@ -58,6 +58,10 @@ import { logger } from "@/api/lib/observability/logger";
 import { getRequestContext } from "@/api/lib/observability/request-context";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { AnyPermissiveRouteSchema } from "@/api/lib/permissive-route-schema";
+import {
+  ActionAdmissionError,
+  withActionAdmission,
+} from "@/api/lib/rate-limit/action-admission";
 import {
   getTanStackTextModelInfoForRole,
   resolveEffectiveServiceTierForProvider,
@@ -347,6 +351,8 @@ export type HandlerConfig = InputSchema &
     /** Finite API-owned transport deadline for a generated capability command. */
     requestTimeoutMs?: number;
     requiresUsage?: UsageMeteringConfig;
+    /** Finite synchronous work; streaming and queued execution need their own lifetimes. */
+    actionAdmission?: "handler";
     mcp: McpExposure;
   };
 
@@ -423,6 +429,8 @@ type BaseHandlerContext<TConfig extends HandlerConfig = HandlerConfig> =
      * consumption settles against the decided budget.
      */
     usageLane?: UsageLaneDecision;
+    /** Shared lease and client cancellation, set only for admitted finite work. */
+    actionSignal?: AbortSignal;
     /**
      * Whether stella may annotate AI requests for this org with
      * prompt-cache markers. Threaded through to the model resolver;
@@ -786,6 +794,10 @@ const runSafeHandler = async <
   }
 };
 
+type HandlerAdmissionDependencies = {
+  admit?: typeof withActionAdmission;
+};
+
 const createSafeScopedHandler = <
   TConfig extends HandlerConfig,
   TContext extends BaseHandlerContext<TConfig>,
@@ -793,6 +805,7 @@ const createSafeScopedHandler = <
 >(
   config: TConfig,
   handler: SafeHandlerFn<TContext, TResult>,
+  { admit = withActionAdmission }: HandlerAdmissionDependencies = {},
 ): SafeHandlerDefinition<TConfig, TContext, TResult> => ({
   config,
   handler: async (ctx): Promise<SafeHandlerResult<TResult>> => {
@@ -838,7 +851,50 @@ const createSafeScopedHandler = <
       ctx.usageLane = preflight.lane;
     }
 
-    return await runSafeHandler(ctx, handler);
+    if (config.actionAdmission !== "handler" || !env.FEATURE_ACTION_ADMISSION) {
+      return await runSafeHandler(ctx, handler);
+    }
+
+    return await runSafeHandler(ctx, async function* () {
+      return yield* Result.await(
+        admit({
+          organizationId: ctx.session.activeOrganizationId,
+          userId: ctx.user.id,
+          run: async (signal) => {
+            ctx.actionSignal = AbortSignal.any([ctx.request.signal, signal]);
+            ctx.actionSignal.throwIfAborted();
+            const outcome = await Result.gen(() => handler(ctx));
+            ctx.actionSignal.throwIfAborted();
+            return outcome;
+          },
+        }).then((admitted) =>
+          Result.mapError(admitted, (error) => {
+            if (ActionAdmissionError.is(error)) {
+              return new HandlerError({
+                status: error.reason === "busy" ? 429 : 503,
+                code:
+                  error.reason === "busy"
+                    ? "rate_limited"
+                    : "service_unavailable",
+                message:
+                  error.reason === "busy"
+                    ? "Concurrent action limit reached"
+                    : "Action admission is unavailable",
+                cause: error,
+              });
+            }
+            const handlerError = resolveHandlerError(error);
+            if (handlerError !== null) {
+              return handlerError;
+            }
+            if (DatabaseError.is(error) || DatabaseRlsError.is(error)) {
+              return error;
+            }
+            return new UnhandledException({ cause: error });
+          }),
+        ),
+      );
+    });
   },
 });
 
@@ -1220,8 +1276,9 @@ export const createSafeRootHandler = <
 >(
   config: TConfig,
   handler: SafeHandlerFn<RootHandlerContext<TConfig>, TResult>,
+  dependencies?: HandlerAdmissionDependencies,
 ): SafeHandlerDefinition<TConfig, RootHandlerContext<TConfig>, TResult> =>
-  createSafeScopedHandler(config, handler);
+  createSafeScopedHandler(config, handler, dependencies);
 
 export const createSafeHandler = <
   TConfig extends WorkspaceHandlerConfig,

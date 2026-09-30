@@ -27,6 +27,7 @@ import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
 
 const config = {
+  actionAdmission: "handler",
   // The other AI reads (recap, suggested prompts, improve-prompt) require
   // chat "create" because they assist with conversing. This one requires
   // "update" — the permission of the rename PATCH it feeds — so a user who
@@ -53,6 +54,7 @@ export const createSuggestThreadTitle = ({
   createSafeRootHandler(
     config,
     async function* ({
+      actionSignal,
       getWorkspaceAccess,
       orgAIConfig,
       orgAIConfigStatus,
@@ -172,7 +174,7 @@ export const createSuggestThreadTitle = ({
           try: async () =>
             await generateTextForRole({
               abortSignal: AbortSignal.any([
-                request.signal,
+                actionSignal ?? request.signal,
                 AbortSignal.timeout(SUGGEST_TITLE_TIMEOUT_MS),
               ]),
               analytics: aiAnalytics,
