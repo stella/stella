@@ -3,6 +3,7 @@ import path from "node:path";
 
 import {
   EDGE_HEADERS,
+  STAGING_API_URL,
   STAGING_STORAGE_STATE,
 } from "../playwright.staging.config";
 
@@ -12,7 +13,6 @@ type SmokeSession = {
   expiresAt: string;
 };
 
-const API_URL = process.env["E2E_API_URL"] ?? "https://api-staging.stll.app";
 const WEB_URL = process.env["E2E_WEB_URL"] ?? "https://staging.stll.app";
 
 const READINESS_TIMEOUT_MS = 1_200_000;
@@ -161,7 +161,7 @@ const ORIGINS: Origin[] = [
         allowMissingMarker: false,
         expectedCommit,
         label: "api",
-        url: `${API_URL}/ready`,
+        url: `${STAGING_API_URL}/ready`,
       }),
   },
   {
@@ -243,7 +243,7 @@ const globalSetup = async (): Promise<void> => {
 
   await waitForDeployedRevision();
 
-  const response = await fetch(`${API_URL}/smoke/session`, {
+  const response = await fetch(`${STAGING_API_URL}/smoke/session`, {
     method: "POST",
     headers: { "x-smoke-secret": secret, ...EDGE_HEADERS },
     signal: AbortSignal.timeout(15_000),

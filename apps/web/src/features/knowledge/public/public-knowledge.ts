@@ -52,6 +52,15 @@ const toCatalogueDetail = (
   disclaimer: template.pack.disclaimer,
 });
 
+/** Whether the published catalogue has any templates to browse. */
+const useCatalogueTemplatesAvailable = () => {
+  const { data, status } = useQuery({
+    ...catalogueTemplatesOptions(),
+    select: (templates) => templates.length > 0,
+  });
+  return { available: data === true, status };
+};
+
 /** The catalogue as the template list renders it, with each row's source. */
 const useCatalogueTemplates = () => {
   const { data, isLoading, isError } = useQuery(catalogueTemplatesOptions());
@@ -171,6 +180,7 @@ const useCatalogueStarters = (): KnowledgeSource<"playbooks">["starters"] => {
  */
 export const publicKnowledgeSource = {
   useCatalogueTemplates,
+  useCatalogueTemplatesAvailable,
   useCatalogueTemplate,
   useCatalogueTemplatePreview,
   useCatalogueStarters,
