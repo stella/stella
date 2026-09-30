@@ -39,3 +39,9 @@ test("outline size and titles are bounded for numbered reasoning", () => {
   expect(outline).toHaveLength(100);
   expect(outline.every(({ title }) => title.length <= 200)).toBe(true);
 });
+
+test("a truncated outline title keeps supplementary characters whole", () => {
+  const text = `1. ${"a".repeat(196)}𠮷 remaining text`;
+  const title = decisionOutline({ blocks: null, text }).at(0)?.title;
+  expect(title).toBe(`1. ${"a".repeat(196)}`);
+});

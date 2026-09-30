@@ -4181,6 +4181,28 @@ describe("OpenAI-compatible MCP tools", () => {
     });
   });
 
+  test("read_case_law_decision keeps a supplementary character whole in a one-character window", async () => {
+    readDecisionHandlerMock.mockResolvedValue({
+      ...createReadDecisionResult(),
+      fulltext: "𠮷A",
+    });
+    const payload = parseToolPayload(
+      await handleMcpToolCall({
+        args: { decision_ids: [DECISION_ID], max_chars: 1 },
+        context: createContext(),
+        toolName: "read_case_law_decision",
+      }),
+    );
+    expect(payload).toMatchObject({
+      items: [
+        {
+          nextCursor: encodePaginationCursor([2, null]),
+          decision: { text: "𠮷", truncated: true },
+        },
+      ],
+    });
+  });
+
   test("read_case_law_decision derives plain text from the AST fallback", async () => {
     readDecisionHandlerMock.mockResolvedValue(createReadDecisionResult());
 
@@ -4620,6 +4642,22 @@ describe("OpenAI-compatible MCP tools", () => {
       [DECISION_ID, "found"],
     ]);
     expect(payload.items.at(1)?.message).toContain("search_case_law");
+  });
+
+  test("read_case_law_decision omits outlines from every item in a batch", async () => {
+    const base = createReadDecisionResult();
+    readGatedDecisionMock.mockImplementation(
+      async ({ locator }: { locator: { kind: "id"; id: string } }) => ({
+        ...base,
+        id: locator.id,
+      }),
+    );
+    const payload = await readBatch([DECISION_ID, SECOND_DECISION_ID]);
+    expect(payload.items).toHaveLength(2);
+    for (const item of payload.items) {
+      expect(item.status).toBe("found");
+      expect(item.decision).not.toHaveProperty("outline");
+    }
   });
 
   test("read_case_law_decision reads a repeated id once and answers both positions", async () => {

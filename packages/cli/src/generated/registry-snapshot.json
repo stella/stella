@@ -373,7 +373,7 @@
       "perEntryCursor": true
     },
     "name": "read_case_law_decision",
-    "description": "Read decisions by id. Each `decision_ids[]` entry is answered in input order: `found` carries metadata, text fields, plain text, source URLs, resourceName and citation ids; `not_found` means no public decision; `pending` means its publisher document is not stored yet. Batch ids to share the text budget. With one id, `max_chars` sizes its text window. The first window includes up to 100 outline headings or numbered paragraphs: pass an outline cursor with that id to read from there. Long text and citations are paged: pass nextCursor with the same id. For citing courts' treatment and surrounding text, call read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }).",
+    "description": "Read decisions by id. Each `decision_ids[]` entry is answered in input order: `found` carries metadata, text fields, plain text, source URLs, resourceName and citation ids; `not_found` means no public decision; `pending` means its publisher document is not stored yet. Batch ids to share the text budget. With one id, `max_chars` sizes its text window. A single id’s first window includes up to 100 headings or numbered paragraphs: pass an outline cursor with that id to read from there. Long text and citations are paged: pass nextCursor with the same id. For citing courts' treatment and surrounding text, call read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }).",
     "inputSchema": {
       "type": "object",
       "required": ["decision_ids"],

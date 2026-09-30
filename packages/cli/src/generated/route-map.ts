@@ -733,6 +733,7 @@ export const generatedRouteMap: RouteNode = {
                 kind: "int",
                 min: 1,
                 max: 8000,
+                range: "clamp",
                 repeatable: false,
                 description:
                   "Text window size, 1–8000 characters. Accepted only alongside a single decision id. Use a JSON number; a value outside the range is clamped to it.",

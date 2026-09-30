@@ -152,7 +152,7 @@ import {
   MAX_SEARCH_LIMIT,
   notFoundResult,
   nullAsAbsent,
-  resolveWindowBounds,
+  resolveTextWindowBounds,
   structuredErrorResult,
   toolDataResult,
   toPlainCorpusText,
@@ -1018,7 +1018,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       "resourceName and citation ids; `not_found` means no public decision; " +
       "`pending` means its publisher document is not stored yet. Batch ids to " +
       "share the text budget. With one id, `max_chars` sizes its text window. " +
-      "The first window includes up to 100 outline headings or numbered " +
+      "A single id’s first window includes up to 100 headings or numbered " +
       "paragraphs: pass an outline cursor with that id to read from there. " +
       "Long text and citations are paged: pass nextCursor with the same id. " +
       "For citing courts' treatment and surrounding text, call " +
@@ -2274,6 +2274,7 @@ type DecisionItemOptions = {
   readsSharedCorpus: boolean;
   /** The window this entry's share of the call's text budget allows. */
   maxTextChars: number;
+  outline: "include" | "omit";
   read: GatedDecisionRead;
   textOffset: number;
 };
@@ -2281,6 +2282,7 @@ type DecisionItemOptions = {
 const decisionItemResult = ({
   decisionId,
   maxTextChars,
+  outline,
   read,
   readsSharedCorpus,
   textOffset,
@@ -2322,7 +2324,11 @@ const decisionItemResult = ({
     : null;
   const textLength = plainText === null ? 0 : plainText.length;
 
-  const textBounds = resolveWindowBounds(textLength, textOffset, maxTextChars);
+  const textBounds = resolveTextWindowBounds({
+    text: plainText ?? "",
+    offset: textOffset,
+    size: maxTextChars,
+  });
   const hasMore =
     textBounds.nextOffset !== null || read.citationsNextCursor !== null;
 
@@ -2370,7 +2376,7 @@ const decisionItemResult = ({
         plainText === null || textBounds.start >= textBounds.end
           ? null
           : plainText.slice(textBounds.start, textBounds.end),
-      ...(plainText !== null && textOffset === 0
+      ...(outline === "include" && plainText !== null && textOffset === 0
         ? { outline: decisionOutline({ blocks, text: plainText }) }
         : {}),
       charCount: plainText === null ? null : textLength,
@@ -2550,6 +2556,7 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
       decisionItemResult({
         decisionId,
         maxTextChars,
+        outline: decisionIds.length === 1 ? "include" : "omit",
         read: readOf(decisionId),
         readsSharedCorpus,
         textOffset: offsets.text,

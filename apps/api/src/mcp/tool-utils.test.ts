@@ -226,6 +226,26 @@ describe("windowTextByCursor", () => {
     expect(pages).toBe(Math.ceil(text.length / maxChars));
   });
 
+  test("Unicode text windows reassemble without splitting code points at any small budget", () => {
+    const text = "😀A𠮷\n👩🏽‍⚖️éZ";
+    for (const maxChars of [1, 2, 3, 4, 5, 6]) {
+      let cursor: string | undefined;
+      const parts: string[] = [];
+      do {
+        const window = expectWindow(
+          windowTextByCursor({ cursor, maxChars, text }),
+        );
+        expect(window.text).not.toMatch(/[\uD800-\uDFFF]/u);
+        expect([...window.text].length).toBeLessThanOrEqual(maxChars);
+        expect(window.text.length).toBeGreaterThan(0);
+        parts.push(window.text);
+        expect(parts.length).toBeLessThanOrEqual(text.length);
+        cursor = window.nextCursor ?? undefined;
+      } while (cursor !== undefined);
+      expect(parts.join("")).toBe(text);
+    }
+  });
+
   test("marks truncated and emits a nextCursor on the first of several windows", () => {
     const window = expectWindow(
       windowTextByCursor({ cursor: undefined, maxChars: 4, text: "abcdefgh" }),

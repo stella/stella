@@ -194,10 +194,10 @@ const parseBoundedInt = (
     return Result.ok(raw);
   }
   const value = Number.parseInt(raw.trim(), 10);
-  if (spec.min !== undefined && value < spec.min) {
+  if (spec.range !== "clamp" && spec.min !== undefined && value < spec.min) {
     return Result.err(`${spec.flag} must be >= ${spec.min}`);
   }
-  if (spec.max !== undefined && value > spec.max) {
+  if (spec.range !== "clamp" && spec.max !== undefined && value > spec.max) {
     return Result.err(`${spec.flag} must be <= ${spec.max}`);
   }
   return Result.ok(value);
@@ -211,10 +211,10 @@ const parseBoundedNumber = (
   if (!Number.isFinite(value)) {
     return Result.ok(raw);
   }
-  if (spec.min !== undefined && value < spec.min) {
+  if (spec.range !== "clamp" && spec.min !== undefined && value < spec.min) {
     return Result.err(`${spec.flag} must be >= ${spec.min}`);
   }
-  if (spec.max !== undefined && value > spec.max) {
+  if (spec.range !== "clamp" && spec.max !== undefined && value > spec.max) {
     return Result.err(`${spec.flag} must be <= ${spec.max}`);
   }
   return Result.ok(value);
