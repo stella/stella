@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { createHash } from "node:crypto";
 
@@ -32,6 +32,7 @@ import {
 } from "@/api/lib/lists/sanctions/monitoring-input";
 import { createSanctionsIndexCache } from "@/api/lib/lists/sanctions/screening-index";
 import { screenSanctionsSubject } from "@/api/lib/lists/sanctions/screening-service";
+import { encodePaginationCursor } from "@/api/lib/pagination";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -755,6 +756,119 @@ test(
     expect((await eventsFor(contact.id)).map((row) => row.type)).toEqual([
       "new",
     ]);
+  },
+  TIMEOUT,
+);
+
+test(
+  "open-hit and durable-event pages advance without overlap and reject cross-tenant cursors",
+  async () => {
+    await activate("3");
+    const contactRows = await db
+      .insert(contacts)
+      .values(
+        Array.from({ length: 3 }, () => ({
+          organizationId: orgId,
+          type: "person" as const,
+          displayName: "Synthetic Person",
+        })),
+      )
+      .returning();
+    const results = await Promise.all(contactRows.map(prepare));
+    await commitSanctionsMonitoringBatch({
+      db: scopedDb,
+      organizationId: orgId,
+      source: "eu",
+      results,
+      now,
+    });
+    await db.delete(sanctionsContactMarks).where(
+      inArray(
+        sanctionsContactMarks.contactId,
+        contactRows.map((row) => row.id),
+      ),
+    );
+    const first = (
+      await scopedDb(
+        async (tx) =>
+          await listOpenSanctionsMatches(tx, {
+            organizationId: orgId,
+            limit: 2,
+            now,
+          }),
+      )
+    ).unwrap();
+    expect(first.items).toHaveLength(2);
+    expect(first.nextCursor).not.toBeNull();
+    const second = (
+      await scopedDb(
+        async (tx) =>
+          await listOpenSanctionsMatches(tx, {
+            organizationId: orgId,
+            limit: 2,
+            now,
+            cursor: first.nextCursor ?? panic("Missing cursor"),
+          }),
+      )
+    ).unwrap();
+    const allIds = [...first.items, ...second.items].map(
+      (row) => row.contactId,
+    );
+    expect(new Set(allIds).size).toBe(allIds.length);
+    expect(allIds.toSorted()).toEqual(
+      contactRows.map((row) => row.id).toSorted(),
+    );
+    const invalid = await scopedDb(
+      async (tx) =>
+        await listOpenSanctionsMatches(tx, {
+          organizationId: orgId,
+          cursor: encodePaginationCursor([
+            otherOrg,
+            contactRows.at(0)?.id ?? panic("Missing contact"),
+            "eu",
+            "one",
+          ]),
+          now,
+        }),
+    );
+    expect(invalid.isErr() && invalid.error.code).toBe("invalid_cursor");
+    const foreign = (
+      await scopedFor(otherOrg)(
+        async (tx) =>
+          await listOpenSanctionsMatches(tx, { organizationId: otherOrg, now }),
+      )
+    ).unwrap();
+    expect(foreign.items).toEqual([]);
+    const eventPage = (
+      await scopedDb(
+        async (tx) =>
+          await listSanctionsMonitoringEvents(tx, {
+            organizationId: orgId,
+            limit: 2,
+          }),
+      )
+    ).unwrap();
+    expect(eventPage.items).toHaveLength(2);
+    expect(
+      eventPage.items.every(
+        (row) => row.type === "new" || row.type === "reopened",
+      ),
+    ).toBe(true);
+    const nextEvents = (
+      await scopedDb(
+        async (tx) =>
+          await listSanctionsMonitoringEvents(tx, {
+            organizationId: orgId,
+            limit: 2,
+            cursor: eventPage.nextCursor ?? panic("Missing event cursor"),
+          }),
+      )
+    ).unwrap();
+    expect(
+      nextEvents.items.every(
+        (row) => !eventPage.items.some((previous) => previous.id === row.id),
+      ),
+    ).toBe(true);
   },
   TIMEOUT,
 );

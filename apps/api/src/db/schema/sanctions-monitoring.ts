@@ -303,6 +303,9 @@ export const sanctionsScreeningEvents = p.pgTable(
     p
       .index("sanctions_screening_events_org_contact_time_idx")
       .on(table.organizationId, table.contactId, table.createdAt, table.id),
+    p
+      .index("sanctions_screening_events_org_cursor_idx")
+      .on(table.organizationId, table.createdAt, table.id),
     p.check(
       "sanctions_screening_events_type_check",
       sql`${table.type} IN (${sql.join(

@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, asc, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 
 import { isCountryCode } from "@stll/country-codes";
 import { SANCTIONS_SOURCES } from "@stll/sanctions";
@@ -26,6 +26,7 @@ import {
   decodePaginationCursor,
   encodePaginationCursor,
   isUuidPaginationCursorPart,
+  parseDateTimePaginationCursorPart,
 } from "@/api/lib/pagination";
 
 export const SANCTIONS_MONITORING_PAGE_SIZE = 100;
@@ -156,13 +157,16 @@ type MonitoringPageOptions = {
   now?: Date;
 };
 
-const invalidCursor = () =>
+const invalidCursor = (
+  capability:
+    | "contacts.sanctions.matches.list"
+    | "contacts.sanctions.events.list",
+) =>
   Result.err(
     new HandlerError({
       status: 400,
       code: "invalid_cursor",
-      message:
-        "Invalid sanctions cursor; call contacts.sanctions.matches.list without cursor to restart",
+      message: `Invalid sanctions cursor; call ${capability} without cursor to restart`,
     }),
   );
 
@@ -185,7 +189,7 @@ export const listOpenSanctionsMatches = async (
       typeof position.at(2) !== "string" ||
       typeof position.at(3) !== "string")
   ) {
-    return invalidCursor();
+    return invalidCursor("contacts.sanctions.matches.list");
   }
   const [_, contactId, sourceId, sourceEntryId] =
     position === null ? [] : position;
@@ -313,13 +317,15 @@ export const listSanctionsMonitoringEvents = async (
   if (
     cursor !== undefined &&
     (position === null ||
-      position.length !== 2 ||
+      position.length !== 3 ||
       position.at(0) !== organizationId ||
-      !isUuidPaginationCursorPart(position.at(1)))
+      parseDateTimePaginationCursorPart(position.at(1)) === null ||
+      !isUuidPaginationCursorPart(position.at(2)))
   ) {
-    return invalidCursor();
+    return invalidCursor("contacts.sanctions.events.list");
   }
-  const afterId = position?.at(1);
+  const afterTime = parseDateTimePaginationCursorPart(position?.at(1));
+  const afterId = position?.at(2);
   const rows = await tx
     .select({
       id: sanctionsScreeningEvents.id,
@@ -355,18 +361,26 @@ export const listSanctionsMonitoringEvents = async (
           isNull(organizationSettings.organizationId),
           eq(organizationSettings.sanctionsMonitoringMode, "enabled"),
         ),
-        typeof afterId === "string"
-          ? gt(sanctionsScreeningEvents.id, sql`${afterId}::uuid`)
+        typeof afterId === "string" && afterTime !== null
+          ? sql`(${sanctionsScreeningEvents.createdAt}, ${sanctionsScreeningEvents.id}) > (${afterTime.toISOString()}::timestamptz, ${afterId}::uuid)`
           : undefined,
       ),
     )
-    .orderBy(asc(sanctionsScreeningEvents.id))
+    .orderBy(
+      asc(sanctionsScreeningEvents.createdAt),
+      asc(sanctionsScreeningEvents.id),
+    )
     .limit(limit + 1);
   return Result.ok(
     createCursorPage({
       rows,
       limit,
-      cursorForItem: (row) => encodePaginationCursor([organizationId, row.id]),
+      cursorForItem: (row) =>
+        encodePaginationCursor([
+          organizationId,
+          row.createdAt.toISOString(),
+          row.id,
+        ]),
     }),
   );
 };

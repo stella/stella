@@ -160,7 +160,11 @@ export const reviewSanctionsMatch = async (
     resourceType: AUDIT_RESOURCE_TYPE.CONTACT,
     resourceId: contactId,
     workspaceId: null,
-    changes: { sanctionsReview: { old: match.disposition, new: disposition } },
+    changes: {
+      sanctionsReview: { old: match.disposition, new: disposition },
+      sanctionsReviewReason: { old: match.reviewReason, new: trimmedReason },
+      sanctionsReviewEntry: { old: null, new: `${source}:${sourceEntryId}` },
+    },
   });
   return Result.ok(reviewed);
 };
