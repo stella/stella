@@ -11,26 +11,25 @@ import { isRecord } from "@/api/lib/type-guards";
 // adapter that sends back every signed thinking entry (Anthropic's) would
 // hand its provider a signature it never issued, which it refuses.
 //
-// A thinking entry carries no record of who wrote it, but each adapter that
-// returns signed reasoning writes the signature in its own format, so the
-// format names the issuer:
-// - OpenAI's Responses adapter packs the reasoning item's id and encrypted
-//   content as a JSON object (`packResponsesReasoningSignature`);
-// - Anthropic's adapter keeps the signature the API streamed, an opaque
-//   base64 string.
-// Gemini keeps its thought signatures on the tool call, where only its own
-// adapter reads them. The other adapters (Bedrock Converse included) neither
-// return signed reasoning nor send any back.
+// A thinking entry carries no record of who wrote it, but an adapter that
+// returns signed reasoning in a format of its own marks the issuer: OpenAI's
+// Responses adapter packs the reasoning item's id and encrypted content as a
+// JSON object (`packResponsesReasoningSignature`). Anthropic's signature is
+// the opaque string its API streamed, recognizable only as not being one of
+// those. Gemini keeps its thought signatures on the tool call, where only its
+// own adapter reads them. The other adapters (Bedrock Converse included)
+// neither return signed reasoning nor send any back.
 
-type ReasoningSignatureFormat = "anthropic-messages" | "openai-responses";
+/** A signature format that names the provider whose adapter wrote it. */
+type RecognizedSignatureFormat = "openai-responses";
 
 /**
- * The signature format each provider's adapter sends back, or `null` when it
- * sends no signed reasoning to its provider. A provider added to the catalog
- * fails typecheck here until its adapter's reasoning replay is decided.
+ * The recognized format each provider's adapter sends back, or `null` when it
+ * sends none. A provider added to the catalog fails typecheck here until its
+ * adapter's reasoning replay is decided.
  */
 const REPLAYED_SIGNATURE_FORMAT = {
-  anthropic: "anthropic-messages",
+  anthropic: null,
   bedrock: null,
   google: null,
   mistral: null,
@@ -38,34 +37,43 @@ const REPLAYED_SIGNATURE_FORMAT = {
   openrouter: null,
 } as const satisfies Record<
   TanStackAIProvider,
-  ReasoningSignatureFormat | null
+  RecognizedSignatureFormat | null
 >;
 
-const isOpenAiResponsesSignature = (signature: string): boolean => {
+const recognizedFormatOf = (
+  signature: string,
+): RecognizedSignatureFormat | null => {
   const parsed = Result.try((): unknown => JSON.parse(signature));
-  return (
-    Result.isOk(parsed) &&
+  return Result.isOk(parsed) &&
     isRecord(parsed.value) &&
     (typeof parsed.value["id"] === "string" ||
       typeof parsed.value["encrypted_content"] === "string")
-  );
+    ? "openai-responses"
+    : null;
 };
 
-const signatureFormatOf = (signature: string): ReasoningSignatureFormat =>
-  isOpenAiResponsesSignature(signature)
-    ? "openai-responses"
-    : "anthropic-messages";
+/** Whether `signature` was written by another provider's adapter. */
+const isForeignSignature = (
+  signature: string | undefined,
+  accepted: RecognizedSignatureFormat | null,
+): boolean => {
+  if (signature === undefined || signature === "") {
+    return false;
+  }
+  const format = recognizedFormatOf(signature);
+  return format !== null && format !== accepted;
+};
 
 /**
  * `messages` as `provider` may be sent them: a thinking entry signed in
- * another provider's format is left out. Unsigned thinking stays, since no
- * adapter replays it as a signed block.
+ * another provider's recognized format is left out. Every other entry stays
+ * for the adapter, which replays only a signature in its own form.
  */
 export const withReasoningBoundToProvider = (
   messages: readonly ModelMessage[],
   provider: TanStackAIProvider,
 ): ModelMessage[] => {
-  const accepted: ReasoningSignatureFormat | null =
+  const accepted: RecognizedSignatureFormat | null =
     REPLAYED_SIGNATURE_FORMAT[provider];
   return messages.map((message) => {
     const { thinking } = message;
@@ -73,10 +81,7 @@ export const withReasoningBoundToProvider = (
       return message;
     }
     const kept = thinking.filter(
-      ({ signature }) =>
-        signature === undefined ||
-        signature === "" ||
-        signatureFormatOf(signature) === accepted,
+      ({ signature }) => !isForeignSignature(signature, accepted),
     );
     if (kept.length === thinking.length) {
       return message;
