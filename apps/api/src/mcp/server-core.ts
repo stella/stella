@@ -99,7 +99,7 @@ const mcpStructuredErrorResult = (
 ): CallToolResult => serializeToolResult(structuredErrorResult(args));
 
 // Only an explicit read hint permits refusal after a tool has run.
-const toolResultDisposition = ({ annotations }: McpTool) =>
+const toolResultDisposition = (annotations: McpTool["annotations"]) =>
   annotations?.readOnlyHint === true ? "read" : "mutation";
 
 type ByteStreamReadResult =
@@ -768,7 +768,7 @@ export const createMcpHttpRequestHandler = ({
         });
       }
 
-      const resultDisposition = toolResultDisposition(definition);
+      const resultDisposition = toolResultDisposition(definition.annotations);
       const run = async (signal?: AbortSignal) => {
         signal?.throwIfAborted();
         const result = await handleMcpToolCall({
