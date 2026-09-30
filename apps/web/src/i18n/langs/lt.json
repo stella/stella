@@ -2135,6 +2135,13 @@
     "unnamedAttachment": "Nepavadintas priedas"
   },
   "errors": {
+    "actionAdmission": {
+      "admissionUnavailable": "Šis veiksmas laikinai pristabdytas. Netrukus bandykite dar kartą.",
+      "concurrencyBusy": "Vyksta kiti darbai. Netrukus bandykite dar kartą.",
+      "contact": "Susisiekite su mumis",
+      "notEnabled": "Šis veiksmas jūsų organizacijai neįjungtas.",
+      "periodExhausted": "Šis veiksmas jūsų organizacijai pristabdytas."
+    },
     "actionFailed": "Veiksmas nepavyko",
     "api": {
       "badRequest": "Užklausos nepavyko užbaigti.",

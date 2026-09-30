@@ -2135,6 +2135,13 @@
     "unnamedAttachment": "Nienazwany załącznik"
   },
   "errors": {
+    "actionAdmission": {
+      "admissionUnavailable": "Ta czynność jest tymczasowo wstrzymana. Spróbuj ponownie za chwilę.",
+      "concurrencyBusy": "Trwają inne operacje. Spróbuj ponownie za chwilę.",
+      "contact": "Skontaktuj się z nami",
+      "notEnabled": "Ta czynność nie jest włączona dla Twojej organizacji.",
+      "periodExhausted": "Ta czynność jest wstrzymana dla Twojej organizacji."
+    },
     "actionFailed": "Akcja nie powiodła się",
     "api": {
       "badRequest": "Nie udało się wykonać żądania.",
