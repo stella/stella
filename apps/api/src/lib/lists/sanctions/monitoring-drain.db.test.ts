@@ -498,14 +498,6 @@ const expiredWorkerRace = async (mode: "activation" | "stale") => {
   });
   const tenant = scopedFor(organizationId);
   await emptyEdition();
-  if (mode === "activation") {
-    await db
-      .update(sanctionsSources)
-      .set({
-        lastSuccessfulVerifiedAt: new Date(Date.now() - 49 * 60 * 60 * 1000),
-      })
-      .where(eq(sanctionsSources.id, "eu"));
-  }
   await tenant(
     async (tx) =>
       await tx.insert(contacts).values({
@@ -514,7 +506,28 @@ const expiredWorkerRace = async (mode: "activation" | "stale") => {
         displayName: "Expired Worker",
       }),
   );
-  const now = futureNow();
+  const now =
+    mode === "stale"
+      ? new Date(Date.now() - SANCTIONS_MARK_LEASE_MS - 1)
+      : futureNow();
+  await db
+    .update(sanctionsSources)
+    .set({
+      lastSuccessfulVerifiedAt: new Date(
+        Date.now() -
+          SANCTIONS_SOURCE_CONFIG.eu.freshnessMs -
+          (mode === "stale" ? 1000 : 60_000),
+      ),
+    })
+    .where(eq(sanctionsSources.id, "eu"));
+  await tenant(
+    async (tx) =>
+      await tx
+        .update(sanctionsContactMarks)
+        .set({ scheduledAt: now })
+        .where(eq(sanctionsContactMarks.organizationId, organizationId)),
+  );
+
   const snapshot = async () =>
     await tenant(async (tx) => ({
       coverage: await tx.select().from(sanctionsContactScreenings),
@@ -532,15 +545,6 @@ const expiredWorkerRace = async (mode: "activation" | "stale") => {
     ) {
       if (mode === "activation") {
         await emptyEdition();
-      } else {
-        await db
-          .update(sanctionsSources)
-          .set({
-            lastSuccessfulVerifiedAt: new Date(
-              Date.now() - 49 * 60 * 60 * 1000,
-            ),
-          })
-          .where(eq(sanctionsSources.id, "eu"));
       }
       await drainSanctionsContactMarks({
         db: tenant,
