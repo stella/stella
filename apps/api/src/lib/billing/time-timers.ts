@@ -136,7 +136,7 @@ type ChangeTimerStateOptions = {
   state: (typeof timeTimers.$inferSelect)["state"];
   recordAuditEvent: AuditRecorder;
 };
-export const changeTimerState = async ({
+const changeTimerState = async ({
   tx,
   owner,
   id,
