@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import nodePath from "node:path";
 
+import { compareCodeUnit } from "@stll/collation";
+
 // These route files stack a top-level `.guard({ validateAuth: true })`
 // with per-route `permissions`. The guard is intentional: it is the
 // type-level carrier of `validateAuth` for Elysia's context composition
@@ -63,7 +65,7 @@ describe("root route registrations", () => {
     const plugins = [...rootSource.matchAll(/\.use\(\s*(\w+)\s*\)/gu)].map(
       (match) => match[1],
     );
-    expect(plugins.toSorted()).toEqual([
+    expect(plugins.toSorted(compareCodeUnit)).toEqual([
       "agentAuthConfirmRoute",
       "agentAuthRoute",
       "aiAutocompleteRoute",
@@ -72,6 +74,7 @@ describe("root route registrations", () => {
       "feedbackPublicRoute",
       "healthRoute",
       "hostedUsageWebhookRoute",
+      "internalTimeEntriesRoute",
       "localDevPublicRoutes",
       "mcpRoute",
       "memoriesRoute",

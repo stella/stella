@@ -187,6 +187,7 @@ describe("audit log compliance filter", () => {
       id: personalMatterId,
       organizationId: ids.orgA,
       name: "Matter C",
+      reference: personalMatterId,
       status: "active",
     });
     seededWorkspaceIds.push(personalMatterId);
