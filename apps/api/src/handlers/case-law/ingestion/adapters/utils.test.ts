@@ -70,8 +70,8 @@ describe("derived metadata lists", () => {
     const decomposed = composed.normalize("NFD");
     expect(decomposed).not.toBe(composed);
     const stated = [
-      `  ${  composed}`,
-      `${decomposed  }\u00a0`,
+      `  ${composed}`,
+      `${decomposed}\u00a0`,
       "Trestné\n  právo",
       "",
       "\t",

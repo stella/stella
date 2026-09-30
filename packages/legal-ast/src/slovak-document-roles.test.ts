@@ -32,7 +32,7 @@ describe("Slovak Roman section headings", () => {
     for (const text of [
       "II. ÚS 177/04",
       "1. Argumentácia",
-      `I. ${  "text ".repeat(50)}`,
+      `I. ${"text ".repeat(50)}`,
     ]) {
       expect(skSectionHeading(text)).toBeNull();
     }
