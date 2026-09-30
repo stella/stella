@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
 import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
+import { Temporal } from "@stll/time";
 
 import { courtAbbreviation } from "@/api/lib/case-law/court-abbreviations";
 import {
@@ -28,7 +29,50 @@ const TARGET_COURT =
   /(?:rozsudok|uznesenie|stanovisko)\s+(.+?)\s+(?:z\s|sp\.\s*zn\.)/iu;
 const ECLI = /ECLI:SK:[A-Z\d]+:\d{4}:[A-Z\d.]+/u;
 const MIN_TEXT_CHARACTERS = 100;
-const MAX_HEADNOTE_CHARACTERS = 20_000;
+const MAX_HEADNOTE_CHARACTERS = 3000;
+const REASONS_START = /^\s*Z\s+odôvodnenia\b/iu;
+const MONTHS: Record<string, number> = {
+  januára: 1,
+  februára: 2,
+  marca: 3,
+  apríla: 4,
+  mája: 5,
+  júna: 6,
+  júla: 7,
+  augusta: 8,
+  septembra: 9,
+  októbra: 10,
+  novembra: 11,
+  decembra: 12,
+};
+
+const statedDecisionDate = (text: string): string | null => {
+  const match = /\bz\s+(\d{1,2})\.\s*(\p{L}+|\d{1,2}\.)\s*(\d{4})\b/iu.exec(
+    text,
+  );
+  if (match === null) {
+    return null;
+  }
+  const day = Number(match.at(1));
+  const monthText = match.at(2)?.toLowerCase() ?? "";
+  const month = MONTHS[monthText] ?? Number(monthText.replace(".", ""));
+  const year = Number(match.at(3));
+  if (
+    !Number.isInteger(month) ||
+    month < 1 ||
+    month > 12 ||
+    day < 1 ||
+    day > Temporal.PlainYearMonth.from({ year, month }).daysInMonth
+  ) {
+    return null;
+  }
+  return Temporal.PlainDate.from({ year, month, day }).toString();
+};
+
+const isEntryNumber = (issue: SkCollectionIssue, text: string) =>
+  issue.series === SK_COLLECTION_SERIES.NS_R
+    ? NS_NUMBER.test(text)
+    : NSS_NUMBER.test(text);
 
 const nonemptyLine = (lines: readonly IssueLine[], start: number) => {
   for (let index = start; index < lines.length; index++) {
@@ -63,7 +107,11 @@ const findEntryTitle = ({
         return { status: "not-entry" };
       }
       const title = nonemptyLine(lines, index + 1);
-      if (title === null || !NS_ENTRY_TITLE.test(lines.at(title)?.text ?? "")) {
+      if (
+        title === null ||
+        lines.at(title)?.page !== line.page ||
+        !NS_ENTRY_TITLE.test(lines.at(title)?.text ?? "")
+      ) {
         return { status: "not-entry" };
       }
       return { status: "entry", title };
@@ -72,19 +120,62 @@ const findEntryTitle = ({
       if (!NSS_NUMBER.test(line.text)) {
         return { status: "not-entry" };
       }
-      const title = lines.findIndex(
-        (candidate, position) =>
-          position > index &&
-          position < index + 40 &&
-          LEGAL_SENTENCE_TITLE.test(candidate.text),
-      );
-      return { status: "entry", title: title === -1 ? null : title };
+      for (
+        let position = index + 1;
+        position < Math.min(index + 40, lines.length);
+        position++
+      ) {
+        const candidate = lines.at(position);
+        if (
+          candidate === undefined ||
+          candidate.page !== line.page ||
+          isEntryNumber(issue, candidate.text) ||
+          REASONS_START.test(candidate.text)
+        ) {
+          break;
+        }
+        if (LEGAL_SENTENCE_TITLE.test(candidate.text)) {
+          return { status: "entry", title: position };
+        }
+      }
+      // Contents/register numbers are not entries without a legal-sentence heading.
+      return { status: "not-entry" };
     }
     default: {
       issue.series satisfies never;
       return panic("Unknown Slovak collection series");
     }
   }
+};
+
+type FindTargetOptions = {
+  issue: SkCollectionIssue;
+  lines: readonly IssueLine[];
+  sentenceStart: number;
+};
+
+const findTarget = ({ issue, lines, sentenceStart }: FindTargetOptions) => {
+  let sentenceCharacters = 0;
+  for (let position = sentenceStart; position < lines.length; position++) {
+    const candidate = lines.at(position);
+    const previous = lines.at(position - 1);
+    if (
+      candidate === undefined ||
+      REASONS_START.test(candidate.text) ||
+      isEntryNumber(issue, candidate.text) ||
+      (previous !== undefined && candidate.page > previous.page + 1)
+    ) {
+      break;
+    }
+    if (TARGET_START.test(candidate.text)) {
+      return position;
+    }
+    sentenceCharacters += candidate.text.length + 1;
+    if (sentenceCharacters > MAX_HEADNOTE_CHARACTERS) {
+      break;
+    }
+  }
+  return -1;
 };
 
 type ParseEntryOptions = {
@@ -117,24 +208,33 @@ const parseEntry = ({
     return defect("unreadable-entry");
   }
   const sentenceStart = nonemptyLine(lines, title + 1);
-  if (sentenceStart === null) {
+  if (
+    sentenceStart === null ||
+    (lines.at(sentenceStart)?.page ?? line.page) > line.page + 1
+  ) {
     return defect("unreadable-entry");
   }
-  const targetStart = lines.findIndex(
-    (candidate, position) =>
-      position >= sentenceStart &&
-      position < sentenceStart + 100 &&
-      TARGET_START.test(candidate.text),
-  );
+  const targetStart = findTarget({ issue, lines, sentenceStart });
   if (targetStart === -1) {
     return defect("unreadable-entry");
   }
   const targetLines: string[] = [];
+  let targetClosed = false;
   for (const candidate of lines.slice(targetStart, targetStart + 8)) {
-    targetLines.push(candidate.text);
-    if (/[)\]]\s*$/u.test(candidate.text)) {
+    if (
+      REASONS_START.test(candidate.text) ||
+      isEntryNumber(issue, candidate.text)
+    ) {
       break;
     }
+    targetLines.push(candidate.text);
+    if (/[)\]]\s*$/u.test(candidate.text)) {
+      targetClosed = true;
+      break;
+    }
+  }
+  if (!targetClosed) {
+    return defect("unreadable-entry");
   }
   const targetText = targetLines.join(" ");
   const docket = TARGET_DOCKET.exec(targetText)?.at(1)?.trim();
@@ -165,7 +265,12 @@ const parseEntry = ({
           page: lines.at(sentenceStart)?.page ?? line.page,
         },
       },
-      target: { court, docket, ecli: ECLI.exec(targetText)?.at(0) ?? null },
+      target: {
+        court,
+        docket,
+        ecli: ECLI.exec(targetText)?.at(0) ?? null,
+        decisionDate: statedDecisionDate(targetText),
+      },
     },
   };
 };
@@ -178,17 +283,21 @@ export const parseSkCollectionPages = (
   if (issue.year < 2010) {
     return { status: "needs-ocr", reason: "before-2010" };
   }
-  const lines = pages.flatMap(({ page, lines: pageLines }) =>
-    pageLines.map((text) => ({ page, text })),
+  const textPages = pages.filter(
+    ({ lines }) =>
+      lines.reduce((size, text) => size + text.trim().length, 0) >=
+      MIN_TEXT_CHARACTERS,
   );
-  if (
-    lines.reduce((size, { text }) => size + text.trim().length, 0) <
-    MIN_TEXT_CHARACTERS
-  ) {
+  if (textPages.length === 0) {
     return { status: "needs-ocr", reason: "image-only" };
   }
+  const lines = textPages.flatMap(({ page, lines: pageLines }) =>
+    pageLines.map((text) => ({ page, text })),
+  );
   const records: SkCollectionRecord[] = [];
-  const defects: SkCollectionDefect[] = [];
+  const defects: SkCollectionDefect[] = pages
+    .filter((page) => !textPages.includes(page))
+    .map(({ page }) => ({ type: "needs-ocr", page, statedNumber: "" }));
   const seen = new Set<string>();
   for (const [index, line] of lines.entries()) {
     const entry = findEntryTitle({ issue, lines, index, line });
@@ -231,12 +340,15 @@ export const parseSkCollectionPages = (
       ],
     };
   }
-  return defects.length > 0
-    ? { status: "defective", defects }
-    : { status: "parsed", records };
+  if (defects.length === 0) {
+    return { status: "parsed", records };
+  }
+  return records.length > 0
+    ? { status: "partial", records, defects }
+    : { status: "defective", defects };
 };
 
-/** Exact ECLI or jurisdiction-scoped docket plus court identity; no fuzzy join. */
+/** Stated date plus exact ECLI or jurisdiction-scoped docket and court; no fuzzy join. */
 export const joinSkCollectionRecords = (
   records: readonly SkCollectionRecord[],
   decisions: readonly SkCollectionDecision[],
@@ -250,7 +362,11 @@ export const joinSkCollectionRecords = (
       court: record.target.court,
     });
     const candidates = decisions.filter((decision) => {
-      if (decision.country !== "SVK") {
+      if (
+        decision.country !== "SVK" ||
+        record.target.decisionDate === null ||
+        decision.decisionDate !== record.target.decisionDate
+      ) {
         return false;
       }
       if (record.target.ecli !== null) {

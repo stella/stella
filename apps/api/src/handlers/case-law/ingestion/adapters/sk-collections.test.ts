@@ -9,6 +9,7 @@ import { createSkCollectionConnector } from "@/api/handlers/case-law/ingestion/a
 import { courtAbbreviation } from "@/api/lib/case-law/court-abbreviations";
 import {
   SK_COLLECTION_SERIES,
+  SK_COLLECTION_PARSER_VERSION,
   SkCollectionIssueError,
   type SkCollectionIssueCache,
 } from "@/api/lib/legal-search/sk-collection-enrichment";
@@ -120,6 +121,7 @@ describe("publisher collection enrichment", () => {
       court: "Najvyšší súd SR",
       caseNumber: "1 VCdo 5/2025",
       ecli: null,
+      decisionDate: "2025-12-03",
     };
     const before = JSON.stringify(decision);
     expect(
@@ -128,6 +130,8 @@ describe("publisher collection enrichment", () => {
     expect(JSON.stringify(decision)).toBe(before);
     for (const changed of [
       { ...decision, country: "CZE" },
+      { ...decision, decisionDate: "2025-12-04" },
+      { ...decision, decisionDate: null },
       { ...decision, caseNumber: "1VCdo/6/2025" },
       { ...decision, court: "Najvyšší správny súd SR" },
     ]) {
@@ -187,6 +191,7 @@ describe("publisher collection enrichment", () => {
         court: "Najvyšší správny súd SR",
         caseNumber: "1Stk/22/2022",
         ecli: null,
+        decisionDate: "2022-03-28",
       },
     ]).at(0);
     expect(joined?.status).toBe("matched");
@@ -243,6 +248,7 @@ describe("publisher collection enrichment", () => {
     ).toEqual({ status: "disabled" });
     const cache = {
       issue: NS_ISSUE,
+      parserVersion: SK_COLLECTION_PARSER_VERSION,
       etag: null,
       lastModified: null,
       outcome: parseSkCollectionPages(NS_ISSUE, samplePages(0)),
@@ -259,6 +265,7 @@ describe("publisher collection enrichment", () => {
   test("validates cached issues without downloading an unchanged PDF", async () => {
     const cache = {
       issue: NS_ISSUE,
+      parserVersion: SK_COLLECTION_PARSER_VERSION,
       etag: '"sample"',
       lastModified: null,
       outcome: parseSkCollectionPages(NS_ISSUE, samplePages(0)),
@@ -267,7 +274,7 @@ describe("publisher collection enrichment", () => {
       status: "enabled",
       request: async ({ url, method, headers }) => {
         expect(headers.get("user-agent")).toContain(
-          "https://github.com/stella/stella/issues",
+          "https://github.com/stella/stella",
         );
         if (url.endsWith("/robots.txt")) {
           return new Response(null, { status: 404 });
@@ -320,10 +327,15 @@ describe("publisher collection enrichment", () => {
     expect(JSON.stringify(outcome)).not.toContain('"lines"');
   });
 
-  test("rejects off-origin URLs, cache identity mismatches and upstream failures", async () => {
+  test("rejects off-origin URLs and cache identity mismatches before a request", async () => {
     const connector = createSkCollectionConnector({
       status: "enabled",
-      request: async () => new Response(null, { status: 503 }),
+      request: async () => {
+        throw new SkCollectionIssueError({
+          message: "must not be reached",
+          issueUrl: NS_ISSUE.url,
+        });
+      },
     });
     for (const url of [
       "http://www.nsud.sk/data/att/x.pdf",
@@ -331,26 +343,236 @@ describe("publisher collection enrichment", () => {
       "https://www.nsud.sk:444/data/att/x.pdf",
       "https://www.nsud.sk/data/att/%2e%2e/x.pdf",
     ]) {
-      expect(
-        (
-          await connector.readIssue({
-            issue: { ...NS_ISSUE, url },
-            cache: null,
-          })
-        ).isErr(),
-      ).toBe(true);
+      const result = await connector.readIssue({
+        issue: { ...NS_ISSUE, url },
+        cache: null,
+      });
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error.message).toBe(
+          "Invalid collection issue descriptor",
+        );
+      }
     }
     const cache = {
       issue: NSS_ISSUE,
+      parserVersion: SK_COLLECTION_PARSER_VERSION,
       etag: null,
       lastModified: null,
       outcome: parseSkCollectionPages(NSS_ISSUE, samplePages(1)),
     } satisfies SkCollectionIssueCache;
+    const mismatch = await connector.readIssue({ issue: NS_ISSUE, cache });
+    expect(mismatch.isErr()).toBe(true);
+    if (mismatch.isErr()) {
+      expect(mismatch.error.message).toBe(
+        "Cached collection issue identity differs",
+      );
+    }
+  });
+
+  test("surfaces upstream failure explicitly", async () => {
+    const connector = createSkCollectionConnector({
+      status: "enabled",
+      request: async () => new Response(null, { status: 503 }),
+    });
+    const result = await connector.readIssue({ issue: NS_ISSUE, cache: null });
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.message).toBe("Robots request failed (503)");
+    }
+  });
+
+  test.each(["Z odôvodnenia", "2."])(
+    "a missing citation stops at %s while the next entry survives",
+    (boundary) => {
+      const first = samplePages(0).at(0);
+      if (first === undefined) {
+        throw new SkCollectionIssueError({
+          message: "Missing fixture",
+          issueUrl: NS_ISSUE.url,
+        });
+      }
+      const second = first.lines.map((line) => (line === "1." ? "2." : line));
+      const lines = [
+        "OBSAH",
+        "1.",
+        "2.",
+        "REGISTER",
+        "R 3/2026",
+        ...first.lines.slice(0, -1),
+        boundary,
+        "Surrounding decision prose must never be stored.",
+        ...second,
+      ];
+      const parsed = parseSkCollectionPages(NS_ISSUE, [{ page: 3, lines }]);
+      expect(parsed.status).toBe("partial");
+      if (parsed.status === "partial") {
+        expect(parsed.records).toHaveLength(1);
+        expect(parsed.records.at(0)?.annotation.statedNumber).toBe("2.");
+        expect(parsed.defects).toEqual([
+          { type: "unreadable-entry", page: 3, statedNumber: "1." },
+        ]);
+        expect(JSON.stringify(parsed)).not.toContain(
+          "Surrounding decision prose",
+        );
+      }
+    },
+  );
+
+  test("multi-entry NSS issues ignore contents numbers and preserve both annotations", () => {
+    const first = samplePages(1).at(0);
+    if (first === undefined) {
+      throw new SkCollectionIssueError({
+        message: "Missing fixture",
+        issueUrl: NSS_ISSUE.url,
+      });
+    }
+    const parsed = parseSkCollectionPages(NSS_ISSUE, [
+      {
+        page: 2,
+        lines: ["OBSAH", "104/2026 ZNSS", "105/2026 ZNSS", "REGISTER"],
+      },
+      first,
+      {
+        page: 7,
+        lines: first.lines.map((line) =>
+          line === "104/2026 ZNSS" ? "105/2026 ZNSS" : line,
+        ),
+      },
+    ]);
+    expect(parsed.status).toBe("partial");
+    if (parsed.status === "partial") {
+      expect(
+        parsed.records.map(({ annotation }) => annotation.statedNumber),
+      ).toEqual(["104/2026 ZNSS", "105/2026 ZNSS"]);
+      expect(parsed.defects).toEqual([
+        { type: "needs-ocr", page: 2, statedNumber: "" },
+      ]);
+    }
+  });
+
+  test("mixed scanned/text pages report each unreadable page and retain good entries", () => {
+    const parsed = parseSkCollectionPages(NS_ISSUE, [
+      ...samplePages(0),
+      { page: 4, lines: [] },
+    ]);
+    expect(parsed.status).toBe("partial");
+    if (parsed.status === "partial") {
+      expect(parsed.records).toHaveLength(1);
+      expect(parsed.defects).toEqual([
+        { type: "needs-ocr", page: 4, statedNumber: "" },
+      ]);
+    }
+  });
+
+  test("oversized legal sentences are refused rather than stored", () => {
+    const parsed = parseSkCollectionPages(NS_ISSUE, [
+      {
+        page: 3,
+        lines: [
+          "1.",
+          "ROZHODNUTIE",
+          "x".repeat(3001),
+          "(rozsudok Najvyššieho súdu Slovenskej republiky z 3. decembra 2025 sp. zn. 1VCdo/5/2025)",
+        ],
+      },
+    ]);
+    expect(parsed).toEqual({
+      status: "defective",
+      defects: [{ type: "unreadable-entry", page: 3, statedNumber: "1." }],
+    });
+  });
+
+  test.each([405, 501])(
+    "unsupported HEAD %s falls back to one conditional GET",
+    async (status) => {
+      const cache = {
+        issue: NS_ISSUE,
+        parserVersion: SK_COLLECTION_PARSER_VERSION,
+        etag: '"sample"',
+        lastModified: null,
+        outcome: parseSkCollectionPages(NS_ISSUE, samplePages(0)),
+      } satisfies SkCollectionIssueCache;
+      const calls: string[] = [];
+      const connector = createSkCollectionConnector({
+        status: "enabled",
+        request: async ({ url, method, headers }) => {
+          calls.push(method);
+          if (url.endsWith("/robots.txt")) {
+            return new Response(
+              "User-agent: *\nDisallow: /\nAllow: /data/att/",
+            );
+          }
+          expect(headers.get("if-none-match")).toBe(cache.etag);
+          return new Response(null, {
+            status: method === "HEAD" ? status : 304,
+          });
+        },
+      });
+      expect(
+        (await connector.readIssue({ issue: NS_ISSUE, cache })).unwrap(),
+      ).toEqual({ status: "unchanged", cache });
+      expect(calls).toEqual(["GET", "HEAD", "GET"]);
+    },
+  );
+
+  test("changed HEAD fallback consumes the GET once and passes citation URL into extraction", async () => {
+    const cache = {
+      issue: NS_ISSUE,
+      parserVersion: SK_COLLECTION_PARSER_VERSION,
+      etag: '"old"',
+      lastModified: null,
+      outcome: parseSkCollectionPages(NS_ISSUE, samplePages(0)),
+    } satisfies SkCollectionIssueCache;
+    let downloads = 0;
+    const connector = createSkCollectionConnector({
+      status: "enabled",
+      extract: async (_bytes, issueUrl) => {
+        expect(issueUrl).toBe(NS_ISSUE.url);
+        return samplePages(0);
+      },
+      request: async ({ url, method }) => {
+        if (url.endsWith("/robots.txt")) {
+          return new Response(null, { status: 404 });
+        }
+        if (method === "HEAD") {
+          return new Response(null, { status: 405 });
+        }
+        downloads++;
+        return new Response("%PDF-transient", { headers: { etag: '"new"' } });
+      },
+    });
     expect(
-      (await connector.readIssue({ issue: NS_ISSUE, cache })).isErr(),
-    ).toBe(true);
-    expect(
-      (await connector.readIssue({ issue: NS_ISSUE, cache: null })).isErr(),
-    ).toBe(true);
+      (await connector.readIssue({ issue: NS_ISSUE, cache })).unwrap().status,
+    ).toBe("read");
+    expect(downloads).toBe(1);
+  });
+
+  test("a parser revision mismatch cannot reuse even a validator-free cached result", async () => {
+    const cache = {
+      issue: NS_ISSUE,
+      parserVersion: SK_COLLECTION_PARSER_VERSION - 1,
+      etag: null,
+      lastModified: null,
+      outcome: parseSkCollectionPages(NS_ISSUE, samplePages(0)),
+    } satisfies SkCollectionIssueCache;
+    const connector = createSkCollectionConnector({
+      status: "enabled",
+      extract: async () => samplePages(0),
+      request: async ({ url, method, headers }) => {
+        expect(method).toBe("GET");
+        expect(headers.has("if-none-match")).toBe(false);
+        return url.endsWith("/robots.txt")
+          ? new Response(null, { status: 404 })
+          : new Response("%PDF-transient");
+      },
+    });
+    const result = (
+      await connector.readIssue({ issue: NS_ISSUE, cache })
+    ).unwrap();
+    expect(result.status).toBe("read");
+    if (result.status === "read") {
+      expect(result.cache.parserVersion).toBe(SK_COLLECTION_PARSER_VERSION);
+    }
   });
 });

@@ -9,9 +9,11 @@ import {
   parseSkCollectionPages,
   type SkCollectionTextPage,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-collection-parser";
+import { INGESTION_USER_AGENT } from "@/api/lib/case-law/ingestion-user-agent";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import {
   SK_COLLECTION_SERIES,
+  SK_COLLECTION_PARSER_VERSION,
   SkCollectionIssueError,
   type SkCollectionIssue,
   type SkCollectionIssueCache,
@@ -42,7 +44,7 @@ const PDF_MAX_BYTES = 8 * 1024 * 1024;
 const ROBOTS_MAX_BYTES = 512 * 1024;
 const PDF_MAX_PAGES = 256;
 const PRODUCT_TOKEN = "stella-collections";
-const USER_AGENT = `${PRODUCT_TOKEN}/1.0 (+https://github.com/stella/stella/issues)`;
+const USER_AGENT = `${INGESTION_USER_AGENT} ${PRODUCT_TOKEN}/1.0`;
 
 type CollectionRequestOptions = {
   series: SkCollectionSeries;
@@ -230,6 +232,7 @@ const responseBytes = async (
 
 const extractPages = async (
   bytes: Uint8Array,
+  issueUrl: string,
 ): Promise<readonly SkCollectionTextPage[]> => {
   const { PDF } = await import("@libpdf/core");
   const pdf = await PDF.load(bytes);
@@ -237,7 +240,7 @@ const extractPages = async (
   if (pages.length > PDF_MAX_PAGES) {
     throw new SkCollectionIssueError({
       message: "Collection issue exceeds the page limit",
-      issueUrl: "",
+      issueUrl,
     });
   }
   return pages.map((page, index) => ({
@@ -260,7 +263,11 @@ const cachedIssueUnchanged = async ({
   request,
   headers,
   signal,
-}: CachedIssueValidationOptions): Promise<boolean> => {
+}: CachedIssueValidationOptions): Promise<
+  | { status: "unchanged" }
+  | { status: "changed" }
+  | { status: "response"; response: Response }
+> => {
   if (cache.etag !== null) {
     headers.set("If-None-Match", cache.etag);
   } else if (cache.lastModified !== null) {
@@ -274,7 +281,19 @@ const cachedIssueUnchanged = async ({
     signal,
   });
   if (head.status === 304) {
-    return true;
+    return { status: "unchanged" };
+  }
+  if (head.status === 405 || head.status === 501) {
+    const response = await request({
+      series: issue.series,
+      url: issue.url,
+      method: "GET",
+      headers,
+      signal,
+    });
+    return response.status === 304
+      ? { status: "unchanged" }
+      : { status: "response", response };
   }
   if (!head.ok) {
     throw new SkCollectionIssueError({
@@ -292,7 +311,7 @@ const cachedIssueUnchanged = async ({
       issueUrl: issue.url,
     });
   }
-  return current === previous;
+  return { status: current === previous ? "unchanged" : "changed" };
 };
 
 type CollectionConnectorOptions = {
@@ -358,19 +377,22 @@ export const createSkCollectionConnector = ({
             status: "read",
             cache: {
               issue,
+              parserVersion: SK_COLLECTION_PARSER_VERSION,
               etag: null,
               lastModified: null,
               outcome: { status: "needs-ocr", reason: "before-2010" },
             },
           };
         }
+        const currentCache =
+          cache?.parserVersion === SK_COLLECTION_PARSER_VERSION ? cache : null;
         // A publisher without validators is fetched once per immutable issue URL.
         if (
-          cache !== null &&
-          cache.etag === null &&
-          cache.lastModified === null
+          currentCache !== null &&
+          currentCache.etag === null &&
+          currentCache.lastModified === null
         ) {
-          return { status: "unchanged", cache };
+          return { status: "unchanged", cache: currentCache };
         }
         const headers = new Headers({ "User-Agent": USER_AGENT });
         const robots = await request({
@@ -392,28 +414,29 @@ export const createSkCollectionConnector = ({
             return { status: "robots-denied", issueUrl: issue.url };
           }
         }
-        if (
-          cache !== null &&
-          (await cachedIssueUnchanged({
-            issue,
-            cache,
-            request,
-            headers,
-            signal,
-          }))
-        ) {
-          return { status: "unchanged", cache };
+        const validation =
+          currentCache === null
+            ? ({ status: "changed" } as const)
+            : await cachedIssueUnchanged({
+                issue,
+                cache: currentCache,
+                request,
+                headers,
+                signal,
+              });
+        if (validation.status === "unchanged" && currentCache !== null) {
+          return { status: "unchanged", cache: currentCache };
         }
-        const response = await request({
-          series: issue.series,
-          url: issue.url,
-          method: "GET",
-          headers,
-          signal,
-        });
-        if (response.status === 304 && cache !== null) {
-          return { status: "unchanged", cache };
-        }
+        const response =
+          validation.status === "response"
+            ? validation.response
+            : await request({
+                series: issue.series,
+                url: issue.url,
+                method: "GET",
+                headers,
+                signal,
+              });
         if (!response.ok) {
           throw new SkCollectionIssueError({
             message: `Issue request failed (${response.status})`,
@@ -427,11 +450,12 @@ export const createSkCollectionConnector = ({
             issueUrl: issue.url,
           });
         }
-        const pages = await extract(bytes);
+        const pages = await extract(bytes, issue.url);
         return {
           status: "read",
           cache: {
             issue,
+            parserVersion: SK_COLLECTION_PARSER_VERSION,
             etag: response.headers.get("etag"),
             lastModified: response.headers.get("last-modified"),
             outcome: parseSkCollectionPages(issue, pages),

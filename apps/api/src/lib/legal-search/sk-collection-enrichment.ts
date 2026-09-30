@@ -3,6 +3,8 @@ import type { Result } from "better-result";
 
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 
+export const SK_COLLECTION_PARSER_VERSION = 2;
+
 export const SK_COLLECTION_SERIES = {
   NS_R: "ns-r",
   NSS_ZNSS: "nss-znss",
@@ -29,22 +31,34 @@ export type SkCollectionAnnotation = {
 /** These identifiers are transient join input, never a correction to a row. */
 export type SkCollectionRecord = {
   annotation: SkCollectionAnnotation;
-  target: { court: string; docket: string; ecli: string | null };
+  target: {
+    court: string;
+    docket: string;
+    ecli: string | null;
+    decisionDate: string | null;
+  };
 };
 
 export type SkCollectionDefect =
+  | { type: "needs-ocr"; page: number; statedNumber: string }
   | { type: "unreadable-entry"; page: number; statedNumber: string }
   | { type: "duplicate-number"; page: number; statedNumber: string }
   | { type: "number-year-conflict"; page: number; statedNumber: string };
 
 export type SkCollectionParseOutcome =
   | { status: "parsed"; records: readonly SkCollectionRecord[] }
+  | {
+      status: "partial";
+      records: readonly SkCollectionRecord[];
+      defects: readonly SkCollectionDefect[];
+    }
   | { status: "needs-ocr"; reason: "before-2010" | "image-only" }
   | { status: "defective"; defects: readonly SkCollectionDefect[] };
 
 /** Persist this small parsed snapshot, never the fetched PDF or its full text. */
 export type SkCollectionIssueCache = {
   issue: SkCollectionIssue;
+  parserVersion: number;
   etag: string | null;
   lastModified: string | null;
   outcome: SkCollectionParseOutcome;
@@ -58,7 +72,7 @@ export type SkCollectionReadOutcome =
 
 export type SkCollectionDecision = Pick<
   IngestionResult,
-  "caseNumber" | "court" | "ecli" | "country"
+  "caseNumber" | "court" | "ecli" | "country" | "decisionDate"
 > & { id: string };
 
 export type SkCollectionJoinOutcome =
