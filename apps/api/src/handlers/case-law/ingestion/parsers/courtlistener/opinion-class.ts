@@ -47,10 +47,25 @@ const ROW_CLASS = {
 
 /**
  * The opinion-element type values that state a class: Harvard's
- * `<opinion type>` and the anonymized HTML's `opiniontype`. Any other value,
- * the generic `opinion` included, is a wrapper that proves none.
+ * `<opinion type>` and the anonymized HTML's `opiniontype`. The generic
+ * `opinion` proves no class; an undeclared value is an explicit conflict.
  */
-const DOM_CLASS: Readonly<Record<string, ClassDeclaration>> = {
+const DOM_OPINION_TYPES = [
+  "majority",
+  "plurality",
+  "unanimous",
+  "on-the-merits",
+  "concur",
+  "concurrence",
+  "concurring-in-part-and-dissenting-in-part",
+  "dissent",
+  "opinion",
+] as const;
+type DomOpinionType = (typeof DOM_OPINION_TYPES)[number];
+const isDomOpinionType = (value: string): value is DomOpinionType =>
+  DOM_OPINION_TYPES.some((known) => known === value);
+
+const DOM_CLASS = {
   majority: ARGUMENTATION,
   plurality: ARGUMENTATION,
   unanimous: ARGUMENTATION,
@@ -59,12 +74,16 @@ const DOM_CLASS: Readonly<Record<string, ClassDeclaration>> = {
   concurrence: SEPARATE_ARGUMENTATION,
   "concurring-in-part-and-dissenting-in-part": SEPARATE_ARGUMENTATION,
   dissent: SEPARATE_DISSENT,
-};
+  opinion: UNPROVEN,
+} as const satisfies Record<DomOpinionType, ClassDeclaration>;
+
+export const unrecognizedOpinionType = (
+  domType: string | null,
+): string | null =>
+  domType !== null && !isDomOpinionType(domType) ? domType : null;
 
 const domClass = (domType: string | null): ClassDeclaration | null =>
-  domType !== null && Object.hasOwn(DOM_CLASS, domType)
-    ? (DOM_CLASS[domType] ?? null)
-    : null;
+  domType !== null && isDomOpinionType(domType) ? DOM_CLASS[domType] : null;
 
 type UnitClass = {
   readonly body: BodyClass;
@@ -76,8 +95,8 @@ type UnitClass = {
   readonly principal: boolean;
 };
 
-/** Where a unit sits: the row's own opinion, or one nested inside it. */
-export type UnitPosition = "row" | "nested";
+/** The row's first root, a nested opinion, or an additional HTML root wrapper. */
+export type UnitPosition = "row" | "nested" | "sibling";
 
 /**
  * The class of one structural unit of a row. The element refines a row that
@@ -92,6 +111,14 @@ export const unitClass = (
   position: UnitPosition,
 ): UnitClass => {
   const dom = domClass(domType);
+  if (unrecognizedOpinionType(domType) !== null || position === "sibling") {
+    return {
+      body: "unknown",
+      structural: false,
+      conflict: true,
+      principal: false,
+    };
+  }
   if (position === "nested") {
     return {
       body: dom?.body ?? "unknown",
@@ -136,4 +163,8 @@ export const hasUnprovenBoundaries = (
   domType: string | null,
   position: UnitPosition,
 ): boolean =>
-  position === "row" && rowType === "010combined" && domClass(domType) === null;
+  unrecognizedOpinionType(domType) !== null ||
+  position === "sibling" ||
+  (position === "row" &&
+    rowType === "010combined" &&
+    (domClass(domType) === null || domClass(domType)?.body === "unknown"));

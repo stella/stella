@@ -432,30 +432,31 @@ export const apparatusBlockIds = (
   return ids;
 };
 
-const footnoteParagraph = (block: Block | undefined): ParagraphBlock | null =>
-  block?.type === "paragraph" && block.note?.type === "footnote" ? block : null;
+const footnoteBlock = (block: Block | undefined) =>
+  (block?.type === "paragraph" || block?.type === "table") &&
+  block.note?.type === "footnote"
+    ? block
+    : null;
 
 /**
  * Whether `block` continues the footnote `previous` opened: the two are
- * adjacent parts of one note when both are footnote paragraphs sharing a
- * `noteId`. A footnote paragraph without one is complete by itself, so it
+ * adjacent parts of one note when both are footnote blocks sharing a
+ * `noteId`. A footnote block without one is complete by itself, so it
  * neither continues its neighbour nor is continued by it.
  */
 const continuesFootnote = (
   previous: Block | undefined,
   block: Block | undefined,
 ): boolean => {
-  const noteId = footnoteParagraph(previous)?.note?.noteId;
-  return (
-    noteId !== undefined && footnoteParagraph(block)?.note?.noteId === noteId
-  );
+  const noteId = footnoteBlock(previous)?.note?.noteId;
+  return noteId !== undefined && footnoteBlock(block)?.note?.noteId === noteId;
 };
 
 /**
  * Where each footnote begins and ends, by block id.
  *
- * A footnote printed over several paragraphs is several adjacent
- * paragraphs sharing one `noteId`; the reader draws the note's mark once
+ * A footnote printed over several blocks is several adjacent
+ * paragraphs or tables sharing one `noteId`; the reader draws the note's mark once
  * at the start and the return arrow once at the end, the way the printed
  * page does, instead of repeating both on every part.
  */
@@ -474,7 +475,7 @@ export const footnoteParts = (blocks: readonly Block[]): FootnoteParts => {
   const backJumpAnchorByLastId = new Map<string, string>();
   let headAnchor: string | null = null;
   for (const [index, block] of blocks.entries()) {
-    if (footnoteParagraph(block) === null) {
+    if (footnoteBlock(block) === null) {
       continue;
     }
     if (!continuesFootnote(blocks[index - 1], block)) {

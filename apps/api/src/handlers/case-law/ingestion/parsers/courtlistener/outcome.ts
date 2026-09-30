@@ -76,6 +76,8 @@ export type TextUnit = {
 export type TextCounts = {
   readonly pageAnchors: number;
   readonly notes: number;
+  /** Source note spans that HTML repair could not preserve. */
+  readonly noteSpanDefects: number;
   /** Publisher citation links unwrapped to their words. */
   readonly publisherLinks: number;
   /** Characters of printed page labels moved off the text axis. */
