@@ -6,7 +6,6 @@ set -euo pipefail
 overall_started="$(date +%s)"
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 summary="${GITHUB_STEP_SUMMARY:-/dev/null}"
-ruleset="$repo_root/.github/branch-protection/ruleset-main.json"
 base_commit="${BASE_SHA:-unset}"
 candidate_commit="unavailable"
 scratch=""
@@ -124,13 +123,21 @@ compare_catalogs() {
   fail "Catalog comparison could not complete."
 }
 
-if ! jq -e '[.rules[] | select(.type == "merge_queue") | .parameters.max_entries_to_build] == [1]' "$ruleset" >/dev/null; then
-  fail "The checked-in merge queue ruleset must set max_entries_to_build to 1."
-fi
 [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]] || fail "BASE_SHA must be a full commit SHA."
 
 base_commit="$(git -C "$repo_root" rev-parse --verify "${BASE_SHA}^{commit}" 2>/dev/null)" \
   || fail "BASE_SHA does not identify an available commit."
+
+# A merge group is tested on its exact speculative base, whatever the queue's
+# build concurrency: prove that from the checkout instead of trusting settings.
+if [[ "${GITHUB_EVENT_NAME:-}" == "merge_group" ]]; then
+  event_base="$(jq -r '.merge_group.base_sha // empty' "${GITHUB_EVENT_PATH:?GITHUB_EVENT_PATH is required in a merge group}")"
+  [[ "$base_commit" == "$event_base" ]] \
+    || fail "Rehearse against the merge group's base_sha ($event_base), not $base_commit."
+  candidate_parent="$(git -C "$repo_root" rev-parse --verify "${candidate_commit}^1" 2>/dev/null)" \
+    || fail "candidate is not built on the rehearsed base"
+  [[ "$candidate_parent" == "$base_commit" ]] || fail "candidate is not built on the rehearsed base"
+fi
 
 # The worktree and snapshots live outside the checkout, and are removed even
 # when a migration or comparison fails.

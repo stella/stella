@@ -18,7 +18,12 @@ const fakeGit = `#!/usr/bin/env bash
 set -eu
 case "$3 $4" in
   "rev-parse HEAD") printf '%s\\n' "$FAKE_CANDIDATE" ;;
-  "rev-parse --verify") printf '%s\\n' "$BASE_SHA" ;;
+  "rev-parse --verify")
+    if [[ "$5" == *"^1" ]]; then
+      printf '%s\\n' "\${FAKE_PARENT:-$BASE_SHA}"
+    else
+      printf '%s\\n' "$BASE_SHA"
+    fi ;;
   "worktree add") mkdir -p "$6/apps/api" ;;
   "worktree remove") ;;
   *) exit 9 ;;
@@ -166,6 +171,77 @@ for (const { outcome, exitCode, verdict, difference } of [
         expect(report).toContain(`First difference: ${difference}`);
       } else {
         expect(report).not.toContain("First difference:");
+      }
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+}
+
+const otherSha = "c".repeat(40);
+
+for (const { name, eventBase, parent, exitCode, message } of [
+  {
+    name: "rehearses a candidate built on the merge group's base",
+    eventBase: base,
+    parent: base,
+    exitCode: 0,
+    message: null,
+  },
+  {
+    name: "refuses a base other than the merge group's base_sha",
+    eventBase: otherSha,
+    parent: base,
+    exitCode: 1,
+    message: "Rehearse against the merge group's base_sha",
+  },
+  {
+    name: "refuses a candidate that is not built on the rehearsed base",
+    eventBase: base,
+    parent: otherSha,
+    exitCode: 1,
+    message: "candidate is not built on the rehearsed base",
+  },
+]) {
+  test(`merge group ${name}`, () => {
+    const directory = mkdtempSync(path.join(tmpdir(), "exact-base-group-"));
+    try {
+      for (const { name: tool, contents } of [
+        { name: "git", contents: fakeGit },
+        { name: "bun", contents: fakeBun },
+      ]) {
+        const executable = path.join(directory, tool);
+        writeFileSync(executable, contents);
+        chmodSync(executable, 0o700);
+      }
+      const event = path.join(directory, "event.json");
+      writeFileSync(
+        event,
+        JSON.stringify({ merge_group: { base_sha: eventBase } }),
+      );
+      const run = Bun.spawnSync({
+        cmd: ["bash", script],
+        env: {
+          PATH: `${directory}:${process.env["PATH"] ?? ""}`,
+          RUNNER_TEMP: directory,
+          GITHUB_STEP_SUMMARY: path.join(directory, "summary"),
+          GITHUB_EVENT_NAME: "merge_group",
+          GITHUB_EVENT_PATH: event,
+          BASE_SHA: base,
+          DATABASE_URL: "postgres://local@127.0.0.1:5432/stella",
+          CLEAN_DATABASE_URL: "postgres://local@127.0.0.1:5433/stella",
+          FAKE_CANDIDATE: candidate,
+          FAKE_PARENT: parent,
+          FAKE_OUTCOME: "pass",
+          FAKE_STATE: directory,
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const stderr = new TextDecoder().decode(run.stderr);
+      expect(run.exitCode, stderr).toBe(exitCode);
+      if (message !== null) {
+        expect(stderr).toContain(message);
       }
     } finally {
       rmSync(directory, { recursive: true, force: true });
