@@ -24,6 +24,7 @@ import {
   ADAPTER_KEYS,
   type AdapterKey,
 } from "@/api/lib/legal-search/ingestion-constants";
+import type { SkCollectionConnector } from "@/api/lib/legal-search/sk-collection-enrichment";
 import { isRecord } from "@/api/lib/type-guards";
 
 export { EMPTY_AST };
@@ -1370,6 +1371,8 @@ export type SourceFieldInventory = {
  */
 export type SourceAdapter = {
   key: AdapterKey;
+  /** An opt-in annotation source; never a second decision-producing adapter. */
+  collectionEnrichment?: SkCollectionConnector | undefined;
   name: string;
   /**
    * The jurisdiction this source publishes for. Typed rather than free text:

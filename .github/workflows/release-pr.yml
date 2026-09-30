@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   schedule:
-    - cron: '17 * * * *'
+    - cron: "17 * * * *"
   workflow_dispatch:
 
 concurrency:
@@ -62,7 +62,7 @@ jobs:
 
   version:
     needs: gate
-    if: needs.gate.outputs.may-version == 'true'
+    if: needs.gate.outputs.may-version == 'true' && vars.STELLA_MERGE_HOLD == ''
     name: Maintain Version Packages PR
     permissions:
       contents: read
@@ -72,7 +72,7 @@ jobs:
     uses: stella/.github/.github/workflows/changeset-release-pr.yml@aff5017c264acce5a2bcdf15876da08835e6de70
     with:
       bun-version-file: package.json
-      auto-merge-command: bun scripts/merge-bar.ts "$RELEASE_PR_NUMBER"
+      auto-merge-command: STELLA_MERGE_HOLD_CHECKED_BY_WORKFLOW=1 bun scripts/merge-bar.ts "$RELEASE_PR_NUMBER"
     secrets:
       CHANGELOG_APP_ID: ${{ secrets.CHANGELOG_APP_ID }}
       CHANGELOG_APP_PRIVATE_KEY: ${{ secrets.CHANGELOG_APP_PRIVATE_KEY }}

@@ -83,5 +83,6 @@ export const publicKnowledgeRoute = createPublicKnowledgeRoute(
   () =>
     (bundledCatalogue ??= createBundledTemplatePackCatalogue(
       env.TEMPLATE_PACKS_CONTENT_DIR,
+      { availability: "readable" },
     )),
 );

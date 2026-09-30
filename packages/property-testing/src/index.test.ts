@@ -45,6 +45,46 @@ afterEach(() => {
 });
 
 describe("propertyConfig", () => {
+  test("defaults omitted seeds to the tier policy", () => {
+    for (const factor of [undefined, "1", "10"]) {
+      withEnv(
+        { [FACTOR_ENV]: factor, [PROPERTY_TEST_SEED_ENV]: undefined },
+        () => {
+          expect(propertyConfig().seed).toBe(propertySeed());
+          expect(propertyConfig({ numRuns: 20 }).seed).toBe(propertySeed());
+          expect("seed" in propertyConfig()).toBe(factor !== "10");
+        },
+      );
+    }
+  });
+
+  test("uses the replay seed by default in every tier", () => {
+    for (const factor of [undefined, "10"]) {
+      withEnv(
+        { [FACTOR_ENV]: factor, [PROPERTY_TEST_SEED_ENV]: "1234" },
+        () => {
+          expect(propertyConfig().seed).toBe(1234);
+        },
+      );
+    }
+  });
+
+  test("preserves explicitly supplied seeds including an unset seed", () => {
+    withEnv({ [FACTOR_ENV]: "10", [PROPERTY_TEST_SEED_ENV]: "1234" }, () => {
+      for (const seed of [0, 42, -42]) {
+        expect(propertyConfig({ seed }).seed).toBe(seed);
+      }
+      expect("seed" in propertyConfig({ seed: undefined })).toBe(false);
+    });
+  });
+
+  test("rejects an invalid default replay seed before generation", () => {
+    withEnv({ [PROPERTY_TEST_SEED_ENV]: "1.5" }, () => {
+      expect(() => propertyConfig()).toThrow(PropertyTestConfigError);
+      expect(propertyConfig({ seed: 42 }).seed).toBe(42);
+    });
+  });
+
   test("passes per-test numRuns through unchanged at the neutral factor", () => {
     withEnv({ [FACTOR_ENV]: undefined }, () => {
       expect(propertyConfig({ numRuns: 200 }).numRuns).toBe(200);

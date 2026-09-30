@@ -42,6 +42,9 @@ export const lockInvoiceInStatus = async (
     .select({
       id: invoices.id,
       status: invoices.status,
+      documentType: invoices.documentType,
+      originalInvoiceId: invoices.originalInvoiceId,
+      finalizedAt: invoices.finalizedAt,
       currency: invoices.currency,
       dueDate: invoices.dueDate,
       invoiceDate: invoices.invoiceDate,
