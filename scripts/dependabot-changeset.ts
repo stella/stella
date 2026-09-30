@@ -617,14 +617,15 @@ const decideFromGit = ({
       : [{ packagePath, base: baseManifest, head: headManifest }];
   });
 
+  const catalog = changedSet.has(ROOT_MANIFEST)
+    ? readCatalogChange({ root, policy, mergeBase, head: exactHead })
+    : undefined;
   return decideDependabotChangeset({
     policy,
     changedFiles,
     addedChangesetFiles,
     manifests,
-    catalog: changedSet.has(ROOT_MANIFEST)
-      ? readCatalogChange({ root, policy, mergeBase, head: exactHead })
-      : undefined,
+    ...(catalog !== undefined && { catalog }),
   });
 };
 
