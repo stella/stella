@@ -26,7 +26,7 @@ export const MAX_CONDITION_NESTING = 256;
 
 export class ConditionParseError extends TaggedError("ConditionParseError")<{
   message: string;
-}>() {}
+}> {}
 
 const COMPARE_SYMBOL_TO_OP = {
   "==": "eq",
