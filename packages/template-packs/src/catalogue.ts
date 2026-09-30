@@ -6,7 +6,7 @@
  */
 
 import { Result, TaggedError } from "better-result";
-import { statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
 import { GENERATED_TEMPLATE_PACKS } from "./packs.gen";
@@ -64,6 +64,8 @@ export type CreateTemplatePackCatalogueOptions = {
    * and the catalogue is empty rather than advertising packs it cannot read.
    */
   contentRoot: string;
+  /** Public entries require readable, nonempty regular files. */
+  availability?: "exists" | "readable";
 };
 
 /**
@@ -74,16 +76,31 @@ export type CreateTemplatePackCatalogueOptions = {
 export const createTemplatePackCatalogue = ({
   packs,
   contentRoot,
+  availability = "exists",
 }: CreateTemplatePackCatalogueOptions): TemplatePackCatalogue => {
   const available = packs.filter(
     (pack) =>
       pack.templates.length > 0 &&
       pack.templates.every((template) => {
-        const file = statSync(
-          path.join(contentRoot, PACKS_DIRECTORY, pack.id, template.file),
-          { throwIfNoEntry: false },
+        const docxPath = path.join(
+          contentRoot,
+          PACKS_DIRECTORY,
+          pack.id,
+          template.file,
         );
-        return file !== undefined && file.isFile() && file.size > 0;
+        if (availability === "exists") {
+          return existsSync(docxPath);
+        }
+        // Metadata and byte reads can both fail on inaccessible content.
+        return Result.try(() => {
+          const file = statSync(docxPath, { throwIfNoEntry: false });
+          return (
+            file !== undefined &&
+            file.isFile() &&
+            file.size > 0 &&
+            readFileSync(docxPath).byteLength > 0
+          );
+        }).unwrapOr(false);
       }),
   );
   const packsById = new Map(available.map((pack) => [pack.id, pack] as const));
@@ -113,17 +130,19 @@ export const createTemplatePackCatalogue = ({
       ref.packId,
       template.file,
     );
-    const file = Bun.file(docxPath);
-    if (!(await file.exists())) {
-      return Result.err(
+    const read = await Result.tryPromise({
+      try: async () => new Uint8Array(await Bun.file(docxPath).arrayBuffer()),
+      catch: () =>
         new TemplatePackContentError({
-          message: "Bundled template content is missing",
+          message: "Bundled template content is unavailable",
           packId: ref.packId,
           slug: ref.slug,
         }),
-      );
+    });
+    if (Result.isError(read)) {
+      return read;
     }
-    const bytes = new Uint8Array(await file.arrayBuffer());
+    const bytes = read.value;
     const sha256 = sha256Hex(bytes);
     if (sha256 !== template.sha256) {
       return Result.err(
@@ -147,8 +166,12 @@ export const createTemplatePackCatalogue = ({
 /** Catalogue over the content bundled with this build. */
 export const createBundledTemplatePackCatalogue = (
   contentRoot: string = bundledTemplatePackContentRoot(),
+  {
+    availability = "exists",
+  }: Pick<CreateTemplatePackCatalogueOptions, "availability"> = {},
 ): TemplatePackCatalogue =>
   createTemplatePackCatalogue({
     packs: GENERATED_TEMPLATE_PACKS,
     contentRoot,
+    availability,
   });

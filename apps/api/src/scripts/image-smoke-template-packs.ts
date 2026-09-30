@@ -1,17 +1,23 @@
 import { panic, Result } from "better-result";
 
-import { createBundledTemplatePackCatalogue } from "@stll/template-packs";
+import {
+  createBundledTemplatePackCatalogue,
+  type TemplatePackCatalogue,
+} from "@stll/template-packs";
 
 const REQUIRED_PUBLIC_PACK = "general-legal";
 
 /** Validate the runner's content through the same loader used by the API. */
 export const checkBundledPublicTemplates = async (
   contentRoot: string | undefined,
+  catalogueFactory: (
+    contentRoot: string,
+  ) => TemplatePackCatalogue = createBundledTemplatePackCatalogue,
 ): Promise<void> => {
   if (!contentRoot) {
     panic("TEMPLATE_PACKS_CONTENT_DIR must be set for the image smoke");
   }
-  const catalogue = createBundledTemplatePackCatalogue(contentRoot);
+  const catalogue = catalogueFactory(contentRoot);
   const pack = catalogue.get(REQUIRED_PUBLIC_PACK);
   if (!pack?.publicDisplay || pack.templates.length === 0) {
     panic("bundled public template catalogue is incomplete");

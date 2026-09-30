@@ -41,7 +41,8 @@ export const Route = createFileRoute(
       catalogueTemplatesOptions(),
     );
     if (catalogue.length === 0) {
-      return { displayName: null };
+      notFound({ throw: true });
+      return panic("TanStack Router did not throw a not-found response.");
     }
     const template = await ensureRouteQueryData(
       context.queryClient,

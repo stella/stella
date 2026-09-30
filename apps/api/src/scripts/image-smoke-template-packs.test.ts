@@ -4,7 +4,12 @@ import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { createBundledTemplatePackCatalogue } from "@stll/template-packs";
+import { createTemplatePackCatalogue } from "@stll/template-packs";
+import {
+  fixtureTemplatePackContentRoot,
+  FIXTURE_TEMPLATE_PACKS,
+} from "@stll/template-packs/fixtures";
+import type { GeneratedTemplatePack } from "@stll/template-packs/schema";
 
 import { checkBundledPublicTemplates } from "./image-smoke-template-packs";
 
@@ -41,25 +46,35 @@ test.each(["missing", "empty"])(
 
 test("image validation checks the complete public pack and its bytes", async () => {
   const root = freshRoot();
-  const source = path.resolve(
-    import.meta.dir,
-    "../../../../../packages/template-packs/content/packs/general-legal",
+  const fixturePack = FIXTURE_TEMPLATE_PACKS.at(0);
+  if (!fixturePack) {
+    panic("expected populated fixture pack");
+  }
+  const source = path.join(
+    fixtureTemplatePackContentRoot(),
+    "packs",
+    fixturePack.id,
   );
   cpSync(source, path.join(root, "packs", "general-legal"), {
     recursive: true,
   });
-  await checkBundledPublicTemplates(root);
+  const publicFixture = {
+    ...fixturePack,
+    id: "general-legal",
+    publicDisplay: true,
+  } satisfies GeneratedTemplatePack;
+  const catalogueFactory = (contentRoot: string) =>
+    createTemplatePackCatalogue({ packs: [publicFixture], contentRoot });
+  await checkBundledPublicTemplates(root, catalogueFactory);
   const template =
-    createBundledTemplatePackCatalogue(root)
-      .get("general-legal")
-      ?.templates.at(0) ?? panic("expected populated public pack");
-  const file = path.join(root, "packs", "general-legal", template.file);
+    fixturePack.templates.at(0) ?? panic("expected populated fixture template");
+  const file = path.join(root, "packs", publicFixture.id, template.file);
   writeFileSync(file, "invalid content");
-  await expect(checkBundledPublicTemplates(root)).rejects.toThrow(
-    "Bundled template bytes do not match the manifest hash",
-  );
+  await expect(
+    checkBundledPublicTemplates(root, catalogueFactory),
+  ).rejects.toThrow("Bundled template bytes do not match the manifest hash");
   rmSync(file);
-  await expect(checkBundledPublicTemplates(root)).rejects.toThrow(
-    "bundled public template catalogue is incomplete",
-  );
+  await expect(
+    checkBundledPublicTemplates(root, catalogueFactory),
+  ).rejects.toThrow("bundled public template catalogue is incomplete");
 });
