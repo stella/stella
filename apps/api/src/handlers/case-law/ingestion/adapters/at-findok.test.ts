@@ -1,7 +1,11 @@
 import { describe, expect, it } from "bun:test";
 import JSZip from "jszip";
 
-import { decodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
+import {
+  decodeSourceRawEnvelope,
+  encodeSourceRawEnvelope,
+  STORED_RAW_REPARSE_REJECTION,
+} from "@/api/handlers/case-law/ingestion/adapter";
 import {
   assembleAtFindokDecision,
   atFindokNextSlice,
@@ -10,6 +14,8 @@ import {
   parseFindokManifest,
 } from "@/api/handlers/case-law/ingestion/adapters/at-findok";
 import { loadDocxArchive } from "@/api/lib/docx-archive";
+
+import { storedRawReparseInputOf } from "./test-utils";
 
 const DOCUMENT_ID = "b68202a0-55e4-4dea-9e93-971f0b71ae32";
 const MANIFEST_ITEM = {
@@ -80,7 +86,11 @@ describe("Austrian Findok adapter", () => {
     const first = await adapter.fetchPage(null, {});
     expect(first.isOk()).toBe(true);
     const page = first.unwrap();
-    expect(page.decisions.at(0)).toMatchObject({
+    const decision = page.decisions.at(0);
+    if (decision === undefined) {
+      throw new TypeError("Expected the listed Findok decision");
+    }
+    expect(decision).toMatchObject({
       sourceDocumentId: DOCUMENT_ID,
       caseNumber: "RV/7500368/2026",
       ecli: "ECLI:AT:BFG:2026:RV.7500368.2026",
@@ -89,11 +99,19 @@ describe("Austrian Findok adapter", () => {
       language: "de",
       decisionDate: "2026-07-14",
     });
-    expect(page.decisions.at(0)?.sourceRaw).toContain("<Segmente>");
+    expect(decision.sourceRaw).toContain("<Segmente>");
     expect(urls).toEqual([
       "https://findok.bmf.gv.at/findok/iwg/bestandsliste-bfg.gz",
       "https://findok.bmf.gv.at/findok/iwg/152/152257/152257.zip",
     ]);
+
+    const reparse = adapter.reparseStoredRaw;
+    const requestsBeforeReplay = urls.length;
+    expect(await reparse(storedRawReparseInputOf(decision))).toEqual({
+      type: "parsed",
+      result: decision,
+    });
+    expect(urls).toHaveLength(requestsBeforeReplay);
 
     const verified = await adapter.fetchPage(page.nextCursor, {});
     expect(verified.unwrap().decisions).toEqual([]);
@@ -277,5 +295,125 @@ describe("Austrian Findok adapter", () => {
     expect(decision.metadata["headnoteStatutes"]).not.toEqual([]);
     expect(decision.metadata["subjectCodes"]).not.toEqual([]);
     expect(decision.metadata["findokGid"]).toContain("_");
+
+    let requests = 0;
+    const adapter = createAtFindokAdapter({
+      request: async () => {
+        requests += 1;
+        throw new Error("reparseStoredRaw must not contact Findok");
+      },
+      sleep: async () => {},
+    });
+    const reparse = adapter.reparseStoredRaw;
+    expect(await reparse(storedRawReparseInputOf(decision))).toEqual({
+      type: "parsed",
+      result: decision,
+    });
+    expect(requests).toBe(0);
+  });
+
+  it("rejects invalid stored payloads and mismatched Findok collection", async () => {
+    const documentXml = await xmlFixture();
+    const manifest = parseFindokManifest(
+      "bfg",
+      JSON.stringify({
+        generierungsdatum: "07.08.2026 06:16",
+        data: [MANIFEST_ITEM],
+      }),
+    );
+    const item = manifest.items.at(0);
+    if (item === undefined) {
+      throw new TypeError("The manifest fixture states no row");
+    }
+    const decision = assembleAtFindokDecision(
+      { collection: "bfg", item },
+      { documentXml },
+    );
+    const adapter = createAtFindokAdapter({
+      request: async () => {
+        throw new Error("reparseStoredRaw must not contact Findok");
+      },
+      sleep: async () => {},
+    });
+    const reparse = adapter.reparseStoredRaw;
+
+    const stored = storedRawReparseInputOf(decision);
+    const expectedIncomplete = {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
+    };
+    expect(await reparse({ ...stored, raw: new Uint8Array() })).toMatchObject(
+      expectedIncomplete,
+    );
+    expect(
+      await reparse({
+        ...stored,
+        raw: new TextEncoder().encode("not-json"),
+      }),
+    ).toMatchObject(expectedIncomplete);
+
+    const { collection: _collection, ...metadataWithoutCollection } =
+      stored.metadata;
+    expect(
+      await reparse({ ...stored, metadata: metadataWithoutCollection }),
+    ).toMatchObject(expectedIncomplete);
+    expect(
+      await reparse({ ...stored, sourceDocumentId: "another-document" }),
+    ).toMatchObject({
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH,
+    });
+
+    const parts = decodeSourceRawEnvelope(decision.sourceRaw ?? "");
+    const listing = parts?.["listing"];
+    if (listing === undefined) {
+      throw new TypeError("The captured Findok envelope has no listing part");
+    }
+    expect(
+      await reparse({
+        ...stored,
+        raw: new TextEncoder().encode(encodeSourceRawEnvelope({ listing })),
+      }),
+    ).toMatchObject({
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+    });
+  });
+
+  it("replays the stored pre-envelope Findok JSON shape", async () => {
+    const documentXml = await xmlFixture();
+    const manifest = parseFindokManifest(
+      "bfg",
+      JSON.stringify({
+        generierungsdatum: "07.08.2026 06:16",
+        data: [MANIFEST_ITEM],
+      }),
+    );
+    const item = manifest.items.at(0);
+    if (item === undefined) {
+      throw new TypeError("The manifest fixture states no row");
+    }
+    const decision = assembleAtFindokDecision(
+      { collection: "bfg", item },
+      { documentXml },
+    );
+    const adapter = createAtFindokAdapter({
+      request: async () => {
+        throw new Error("reparseStoredRaw must not contact Findok");
+      },
+      sleep: async () => {},
+    });
+    const reparse = adapter.reparseStoredRaw;
+
+    const legacyRaw = JSON.stringify({
+      listing: { collection: "bfg", item },
+      documentXml,
+    });
+    const replayed = await reparse({
+      ...storedRawReparseInputOf(decision),
+      raw: new TextEncoder().encode(legacyRaw),
+      contentType: "application/json",
+    });
+    expect(replayed).toEqual({ type: "parsed", result: decision });
   });
 });
