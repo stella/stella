@@ -8,7 +8,7 @@ import {
 import { expect, test } from "bun:test";
 
 import { publicKnowledgeKeys } from "@/features/knowledge/public/public-knowledge-queries";
-import { Route as TemplateDetailRoute } from "@/routes/knowledge/templates_.catalogue.$packId.$templateId";
+import { loadCatalogueTemplate } from "@/routes/knowledge/templates_.catalogue.$packId.$templateId";
 
 test("an empty public template catalogue makes a detail URL not found", async () => {
   const queryClient = new QueryClient();
@@ -19,7 +19,7 @@ test("an empty public template catalogue makes a detail URL not found", async ()
   }>()();
   const detailRoute = createRoute({
     getParentRoute: () => rootRoute,
-    loader: TemplateDetailRoute.options.loader,
+    loader: loadCatalogueTemplate,
     path: "/knowledge/templates/catalogue/$packId/$templateId",
   });
   const router = createRouter({

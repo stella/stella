@@ -1,3 +1,4 @@
+import type { QueryClient } from "@tanstack/react-query";
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
@@ -20,6 +21,36 @@ import { createPublicHead } from "@/lib/public-seo";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { CatalogueTemplateActions } from "@/routes/knowledge/-catalogue-template-actions";
 
+type CatalogueTemplateLoaderArgs = {
+  context: { queryClient: QueryClient };
+  params: { packId: string; templateId: string };
+};
+
+export const loadCatalogueTemplate = async ({
+  context,
+  params,
+}: CatalogueTemplateLoaderArgs) => {
+  const catalogue = await ensureRouteQueryData(
+    context.queryClient,
+    catalogueTemplatesOptions(),
+  );
+  if (catalogue.length === 0) {
+    notFound({ throw: true });
+    return panic("TanStack Router did not throw a not-found response.");
+  }
+  const template = await ensureRouteQueryData(
+    context.queryClient,
+    catalogueTemplateOptions(params.packId, params.templateId),
+  );
+  // An unknown or unlisted template is not a page; an act named for it in
+  // the query goes with it.
+  if (template === null) {
+    notFound({ throw: true });
+    return panic("TanStack Router did not throw a not-found response.");
+  }
+  return { displayName: template.title };
+};
+
 /**
  * A catalogue template's page. The same static page for every visitor: the
  * loader reads only the published catalogue, so what the server renders and
@@ -35,27 +66,7 @@ export const Route = createFileRoute(
       notFound({ throw: true });
     }
   },
-  loader: async ({ context, params }) => {
-    const catalogue = await ensureRouteQueryData(
-      context.queryClient,
-      catalogueTemplatesOptions(),
-    );
-    if (catalogue.length === 0) {
-      notFound({ throw: true });
-      return panic("TanStack Router did not throw a not-found response.");
-    }
-    const template = await ensureRouteQueryData(
-      context.queryClient,
-      catalogueTemplateOptions(params.packId, params.templateId),
-    );
-    // An unknown or unlisted template is not a page; an act named for it in
-    // the query goes with it.
-    if (template === null) {
-      notFound({ throw: true });
-      return panic("TanStack Router did not throw a not-found response.");
-    }
-    return { displayName: template.title };
-  },
+  loader: loadCatalogueTemplate,
   head: ({ loaderData, params }) =>
     createPublicHead({
       crawlAllowed: isPublicKnowledgeCrawlAllowed(),

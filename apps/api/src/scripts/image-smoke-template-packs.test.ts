@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { afterEach, expect, test } from "bun:test";
 import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -25,8 +25,20 @@ afterEach(() => {
   }
 });
 
+const expectValidationFailure = async (
+  validate: () => Promise<void>,
+  message: string,
+) => {
+  const result = await Result.tryPromise(validate);
+  expect(Result.isError(result)).toBe(true);
+  if (Result.isError(result)) {
+    expect(result.error.message).toContain(message);
+  }
+};
+
 test("image validation requires a configured content root", async () => {
-  await expect(checkBundledPublicTemplates(undefined)).rejects.toThrow(
+  await expectValidationFailure(
+    () => checkBundledPublicTemplates(undefined),
     "TEMPLATE_PACKS_CONTENT_DIR must be set",
   );
 });
@@ -38,7 +50,8 @@ test.each(["missing", "empty"])(
     if (state === "empty") {
       mkdirSync(path.join(root, "packs"));
     }
-    await expect(checkBundledPublicTemplates(root)).rejects.toThrow(
+    await expectValidationFailure(
+      () => checkBundledPublicTemplates(root),
       "bundled public template catalogue is incomplete",
     );
   },
@@ -70,11 +83,13 @@ test("image validation checks the complete public pack and its bytes", async () 
     fixturePack.templates.at(0) ?? panic("expected populated fixture template");
   const file = path.join(root, "packs", publicFixture.id, template.file);
   writeFileSync(file, "invalid content");
-  await expect(
-    checkBundledPublicTemplates(root, catalogueFactory),
-  ).rejects.toThrow("Bundled template bytes do not match the manifest hash");
+  await expectValidationFailure(
+    () => checkBundledPublicTemplates(root, catalogueFactory),
+    "Bundled template bytes do not match the manifest hash",
+  );
   rmSync(file);
-  await expect(
-    checkBundledPublicTemplates(root, catalogueFactory),
-  ).rejects.toThrow("bundled public template catalogue is incomplete");
+  await expectValidationFailure(
+    () => checkBundledPublicTemplates(root, catalogueFactory),
+    "bundled public template catalogue is incomplete",
+  );
 });
