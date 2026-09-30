@@ -2,11 +2,15 @@ import { panic } from "better-result";
 import { parentPort } from "node:worker_threads";
 
 import { buildScreeningIndex, screen } from "@stll/sanctions";
-import type { SanctionsSource, ScreeningIndex } from "@stll/sanctions";
+import type {
+  SanctionsEntry,
+  SanctionsSource,
+  ScreeningIndex,
+} from "@stll/sanctions";
 
 import type {
   SanctionsMatcherReply,
-  SanctionsMatcherRequest,
+  SanctionsMatcherMessage,
 } from "./matcher-protocol";
 
 const port = parentPort;
@@ -17,23 +21,60 @@ const indexes = new Map<
   SanctionsSource,
   { editionId: string; index: ScreeningIndex }
 >();
-port.on("message", (request: SanctionsMatcherRequest) => {
+let assembly: {
+  source: SanctionsSource;
+  editionId: string;
+  entries: SanctionsEntry[];
+} | null = null;
+port.on("message", (request: SanctionsMatcherMessage) => {
+  if (request.type === "entries") {
+    if (request.offset === 0) {
+      indexes.delete(request.source);
+      assembly = {
+        source: request.source,
+        editionId: request.editionId,
+        entries: [],
+      };
+    }
+    if (
+      assembly === null ||
+      assembly.source !== request.source ||
+      assembly.editionId !== request.editionId ||
+      assembly.entries.length !== request.offset
+    ) {
+      panic("Invalid sanctions entry transfer sequence");
+    }
+    assembly.entries.push(...request.entries);
+    port.postMessage({
+      status: "entries-loaded",
+    } satisfies SanctionsMatcherReply);
+    return;
+  }
   let cached = indexes.get(request.source);
   if (cached?.editionId !== request.editionId) {
     // Drop the previous edition before allocating its replacement.
     indexes.delete(request.source);
-    if (request.list === null) {
+    if (request.version === null) {
       port.postMessage({
         status: "unavailable",
       } satisfies SanctionsMatcherReply);
       return;
     }
+    const entries = assembly === null ? [] : assembly.entries;
+    if (
+      assembly !== null &&
+      (assembly.source !== request.source ||
+        assembly.editionId !== request.editionId)
+    ) {
+      panic("Invalid sanctions entry transfer owner");
+    }
     cached = {
       editionId: request.editionId,
-      index: buildScreeningIndex([request.list]),
+      index: buildScreeningIndex([{ version: request.version, entries }]),
     };
     indexes.set(request.source, cached);
   }
+  assembly = null;
   const result = screen(cached.index, request.query, {
     cutoff: request.cutoff,
     limit: request.limit,

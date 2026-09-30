@@ -11,6 +11,7 @@ import {
 
 import type {
   SanctionsMatcherReply,
+  SanctionsMatcherMessage,
   SanctionsMatcherRequest,
 } from "./matcher-protocol";
 
@@ -63,6 +64,94 @@ const createMatcherWorker = () =>
       sourceFile: "sanctions-matcher-worker.ts",
     }),
   );
+
+const MATCHER_TRANSFER_ENTRIES = 1000;
+
+type ExchangeMatcherMessageOptions = {
+  worker: Worker;
+  signal: AbortSignal;
+  message: SanctionsMatcherMessage;
+  fail: () => void;
+};
+
+const exchangeMatcherMessage = ({
+  worker,
+  signal,
+  message,
+  fail,
+}: ExchangeMatcherMessageOptions): Promise<SanctionsMatcherReply> => {
+  if (signal.aborted) {
+    return Promise.resolve({ status: "unavailable" });
+  }
+  return new Promise((resolve) => {
+    const abort = () => {
+      worker.off("message", reply);
+      resolve({ status: "unavailable" });
+    };
+    const reply = (response: SanctionsMatcherReply) => {
+      signal.removeEventListener("abort", abort);
+      resolve(response);
+    };
+    signal.addEventListener("abort", abort, { once: true });
+    worker.once("message", reply);
+    const sent = Result.try(() => worker.postMessage(message, []));
+    if (sent.isErr()) {
+      fail();
+    }
+  });
+};
+
+type MatchSanctionsRequestOptions = {
+  worker: Worker;
+  signal: AbortSignal;
+  request: SanctionsMatcherRequest;
+  fail: () => void;
+};
+
+const matchSanctionsRequest = async ({
+  worker,
+  signal,
+  request,
+  fail,
+}: MatchSanctionsRequestOptions): Promise<SanctionsMatcherReply> => {
+  const exchange = async (message: SanctionsMatcherMessage) =>
+    await exchangeMatcherMessage({
+      worker,
+      signal,
+      message,
+      fail,
+    });
+  if (request.list !== null) {
+    for (
+      let offset = 0;
+      offset < request.list.entries.length;
+      offset += MATCHER_TRANSFER_ENTRIES
+    ) {
+      const response = await exchange({
+        type: "entries",
+        source: request.source,
+        editionId: request.editionId,
+        offset,
+        entries: request.list.entries.slice(
+          offset,
+          offset + MATCHER_TRANSFER_ENTRIES,
+        ),
+      });
+      if (response.status !== "entries-loaded") {
+        return { status: "unavailable" };
+      }
+    }
+  }
+  return await exchange({
+    type: "screen",
+    source: request.source,
+    editionId: request.editionId,
+    version: request.list?.version ?? null,
+    query: request.query,
+    cutoff: request.cutoff,
+    limit: request.limit,
+  });
+};
 
 /** Ephemeral, reconstructible indexes; each lease owns a worker for the entire request. */
 export const createSanctionsMatcherPool = ({
@@ -195,27 +284,19 @@ export const createSanctionsMatcherPool = ({
             if (controller.signal.aborted) {
               return { status: "unavailable" };
             }
-            return await new Promise<SanctionsMatcherReply>((resolve) => {
-              const abort = () => {
-                worker.off("message", reply);
-                resolve({ status: "unavailable" });
-              };
-              const reply = (response: SanctionsMatcherReply) => {
-                controller.signal.removeEventListener("abort", abort);
-                if (response.status === "screened" || request.list !== null) {
-                  slot.editions.set(request.source, request.editionId);
-                }
-                resolve(response);
-              };
-              controller.signal.addEventListener("abort", abort, {
-                once: true,
-              });
-              worker.once("message", reply);
-              const sent = Result.try(() => worker.postMessage(request, []));
-              if (sent.isErr()) {
-                fail();
-              }
+            const response = await matchSanctionsRequest({
+              worker,
+              signal: controller.signal,
+              request,
+              fail,
             });
+            if (
+              !controller.signal.aborted &&
+              (response.status === "screened" || request.list !== null)
+            ) {
+              slot.editions.set(request.source, request.editionId);
+            }
+            return response;
           },
         };
         const result = await Result.tryPromise(
