@@ -112,3 +112,53 @@ test("composer draft survives typing while a response is streaming", async ({
   );
   await expect(errorBoundary).toHaveCount(0);
 });
+
+// Markers recognized by the mock AI adapter (E2E_CREATE_DOCUMENT_MARKER and
+// E2E_STREAMED_TOOL_ARGS_MARKER in apps/api/src/dev/register-mock-ai.ts):
+// together they make the mock stream a create-document call's arguments as a
+// few hundred small deltas over about three seconds, the densest update rate
+// a chat turn produces.
+const STREAMED_TOOL_ARGS_PROMPT =
+  "Draft it as a document please, streaming the arguments";
+
+test("a streamed tool input does not re-render the page per delta", async ({
+  page,
+}) => {
+  await page.goto("/chat", { waitUntil: "commit" });
+  const composer = page.getByRole("textbox", { name: /type your question/iu });
+  await expect(composer).toBeVisible({ timeout: 30_000 });
+  await composer.click();
+  await composer.pressSequentially("Start this test thread");
+  await page.getByRole("button", { name: "Send message" }).click();
+  await expect(page).toHaveURL(
+    /\/chat\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u,
+    { timeout: 30_000 },
+  );
+  const transcript = page.getByRole("log");
+  await expect(transcript.getByRole("button", { name: "Retry" })).toBeVisible({
+    timeout: 30_000,
+  });
+
+  // The second turn streams inside the settled thread route, as in the test
+  // above.
+  const threadComposer = page.locator(
+    '[role="textbox"][contenteditable="true"]',
+  );
+  await threadComposer.click();
+  await threadComposer.pressSequentially(STREAMED_TOOL_ARGS_PROMPT);
+  await page.getByRole("button", { name: "Send message" }).click();
+
+  // The whole input arrived: the compiled draft opens in the inspector and
+  // the continuation answers. A page that commits once per delta trips the
+  // render-storm canary (apps/web/src/lib/render-storm-canary.ts), whose
+  // console.error fails this test through the `browserErrors` fixture.
+  await expect(
+    page.getByRole("textbox", { name: /chat about or edit Mutual NDA/iu }),
+  ).toBeVisible({ timeout: 30_000 });
+  await expect(
+    transcript.getByText("The draft is open in the panel"),
+  ).toBeVisible({ timeout: 30_000 });
+  await expect(transcript.getByRole("button", { name: "Resend" })).toHaveCount(
+    0,
+  );
+});
