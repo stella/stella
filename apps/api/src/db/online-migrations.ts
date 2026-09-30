@@ -251,6 +251,15 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     name: "chat_turns_org_run_id_uidx",
     tableName: "chat_turns",
   },
+  {
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "case_law_ingestion_failures_source_record_uidx" ON public."case_law_ingestion_failures" USING btree ("source_id", "record_identity") WHERE "record_identity" IS NOT NULL',
+    definitionBody:
+      "ON public.case_law_ingestion_failures USING btree (source_id, record_identity) WHERE (record_identity IS NOT NULL)",
+    isUnique: true,
+    name: "case_law_ingestion_failures_source_record_uidx",
+    tableName: "case_law_ingestion_failures",
+  },
   ...REWRITTEN_MIGRATION_INDEXES,
 ];
 

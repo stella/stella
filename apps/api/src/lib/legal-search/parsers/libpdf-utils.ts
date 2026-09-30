@@ -75,13 +75,21 @@ export const buildBoldRanges = (
     const bold = isBoldFont(span.fontName);
 
     // Find this span's text in the remaining line text
-    const idx = lineText.indexOf(text.trim(), offset);
-    if (idx === -1) {
+    const pattern = text
+      .trim()
+      .split(/\s+/u)
+      .map((part) => part.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"))
+      .join("\\s+");
+    const match = new RegExp(pattern, "u").exec(lineText.slice(offset));
+    if (match === null) {
       continue;
     }
 
-    const start = idx;
-    const end = idx + text.trim().length;
+    const start = offset + match.index;
+    const end = start + match[0].length;
+    if (ranges.length === 0 && start > 0) {
+      ranges.push({ start: 0, end: start, bold: false });
+    }
 
     // Merge with previous range if same bold state
     const last = ranges.at(-1);
