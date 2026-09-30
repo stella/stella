@@ -47,15 +47,17 @@ describe("returned time entry comments", () => {
 
   test("missing or invalid comments reject the whole page instead of disappearing", () => {
     const { returnComment: _returnComment, ...withoutComment } = ENTRY;
-    for (const entry of [
-      withoutComment,
-      ...[undefined, 0, false, {}, []].map((returnComment) =>
-        ({ ...ENTRY, returnComment}),
-      ),
-    ]) {
+    expect(
+      parseTimeEntryListPage({
+        items: [ENTRY, withoutComment],
+        limit: 50,
+        nextCursor: null,
+      }),
+    ).toBeNull();
+    for (const returnComment of [undefined, 0, false, {}, []]) {
       expect(
         parseTimeEntryListPage({
-          items: [ENTRY, entry],
+          items: [ENTRY, { ...ENTRY, returnComment }],
           limit: 50,
           nextCursor: null,
         }),

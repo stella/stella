@@ -23,18 +23,17 @@ import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
+import { localISODate } from "@/lib/local-iso-date";
 import { organizationOptions } from "@/lib/organization/queries";
 import { pageTitle } from "@/lib/page-title";
 import {
   ensureRouteInfiniteQueryData,
   ensureRouteQueryData,
 } from "@/lib/react-query";
+import { normalizeApprovalFilters } from "@/lib/time-approval-filters";
+import type { ApprovalFilters } from "@/lib/time-approval-filters";
 import { approvalQueueOptions } from "@/lib/time-approval-queue";
-import type {
-  ApprovalEntry,
-  ApprovalFilters,
-  ApprovalResult,
-} from "@/lib/time-approval-queue";
+import type { ApprovalEntry, ApprovalResult } from "@/lib/time-approval-queue";
 import { workspacesRouteOptions } from "@/lib/workspaces/queries";
 
 const optionalDate = (value: unknown) =>
@@ -50,12 +49,7 @@ export const Route = createFileRoute("/_protected/time_/approval-queue")({
     const to = optionalDate(search["to"]);
     const member = optionalId(search["member"]);
     const matter = optionalId(search["matter"]);
-    return {
-      ...(from === undefined ? {} : { from }),
-      ...(to === undefined ? {} : { to }),
-      ...(member === undefined ? {} : { member }),
-      ...(matter === undefined ? {} : { matter }),
-    };
+    return normalizeApprovalFilters({ from, to, member, matter });
   },
   loaderDeps: ({ search }) => search,
   beforeLoad: async ({ context }) => {
@@ -193,7 +187,7 @@ function ApprovalContent({ filters }: { filters: ApprovalFilters }) {
         <Link
           className="text-sm hover:underline"
           to="/time"
-          search={{ date: undefined }}
+          search={{ date: localISODate() }}
         >
           {t("billing.timesheets")}
         </Link>
@@ -207,7 +201,7 @@ function ApprovalContent({ filters }: { filters: ApprovalFilters }) {
             matters={matters}
             onApply={(nextFilters) =>
               detached(
-                navigate({ search: nextFilters }),
+                navigate({ search: normalizeApprovalFilters(nextFilters) }),
                 "approval-queue.filters",
               )
             }

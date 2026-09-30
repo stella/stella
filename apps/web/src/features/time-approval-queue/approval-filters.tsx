@@ -15,7 +15,7 @@ import {
 } from "@stll/ui/select";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
-import type { ApprovalFilters } from "@/lib/time-approval-queue";
+import type { ApprovalFilters } from "@/lib/time-approval-filters";
 
 const ALL_ITEMS = "__all__";
 
@@ -60,7 +60,9 @@ export const ApprovalFiltersForm = ({
           {...(toDate === null ? {} : { maxDate: toDate })}
           value={fromDate}
           onChange={(date) => {
-            if (pending) {return;}
+            if (pending) {
+              return;
+            }
             setDraftFilters({
               ...draftFilters,
               from: date ?? undefined,
@@ -77,7 +79,9 @@ export const ApprovalFiltersForm = ({
           {...(fromDate === null ? {} : { minDate: fromDate })}
           value={toDate}
           onChange={(date) => {
-            if (pending) {return;}
+            if (pending) {
+              return;
+            }
             setDraftFilters({
               ...draftFilters,
               to: date ?? undefined,

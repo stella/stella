@@ -7,25 +7,27 @@ import { unwrapEden } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
+import { normalizeApprovalFilters } from "@/lib/time-approval-filters";
+import type { ApprovalFilters } from "@/lib/time-approval-filters";
 
 const APPROVAL_PAGE_SIZE = 50;
 const APPROVAL_BATCH_SIZE = 200;
 
-export type ApprovalFilters = {
-  from?: string | undefined;
-  to?: string | undefined;
-  member?: string | undefined;
-  matter?: string | undefined;
-};
-
 const fetchApprovalQueue = async (
-  { matter, ...query }: ApprovalFilters & { limit: number; cursor?: string },
+  {
+    limit,
+    cursor,
+    ...filters
+  }: ApprovalFilters & { limit: number; cursor?: string },
   signal: AbortSignal,
-) =>
-  unwrapEden(
+) => {
+  const { matter, ...query } = normalizeApprovalFilters(filters);
+  return unwrapEden(
     await timeApprovalQueueApi["approval-queue"].get({
       query: {
         ...query,
+        limit,
+        ...(cursor === undefined ? {} : { cursor }),
         ...(matter === undefined
           ? {}
           : { matter: toSafeId<"workspace">(matter) }),
@@ -33,6 +35,7 @@ const fetchApprovalQueue = async (
       fetch: { signal },
     }),
   );
+};
 
 export type ApprovalEntry = Awaited<
   ReturnType<typeof fetchApprovalQueue>
