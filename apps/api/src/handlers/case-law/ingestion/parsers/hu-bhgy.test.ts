@@ -133,7 +133,10 @@ test("custom XML wrappers retain every body and table-cell paragraph", () => {
     rows: [
       {
         cells: [
-          { content: [paragraphOf({ text: "A cella teljes szövege." })] },
+          {
+            type: "tableCell",
+            content: [paragraphOf({ text: "A cella teljes szövege." })],
+          },
         ],
       },
     ],

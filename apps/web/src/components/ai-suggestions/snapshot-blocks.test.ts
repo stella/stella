@@ -13,14 +13,18 @@ test("editable snapshots preserve text and hashes while excluding read-only carr
       ]),
     ]),
   );
-  snapshot.blocks.push({
-    id: "opaque",
-    kind: "diagnostic",
-    text: "Unsupported content",
-    diagnostic: { type: "opaqueCarrier", carrier: "customXml" },
+  const blocks = withBlockTextHashes({
+    ...snapshot,
+    blocks: [
+      ...snapshot.blocks,
+      {
+        id: "opaque",
+        kind: "diagnostic",
+        text: "Unsupported content",
+        diagnostic: { type: "opaqueCarrier", carrier: "customXml" },
+      },
+    ],
   });
-
-  const blocks = withBlockTextHashes(snapshot);
   expect(blocks).toHaveLength(1);
   expect(blocks.at(0)).toMatchObject({
     id: "A1",
