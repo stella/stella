@@ -1,7 +1,11 @@
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
+import {
+  propertyConfig,
+  propertySeed,
+  propertyTestTimeout,
+} from "@stll/property-testing";
 
 import { AGENT_INPUT_NORMALIZATION_KEY, normalizeAgentInput } from "./schema";
 
@@ -66,7 +70,7 @@ describe("schema normalization", () => {
         const second = normalizeAgentInput({ schema, value: first.value });
         expect(second).toEqual({ ok: true, value: first.value, notes: [] });
       }),
-      propertyConfig({ numRuns: 150 }),
+      propertyConfig({ numRuns: 150, seed: propertySeed() }),
     );
   });
 
@@ -82,7 +86,7 @@ describe("schema normalization", () => {
           ).toMatchObject({ ok: true, value });
         }
       }),
-      propertyConfig({ numRuns: 150 }),
+      propertyConfig({ numRuns: 150, seed: propertySeed() }),
     );
 
     fc.assert(
@@ -100,7 +104,7 @@ describe("schema normalization", () => {
           );
         },
       ),
-      propertyConfig({ numRuns: 150 }),
+      propertyConfig({ numRuns: 150, seed: propertySeed() }),
     );
   });
 });
