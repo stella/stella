@@ -2,7 +2,8 @@ import { hashKey } from "@tanstack/react-query";
 import type { Query, QueryClient } from "@tanstack/react-query";
 import { redirect } from "@tanstack/react-router";
 
-import { rootKeys } from "@/lib/auth-queries";
+import { rootKeys, sessionOptions } from "@/lib/auth-query-options";
+import { detached } from "@/lib/detached";
 import { isAuthFlowPathname } from "@/lib/redirect";
 
 /**
@@ -18,9 +19,66 @@ type ReloadDocumentAt = (href: string) => void;
 // Clients whose next page loads as a new document, with how to load it.
 const freshDocumentPending = new WeakMap<QueryClient, ReloadDocumentAt>();
 
-const SESSION_QUERY_HASH = hashKey(rootKeys.session);
+const isSessionQuery = (query: Query) =>
+  query.queryHash === hashKey(rootKeys.session);
 
-const isSessionQuery = (query: Query) => query.queryHash === SESSION_QUERY_HASH;
+const transitions = new WeakMap<
+  QueryClient,
+  {
+    visitor: string;
+    pending: Promise<void>;
+  }
+>();
+const authFlowPages = new WeakMap<QueryClient, () => boolean>();
+
+const sessionVisitor = (session: unknown): string => {
+  const userId = signedInUserId(session);
+  if (userId === undefined) {
+    return "anonymous";
+  }
+  const organizationId =
+    typeof session === "object" &&
+    session !== null &&
+    "session" in session &&
+    typeof session.session === "object" &&
+    session.session !== null &&
+    "activeOrganizationId" in session.session &&
+    typeof session.session.activeOrganizationId === "string"
+      ? session.session.activeOrganizationId
+      : "";
+  return `member:${userId}:${organizationId}`;
+};
+
+export const resetAuthTransition = async (
+  queryClient: QueryClient,
+  visitor: string,
+) => {
+  const current = transitions.get(queryClient);
+  if (current?.visitor === visitor) {
+    return await current.pending;
+  }
+  if (current === undefined) {
+    const pending = Promise.resolve();
+    transitions.set(queryClient, { visitor, pending });
+    return await pending;
+  }
+  const predicate = (query: Query) => !isSessionQuery(query);
+  const pending = queryClient.cancelQueries({ predicate });
+  queryClient.removeQueries({ predicate });
+  transitions.set(queryClient, { visitor, pending });
+  return await pending;
+};
+
+export const settleAuthTransition = async (queryClient: QueryClient) => {
+  const session: unknown = queryClient.getQueryData(sessionOptions.queryKey);
+  if (
+    signedInUserId(session) === undefined &&
+    authFlowPages.get(queryClient)?.()
+  ) {
+    return;
+  }
+  await resetAuthTransition(queryClient, sessionVisitor(session));
+};
 
 /**
  * The signed-in user's id in a cached session, if there is one.
@@ -54,17 +112,19 @@ export const installSessionCacheGuard = (
     reloadDocumentAt,
   }: SessionCacheGuardOptions,
 ) => {
+  authFlowPages.set(queryClient, isAuthFlowPage);
   // Kept once the session ends, so the next sign-in can be told apart.
   let cachedFor: string | undefined;
   return queryClient.getQueryCache().subscribe((event) => {
     if (event.type !== "updated" || event.action.type !== "success") {
       return;
     }
-    if (event.query.queryHash !== SESSION_QUERY_HASH) {
+    if (!isSessionQuery(event.query)) {
       return;
     }
     const session: unknown = event.query.state.data;
     const userId = signedInUserId(session);
+    detached(settleAuthTransition(queryClient), "session-cache.transition");
     if (userId === undefined) {
       return;
     }
@@ -73,8 +133,6 @@ export const installSessionCacheGuard = (
     if (previous === undefined || previous === userId) {
       return;
     }
-    // Removing a query also cancels its read in flight.
-    queryClient.removeQueries({ predicate: (query) => !isSessionQuery(query) });
     freshDocumentPending.set(queryClient, reloadDocumentAt);
     if (!isAuthFlowPage()) {
       reloadDocument();
