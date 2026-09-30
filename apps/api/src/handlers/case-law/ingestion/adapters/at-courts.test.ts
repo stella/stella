@@ -744,6 +744,42 @@ describe("Austrian RIS adapter", () => {
     }
     const withoutDocument = encodeSourceRawEnvelope({ listing });
     const requestsBeforeReplay = urls.length;
+    for (const wrongListing of [
+      listing.replace('"Applikation":"Justiz"', '"Applikation":"Vfgh"'),
+      JSON.stringify(listingItem(SOURCE_ID, "AUSL")),
+    ]) {
+      expect(
+        await reparse({
+          ...stored,
+          raw: new TextEncoder().encode(
+            encodeSourceRawEnvelope({
+              listing: wrongListing,
+              "document-xml": xml,
+            }),
+          ),
+        }),
+      ).toMatchObject({
+        type: "rejected",
+        rejection: STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH,
+      });
+    }
+    expect(
+      await reparse({
+        ...stored,
+        raw: new TextEncoder().encode(
+          encodeSourceRawEnvelope({
+            listing,
+            "document-xml":
+              "<NotADecision>Malformed document payload</NotADecision>".repeat(
+                3,
+              ),
+          }),
+        ),
+      }),
+    ).toMatchObject({
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+    });
     expect(
       await reparse({
         ...stored,

@@ -358,6 +358,12 @@ describe("Austrian Findok adapter", () => {
       await reparse({ ...stored, metadata: metadataWithoutCollection }),
     ).toMatchObject(expectedIncomplete);
     expect(
+      await reparse({
+        ...stored,
+        metadata: { ...stored.metadata, collection: "unknown" },
+      }),
+    ).toMatchObject(expectedIncomplete);
+    expect(
       await reparse({ ...stored, sourceDocumentId: "another-document" }),
     ).toMatchObject({
       type: "rejected",
