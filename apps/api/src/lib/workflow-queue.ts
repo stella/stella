@@ -276,6 +276,8 @@ type StartWorkflowArgs = {
    * starts is recorded on the connection the worker was handed.
    */
   extractionRunStore: ExtractionRunStartStore;
+  kickoff?: typeof runQueuedKickoff;
+  queue?: WorkflowEntityQueue;
 };
 
 /**
@@ -439,6 +441,8 @@ export const startWorkflow = async ({
   serviceTier = "standard",
   runStateStore = getRootWorkflowRunStateStore(),
   extractionRunStore,
+  kickoff = runQueuedKickoff,
+  queue,
 }: StartWorkflowArgs): Promise<StartWorkflowResult> => {
   const requestId = createSafeId<"extractionRun">();
   const runKey = { id: requestId, organizationId, workspaceId };
@@ -637,7 +641,9 @@ export const startWorkflow = async ({
       // Select once for the whole workflow. The same queue instance owns every
       // chunk and any partial-enqueue cleanup, so one request cannot straddle
       // queue classes even during a rolling routing change.
-      const q = getQueueForClass(workflowQueueClassForServiceTier(serviceTier));
+      const q =
+        queue ??
+        getQueueForClass(workflowQueueClassForServiceTier(serviceTier));
       const queuedJobIds: string[] = [];
       try {
         for (const chunk of chunked(
@@ -687,7 +693,7 @@ export const startWorkflow = async ({
   }
   const started = await Result.tryPromise({
     try: async () =>
-      await runQueuedKickoff({
+      await kickoff({
         organizationId,
         userId,
         actionKind: QUEUED_ACTION_KIND.extraction,

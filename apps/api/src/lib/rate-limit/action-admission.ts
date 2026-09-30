@@ -481,9 +481,7 @@ const runInheritedAdmission = async <T>({
           ) {
             await nested.reservePeriod();
           }
-          const value = await run(inherited.signal);
-          inherited.signal.throwIfAborted();
-          return value;
+          return await run(inherited.signal);
         }),
       catch: (error: unknown) => error,
     });
@@ -514,6 +512,23 @@ const validateAdmissionReply = (reply: unknown) => {
   }
 
   return Result.ok(undefined);
+};
+
+const settledAdmissionOutcome = <T>(
+  outcome: Result<T, unknown>,
+  signal: AbortSignal,
+) => {
+  // A settled success may already have committed or charged. Losing the lease
+  // cannot replace it with an infrastructure error that invites duplicate work.
+  if (
+    Result.isError(outcome) &&
+    signal.aborted &&
+    (outcome.error === signal.reason ||
+      (outcome.error instanceof Error && outcome.error.name === "AbortError"))
+  ) {
+    return Result.err(signal.reason);
+  }
+  return outcome;
 };
 
 /**
@@ -725,15 +740,5 @@ export const withActionAdmission = async <T>({
       observeFailure(released.error, { sink: RELEASE_FAILURE });
     }
   }
-  // A settled success may already have committed or charged. Losing the lease
-  // cannot replace it with an infrastructure error that invites duplicate work.
-  if (
-    Result.isError(outcome) &&
-    controller.signal.aborted &&
-    (outcome.error === controller.signal.reason ||
-      (outcome.error instanceof Error && outcome.error.name === "AbortError"))
-  ) {
-    return Result.err(controller.signal.reason);
-  }
-  return outcome;
+  return settledAdmissionOutcome(outcome, controller.signal);
 };

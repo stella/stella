@@ -755,7 +755,6 @@ export const createMcpHttpRequestHandler = ({
           mode,
           toolName,
         });
-        signal?.throwIfAborted();
         return result;
       };
       if (!env.FEATURE_ACTION_ADMISSION) {

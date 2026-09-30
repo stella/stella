@@ -178,13 +178,15 @@ describe("queued action admission", () => {
     expect(
       calls.filter((args) => args.at(0)?.includes("ZREMRANGEBYSCORE")),
     ).toHaveLength(1);
-    expect(calls.some((args) => args.at(0)?.includes("ZREM"))).toBe(false);
+    expect(
+      calls.some((args) => args.at(0)?.includes('redis.call("ZREM",')),
+    ).toBe(false);
 
     finishPlanningAndEnqueue.resolve(undefined);
     await expect(operation).resolves.toBe("enqueued");
-    expect(calls.filter((args) => args.at(0)?.includes("ZREM"))).toHaveLength(
-      1,
-    );
+    expect(
+      calls.filter((args) => args.at(0)?.includes('redis.call("ZREM",')),
+    ).toHaveLength(1);
   });
   test("denied contenders spread their retries and progress after the owner settles", async () => {
     let active = 0;
@@ -200,7 +202,7 @@ describe("queued action admission", () => {
           active += 1;
           return 1;
         }
-        if (args.at(0)?.includes("ZREM")) {
+        if (args.at(0)?.includes('redis.call("ZREM",')) {
           active -= 1;
         }
         return 1;
