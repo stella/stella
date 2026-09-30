@@ -189,6 +189,29 @@ describe("finite HTTP action admission", () => {
     });
   });
 
+  test("completed and charged finite work survives client abort during settlement", async () => {
+    await withFeature(true, async () => {
+      const deps = dependencies();
+      const controller = new AbortController();
+      let charges = 0;
+      const payload = { value: "charged" };
+      const endpoint = createSafeRootHandler(
+        config,
+        async function* () {
+          charges += 1;
+          controller.abort();
+          return Result.ok(payload);
+        },
+        deps,
+      );
+      expect(
+        await endpoint.handler(asTestRaw(context(controller.signal))),
+      ).toBe(payload);
+      expect(charges).toBe(1);
+      expect(deps.counts()).toEqual({ acquisitions: 1, releases: 1 });
+    });
+  });
+
   test("finite admission rejects a dynamically widened Response and cancels its producer", async () => {
     await withFeature(true, async () => {
       const deps = dependencies();
