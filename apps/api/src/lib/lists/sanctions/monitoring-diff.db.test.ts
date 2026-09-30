@@ -7,10 +7,12 @@ import { createHash } from "node:crypto";
 import { SANCTIONS_SOURCES } from "@stll/sanctions";
 import type { SanctionsEntry } from "@stll/sanctions";
 
-import { organization } from "@/api/db/auth-schema";
+import { organization, user } from "@/api/db/auth-schema";
+import { databaseRelations } from "@/api/db/database-relations";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
+  sanctionsContactMarks,
   contacts,
   organizationSettings,
   sanctionsContactMatches,
@@ -21,6 +23,7 @@ import {
   sanctionsEditionEntries,
   sanctionsEntryPayloads,
 } from "@/api/db/schema";
+import type { AuditEvent } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { commitSanctionsMonitoringBatch } from "@/api/lib/lists/sanctions/monitoring-diff";
 import {
@@ -32,12 +35,26 @@ import { screenSanctionsSubject } from "@/api/lib/lists/sanctions/screening-serv
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
+import {
+  excludeSanctionsContact,
+  disableSanctionsMonitoring,
+} from "./monitoring-opt-out";
+import {
+  readContactSanctions,
+  listOpenSanctionsMatches,
+  listSanctionsMonitoringEvents,
+} from "./monitoring-read";
+import { reviewSanctionsMatch } from "./monitoring-review";
+import { sanctionsSourceIds } from "./source-config";
+
 const TIMEOUT = 120_000;
 const now = new Date("2026-09-29T12:00:00Z");
 const orgId = toSafeId<"organization">("monitoring-org");
 const otherOrg = toSafeId<"organization">("monitoring-other");
 let client: Awaited<ReturnType<typeof createTestPglite>>;
-let db: ReturnType<typeof drizzle>;
+const openDb = (connection: Awaited<ReturnType<typeof createTestPglite>>) =>
+  drizzle({ client: connection, relations: databaseRelations });
+let db: ReturnType<typeof openDb>;
 let scopedDb: ScopedDb;
 const indexCache = createSanctionsIndexCache();
 
@@ -54,11 +71,12 @@ const scopedFor =
 
 beforeAll(async () => {
   client = await createTestPglite();
-  db = drizzle({ client });
+  db = openDb(client);
   scopedDb = scopedFor(orgId);
   await client.exec(`
     REVOKE ALL ON organization, sanctions_sources, sanctions_editions, sanctions_edition_entries, sanctions_entry_payloads FROM stella;
     GRANT SELECT ON organization, sanctions_sources, sanctions_editions, sanctions_edition_entries, sanctions_entry_payloads TO stella;
+    GRANT SELECT ON sanctions_contact_marks TO stella;
     GRANT SELECT, INSERT, UPDATE, DELETE ON contacts, organization_settings, sanctions_contact_matches, sanctions_contact_screenings, sanctions_screening_events TO stella;
     ALTER TABLE contacts ENABLE ROW LEVEL SECURITY; ALTER TABLE contacts FORCE ROW LEVEL SECURITY;
     ALTER TABLE organization_settings ENABLE ROW LEVEL SECURITY; ALTER TABLE organization_settings FORCE ROW LEVEL SECURITY;
@@ -489,6 +507,254 @@ test(
         }),
       "sanctions_contact_screenings_clear_edition_check",
     );
+  },
+  TIMEOUT,
+);
+
+const reviewerId = toSafeId<"user">("monitoring-reviewer");
+const audited: string[] = [];
+const recordAuditEvent = async (
+  _tx: Transaction,
+  event: AuditEvent | AuditEvent[],
+) => {
+  audited.push(
+    ...(Array.isArray(event) ? event : [event]).map((row) => row.resourceId),
+  );
+};
+
+test.each(["dismissed", "confirmed"] as const)(
+  "%s review is tenant-isolated, replay-safe, and reopens on either fingerprint",
+  async (disposition) => {
+    await db
+      .insert(user)
+      .values({
+        id: reviewerId,
+        name: "Synthetic Reviewer",
+        email: "reviewer@example.test",
+        emailVerified: false,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoNothing();
+    await activate("f");
+    const contact = await addContact();
+    await commit(await prepare(contact));
+    const initial = await matchFor(contact.id);
+    const options = {
+      organizationId: orgId,
+      contactId: contact.id,
+      source: "eu",
+      sourceEntryId: "one",
+      disposition,
+      reason: "Synthetic review",
+      reviewerId,
+      recordAuditEvent,
+      now,
+    } as const;
+    const denied = await scopedFor(otherOrg)(
+      async (tx) => await reviewSanctionsMatch(tx, options),
+    );
+    expect(denied.isErr()).toBe(true);
+    expect((await matchFor(contact.id)).disposition).toBe("needs-review");
+    const reviewed = await scopedDb(
+      async (tx) => await reviewSanctionsMatch(tx, options),
+    );
+    expect(reviewed.isOk()).toBe(true);
+    await scopedDb(async (tx) => await reviewSanctionsMatch(tx, options));
+    expect((await eventsFor(contact.id)).map((row) => row.type)).toEqual([
+      "new",
+      disposition,
+    ]);
+    expect(await matchFor(contact.id)).toMatchObject({
+      disposition,
+      reviewedContactFingerprint: initial.contactFingerprint,
+      reviewedEntryHash: initial.entryHash,
+      reviewedBy: reviewerId,
+    });
+    await activate("f");
+    await commit(await prepare(contact));
+    expect((await matchFor(contact.id)).disposition).toBe(disposition);
+    await activate("e");
+    await commit(await prepare(contact));
+    expect(await matchFor(contact.id)).toMatchObject({
+      disposition: "needs-review",
+      reviewedContactFingerprint: null,
+      reviewedEntryHash: null,
+    });
+    expect((await eventsFor(contact.id)).at(-1)?.type).toBe("reopened");
+    await scopedDb(async (tx) => await reviewSanctionsMatch(tx, options));
+    const edited =
+      (
+        await db
+          .update(contacts)
+          .set({ nationalityCodes: ["DE"] })
+          .where(eq(contacts.id, contact.id))
+          .returning()
+      ).at(0) ?? panic("Contact missing");
+    await commit(await prepare(edited));
+    expect((await matchFor(contact.id)).disposition).toBe("needs-review");
+    expect((await eventsFor(contact.id)).at(-1)?.type).toBe("reopened");
+  },
+  TIMEOUT,
+);
+
+test(
+  "opt-out hides current hits, preserves history, and fences a concurrent prepared commit",
+  async () => {
+    await db
+      .insert(sanctionsSources)
+      .values(
+        sanctionsSourceIds().map((id) => ({
+          id,
+          issuer: id,
+          markerUrl: "https://example.test/list",
+        })),
+      )
+      .onConflictDoNothing();
+    await activate("d");
+    const contact = await addContact();
+    const prepared = await prepare(contact);
+    await commit(prepared);
+    await db
+      .delete(sanctionsContactMarks)
+      .where(eq(sanctionsContactMarks.contactId, contact.id));
+    const initialRead = await scopedDb(
+      async (tx) =>
+        await readContactSanctions(tx, {
+          organizationId: orgId,
+          contactId: contact.id,
+          now,
+        }),
+    );
+    expect(
+      initialRead.unwrap().lists.find((row) => row.source === "eu")?.status,
+    ).toBe("possible-match");
+    const firstEvents = await eventsFor(contact.id);
+    await Promise.all([
+      scopedDb(
+        async (tx) =>
+          await excludeSanctionsContact(tx, {
+            organizationId: orgId,
+            contactId: contact.id,
+            recordAuditEvent,
+            now,
+          }),
+      ),
+      commit(prepared),
+    ]);
+    expect((await matchFor(contact.id)).state).toBe("lapsed");
+    const excluded = (
+      await scopedDb(
+        async (tx) =>
+          await readContactSanctions(tx, {
+            organizationId: orgId,
+            contactId: contact.id,
+            now,
+          }),
+      )
+    ).unwrap();
+    expect(
+      excluded.lists.every(
+        (row) => row.status === "excluded" && row.matches.length === 0,
+      ),
+    ).toBe(true);
+    expect(await eventsFor(contact.id)).toHaveLength(firstEvents.length);
+    expect(
+      (
+        await scopedDb(
+          async (tx) =>
+            await listOpenSanctionsMatches(tx, { organizationId: orgId, now }),
+        )
+      )
+        .unwrap()
+        .items.some((row) => row.contactId === contact.id),
+    ).toBe(false);
+    expect(
+      (
+        await scopedDb(
+          async (tx) =>
+            await listSanctionsMonitoringEvents(tx, { organizationId: orgId }),
+        )
+      )
+        .unwrap()
+        .items.some((row) => row.contactId === contact.id),
+    ).toBe(false);
+    const otherRead = await scopedFor(otherOrg)(
+      async (tx) =>
+        await readContactSanctions(tx, {
+          organizationId: orgId,
+          contactId: contact.id,
+          now,
+        }),
+    );
+    expect(otherRead.isErr()).toBe(true);
+    await db
+      .delete(organizationSettings)
+      .where(eq(organizationSettings.organizationId, orgId));
+    const included = await addContact();
+    const firmPrepared = await prepare(included);
+    await commit(firmPrepared);
+    await Promise.all([
+      scopedDb(
+        async (tx) =>
+          await disableSanctionsMonitoring(tx, {
+            organizationId: orgId,
+            recordAuditEvent,
+            now,
+          }),
+      ),
+      commit(firmPrepared),
+    ]);
+    expect((await matchFor(included.id)).state).toBe("lapsed");
+    expect(
+      (
+        await scopedDb(
+          async (tx) =>
+            await readContactSanctions(tx, {
+              organizationId: orgId,
+              contactId: included.id,
+              now,
+            }),
+        )
+      )
+        .unwrap()
+        .lists.every((row) => row.status === "excluded"),
+    ).toBe(true);
+  },
+  TIMEOUT,
+);
+
+test(
+  "an audit failure rolls back review state and its append-only event",
+  async () => {
+    await db
+      .delete(organizationSettings)
+      .where(eq(organizationSettings.organizationId, orgId));
+    await activate("9");
+    const contact = await addContact();
+    await commit(await prepare(contact));
+    await expectFailure(
+      async () =>
+        await scopedDb(
+          async (tx) =>
+            await reviewSanctionsMatch(tx, {
+              organizationId: orgId,
+              contactId: contact.id,
+              reviewerId,
+              source: "eu",
+              sourceEntryId: "one",
+              disposition: "dismissed",
+              reason: "Synthetic review",
+              now,
+              recordAuditEvent: async () => panic("synthetic audit failure"),
+            }),
+        ),
+      "synthetic audit failure",
+    );
+    expect((await matchFor(contact.id)).disposition).toBe("needs-review");
+    expect((await eventsFor(contact.id)).map((row) => row.type)).toEqual([
+      "new",
+    ]);
   },
   TIMEOUT,
 );

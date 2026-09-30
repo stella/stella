@@ -11,7 +11,7 @@ ALTER TABLE sanctions_screening_events
   ADD COLUMN entry_hash text;--> statement-breakpoint
 -- stella-migration-safety: reviewed drop-constraint - replace the disposition check with a superset in the same transaction.
 ALTER TABLE sanctions_contact_matches DROP CONSTRAINT sanctions_contact_matches_disposition_check;--> statement-breakpoint
-ALTER TABLE sanctions_contact_matches ADD CONSTRAINT sanctions_contact_matches_disposition_check CHECK (disposition IN ('needs-review', 'dismissed', 'confirmed'));--> statement-breakpoint
+ALTER TABLE sanctions_contact_matches ADD CONSTRAINT sanctions_contact_matches_disposition_check CHECK (disposition IN ('needs-review', 'dismissed', 'confirmed')) NOT VALID;--> statement-breakpoint
 -- stella-migration-safety: reviewed drop-constraint - replace the event check with a superset in the same transaction.
 ALTER TABLE sanctions_screening_events DROP CONSTRAINT sanctions_screening_events_type_check;--> statement-breakpoint
-ALTER TABLE sanctions_screening_events ADD CONSTRAINT sanctions_screening_events_type_check CHECK (type IN ('new', 'changed', 'lapsed', 'reopened', 'dismissed', 'review-restored', 'confirmed'));
+ALTER TABLE sanctions_screening_events ADD CONSTRAINT sanctions_screening_events_type_check CHECK (type IN ('new', 'changed', 'lapsed', 'reopened', 'dismissed', 'review-restored', 'confirmed')) NOT VALID;

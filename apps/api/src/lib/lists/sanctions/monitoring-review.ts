@@ -14,6 +14,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { readSanctionsFreshness } from "@/api/lib/lists/sanctions/freshness";
 import { monitoringFingerprint } from "@/api/lib/lists/sanctions/monitoring-input";
 import { lockSanctionsMonitoring } from "@/api/lib/lists/sanctions/monitoring-lock";
 
@@ -94,7 +95,12 @@ export const reviewSanctionsMatch = async (
       .limit(1)
       .for("update")
   ).at(0);
+  const freshness = (
+    await readSanctionsFreshness({ db: async (read) => await read(tx), now })
+  ).find((row) => row.source === source);
   if (
+    freshness?.status !== "fresh" ||
+    freshness.edition?.id !== match?.editionId ||
     settings?.sanctionsMonitoringMode === "disabled" ||
     contact.sanctionsMonitoringMode === "excluded" ||
     match?.state !== "active" ||
@@ -133,24 +139,22 @@ export const reviewSanctionsMatch = async (
       .where(predicate)
       .returning()
   ).at(0);
-  await tx
-    .insert(sanctionsScreeningEvents)
-    .values({
-      organizationId,
-      contactId,
-      sourceId: source,
-      sourceEntryId,
-      type: disposition,
-      oldEditionId: match.editionId,
-      newEditionId: match.editionId,
-      reason: trimmedReason,
-      reviewerId,
-      contactFingerprint: match.contactFingerprint,
-      entryHash: match.entryHash,
-      oldMatch: match.match,
-      newMatch: match.match,
-      createdAt: now,
-    });
+  await tx.insert(sanctionsScreeningEvents).values({
+    organizationId,
+    contactId,
+    sourceId: source,
+    sourceEntryId,
+    type: disposition,
+    oldEditionId: match.editionId,
+    newEditionId: match.editionId,
+    reason: trimmedReason,
+    reviewerId,
+    contactFingerprint: match.contactFingerprint,
+    entryHash: match.entryHash,
+    oldMatch: match.match,
+    newMatch: match.match,
+    createdAt: now,
+  });
   await recordAuditEvent(tx, {
     action: AUDIT_ACTION.UPDATE,
     resourceType: AUDIT_RESOURCE_TYPE.CONTACT,
