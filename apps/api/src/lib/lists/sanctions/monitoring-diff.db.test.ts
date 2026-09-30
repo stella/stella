@@ -1179,7 +1179,7 @@ test(
     const contact = await addContact();
     await commit(await prepare(contact));
     const match = await matchFor(contact.id);
-    const extraMatches = Array.from({ length: 200 }, (_, index) => {
+    const extraMatches = Array.from({ length: 99 }, (_, index) => {
       const sourceEntryId = `entry-${String(index).padStart(3, "0")}`;
       return {
         ...match,
@@ -1188,6 +1188,42 @@ test(
       };
     });
     await db.insert(sanctionsContactMatches).values(extraMatches);
+    const unEditionId = toSafeId<"sanctionsEdition">(Bun.randomUUIDv7());
+    const editionHash = createHash("sha256").update(unEditionId).digest("hex");
+    await db.insert(sanctionsEditions).values({
+      id: unEditionId,
+      sourceId: "un",
+      markerKey: editionHash,
+      contentHash: editionHash,
+      publishedAt: "2026-09-29",
+      state: "ready",
+      entryCount: 0,
+    });
+    await db
+      .update(sanctionsSources)
+      .set({ activeEditionId: unEditionId, lastSuccessfulVerifiedAt: now })
+      .where(eq(sanctionsSources.id, "un"));
+    const unMatches = Array.from({ length: 101 }, (_, index) => {
+      const sourceEntryId = `entry-${String(index).padStart(3, "0")}`;
+      return {
+        ...match,
+        sourceId: "un",
+        sourceEntryId,
+        editionId: unEditionId,
+        match: { ...match.match, sourceEntryId, editionId: unEditionId },
+      };
+    });
+    await db.insert(sanctionsContactMatches).values(unMatches);
+    await db.insert(sanctionsContactScreenings).values({
+      organizationId: orgId,
+      contactId: contact.id,
+      sourceId: "un",
+      editionId: unEditionId,
+      status: "possible-match",
+      reason: null,
+      contactFingerprint: match.contactFingerprint,
+      checkedAt: now,
+    });
     const options = { organizationId: orgId, contactId: contact.id, now };
     const first = (
       await scopedDb(async (tx) => await readContactSanctions(tx, options))
@@ -1213,6 +1249,15 @@ test(
           }),
       )
     ).unwrap();
+    expect(first.matches.items.every((row) => row.sourceId === "eu")).toBe(
+      true,
+    );
+    expect(first.matches.items.at(-1)?.sourceEntryId).toBe("one");
+    expect(second.matches.items.at(0)?.sourceEntryId).toBe("entry-000");
+    expect(second.matches.items.every((row) => row.sourceId === "un")).toBe(
+      true,
+    );
+    expect(third.matches.items.at(0)?.sourceId).toBe("un");
     expect(second.matches.items).toHaveLength(100);
     expect(third.matches.items).toHaveLength(1);
     expect(third.truncated).toBe(false);
@@ -1221,12 +1266,11 @@ test(
       ...first.matches.items,
       ...second.matches.items,
       ...third.matches.items,
-    ].map((row) => row.sourceEntryId);
+    ].map((row) => `${row.sourceId}:${row.sourceEntryId}`);
     expect(ids).toEqual(
-      [
-        ...extraMatches.map((row) => row.sourceEntryId),
-        match.sourceEntryId,
-      ].toSorted(),
+      [...extraMatches, match, ...unMatches]
+        .map((row) => `${row.sourceId}:${row.sourceEntryId}`)
+        .toSorted(),
     );
     expect(new Set(ids).size).toBe(201);
     expect(
