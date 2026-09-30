@@ -19,65 +19,65 @@ const gatingFailure = {
 const failed = { status: "failed" as const };
 
 describe("staging reporter", () => {
-  test("passes when the only unexpected failure is declared report-only", () => {
+  test("passes when the only unexpected failure is declared report-only", async () => {
     const reporter = new StagingReporter({ state: reportOnlyState });
     reporter.onTestEnd(reportOnlyFailure, failed);
 
-    expect(reporter.onEnd(failed)).toEqual({ status: "passed" });
+    expect(await reporter.onEnd(failed)).toEqual({ status: "passed" });
   });
 
-  test("keeps the run failed when a gating failure accompanies report-only failure", () => {
+  test("keeps the run failed when a gating failure accompanies report-only failure", async () => {
     const reporter = new StagingReporter({ state: reportOnlyState });
     reporter.onTestEnd(reportOnlyFailure, failed);
     reporter.onTestEnd(gatingFailure, failed);
 
-    expect(reporter.onEnd(failed)).toEqual({ status: "failed" });
+    expect(await reporter.onEnd(failed)).toEqual({ status: "failed" });
   });
 
-  test("keeps absent and on preconditions gating", () => {
+  test("keeps absent and on preconditions gating", async () => {
     for (const state of [
       parseStagingState(undefined),
       parseStagingState('{"corpus_index":"on"}'),
     ]) {
       const reporter = new StagingReporter({ state });
       reporter.onTestEnd(reportOnlyFailure, failed);
-      expect(reporter.onEnd(failed)).toEqual({ status: "failed" });
+      expect(await reporter.onEnd(failed)).toEqual({ status: "failed" });
     }
   });
 
-  test("keeps fatal runner errors gating despite declared report-only failure", () => {
+  test("keeps fatal runner errors gating despite declared report-only failure", async () => {
     const reporter = new StagingReporter({ state: reportOnlyState });
     reporter.onTestEnd(reportOnlyFailure, failed);
     reporter.onError();
 
-    expect(reporter.onEnd(failed)).toEqual({ status: "failed" });
+    expect(await reporter.onEnd(failed)).toEqual({ status: "failed" });
   });
 
-  test("preserves interrupted and timed out runner statuses", () => {
+  test("preserves interrupted and timed out runner statuses", async () => {
     const reporter = new StagingReporter({ state: reportOnlyState });
     reporter.onTestEnd(reportOnlyFailure, failed);
 
-    expect(reporter.onEnd({ status: "interrupted" })).toEqual({
+    expect(await reporter.onEnd({ status: "interrupted" })).toEqual({
       status: "interrupted",
     });
-    expect(reporter.onEnd({ status: "timedout" })).toEqual({
+    expect(await reporter.onEnd({ status: "timedout" })).toEqual({
       status: "timedout",
     });
   });
 
-  test("keeps unexplained failures failed and preserves passed results", () => {
+  test("keeps unexplained failures failed and preserves passed results", async () => {
     const reporter = new StagingReporter({ state: reportOnlyState });
-    expect(reporter.onEnd(failed)).toEqual({ status: "failed" });
-    expect(reporter.onEnd({ status: "passed" })).toEqual({
+    expect(await reporter.onEnd(failed)).toEqual({ status: "failed" });
+    expect(await reporter.onEnd({ status: "passed" })).toEqual({
       status: "passed",
     });
   });
 
-  test("ignores passed and skipped tests when deciding whether to demote", () => {
+  test("ignores passed and skipped tests when deciding whether to demote", async () => {
     const reporter = new StagingReporter({ state: reportOnlyState });
     reporter.onTestEnd(reportOnlyFailure, { status: "passed" });
     reporter.onTestEnd(reportOnlyFailure, { status: "skipped" });
 
-    expect(reporter.onEnd(failed)).toEqual({ status: "failed" });
+    expect(await reporter.onEnd(failed)).toEqual({ status: "failed" });
   });
 });

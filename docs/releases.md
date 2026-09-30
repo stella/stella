@@ -78,6 +78,8 @@ only Public Knowledge API/web flag consistency becomes report-only when
 `rollout=knowledge-web-pending`. Assertions still run, and failures retain their
 Playwright traces and report. Every smoke run logs the dispositions and reasons
 and writes them to the step summary. Other test failures and runner errors gate.
+Visitor route checks are skipped with an explicit reason when the web side is
+disabled during a declared pending rollout; undeclared mismatches still gate.
 This declaration records prerequisites; it does not infer state from responses
 or change deployed feature flags.
 

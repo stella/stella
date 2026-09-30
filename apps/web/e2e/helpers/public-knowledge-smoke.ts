@@ -6,12 +6,14 @@ import * as v from "valibot";
 import { loadCatalogue } from "@stll/catalogue";
 
 import messages from "../../src/i18n/langs/en.json" with { type: "json" };
+import { getStagingReporterEnvironment } from "../staging/env";
 import { createNetworkCollector } from "./network";
 import {
   classifyPublicKnowledgeWebProbe,
   isMemberOnlySmokeRequest,
+  publicKnowledgeVisitorSkipReason,
 } from "./public-knowledge-smoke.logic";
-import { STAGING_CHECKS } from "./staging-state";
+import { parseStagingState, STAGING_CHECKS } from "./staging-state";
 
 const PACK_ID = "general-legal";
 const PUBLIC_API = "/api/v1/public/knowledge/template-packs";
@@ -133,9 +135,14 @@ export const declarePublicKnowledgeSmoke = ({
 
     test.beforeAll(async ({ request }) => {
       const { apiEnabled, webEnabled } = await probePublicKnowledge(request);
-      if (!apiEnabled && !webEnabled) {
+      const skipReason = publicKnowledgeVisitorSkipReason({
+        apiEnabled,
+        webEnabled,
+        state: parseStagingState(getStagingReporterEnvironment().state),
+      });
+      if (skipReason) {
         catalogue = { status: "disabled" };
-        test.skip(true, "Public Knowledge is disabled on API and web");
+        test.skip(true, skipReason);
         return;
       }
       const pack = await request.get(`${PUBLIC_API}/${PACK_ID}`);

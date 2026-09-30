@@ -75,7 +75,9 @@ export default class StagingReporter implements Reporter {
     this.fatalError = true;
   }
 
-  onEnd(result: Pick<FullResult, "status">): Pick<FullResult, "status"> {
+  async onEnd(
+    result: Pick<FullResult, "status">,
+  ): Promise<Pick<FullResult, "status">> {
     if (
       result.status !== "failed" ||
       this.fatalError ||
