@@ -162,7 +162,9 @@ test("custom XML wrappers retain every body and table-cell paragraph", () => {
             }
           : block,
     );
-    for (let level = 0; level < depth; level += 1) {content = [wrap(content)];}
+    for (let level = 0; level < depth; level += 1) {
+      content = [wrap(content)];
+    }
     const wrapped = {
       ...document,
       package: {
