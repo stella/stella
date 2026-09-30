@@ -162,20 +162,25 @@ export const sanctionsContactScreenings = p.pgTable(
       .text("source_id")
       .notNull()
       .references(() => sanctionsSources.id),
-    editionId: safeUuid<"sanctionsEdition">("edition_id").references(
-      () => sanctionsEditions.id,
-    ),
+    editionId: safeUuid<"sanctionsEdition">("edition_id"),
     status: p.text({ enum: SANCTIONS_SCREENING_STATUSES }).notNull(),
     reason: p.text(),
     contactFingerprint: p.text("contact_fingerprint").notNull(),
     checkedAt: timestamptz("checked_at").notNull(),
   },
   (table) => [
+    p.foreignKey({
+      name: "sanctions_screenings_edition_fk",
+      columns: [table.editionId],
+      foreignColumns: [sanctionsEditions.id],
+    }),
     p.primaryKey({
+      name: "sanctions_contact_screenings_pkey",
       columns: [table.organizationId, table.contactId, table.sourceId],
     }),
     p
       .foreignKey({
+        name: "sanctions_screenings_contact_fk",
         columns: [table.organizationId, table.contactId],
         foreignColumns: [contacts.organizationId, contacts.id],
       })
@@ -226,6 +231,7 @@ export const sanctionsContactMatches = p.pgTable(
   },
   (table) => [
     p.primaryKey({
+      name: "sanctions_contact_matches_pkey",
       columns: [
         table.organizationId,
         table.contactId,
@@ -249,6 +255,7 @@ export const sanctionsContactMatches = p.pgTable(
     ),
     p
       .foreignKey({
+        name: "sanctions_matches_contact_fk",
         columns: [table.organizationId, table.contactId],
         foreignColumns: [contacts.organizationId, contacts.id],
       })
@@ -272,18 +279,24 @@ export const sanctionsScreeningEvents = p.pgTable(
       .references(() => sanctionsSources.id),
     sourceEntryId: p.text("source_entry_id").notNull(),
     type: p.text({ enum: SANCTIONS_MONITORING_EVENT_TYPES }).notNull(),
-    oldEditionId: safeUuid<"sanctionsEdition">("old_edition_id").references(
-      () => sanctionsEditions.id,
-    ),
-    newEditionId: safeUuid<"sanctionsEdition">("new_edition_id")
-      .notNull()
-      .references(() => sanctionsEditions.id),
+    oldEditionId: safeUuid<"sanctionsEdition">("old_edition_id"),
+    newEditionId: safeUuid<"sanctionsEdition">("new_edition_id").notNull(),
     reason: p.text().notNull(),
     oldMatch: p.jsonb("old_match").$type<SanctionsPossibleMatch>(),
     newMatch: p.jsonb("new_match").$type<SanctionsPossibleMatch>(),
     createdAt: timestamptz("created_at").notNull(),
   },
   (table) => [
+    p.foreignKey({
+      name: "sanctions_events_new_edition_fk",
+      columns: [table.newEditionId],
+      foreignColumns: [sanctionsEditions.id],
+    }),
+    p.foreignKey({
+      name: "sanctions_events_old_edition_fk",
+      columns: [table.oldEditionId],
+      foreignColumns: [sanctionsEditions.id],
+    }),
     p
       .index("sanctions_screening_events_org_contact_time_idx")
       .on(table.organizationId, table.contactId, table.createdAt, table.id),
@@ -296,6 +309,7 @@ export const sanctionsScreeningEvents = p.pgTable(
     ),
     p
       .foreignKey({
+        name: "sanctions_events_contact_fk",
         columns: [table.organizationId, table.contactId],
         foreignColumns: [contacts.organizationId, contacts.id],
       })
