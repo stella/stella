@@ -1,5 +1,5 @@
+import type { ManualTimeEntryValues } from "@/components/billing/manual-time-entry-form";
 import { APIError } from "@/lib/errors/api";
-import type { ManualTimeEntryValues } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/manual-time-entry-form";
 
 export const emptyQuickEntryValues = (
   dateWorked: string,

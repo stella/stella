@@ -1,7 +1,7 @@
 import { useHotkey } from "@tanstack/react-hotkeys";
 import type { Hotkey } from "@tanstack/react-hotkeys";
 
-import { useQuickEntryStore } from "@/lib/time/quick-entry-store";
+import { useQuickEntryStore } from "@/lib/workspaces/quick-entry-store";
 
 type QuickEntryScope = Parameters<
   ReturnType<typeof useQuickEntryStore.getState>["openDialog"]

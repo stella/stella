@@ -12,12 +12,12 @@ import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-sto
 import { usePermissions } from "@/hooks/use-permissions";
 import { useTimeBillingPreviewEnabled } from "@/hooks/use-time-billing-preview";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { useQuickEntryStore } from "@/lib/time/quick-entry-store";
 import { useEffectiveShortcutGroups } from "@/lib/use-effective-shortcuts";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { useCreateTask } from "@/lib/workspaces/mutations/tasks";
 import { entitySummariesCountOptions } from "@/lib/workspaces/queries/entities";
 import { workflowOptions } from "@/lib/workspaces/queries/workspace";
+import { useQuickEntryStore } from "@/lib/workspaces/quick-entry-store";
 
 import { COMMAND_ACTIONS } from "../lib/registry";
 import type { CommandAction, CommandActionContext } from "../lib/types";

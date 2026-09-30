@@ -6,9 +6,10 @@ GlobalRegistrator.register({ url: "http://localhost:3000/time" });
 const { act, cleanup, renderHook } = await import("@testing-library/react");
 const { detectPlatform } = await import("@tanstack/react-hotkeys");
 const { HOTKEYS } = await import("@/lib/hotkeys");
-const { useQuickEntryStore } = await import("@/lib/time/quick-entry-store");
+const { useQuickEntryStore } =
+  await import("@/lib/workspaces/quick-entry-store");
 const { useQuickEntryHotkey } =
-  await import("@/lib/time/use-quick-entry-hotkey");
+  await import("@/lib/workspaces/use-quick-entry-hotkey");
 
 afterEach(() => {
   cleanup();
@@ -19,6 +20,13 @@ afterAll(async () => {
   await GlobalRegistrator.unregister();
 });
 
+// Happy DOM aliases AltGraph to Alt; this fixture represents plain Alt.
+class ShortcutKeyboardEvent extends KeyboardEvent {
+  override getModifierState(key: string) {
+    return key === "AltGraph" ? false : super.getModifierState(key);
+  }
+}
+
 const pressLogTime = () => {
   const modifiers = {
     altKey: true,
@@ -27,7 +35,7 @@ const pressLogTime = () => {
   };
   act(() => {
     document.dispatchEvent(
-      new KeyboardEvent("keydown", {
+      new ShortcutKeyboardEvent("keydown", {
         ...modifiers,
         key: "t",
         code: "KeyT",
@@ -35,7 +43,7 @@ const pressLogTime = () => {
       }),
     );
     document.dispatchEvent(
-      new KeyboardEvent("keyup", {
+      new ShortcutKeyboardEvent("keyup", {
         ...modifiers,
         key: "t",
         code: "KeyT",
@@ -81,7 +89,7 @@ describe("global log-time shortcut", () => {
         useQuickEntryHotkey({
           enabled,
           hotkey: HOTKEYS.LOG_TIME,
-          scope: currentScope,
+          scope,
         }),
       { initialProps: { enabled: false } },
     );

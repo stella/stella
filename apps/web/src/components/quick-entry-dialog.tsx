@@ -15,6 +15,10 @@ import {
 import { Label } from "@stll/ui/label";
 import { stellaToast } from "@stll/ui/toast";
 
+import { ExpenseForm } from "@/components/billing/expense-form";
+import type { ExpenseFormValues } from "@/components/billing/expense-form";
+import { ManualTimeEntryForm } from "@/components/billing/manual-time-entry-form";
+import type { ManualTimeEntryValues } from "@/components/billing/manual-time-entry-form";
 import { QuickEntryRefusal } from "@/components/quick-entry-refusal";
 import { emptyQuickEntryValues } from "@/components/quick-entry.logic";
 import { MatterCombobox } from "@/components/workspaces/matter-combobox";
@@ -25,15 +29,11 @@ import { detached } from "@/lib/detached";
 import { localISODate } from "@/lib/local-iso-date";
 import { organizationSettingsOptions } from "@/lib/organization/settings-queries";
 import { expensesQueryRoot } from "@/lib/resource-query-roots.logic";
-import { useQuickEntryStore } from "@/lib/time/quick-entry-store";
+import { useCreateExpense } from "@/lib/workspaces/mutations/expenses";
+import { useCreateTimeEntry } from "@/lib/workspaces/mutations/time-entries";
 import { myTimeEntriesKeys } from "@/lib/workspaces/queries/my-time-entries";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
-import { ExpenseForm } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/expense-form";
-import type { ExpenseFormValues } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/expense-form";
-import { ManualTimeEntryForm } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/manual-time-entry-form";
-import type { ManualTimeEntryValues } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/manual-time-entry-form";
-import { useCreateExpense } from "@/routes/_protected.workspaces/$workspaceId/-mutations/expenses";
-import { useCreateTimeEntry } from "@/routes/_protected.workspaces/$workspaceId/-mutations/time-entries";
+import { useQuickEntryStore } from "@/lib/workspaces/quick-entry-store";
 
 type EntryStep =
   | { type: "time"; defaults: ManualTimeEntryValues; revision: number }

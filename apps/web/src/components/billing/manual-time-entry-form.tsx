@@ -7,15 +7,15 @@ import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { Label } from "@stll/ui/label";
 
-import { DatePickerPopover } from "@/components/date-picker-popover";
-import { detached } from "@/lib/detached";
-import { MEDIUM_DATE_FORMAT } from "@/lib/relative-time";
-import { DurationInput } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/duration-input";
+import { DurationInput } from "@/components/billing/duration-input";
 import {
   getTimeEntryDateBounds,
   isTimeEntryDateAllowed,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-date.logic";
-import { TimeEntryNarrativeField } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-narrative-field";
+} from "@/components/billing/time-entry-date.logic";
+import { TimeEntryNarrativeField } from "@/components/billing/time-entry-narrative-field";
+import { DatePickerPopover } from "@/components/date-picker-popover";
+import { detached } from "@/lib/detached";
+import { MEDIUM_DATE_FORMAT } from "@/lib/relative-time";
 
 export type ManualTimeEntryValues = {
   dateWorked: string;
