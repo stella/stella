@@ -7,13 +7,13 @@ import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import type { AdmittedActionIdentity } from "@/api/lib/rate-limit/action-kinds";
 import {
   ACTION_PERIOD_ACQUIRE_SCRIPT,
   actionPeriodArguments,
   staleActionPeriodTime,
   resolveActionPeriodBudget,
   type ActionPeriodBudget,
-  type ActionPeriodIdentity,
   type ActionPeriodPolicy,
 } from "@/api/lib/rate-limit/action-period-budget";
 import { withCommandTimeout } from "@/api/lib/rate-limit/redis-command-timeout";
@@ -150,7 +150,7 @@ type ActionAdmissionOptions = {
   run: (signal: AbortSignal) => Promise<unknown>;
   enabled?: boolean;
   policy?: ActionAdmissionPolicy;
-  periodIdentity?: ActionPeriodIdentity;
+  periodIdentity?: AdmittedActionIdentity;
   periodPolicy?: ActionPeriodPolicy;
   redis?: RedisCommands;
   redisReady?: () => Promise<RedisCommands>;
@@ -184,7 +184,7 @@ type AdmissionExecutorOptions = {
   keys: AdmissionKeys;
   budget: ActionPeriodBudget | null;
   organizationId: SafeId<"organization">;
-  periodIdentity: ActionPeriodIdentity | undefined;
+  periodIdentity: AdmittedActionIdentity | undefined;
   redis: RedisCommands | undefined;
   redisReady: () => Promise<RedisCommands>;
 };

@@ -26,7 +26,11 @@ const config = {
     "author or someone who may edit the skill can.",
   permissions: { agentSkill: ["propose"] },
   access: "write",
-  mcp: { type: "capability", reason: "agent_tool_authoring" },
+  mcp: {
+    type: "capability",
+    reason: "agent_tool_authoring",
+    consumesServices: false,
+  },
   params: deleteSkillProposalParamsSchema,
 } satisfies HandlerConfig;
 

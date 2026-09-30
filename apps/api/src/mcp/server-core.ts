@@ -28,8 +28,12 @@ import {
   type McpAuthenticationFailure,
   type McpSession,
 } from "@/api/mcp/auth";
-import { featureOmittedCapabilityIds } from "@/api/mcp/capability-tools";
+import {
+  invokedCapabilityConsumesServices,
+  featureOmittedCapabilityIds,
+} from "@/api/mcp/capability-tools";
 import type { RecordMcpSessionInitialized } from "@/api/mcp/client-identity";
+import { compatFetchConsumesServices } from "@/api/mcp/compat-tools";
 import {
   MCP_MAX_REQUEST_BODY_BYTES,
   MCP_NOTIFICATION_KEEP_ALIVE_MS,
@@ -753,11 +757,21 @@ export const createMcpHttpRequestHandler = ({
         return await run();
       }
 
+      let consumesServices = definition.consumesServices;
+      if (toolName === "invoke_capability") {
+        consumesServices = invokedCapabilityConsumesServices(
+          toolRequest.params.arguments ?? {},
+        );
+      } else if (toolName === "fetch" && mode !== "law") {
+        consumesServices = compatFetchConsumesServices(
+          toolRequest.params.arguments ?? {},
+        );
+      }
       const admitted = await withActionAdmission({
         enabled: true,
         organizationId: context.organizationId,
         userId: context.userId,
-        periodIdentity: mcpActionPeriodIdentity(),
+        periodIdentity: mcpActionPeriodIdentity(consumesServices),
         run,
       });
       if (Result.isOk(admitted)) {

@@ -104,6 +104,7 @@ type HandlerKind = (typeof HANDLER_KINDS)[number];
 
 type CatalogEntry = {
   id: string;
+  consumesServices: boolean;
   /**
    * Authored prose describing what the capability does, sourced from the
    * handler config and carried here by the export script. Surfaced in
@@ -234,6 +235,7 @@ const isCapabilityTransport = (
 const isCatalogEntry = (value: unknown): value is CatalogEntry =>
   isRecord(value) &&
   typeof value["id"] === "string" &&
+  typeof value["consumesServices"] === "boolean" &&
   (value["description"] === undefined ||
     typeof value["description"] === "string") &&
   isHandlerKind(value["handlerKind"]) &&
@@ -266,10 +268,11 @@ const parseCatalog = (raw: unknown): readonly CatalogEntry[] => {
   );
 };
 
-const CATALOG = parseCatalog(capabilityCatalogRaw);
-
-const CATALOG_BY_ID = new Map(CATALOG.map((entry) => [entry.id, entry]));
-const CATALOG_IDS = CATALOG.map((entry) => entry.id);
+let catalog: readonly CatalogEntry[] | undefined;
+let catalogById: Map<string, CatalogEntry> | undefined;
+const getCatalog = () => (catalog ??= parseCatalog(capabilityCatalogRaw));
+const getCatalogById = () =>
+  (catalogById ??= new Map(getCatalog().map((entry) => [entry.id, entry])));
 const DISPATCH_BY_ID = new Map<string, CapabilityDispatchEntry>(
   Object.entries(CAPABILITY_DISPATCH),
 );
@@ -848,7 +851,8 @@ export const featureOmittedCapabilityIds = (
     feature: string | undefined,
   ) => boolean = isCapabilityFeatureEnabled,
 ): readonly string[] =>
-  CATALOG.filter((entry) => !isFeatureEnabled(entry.feature))
+  getCatalog()
+    .filter((entry) => !isFeatureEnabled(entry.feature))
     .map((entry) => entry.id)
     .toSorted();
 
@@ -883,7 +887,7 @@ const listCapabilitiesHandler: McpToolHandler<
   // invoke refuses them for it as well.
   const confirmable =
     context.toolConfirmation !== TOOL_CONFIRMATION.unavailable;
-  const filtered = CATALOG.filter(
+  const filtered = getCatalog().filter(
     (entry) =>
       contextFeatureEnabled(entry.feature, context) &&
       (confirmable || !entry.destructive) &&
@@ -953,7 +957,10 @@ const featureDisabledResult = (
   });
 
 const hintForUnknownId = (id: string): string => {
-  const suggestions = closestToolNames(id, CATALOG_IDS);
+  const suggestions = closestToolNames(
+    id,
+    getCatalog().map((entry) => entry.id),
+  );
   return suggestions.length > 0
     ? `${didYouMean(suggestions.map(quoteToolName))} Call list_capabilities to browse the full set.`
     : "Call list_capabilities to browse available capability ids.";
@@ -1023,7 +1030,7 @@ const describeCapabilityHandler: McpToolHandler<
     return validationErrorResult(parsed.issues);
   }
   const id = parsed.output.capability;
-  const entry = CATALOG_BY_ID.get(id);
+  const entry = getCatalogById().get(id);
   if (!entry) {
     return notFoundWithHint(id);
   }
@@ -1422,6 +1429,19 @@ const resolveCapabilityWorkspace = ({
   return { ok: true, workspaceId: branded };
 };
 
+export const invokedCapabilityConsumesServices = (args: unknown): boolean => {
+  const parsed = v.safeParse(invokeCapabilityArgsSchema, args);
+  if (!parsed.success) {
+    // Invalid calls reach the canonical validation response without executing work.
+    return false;
+  }
+  const entry = getCatalogById().get(parsed.output.capability);
+  if (entry === undefined || parsed.output.validate_only === true) {
+    return false;
+  }
+  return entry.consumesServices;
+};
+
 const invokeCapabilityHandler = async ({
   args,
   context,
@@ -1448,7 +1468,7 @@ const invokeCapabilityHandler = async ({
     confirm,
   } = parsed.output;
 
-  const entry = CATALOG_BY_ID.get(id);
+  const entry = getCatalogById().get(id);
 
   // 1. Unknown id -> not_found with a closest-id hint.
   if (!entry) {
@@ -1912,6 +1932,7 @@ export const mapHandlerResult = ({
 
 const CAPABILITY_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
+    consumesServices: false,
     annotations: {
       title: "List capabilities",
       destructiveHint: false,
@@ -1934,6 +1955,7 @@ const CAPABILITY_TOOL_DEFINITIONS = [
     inputSchema: listCapabilitiesArgsSchema,
   }),
   defineValibotMcpTool({
+    consumesServices: false,
     annotations: {
       title: "Describe capability",
       destructiveHint: false,
@@ -1954,6 +1976,7 @@ const CAPABILITY_TOOL_DEFINITIONS = [
     inputSchema: describeCapabilityArgsSchema,
   }),
   defineValibotMcpTool({
+    consumesServices: false,
     // openWorldHint: true because the target capability is selected at
     // runtime by id, and the catalog includes contacts.business-registries-
     // lookup, which reaches the shared business-registry dispatch (ARES,

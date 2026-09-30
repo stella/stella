@@ -68,10 +68,15 @@ describe("parseExposure", () => {
       by: "search",
     });
     expect(
-      parseExposure({ type: "capability", reason: "billing_admin" }),
+      parseExposure({
+        type: "capability",
+        reason: "billing_admin",
+        consumesServices: false,
+      }),
     ).toEqual({
       type: "capability",
       reason: "billing_admin",
+      consumesServices: false,
     });
     expect(parseExposure({ type: "internal", reason: "webhook" })).toEqual({
       type: "internal",
@@ -82,6 +87,26 @@ describe("parseExposure", () => {
     expect(parseExposure({ type: "covered" }).type).toBe("invalid");
     expect(parseExposure({ type: "capability" }).type).toBe("invalid");
     expect(parseExposure({ type: "bogus" }).type).toBe("invalid");
+  });
+
+  test("requires an explicit boolean service classification on every capability", () => {
+    for (const consumesServices of [false, true]) {
+      const exposure = {
+        type: "capability",
+        reason: "billing_admin",
+        consumesServices,
+      };
+      expect(parseExposure(exposure)).toEqual(exposure);
+    }
+    for (const consumesServices of [undefined, null, "false", 0, {}]) {
+      expect(
+        parseExposure({
+          type: "capability",
+          reason: "billing_admin",
+          consumesServices,
+        }).type,
+      ).toBe("invalid");
+    }
   });
 
   test("distinguishes a missing mcp field (undefined) from a malformed one", () => {
@@ -252,7 +277,11 @@ describe("classifyCoverage", () => {
         // never orphans a tool.
         {
           id: "cap.ts",
-          exposure: { type: "capability", reason: "billing_admin" },
+          exposure: {
+            type: "capability",
+            reason: "billing_admin",
+            consumesServices: false,
+          },
         },
       ],
       registryToolNames,

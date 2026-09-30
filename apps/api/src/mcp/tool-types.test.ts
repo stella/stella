@@ -4,6 +4,7 @@ import { expectTypeOf } from "expect-type";
 import type {
   AllHandlerOutputsTyped,
   HandlerOutputsMatchByName,
+  McpToolDefinition,
   McpToolHandler,
   TypedMcpToolHandler,
 } from "@/api/mcp/tool-types";
@@ -54,5 +55,16 @@ describe("typed tool output contract", () => {
         "test_tool"
       >
     >().toEqualTypeOf<false>();
+  });
+});
+
+describe("MCP service classification contract", () => {
+  test("rejects a tool without an explicit service classification", () => {
+    expectTypeOf<
+      Omit<McpToolDefinition, "consumesServices">
+    >().not.toMatchTypeOf<McpToolDefinition>();
+    expectTypeOf<
+      McpToolDefinition["consumesServices"]
+    >().toEqualTypeOf<boolean>();
   });
 });

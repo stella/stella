@@ -25,7 +25,11 @@ const config = {
     "the matter exactly once in the order you want; a partial list, an " +
     "unknown id, or a duplicate is refused. Only positions change.",
   permissions: { view: ["update"] },
-  mcp: { type: "capability", reason: "workspace_schema" },
+  mcp: {
+    type: "capability",
+    reason: "workspace_schema",
+    consumesServices: false,
+  },
   body: t.Object({
     viewIds: t.Array(tSafeId("workspaceView"), {
       minItems: 1,

@@ -62,6 +62,7 @@ import {
   ActionAdmissionError,
   withActionAdmission,
 } from "@/api/lib/rate-limit/action-admission";
+import type { ActionKind } from "@/api/lib/rate-limit/action-kinds";
 import {
   getTanStackTextModelInfoForRole,
   resolveEffectiveServiceTierForProvider,
@@ -242,7 +243,11 @@ export type McpInternalReason =
 export type McpExposure =
   | { type: "tool"; name: McpToolName }
   | { type: "covered"; by: McpToolName }
-  | { type: "capability"; reason: McpCapabilityReason }
+  | {
+      type: "capability";
+      reason: McpCapabilityReason;
+      consumesServices: boolean;
+    }
   | { type: "internal"; reason: McpInternalReason };
 
 /**
@@ -352,7 +357,7 @@ export type HandlerConfig = InputSchema &
     requestTimeoutMs?: number;
     requiresUsage?: UsageMeteringConfig;
     /** Finite synchronous work; streaming and queued execution need their own lifetimes. */
-    actionAdmission?: { type: "handler"; actionKind: string };
+    actionAdmission?: { type: "handler"; actionKind: ActionKind };
     mcp: McpExposure;
   };
 
@@ -799,7 +804,7 @@ type FiniteHandlerGuard<TResult> = [Extract<TResult, Response>] extends [never]
   : never;
 
 type ConfiguredFiniteHandlerGuard<TConfig, TResult> = TConfig extends {
-  actionAdmission: { type: "handler"; actionKind: string };
+  actionAdmission: { type: "handler"; actionKind: ActionKind };
 }
   ? NoInfer<FiniteHandlerGuard<TResult>>
   : unknown;
@@ -811,7 +816,7 @@ type FiniteActionContext = SafeHandlerLogContext & {
 };
 
 type FiniteActionOptions<TContext, TResult extends SafeHandlerPayload> = {
-  actionKind: string;
+  actionKind: ActionKind;
   ctx: TContext;
   handler: SafeHandlerFn<TContext, TResult>;
   admit?: typeof withActionAdmission;

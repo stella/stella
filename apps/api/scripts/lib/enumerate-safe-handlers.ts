@@ -81,7 +81,7 @@ export const detectHandlerKinds = (source: string): HandlerKind[] => {
 export type ParsedExposure =
   | { type: "tool"; name: string }
   | { type: "covered"; by: string }
-  | { type: "capability"; reason: string }
+  | { type: "capability"; reason: string; consumesServices: boolean }
   | { type: "internal"; reason: string }
   | { type: "pending" }
   | { type: "invalid"; raw: unknown };
@@ -128,8 +128,13 @@ export const parseExposure = (mcp: unknown): ParsedExposure => {
     return { type: "covered", by };
   }
   const reason = mcp["reason"];
-  if (type === "capability" && typeof reason === "string") {
-    return { type: "capability", reason };
+  const consumesServices = mcp["consumesServices"];
+  if (
+    type === "capability" &&
+    typeof reason === "string" &&
+    typeof consumesServices === "boolean"
+  ) {
+    return { type: "capability", reason, consumesServices };
   }
   if (type === "internal" && typeof reason === "string") {
     return { type: "internal", reason };

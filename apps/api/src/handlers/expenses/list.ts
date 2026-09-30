@@ -45,7 +45,7 @@ const config = {
     "item carries the amount in minor currency units, currency, category, " +
     "markup percentage, status, and the recording user's name.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "billing_admin" },
+  mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   access: "read",
   query: readExpensesQuerySchema,
 } satisfies WorkspaceHandlerConfig;

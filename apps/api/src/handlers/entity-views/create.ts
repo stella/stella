@@ -19,7 +19,11 @@ const config = {
   description:
     "Save a personal Table or Kanban view across accessible matters. Layout filters and sorts use the same contract as matter views.",
   permissions: { view: ["create"] },
-  mcp: { type: "capability", reason: "workspace_schema" },
+  mcp: {
+    type: "capability",
+    reason: "workspace_schema",
+    consumesServices: false,
+  },
   body: entityViewBody,
 } satisfies HandlerConfig;
 

@@ -488,6 +488,7 @@ type CapabilityEntry = {
   handlerKind: HandlerKind;
   access: "read" | "write";
   destructive: boolean;
+  consumesServices: boolean;
   scope: string;
   /** Additional OAuth grants required by a compound covering tool. */
   additionalScopes?: readonly string[];
@@ -820,12 +821,40 @@ const coveringToolOf = (exposure: ParsedExposure): string | undefined => {
   return undefined;
 };
 
+const serviceConsumptionOf = (
+  exposure: Extract<
+    ParsedExposure,
+    { type: "capability" | "tool" | "covered" }
+  >,
+  toolServicesByName: ReadonlyMap<string, boolean>,
+): boolean => {
+  let toolName: string;
+  switch (exposure.type) {
+    case "capability":
+      return exposure.consumesServices;
+    case "tool":
+      toolName = exposure.name;
+      break;
+    case "covered":
+      toolName = exposure.by;
+      break;
+    default:
+      exposure satisfies never;
+      return panic("Unhandled capability exposure");
+  }
+  return (
+    toolServicesByName.get(toolName) ??
+    panic(`Missing service classification for covering tool ${toolName}`)
+  );
+};
+
 type BuildCatalogEntryOptions = {
   id: string;
   /** Handler config's `description`, absent when the handler declares none. */
   description: string | undefined;
   kind: HandlerKind;
   access: { access: "read" | "write"; destructive: boolean };
+  consumesServices: boolean;
   scope: string;
   additionalScopes: readonly string[];
   requestTimeoutMs: number | undefined;
@@ -855,6 +884,7 @@ const buildCatalogEntry = ({
   description,
   kind,
   access,
+  consumesServices,
   scope,
   additionalScopes,
   requestTimeoutMs,
@@ -870,6 +900,7 @@ const buildCatalogEntry = ({
   handlerKind: kind,
   access: access.access,
   destructive: access.destructive,
+  consumesServices,
   scope,
   ...(additionalScopes.length === 0 ? {} : { additionalScopes }),
   ...(requestTimeoutMs === undefined ? {} : { requestTimeoutMs }),
@@ -1098,6 +1129,9 @@ const buildCatalog = async (): Promise<BuildResult> => {
   const { DEFAULT_MCP_TOOL_DEFINITIONS: narrowToolDefinitions } =
     await import("../src/mcp/static-tool-definitions");
   const toolDefinitions: readonly McpToolDefinition[] = narrowToolDefinitions;
+  const toolServicesByName = new Map(
+    toolDefinitions.map((tool) => [tool.name, tool.consumesServices]),
+  );
   const toolScopeByName = new Map<string, string>(
     toolDefinitions.map((tool) => [tool.name, tool.scope]),
   );
@@ -1487,12 +1521,17 @@ const buildCatalog = async (): Promise<BuildResult> => {
       coveringToolName === undefined
         ? undefined
         : toolFeatureByName.get(coveringToolName);
+    const consumesServices = serviceConsumptionOf(
+      endpoint.exposure,
+      toolServicesByName,
+    );
     entries.push(
       buildCatalogEntry({
         id,
         description: readDescription(endpoint.config),
         kind: kindResolution.kind,
         access: accessResolution,
+        consumesServices,
         scope,
         additionalScopes,
         requestTimeoutMs,

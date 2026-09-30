@@ -865,6 +865,7 @@ const toPracticeJurisdiction = (
 
 export const STELLA_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
+    consumesServices: false,
     annotations: {
       title: "List matters",
       destructiveHint: false,
@@ -890,6 +891,7 @@ export const STELLA_TOOL_DEFINITIONS = [
     scope: "stella:read",
   }),
   defineValibotMcpTool({
+    consumesServices: false,
     annotations: {
       title: "Search across matters",
       destructiveHint: false,
@@ -909,6 +911,7 @@ export const STELLA_TOOL_DEFINITIONS = [
     scope: "stella:search",
   }),
   defineValibotMcpTool({
+    consumesServices: true,
     annotations: {
       title: "Search case law",
       destructiveHint: false,
@@ -949,6 +952,7 @@ export const STELLA_TOOL_DEFINITIONS = [
     scope: "stella:search",
   }),
   defineValibotMcpTool({
+    consumesServices: true,
     annotations: {
       title: "Look up case law by identifier",
       destructiveHint: false,
@@ -985,6 +989,7 @@ export const STELLA_TOOL_DEFINITIONS = [
     scope: "stella:read",
   }),
   defineValibotMcpTool({
+    consumesServices: false,
     annotations: {
       title: "Read content across matters",
       destructiveHint: false,
@@ -1009,6 +1014,7 @@ export const STELLA_TOOL_DEFINITIONS = [
     scope: "stella:read",
   }),
   defineValibotMcpTool({
+    consumesServices: true,
     annotations: {
       title: "Read case-law decision",
       destructiveHint: false,
@@ -1036,6 +1042,7 @@ export const STELLA_TOOL_DEFINITIONS = [
     scope: "stella:read",
   }),
   defineValibotMcpTool({
+    consumesServices: true,
     annotations: {
       title: "Read case-law citations",
       destructiveHint: false,
@@ -1071,6 +1078,7 @@ export const STELLA_TOOL_DEFINITIONS = [
     scope: "stella:read",
   }),
   defineValibotMcpTool({
+    consumesServices: false,
     annotations: {
       title: "Read contact",
       destructiveHint: false,
@@ -1092,6 +1100,7 @@ export const STELLA_TOOL_DEFINITIONS = [
     scope: "stella:read",
   }),
   defineValibotMcpTool({
+    consumesServices: false,
     description:
       "Set the practice jurisdictions for the user's stella organization. " +
       "Call this when the org's practice jurisdictions are empty (e.g., the " +
