@@ -61,53 +61,87 @@ export const sellerProfileFormSchema = (
       v.maxLength(maxLength, messages.invalidField),
       v.transform((value) => (value === "" ? undefined : value)),
     );
-  return v.object({
-    legalName: v.pipe(
-      v.string(),
-      v.trim(),
-      v.nonEmpty(messages.required),
-      v.maxLength(SELLER_PROFILE_LIMITS.legalName, messages.invalidField),
-    ),
-    registrationId: optionalText(SELLER_PROFILE_LIMITS.registrationId),
-    vatId: optionalText(SELLER_PROFILE_LIMITS.vatId),
-    addressLine1: optionalText(SELLER_PROFILE_LIMITS.addressLine1),
-    addressLine2: optionalText(SELLER_PROFILE_LIMITS.addressLine2),
-    city: optionalText(SELLER_PROFILE_LIMITS.city),
-    postalCode: optionalText(SELLER_PROFILE_LIMITS.postalCode),
-    country: optionalText(SELLER_PROFILE_LIMITS.country),
-    iban: v.pipe(
-      v.string(),
-      v.trim(),
-      v.rawTransform(({ dataset, addIssue, NEVER }) => {
-        if (dataset.value === "") {
-          return undefined;
-        }
-        const normalized = normalizeIban(dataset.value);
-        if (normalized === null) {
-          addIssue({ message: messages.invalidIban });
-          return NEVER;
-        }
-        return normalized;
-      }),
-    ),
-    bic: v.pipe(
-      v.string(),
-      v.trim(),
-      v.toUpperCase(),
-      v.check(
-        (value) =>
-          value === "" || /^[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?$/u.test(value),
-        messages.invalidBic,
+  return v.pipe(
+    v.object({
+      legalName: v.pipe(
+        v.string(),
+        v.trim(),
+        v.nonEmpty(messages.required),
+        v.maxLength(SELLER_PROFILE_LIMITS.legalName, messages.invalidField),
       ),
-      v.transform((value) => (value === "" ? undefined : value)),
+      registrationId: optionalText(SELLER_PROFILE_LIMITS.registrationId),
+      vatId: optionalText(SELLER_PROFILE_LIMITS.vatId),
+      addressLine1: optionalText(SELLER_PROFILE_LIMITS.addressLine1),
+      addressLine2: optionalText(SELLER_PROFILE_LIMITS.addressLine2),
+      city: optionalText(SELLER_PROFILE_LIMITS.city),
+      postalCode: optionalText(SELLER_PROFILE_LIMITS.postalCode),
+      country: optionalText(SELLER_PROFILE_LIMITS.country),
+      iban: v.pipe(
+        v.string(),
+        v.trim(),
+        v.rawTransform(({ dataset, addIssue, NEVER }) => {
+          if (dataset.value === "") {
+            return undefined;
+          }
+          const normalized = normalizeIban(dataset.value);
+          if (normalized === null) {
+            addIssue({ message: messages.invalidIban });
+            return NEVER;
+          }
+          return normalized;
+        }),
+      ),
+      bic: v.pipe(
+        v.string(),
+        v.trim(),
+        v.toUpperCase(),
+        v.check(
+          (value) =>
+            value === "" || /^[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?$/u.test(value),
+          messages.invalidBic,
+        ),
+        v.transform((value) => (value === "" ? undefined : value)),
+      ),
+      accountNumber: optionalText(SELLER_PROFILE_LIMITS.accountNumber),
+      defaultCurrency: v.pipe(
+        v.string(),
+        v.trim(),
+        v.toUpperCase(),
+        v.regex(/^[A-Z]{3}$/u, messages.invalidCurrency),
+      ),
+      footerNotes: optionalText(SELLER_PROFILE_LIMITS.footerNotes),
+    } satisfies Record<keyof SellerProfileInput, v.GenericSchema>),
+    v.transform(
+      ({
+        legalName,
+        registrationId,
+        vatId,
+        addressLine1,
+        addressLine2,
+        city,
+        postalCode,
+        country,
+        iban,
+        bic,
+        accountNumber,
+        defaultCurrency,
+        footerNotes,
+      }) =>
+        ({
+          legalName,
+          defaultCurrency,
+          ...(registrationId === undefined ? {} : { registrationId }),
+          ...(vatId === undefined ? {} : { vatId }),
+          ...(addressLine1 === undefined ? {} : { addressLine1 }),
+          ...(addressLine2 === undefined ? {} : { addressLine2 }),
+          ...(city === undefined ? {} : { city }),
+          ...(postalCode === undefined ? {} : { postalCode }),
+          ...(country === undefined ? {} : { country }),
+          ...(iban === undefined ? {} : { iban }),
+          ...(bic === undefined ? {} : { bic }),
+          ...(accountNumber === undefined ? {} : { accountNumber }),
+          ...(footerNotes === undefined ? {} : { footerNotes }),
+        }) satisfies SellerProfileInput,
     ),
-    accountNumber: optionalText(SELLER_PROFILE_LIMITS.accountNumber),
-    defaultCurrency: v.pipe(
-      v.string(),
-      v.trim(),
-      v.toUpperCase(),
-      v.regex(/^[A-Z]{3}$/u, messages.invalidCurrency),
-    ),
-    footerNotes: optionalText(SELLER_PROFILE_LIMITS.footerNotes),
-  } satisfies Record<keyof SellerProfileInput, v.GenericSchema>);
+  );
 };

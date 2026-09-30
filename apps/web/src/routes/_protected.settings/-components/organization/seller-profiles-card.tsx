@@ -75,7 +75,10 @@ const SellerProfilesCardBody = ({
     mutationFn: sendSellerProfileCommand,
     invalidate: sellerProfilesKeys.all(organizationId),
   });
-  const profiles = query.data?.pages.flatMap((page) => page.items) ?? [];
+  const profiles =
+    query.data === undefined
+      ? []
+      : query.data.pages.flatMap((page) => page.items);
   const close = () => {
     if (!mutation.isPending) {
       setDialog({ type: "closed" });

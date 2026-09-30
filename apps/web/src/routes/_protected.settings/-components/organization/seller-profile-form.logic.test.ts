@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
-import { sellerProfileFormSchema } from "./seller-profile-form.logic";
+import {
+  SELLER_PROFILE_FIELDS,
+  sellerProfileFormSchema,
+} from "./seller-profile-form.logic";
 
 const schema = sellerProfileFormSchema({
   required: "Required",
@@ -29,17 +32,18 @@ const empty = {
 describe("seller profile form normalization", () => {
   test("trims required fields and omits cleared optional fields from the request", () => {
     const values = v.parse(schema, empty);
-    expect(JSON.stringify(values)).toBe(
-      JSON.stringify({
-        legalName: "Legal Practice",
-        defaultCurrency: "EUR",
-      }),
-    );
-    for (const [name, value] of Object.entries(values)) {
-      if (name === "legalName" || name === "defaultCurrency") {
-        continue;
-      }
-      expect(value).toBeUndefined();
+    expect(values).toEqual({
+      legalName: "Legal Practice",
+      defaultCurrency: "EUR",
+    });
+    expect(Object.keys(values).toSorted()).toEqual([
+      "defaultCurrency",
+      "legalName",
+    ]);
+    for (const name of SELLER_PROFILE_FIELDS) {
+      expect(Object.hasOwn(values, name)).toBe(
+        name === "legalName" || name === "defaultCurrency",
+      );
     }
   });
 
@@ -76,17 +80,20 @@ describe("seller profile form normalization", () => {
   });
 
   test("clears whitespace-only optional values", () => {
-    for (const name of Object.keys(schema.entries)) {
+    for (const name of SELLER_PROFILE_FIELDS) {
       if (name === "legalName" || name === "defaultCurrency") {
         continue;
       }
       const result = v.parse(schema, { ...empty, [name]: "  \n " });
-      expect(JSON.stringify(result)).toBe(
-        JSON.stringify({
-          legalName: "Legal Practice",
-          defaultCurrency: "EUR",
-        }),
-      );
+      expect(result).toEqual({
+        legalName: "Legal Practice",
+        defaultCurrency: "EUR",
+      });
+      expect(Object.hasOwn(result, name)).toBe(false);
+      expect(Object.keys(result).toSorted()).toEqual([
+        "defaultCurrency",
+        "legalName",
+      ]);
     }
   });
 

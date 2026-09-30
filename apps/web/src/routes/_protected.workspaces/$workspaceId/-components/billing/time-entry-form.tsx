@@ -22,6 +22,10 @@ import {
 } from "@stll/ui/select";
 import { Textarea } from "@stll/ui/textarea";
 
+import {
+  DEFAULT_CURRENCY,
+  formatCurrencyAmount,
+} from "@/components/billing/format-currency";
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
@@ -34,10 +38,6 @@ import {
   submittedRateCents,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/amount-input.logic";
 import { DurationInput } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/duration-input";
-import {
-  DEFAULT_CURRENCY,
-  formatCurrencyAmount,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
 import { MatterCombobox } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/matter-combobox";
 import { TimeEntryNarrativeField } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-narrative-field";
 

@@ -44,6 +44,7 @@ import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
+import { formatCurrencyAmount } from "@/components/billing/format-currency";
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
@@ -64,7 +65,6 @@ import {
 } from "@/lib/workspaces/queries/invoices";
 import type { InvoiceStatus } from "@/lib/workspaces/queries/invoices";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
-import { formatCurrencyAmount } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
 import { InvoiceStatusBadge } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-status-badge";
 
 export const Route = createFileRoute(

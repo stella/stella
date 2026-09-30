@@ -12,13 +12,13 @@ import { Input } from "@stll/ui/input";
 import { Textarea } from "@stll/ui/textarea";
 import { cn } from "@stll/ui/utils";
 
+import { DEFAULT_CURRENCY } from "@/components/billing/format-currency";
 import { detached } from "@/lib/detached";
 import type {
   SellerProfile,
   SellerProfileInput,
 } from "@/lib/organization/seller-profiles";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
-import { DEFAULT_CURRENCY } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
 
 import {
   SELLER_PROFILE_FIELDS,
