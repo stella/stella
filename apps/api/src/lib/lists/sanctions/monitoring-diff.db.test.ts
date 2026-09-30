@@ -13,6 +13,7 @@ import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   sanctionsContactMarks,
+  sanctionsOrganizationMarks,
   contacts,
   organizationSettings,
   sanctionsContactMatches,
@@ -38,6 +39,8 @@ import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 import {
   excludeSanctionsContact,
+  includeSanctionsContact,
+  enableSanctionsMonitoring,
   disableSanctionsMonitoring,
 } from "./monitoring-opt-out";
 import {
@@ -78,7 +81,7 @@ beforeAll(async () => {
   await client.exec(`
     REVOKE ALL ON organization, sanctions_sources, sanctions_editions, sanctions_edition_entries, sanctions_entry_payloads FROM stella;
     GRANT SELECT ON organization, sanctions_sources, sanctions_editions, sanctions_edition_entries, sanctions_entry_payloads TO stella;
-    GRANT SELECT ON sanctions_contact_marks TO stella;
+    GRANT SELECT, INSERT, UPDATE ON sanctions_contact_marks, sanctions_organization_marks TO stella;
     GRANT SELECT, INSERT, UPDATE, DELETE ON contacts, organization_settings, sanctions_contact_matches, sanctions_contact_screenings, sanctions_screening_events TO stella;
     ALTER TABLE contacts ENABLE ROW LEVEL SECURITY; ALTER TABLE contacts FORCE ROW LEVEL SECURITY;
     ALTER TABLE organization_settings ENABLE ROW LEVEL SECURITY; ALTER TABLE organization_settings FORCE ROW LEVEL SECURITY;
@@ -898,6 +901,148 @@ test(
         (row) => !eventPage.items.some((previous) => previous.id === row.id),
       ),
     ).toBe(true);
+  },
+  TIMEOUT,
+);
+
+test(
+  "re-enabling queues durable contact and firm refreshes, replays safely, and rolls back on audit failure",
+  async () => {
+    const contact = await addContact();
+    await scopedDb(
+      async (tx) =>
+        await excludeSanctionsContact(tx, {
+          organizationId: orgId,
+          contactId: contact.id,
+          recordAuditEvent,
+          now,
+        }),
+    );
+    await db
+      .delete(sanctionsContactMarks)
+      .where(eq(sanctionsContactMarks.contactId, contact.id));
+    const options = {
+      organizationId: orgId,
+      contactId: contact.id,
+      recordAuditEvent,
+    };
+    const denied = await scopedFor(otherOrg)(
+      async (tx) => await includeSanctionsContact(tx, options),
+    );
+    expect(denied.isErr() && denied.error.status).toBe(404);
+    await expectFailure(
+      async () =>
+        await scopedDb(
+          async (tx) =>
+            await includeSanctionsContact(tx, {
+              ...options,
+              recordAuditEvent: async () =>
+                panic("synthetic re-enable audit failure"),
+            }),
+        ),
+      "synthetic re-enable audit failure",
+    );
+    expect(
+      (
+        await db
+          .select()
+          .from(sanctionsContactMarks)
+          .where(eq(sanctionsContactMarks.contactId, contact.id))
+      ).length,
+    ).toBe(0);
+    expect(
+      (await db.select().from(contacts).where(eq(contacts.id, contact.id))).at(
+        0,
+      )?.sanctionsMonitoringMode,
+    ).toBe("excluded");
+    const included = await scopedDb(
+      async (tx) => await includeSanctionsContact(tx, options),
+    );
+    expect(included.isOk()).toBe(true);
+    const mark = (
+      await db
+        .select()
+        .from(sanctionsContactMarks)
+        .where(eq(sanctionsContactMarks.contactId, contact.id))
+    ).at(0);
+    expect(mark).toBeDefined();
+    await scopedDb(async (tx) => await includeSanctionsContact(tx, options));
+    expect(
+      (
+        await db
+          .select()
+          .from(sanctionsContactMarks)
+          .where(eq(sanctionsContactMarks.contactId, contact.id))
+      ).at(0),
+    ).toEqual(mark);
+    await scopedDb(
+      async (tx) =>
+        await disableSanctionsMonitoring(tx, {
+          organizationId: orgId,
+          recordAuditEvent,
+          now,
+        }),
+    );
+    await db
+      .delete(sanctionsOrganizationMarks)
+      .where(eq(sanctionsOrganizationMarks.organizationId, orgId));
+    await expectFailure(
+      async () =>
+        await scopedDb(
+          async (tx) =>
+            await enableSanctionsMonitoring(tx, {
+              organizationId: orgId,
+              recordAuditEvent: async () =>
+                panic("synthetic firm audit failure"),
+            }),
+        ),
+      "synthetic firm audit failure",
+    );
+    expect(
+      (
+        await db
+          .select()
+          .from(sanctionsOrganizationMarks)
+          .where(eq(sanctionsOrganizationMarks.organizationId, orgId))
+      ).length,
+    ).toBe(0);
+    expect(
+      (
+        await db
+          .select()
+          .from(organizationSettings)
+          .where(eq(organizationSettings.organizationId, orgId))
+      ).at(0)?.sanctionsMonitoringMode,
+    ).toBe("disabled");
+    await scopedDb(
+      async (tx) =>
+        await enableSanctionsMonitoring(tx, {
+          organizationId: orgId,
+          recordAuditEvent,
+        }),
+    );
+    const orgMark = (
+      await db
+        .select()
+        .from(sanctionsOrganizationMarks)
+        .where(eq(sanctionsOrganizationMarks.organizationId, orgId))
+    ).at(0);
+    expect(orgMark).toBeDefined();
+    await scopedDb(
+      async (tx) =>
+        await enableSanctionsMonitoring(tx, {
+          organizationId: orgId,
+          recordAuditEvent,
+        }),
+    );
+    expect(
+      (
+        await db
+          .select()
+          .from(sanctionsOrganizationMarks)
+          .where(eq(sanctionsOrganizationMarks.organizationId, orgId))
+      ).at(0),
+    ).toEqual(orgMark);
   },
   TIMEOUT,
 );

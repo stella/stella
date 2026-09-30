@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
+import { isUuid } from "@stll/uuid-codec";
+
 import type { Transaction } from "@/api/db/root";
 import {
   contacts,
@@ -15,9 +17,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { monitoringFingerprint } from "@/api/lib/lists/sanctions/monitoring-input";
 import { lockSanctionsMonitoring } from "@/api/lib/lists/sanctions/monitoring-lock";
+import { requestSanctionsMonitoringRefresh } from "@/api/lib/lists/sanctions/monitoring-refresh";
 import { sanctionsSourceIds } from "@/api/lib/lists/sanctions/source-config";
 
-type ExcludeContactOptions = {
+type ContactMonitoringOptions = {
   organizationId: SafeId<"organization">;
   contactId: SafeId<"contact">;
   recordAuditEvent: AuditRecorder;
@@ -31,7 +34,7 @@ export const excludeSanctionsContact = async (
     contactId,
     recordAuditEvent,
     now = new Date(),
-  }: ExcludeContactOptions,
+  }: ContactMonitoringOptions,
 ) => {
   await lockSanctionsMonitoring(tx, organizationId);
   const contact = (
@@ -117,7 +120,7 @@ export const excludeSanctionsContact = async (
   return Result.ok({ mode: "excluded" } as const);
 };
 
-type DisableMonitoringOptions = {
+type FirmMonitoringOptions = {
   organizationId: SafeId<"organization">;
   recordAuditEvent: AuditRecorder;
   now?: Date;
@@ -125,11 +128,7 @@ type DisableMonitoringOptions = {
 
 export const disableSanctionsMonitoring = async (
   tx: Transaction,
-  {
-    organizationId,
-    recordAuditEvent,
-    now = new Date(),
-  }: DisableMonitoringOptions,
+  { organizationId, recordAuditEvent, now = new Date() }: FirmMonitoringOptions,
 ) => {
   await lockSanctionsMonitoring(tx, organizationId);
   const settings = (
@@ -184,4 +183,99 @@ export const disableSanctionsMonitoring = async (
     });
   }
   return { mode: "disabled" } as const;
+};
+
+export const includeSanctionsContact = async (
+  tx: Transaction,
+  { organizationId, contactId, recordAuditEvent }: ContactMonitoringOptions,
+) => {
+  if (!isUuid(contactId)) {
+    return Result.err(
+      new HandlerError({ status: 400, message: "Contact ID must be a UUID" }),
+    );
+  }
+  await lockSanctionsMonitoring(tx, organizationId);
+  const contact = (
+    await tx
+      .select()
+      .from(contacts)
+      .where(
+        and(
+          eq(contacts.organizationId, organizationId),
+          eq(contacts.id, contactId),
+        ),
+      )
+      .limit(1)
+      .for("no key update")
+  ).at(0);
+  if (contact === undefined) {
+    return Result.err(
+      new HandlerError({ status: 404, message: "Contact not found" }),
+    );
+  }
+  await tx
+    .update(contacts)
+    .set({ sanctionsMonitoringMode: "included" })
+    .where(
+      and(
+        eq(contacts.organizationId, organizationId),
+        eq(contacts.id, contactId),
+      ),
+    );
+  await requestSanctionsMonitoringRefresh(tx, {
+    organizationId,
+    contactIds: [contactId],
+  });
+  if (contact.sanctionsMonitoringMode !== "included") {
+    await recordAuditEvent(tx, {
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.CONTACT,
+      resourceId: contactId,
+      workspaceId: null,
+      changes: {
+        sanctionsMonitoringMode: {
+          old: contact.sanctionsMonitoringMode,
+          new: "included",
+        },
+      },
+    });
+  }
+  return Result.ok({ mode: "included" } as const);
+};
+
+export const enableSanctionsMonitoring = async (
+  tx: Transaction,
+  { organizationId, recordAuditEvent }: FirmMonitoringOptions,
+) => {
+  await lockSanctionsMonitoring(tx, organizationId);
+  const settings = (
+    await tx
+      .select()
+      .from(organizationSettings)
+      .where(eq(organizationSettings.organizationId, organizationId))
+      .limit(1)
+      .for("no key update")
+  ).at(0);
+  await tx
+    .insert(organizationSettings)
+    .values({
+      id: createSafeId<"organizationSettings">(),
+      organizationId,
+      sanctionsMonitoringMode: "enabled",
+    })
+    .onConflictDoUpdate({
+      target: organizationSettings.organizationId,
+      set: { sanctionsMonitoringMode: "enabled" },
+    });
+  await requestSanctionsMonitoringRefresh(tx, { organizationId });
+  if (settings?.sanctionsMonitoringMode === "disabled") {
+    await recordAuditEvent(tx, {
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+      resourceId: organizationId,
+      workspaceId: null,
+      changes: { sanctionsMonitoringMode: { old: "disabled", new: "enabled" } },
+    });
+  }
+  return { mode: "enabled" } as const;
 };
