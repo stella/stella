@@ -2,13 +2,6 @@
 import { Result, TaggedError } from "better-result";
 import JSZip from "jszip";
 
-// JSZip's platform-neutral entry stream is missing from its published typings.
-declare module "jszip" {
-  type JSZipObject = {
-    internalStream: (type: "uint8array") => JSZip.JSZipStreamHelper<Uint8Array>;
-  };
-}
-
 /** Maximum bytes any single archive entry may decompress to. */
 export const DOCX_MAX_ENTRY_BYTES = 128 * 1024 * 1024;
 
@@ -62,11 +55,28 @@ type ReadEntryOptions = {
   onChunk?: (chunk: Uint8Array) => void;
 };
 
+type StreamingEntry = JSZip.JSZipObject & {
+  internalStream: (type: "uint8array") => JSZip.JSZipStreamHelper<Uint8Array>;
+};
+
+// The upstream stream method is not included in JSZip's published entry type.
+const isStreamingEntry = (entry: JSZip.JSZipObject): entry is StreamingEntry =>
+  "internalStream" in entry && typeof entry.internalStream === "function";
+
 const readEntryBounded = async (
   entry: JSZip.JSZipObject,
   { maxEntryBytes, remainingBytes, onChunk }: ReadEntryOptions,
 ): Promise<number> =>
   await new Promise<number>((resolve, reject) => {
+    if (!isStreamingEntry(entry)) {
+      reject(
+        new DocxArchiveError({
+          message: "Failed to read DOCX entry",
+          reason: "load-failed",
+        }),
+      );
+      return;
+    }
     const stream = entry.internalStream("uint8array");
     let bytes = 0;
     let settled = false;
