@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import {
   majorUnitInput,
   submittedRateCents,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/amount-input.logic";
+} from "@/components/billing/amount-input.logic";
 
 test("a rate typed under one currency is scaled by the one submitted", () => {
   // The reported defect: the rate input blurs under USD, the currency beside
