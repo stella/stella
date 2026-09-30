@@ -19,9 +19,9 @@ import {
   MAX_SOURCE_IDENTITY_CANDIDATES,
 } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import { planSupplementComposition } from "@/api/handlers/case-law/ingestion/supplement-composition";
-import { rowHoldsDocumentFor } from "@/api/handlers/case-law/stored-payload";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resolveDecisionCourtId } from "@/api/lib/case-law/decision-court-identity";
+import { rowHoldsDocumentFor } from "@/api/lib/case-law/stored-payload";
 import { DANGEROUS_CHARS } from "@/api/lib/legal-search/corpus-sanitize";
 import {
   observedDocketOf,

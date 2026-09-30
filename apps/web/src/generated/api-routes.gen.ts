@@ -8414,7 +8414,9 @@ export type WebRoutes = {
             200: {
               items: Array<{
                 id: Tb7bcf69f62;
-                invoiceNumber: string;
+                invoiceNumber: Tbe0400fa4c;
+                documentType: Tbb2566af3f;
+                originalInvoiceId: T35ba71e459;
                 reference: Tbe0400fa4c;
                 status: Tc0f5c8e964;
                 invoiceDate: string;
@@ -8485,6 +8487,7 @@ export type WebRoutes = {
                 }>;
                 totals: T5a0acd1281;
                 paidAt: Tbe0400fa4c;
+                finalizedAt: Tbe0400fa4c;
                 createdAt: string;
                 updatedAt: string;
                 status: Tc0f5c8e964;
@@ -8492,9 +8495,11 @@ export type WebRoutes = {
                 id: Tb7bcf69f62;
                 workspaceId: T9e07a7d6cd;
                 dueDate: Tbe0400fa4c;
+                documentType: Tbb2566af3f;
                 currency: string;
                 notes: Tbe0400fa4c;
-                invoiceNumber: string;
+                invoiceNumber: Tbe0400fa4c;
+                originalInvoiceId: T35ba71e459;
                 invoiceDate: string;
                 totalAmount: stll_money_CentsAmount;
                 taxableSupplyDate: Tbe0400fa4c;
@@ -8571,9 +8576,11 @@ export type WebRoutes = {
           body: {
             reference?: string | null;
             dueDate?: string | null;
+            documentType?: "advance" | "credit_note" | "invoice";
             notes?: string | null;
+            invoiceNumber?: string;
+            originalInvoiceId?: Tb7bcf69f62;
             currency: string;
-            invoiceNumber: string;
             invoiceDate: string;
             timeEntryIds: Array<Tdb05f01858>;
           };
@@ -8583,7 +8590,7 @@ export type WebRoutes = {
           response: {
             200: {
               id: Tb7bcf69f62;
-              invoiceNumber: string;
+              invoiceNumber: Tbe0400fa4c;
               totalAmount: stll_money_CentsAmount;
               entryCount: number;
             };
@@ -8618,9 +8625,11 @@ export type WebRoutes = {
             body: {
               reference?: string | null;
               dueDate?: string | null;
+              documentType?: "advance" | "credit_note" | "invoice";
               currency?: string;
               notes?: string | null;
-              invoiceNumber?: string;
+              invoiceNumber?: string | null;
+              originalInvoiceId?: Tb7bcf69f62 | null;
               invoiceDate?: string;
               taxableSupplyDate?: string | null;
               sellerProfileId?: Tfd3441c0df | null;
@@ -26296,6 +26305,8 @@ export type WebRoutes = {
           response: {
             200: T13b00b267e;
             401: never;
+            403: "Organization membership not found";
+            409: "A firm-knowledge seed is already running";
             422: {
               type: "validation";
               on: string;
@@ -36390,6 +36401,8 @@ type T352ed14c79 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "agentSkill";
 };
 
+type T35ba71e459 = Tb7bcf69f62 | null;
+
 type T367a10cc51 = {
   readonly input: T466db84340;
   readonly output: T27875dbd24;
@@ -38818,6 +38831,7 @@ type Ta0c1d202e7 = stll_money_CentsAmount | null;
 
 type Ta0e1c4f807 = T12163e1f6a | {
   documentPending: Tfddd645dc8;
+  hasDocument: Tfddd645dc8;
   documentReadFailed: Tfddd645dc8;
   documentUnavailable: Tfddd645dc8;
   id: T406326c84f;
@@ -38938,7 +38952,9 @@ type Ta0e1c4f807 = T12163e1f6a | {
     sectionIndex: T588d0ee653;
   }>);
   citationsNextCursor: Tbe0400fa4c;
-  languageAlternates: ReadonlyArray<T32fdeee18e>;
+  languageAlternates: ReadonlyArray<(T32fdeee18e & {
+    hasDocument: Tfddd645dc8;
+  })>;
   fulltext: Tbe0400fa4c;
 };
 

@@ -1,6 +1,6 @@
 import type { TSchema } from "@sinclair/typebox";
-import type { Err, UnhandledException } from "better-result";
-import { Result } from "better-result";
+import type { Err } from "better-result";
+import { Result, UnhandledException } from "better-result";
 import type {
   Context,
   ElysiaCustomStatusResponse,
@@ -58,6 +58,10 @@ import { logger } from "@/api/lib/observability/logger";
 import { getRequestContext } from "@/api/lib/observability/request-context";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { AnyPermissiveRouteSchema } from "@/api/lib/permissive-route-schema";
+import {
+  ActionAdmissionError,
+  withActionAdmission,
+} from "@/api/lib/rate-limit/action-admission";
 import {
   getTanStackTextModelInfoForRole,
   resolveEffectiveServiceTierForProvider,
@@ -347,6 +351,8 @@ export type HandlerConfig = InputSchema &
     /** Finite API-owned transport deadline for a generated capability command. */
     requestTimeoutMs?: number;
     requiresUsage?: UsageMeteringConfig;
+    /** Finite synchronous work; streaming and queued execution need their own lifetimes. */
+    actionAdmission?: { type: "handler"; actionKind: string };
     mcp: McpExposure;
   };
 
@@ -423,6 +429,8 @@ type BaseHandlerContext<TConfig extends HandlerConfig = HandlerConfig> =
      * consumption settles against the decided budget.
      */
     usageLane?: UsageLaneDecision;
+    /** Shared lease and client cancellation, set only for admitted finite work. */
+    actionSignal?: AbortSignal;
     /**
      * Whether stella may annotate AI requests for this org with
      * prompt-cache markers. Threaded through to the model resolver;
@@ -786,6 +794,127 @@ const runSafeHandler = async <
   }
 };
 
+type FiniteHandlerGuard<TResult> = [Extract<TResult, Response>] extends [never]
+  ? unknown
+  : never;
+
+type ConfiguredFiniteHandlerGuard<TConfig, TResult> = TConfig extends {
+  actionAdmission: { type: "handler"; actionKind: string };
+}
+  ? NoInfer<FiniteHandlerGuard<TResult>>
+  : unknown;
+
+type FiniteActionContext = SafeHandlerLogContext & {
+  user: { id: SafeId<"user"> };
+  session: { activeOrganizationId: SafeId<"organization"> };
+  actionSignal?: AbortSignal;
+};
+
+type FiniteActionOptions<TContext, TResult extends SafeHandlerPayload> = {
+  actionKind: string;
+  ctx: TContext;
+  handler: SafeHandlerFn<TContext, TResult>;
+  admit?: typeof withActionAdmission;
+};
+
+const runAdmittedFiniteHandler = async function* <
+  TContext extends FiniteActionContext,
+  TResult extends SafeHandlerPayload,
+>({
+  ctx,
+  handler,
+  actionKind,
+  admit = withActionAdmission,
+}: FiniteActionOptions<TContext, TResult>): SafeHandlerGenerator<TResult> {
+  return yield* Result.await(
+    admit({
+      organizationId: ctx.session.activeOrganizationId,
+      userId: ctx.user.id,
+      periodIdentity: {
+        actionKind,
+        // These finite endpoints have no client idempotency key.
+        logicalPhaseId:
+          getRequestContext(ctx.request)?.requestId ?? Bun.randomUUIDv7(),
+      },
+      run: async (signal) => {
+        ctx.actionSignal = AbortSignal.any([ctx.request.signal, signal]);
+        ctx.actionSignal.throwIfAborted();
+        const outcome = await Result.gen(() => handler(ctx));
+        ctx.actionSignal.throwIfAborted();
+        if (Result.isOk(outcome) && outcome.value instanceof Response) {
+          // Cancel the producer too: a rejected stream must not keep running after release.
+          await outcome.value.body?.cancel();
+          return Result.err(
+            new HandlerError({
+              status: 500,
+              code: API_ERROR_CODE.internalServerError,
+              message: "Internal server error",
+              cause: new UnhandledException({
+                cause: "Finite handlers cannot return a Response",
+              }),
+            }),
+          );
+        }
+        return outcome;
+      },
+    }).then((admitted) =>
+      Result.mapError(admitted, (error) => {
+        if (ActionAdmissionError.is(error)) {
+          return new HandlerError({
+            status: error.reason === "busy" ? 429 : 503,
+            code:
+              error.reason === "busy" ? "rate_limited" : "service_unavailable",
+            message:
+              error.reason === "busy"
+                ? error.message
+                : "Action admission is unavailable",
+            cause: error,
+          });
+        }
+        const handlerError = resolveHandlerError(error);
+        if (handlerError !== null) {
+          return handlerError;
+        }
+        if (DatabaseError.is(error) || DatabaseRlsError.is(error)) {
+          return error;
+        }
+        return new UnhandledException({ cause: error });
+      }),
+    ),
+  );
+};
+
+/**
+ * Call after resource authorization and the operation's usage preflight.
+ * @yields Typed failures for the owning safe-handler boundary.
+ */
+export const admitFiniteAction = async function* <
+  TContext extends FiniteActionContext,
+  TResult extends SafeHandlerPayload,
+>({
+  ctx,
+  handler,
+  admit,
+  actionKind,
+}: FiniteActionOptions<TContext, TResult> & {
+  handler: SafeHandlerFn<TContext, TResult> &
+    NoInfer<FiniteHandlerGuard<TResult>>;
+}): SafeHandlerGenerator<TResult> {
+  if (!env.FEATURE_ACTION_ADMISSION) {
+    return yield* handler(ctx);
+  }
+  return yield* runAdmittedFiniteHandler({
+    actionKind,
+    ctx,
+    handler,
+    ...(admit === undefined ? {} : { admit }),
+  });
+};
+
+type HandlerAdmissionDependencies = {
+  admit?: typeof withActionAdmission;
+};
+
 const createSafeScopedHandler = <
   TConfig extends HandlerConfig,
   TContext extends BaseHandlerContext<TConfig>,
@@ -793,6 +922,7 @@ const createSafeScopedHandler = <
 >(
   config: TConfig,
   handler: SafeHandlerFn<TContext, TResult>,
+  { admit = withActionAdmission }: HandlerAdmissionDependencies = {},
 ): SafeHandlerDefinition<TConfig, TContext, TResult> => ({
   config,
   handler: async (ctx): Promise<SafeHandlerResult<TResult>> => {
@@ -838,7 +968,19 @@ const createSafeScopedHandler = <
       ctx.usageLane = preflight.lane;
     }
 
-    return await runSafeHandler(ctx, handler);
+    const admission = config.actionAdmission;
+    if (admission === undefined || !env.FEATURE_ACTION_ADMISSION) {
+      return await runSafeHandler(ctx, handler);
+    }
+
+    return await runSafeHandler(ctx, (input) =>
+      runAdmittedFiniteHandler({
+        ctx: input,
+        handler,
+        admit,
+        actionKind: admission.actionKind,
+      }),
+    );
   },
 });
 
@@ -1219,16 +1361,19 @@ export const createSafeRootHandler = <
   TResult extends SafeHandlerPayload,
 >(
   config: TConfig,
-  handler: SafeHandlerFn<RootHandlerContext<TConfig>, TResult>,
+  handler: SafeHandlerFn<RootHandlerContext<TConfig>, TResult> &
+    ConfiguredFiniteHandlerGuard<TConfig, TResult>,
+  dependencies?: HandlerAdmissionDependencies,
 ): SafeHandlerDefinition<TConfig, RootHandlerContext<TConfig>, TResult> =>
-  createSafeScopedHandler(config, handler);
+  createSafeScopedHandler(config, handler, dependencies);
 
 export const createSafeHandler = <
   TConfig extends WorkspaceHandlerConfig,
   TResult extends SafeHandlerPayload,
 >(
   config: TConfig,
-  handler: SafeHandlerFn<WorkspaceHandlerContext<TConfig>, TResult>,
+  handler: SafeHandlerFn<WorkspaceHandlerContext<TConfig>, TResult> &
+    ConfiguredFiniteHandlerGuard<TConfig, TResult>,
 ): SafeHandlerDefinition<TConfig, WorkspaceHandlerContext<TConfig>, TResult> =>
   createSafeScopedHandler(config, (ctx) => {
     // Elysia may expand validateAuth again after validateWorkspaceAccess when a

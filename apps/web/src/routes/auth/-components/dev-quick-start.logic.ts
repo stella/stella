@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 
 export const DEV_QUICK_START_PHASE = {
   authenticate: "authenticate",
@@ -20,6 +20,159 @@ export type DevQuickStartAttempt = {
   completedPhase: DevQuickStartPhase | null;
   identity: DevQuickStartIdentity;
   organizationId: string | null;
+};
+
+export const DEV_QUICK_START_STAGE = {
+  authenticate: "authenticate",
+  continue: "continue",
+} as const;
+
+type DevQuickStartStage =
+  (typeof DEV_QUICK_START_STAGE)[keyof typeof DEV_QUICK_START_STAGE];
+
+type SingleFlightOptions = {
+  stage: DevQuickStartStage;
+  run: () => Promise<void>;
+};
+
+/** Owns one tab's attempt across component lifetimes, including failed retries. */
+export const createDevQuickStartRuntime = () => {
+  let attempt: DevQuickStartAttempt | null = null;
+  let phase: DevQuickStartPhase | null = null;
+  let flight: { stage: DevQuickStartStage; promise: Promise<void> } | null =
+    null;
+  const listeners = new Set<() => void>();
+
+  const setPhase = (nextPhase: DevQuickStartPhase | null) => {
+    phase = nextPhase;
+    for (const listener of listeners) {
+      listener();
+    }
+  };
+
+  const runSingleFlight = async ({
+    stage,
+    run,
+  }: SingleFlightOptions): Promise<void> => {
+    if (flight !== null) {
+      if (flight.stage === stage) {
+        return flight.promise;
+      }
+      // Navigation can mount the continuation before authentication settles.
+      await flight.promise;
+      return runSingleFlight({ stage, run });
+    }
+
+    const promise = Promise.resolve()
+      .then(run)
+      .finally(() => {
+        flight = null;
+        setPhase(null);
+      });
+    flight = { stage, promise };
+    return promise;
+  };
+
+  return {
+    getAttempt: (restore: () => DevQuickStartAttempt) => {
+      attempt ??= restore();
+      return attempt;
+    },
+    getPhase: () => phase,
+    runSingleFlight,
+    setAttempt: (nextAttempt: DevQuickStartAttempt) => {
+      attempt = nextAttempt;
+    },
+    setPhase,
+    subscribe: (listener: () => void) => {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+  };
+};
+
+export const startDevQuickStartAttempt = (
+  attempt: DevQuickStartAttempt,
+  createIdentity: () => DevQuickStartIdentity,
+): DevQuickStartAttempt => {
+  if (attempt.completedPhase !== DEV_QUICK_START_PHASE.matters) {
+    return attempt;
+  }
+  return {
+    completedPhase: null,
+    identity: createIdentity(),
+    organizationId: null,
+  };
+};
+
+type ResolveDevQuickStartOrganizationOptions = {
+  identity: DevQuickStartIdentity;
+  listOrganizations: () => Promise<readonly { id: string; slug: string }[]>;
+  createOrganization: (identity: DevQuickStartIdentity) => Promise<string>;
+};
+
+class DevQuickStartOrganizationError extends TaggedError(
+  "DevQuickStartOrganizationError",
+)<{
+  message: string;
+  cause: unknown;
+}> {}
+
+type ResolveDevQuickStartOrganizationResult = Result<
+  string,
+  DevQuickStartOrganizationError
+>;
+
+const toOrganizationError = (cause: unknown) =>
+  new DevQuickStartOrganizationError({
+    message: "Dev quick start organization setup failed.",
+    cause,
+  });
+
+export const resolveDevQuickStartOrganization = async ({
+  identity,
+  listOrganizations,
+  createOrganization,
+}: ResolveDevQuickStartOrganizationOptions): Promise<ResolveDevQuickStartOrganizationResult> => {
+  const organizations = await Result.tryPromise({
+    try: listOrganizations,
+    catch: toOrganizationError,
+  });
+  if (Result.isError(organizations)) {
+    return organizations;
+  }
+  const existing = organizations.value.find(
+    ({ slug }) => slug === identity.organizationSlug,
+  );
+  if (existing) {
+    return Result.ok(existing.id);
+  }
+
+  const created = await Result.tryPromise({
+    try: async () => createOrganization(identity),
+    catch: toOrganizationError,
+  });
+  if (Result.isOk(created)) {
+    return created;
+  }
+
+  // A competing create or a lost response can leave the exact org already owned.
+  const relisted = await Result.tryPromise({
+    try: listOrganizations,
+    catch: toOrganizationError,
+  });
+  if (Result.isError(relisted)) {
+    return relisted;
+  }
+  const recovered = relisted.value.find(
+    ({ slug }) => slug === identity.organizationSlug,
+  );
+  if (recovered) {
+    return Result.ok(recovered.id);
+  }
+  return created;
 };
 
 const DEV_QUICK_START_EMAIL = "dev-quick-start@stella.dev";
