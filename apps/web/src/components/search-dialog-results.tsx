@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { useQuery } from "@tanstack/react-query";
 import type { UseMutationResult } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
@@ -30,14 +31,17 @@ import {
 import Tooltip from "@/components/tooltip";
 import { UserIdentity } from "@/components/user-avatar";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
+import { fileHasThumbnail } from "@/components/workspaces/entity-utils";
 import type { ResolvedCommandAction } from "@/features/command-palette/hooks/use-command-actions";
 import { useHydrationSafeHotkeyPlatform } from "@/hooks/use-hydration-safe-hotkey-platform";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { api } from "@/lib/api";
 import type { GlobalSearchHit } from "@/lib/api-contract";
 import { formatHotkeyForPlatform } from "@/lib/hotkeys";
+import { resolveRecentFilePreviewFieldId } from "@/lib/search";
 import type { SearchAISummaryParams } from "@/lib/search";
 import type { RecentFile, RecentSearch } from "@/lib/search-recents";
+import { entityOptions } from "@/lib/workspaces/queries/entities";
 
 type SearchSummaryData = NonNullable<
   Awaited<ReturnType<typeof api.search.summary.post>>["data"]
@@ -324,23 +328,7 @@ export const SearchRecents = ({
                 previewedFileId === file.entityId ? "secondary" : "ghost"
               }
             >
-              {file.mimeType ? (
-                <DocumentIcon
-                  className="text-muted-foreground size-4 shrink-0"
-                  mimeType={file.mimeType}
-                  thumbnail={
-                    file.fileFieldId && file.mimeType.startsWith("image/")
-                      ? {
-                          fieldId: file.fileFieldId,
-                          workspaceId: file.workspaceId,
-                          hasThumbnail: true,
-                        }
-                      : undefined
-                  }
-                />
-              ) : (
-                <FileTextIcon className="text-muted-foreground size-4 shrink-0" />
-              )}
+              <RecentFileIcon file={file} />
               <span className="min-w-0 flex-1">
                 <BidiText as="span" className="block truncate">
                   {file.title}
@@ -454,6 +442,44 @@ export const SearchResultItem = ({
   );
 };
 
+export const RecentFileIcon = ({ file }: { file: RecentFile }) => {
+  // Recents store identifiers, not thumbnail availability. Observe metadata
+  // already loaded by the file view without fetching every recent on open.
+  const { data: entity } = useQuery({
+    ...entityOptions(file.workspaceId, file.entityId),
+    enabled: false,
+  });
+  const fieldId = entity
+    ? resolveRecentFilePreviewFieldId({
+        fields: entity.fields,
+        fileFieldId: file.fileFieldId,
+        filePropertyId: file.filePropertyId,
+        mimeType: file.mimeType ?? null,
+      })
+    : null;
+  const field = entity?.fields.find((candidate) => candidate.id === fieldId);
+  const content = field?.content.type === "file" ? field.content : null;
+  const mimeType = content?.mimeType ?? file.mimeType;
+  if (!mimeType) {
+    return <FileTextIcon className="text-muted-foreground size-4 shrink-0" />;
+  }
+  return (
+    <DocumentIcon
+      className="text-muted-foreground size-4 shrink-0"
+      mimeType={mimeType}
+      thumbnail={
+        field && content && mimeType.startsWith("image/")
+          ? {
+              fieldId: field.id,
+              workspaceId: file.workspaceId,
+              hasThumbnail: fileHasThumbnail(content),
+            }
+          : undefined
+      }
+    />
+  );
+};
+
 const NON_ENTITY_KIND_ICONS = {
   contact: UserIcon,
   "case-law": LandmarkIcon,
@@ -472,17 +498,6 @@ export const SearchHitIcon = ({ hit }: { hit: GlobalSearchHit }) => {
           className="text-muted-foreground mt-0.5 size-4 shrink-0"
           kind={hit.type}
           mimeType={hit.mimeType}
-          thumbnail={
-            hit.type === "document" &&
-            hit.fileFieldId &&
-            hit.mimeType?.startsWith("image/")
-              ? {
-                  fieldId: hit.fileFieldId,
-                  workspaceId: hit.workspaceId,
-                  hasThumbnail: true,
-                }
-              : undefined
-          }
         />
       );
     case "matter":
