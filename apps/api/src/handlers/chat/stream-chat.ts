@@ -80,6 +80,7 @@ import {
 import { guardProviderHistory } from "@/api/handlers/chat/provider-history";
 import type { GuardedProviderHistory } from "@/api/handlers/chat/provider-history";
 import {
+  assistantMessageStartChunk,
   createTurnMessageIdMapper,
   ensureAssistantMessageStart,
   findDeniedApprovals,
@@ -1790,14 +1791,6 @@ const drainedRunOutcome = ({
   return { type: "completed" };
 };
 
-/** The chunk that tells the client which message the turn writes. */
-const assistantMessageStart = (mapMessageId: MessageIdMapper): StreamChunk => ({
-  type: EventType.TEXT_MESSAGE_START,
-  messageId: mapMessageId(ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL),
-  role: "assistant",
-  timestamp: Temporal.Now.instant().epochMilliseconds,
-});
-
 type AdmissionLossOutcomeOptions = Pick<
   ProcessServerChatStreamProps,
   "getRestorableCheckpoint" | "getResponseMessage" | "processor"
@@ -2141,7 +2134,13 @@ export const processServerChatStream = async function* ({
   // client opens a placeholder under an id of its own beside the message the
   // turn stored or continued.
   const announceBeforeFailure = (): StreamChunk[] =>
-    announcedAssistantMessage ? [] : [assistantMessageStart(mapMessageId)];
+    announcedAssistantMessage
+      ? []
+      : [
+          assistantMessageStartChunk(
+            mapMessageId(ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL),
+          ),
+        ];
   try {
     const normalizedSource = ensureAssistantMessageStart({
       getOrCreateMessageId: () =>
