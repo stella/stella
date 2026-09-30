@@ -93,6 +93,9 @@ const updateRateTable = createSafeHandler(
 
     const outcome = yield* Result.await(
       safeDb(async (tx) => {
+        await tx.execute(
+          sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`,
+        );
         // The currency the rates are currently stored in, read under a row
         // lock BEFORE anything is written. The `existing` read above happened
         // outside this transaction, so a currency change that landed in
@@ -100,7 +103,11 @@ const updateRateTable = createSafeHandler(
         // carries; the lock also serializes two concurrent currency changes,
         // which would otherwise both scale from the same starting point.
         const lockedRows = await tx
-          .select({ currency: rateTables.currency })
+          .select({
+            currency: rateTables.currency,
+            name: rateTables.name,
+            isDefault: rateTables.isDefault,
+          })
           .from(rateTables)
           .where(
             and(
@@ -109,7 +116,11 @@ const updateRateTable = createSafeHandler(
             ),
           )
           .for("update");
-        const sourceCurrency = lockedRows.at(0)?.currency ?? existing.currency;
+        const locked = lockedRows.at(0);
+        if (!locked) {
+          return { status: "rate-not-found" as const };
+        }
+        const sourceCurrency = locked.currency;
 
         const nextCurrency = changedFields.currency;
         const exponentShift =
@@ -194,10 +205,9 @@ const updateRateTable = createSafeHandler(
         for (const field of ["name", "currency", "isDefault"] as const) {
           const next = changedFields[field];
           if (next !== undefined) {
-            // The currency's old value comes from the locked row, so the
-            // audit trail records what was actually replaced.
+            // Every old value comes from the same locked snapshot as the write.
             changes[field] = {
-              old: field === "currency" ? sourceCurrency : existing[field],
+              old: locked[field],
               new: next,
             };
           }
@@ -230,6 +240,11 @@ const updateRateTable = createSafeHandler(
       }),
     );
 
+    if (outcome.status === "rate-not-found") {
+      return Result.err(
+        new HandlerError({ status: 404, message: "Rate table not found" }),
+      );
+    }
     if (outcome.status === "rate-out-of-range") {
       return Result.err(
         new HandlerError({
