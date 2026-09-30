@@ -18,6 +18,19 @@ const FIXTURE_PARENT = path.join(REPO_ROOT, "apps/api/.cache");
 
 const HANDLE_MODULES = ["db/root.ts", "db/scoped.ts"] as const;
 
+const propagationCertificates = [
+  "tuple.map(value => value * 2)",
+  "tuple.filter(value => value > 1)",
+  "tuple.slice(1)",
+  "tuple.flatMap(value => [value, value])",
+  "tuple.flatMap(value => { return [value]; })",
+  "tuple.flatMap(value => value > 1 ? [value] : [])",
+  "Object.values(registry)",
+  "Object.values(plainRegistry)",
+  "tuple.map(value => value).filter(value => value > 1).slice(0, 2)",
+  "[...tuple, ...tuple] as const",
+];
+
 const FIXTURE_FILES: Record<string, string> = {
   "db/root.ts": `
 import { defineRelations } from "drizzle-orm";
@@ -56,6 +69,62 @@ export const chunked = <T>(items: readonly T[], size: number): T[][] => {
 export const importedTuple = ["one", "two"] as const;
 export const importedSpread = [...importedTuple] as const;
 export let importedMutableBinding = ["one", "two"] as const;
+`,
+  "propagated-bounds.ts": `
+import { rootDb, items } from "./db/root";
+const tuple = [1, 2, 3] as const;
+const registry = { first: 1, second: 2 } as const;
+const plainRegistry = { first: 1, second: 2 };
+declare const unbounded: number[];
+declare const untrusted: (values: number[]) => void;
+${propagationCertificates
+  .map(
+    (expression, index) => `
+export const accepted${index} = async () => {
+  const derived = ${expression};
+  const chain = derived;
+  for (const value of chain) { await rootDb.select().from(items); }
+};`,
+  )
+  .join("\n")}
+export const rejected = async () => {
+  const mutatedObject = { first: 1, second: 2 };
+  Object.assign(mutatedObject, { third: 3 });
+  for (const value of Object.values(mutatedObject)) { await rootDb.select().from(items); } // expect: query
+  const escaped = tuple.map(value => value);
+  untrusted(escaped);
+  for (const value of escaped) { await rootDb.select().from(items); } // expect: query
+  const pushed = tuple.map(value => value);
+  pushed.push(1);
+  for (const value of pushed) { await rootDb.select().from(items); } // expect: query
+  const throughAlias = tuple.map(value => value);
+  const alias = throughAlias;
+  alias.push(1);
+  for (const value of throughAlias) { await rootDb.select().from(items); } // expect: query
+  const concatenated = tuple.map(value => value).concat(unbounded);
+  for (const value of concatenated) { await rootDb.select().from(items); } // expect: query
+  let reassigned = tuple.map(value => value);
+  reassigned = unbounded;
+  for (const value of reassigned) { await rootDb.select().from(items); } // expect: query
+  const mappedUnbounded = unbounded.map(value => value);
+  for (const value of mappedUnbounded) { await rootDb.select().from(items); } // expect: query
+  const flatUnbounded = tuple.flatMap(value => unbounded);
+  for (const value of flatUnbounded) { await rootDb.select().from(items); } // expect: query
+  const flatTooLarge = tuple.flatMap(value => [value,value,value,value,value,value]);
+  for (const value of flatTooLarge) { await rootDb.select().from(items); } // expect: query
+  const spreadTooLarge = [...tuple,...tuple,...tuple,...tuple,...tuple,...tuple] as const;
+  for (const value of spreadTooLarge) { await rootDb.select().from(items); } // expect: query
+  const spreadUnbounded = [...tuple,...unbounded] as const;
+  for (const value of spreadUnbounded) { await rootDb.select().from(items); } // expect: query
+  const assignedIndex = tuple.map(value => value);
+  assignedIndex[100] = 1;
+  for (const value of assignedIndex) { await rootDb.select().from(items); } // expect: query
+  const truncated = tuple.map(value => value);
+  truncated.length = 100;
+  for (const value of truncated) { await rootDb.select().from(items); } // expect: query
+  const callbackMutation = tuple.map(value => value).map((value, index, array) => { array.push(value); return value; });
+  for (const value of callbackMutation) { await rootDb.select().from(items); } // expect: query
+};
 `,
   "bounded-rounds.ts": `
 import { rootDb, items, type Transaction } from "./db/root";
@@ -111,7 +180,7 @@ export async function* yieldedFanOut(tx: Transaction) {
 export const rejected = async (size: number, narrowSize: 8, cursor: string | null, tx: Transaction) => {
   const mutableView: { first: number; second: number } = registry;
   for (const kind of Object.values(mutableView)) {
-    await rootDb.select().from(items); // expect: query
+    await rootDb.select().from(items);
   }
   for (const id of ids) {
     await rootDb.select().from(items); // expect: query
@@ -200,13 +269,13 @@ export const rejected = async (size: number, narrowSize: 8, cursor: string | nul
   }
   const spreadTuple = [...tuple] as const;
   for (const kind of spreadTuple) {
-    await rootDb.select().from(items); // expect: query
+    await rootDb.select().from(items);
   }
   for (const kind of [...tuple] as const) {
-    await rootDb.select().from(items); // expect: query
+    await rootDb.select().from(items);
   }
   for (const kind of importedSpread) {
-    await rootDb.select().from(items); // expect: query
+    await rootDb.select().from(items);
   }
   for (const kind of importedMutableBinding) {
     await rootDb.select().from(items); // expect: query
@@ -231,16 +300,16 @@ export const rejected = async (size: number, narrowSize: 8, cursor: string | nul
   }
   const mutableRegistry: { first: number; second: number } = { first: 1, second: 2 };
   for (const kind of Object.values(mutableRegistry)) {
-    await rootDb.select().from(items); // expect: query
+    await rootDb.select().from(items);
   }
   for (const kind of Object.keys(mutableRegistry)) {
-    await rootDb.select().from(items); // expect: query
+    await rootDb.select().from(items);
   }
   for (const kind of Object.entries(mutableRegistry)) {
-    await rootDb.select().from(items); // expect: query
+    await rootDb.select().from(items);
   }
   for (const kind of Object.values({ first: 1, second: 2 })) {
-    await rootDb.select().from(items); // expect: query
+    await rootDb.select().from(items);
   }
   let readonlyRegistry = { first: 1, second: 2 } as const;
   for (const kind of Object.values(readonlyRegistry)) {
@@ -726,7 +795,13 @@ describe("db-await-in-loop", () => {
     expect(observed("bounded-rounds.ts")).toEqual(
       expectedFromMarkers(sourceOf("bounded-rounds.ts")),
     );
-    expect(report.boundedRoundHits).toBe(22);
+    expect(report.boundedRoundHits).toBe(30 + propagationCertificates.length);
+  });
+
+  test("propagates safe bounds without certifying mutated or growing arrays", () => {
+    expect(observed("propagated-bounds.ts")).toEqual(
+      expectedFromMarkers(sourceOf("propagated-bounds.ts")),
+    );
   });
 
   test("helpers reached from a flagged site are not reported on their own", () => {

@@ -53,8 +53,8 @@
 // continues; a later exit still requires no `continue` targeting the loop.
 // One DB hit per constant-bounded round is exempt: canonical chunked inputs
 // (literal/const size >= 2), array slice-step loops with that stride, fixed
-// sets of at most 16 elements (readonly tuples use const bindings without
-// spread initializers), and nonnegative constant-start counters bounded by <= 16.
+// sets of at most 16 elements, including stable const tuple derivations, and
+// nonnegative constant-start counters bounded by <= 16.
 // The counter must not be written in the body. Multiple DB hits, fan-out,
 // enclosing loops or fan-out callbacks, dynamic sizes and keyset walks stay
 // flagged; bounded rounds cannot hide per-row work in a nested loop.
@@ -894,118 +894,129 @@ export const scanDbAwaitInLoop = ({
     );
   };
 
-  const isReadonlyObject = (
-    expression: ts.Expression,
+  const stableBindings = new Map<ts.Symbol, boolean>();
+  const readOnlyArrayMethods = new Set([
+    "map",
+    "filter",
+    "slice",
+    "flatMap",
+    "concat",
+    "entries",
+    "keys",
+    "values",
+    "at",
+    "includes",
+    "indexOf",
+    "join",
+    "every",
+    "some",
+    "find",
+    "findIndex",
+  ]);
+  const hasStableBinding = (
+    symbol: ts.Symbol,
     seen = new Set<ts.Symbol>(),
   ): boolean => {
-    if (!isConstObject(expression)) {
+    const cached = stableBindings.get(symbol);
+    if (cached !== undefined) {
+      return cached;
+    }
+    if (seen.has(symbol)) {
       return false;
     }
-    const properties = checker.getTypeAtLocation(expression).getProperties();
+    seen.add(symbol);
+    const declaration = symbol.valueDeclaration;
     if (
-      properties.length > 0 &&
-      properties.every((property) =>
-        (property.declarations ?? []).some(
-          (declaration) =>
-            ts.canHaveModifiers(declaration) &&
-            ts
-              .getModifiers(declaration)
-              ?.some(
-                (modifier) => modifier.kind === ts.SyntaxKind.ReadonlyKeyword,
-              ),
-        ),
-      )
+      declaration === undefined ||
+      !isConstDeclaration(declaration) ||
+      !ts.isIdentifier(declaration.name)
     ) {
+      return false;
+    }
+    if (
+      ts.canHaveModifiers(declaration.parent.parent) &&
+      ts
+        .getModifiers(declaration.parent.parent)
+        ?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) &&
+      tupleTypeLength(declaration.name) === null
+    ) {
+      return false;
+    }
+    const name = symbol.getName();
+    const unsafeReference = (node: ts.Node): boolean => {
+      if (
+        !ts.isIdentifier(node) ||
+        node.text !== name ||
+        checker.getSymbolAtLocation(node) !== symbol
+      ) {
+        return ts.forEachChild(node, unsafeReference) === true;
+      }
+      let reference: ts.Expression = node;
+      while (
+        ts.isParenthesizedExpression(reference.parent) ||
+        ts.isAsExpression(reference.parent) ||
+        ts.isSatisfiesExpression(reference.parent)
+      ) {
+        reference = reference.parent;
+      }
+      const parent = reference.parent;
+      if (ts.isVariableDeclaration(parent)) {
+        if (parent.name === node) {
+          return false;
+        }
+        const alias = checker.getSymbolAtLocation(parent.name);
+        return alias === undefined || !hasStableBinding(alias, new Set(seen));
+      }
+      if (ts.isForOfStatement(parent) || ts.isSpreadElement(parent)) {
+        return false;
+      }
+      if (
+        ts.isPropertyAccessExpression(parent) ||
+        ts.isElementAccessExpression(parent)
+      ) {
+        const use = parent.parent;
+        if (
+          ts.isBinaryExpression(use) &&
+          use.left === parent &&
+          use.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+          use.operatorToken.kind <= ts.SyntaxKind.LastAssignment
+        ) {
+          return true;
+        }
+        if (
+          ts.isPrefixUnaryExpression(use) ||
+          ts.isPostfixUnaryExpression(use) ||
+          ts.isDeleteExpression(use)
+        ) {
+          return true;
+        }
+        if (ts.isCallExpression(use) && use.expression === parent) {
+          return (
+            !ts.isPropertyAccessExpression(parent) ||
+            !readOnlyArrayMethods.has(parent.name.text)
+          );
+        }
+        return false;
+      }
+      // Passing a mutable derived array elsewhere can change its length.
+      if (ts.isCallExpression(parent)) {
+        return !(
+          ts.isPropertyAccessExpression(parent.expression) &&
+          ts.isIdentifier(parent.expression.expression) &&
+          parent.expression.expression.text === "Object" &&
+          ["values", "keys", "entries"].includes(parent.expression.name.text)
+        );
+      }
       return true;
-    }
-    let value = expression;
-    while (
-      ts.isParenthesizedExpression(value) ||
-      ts.isSatisfiesExpression(value) ||
-      ts.isAsExpression(value) ||
-      ts.isTypeAssertionExpression(value)
-    ) {
-      if (
-        (ts.isAsExpression(value) || ts.isTypeAssertionExpression(value)) &&
-        ts.isTypeReferenceNode(value.type) &&
-        ts.isIdentifier(value.type.typeName) &&
-        value.type.typeName.text === "const"
-      ) {
-        return true;
-      }
-      value = value.expression;
-    }
-    const symbol = symbolOf(value);
-    if (symbol === undefined || seen.has(symbol)) {
-      return false;
-    }
-    seen.add(symbol);
-    return (symbol.declarations ?? []).some(
-      (declaration) =>
-        isConstDeclaration(declaration) &&
-        declaration.type === undefined &&
-        declaration.initializer !== undefined &&
-        isReadonlyObject(declaration.initializer, seen),
-    );
+    };
+    const stable = !unsafeReference(declaration.getSourceFile());
+    stableBindings.set(symbol, stable);
+    return stable;
   };
 
-  const hasFixedTupleBinding = (
-    expression: ts.Expression,
-    seen = new Set<ts.Symbol>(),
-  ): boolean => {
-    const value = unwrap(expression);
-    if (ts.isArrayLiteralExpression(value)) {
-      return !value.elements.some(ts.isSpreadElement);
-    }
-    const symbol = symbolOf(value);
-    if (symbol === undefined || seen.has(symbol)) {
-      return false;
-    }
-    seen.add(symbol);
-    return (symbol.declarations ?? []).some(
-      (declaration) =>
-        isConstDeclaration(declaration) &&
-        (declaration.initializer === undefined ||
-          hasFixedTupleBinding(declaration.initializer, seen)),
-    );
-  };
-
-  const fixedSetLength = (expression: ts.Expression): number | null => {
-    const value = unwrap(expression);
-    if (ts.isArrayLiteralExpression(value)) {
-      return value.elements.some(ts.isSpreadElement)
-        ? null
-        : value.elements.length;
-    }
-    if (
-      ts.isCallExpression(value) &&
-      ts.isPropertyAccessExpression(value.expression)
-    ) {
-      const member = value.expression;
-      if (!["entries", "keys", "values"].includes(member.name.text)) {
-        return null;
-      }
-      if (value.arguments.length === 0) {
-        return fixedSetLength(member.expression);
-      }
-      const [object] = value.arguments;
-      if (
-        !ts.isIdentifier(member.expression) ||
-        member.expression.text !== "Object" ||
-        value.arguments.length !== 1 ||
-        object === undefined ||
-        !isReadonlyObject(object)
-      ) {
-        return null;
-      }
-      const type = checker.getTypeAtLocation(object);
-      return checker.getIndexInfosOfType(type).length === 0
-        ? type.getProperties().length
-        : null;
-    }
+  const tupleTypeLength = (value: ts.Expression): number | null => {
     const type = checker.getTypeAtLocation(value);
     if (
-      !hasFixedTupleBinding(value) ||
       !checker.isTupleType(type) ||
       !("target" in type) ||
       typeof type.target !== "object" ||
@@ -1029,6 +1040,145 @@ export const scanDbAwaitInLoop = ({
       maximum = Math.max(maximum, entry.value);
     }
     return maximum;
+  };
+
+  const fixedSetLength = (
+    expression: ts.Expression,
+    seen = new Set<ts.Symbol>(),
+  ): number | null => {
+    const value = unwrap(expression);
+    if (ts.isConditionalExpression(value)) {
+      const left = fixedSetLength(value.whenTrue, new Set(seen));
+      const right = fixedSetLength(value.whenFalse, new Set(seen));
+      return left === null || right === null ? null : Math.max(left, right);
+    }
+    if (ts.isArrayLiteralExpression(value)) {
+      let length = 0;
+      for (const element of value.elements) {
+        const count = ts.isSpreadElement(element)
+          ? fixedSetLength(element.expression, new Set(seen))
+          : 1;
+        if (count === null) {
+          return null;
+        }
+        length += count;
+      }
+      return length;
+    }
+    if (
+      ts.isCallExpression(value) &&
+      ts.isPropertyAccessExpression(value.expression)
+    ) {
+      return derivedSetLength(value, seen);
+    }
+    const symbol = symbolOf(value);
+    if (symbol === undefined || seen.has(symbol) || !hasStableBinding(symbol)) {
+      return null;
+    }
+    seen.add(symbol);
+    const declaration = symbol.valueDeclaration;
+    if (declaration === undefined || !isConstDeclaration(declaration)) {
+      return null;
+    }
+    if (declaration.initializer === undefined) {
+      return tupleTypeLength(value);
+    }
+    const initializer = unwrap(declaration.initializer);
+    // Plain arrays remain mutable inputs, rather than certified source tuples.
+    if (
+      ts.isArrayLiteralExpression(initializer) &&
+      tupleTypeLength(value) === null
+    ) {
+      return null;
+    }
+    return fixedSetLength(initializer, seen);
+  };
+
+  const fixedObjectLength = (
+    call: ts.CallExpression,
+    method: string,
+  ): number | null => {
+    const object = call.arguments.at(0);
+    if (
+      !["entries", "keys", "values"].includes(method) ||
+      call.arguments.length !== 1 ||
+      object === undefined ||
+      !isConstObject(object)
+    ) {
+      return null;
+    }
+    const symbol = symbolOf(object);
+    if (
+      !ts.isObjectLiteralExpression(unwrap(object)) &&
+      (symbol === undefined || !hasStableBinding(symbol))
+    ) {
+      return null;
+    }
+    const type = checker.getTypeAtLocation(object);
+    return checker.getIndexInfosOfType(type).length === 0
+      ? type.getProperties().length
+      : null;
+  };
+
+  const derivedSetLength = (
+    call: ts.CallExpression,
+    seen: Set<ts.Symbol>,
+  ): number | null => {
+    const member = call.expression;
+    if (!ts.isPropertyAccessExpression(member)) {
+      return null;
+    }
+    const method = member.name.text;
+    if (
+      ts.isIdentifier(member.expression) &&
+      member.expression.text === "Object"
+    ) {
+      return fixedObjectLength(call, method);
+    }
+
+    const type = checker.getTypeAtLocation(member.expression);
+    if (!checker.isArrayType(type) && !checker.isTupleType(type)) {
+      return null;
+    }
+    const bound = fixedSetLength(member.expression, new Set(seen));
+    if (bound === null) {
+      return null;
+    }
+    if (["entries", "keys", "values"].includes(method)) {
+      return call.arguments.length === 0 ? bound : null;
+    }
+    if (method === "slice") {
+      return call.arguments.length <= 2 ? bound : null;
+    }
+    if (!["map", "filter", "flatMap"].includes(method)) {
+      return null;
+    }
+    const callback = call.arguments.at(0);
+    if (
+      callback === undefined ||
+      (!ts.isArrowFunction(callback) && !ts.isFunctionExpression(callback)) ||
+      callback.parameters.length > 2
+    ) {
+      return null;
+    }
+    if (method !== "flatMap") {
+      return bound;
+    }
+    let result = callback.body;
+    if (ts.isBlock(result)) {
+      const statement = result.statements.at(0);
+      if (
+        result.statements.length !== 1 ||
+        statement === undefined ||
+        !ts.isReturnStatement(statement) ||
+        statement.expression === undefined
+      ) {
+        return null;
+      }
+      result = statement.expression;
+    }
+    const inner = fixedSetLength(result, new Set(seen));
+    return inner === null ? null : bound * inner;
   };
 
   const writesCounter = (body: ts.Node, counter: ts.Symbol): boolean => {
