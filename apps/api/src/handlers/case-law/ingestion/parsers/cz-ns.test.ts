@@ -515,7 +515,7 @@ describe("parseNsDecisionHtml", () => {
       expect(tableBlocks.length).toBeGreaterThan(0);
 
       // Source metadata should contain parsed ústavní stížnost
-      expect(sourceMetadata["ustavniStiznost"]).toBeDefined();
+      expect(sourceMetadata.ustavniStiznost).toBeDefined();
     });
   });
 
