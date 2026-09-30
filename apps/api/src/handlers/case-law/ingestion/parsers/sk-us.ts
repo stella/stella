@@ -24,6 +24,7 @@
  */
 
 import * as cheerio from "cheerio";
+import { type AnyNode, isTag, isText } from "domhandler";
 
 import {
   isSkDecisionTitle,
@@ -46,6 +47,7 @@ import {
   inlinesToPlainText,
   walkInlines,
 } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
+import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
 
 /**
  * What a dropped anonymized run reads as.
@@ -119,11 +121,9 @@ const splitAtLineBreaks = (inlines: readonly Inline[]): Inline[][] => {
 /**
  * The document's lines, in order, each carrying its own font size.
  *
- * Walked span by span rather than over the whole `<div>`: the size is on
- * the span, and a walk of the container would flatten away the one signal
- * that tells a title from a sentence. A line the court splits across two
- * spans is stitched back together, which is how `OPRAVNÉ ` and `UZNESENIE`
- * become one title line.
+ * Spans retain their own font signal while the surrounding DOM is walked
+ * too, so content in paragraphs, cells, and bare text nodes is accounted
+ * for without reading nested spans twice.
  */
 const readMarkupLines = ($: cheerio.CheerioAPI): MarkupLine[] => {
   const lines: MarkupLine[] = [];
@@ -136,35 +136,59 @@ const readMarkupLines = ($: cheerio.CheerioAPI): MarkupLine[] => {
     }
   };
 
-  $("body span").each((_, element) => {
-    const span = $(element);
-    // Only the outermost span of a run: a nested one is already walked as
-    // part of its parent, and walking it again would double its text.
-    if (span.parents("span").length > 0) {
-      return;
-    }
-    const fontSize = fontSizeOf(span.attr("style"));
-    // Seeded from the span itself: the walker reads the marker class on the
-    // elements it descends into, and the run this court hides is the root of
-    // the walk rather than something inside it.
-    for (const [index, inlines] of splitAtLineBreaks(
-      walkInlines($, span, { anonymized: span.hasClass(ANONYMIZED_CLASS) }),
-    ).entries()) {
+  const appendRun = (inlines: readonly Inline[], fontSize: number): void => {
+    for (const [index, lineInlines] of splitAtLineBreaks(inlines).entries()) {
       if (index > 0) {
         close();
       }
-      const text = inlinesToPlainText(inlines);
+      const text = inlinesToPlainText(lineInlines);
       if (open === null) {
-        open = { inlines: [...inlines], text, fontSize };
+        open = { inlines: [...lineInlines], text, fontSize };
         continue;
       }
-      open.inlines.push(...inlines);
+      open.inlines.push(...lineInlines);
       open.text += text;
-      // The larger of the two: a title the court opened in body size and
-      // finished in display size is a title line.
       open.fontSize = Math.max(open.fontSize, fontSize);
     }
-  });
+  };
+
+  const visit = (node: cheerio.Cheerio<AnyNode>): void => {
+    node.contents().each((_, child) => {
+      if (isText(child)) {
+        appendRun([{ type: "text", text: child.data }], DEFAULT_FONT_SIZE);
+        return;
+      }
+      if (!isTag(child)) {
+        return;
+      }
+      const element = $(child);
+      if (child.name === "br") {
+        close();
+        return;
+      }
+      if (child.name === "span") {
+        const fontSize = fontSizeOf(element.attr("style"));
+        appendRun(
+          walkInlines($, element, {
+            anonymized: element.hasClass(ANONYMIZED_CLASS),
+          }),
+          fontSize,
+        );
+        return;
+      }
+      // Paragraphs and table cells are meaningful boundaries even when a
+      // source omits spans and explicit <br/> elements.
+      if (["p", "td", "th", "tr"].includes(child.name)) {
+        close();
+      }
+      visit(element);
+      if (["p", "td", "th", "tr"].includes(child.name)) {
+        close();
+      }
+    });
+  };
+
+  visit($("body"));
   close();
 
   for (const line of lines) {
@@ -383,6 +407,16 @@ export const parseSkUsDocumentXhtml = ({
   const $ = cheerio.load(xhtml);
   markHiddenRuns($);
   const blocks = classifyLines(readMarkupLines($));
+
+  validateAndLog(
+    {
+      parser: "sk-us",
+      caseNumber,
+      url: documentUrl,
+    },
+    xhtml,
+    blocks,
+  );
 
   const fulltext = blocks
     .map(({ plainText }) => plainText)
