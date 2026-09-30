@@ -1,4 +1,5 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
+import type { Ranged } from "@oxlint/plugins";
 import { panic } from "better-result";
 
 import ledger from "../scripts/parser-validator-call-ledger.json" with { type: "json" };
@@ -63,7 +64,7 @@ export default eslintCompatPlugin({
         let calls = 0;
         let aliases = new Set<string>();
 
-        const record = (node: unknown, kind: "import" | "call") => {
+        const record = (node: Ranged, kind: "import" | "call") => {
           const ordinal = kind === "import" ? ++imports : ++calls;
           const entry = `${kind}::${ordinal}`;
           seen.add(entry);
