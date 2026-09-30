@@ -9,6 +9,7 @@ import {
 } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 
+import type { SafeDb } from "@/api/db/safe-db";
 import {
   WORKSPACE_VIEWS_CORRESPONDENCE_INDEX,
   workspaceViews,
@@ -70,6 +71,11 @@ const correspondenceViewIds = async (): Promise<SafeId<"workspaceView">[]> =>
         ),
       )
   ).map(({ id }) => id);
+
+// The handler's SafeDb is typed over the production driver's transaction;
+// the shared test database runs the same schema on PGlite.
+const scopedSafeDb = (): SafeDb =>
+  asTestRaw<SafeDb>(createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1));
 
 const runCreate = async (
   safeDb: CreateCtx["safeDb"],
@@ -142,7 +148,7 @@ describe("one correspondence view per matter", () => {
 
   test("a create that loses the race gets the singleton conflict", async () => {
     expect(await correspondenceViewIds()).toEqual([]);
-    const safeDb = createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1);
+    const safeDb = scopedSafeDb();
     const competitor = correspondenceRow();
 
     // The competing create commits between this create's FOR UPDATE check
@@ -191,7 +197,7 @@ describe("one correspondence view per matter", () => {
   });
 
   test("an uncontested create still succeeds", async () => {
-    const safeDb = createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1);
+    const safeDb = scopedSafeDb();
     const viewId = createSafeId<"workspaceView">();
 
     const outcome = await runCreate(safeDb, viewId);

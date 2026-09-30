@@ -145,9 +145,9 @@ describe("getDefaultViews", () => {
 
     expect(correspondence).toHaveLength(1);
     expect(views.at(-1)?.layout.type).toBe("correspondence");
-    expect(Math.max(...views.map((view) => view.position))).toBe(
-      correspondence[0]?.position,
-    );
+    expect(correspondence.map((view) => view.position)).toEqual([
+      Math.max(...views.map((view) => view.position)),
+    ]);
   });
 
   test("re-localizes an un-renamed correspondence view and keeps a renamed one", () => {

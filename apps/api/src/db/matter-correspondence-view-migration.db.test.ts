@@ -158,14 +158,17 @@ test("writes the same view a new matter is seeded with", async () => {
     const seeded = getDefaultViews("en").find(
       (view) => view.layout.type === "correspondence",
     );
+    if (!seeded) {
+      throw new Error("default views carry no correspondence view");
+    }
     const inserted = (await correspondenceViews(database)).find(
       (row) => row.workspace_id === MATTER.empty,
     );
 
-    expect(inserted?.name).toBe(seeded?.name);
+    expect(inserted?.name).toBe(seeded.name);
     // Byte-level parity with the seed, and the stored row reads back.
-    expect(inserted?.layout).toEqual(seeded?.layout);
-    expect(parseStoredViewLayout(inserted?.layout)).toEqual(seeded?.layout);
+    expect(inserted?.layout).toEqual(seeded.layout);
+    expect(parseStoredViewLayout(inserted?.layout)).toEqual(seeded.layout);
   } finally {
     await database.close();
   }
