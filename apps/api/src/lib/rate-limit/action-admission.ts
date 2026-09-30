@@ -525,10 +525,7 @@ const reuseAdmissionScope = async <T>({
 }: ReuseAdmissionOptions & {
   run: (signal: AbortSignal) => Promise<T>;
 }): Promise<Result<T, unknown>> => {
-  if (
-    serviceBudgetsEnabled &&
-    (periodIdentity === undefined || !periodIdentity.logicalPhaseId.trim())
-  ) {
+  if (serviceBudgetsEnabled && !periodIdentity?.logicalPhaseId.trim()) {
     return Result.err(
       new ActionAdmissionError({
         message: "Action service identity is incomplete",
