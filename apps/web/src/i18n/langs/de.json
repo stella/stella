@@ -480,7 +480,6 @@
     "globalTimer": {
       "confirm": "Zeit bestätigen",
       "discard": "Timer verwerfen",
-      "loggedToday": "Heute erfasst",
       "matterInaccessible": "Wählen Sie eine Akte, auf die Sie zugreifen können.",
       "narrativeRequired": "Fügen Sie eine Beschreibung hinzu, bevor Sie die Zeit bestätigen.",
       "pause": "Pausieren",

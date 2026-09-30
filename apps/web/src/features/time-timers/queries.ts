@@ -1,8 +1,8 @@
-import { queryOptions } from "@tanstack/react-query";
+import { infiniteQueryOptions } from "@tanstack/react-query";
 
-import type { TimeTimer } from "@/features/time-timers/timer.logic";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
+import { stringCursorSeed } from "@/lib/infinite-query";
 
 export const timeTimersKeys = {
   all: (organizationId: string, userId: string) => [
@@ -13,24 +13,20 @@ export const timeTimersKeys = {
 };
 
 export const timeTimersOptions = (organizationId: string, userId: string) =>
-  queryOptions({
+  infiniteQueryOptions({
     queryKey: timeTimersKeys.all(organizationId, userId),
-    queryFn: async ({ signal }) => {
-      const items: TimeTimer[] = [];
-      let cursor: string | undefined;
-      do {
-        const page = unwrapEden(
-          // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- cursor pagination: the next page needs this response's cursor
-          await api["time-timers"].get({
-            query: { limit: 100, ...(cursor === undefined ? {} : { cursor }) },
-            fetch: { signal },
-          }),
-        );
-        items.push(...page.items);
-        cursor = page.nextCursor ?? undefined;
-      } while (cursor !== undefined);
-      return items;
-    },
+    initialPageParam: stringCursorSeed(),
+    queryFn: async ({ pageParam, signal }) =>
+      unwrapEden(
+        await api["time-timers"].get({
+          query: {
+            limit: 100,
+            ...(pageParam === undefined ? {} : { cursor: pageParam }),
+          },
+          fetch: { signal },
+        }),
+      ),
+    getNextPageParam: (page) => page.nextCursor ?? undefined,
     staleTime: 30_000,
     refetchInterval: 60_000,
   });

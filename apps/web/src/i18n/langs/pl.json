@@ -480,7 +480,6 @@
     "globalTimer": {
       "confirm": "Potwierdź czas",
       "discard": "Odrzuć stoper",
-      "loggedToday": "Zarejestrowano dzisiaj",
       "matterInaccessible": "Wybierz sprawę, do której masz dostęp.",
       "narrativeRequired": "Dodaj opis przed potwierdzeniem czasu.",
       "pause": "Wstrzymaj",

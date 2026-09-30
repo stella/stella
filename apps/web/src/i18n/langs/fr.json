@@ -480,7 +480,6 @@
     "globalTimer": {
       "confirm": "Confirmer le temps",
       "discard": "Abandonner le chronomètre",
-      "loggedToday": "Enregistré aujourd’hui",
       "matterInaccessible": "Choisissez un dossier auquel vous avez accès.",
       "narrativeRequired": "Ajoutez une description avant de confirmer le temps.",
       "pause": "Mettre en pause",

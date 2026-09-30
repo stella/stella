@@ -480,7 +480,6 @@
     "globalTimer": {
       "confirm": "تأكيد الوقت",
       "discard": "إلغاء المؤقت",
-      "loggedToday": "المسجّل اليوم",
       "matterInaccessible": "اختر ملفًا قانونيًا يمكنك الوصول إليه.",
       "narrativeRequired": "أضف وصفًا قبل تأكيد الوقت.",
       "pause": "إيقاف مؤقت",

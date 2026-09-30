@@ -480,7 +480,6 @@
     "globalTimer": {
       "confirm": "Idő megerősítése",
       "discard": "Időmérő elvetése",
-      "loggedToday": "Ma rögzítve",
       "matterInaccessible": "Válasszon egy ügyet, amelyhez van hozzáférése.",
       "narrativeRequired": "Az idő megerősítése előtt adjon meg egy leírást.",
       "pause": "Szüneteltetés",

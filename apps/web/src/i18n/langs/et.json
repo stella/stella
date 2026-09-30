@@ -480,7 +480,6 @@
     "globalTimer": {
       "confirm": "Kinnita aeg",
       "discard": "Loobu taimerist",
-      "loggedToday": "Täna registreeritud",
       "matterInaccessible": "Valige toimik, millele teil on juurdepääs.",
       "narrativeRequired": "Enne aja kinnitamist lisage kirjeldus.",
       "pause": "Peata",

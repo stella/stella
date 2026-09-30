@@ -1,9 +1,8 @@
 import { useState } from "react";
 
-import { useQuery } from "@tanstack/react-query";
-import { useFormatter, useTranslations } from "use-intl";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useFormatter, useNow, useTranslations } from "use-intl";
 
-import { Temporal } from "@stll/time";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { ClockIcon } from "@stll/ui/icons";
@@ -25,11 +24,9 @@ import {
   type TimeTimer,
 } from "@/features/time-timers/timer.logic";
 import { usePermissions } from "@/hooks/use-permissions";
-import { useSharedClock } from "@/hooks/use-shared-clock";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
-import { loggedTodayOptions } from "@/lib/workspaces/queries/my-time-entries";
 
 type TimerPanelState =
   | { type: "list" }
@@ -44,31 +41,22 @@ export const GlobalTimerContent = ({
   const t = useTranslations();
   const format = useFormatter();
   const user = useAuthenticatedUser();
-  const now = useSharedClock();
+  const now = useNow({ updateInterval: 1000 }).getTime();
   const [open, setOpen] = useState(false);
   const [panel, setPanel] = useState<TimerPanelState>({ type: "list" });
-  const timers = useQuery(
+  const timers = useInfiniteQuery(
     timeTimersOptions(user.activeOrganizationId, user.id),
   );
   const matters = useQuery(
     workspacesNavigationOptions(user.activeOrganizationId),
   );
-  const date = Temporal.Instant.fromEpochMilliseconds(
-    now || Temporal.Now.instant().epochMilliseconds,
-  )
-    .toZonedDateTimeISO(user.timezoneId)
-    .toPlainDate()
-    .toString();
-  const today = useQuery({
-    ...loggedTodayOptions(user.activeOrganizationId, user.id, date),
-    enabled: open,
-  });
   const mutation = useTimerMutation();
   const canCreate = usePermissions({ timeEntry: ["create"] });
   const canUpdate = usePermissions({ timeEntry: ["update"] });
   const canDelete = usePermissions({ timeEntry: ["delete"] });
+  const timerItems = timers.data?.pages.flatMap((page) => page.items);
   const active =
-    timers.data === undefined ? undefined : runningTimer(timers.data);
+    timerItems === undefined ? undefined : runningTimer(timerItems);
   const elapsed = (timer: TimeTimer) =>
     formatTimerSeconds({
       seconds: elapsedTimerSeconds(timer, now),
@@ -116,26 +104,6 @@ export const GlobalTimerContent = ({
         </PopoverTrigger>
         <PopoverPanel align="end" className="w-96 max-w-[calc(100vw-2rem)]">
           <PopoverTitle>{t("billing.globalTimer.title")}</PopoverTitle>
-          {today.data !== undefined && (
-            <p className="text-muted-foreground text-sm tabular-nums">
-              {t("billing.globalTimer.loggedToday")}:{" "}
-              <bdi>
-                {formatTimerSeconds({
-                  seconds: today.data * 60,
-                  formatNumber: (value) =>
-                    format.number(value, {
-                      minimumIntegerDigits: 2,
-                      useGrouping: false,
-                    }),
-                })}
-              </bdi>
-            </p>
-          )}
-          {today.error !== null && (
-            <p className="text-destructive text-sm" role="alert">
-              {today.error.message}
-            </p>
-          )}
           {panel.type === "list" ? (
             <>
               {timers.isPending && (
@@ -163,7 +131,7 @@ export const GlobalTimerContent = ({
                   {matters.error.message}
                 </p>
               )}
-              {timers.data?.map((timer) => {
+              {timerItems?.map((timer) => {
                 const matter = matters.data?.workspaces.find(
                   (item) => item.id === timer.matterId,
                 );
@@ -245,6 +213,21 @@ export const GlobalTimerContent = ({
                   </div>
                 );
               })}
+              {timers.hasNextPage && (
+                <Button
+                  disabled={timers.isFetchingNextPage}
+                  onClick={() =>
+                    detached(timers.fetchNextPage(), "global-timer.load-more")
+                  }
+                  variant="ghost"
+                >
+                  {t(
+                    timers.isFetchingNextPage
+                      ? "common.loading"
+                      : "common.loadMore",
+                  )}
+                </Button>
+              )}
               <TimerError error={mutation.error} />
               {canCreate && (
                 <Button

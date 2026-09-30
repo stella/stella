@@ -31,10 +31,7 @@ import {
   entityViewKeys,
   entityViewsOptions,
 } from "@/lib/workspaces/queries/entity-views";
-import {
-  loggedTodayOptions,
-  myTimeEntriesInfiniteOptions,
-} from "@/lib/workspaces/queries/my-time-entries";
+import { myTimeEntriesInfiniteOptions } from "@/lib/workspaces/queries/my-time-entries";
 import { reportExportsKeys } from "@/lib/workspaces/queries/report-exports";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
 import { viewTemplateKeys } from "@/lib/workspaces/queries/view-templates";
@@ -393,7 +390,6 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     files: ["lib/workspaces/queries/my-time-entries.ts"],
     keys: () => [
       myTimeEntriesInfiniteOptions(ORG, USER, "2026-01-01").queryKey,
-      loggedTodayOptions(ORG, USER, "2026-01-01").queryKey,
     ],
   },
   "time-entries/suggestions/list.ts": {
