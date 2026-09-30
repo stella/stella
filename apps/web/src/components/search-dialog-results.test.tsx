@@ -9,7 +9,6 @@ import {
   RecentFileIcon,
   SearchHitIcon,
 } from "@/components/search-dialog-results";
-import type { api } from "@/lib/api";
 import type { GlobalSearchHit } from "@/lib/api-contract";
 import { toSafeId } from "@/lib/safe-id";
 import type { RecentFile } from "@/lib/search-recents";
@@ -73,15 +72,6 @@ const recent = {
   openedAt: hit.updatedAt,
 } as const satisfies RecentFile;
 
-type CachedEntityFields = Pick<
-  NonNullable<
-    Awaited<
-      ReturnType<ReturnType<ReturnType<typeof api.entities>["entity"]>["get"]>
-    >["data"]
-  >,
-  "fields"
->;
-
 test.each([
   {
     cached: false,
@@ -108,7 +98,14 @@ test.each([
     const client = new QueryClient();
     const options = entityOptions(recent.workspaceId, recent.entityId);
     if (cached) {
-      const entity = {
+      client.setQueryData(options.queryKey, {
+        entityId: toSafeId<"entity">(recent.entityId),
+        kind: "document",
+        name: recent.title,
+        currentVersionId: toSafeId<"entityVersion">("version_search_image"),
+        currentVersionCreatedAt: hit.updatedAt,
+        currentVersionReference: null,
+        extractionFileFieldId: null,
         fields: [
           {
             id: toSafeId<"field">(hit.fileFieldId),
@@ -127,8 +124,7 @@ test.each([
             },
           },
         ],
-      } as const satisfies CachedEntityFields;
-      client.setQueryData(options.queryKey, entity);
+      });
     }
     const markup = renderToStaticMarkup(
       <QueryClientProvider client={client}>
