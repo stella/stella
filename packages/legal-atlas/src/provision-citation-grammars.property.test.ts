@@ -9,6 +9,7 @@ import {
 
 import {
   locateGazetteCitations,
+  type LocatedGazetteCitation,
   PROVISION_CITATION_GRAMMARS,
 } from "./provision-citation-grammars";
 
@@ -197,7 +198,7 @@ describe("provision citation grammar properties", () => {
               start: prefix.length,
               end: prefix.length + printed.length,
               jurisdiction: "CZE",
-            };
+            } as const satisfies LocatedGazetteCitation;
             expect(czech.locateGazetteCitations(text).at(0)).toEqual(expected);
             expect(locateGazetteCitations(text).at(0)).toEqual(expected);
             expect(text.slice(expected.start, expected.end)).toBe(printed);
@@ -220,18 +221,16 @@ describe("provision citation grammar properties", () => {
           expectSpans(text, provisions);
           expectSpans(text, gazettes);
           expect(czech.locateAbbreviatedProvisions(prefix + text)).toEqual(
-            provisions.map((citation) => ({
-              ...citation,
-              start: citation.start + prefix.length,
-              end: citation.end + prefix.length,
-            })),
+            provisions.map((citation) =>
+              ({ ...citation, start: citation.start + prefix.length,
+                end: citation.end + prefix.length,}),
+            ),
           );
           expect(locateGazetteCitations(prefix + text)).toEqual(
-            gazettes.map((citation) => ({
-              ...citation,
-              start: citation.start + prefix.length,
-              end: citation.end + prefix.length,
-            })),
+            gazettes.map((citation) =>
+              ({ ...citation, start: citation.start + prefix.length,
+                end: citation.end + prefix.length,}),
+            ),
           );
           expect(performance.now() - started).toBeLessThan(2000);
         }),

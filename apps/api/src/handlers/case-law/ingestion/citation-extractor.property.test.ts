@@ -114,7 +114,7 @@ test(
     fc.assert(
       fc.property(
         noise,
-        docket,
+        docket.map((value) => `sp. zn. ${value}`),
         noise,
         fc.nat({ max: 1000 }),
         (before, citation, after, index) => {
@@ -178,11 +178,10 @@ test(
           expect(text.slice(occurrence.start, occurrence.end)).toBe(citation);
         }
         expect(
-          shifted.value.occurrences.map((occurrence) => ({
-            ...occurrence,
-            start: occurrence.start - lead.length,
-            end: occurrence.end - lead.length,
-          })),
+          shifted.value.occurrences.map((occurrence) =>
+            ({ ...occurrence, start: occurrence.start - lead.length,
+              end: occurrence.end - lead.length,}),
+          ),
         ).toEqual(original.value.occurrences);
       }),
       propertyConfig({ seed: propertySeed() }),
@@ -199,7 +198,7 @@ test(
         fc.constantFrom("/", "9", "§", "\u00a0", "\u2003", " , / "),
         fc.integer({ min: 1000, max: 12_000 }),
         (fragment, count) => {
-          const citation = "21 Cdo 1234/2020";
+          const citation = "sp. zn. 21 Cdo 1234/2020";
           const text = `${fragment.repeat(count)}; ${citation};`;
           const started = performance.now();
           const citations = extractCitations([{ index: 0, text }]);
