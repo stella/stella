@@ -1,4 +1,5 @@
 import { Result, panic } from "better-result";
+import * as v from "valibot";
 /**
  * Slovak Constitutional Court (Ústavný súd SR) adapter.
  *
@@ -916,6 +917,7 @@ type SkUsCollectionMatch =
       status: "unresolved";
       reason:
         | "unavailable"
+        | "invalid_listing"
         | "incomplete_listing"
         | "no_matching_entry"
         | "ambiguous_identity";
@@ -934,6 +936,28 @@ const storedSearchResponse = (
   return isSearchResponse(value) ? value : null;
 };
 
+// Preserve unknown publisher fields while validating everything the join reads.
+const COLLECTION_ENTRY_SCHEMA = v.looseObject({
+  docType: v.literal(COLLECTION_DOC_TYPE),
+  documentId: v.pipe(v.string(), v.minLength(1)),
+  mkRSAPNumberOfFile: v.string(),
+  mkDateOfDecision: v.exactOptional(v.nullable(v.string())),
+  mkFormOfDecision: v.exactOptional(v.nullable(v.string())),
+  mkTypeOfDecision: v.exactOptional(v.nullable(v.array(v.string()))),
+  mkClauseTitle: v.exactOptional(v.nullable(v.string())),
+  mkClauseText: v.exactOptional(v.nullable(v.string())),
+  mkLawReportsNumber: v.exactOptional(
+    v.nullable(v.union([v.string(), v.number()])),
+  ),
+  mkVolumeOfLawReports: v.exactOptional(
+    v.nullable(v.union([v.string(), v.number()])),
+  ),
+  mkYearOfLawReports: v.exactOptional(
+    v.nullable(v.pipe(v.number(), v.integer())),
+  ),
+  mkTimePeriodZNaU: v.exactOptional(v.nullable(v.string())),
+});
+
 type SkUsCollectionMatchOptions = {
   doc: SearchDocument;
   collectionJson: string | undefined;
@@ -949,6 +973,17 @@ const skUsCollectionMatch = ({
   const collection = storedSearchResponse(collectionJson);
   if (collection === null) {
     return { status: "unresolved", reason: "unavailable" };
+  }
+  const validated = v.safeParse(
+    v.array(COLLECTION_ENTRY_SCHEMA),
+    collection.documents,
+  );
+  if (
+    !validated.success ||
+    !Number.isSafeInteger(collection.numFound) ||
+    collection.numFound < 0
+  ) {
+    return { status: "unresolved", reason: "invalid_listing" };
   }
   if (collection.numFound !== collection.documents.length) {
     return { status: "unresolved", reason: "incomplete_listing" };
@@ -975,7 +1010,7 @@ const skUsCollectionMatch = ({
       )
     );
   };
-  const entries = collection.documents.filter(
+  const entries = validated.output.filter(
     (entry) => entry.docType === COLLECTION_DOC_TYPE && sameDecision(entry),
   );
   const entry = entries.at(0);
@@ -1008,10 +1043,8 @@ type SkUsCollectionPublication =
       year: number | null;
       period: string | null;
     }
-  | { status: "selected" }
-  | { status: "not_included" }
   | {
-      status: "not_stated";
+      status: "selected" | "not_included" | "not_stated";
       reason: Extract<SkUsCollectionMatch, { status: "unresolved" }>["reason"];
     };
 
@@ -1033,10 +1066,10 @@ const skUsCollectionPublication = (
     }
     case "unresolved":
       if (doc.mkIncludeToZnaU === true) {
-        return { status: "selected" };
+        return { status: "selected", reason: collection.reason };
       }
       if (doc.mkIncludeToZnaU === false) {
-        return { status: "not_included" };
+        return { status: "not_included", reason: collection.reason };
       }
       return { status: "not_stated", reason: collection.reason };
     default:
@@ -1058,19 +1091,32 @@ const skUsCollectionTextFields = (
       return {
         ...stated,
         headnote:
-          stated.headnote.type === "present"
-            ? stated.headnote
-            : published.headnote,
+          stated.headnote.type !== "present" &&
+          published.headnote.type === "present"
+            ? published.headnote
+            : stated.headnote,
         legalSentence:
-          stated.legalSentence.type === "present"
-            ? stated.legalSentence
-            : published.legalSentence,
+          stated.legalSentence.type !== "present" &&
+          published.legalSentence.type === "present"
+            ? published.legalSentence
+            : stated.legalSentence,
       };
     }
     default:
       collection satisfies never;
       return panic("Unhandled ÚS collection identity state");
   }
+};
+
+type SkUsEcliAvailability = {
+  status: "published" | "not_published" | "not_stated";
+};
+
+const skUsEcliAvailability = (doc: SearchDocument): SkUsEcliAvailability => {
+  if (!Object.hasOwn(doc, "mkECLI")) {
+    return { status: "not_stated" };
+  }
+  return doc.mkECLI ? { status: "published" } : { status: "not_published" };
 };
 
 type SkUsMetadataOptions = {
@@ -1129,9 +1175,7 @@ const skUsMetadata = ({
   ...(collection.status === "matched"
     ? { collectionEntry: collection.entry }
     : {}),
-  ecliAvailability: doc.mkECLI
-    ? { status: "published" }
-    : { status: "not_published" },
+  ecliAvailability: skUsEcliAvailability(doc),
   formOfEntry: doc.mkFormOfEntry,
   typeOfEntry: doc.mkTypeOfEntry,
   parentDecisionKind: doc.mkParentIdDecision,
@@ -1193,7 +1237,20 @@ export const buildSkUsDecision = async (
     decisionDate === undefined
       ? undefined
       : await page.collectionListing({ caseNumber, decisionDate }, signal);
+  signal?.throwIfAborted();
   const collection = skUsCollectionMatch({ doc, collectionJson, facetsJson });
+  if (
+    decisionDate !== undefined &&
+    collection.status === "unresolved" &&
+    collection.reason === "unavailable"
+  ) {
+    logger.warn("case_law.ingestion.collection_fetch_failed", {
+      adapterKey: ADAPTER_KEYS.SK_US,
+      caseNumber,
+      decisionDate,
+      reason: collection.reason,
+    });
+  }
   const rvpNumber = doc.mkRVPNumberOfFile ?? undefined;
   const courtFileJson =
     rvpNumber === undefined

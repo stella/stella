@@ -966,6 +966,67 @@ describe("sk-us buildDecision", () => {
     });
   });
 
+  test.each([204, 500])(
+    "collection listing failure (%s) remains visible beside the publisher inclusion flag",
+    async (status) => {
+      const logs = installRecordingLogger();
+      try {
+        for (const [includeToZnaU, publicationStatus] of [
+          [true, "selected"],
+          [false, "not_included"],
+        ] as const) {
+          mockFetch({ search: [], collection: { type: "status", status } });
+          const built = await buildSkUsDecision({
+            ...PLENARY_OPINION,
+            mkIncludeToZnaU: includeToZnaU,
+          });
+          if (built.type !== "built") {
+            throw new Error(`expected a built decision, got ${built.type}`);
+          }
+          expect(built.decision.metadata["publishedInCollection"]).toEqual({
+            status: publicationStatus,
+            reason: "unavailable",
+          });
+          expect(
+            decodeSourceRawEnvelope(built.decision.sourceRaw ?? "")?.[
+              "collection-listing"
+            ],
+          ).toBeUndefined();
+        }
+        expect(
+          logs
+            .at("WARN")
+            .filter(
+              ({ message }) =>
+                message === "case_law.ingestion.collection_fetch_failed",
+            ),
+        ).toHaveLength(2);
+        expect(
+          logs
+            .at("WARN")
+            .filter(
+              ({ message }) =>
+                message === "case_law.ingestion.collection_fetch_failed",
+            )
+            .map(({ attributes }) => attributes),
+        ).toEqual([
+          expect.objectContaining({
+            adapterKey: "sk-us",
+            caseNumber: PLENARY_OPINION.mkRSAPNumberOfFile,
+            reason: "unavailable",
+          }),
+          expect.objectContaining({
+            adapterKey: "sk-us",
+            caseNumber: PLENARY_OPINION.mkRSAPNumberOfFile,
+            reason: "unavailable",
+          }),
+        ]);
+      } finally {
+        logs.restore();
+      }
+    },
+  );
+
   test("the judges the source states structurally reach the row", async () => {
     mockFetch({ search: [], dissenters: ["Peter Straka"] });
 

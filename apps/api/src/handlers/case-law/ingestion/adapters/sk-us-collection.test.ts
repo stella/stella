@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   encodeSourceRawEnvelope,
+  decodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { skUsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
@@ -227,14 +228,88 @@ describe("ÚS collection identity and publication", () => {
     });
     expect(selected.metadata["publishedInCollection"]).toEqual({
       status: "selected",
+      reason: "no_matching_entry",
     });
     const placeholder = await replay({
-      listing: unpublished,
-      entries: [{ ...entry, mkClauseText: "- bez právnej vety -" }],
+      listing: { ...unpublished, mkClauseText: "- bez právnej vety -" },
+      entries: [{ ...entry, mkClauseText: null }],
     });
     expect(placeholder.textFields.legalSentence).toEqual({
       type: "absent",
       reason: "publisher_placeholder",
     });
+  });
+  test("rejects malformed collection field types while preserving the captured response", async () => {
+    const { listing, entry } = await fixture();
+    const withoutClauses = {
+      ...listing,
+      mkClauseTitle: null,
+      mkClauseText: null,
+      mkIncludeToZnaU: null,
+    };
+    for (const changed of [
+      { ...entry, mkClauseTitle: 123 },
+      { ...entry, mkClauseText: ["sentence"] },
+      { ...entry, mkYearOfLawReports: "2026" },
+      { ...entry, mkYearOfLawReports: 2026.5 },
+      { ...entry, mkTypeOfDecision: [123] },
+      { ...entry, mkFormOfDecision: true },
+      { ...entry, mkDateOfDecision: 20_260_610 },
+      { ...entry, mkLawReportsNumber: {} },
+      { ...entry, mkVolumeOfLawReports: [] },
+      { ...entry, mkTimePeriodZNaU: 1 },
+    ]) {
+      const result = await replay({
+        listing: withoutClauses,
+        entries: [changed],
+      });
+      expect(result.metadata["publishedInCollection"]).toEqual({
+        status: "not_stated",
+        reason: "invalid_listing",
+      });
+      expect(result.textFields.headnote).toEqual({
+        type: "absent",
+        reason: "not_published",
+      });
+      const captured = decodeSourceRawEnvelope(result.sourceRaw ?? "");
+      expect(
+        JSON.parse(captured?.["collection-listing"] ?? "null"),
+      ).toMatchObject({ documents: [changed] });
+    }
+  });
+
+  test("distinguishes an omitted ECLI from a publisher-stated null", async () => {
+    const { listing } = await fixture();
+    const missing = { ...listing };
+    delete missing["mkECLI"];
+    expect(Object.hasOwn(missing, "mkECLI")).toBe(false);
+    const absentKey = await replay({ listing: missing, entries: [] });
+    expect(absentKey.metadata["ecliAvailability"]).toEqual({
+      status: "not_stated",
+    });
+    const statedNull = await replay({
+      listing: { ...missing, mkECLI: null },
+      entries: [],
+    });
+    expect(statedNull.metadata["ecliAvailability"]).toEqual({
+      status: "not_published",
+    });
+  });
+
+  test("keeps collection-loss reasons for every publisher inclusion state", async () => {
+    const { listing } = await fixture();
+    for (const [includeToZnaU, status] of [
+      [true, "selected"],
+      [false, "not_included"],
+      [null, "not_stated"],
+    ] as const) {
+      const result = await replay({
+        listing: { ...listing, mkIncludeToZnaU: includeToZnaU },
+      });
+      expect(result.metadata["publishedInCollection"]).toEqual({
+        status,
+        reason: "unavailable",
+      });
+    }
   });
 });
