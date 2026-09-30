@@ -5,7 +5,7 @@ import * as v from "valibot";
 import { respondToMcpLifecycle } from "../tests/mcp-test-lifecycle.js";
 import {
   actionAdmissionRefusalLines,
-  readActionAdmissionRefusal,
+  readCliActionAdmissionRefusal,
   readHttpActionAdmissionRefusal,
 } from "./action-admission-refusal.js";
 import { checkServerCompatibility } from "./compatibility.js";
@@ -86,7 +86,7 @@ const render = async (
 
 for (const code of Object.keys(EXPECTED_EXITS)) {
   test(`admission parity ${code}: MCP tool, MCP HTTP, resources, direct HTTP and upload`, async () => {
-    const metadata = readActionAdmissionRefusal({
+    const metadata = readCliActionAdmissionRefusal({
       code,
       message: "Server message",
     });
@@ -106,7 +106,7 @@ for (const code of Object.keys(EXPECTED_EXITS)) {
       content: [{ type: "text", text: JSON.stringify({ error: fixture }) }],
     };
     expect(errorEnvelope({ error: fixture })).toMatchObject(refusal);
-    expect(readActionAdmissionRefusal({ error: fixture })).toEqual(refusal);
+    expect(readCliActionAdmissionRefusal({ error: fixture })).toEqual(refusal);
     expect(
       await readHttpActionAdmissionRefusal(Response.json(fixture)),
     ).toEqual(refusal);
@@ -248,7 +248,7 @@ test("admission parity leaves unrelated and malformed HTTP errors unchanged", as
     { code: "not_found", message: "Gone" },
     { code: "action_period_exhausted" },
   ]) {
-    expect(readActionAdmissionRefusal(body)).toBeUndefined();
+    expect(readCliActionAdmissionRefusal(body)).toBeUndefined();
   }
   expect(
     await readHttpActionAdmissionRefusal(new Response("invalid JSON")),

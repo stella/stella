@@ -5,7 +5,7 @@ import path from "node:path";
 
 import {
   actionAdmissionRefusalLines,
-  readActionAdmissionRefusal,
+  readCliActionAdmissionRefusal,
   readHttpActionAdmissionRefusal,
   type CliActionAdmissionRefusal,
 } from "./action-admission-refusal.js";
@@ -352,7 +352,7 @@ const abortUpload = async ({
   const admission =
     aborted.status === "client-error"
       ? aborted.error.admission
-      : readActionAdmissionRefusal(parsePayload(aborted.result));
+      : readCliActionAdmissionRefusal(parsePayload(aborted.result));
   const recovery = `Cleanup failed for reserved upload ${uploadId}; run '${formatCapabilityCommand(UPLOAD_CAPABILITIES.abort)} --matter-id ${workspaceId} --upload-id ${uploadId} --yes'`;
   return admission === undefined
     ? recovery

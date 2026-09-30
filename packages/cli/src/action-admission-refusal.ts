@@ -21,7 +21,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 /** Both HTTP bodies and MCP envelopes carry the same admission contract. */
-export const readActionAdmissionRefusal = (
+export const readCliActionAdmissionRefusal = (
   payload: unknown,
 ): CliActionAdmissionRefusal | undefined => {
   if (!isRecord(payload)) {
@@ -56,7 +56,9 @@ export const readHttpActionAdmissionRefusal = async (
   const body = await Result.tryPromise(
     async (): Promise<unknown> => await response.clone().json(),
   );
-  return Result.isOk(body) ? readActionAdmissionRefusal(body.value) : undefined;
+  return Result.isOk(body)
+    ? readCliActionAdmissionRefusal(body.value)
+    : undefined;
 };
 
 export const actionAdmissionRefusalLines = (

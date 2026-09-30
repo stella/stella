@@ -13,7 +13,7 @@ import { text as readStreamText } from "node:stream/consumers";
 import {
   actionAdmissionRefusalLines,
   actionAdmissionRefusalOutput,
-  readActionAdmissionRefusal,
+  readCliActionAdmissionRefusal,
 } from "./action-admission-refusal.js";
 import { decodeAccessTokenClaims } from "./auth/jwt.js";
 import { RESOURCE_SCOPE_PREFIX } from "./auth/scopes.js";
@@ -1082,7 +1082,7 @@ export const toolErrorLines = (
   },
   flagPaths?: ReadonlySet<string>,
 ): string[] => {
-  const admission = readActionAdmissionRefusal(envelope);
+  const admission = readCliActionAdmissionRefusal(envelope);
   if (admission !== undefined) {
     return actionAdmissionRefusalLines(admission);
   }
@@ -1132,7 +1132,7 @@ export const renderToolError = ({
 }): void => {
   const errorPayload = parsePayload(result);
   const envelope = errorEnvelope(errorPayload);
-  const admission = readActionAdmissionRefusal(errorPayload);
+  const admission = readCliActionAdmissionRefusal(errorPayload);
   if (admission !== undefined && (format === "json" || format === "jsonl")) {
     writers.stderr(
       actionAdmissionRefusalOutput({

@@ -10,7 +10,7 @@ import {
 
 import {
   actionAdmissionRefusalLines,
-  readActionAdmissionRefusal,
+  readCliActionAdmissionRefusal,
 } from "../../../../packages/cli/src/action-admission-refusal.ts";
 import { ACTION_ADMISSION_REFUSALS as CLI_ADMISSION_REFUSALS } from "../../../../packages/cli/src/generated/mcp-contract.ts";
 import { serializeToolResult, structuredErrorResult } from "./tool-utils";
@@ -43,8 +43,8 @@ test("every MCP refusal retains identical structured fields and renders through 
       panic("MCP refusal has no text envelope");
     }
     const payload: unknown = JSON.parse(text.text);
-    const fromMcp = readActionAdmissionRefusal(payload);
-    const fromHttp = readActionAdmissionRefusal(fixture);
+    const fromMcp = readCliActionAdmissionRefusal(payload);
+    const fromHttp = readCliActionAdmissionRefusal(fixture);
     expect(mcp.isError).toBe(true);
     expect(fromMcp).toEqual(fixture);
     expect(fromHttp).toEqual(fixture);
