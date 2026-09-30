@@ -12,7 +12,7 @@ const testing = await import("@testing-library/react");
 const { QueryClient, QueryClientProvider, hashKey, useQuery, useQueryClient } =
   await import("@tanstack/react-query");
 const router = await import("@tanstack/react-router");
-const { rootKeys, sessionOptions } = await import("@/lib/auth-query-options");
+const { rootKeys, sessionOptions } = await import("@/lib/auth-queries");
 const { useMountEffect } = await import("@/hooks/use-effect");
 const { memberKnowledgeKeys } = await import("@/lib/knowledge/knowledge-cache");
 const { installSessionCacheGuard, settleAuthTransition } =
@@ -72,7 +72,7 @@ test("frame replacement completes cleanup after a delayed route update", async (
       queryKey: frameKey(user.activeOrganizationId),
       queryFn: async () => {
         await Promise.resolve();
-        return client.getQueryData(rootKeys.session);
+        return client.getQueryState(rootKeys.session)?.data;
       },
     });
     useMountEffect(() => {
@@ -150,7 +150,7 @@ test("frame replacement completes cleanup after a delayed route update", async (
     });
     // The mounted observer still uses the matched route's first context.
     await testing.waitFor(() => {
-      expect(queryClient.getQueryData(frameKey("frame-one"))).toEqual(
+      expect(queryClient.getQueryState(frameKey("frame-one"))?.data).toEqual(
         session("frame-two"),
       );
     });

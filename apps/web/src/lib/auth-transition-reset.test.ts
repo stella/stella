@@ -2,7 +2,7 @@ import { isCancelledError, QueryClient } from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
 
 import { publicKnowledgeKeys } from "@/features/knowledge/public/public-knowledge-queries";
-import { rootKeys } from "@/lib/auth-query-options";
+import { rootKeys } from "@/lib/auth-queries";
 import { knowledgeKeys } from "@/lib/knowledge/queries";
 import {
   installSessionCacheGuard,
@@ -62,8 +62,8 @@ describe("auth transition cache policy", () => {
       await response.promise;
       expect(queryClient.getQueryState(memberKey)).toBeUndefined();
       expect(queryClient.getQueryState(heldKey)).toBeUndefined();
-      expect(queryClient.getQueryData(chatKey)).toBe("chat");
-      expect(queryClient.getQueryData(catalogueKey)).toBe("catalogue");
+      expect(queryClient.getQueryState(chatKey)?.data).toBe("chat");
+      expect(queryClient.getQueryState(catalogueKey)?.data).toBe("catalogue");
 
       queryClient.setQueryData(
         rootKeys.session,
@@ -71,9 +71,9 @@ describe("auth transition cache policy", () => {
       );
       await settleAuthTransition(queryClient);
       await resetAuthTransition(queryClient, "member:member-a:org-a");
-      expect(queryClient.getQueryData(chatKey)).toBe("chat");
+      expect(queryClient.getQueryState(chatKey)?.data).toBe("chat");
       expect(queryClient.getQueryState(memberKey)).toBeUndefined();
-      expect(queryClient.getQueryData(catalogueKey)).toBe("catalogue");
+      expect(queryClient.getQueryState(catalogueKey)?.data).toBe("catalogue");
       expect(reloads).toEqual([]);
     } finally {
       response.resolve("cleanup");
@@ -91,7 +91,7 @@ describe("auth transition cache policy", () => {
       queryClient.setQueryData(catalogueKey, "catalogue");
       queryClient.setQueryData(rootKeys.session, null);
       await settleAuthTransition(queryClient);
-      expect(queryClient.getQueryData(chatKey)).toBe("chat");
+      expect(queryClient.getQueryState(chatKey)?.data).toBe("chat");
 
       queryClient.setQueryData(
         rootKeys.session,
@@ -100,7 +100,7 @@ describe("auth transition cache policy", () => {
       await settleAuthTransition(queryClient);
       await resetAuthTransition(queryClient, "member:member-a:org-b");
       expect(queryClient.getQueryState(chatKey)).toBeUndefined();
-      expect(queryClient.getQueryData(catalogueKey)).toBe("catalogue");
+      expect(queryClient.getQueryState(catalogueKey)?.data).toBe("catalogue");
       expect(reloads).toEqual([]);
     } finally {
       uninstall();
@@ -235,7 +235,7 @@ describe("auth transition cache policy", () => {
               ]
             : [rootKeys.session, catalogueKey],
         );
-        expect(queryClient.getQueryData(rootKeys.session)).toEqual(
+        expect(queryClient.getQueryState(rootKeys.session)?.data).toEqual(
           transition.next,
         );
         expect(reloads).toEqual(transition.reloads);

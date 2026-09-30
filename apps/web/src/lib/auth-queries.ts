@@ -1,17 +1,61 @@
-import type { QueryClient } from "@tanstack/react-query";
+import { queryOptions, type QueryClient } from "@tanstack/react-query";
 
 import { signalSessionChange } from "@/lib/account/session-signal";
-import { rootKeys } from "@/lib/auth-query-options";
-import { settleAuthTransition } from "@/lib/session-cache-guard";
+import { toAuthClientError } from "@/lib/errors/auth";
+import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 
-export {
-  rootKeys,
-  roleOptions,
-  sessionOptions,
-} from "@/lib/auth-query-options";
+export const rootKeys = {
+  session: ["session"],
+  role: ["role"],
+};
+
+/**
+ * The shell blocks on these two, so their worst case is what a user stares
+ * at before anything renders. The QueryClient sets no `retry`, i.e. the
+ * TanStack default of 3 attempts with exponential backoff — which would turn
+ * one stalled connection into roughly four auth-request budgets plus backoff
+ * before `beforeLoad` settles. On the boot path, failing fast into the route
+ * error boundary's bounded recovery beats a minute-long pending component.
+ * Retries stay on for everything downstream of boot.
+ */
+const BOOT_QUERY_RETRY = false;
+
+export const sessionOptions = queryOptions({
+  retry: BOOT_QUERY_RETRY,
+  queryKey: rootKeys.session,
+  queryFn: async () => {
+    const { authClient } = await import("@/lib/auth-client");
+    const result = await authClient.getSession();
+
+    if (result.error) {
+      throw toAuthClientError(result.error);
+    }
+
+    return result.data;
+  },
+  staleTime: ROUTE_QUERY_STALE_TIME_MS,
+});
+
+export const roleOptions = queryOptions({
+  retry: BOOT_QUERY_RETRY,
+  queryKey: rootKeys.role,
+  queryFn: async () => {
+    const { authClient } = await import("@/lib/auth-client");
+    const result = await authClient.organization.getActiveMemberRole();
+
+    if (result.error) {
+      throw toAuthClientError(result.error);
+    }
+
+    return result.data.role;
+  },
+  staleTime: ROUTE_QUERY_STALE_TIME_MS,
+});
 
 /** Refreshes authentication queries; the host finishes frame cleanup after unmount. */
 export const refreshAuthQueries = async (queryClient: QueryClient) => {
+  // Load the reset owner at the call boundary; it reads these query options.
+  const { settleAuthTransition } = await import("@/lib/session-cache-guard");
   await Promise.all([
     queryClient.refetchQueries({ queryKey: rootKeys.session, type: "all" }),
     queryClient.refetchQueries({ queryKey: rootKeys.role, type: "all" }),
