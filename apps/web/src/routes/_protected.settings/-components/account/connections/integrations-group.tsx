@@ -64,10 +64,9 @@ export const useIntegrations = (query: string): IntegrationsData => {
       connection,
     ]),
   );
-  const installed = catalogue.entries.filter(
-    (entry): entry is CatalogueMcp =>
-      entry.kind === "mcp" && isEffectivelyInstalled(entry),
-  );
+  const installed = catalogue.entries
+    .filter((entry) => entry.kind === "mcp")
+    .filter((entry) => isEffectivelyInstalled(entry));
   const visible = installed.filter((entry) =>
     matchesConnectionQuery(query, [entry.displayName, entry.description]),
   );

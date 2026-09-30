@@ -129,21 +129,19 @@ const ListItem = ({
   children,
   ...props
 }: useRender.ComponentProps<"div">) => {
+  const defaultProps = {
+    className: cn(
+      "flex min-h-14 w-full items-center gap-3 px-4 py-2.5 text-start",
+      render !== undefined &&
+        "hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:ring-ring cursor-pointer transition-colors duration-150 outline-none focus-visible:ring-2 focus-visible:ring-inset",
+      className,
+    ),
+    "data-slot": "list-item",
+    children,
+  };
   const row = useRender({
     defaultTagName: "div",
-    props: mergeProps<"div">(
-      {
-        className: cn(
-          "flex min-h-14 w-full items-center gap-3 px-4 py-2.5 text-start",
-          render !== undefined &&
-            "hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:ring-ring cursor-pointer transition-colors duration-150 outline-none focus-visible:ring-2 focus-visible:ring-inset",
-          className,
-        ),
-        "data-slot": "list-item",
-        children,
-      },
-      props,
-    ),
+    props: mergeProps<"div">(defaultProps, props),
     render,
   });
   // The `li` carries the divider; the row inside it carries layout and focus.

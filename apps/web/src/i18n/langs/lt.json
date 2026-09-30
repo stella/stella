@@ -32,7 +32,7 @@
     "copiedToast": "Instrukcijos nukopijuotos. Įklijuokite jas į pokalbį su asistentu.",
     "copy": "Nukopijuokite jam instrukcijas",
     "description": "Klauskite Claude arba ChatGPT apie savo bylas ir dokumentus. Pasirinkite asistentą ir atsivers trumpas vadovas; tai užtruks apie minutę.",
-    "instructions": "Prijunk mane prie stella, mano teisinės darbo erdvės. Vadovaukis skiltimi „Instructions for AI agents“ adresu {guideUrl} ir naudok šį serverio adresą: {mcpUrl}",
+    "instructions": "Prijunk mane prie stella, mano teisinės darbo srities. Vadovaukis DI agentų instrukcijomis adresu {guideUrl} ir naudok šį serverio adresą: {mcpUrl}",
     "openGuide": "Atidaryti vadovą: {assistant}",
     "selfSetupHint": "Naudojate Claude Code ar Codex?",
     "title": "Naudokite stella savo DI asistente"

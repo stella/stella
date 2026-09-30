@@ -32,7 +32,7 @@
     "copiedToast": "Instruções copiadas. Cole-as em uma conversa com seu assistente.",
     "copy": "Copie as instruções para ele",
     "description": "Pergunte ao Claude ou ao ChatGPT sobre seus casos e documentos. Escolha seu assistente para ver um guia curto; leva cerca de um minuto.",
-    "instructions": "Conecte-me ao stella, meu espaço de trabalho jurídico. Siga as “Instructions for AI agents” em {guideUrl} e use este endereço de servidor: {mcpUrl}",
+    "instructions": "Conecte-me ao stella, meu espaço de trabalho jurídico. Siga as instruções para agentes de IA em {guideUrl} e use este endereço de servidor: {mcpUrl}",
     "openGuide": "Abrir o guia do {assistant}",
     "selfSetupHint": "Usa o Claude Code ou o Codex?",
     "title": "Use o stella no seu assistente de IA"

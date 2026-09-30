@@ -35,7 +35,7 @@
     "instructions": "Csatlakoztass a stellához, a jogi munkaterületemhez. Kövesd az „Instructions for AI agents” részt itt: {guideUrl}, és ezt a szervercímet használd: {mcpUrl}",
     "openGuide": "Útmutató megnyitása: {assistant}",
     "selfSetupHint": "Claude Code-ot vagy Codexet használsz?",
-    "title": "Használd a stellát az MI-asszisztensedben"
+    "title": "Használd a stellát az AI-asszisztensedben"
   },
   "ai": {
     "chooseRewriteInstruction": "Átírási lehetőségek",
@@ -4223,13 +4223,13 @@
       "connectedAppsDescription": "Alkalmazások, amelyekbe stella-fiókkal jelentkeztél be. Válaszd le azokat, amelyeket már nem használsz.",
       "connectedAppsEmpty": "Még semmi. Állítsd be fent a Claude-ot vagy a ChatGPT-t, és itt megjelenik.",
       "connectedAppsTitle": "Hozzáféréssel rendelkező alkalmazások",
-      "description": "Használd a stellát az MI-asszisztensedből, és lásd, mi fér hozzá a fiókodhoz.",
+      "description": "Használd a stellát az AI-asszisztensedből, és lásd, mi fér hozzá a fiókodhoz.",
       "developerDescription": "Szervercímek és a parancssori eszköz technikai beállításokhoz.",
       "developerTitle": "Fejlesztői hozzáférés",
       "disconnectConfirmDescription": "Ez megvonja a(z) {clientName} hozzáférését a fiókjához, valamint érvényteleníti az összes általa kibocsátott tokent. Bármikor újra csatlakozhat.",
       "disconnectConfirmTitle": "Leválasztja a(z) {clientName} alkalmazást?",
       "disconnectSuccess": "A(z) {clientName} leválasztva",
-      "integrationsDescription": "Külső szolgáltatások, amelyeket az MI a nevedben használhat, például a dokumentumtárad.",
+      "integrationsDescription": "Külső szolgáltatások, amelyeket az AI a nevedben használhat, például a dokumentumtárad.",
       "integrationsEmpty": "Add hozzá az első szolgáltatást",
       "integrationsTitle": "Csatlakoztatott szolgáltatások",
       "mcpAnonymizedLabel": "Anonimizált végpont",

@@ -35,7 +35,7 @@
     "instructions": "Pievieno mani stella, manai juridiskajai darbvietai. Izpildi sadaļu “Instructions for AI agents” vietnē {guideUrl} un izmanto šo servera adresi: {mcpUrl}",
     "openGuide": "Atvērt ceļvedi: {assistant}",
     "selfSetupHint": "Izmantojat Claude Code vai Codex?",
-    "title": "Izmantojiet stella savā MI asistentā"
+    "title": "Izmantojiet stella savā AI asistentā"
   },
   "ai": {
     "chooseRewriteInstruction": "Pārrakstīšanas iespējas",
@@ -4223,13 +4223,13 @@
       "connectedAppsDescription": "Lietotnes, kurās pierakstījāties ar stella kontu. Atvienojiet tās, kuras vairs neizmantojat.",
       "connectedAppsEmpty": "Pagaidām nekā. Iestatiet augstāk Claude vai ChatGPT, un tas parādīsies šeit.",
       "connectedAppsTitle": "Lietotnes ar piekļuvi",
-      "description": "Izmantojiet stella no sava MI asistenta un redziet, kam ir piekļuve jūsu kontam.",
+      "description": "Izmantojiet stella no sava AI asistenta un redziet, kam ir piekļuve jūsu kontam.",
       "developerDescription": "Servera adreses un komandrindas rīks tehniskiem iestatījumiem.",
       "developerTitle": "Izstrādātāju piekļuve",
       "disconnectConfirmDescription": "Tas atņems {clientName} piekļuvi jūsu kontam, kā arī atceļ visus tā izsniegtos marķierus. Jūs varat atkal pievienoties jebkurā laikā.",
       "disconnectConfirmTitle": "Atvienot {clientName}?",
       "disconnectSuccess": "{clientName} atvienots",
-      "integrationsDescription": "Ārējie pakalpojumi, ko MI var izmantot jūsu vietā, piemēram, dokumentu krātuve.",
+      "integrationsDescription": "Ārējie pakalpojumi, ko AI var izmantot jūsu vietā, piemēram, dokumentu krātuve.",
       "integrationsEmpty": "Pievienojiet pirmo pakalpojumu",
       "integrationsTitle": "Pievienotie pakalpojumi",
       "mcpAnonymizedLabel": "Anonimizēts galapunkts",

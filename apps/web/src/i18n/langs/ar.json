@@ -29,10 +29,10 @@
   },
   "agentSetup": {
     "addressLabel": "سيطلب مساعدك هذا العنوان",
-    "copiedToast": "تم نسخ التعليمات. الصقها في محادثة مع مساعدك.",
+    "copiedToast": "تم نسخ التعليمات. الصقها في دردشة مع مساعدك.",
     "copy": "انسخ له التعليمات",
     "description": "اسأل Claude أو ChatGPT عن ملفاتك القانونية ومستنداتك. اختر مساعدك لفتح دليل قصير؛ يستغرق الأمر نحو دقيقة.",
-    "instructions": "اربطني بـ stella، مساحة عملي القانونية. اتّبع قسم «Instructions for AI agents» في {guideUrl} واستخدم عنوان الخادم هذا: {mcpUrl}",
+    "instructions": "اربطني بـ stella، مساحة عملي القانونية. اتّبع تعليمات وكلاء الذكاء الاصطناعي في {guideUrl} واستخدم عنوان الخادم هذا: {mcpUrl}",
     "openGuide": "افتح دليل {assistant}",
     "selfSetupHint": "هل تستخدم Claude Code أو Codex؟",
     "title": "استخدم stella في مساعد الذكاء الاصطناعي"
