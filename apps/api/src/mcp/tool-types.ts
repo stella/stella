@@ -351,7 +351,7 @@ export type McpCliToolAnnotation = {
 };
 
 /** One table of a composite result. */
-export type McpCliCompositeSection = {
+type McpCliCompositeSection = {
   /** The heading printed above the table. */
   title: string;
   /**
@@ -367,7 +367,7 @@ export type McpCliCompositeSection = {
   columns: readonly string[];
 };
 
-export type McpCliCompositeView = {
+type McpCliCompositeView = {
   /** Dot paths printed as key/value lines above the tables; absent and null values are skipped. */
   summary: readonly string[];
   sections: readonly [McpCliCompositeSection, ...McpCliCompositeSection[]];
@@ -570,6 +570,13 @@ type IsUnknown<TValue> =
   IsAny<TValue> extends true ? false : unknown extends TValue ? true : false;
 
 type IsBroadRecord<TValue> = string extends keyof TValue ? true : false;
+
+export type TypedHandlerDataByName<
+  THandlers,
+  TNames extends keyof THandlers,
+> = {
+  [TName in TNames]: TypedHandlerData<THandlers[TName]>;
+};
 
 type HandlerOutputIsTyped<THandler, TData = TypedHandlerData<THandler>> =
   IsNever<TData> extends true

@@ -298,8 +298,26 @@ export const runSearchCensus = async (
       configs,
       limit: 10,
       parsedCursor: null,
+      pinned: [],
     }),
   );
+  // The same read with a named Work placed ahead of the matches, so the
+  // reader also executes the pinned branch's statement.
+  await readLegislationSearchHits(tx, {
+    body: { query: WORD, language: "cs" },
+    configs,
+    limit: 10,
+    parsedCursor: null,
+    pinned: [
+      {
+        sourceId: createSafeId<"legislationSource">(),
+        eli: "census/pinned",
+        language: "cs",
+        keyId: createSafeId<"legislationDocument">(),
+        score: 1_000_000,
+      },
+    ],
+  });
   exercised.add(readLegislationSearchHits.publicLawSharedQuery);
 
   return {

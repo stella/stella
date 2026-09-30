@@ -193,6 +193,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   folder: { type: "alias", resourceType: RESOURCE_TYPE.ENTITY },
   infoSoudTrackedCase: { type: "non_resource", reason: "workflow" },
   invoice: { type: "resource", resourceType: RESOURCE_TYPE.INVOICE },
+  invoiceLine: { type: "non_resource", reason: "subresource" },
   justification: { type: "non_resource", reason: "subresource" },
   legislationDocument: {
     type: "resource",
@@ -203,6 +204,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
     type: "resource",
     resourceType: RESOURCE_TYPE.LEGISLATION_SOURCE,
   },
+  legislationWorkName: { type: "non_resource", reason: "projection" },
   legalList: { type: "resource", resourceType: RESOURCE_TYPE.LEGAL_LIST },
   legalListColumn: { type: "non_resource", reason: "subresource" },
   legalListGenerationCandidate: { type: "non_resource", reason: "workflow" },

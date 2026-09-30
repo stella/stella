@@ -10,6 +10,7 @@ import { Button } from "@stll/ui/button";
 import { stellaToast } from "@stll/ui/toast";
 
 import { useAnalytics } from "@/lib/analytics/provider";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { updateMemory } from "@/lib/memory-api";
 import {
@@ -32,6 +33,7 @@ export const SuggestionsQueue = (props: SuggestionsQueueProps) => {
     from: "/_protected",
     select: (ctx) => ctx.user.activeOrganizationId,
   });
+  const { id: userId } = useAuthenticatedUser();
 
   const workspaceId =
     props.scope === "workspace" ? props.workspaceId : undefined;
@@ -48,6 +50,7 @@ export const SuggestionsQueue = (props: SuggestionsQueueProps) => {
       activeOrganizationId,
       scope,
       status: "suggested",
+      userId,
       ...(workspaceId !== undefined && { workspaceId }),
     }),
   );

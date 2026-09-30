@@ -106,53 +106,55 @@ type RehydrateCorpusIndexCandidatesOptions = {
   ids: SafeId<"caseLawDecision">[];
 };
 
+export const rehydrateCorpusIndexProviderCandidatesQuery = (
+  tx: CaseLawPublicReadTransaction,
+  { generation, ids }: RehydrateCorpusIndexCandidatesOptions,
+) =>
+  tx
+    .select({
+      id: caseLawDecisions.id,
+      caseNumber: caseLawDecisions.caseNumber,
+      caseNumberType: caseLawDecisions.caseNumberType,
+      ecli: caseLawDecisions.ecli,
+      identifiers: sql<unknown>`coalesce((
+        SELECT jsonb_agg(
+          jsonb_build_object(
+            'type', identifier.type,
+            'value', identifier.value
+          )
+          ORDER BY identifier.type, identifier.value
+        )
+        FROM ${caseLawDecisionIdentifiers} identifier
+        WHERE identifier.decision_id = ${caseLawDecisions.id}
+      ), '[]'::jsonb)`,
+      court: caseLawDecisions.court,
+      country: caseLawDecisions.country,
+      language: caseLawDecisions.language,
+      decisionDate: caseLawDecisions.decisionDate,
+      decisionType: caseLawDecisions.decisionType,
+      sourceUrl: caseLawDecisions.sourceUrl,
+      citationCount: caseLawDecisions.citationCount,
+      citationAuthority: caseLawDecisions.citationAuthority,
+      createdAt: caseLawDecisions.createdAt,
+    })
+    .from(caseLawDecisions)
+    .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
+    .where(
+      and(
+        inArray(caseLawDecisions.id, ids),
+        redistributableCaseLawSource,
+        publishedCaseLawDecision,
+        currentCaseLawCorpusProjection(generation),
+      ),
+    );
+
 export const rehydrateCorpusIndexProviderCandidates =
   definePublicLawSharedQuery(
     PUBLIC_LAW_SHARED_QUERY.caseLawCorpusIndexRehydration,
     async (
       tx: CaseLawPublicReadTransaction,
-      { generation, ids }: RehydrateCorpusIndexCandidatesOptions,
-    ) =>
-      await tx
-        .select({
-          id: caseLawDecisions.id,
-          caseNumber: caseLawDecisions.caseNumber,
-          caseNumberType: caseLawDecisions.caseNumberType,
-          ecli: caseLawDecisions.ecli,
-          identifiers: sql<unknown>`coalesce((
-            SELECT jsonb_agg(
-              jsonb_build_object(
-                'type', identifier.type,
-                'value', identifier.value
-              )
-              ORDER BY identifier.type, identifier.value
-            )
-            FROM ${caseLawDecisionIdentifiers} identifier
-            WHERE identifier.decision_id = ${caseLawDecisions.id}
-          ), '[]'::jsonb)`,
-          court: caseLawDecisions.court,
-          country: caseLawDecisions.country,
-          language: caseLawDecisions.language,
-          decisionDate: caseLawDecisions.decisionDate,
-          decisionType: caseLawDecisions.decisionType,
-          sourceUrl: caseLawDecisions.sourceUrl,
-          citationCount: caseLawDecisions.citationCount,
-          citationAuthority: caseLawDecisions.citationAuthority,
-          createdAt: caseLawDecisions.createdAt,
-        })
-        .from(caseLawDecisions)
-        .innerJoin(
-          caseLawSources,
-          eq(caseLawSources.id, caseLawDecisions.sourceId),
-        )
-        .where(
-          and(
-            inArray(caseLawDecisions.id, ids),
-            redistributableCaseLawSource,
-            publishedCaseLawDecision,
-            currentCaseLawCorpusProjection(generation),
-          ),
-        ),
+      options: RehydrateCorpusIndexCandidatesOptions,
+    ) => await rehydrateCorpusIndexProviderCandidatesQuery(tx, options),
   );
 
 const searchResult = async (

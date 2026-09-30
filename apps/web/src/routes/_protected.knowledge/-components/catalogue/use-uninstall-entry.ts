@@ -65,7 +65,7 @@ export const useUninstallEntry = (
     onSuccess: () => {
       detached(
         queryClient.invalidateQueries({
-          queryKey: catalogueKeys.list(organizationId),
+          queryKey: catalogueKeys.all(organizationId),
         }),
         "use-uninstall-entry.invalidate",
       );

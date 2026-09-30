@@ -1,10 +1,11 @@
 import { panic, Result } from "better-result";
-import { describe, expect, mock, test } from "bun:test";
+import { describe, expect, mock, spyOn, test } from "bun:test";
 
 import type { CountryCode } from "@stll/country-codes";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { toSafeId } from "@/api/lib/branded-types";
+import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
 import type {
   BusinessRegistryHit,
   executeRegistryLookup,
@@ -228,6 +229,28 @@ describe("sanctions check", () => {
       }
     },
   );
+
+  test("reports the lists unavailable when the ID check itself fails", async () => {
+    const isCanonicalId = spyOn(
+      BUSINESS_REGISTRY_DISPATCH.ares,
+      "isCanonicalId",
+    ).mockImplementation(() => {
+      throw new Error("checksum binding failed");
+    });
+    try {
+      const result = await runSanctionsCheck({
+        subject: { type: "company-id", value: "26863154", country: "CZ" },
+        dependencies: dependencies({}),
+      });
+      const check = result.unwrap();
+      expect(check.status).toBe("unavailable");
+      for (const list of check.lists) {
+        expect(list.reason).toBe("registry-unavailable");
+      }
+    } finally {
+      isCanonicalId.mockRestore();
+    }
+  });
 
   test("asks for a valid company ID before reading any register", async () => {
     const result = await runSanctionsCheck({

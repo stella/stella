@@ -139,11 +139,14 @@ describe("maybeSkillTools", () => {
       userId: ids.userA2,
     });
 
-    const result = await maybeSkillTools(refPrompt(disabledSlug), {
-      organizationId: ids.orgA,
-      safeDb,
-      userId: ids.userA2,
-    });
+    const result = await maybeSkillTools(
+      `${refPrompt(enabledSlug)} ${refPrompt(disabledSlug)}`,
+      {
+        organizationId: ids.orgA,
+        safeDb,
+        userId: ids.userA2,
+      },
+    );
     if (Result.isError(result)) {
       throw result.error;
     }
@@ -160,6 +163,16 @@ describe("maybeSkillTools", () => {
     );
     expect(disabledLoad).toBeInstanceOf(Error);
     expect(String(disabledLoad)).toMatch(/No skill named/u);
+  });
+
+  test("offers no tools for a prompt that references no available skill", async () => {
+    const result = await maybeSkillTools(refPrompt("no-such-skill"), {
+      organizationId: ids.orgA,
+      safeDb,
+      userId: ids.userA2,
+    });
+
+    expect(Result.isOk(result) && result.value === undefined).toBe(true);
   });
 
   test("offers no tools for a prompt without a skill reference", async () => {

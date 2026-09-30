@@ -28,6 +28,7 @@ import { Temporal } from "@stll/time";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { userFiles } from "@/api/db/schema";
 import type { UsageEventLane } from "@/api/db/schema";
+import { env } from "@/api/env";
 import { modelAcceptsDocumentAttachment } from "@/api/handlers/chat/attachment-modality";
 import {
   applyChatPartPersistenceBudget,
@@ -45,6 +46,7 @@ import type {
   ChatSafePrompt,
   ChatUntrustedPromptSuffix,
 } from "@/api/handlers/chat/chat-prompt";
+import { shadowChatRun } from "@/api/handlers/chat/chat-run-shadow";
 import {
   CHAT_RUN_MODE,
   type ChatRunMode,
@@ -146,6 +148,7 @@ import type {
 import { withProviderStreamContract } from "@/api/lib/chat/provider-stream-contract";
 import { projectChatToolSchemasForProvider } from "@/api/lib/chat/provider-tool-projection";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import { createChatRunLog } from "@/api/lib/chat/run-log";
 import {
   createStreamMessageCapture,
   type ChatStreamProcessor,
@@ -180,6 +183,7 @@ import { modelAcceptsStreamingToolUse } from "@/api/lib/tanstack-ai-models";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import { projectSchemaInputJsonSchema } from "@/api/lib/tanstack-ai-schema";
 import { tokenUsageFromTerminalChunk } from "@/api/lib/tanstack-ai-usage";
+import { isLocalDevOpen } from "@/api/runtime-mode";
 
 const MAX_TOOL_STEPS = 100;
 const THIRD_PARTY_BOUNDARY_REFUSAL_MESSAGE =
@@ -212,7 +216,7 @@ type AssistantToolOutputRefResolver = (props: {
   toolName: string;
 }) => unknown;
 
-type StreamChatFinishEvent = {
+export type StreamChatFinishEvent = {
   outcome: ChatTurnOutcome;
   responseMessage: PersistableTerminalAssistantMessage;
 };
@@ -560,6 +564,31 @@ export const streamChat = async ({
     workspaceId,
   });
 
+  const shadow = shadowChatRun({
+    enabled: env.CHAT_RUN_LOG_SHADOW ?? isLocalDevOpen(),
+    createLog: () =>
+      createChatRunLog({
+        db: async (callback) => {
+          const appended = await safeDb(
+            async (tx) => {
+              // Bound lock ownership too: a timed-out shadow append must not stall settlement.
+              await tx.execute(sql`SET LOCAL transaction_timeout = '100ms'`);
+              await tx.execute(sql`SET LOCAL lock_timeout = '25ms'`);
+              return await callback(tx);
+            },
+            { retry: { times: 0, delayMs: 0, backoff: "constant" } },
+          );
+          if (Result.isError(appended)) {
+            throw appended.error;
+          }
+          return appended.value;
+        },
+        execution: run.execution,
+        organizationId,
+        runId,
+      }),
+    source: stream,
+  });
   const persistenceVisibleStream = transformPersistenceVisibleStream({
     boundary: thirdPartyBoundary,
     initialRestorationPlaceholders:
@@ -571,7 +600,7 @@ export const streamChat = async ({
           })
         : new Set<string>(),
     restorationPairs,
-    source: stream,
+    source: shadow.source,
   });
   const processedStream = processTurnForPersistence({
     // The run's own signal, not the deadline's. Cancelling the response stream
@@ -582,6 +611,7 @@ export const streamChat = async ({
     flushPendingSource: persistenceVisibleStream.flushPending,
     initialMessages: preparedMessageList,
     onFinish: async (event) => {
+      await shadow.flush();
       await run.settle(async () => {
         await onFinish(event);
       });

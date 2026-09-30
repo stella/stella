@@ -26,6 +26,7 @@ import {
   READ_STATUTE_PROVISIONS_PROJECTION,
   SEARCH_LEGISLATION_PROJECTION,
 } from "@/api/lib/chat/projections";
+import { CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
 import { PROVISION_STATUS } from "@/api/lib/legal-search/legislation-provision-vocabulary";
 import { readVersionBlocks } from "@/api/lib/legal-search/legislation-version-blocks";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
@@ -230,6 +231,7 @@ const searchLegislationArgsSchema = nullAsAbsent(
     ),
     cursor: cursorInput({
       description: "Opaque cursor from a previous search_legislation call",
+      maxLength: CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
     }),
   }),
 );

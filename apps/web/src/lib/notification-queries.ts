@@ -7,11 +7,12 @@ import { stringCursorSeed } from "@/lib/infinite-query";
 
 type NotificationsKey = {
   organizationId: string;
+  userId: string;
 };
 
 const notificationKeys = {
-  all: ({ organizationId }: NotificationsKey) =>
-    ["notifications", organizationId] as const,
+  all: ({ organizationId, userId }: NotificationsKey) =>
+    ["notifications", organizationId, userId] as const,
   list: (key: NotificationsKey) => [...notificationKeys.all(key), "list"],
 };
 
@@ -23,9 +24,12 @@ const notificationKeys = {
  * rides on every page and is computed server-side, so the badge stays right
  * however little of the history the client holds.
  */
-export const notificationsOptions = ({ organizationId }: NotificationsKey) =>
+export const notificationsOptions = ({
+  organizationId,
+  userId,
+}: NotificationsKey) =>
   infiniteQueryOptions({
-    queryKey: notificationKeys.list({ organizationId }),
+    queryKey: notificationKeys.list({ organizationId, userId }),
     initialPageParam: stringCursorSeed(),
     queryFn: async ({ pageParam, signal }) =>
       unwrapEden(
@@ -48,11 +52,11 @@ export const notificationsOptions = ({ organizationId }: NotificationsKey) =>
 export const refetchFirstNotificationsPage = async ({
   organizationId,
   queryClient,
-}: {
-  organizationId: string;
+  userId,
+}: NotificationsKey & {
   queryClient: QueryClient;
 }): Promise<void> => {
-  const queryKey = notificationsOptions({ organizationId }).queryKey;
+  const queryKey = notificationsOptions({ organizationId, userId }).queryKey;
   queryClient.setQueryData(queryKey, (cached) =>
     cached === undefined
       ? cached

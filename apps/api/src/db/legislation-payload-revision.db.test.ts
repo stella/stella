@@ -124,9 +124,44 @@ const SCALAR_INPUTS = PAYLOAD_INPUTS.filter(
     !ASSIGNED_ONLY_INPUTS.some((assignedOnly) => assignedOnly === column),
 );
 
+/**
+ * The version's classification, from a withdrawn row so each column can change
+ * with no more than the basis the pairing CHECK requires alongside it: no
+ * disposition can change while its basis stays valid.
+ */
+const CLASSIFIED_ROW = {
+  ...BASE_ROW,
+  expressionKind: "consolidation",
+  windowDisposition: "withdrawn",
+  windowDispositionBasis: "publisher-unlisted",
+} as const satisfies typeof legislationDocuments.$inferInsert;
+
+const CLASSIFICATION_INPUT_CHANGES = {
+  expression_kind: { expressionKind: "promulgated" },
+  // A restoration: the pairing CHECK takes the basis with it.
+  window_disposition: {
+    windowDisposition: "effective",
+    windowDispositionBasis: null,
+  },
+  window_disposition_basis: { windowDispositionBasis: "listed-not-stored" },
+} as const satisfies Record<
+  string,
+  Partial<typeof legislationDocuments.$inferInsert>
+>;
+type ClassificationInput = keyof typeof CLASSIFICATION_INPUT_CHANGES;
+const CLASSIFICATION_INPUTS = Object.keys(CLASSIFICATION_INPUT_CHANGES).filter(
+  (column): column is ClassificationInput =>
+    column in CLASSIFICATION_INPUT_CHANGES,
+);
+
 /** Columns outside the payload that writers routinely update. */
 const UNRELATED_CHANGES = {
   title: { title: "Zákon č. 89/2012 Sb., občanský zákoník" },
+  // An identity claim, which the backfill makes once for every stored
+  // version: it must queue no Work.
+  publisher_expression_id: {
+    publisherExpressionId: "revision-a:eli/cz/sb/2012/89/2024-01-01",
+  },
   source_hash: { sourceHash: "c".repeat(64) },
   status: { status: "repealed" },
   projection_epoch: { projectionEpoch: 3n },
@@ -213,7 +248,12 @@ beforeAll(
     }
 
     await db.insert(legislationSources).values([
-      { id: SOURCE_ID, adapterKey: "payload-revision-a", name: "Source A" },
+      {
+        id: SOURCE_ID,
+        adapterKey: "payload-revision-a",
+        name: "Source A",
+        expressionNamespace: "revision-a",
+      },
       {
         id: OTHER_SOURCE_ID,
         adapterKey: "payload-revision-b",
@@ -261,7 +301,9 @@ describe("trigger definitions", () => {
     for (const column of ASSIGNED_ONLY_INPUTS) {
       expect(comparedByRowPath.has(column)).toBe(false);
     }
-    expect([...triggerInputs].toSorted()).toEqual(PAYLOAD_INPUTS.toSorted());
+    expect([...triggerInputs].toSorted()).toEqual(
+      [...PAYLOAD_INPUTS, ...CLASSIFICATION_INPUTS].toSorted(),
+    );
 
     const changeTrigger = await db.execute<{ definition: string }>(sql`
       SELECT pg_get_triggerdef(oid) AS definition FROM pg_trigger
@@ -367,6 +409,43 @@ describe("payload revision", () => {
         eli: PAYLOAD_INPUT_CHANGES.eli.eli,
       },
     ]);
+  });
+
+  test.each(CLASSIFICATION_INPUTS)(
+    "changing %s advances the revision once and records the work",
+    async (column) => {
+      await db.insert(legislationDocuments).values(CLASSIFIED_ROW);
+      await clearWorkChanges();
+
+      await db
+        .update(legislationDocuments)
+        .set(CLASSIFICATION_INPUT_CHANGES[column])
+        .where(eq(legislationDocuments.id, DOCUMENT_ID));
+
+      expect(await revisionOf(DOCUMENT_ID)).toBe(2n);
+      expect(await workChanges()).toEqual([BASE_KEY]);
+    },
+  );
+
+  test("restating the classification changes nothing", async () => {
+    await db.insert(legislationDocuments).values(CLASSIFIED_ROW);
+    await clearWorkChanges();
+    const { expressionKind, windowDisposition, windowDispositionBasis } =
+      CLASSIFIED_ROW;
+    const restated = {
+      expressionKind,
+      windowDisposition,
+      windowDispositionBasis,
+    };
+    expect(Object.keys(restated).length).toBe(CLASSIFICATION_INPUTS.length);
+
+    await db
+      .update(legislationDocuments)
+      .set(restated)
+      .where(eq(legislationDocuments.id, DOCUMENT_ID));
+
+    expect(await revisionOf(DOCUMENT_ID)).toBe(1n);
+    expect(await workChanges()).toEqual([]);
   });
 
   test("successive changes keep advancing", async () => {

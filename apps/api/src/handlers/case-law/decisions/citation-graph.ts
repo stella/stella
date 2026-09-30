@@ -282,7 +282,37 @@ export const listDecisionCitationsHandler = async ({
     return status(400, { message: "Invalid cursor" });
   }
   const pageSize = Math.min(limit, LIMITS.caseLawDecisionCitationPageSize);
-  const spec = DIRECTION_SPECS[query.direction];
+  const rows = await decisionCitationPageQuery({
+    cursorId,
+    decisionId,
+    direction: query.direction,
+    limit: pageSize,
+    tx,
+  });
+  const toRelatedDecision = await withLanguageAlternates(
+    tx,
+    rows.map((row) => (row.visible ? row.decision : null)),
+  );
+
+  return createScannedPage({ rows, limit: pageSize, toRelatedDecision });
+};
+
+type DecisionCitationPageQueryOptions = {
+  cursorId: SafeId<"caseLawCitation"> | undefined;
+  decisionId: SafeId<"caseLawDecision">;
+  direction: CitationDirection;
+  limit: number;
+  tx: CaseLawPublicReadTransaction;
+};
+
+export const decisionCitationPageQuery = ({
+  cursorId,
+  decisionId,
+  direction,
+  limit,
+  tx,
+}: DecisionCitationPageQueryOptions) => {
+  const spec = DIRECTION_SPECS[direction];
 
   const candidates = tx
     .select({
@@ -295,15 +325,15 @@ export const listDecisionCitationsHandler = async ({
     .from(caseLawCitations)
     .where(
       and(
-        eq(spec.anchor, decisionId),
+        sql`${spec.anchor} = ${decisionId}`,
         precedentOnly,
         cursorId === undefined ? undefined : gt(caseLawCitations.id, cursorId),
       ),
     )
     .orderBy(asc(caseLawCitations.id))
-    .limit(pageSize + 1)
+    .limit(limit + 1)
     .as("citation_graph_candidates");
-  const rows = await tx
+  return tx
     .select({
       id: candidates.id,
       citationText: candidates.citationText,
@@ -332,13 +362,7 @@ export const listDecisionCitationsHandler = async ({
     .leftJoin(relatedDecision, eq(relatedDecision.id, candidates.relatedId))
     .leftJoin(relatedSource, eq(relatedSource.id, relatedDecision.sourceId))
     .orderBy(asc(candidates.id))
-    .limit(pageSize + 1);
-  const toRelatedDecision = await withLanguageAlternates(
-    tx,
-    rows.map((row) => (row.visible ? row.decision : null)),
-  );
-
-  return createScannedPage({ rows, limit: pageSize, toRelatedDecision });
+    .limit(limit + 1);
 };
 
 export type CitationTreatmentCounts = Record<CitationTreatment, number>;
@@ -349,6 +373,8 @@ export type DecisionCitationSummary = Record<
   CitationDirection,
   CitationTreatmentCounts
 > & {
+  /** Counts and timeline entries are lower bounds in a capped direction. */
+  capped: Record<CitationDirection, boolean>;
   /**
    * Incoming citations by the citing decision's year, oldest first; a year
    * with no citations is absent. Spans at most `CITATION_TIMELINE_MAX_YEARS`
@@ -359,6 +385,9 @@ export type DecisionCitationSummary = Record<
 
 /** How far back the per-year rollup reaches, counted to the current year. */
 export const CITATION_TIMELINE_MAX_YEARS = CASE_LAW_CITATION_TIMELINE_MAX_YEARS;
+
+/** One extra row distinguishes a complete rollup from a lower bound. */
+export const CITATION_SUMMARY_SCAN_LIMIT = 2048;
 
 const emptyTreatmentCounts = (): CitationTreatmentCounts => ({
   negative: 0,
@@ -391,6 +420,7 @@ type SummaryRow = {
   year: number | null;
   polarity: string | null;
   count: number;
+  capped: boolean;
 };
 
 /**
@@ -399,80 +429,34 @@ type SummaryRow = {
  *
  * Counts only what the list would show, so the rollup and the rows agree:
  * a citation whose far end may not be redistributed is absent from both.
- * One statement serves all three figures: each side of the graph is one
- * indexed aggregate, and the incoming side is walked once for both its
- * totals and its years; never a walk over pages.
+ * One statement serves all three figures. Each direction reads at most one
+ * more indexed citation than the summary counts; the extra row marks a
+ * lower bound without making the joins or rollup unbounded.
  */
 export const summarizeDecisionCitationsHandler = async ({
   subject: { id: decisionId, tx },
   currentYear = Temporal.Now.plainDateISO("UTC").year,
 }: SummarizeDecisionCitationsOptions) => {
-  const scopeFor = (direction: CitationDirection) => {
-    const spec = DIRECTION_SPECS[direction];
-    return and(
-      eq(spec.anchor, decisionId),
-      precedentOnly,
-      visibleFor({
-        keepsUnresolved: spec.keepsUnresolved,
-        related: spec.related,
-      }),
-    );
-  };
-
-  const firstYear = currentYear - (CITATION_TIMELINE_MAX_YEARS - 1);
-  const citingYearInSpan = sql<number | null>`CASE
-    WHEN ${relatedDecision.decisionDate} >= make_date(${firstYear}::int, 1, 1)
-     AND ${relatedDecision.decisionDate} < make_date(${currentYear + 1}::int, 1, 1)
-    THEN extract(year from ${relatedDecision.decisionDate})::int
-  END`;
-  const count = sql<number>`count(*)::int`;
-
-  const incoming = tx
-    .select({
-      direction: sql<CitationDirection>`'incoming'`.as("direction"),
-      year: citingYearInSpan.as("year"),
-      polarity: caseLawCitations.polarity,
-      count: count.as("count"),
-    })
-    .from(caseLawCitations)
-    .innerJoin(
-      relatedDecision,
-      eq(relatedDecision.id, DIRECTION_SPECS.incoming.related),
-    )
-    .leftJoin(relatedSource, eq(relatedSource.id, relatedDecision.sourceId))
-    .where(scopeFor("incoming"))
-    // By ordinal: the year expression binds its bounds as parameters, and
-    // a second rendering would bind fresh ones the planner cannot match.
-    .groupBy(sql`2`, caseLawCitations.polarity);
-
-  const outgoing = tx
-    .select({
-      direction: sql<CitationDirection>`'outgoing'`.as("direction"),
-      year: sql<number | null>`NULL::int`.as("year"),
-      polarity: caseLawCitations.polarity,
-      count: count.as("count"),
-    })
-    .from(caseLawCitations)
-    .leftJoin(
-      relatedDecision,
-      eq(relatedDecision.id, DIRECTION_SPECS.outgoing.related),
-    )
-    .leftJoin(relatedSource, eq(relatedSource.id, relatedDecision.sourceId))
-    .where(scopeFor("outgoing"))
-    .groupBy(caseLawCitations.polarity);
-
-  // One row per (direction, year-or-null, stored polarity): the span and
-  // the polarity check constraint already cap it, this states the cap.
-  const rows = await unionAll(incoming, outgoing).limit(
-    (CITATION_TIMELINE_MAX_YEARS + 2) * (POLARITIES.length + 1),
-  );
+  const rows = await decisionCitationSummaryQuery({
+    currentYear,
+    decisionId,
+    tx,
+  });
 
   const totals: Record<CitationDirection, CitationTreatmentCounts> = {
     incoming: emptyTreatmentCounts(),
     outgoing: emptyTreatmentCounts(),
   };
+  const capped: Record<CitationDirection, boolean> = {
+    incoming: false,
+    outgoing: false,
+  };
   const byYear = new Map<number, CitationYearCounts>();
   for (const row of rows satisfies readonly SummaryRow[]) {
+    capped[row.direction] ||= row.capped;
+    if (row.count === 0) {
+      continue;
+    }
     const treatment = treatmentOf(row.polarity);
     totals[row.direction][treatment] += row.count;
     if (row.year === null) {
@@ -489,8 +473,118 @@ export const summarizeDecisionCitationsHandler = async ({
   return {
     incoming: totals.incoming,
     outgoing: totals.outgoing,
+    capped,
     incomingByYear: [...byYear.values()].toSorted((a, b) => a.year - b.year),
   };
+};
+
+type DecisionCitationSummaryQueryOptions = {
+  currentYear: number;
+  decisionId: SafeId<"caseLawDecision">;
+  tx: CaseLawPublicReadTransaction;
+};
+
+export const decisionCitationSummaryQuery = ({
+  currentYear,
+  decisionId,
+  tx,
+}: DecisionCitationSummaryQueryOptions) => {
+  const candidatesFor = (direction: CitationDirection) => {
+    const spec = DIRECTION_SPECS[direction];
+    const candidates = tx
+      .select({
+        id: caseLawCitations.id,
+        relatedId: spec.related,
+        polarity: caseLawCitations.polarity,
+        kind: caseLawCitations.kind,
+      })
+      .from(caseLawCitations)
+      .where(eq(spec.anchor, decisionId))
+      .orderBy(asc(caseLawCitations.id))
+      .limit(CITATION_SUMMARY_SCAN_LIMIT + 1)
+      .as(`${direction}_summary_candidates`);
+    return tx
+      .select({
+        relatedId: candidates.relatedId,
+        polarity: candidates.polarity,
+        kind: candidates.kind,
+        ordinal: sql<number>`row_number() OVER (ORDER BY ${candidates.id})`.as(
+          "ordinal",
+        ),
+      })
+      .from(candidates)
+      .as(`${direction}_summary_numbered`);
+  };
+
+  const firstYear = currentYear - (CITATION_TIMELINE_MAX_YEARS - 1);
+  const citingYearInSpan = sql<number | null>`CASE
+    WHEN ${relatedDecision.decisionDate} >= make_date(${firstYear}::int, 1, 1)
+     AND ${relatedDecision.decisionDate} < make_date(${currentYear + 1}::int, 1, 1)
+    THEN extract(year from ${relatedDecision.decisionDate})::int
+  END`;
+  const incomingCandidates = candidatesFor("incoming");
+  const incomingVisible = visibleFor({
+    keepsUnresolved: false,
+    related: incomingCandidates.relatedId,
+  });
+
+  const incoming = tx
+    .select({
+      direction: sql<CitationDirection>`'incoming'`.as("direction"),
+      year: citingYearInSpan.as("year"),
+      polarity: incomingCandidates.polarity,
+      count:
+        sql<number>`count(*) FILTER (WHERE ${incomingCandidates.ordinal} <= ${CITATION_SUMMARY_SCAN_LIMIT} AND ${eq(incomingCandidates.kind, CITATION_KIND.PRECEDENT)} AND ${incomingVisible})::int`.as(
+          "count",
+        ),
+      capped:
+        sql<boolean>`bool_or(${incomingCandidates.ordinal} > ${CITATION_SUMMARY_SCAN_LIMIT})`.as(
+          "capped",
+        ),
+    })
+    .from(incomingCandidates)
+    .leftJoin(
+      relatedDecision,
+      eq(relatedDecision.id, incomingCandidates.relatedId),
+    )
+    .leftJoin(relatedSource, eq(relatedSource.id, relatedDecision.sourceId))
+    // By ordinal: the year expression binds its bounds as parameters, and
+    // a second rendering would bind fresh ones the planner cannot match.
+    .groupBy(sql`2`, incomingCandidates.polarity);
+
+  const outgoingCandidates = candidatesFor("outgoing");
+  const outgoingVisible = visibleFor({
+    keepsUnresolved: true,
+    related: outgoingCandidates.relatedId,
+  });
+
+  const outgoing = tx
+    .select({
+      direction: sql<CitationDirection>`'outgoing'`.as("direction"),
+      year: sql<number | null>`NULL::int`.as("year"),
+      polarity: outgoingCandidates.polarity,
+      count:
+        sql<number>`count(*) FILTER (WHERE ${outgoingCandidates.ordinal} <= ${CITATION_SUMMARY_SCAN_LIMIT} AND ${eq(outgoingCandidates.kind, CITATION_KIND.PRECEDENT)} AND ${outgoingVisible})::int`.as(
+          "count",
+        ),
+      capped:
+        sql<boolean>`bool_or(${outgoingCandidates.ordinal} > ${CITATION_SUMMARY_SCAN_LIMIT})`.as(
+          "capped",
+        ),
+    })
+    .from(outgoingCandidates)
+    .leftJoin(
+      relatedDecision,
+      eq(relatedDecision.id, outgoingCandidates.relatedId),
+    )
+    .leftJoin(relatedSource, eq(relatedSource.id, relatedDecision.sourceId))
+    .groupBy(outgoingCandidates.polarity);
+
+  // One row per (direction, year-or-null, stored polarity): the span and
+  // the polarity check constraint already cap it, this states the cap.
+  return unionAll(incoming, outgoing).limit(
+    (CITATION_TIMELINE_MAX_YEARS + 2) * (POLARITIES.length + 1),
+  );
 };
 
 /** How many decisions each treatment shows before the reader asks for all. */

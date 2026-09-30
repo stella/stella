@@ -9,13 +9,13 @@ export const catalogueKeys = {
   root: catalogueQueryRoot(),
   all: (organizationId: string) =>
     [...catalogueKeys.root, organizationId] as const,
-  list: (organizationId: string) =>
-    [...catalogueKeys.all(organizationId), "list"] as const,
+  list: (organizationId: string, userId: string) =>
+    [...catalogueKeys.all(organizationId), userId, "list"] as const,
 };
 
-export const catalogueOptions = (organizationId: string) =>
+export const catalogueOptions = (organizationId: string, userId: string) =>
   queryOptions({
-    queryKey: catalogueKeys.list(organizationId),
+    queryKey: catalogueKeys.list(organizationId, userId),
     queryFn: async ({ signal }) => {
       const response = await api.catalogue.get({ fetch: { signal } });
       return unwrapEden(response);

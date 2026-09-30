@@ -1,6 +1,7 @@
 import { useState } from "react";
 
-import { useQuery } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
@@ -23,13 +24,16 @@ import {
   createToolCallTiming,
 } from "@/components/chat/tool-call-timing.logic";
 import {
-  isSkillResourceOrigin,
-  type SkillResourceOrigin,
+  parseSkillResourceSource,
+  type SkillResourceSource,
 } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { findSkillDisplayName } from "@/components/inspector/skill-display-name.logic";
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
+import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
+import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { mcpConnectorsOptions, skillsOptions } from "@/lib/knowledge/queries";
 
 type ToolPart = ChatToolCallPart;
 
@@ -150,8 +154,7 @@ type SkillResourceOutput = {
   path: string;
   content: string;
   mimeType: string;
-  skillId: string;
-  origin: SkillResourceOrigin;
+  source: SkillResourceSource;
   target?: SkillResourceTarget | undefined;
 };
 
@@ -177,16 +180,17 @@ const getSkillResourceOutput = (
   const path = getStringProperty(output, "path");
   const content = getStringProperty(output, "content");
   const mimeType = getStringProperty(output, "mimeType");
-  const skillId = getStringProperty(output, "skillId");
-  const originRaw: unknown = Reflect.get(output, "origin");
+  const source = parseSkillResourceSource(
+    Reflect.get(output, "skillId"),
+    Reflect.get(output, "origin"),
+  );
   const targetRaw: unknown = Reflect.get(output, "target");
   if (
     skillName === undefined ||
     path === undefined ||
     content === undefined ||
     mimeType === undefined ||
-    skillId === undefined ||
-    !isSkillResourceOrigin(originRaw)
+    source === undefined
   ) {
     return undefined;
   }
@@ -195,8 +199,7 @@ const getSkillResourceOutput = (
     path,
     content,
     mimeType,
-    skillId,
-    origin: originRaw,
+    source,
     ...(isSkillResourceTarget(targetRaw) ? { target: targetRaw } : {}),
   };
 };
@@ -333,6 +336,22 @@ const findCatalogEntry = ({
   };
 };
 
+// The skills list is cached per user; without a signed-in user (the dev
+// playground) there is no cache to read.
+const readCachedSkillPages = ({
+  organizationId,
+  queryClient,
+  user,
+}: {
+  organizationId: string;
+  queryClient: QueryClient;
+  user: AuthenticatedUser | null;
+}) =>
+  user === null
+    ? undefined
+    : queryClient.getQueryData(skillsOptions(organizationId, user.id).queryKey)
+        ?.pages;
+
 export const ToolCallCard = ({
   activeOrganizationId,
   durationMs,
@@ -348,6 +367,8 @@ export const ToolCallCard = ({
 }) => {
   const t = useTranslations();
   const format = useFormatter();
+  const queryClient = useQueryClient();
+  const user = useMaybeAuthenticatedUser();
   const name = part.name;
   const mcpToolInfo = getMcpToolInfo(name);
   const { data: catalogData } = useQuery({
@@ -460,10 +481,21 @@ export const ToolCallCard = ({
           )}
           onClick={() => {
             if (skillResourceOutput) {
-              useInspectorTabsStore.getState().openSkillResourceTab({
+              // The chat routes load the skills list, so its title is read
+              // from the cache; without it the tab shows the slug.
+              const skillDisplayName = findSkillDisplayName({
+                pages: readCachedSkillPages({
+                  organizationId: activeOrganizationId,
+                  queryClient,
+                  user,
+                }),
                 skillName: skillResourceOutput.skillName,
-                skillId: skillResourceOutput.skillId,
-                origin: skillResourceOutput.origin,
+                source: skillResourceOutput.source,
+              });
+              useInspectorTabsStore.getState().openSkillResourceTab({
+                ...skillResourceOutput.source,
+                skillName: skillResourceOutput.skillName,
+                ...(skillDisplayName === undefined ? {} : { skillDisplayName }),
                 resourcePath: skillResourceOutput.path,
                 mimeType: skillResourceOutput.mimeType,
                 content: skillResourceOutput.content,

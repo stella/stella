@@ -622,6 +622,7 @@
       }
     },
     "citation": {
+      "citedAtLeast": "Citováno nejméně {count}krát",
       "citedSummary": "{count, plural, =0 {Necitováno} one {Citováno jednou} few {Citováno #krát} other {Citováno #krát}}",
       "decisionCount": "{count, plural, =0 {Žádná rozhodnutí} one {# rozhodnutí} few {# rozhodnutí} other {# rozhodnutí}}",
       "lastNegative": "poslední negativní citace v roce {year}",
@@ -629,6 +630,7 @@
       "none": "Zatím nejsou zaznamenány žádné citace.",
       "openAtCitation": "Otevřít na místě citace",
       "openDecision": "Otevřít rozhodnutí",
+      "partialSummary": "Součty citací a časová osa jsou neúplné.",
       "passageNotFound": "Citující pasáž se v textu nepodařilo najít",
       "positiveCount": "{count, plural, one {# pozitivní} few {# pozitivní} many {# pozitivních} other {# pozitivních}}",
       "showAll": "{count, plural, one {Zobrazit # rozhodnutí} few {Zobrazit všechna # rozhodnutí} many {Zobrazit všech # rozhodnutí} other {Zobrazit všech # rozhodnutí}}",
@@ -3182,6 +3184,7 @@
   },
   "knowledge": {
     "agentSkills": {
+      "builtInSection": "Vestavěné dovednosti",
       "deleteFile": "Smazat soubor",
       "deleteFileConfirm": "Smazat soubor? Tuto akci nelze vrátit zpět.",
       "disableSkill": "Vypnout dovednost",

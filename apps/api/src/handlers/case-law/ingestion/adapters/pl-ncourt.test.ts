@@ -44,6 +44,17 @@ import {
   validatePlNcourtDocument,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-ncourt";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
+import {
+  AST_BOUNDARY_WHITESPACE,
+  AST_CONTENT_LOST,
+  AST_STRUCTURE_DEGRADED,
+  buildValidationHtml,
+  validateAst,
+} from "@/api/lib/legal-search/parsers/validate-ast";
+import {
+  resetLogSinkForTesting,
+  setLogSinkForTesting,
+} from "@/api/lib/observability/logger";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
@@ -713,11 +724,230 @@ describe("the document", () => {
     },
   );
 
+  test.each([
+    "xPart",
+    "xUnit",
+    "xBlock",
+    "xRows",
+    "xRow",
+    "xClmn",
+    "xEnum",
+    "xEnumElem",
+  ])("text and CDATA directly in %s stay in document order", (tag) => {
+    const child = (text: string) => {
+      const paragraph = `<xText>${text}</xText>`;
+      switch (tag) {
+        case "xRows":
+          return `<xRow><xClmn>${paragraph}</xClmn></xRow>`;
+        case "xRow":
+          return `<xClmn>${paragraph}</xClmn>`;
+        case "xEnum":
+          return `<xEnumElem>${paragraph}</xEnumElem>`;
+        case "xPart":
+        case "xUnit":
+        case "xBlock":
+        case "xClmn":
+        case "xEnumElem":
+          return paragraph;
+        default: {
+          tag satisfies never;
+          return panic("unexpected paragraph container");
+        }
+      }
+    };
+    const wrap = (text: string) => {
+      const container = `<${tag}>${text}</${tag}>`;
+      switch (tag) {
+        case "xPart":
+          return container;
+        case "xRow":
+          return `<xPart><xRows>${container}</xRows></xPart>`;
+        case "xClmn":
+          return `<xPart><xRows><xRow>${container}</xRow></xRows></xPart>`;
+        case "xEnumElem":
+          return `<xPart><xEnum>${container}</xEnum></xPart>`;
+        case "xUnit":
+        case "xBlock":
+        case "xRows":
+        case "xEnum":
+          return `<xPart>${container}</xPart>`;
+        default: {
+          tag satisfies never;
+          return panic("unexpected document container");
+        }
+      }
+    };
+    const content =
+      readPlNcourtContent(
+        wrap(
+          `${child("Before")} Bare &amp; text <![CDATA[CDATA <content>]]>${child("After")}`,
+        ),
+      ) ?? panic("the document did not read");
+    expect(content.unmappedMarkup).toEqual(["#text", "#cdata"]);
+    expect(content.sourceParagraphs).toEqual([
+      "Before",
+      "Bare & text",
+      "CDATA <content>",
+      "After",
+    ]);
+    expect(content.html).toContain("<p> Bare &amp; text </p>");
+    expect(content.html).toContain("<p>CDATA &lt;content&gt;</p>");
+    const parsed = parsePlDecisionContent({
+      caseNumber: "I C 1/15",
+      ecli: undefined,
+      court: "",
+      decisionDate: undefined,
+      decisionType: undefined,
+      sourceUrl: undefined,
+      documentUrl: undefined,
+      content: content.html,
+      keywords: [],
+      statutes: [],
+      documentId: "ordered-text",
+    });
+    const text = parsed.fulltext;
+    for (const fragment of [
+      "Before",
+      "Bare & text",
+      "CDATA <content>",
+      "After",
+    ]) {
+      expect(text.split(fragment)).toHaveLength(2);
+    }
+    expect(text.indexOf("Before")).toBeLessThan(text.indexOf("Bare & text"));
+    expect(text.indexOf("Bare & text")).toBeLessThan(
+      text.indexOf("CDATA <content>"),
+    );
+    expect(text.indexOf("CDATA <content>")).toBeLessThan(text.indexOf("After"));
+    const whitespace =
+      readPlNcourtContent(wrap(" \n <![CDATA[ \n ]]>")) ??
+      panic("the whitespace document did not read");
+    expect(whitespace.unmappedMarkup).toEqual([]);
+    expect(whitespace.sourceParagraphs).toEqual([]);
+    expect(whitespace.html).not.toContain("<p>");
+  });
+
+  test("unknown wrappers keep paragraphs and table cells separate", () => {
+    const content =
+      readPlNcourtContent(
+        "<xPart><xFoo><xText>ab</xText><xText>cd</xText><xRows><xRow><xClmn><xText>Left cell</xText></xClmn><xClmn><xText>Right cell</xText></xClmn></xRow></xRows></xFoo></xPart>",
+      ) ?? panic("the document did not read");
+    expect(content.html).toBe(
+      "<p>ab</p>\n<p>cd</p>\n<table><tr><td><p>Left cell</p></td>\n<td><p>Right cell</p></td></tr></table>",
+    );
+    expect(content.sourceParagraphs).toEqual([
+      "ab",
+      "cd",
+      "Left cell",
+      "Right cell",
+    ]);
+    expect(content.unmappedMarkup).toEqual(["xFoo"]);
+  });
+
+  test("unknown wrappers with only inline marks stay in one paragraph", () => {
+    const content =
+      readPlNcourtContent(
+        "<xPart><xFoo>Before <xBx>bold</xBx> after</xFoo></xPart>",
+      ) ?? panic("the document did not read");
+    expect(content.html).toBe("<p>Before <strong>bold</strong> after</p>");
+    expect(content.unmappedMarkup).toEqual(["xFoo"]);
+  });
+
+  test("the source view includes text inside layout elements", () => {
+    const content =
+      readPlNcourtContent(
+        "<xPart><xCOLGROUPx><xCOLx><xText>Source paragraph</xText><![CDATA[Source note]]></xCOLx></xCOLGROUPx></xPart>",
+      ) ?? panic("the document did not read");
+    expect(content.sourceParagraphs).toEqual([
+      "Source paragraph",
+      "Source note",
+    ]);
+  });
+
+  test("CDATA inside a paragraph stays beside its inline text", () => {
+    const content =
+      readPlNcourtContent(
+        "<xPart><xText>Before <![CDATA[<quoted>]]> after</xText></xPart>",
+      ) ?? panic("the document did not read");
+    expect(content.html).toBe("<p>Before &lt;quoted&gt; after</p>");
+    expect(content.sourceParagraphs).toEqual(["Before <quoted> after"]);
+    expect(content.unmappedMarkup).toEqual([]);
+  });
+
+  test("later list bullets appear once between their neighbouring items", () => {
+    const content =
+      readPlNcourtContent(
+        "<xPart><xEnum><xBullet>-</xBullet><xEnumElem><xText>First item</xText></xEnumElem><xBullet>Second marker</xBullet><xEnumElem><xText>Second item</xText></xEnumElem><xBullet>Third marker</xBullet></xEnum></xPart>",
+      ) ?? panic("the document did not read");
+    expect(content.html).toBe(
+      "<dl><dt>-</dt>\n<dd><p>First item</p></dd></dl>\n<p>Second marker</p>\n<dl><dt>-</dt>\n<dd><p>Second item</p></dd></dl>\n<p>Third marker</p>",
+    );
+    expect(content.sourceParagraphs).toEqual([
+      "-",
+      "First item",
+      "Second marker",
+      "Second item",
+      "Third marker",
+    ]);
+    expect(content.unmappedMarkup).toEqual(["xBullet"]);
+  });
+
   test("a superscript stays apart from the number it follows", () => {
     const content = readPlNcourtContent(
       "<xPart><xBlock><xText>art. 353<xSUPx>1</xSUPx> k.c.</xText></xBlock></xPart>",
     );
     expect(content?.html).toContain("353<sup> 1</sup>");
+  });
+
+  test("paragraphs left straight in a table or a list, outside its rows and items, are kept in place", () => {
+    const reasons = Array.from(
+      { length: 6 },
+      (_, index) =>
+        `Paragraph ${String(index + 1)} of the reasons states its own sentence about ground ${String(index + 1)} of the appeal in full.`,
+    );
+    const content =
+      readPlNcourtContent(
+        [
+          "<xPart><xName>Judgment</xName><xBlock>",
+          '<xUnit xIsTitle="true"><xName>Reasons</xName>',
+          "<xText>Before the table.</xText>",
+          "<xRows><xCOLGROUPx><xCOLx/></xCOLGROUPx>",
+          "<xRow><xClmn><xText>Heading cell</xText></xClmn><xText>Loose in a row</xText></xRow>",
+          ...reasons.map((reason) => `<xText>${reason}</xText>`),
+          "</xRows>",
+          "<xEnum><xBullet>-</xBullet><xEnumElem><xText>An item</xText></xEnumElem>",
+          "<xText>Loose in a list</xText></xEnum>",
+          "</xUnit></xBlock></xPart>",
+        ].join(""),
+      ) ?? panic("the document did not read");
+    const html = content.html;
+    // The row stays a table; what follows it is paragraphs, in order.
+    expect(html).toContain("<td><p>Loose in a row</p></td>");
+    expect(html.indexOf("</table>")).toBeLessThan(
+      html.indexOf(reasons[0] ?? ""),
+    );
+    expect(html.indexOf(reasons[5] ?? "")).toBeLessThan(html.indexOf("<dl>"));
+    expect(html).toContain("</dl>\n<p>Loose in a list</p>");
+    expect(content.unmappedMarkup).toEqual([]);
+    const blocks = parsePlDecisionContent({
+      caseNumber: "I ACa 1/13",
+      ecli: undefined,
+      court: "",
+      decisionDate: undefined,
+      decisionType: undefined,
+      sourceUrl: undefined,
+      documentUrl: undefined,
+      content: html,
+      keywords: [],
+      statutes: [],
+      documentId: "I ACa 1/13",
+    }).documentAst.blocks;
+    const validation = validatePlNcourtDocument(
+      { parser: "pl-ncourt", caseNumber: "I ACa 1/13" },
+      content,
+      blocks,
+    );
+    expect(validation.issues.map((issue) => issue.code)).toEqual([]);
   });
 
   test("the root's attributes and every statute link are kept", async () => {
@@ -760,6 +990,94 @@ describe("the document", () => {
     expect(codes(blocks.slice(0, Math.floor(blocks.length / 2)))).toContain(
       "CONTENT_LOSS",
     );
+  });
+
+  test("XML line breaks reclassify glued source words without changing the AST", () => {
+    const boundaryXml = `<xPart><xBlock><xText>${Array.from({ length: 20 }, (_, index) => `wyraz${index}<xBRx/>w`).join(" ")}</xText></xBlock></xPart>`;
+    const content =
+      readPlNcourtContent(boundaryXml) ?? panic("the XML did not read");
+    const parsed = parsePlDecisionContent({
+      caseNumber: "I C 1/2026",
+      ecli: undefined,
+      court: "",
+      decisionDate: undefined,
+      decisionType: undefined,
+      sourceUrl: undefined,
+      documentUrl: undefined,
+      content: content.html,
+      keywords: [],
+      statutes: [],
+      documentId: "boundary-test",
+    });
+    const blocks = parsed.documentAst.blocks;
+    expect(content.sourceParagraphs.at(0)).toContain("wyraz0w");
+    expect(content.comparisonParagraphs.at(0)).toContain("wyraz0 w");
+    expect(parsed.fulltext).toContain("wyraz0\nw");
+    expect(
+      validateAst(
+        buildValidationHtml(content.sourceParagraphs),
+        blocks,
+      ).issues.map((issue) => issue.code),
+    ).toContain("MISSING_WORDS");
+
+    const events: string[] = [];
+    setLogSinkForTesting(({ message }) => {
+      events.push(message);
+    });
+    const result = (() => {
+      try {
+        return validatePlNcourtDocument(
+          { parser: "pl-ncourt", caseNumber: "I C 1/2026" },
+          content,
+          blocks,
+        );
+      } finally {
+        resetLogSinkForTesting();
+      }
+    })();
+    expect(result.stats.boundaryWhitespaceWords).toHaveLength(20);
+    expect(result.issues.map((issue) => issue.code)).toContain(
+      "BOUNDARY_WHITESPACE",
+    );
+    expect(result.issues.map((issue) => issue.code)).not.toContain(
+      "MISSING_WORDS",
+    );
+    expect(events).toContain(AST_BOUNDARY_WHITESPACE);
+    expect(events).toContain(AST_STRUCTURE_DEGRADED);
+    expect(events).not.toContain(AST_CONTENT_LOST);
+  });
+
+  test("a missing sentence still fails after an XML boundary is reconciled", () => {
+    const lostSentence = Array.from(
+      { length: 20 },
+      (_, index) => `utracony${String.fromCodePoint(97 + index)}`,
+    ).join(" ");
+    const content =
+      readPlNcourtContent(
+        `<xPart><xBlock><xText>Powództwo<xBRx/>w sprawie.</xText><xText>${lostSentence}</xText></xBlock></xPart>`,
+      ) ?? panic("the XML did not read");
+    const blocks = parsePlDecisionContent({
+      caseNumber: "I C 2/2026",
+      ecli: undefined,
+      court: "",
+      decisionDate: undefined,
+      decisionType: undefined,
+      sourceUrl: undefined,
+      documentUrl: undefined,
+      content: content.html,
+      keywords: [],
+      statutes: [],
+      documentId: "loss-test",
+    }).documentAst.blocks;
+    expect(blocks).toHaveLength(2);
+    const result = validatePlNcourtDocument(
+      { parser: "pl-ncourt", caseNumber: "I C 2/2026" },
+      content,
+      blocks.slice(0, 1),
+    );
+    expect(result.issues.map((issue) => issue.code)).toContain("MISSING_WORDS");
+    expect(result.issues.map((issue) => issue.code)).toContain("CONTENT_LOSS");
+    expect(result.stats.missingWords).toHaveLength(20);
   });
 
   test("bold and italic in the XML stay bold and italic in the document", async () => {

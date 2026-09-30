@@ -48,7 +48,7 @@ export const Route = createFileRoute("/_protected/knowledge/playbooks")({
         ),
         prefetchRouteQuery(
           context.queryClient,
-          recentPlaybooksOptions(organizationId),
+          recentPlaybooksOptions(organizationId, context.user.id),
           onPrefetchError,
         ),
       ]),

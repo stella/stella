@@ -30,7 +30,7 @@ export const COUNTERPARTY_CHECK_KINDS = [
   "sanctions",
 ] as const;
 
-export type CounterpartyCheckKind = (typeof COUNTERPARTY_CHECK_KINDS)[number];
+type CounterpartyCheckKind = (typeof COUNTERPARTY_CHECK_KINDS)[number];
 
 export const COUNTERPARTY_CHECK_SUBJECT_TYPES = [
   "company-id",

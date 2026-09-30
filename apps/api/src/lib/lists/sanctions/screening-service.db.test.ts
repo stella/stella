@@ -221,7 +221,6 @@ beforeAll(async () => {
       return await fn(asTestRaw<Transaction>(tx));
     });
   for (const source of sanctionsSourceIds()) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential test seeding
     await seedSource(source);
   }
 }, DB_TEST_TIMEOUT_MS);

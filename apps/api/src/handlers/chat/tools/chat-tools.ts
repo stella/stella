@@ -10,6 +10,7 @@ import type { SkillMetadata } from "@stll/skills";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { UsageEventLane } from "@/api/db/schema";
 import { env } from "@/api/env";
+import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
 import {
   CHAT_EDIT_APPLY_MODE,
   DEFAULT_CHAT_EDIT_APPLY_MODE,
@@ -33,6 +34,7 @@ import {
   createCreateDocumentTool,
 } from "@/api/handlers/chat/tools/create-document-tool";
 import { createCreateWorkspaceDocumentTools } from "@/api/handlers/chat/tools/create-workspace-document-tools";
+import type { ExcludableChatToolName } from "@/api/handlers/chat/tools/excluded-chat-tools";
 import {
   buildChatCodeModeTools,
   type ChatCodeModeToolMap,
@@ -66,6 +68,7 @@ import {
 } from "@/api/handlers/chat/tools/remember-tool";
 import {
   createSpawnSubagentsTool,
+  SPAWN_SUBAGENTS_TOOL_NAME,
   SUBAGENT_DELEGATION_DEPTH_CAP,
 } from "@/api/handlers/chat/tools/spawn-subagents-tool";
 import { projectToolMapForSubagent } from "@/api/handlers/chat/tools/subagent-tools";
@@ -84,7 +87,6 @@ import {
 } from "@/api/handlers/chat/tools/web-search-tools";
 import { createWorkspaceTools } from "@/api/handlers/chat/tools/workspace-tools";
 import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
-import type { ActiveChatSkillContext } from "@/api/lib/agent-skills/skills";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
@@ -163,19 +165,29 @@ export const areTemplateAuthoringToolsRegistered = (
 
 type SubagentToolsRegisteredProps = {
   delegationDepth?: number | undefined;
+  /**
+   * The active skill's `excludedChatTools`, when a skill is active. Naming
+   * `spawn_subagents` withholds the tool for the turn: a skill whose flow
+   * has the user pick each document before it is read cannot let a
+   * subagent, which cannot ask them, read on its behalf.
+   */
+  excludedChatTools?: readonly ExcludableChatToolName[] | undefined;
 };
 
 /**
  * Single source of truth for "is `spawn_subagents` registered on this
- * turn". `getChatTools` uses the same `delegationDepth` comparison to
- * decide registration; prompt construction uses this predicate to
- * decide whether the delegation section may steer the model to the
- * tool.
+ * turn". `getChatTools` uses the same `delegationDepth` comparison and
+ * skill exclusion to decide registration; prompt construction uses this
+ * predicate to decide whether the delegation section may steer the model
+ * to the tool. The skill exclusion is one more reason for `false`, never
+ * a reason for `true`: the depth cap holds regardless.
  */
 export const areSubagentToolsRegistered = ({
   delegationDepth,
+  excludedChatTools,
 }: SubagentToolsRegisteredProps): boolean =>
-  (delegationDepth ?? 0) < SUBAGENT_DELEGATION_DEPTH_CAP;
+  (delegationDepth ?? 0) < SUBAGENT_DELEGATION_DEPTH_CAP &&
+  excludedChatTools?.includes(SPAWN_SUBAGENTS_TOOL_NAME) !== true;
 
 type ResolveRegisteredDocxEditModeOptions = {
   activeFile: GetChatToolsProps["activeFile"];
@@ -607,6 +619,28 @@ true satisfies Exclude<
   ? true
   : never;
 
+/**
+ * The active skill's chat declarations as a turn's tool set honours them. The
+ * streaming set applies both; the validation set ignores both, since neither
+ * a read's laziness nor a withheld tool changes how a persisted call parses.
+ */
+const honouredSkillDeclarations = ({
+  activeSkillContext,
+  forValidation,
+}: {
+  activeSkillContext: ActiveChatSkillContext | null | undefined;
+  forValidation: boolean;
+}): Pick<
+  ActiveChatSkillContext,
+  "documentedChatReads" | "excludedChatTools"
+> =>
+  forValidation || !activeSkillContext
+    ? { documentedChatReads: [], excludedChatTools: [] }
+    : {
+        documentedChatReads: activeSkillContext.documentedChatReads,
+        excludedChatTools: activeSkillContext.excludedChatTools,
+      };
+
 export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   const {
     memoryEnabled = env.FEATURE_AI_MEMORY,
@@ -650,6 +684,10 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     usageLane,
   } = props;
   const forValidation = purpose === CHAT_TOOL_SET_PURPOSE.validation;
+  const skillDeclarations = honouredSkillDeclarations({
+    activeSkillContext,
+    forValidation,
+  });
   const orgTools = createOrgTools({
     accessibleWorkspaceIds: toolWorkspaceIds,
     organizationId,
@@ -681,7 +719,10 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   // hardened sandbox: the single `execute_typescript` runner plus its
   // `discover_tools` companion. Replaces the hand-written run-stella-query /
   // describe-stella-api pair; the read functions it exposes as `external_*`
-  // bindings are ref-mediated, so no tenant UUID reaches the model.
+  // bindings are ref-mediated, so no tenant UUID reaches the model. The
+  // active skill's documented reads are eager on the streaming set only; the
+  // validation set ignores them, as it ignores the exclusion below, since
+  // laziness does not change a tool's schema.
   // A script run reads the turn's finished tool set (assigned at the end), so
   // a script that calls a direct tool is told to call it directly.
   let scriptCallTools: ChatScriptCallTools = {
@@ -689,6 +730,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     unavailableReasons: new Map(),
   };
   const executionTools = buildChatCodeModeTools({
+    documentedReads: skillDeclarations.documentedChatReads,
     memberRole,
     organizationId,
     recordAuditEvent,
@@ -1026,8 +1068,14 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   // `spawn_subagents`, so a subagent cannot spawn further subagents. The
   // recursive call also forces `hasActiveDocxEditClient: false`, since a
   // nested loop has no client to satisfy that tool's `addToolResult` contract.
+  // The active skill's exclusion narrows the streaming set only: the
+  // validation set stays broad so a thread that used `spawn_subagents`
+  // before the skill was activated still hydrates.
   const delegationDepth = props.delegationDepth ?? 0;
-  const subagentTools = areSubagentToolsRegistered({ delegationDepth })
+  const subagentTools = areSubagentToolsRegistered({
+    delegationDepth,
+    excludedChatTools: skillDeclarations.excludedChatTools,
+  })
     ? createSpawnSubagentsTool({
         buildSubagentToolset: (proposalSink) =>
           getChatTools({

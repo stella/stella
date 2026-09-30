@@ -622,6 +622,7 @@
       }
     },
     "citation": {
+      "citedAtLeast": "Cituota bent {count} kartų",
       "citedSummary": "{count, plural, =0 {Necituota} one {Cituota kartą} few {Cituota # kartus} many {Cituota # karto} other {Cituota # kartų}}",
       "decisionCount": "{count, plural, =0 {Sprendimų nėra} one {# sprendimas} few {# sprendimai} many {# sprendimo} other {# sprendimų}}",
       "lastNegative": "paskutinė neigiama citata {year} m.",
@@ -629,6 +630,7 @@
       "none": "Citavimų dar neužfiksuota.",
       "openAtCitation": "Atverti citatos vietoje",
       "openDecision": "Atverti sprendimą",
+      "partialSummary": "Citavimų sumos ir laiko juosta yra nepilnos.",
       "passageNotFound": "Cituojanti ištrauka tekste nerasta",
       "positiveCount": "{count, plural, one {# teigiama} few {# teigiamos} many {# teigiamos} other {# teigiamų}}",
       "showAll": "{count, plural, one {Rodyti # sprendimą} few {Rodyti visus # sprendimus} many {Rodyti visus # sprendimo} other {Rodyti visus # sprendimų}}",
@@ -3182,6 +3184,7 @@
   },
   "knowledge": {
     "agentSkills": {
+      "builtInSection": "Integruoti įgūdžiai",
       "deleteFile": "Ištrinti failą",
       "deleteFileConfirm": "Ištrinti failą? Šio veiksmo negalima atšaukti.",
       "disableSkill": "Išjungti įgūdį",

@@ -179,7 +179,7 @@
     }
   },
   "audit-skip-directives": {
-    "count": 266,
+    "count": 267,
     "files": {
       "apps/api/src/handlers/bilingual-translations/create-run.ts": 1,
       "apps/api/src/handlers/case-law/analysis/generate.ts": 2,
@@ -196,7 +196,7 @@
       "apps/api/src/handlers/case-law/ingestion/pipeline/corpus-mirror.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/pipeline/decision-existing.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/pipeline/decision-identity.ts": 3,
-      "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row.ts": 1,
+      "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/pipeline/source-observation.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/pipeline/supplement-placement.ts": 4,
       "apps/api/src/handlers/case-law/ingestion/source-totals.ts": 2,
@@ -985,7 +985,7 @@
     }
   },
   "no-db-await-in-loop-suppressions": {
-    "count": 120,
+    "count": 122,
     "files": {
       "apps/api/scripts/backfill-image-thumbnails.ts": 3,
       "apps/api/scripts/backfill-search-previews.ts": 2,
@@ -1030,6 +1030,7 @@
       "apps/api/src/lib/flows/flow-run-worker.ts": 1,
       "apps/api/src/lib/legal-search/corpus-index-projection-executor.ts": 3,
       "apps/api/src/lib/legal-search/corpus-pack-batch.ts": 1,
+      "apps/api/src/lib/lists/sanctions/screening-service.ts": 1,
       "apps/api/src/lib/notifications.ts": 1,
       "apps/api/src/lib/scheduler/runner.ts": 2,
       "apps/api/src/lib/scheduler/tasks/chat-run-log-retention.ts": 1,
@@ -1048,6 +1049,7 @@
       "apps/api/src/scripts/backfill-citation-authority.ts": 1,
       "apps/api/src/scripts/backfill-citation-keys.ts": 2,
       "apps/api/src/scripts/backfill-corpus-storage.ts": 1,
+      "apps/api/src/scripts/backfill-legislation-work-names.ts": 1,
       "apps/api/src/scripts/backfill-property-roles.ts": 1,
       "apps/api/src/scripts/backfill-statute-citation-counts.ts": 1,
       "apps/api/src/scripts/corpus-column-trim.ts": 1,

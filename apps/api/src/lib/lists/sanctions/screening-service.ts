@@ -62,7 +62,7 @@ export type SanctionsScreeningSubject =
       nationalityCodes: readonly CountryCode[];
     };
 
-export type SanctionsPossibleMatch = {
+type SanctionsPossibleMatch = {
   sourceEntryId: string;
   editionId: string;
   /** 0..1, at or above the cutoff. A possible match needs human review. */
@@ -91,7 +91,7 @@ export type SanctionsPossibleMatch = {
  * A newer edition the refresh fetched but held back for review; the list
  * still screens against the edition it had. Null when nothing is held.
  */
-export type SanctionsPendingUpdate = {
+type SanctionsPendingUpdate = {
   code: SanctionsPendingUpdateCode;
   /** When the edition was held. */
   heldAt: string;
@@ -196,7 +196,7 @@ const toScreeningQuery = (
   }
 };
 
-export const aggregateSanctionsStatus = (
+const aggregateSanctionsStatus = (
   lists: readonly SanctionsListOutcome[],
 ): SanctionsScreeningStatus => {
   if (lists.some((list) => list.status === "possible-match")) {
@@ -410,6 +410,7 @@ export const screenSanctionsSubject = async ({
       }),
     );
   }
+  // db-await-in-loop: one concurrent read per sanctions source (a small fixed set); each list's index is cached per edition, so a warm screening reads nothing
   const lists = await Promise.all(
     freshness.value.map(
       async (sourceFreshness) =>

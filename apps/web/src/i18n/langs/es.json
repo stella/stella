@@ -622,6 +622,7 @@
       }
     },
     "citation": {
+      "citedAtLeast": "Citada al menos {count} veces",
       "citedSummary": "{count, plural, =0 {Sin citas} one {Citada una vez} other {Citada # veces}}",
       "decisionCount": "{count, plural, =0 {Ninguna resolución} one {# resolución} other {# resoluciones}}",
       "lastNegative": "última cita negativa en {year}",
@@ -629,6 +630,7 @@
       "none": "Aún no hay citas registradas.",
       "openAtCitation": "Abrir en la cita",
       "openDecision": "Abrir la resolución",
+      "partialSummary": "Los totales de citas y la cronología son parciales.",
       "passageNotFound": "No se encontró el pasaje citante en el texto",
       "positiveCount": "{count, plural, one {# positiva} many {# positivas} other {# positivas}}",
       "showAll": "{count, plural, one {Mostrar la resolución} many {Mostrar las # resoluciones} other {Mostrar las # resoluciones}}",
@@ -3182,6 +3184,7 @@
   },
   "knowledge": {
     "agentSkills": {
+      "builtInSection": "Habilidades integradas",
       "deleteFile": "Eliminar archivo",
       "deleteFileConfirm": "¿Eliminar el archivo? No se puede deshacer.",
       "disableSkill": "Desactivar habilidad",

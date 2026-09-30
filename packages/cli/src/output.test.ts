@@ -507,6 +507,30 @@ describe("composite results", () => {
     expect(render(clear, "table")).toContain("Possible matches: none");
   });
 
+  test("a rows path ending in [] reads the array it names", () => {
+    const { out, writers } = capture();
+    renderResult({
+      plan: buildRenderPlan({
+        payload: sanctions,
+        itemsKey: undefined,
+        textPath: undefined,
+        singleReadActive: false,
+        columns: undefined,
+        composite: {
+          summary: ["status"],
+          sections: [{ title: "Lists", rows: "lists[]", columns: ["source"] }],
+        },
+      }),
+      format: "table",
+      writers,
+      allActive: false,
+    });
+    const table = out.join("");
+    expect(table).not.toContain("Lists: none");
+    expect(table).toMatch(/^eu\s*$/mu);
+    expect(table).toMatch(/^ch\s*$/mu);
+  });
+
   test("JSON and JSONL print the whole result, not only the lists", () => {
     expect(JSON.parse(render(sanctions, "json"))).toEqual(sanctions);
     const lines = render(sanctions, "jsonl").trimEnd().split("\n");

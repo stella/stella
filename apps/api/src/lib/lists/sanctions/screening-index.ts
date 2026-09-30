@@ -39,7 +39,7 @@ export type SanctionsActiveEdition = NonNullable<
 >;
 
 /** The edition could not be read in full; the caller reports the list unavailable. */
-export type SanctionsIndexLoadError = { code: "load-failed" };
+type SanctionsIndexLoadError = { code: "load-failed" };
 
 type IndexResult = Result<ScreeningIndex, SanctionsIndexLoadError>;
 
@@ -49,7 +49,7 @@ const SanctionsIndexLoadFailureBase: TaggedErrorClass<"SanctionsIndexLoadFailure
   TaggedError("SanctionsIndexLoadFailure");
 
 /** Why an edition's index could not be built; reported to error telemetry. */
-export class SanctionsIndexLoadFailure extends SanctionsIndexLoadFailureBase<{
+class SanctionsIndexLoadFailure extends SanctionsIndexLoadFailureBase<{
   stage: LoadStage;
   message: string;
   cause?: unknown;
@@ -99,7 +99,7 @@ const loadEditionEntries = async (
   return entries;
 };
 
-export type BuildSanctionsIndex = typeof buildScreeningIndex;
+type BuildSanctionsIndex = typeof buildScreeningIndex;
 
 type LoadIndexProps = {
   db: ScopedDb;
@@ -240,7 +240,11 @@ export const createSanctionsIndexCache = ({
     { editionId: SanctionsActiveEdition["id"]; at: number }
   >();
 
-  const start = ({ db, source, edition }: CacheProps): Promise<IndexResult> => {
+  const start = async ({
+    db,
+    source,
+    edition,
+  }: CacheProps): Promise<IndexResult> => {
     const load = Symbol(source);
     const settle = async (): Promise<IndexResult> => {
       const loaded = await loadIndex({ db, source, edition, build });
@@ -261,7 +265,7 @@ export const createSanctionsIndexCache = ({
     };
     const index = settle();
     bySource.set(source, { editionId: edition.id, load, index });
-    return index;
+    return await index;
   };
 
   return {
@@ -286,9 +290,12 @@ export const createSanctionsIndexCache = ({
       if (cached === undefined || cached.editionId === props.edition.id) {
         return;
       }
-      // A failed rebuild is reported and remembered like any other; the next
-      // screening answers from the memo or tries again.
-      await start(props);
+      const rebuilt = await start(props);
+      if (rebuilt.isErr()) {
+        // A failed rebuild is reported and remembered like any other; the
+        // next screening answers from the memo or tries again.
+        return;
+      }
     },
   };
 };

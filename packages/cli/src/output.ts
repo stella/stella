@@ -161,14 +161,17 @@ type GatheredRow = { row: unknown; parent: unknown };
  */
 const gatherRows = (payload: unknown, rows: string): GatheredRow[] => {
   const segments = rows.split(".");
-  const last = segments.pop() ?? rows;
+  const last = (segments.pop() ?? rows).replace(/\[\]$/u, "");
   let holders: readonly unknown[] = [payload];
   for (const segment of segments) {
     holders = segment.endsWith("[]")
       ? holders.flatMap((holder) => {
           // A holder without the array (a list that failed) adds no rows.
           const spread = arrayAt(holder, segment.slice(0, -2));
-          return spread === null ? [] : spread;
+          if (spread === null) {
+            return [];
+          }
+          return spread;
         })
       : holders.map((holder) => fieldOf(holder, segment));
   }

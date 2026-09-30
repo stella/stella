@@ -139,6 +139,7 @@ export const Route = createFileRoute(
             queryClient,
             timeEntryTeamSummaryOptions(
               workspaceId,
+              context.user.id,
               toISODate(weekStart),
               toISODate(weekEnd),
             ),
@@ -154,6 +155,7 @@ export const Route = createFileRoute(
             queryClient,
             timeEntrySummaryOptions(
               workspaceId,
+              context.user.id,
               toISODate(weekStart),
               toISODate(weekEnd),
             ),
@@ -169,6 +171,7 @@ export const Route = createFileRoute(
           queryClient,
           timeEntrySummaryOptions(
             workspaceId,
+            context.user.id,
             toISODate(prevWeekStart),
             toISODate(prevWeekEnd),
           ),

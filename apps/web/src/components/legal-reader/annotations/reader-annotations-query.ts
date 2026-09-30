@@ -10,6 +10,7 @@ export type ReaderAnnotationsKey = {
   activeOrganizationId: string;
   targetId: string;
   targetType: ReaderAnnotationTargetType;
+  userId: string;
 };
 
 type AnnotationPage<T> = {
@@ -43,9 +44,10 @@ export const readerAnnotationKeys = {
     activeOrganizationId,
     targetId,
     targetType,
+    userId,
   }: ReaderAnnotationsKey) => [
     ...readerAnnotationKeys.all,
-    { activeOrganizationId, targetId, targetType },
+    { activeOrganizationId, userId, targetId, targetType },
   ],
 };
 

@@ -69,6 +69,7 @@ import { useLocale } from "@/i18n/formatting-context";
 import { getFormatter } from "@/i18n/i18n-store";
 import { getFirstWeekday } from "@/i18n/week";
 import { api } from "@/lib/api";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { getDisplayName } from "@/lib/get-display-name";
@@ -164,6 +165,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   const firstWeekday = getFirstWeekday(locale);
   const navigate = useNavigate({ from: "/workspaces/$workspaceId" });
   const queryClient = useQueryClient();
+  const userId = useAuthenticatedUser().id;
   const { data } = useSuspenseQuery(overviewOptions(workspaceId));
   const [upcomingMenu, setUpcomingMenu] = useState<UpcomingMenuState>({
     open: false,
@@ -339,6 +341,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
     ...routeQueryOptions(
       timeEntrySummaryOptions(
         workspaceId,
+        userId,
         toISODate(weekStart),
         toISODate(weekEnd),
       ),
@@ -350,6 +353,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
     ...routeQueryOptions(
       timeEntryTeamSummaryOptions(
         workspaceId,
+        userId,
         toISODate(weekStart),
         toISODate(weekEnd),
       ),
@@ -371,6 +375,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
     ...routeQueryOptions(
       timeEntrySummaryOptions(
         workspaceId,
+        userId,
         toISODate(prevWeekStart),
         toISODate(prevWeekEnd),
       ),

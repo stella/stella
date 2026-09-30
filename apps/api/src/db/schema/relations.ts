@@ -1,6 +1,7 @@
 import {
   billingCodes,
   expenses,
+  invoiceLines,
   invoices,
   numberSeries,
   numberSeriesAllocations,
@@ -14,6 +15,7 @@ import {
 import {
   caseLawCitations,
   caseLawCourtWeights,
+  caseLawCourtDirectoryRanks,
   caseLawDecisionIdentifiers,
   caseLawDecisionSourceIdentities,
   caseLawDecisions,
@@ -190,6 +192,7 @@ export const relations = defineRelations(
     rateEntries,
     expenses,
     invoices,
+    invoiceLines,
     matterCounters,
     documentCounters,
     documentReferenceCounters,
@@ -215,6 +218,7 @@ export const relations = defineRelations(
     caseLawCitations,
     caseLawPolarityRules,
     caseLawCourtWeights,
+    caseLawCourtDirectoryRanks,
     caseLawFtsConfigs,
     caseLawMatterLinks,
     caseLawSearchDocuments,
@@ -1053,6 +1057,16 @@ export const relations = defineRelations(
         from: r.invoices.id,
         to: r.expenses.invoiceId,
       }),
+      lines: r.many.invoiceLines({
+        from: r.invoices.id,
+        to: r.invoiceLines.invoiceId,
+      }),
+    },
+    invoiceLines: {
+      invoice: r.one.invoices({
+        from: r.invoiceLines.invoiceId,
+        to: r.invoices.id,
+      }),
     },
     matterCounters: {},
     documentCounters: {},
@@ -1219,6 +1233,7 @@ export const relations = defineRelations(
     },
     caseLawPolarityRules: {},
     caseLawCourtWeights: {},
+    caseLawCourtDirectoryRanks: {},
     caseLawFtsConfigs: {},
     caseLawMatterLinks: {
       decision: r.one.caseLawDecisions({

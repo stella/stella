@@ -2713,6 +2713,32 @@ export const caseLawCourtWeights = p.pgTable(
   ],
 );
 
+export const caseLawCourtDirectoryRanks = p.pgTable(
+  "case_law_court_directory_ranks",
+  {
+    country: p.text().notNull(),
+    courtId: p.text("court_id").notNull(),
+    tier: p.smallint().notNull(),
+    weight: p.smallint().notNull(),
+  },
+  (t) => [
+    p.primaryKey({
+      name: "case_law_court_directory_ranks_pkey",
+      columns: [t.country, t.courtId],
+    }),
+    // Row security is forced; the seed migrations write as the owner.
+    p.pgPolicy("case_law_court_directory_rank_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`true`,
+      withCheck: sql`true`,
+    }),
+    ...globalCaseLawPolicies(),
+    ...caseLawAnalysisReaderPolicies(),
+    ...publicLawReaderPolicies(),
+  ],
+);
+
 export const caseLawFtsConfigs = p.pgTable(
   "case_law_fts_configs",
   {

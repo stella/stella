@@ -21,12 +21,13 @@ import { toWorkspaceEntity } from "@/lib/workspaces/queries/entities";
 import { myWorkKeys } from "@/lib/workspaces/queries/my-work";
 
 export const entityViewKeys = {
-  all: (organizationId: string) =>
-    [...myWorkKeys.all, "entity-views", organizationId] as const,
+  all: (organizationId: string, userId: string) =>
+    [...myWorkKeys.all, "entity-views", organizationId, userId] as const,
 };
 
 type EntityViewRowsOptions = {
   organizationId: string;
+  userId: string;
   scope: EntityViewScope;
   layout: ViewLayout;
   /** Which Inbox lifecycle slice the window holds, signals included. */
@@ -40,6 +41,7 @@ type EntityViewRowsOptions = {
  */
 export const entityViewRowsOptions = ({
   organizationId,
+  userId,
   scope,
   layout,
   inboxView,
@@ -47,7 +49,7 @@ export const entityViewRowsOptions = ({
   const asOf = localISODate();
   return infiniteQueryOptions({
     queryKey: [
-      ...entityViewKeys.all(organizationId),
+      ...entityViewKeys.all(organizationId, userId),
       scope,
       layout.filters,
       layout.sorts,
@@ -136,9 +138,9 @@ const toProposalProjection = ({
   return { kind, status, type: agendaKind, dueDate };
 };
 
-export const entityViewsOptions = (organizationId: string) =>
+export const entityViewsOptions = (organizationId: string, userId: string) =>
   queryOptions({
-    queryKey: ["entity-view-layouts", organizationId],
+    queryKey: ["entity-view-layouts", organizationId, userId],
     queryFn: async ({ signal }) =>
       unwrapEden(await api["entity-views"].get({ fetch: { signal } })),
   });

@@ -51,6 +51,7 @@ export const Route = createFileRoute("/_protected/time")({
       context.queryClient,
       myTimeEntriesInfiniteOptions(
         context.user.activeOrganizationId,
+        context.user.id,
         deps.date,
       ),
     );
@@ -79,9 +80,12 @@ function MyDayPage() {
   const organizationId = Route.useRouteContext({
     select: (context) => context.user.activeOrganizationId,
   });
+  const userId = Route.useRouteContext({
+    select: (context) => context.user.id,
+  });
   const navigate = Route.useNavigate();
   const entriesQuery = useSuspenseInfiniteQuery(
-    myTimeEntriesInfiniteOptions(organizationId, date),
+    myTimeEntriesInfiniteOptions(organizationId, userId, date),
   );
   const entries = entriesQuery.data.pages.flatMap((page) => page.items);
   const totalMinutes = entries.reduce(

@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { SKILL_REQUIRED_TOOLS_METADATA_KEY } from "@stll/skills";
 
 import type { Transaction } from "@/api/db/root";
+import { CHAT_SKILL_SOURCE } from "@/api/lib/agent-skills/skills";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
@@ -15,6 +16,7 @@ import {
   loadVisibleSkillTools,
   resolveSkillTool,
 } from "@/api/mcp/gateway/skills";
+import type { ResolvedSkillTool } from "@/api/mcp/gateway/skills";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -95,6 +97,11 @@ const createContext = ({
   });
 };
 
+// Every organization also has the shipped built-in skills, with no row; these
+// cases are about the stored rows.
+const installedOnly = (tools: readonly ResolvedSkillTool[]) =>
+  tools.filter((tool) => tool.source === CHAT_SKILL_SOURCE.installed);
+
 describe("MCP gateway skill tools", () => {
   let analytics: RecordingAnalytics;
 
@@ -111,7 +118,7 @@ describe("MCP gateway skill tools", () => {
       rows: [skillRow({ slug: "alpha" }), skillRow({ slug: "beta" })],
     });
 
-    const tools = await loadVisibleSkillTools({ context });
+    const tools = installedOnly(await loadVisibleSkillTools({ context }));
 
     expect(tools.map((tool) => tool.exposedName)).toEqual([
       "skill__alpha",
@@ -138,12 +145,12 @@ describe("MCP gateway skill tools", () => {
       ],
     });
 
-    const tools = await loadVisibleSkillTools({ context });
+    const tools = installedOnly(await loadVisibleSkillTools({ context }));
 
     expect(tools).toHaveLength(1);
-    expect(tools.at(0)?.id).toBe(
-      toSafeId<"agentSkill">("skill_private_shared"),
-    );
+    expect(tools.at(0)).toMatchObject({
+      id: toSafeId<"agentSkill">("skill_private_shared"),
+    });
   });
 
   test("distinct slugs that sanitize to the same name get collision-safe names", async () => {
@@ -157,7 +164,7 @@ describe("MCP gateway skill tools", () => {
       ],
     });
 
-    const tools = await loadVisibleSkillTools({ context });
+    const tools = installedOnly(await loadVisibleSkillTools({ context }));
 
     const names = tools.map((tool) => tool.exposedName);
     expect(names).toHaveLength(2);
@@ -176,6 +183,7 @@ describe("MCP gateway skill tools", () => {
         displayName: `Skill ${String(i)}`,
         id: toSafeId<"agentSkill">(`skill_${String(i)}`),
         name: `skill-${String(i)}`,
+        source: CHAT_SKILL_SOURCE.installed,
         version: null,
       }),
     );
