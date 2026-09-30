@@ -30,7 +30,7 @@ export const createSanctionsPublicReadDb = <
   database: RlsDatabase<TTransaction>,
 ): SanctionsPublicReadDb => {
   const read = async <T>(
-    fn: (tx: SanctionsReadTransaction) => Promise<T>,
+    fn: (tx: SanctionsReadTransaction) => T | Promise<T>,
   ): Promise<T> =>
     await database.transaction(async (tx) => {
       await tx.execute(sql`SELECT
@@ -44,7 +44,7 @@ export const createSanctionsPublicReadDb = <
     // Probe outside screening: its recoverable list failures must not mask a
     // deployment that cannot assume the anonymous reader role.
     validation ??= Result.tryPromise({
-      try: async () => await read(async () => undefined),
+      try: async () => await read(() => undefined),
       catch: () =>
         new SanctionsPublicRoleError({
           message: "Public sanctions database role is unavailable",

@@ -205,10 +205,12 @@ describe("anonymous sanctions search", () => {
     );
     const db = testDb(validateRole);
     // Different handler instances share the per-process admission ceiling.
-    const requests = Array.from({ length: maximum }, () =>
-      appWith(screen, db).app.handle(
-        request({ type: "organization", name: "Held" }),
-      ),
+    const requests = Array.from(
+      { length: maximum },
+      async () =>
+        await appWith(screen, db).app.handle(
+          request({ type: "organization", name: "Held" }),
+        ),
     );
     try {
       await allStarted.promise;

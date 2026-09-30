@@ -302,7 +302,7 @@ const assertParity = async ({
     ).toBe("binding");
     return inProduct;
   } finally {
-    await context.kill();
+    context.kill();
   }
 };
 
@@ -765,7 +765,7 @@ describe("public sanctions search parity", () => {
         });
         expect(partial.status).not.toBe("clear");
       } finally {
-        await context.kill();
+        context.kill();
       }
     },
     DB_TEST_TIMEOUT_MS,

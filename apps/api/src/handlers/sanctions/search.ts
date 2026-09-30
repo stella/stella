@@ -72,13 +72,12 @@ const screeningSubject = ({
         resolveSanctionsNameSubject({
           type: "organization",
           name: subject.name,
-          companyId: subject.companyId === undefined ? null : subject.companyId,
+          companyId: subject.companyId ?? null,
         }).subject,
       );
     }
     case "person": {
-      const codes =
-        subject.nationalityCodes === undefined ? [] : subject.nationalityCodes;
+      const codes = subject.nationalityCodes ?? [];
       const nationalityCodes = codes.filter(isCountryCode);
       if (codes.length !== nationalityCodes.length) {
         return invalidSubject(

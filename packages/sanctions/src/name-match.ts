@@ -636,20 +636,15 @@ const align = (pairs: Pair[]): Alignment => {
   return alignment;
 };
 
-/** Share of the listed name's weight the alignment explains. */
+/** Shares of the listed name's weight for ranking and optimistic filtering. */
 type ListedCoverageOptions = {
   index: NameIndex;
   alias: IndexedAlias;
   matched: ReadonlyMap<number, number>;
-  denominator: "aligned" | "minimum";
 };
-const listedCoverage = ({
-  index,
-  alias,
-  matched,
-  denominator,
-}: ListedCoverageOptions): number => {
-  let total = 0;
+const listedCoverage = ({ index, alias, matched }: ListedCoverageOptions) => {
+  let alignedTotal = 0;
+  let minimumTotal = 0;
   let explained = 0;
   const last = alias.tokens.length - 1;
   for (const [listed, token] of alias.tokens.entries()) {
@@ -662,18 +657,18 @@ const listedCoverage = ({
       ((listed > 0 && listed < last) ||
         PATRONYMIC.test(token.folded) ||
         PARTICLES.has(token.folded));
+    const minimumWeight = optional ? weight * MIDDLE_NAME_DISCOUNT : weight;
+    minimumTotal += minimumWeight;
     const similarity = matched.get(listed);
+    alignedTotal += similarity === undefined ? minimumWeight : weight;
     if (similarity !== undefined) {
-      total +=
-        denominator === "minimum" && optional
-          ? weight * MIDDLE_NAME_DISCOUNT
-          : weight;
       explained += weight * similarity;
-      continue;
     }
-    total += optional ? weight * MIDDLE_NAME_DISCOUNT : weight;
   }
-  return Math.min(1, explained / total);
+  return {
+    minimum: Math.min(1, explained / minimumTotal),
+    aligned: Math.min(1, explained / alignedTotal),
+  };
 };
 
 /**
@@ -702,8 +697,7 @@ const scoreAlias = (
         index,
         alias,
         matched: alignment.listed,
-        denominator: "aligned",
-      }),
+      }).aligned,
   );
   return alias.quality === "weak" ? score * WEAK_ALIAS_FACTOR : score;
 };
@@ -742,15 +736,10 @@ const candidateEstimate = ({
       similarity = Math.max(similarity, current);
       matched.set(position, current);
     }
+    const coverage = listedCoverage({ index, alias, matched });
     return {
-      bound: Math.sqrt(
-        similarity *
-          listedCoverage({ index, alias, matched, denominator: "minimum" }),
-      ),
-      rank: Math.sqrt(
-        similarity *
-          listedCoverage({ index, alias, matched, denominator: "aligned" }),
-      ),
+      bound: Math.sqrt(similarity * coverage.minimum),
+      rank: Math.sqrt(similarity * coverage.aligned),
     };
   }
   const pairs = candidatePairs(alias, query);
@@ -780,25 +769,10 @@ const candidateEstimate = ({
     queryExplained += weight * (queryMatched.get(position) ?? 0);
   }
   const queryShare = queryExplained / queryTotal;
+  const coverage = listedCoverage({ index, alias, matched: listedMatched });
   return {
-    bound: Math.sqrt(
-      queryShare *
-        listedCoverage({
-          index,
-          alias,
-          matched: listedMatched,
-          denominator: "minimum",
-        }),
-    ),
-    rank: Math.sqrt(
-      queryShare *
-        listedCoverage({
-          index,
-          alias,
-          matched: listedMatched,
-          denominator: "aligned",
-        }),
-    ),
+    bound: Math.sqrt(queryShare * coverage.minimum),
+    rank: Math.sqrt(queryShare * coverage.aligned),
   };
 };
 
