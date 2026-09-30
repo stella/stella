@@ -591,7 +591,9 @@ export const loadDocxArchive = async (
       const size = await readEntryBounded(entry, {
         maxEntryBytes,
         remainingBytes: remaining,
-        onChunk: (chunk) => chunks.push(chunk),
+        onChunk: (chunk) => {
+          chunks.push(chunk);
+        },
       });
       totalRead += size;
       return Buffer.concat(chunks, size);

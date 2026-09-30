@@ -136,8 +136,9 @@ test(
             maxTotalBytes: count * length,
           });
           const reads = await Promise.allSettled(
-            Array.from({ length: count + 1 }, () =>
-              archive.readEntryUint8("part-0.bin"),
+            Array.from(
+              { length: count + 1 },
+              async () => await archive.readEntryUint8("part-0.bin"),
             ),
           );
           expect(
