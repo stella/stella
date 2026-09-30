@@ -1,8 +1,72 @@
 import { assertSsrDocument } from "@stll/ssr-testkit";
 
+import { E2E_API_ORIGIN } from "../helpers/api";
 import { expect, test } from "../helpers/test";
 
 const PUBLIC_SSR_TIMEOUT_MS = 45_000;
+
+test("public tools render the same document content for both session states", async ({
+  context,
+  page,
+}) => {
+  const session = await context.request.get(
+    `${E2E_API_ORIGIN}/api/auth/get-session`,
+  );
+  expect(session.ok()).toBe(true);
+  expect(await session.json()).toMatchObject({
+    user: { id: expect.any(String) },
+  });
+
+  for (const path of ["/tools", "/tools/contract-review"]) {
+    const signedIn = await context.request.get(path, {
+      timeout: PUBLIC_SSR_TIMEOUT_MS,
+    });
+    const signedInHtml = await signedIn.text();
+    assertSsrDocument({
+      contentType: signedIn.headers()["content-type"] ?? null,
+      html: signedInHtml,
+      requiredContent: ["<main", "Contract Review"],
+      status: signedIn.status(),
+    });
+    const cookies = await context.cookies();
+    expect(cookies.length).toBeGreaterThan(0);
+    await context.clearCookies();
+    const anonymousSession = await context.request.get(
+      `${E2E_API_ORIGIN}/api/auth/get-session`,
+    );
+    expect(anonymousSession.ok()).toBe(true);
+    expect(await anonymousSession.json()).toBeNull();
+    const anonymous = await context.request.get(path, {
+      timeout: PUBLIC_SSR_TIMEOUT_MS,
+    });
+    const anonymousHtml = await anonymous.text();
+    assertSsrDocument({
+      contentType: anonymous.headers()["content-type"] ?? null,
+      html: anonymousHtml,
+      requiredContent: ["<main", "Contract Review"],
+      status: anonymous.status(),
+    });
+    const documents = await page.evaluate(
+      (htmlDocuments) =>
+        htmlDocuments.map((html) => {
+          const document = new DOMParser().parseFromString(html, "text/html");
+          // Streaming scripts contain per-request router timing data.
+          for (const script of document.querySelectorAll("script")) {
+            script.remove();
+          }
+          return document.documentElement.outerHTML;
+        }),
+      [signedInHtml, anonymousHtml],
+    );
+    expect(documents.at(0)).toBe(documents.at(1));
+    expect(signedIn.headers()["cache-control"]).toBe("private, no-store");
+    expect(anonymous.headers()["cache-control"]).toBe("private, no-store");
+    expect(signedIn.headers()["x-robots-tag"]).toBe(
+      anonymous.headers()["x-robots-tag"],
+    );
+    await context.addCookies(cookies);
+  }
+});
 
 test("public tools catalogue returns SSR content for anonymous visitors", async ({
   context,

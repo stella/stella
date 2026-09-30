@@ -42,6 +42,11 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import {
+  createPublicCrawlRules,
+  PUBLIC_CRAWL_ROUTES,
+} from "../apps/web/src/lib/public-crawl-policy";
+
 const SCRIPTS_DIR = import.meta.dir;
 const REPO_ROOT = path.resolve(SCRIPTS_DIR, "..");
 const APPS_ROOT = path.join(REPO_ROOT, "apps");
@@ -71,7 +76,7 @@ const MIXED_SITEMAP_ROUTE = "src/routes/sitemap[.]xml.ts";
 const MIXED_ROBOTS_LIB = "src/lib/public-law-sitemap.ts";
 const MIXED_ROUTES_DIR = "src/routes";
 const MIXED_INDEX_HTML = "index.html";
-const MIXED_CRAWL_PREFIX_CONST = "PUBLIC_CRAWL_PATH_PREFIXES";
+const MIXED_CRAWL_BUILDER = "createPublicCrawlRules";
 
 // Source files scanned for a stray `noindex` robots meta on a public surface.
 const PUBLIC_SRC_GLOB = "**/*.{astro,html,tsx,ts,mdx,md}";
@@ -284,16 +289,10 @@ const INDEXABLE_DEFAULT_DENY = /["']Disallow:\s*\/["']/u;
 // the boundary emission `Allow: /law/` or `Allow: /law$`); the leading `/`
 // requirement skips the generated `Allow: ${prefix}...` template form.
 const ALLOW_PATH_LITERAL = /Allow:\s*(\/[^\s"'`]+)/gu;
-const QUOTED_STRING = /["'`]([^"'`]+)["'`]/gu;
-
-// Normalize an emitted allow path back to its crawl-prefix by dropping a
-// trailing boundary marker (`/` subtree rule or `$` exact-path anchor).
-const allowPathToPrefix = (allowPath: string): string =>
-  allowPath.replace(/[/$]$/u, "");
 
 // The body of `createRobotsTxt` (from its declaration to the next top-level
 // `export`, or end of file). Used to confirm the function actually consults the
-// crawl-prefix constant rather than hand-building Allow lines around it.
+// shared crawl builder.
 const createRobotsTxtBody = (source: string): string | null => {
   const marker = "createRobotsTxt";
   const start = source.indexOf(marker);
@@ -303,27 +302,6 @@ const createRobotsTxtBody = (source: string): string | null => {
   const rest = source.slice(start + marker.length);
   const nextExport = rest.search(/\nexport\s/u);
   return nextExport === -1 ? rest : rest.slice(0, nextExport);
-};
-
-// String entries of `export const <NAME> = [ ... ] as const`.
-const crawlPrefixConstantEntries = (
-  source: string,
-  constName: string,
-): string[] => {
-  const declaration = new RegExp(
-    `${constName}\\s*=\\s*\\[([^\\]]*)\\]`,
-    "u",
-  ).exec(source);
-  if (declaration === null) {
-    return [];
-  }
-  const body = declaration[1];
-  if (body === undefined) {
-    return [];
-  }
-  return [...body.matchAll(QUOTED_STRING)].flatMap((match) =>
-    match[1] === undefined ? [] : [match[1]],
-  );
 };
 
 const isDirectory = (candidate: string): boolean =>
@@ -342,16 +320,25 @@ const routeExistsForPrefix = (routesDir: string, prefix: string): boolean => {
     return true;
   }
   const segments = rel.split("/");
-  const last = segments.pop();
-  if (last === undefined || last === "") {
-    return false;
+  for (let depth = 0; depth < segments.length; depth++) {
+    const parent = path.join(routesDir, ...segments.slice(0, depth));
+    if (!isDirectory(parent)) {
+      continue;
+    }
+    const expected = segments.slice(depth).join(".");
+    if (
+      readdirSync(parent).some(
+        (entry) =>
+          entry
+            .replace(/\.(?:tsx?|jsx?)$/u, "")
+            .replaceAll("[.]", ".")
+            .replaceAll("_", "") === expected,
+      )
+    ) {
+      return true;
+    }
   }
-  const parent = path.join(routesDir, ...segments);
-  if (!existsSync(parent)) {
-    return false;
-  }
-  const escaped = last.replaceAll(".", "[.]");
-  return readdirSync(parent).some((entry) => entry.startsWith(`${escaped}.`));
+  return false;
 };
 
 // --- Filesystem helpers -----------------------------------------------------
@@ -562,15 +549,14 @@ const checkMixed = (appDir: string, app: string): Violation[] => {
     });
   }
 
-  // e. the robots lib default-denies, and its allowlist and the crawl-prefix
-  //    constant stay in sync with real routes.
+  // e. the robots lib uses the shared crawl policy and a default-deny.
   const rawLibSource = readTextIfExists(path.join(appDir, MIXED_ROBOTS_LIB));
   if (rawLibSource === null) {
     violations.push({
       app,
       code: "mixed-lib-missing",
       message: `mixed app is missing the robots source ${MIXED_ROBOTS_LIB}.`,
-      fix: `add ${MIXED_ROBOTS_LIB} exporting createRobotsTxt and ${MIXED_CRAWL_PREFIX_CONST}.`,
+      fix: `add ${MIXED_ROBOTS_LIB} exporting createRobotsTxt and consuming ${MIXED_CRAWL_BUILDER}.`,
     });
     return violations;
   }
@@ -590,54 +576,61 @@ const checkMixed = (appDir: string, app: string): Violation[] => {
     });
   }
 
-  // createRobotsTxt must build its Allow lines from the crawl-prefix constant;
-  // if its body never references the identifier, the allowlist has been
-  // bypassed with hand-built rules and the whole guard is moot.
+  // Robots output and route checks share the crawl builder.
   const body = createRobotsTxtBody(libSource);
-  if (body === null || !body.includes(MIXED_CRAWL_PREFIX_CONST)) {
+  if (body === null || !body.includes(MIXED_CRAWL_BUILDER)) {
     violations.push({
       app,
       code: "mixed-lib-constant-unused",
-      message: `${MIXED_ROBOTS_LIB} createRobotsTxt does not reference ${MIXED_CRAWL_PREFIX_CONST}.`,
-      fix: `build the Allow lines from ${MIXED_CRAWL_PREFIX_CONST} so the allowlist cannot be bypassed by hand-built rules.`,
+      message: `${MIXED_ROBOTS_LIB} createRobotsTxt does not reference ${MIXED_CRAWL_BUILDER}.`,
+      fix: `build the Allow lines from ${MIXED_CRAWL_BUILDER}.`,
     });
   }
 
-  const prefixes = crawlPrefixConstantEntries(
-    libSource,
-    MIXED_CRAWL_PREFIX_CONST,
+  const crawlRules = [
+    ...createPublicCrawlRules({
+      publicKnowledgeCrawlAllowed: true,
+      publicLawCrawlAllowed: true,
+      publicToolsCrawlAllowed: true,
+      toolsBasePath: "/tools",
+    }),
+    ...createPublicCrawlRules({
+      publicKnowledgeCrawlAllowed: true,
+      publicLawCrawlAllowed: true,
+      publicToolsCrawlAllowed: true,
+      toolsBasePath: "/knowledge/tools",
+    }),
+  ];
+  const allowedPaths = new Set(
+    crawlRules.flatMap(({ path: crawlPath, scope }) =>
+      scope === "exact"
+        ? [`${crawlPath}$`]
+        : [`${crawlPath}/`, `${crawlPath}$`],
+    ),
   );
-
-  // Every literal `Allow: /path` in the source, once its boundary marker (`/`
-  // or `$`) is dropped, must be an allow-listed prefix, so a hand-added allow
-  // cannot bypass the single crawl-prefix allowlist.
-  const constantSet = new Set(prefixes);
   for (const match of libSource.matchAll(ALLOW_PATH_LITERAL)) {
     const allowPath = match[1];
     if (allowPath === undefined) {
       continue;
     }
-    const prefix = allowPathToPrefix(allowPath);
-    if (!constantSet.has(prefix)) {
+    if (!allowedPaths.has(allowPath)) {
       violations.push({
         app,
         code: "mixed-allow-not-in-constant",
-        message: `${MIXED_ROBOTS_LIB} allows \`${allowPath}\`, whose prefix \`${prefix}\` is not in ${MIXED_CRAWL_PREFIX_CONST}.`,
-        fix: `add ${prefix} to ${MIXED_CRAWL_PREFIX_CONST} or remove the Allow line.`,
+        message: `${MIXED_ROBOTS_LIB} allows \`${allowPath}\`, which is not declared by ${MIXED_CRAWL_BUILDER}.`,
+        fix: "update the public crawl policy or remove the Allow line.",
       });
     }
   }
 
-  // Every allow-listed prefix must map to a real route, so the allowlist cannot
-  // advertise a path the app does not serve.
   const routesDir = path.join(appDir, MIXED_ROUTES_DIR);
-  for (const prefix of prefixes) {
-    if (!routeExistsForPrefix(routesDir, prefix)) {
+  for (const { route } of PUBLIC_CRAWL_ROUTES) {
+    if (!routeExistsForPrefix(routesDir, route)) {
       violations.push({
         app,
         code: "mixed-prefix-no-route",
-        message: `${MIXED_CRAWL_PREFIX_CONST} lists \`${prefix}\`, but no route resolves under ${MIXED_ROUTES_DIR}.`,
-        fix: `add a route for ${prefix} (a ${MIXED_ROUTES_DIR}/<path>/ dir or a <path>[.]<ext> route file) or drop it from ${MIXED_CRAWL_PREFIX_CONST}.`,
+        message: `public crawl policy lists \`${route}\`, but no route resolves under ${MIXED_ROUTES_DIR}.`,
+        fix: `add a route for ${route} or update the public crawl policy.`,
       });
     }
   }
@@ -809,18 +802,12 @@ const ROUTE_STUB = "export const Route = {};\n";
 const libFixture = (lines: readonly string[]): string =>
   `${lines.join("\n")}\n`;
 
-// A valid robots lib: the crawl-prefix constant, a createRobotsTxt whose body
-// references it, boundary-anchored `Allow:` literals all drawn from it, and a
-// quoted `"Disallow: /"` default-deny. It also proves comment-stripping: the
-// block-comment `Allow: /secret$`, the `//`-line `Allow: /admin$`, and the
-// `https://` URL sitting before the real `"Disallow: /"` would each break a
-// detector if stripping were naive, so this fixture passing exercises all three.
+// Valid output includes the builder, declared rules, and default-deny.
 const MIXED_LIB_VALID = libFixture([
   "/* ignored example: Allow: /secret$ (block comment) */",
-  'export const PUBLIC_CRAWL_PATH_PREFIXES = ["/law", "/sitemap.xml"] as const;',
   "export const createRobotsTxt = () => {",
   "  // commented-out example: Allow: /admin$",
-  "  const allowed = PUBLIC_CRAWL_PATH_PREFIXES;",
+  "  const allowed = createPublicCrawlRules();",
   '  const url = "https://example.com/sitemap.xml"; const deny = "Disallow: /";',
   '  const lines = ["User-agent: *", "Allow: /law/", "Allow: /law$", "Allow: /sitemap.xml$", deny, ...allowed];',
   "  return { lines, url };",
@@ -828,62 +815,41 @@ const MIXED_LIB_VALID = libFixture([
 ]);
 // No quoted "Disallow: /" anywhere.
 const MIXED_LIB_NO_DENY = libFixture([
-  'export const PUBLIC_CRAWL_PATH_PREFIXES = ["/law", "/sitemap.xml"] as const;',
   "export const createRobotsTxt = () => {",
-  "  const allowed = PUBLIC_CRAWL_PATH_PREFIXES;",
+  "  const allowed = createPublicCrawlRules();",
   '  const lines = ["User-agent: *", "Allow: /law/", "Allow: /sitemap.xml$", ...allowed];',
   "  return lines;",
   "};",
 ]);
-// A boundary-anchored `Allow: /secret$` literal whose prefix is not in the
-// constant.
+// A rule with an undeclared scope.
 const MIXED_LIB_BAD_ALLOW = libFixture([
-  'export const PUBLIC_CRAWL_PATH_PREFIXES = ["/law"] as const;',
   "export const createRobotsTxt = () => {",
-  "  const allowed = PUBLIC_CRAWL_PATH_PREFIXES;",
-  '  const lines = ["User-agent: *", "Allow: /law/", "Allow: /secret$", "Disallow: /", ...allowed];',
+  "  const allowed = createPublicCrawlRules();",
+  '  const lines = ["User-agent: *", "Allow: /law/", "Allow: /tools/", "Disallow: /", ...allowed];',
   "  return lines;",
   "};",
 ]);
-// A constant prefix (`/ghost`) that maps to no route.
-const MIXED_LIB_GHOST_PREFIX = libFixture([
-  'export const PUBLIC_CRAWL_PATH_PREFIXES = ["/law", "/ghost"] as const;',
-  "export const createRobotsTxt = () => {",
-  "  const allowed = PUBLIC_CRAWL_PATH_PREFIXES;",
-  '  const lines = ["User-agent: *", "Allow: /law/", "Disallow: /", ...allowed];',
-  "  return lines;",
-  "};",
-]);
-// A law-only constant, used where /sitemap.xml must not be required as a route.
-const MIXED_LIB_LAW_ONLY = libFixture([
-  'export const PUBLIC_CRAWL_PATH_PREFIXES = ["/law"] as const;',
-  "export const createRobotsTxt = () => {",
-  "  const allowed = PUBLIC_CRAWL_PATH_PREFIXES;",
-  '  const lines = ["User-agent: *", "Allow: /law/", "Disallow: /", ...allowed];',
-  "  return lines;",
-  "};",
-]);
-// createRobotsTxt hand-builds its Allow lines and never consults the constant.
+// Output without the shared builder.
 const MIXED_LIB_CONSTANT_UNUSED = libFixture([
-  'export const PUBLIC_CRAWL_PATH_PREFIXES = ["/law"] as const;',
   "export const createRobotsTxt = () => {",
   '  const lines = ["User-agent: *", "Allow: /law/", "Allow: /law$", "Disallow: /"];',
   "  return lines;",
   "};",
 ]);
 
-// Lay out a fully valid mixed app; broken fixtures start here and mutate one
-// thing. `/law` resolves to a directory route, `/sitemap.xml` to the escaped
-// sitemap route file.
+// Fixtures derive route files from the production policy.
 const layoutValidMixed = (root: string, app: string): void => {
   writeFixtureFile(root, path.join(app, "package.json"), pkg("mixed"));
   writeFixtureFile(root, path.join(app, MIXED_ROBOTS_ROUTE), ROUTE_STUB);
   writeFixtureFile(root, path.join(app, MIXED_SITEMAP_ROUTE), ROUTE_STUB);
-  writeFixtureFile(
-    root,
-    path.join(app, MIXED_ROUTES_DIR, "law", "route.tsx"),
-    ROUTE_STUB,
-  );
+  for (const { route } of PUBLIC_CRAWL_ROUTES) {
+    const filename = `${route.slice(1).replaceAll(".", "[.]")}.tsx`;
+    writeFixtureFile(
+      root,
+      path.join(app, MIXED_ROUTES_DIR, filename),
+      ROUTE_STUB,
+    );
+  }
   writeFixtureFile(root, path.join(app, MIXED_ROBOTS_LIB), MIXED_LIB_VALID);
   writeFixtureFile(root, path.join(app, MIXED_INDEX_HTML), PLAIN_HTML);
 };
@@ -1165,18 +1131,12 @@ const runSelfTest = (): number => {
     "mixed-static-robots-present",
   );
 
-  // 14. mixed missing the dynamic sitemap route. Drop /sitemap.xml from the
-  //     constant too so only the route-missing detector fires.
+  // 14. mixed missing the dynamic sitemap route.
   expectCode(
     "mixed missing sitemap route",
     reportForSingleApp((root, app) => {
       layoutValidMixed(root, app);
       rmSync(path.join(root, app, MIXED_SITEMAP_ROUTE));
-      writeFixtureFile(
-        root,
-        path.join(app, MIXED_ROBOTS_LIB),
-        MIXED_LIB_LAW_ONLY,
-      );
     }),
     "mixed-sitemap-route-missing",
   );
@@ -1219,16 +1179,12 @@ const runSelfTest = (): number => {
     "mixed-allow-not-in-constant",
   );
 
-  // 18. mixed crawl-prefix constant with a prefix that maps to no route.
+  // 18. a declared route is absent.
   expectCode(
     "mixed prefix without a route",
     reportForSingleApp((root, app) => {
       layoutValidMixed(root, app);
-      writeFixtureFile(
-        root,
-        path.join(app, MIXED_ROBOTS_LIB),
-        MIXED_LIB_GHOST_PREFIX,
-      );
+      rmSync(path.join(root, app, MIXED_ROUTES_DIR, "law.tsx"));
     }),
     "mixed-prefix-no-route",
   );
