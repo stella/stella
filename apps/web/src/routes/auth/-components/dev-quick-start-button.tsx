@@ -108,7 +108,7 @@ const authenticate = async ({ email }: DevQuickStartIdentity) => {
 };
 
 const createOrganization = async (identity: DevQuickStartIdentity) => {
-  const organizationId = await resolveDevQuickStartOrganization({
+  const resolved = await resolveDevQuickStartOrganization({
     identity,
     listOrganizations: async () => {
       const listed = await authClient.organization.list();
@@ -128,6 +128,10 @@ const createOrganization = async (identity: DevQuickStartIdentity) => {
       return created.data.id;
     },
   });
+  if (Result.isError(resolved)) {
+    throw resolved.error;
+  }
+  const organizationId = resolved.value;
 
   const active = await authClient.organization.setActive({
     organizationId,

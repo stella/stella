@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -339,7 +340,7 @@ describe("quick-start organization recovery", () => {
         return "unexpected-organization";
       },
     });
-    expect(organizationId).toBe(ORGANIZATION_ID);
+    expect(organizationId).toEqual(Result.ok(ORGANIZATION_ID));
     expect(creates).toBe(0);
   });
 
@@ -361,22 +362,45 @@ describe("quick-start organization recovery", () => {
         throw new Error("duplicate organization slug");
       },
     });
-    expect(organizationId).toBe(ORGANIZATION_ID);
+    expect(organizationId).toEqual(Result.ok(ORGANIZATION_ID));
     expect(listed).toBe(2);
   });
 
   test("propagates a create failure when the attempt's organization does not exist", async () => {
-    await expect(
-      resolveDevQuickStartOrganization({
-        identity: createDevQuickStartIdentity(RANDOM_ID),
-        listOrganizations: async () => [
-          { id: "unrelated-organization", slug: "unrelated-slug" },
-        ],
-        createOrganization: async () => {
-          throw new Error("organization create failed");
-        },
-      }),
-    ).rejects.toThrow("organization create failed");
+    const failure = new Error("organization create failed");
+    const result = await resolveDevQuickStartOrganization({
+      identity: createDevQuickStartIdentity(RANDOM_ID),
+      listOrganizations: async () => [
+        { id: "unrelated-organization", slug: "unrelated-slug" },
+      ],
+      createOrganization: async () => {
+        throw failure;
+      },
+    });
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error.cause).toBe(failure);
+    }
+  });
+
+  test("returns a typed failure when listing organizations fails", async () => {
+    const failure = new Error("organization list failed");
+    let creates = 0;
+    const result = await resolveDevQuickStartOrganization({
+      identity: createDevQuickStartIdentity(RANDOM_ID),
+      listOrganizations: async () => {
+        throw failure;
+      },
+      createOrganization: async () => {
+        creates += 1;
+        return ORGANIZATION_ID;
+      },
+    });
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error.cause).toBe(failure);
+    }
+    expect(creates).toBe(0);
   });
 });
 

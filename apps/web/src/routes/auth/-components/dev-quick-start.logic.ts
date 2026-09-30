@@ -1,4 +1,4 @@
-import { panic, Result } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 
 export const DEV_QUICK_START_PHASE = {
   authenticate: "authenticate",
@@ -112,36 +112,66 @@ type ResolveDevQuickStartOrganizationOptions = {
   createOrganization: (identity: DevQuickStartIdentity) => Promise<string>;
 };
 
+class DevQuickStartOrganizationError extends TaggedError(
+  "DevQuickStartOrganizationError",
+)<{
+  message: string;
+  cause: unknown;
+}> {}
+
+type ResolveDevQuickStartOrganizationResult = Result<
+  string,
+  DevQuickStartOrganizationError
+>;
+
+const toOrganizationError = (cause: unknown) =>
+  new DevQuickStartOrganizationError({
+    message: "Dev quick start organization setup failed.",
+    cause,
+  });
+
 export const resolveDevQuickStartOrganization = async ({
   identity,
   listOrganizations,
   createOrganization,
-}: ResolveDevQuickStartOrganizationOptions): Promise<string> => {
-  const organizations = await listOrganizations();
-  const existing = organizations.find(
+}: ResolveDevQuickStartOrganizationOptions): Promise<ResolveDevQuickStartOrganizationResult> => {
+  const organizations = await Result.tryPromise({
+    try: listOrganizations,
+    catch: toOrganizationError,
+  });
+  if (Result.isError(organizations)) {
+    return organizations;
+  }
+  const existing = organizations.value.find(
     ({ slug }) => slug === identity.organizationSlug,
   );
   if (existing) {
-    return existing.id;
+    return Result.ok(existing.id);
   }
 
   const created = await Result.tryPromise({
     try: () => createOrganization(identity),
-    catch: (cause) => cause,
+    catch: toOrganizationError,
   });
   if (Result.isOk(created)) {
-    return created.value;
+    return created;
   }
 
   // A competing create or a lost response can leave the exact org already owned.
-  const relisted = await listOrganizations();
-  const recovered = relisted.find(
+  const relisted = await Result.tryPromise({
+    try: listOrganizations,
+    catch: toOrganizationError,
+  });
+  if (Result.isError(relisted)) {
+    return relisted;
+  }
+  const recovered = relisted.value.find(
     ({ slug }) => slug === identity.organizationSlug,
   );
   if (recovered) {
-    return recovered.id;
+    return Result.ok(recovered.id);
   }
-  throw created.error;
+  return created;
 };
 
 const DEV_QUICK_START_EMAIL = "dev-quick-start@stella.dev";
