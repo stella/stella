@@ -57,3 +57,51 @@ describe("EntityKindIcon", () => {
     expect(kindGlyph("task", "done")).not.toBe(kindGlyph("task", "cancelled"));
   });
 });
+
+describe("EntityKindIcon thumbnails", () => {
+  const thumbnail = {
+    fieldId: "field-1",
+    hasThumbnail: true,
+    workspaceId: "matter-1",
+  };
+  const documentIcon = (
+    mimeType: string,
+    fileThumbnail: typeof thumbnail | null,
+  ) =>
+    renderToStaticMarkup(
+      <EntityKindIcon
+        className="size-4 shrink-0"
+        fileName="file"
+        kind="document"
+        mimeType={mimeType}
+        thumbnail={fileThumbnail}
+      />,
+    );
+
+  // The image sits next to the file name, so it takes the icon's box and
+  // adds no second accessible name to the row.
+  test("an image with a preview draws it, decorative, in the icon's box", () => {
+    const markup = documentIcon("image/png", thumbnail);
+
+    expect(markup).toStartWith("<img");
+    expect(markup).toContain('alt=""');
+    expect(markup).toContain('loading="lazy"');
+    expect(markup).toContain('decoding="async"');
+    expect(markup).toContain("/files/matter-1/thumbnail/field-1");
+    expect(markup).toContain("size-4 shrink-0");
+  });
+
+  test("an image without a preview keeps its type icon", () => {
+    const markup = documentIcon("image/png", {
+      ...thumbnail,
+      hasThumbnail: false,
+    });
+
+    expect(markup).not.toContain("<img");
+    expect(glyphOf(markup)).toBe(glyphOf(documentIcon("image/png", null)));
+  });
+
+  test("a non-image keeps its type icon even when it has a preview", () => {
+    expect(documentIcon("application/pdf", thumbnail)).not.toContain("<img");
+  });
+});
