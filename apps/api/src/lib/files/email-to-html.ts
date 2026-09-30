@@ -119,12 +119,13 @@ export type EmailPreview = {
 export const emailToHtml = async (
   fileBuffer: ArrayBuffer,
   mimeType: string,
-): Promise<Result<string, EmailParseError>> =>
-  await Result.tryPromise({
-    try: async () => {
-      const parsed = await parseEmail(fileBuffer, mimeType);
-      return renderEmailHtml(parsed);
-    },
+): Promise<Result<string, EmailParseError>> => {
+  const parsed = await parseEmail(fileBuffer, mimeType);
+  if (parsed.isErr()) {
+    return parsed;
+  }
+  return Result.try({
+    try: () => renderEmailHtml(parsed.value),
     catch: (cause) =>
       cause instanceof EmailParseError
         ? cause
@@ -134,6 +135,7 @@ export const emailToHtml = async (
             cause,
           }),
   });
+};
 
 type EmailPreviewOptions = {
   citationBlockMode?: EmailCitationBlockMode;
@@ -144,10 +146,13 @@ export const emailToPreview = async (
   fileBuffer: ArrayBuffer,
   mimeType: string,
   options: EmailPreviewOptions = {},
-): Promise<Result<EmailPreview, EmailParseError>> =>
-  await Result.tryPromise({
-    try: async () =>
-      buildEmailPreview(await parseEmail(fileBuffer, mimeType), options),
+): Promise<Result<EmailPreview, EmailParseError>> => {
+  const parsed = await parseEmail(fileBuffer, mimeType);
+  if (parsed.isErr()) {
+    return parsed;
+  }
+  return Result.try({
+    try: () => buildEmailPreview(parsed.value, options),
     catch: (cause) =>
       cause instanceof EmailParseError
         ? cause
@@ -157,6 +162,7 @@ export const emailToPreview = async (
             cause,
           }),
   });
+};
 
 export const buildEmailPreview = (
   parsed: ParsedEmail,
@@ -267,9 +273,17 @@ export const resolveEmailAttachmentMimeType = ({
 export const parseEmail = async (
   fileBuffer: ArrayBuffer,
   mimeType: string,
-): Promise<ParsedEmail> => {
+): Promise<Result<ParsedEmail, EmailParseError>> => {
   if (mimeType === MSG_MIME_TYPE) {
-    return parseMsg(fileBuffer);
+    return Result.try({
+      try: () => parseMsg(fileBuffer),
+      catch: (cause) =>
+        new EmailParseError({
+          message: "Failed to parse email",
+          mimeType,
+          cause,
+        }),
+    });
   }
   return await parseEml(fileBuffer);
 };
@@ -388,7 +402,9 @@ const buildPostalMimeAttachmentCharsetLookup = (
   return lookup;
 };
 
-const parseEml = async (fileBuffer: ArrayBuffer): Promise<ParsedEmail> => {
+const parseEml = async (
+  fileBuffer: ArrayBuffer,
+): Promise<Result<ParsedEmail, EmailParseError>> => {
   const parser = new PostalMime({
     attachmentEncoding: "arraybuffer",
   });
@@ -402,7 +418,7 @@ const parseEml = async (fileBuffer: ArrayBuffer): Promise<ParsedEmail> => {
       }),
   });
   if (parsed.isErr()) {
-    throw parsed.error;
+    return parsed;
   }
   const email = parsed.value;
   const attachmentCharsets = buildPostalMimeAttachmentCharsetLookup(parser);
@@ -465,7 +481,7 @@ const parseEml = async (fileBuffer: ArrayBuffer): Promise<ParsedEmail> => {
     }
   }
 
-  return {
+  return Result.ok({
     subject: email.subject ?? null,
     from: email.from ? formatAddress(email.from) : null,
     to,
@@ -477,7 +493,7 @@ const parseEml = async (fileBuffer: ArrayBuffer): Promise<ParsedEmail> => {
       : { type: "text", text: email.text ?? "" },
     inlineImages,
     attachments,
-  };
+  } satisfies ParsedEmail);
 };
 
 const formatAddress = (address: Address): string => {
