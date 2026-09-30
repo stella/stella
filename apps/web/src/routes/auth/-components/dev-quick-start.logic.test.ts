@@ -221,7 +221,7 @@ describe("quick-start run ownership", () => {
     let savedAttempt: DevQuickStartAttempt | null = initialAttempt;
     let restores = 0;
     const calls: string[] = [];
-    const run = () =>
+    const run = async () =>
       runDevQuickStart({
         attempt: runtime.getAttempt(() => {
           restores += 1;
@@ -278,7 +278,7 @@ describe("quick-start run ownership", () => {
     >();
     let importRequests = 0;
     let organizationCreates = 0;
-    const run = () =>
+    const run = async () =>
       runDevQuickStart({
         attempt: runtime.getAttempt(() => initialAttempt),
         authenticate: async () => undefined,
@@ -301,12 +301,16 @@ describe("quick-start run ownership", () => {
         },
       });
 
-    await expect(
+    const result = await Result.tryPromise(async () =>
       runtime.runSingleFlight({
         stage: DEV_QUICK_START_STAGE.continue,
         run,
       }),
-    ).rejects.toThrow("import response lost");
+    );
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error.cause).toEqual(new Error("import response lost"));
+    }
     expect(runtime.getPhase()).toBeNull();
     await runtime.runSingleFlight({
       stage: DEV_QUICK_START_STAGE.continue,
@@ -447,7 +451,7 @@ describe("runDevQuickStart", () => {
     const calls: string[] = [];
     const identity = createDevQuickStartIdentity(RANDOM_ID);
 
-    await expect(
+    const result = await Result.tryPromise(async () =>
       runDevQuickStart({
         attempt: { completedPhase: null, identity, organizationId: null },
         authenticate: async () => {
@@ -463,7 +467,11 @@ describe("runDevQuickStart", () => {
           calls.push("matters");
         },
       }),
-    ).rejects.toThrow("organization failed");
+    );
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error.cause).toEqual(new Error("organization failed"));
+    }
     expect(calls).toEqual(["authenticate", "organization"]);
   });
 
