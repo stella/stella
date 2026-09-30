@@ -30,6 +30,13 @@ type Messages = {
     "errorNotFound": "We couldn't find a pending request for that code. Check the code and try again.";
     "title": "Connect your agent";
   };
+  "agentSetup": {
+    "copiedToast": "Instructions copied. Paste them into your agent.";
+    "copy": "Copy instructions";
+    "description": "Paste these instructions into Claude, Codex, Cursor or another agent. It connects stella for you; you only sign in and approve access.";
+    "instructions": "Connect me to stella, my legal workspace:\n1. Add the stella MCP server as a remote HTTP MCP server named “stella”: {mcpUrl}\n   It uses OAuth. When the browser opens, I will sign in and approve access.\n2. If you can run shell commands, install the stella CLI with “{cliInstall}” and sign in with “stella auth login --server {apiOrigin}”.\n3. Call a stella tool to check that the connection works, then tell me what you can now do for me.\nIf I ask for anonymized data only, use {anonymizedUrl} instead of the first URL.";
+    "title": "Set up with your AI agent";
+  };
   "ai": {
     "chooseRewriteInstruction": "Rewrite options";
     "editWithAI": "Edit with AI";
@@ -3679,7 +3686,6 @@ type Messages = {
     "aiTitle": "Connect your AI provider";
     "appsSubtitle": "stella also works outside the browser: on your desktop and inside your AI assistant. You can come back to this setup anytime later.";
     "appsTitle": "Get stella everywhere";
-    "assistantDocsLink": "How to connect your assistant";
     "catalogueAlwaysOn": "Always on";
     "catalogueClearSearch": "Clear search";
     "catalogueCommunityHeading": "Others";
