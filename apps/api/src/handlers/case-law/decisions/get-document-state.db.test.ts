@@ -25,6 +25,7 @@ import {
   readPublicDecisionLanguageAlternatesQuery,
 } from "@/api/lib/case-law/language-alternates";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
+import { rowHoldsDocument } from "@/api/lib/case-law/stored-payload";
 import {
   corpusKeys,
   EMPTY_CORPUS_CONTENT_HASHES,
@@ -144,35 +145,79 @@ if (!databaseUrl || !runPostgresTests) {
         await readState(await insertDecision("Decision\n\nReasons.")),
       ).toEqual({ hasDocument: true, pending: false, unavailable: false });
     });
-    test("single-row document presence distinguishes empty canonical payloads without reading S3", async () => {
+    test("public and full document predicates agree across stored payload states", async () => {
       const id = await insertDecision(null);
-      for (const [contentHash, expected] of [
-        [null, false],
-        [
-          EMPTY_CORPUS_CONTENT_HASHES.at(0) ??
-            panic("Expected an empty corpus hash"),
-          false,
-        ],
-        ["a".repeat(64), true],
-      ] as const) {
-        const keys = corpusKeys({
-          documentId: id,
-          jurisdiction: "CZE",
-          contentHash: contentHash ?? "pending",
-        });
+      const contentHash = "a".repeat(64);
+      const keys = corpusKeys({
+        documentId: id,
+        jurisdiction: "CZE",
+        contentHash,
+      });
+      const emptyHash =
+        EMPTY_CORPUS_CONTENT_HASHES.at(0) ??
+        panic("Expected an empty corpus hash");
+      const empty = {
+        fulltext: null,
+        contentHash: null,
+        textS3Key: null,
+        normalizedS3Key: null,
+        astS3Key: null,
+      };
+      const complete = {
+        ...empty,
+        contentHash,
+        textS3Key: keys.textKey,
+        normalizedS3Key: keys.sectionsKey,
+        astS3Key: keys.astKey,
+      };
+      const fixtures = [
+        { name: "textless", values: empty, expected: false },
+        {
+          name: "empty text",
+          values: { ...empty, fulltext: "" },
+          expected: false,
+        },
+        {
+          name: "inline text",
+          values: { ...empty, fulltext: "Document" },
+          expected: true,
+        },
+        { name: "trimmed complete corpus", values: complete, expected: true },
+        {
+          name: "canonical empty",
+          values: { ...complete, contentHash: emptyHash },
+          expected: false,
+        },
+        {
+          name: "normalized key alone",
+          values: { ...empty, contentHash, normalizedS3Key: keys.sectionsKey },
+          expected: false,
+        },
+        {
+          name: "text key alone",
+          values: { ...empty, contentHash, textS3Key: keys.textKey },
+          expected: false,
+        },
+        {
+          name: "unconfirmed corpus",
+          values: { ...complete, contentHash: null },
+          expected: false,
+        },
+      ];
+      for (const { name, values, expected } of fixtures) {
         await db
           .update(caseLawDecisions)
-          .set({
-            contentHash,
-            textS3Key: keys.textKey,
-            normalizedS3Key: keys.sectionsKey,
-            astS3Key: keys.astKey,
-          })
+          .set(values)
           .where(eq(caseLawDecisions.id, id));
-        const row = await caseLawPublicReadDb(
+        const [full] = await db
+          .select({ hasDocument: rowHoldsDocument })
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.id, id));
+        const publicRow = await caseLawPublicReadDb(
           async (tx) => await decisionRecordQuery(tx, id),
         );
-        expect(row?.hasDocument).toBe(expected);
+        expect(full?.hasDocument, name).toBe(expected);
+        expect(publicRow?.hasDocument, name).toBe(full?.hasDocument);
       }
     });
 

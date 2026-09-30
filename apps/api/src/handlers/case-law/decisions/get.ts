@@ -23,10 +23,6 @@ import {
 } from "@/api/handlers/case-law/document-ast";
 import { DECISION_JUDGE_ROLE_RANK } from "@/api/handlers/case-law/judges/consts";
 import { judgePortraitPath } from "@/api/handlers/case-law/judges/portrait";
-import {
-  corpusCarriesDocument,
-  rowHoldsDocumentFor,
-} from "@/api/handlers/case-law/stored-payload";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
@@ -45,6 +41,10 @@ import { loadPublicCourtWeightsWithin } from "@/api/lib/case-law/public-case-law
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
 import { publisherHeadnoteOf } from "@/api/lib/case-law/publisher-summary";
 import { decisionSourceAttributionUrl } from "@/api/lib/case-law/source-attribution";
+import {
+  corpusCarriesDocument,
+  publicRowHoldsDocumentFor,
+} from "@/api/lib/case-law/stored-payload";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { CorpusPayloadUnavailableError } from "@/api/lib/errors/tagged-errors";
 import { allowsDerivedAi } from "@/api/lib/legal-search/corpus-source";
@@ -310,7 +310,7 @@ export const decisionRecordQuery = (
 ) =>
   tx.query.caseLawDecisions.findFirst({
     where: { id: { eq: decisionId } },
-    extras: { hasDocument: rowHoldsDocumentFor },
+    extras: { hasDocument: publicRowHoldsDocumentFor },
     columns: {
       id: true,
       caseNumber: true,

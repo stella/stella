@@ -54,13 +54,13 @@ import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { caseLawDecisions, caseLawSearchDocuments } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
-import { payloadCarriesDocument } from "@/api/handlers/case-law/stored-payload";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   enterCaseLawMaintenanceLane,
   openCaseLawReadOnlySession,
 } from "@/api/lib/case-law/maintenance-lane";
+import { payloadCarriesDocument } from "@/api/lib/case-law/stored-payload";
 import {
   timestampCasToken,
   type TimestampCasToken,

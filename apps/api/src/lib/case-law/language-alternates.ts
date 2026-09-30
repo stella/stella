@@ -3,7 +3,6 @@ import { and, asc, eq, inArray, lte, sql } from "drizzle-orm";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
-import { rowHoldsDocument } from "@/api/handlers/case-law/stored-payload";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import type {
   CaseLawPublicReadDb,
@@ -12,6 +11,7 @@ import type {
 import { normalizePublicDecisionLanguage } from "@/api/lib/case-law/decision-language";
 import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
+import { publicRowHoldsDocument } from "@/api/lib/case-law/stored-payload";
 import { LIMITS } from "@/api/lib/limits";
 import {
   definePublicLawSharedQuery,
@@ -255,10 +255,10 @@ export const listPublicDecisionLanguageAlternates = async ({
       court: caseLawDecisions.court,
       decisionDate: caseLawDecisions.decisionDate,
       language: caseLawDecisions.language,
-      hasDocument: rowHoldsDocument.as("has_document"),
+      hasDocument: publicRowHoldsDocument.as("has_document"),
       languageRank: sql<number>`row_number() over (
         partition by ${normalizedLanguageSql}
-        order by ${rowHoldsDocument} desc, ${caseLawDecisions.id}
+        order by ${publicRowHoldsDocument} desc, ${caseLawDecisions.id}
       )`.as("language_rank"),
     })
     .from(caseLawDecisions)
