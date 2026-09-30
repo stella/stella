@@ -2300,6 +2300,14 @@ const countInternalModuleMockLedgerEntries: FileCounter = (content) => {
   return parsed.length;
 };
 
+const countParserValidatorLedgerEntries: FileCounter = (content) => {
+  const parsed: unknown = JSON.parse(content);
+  if (!Array.isArray(parsed)) {
+    panic("parser-validator-call ledger must be a JSON array");
+  }
+  return parsed.length;
+};
+
 // --- Repo-scope counters ----------------------------------------------------
 // Duplication is invisible to a per-file counter: the second copy of a helper
 // is a perfectly ordinary file. These counters compare files against each
@@ -3112,6 +3120,15 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     include: ["apps/api/src/db/schema/**/*.ts"],
     exclude: isExcludedSource,
     count: countWorkspaceOnlyRlsOnOrgTables,
+  },
+  {
+    scope: "file",
+    id: "parser-validator-call-ledger-entries",
+    description:
+      "legacy parser validator imports and calls; validation moves to the pipeline and this ledger only shrinks",
+    include: ["scripts/parser-validator-call-ledger.json"],
+    exclude: () => false,
+    count: countParserValidatorLedgerEntries,
   },
   {
     scope: "file",
@@ -4880,6 +4897,12 @@ const SELF_TEST_INTERNAL_MODULE_MOCK_LEDGER = `${JSON.stringify(
   2,
 )}\n`;
 const EXPECTED_INTERNAL_MODULE_MOCK_LEDGER_ENTRIES = 3;
+const SELF_TEST_PARSER_VALIDATOR_LEDGER = `${JSON.stringify([
+  "apps/api/src/handlers/case-law/ingestion/parsers/alpha.ts::import::1",
+  "apps/api/src/handlers/case-law/ingestion/parsers/alpha.ts::call::1",
+  "apps/api/src/lib/legal-search/parsers/beta.ts::call::1",
+])}\n`;
+const EXPECTED_PARSER_VALIDATOR_LEDGER_ENTRIES = 3;
 // Expected: the two tables that declare organizationId AND spread wsPolicies().
 // Excluded: the workspace-only table with no organizationId column, the table
 // already on wsOrganizationPolicies, the org-only table, the table whose only
@@ -5455,6 +5478,26 @@ const asCastSelfTestFailures = (snapshot: Baseline): string[] => {
   return failures;
 };
 
+const ledgerSelfTestFailures = (snapshot: Baseline): string[] => {
+  const failures: string[] = [];
+  for (const { id, expected } of [
+    {
+      id: "parser-validator-call-ledger-entries",
+      expected: EXPECTED_PARSER_VALIDATOR_LEDGER_ENTRIES,
+    },
+    {
+      id: "internal-module-mock-ledger-entries",
+      expected: EXPECTED_INTERNAL_MODULE_MOCK_LEDGER_ENTRIES,
+    },
+  ]) {
+    const metric = requireSnapshot(snapshot, id);
+    if (metric.count !== expected) {
+      failures.push(`${id} counted ${metric.count}, expected ${expected}`);
+    }
+  }
+  return failures;
+};
+
 // The repo-scope metrics assert on a layout rather than one file's text, so
 // each check names the count it expects plus the files that must and must not
 // appear in its per-file breakdown.
@@ -5992,6 +6035,11 @@ const runSelfTest = (): number => {
     );
     writeFixture(
       root,
+      "scripts/parser-validator-call-ledger.json",
+      SELF_TEST_PARSER_VALIDATOR_LEDGER,
+    );
+    writeFixture(
+      root,
       INTERNAL_MODULE_MOCK_LEDGER_REL,
       SELF_TEST_INTERNAL_MODULE_MOCK_LEDGER,
     );
@@ -6182,17 +6230,7 @@ const runSelfTest = (): number => {
     failures.push(...failureSinkSelfTestFailures(snapshot));
     failures.push(...ownerHandleAllowlistSelfTestFailures(snapshot));
 
-    const mockLedgerMetric = requireSnapshot(
-      snapshot,
-      "internal-module-mock-ledger-entries",
-    );
-    if (
-      mockLedgerMetric.count !== EXPECTED_INTERNAL_MODULE_MOCK_LEDGER_ENTRIES
-    ) {
-      failures.push(
-        `internal-module-mock-ledger-entries counted ${mockLedgerMetric.count}, expected ${EXPECTED_INTERNAL_MODULE_MOCK_LEDGER_ENTRIES}`,
-      );
-    }
+    failures.push(...ledgerSelfTestFailures(snapshot));
 
     const nullishMetric = requireSnapshot(snapshot, "nullish-array-fallback");
     if (nullishMetric.count !== EXPECTED_NULLISH) {

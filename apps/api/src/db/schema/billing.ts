@@ -10,6 +10,8 @@ import type { TimeEntrySuggestionEvidence } from "@stll/api-contract/time-entry-
 import { VAT_TREATMENTS } from "@stll/invoicing";
 import { ORGANIZATION_MANAGEMENT_ROLES } from "@stll/permissions";
 
+import type { SafeId } from "@/api/lib/branded-types";
+
 import {
   EXPENSE_CATEGORIES,
   TIME_ENTRY_SOURCES,
@@ -42,6 +44,12 @@ export const ACTIVE_TIMER_INDEX_NAME =
 const TIME_ENTRY_SUGGESTION_STATUS_SQL_VALUES =
   TIME_ENTRY_SUGGESTION_STATUSES.map((status) => sql.raw(`'${status}'`));
 
+const TIME_ENTRY_APPROVAL_PROVENANCE_STATUSES = [
+  "approved",
+  "billed",
+  "written_off",
+] as const satisfies readonly (typeof TIME_ENTRY_STATUSES)[number][];
+
 export const timeEntries = p.pgTable(
   "time_entries",
   {
@@ -55,6 +63,15 @@ export const timeEntries = p.pgTable(
     userId: p
       .text("user_id")
       .references(() => user.id, { onDelete: "set null" }),
+    approverUserId: p
+      .text("approver_user_id")
+      .references(() => user.id, { onDelete: "set null" }),
+    // Retain historical actor identifiers after account records are removed.
+    approvedByUserId: p.text("approved_by_user_id").$type<SafeId<"user">>(),
+    approvedAt: timestamptz("approved_at"),
+    returnedByUserId: p.text("returned_by_user_id").$type<SafeId<"user">>(),
+    returnedAt: timestamptz("returned_at"),
+    returnComment: p.text("return_comment"),
     // A workspace is the legal matter. This optional foreign key records only
     // the document, folder, task, or other work item that provided context.
     workItemId: safeUuid<"entity">("work_item_id"),
@@ -115,6 +132,16 @@ export const timeEntries = p.pgTable(
     p.index("time_entries_ws_status_idx").on(table.workspaceId, table.status),
     p.index("time_entries_invoice_idx").on(table.invoiceId),
     p
+      .index("time_entries_approval_queue_idx")
+      .on(
+        table.organizationId,
+        table.approverUserId,
+        table.status,
+        table.dateWorked,
+        table.id,
+      )
+      .where(sql`${table.status} = 'draft'`),
+    p
       .uniqueIndex(ACTIVE_TIMER_INDEX_NAME)
       .on(table.userId)
       .where(sql`${table.timerStartedAt} IS NOT NULL`),
@@ -125,6 +152,19 @@ export const timeEntries = p.pgTable(
     p.check(
       "time_entries_billed_minutes_check",
       sql`${table.billedMinutes} >= 0`,
+    ),
+    p.check(
+      "time_entries_approval_provenance_check",
+      sql`(${table.approvedByUserId} IS NULL AND ${table.approvedAt} IS NULL) OR (${table.approvedByUserId} IS NOT NULL AND ${table.approvedAt} IS NOT NULL AND ${table.status} IN (${sql.join(
+        TIME_ENTRY_APPROVAL_PROVENANCE_STATUSES.map((status) =>
+          sql.raw(`'${status}'`),
+        ),
+        sql`, `,
+      )}))`,
+    ),
+    p.check(
+      "time_entries_return_metadata_check",
+      sql`(${table.returnedByUserId} IS NULL AND ${table.returnedAt} IS NULL AND ${table.returnComment} IS NULL) OR (${table.returnedByUserId} IS NOT NULL AND ${table.returnedAt} IS NOT NULL AND ${table.returnComment} IS NOT NULL AND char_length(btrim(${table.returnComment})) BETWEEN 1 AND 2000 AND char_length(${table.returnComment}) <= 2000)`,
     ),
     ...wsOrganizationPolicies("time_entries"),
   ],

@@ -143,6 +143,16 @@ export const PUBLISHER_GATES = {
     intervalMs: POLITE_INTERVAL_MS,
     hosts: ["obcan.justice.sk"],
   },
+  "nsud-sk": {
+    publisher: "Najvyšší súd SR",
+    intervalMs: 2000,
+    hosts: ["www.nsud.sk"],
+  },
+  "nssud-sk": {
+    publisher: "Najvyšší správny súd SR",
+    intervalMs: 2000,
+    hosts: ["www.nssud.sk"],
+  },
   /**
    * www.usoud.cz, the court's own site rather than its decision database:
    * the judge roster and the pages it links. A budget of its own because it
@@ -314,11 +324,17 @@ export const reservePublisherSlot = async (
   adapterKey: AdapterKey,
   signal?: AbortSignal,
 ): Promise<void> => {
+  await reservePublisherGateSlot(ADAPTER_PUBLISHER_GATES[adapterKey], signal);
+};
+
+export const reservePublisherGateSlot = async (
+  gateId: PublisherGateId,
+  signal?: AbortSignal,
+): Promise<void> => {
   if (!publisherGateReserves()) {
     return;
   }
-  const gateId = ADAPTER_PUBLISHER_GATES[adapterKey];
-  const reserve = slotsByGate.get(gateId) ?? createPublisherSlot(adapterKey);
+  const reserve = slotsByGate.get(gateId) ?? createPublisherGateSlot(gateId);
   slotsByGate.set(gateId, reserve);
   await reserve(signal);
 };
