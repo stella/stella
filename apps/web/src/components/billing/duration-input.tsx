@@ -12,7 +12,7 @@ import {
   combineDurationParts,
   parseDurationPart,
   splitDurationMinutes,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/duration-input.logic";
+} from "@/components/billing/duration-input.logic";
 
 type DurationInputProps = {
   id: string;

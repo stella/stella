@@ -90,6 +90,26 @@ export const parseRegionalDecision = (
   };
   const styleMap = new Map(input.styles.map((s) => [s.localId, s]));
 
+  const sectionContent = (
+    paragraphs: FinaldocParagraph[],
+    fallbackText: string,
+  ) => {
+    const content = paragraphs
+      .map((para) => toInlines(para, styleMap))
+      .filter(({ plainText }) => plainText.length > 0);
+    if (content.length > 0 || !fallbackText.trim()) {
+      return content;
+    }
+    return [
+      { inlines: textInline(fallbackText), plainText: fallbackText.trim() },
+    ];
+  };
+  const verdict = sectionContent(input.verdict, input.verdictText);
+  const justification = sectionContent(
+    input.justification,
+    input.justificationText,
+  );
+
   const blocks: Block[] = [];
   let blockIndex = 0;
 
@@ -135,7 +155,7 @@ export const parseRegionalDecision = (
   }
 
   // ── Verdict (ruling items) ───────────────────────────
-  if (input.verdict.length > 0) {
+  if (verdict.length > 0) {
     blockIndex += 1;
     blocks.push({
       id: makeBlockId(),
@@ -147,12 +167,7 @@ export const parseRegionalDecision = (
       plainText: "takto:",
     });
 
-    for (const para of input.verdict) {
-      const { inlines, plainText } = toInlines(para, styleMap);
-      if (!plainText) {
-        continue;
-      }
-
+    for (const { inlines, plainText } of verdict) {
       blockIndex += 1;
       blocks.push({
         id: makeBlockId(),
@@ -166,7 +181,7 @@ export const parseRegionalDecision = (
   }
 
   // ── Justification ────────────────────────────────────
-  if (input.justification.length > 0) {
+  if (justification.length > 0) {
     blockIndex += 1;
     blocks.push({
       id: makeBlockId(),
@@ -178,12 +193,7 @@ export const parseRegionalDecision = (
       plainText: "Odůvodnění:",
     });
 
-    for (const para of input.justification) {
-      const { inlines, plainText } = toInlines(para, styleMap);
-      if (!plainText) {
-        continue;
-      }
-
+    for (const { inlines, plainText } of justification) {
       blockIndex += 1;
       const block = classifyJustificationParagraph(
         inlines,
@@ -229,20 +239,12 @@ export const parseRegionalDecision = (
     .flatMap((b) => (b.plainText ? [b.plainText] : []))
     .join("\n\n");
 
-  // Build validation HTML from the structured sections so word
-  // boundaries match the AST. Using the plain text fallbacks
-  // (verdictText/justificationText) caused false positives:
-  // adjacent section text was concatenated without whitespace
-  // (e.g., "zamítá.II." -> word "zamítá.ii" missing from AST).
-  const allParagraphs = [
-    ...input.header,
-    ...input.verdict,
-    ...input.justification,
-    ...input.information,
-  ];
-  const validationHtml = buildValidationHtml(
-    allParagraphs.map((para) => para.texts.map((s) => s.text).join("")),
-  );
+  const validationHtml = buildValidationHtml([
+    ...input.header.map((para) => toInlines(para, styleMap).plainText),
+    ...verdict.map(({ plainText }) => plainText),
+    ...justification.map(({ plainText }) => plainText),
+    ...input.information.map((para) => toInlines(para, styleMap).plainText),
+  ]);
   validateAndLog(
     { parser: "cz-regional", caseNumber: input.caseNumber },
     validationHtml,

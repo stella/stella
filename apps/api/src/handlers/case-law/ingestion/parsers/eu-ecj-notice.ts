@@ -66,29 +66,29 @@ export type EcjNoticeManifestation = {
  * and an older decision carries a fraction of what a recent one does.
  */
 export type EcjNoticeFacts = {
-  celex: string | undefined;
-  ecli: string | undefined;
+  celex: readonly string[];
+  ecli: readonly string[];
   /** Corporate-body code of the court that gave the decision (`CJ`, `GCEU`). */
-  courtCode: string | undefined;
+  courtCode: readonly string[];
   /** CELEX document-type letters (`CJ`, `TJ`, `CC`, `CO`). */
-  celexType: string | undefined;
+  celexType: readonly string[];
   /** The resource-type label, as the notice renders it (`Judgment`). */
-  form: string | undefined;
+  form: readonly EcjNoticeConcept[];
   /** Whether the Office holds this record as definitive or as provisional. */
-  recordVersion: string | undefined;
-  decisionDate: string | undefined;
-  lodgedOn: string | undefined;
+  recordVersion: readonly string[];
+  decisionDate: readonly string[];
+  lodgedOn: readonly string[];
   /** Country the request originates in, as a label. */
-  referringCountry: string | undefined;
+  referringCountry: readonly EcjNoticeConcept[];
   /** Authority code of the authentic language, which is not this row's. */
-  procedureLanguage: string | undefined;
-  procedureType: string | undefined;
+  procedureLanguage: readonly EcjNoticeConcept[];
+  procedureType: readonly EcjNoticeConcept[];
   /** Who filed observations, as the notice labels them. */
   observations: readonly string[];
-  rapporteur: string | undefined;
-  advocateGeneral: string | undefined;
+  rapporteur: readonly string[];
+  advocateGeneral: readonly string[];
   /** The referring court, its chamber, date and national docket, as prose. */
-  nationalJudgment: string | undefined;
+  nationalJudgment: readonly string[];
   /** CELEX numbers of the instruments the decision interprets. */
   interprets: readonly string[];
   /** CELEX numbers of every work the decision cites. */
@@ -101,21 +101,21 @@ export type EcjNoticeFacts = {
   caseLawDirectory: readonly EcjNoticeConcept[];
   /** The revised Répertoire chain, same shape and a different tree. */
   caseLawDirectoryNew: readonly EcjNoticeConcept[];
-  publishedInReports: boolean | undefined;
+  publishedInReports: readonly boolean[];
   /** The electronic Reports of Cases coordinates. */
-  reportsReference: Readonly<Record<string, string>>;
+  reportsReference: Readonly<Record<string, readonly string[]>>;
   /** The Official Journal C-series communication announcing the decision. */
-  ojNotice: string | undefined;
+  ojNotice: readonly string[];
   /** The case file grouping judgment, opinion and abstract (`case:C-128/22`). */
-  dossier: string | undefined;
+  dossier: readonly string[];
   /** Sibling CELEX numbers of the same case event. */
   caseEventWorks: readonly string[];
   /** CELEX of the `_RES` abstract work, where the Office published one. */
-  abstractCelex: string | undefined;
+  abstractCelex: readonly string[];
   /** The `#`-separated title, in the negotiated language. */
-  title: string | undefined;
+  title: readonly string[];
   /** The publisher's own docket wording, in the negotiated language. */
-  caseIdentifier: string | undefined;
+  caseIdentifier: readonly string[];
   /** Every format of this expression, so a later fetch needs no query. */
   manifestations: readonly EcjNoticeManifestation[];
 };
@@ -127,6 +127,16 @@ const textOf = (selection: Selection): string | undefined => {
   return value.length > 0 ? value : undefined;
 };
 
+const textValues = (
+  $: cheerio.CheerioAPI,
+  selection: Selection,
+): readonly string[] =>
+  selection
+    .children("VALUE")
+    .toArray()
+    .map((element) => $(element).text().trim())
+    .filter((value) => value.length > 0);
+
 /**
  * Direct children of `parent` with this tag, and nothing an
  * `EMBEDDED_NOTICE` below it repeats.
@@ -134,35 +144,24 @@ const textOf = (selection: Selection): string | undefined => {
 const children = (parent: Selection, tag: string): Selection =>
   parent.children(tag);
 
-/** The `<VALUE>` of a direct child, which is how `type="data"` states one. */
-const dataValue = (parent: Selection, tag: string): string | undefined =>
-  textOf(children(parent, tag).children("VALUE"));
-
 /** The authority code and label of a `type="concept"` child. */
-const concept = (
+const concepts = (
+  $: cheerio.CheerioAPI,
   parent: Selection,
   tag: string,
-): EcjNoticeConcept | undefined => {
-  const element = children(parent, tag).first();
-  const code = textOf(element.children("IDENTIFIER"));
-  return code === undefined
-    ? undefined
-    : { code, label: textOf(element.children("PREFLABEL")) ?? code };
-};
-
-/** The identifier of the first `SAMEAS` naming a URI of this scheme. */
-const sameAsIdentifier = (
-  $: cheerio.CheerioAPI,
-  element: Selection,
-  scheme: string,
-): string | undefined => {
-  for (const uri of element.children("SAMEAS").children("URI").toArray()) {
-    const node = $(uri);
-    if (textOf(node.children("TYPE")) === scheme) {
-      return textOf(node.children("IDENTIFIER"));
+): readonly EcjNoticeConcept[] => {
+  const values: EcjNoticeConcept[] = [];
+  for (const element of children(parent, tag).toArray()) {
+    const node = $(element);
+    const code = textOf(node.children("IDENTIFIER"));
+    if (code !== undefined) {
+      values.push({
+        code,
+        label: textOf(node.children("PREFLABEL")) ?? code,
+      });
     }
   }
-  return undefined;
+  return values;
 };
 
 const sameAsIdentifiers = (
@@ -173,9 +172,15 @@ const sameAsIdentifiers = (
 ): readonly string[] => {
   const identifiers: string[] = [];
   for (const link of children(parent, tag).toArray()) {
-    const identifier = sameAsIdentifier($, $(link), scheme);
-    if (identifier !== undefined) {
-      identifiers.push(identifier);
+    for (const uri of $(link).children("SAMEAS").children("URI").toArray()) {
+      const node = $(uri);
+      if (textOf(node.children("TYPE")) !== scheme) {
+        continue;
+      }
+      const identifier = textOf(node.children("IDENTIFIER"));
+      if (identifier !== undefined) {
+        identifiers.push(identifier);
+      }
     }
   }
   return identifiers;
@@ -222,10 +227,7 @@ const dataValues = (
 ): readonly string[] => {
   const values: string[] = [];
   for (const element of children(parent, tag).toArray()) {
-    const value = textOf($(element).children("VALUE"));
-    if (value !== undefined) {
-      values.push(value);
-    }
+    values.push(...textValues($, $(element)));
   }
   return values;
 };
@@ -251,15 +253,24 @@ const conceptLabels = (
  * The person an agent link names.
  *
  * The Office states the agent twice — as an embedded notice carrying the
- * printed name, and as a cellar URI — and only the first is a name a reader
- * can be shown.
+ * printed name, and as a cellar URI. The embedded notice may state multiple
+ * names.
  */
-const agentName = (parent: Selection, tag: string): string | undefined =>
-  textOf(
-    children(parent, tag)
-      .first()
-      .find("EMBEDDED_NOTICE > AGENT > AGENT_NAME > VALUE"),
-  );
+const agentNames = (
+  $: cheerio.CheerioAPI,
+  parent: Selection,
+  tag: string,
+): readonly string[] => {
+  const names: string[] = [];
+  for (const link of children(parent, tag).toArray()) {
+    for (const agentName of $(link)
+      .find("EMBEDDED_NOTICE > AGENT > AGENT_NAME")
+      .toArray()) {
+      names.push(...textValues($, $(agentName)));
+    }
+  }
+  return names;
+};
 
 /**
  * The court, from the corporate body the work was created by.
@@ -269,10 +280,11 @@ const agentName = (parent: Selection, tag: string): string | undefined =>
  * the concept form carries an authority code, which is what tells them apart
  * without reading a label the notice translates.
  */
-const courtCode = (
+const courtCodes = (
   $: cheerio.CheerioAPI,
   work: Selection,
-): string | undefined => {
+): readonly string[] => {
+  const codes: string[] = [];
   for (const element of work.children("WORK_CREATED_BY_AGENT").toArray()) {
     const node = $(element);
     if (textOf(node.children("URI").children("TYPE")) !== "corporate-body") {
@@ -280,27 +292,28 @@ const courtCode = (
     }
     const code = textOf(node.children("IDENTIFIER"));
     if (code !== undefined) {
-      return code;
+      codes.push(code);
     }
   }
-  return undefined;
+  return codes;
 };
 
 /** The Reports-of-Cases coordinates, from the container work the notice embeds. */
 const reportsReference = (
   $: cheerio.CheerioAPI,
   work: Selection,
-): Readonly<Record<string, string>> => {
+): Readonly<Record<string, readonly string[]>> => {
   const container = work.find("WORK_PART_OF_WORK > EMBEDDED_NOTICE > WORK");
-  const reference: Record<string, string> = {};
+  const reference: Record<string, string[]> = {};
   for (const element of container.children().toArray()) {
     const tag = element.tagName.toUpperCase();
     if (!tag.startsWith("CONTAINER_CASE-LAW_")) {
       continue;
     }
-    const value = textOf($(element).children("VALUE"));
-    if (value !== undefined) {
-      reference[tag.slice("CONTAINER_CASE-LAW_".length)] = value;
+    const values = textValues($, $(element));
+    if (values.length > 0) {
+      const key = tag.slice("CONTAINER_CASE-LAW_".length);
+      (reference[key] ??= []).push(...values);
     }
   }
   return reference;
@@ -342,29 +355,32 @@ export const parseEcjNotice = (xml: string): EcjNoticeFacts => {
   const expression = $("NOTICE > EXPRESSION");
   const dossier = work.find("WORK_PART_OF_DOSSIER > EMBEDDED_NOTICE > DOSSIER");
   const event = work.find("WORK_PART_OF_DOSSIER > EMBEDDED_NOTICE > EVENT");
-  const published = dataValue(work, "CASE-LAW_PUBLISHED_IN_ERECUEIL");
-
   return {
-    celex: dataValue(work, "RESOURCE_LEGAL_ID_CELEX"),
-    ecli: dataValue(work, "ECLI"),
-    courtCode: courtCode($, work),
-    celexType: dataValue(work, "RESOURCE_LEGAL_TYPE"),
-    form: concept(work, "WORK_HAS_RESOURCE-TYPE")?.label,
-    recordVersion: dataValue(work, "VERSION"),
-    decisionDate: dataValue(work, "WORK_DATE_DOCUMENT"),
-    lodgedOn: dataValue(work, "RESOURCE_LEGAL_DATE_REQUEST_OPINION"),
-    referringCountry: concept(work, "CASE-LAW_ORIGINATES_IN_COUNTRY")?.label,
-    procedureLanguage: concept(work, "CASE-LAW_USES_PROCEDURE_LANGUAGE")?.code,
-    procedureType: concept(
+    celex: dataValues($, work, "RESOURCE_LEGAL_ID_CELEX"),
+    ecli: dataValues($, work, "ECLI"),
+    courtCode: courtCodes($, work),
+    celexType: dataValues($, work, "RESOURCE_LEGAL_TYPE"),
+    form: concepts($, work, "WORK_HAS_RESOURCE-TYPE"),
+    recordVersion: dataValues($, work, "VERSION"),
+    decisionDate: dataValues($, work, "WORK_DATE_DOCUMENT"),
+    lodgedOn: dataValues($, work, "RESOURCE_LEGAL_DATE_REQUEST_OPINION"),
+    referringCountry: concepts($, work, "CASE-LAW_ORIGINATES_IN_COUNTRY"),
+    procedureLanguage: concepts($, work, "CASE-LAW_USES_PROCEDURE_LANGUAGE"),
+    procedureType: concepts(
+      $,
       work,
       "CASE-LAW_HAS_TYPE_PROCEDURE_CONCEPT_TYPE_PROCEDURE",
-    )?.label,
-    observations: conceptLabels($, work, "CASE-LAW_COMMENTED_BY_AGENT"),
-    rapporteur: agentName(work, "CASE-LAW_DELIVERED_BY_JUDGE"),
-    advocateGeneral: agentName(work, "CASE-LAW_DELIVERED_BY_ADVOCATE-GENERAL"),
-    nationalJudgment: nationalJudgment(
-      dataValue(work, "CASE-LAW_NATIONAL-JUDGEMENT"),
     ),
+    observations: conceptLabels($, work, "CASE-LAW_COMMENTED_BY_AGENT"),
+    rapporteur: agentNames($, work, "CASE-LAW_DELIVERED_BY_JUDGE"),
+    advocateGeneral: agentNames(
+      $,
+      work,
+      "CASE-LAW_DELIVERED_BY_ADVOCATE-GENERAL",
+    ),
+    nationalJudgment: dataValues($, work, "CASE-LAW_NATIONAL-JUDGEMENT")
+      .map(nationalJudgment)
+      .filter((value): value is string => value !== undefined),
     interprets: sameAsIdentifiers(
       $,
       work,
@@ -389,23 +405,29 @@ export const parseEcjNotice = (xml: string): EcjNoticeFacts => {
       work,
       "CASE-LAW_IS_ABOUT_CONCEPT_NEW_CASE-LAW",
     ),
-    publishedInReports:
-      published === undefined ? undefined : published === "true",
-    reportsReference: reportsReference($, work),
-    ojNotice: sameAsIdentifier(
+    publishedInReports: dataValues(
       $,
-      work.children("CASE-LAW_COMMUNICATED_ON_BY_COMMUNICATION_CJEU").first(),
+      work,
+      "CASE-LAW_PUBLISHED_IN_ERECUEIL",
+    ).map((value) => value === "true"),
+    reportsReference: reportsReference($, work),
+    ojNotice: sameAsIdentifiers(
+      $,
+      work,
+      "CASE-LAW_COMMUNICATED_ON_BY_COMMUNICATION_CJEU",
       "eli",
     ),
-    dossier: textOf(dossier.children("DOSSIER_IDENTIFIER").children("VALUE")),
+    dossier: dataValues($, dossier, "DOSSIER_IDENTIFIER"),
     caseEventWorks: sameAsIdentifiers($, event, "EVENT_CONTAINS_WORK", "celex"),
-    abstractCelex: sameAsIdentifier(
+    abstractCelex: sameAsIdentifiers(
       $,
-      work.children("WORK_SUMMARIZED_BY_SUMMARY").first(),
+      work,
+      "WORK_SUMMARIZED_BY_SUMMARY",
       "celex",
     ),
-    title: dataValue(expression, "EXPRESSION_TITLE"),
-    caseIdentifier: dataValue(
+    title: dataValues($, expression, "EXPRESSION_TITLE"),
+    caseIdentifier: dataValues(
+      $,
       expression,
       "EXPRESSION_CASE-LAW_IDENTIFIER_CASE",
     ),
