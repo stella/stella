@@ -28,7 +28,10 @@ const lint = async (source: string) => {
     configPath,
     `export default ${JSON.stringify({
       jsPlugins: [
-        path.join(REPOSITORY_ROOT, ".oxlint-plugins", `${RULE_NAME}.ts`),
+        path.join(
+          REPOSITORY_ROOT,
+          ".oxlint-plugins/require-running-entry-guard.ts",
+        ),
       ],
       categories: { correctness: "off" },
       rules: { [`${RULE_NAME}/${RULE_NAME}`]: "error" },

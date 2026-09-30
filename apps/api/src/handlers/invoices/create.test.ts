@@ -6,7 +6,10 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { PG_ERROR } from "@/api/lib/pg-error";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+import {
+  createScopedDbMock,
+  createSelectQueryMock,
+} from "@/api/tests/scoped-db-mock";
 
 import createInvoice from "./create";
 
@@ -63,7 +66,8 @@ describe("createInvoice", () => {
     const entries = [entry("te_1", "USD"), entry("te_2", "EUR")];
     const { safeDb, scopedDb } = createScopedDbMock({
       $count: async () => 0,
-      select: () => ({ from: () => ({ where: async () => entries }) }),
+      select: (fields: object) =>
+        createSelectQueryMock("status" in fields ? entries : []),
     });
 
     const result = await createInvoice.handler(
@@ -86,18 +90,14 @@ describe("createInvoice", () => {
     const entries = [entry("te_1", "USD")];
     const { scopedDb } = createScopedDbMock({});
 
-    // Production safeDb returns Result.err(DatabaseError) on a unique
-    // violation; drive that directly on the insert transaction (the third
-    // safeDb call) so the handler's error mapping is what is under test.
+    // Preflight returns the selected entries; the insert transaction returns
+    // the unique violation through the production safeDb error boundary.
     let call = 0;
     const safeDb: CreateInvoiceCtx["safeDb"] = asTestRaw<
       CreateInvoiceCtx["safeDb"]
     >(async () => {
       call += 1;
       if (call === 1) {
-        return Result.ok(0);
-      }
-      if (call === 2) {
         return Result.ok(entries);
       }
       return Result.err(
@@ -131,7 +131,8 @@ describe("createInvoice", () => {
     ];
     const { safeDb, scopedDb } = createScopedDbMock({
       $count: async () => 0,
-      select: () => ({ from: () => ({ where: async () => entries }) }),
+      select: (fields: object) =>
+        createSelectQueryMock("status" in fields ? entries : []),
     });
 
     const result = await createInvoice.handler(
@@ -161,7 +162,8 @@ describe("createInvoice", () => {
     let auditCalls = 0;
     const { safeDb, scopedDb } = createScopedDbMock({
       $count: async () => 0,
-      select: () => ({ from: () => ({ where: async () => entries }) }),
+      select: (fields: object) =>
+        createSelectQueryMock("status" in fields ? entries : []),
       insert: () => ({
         values: () => ({
           returning: async () => [

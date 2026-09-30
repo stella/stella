@@ -3,6 +3,7 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 import {
   isAstNode,
   isIdentifier,
+  isIdentifierReference,
   isImportedFrom,
   memberPropertyName,
   getPropertyName,
@@ -23,6 +24,19 @@ const FUNCTION_TYPES = new Set([
   "FunctionExpression",
   "FunctionDeclaration",
 ]);
+
+const templateElementRawText = (quasi: unknown) => {
+  if (!isAstNode(quasi)) {
+    return "";
+  }
+  const value = quasi.value;
+  return typeof value === "object" &&
+    value !== null &&
+    "raw" in value &&
+    typeof value.raw === "string"
+    ? value.raw
+    : "";
+};
 
 type GuardTransactionOptions = { call: AstNode; mutation: AstNode };
 const guardsSameTransaction = (
@@ -46,8 +60,8 @@ const guardsSameTransaction = (
   );
   if (
     !isAstNode(txProperty) ||
-    !isIdentifier(txProperty.value) ||
-    !isIdentifier(mutation.callee.object)
+    !isIdentifierReference(txProperty.value) ||
+    !isIdentifierReference(mutation.callee.object)
   ) {
     return false;
   }
@@ -70,7 +84,8 @@ const guardedBefore = (context: RuleContext, mutation: AstNode) => {
   if (body?.type !== "BlockStatement" || !Array.isArray(body.body)) {
     return false;
   }
-  return body.body.some((statement, index) => {
+  const statements = body.body;
+  return statements.some((statement, index) => {
     if (
       !isAstNode(statement) ||
       statement.type !== "VariableDeclaration" ||
@@ -104,7 +119,7 @@ const guardedBefore = (context: RuleContext, mutation: AstNode) => {
     if (!guardsSameTransaction(context, { call, mutation })) {
       return false;
     }
-    const refusal = body.body.at(index + 1);
+    const refusal = statements.at(index + 1);
     if (
       !isAstNode(refusal) ||
       refusal.type !== "IfStatement" ||
@@ -146,7 +161,11 @@ export default eslintCompatPlugin({
       createOnce(context) {
         return {
           CallExpression(node) {
-            if (!isAstNode(node.callee) || !Array.isArray(node.arguments)) {
+            if (
+              !isAstNode(node) ||
+              !isAstNode(node.callee) ||
+              !Array.isArray(node.arguments)
+            ) {
               return;
             }
             const method = memberPropertyName(node.callee);
@@ -167,15 +186,7 @@ export default eslintCompatPlugin({
                 : null;
             const sqlText =
               template && Array.isArray(template.quasis)
-                ? template.quasis
-                    .map((quasi) =>
-                      isAstNode(quasi) &&
-                      typeof quasi.value === "object" &&
-                      quasi.value !== null
-                        ? Reflect.get(quasi.value, "raw")
-                        : "",
-                    )
-                    .join(" ")
+                ? template.quasis.map(templateElementRawText).join(" ")
                 : "";
             const interpolatedEntry =
               template &&

@@ -46,3 +46,23 @@ export const createScopedDbMock = (tx: unknown) => {
     scopedDb,
   };
 };
+
+// Query fixtures provide the rows matching their select boundary. Keep the
+// awaitable builder shape intact for locking and bounded reads.
+export const createSelectQueryMock = <TRow>(rows: TRow[]) => {
+  const limit = (count: number) => {
+    const selected = rows.slice(0, count);
+    return Object.assign(Promise.resolve(selected), {
+      for: async () => selected,
+    });
+  };
+  return {
+    from: () => ({
+      where: () =>
+        Object.assign(Promise.resolve(rows), {
+          limit,
+          orderBy: () => ({ limit }),
+        }),
+    }),
+  };
+};

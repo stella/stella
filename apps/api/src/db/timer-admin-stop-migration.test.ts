@@ -36,13 +36,19 @@ const createDatabase = async (role: string) => {
       ),
     ).text(),
   );
+  const migration = await Bun.file(
+    new URL(
+      "../../drizzle/20261003122600_timer_admin_stop/migration.sql",
+      import.meta.url,
+    ),
+  ).text();
+  // PGlite batches the script in a transaction. The concurrent-index guard
+  // verifies the production locking protocol; this suite checks schema/RLS.
   await db.exec(
-    await Bun.file(
-      new URL(
-        "../../drizzle/20261003122600_timer_admin_stop/migration.sql",
-        import.meta.url,
-      ),
-    ).text(),
+    migration
+      .replaceAll(" CONCURRENTLY", "")
+      .replace(/^COMMIT;$/gmu, "")
+      .replace(/^BEGIN;$/gmu, ""),
   );
   await db.query(
     `INSERT INTO time_timers (id, organization_id, user_id, state, started_at, last_resumed_at) VALUES

@@ -1,6 +1,31 @@
 -- requires: 20261003122300_global_timers
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '10s';--> statement-breakpoint
+-- Split before any non-replayable DDL so retries only repair the indexes.
+-- squawk-ignore transaction-nesting
+COMMIT;
+--> statement-breakpoint
+SET statement_timeout = 0;
+--> statement-breakpoint
+SET lock_timeout = 0;
+--> statement-breakpoint
+CREATE INDEX CONCURRENTLY IF NOT EXISTS "time_timers_running_org_id_idx"
+  ON "time_timers" ("organization_id", "id") WHERE "state" = 'running';
+--> statement-breakpoint
+REINDEX INDEX CONCURRENTLY "time_timers_running_org_id_idx";
+--> statement-breakpoint
+CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "time_timers_legacy_entry_uidx"
+  ON "time_timers" ("legacy_time_entry_id") WHERE "legacy_time_entry_id" IS NOT NULL;
+--> statement-breakpoint
+REINDEX INDEX CONCURRENTLY "time_timers_legacy_entry_uidx";
+--> statement-breakpoint
+SET statement_timeout = '10s';
+--> statement-breakpoint
+SET lock_timeout = '1s';
+--> statement-breakpoint
+-- squawk-ignore transaction-nesting, ban-uncommitted-transaction
+BEGIN;
+--> statement-breakpoint
 CREATE POLICY "organization_admin_select" ON "time_timers" AS PERMISSIVE FOR SELECT TO stella
   USING ("time_timers"."organization_id" = (SELECT current_setting('app.organization_id', true))
     AND EXISTS (
@@ -61,8 +86,6 @@ CREATE POLICY "organization_admin_insert" ON "time_timer_confirmations" AS PERMI
         AND "time_entries"."organization_id" = "time_timer_confirmations"."organization_id"
         AND "time_entries"."user_id" = "time_timer_confirmations"."user_id"
     ));--> statement-breakpoint
-CREATE INDEX "time_timers_running_org_id_idx" ON "time_timers" ("organization_id", "id") WHERE "state" = 'running';--> statement-breakpoint
-CREATE UNIQUE INDEX "time_timers_legacy_entry_uidx" ON "time_timers" ("legacy_time_entry_id") WHERE "legacy_time_entry_id" IS NOT NULL;--> statement-breakpoint
 CREATE TABLE "time_entry_timer_states" (
   "entry_id" uuid PRIMARY KEY REFERENCES "time_entries"("id") ON DELETE cascade,
   "organization_id" varchar(128) NOT NULL REFERENCES "organization"("id") ON DELETE cascade,
