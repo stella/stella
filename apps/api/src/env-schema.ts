@@ -342,6 +342,18 @@ export const envApiServerSchema = {
   ACTION_LIMIT_CONTACT_URL: v.optional(
     v.pipe(v.string(), v.url(), v.regex(/^https?:\/\//u)),
   ),
+  FEATURE_ACTION_COST_RECORDS: featureFlagSchema,
+  ACTION_COST_ESTIMATES: v.optional(v.string()),
+  ACTION_COST_CALL_RATES: v.optional(v.string()),
+  ACTION_COST_RETENTION_DAYS: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(100_000_000),
+    ),
+  ),
   ACTION_ADMISSION_ORG_CONCURRENCY: v.optional(
     v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1)),
   ),

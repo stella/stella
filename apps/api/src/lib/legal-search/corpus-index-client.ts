@@ -4,6 +4,10 @@ import { fetchWithTimeout, type FetchWithTimeoutInit } from "@stll/fetch";
 import { Temporal } from "@stll/time";
 
 import { envBase } from "@/api/env-base";
+import {
+  ACTION_COST_CALL_KIND,
+  recordExternalActionCall,
+} from "@/api/lib/action-costs/context";
 import type { QuickwitCluster } from "@/api/lib/legal-search/corpus-generation-contract";
 import {
   CORPUS_INDEX_COMMIT_TIMEOUT_SECS,
@@ -458,9 +462,12 @@ const fetchCorpusIndex = async (
   baseUrl: string,
   path: string,
   init: FetchWithTimeoutInit,
-): Promise<Response> =>
+): Promise<Response> => {
+  init.signal?.throwIfAborted();
+  recordExternalActionCall(ACTION_COST_CALL_KIND.corpusRequest);
   // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- baseUrl is one of the configured corpus index cluster URLs; path is Stella-built
-  await fetchWithTimeout(`${baseUrl}${path}`, init);
+  return await fetchWithTimeout(`${baseUrl}${path}`, init);
+};
 
 /** Liveness of the cluster's search endpoint; resolves with the raw response. */
 export const probeCorpusIndexSearchLiveness = async (

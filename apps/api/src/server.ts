@@ -7,6 +7,7 @@ import {
   STELLA_API_VERSION_PREFIX,
 } from "@stll/api-contract";
 import { redisConnectionConfig } from "@stll/redis-config";
+import { observeRegistryRequests } from "@stll/business-registries/shared/request-observer";
 
 import { initApiBackgroundWorkers } from "@/api/api-background-workers";
 import { env } from "@/api/env";
@@ -124,7 +125,12 @@ import { myWorkRoute } from "@/api/handlers/work-obligations/my-work-route";
 import { workObligationsRoute } from "@/api/handlers/work-obligations/routes";
 import { workspaceEventsRoute } from "@/api/handlers/workspaces/events";
 import { workspacesRoute } from "@/api/handlers/workspaces/routes";
-import { detached } from "@/api/lib/analytics/capture";
+import {
+  ACTION_COST_CALL_KIND,
+  recordExternalActionCall,
+} from "@/api/lib/action-costs/context";
+import { flushActionCostRecords } from "@/api/lib/action-costs/recorder";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import { getAuth, realtimeAuthorizers } from "@/api/lib/auth";
 import { shouldRejectBrowserMutation } from "@/api/lib/browser-origin-guard";
 import {
@@ -621,6 +627,11 @@ const startServer = async (): Promise<void> => {
     logger.info("redis.connection.mode", { mode });
   }
 
+  const stopRegistryObservation = observeRegistryRequests({
+    onRequest: () =>
+      recordExternalActionCall(ACTION_COST_CALL_KIND.registryRequest),
+    onError: (error) => captureError(error, { phase: "action-cost-registry" }),
+  });
   startMemoryPressureHandler();
 
   // Start the SSE keep-alive heartbeat and cross-instance Redis subscriber
@@ -714,6 +725,11 @@ const startServer = async (): Promise<void> => {
       stopSse,
       timeout: Bun.sleep(WORKER_SHUTDOWN_TIMEOUT_MS),
     });
+    await Promise.race([
+      flushActionCostRecords(),
+      Bun.sleep(WORKER_SHUTDOWN_TIMEOUT_MS),
+    ]);
+    stopRegistryObservation();
     closeActionAdmissionRedis();
     switch (outcome) {
       case API_SHUTDOWN_OUTCOME.drained:

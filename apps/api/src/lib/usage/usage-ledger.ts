@@ -49,6 +49,7 @@ import type {
   UsageServiceTier,
   UsageEntitlementStatus,
 } from "@/api/db/schema";
+import { currentActionCostIdentity } from "@/api/lib/action-costs/context";
 import type { SafeId } from "@/api/lib/branded-types";
 import { UsageLimitExceededError } from "@/api/lib/errors/tagged-errors";
 
@@ -353,7 +354,10 @@ export const recordUsageEvent = async ({
     return owners.at(0)?.id ?? null;
   })();
 
+  const identity = currentActionCostIdentity(organizationId);
   const values = {
+    actionKind: identity?.actionKind ?? null,
+    logicalPhaseId: identity?.logicalPhaseId ?? null,
     organizationId,
     workspaceId: retainedWorkspaceId,
     userId,
