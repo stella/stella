@@ -5,11 +5,11 @@ import type { Static } from "elysia";
 import { isCountryCode } from "@stll/country-codes";
 import { hasExcessQueryTokens, MAX_QUERY_TOKENS } from "@stll/sanctions";
 
-import { nationalityCodesSchema } from "@/api/handlers/contacts/person-details";
 import { createSafePublicHandler } from "@/api/lib/api-handlers";
 import type { SafeHandlerGenerator } from "@/api/lib/api-handlers";
 import { dateOfBirthSchema } from "@/api/lib/business-registries/date-of-birth";
 import { personDateOfBirth } from "@/api/lib/business-registries/entity-checks";
+import { nationalityCodesSchema } from "@/api/lib/business-registries/nationality-codes";
 import { resolveSanctionsNameSubject } from "@/api/lib/business-registries/sanctions-check";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
