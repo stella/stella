@@ -1,9 +1,9 @@
 import { sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
 
-/** Shared with the expression indexes; keep JSON keys literal for index matching.
- * Bound category strings to the accepted input length so arbitrary metadata
- * cannot exceed a B-tree tuple's byte budget. */
+/** Residual filters for indexed text matches or bounded decision-id lookups.
+ * Structured categories are excluded; only strings the search input accepts
+ * can match. These expressions do not need corpus-wide metadata indexes. */
 export const decisionSearchCategorySql = (metadata: SQLWrapper) =>
   sql`(CASE WHEN jsonb_typeof(${metadata} -> 'category') = 'string'
     AND length(${metadata} ->> 'category') <= 128

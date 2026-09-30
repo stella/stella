@@ -75,22 +75,3 @@ test("categories preserve exact bounded strings and exclude structured metadata"
     null,
   ]);
 });
-
-test("metadata filter expressions have index conditions under country scope", async () => {
-  await client.exec("SET enable_seqscan = off");
-  for (const predicate of [
-    sql`${decisionSearchCategorySql(sql`metadata`)} = 'A'`,
-    sql`${decisionHasLegalSentenceSql(sql`metadata`)} = true`,
-    sql`${decisionHasLegalSentenceSql(sql`metadata`)} = false`,
-  ]) {
-    const compiled = dialect.sqlToQuery(sql`
-      EXPLAIN (FORMAT JSON) SELECT id FROM case_law_decisions
-      WHERE country = 'CZE' AND ${predicate}
-    `);
-    const result = await client.query(compiled.sql, compiled.params);
-    const plan = JSON.stringify(result.rows);
-    expect(plan).toContain("Index Cond");
-    expect(plan).toMatch(/country_(?:category|legal_sentence)_idx/u);
-  }
-  await client.exec("RESET enable_seqscan");
-});

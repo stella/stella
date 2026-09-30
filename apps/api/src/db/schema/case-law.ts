@@ -53,10 +53,6 @@ import {
   DECISION_COURT_ID_MAX_LENGTH,
   decisionCourtIdByCountrySql,
 } from "@/api/lib/case-law/decision-court-id-sql";
-import {
-  decisionSearchCategorySql,
-  decisionHasLegalSentenceSql,
-} from "@/api/lib/case-law/decision-search-metadata-sql";
 import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution-sql";
 import type {
   CaseLawResearchAnswerRun,
@@ -712,12 +708,6 @@ export const caseLawDecisions = p.pgTable(
       .where(isNotNull(t.slug)),
     p.index("case_law_decisions_case_number_idx").on(t.caseNumber),
     p.index("case_law_decisions_court_idx").on(t.court),
-    p
-      .index("case_law_decisions_country_category_idx")
-      .on(t.country, decisionSearchCategorySql(t.metadata), t.id),
-    p
-      .index("case_law_decisions_country_legal_sentence_idx")
-      .on(t.country, decisionHasLegalSentenceSql(t.metadata), t.id),
     p.index("case_law_decisions_country_idx").on(t.country),
     p
       .index("case_law_decisions_provision_scope_cursor_idx")
