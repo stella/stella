@@ -7,7 +7,9 @@ COMMIT;--> statement-breakpoint
 SET statement_timeout = 0;--> statement-breakpoint
 SET lock_timeout = 0;--> statement-breakpoint
 DROP INDEX CONCURRENTLY IF EXISTS "case_law_decisions_textless_detail_recheck_idx";--> statement-breakpoint
-CREATE INDEX CONCURRENTLY IF NOT EXISTS "case_law_decisions_textless_detail_recheck_idx"
+-- The preceding drop removes invalid remnants before every retry.
+-- squawk-ignore prefer-robust-stmts
+CREATE INDEX CONCURRENTLY "case_law_decisions_textless_detail_recheck_idx"
   ON "case_law_decisions" (
     "source_id",
     (coalesce("textless_detail_rechecked_at", "updated_at")),
