@@ -2499,16 +2499,17 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["contact", "check-counterparty"],
             toolName: "check_counterparty",
-            description: "Screen a company or person for due diligence.",
+            description:
+              "Screen a company or a person against an official register for due diligence.",
             flags: [
               {
                 flag: "--check",
                 prop: "check",
                 kind: "enum",
-                enum: ["cz-insolvency", "cz-vat-reliability", "sanctions"],
+                enum: ["cz-insolvency", "cz-vat-reliability"],
                 repeatable: false,
                 description:
-                  "Source to screen against. cz-insolvency: the Czech insolvency register (ISIR), pending and ended proceedings; takes a company or a person with a full birth date. cz-vat-reliability: the Czech VAT register, unreliable-payer status and published bank accounts; takes a tax ID, or a company ID sent as CZ + IČO and marked derived. sanctions: every sanctions list stella keeps (the EU, UN and national lists), one outcome per list; takes a company ID, an organization by name, or a person by name with any known birth date and nationalities. Use an advertised value; case and surrounding whitespace are normalized.",
+                  "Source to screen against. cz-insolvency: the Czech insolvency register (ISIR), pending and ended proceedings; takes a company or a person. cz-vat-reliability: the Czech VAT register, unreliable-payer status and published bank accounts; takes a tax ID, or a company ID sent as CZ + IČO and marked derived. Use an advertised value; case and surrounding whitespace are normalized.",
                 required: true,
               },
             ],
@@ -2516,56 +2517,6 @@ export const generatedRouteMap: RouteNode = {
             paginated: false,
             followable: true,
             windowedText: false,
-            composite: {
-              summary: [
-                "kind",
-                "status",
-                "subject.type",
-                "subject.name",
-                "subject.value",
-                "subject.country",
-                "subject.identifiers",
-                "subject.resolvedFrom.value",
-                "subject.resolvedFrom.registry",
-                "subject.dateOfBirth",
-                "subject.nationalityCodes",
-                "checkedAt",
-                "cutoff",
-              ],
-              sections: [
-                {
-                  title: "Lists",
-                  rows: "lists",
-                  columns: [
-                    "source",
-                    "issuer",
-                    "classification",
-                    "status",
-                    "reason",
-                    "totalMatches",
-                    "truncated",
-                    "editionId",
-                    "publishedAt",
-                    "verifiedAt",
-                    "pendingUpdate.code",
-                  ],
-                },
-                {
-                  title: "Possible matches",
-                  rows: "lists[].possibleMatches",
-                  columns: [
-                    "^.source",
-                    "name",
-                    "score",
-                    "sourceEntryId",
-                    "evidence.conflicts",
-                    "entityType",
-                    "listedOn",
-                    "sourceUrl",
-                  ],
-                },
-              ],
-            },
             destructive: false,
             scope: "read",
             inputSchema: {
@@ -2574,10 +2525,10 @@ export const generatedRouteMap: RouteNode = {
               additionalProperties: false,
               properties: {
                 check: {
-                  enum: ["cz-insolvency", "cz-vat-reliability", "sanctions"],
+                  enum: ["cz-insolvency", "cz-vat-reliability"],
                   type: "string",
                   description:
-                    "Source to screen against. cz-insolvency: the Czech insolvency register (ISIR), pending and ended proceedings; takes a company or a person with a full birth date. cz-vat-reliability: the Czech VAT register, unreliable-payer status and published bank accounts; takes a tax ID, or a company ID sent as CZ + IČO and marked derived. sanctions: every sanctions list stella keeps (the EU, UN and national lists), one outcome per list; takes a company ID, an organization by name, or a person by name with any known birth date and nationalities. Use an advertised value; case and surrounding whitespace are normalized.",
+                    "Source to screen against. cz-insolvency: the Czech insolvency register (ISIR), pending and ended proceedings; takes a company or a person. cz-vat-reliability: the Czech VAT register, unreliable-payer status and published bank accounts; takes a tax ID, or a company ID sent as CZ + IČO and marked derived. Use an advertised value; case and surrounding whitespace are normalized.",
                   "x-stella-agent-input": {
                     kind: "enum",
                   },
@@ -2599,21 +2550,7 @@ export const generatedRouteMap: RouteNode = {
                           minLength: 1,
                           maxLength: 32,
                           description:
-                            "National business ID, e.g. the Czech IČO 26863154. The sanctions check reads the company's name from its register (ARES for CZ, RPO for SK) and screens that name.",
-                        },
-                        country: {
-                          type: "string",
-                          maxLength: 64,
-                          description:
-                            "Country that issued the ID, as an ISO 3166-1 alpha-2 code or the country's name: CZ (the default) or SK. The register checks cover CZ only. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
-                          "x-stella-agent-input": {
-                            kind: "country",
-                            country: {
-                              spelling: "alpha-2",
-                              admitted: ["CZ", "SK"],
-                              tool: "check_counterparty",
-                            },
-                          },
+                            "National business ID in the check's country, e.g. the Czech IČO 26863154",
                         },
                       },
                       required: ["type", "company_id"],
@@ -2644,7 +2581,7 @@ export const generatedRouteMap: RouteNode = {
                         type: {
                           enum: ["person"],
                           description:
-                            "A natural person, by name. cz-insolvency also needs the full birth date; the sanctions check uses whatever date and nationalities are known.",
+                            "A natural person, by name and birth date.",
                           type: "string",
                         },
                         first_name: {
@@ -2664,127 +2601,18 @@ export const generatedRouteMap: RouteNode = {
                           format: "date",
                           maxLength: 10,
                           description:
-                            "Full birth date. When only the year or the month is known, send date_of_birth instead; never invent a day. Use ISO YYYY-MM-DD; unambiguous localized calendar dates are normalized.",
+                            "Birth date. Use ISO YYYY-MM-DD; unambiguous localized calendar dates are normalized.",
                           "x-stella-agent-input": {
                             kind: "date",
                           },
                         },
-                        date_of_birth: {
-                          description:
-                            "Birth date at the precision known, in the shape read_contact returns: year only, year and month, or a full date.",
-                          anyOf: [
-                            {
-                              type: "object",
-                              properties: {
-                                precision: {
-                                  enum: ["year"],
-                                  type: "string",
-                                },
-                                year: {
-                                  type: "integer",
-                                  minimum: 1000,
-                                  maximum: 9999,
-                                },
-                              },
-                              required: ["precision", "year"],
-                              additionalProperties: false,
-                            },
-                            {
-                              type: "object",
-                              properties: {
-                                precision: {
-                                  enum: ["month"],
-                                  type: "string",
-                                },
-                                year: {
-                                  type: "integer",
-                                  minimum: 1000,
-                                  maximum: 9999,
-                                },
-                                month: {
-                                  type: "integer",
-                                  minimum: 1,
-                                  maximum: 12,
-                                },
-                              },
-                              required: ["precision", "year", "month"],
-                              additionalProperties: false,
-                            },
-                            {
-                              type: "object",
-                              properties: {
-                                precision: {
-                                  enum: ["day"],
-                                  type: "string",
-                                },
-                                year: {
-                                  type: "integer",
-                                  minimum: 1000,
-                                  maximum: 9999,
-                                },
-                                month: {
-                                  type: "integer",
-                                  minimum: 1,
-                                  maximum: 12,
-                                },
-                                day: {
-                                  type: "integer",
-                                  minimum: 1,
-                                  maximum: 31,
-                                },
-                              },
-                              required: ["precision", "year", "month", "day"],
-                              additionalProperties: false,
-                            },
-                          ],
-                        },
-                        nationality_codes: {
-                          type: "array",
-                          items: {
-                            type: "string",
-                            maxLength: 64,
-                            description:
-                              "Nationality country. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
-                            "x-stella-agent-input": {
-                              kind: "country",
-                              country: {
-                                spelling: "alpha-2",
-                                tool: "check_counterparty",
-                              },
-                            },
-                          },
-                          maxItems: 250,
-                          description:
-                            "Nationalities, as ISO 3166-1 alpha-2 codes; used by the sanctions check",
-                        },
                       },
-                      required: ["type", "first_name", "last_name"],
-                      additionalProperties: false,
-                    },
-                    {
-                      type: "object",
-                      properties: {
-                        type: {
-                          enum: ["organization"],
-                          description:
-                            "A company or other organization, by name. For the sanctions check.",
-                          type: "string",
-                        },
-                        name: {
-                          type: "string",
-                          minLength: 1,
-                          maxLength: 512,
-                          description: "The organization's name as registered",
-                        },
-                        company_id: {
-                          type: "string",
-                          minLength: 1,
-                          maxLength: 32,
-                          description:
-                            "Its registration number, if known; screened beside the name",
-                        },
-                      },
-                      required: ["type", "name"],
+                      required: [
+                        "type",
+                        "first_name",
+                        "last_name",
+                        "birth_date",
+                      ],
                       additionalProperties: false,
                     },
                   ],
@@ -11729,15 +11557,15 @@ export const generatedRouteMap: RouteNode = {
                 ],
                 capabilityId: "contacts.business-registries.check",
                 description:
-                  "Screen a company or person against an official source, such as the Czech insolvency or VAT register, or against every sanctions list. A register check returns one outcome: clear (the source answered and holds nothing adverse), found (with the adverse records), not-registered (the source holds no record of the subject), unavailable (the source could not answer; never read this as clear), or not-covered (the source cannot answer for this subject type). The sanctions check returns one outcome per list (clear, possible-match or unavailable) with the edition screened, and is clear only when every list is.",
+                  "Screen a company or person against an official source, such as the Czech insolvency or VAT register. Returns one outcome: clear (the source answered and holds nothing adverse), found (with the adverse records), not-registered (the source holds no record of the subject), unavailable (the source could not answer; never read this as clear), or not-covered (the source cannot answer for this subject type).",
                 access: "read",
                 flags: [
                   {
                     kind: "enum",
-                    enum: ["cz-insolvency", "cz-vat-reliability", "sanctions"],
+                    enum: ["cz-insolvency", "cz-vat-reliability"],
                     repeatable: false,
                     description:
-                      "Which official source to screen the subject against; 'sanctions' screens every sanctions list and answers per list",
+                      "Which official source to screen the subject against",
                     flag: "--check",
                     prop: "check",
                     required: true,
@@ -11746,10 +11574,10 @@ export const generatedRouteMap: RouteNode = {
                   },
                   {
                     kind: "enum",
-                    enum: ["company-id", "tax-id", "person", "organization"],
+                    enum: ["company-id", "tax-id", "person"],
                     repeatable: false,
                     description:
-                      "'company-id' screens a registered business by its national ID; 'tax-id' a taxpayer by its tax ID; 'person' a natural person by name and birth date; 'organization' an organization by name (sanctions only)",
+                      "'company-id' screens a registered business by its national ID; 'tax-id' a taxpayer by its tax ID; 'person' a natural person by name and birth date",
                     flag: "--subject-type",
                     prop: "subjectType",
                     required: true,
@@ -11779,17 +11607,6 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    description:
-                      "Organization name, for the 'organization' subject type",
-                    flag: "--name",
-                    prop: "name",
-                    required: false,
-                    part: "body",
-                    partPath: "name",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
                     flag: "--first-name",
                     prop: "firstName",
                     required: false,
@@ -11815,17 +11632,8 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "birthDate",
                   },
-                  {
-                    kind: "string-array",
-                    repeatable: true,
-                    flag: "--nationality-codes",
-                    prop: "nationalityCodes",
-                    required: false,
-                    part: "body",
-                    partPath: "nationalityCodes",
-                  },
                 ],
-                inputOnly: ["body.country", "body.dateOfBirth"],
+                inputOnly: [],
                 paginated: false,
                 destructive: false,
                 scope: "read",
@@ -11840,25 +11648,16 @@ export const generatedRouteMap: RouteNode = {
                         check: {
                           default: "cz-insolvency",
                           description:
-                            "Which official source to screen the subject against; 'sanctions' screens every sanctions list and answers per list",
+                            "Which official source to screen the subject against",
                           type: "string",
-                          enum: [
-                            "cz-insolvency",
-                            "cz-vat-reliability",
-                            "sanctions",
-                          ],
+                          enum: ["cz-insolvency", "cz-vat-reliability"],
                         },
                         subjectType: {
                           default: "company-id",
                           description:
-                            "'company-id' screens a registered business by its national ID; 'tax-id' a taxpayer by its tax ID; 'person' a natural person by name and birth date; 'organization' an organization by name (sanctions only)",
+                            "'company-id' screens a registered business by its national ID; 'tax-id' a taxpayer by its tax ID; 'person' a natural person by name and birth date",
                           type: "string",
-                          enum: [
-                            "company-id",
-                            "tax-id",
-                            "person",
-                            "organization",
-                          ],
+                          enum: ["company-id", "tax-id", "person"],
                         },
                         companyId: {
                           minLength: 1,
@@ -11866,31 +11665,10 @@ export const generatedRouteMap: RouteNode = {
                           description: "National business ID",
                           type: "string",
                         },
-                        country: {
-                          description:
-                            "Country that issued the company ID; defaults to CZ. The register checks cover CZ only",
-                          anyOf: [
-                            {
-                              const: "CZ",
-                              type: "string",
-                            },
-                            {
-                              const: "SK",
-                              type: "string",
-                            },
-                          ],
-                        },
                         taxId: {
                           minLength: 1,
                           maxLength: 32,
                           description: "Tax ID",
-                          type: "string",
-                        },
-                        name: {
-                          minLength: 1,
-                          maxLength: 512,
-                          description:
-                            "Organization name, for the 'organization' subject type",
                           type: "string",
                         },
                         firstName: {
@@ -11907,82 +11685,6 @@ export const generatedRouteMap: RouteNode = {
                           format: "date",
                           description: "Birth date, YYYY-MM-DD",
                           type: "string",
-                        },
-                        dateOfBirth: {
-                          anyOf: [
-                            {
-                              additionalProperties: false,
-                              type: "object",
-                              required: ["precision", "year"],
-                              properties: {
-                                precision: {
-                                  const: "year",
-                                  type: "string",
-                                },
-                                year: {
-                                  minimum: 1000,
-                                  maximum: 9999,
-                                  type: "integer",
-                                },
-                              },
-                            },
-                            {
-                              additionalProperties: false,
-                              type: "object",
-                              required: ["precision", "year", "month"],
-                              properties: {
-                                precision: {
-                                  const: "month",
-                                  type: "string",
-                                },
-                                year: {
-                                  minimum: 1000,
-                                  maximum: 9999,
-                                  type: "integer",
-                                },
-                                month: {
-                                  minimum: 1,
-                                  maximum: 12,
-                                  type: "integer",
-                                },
-                              },
-                            },
-                            {
-                              additionalProperties: false,
-                              type: "object",
-                              required: ["precision", "year", "month", "day"],
-                              properties: {
-                                precision: {
-                                  const: "day",
-                                  type: "string",
-                                },
-                                year: {
-                                  minimum: 1000,
-                                  maximum: 9999,
-                                  type: "integer",
-                                },
-                                month: {
-                                  minimum: 1,
-                                  maximum: 12,
-                                  type: "integer",
-                                },
-                                day: {
-                                  minimum: 1,
-                                  maximum: 31,
-                                  type: "integer",
-                                },
-                              },
-                            },
-                          ],
-                        },
-                        nationalityCodes: {
-                          maxItems: 250,
-                          uniqueItems: true,
-                          type: "array",
-                          items: {
-                            pattern: "^[A-Z]{2}$",
-                            type: "string",
-                          },
                         },
                       },
                     },
@@ -24987,7 +24689,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "invoices", "create"],
                 capabilityId: "invoices.create",
                 description:
-                  "Create a draft invoice from approved, billable, not-yet-invoiced time entries in a matter, marking them billed and setting the total from their billed minutes and recorded rates. Every entry must already carry the invoice currency, since nothing is converted, and the invoice number must not already be in use. Expenses are added afterwards with invoices.entries.add.",
+                  "Create a draft invoice from approved, billable, not-yet-invoiced time entries in a matter, marking them billed and setting the total from their billed minutes and recorded rates. Every entry must already carry the invoice currency, since nothing is converted, and the optional invoice number must not already be in use. An omitted number is allocated from the document type’s default series at finalize. Credit notes require an original finalized, sent, or paid invoice in the same matter. Pass empty timeEntryIds for a draft with manual lines. Expenses are added afterwards with invoices.entries.add.",
                 access: "write",
                 flags: [
                   {
@@ -25004,9 +24706,18 @@ export const generatedRouteMap: RouteNode = {
                     repeatable: false,
                     flag: "--invoice-number",
                     prop: "invoiceNumber",
-                    required: true,
+                    required: false,
                     part: "body",
                     partPath: "invoiceNumber",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--original-invoice-id",
+                    prop: "originalInvoiceId",
+                    required: false,
+                    part: "body",
+                    partPath: "originalInvoiceId",
                   },
                   {
                     kind: "string",
@@ -25063,7 +24774,7 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "timeEntryIds",
                   },
                 ],
-                inputOnly: [],
+                inputOnly: ["body.documentType"],
                 paginated: false,
                 destructive: false,
                 scope: "billing_write",
@@ -25073,16 +24784,34 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     body: {
                       type: "object",
-                      required: [
-                        "invoiceNumber",
-                        "invoiceDate",
-                        "currency",
-                        "timeEntryIds",
-                      ],
+                      required: ["invoiceDate", "currency", "timeEntryIds"],
                       properties: {
                         invoiceNumber: {
                           minLength: 1,
                           maxLength: 64,
+                          type: "string",
+                        },
+                        documentType: {
+                          anyOf: [
+                            {
+                              const: "invoice",
+                              type: "string",
+                            },
+                            {
+                              const: "advance",
+                              type: "string",
+                            },
+                            {
+                              const: "credit_note",
+                              type: "string",
+                            },
+                          ],
+                        },
+                        originalInvoiceId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                           type: "string",
                         },
                         invoiceDate: {
@@ -25132,7 +24861,7 @@ export const generatedRouteMap: RouteNode = {
                           ],
                         },
                         timeEntryIds: {
-                          minItems: 1,
+                          minItems: 0,
                           maxItems: 500,
                           type: "array",
                           items: {
@@ -25438,7 +25167,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "invoices", "get"],
                 capabilityId: "invoices.get",
                 description:
-                  "Read one invoice with its full detail: its lines in order with quantity, unit price, VAT, and amounts; totals with the VAT breakdown by rate; seller profile, buyer, dates, currency, and status; and every attached time entry and expense with its work item. An invoice from before invoice lines lists no lines for its attached entries until its first line edit; its totals still count them. Use invoices.list for a paginated summary without lines.",
+                  "Read one invoice with its full detail: its lines in order with quantity, unit price, VAT, and amounts; totals with the VAT breakdown by rate; document type, original invoice id, seller profile, buyer, dates, currency, and status; and every attached time entry and expense with its work item. An invoice from before invoice lines lists no lines for its attached entries until its first line edit; its totals still count them. Use invoices.list for a paginated summary without lines.",
                 access: "read",
                 flags: [
                   {
@@ -25959,7 +25688,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "invoices", "list"],
                 capabilityId: "invoices.list",
                 description:
-                  "List a matter's invoices oldest first with cursor pagination, returning each invoice's number, reference, status, dates, currency, and total, but not its line items. Use invoices.get to read the attached time entries and expenses.",
+                  "List a matter's invoices oldest first with cursor pagination, returning each invoice's number (null before numbering), document type, original invoice id, reference, status, dates, currency, and total, but not its line items. Use invoices.get to read the attached time entries and expenses.",
                 access: "read",
                 flags: [
                   {
@@ -26018,7 +25747,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "invoices", "transition"],
                 capabilityId: "invoices.transition",
                 description:
-                  "Move an invoice through its lifecycle with one action: finalize (draft to finalized), send (finalized to sent), mark_paid (sent to paid), revert_to_draft (finalized back to draft), or void (from finalized, sent, or paid). Voiding also releases every attached time entry and expense back to approved, unbilled status and clears the paid timestamp. An action the invoice's current status does not allow is refused.",
+                  "Move an invoice through finalize, send, mark_paid, void, or revert_to_draft. Finalize assigns an omitted number from the document type's default series, using the issue date; configure a default number series first. Manual numbers and numbers kept after reverting to draft are preserved. A credit note must reference an eligible original and cannot exceed its total. Voiding releases attached entries and clears the paid timestamp.",
                 access: "write",
                 flags: [
                   {
@@ -26111,7 +25840,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "invoices", "update"],
                 capabilityId: "invoices.update",
                 description:
-                  "Change a draft invoice's number, issue date (invoiceDate), taxable supply date, due date, reference, notes, currency, issuing seller profile, or buyer details as they should read on the document. Omitted fields stay unchanged; null clears an optional field. Only draft invoices can be edited, and the currency cannot change while the invoice has lines or attached entries.",
+                  "Change a draft invoice's number, issue date (invoiceDate), taxable supply date, due date, reference, notes, currency, issuing seller profile, or buyer details as they should read on the document. Omitted fields stay unchanged; null clears an optional field. Only draft invoices can be edited. Type and original invoice become immutable after the first finalize, including after reverting to draft. Credit notes require an eligible original in the same matter. Currency cannot change while the invoice has lines or attached entries.",
                 access: "write",
                 flags: [
                   {
@@ -26133,13 +25862,22 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "invoiceId",
                   },
                   {
-                    kind: "string",
+                    kind: "nullable-string",
                     repeatable: false,
                     flag: "--invoice-number",
                     prop: "invoiceNumber",
                     required: false,
                     part: "body",
                     partPath: "invoiceNumber",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--original-invoice-id",
+                    prop: "originalInvoiceId",
+                    required: false,
+                    part: "body",
+                    partPath: "originalInvoiceId",
                   },
                   {
                     kind: "string",
@@ -26277,7 +26015,7 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "buyerCountry",
                   },
                 ],
-                inputOnly: [],
+                inputOnly: ["body.documentType"],
                 paginated: false,
                 destructive: false,
                 scope: "billing_write",
@@ -26289,9 +26027,48 @@ export const generatedRouteMap: RouteNode = {
                       type: "object",
                       properties: {
                         invoiceNumber: {
-                          minLength: 1,
-                          maxLength: 64,
-                          type: "string",
+                          nullable: true,
+                          anyOf: [
+                            {
+                              minLength: 1,
+                              maxLength: 64,
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                        documentType: {
+                          anyOf: [
+                            {
+                              const: "invoice",
+                              type: "string",
+                            },
+                            {
+                              const: "advance",
+                              type: "string",
+                            },
+                            {
+                              const: "credit_note",
+                              type: "string",
+                            },
+                          ],
+                        },
+                        originalInvoiceId: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              minLength: 36,
+                              maxLength: 36,
+                              pattern:
+                                "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
                         },
                         invoiceDate: {
                           format: "date",

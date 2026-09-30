@@ -1,6 +1,6 @@
 import * as v from "valibot";
 
-import { ENTITY_KINDS } from "@stll/api-contract";
+import { ENTITY_KINDS, NUMBER_SERIES_DOCUMENT_TYPES } from "@stll/api-contract";
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import {
   DECISION_TEXT_FIELD,
@@ -1243,7 +1243,9 @@ export const LIST_INVOICES_LIST_PROJECTION = v.strictObject({
   invoices: v.array(
     v.strictObject({
       id: passthroughId(),
-      invoiceNumber: v.string(),
+      invoiceNumber: v.nullable(v.string()),
+      documentType: v.picklist(NUMBER_SERIES_DOCUMENT_TYPES),
+      originalInvoiceId: v.nullable(passthroughId()),
       reference: v.nullable(v.string()),
       status: v.string(),
       invoiceDate: v.string(),
@@ -1265,7 +1267,9 @@ export const LIST_INVOICES_DETAIL_PROJECTION = v.strictObject({
     id: passthroughId(),
     // The detail invoice's own owning workspace is a matter ref.
     workspaceId: chatRef("matter"),
-    invoiceNumber: v.string(),
+    invoiceNumber: v.nullable(v.string()),
+    documentType: v.picklist(NUMBER_SERIES_DOCUMENT_TYPES),
+    originalInvoiceId: v.nullable(passthroughId()),
     reference: v.nullable(v.string()),
     status: v.string(),
     invoiceDate: v.string(),
