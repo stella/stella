@@ -21,4 +21,10 @@ for source in /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sour
   sudo sed -i 's|://azure\.archive\.ubuntu\.com/ubuntu|://archive.ubuntu.com/ubuntu|g' "$source"
 done
 
+# A killed unpack/configure phase may leave dpkg interrupted. Reconcile before
+# apt retries; missing dependencies can still be repaired by that final install.
+if ! sudo timeout --kill-after=10s 60s dpkg --configure -a; then
+  echo "::warning::dpkg recovery did not complete; the final dependency install must repair or fail"
+fi
+
 timeout --kill-after=10s 180s bunx playwright install-deps "$@"

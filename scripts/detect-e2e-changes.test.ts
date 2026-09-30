@@ -858,6 +858,12 @@ describe("detect-e2e-changes", () => {
     );
     expect(job).toMatch(/playwright:v[\d.]+-noble@sha256:[a-f0-9]{64}\n/u);
     expect(job).toContain("shell: bash");
+    const bunSetup = workflowStep(job, "Setup Bun");
+    expect(bunSetup).toContain("@oven/bun-linux-x64@$version");
+    expect(bunSetup).toContain("--ignore-scripts");
+    expect(bunSetup).toContain('require("./package.json").packageManager');
+    expect(bunSetup).not.toContain("oven-sh/setup-bun");
+    expect(bunSetup).not.toContain("apt-get");
     expect(job).not.toContain("playwright install");
     expect(actionStep(playwrightSetup, "Restore Playwright browser")).toContain(
       "if: inputs.dependency-mode != 'preinstalled'",
