@@ -623,6 +623,7 @@ test("court lists are exact OR terms intersected with a singular court", () => {
   expect(
     caseLawCorpusQuery({
       text: "smlouva",
+      jurisdiction: undefined,
       filters: {
         courts: ["Nejvyšší soud", "Nejvyšší správní soud", "Ústavní soud"],
       },
@@ -633,6 +634,7 @@ test("court lists are exact OR terms intersected with a singular court", () => {
   expect(
     caseLawCorpusQuery({
       text: "smlouva",
+      jurisdiction: undefined,
       filters: { court: "Ústavní soud", courts: ['A" OR court:*'] },
     }),
   ).toBe('("smlouva") AND court:"Ústavní soud" AND (court:"A\\" OR court:*")');
