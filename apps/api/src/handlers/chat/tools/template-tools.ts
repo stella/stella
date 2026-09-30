@@ -9,6 +9,7 @@ import {
 } from "@/api/handlers/chat/third-party-boundary";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
+import { templateAiCollaboratorsForBoundary } from "@/api/handlers/chat/tools/template-ai-boundary";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
@@ -89,11 +90,7 @@ type CreateTemplateToolsArgs = {
   orgAIConfig: OrgAIConfig | null;
   /** Records the EXECUTE audit event for a fill when present. */
   recordAuditEvent?: AuditRecorder | undefined;
-  /**
-   * The chat turn's boundary. AI-drafted fields send the filled values to the
-   * model with no anonymization step, so an anonymized turn leaves them for
-   * the user to provide.
-   */
+  /** The chat turn's boundary, which prepares the nested AI-field requests. */
   thirdPartyBoundary: ChatThirdPartyBoundary;
 };
 
@@ -169,11 +166,11 @@ export const createTemplateTools = ({
       }),
       tenantWorkspaceIds: [],
     };
-    return {
+    return templateAiCollaboratorsForBoundary(thirdPartyBoundary, {
       generateAiValue: buildAiFieldGenerator(shared),
       decideAiCondition: buildAiConditionDecider(shared),
       adaptAiValue: buildAiOccurrenceAdapter(shared),
-    };
+    });
   };
 
   return {
@@ -241,7 +238,7 @@ export const createTemplateTools = ({
         scopedDb,
         organizationId,
         requiredFields: "enforce",
-        ...(thirdPartyBoundary.type === "raw" ? { aiCollaborators } : {}),
+        aiCollaborators,
       });
       if ("requiredFieldsRejection" in result) {
         // A required, non-AI-fillable field was omitted or empty: reject

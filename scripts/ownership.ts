@@ -369,7 +369,7 @@ export const OWNERSHIP = [
         {
           path: "apps/api/src/lib/docx/ai-field-generator.ts",
           reason:
-            "Template AI fields: chat's fill_template omits them in anonymized mode; the fill routes carry no chat content.",
+            "Template AI fields: chat's fill_template sends their prompts and values through the turn's boundary; the fill routes carry no chat content.",
         },
         {
           path: "apps/api/src/lib/templates/suggest-template-fields.ts",

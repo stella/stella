@@ -1,0 +1,116 @@
+import { describe, expect, test } from "bun:test";
+
+import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
+import type { ChatSendMode } from "@stll/anonymize-chat";
+
+import { createChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
+import { toSafeId } from "@/api/lib/branded-types";
+import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+
+import { templateAiCollaboratorsForBoundary } from "./template-ai-boundary";
+
+const NAME = "Dana Novotná";
+
+const anonymizeFields = async ({ fields }: { fields: string[] }) => {
+  const redactionMap = new Map<string, string>();
+  const anonymized = fields.map((field) => {
+    if (!field.includes(NAME)) {
+      return field;
+    }
+    redactionMap.set("[PERSON_1]", NAME);
+    return field.replaceAll(NAME, "[PERSON_1]");
+  });
+  return { entityCount: redactionMap.size, fields: anonymized, redactionMap };
+};
+
+const boundaryFor = (sendMode: ChatSendMode) =>
+  createChatThirdPartyBoundary({
+    anonymizeFields,
+    anonymizationScopeId: "workspace-A",
+    organizationId: toSafeId<"organization">("org-test"),
+    scopedDb: createScopedDbMock({}).scopedDb,
+    sendMode,
+    threadRestorations: [],
+  });
+
+/** Collaborators that record what each nested request would send, and draft
+ *  from it the way a model would: echoing the name it was given. */
+const recordingCollaborators = () => {
+  const sent: unknown[] = [];
+  return {
+    collaborators: {
+      adaptAiValue: async (input: {
+        occurrences: readonly { context: string }[];
+        stub: string;
+      }) => {
+        sent.push(input);
+        return input.occurrences.map(() => `${input.stub}, as signatory`);
+      },
+      decideAiCondition: async (input: { values: Record<string, unknown> }) => {
+        sent.push(input);
+        return { decidedBy: "generative_model", value: true } as const;
+      },
+      generateAiValue: async (input: {
+        prompt: string;
+        values: Record<string, unknown>;
+      }) => {
+        sent.push(input);
+        return {
+          type: "drafted",
+          value: `Signed by ${String(input.values["party"])}`,
+        } as const;
+      },
+    },
+    sent,
+  };
+};
+
+const runAll = async (sendMode: ChatSendMode) => {
+  const { collaborators, sent } = recordingCollaborators();
+  const wrapped = templateAiCollaboratorsForBoundary(
+    boundaryFor(sendMode),
+    collaborators,
+  );
+  const drafted = await wrapped.generateAiValue?.({
+    fieldPath: "clause",
+    prompt: `Draft a signature line for ${NAME}.`,
+    values: { party: NAME },
+  });
+  await wrapped.decideAiCondition?.({
+    fieldPath: "hasGuarantor",
+    prompt: "Is there a guarantor?",
+    values: { party: NAME },
+  });
+  const adapted = await wrapped.adaptAiValue?.({
+    fieldPath: "party",
+    label: undefined,
+    occurrences: [{ context: `Between ${NAME} and {{party}}` }],
+    prompt: undefined,
+    stub: NAME,
+  });
+  return { adapted, drafted, sent };
+};
+
+describe("template AI fields in a chat turn", () => {
+  test("prepare each nested request for the send mode and restore the drafts", async () => {
+    const anonymized = await runAll(CHAT_SEND_MODE.anonymized);
+
+    expect(JSON.stringify(anonymized.sent)).not.toContain(NAME);
+    expect(JSON.stringify(anonymized.sent)).toContain("[PERSON_1]");
+    expect(anonymized.drafted).toEqual({
+      type: "drafted",
+      value: `Signed by ${NAME}`,
+    });
+    expect(anonymized.adapted).toEqual([`${NAME}, as signatory`]);
+  });
+
+  test("send the values as they are in raw mode", async () => {
+    const raw = await runAll(CHAT_SEND_MODE.rawOverride);
+
+    expect(JSON.stringify(raw.sent)).toContain(NAME);
+    expect(raw.drafted).toEqual({
+      type: "drafted",
+      value: `Signed by ${NAME}`,
+    });
+  });
+});

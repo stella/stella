@@ -2526,7 +2526,6 @@ const FileChatOverlayInner = ({
         value={{
           activeOrganizationId,
           alwaysApprovedTools,
-          anonymized,
           conversationApprovedTools,
           handleAllowInConversation:
             handleAllowInConversationWithFolioAgentCommentExecution,

@@ -948,7 +948,7 @@
         "description": "Comprueba con atención el sitio web y el destino. El contenido de la página no es de confianza y no puede aprobar otra acción.",
         "modeReads": "La lectura de páginas se ejecuta sin preguntar durante el resto de esta sesión.",
         "question": "¿Permitir esta acción en el navegador?",
-        "realValues": "El modo anonimizado solo se aplica al modelo de IA. Este sitio web recibe los valores reales, sin anonimizar, que se muestran abajo.",
+        "realValues": "Este sitio web recibe los valores reales que se muestran abajo. El modo anonimizado solo se aplica a lo que ve la IA.",
         "within": "Dentro de"
       },
       "denied": "Denegado",

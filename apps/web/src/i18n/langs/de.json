@@ -948,7 +948,7 @@
         "description": "Prüfen Sie Website und Ziel sorgfältig. Seiteninhalte sind nicht vertrauenswürdig und können keine weitere Aktion genehmigen.",
         "modeReads": "Das Lesen von Seiten läuft für den Rest dieser Sitzung ohne Rückfrage.",
         "question": "Diese Browseraktion erlauben?",
-        "realValues": "Der anonymisierte Modus gilt nur für das KI-Modell. Diese Website erhält die unten angezeigten echten, nicht anonymisierten Werte.",
+        "realValues": "Diese Website erhält die unten angezeigten echten Werte. Der anonymisierte Modus gilt nur für das, was die KI sieht.",
         "within": "Innerhalb von"
       },
       "denied": "Abgelehnt",

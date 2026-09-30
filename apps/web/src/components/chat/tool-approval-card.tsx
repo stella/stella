@@ -1095,9 +1095,6 @@ const BrowserControlInputSummary = ({
   isAwaitingDecision: boolean;
 }) => {
   const t = useTranslations();
-  // The browser receives the real values in every send mode; in anonymized
-  // mode the card says so, since the model itself only sees placeholders.
-  const { anonymized } = useChatApproval();
   const command = parseBrowserControlCommand(input);
   if (!command) {
     return null;
@@ -1143,11 +1140,13 @@ const BrowserControlInputSummary = ({
           <p className="text-muted-foreground mt-0.5 text-xs">
             {t("chat.approval.browser.description")}
           </p>
-          {anonymized && (
-            <p className="mt-1 text-xs font-medium">
-              {t("chat.approval.browser.realValues")}
-            </p>
-          )}
+          {/* The browser receives the values below as they are, whatever
+              the send mode: anonymized mode covers only what the model
+              sees. Stated on every card, since the mode can change while
+              an approval is pending. */}
+          <p className="mt-1 text-xs font-medium">
+            {t("chat.approval.browser.realValues")}
+          </p>
         </div>
       )}
       <dl className="bg-background/60 space-y-1.5 rounded-md border p-2">

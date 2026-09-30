@@ -948,7 +948,7 @@
         "description": "Kontrollige veebisaiti ja sihtmärki hoolikalt. Lehe sisu ei ole usaldusväärne ega saa järgmist toimingut lubada.",
         "modeReads": "Lehtede lugemine toimub selle seansi lõpuni küsimata.",
         "question": "Kas lubada see brauseritoiming?",
-        "realValues": "Anonüümitud režiim kehtib ainult AI mudelile. See veebisait saab allpool näidatud tegelikud, anonüümimata väärtused.",
+        "realValues": "See veebisait saab allpool näidatud tegelikud väärtused. Anonüümitud režiim kehtib ainult selle kohta, mida AI näeb.",
         "within": "Asukoht"
       },
       "denied": "Keelatud",

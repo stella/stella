@@ -448,7 +448,6 @@ const RecordedThreadPage = ({
         value={{
           activeOrganizationId: organizationId,
           alwaysApprovedTools: session.alwaysApprovedTools,
-          anonymized: false,
           conversationApprovedTools: session.conversationApprovedTools,
           handleAllowInConversation: session.handleAllowInConversation,
           handleAlwaysAllow: session.handleAlwaysAllow,

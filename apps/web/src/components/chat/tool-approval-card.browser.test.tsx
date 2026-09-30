@@ -17,7 +17,7 @@ import messages from "@/i18n/langs/en.json";
 
 const noop = () => undefined;
 
-const renderCard = (part: unknown, { anonymized = false } = {}) => {
+const renderCard = (part: unknown) => {
   if (!isApprovalPart(part)) {
     throw new Error("Expected a browser approval part");
   }
@@ -28,7 +28,6 @@ const renderCard = (part: unknown, { anonymized = false } = {}) => {
           value={{
             activeOrganizationId: "org-1",
             alwaysApprovedTools: new Set(),
-            anonymized,
             conversationApprovedTools: new Set(),
             handleAllowInConversation: noop,
             handleAlwaysAllow: noop,
@@ -64,7 +63,7 @@ describe("browser approval card", () => {
     );
   });
 
-  test("says the website receives real values in anonymized mode", () => {
+  test("says the website receives the real values it shows", () => {
     const fillForm = {
       action: "fill",
       page: { revision: "revision-1", url: "https://example.com/form" },
@@ -73,15 +72,13 @@ describe("browser approval card", () => {
     };
     const realValues = messages.chat.approval.browser.realValues;
 
-    const anonymizedMarkup = renderCard(
-      browserPart(fillForm, "approval-requested"),
-      { anonymized: true },
+    const pending = renderCard(browserPart(fillForm, "approval-requested"));
+    expect(pending).toContain(realValues);
+    expect(pending).toContain("Dana Novotná");
+    // A decided card no longer asks, so it no longer warns.
+    expect(renderCard(browserPart(fillForm, "complete"))).not.toContain(
+      realValues,
     );
-    expect(anonymizedMarkup).toContain(realValues);
-    expect(anonymizedMarkup).toContain("Dana Novotná");
-    expect(
-      renderCard(browserPart(fillForm, "approval-requested")),
-    ).not.toContain(realValues);
   });
 
   test("a past browser action no longer asks", () => {
