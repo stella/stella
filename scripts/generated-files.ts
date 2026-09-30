@@ -1,3 +1,7 @@
+import { BASELINE_PATHS } from "./baseline-paths";
+
+export const RATCHET_GENERATOR_ID = "ratchet-improvements";
+
 type GeneratorCheck =
   | { check: readonly string[]; checkedBy?: never; unchecked?: never }
   | { check: null; checkedBy: string; unchecked?: never }
@@ -29,6 +33,23 @@ const MODEL_CATALOG_INPUTS = [
 ] as const;
 
 export const GENERATORS = [
+  {
+    id: RATCHET_GENERATOR_ID,
+    outputs: [BASELINE_PATHS.ratchet],
+    // Whole-tree metrics include source, configuration and workspace structure.
+    inputs: ["**"],
+    write: [
+      "bun",
+      "--no-install",
+      "--no-env-file",
+      "scripts/ratchet.ts",
+      "--write-improvements-only",
+    ],
+    check: null,
+    checkedBy: "Ratchet guard",
+    autofix: true,
+    after: [],
+  },
   {
     id: "capability-catalog",
     outputs: [
@@ -685,7 +706,12 @@ export const generatorsForFiles = (files: readonly string[]) => {
 };
 
 export const allowedOutputs = (generators: readonly Generator[]) => [
-  ...new Set(generators.flatMap((generator) => generator.outputs)),
+  // The ratchet output requires a separate trusted proof, never the plan alone.
+  ...new Set(
+    generators
+      .flatMap((generator) => generator.outputs)
+      .filter((output) => output !== BASELINE_PATHS.ratchet),
+  ),
 ];
 
 export const orderGenerators = (

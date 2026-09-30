@@ -3,9 +3,12 @@ import * as React from "react";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import * as v from "valibot";
 
+import { ProtectedPendingSkeleton } from "@/routes/-protected-pending-skeleton";
+
 const DEV_VISUAL = {
   controlSizes: "control-sizes",
   inspectorPane: "inspector-pane",
+  shellPending: "shell-pending",
   workspaceTable: "workspace-table",
 } as const;
 
@@ -49,6 +52,7 @@ const searchSchema = v.object({
     v.picklist([
       DEV_VISUAL.controlSizes,
       DEV_VISUAL.inspectorPane,
+      DEV_VISUAL.shellPending,
       DEV_VISUAL.workspaceTable,
     ]),
   ),
@@ -83,6 +87,12 @@ function DevRouteComponent() {
         </main>
       </React.Suspense>
     );
+  }
+
+  // The signed-in shell's loading state, held still so it can be inspected;
+  // in the product it only shows while the shell data loads.
+  if (visual === DEV_VISUAL.shellPending) {
+    return <ProtectedPendingSkeleton />;
   }
 
   if (visual === DEV_VISUAL.inspectorPane) {
