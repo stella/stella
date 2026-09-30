@@ -2,7 +2,7 @@ import { panic } from "better-result";
 
 import {
   isEffectivelyInstalled,
-  type CatalogueEntry,
+  type CatalogueDisplayEntry,
 } from "@/lib/knowledge/catalogue-types";
 
 /**
@@ -13,7 +13,9 @@ import {
  */
 export type CatalogueRemoval = "none" | "immediate" | "confirm";
 
-export const catalogueRemoval = (entry: CatalogueEntry): CatalogueRemoval => {
+export const catalogueRemoval = (
+  entry: CatalogueDisplayEntry,
+): CatalogueRemoval => {
   if (!isEffectivelyInstalled(entry) || entry.isLocked) {
     return "none";
   }

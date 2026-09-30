@@ -7,7 +7,7 @@ import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import type { CatalogueEntry } from "@/lib/knowledge/catalogue-types";
+import type { CatalogueDisplayEntry } from "@/lib/knowledge/catalogue-types";
 import { knowledgeKeys } from "@/lib/knowledge/queries";
 import { catalogueKeys } from "@/lib/knowledge/queries/catalogue";
 import {
@@ -22,7 +22,7 @@ import { toSafeId } from "@/lib/safe-id";
  * (settings list + inspector view) can share the same hook.
  */
 export const useUninstallEntry = (
-  entry: CatalogueEntry,
+  entry: CatalogueDisplayEntry,
   organizationId: string,
 ) => {
   const t = useTranslations();

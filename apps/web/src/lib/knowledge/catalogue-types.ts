@@ -72,7 +72,7 @@ export type CatalogueNativeTool = CommonFields & {
   documentationUrl?: string | undefined;
 };
 
-export type CatalogueEntry =
+export type CatalogueDisplayEntry =
   | CatalogueSkill
   | CatalogueMcp
   | CatalogueNativeTool;
@@ -88,7 +88,9 @@ export type CatalogueEntry =
  * MCP and skill entries fully drop from `installState === "installed"`
  * on remove, so the simple state check is enough.
  */
-export const isEffectivelyInstalled = (entry: CatalogueEntry): boolean => {
+export const isEffectivelyInstalled = (
+  entry: CatalogueDisplayEntry,
+): boolean => {
   if (entry.installState !== "installed") {
     return false;
   }

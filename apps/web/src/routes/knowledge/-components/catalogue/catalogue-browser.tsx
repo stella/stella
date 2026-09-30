@@ -39,7 +39,7 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
 import {
   isEffectivelyInstalled,
-  type CatalogueEntry,
+  type CatalogueDisplayEntry,
 } from "@/lib/knowledge/catalogue-types";
 import { useChatUnavailableSkills } from "@/lib/prompts/use-chat-unavailable-skills";
 import {
@@ -86,7 +86,7 @@ type CatalogueBrowserProps = {
   practiceJurisdictions?: readonly PracticeJurisdiction[];
 };
 
-const toRowDisplay = (entry: CatalogueEntry): CatalogueRowDisplay => ({
+const toRowDisplay = (entry: CatalogueDisplayEntry): CatalogueRowDisplay => ({
   slug: entry.slug,
   kind: entry.kind,
   displayName: entry.displayName,
@@ -134,7 +134,7 @@ export const CatalogueBrowser = ({
 
   const entries = data.entries;
 
-  const onRowFocus = (entry: CatalogueEntry) => {
+  const onRowFocus = (entry: CatalogueDisplayEntry) => {
     const tabId = toolDetailTabId(entry.kind, entry.slug);
     if (focusedTabId === tabId) {
       inspector.close(tabId);
@@ -177,7 +177,7 @@ export const CatalogueBrowser = ({
     );
   };
 
-  const openEditInstalledSkill = (entry: CatalogueEntry) => {
+  const openEditInstalledSkill = (entry: CatalogueDisplayEntry) => {
     if (entry.kind !== "skill" || entry.installedSkillId === null) {
       return;
     }
@@ -340,7 +340,7 @@ export const CatalogueBrowserWithRouteData = ({
 );
 
 type CatalogueEntryRowProps = {
-  entry: CatalogueEntry;
+  entry: CatalogueDisplayEntry;
   focused: boolean;
   onEditSkill: () => void;
   onFocus: () => void;

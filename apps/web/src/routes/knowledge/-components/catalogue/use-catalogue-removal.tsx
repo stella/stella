@@ -14,13 +14,13 @@ import {
 } from "@stll/ui/alert-dialog";
 import { Button } from "@stll/ui/button";
 
-import type { CatalogueEntry } from "@/lib/knowledge/catalogue-types";
+import type { CatalogueDisplayEntry } from "@/lib/knowledge/catalogue-types";
 
 import type { CatalogueRemoval } from "./catalogue-removal.logic";
 import { catalogueRemoval } from "./catalogue-removal.logic";
 
 type UseCatalogueRemovalOptions = {
-  entry: CatalogueEntry;
+  entry: CatalogueDisplayEntry;
   onRemove: () => void;
 };
 

@@ -1,4 +1,4 @@
-import type { CatalogueEntry } from "@/lib/knowledge/catalogue-types";
+import type { CatalogueDisplayEntry } from "@/lib/knowledge/catalogue-types";
 
 import type { ToolDetailKind, ToolDetailPayload } from "./tool-detail-view";
 
@@ -12,7 +12,7 @@ export const toolDetailTabId = (kind: ToolDetailKind, slug: string): string =>
   `tool-detail:${kind}:${slug}`;
 
 export const getToolDetailPayload = (
-  entry: CatalogueEntry,
+  entry: CatalogueDisplayEntry,
   organizationId: string,
 ): ToolDetailPayload => {
   const activeSkill =
