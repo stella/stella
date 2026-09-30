@@ -408,8 +408,6 @@ export const MCP_ERROR_CODES = ${JSON.stringify(MCP_ERROR_CODES, null, 2)} as co
 export type McpErrorCode = (typeof MCP_ERROR_CODES)[number];
 export const ACTION_ADMISSION_REFUSALS = ${JSON.stringify(ACTION_ADMISSION_REFUSALS, null, 2)} as const;
 export type ActionAdmissionCode = keyof typeof ACTION_ADMISSION_REFUSALS;
-export const isActionAdmissionCode = (code: unknown): code is ActionAdmissionCode =>
-  typeof code === "string" && Object.hasOwn(ACTION_ADMISSION_REFUSALS, code);
 export const MCP_CLI_TOOL_SCOPES = ${JSON.stringify(MCP_CLI_TOOL_SCOPES, null, 2)} as const;
 export type McpCliToolScope = (typeof MCP_CLI_TOOL_SCOPES)[number];
 `,

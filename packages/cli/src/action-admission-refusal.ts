@@ -2,10 +2,12 @@ import { Result } from "better-result";
 
 import {
   ACTION_ADMISSION_REFUSALS,
-  isActionAdmissionCode,
   type ActionAdmissionCode,
 } from "./generated/mcp-contract.js";
 import type { OutputFormat } from "./output.js";
+
+const isActionAdmissionCode = (code: unknown): code is ActionAdmissionCode =>
+  typeof code === "string" && Object.hasOwn(ACTION_ADMISSION_REFUSALS, code);
 
 export type ActionAdmissionRefusal = {
   code: ActionAdmissionCode;

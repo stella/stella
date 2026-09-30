@@ -87,10 +87,6 @@ export const ACTION_ADMISSION_REFUSALS = {
   },
 } as const;
 export type ActionAdmissionCode = keyof typeof ACTION_ADMISSION_REFUSALS;
-export const isActionAdmissionCode = (
-  code: unknown,
-): code is ActionAdmissionCode =>
-  typeof code === "string" && Object.hasOwn(ACTION_ADMISSION_REFUSALS, code);
 export const MCP_CLI_TOOL_SCOPES = [
   "read",
   "contacts_write",
