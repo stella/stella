@@ -483,7 +483,6 @@ type Messages = {
     "globalTimer": {
       "confirm": "Confirm time";
       "discard": "Discard timer";
-      "loggedToday": "Logged today";
       "matterInaccessible": "Choose a matter you can access.";
       "narrativeRequired": "Add a description before confirming time.";
       "pause": "Pause";
