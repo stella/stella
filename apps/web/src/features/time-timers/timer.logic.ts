@@ -67,7 +67,7 @@ const TIMER_REFUSALS = {
 
 const isTimerRefusal = (code: string): code is keyof typeof TIMER_REFUSALS =>
   Object.hasOwn(TIMER_REFUSALS, code);
-export const timerErrorKey = (error: unknown): TranslationKey | null =>
+export const timerErrorKey = (error: unknown) =>
   APIError.is(error) && error.code !== undefined && isTimerRefusal(error.code)
     ? TIMER_REFUSALS[error.code]
     : null;
