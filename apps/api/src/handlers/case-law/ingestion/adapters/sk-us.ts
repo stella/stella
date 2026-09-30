@@ -116,6 +116,7 @@ const DOC_DOWNLOAD_URL = `${BASE_URL}/docDownload`;
 
 /** The corpus this adapter reads; the service echoes it back as `docType`. */
 const DECISION_DOC_TYPE = "USSR_DECISION_MK";
+const COLLECTION_DOC_TYPE = "USSR_ZNAU";
 
 /**
  * The index fields the service states only as facet counts.
@@ -506,6 +507,38 @@ const fetchFacets = async (
     ...(signal === undefined ? {} : { signal }),
   });
 
+/** Collection entries have their own document ids; a docket query does not re-key them. */
+const fetchCollectionListing = async (
+  { caseNumber, decisionDate }: { caseNumber: string; decisionDate: string },
+  signal?: AbortSignal,
+): Promise<string | undefined> =>
+  await fetchJson(SEARCH_PATH, {
+    body: JSON.stringify({
+      docType: COLLECTION_DOC_TYPE,
+      start: 0,
+      pageSize: LISTING_PAGE_SIZE,
+      searchFilter: {
+        filterNameValue: [
+          {
+            type: "DATE_RANGE",
+            fieldName: "mkDateOfDecision",
+            fieldValue: { FROM: decisionDate, TO: decisionDate },
+          },
+          {
+            type: "STRING",
+            fieldName: "mkRSAPNumberOfFileNorm",
+            fieldValue: caseNumber,
+          },
+        ],
+      },
+      facetFilter: { facetFilterNameValue: [] },
+      facets: [],
+      fieldsToReturn: FIELDS_TO_RETURN,
+      clustering: false,
+    }),
+    ...(signal === undefined ? {} : { signal }),
+  });
+
 /**
  * The docket file a decision was filed under, with the documents in it.
  *
@@ -589,6 +622,10 @@ const codelistPart = (
  * court has since added a judge to.
  */
 export type SkUsPageContext = {
+  collectionListing: (
+    key: { caseNumber: string; decisionDate: string },
+    signal?: AbortSignal,
+  ) => Promise<string | undefined>;
   codelist: (signal?: AbortSignal) => Promise<SkUsCodelist | undefined>;
   facets: (
     key: { caseNumber: string; decisionDate: string },
@@ -630,11 +667,20 @@ export const createSkUsPageContext = (): SkUsPageContext => {
     const [caseNumber = "", decisionDate = ""] = key.split(FACET_KEY_SEPARATOR);
     return await fetchFacets({ caseNumber, decisionDate }, signal);
   });
+  const collectionListing = perKey(async (key, signal) => {
+    const [caseNumber = "", decisionDate = ""] = key.split(FACET_KEY_SEPARATOR);
+    return await fetchCollectionListing({ caseNumber, decisionDate }, signal);
+  });
   const courtFile = perKey(
     async (key, signal) => await fetchCourtFile(key, signal),
   );
 
   return {
+    collectionListing: async ({ caseNumber, decisionDate }, signal) =>
+      await collectionListing(
+        `${caseNumber}${FACET_KEY_SEPARATOR}${decisionDate}`,
+        signal,
+      ),
     codelist: async (signal) => await codelist("decision", signal),
     facets: async ({ caseNumber, decisionDate }, signal) =>
       await facets(
@@ -840,17 +886,191 @@ const skUsTextFields = (doc: SearchDocument): IngestionResult["textFields"] => {
   const absent = absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED);
   const headnote = doc.mkClauseTitle?.trim();
   const legalSentence = doc.mkClauseText?.trim();
-  return {
+  const fields = {
     ...absent,
     ...(headnote === undefined || headnote.length === 0
       ? {}
       : { headnote: { type: "present" as const, text: headnote } }),
-    ...(legalSentence === undefined ||
-    legalSentence.length === 0 ||
-    legalSentence === NO_LEGAL_SENTENCE
-      ? {}
-      : { legalSentence: { type: "present" as const, text: legalSentence } }),
   };
+  if (legalSentence === NO_LEGAL_SENTENCE) {
+    return {
+      ...fields,
+      legalSentence: {
+        type: "absent",
+        reason: TEXT_ABSENCE_REASON.PUBLISHER_PLACEHOLDER,
+      },
+    };
+  }
+  if (legalSentence === undefined || legalSentence.length === 0) {
+    return fields;
+  }
+  return {
+    ...fields,
+    legalSentence: { type: "present", text: legalSentence },
+  };
+};
+
+type SkUsCollectionMatch =
+  | { status: "matched"; entry: SearchDocument }
+  | {
+      status: "unresolved";
+      reason:
+        | "unavailable"
+        | "incomplete_listing"
+        | "no_matching_entry"
+        | "ambiguous_identity";
+    };
+
+const storedSearchResponse = (
+  raw: string | undefined,
+): SearchResponse | null => {
+  if (raw === undefined) {
+    return null;
+  }
+  const value: unknown = Result.try({
+    try: (): unknown => JSON.parse(raw),
+    catch: () => null,
+  }).unwrapOr(null);
+  return isSearchResponse(value) ? value : null;
+};
+
+type SkUsCollectionMatchOptions = {
+  doc: SearchDocument;
+  collectionJson: string | undefined;
+  facetsJson: string | undefined;
+};
+
+/** A docket can contain several judgments and opinions, so both sides must be unique. */
+const skUsCollectionMatch = ({
+  doc,
+  collectionJson,
+  facetsJson,
+}: SkUsCollectionMatchOptions): SkUsCollectionMatch => {
+  const collection = storedSearchResponse(collectionJson);
+  if (collection === null) {
+    return { status: "unresolved", reason: "unavailable" };
+  }
+  if (collection.numFound !== collection.documents.length) {
+    return { status: "unresolved", reason: "incomplete_listing" };
+  }
+  const date = parseApiDate(doc.mkDateOfDecision);
+  const kind = doc.mkFormOfDecision?.toLocaleLowerCase("sk");
+  const sameDecision = (entry: SearchDocument): boolean => {
+    if (
+      date === undefined ||
+      kind === undefined ||
+      entry.mkRSAPNumberOfFile !== doc.mkRSAPNumberOfFile ||
+      parseApiDate(entry.mkDateOfDecision) !== date
+    ) {
+      return false;
+    }
+    if (typeof entry.mkFormOfDecision === "string") {
+      return entry.mkFormOfDecision.toLocaleLowerCase("sk") === kind;
+    }
+    return (
+      Array.isArray(entry.mkTypeOfDecision) &&
+      entry.mkTypeOfDecision.some(
+        (value) =>
+          typeof value === "string" && value.toLocaleLowerCase("sk") === kind,
+      )
+    );
+  };
+  const entries = collection.documents.filter(
+    (entry) => entry.docType === COLLECTION_DOC_TYPE && sameDecision(entry),
+  );
+  const entry = entries.at(0);
+  if (entry === undefined) {
+    return { status: "unresolved", reason: "no_matching_entry" };
+  }
+  if (entries.length !== 1) {
+    return { status: "unresolved", reason: "ambiguous_identity" };
+  }
+  const siblings = storedSearchResponse(facetsJson);
+  if (siblings === null || siblings.numFound !== siblings.documents.length) {
+    return { status: "unresolved", reason: "incomplete_listing" };
+  }
+  const decisions = siblings.documents.filter(sameDecision);
+  if (
+    decisions.length !== 1 ||
+    decisions.at(0)?.documentId !== doc.documentId
+  ) {
+    return { status: "unresolved", reason: "ambiguous_identity" };
+  }
+  return { status: "matched", entry };
+};
+
+type SkUsCollectionPublication =
+  | {
+      status: "published";
+      documentId: string | null;
+      number: string | number | null;
+      volume: string | number | null;
+      year: number | null;
+      period: string | null;
+    }
+  | { status: "selected" }
+  | { status: "not_included" }
+  | {
+      status: "not_stated";
+      reason: Extract<SkUsCollectionMatch, { status: "unresolved" }>["reason"];
+    };
+
+const skUsCollectionPublication = (
+  doc: SearchDocument,
+  collection: SkUsCollectionMatch,
+): SkUsCollectionPublication => {
+  switch (collection.status) {
+    case "matched": {
+      const { entry } = collection;
+      return {
+        status: "published",
+        documentId: entry.documentId ?? null,
+        number: entry.mkLawReportsNumber ?? null,
+        volume: entry.mkVolumeOfLawReports ?? null,
+        year: entry.mkYearOfLawReports ?? null,
+        period: entry.mkTimePeriodZNaU ?? null,
+      };
+    }
+    case "unresolved":
+      if (doc.mkIncludeToZnaU === true) {
+        return { status: "selected" };
+      }
+      if (doc.mkIncludeToZnaU === false) {
+        return { status: "not_included" };
+      }
+      return { status: "not_stated", reason: collection.reason };
+    default:
+      collection satisfies never;
+      return panic("Unhandled ÚS collection identity state");
+  }
+};
+
+const skUsCollectionTextFields = (
+  doc: SearchDocument,
+  collection: SkUsCollectionMatch,
+): IngestionResult["textFields"] => {
+  const stated = skUsTextFields(doc);
+  switch (collection.status) {
+    case "unresolved":
+      return stated;
+    case "matched": {
+      const published = skUsTextFields(collection.entry);
+      return {
+        ...stated,
+        headnote:
+          stated.headnote.type === "present"
+            ? stated.headnote
+            : published.headnote,
+        legalSentence:
+          stated.legalSentence.type === "present"
+            ? stated.legalSentence
+            : published.legalSentence,
+      };
+    }
+    default:
+      collection satisfies never;
+      return panic("Unhandled ÚS collection identity state");
+  }
 };
 
 type SkUsMetadataOptions = {
@@ -858,6 +1078,7 @@ type SkUsMetadataOptions = {
   facetsJson: string | undefined;
   /** The docket file's own header row, where the service served one. */
   header: SearchDocument | undefined;
+  collection: SkUsCollectionMatch;
 };
 
 /**
@@ -873,6 +1094,7 @@ const skUsMetadata = ({
   doc,
   facetsJson,
   header,
+  collection,
 }: SkUsMetadataOptions): Record<string, unknown> => ({
   caseNumber: doc.mkRSAPNumberOfFile,
   ecli: doc.mkECLI,
@@ -903,6 +1125,13 @@ const skUsMetadata = ({
   affectedLegalRegulation: doc.mkAffectedLegalRegulation,
   underage: doc.mkUnderage,
   includeToZnaU: doc.mkIncludeToZnaU,
+  publishedInCollection: skUsCollectionPublication(doc, collection),
+  ...(collection.status === "matched"
+    ? { collectionEntry: collection.entry }
+    : {}),
+  ecliAvailability: doc.mkECLI
+    ? { status: "published" }
+    : { status: "not_published" },
   formOfEntry: doc.mkFormOfEntry,
   typeOfEntry: doc.mkTypeOfEntry,
   parentDecisionKind: doc.mkParentIdDecision,
@@ -960,6 +1189,11 @@ export const buildSkUsDecision = async (
     decisionDate === undefined
       ? undefined
       : await page.facets({ caseNumber, decisionDate }, signal);
+  const collectionJson =
+    decisionDate === undefined
+      ? undefined
+      : await page.collectionListing({ caseNumber, decisionDate }, signal);
+  const collection = skUsCollectionMatch({ doc, collectionJson, facetsJson });
   const rvpNumber = doc.mkRVPNumberOfFile ?? undefined;
   const courtFileJson =
     rvpNumber === undefined
@@ -1005,6 +1239,9 @@ export const buildSkUsDecision = async (
 
   const parts: Record<string, string> = {
     listing: JSON.stringify(doc),
+    ...(collectionJson === undefined
+      ? {}
+      : { "collection-listing": collectionJson }),
     ...(documentXhtml === undefined ? {} : { document: documentXhtml }),
     ...(facetsJson === undefined ? {} : { facets: facetsJson }),
     ...(courtFileJson === undefined ? {} : { file: courtFileJson }),
@@ -1045,11 +1282,11 @@ export const buildSkUsDecision = async (
     ...(pdfBytes === undefined ? { isListingOnly: true } : {}),
     sourceUrl: documentUrl,
     documentUrl,
-    textFields: skUsTextFields(doc),
+    textFields: skUsCollectionTextFields(doc, collection),
     metadata: checkedDecisionMetadata(
-      skUsMetadata({ doc, facetsJson, header }),
+      skUsMetadata({ doc, facetsJson, header, collection }),
     ),
-    // Over the envelope, not over the listing row: the row is one of six
+    // Over the envelope, not over the listing row: the row is one of seven
     // responses stored, and a hash of it alone would call a decision
     // unchanged after the court rewrote the document behind it.
     rawHash: hashContent(sourceRaw),
@@ -1849,6 +2086,15 @@ const listSkUsSourceFields = (parts: SourceRawParts): readonly string[] => {
     }
   }
 
+  const collection = storedSearchResponse(parts["collection-listing"]);
+  if (collection !== null) {
+    for (const entry of collection.documents) {
+      for (const name of Object.keys(entry)) {
+        names.add(name);
+      }
+    }
+  }
+
   const facets: unknown = Result.try({
     try: (): unknown => JSON.parse(parts["facets"] ?? "null"),
     catch: () => null,
@@ -1984,6 +2230,11 @@ const reparseStoredRaw = (
   const documentUrl = `${DOC_DOWNLOAD_URL}/${fields.documentId}`;
   const documentXhtml = parts?.["document"];
   const facetsJson = parts?.["facets"];
+  const collection = skUsCollectionMatch({
+    doc: listing,
+    collectionJson: parts?.["collection-listing"],
+    facetsJson,
+  });
 
   const parsed =
     documentXhtml === undefined
@@ -2016,12 +2267,13 @@ const reparseStoredRaw = (
       }),
       sourceUrl: documentUrl,
       documentUrl,
-      textFields: skUsTextFields(listing),
+      textFields: skUsCollectionTextFields(listing, collection),
       metadata: checkedDecisionMetadata(
         skUsMetadata({
           doc: listing,
           facetsJson,
           header: courtFileHeader(parts?.["file"]),
+          collection,
         }),
       ),
       rawHash: hashContent(raw),
@@ -2039,11 +2291,12 @@ const reparseStoredRaw = (
  * Every payload this court's service serves for one decision, and whether the
  * row keeps it.
  *
- * Six are kept: the search row that names the decision, the text rendering
+ * Seven are kept: the search row that names the decision, the collection
+ * listing joined only when both identities are unambiguous, the text rendering
  * and the file the court serves of the same document, the facet counts that
  * are the only statement of several index fields, the docket file the
  * document was filed under, and the vocabularies the coded fields resolve
- * against. Two corpora under the same endpoint are not walked; the rest of
+ * against. The archive corpus is not walked; the rest of
  * the list is this service's export machinery and the portal around it.
  */
 const SOURCE_SURFACES = [
@@ -2075,10 +2328,7 @@ const SK_US_SOURCE_SURFACES = {
     file: storedSourceSurface("file"),
     facets: storedSourceSurface("facets"),
     codelists: storedSourceSurface("codelists"),
-    "collection-listing": backlogSurface(
-      ADAPTER_KEYS.SK_US,
-      "separate corpus; identity reconciliation rule needed",
-    ),
+    "collection-listing": storedSourceSurface("collection-listing"),
     "archive-listing": backlogSurface(
       ADAPTER_KEYS.SK_US,
       "separate corpus; identity reconciliation rule needed",

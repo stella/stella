@@ -185,6 +185,7 @@ type MockOptions = {
   dissenters?: readonly string[];
   /** Every supplementary surface answers nothing, as this service does under load. */
   supplementaryUnavailable?: boolean;
+  collection?: SearchStub;
 };
 
 /**
@@ -270,6 +271,7 @@ const mockFetch = ({
   search,
   searchFor,
   supplementaryUnavailable = false,
+  collection = { type: "page", documents: [], numFound: 0 },
 }: MockOptions): MockHandle => {
   let searchCall = 0;
   let downloadCall = 0;
@@ -280,6 +282,13 @@ const mockFetch = ({
       const url = new URL(input instanceof Request ? input.url : String(input));
       if (url.pathname === SEARCH_PATH) {
         const body = parseSearchBody(init);
+        if (body.docType === "USSR_ZNAU") {
+          return Promise.resolve(
+            supplementaryUnavailable
+              ? unavailable()
+              : searchResponse(collection),
+          );
+        }
         if (isFacetQuery(body)) {
           facetCall += 1;
           return Promise.resolve(
@@ -859,6 +868,73 @@ describe("sk-us buildDecision", () => {
     );
   });
 
+  test("collection enrichment survives stored replay and never substitutes the collection document identity", async () => {
+    mockFetch({ search: [] });
+    const entry = {
+      documentId: "11111111-2222-4333-8444-555555555555",
+      docType: "USSR_ZNAU",
+      mkRSAPNumberOfFile: PLENARY_OPINION.mkRSAPNumberOfFile,
+      mkDateOfDecision: PLENARY_OPINION.mkDateOfDecision,
+      mkTypeOfDecision: ["nález"],
+      mkClauseTitle: "Preskúmanie zákonnosti",
+      mkClauseText: "Rozhodnutie musí byť preskúmateľné.",
+      mkLawReportsNumber: "4",
+      mkYearOfLawReports: 2020,
+    };
+    const collectionJson = JSON.stringify({ documents: [entry], numFound: 1 });
+    const built = await buildSkUsDecision(PLENARY_OPINION, {
+      context: {
+        collectionListing: async ({ caseNumber, decisionDate }) => {
+          expect(caseNumber).toBe(PLENARY_OPINION.mkRSAPNumberOfFile);
+          expect(decisionDate).toBe("2020-03-12");
+          return await Promise.resolve(collectionJson);
+        },
+        facets: async () =>
+          await Promise.resolve(
+            JSON.stringify({ documents: [PLENARY_OPINION], numFound: 1 }),
+          ),
+        courtFile: async () => await Promise.resolve(undefined),
+        codelist: async () => await Promise.resolve(undefined),
+      },
+    });
+    if (built.type !== "built") {
+      throw new Error(`expected a built decision, got ${built.type}`);
+    }
+    const { decision } = built;
+    expect(decision.sourceDocumentId).toBe(PLENARY_OPINION.documentId);
+    expect(decision.textFields.legalSentence).toEqual({
+      type: "present",
+      text: entry.mkClauseText,
+    });
+    expect(
+      decodeSourceRawEnvelope(decision.sourceRaw ?? "")?.["collection-listing"],
+    ).toBe(collectionJson);
+    const reparse = skUsAdapter.reparseStoredRaw;
+    if (reparse === undefined) {
+      throw new Error("sk-us must support stored replay");
+    }
+    const replayed = await reparse({
+      raw: new TextEncoder().encode(decision.sourceRaw),
+      contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+      caseNumber: decision.caseNumber,
+      sourceDocumentId: decision.sourceDocumentId ?? null,
+      court: decision.court,
+      language: decision.language,
+      ecli: decision.ecli ?? null,
+      decisionDate: decision.decisionDate ?? null,
+      decisionType: decision.decisionType ?? null,
+      sourceUrl: decision.sourceUrl ?? null,
+      documentUrl: decision.documentUrl ?? null,
+      metadata: decision.metadata,
+    });
+    expect(replayed.type).toBe("parsed");
+    if (replayed.type !== "parsed") {
+      throw new Error("the captured collection must be reparsable");
+    }
+    expect(replayed.result.textFields).toEqual(decision.textFields);
+    expect(replayed.result.metadata).toEqual(decision.metadata);
+  });
+
   test("every response the court served for the decision is in the envelope", async () => {
     mockFetch({ search: [], dissenters: ["Peter Straka"] });
 
@@ -872,6 +948,7 @@ describe("sk-us buildDecision", () => {
     // was the one response a decision with a document kept none of.
     expect(Object.keys(parts ?? {}).toSorted()).toEqual([
       "codelists",
+      "collection-listing",
       "document",
       "facets",
       "file",
