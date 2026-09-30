@@ -24,6 +24,7 @@
  */
 
 import * as cheerio from "cheerio";
+import { isComment, isText } from "domhandler";
 import type { AnyNode } from "domhandler";
 
 import {
@@ -431,7 +432,7 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
   };
 
   const visit = (el: AnyNode): void => {
-    if (el.type === "comment") {
+    if (isComment(el)) {
       return;
     }
     const $el = $(el);
@@ -450,7 +451,7 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
       visitContents($el);
       return;
     }
-    if (el.type === "text") {
+    if (isText(el)) {
       const plainText = el.data.trim();
       if (plainText) {
         chunks.push({
