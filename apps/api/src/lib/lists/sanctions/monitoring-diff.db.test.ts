@@ -1045,12 +1045,24 @@ test(
   TIMEOUT,
 );
 
-test.each(["dismissed", "confirmed"] as const)(
-  "rejects %s when evidence expires during advisory-lock acquisition",
-  async (disposition) => {
+test.each(
+  (["dismissed", "confirmed"] as const).flatMap((disposition) =>
+    (["advisory", "settings", "contact", "match"] as const).map((lock) => ({
+      disposition,
+      lock,
+    })),
+  ),
+)(
+  "rejects $disposition when evidence expires after the $lock lock",
+  async ({ disposition, lock }) => {
     await db
       .delete(organizationSettings)
       .where(eq(organizationSettings.organizationId, orgId));
+    await db.insert(organizationSettings).values({
+      id: toSafeId<"organizationSettings">(Bun.randomUUIDv7()),
+      organizationId: orgId,
+      sanctionsMonitoringMode: "enabled",
+    });
     await activate("b");
     const contact = await addContact();
     await commit(await prepare(contact));
@@ -1079,16 +1091,49 @@ test.each(["dismissed", "confirmed"] as const)(
     let audits = 0;
     const operation = scopedDb(async (tx) => {
       let firstStatement = true;
+      let lockedSelections = 0;
+      const pauseAfterLock = async (step: typeof lock) => {
+        if (step === lock) {
+          waiting.resolve(undefined);
+          await acquired.promise;
+        }
+      };
       const waitingTransaction = new Proxy(tx, {
         get(handle, property) {
           if (property === "execute") {
             return async (query: Parameters<Transaction["execute"]>[0]) => {
+              const result = await handle.execute(query);
               if (firstStatement) {
                 firstStatement = false;
-                waiting.resolve(undefined);
-                await acquired.promise;
+                await pauseAfterLock("advisory");
               }
-              return await handle.execute(query);
+              return result;
+            };
+          }
+          if (property === "select") {
+            return (...args: Parameters<Transaction["select"]>) => {
+              const query = handle.select(...args);
+              const from = query.from.bind(query);
+              return Object.assign(query, {
+                from: (table: Parameters<typeof query.from>[0]) => {
+                  const selected = from(table);
+                  const takeLock = selected.for.bind(selected);
+                  return Object.assign(selected, {
+                    for: (...options: Parameters<typeof selected.for>) =>
+                      takeLock(...options).then(async (rows) => {
+                        const step = (
+                          ["settings", "contact", "match"] as const
+                        ).at(lockedSelections);
+                        lockedSelections += 1;
+                        if (step === undefined) {
+                          panic("Unexpected review row lock");
+                        }
+                        await pauseAfterLock(step);
+                        return rows;
+                      }),
+                  });
+                },
+              });
             };
           }
           return Reflect.get(handle, property);
