@@ -505,12 +505,7 @@ export const createChatRuntime = ({
         setSnapshot({ error });
       }
     },
-    onFinish: () => {
-      if (cancelScheduledEmit !== undefined) {
-        emit();
-      }
-      onFinish();
-    },
+    onFinish,
     onInterruptStateChange: observeInterruptSubmission,
     onLoadingChange: (isLoading) => {
       setSnapshot({
