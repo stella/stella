@@ -189,7 +189,7 @@ describe("daily target ownership and audit", () => {
       }),
     ).toMatchObject({
       code: 403,
-      response: { code: "daily_target_admin_required" },
+      response: { code: "forbidden" },
     });
     expect(
       await readTarget({ organizationId: ids.orgA, userId: ids.userA2 }),

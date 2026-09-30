@@ -51023,7 +51023,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "time-entries", "me-list"],
                 capabilityId: "time-entries.me.list",
                 description:
-                  "List the signed-in user's time entries for one work date across matters in the active organization. Returns only matters the caller can still access, with a cursor for the next page. Daily target and remaining minutes cover all accessible entries for the date, independently of pagination; both are null when no target is set.",
+                  "List the signed-in user's time entries for one work date across matters in the active organization. Returns only matters the caller can still access, with a cursor for the next page. Logged minutes, daily target and remaining minutes cover all accessible entries for the date, independently of pagination. Logged minutes sum client and internal durations; target and remaining minutes are null when no target is set.",
                 access: "read",
                 flags: [
                   {

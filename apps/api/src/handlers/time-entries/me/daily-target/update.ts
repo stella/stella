@@ -1,5 +1,3 @@
-import { Result } from "better-result";
-
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import {
   dailyTargetBody,
@@ -16,17 +14,13 @@ const updateDailyTarget = createSafeRootHandler(
     body: dailyTargetBody,
   },
   async function* ({ safeDb, session, user, body, recordAuditEvent }) {
-    return Result.ok(
-      yield* Result.await(
-        setDailyTarget({
-          safeDb,
-          organizationId: session.activeOrganizationId,
-          userId: user.id,
-          minutes: body.minutes,
-          recordAuditEvent,
-        }),
-      ),
-    );
+    return yield* setDailyTarget({
+      safeDb,
+      organizationId: session.activeOrganizationId,
+      userId: user.id,
+      minutes: body.minutes,
+      recordAuditEvent,
+    });
   },
 );
 export default updateDailyTarget;

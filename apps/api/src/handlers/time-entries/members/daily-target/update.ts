@@ -39,17 +39,13 @@ const updateMemberDailyTarget = createSafeRootHandler(
         }),
       );
     }
-    return Result.ok(
-      yield* Result.await(
-        setDailyTarget({
-          safeDb,
-          organizationId: session.activeOrganizationId,
-          userId: params.userId,
-          minutes: body.minutes,
-          recordAuditEvent,
-        }),
-      ),
-    );
+    return yield* setDailyTarget({
+      safeDb,
+      organizationId: session.activeOrganizationId,
+      userId: params.userId,
+      minutes: body.minutes,
+      recordAuditEvent,
+    });
   },
 );
 export default updateMemberDailyTarget;
