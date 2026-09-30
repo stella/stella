@@ -17,7 +17,7 @@ import type {
   Paragraph,
   ParagraphAlignment,
 } from "@stll/docx-core/model";
-import { parseDocx } from "@stll/folio-core/server";
+import { parseDocx, table } from "@stll/folio-core/server";
 import {
   DECISION_IDENTIFIER_MAX_LENGTH,
   DECISION_IDENTIFIER_TYPES,
@@ -128,19 +128,17 @@ test("custom XML wrappers retain every body and table-cell paragraph", () => {
     { text: "[1] A bíróság minden szót megőriz." },
     { text: "[2] A következő bekezdés is megmarad." },
   ]);
-  document.package.document.content.push({
-    type: "table",
-    rows: [
-      {
-        cells: [
+  document.package.document.content.push(
+    table({
+      rows: [
+        [
           {
-            type: "tableCell",
             content: [paragraphOf({ text: "A cella teljes szövege." })],
           },
         ],
-      },
-    ],
-  });
+      ],
+    }),
+  );
   const expected = parseDocument(document).documentAst;
   const wrap = (content: BlockContent[]) =>
     ({
