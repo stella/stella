@@ -7,11 +7,13 @@ import {
   CORPUS_QUERY_LEAF_BUDGET,
   caseLawCorpusQuery,
   type CorpusStemming,
+  type CorpusFreeTextOptions,
   corpusFreeTextClause,
   type CorpusTermExpander,
   quoteCorpusValue,
   tokenizeCorpusFreeText,
 } from "@/api/lib/legal-search/corpus-query";
+import { MORPHOLOGY_LANGUAGES } from "@/api/lib/legal-search/morphology/stem";
 
 test("free text cannot escape into the query DSL", () => {
   expect(corpusFreeTextClause('smlouva) OR (court:"X" AND text:*')).toBe(
@@ -586,5 +588,204 @@ test("every word keeps its stem leaves while the stem pass fits", () => {
       }
     }),
     propertyConfig(),
+  );
+});
+
+const SK_STEMMING = {
+  language: "sk",
+  fields: STEM_FIELDS,
+} as const satisfies CorpusStemming;
+
+/** Compare candidate free text with the unchanged baseline allocator. */
+const svkFreeText = (
+  text: string,
+  options: Omit<CorpusFreeTextOptions, "slovakLegacyStemFields"> = {},
+) => {
+  const query = caseLawCorpusQuery({
+    text,
+    ...options,
+    filters: { jurisdiction: "SVK" },
+  });
+  return query === null
+    ? null
+    : query.slice(0, -' AND jurisdiction:"SVK"'.length);
+};
+
+test("Slovak terms OR faithful stems beside extended stems in declared fields", () => {
+  expect(svkFreeText("premlčanie", { stemming: SK_STEMMING })).toBe(
+    '(("premlčanie" OR text_stem:"premlčan" OR headnote_stem:"premlčan" OR text_stem:"premlčani" OR headnote_stem:"premlčani"))',
+  );
+  const baseline = corpusFreeTextClause("súd", { stemming: SK_STEMMING });
+  expect(svkFreeText("súd", { stemming: SK_STEMMING })).toBe(baseline);
+  expect(svkFreeText('"premlčanie škodu"', { stemming: SK_STEMMING })).toBe(
+    corpusFreeTextClause('"premlčanie škodu"', { stemming: SK_STEMMING }),
+  );
+});
+
+test("Slovak compatibility preserves NFC normalization and quoted term boundaries", () => {
+  const composed = 'premlčanie "premlčanie škodu" škodu';
+  const decomposed = composed.normalize("NFD");
+  expect(decomposed).not.toBe(composed);
+  const candidate = svkFreeText(composed, { stemming: SK_STEMMING });
+  expect(svkFreeText(decomposed, { stemming: SK_STEMMING })).toBe(candidate);
+  const groups = clauseGroups(candidate ?? "");
+  expect(groups.at(1)).toBe(
+    clauseGroups(
+      corpusFreeTextClause('"premlčanie škodu"', { stemming: SK_STEMMING }) ??
+        "",
+    ).at(0),
+  );
+});
+
+test("only manifest-declared text and headnote stem fields gain faithful alternatives", () => {
+  for (const fields of [
+    [],
+    ["text_stem"],
+    ["headnote_stem"],
+    ["custom_stem"],
+    ["text_stem", "custom_stem"],
+  ]) {
+    const stemming = {
+      language: "sk",
+      fields,
+    } as const satisfies CorpusStemming;
+    const candidate = svkFreeText("premlčanie", { stemming }) ?? "";
+    const baseline = corpusFreeTextClause("premlčanie", { stemming }) ?? "";
+    const extra = fieldLeaves(candidate).filter(
+      (leaf) => !fieldLeaves(baseline).includes(leaf),
+    );
+    expect(extra).toEqual(
+      fields
+        .filter((field) => STEM_FIELDS.some((allowed) => allowed === field))
+        .map((field) => `${field}:"premlčani"`),
+    );
+  }
+});
+
+test("faithful groups spend headroom whole and never displace a baseline grant", () => {
+  for (const count of [7, 8, 9, 24, 25]) {
+    const text = Array.from({ length: count }, () => "premlčanie").join(" ");
+    const baseline =
+      corpusFreeTextClause(text, { stemming: SK_STEMMING }) ?? "";
+    const candidate = svkFreeText(text, { stemming: SK_STEMMING }) ?? "";
+    if (count === 7) {
+      expect(countLeaves(baseline)).toBe(21);
+      expect(countLeaves(candidate)).toBe(23);
+      expect(clauseGroups(candidate).at(1)).toBe(clauseGroups(baseline).at(1));
+    } else {
+      expect(candidate).toBe(baseline);
+    }
+    expect(clauseGroups(candidate)).toHaveLength(count);
+  }
+});
+
+test("non-SVK queries stay byte-identical for every morphology language", () => {
+  fc.assert(
+    fc.property(
+      fc.constantFrom(...MORPHOLOGY_LANGUAGES),
+      fc.array(
+        fc.constantFrom(
+          "premlčanie",
+          "nájemního",
+          "škodu",
+          '"náhrada škody"',
+          "Mietverträge",
+        ),
+        { minLength: 1, maxLength: 10 },
+      ),
+      (language, words) => {
+        const text = words.join(" ");
+        const stemming = { language, fields: STEM_FIELDS };
+        const baseline = corpusFreeTextClause(text, { stemming });
+        for (const jurisdiction of ["CZE", "POL", "DEU", undefined]) {
+          const candidate = caseLawCorpusQuery({
+            text,
+            stemming,
+            filters: { jurisdiction },
+          });
+          expect(candidate).toBe(
+            jurisdiction === undefined
+              ? baseline
+              : `${baseline} AND jurisdiction:${quoteCorpusValue(jurisdiction)}`,
+          );
+        }
+        if (language !== "sk") {
+          expect(svkFreeText(text, { stemming })).toBe(baseline);
+        }
+      },
+    ),
+    propertyConfig(),
+  );
+});
+
+test("Slovak compatibility preserves all baseline leaves and the actual leaf ceiling", () => {
+  fc.assert(
+    fc.property(
+      fc.array(
+        fc.constantFrom(
+          "premlčanie",
+          "škodu",
+          "súd",
+          '"premlčanie škodu"',
+          "premlčanie) OR (text:*",
+        ),
+        { minLength: 0, maxLength: 12 },
+      ),
+      fc.subarray([...STEM_FIELDS], { minLength: 0 }),
+      fc.integer({ min: 0, max: 5 }),
+      (words, fields, expansionCount) => {
+        const text = words.join(" ");
+        const options = {
+          stemming: {
+            language: "sk",
+            fields,
+          } as const satisfies CorpusStemming,
+          expand: () =>
+            Array.from(
+              { length: expansionCount },
+              (_unused, index) => `forma${index}`,
+            ),
+          surfaceFields: ["headnote"],
+          keywordFields: ["keywords"],
+          legalAlternatives: () => ["súd"],
+        };
+        const baseline = corpusFreeTextClause(text, options);
+        const candidate = svkFreeText(text, options);
+        if (baseline === null) {
+          expect(candidate).toBeNull();
+          return;
+        }
+        const baselineGroups = clauseGroups(baseline);
+        const candidateGroups = clauseGroups(candidate ?? "");
+        expect(candidateGroups).toHaveLength(baselineGroups.length);
+        for (const [index, group] of baselineGroups.entries()) {
+          const candidateGroup = candidateGroups.at(index) ?? "";
+          if (candidateGroup === group) {
+            continue;
+          }
+          expect(candidateGroup).toStartWith(`${group.slice(0, -1)  } OR `);
+          const extra = fieldLeaves(candidateGroup).filter(
+            (leaf) => !fieldLeaves(group).includes(leaf),
+          );
+          expect(extra).toHaveLength(fields.length);
+          expect(
+            extra.every((leaf) =>
+              fields.some((field) => leaf.startsWith(`${field}:`)),
+            ),
+          ).toBe(true);
+          expect(candidateGroup).not.toContain("*");
+        }
+        expect(countLeaves(candidate ?? "")).toBeLessThanOrEqual(
+          Math.max(CORPUS_QUERY_LEAF_BUDGET, baselineGroups.length),
+        );
+        if (countLeaves(baseline) >= CORPUS_QUERY_LEAF_BUDGET) {
+          expect(candidate).toBe(baseline);
+        }
+      },
+    ),
+    propertyConfig(),
+  );
+  expect(svkFreeText("premlčanie", { stemming: null })).toBe(
+    corpusFreeTextClause("premlčanie"),
   );
 });
