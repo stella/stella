@@ -23,10 +23,10 @@ import type {
 } from "@/api/lib/lists/sanctions/screening-service";
 import { commitReplaySafeIngestionBatch } from "@/api/lib/replay-safe-ingestion";
 
-export const SANCTIONS_MONITORING_BATCH_SIZE = 100;
+const SANCTIONS_MONITORING_BATCH_SIZE = 100;
 const MATCHES_PER_CONTACT = 1000;
 
-export type SanctionsMonitoringResult = {
+type SanctionsMonitoringResult = {
   contactId: SafeId<"contact">;
   contactFingerprint: string;
   outcome: SanctionsListOutcome;
