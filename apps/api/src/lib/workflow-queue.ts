@@ -1398,7 +1398,6 @@ const processEntityJob = async (
 
     // Process all batches at this level in parallel
     // (same level = independent dependencies)
-    // db-await-in-loop: levels run in dependency order; a level must finish before the next starts. Same-level batches process a single entity's properties in parallel, so the fan-out width is bounded by the workspace's configured property count, not tenant row volume
     const drained = await drainFanOut({
       items: batches,
       signal,
