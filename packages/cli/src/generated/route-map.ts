@@ -13251,6 +13251,378 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
+            "sanctions-events-list": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "contacts",
+                  "sanctions-events-list",
+                ],
+                capabilityId: "contacts.sanctions.events.list",
+                description:
+                  "Read durable new and reopened sanctions events in bounded cursor pages. Changed evidence and review decisions do not notify. Excluded contacts and disabled firms are omitted. This feed does not deliver notifications or select recipients.",
+                access: "read",
+                flags: [],
+                inputOnly: [],
+                paginated: true,
+                paginationPart: "query",
+                itemsKey: "items",
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    query: {
+                      type: "object",
+                      properties: {
+                        cursor: {
+                          maxLength: 8192,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
+                          type: "string",
+                        },
+                        limit: {
+                          minimum: 1,
+                          maximum: 100,
+                          type: "integer",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "sanctions-get": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "contacts", "sanctions-get"],
+                capabilityId: "contacts.sanctions.get",
+                description:
+                  "Read a contact's sanctions screening per list, including evidence, review disposition and freshness. Unavailable never means clear. Binding versus informational uses the firm's practice jurisdictions. To review a current match, call contacts.sanctions.reviews.update with its reviewTarget, a dismissed or confirmed disposition and a reason.",
+                access: "read",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--contact-id",
+                    prop: "contactId",
+                    required: true,
+                    part: "params",
+                    partPath: "contactId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["contactId"],
+                      properties: {
+                        contactId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "sanctions-matches-list": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "contacts",
+                  "sanctions-matches-list",
+                ],
+                capabilityId: "contacts.sanctions.matches.list",
+                description:
+                  "List open sanctions matches for the active organization in bounded cursor pages. Only fresh, currently screened contacts included in monitoring are returned. Dismissed and confirmed matches are omitted. Copy source and sourceEntryId to contacts.sanctions.reviews.update with the returned contactId.",
+                access: "read",
+                flags: [],
+                inputOnly: [],
+                paginated: true,
+                paginationPart: "query",
+                itemsKey: "items",
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    query: {
+                      type: "object",
+                      properties: {
+                        cursor: {
+                          maxLength: 8192,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
+                          type: "string",
+                        },
+                        limit: {
+                          minimum: 1,
+                          maximum: 100,
+                          type: "integer",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "sanctions-monitoring-update": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "contacts",
+                  "sanctions-monitoring-update",
+                ],
+                capabilityId: "contacts.sanctions.monitoring.update",
+                description:
+                  "Set a contact to included or excluded from sanctions monitoring. Excluding hides active hits and preserves history. Including queues a re-screen; read contacts.sanctions.get for its eventual result. Firm-level disablement still applies. Changes are audited.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--contact-id",
+                    prop: "contactId",
+                    required: true,
+                    part: "params",
+                    partPath: "contactId",
+                  },
+                  {
+                    kind: "enum",
+                    enum: ["included", "excluded"],
+                    repeatable: false,
+                    flag: "--mode",
+                    prop: "mode",
+                    required: true,
+                    part: "body",
+                    partPath: "mode",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "contacts_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["mode"],
+                      properties: {
+                        mode: {
+                          default: "included",
+                          type: "string",
+                          enum: ["included", "excluded"],
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["contactId"],
+                      properties: {
+                        contactId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "sanctions-reviews-update": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "contacts",
+                  "sanctions-reviews-update",
+                ],
+                capabilityId: "contacts.sanctions.reviews.update",
+                description:
+                  "Dismiss or confirm one current sanctions match with a reason. Read contacts.sanctions.get first and copy the match's reviewTarget, then supply disposition and reason. A stale reviewTarget is rejected; read the contact again before retrying. A decision remains valid only while the contact fingerprint and listed-entry hash remain unchanged. Repeating the same decision is idempotent; changed evidence reopens it.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--contact-id",
+                    prop: "contactId",
+                    required: true,
+                    part: "params",
+                    partPath: "contactId",
+                  },
+                  {
+                    kind: "enum",
+                    enum: [
+                      "eu",
+                      "un",
+                      "cz",
+                      "us-sdn",
+                      "us-non-sdn",
+                      "uk",
+                      "ch",
+                    ],
+                    repeatable: false,
+                    flag: "--source",
+                    prop: "source",
+                    required: true,
+                    part: "body",
+                    partPath: "source",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--source-entry-id",
+                    prop: "sourceEntryId",
+                    required: true,
+                    part: "body",
+                    partPath: "sourceEntryId",
+                  },
+                  {
+                    kind: "enum",
+                    enum: ["dismissed", "confirmed"],
+                    repeatable: false,
+                    flag: "--disposition",
+                    prop: "disposition",
+                    required: true,
+                    part: "body",
+                    partPath: "disposition",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--reason",
+                    prop: "reason",
+                    required: true,
+                    part: "body",
+                    partPath: "reason",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    description:
+                      "Copy expectedContactFingerprint from the current match reviewTarget",
+                    flag: "--expected-contact-fingerprint",
+                    prop: "expectedContactFingerprint",
+                    required: true,
+                    part: "body",
+                    partPath: "expectedContactFingerprint",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    description:
+                      "Copy expectedEntryHash from the current match reviewTarget",
+                    flag: "--expected-entry-hash",
+                    prop: "expectedEntryHash",
+                    required: true,
+                    part: "body",
+                    partPath: "expectedEntryHash",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "contacts_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: [
+                        "source",
+                        "sourceEntryId",
+                        "disposition",
+                        "reason",
+                        "expectedContactFingerprint",
+                        "expectedEntryHash",
+                      ],
+                      properties: {
+                        source: {
+                          default: "eu",
+                          type: "string",
+                          enum: [
+                            "eu",
+                            "un",
+                            "cz",
+                            "us-sdn",
+                            "us-non-sdn",
+                            "uk",
+                            "ch",
+                          ],
+                        },
+                        sourceEntryId: {
+                          minLength: 1,
+                          maxLength: 512,
+                          type: "string",
+                        },
+                        disposition: {
+                          default: "dismissed",
+                          type: "string",
+                          enum: ["dismissed", "confirmed"],
+                        },
+                        reason: {
+                          minLength: 1,
+                          maxLength: 2000,
+                          type: "string",
+                        },
+                        expectedContactFingerprint: {
+                          pattern: "^[0-9a-f]{64}$",
+                          minLength: 64,
+                          maxLength: 64,
+                          description:
+                            "Copy expectedContactFingerprint from the current match reviewTarget",
+                          type: "string",
+                        },
+                        expectedEntryHash: {
+                          pattern: "^[0-9a-f]{64}$",
+                          minLength: 64,
+                          maxLength: 64,
+                          description:
+                            "Copy expectedEntryHash from the current match reviewTarget",
+                          type: "string",
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["contactId"],
+                      properties: {
+                        contactId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
             search: {
               kind: "capability-leaf",
               spec: {
@@ -33609,6 +33981,54 @@ export const generatedRouteMap: RouteNode = {
                           minimum: 1,
                           maximum: 6,
                           type: "integer",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "sanctions-monitoring-update": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "organization-settings",
+                  "sanctions-monitoring-update",
+                ],
+                capabilityId:
+                  "organization-settings.sanctions-monitoring.update",
+                description:
+                  "Enable or disable sanctions monitoring for the active organization. Disabling hides active hits and preserves history. Enabling queues a bounded backfill; contact opt-outs still apply. Read contacts.sanctions.get for eventual screening results. Changes are audited.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "enum",
+                    enum: ["enabled", "disabled"],
+                    repeatable: false,
+                    flag: "--mode",
+                    prop: "mode",
+                    required: true,
+                    part: "body",
+                    partPath: "mode",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "admin_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["mode"],
+                      properties: {
+                        mode: {
+                          default: "enabled",
+                          type: "string",
+                          enum: ["enabled", "disabled"],
                         },
                       },
                     },

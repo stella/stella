@@ -171,6 +171,25 @@ export const CAPABILITY_DISPATCH = {
   "contacts.list": {
     load: async () => await import("@/api/handlers/contacts/list"),
   },
+  "contacts.sanctions.events.list": {
+    load: async () =>
+      await import("@/api/handlers/contacts/sanctions/events/list"),
+  },
+  "contacts.sanctions.get": {
+    load: async () => await import("@/api/handlers/contacts/sanctions/get"),
+  },
+  "contacts.sanctions.matches.list": {
+    load: async () =>
+      await import("@/api/handlers/contacts/sanctions/matches/list"),
+  },
+  "contacts.sanctions.monitoring.update": {
+    load: async () =>
+      await import("@/api/handlers/contacts/sanctions/monitoring/update"),
+  },
+  "contacts.sanctions.reviews.update": {
+    load: async () =>
+      await import("@/api/handlers/contacts/sanctions/reviews/update"),
+  },
   "contacts.search": {
     load: async () => await import("@/api/handlers/contacts/search"),
   },
@@ -706,6 +725,10 @@ export const CAPABILITY_DISPATCH = {
   "organization-settings.preview": {
     load: async () =>
       await import("@/api/handlers/organization-settings/preview"),
+  },
+  "organization-settings.sanctions-monitoring.update": {
+    load: async () =>
+      await import("@/api/handlers/organization-settings/sanctions-monitoring/update"),
   },
   "organization-settings.update": {
     load: async () =>

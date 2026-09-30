@@ -3371,6 +3371,104 @@ export type WebRoutes = {
         };
       };
     } & {
+      sanctions: {
+        matches: {
+          get: {
+            body: Record<never, never>;
+            params: T5e3ac29766;
+            query: {
+              cursor?: string;
+              limit?: number;
+            };
+            headers: Record<never, never>;
+            response: {
+              200: {
+                items: Array<{
+                  contactId: Tbf83a7d346;
+                  source: string;
+                  sourceEntryId: string;
+                  evidence: T0bc3339b15;
+                }>;
+                nextCursor: Tbe0400fa4c;
+                limit: number;
+              };
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: Tddfcdef857;
+              404: T9a51b7d2bc;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: (T9a51b7d2bc | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    } & {
+      sanctions: {
+        events: {
+          get: {
+            body: Record<never, never>;
+            params: T5e3ac29766;
+            query: {
+              cursor?: string;
+              limit?: number;
+            };
+            headers: Record<never, never>;
+            response: {
+              200: {
+                items: Array<{
+                  id: (string & valibot_Brand<"SafeId"> & {
+                    readonly __safeIdType?: "sanctionsScreeningEvent";
+                  });
+                  contactId: Tbf83a7d346;
+                  source: string;
+                  sourceEntryId: string;
+                  type: ("changed" | "confirmed" | "dismissed" | "lapsed" | "new" | "reopened" | "review-restored");
+                  createdAt: string;
+                }>;
+                nextCursor: Tbe0400fa4c;
+                limit: number;
+              };
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: Tddfcdef857;
+              404: T9a51b7d2bc;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: (T9a51b7d2bc | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    } & {
       search: {
         get: {
           body: Record<never, never>;
@@ -3534,7 +3632,7 @@ export type WebRoutes = {
                   reason: null;
                   totalMatches: number;
                   truncated: Tfddd645dc8;
-                  possibleMatches: [Teae76f4456, ...Teae76f4456[]];
+                  possibleMatches: [T0bc3339b15, ...T0bc3339b15[]];
                 }) | (T304328c782 & {
                   status: "unavailable";
                   reason: ("access-denied" | "company-not-found" | "load-failed" | "not-loaded" | "registry-unavailable" | "stale");
@@ -4260,6 +4358,196 @@ export type WebRoutes = {
             500: T9a51b7d2bc;
             502: T9a51b7d2bc;
             503: T9a51b7d2bc;
+          };
+        };
+      };
+    } & {
+      ":contactId": {
+        sanctions: {
+          get: {
+            body: Record<never, never>;
+            params: {
+              contactId: T09d69fbefb;
+            };
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                contactId: Tbf83a7d346;
+                contactMode: T914c41786d;
+                firmMode: Tfe1936e462;
+                lists: Array<{
+                  source: T0af9516338;
+                  classification: T582feff9d9;
+                  status: ("clear" | "excluded" | "possible-match" | "unavailable");
+                  reason: Tbe0400fa4c;
+                  freshness: {
+                    source: T0af9516338;
+                    issuer: string;
+                    licence: Tbe0400fa4c;
+                    status: ("fresh" | "unavailable");
+                    reason: ("access-denied" | "not-loaded" | "stale" | null);
+                    edition: {
+                      id: Tcfd90007a8;
+                      publishedAt: string;
+                      fileId: Tbe0400fa4c;
+                      entryCount: number;
+                    } | null;
+                    lastCheckedAt: Tdf2b0d1150;
+                    lastSuccessfulVerifiedAt: Tdf2b0d1150;
+                    heldUpdate: {
+                      editionId: Tcfd90007a8;
+                      code: T23194ec8c3;
+                      at: string;
+                      previousCount: T588d0ee653;
+                      nextCount: T588d0ee653;
+                    } | null;
+                    annotation: {
+                      type: "held-for-review";
+                      code: T23194ec8c3;
+                    } | {
+                      type: "transport-failure";
+                      code: ("access-denied" | "fetch-failed" | "metadata-invalid" | "parse-failed" | "unexpected-error");
+                      at: string;
+                    } | null;
+                  };
+                  checkedAt: Tdf2b0d1150;
+                  matches: Array<{
+                    organizationId: Tb1d68817ba;
+                    contactId: Tbf83a7d346;
+                    sourceId: string;
+                    sourceEntryId: string;
+                    editionId: Tcfd90007a8;
+                    state: ("active" | "lapsed");
+                    disposition: ("confirmed" | "dismissed" | "needs-review");
+                    reviewedBy: Tbe0400fa4c;
+                    reviewReason: Tbe0400fa4c;
+                    reviewedAt: Tdf2b0d1150;
+                    reviewedContactFingerprint: Tbe0400fa4c;
+                    reviewedEntryHash: Tbe0400fa4c;
+                    contactFingerprint: string;
+                    entryHash: string;
+                    match: T0bc3339b15;
+                    updatedAt: string;
+                  } & {
+                    reviewTarget: {
+                      source: T0af9516338;
+                      sourceEntryId: string;
+                      expectedContactFingerprint: string;
+                      expectedEntryHash: string;
+                    };
+                  }>;
+                }>;
+              };
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: Tddfcdef857;
+              404: T9a51b7d2bc;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: (T9a51b7d2bc | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    } & {
+      ":contactId": {
+        sanctions: {
+          reviews: {
+            post: {
+              body: {
+                reason: string;
+                source: (number | string);
+                sourceEntryId: string;
+                disposition: ("confirmed" | "dismissed");
+                expectedContactFingerprint: string;
+                expectedEntryHash: string;
+              };
+              params: {
+                contactId: T09d69fbefb;
+              };
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: T5e3ac29766;
+                400: T9a51b7d2bc;
+                401: T9a51b7d2bc;
+                402: T9a51b7d2bc;
+                403: Tddfcdef857;
+                404: T9a51b7d2bc;
+                409: T9a51b7d2bc;
+                413: T9a51b7d2bc;
+                422: (T9a51b7d2bc | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: T9a51b7d2bc;
+                429: T9a51b7d2bc;
+                500: T9a51b7d2bc;
+                502: T9a51b7d2bc;
+                503: T9a51b7d2bc;
+              };
+            };
+          };
+        };
+      };
+    } & {
+      ":contactId": {
+        sanctions: {
+          monitoring: {
+            post: {
+              body: {
+                mode: T914c41786d;
+              };
+              params: {
+                contactId: T09d69fbefb;
+              };
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: T5e3ac29766;
+                400: T9a51b7d2bc;
+                401: T9a51b7d2bc;
+                402: T9a51b7d2bc;
+                403: Tddfcdef857;
+                404: T9a51b7d2bc;
+                409: T9a51b7d2bc;
+                413: T9a51b7d2bc;
+                422: (T9a51b7d2bc | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: T9a51b7d2bc;
+                429: T9a51b7d2bc;
+                500: T9a51b7d2bc;
+                502: T9a51b7d2bc;
+                503: T9a51b7d2bc;
+              };
+            };
           };
         };
       };
@@ -20268,6 +20556,45 @@ export type WebRoutes = {
         };
       };
     } & {
+      "sanctions-monitoring": {
+        post: {
+          body: {
+            mode: Tfe1936e462;
+          };
+          params: T5e3ac29766;
+          query: Record<never, never>;
+          headers: Record<never, never>;
+          response: {
+            200: {
+              readonly mode: "enabled";
+            } | {
+              readonly mode: "disabled";
+            };
+            400: T9a51b7d2bc;
+            401: T9a51b7d2bc;
+            402: T9a51b7d2bc;
+            403: Tddfcdef857;
+            404: T9a51b7d2bc;
+            409: T9a51b7d2bc;
+            413: T9a51b7d2bc;
+            422: (T9a51b7d2bc | {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            });
+            428: T9a51b7d2bc;
+            429: T9a51b7d2bc;
+            500: T9a51b7d2bc;
+            502: T9a51b7d2bc;
+            503: T9a51b7d2bc;
+          };
+        };
+      };
+    } & {
       "practice-jurisdictions": {
         post: {
           body: {
@@ -34671,6 +34998,8 @@ type T09c57cc1dd = T0da73a8dae | null;
 
 type T09d040568c = T9a51b7d2bc | "Internal Server Error";
 
+type T09d69fbefb = string & valibot_Brand<"SafeId"> & T1c99d77bbc;
+
 type T09dc0536e6 = stll_api_contract_AgendaItemWireFields & {
   entityId: string;
   workspaceId: string;
@@ -34743,6 +35072,8 @@ type T0a1c0a6ee4 = {
 type T0a54ae7a2b = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "legalListSection";
 };
+
+type T0af9516338 = "ch" | "cz" | "eu" | "uk" | "un" | "us-non-sdn" | "us-sdn";
 
 type T0afdf1a25a = {
   activeDraftContext?: {
@@ -34851,6 +35182,27 @@ type T0b7cb34284 = {
   version: string;
   commit: string;
   status: "ok";
+};
+
+type T0bc3339b15 = {
+  sourceEntryId: string;
+  editionId: string;
+  score: number;
+  sourceUrl: string;
+  name: Tbe0400fa4c;
+  referenceNumber: Tbe0400fa4c;
+  entityType: ("aircraft" | "organisation" | "person" | "unknown" | "vessel");
+  programme: Tbe0400fa4c;
+  listedOn: Tbe0400fa4c;
+  evidence: {
+    nameScore: number;
+    matchedName: Tbe0400fa4c;
+    birthDate: T230894d92c;
+    nationality: T230894d92c;
+    entityType: T230894d92c;
+    identifier: T230894d92c;
+    conflicts: Array<("birth-date" | "entity-type" | "nationality")>;
+  };
 };
 
 type T0bdd08f6e7 = {
@@ -35373,6 +35725,10 @@ type T2253957f29 = {
   reason?: "enqueue" | "processing";
   status: "failed";
 };
+
+type T230894d92c = "match" | "mismatch" | "not-compared";
+
+type T23194ec8c3 = "below-minimum" | "contracted" | "source-mismatch" | "stale";
 
 type T23680c2d7b = "ch" | "eu" | "global";
 
@@ -36363,9 +36719,9 @@ type T3012ed5aad = {
 };
 
 type T304328c782 = {
-  source: ("ch" | "cz" | "eu" | "uk" | "un" | "us-non-sdn" | "us-sdn");
+  source: T0af9516338;
   issuer: ("CH" | "CZ" | "EU" | "GB" | "UA" | "UN" | "US");
-  classification: ("binding" | "informational");
+  classification: T582feff9d9;
   pendingUpdate: {
     code: ("below-minimum" | "contracted" | "source-mismatch" | "stale");
     heldAt: string;
@@ -36966,7 +37322,7 @@ type T4c80e82e5d = string & valibot_Brand<"SafeId"> & {
 };
 
 type T4d118d2832 = {
-  contactId: (string & valibot_Brand<"SafeId"> & T1c99d77bbc);
+  contactId: T09d69fbefb;
 };
 
 type T4d5e4f5d1c = {
@@ -37056,8 +37412,6 @@ type T501a665986 = string & valibot_Brand<"SafeId"> & {
 };
 
 type T504bb6d30f = Ta307d8fb8c | Tbc510e9400;
-
-type T5130e1fe7d = "match" | "mismatch" | "not-compared";
 
 type T51cc6664d5 = {
   query: string;
@@ -37198,6 +37552,8 @@ type T580bd0de31 = {
   state: Tfafd241922;
   output?: T482343ffbd;
 } & T4d73965770;
+
+type T582feff9d9 = "binding" | "informational";
 
 type T5855f1649e = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "pendingUpload";
@@ -40247,6 +40603,10 @@ type Tcfcb60a90e = {
   readonly issues?: undefined;
 };
 
+type Tcfd90007a8 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "sanctionsEdition";
+};
+
 type Td00a89251b = {
   type: "tool-call";
   id: string;
@@ -41019,27 +41379,6 @@ type Teab768a417 = {
   }>;
 };
 
-type Teae76f4456 = {
-  sourceEntryId: string;
-  editionId: string;
-  score: number;
-  sourceUrl: string;
-  name: Tbe0400fa4c;
-  referenceNumber: Tbe0400fa4c;
-  entityType: ("aircraft" | "organisation" | "person" | "unknown" | "vessel");
-  programme: Tbe0400fa4c;
-  listedOn: Tbe0400fa4c;
-  evidence: {
-    nameScore: number;
-    matchedName: Tbe0400fa4c;
-    birthDate: T5130e1fe7d;
-    nationality: T5130e1fe7d;
-    entityType: T5130e1fe7d;
-    identifier: T5130e1fe7d;
-    conflicts: Array<("birth-date" | "entity-type" | "nationality")>;
-  };
-};
-
 type Teaea18eeca = {
   workspaceId: string;
 };
@@ -41520,6 +41859,8 @@ type Tfd761de317 = {
 } & T4d73965770;
 
 type Tfddd645dc8 = false | true;
+
+type Tfe1936e462 = "disabled" | "enabled";
 
 type Tfe2faf9844 = {
   ok: true;

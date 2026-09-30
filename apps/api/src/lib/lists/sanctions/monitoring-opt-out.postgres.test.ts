@@ -44,14 +44,12 @@ if (!runPostgresTests || databaseUrl === undefined) {
       const existingSource = await admin.query.sanctionsSources.findFirst({
         where: { id: { eq: "eu" } },
       });
-      await admin
-        .insert(organization)
-        .values({
-          id: organizationId,
-          name: "Synthetic monitoring organization",
-          slug: organizationId,
-          createdAt: now,
-        });
+      await admin.insert(organization).values({
+        id: organizationId,
+        name: "Synthetic monitoring organization",
+        slug: organizationId,
+        createdAt: now,
+      });
       try {
         await admin.transaction(async (tx) => {
           await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
@@ -63,17 +61,15 @@ if (!runPostgresTests || databaseUrl === undefined) {
               markerUrl: "https://example.test/list",
             })
             .onConflictDoNothing();
-          await tx
-            .insert(sanctionsEditions)
-            .values({
-              id: editionId,
-              sourceId: "eu",
-              markerKey: editionHash,
-              contentHash: editionHash,
-              publishedAt: "2026-09-29",
-              state: "ready",
-              entryCount: 0,
-            });
+          await tx.insert(sanctionsEditions).values({
+            id: editionId,
+            sourceId: "eu",
+            markerKey: editionHash,
+            contentHash: editionHash,
+            publishedAt: "2026-09-29",
+            state: "ready",
+            entryCount: 0,
+          });
         });
         const contact =
           (
@@ -107,31 +103,27 @@ if (!runPostgresTests || databaseUrl === undefined) {
             conflicts: [],
           },
         } satisfies SanctionsPossibleMatch;
-        await admin
-          .insert(sanctionsContactMatches)
-          .values({
-            organizationId,
-            contactId: contact.id,
-            sourceId: "eu",
-            sourceEntryId: match.sourceEntryId,
-            editionId,
-            state: "active",
-            contactFingerprint: fingerprint,
-            entryHash: editionHash,
-            match,
-            updatedAt: now,
-          });
-        await admin
-          .insert(sanctionsContactScreenings)
-          .values({
-            organizationId,
-            contactId: contact.id,
-            sourceId: "eu",
-            editionId,
-            status: "possible-match",
-            contactFingerprint: fingerprint,
-            checkedAt: now,
-          });
+        await admin.insert(sanctionsContactMatches).values({
+          organizationId,
+          contactId: contact.id,
+          sourceId: "eu",
+          sourceEntryId: match.sourceEntryId,
+          editionId,
+          state: "active",
+          contactFingerprint: fingerprint,
+          entryHash: editionHash,
+          match,
+          updatedAt: now,
+        });
+        await admin.insert(sanctionsContactScreenings).values({
+          organizationId,
+          contactId: contact.id,
+          sourceId: "eu",
+          editionId,
+          status: "possible-match",
+          contactFingerprint: fingerprint,
+          checkedAt: now,
+        });
         expect(
           await admin.query.organizationSettings.findFirst({
             where: { organizationId: { eq: organizationId } },

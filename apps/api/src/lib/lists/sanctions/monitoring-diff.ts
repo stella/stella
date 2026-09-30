@@ -17,8 +17,8 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { readSanctionsFreshness } from "@/api/lib/lists/sanctions/freshness";
 import { monitoringFingerprint } from "@/api/lib/lists/sanctions/monitoring-input";
-import { SANCTIONS_SCREENING_BATCH_SIZE } from "@/api/lib/lists/sanctions/screening-service";
 import { lockSanctionsMonitoring } from "@/api/lib/lists/sanctions/monitoring-lock";
+import { SANCTIONS_SCREENING_BATCH_SIZE } from "@/api/lib/lists/sanctions/screening-service";
 import type {
   SanctionsListOutcome,
   SanctionsPossibleMatch,
