@@ -9,7 +9,7 @@ import { sanctionsSourceIds } from "@/api/lib/lists/sanctions/source-config";
 export default createSafeRootHandler(
   {
     description:
-      "Dismiss or confirm one current sanctions match with a reason. Read contacts.sanctions.get first and copy the match's source and sourceEntryId. A decision remains valid only while the contact fingerprint and listed-entry hash remain unchanged. Repeating the same decision is idempotent; changed evidence reopens it.",
+      "Dismiss or confirm one current sanctions match with a reason. Read contacts.sanctions.get first and copy the match's reviewTarget, then supply disposition and reason. A stale reviewTarget is rejected; read the contact again before retrying. A decision remains valid only while the contact fingerprint and listed-entry hash remain unchanged. Repeating the same decision is idempotent; changed evidence reopens it.",
     permissions: { contact: ["update"] },
     mcp: { type: "capability", reason: "contact_directory" },
     params: t.Object({ contactId: tSafeId("contact") }),
@@ -18,6 +18,20 @@ export default createSafeRootHandler(
       sourceEntryId: t.String({ minLength: 1, maxLength: 512 }),
       disposition: t.UnionEnum(["dismissed", "confirmed"]),
       reason: t.String({ minLength: 1, maxLength: 2000 }),
+      expectedContactFingerprint: t.String({
+        pattern: "^[0-9a-f]{64}$",
+        minLength: 64,
+        maxLength: 64,
+        description:
+          "Copy expectedContactFingerprint from the current match reviewTarget",
+      }),
+      expectedEntryHash: t.String({
+        pattern: "^[0-9a-f]{64}$",
+        minLength: 64,
+        maxLength: 64,
+        description:
+          "Copy expectedEntryHash from the current match reviewTarget",
+      }),
     }),
   },
   async function* ({ safeDb, session, user, params, body, recordAuditEvent }) {

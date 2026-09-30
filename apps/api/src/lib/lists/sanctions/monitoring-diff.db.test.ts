@@ -52,6 +52,7 @@ const TIMEOUT = 120_000;
 const now = new Date("2026-09-29T12:00:00Z");
 const orgId = toSafeId<"organization">("monitoring-org");
 const otherOrg = toSafeId<"organization">("monitoring-other");
+const reviewerId = toSafeId<"user">("monitoring-reviewer");
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 const openDb = (connection: Awaited<ReturnType<typeof createTestPglite>>) =>
   drizzle({ client: connection, relations: databaseRelations });
@@ -99,9 +100,21 @@ beforeAll(async () => {
       createdAt: now,
     },
   ]);
-  await db
-    .insert(sanctionsSources)
-    .values({ id: "eu", issuer: "EU", markerUrl: "https://example.test/list" });
+  await db.insert(user).values({
+    id: reviewerId,
+    name: "Synthetic Reviewer",
+    email: "reviewer@example.test",
+    emailVerified: false,
+    createdAt: now,
+    updatedAt: now,
+  });
+  await db.insert(sanctionsSources).values(
+    sanctionsSourceIds().map((id) => ({
+      id,
+      issuer: SANCTIONS_SOURCES[id].issuer,
+      markerUrl: "https://example.test/list",
+    })),
+  );
 }, TIMEOUT);
 
 afterAll(async () => {
@@ -512,7 +525,6 @@ test(
   TIMEOUT,
 );
 
-const reviewerId = toSafeId<"user">("monitoring-reviewer");
 const audited: string[] = [];
 const recordAuditEvent = async (
   _tx: Transaction,
@@ -526,26 +538,30 @@ const recordAuditEvent = async (
 test.each(["dismissed", "confirmed"] as const)(
   "%s review is tenant-isolated, replay-safe, and reopens on either fingerprint",
   async (disposition) => {
-    await db
-      .insert(user)
-      .values({
-        id: reviewerId,
-        name: "Synthetic Reviewer",
-        email: "reviewer@example.test",
-        emailVerified: false,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .onConflictDoNothing();
     await activate("f");
     const contact = await addContact();
     await commit(await prepare(contact));
     const initial = await matchFor(contact.id);
+    const read = await scopedDb(
+      async (tx) =>
+        await readContactSanctions(tx, {
+          organizationId: orgId,
+          contactId: contact.id,
+          now,
+        }),
+    );
+    if (read.isErr()) {
+      panic("Synthetic contact read failed");
+    }
+    const target =
+      read.value.lists.find((row) => row.source === "eu")?.matches.at(0)
+        ?.reviewTarget ?? panic("Synthetic review target missing");
+    expect(target.expectedContactFingerprint).toBe(initial.contactFingerprint);
+    expect(target.expectedEntryHash).toBe(initial.entryHash);
     const options = {
       organizationId: orgId,
       contactId: contact.id,
-      source: "eu",
-      sourceEntryId: "one",
+      ...target,
       disposition,
       reason: "Synthetic review",
       reviewerId,
@@ -583,7 +599,20 @@ test.each(["dismissed", "confirmed"] as const)(
       reviewedEntryHash: null,
     });
     expect((await eventsFor(contact.id)).at(-1)?.type).toBe("reopened");
-    await scopedDb(async (tx) => await reviewSanctionsMatch(tx, options));
+    const staleReview = await scopedDb(
+      async (tx) => await reviewSanctionsMatch(tx, options),
+    );
+    expect(staleReview.isErr() && staleReview.error.status).toBe(409);
+    const current = await matchFor(contact.id);
+    const refreshedOptions = {
+      ...options,
+      expectedContactFingerprint: current.contactFingerprint,
+      expectedEntryHash: current.entryHash,
+    };
+    const refreshedReview = await scopedDb(
+      async (tx) => await reviewSanctionsMatch(tx, refreshedOptions),
+    );
+    expect(refreshedReview.isOk()).toBe(true);
     const edited =
       (
         await db
@@ -595,6 +624,13 @@ test.each(["dismissed", "confirmed"] as const)(
     await commit(await prepare(edited));
     expect((await matchFor(contact.id)).disposition).toBe("needs-review");
     expect((await eventsFor(contact.id)).at(-1)?.type).toBe("reopened");
+    const staleContactReview = await scopedDb(
+      async (tx) => await reviewSanctionsMatch(tx, refreshedOptions),
+    );
+    expect(staleContactReview.isErr() && staleContactReview.error.status).toBe(
+      409,
+    );
+    expect((await matchFor(contact.id)).disposition).toBe("needs-review");
   },
   TIMEOUT,
 );
@@ -602,16 +638,6 @@ test.each(["dismissed", "confirmed"] as const)(
 test(
   "opt-out hides current hits, preserves history, and fences a concurrent prepared commit",
   async () => {
-    await db
-      .insert(sanctionsSources)
-      .values(
-        sanctionsSourceIds().map((id) => ({
-          id,
-          issuer: id,
-          markerUrl: "https://example.test/list",
-        })),
-      )
-      .onConflictDoNothing();
     await activate("d");
     const contact = await addContact();
     const prepared = await prepare(contact);
@@ -734,6 +760,7 @@ test(
     await activate("9");
     const contact = await addContact();
     await commit(await prepare(contact));
+    const current = await matchFor(contact.id);
     await expectFailure(
       async () =>
         await scopedDb(
@@ -746,6 +773,8 @@ test(
               sourceEntryId: "one",
               disposition: "dismissed",
               reason: "Synthetic review",
+              expectedContactFingerprint: current.contactFingerprint,
+              expectedEntryHash: current.entryHash,
               now,
               recordAuditEvent: async () => panic("synthetic audit failure"),
             }),

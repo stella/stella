@@ -138,12 +138,23 @@ export const readContactSanctions = async (
         checkedAt: screening?.checkedAt ?? null,
         matches:
           status === "possible-match"
-            ? matches.filter(
-                (row) =>
-                  row.sourceId === source.source &&
-                  row.editionId === source.edition?.id &&
-                  row.contactFingerprint === fingerprint,
-              )
+            ? matches
+                .filter(
+                  (row) =>
+                    row.sourceId === source.source &&
+                    row.editionId === source.edition?.id &&
+                    row.contactFingerprint === fingerprint,
+                )
+                .map((row) =>
+                  Object.assign(row, {
+                    reviewTarget: {
+                      source: source.source,
+                      sourceEntryId: row.sourceEntryId,
+                      expectedContactFingerprint: row.contactFingerprint,
+                      expectedEntryHash: row.entryHash,
+                    },
+                  }),
+                )
             : [],
       };
     }),

@@ -25,6 +25,8 @@ export type ReviewSanctionsMatchOptions = {
   source: SanctionsSource;
   sourceEntryId: string;
   disposition: "dismissed" | "confirmed";
+  expectedContactFingerprint: string;
+  expectedEntryHash: string;
   reason: string;
   recordAuditEvent: AuditRecorder;
   now?: Date;
@@ -39,6 +41,8 @@ export const reviewSanctionsMatch = async (
     source,
     sourceEntryId,
     disposition,
+    expectedContactFingerprint,
+    expectedEntryHash,
     reason,
     recordAuditEvent,
     now = new Date(),
@@ -104,7 +108,9 @@ export const reviewSanctionsMatch = async (
     settings?.sanctionsMonitoringMode === "disabled" ||
     contact.sanctionsMonitoringMode === "excluded" ||
     match?.state !== "active" ||
-    match.contactFingerprint !== monitoringFingerprint(contact)
+    match.contactFingerprint !== monitoringFingerprint(contact) ||
+    match.contactFingerprint !== expectedContactFingerprint ||
+    match.entryHash !== expectedEntryHash
   ) {
     return Result.err(
       new HandlerError({
