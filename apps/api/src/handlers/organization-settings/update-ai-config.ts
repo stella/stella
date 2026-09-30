@@ -6,6 +6,7 @@ import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
 import { organizationSettings } from "@/api/db/schema";
 import {
   DECISION_MODEL_PROVIDERS,
+  supportsRegion,
   type DataRegion,
   type OrgAIConfig,
   type OrgAIModelSelection,
@@ -355,7 +356,7 @@ const resolveProviderConfigs = (
         : undefined;
 
     const region = providerInput.region ?? existingRegion ?? "global";
-    if (region !== "global") {
+    if (region !== "global" && !supportsRegion(providerInput.provider)) {
       return {
         valid: false,
         error: `The selected endpoint setting is not supported by ${providerInput.provider}. Use global.`,
