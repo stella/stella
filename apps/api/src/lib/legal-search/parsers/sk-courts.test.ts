@@ -5,7 +5,7 @@
  * into every decision it touches leaving the walk.
  */
 
-import { PDF } from "@libpdf/core";
+import { PDF, StandardFonts } from "@libpdf/core";
 import { describe, expect, test } from "bun:test";
 
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
@@ -180,4 +180,42 @@ describe("PDF byte fixture text retention", () => {
       expect(fulltext).toBe(texts.join(" "));
     }
   });
+});
+
+test("bold Roman verdict items keep their holding role and reasoning titles become headings", async () => {
+  const pdf = PDF.create();
+  const page = pdf.addPage({ size: "letter" });
+  const lines = [
+    { text: "rozhodol:", font: StandardFonts.HelveticaBold },
+    { text: "I. Súd žalobu zamieta.", font: StandardFonts.HelveticaBold },
+    { text: "II. Náhradu nepriznáva.", font: StandardFonts.HelveticaBold },
+    { text: "Odôvodnenie:", font: StandardFonts.HelveticaBold },
+    { text: "Text odovodnenia.", font: StandardFonts.Helvetica },
+    { text: "XII. Argumentacia", font: StandardFonts.HelveticaBold },
+    { text: "Dalsi text.", font: StandardFonts.Helvetica },
+  ];
+  for (const [index, line] of lines.entries()) {
+    page.drawText(line.text, {
+      x: 50,
+      y: 700 - index * 20,
+      size: 10,
+      font: line.font,
+    });
+  }
+  const { documentAst } = await parseSkDecisionPdf({
+    pdfBytes: await pdf.save(),
+    caseNumber: "1C/1/2024",
+    ecli: undefined,
+    court: "Okresný súd",
+    decisionDate: undefined,
+    decisionType: undefined,
+  });
+  for (const text of ["I. Súd žalobu zamieta.", "II. Náhradu nepriznáva."]) {
+    expect(
+      documentAst.blocks.find((block) => block.plainText === text),
+    ).toMatchObject({ type: "paragraph", role: "holding" });
+  }
+  expect(
+    documentAst.blocks.find((block) => block.plainText === "XII. Argumentacia"),
+  ).toMatchObject({ type: "heading", level: 3 });
 });

@@ -46,8 +46,9 @@ import {
   isSkStandaloneInstructionMarker,
   SK_CLOSING_RE,
   SK_JUDGE_TITLE_RE,
-  SK_ROMAN_DIVIDER_RE,
+  skSectionHeading,
 } from "@stll/legal-ast/slovak-document-roles";
+import type { SkDocumentSection } from "@stll/legal-ast/slovak-document-roles";
 
 import type {
   Block,
@@ -392,11 +393,14 @@ const buildSpanSegments = (
 const STARTS_NEW_PARAGRAPH_RE =
   /^(?:\d{1,3}\.\s|(?:I{1,3}|IV|VI{0,3}|IX|X)\.(?:\s(?!ÚS\b)|$)|\([a-z]\)\s)/u;
 
-function isStructuralStart(line: PdfLine): boolean {
+function isStructuralStart(line: PdfLine, section: Section): boolean {
   if (line.fontSize > 14) {
     return true; // title
   }
-  if (STARTS_NEW_PARAGRAPH_RE.test(line.text)) {
+  if (
+    STARTS_NEW_PARAGRAPH_RE.test(line.text) ||
+    (line.bold && skSectionHeading(line.text, section) !== null)
+  ) {
     return true;
   }
   if (
@@ -421,8 +425,21 @@ function isStructuralStart(line: PdfLine): boolean {
 
 const mergeWrappedLines = (lines: readonly PdfLine[]): PdfLine[] => {
   const merged: PdfLine[] = [];
+  let section: Section = "preamble";
 
   for (const line of lines) {
+    if (line.bold && isSkHoldingMarker(line.text)) {
+      section = "holding";
+    }
+    if (line.bold && isSkReasoningMarker(line.text)) {
+      section = "reasoning";
+    }
+    if (line.bold && isSkInstructionMarker(line.text)) {
+      section = "instruction";
+    }
+    if (section === "instruction" && SK_CLOSING_RE.test(line.text)) {
+      section = "closing";
+    }
     const prev = merged.at(-1);
 
     // Start a new paragraph if:
@@ -448,13 +465,13 @@ const mergeWrappedLines = (lines: readonly PdfLine[]): PdfLine[] => {
       !prev.bold &&
       line.bold &&
       !fontSizeChanged &&
-      !isStructuralStart(line);
+      !isStructuralStart(line, section);
 
     const startNew =
       !prev ||
       (line.bold !== prev.bold && !boldContinuation) ||
       fontSizeChanged ||
-      isStructuralStart(line) ||
+      isStructuralStart(line, section) ||
       prev.bold;
 
     if (startNew) {
@@ -516,7 +533,7 @@ const boldInline = (text: string): Inline[] => [
   { type: "bold", children: [{ type: "text", text }] },
 ];
 
-type Section = "preamble" | "holding" | "reasoning" | "instruction" | "closing";
+type Section = SkDocumentSection;
 
 /**
  * Classify extracted PDF lines into AST blocks.
@@ -645,16 +662,14 @@ const classifyLines = (lines: readonly PdfLine[]): Block[] => {
       continue;
     }
 
-    // Standalone bold Roman numeral markers (I., II., III.)
-    // are sub-section dividers. Classify as level 3 headings
-    // so they render as visual separators, not plain paragraphs.
-    if (bold && SK_ROMAN_DIVIDER_RE.test(text.trim())) {
+    const sectionHeading = bold ? skSectionHeading(text, section) : null;
+    if (sectionHeading !== null) {
       blocks.push({
         id: makeId(),
         anchorId: `p${++blockCount}`,
         type: "heading",
-        level: 3,
-        inlines: boldInline(text),
+        level: sectionHeading.level,
+        inlines: segmentsToInlines(line.segments),
         plainText: text,
       });
       continue;
@@ -665,6 +680,7 @@ const classifyLines = (lines: readonly PdfLine[]): Block[] => {
     // "Argumentácia sťažovateľa"). Center it as h3.
     const prevBlock = blocks.at(-1);
     if (
+      section === "reasoning" &&
       bold &&
       text.length < 80 &&
       prevBlock?.type === "heading" &&
