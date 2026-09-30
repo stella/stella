@@ -453,14 +453,20 @@ describe("chat run admission follows owned settlement", () => {
         const entry = { at: now + delayMs, callback };
         scheduled = entry;
         schedules += 1;
-        if (schedules === 2) {nextRenewalScheduled.resolve(undefined);}
+        if (schedules === 2) {
+          nextRenewalScheduled.resolve(undefined);
+        }
         return () => {
-          if (scheduled === entry) {scheduled = undefined;}
+          if (scheduled === entry) {
+            scheduled = undefined;
+          }
         };
       },
       firePending: () => {
         const entry = scheduled;
-        if (entry === undefined) {return false;}
+        if (entry === undefined) {
+          return false;
+        }
         scheduled = undefined;
         now = entry.at;
         entry.callback();
@@ -471,10 +477,15 @@ describe("chat run admission follows owned settlement", () => {
     const redis = {
       send: async (_command: string, args: string[]) => {
         const script = args.at(0) ?? panic("Admission must send a script");
-        if (script.includes('redis.call("ZCARD"')) {acquisitions += 1;}
-        else if (script.includes('redis.call("ZSCORE"')) {renewals += 1;}
-        else if (script.includes('redis.call("ZREM"')) {releases += 1;}
-        else {panic("Unexpected admission operation");}
+        if (script.includes('redis.call("ZCARD"')) {
+          acquisitions += 1;
+        } else if (script.includes('redis.call("ZSCORE"')) {
+          renewals += 1;
+        } else if (script.includes('redis.call("ZREM"')) {
+          releases += 1;
+        } else {
+          panic("Unexpected admission operation");
+        }
         return await Promise.resolve(1);
       },
     };
@@ -495,7 +506,9 @@ describe("chat run admission follows owned settlement", () => {
           createId: () => "lease_hanging",
         }),
     });
-    if (Result.isError(acquired)) {throw acquired.error;}
+    if (Result.isError(acquired)) {
+      throw acquired.error;
+    }
     const admission =
       acquired.value ?? panic("Enabled admission must acquire a lease");
     let persisted = 0;
