@@ -76,9 +76,9 @@ import {
   listReconciliationSlice,
   MAX_SLICE_PAGES,
 } from "@/api/handlers/case-law/ingestion/slice-listing";
-import { rowHoldsDocument } from "@/api/handlers/case-law/stored-payload";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decisionAbsorptionSql } from "@/api/lib/case-law/decision-absorption";
+import { rowHoldsDocument } from "@/api/lib/case-law/stored-payload";
 import {
   errorFingerprint,
   errorSystemFields,
@@ -1007,6 +1007,7 @@ type IngestItemOptions = {
   lease: CaseLawSourceIngestionLease;
   now: Date;
   buildDecision: SourceReconciliation["buildDecision"];
+  reconciliation: SourceReconciliation;
   reparseStoredRaw: SourceAdapter["reparseStoredRaw"];
   scopedDb: ScopedDb;
   slice: string;
@@ -1028,6 +1029,7 @@ const ingestListedItem = async ({
   lease,
   now,
   buildDecision,
+  reconciliation,
   reparseStoredRaw,
   scopedDb,
   slice,
@@ -1321,6 +1323,7 @@ const walkSlice = async ({
       lease,
       now: now(),
       buildDecision,
+      reconciliation,
       reparseStoredRaw,
       scopedDb,
       slice,
@@ -1459,6 +1462,7 @@ const retryParkedItems = async ({
       lease,
       now: now(),
       buildDecision,
+      reconciliation,
       reparseStoredRaw,
       scopedDb,
       slice: item.slice,

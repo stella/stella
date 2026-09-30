@@ -101,7 +101,7 @@ export const skCourtDirectoryMetadata = (
     logger.warn("case_law.ingestion.unknown_court_type", {
       adapterKey: ADAPTER_KEYS.SK_COURTS,
       registreGuid: record.registreGuid,
-      type: type ?? null,
+      type: type ?? "not_stated",
     });
   }
   return {
@@ -131,7 +131,7 @@ export const skCourtDirectoryMetadata = (
             statedName,
             registryName: record.nazov,
           },
-  } as const;
+  };
 };
 
 export type SkCourtRegistryReader = (
@@ -144,10 +144,10 @@ export const createSkCourtRegistryReader = (
   signal?: AbortSignal,
 ): SkCourtRegistryReader => {
   const records = new Map<string, ReturnType<SkCourtRegistryReader>>();
-  return (registreGuid, requestSignal) => {
+  return async (registreGuid, requestSignal) => {
     const cached = records.get(registreGuid);
     if (cached !== undefined) {
-      return cached;
+      return await cached;
     }
     const registryError = (cause?: unknown) =>
       new AdapterFetchError({
@@ -236,6 +236,6 @@ export const createSkCourtRegistryReader = (
       return result;
     });
     records.set(registreGuid, pending);
-    return pending;
+    return await pending;
   };
 };

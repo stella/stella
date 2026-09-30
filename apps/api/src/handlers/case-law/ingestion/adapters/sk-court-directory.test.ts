@@ -146,12 +146,12 @@ describe("court registry enrichment", () => {
   test("coalesces concurrent requests within a page and reloads on the next page", async () => {
     const requested: string[] = [];
     globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-      requested.push(String(input));
+      requested.push(input instanceof Request ? input.url : String(input));
       return new Response(JSON.stringify(registry));
     });
     const read = createSkCourtRegistryReader();
     const records = await Promise.all(
-      Array.from({ length: 20 }, () => read(registry.registreGuid)),
+      Array.from({ length: 20 }, async () => await read(registry.registreGuid)),
     );
     expect(records.map((record) => record.unwrap())).toEqual(
       Array.from({ length: 20 }, () => ({

@@ -90,6 +90,8 @@ const readTimeEntryById = createSafeHandler(
     return Result.ok({
       ...row,
       userName,
+      approvedAt: row.approvedAt?.toISOString() ?? null,
+      returnedAt: row.returnedAt?.toISOString() ?? null,
       timerStartedAt: row.timerStartedAt?.toISOString() ?? null,
       timerStoppedAt: row.timerStoppedAt?.toISOString() ?? null,
       createdAt: row.createdAt.toISOString(),

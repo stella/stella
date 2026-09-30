@@ -1188,6 +1188,18 @@ export const CAPABILITY_DISPATCH = {
     load: async () =>
       await import("@/api/handlers/templates/versions/summarize"),
   },
+  "time-entries.approval-queue.approve": {
+    load: async () =>
+      await import("@/api/handlers/time-entries/approval-queue/approve"),
+  },
+  "time-entries.approval-queue.list": {
+    load: async () =>
+      await import("@/api/handlers/time-entries/approval-queue/list"),
+  },
+  "time-entries.approval-queue.return": {
+    load: async () =>
+      await import("@/api/handlers/time-entries/approval-queue/return"),
+  },
   "time-entries.batch.delete": {
     load: async () => await import("@/api/handlers/time-entries/batch/delete"),
   },

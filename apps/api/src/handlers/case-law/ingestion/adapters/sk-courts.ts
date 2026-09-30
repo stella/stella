@@ -1,6 +1,10 @@
 import { panic, Result } from "better-result";
 
 import { mapWithConcurrency } from "@stll/concurrency";
+import {
+  skDocumentErrorDiagnostics,
+  skDocumentResponseDiagnostics,
+} from "@stll/legal-atlas/sk-document-fetch-diagnostics";
 import { parsePlainDate, Temporal } from "@stll/time";
 
 import {
@@ -42,6 +46,7 @@ import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/ad
 import { createPagePaginatedFetch } from "@/api/handlers/case-law/ingestion/adapters/pagination";
 import { publisherTarget } from "@/api/handlers/case-law/ingestion/adapters/publisher-target";
 import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
+import { createSkCollectionConnector } from "@/api/handlers/case-law/ingestion/adapters/sk-collections";
 import {
   createSkCourtRegistryReader,
   isSkCourtRegistryRecord,
@@ -69,6 +74,7 @@ import {
   absentDecisionTextFields,
   checkedDecisionMetadata,
 } from "@/api/lib/case-law/decision-text";
+import { decisionTypeKey } from "@/api/lib/case-law/decision-type-key";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { DOCUMENT_DELIVERY } from "@/api/lib/legal-search/ingestion-types";
@@ -149,12 +155,33 @@ export const skCourtsDocumentFetch: SkDocumentFetch = async (
     });
     return undefined;
   }
-  return await fetchPublisher(target.value, {
-    adapterKey: ADAPTER_KEYS.SK_COURTS,
-    redirect: "error",
-    signal,
-    timeoutMs: DOCUMENT_TIMEOUT_MS,
+  const fetched = await Result.tryPromise({
+    try: async () =>
+      await fetchPublisher(target.value, {
+        adapterKey: ADAPTER_KEYS.SK_COURTS,
+        redirect: "error",
+        signal,
+        timeoutMs: DOCUMENT_TIMEOUT_MS,
+        headers: { "User-Agent": INGESTION_USER_AGENT },
+      }),
+    catch: (error) => error,
   });
+  if (Result.isError(fetched)) {
+    logger.warn(
+      "case_law.ingestion.sk_document_fetch_failed",
+      skDocumentErrorDiagnostics(fetched.error),
+    );
+    throw fetched.error;
+  }
+  const diagnostics = skDocumentResponseDiagnostics(fetched.value);
+  if (
+    !fetched.value.ok ||
+    (diagnostics.contentTypeClass !== "pdf" &&
+      diagnostics.contentTypeClass !== "binary")
+  ) {
+    logger.warn("case_law.ingestion.sk_document_fetch_response", diagnostics);
+  }
+  return fetched.value;
 };
 
 const arrayOrEmpty = <T>(value: T[] | null | undefined): T[] => {
@@ -366,19 +393,6 @@ const fetchDetail = async (
 };
 
 /**
- * Build the public source URL for a decision.
- *
- * The infosud viewer (obcan.justice.sk/infosud/...) is a
- * Liferay portlet that frequently returns "item not found"
- * for valid decisions. Use the direct PDF content URL
- * instead — it's always available and is the actual document.
- */
-const sourceUrlForDecision = (
-  guid: string,
-  documentUrl: string | null | undefined,
-): string => documentUrl ?? `${BASE_URL}/${encodeURIComponent(guid)}`;
-
-/**
  * The publisher's own document id for a listing item, or undefined where the
  * item states none this store can hold.
  *
@@ -476,6 +490,16 @@ const fetchDetailForItem = async (
   return detail === null ? { type: "unavailable" } : { type: "detail", detail };
 };
 
+type SkCourtsMetadata = Record<string, unknown> & {
+  updateDate: string | undefined;
+  updateDateIso: string | undefined;
+  updateDateDefect:
+    | { type: "invalid-publisher-date"; value: string }
+    | undefined;
+  statedSourceUrl: string | undefined;
+  sourceUrlStatus: "published" | "not-published-by-source" | "rejected-url";
+};
+
 type SkCourtsDecisionParts = {
   /** The item exactly as the publisher listed it. */
   item: SkApiItem;
@@ -567,6 +591,22 @@ export const assembleSkCourtsDecision = ({
   const decisionType = toOptionalValue(item.formaRozhodnutia);
   const ecli = toOptionalValue(detail?.ecli);
 
+  const updateDate = toOptionalValue(detail?.updateDate);
+  const parsedUpdateDate =
+    updateDate === undefined ? undefined : parseCeDate(updateDate);
+  const updateDateIso =
+    parsedUpdateDate === undefined
+      ? undefined
+      : parsePlainDate(parsedUpdateDate)?.toString();
+  const statedSourceUrl = toOptionalValue(detail?.dokument?.url);
+  const sourceUrl = sanitizeUrl(statedSourceUrl);
+  const sourceUrlStatus = (() => {
+    if (statedSourceUrl === undefined) {
+      return "not-published-by-source";
+    }
+    return sourceUrl === undefined ? "rejected-url" : "published";
+  })();
+
   return {
     caseNumber,
     ecli,
@@ -576,9 +616,7 @@ export const assembleSkCourtsDecision = ({
     decisionDate,
     decisionType,
     sourceDocumentId: skCourtsSourceDocumentId(item.guid),
-    sourceUrl: item.guid
-      ? sanitizeUrl(sourceUrlForDecision(item.guid, detail?.dokument?.url))
-      : undefined,
+    sourceUrl,
     documentUrl:
       restrictSkCourtDocumentUrl(
         toOptionalValue(detail?.dokument?.url) ?? "",
@@ -594,6 +632,7 @@ export const assembleSkCourtsDecision = ({
       court,
       decisionDate,
       decisionType,
+      decisionTypeKey: decisionTypeKey(decisionType),
       guid: toOptionalValue(item.guid),
       identifikacneCislo: toOptionalValue(item.identifikacneCislo),
       // The name this service states for a decision is the judge's or a
@@ -611,13 +650,20 @@ export const assembleSkCourtsDecision = ({
       documentExtension: toOptionalValue(detail?.dokument?.fileExtension),
       documentSize: detail?.dokument?.size,
       documentFileId: detail?.dokument?.id,
-      updateDate: toOptionalValue(detail?.updateDate),
+      updateDate,
+      updateDateIso,
+      updateDateDefect:
+        updateDate !== undefined && updateDateIso === undefined
+          ? { type: "invalid-publisher-date", value: updateDate }
+          : undefined,
+      statedSourceUrl,
+      sourceUrlStatus,
       originCourt: toOptionalValue(detail?.povodnySud?.nazov),
       originCourtRegistreGuid: toOptionalValue(
         detail?.povodnySud?.registreGuid,
       ),
       originCaseNumber: toOptionalValue(detail?.povodnaSpisovaZnacka),
-    }),
+    } satisfies SkCourtsMetadata),
     rawHash,
     parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
     documentAst: EMPTY_AST,
@@ -673,7 +719,7 @@ export const buildSkCourtsDecision = async (
   if (registry.isErr()) {
     logger.warn("case_law.ingestion.court_registry_unavailable", {
       adapterKey: ADAPTER_KEYS.SK_COURTS,
-      registreGuid: registreGuid ?? null,
+      ...(registreGuid === undefined ? {} : { registreGuid }),
       reason: registry.error.message,
     });
   }
@@ -1131,12 +1177,11 @@ const collectFrontierPage = async (
     items: [
       ...new Set(
         listed.flatMap((item) => {
+          if (!isSkApiItem(item) || skCourtsIdentityFields(item) === null) {
+            return [];
+          }
           const id = item.sud?.registreGuid;
-          return skCourtsIdentityFields(item) === null ||
-            id === null ||
-            id === undefined
-            ? []
-            : [id];
+          return id === null || id === undefined ? [] : [id];
         }),
       ),
     ],
@@ -1556,6 +1601,7 @@ const SK_COURTS_SOURCE_SURFACES = {
 
 export const skCourtsAdapter = defineSourceAdapter({
   key: ADAPTER_KEYS.SK_COURTS,
+  collectionEnrichment: createSkCollectionConnector({ status: "disabled" }),
   sourceSurfaces: SK_COURTS_SOURCE_SURFACES,
   sourceFields: {
     status: "declared",
@@ -1692,12 +1738,11 @@ const createBackfillPage = (readCourt: SkCourtRegistryReader) =>
       }
       const courtIds = new Set(
         arrayOrEmpty(json.rozhodnutieList).flatMap((item) => {
+          if (!isSkApiItem(item) || skCourtsIdentityFields(item) === null) {
+            return [];
+          }
           const id = item.sud?.registreGuid;
-          return skCourtsIdentityFields(item) === null ||
-            id === null ||
-            id === undefined
-            ? []
-            : [id];
+          return id === null || id === undefined ? [] : [id];
         }),
       );
       const records = await mapWithConcurrency({
