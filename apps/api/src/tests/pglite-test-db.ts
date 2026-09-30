@@ -28,7 +28,7 @@ import {
   installPgliteOrganizationMemberCapacity,
   installPglitePdfSigningTokenScopes,
   installPgliteSchemaPrerequisites,
-  installPglitePublicSanctionsGrants,
+  readPglitePublicSanctionsGrants,
   installPgliteStatuteCitationCounts,
   installPgliteTimeEntryTimerSignals,
   installPgliteWorkspaceAccessObjects,
@@ -598,6 +598,7 @@ export const ROLE_GRANT_STATEMENTS = [
         TO stella_public_law_reader
     `,
   ),
+  ...readPglitePublicSanctionsGrants(),
   // Operator role for pre-computed decision analyses: a narrow read plus the
   // single writable column.
   `
@@ -674,7 +675,6 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   for (const statement of sqlStatements) {
     await db.execute(sql.raw(statement));
   }
-  await installPglitePublicSanctionsGrants(db);
   await installPgliteWorkspaceAccessObjects(db);
   await installPgliteAgentSkillRevisionTrigger(db);
   await installPgliteCorpusProjectionRevisionFence(db);
