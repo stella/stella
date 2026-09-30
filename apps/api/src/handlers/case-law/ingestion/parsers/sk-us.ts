@@ -33,12 +33,13 @@ import {
   isSkStandaloneInstructionMarker,
   SK_CLOSING_RE,
   SK_JUDGE_TITLE_RE,
-  SK_ROMAN_DIVIDER_RE,
+  skSectionHeading,
 } from "@stll/legal-ast/slovak-document-roles";
 
 import type {
   Block,
   DocumentAst,
+  HeadingBlock,
   Inline,
 } from "@/api/handlers/case-law/document-ast";
 import {
@@ -186,7 +187,7 @@ const headingBlock = ({
 }: {
   id: string;
   anchorId: string;
-  level: 1 | 2 | 3;
+  level: HeadingBlock["level"];
   line: MarkupLine;
 }): Block => ({
   id,
@@ -332,13 +333,14 @@ const classifyLines = (lines: readonly MarkupLine[]): Block[] => {
       continue;
     }
 
-    if (SK_ROMAN_DIVIDER_RE.test(line.text)) {
+    const sectionHeading = skSectionHeading(line.text);
+    if (sectionHeading !== null) {
       flushParagraph();
       blocks.push(
         headingBlock({
           id: nextId(),
           anchorId: `h${blocks.length + 1}`,
-          level: 3,
+          level: sectionHeading.level,
           line,
         }),
       );

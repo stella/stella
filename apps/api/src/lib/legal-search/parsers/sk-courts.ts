@@ -46,7 +46,7 @@ import {
   isSkStandaloneInstructionMarker,
   SK_CLOSING_RE,
   SK_JUDGE_TITLE_RE,
-  SK_ROMAN_DIVIDER_RE,
+  skSectionHeading,
 } from "@stll/legal-ast/slovak-document-roles";
 
 import type {
@@ -401,7 +401,10 @@ function isStructuralStart(line: PdfLine): boolean {
   if (line.fontSize > 14) {
     return true; // title
   }
-  if (STARTS_NEW_PARAGRAPH_RE.test(line.text)) {
+  if (
+    STARTS_NEW_PARAGRAPH_RE.test(line.text) ||
+    (line.bold && skSectionHeading(line.text) !== null)
+  ) {
     return true;
   }
   if (
@@ -684,16 +687,14 @@ const classifyLines = (lines: readonly PdfLine[]): Block[] => {
       continue;
     }
 
-    // Standalone bold Roman numeral markers (I., II., III.)
-    // are sub-section dividers. Classify as level 3 headings
-    // so they render as visual separators, not plain paragraphs.
-    if (bold && SK_ROMAN_DIVIDER_RE.test(text.trim())) {
+    const sectionHeading = bold ? skSectionHeading(text) : null;
+    if (sectionHeading !== null) {
       blocks.push({
         id: makeId(),
         anchorId: `p${++blockCount}`,
         type: "heading",
-        level: 3,
-        inlines: boldInline(text),
+        level: sectionHeading.level,
+        inlines: segmentsToInlines(line.segments),
         plainText: text,
       });
       continue;

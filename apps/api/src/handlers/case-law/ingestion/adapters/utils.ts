@@ -54,6 +54,16 @@ export const toOptionalValue = <T>(
   value: T | null | undefined,
 ): T | undefined => value ?? undefined;
 
+/** Derived metadata values; stated values remain in the source metadata. */
+export const normalizeMetadataValues = (
+  values: readonly string[] | null | undefined,
+): string[] => {
+  const normalized = (values ?? []).map((value) =>
+    value.normalize("NFC").replaceAll(/\s+/gu, " ").trim(),
+  );
+  return [...new Set(normalized.filter((value) => value.length > 0))];
+};
+
 /**
  * Remove every `<`…`>` span, taking each `<` to the next `>` exactly as
  * `/<[^>]*>/g` does, and leaving a trailing unterminated `<` in place.

@@ -1,5 +1,7 @@
 import { collapseSpacedLetters } from "@stll/text-normalize";
 
+import { caseLawSectionHeading } from "./case-law-heading";
+
 /**
  * How a Slovak court decision names its own parts.
  *
@@ -89,3 +91,16 @@ export const SK_JUDGE_TITLE_RE =
 
 /** A standalone Roman numeral, which this court uses as a part divider. */
 export const SK_ROMAN_DIVIDER_RE = /^(?:I{1,3}|IV|VI{0,3}|IX|X{1,3})\.$/u;
+
+/** Both renderings use Roman dividers and one-line section titles. */
+export const skSectionHeading = (text: string) => {
+  const trimmed = text.trim();
+  if (SK_ROMAN_DIVIDER_RE.test(trimmed)) {
+    return { level: 3 } as const;
+  }
+  // A cited constitutional docket is prose, even at the start of a line.
+  if (/^[IVX]+\.\s+ÚS\b/u.test(trimmed)) {
+    return null;
+  }
+  return caseLawSectionHeading(trimmed);
+};
