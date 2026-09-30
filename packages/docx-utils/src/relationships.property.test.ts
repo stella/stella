@@ -22,7 +22,7 @@ const existingRelationship = fc.record({
 
 const idsFromXml = (xml: string): string[] =>
   Array.from(
-    slimdom.parseXmlDocument(xml).querySelectorAll("Relationship"),
+    slimdom.parseXmlDocument(xml).getElementsByTagNameNS("*", "Relationship"),
   ).map((child) => child.getAttribute("Id") ?? "");
 
 const xmlAttributeValue = fc

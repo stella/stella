@@ -15,10 +15,7 @@ const escapeXmlAttribute = (value: string): string =>
 const relationshipIds = (relsXml: string): Set<string> => {
   const document = slimdom.parseXmlDocument(relsXml);
   const ids = new Set<string>();
-  for (const element of document.querySelectorAll("*")) {
-    if (element.localName !== "Relationship") {
-      continue;
-    }
+  for (const element of document.getElementsByTagNameNS("*", "Relationship")) {
     const id = element.getAttribute("Id");
     if (id !== null) {
       ids.add(id);

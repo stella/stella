@@ -2,6 +2,13 @@
 import { Result, TaggedError } from "better-result";
 import JSZip from "jszip";
 
+// JSZip's platform-neutral entry stream is missing from its published typings.
+declare module "jszip" {
+  type JSZipObject = {
+    internalStream: (type: "uint8array") => JSZip.JSZipStreamHelper<Uint8Array>;
+  };
+}
+
 /** Maximum bytes any single archive entry may decompress to. */
 export const DOCX_MAX_ENTRY_BYTES = 128 * 1024 * 1024;
 
