@@ -5034,6 +5034,11 @@
     "whenToUse": "Millal kasutada",
     "whenToUsePlaceholder": "Millal tuleks seda malli kasutada? (aitab AI-l malli valida)"
   },
+  "timesheets": {
+    "day": {
+      "internalWork": "Sisemine töö"
+    }
+  },
   "translate": {
     "dialog": {
       "aiDescription": "Kasutage stella AI-d, säilitades dokumendi struktuuri ja vormingu.",

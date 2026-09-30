@@ -50212,7 +50212,7 @@ export const generatedRouteMap: RouteNode = {
                 ],
                 capabilityId: "time-entries.approval-queue.list",
                 description:
-                  "List draft time entries awaiting the signed-in user's approval in accessible matters. Owners/admins also see drafts without an assigned approver. Optionally filter work dates (from/to, YYYY-MM-DD), timekeeper (member), and matter. Returns logged durationMinutes separately from adjusted billedMinutes and the last return comment. Follow nextCursor for the next bounded page.",
+                  "List draft time entries awaiting the signed-in user's approval, including internal work and accessible client matters. Owners/admins also see drafts without an assigned approver. Optionally filter work dates (from/to, YYYY-MM-DD), timekeeper (member), and matter. Returns logged durationMinutes separately from adjusted billedMinutes and the last return comment. Follow nextCursor for the next bounded page.",
                 access: "read",
                 flags: [
                   {
@@ -50759,7 +50759,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "time-entries", "csv-export"],
                 capabilityId: "time-entries.csv.export",
                 description:
-                  "Export a matter's time entries as CSV text, one row per entry with date, timekeeper name, work item, minutes, rate, amount, billable flag, status, task and activity codes, and narratives. Filter by date-worked range, status, and work item. Unlike the LEDES export this includes non-billable and written-off entries; the row count is capped.",
+                  "Export a matter's client time entries as CSV text, one row per entry with date, timekeeper name, activity group, work item, minutes, rate, amount, billable flag, status, task and activity codes, and narratives. Filter by date-worked range, status, and work item. Unlike the LEDES export this includes non-billable and written-off entries; the row count is capped.",
                 access: "read",
                 flags: [
                   {
@@ -50979,13 +50979,126 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
+            "internal-create": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "time-entries", "internal-create"],
+                capabilityId: "time-entries.internal.create",
+                description:
+                  "Record internal work for yourself in the active organization without a matter. Requires work date (YYYY-MM-DD), IANA timezoneId, positive whole durationMinutes, and narrative. Internal work has no billable value; monthly locks, edit windows, and narrative policy still apply. Returns the entry id and activityGroup. Internal entries await administrator approval when no approver is assigned.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--date-worked",
+                    prop: "dateWorked",
+                    required: true,
+                    part: "body",
+                    partPath: "dateWorked",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--timezone-id",
+                    prop: "timezoneId",
+                    required: true,
+                    part: "body",
+                    partPath: "timezoneId",
+                  },
+                  {
+                    kind: "int",
+                    min: 1,
+                    repeatable: false,
+                    flag: "--duration-minutes",
+                    prop: "durationMinutes",
+                    required: true,
+                    part: "body",
+                    partPath: "durationMinutes",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--narrative",
+                    prop: "narrative",
+                    required: true,
+                    part: "body",
+                    partPath: "narrative",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--narrative-language",
+                    prop: "narrativeLanguage",
+                    required: false,
+                    part: "body",
+                    partPath: "narrativeLanguage",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "billing_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      additionalProperties: false,
+                      type: "object",
+                      required: [
+                        "dateWorked",
+                        "timezoneId",
+                        "durationMinutes",
+                        "narrative",
+                      ],
+                      properties: {
+                        dateWorked: {
+                          format: "date",
+                          type: "string",
+                        },
+                        timezoneId: {
+                          minLength: 1,
+                          maxLength: 64,
+                          type: "string",
+                        },
+                        durationMinutes: {
+                          minimum: 1,
+                          type: "integer",
+                        },
+                        narrative: {
+                          maxLength: 10000,
+                          type: "string",
+                        },
+                        narrativeLanguage: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              minLength: 2,
+                              maxLength: 64,
+                              pattern: "^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$",
+                              description:
+                                "BCP-47 language tag, or null when unspecified",
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
             "ledes-export": {
               kind: "capability-leaf",
               spec: {
                 commandPath: ["capability", "time-entries", "ledes-export"],
                 capabilityId: "time-entries.ledes.export",
                 description:
-                  "Export a matter's time entries as a LEDES 1998B e-billing file. Only billable, charged, not-written-off entries are included, so the selection is narrower than the CSV export of the same filters. Refused when an included entry has no effective rate, or when the selection spans more than one currency, which the format cannot represent.",
+                  "Export a matter's client time entries as a LEDES 1998B e-billing file. Only billable, charged, not-written-off entries are included, so the selection is narrower than the CSV export of the same filters. Refused when an included entry has no effective rate, or when the selection spans more than one currency, which the format cannot represent.",
                 access: "read",
                 flags: [
                   {
@@ -51290,7 +51403,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "time-entries", "me-list"],
                 capabilityId: "time-entries.me.list",
                 description:
-                  "List the signed-in user's time entries for one work date across matters in the active organization. Returns only matters the caller can still access, with a cursor for the next page.",
+                  "List the signed-in user's client and internal time entries for one work date in the active organization. Client rows include an accessible matter; internal rows have no matter. Follow the cursor for the next page.",
                 access: "read",
                 flags: [
                   {
@@ -51709,7 +51822,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "time-entries", "summary-get"],
                 capabilityId: "time-entries.summary.get",
                 description:
-                  "Summarize time in the current matter for a bounded date range; team scope requires time-entry approval access.",
+                  "Summarize client time in the current matter for a bounded date range; team scope requires time-entry approval access.",
                 access: "read",
                 flags: [
                   {
@@ -52157,7 +52270,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "time-timers", "confirm"],
                 capabilityId: "time-timers.confirm",
                 description:
-                  "Confirm your timer into a draft time entry and remove it. Assign a matter with update first. Rounds billed minutes to the organization's minimum unit and enforces narrative and monthly locks. Retry with the same timer ID to get the original entry ID without creating another entry. timezoneId is an IANA timezone for the work date; timers without an effective rate default to non-billable.",
+                  "Confirm your timer into a draft time entry and remove it. For client work, assign a matter with update first. Request activityGroup internal only for a timer without a matter; internal entries have zero billed minutes and cannot be billable. Rounds client billed minutes to the organization's minimum unit and enforces narrative and monthly locks. Retry with the same timer ID to get the original entry ID without creating another entry. timezoneId is an IANA timezone for the work date; timers without an effective rate default to non-billable.",
                 access: "write",
                 flags: [
                   {
@@ -52188,7 +52301,7 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "billable",
                   },
                 ],
-                inputOnly: [],
+                inputOnly: ["body.activityGroup"],
                 paginated: false,
                 destructive: false,
                 scope: "billing_write",
@@ -52207,6 +52320,18 @@ export const generatedRouteMap: RouteNode = {
                         },
                         billable: {
                           type: "boolean",
+                        },
+                        activityGroup: {
+                          anyOf: [
+                            {
+                              const: "client",
+                              type: "string",
+                            },
+                            {
+                              const: "internal",
+                              type: "string",
+                            },
+                          ],
                         },
                       },
                     },

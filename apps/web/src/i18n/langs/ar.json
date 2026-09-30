@@ -5034,6 +5034,11 @@
     "whenToUse": "متى يُستخدَم",
     "whenToUsePlaceholder": "متى ينبغي استخدام هذا القالب؟ (يوجّه اختيار القالب بالذكاء الاصطناعي)"
   },
+  "timesheets": {
+    "day": {
+      "internalWork": "العمل الداخلي"
+    }
+  },
   "translate": {
     "dialog": {
       "aiDescription": "استخدم stella AI مع الحفاظ على بنية المستند وتنسيقه.",

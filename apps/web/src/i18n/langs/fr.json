@@ -5034,6 +5034,11 @@
     "whenToUse": "Quand utiliser",
     "whenToUsePlaceholder": "Quand ce modèle doit-il être utilisé ? (guide la sélection de modèles par l'IA)"
   },
+  "timesheets": {
+    "day": {
+      "internalWork": "Travail interne"
+    }
+  },
   "translate": {
     "dialog": {
       "aiDescription": "Utiliser stella AI tout en conservant la structure et la mise en forme du document.",

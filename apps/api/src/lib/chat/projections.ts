@@ -1,6 +1,10 @@
 import * as v from "valibot";
 
-import { ENTITY_KINDS, NUMBER_SERIES_DOCUMENT_TYPES } from "@stll/api-contract";
+import {
+  ENTITY_KINDS,
+  NUMBER_SERIES_DOCUMENT_TYPES,
+  TIME_ENTRY_ACTIVITY_GROUPS,
+} from "@stll/api-contract";
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import {
   DECISION_TEXT_FIELD,
@@ -1139,6 +1143,7 @@ export const LIST_PLAYBOOKS_PROJECTION = v.union([
 const timeEntryFieldEntries = (workspace: { from: "inputParam" | "sibling" }) =>
   ({
     id: passthroughId(),
+    activityGroup: v.picklist(TIME_ENTRY_ACTIVITY_GROUPS),
     entityId: v.nullable(
       chatEntityRef(
         workspace.from === "inputParam"

@@ -5037,6 +5037,11 @@ type Messages = {
     "whenToUse": "When to use";
     "whenToUsePlaceholder": "When should this template be used? (guides AI template selection)";
   };
+  "timesheets": {
+    "day": {
+      "internalWork": "Internal work";
+    };
+  };
   "translate": {
     "dialog": {
       "aiDescription": "Use stella AI while keeping the document structure and formatting.";

@@ -114,8 +114,8 @@
       "default": {"title": 14, "description": 691, "inputSchema": 354, "outputSchema": 2450, "annotations": 92, "payloadUtf8Bytes": 3700}
     },
     "list_time_entries": {
-      "anonymized": {"title": 17, "description": 587, "inputSchema": 1585, "outputSchema": 1828, "annotations": 95, "payloadUtf8Bytes": 4214},
-      "default": {"title": 17, "description": 587, "inputSchema": 1585, "outputSchema": 1828, "annotations": 95, "payloadUtf8Bytes": 4214}
+      "anonymized": {"title": 17, "description": 587, "inputSchema": 1585, "outputSchema": 1986, "annotations": 95, "payloadUtf8Bytes": 4372},
+      "default": {"title": 17, "description": 587, "inputSchema": 1585, "outputSchema": 1986, "annotations": 95, "payloadUtf8Bytes": 4372}
     },
     "lookup_business_registry": {
       "anonymized": {"title": 25, "description": 274, "inputSchema": 608, "outputSchema": 940, "annotations": 102, "payloadUtf8Bytes": 2058},

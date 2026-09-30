@@ -5034,6 +5034,11 @@
     "whenToUse": "Kiedy używać",
     "whenToUsePlaceholder": "Kiedy należy używać tego szablonu? (pomaga AI w wyborze szablonu)"
   },
+  "timesheets": {
+    "day": {
+      "internalWork": "Praca wewnętrzna"
+    }
+  },
   "translate": {
     "dialog": {
       "aiDescription": "Użyj stella AI, zachowując strukturę i formatowanie dokumentu.",

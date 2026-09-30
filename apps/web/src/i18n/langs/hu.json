@@ -5034,6 +5034,11 @@
     "whenToUse": "Mikor használja",
     "whenToUsePlaceholder": "Mikor használandó ez a sablon? (segíti az AI sablonválasztását)"
   },
+  "timesheets": {
+    "day": {
+      "internalWork": "Belső munka"
+    }
+  },
   "translate": {
     "dialog": {
       "aiDescription": "A stella AI használata a dokumentum szerkezetének és formázásának megőrzésével.",
