@@ -64,10 +64,15 @@ export const publicKnowledgeVisitorSkipReason = ({
   webEnabled,
   state,
 }: PublicKnowledgeVisitorSkipOptions): string | undefined => {
-  if (!apiEnabled && !webEnabled)
-    {return "Public Knowledge is disabled on API and web";}
-  if (webEnabled) {return undefined;}
+  if (!apiEnabled && !webEnabled) {
+    return "Public Knowledge is disabled on API and web";
+  }
+  if (webEnabled) {
+    return undefined;
+  }
   const disposition = stagingCheckDisposition(state, "public-knowledge-flags");
-  if (disposition.mode === "gating") {return undefined;}
+  if (disposition.mode === "gating") {
+    return undefined;
+  }
   return `Public Knowledge web routes unavailable: declared ${disposition.reason}`;
 };
