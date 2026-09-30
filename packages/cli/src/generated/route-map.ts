@@ -50211,7 +50211,7 @@ export const generatedRouteMap: RouteNode = {
                     flag: "--id",
                     prop: "id",
                     required: true,
-                    part: "params",
+                    part: "body",
                     partPath: "id",
                   },
                   {
@@ -50234,25 +50234,19 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     body: {
                       type: "object",
-                      required: ["comment"],
-                      properties: {
-                        comment: {
-                          minLength: 1,
-                          maxLength: 2000,
-                          pattern: "\\S",
-                          type: "string",
-                        },
-                      },
-                    },
-                    params: {
-                      type: "object",
-                      required: ["id"],
+                      required: ["id", "comment"],
                       properties: {
                         id: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
                             "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        comment: {
+                          minLength: 1,
+                          maxLength: 2000,
+                          pattern: "\\S",
                           type: "string",
                         },
                       },

@@ -4,6 +4,7 @@ import { eq, inArray } from "drizzle-orm";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 
+import type { ScopedDb } from "@/api/db/safe-db";
 import { invoices, timeEntries } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { exportCsvHandler } from "@/api/handlers/time-entries/csv/export";
@@ -85,7 +86,9 @@ const seedEntries = async () => {
 const exportContext = () => ({
   organizationId: ids.orgA,
   workspaceId: ids.wsA2,
-  scopedDb: createScopedDb(db, [ids.wsA2], ids.orgA, ids.userAdmin),
+  scopedDb: asTestRaw<ScopedDb>(
+    createScopedDb(db, [ids.wsA2], ids.orgA, ids.userAdmin),
+  ),
   query: { dateFrom: DAY, dateTo: DAY },
 });
 

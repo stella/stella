@@ -24,8 +24,8 @@ const returnTimeEntry = createSafeRootHandler(
     permissions: { timeEntry: ["read"] },
     mcp: { type: "capability", reason: "billing_admin" },
     access: "write",
-    params: t.Object({ id: tSafeId("timeEntry") }),
     body: t.Object({
+      id: tSafeId("timeEntry"),
       comment: t.String({
         minLength: 1,
         maxLength: LIMITS.timeEntryReturnCommentMaxLength,
@@ -39,7 +39,6 @@ const returnTimeEntry = createSafeRootHandler(
     user,
     memberRole,
     body,
-    params,
     recordAuditEvent,
   }) {
     const comment = body.comment.trim();
@@ -62,7 +61,7 @@ const returnTimeEntry = createSafeRootHandler(
           tx,
           organizationId: session.activeOrganizationId,
           actorUserId: user.id,
-          selection: { type: "approval_batch", ids: [params.id] },
+          selection: { type: "approval_batch", ids: [body.id] },
         });
         if (runningError) {
           return Result.err(runningError);
@@ -82,7 +81,7 @@ const returnTimeEntry = createSafeRootHandler(
           )
           .where(
             and(
-              eq(timeEntries.id, params.id),
+              eq(timeEntries.id, body.id),
               eq(timeEntries.organizationId, session.activeOrganizationId),
               or(
                 eq(

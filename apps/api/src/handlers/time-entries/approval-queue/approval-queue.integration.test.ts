@@ -143,7 +143,7 @@ const approveFor = async (
   );
 const returnFor = async (id: SafeId<"timeEntry">, comment: string) =>
   await returnEntry.handler(
-    asTestRaw<ReturnCtx>({ ...context(), params: { id }, body: { comment } }),
+    asTestRaw<ReturnCtx>({ ...context(), body: { id, comment } }),
   );
 const listFor = async (
   query: ListCtx["query"] = {},
@@ -429,7 +429,7 @@ describe("approval policy serialization", () => {
   const policyCheckingContext = () => {
     const ctx = context();
     const safeDb: SafeDb = async (run, retry) =>
-      await ctx.safeDb(async (tx) => {
+      await asTestRaw<SafeDb>(ctx.safeDb)(async (tx) => {
         const result = await run(tx);
         const heldPolicyLocks = await tx
           .select({ mode: pgLocks.mode })
@@ -461,8 +461,7 @@ describe("approval policy serialization", () => {
     const returned = await returnEntry.handler(
       asTestRaw<ReturnCtx>({
         ...policyCheckingContext(),
-        params: { id },
-        body: { comment: "Revise" },
+        body: { id, comment: "Revise" },
       }),
     );
     expect(returned).toEqual({ id, status: "draft" });

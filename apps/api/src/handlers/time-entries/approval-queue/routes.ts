@@ -20,8 +20,7 @@ export const timeApprovalQueueRoute = new Elysia({ prefix: "/v1/time-entries" })
     permissions: approveTimeEntries.config.permissions,
     body: approveTimeEntries.config.body,
   })
-  .post("/:id/return", returnTimeEntry.handler, {
+  .post("/approval-queue/return", returnTimeEntry.handler, {
     permissions: returnTimeEntry.config.permissions,
-    params: returnTimeEntry.config.params,
     body: returnTimeEntry.config.body,
   });

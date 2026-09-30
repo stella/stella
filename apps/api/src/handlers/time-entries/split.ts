@@ -208,7 +208,8 @@ const splitEntry = createSafeHandler(
               eq(timeEntries.workspaceId, workspaceId),
             ),
           )
-          .limit(1);
+          .limit(1)
+          .for("update");
         if (
           !current ||
           current.status !== original.status ||

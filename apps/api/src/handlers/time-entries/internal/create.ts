@@ -68,10 +68,10 @@ const createInternalTimeEntry = createSafeRootHandler(
               recordAuditEvent,
               source: TIME_ENTRY_SOURCE.MANUAL,
             });
-            return {
+            return Result.ok({
               id: entry.id,
               activityGroup: TIME_ENTRY_ACTIVITY_GROUP.INTERNAL,
-            } as const;
+            } as const);
           }),
       ),
     );
