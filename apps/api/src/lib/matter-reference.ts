@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { renderMatterReference } from "@stll/api-contract";
 
@@ -13,7 +13,10 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
-export const MAX_MATTER_REFERENCE_ALLOCATION_ATTEMPTS = 100;
+const MATTER_REFERENCE_BATCH_SIZE = 10;
+const MAX_MATTER_REFERENCE_ALLOCATION_ROUNDS = 10;
+export const MAX_MATTER_REFERENCE_ALLOCATION_ATTEMPTS =
+  MATTER_REFERENCE_BATCH_SIZE * MAX_MATTER_REFERENCE_ALLOCATION_ROUNDS;
 
 export const validatePattern = (pattern: string, padding: number) =>
   validateNumberPattern({ pattern, padding, sequenceDigitsBudget: 6 });
@@ -42,49 +45,84 @@ export const allocateMatterReference = async ({
   now,
 }: AllocateMatterReferenceOptions): Promise<string> => {
   const scopeKey = toScopeKey(pattern, now);
-  // The counter lock serializes candidate selection across matter creation.
-  for (
-    let attempt = 0;
-    attempt < MAX_MATTER_REFERENCE_ALLOCATION_ATTEMPTS;
-    attempt++
-  ) {
-    const counters = await tx
-      .insert(matterCounters)
-      .values({
-        id: createSafeId<"matterCounter">(),
-        organizationId,
-        scopeKey,
-        lastValue: 1,
-      })
-      .onConflictDoUpdate({
-        target: [matterCounters.organizationId, matterCounters.scopeKey],
-        set: { lastValue: sql`${matterCounters.lastValue} + 1` },
-      })
-      .returning({ lastValue: matterCounters.lastValue });
-    const counter = counters.at(0);
-    if (!counter) {
-      panic("Failed to create matter counter");
-    }
-    const reference = renderMatterReference({
-      pattern,
-      now,
-      seq: counter.lastValue,
-      padding,
-    });
+  // Reserve the bounded search range under one counter lock. Keep that lock
+  // until the chosen sequence is committed, returning unused numbers to it.
+  const counters = await tx
+    .insert(matterCounters)
+    .values({
+      id: createSafeId<"matterCounter">(),
+      organizationId,
+      scopeKey,
+      lastValue: MAX_MATTER_REFERENCE_ALLOCATION_ATTEMPTS,
+    })
+    .onConflictDoUpdate({
+      target: [matterCounters.organizationId, matterCounters.scopeKey],
+      set: {
+        lastValue: sql`${matterCounters.lastValue} + ${MAX_MATTER_REFERENCE_ALLOCATION_ATTEMPTS}`,
+      },
+    })
+    .returning({ lastValue: matterCounters.lastValue });
+  const counter = counters.at(0);
+  if (!counter) {
+    panic("Failed to create matter counter");
+  }
+  const candidates = Array.from(
+    { length: MAX_MATTER_REFERENCE_ALLOCATION_ATTEMPTS },
+    (_, index) => {
+      const sequence =
+        counter.lastValue -
+        MAX_MATTER_REFERENCE_ALLOCATION_ATTEMPTS +
+        index +
+        1;
+      return {
+        sequence,
+        reference: renderMatterReference({
+          pattern,
+          now,
+          seq: sequence,
+          padding,
+        }),
+      };
+    },
+  );
+  let selected: (typeof candidates)[number] | undefined;
+  for (let round = 0; round < MAX_MATTER_REFERENCE_ALLOCATION_ROUNDS; round++) {
+    const batch = candidates.slice(
+      round * MATTER_REFERENCE_BATCH_SIZE,
+      (round + 1) * MATTER_REFERENCE_BATCH_SIZE,
+    );
     const ledger = await tx
-      .select({ id: documentReferenceCounters.id })
+      .select({ reference: documentReferenceCounters.reference })
       .from(documentReferenceCounters)
       .where(
         and(
           eq(documentReferenceCounters.organizationId, organizationId),
-          eq(documentReferenceCounters.reference, reference),
+          inArray(
+            documentReferenceCounters.reference,
+            batch.map(({ reference }) => reference),
+          ),
         ),
       )
-      .limit(1)
+      .orderBy(documentReferenceCounters.reference)
+      .limit(MATTER_REFERENCE_BATCH_SIZE)
       .for("update");
-    if (ledger.length === 0) {
-      return reference;
+    const unavailable = new Set(ledger.map(({ reference }) => reference));
+    selected = batch.find(({ reference }) => !unavailable.has(reference));
+    if (selected !== undefined) {
+      break;
     }
+  }
+  if (selected !== undefined) {
+    await tx
+      .update(matterCounters)
+      .set({ lastValue: selected.sequence })
+      .where(
+        and(
+          eq(matterCounters.organizationId, organizationId),
+          eq(matterCounters.scopeKey, scopeKey),
+        ),
+      );
+    return selected.reference;
   }
   throw new HandlerError({
     status: 409,

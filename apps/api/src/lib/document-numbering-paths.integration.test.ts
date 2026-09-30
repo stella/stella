@@ -753,5 +753,19 @@ test.each([
       .from(workspaces)
       .where(eq(workspaces.id, workspaceId));
     expect(rows.at(0)?.reference).toBe(expectedReference);
+    const counters = await testDb
+      .select({ lastValue: matterCounters.lastValue })
+      .from(matterCounters)
+      .where(
+        and(
+          eq(matterCounters.organizationId, ids.orgA),
+          eq(matterCounters.scopeKey, toScopeKey(pattern, new Date())),
+        ),
+      );
+    expect(counters.at(0)?.lastValue).toBe(
+      blockedCount === MAX_MATTER_REFERENCE_ALLOCATION_ATTEMPTS
+        ? 1
+        : blockedCount + 1,
+    );
   },
 );
