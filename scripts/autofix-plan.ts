@@ -9,7 +9,8 @@ import {
   orderGenerators,
 } from "./generated-files";
 
-const fail = (message: string): never => {
+// The explicit type lets calls narrow the values they reject.
+const fail: (message: string) => never = (message) => {
   console.error(message);
   process.exit(1);
 };
