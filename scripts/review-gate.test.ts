@@ -937,10 +937,10 @@ describe("sweep", () => {
       10,
       now,
     );
-    expect(targets).toEqual([3, 5, 4, 2]);
+    expect(targets).toEqual([2, 3, 5, 4]);
   });
 
-  test("due gates prioritize pending, missing, then failure; oldest observations first", () => {
+  test("due gates prioritize missing observations, then age regardless of verdict", () => {
     const targets = selectSweepTargets(
       [
         open(1, { gate: "failure", observedAt: OPENED }),
@@ -954,7 +954,23 @@ describe("sweep", () => {
       10,
       now,
     );
-    expect(targets).toEqual([7, 5, 3, 6, 2, 1, 4]);
+    expect(targets).toEqual([7, 1, 4, 6, 2, 5, 3]);
+  });
+
+  test("an older failure is selected when due pending gates exceed the budget", () => {
+    const pullRequests = [
+      ...Array.from({ length: 30 }, (_, index) =>
+        open(index + 1, {
+          gate: "pending",
+          observedAt: minutesAfter(OPENED, index + 1),
+        }),
+      ),
+      open(31, { gate: "failure", observedAt: OPENED }),
+    ];
+    const targets = selectSweepTargets(pullRequests, 25, now);
+    expect(targets).toHaveLength(25);
+    expect(targets.at(0)).toBe(31);
+    expect(targets).toContain(31);
   });
 
   test("due gates fill only the budget remaining after landing pull requests", () => {

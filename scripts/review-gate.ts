@@ -1053,22 +1053,12 @@ const SWEEP_RECHECK_MS = {
   number
 >;
 
-const SWEEP_PRIORITY = {
-  pending: 0,
-  missing: 1,
-  failure: 2,
-  success: 3,
-} as const satisfies Record<
-  NonNullable<OpenPullRequest["gate"]> | "missing",
-  number
->;
-
 /**
  * Queued and armed non-draft pull requests are always re-evaluated: a missed
  * event may have left a success standing. Other unsettled gates are due when
  * missing an observation, pending for 10 minutes (timeouts), or failed for
  * 30 minutes (thread resolution has no event). Fill the remaining budget with
- * due pending, missing, then failed gates, oldest observation first.
+ * due gates without an observation first, then oldest observation first.
  */
 export const selectSweepTargets = (
   pullRequests: readonly OpenPullRequest[],
@@ -1088,11 +1078,6 @@ export const selectSweepTargets = (
     return nowMs - Date.parse(observedAt) >= SWEEP_RECHECK_MS[gate];
   });
   due.sort((a, b) => {
-    const priority =
-      SWEEP_PRIORITY[a.gate ?? "missing"] - SWEEP_PRIORITY[b.gate ?? "missing"];
-    if (priority !== 0) {
-      return priority;
-    }
     if (a.observedAt === null) {
       return b.observedAt === null ? 0 : -1;
     }
