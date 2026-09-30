@@ -18,6 +18,10 @@ const EXPECTED_STATUS_BY_PATH = {
   "/status-helper-5xx": 500,
   "/status-helper-named": 404,
   "/raw-response": 502,
+  "/raw-response-set-error": 403,
+  "/raw-response-set-error-named": 403,
+  "/raw-response-late-error": 500,
+  "/raw-error-retains-status": 502,
 } as const;
 
 describe("resolveResponseStatus", () => {
@@ -25,6 +29,11 @@ describe("resolveResponseStatus", () => {
     const observed = new Map<string, number>();
 
     const app = new Elysia()
+      .onAfterHandle(({ path, set }) => {
+        if (path === "/raw-response-late-error") {
+          set.status = 500;
+        }
+      })
       .onAfterHandle(({ path, responseValue, set }) => {
         observed.set(
           path,
@@ -43,7 +52,20 @@ describe("resolveResponseStatus", () => {
       .get("/status-helper-4xx", () => status(403, { code: "forbidden" }))
       .get("/status-helper-5xx", () => status(500, { code: "internal" }))
       .get("/status-helper-named", () => status("Not Found", { code: "gone" }))
-      .get("/raw-response", () => new Response("upstream", { status: 502 }));
+      .get("/raw-response", () => new Response("upstream", { status: 502 }))
+      .get("/raw-response-set-error", ({ set }) => {
+        set.status = 403;
+        return new Response("upstream");
+      })
+      .get("/raw-response-set-error-named", ({ set }) => {
+        set.status = "Forbidden";
+        return new Response("upstream");
+      })
+      .get("/raw-response-late-error", () => new Response("upstream"))
+      .get("/raw-error-retains-status", ({ set }) => {
+        set.status = 500;
+        return new Response("upstream", { status: 502 });
+      });
 
     const served = new Map<string, number>();
     await Promise.all(

@@ -13,12 +13,10 @@ type ResolveResponseStatusOptions = {
  *
  * A handler can carry its status on the value it returns rather than on
  * `set`: `status(code, body)` holds it on the returned wrapper, and a
- * returned `Response` holds it on the response itself. Elysia applies
- * either while mapping the response, which happens after `onAfterHandle`
- * runs, so `set.status` still holds the default at that point. Reading
- * `set` alone therefore reports every such reply as a 200, including the
- * whole safe-handler error path and any upstream status a route forwards
- * verbatim.
+ * returned `Response` holds it on the response itself, except that a raw
+ * 200 lets `set.status` override it. Elysia applies this while mapping the
+ * response, after `onAfterHandle` runs. Reading `set` alone therefore loses
+ * status wrappers and non-200 raw responses, including safe-handler errors.
  */
 export const resolveResponseStatus = ({
   response,
@@ -33,7 +31,12 @@ export const resolveResponseStatus = ({
     return response.code;
   }
 
-  if (response instanceof Response) {
+  // Elysia's raw-response mapper lets an explicit set.status override a 200
+  // Response; other raw statuses retain their own status.
+  if (
+    response instanceof Response &&
+    response.status !== DEFAULT_RESPONSE_STATUS
+  ) {
     return response.status;
   }
 
