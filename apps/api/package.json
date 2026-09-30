@@ -185,7 +185,6 @@
     "@modelcontextprotocol/ext-apps": "^2.0.0",
     "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
-    "@types/nodemailer": "^8.0.2",
     "ajv": "catalog:",
     "ajv-formats": "catalog:",
     "bun-types": "catalog:",

@@ -17,11 +17,11 @@ import { PlusIcon } from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
+import { formatCurrencyAmount } from "@/components/billing/format-currency";
 import { usePermissions } from "@/hooks/use-permissions";
 import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { detached } from "@/lib/detached";
 import { invoicesInfiniteOptions } from "@/lib/workspaces/queries/invoices";
-import { formatCurrencyAmount } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
 import { InvoiceStatusBadge } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-status-badge";
 
 export const Route = createFileRoute(
@@ -108,7 +108,8 @@ const useInvoiceColumns = (): InvoiceColumn[] => {
     {
       id: "invoiceNumber",
       header: () => t("billing.invoices.invoiceNumber"),
-      cell: (invoice) => invoice.invoiceNumber,
+      cell: (invoice) =>
+        invoice.invoiceNumber ?? t("billing.invoices.statuses.draft"),
       cellClassName: "font-medium",
       skeletonCell: () => <Skeleton className="h-4 w-24" />,
     },

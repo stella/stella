@@ -17,12 +17,14 @@ import { resolveCaching } from "@/api/lib/ai-config";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
+  admitFiniteAction,
   assertUsageAvailableForHandler,
   createSafeRootHandler,
 } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
 import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
 
@@ -46,13 +48,14 @@ const SUGGEST_TITLE_TIMEOUT_MS = 15_000;
 // audit event, and search re-indexing.
 export const createSuggestThreadTitle = ({
   generateTextForRole = generateTanStackTextForRole,
+  admit,
 }: {
+  admit?: typeof withActionAdmission;
   /** External model-dispatch boundary; supplied by focused integration tests. */
   generateTextForRole?: typeof generateTanStackTextForRole | undefined;
 } = {}) =>
-  createSafeRootHandler(
-    config,
-    async function* ({
+  createSafeRootHandler(config, async function* (ctx) {
+    const {
       getWorkspaceAccess,
       orgAIConfig,
       orgAIConfigStatus,
@@ -63,152 +66,162 @@ export const createSuggestThreadTitle = ({
       safeDb,
       session,
       user,
-    }) {
-      const scope = yield* resolveChatScope({
-        getWorkspaceAccess,
-        workspaceId,
-      });
+    } = ctx;
+    const scope = yield* resolveChatScope({
+      getWorkspaceAccess,
+      workspaceId,
+    });
 
-      const thread = yield* Result.await(
-        safeDb((tx) =>
-          tx.query.chatThreads.findFirst({
-            where: {
-              id: { eq: threadId },
-              userId: { eq: user.id },
-            },
-            columns: {
-              dataWorkspaceIds: true,
-              workspaceId: true,
-              usedAnonymization: true,
-            },
-          }),
-        ),
-      );
-
-      if (!thread) {
-        return Result.err(
-          new HandlerError({
-            status: 404,
-            message: "Chat thread not found",
-          }),
-        );
-      }
-
-      const persistedWorkspaceId = thread.workspaceId ?? null;
-      yield* assertChatThreadScopeMatches({ persistedWorkspaceId, scope });
-
-      if (thread.usedAnonymization) {
-        return Result.err(
-          new HandlerError({
-            status: 403,
-            message:
-              "Title suggestion is unavailable for anonymized conversations",
-          }),
-        );
-      }
-
-      const messageWindow = yield* Result.await(
-        loadRecapMessageWindow({ safeDb, threadId, userId: user.id }),
-      );
-
-      if (messageWindow.messages.length === 0) {
-        return Result.err(
-          new HandlerError({
-            status: 409,
-            message: "Chat thread has no messages to summarize",
-          }),
-        );
-      }
-
-      yield* requireTanStackAIAvailableForRole({
-        configStatus: orgAIConfigStatus,
-        orgConfig: orgAIConfig,
-        role: "fast",
-      });
-
-      const preflightError = await assertUsageAvailableForHandler({
-        metering: { actionType: "chat", modelRole: "fast" },
-        organizationId: session.activeOrganizationId,
-        orgAIConfig,
-        workspaceId: persistedWorkspaceId,
-        userId: user.id,
-        safeDb,
-      });
-      if (preflightError) {
-        return Result.err(preflightError);
-      }
-
-      const tenantWorkspaceIds = persistedWorkspaceId
-        ? Array.from(
-            new Set([persistedWorkspaceId, ...thread.dataWorkspaceIds]),
-          )
-        : thread.dataWorkspaceIds;
-
-      const titleMessages = messageWindow.messages.map((row) => ({
-        role: row.role,
-        parts: normalizePersistedChatMessageContent(row.content).parts,
-      }));
-
-      const aiAnalytics = createTanStackAIAnalyticsCallbacks({
-        usageMetering: {
-          actionType: "chat",
-          organizationId: session.activeOrganizationId,
-          safeDb,
-          serviceTier: "standard",
-          userId: user.id,
-          workspaceId: persistedWorkspaceId,
-        },
-        feature: "chat.suggest_title",
-        modelRole: "fast",
-        orgAIConfig,
-        properties: persistedWorkspaceId
-          ? { workspace_id: persistedWorkspaceId }
-          : {},
-        traceId: Bun.randomUUIDv7(),
-      });
-
-      const text = yield* Result.await(
-        Result.tryPromise({
-          try: async () =>
-            await generateTextForRole({
-              abortSignal: AbortSignal.any([
-                request.signal,
-                AbortSignal.timeout(SUGGEST_TITLE_TIMEOUT_MS),
-              ]),
-              analytics: aiAnalytics,
-              caching: resolveCaching({
-                promptCachingEnabled,
-                role: "fast",
-                scopeKey: threadId,
-              }),
-              finishPolicy: TITLE_FINISH_POLICY,
-              maxOutputTokens: TITLE_MAX_OUTPUT_TOKENS,
-              organizationId: session.activeOrganizationId,
-              orgAIConfig,
-              prompt: buildThreadTitlePrompt(titleMessages),
-              role: "fast",
-              serviceTier: "standard",
-              tenantWorkspaceIds,
-            }),
-          catch: (error) => {
-            aiAnalytics.captureError(error);
-            return aiHandlerError(error, {
-              status: 502,
-              message: "Title suggestion failed",
-            });
+    const thread = yield* Result.await(
+      safeDb((tx) =>
+        tx.query.chatThreads.findFirst({
+          where: {
+            id: { eq: threadId },
+            userId: { eq: user.id },
+          },
+          columns: {
+            dataWorkspaceIds: true,
+            workspaceId: true,
+            usedAnonymization: true,
           },
         }),
+      ),
+    );
+
+    if (!thread) {
+      return Result.err(
+        new HandlerError({
+          status: 404,
+          message: "Chat thread not found",
+        }),
       );
+    }
 
-      const title = cleanGeneratedTitle(text);
-      if (title.length === 0) {
-        return Result.err(
-          new HandlerError({ status: 502, message: "Empty suggested title" }),
-        );
-      }
+    const persistedWorkspaceId = thread.workspaceId ?? null;
+    yield* assertChatThreadScopeMatches({ persistedWorkspaceId, scope });
 
-      return Result.ok({ title });
-    },
-  );
+    if (thread.usedAnonymization) {
+      return Result.err(
+        new HandlerError({
+          status: 403,
+          message:
+            "Title suggestion is unavailable for anonymized conversations",
+        }),
+      );
+    }
+
+    const messageWindow = yield* Result.await(
+      loadRecapMessageWindow({ safeDb, threadId, userId: user.id }),
+    );
+
+    if (messageWindow.messages.length === 0) {
+      return Result.err(
+        new HandlerError({
+          status: 409,
+          message: "Chat thread has no messages to summarize",
+        }),
+      );
+    }
+
+    yield* requireTanStackAIAvailableForRole({
+      configStatus: orgAIConfigStatus,
+      orgConfig: orgAIConfig,
+      role: "fast",
+    });
+
+    const preflightError = await assertUsageAvailableForHandler({
+      metering: { actionType: "chat", modelRole: "fast" },
+      organizationId: session.activeOrganizationId,
+      orgAIConfig,
+      workspaceId: persistedWorkspaceId,
+      userId: user.id,
+      safeDb,
+    });
+    if (preflightError) {
+      return Result.err(preflightError);
+    }
+
+    const tenantWorkspaceIds = persistedWorkspaceId
+      ? Array.from(new Set([persistedWorkspaceId, ...thread.dataWorkspaceIds]))
+      : thread.dataWorkspaceIds;
+
+    const titleMessages = messageWindow.messages.map((row) => ({
+      role: row.role,
+      parts: normalizePersistedChatMessageContent(row.content).parts,
+    }));
+
+    const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+      usageMetering: {
+        actionType: "chat",
+        organizationId: session.activeOrganizationId,
+        safeDb,
+        serviceTier: "standard",
+        userId: user.id,
+        workspaceId: persistedWorkspaceId,
+      },
+      feature: "chat.suggest_title",
+      modelRole: "fast",
+      orgAIConfig,
+      properties: persistedWorkspaceId
+        ? { workspace_id: persistedWorkspaceId }
+        : {},
+      traceId: Bun.randomUUIDv7(),
+    });
+
+    const text = yield* Result.await(
+      Result.gen(() =>
+        admitFiniteAction({
+          actionKind: "chat.suggest-thread-title",
+          ctx,
+          ...(admit === undefined ? {} : { admit }),
+          async *handler({ actionSignal }) {
+            const generated = yield* Result.await(
+              Result.tryPromise({
+                try: async () =>
+                  await generateTextForRole({
+                    abortSignal: AbortSignal.any([
+                      actionSignal ?? request.signal,
+                      AbortSignal.timeout(SUGGEST_TITLE_TIMEOUT_MS),
+                    ]),
+                    analytics: aiAnalytics,
+                    caching: resolveCaching({
+                      promptCachingEnabled,
+                      role: "fast",
+                      scopeKey: threadId,
+                    }),
+                    finishPolicy: TITLE_FINISH_POLICY,
+                    maxOutputTokens: TITLE_MAX_OUTPUT_TOKENS,
+                    organizationId: session.activeOrganizationId,
+                    orgAIConfig,
+                    prompt: buildThreadTitlePrompt(titleMessages),
+                    role: "fast",
+                    serviceTier: "standard",
+                    tenantWorkspaceIds,
+                  }),
+                catch: (error) => {
+                  aiAnalytics.captureError(error);
+                  return aiHandlerError(error, {
+                    status: 502,
+                    message: "Title suggestion failed",
+                  });
+                },
+              }),
+            );
+
+            return Result.ok(generated);
+          },
+        }),
+      ),
+    );
+
+    const title = cleanGeneratedTitle(text);
+    if (title.length === 0) {
+      return Result.err(
+        new HandlerError({ status: 502, message: "Empty suggested title" }),
+      );
+    }
+
+    return Result.ok({ title });
+  });
 
 export default createSuggestThreadTitle();

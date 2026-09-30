@@ -146,7 +146,10 @@ import type {
   GuardedSystemPrompt,
   GuardedToolSchemas,
 } from "@/api/lib/chat/model-ingress-guard";
-import { withProviderStreamContract } from "@/api/lib/chat/provider-stream-contract";
+import {
+  withProviderStreamContract,
+  withRunToolCallIds,
+} from "@/api/lib/chat/provider-stream-contract";
 import { projectChatToolSchemasForProvider } from "@/api/lib/chat/provider-tool-projection";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatRunLog } from "@/api/lib/chat/run-log";
@@ -161,10 +164,7 @@ import {
   toolCallNameOf,
 } from "@/api/lib/chat/tanstack-chat-runtime";
 import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
-import {
-  ToolCallIdLedger,
-  toolCallIdLedgerMetadata,
-} from "@/api/lib/chat/unique-tool-call-ids";
+import { ToolCallIdLedger } from "@/api/lib/chat/unique-tool-call-ids";
 import {
   ChatEmptyCompletionError,
   ChatLoopDetectedError,
@@ -1218,9 +1218,11 @@ const runChatAttempt = async function* ({
     const { adapter, middleware: sandboxMiddleware } =
       resolveStellaSandboxRun(sandboxRun);
     yield* streamChatChunks({
-      adapter: withProviderStreamContract(adapter),
+      adapter: withRunToolCallIds(
+        withProviderStreamContract(adapter),
+        toolCallIds,
+      ),
       messages: preparedMessages,
-      metadata: toolCallIdLedgerMetadata(toolCallIds),
       agentLoopStrategy: maxIterations(MAX_TOOL_STEPS),
       abortController,
       threadId,
@@ -1250,9 +1252,8 @@ const runChatAttempt = async function* ({
   }
 
   const stream = streamChatChunks({
-    adapter: model.adapter,
+    adapter: withRunToolCallIds(model.adapter, toolCallIds),
     messages: preparedMessages,
-    metadata: toolCallIdLedgerMetadata(toolCallIds),
     tools: projectChatToolSchemasForProvider({
       modelTools,
       provider: model.provider,

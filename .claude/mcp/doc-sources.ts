@@ -328,7 +328,6 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "@types/chrome",
   "@types/hast",
   "@types/node",
-  "@types/nodemailer",
   "@typescript-eslint/utils",
   "@typescript/native",
   "@vscode/markdown-editor",
@@ -349,7 +348,6 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "expect-type",
   "expo-doctor",
   "franc",
-  "i18n-unused",
   "immer",
   "input-otp",
   "ioredis",
@@ -385,7 +383,6 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "use-debounce",
   "use-intl",
   "uuid",
-  "web-ext",
 ]
   .map(noLlmsTxt)
   .concat(

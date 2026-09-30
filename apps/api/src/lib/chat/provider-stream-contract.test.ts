@@ -7,7 +7,9 @@ import { describe, expect, test } from "bun:test";
 import {
   INCOMPLETE_STREAM_CODE,
   withProviderStreamContract,
+  withRunToolCallIds,
 } from "@/api/lib/chat/provider-stream-contract";
+import { ToolCallIdLedger } from "@/api/lib/chat/unique-tool-call-ids";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const started: StreamChunk = {
@@ -131,6 +133,63 @@ describe("the provider stream contract", () => {
       }
     }
     expect(closed).toBe(true);
+  });
+
+  test("a run's call id ledger reaches the stream, never the request", async () => {
+    const seen: unknown[] = [];
+    const adapter = asTestRaw<AnyTextAdapter>({
+      kind: "text",
+      model: "model",
+      name: "fixture",
+      async *chatStream(options: unknown) {
+        seen.push(options);
+        await Promise.resolve();
+        yield started;
+        yield {
+          type: EventType.TOOL_CALL_START,
+          toolCallId: "call_0",
+          toolCallName: "search",
+          toolName: "search",
+          timestamp: 1,
+        };
+        yield finished;
+      },
+    });
+    const request = {
+      logger: resolveDebugOption(false),
+      messages: [],
+      model: "model",
+    };
+    const ids: string[] = [];
+    for await (const chunk of withRunToolCallIds(
+      withProviderStreamContract(adapter),
+      new ToolCallIdLedger(["call_0"]),
+    ).chatStream(request)) {
+      if (chunk.type === EventType.TOOL_CALL_START) {
+        ids.push(chunk.toolCallId);
+      }
+    }
+    expect(ids).toEqual(["call_0_2"]);
+    expect(seen).toHaveLength(1);
+    expect(seen.at(0)).toBe(request);
+  });
+
+  test("an adapter is held to the contract once", () => {
+    const contracted = withProviderStreamContract(adapterOf([]));
+    expect(() => withProviderStreamContract(contracted)).toThrow(
+      "already held to the provider stream contract",
+    );
+    expect(() =>
+      withProviderStreamContract(
+        withRunToolCallIds(contracted, new ToolCallIdLedger([])),
+      ),
+    ).toThrow("already held to the provider stream contract");
+  });
+
+  test("a run's ledger binds only to a contracted adapter", () => {
+    expect(() =>
+      withRunToolCallIds(adapterOf([]), new ToolCallIdLedger([])),
+    ).toThrow("must be held to the provider stream contract");
   });
 
   test("every other member is the adapter's own", () => {
