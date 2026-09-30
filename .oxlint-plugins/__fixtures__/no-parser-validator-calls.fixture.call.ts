@@ -8,7 +8,7 @@ validateAndLog("<p>source</p>", []);
 validateAst("<p>source</p>", []);
 // oxlint-disable-next-line no-parser-validator-calls/no-parser-validator-calls -- fixture: namespace validator invocation is still direct oracle access
 oracle.validateAst("<p>source</p>", []);
-// oxlint-disable-next-line no-parser-validator-calls/no-parser-validator-calls -- fixture: computed static member invocation is equivalent
+// oxlint-disable-next-line no-parser-validator-calls/no-parser-validator-calls, typescript/dot-notation -- fixture: computed static member invocation must exercise bracket access
 oracle["validateAst"]("<p>source</p>", []);
 
 // expect-clean: no-parser-validator-calls/no-parser-validator-calls
