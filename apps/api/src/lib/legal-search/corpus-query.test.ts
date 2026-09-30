@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
@@ -725,6 +726,9 @@ test("non-SVK queries stay byte-identical for every morphology language", () => 
         const text = words.join(" ");
         const stemming = { language, fields: STEM_FIELDS };
         const baseline = corpusFreeTextClause(text, { stemming });
+        if (baseline === null) {
+          panic("Searchable test terms must produce a baseline clause");
+        }
         for (const jurisdiction of ["CZE", "POL", "DEU", undefined]) {
           const candidate = caseLawCorpusQuery({
             jurisdiction,
@@ -833,6 +837,9 @@ test("Slovak query scope enables compatibility even without an index jurisdictio
     filters: {},
     stemming: SK_STEMMING,
   });
+  if (singleJurisdictionQuery === null) {
+    panic("Searchable Slovak test terms must produce a query");
+  }
   expect(singleJurisdictionQuery).toBe(
     svkFreeText(text, { stemming: SK_STEMMING }),
   );
@@ -841,6 +848,10 @@ test("Slovak query scope enables compatibility even without an index jurisdictio
   expect(sharedIndexQuery).toBe(
     `${singleJurisdictionQuery} AND jurisdiction:"SVK"`,
   );
+  const baseline = corpusFreeTextClause(text, { stemming: SK_STEMMING });
+  if (baseline === null) {
+    panic("Searchable Slovak test terms must produce a baseline clause");
+  }
   for (const jurisdiction of ["CZE", undefined]) {
     expect(
       caseLawCorpusQuery({
@@ -849,8 +860,6 @@ test("Slovak query scope enables compatibility even without an index jurisdictio
         filters: { jurisdiction: "SVK" },
         stemming: SK_STEMMING,
       }),
-    ).toBe(
-      `${corpusFreeTextClause(text, { stemming: SK_STEMMING })} AND jurisdiction:"SVK"`,
-    );
+    ).toBe(`${baseline} AND jurisdiction:"SVK"`);
   }
 });
