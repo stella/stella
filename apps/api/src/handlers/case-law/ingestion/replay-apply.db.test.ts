@@ -7,7 +7,7 @@ import {
   expect,
   test,
 } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
@@ -15,9 +15,12 @@ import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawCitations,
+  caseLawCorpusUploadIntents,
   caseLawDecisions,
   caseLawIndexJobs,
   caseLawSources,
+  corpusIndexProjectionIntents,
+  corpusIndexProjectionStates,
   relations,
 } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
@@ -27,6 +30,7 @@ import {
   STORED_RAW_REPARSE_REJECTION,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type { SourceAdapter } from "@/api/handlers/case-law/ingestion/adapter";
+import { caseLawCanonicalPayload } from "@/api/handlers/case-law/ingestion/pipeline/corpus-mirror";
 import {
   CASE_LAW_REPLAY_SCOPE,
   REPLAY_REJECTION_POLICY,
@@ -45,8 +49,10 @@ import {
 } from "@/api/lib/case-law/decision-text";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
+import { corpusContentHash } from "@/api/lib/legal-search/corpus-storage";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
@@ -714,4 +720,228 @@ test("a corpus object that outlives its delete leaves the row alone", async () =
   }
 
   await sourceLease.release();
+});
+
+const replayConvergenceFixture = async (text: string) => {
+  const sourceId = createSafeId<"caseLawSource">();
+  const id = createSafeId<"caseLawDecision">();
+  await db
+    .insert(caseLawSources)
+    .values({
+      id: sourceId,
+      adapterKey: `replay-convergence-${sourceId}`,
+      name: "replay convergence fixture",
+    });
+  const result = {
+    caseNumber: "C-10/26",
+    court: "Court of Justice",
+    country: "EU",
+    language: "en",
+    metadata: { celex: "62026CJ0010" },
+    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+    rawHash: "convergence-source-hash",
+    fulltext: text,
+    sections: [{ index: 0, type: "unknown" as const, title: null, text }],
+    documentAst: astWithBlocks([paragraph("b1", text)]),
+    parserVersion: 4,
+  };
+  const sanitized = sanitizeResult(result);
+  const payload = caseLawCanonicalPayload(sanitized);
+  await db.insert(caseLawDecisions).values({
+    id,
+    sourceId,
+    caseNumber: sanitized.caseNumber,
+    court: sanitized.court,
+    country: sanitized.country,
+    language: sanitized.language,
+    metadata: sanitized.metadata,
+    fulltext: payload.text,
+    sections: payload.sections,
+    documentAst: payload.ast,
+    parserVersion: 4,
+    sourceHash: sanitized.rawHash,
+    sourceRawS3Key: STORED_KEY_PLACEHOLDER,
+    sourceRawContentType: "application/xhtml+xml",
+  });
+  const adapter = stubAdapter(() => ({ type: "parsed", result }));
+  const replay = async (sourceLease: CaseLawSourceIngestionLease | null) =>
+    await replayCaseLawSource({
+      adapter,
+      scopedDb,
+      sourceId,
+      sourceLease,
+      scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
+      readStoredRaw: async () => new TextEncoder().encode(STORED_PAYLOAD),
+      bound: { type: "at-most", limit: 10 },
+      pageSize: 10,
+    });
+  return { sourceId, id, result, sanitized, payload, replay };
+};
+
+test.each(["r o z h o d o l :", "Body text.\u0000"])(
+  "sanitized replay reaches a fixed point for %p",
+  async (text) => {
+    const fixture = await replayConvergenceFixture(text);
+    expect(fixture.sanitized.fulltext).not.toBe(text);
+    // Begin with a payload that needs the parser change, then reparse the
+    // identical unsanitized source again against what the pipeline stored.
+    await db
+      .update(caseLawDecisions)
+      .set({ fulltext: "Old text", sections: null, documentAst: EMPTY_AST })
+      .where(eq(caseLawDecisions.id, fixture.id));
+    const lease = await acquireCaseLawSourceIngestionLease({
+      scopedDb,
+      sourceId: fixture.sourceId,
+    });
+    if (lease === null) {
+      throw new TypeError("Expected the source ingestion lease to be free");
+    }
+    const first = await fixture.replay(lease);
+    if (first.type !== "ran") {
+      throw new TypeError("Expected replay to run");
+    }
+    expect(first.report.outcomes[REPLAY_ROW_OUTCOME.APPLIED]).toBe(1);
+    const second = await fixture.replay(lease);
+    if (second.type !== "ran") {
+      throw new TypeError("Expected replay to run");
+    }
+    expect(second.report.outcomes[REPLAY_ROW_OUTCOME.UNCHANGED]).toBe(1);
+    expect(second.report.outcomes[REPLAY_ROW_OUTCOME.APPLIED]).toBe(0);
+    await lease.release();
+  },
+);
+
+test.each(["row-columns", "content-hash"])(
+  "a version-only replay stamps without payload or projection writes: %p",
+  async (storage) => {
+    const fixture = await replayConvergenceFixture("Unchanged body text.");
+    await db
+      .update(caseLawDecisions)
+      .set({
+        parserVersion: 3,
+        contentHash:
+          storage === "content-hash"
+            ? corpusContentHash(fixture.payload)
+            : null,
+        updatedAt: sql`'2026-01-01 00:00:00.123456+00'::timestamptz`,
+      })
+      .where(eq(caseLawDecisions.id, fixture.id));
+    const readRow = async () =>
+      (
+        await db
+          .select()
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.id, fixture.id))
+      ).at(0);
+    const before = await readRow();
+    const dry = await fixture.replay(null);
+    if (dry.type !== "ran") {
+      throw new TypeError("Expected replay to run");
+    }
+    expect(dry.report.outcomes[REPLAY_ROW_OUTCOME.WOULD_APPLY]).toBe(1);
+    expect(await readRow()).toEqual(before);
+    const lease = await acquireCaseLawSourceIngestionLease({
+      scopedDb,
+      sourceId: fixture.sourceId,
+    });
+    if (lease === null) {
+      throw new TypeError("Expected the source ingestion lease to be free");
+    }
+    const run = await fixture.replay(lease);
+    if (run.type !== "ran") {
+      throw new TypeError("Expected replay to run");
+    }
+    expect(run.report.outcomes[REPLAY_ROW_OUTCOME.APPLIED]).toBe(1);
+    expect(await readRow()).toEqual({ ...before, parserVersion: 4 });
+    const [timestamp] = await db
+      .select({ value: sql<string>`${caseLawDecisions.updatedAt}::text` })
+      .from(caseLawDecisions)
+      .where(eq(caseLawDecisions.id, fixture.id));
+    expect(timestamp?.value).toContain(".123456");
+    expect(fake.requests.filter(({ method }) => method === "PUT")).toHaveLength(
+      0,
+    );
+    expect(
+      await db
+        .select()
+        .from(caseLawCorpusUploadIntents)
+        .where(eq(caseLawCorpusUploadIntents.decisionId, fixture.id)),
+    ).toHaveLength(0);
+    expect(
+      await db
+        .select()
+        .from(caseLawIndexJobs)
+        .where(eq(caseLawIndexJobs.decisionId, fixture.id)),
+    ).toHaveLength(0);
+    expect(
+      await db
+        .select()
+        .from(corpusIndexProjectionIntents)
+        .where(eq(corpusIndexProjectionIntents.entityId, fixture.id)),
+    ).toHaveLength(0);
+    expect(
+      await db
+        .select()
+        .from(corpusIndexProjectionStates)
+        .where(eq(corpusIndexProjectionStates.entityId, fixture.id)),
+    ).toHaveLength(0);
+    const [source] = await db
+      .select({ order: caseLawSources.observationOrder })
+      .from(caseLawSources)
+      .where(eq(caseLawSources.id, fixture.sourceId));
+    expect(source?.order).toBe(0n);
+    const second = await fixture.replay(null);
+    if (second.type !== "ran") {
+      throw new TypeError("Expected replay to run");
+    }
+    expect(second.report.outcomes[REPLAY_ROW_OUTCOME.UNCHANGED]).toBe(1);
+    await lease.release();
+  },
+);
+
+test("a stamp cannot overwrite a version written after the row was selected", async () => {
+  const fixture = await replayConvergenceFixture("Unchanged body text.");
+  await db
+    .update(caseLawDecisions)
+    .set({ parserVersion: 3 })
+    .where(eq(caseLawDecisions.id, fixture.id));
+  const lease = await acquireCaseLawSourceIngestionLease({
+    scopedDb,
+    sourceId: fixture.sourceId,
+  });
+  if (lease === null) {
+    throw new TypeError("Expected the source ingestion lease to be free");
+  }
+  const run = await replayCaseLawSource({
+    adapter: stubAdapter(() => ({ type: "parsed", result: fixture.result })),
+    scopedDb,
+    sourceId: fixture.sourceId,
+    sourceLease: lease,
+    scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
+    readStoredRaw: async () => {
+      await db
+        .update(caseLawDecisions)
+        .set({
+          parserVersion: 9,
+          updatedAt: sql`${caseLawDecisions.updatedAt}`,
+        })
+        .where(eq(caseLawDecisions.id, fixture.id));
+      return new TextEncoder().encode(STORED_PAYLOAD);
+    },
+    bound: { type: "at-most", limit: 10 },
+    pageSize: 10,
+  });
+  if (run.type !== "ran") {
+    throw new TypeError("Expected replay to run");
+  }
+  expect(run.report.outcomes[REPLAY_ROW_OUTCOME.RETRYABLE]).toBe(1);
+  const [row] = await db
+    .select({ version: caseLawDecisions.parserVersion })
+    .from(caseLawDecisions)
+    .where(eq(caseLawDecisions.id, fixture.id));
+  expect(row?.version).toBe(9);
+  expect(fake.requests.filter(({ method }) => method === "PUT")).toHaveLength(
+    0,
+  );
+  await lease.release();
 });

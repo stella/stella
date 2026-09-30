@@ -16,6 +16,7 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawDecisions,
+  caseLawSources,
 } from "@/api/db/schema";
 import { STORED_RAW_REPARSE_REJECTION } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
@@ -46,7 +47,10 @@ import { corpusContentHash } from "@/api/lib/legal-search/corpus-storage";
 import type { CorpusPayload } from "@/api/lib/legal-search/corpus-storage";
 import { decisionReplayIdentity } from "@/api/lib/legal-search/decision-language-identity";
 import { parsePrimaryReferenceType } from "@/api/lib/legal-search/decision-primary-reference";
-import { storedCaseNumberOf } from "@/api/lib/legal-search/ingestion-normalization";
+import {
+  sanitizeResult,
+  storedCaseNumberOf,
+} from "@/api/lib/legal-search/ingestion-normalization";
 
 /**
  * Re-parse decisions a source already ingested, from the raw payload stored
@@ -94,7 +98,7 @@ import { storedCaseNumberOf } from "@/api/lib/legal-search/ingestion-normalizati
  */
 
 export const REPLAY_ROW_OUTCOME = {
-  /** The pipeline applied the re-parsed result. */
+  /** The replay applied the re-parsed payload or stamped its parser version. */
   APPLIED: "applied",
   /** Re-parsing reproduced the stored result; nothing to write. */
   UNCHANGED: "unchanged",
@@ -142,6 +146,8 @@ export type ReplayDecisionRow = {
    */
   contentHash: string | null;
   parserVersion: number | null;
+  /** Exact PostgreSQL timestamp for the stamp's compare-and-set, without Date truncation. */
+  updateToken: string;
   sourceRawS3Key: string;
   sourceRawContentType: string | null;
   corpusMirrorStatus: (typeof CASE_LAW_CORPUS_MIRROR_STATUS)[keyof typeof CASE_LAW_CORPUS_MIRROR_STATUS];
@@ -300,6 +306,7 @@ export const selectReplayPage = async ({
         sourceHash: caseLawDecisions.sourceHash,
         contentHash: caseLawDecisions.contentHash,
         parserVersion: caseLawDecisions.parserVersion,
+        updateToken: sql<string>`${caseLawDecisions.updatedAt}::text`,
         sourceRawS3Key: caseLawDecisions.sourceRawS3Key,
         sourceRawContentType: caseLawDecisions.sourceRawContentType,
         corpusMirrorStatus: caseLawDecisions.corpusMirrorStatus,
@@ -677,26 +684,26 @@ const storedPayloadMatches = async ({
 /**
  * Whether replaying this result would change what the row holds.
  *
- * Three questions, because a parser change can move any of them
- * independently:
+ * The source-side refresh check and sanitized canonical payload are compared
+ * independently. A parser-version difference is handled separately so an
+ * identical payload can be stamped without running the ingestion pipeline.
  *
  * - the source-side refresh check the pipeline itself applies, which covers
  *   the publisher's hash and the ingestion metadata (keywords included);
  * - the canonical payload's content hash, which is what a restructure moves
  *   while the flattened text stays identical — the case a source-hash
  *   comparison alone would report as unchanged and never apply;
- * - the parser version recorded on the row, so a version the row never
- *   caught up with is not left behind.
  */
 const replayWouldChangeRow = async ({
   row,
-  result,
+  result: input,
   scopedDb,
 }: {
   row: ReplayDecisionRow;
   result: IngestionResult;
   scopedDb: ScopedDb;
 }): Promise<boolean> => {
+  const result = sanitizeResult(input);
   if (row.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.PENDING) {
     return true;
   }
@@ -716,9 +723,6 @@ const replayWouldChangeRow = async ({
     incomingRawHash: result.rawHash,
   });
   if (sourceChanged) {
-    return true;
-  }
-  if ((row.parserVersion ?? 0) !== (result.parserVersion ?? 0)) {
     return true;
   }
   return !(await storedPayloadMatches({
@@ -805,13 +809,54 @@ const replayRow = async ({
     scopedDb,
   });
 
+  const versionChanged =
+    (row.parserVersion ?? 0) !== (reparsed.result.parserVersion ?? 0);
   if (sourceLease === null) {
     return {
       ...base,
-      outcome: changed
-        ? REPLAY_ROW_OUTCOME.WOULD_APPLY
-        : REPLAY_ROW_OUTCOME.UNCHANGED,
+      outcome:
+        changed || versionChanged
+          ? REPLAY_ROW_OUTCOME.WOULD_APPLY
+          : REPLAY_ROW_OUTCOME.UNCHANGED,
     };
+  }
+
+  if (!changed && versionChanged) {
+    await sourceLease.beforeDatabaseMark();
+    const stamped = await scopedDb(async (tx) => 
+      // audit: skip — stamps parser provenance for a public corpus row; no document change
+      await tx
+        .update(caseLawDecisions)
+        .set({
+          parserVersion: reparsed.result.parserVersion ?? null,
+          updatedAt: sql`${caseLawDecisions.updatedAt}`,
+        })
+        .where(
+          and(
+            eq(caseLawDecisions.id, row.id),
+            eq(caseLawDecisions.sourceId, sourceId),
+            isNull(caseLawDecisions.redactedAt),
+            sql`${caseLawDecisions.updatedAt} = ${row.updateToken}::timestamptz`,
+            sql`${caseLawDecisions.parserVersion} IS NOT DISTINCT FROM ${row.parserVersion}::integer`,
+            sql`EXISTS (
+            SELECT 1 FROM ${caseLawSources}
+            WHERE ${caseLawSources.id} = ${sourceId}
+              AND ${caseLawSources.ingestionLeaseToken} = ${sourceLease.leaseToken}
+              AND ${caseLawSources.ingestionLeaseExpiresAt} > now()
+          )`,
+          ),
+        )
+        .returning({ id: caseLawDecisions.id })
+    );
+    if (stamped.length === 0) {
+      return {
+        ...base,
+        outcome: REPLAY_ROW_OUTCOME.RETRYABLE,
+        detail:
+          "decision or source lease changed before its parser version could be stamped",
+      };
+    }
+    return { ...base, outcome: REPLAY_ROW_OUTCOME.APPLIED };
   }
 
   // Ordered on the source's own counter, under its lease: the row guards
