@@ -238,7 +238,9 @@ describe("handleMcpHttpRequest", () => {
         const handler = createMcpHttpRequestHandler({
           admitAction: async () => Result.err(refusalError),
           authenticateMcpRequest: authenticateMcpRequestMock,
-          captureError: captureErrorMock,
+          captureError: (error, context) => {
+            captureErrorMock(error, context);
+          },
           getMcpToolDefinition: getMcpToolDefinitionMock,
           getMcpToolRequiredScopesHint: getMcpToolRequiredScopesHintMock,
           handleMcpToolCall: handleMcpToolCallMock,
@@ -248,15 +250,17 @@ describe("handleMcpHttpRequest", () => {
           recordMcpSessionInitialized,
           resolveMcpSessionContext: resolveMcpSessionContextMock,
         });
-        const response = await runWithRequestId("req_admission", () =>
-          handler(
-            createMcpRequest({
-              id: 1,
-              jsonrpc: "2.0",
-              method: "tools/call",
-              params: { name: "get_document", arguments: {} },
-            }),
-          ),
+        const response = await runWithRequestId(
+          "req_admission",
+          async () =>
+            await handler(
+              createMcpRequest({
+                id: 1,
+                jsonrpc: "2.0",
+                method: "tools/call",
+                params: { name: "get_document", arguments: {} },
+              }),
+            ),
         );
         const body =
           await readTestJson<McpJsonResponse<CallToolResult>>(response);

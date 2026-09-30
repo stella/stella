@@ -5,6 +5,7 @@ import type { EdenRoutesApp } from "@stll/api-client";
 import {
   ACTION_ADMISSION_CODES,
   ACTION_ADMISSION_REFUSALS,
+  type ActionAdmissionRefusal,
 } from "@stll/api-contract/action-admission";
 
 import type { WebRoutes } from "@/generated/api-routes.gen";
@@ -19,8 +20,10 @@ describe("action response observation", () => {
       const payload = {
         code,
         message: refusal.message,
+        hint: refusal.hint,
+        retryable: refusal.retryable,
         contactUrl: "https://example.test/help",
-      };
+      } as const satisfies ActionAdmissionRefusal;
       const response = Response.json(payload, {
         status: refusal.status,
         headers: { "x-receipt-id": "receipt-example" },
@@ -117,7 +120,12 @@ describe("action response observation", () => {
 test("the installed Eden hook preserves refused status, error payload and headers", async () => {
   for (const code of Object.values(ACTION_ADMISSION_CODES)) {
     const refusal = ACTION_ADMISSION_REFUSALS[code];
-    const payload = { code, message: refusal.message };
+    const payload = {
+      code,
+      message: refusal.message,
+      hint: refusal.hint,
+      retryable: refusal.retryable,
+    } as const satisfies ActionAdmissionRefusal;
     const observed: unknown[] = [];
     const captured: unknown[] = [];
     const client = createStellaEdenClient<
