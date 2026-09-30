@@ -210,7 +210,11 @@ const missFirstEntitlementLookup = (tx: Transaction) => {
       }
       return (...args: unknown[]) => {
         const result = Reflect.apply(value, target, args);
-        return property === "select" ? wrapQuery(result) : result;
+        return property === "select" &&
+          typeof result === "object" &&
+          result !== null
+          ? wrapQuery(result)
+          : result;
       };
     },
   });
