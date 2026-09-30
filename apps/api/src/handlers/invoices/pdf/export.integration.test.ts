@@ -3,11 +3,14 @@ import { eq } from "drizzle-orm";
 
 import { invoices, INVOICE_STATUS } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
-import exportInvoicePdf from "@/api/handlers/invoices/pdf/export";
+import type exportInvoicePdf from "@/api/handlers/invoices/pdf/export";
+import { createInvoicePdfExport } from "@/api/handlers/invoices/pdf/export";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
+import { S3_OBJECT_WRITE_CERTAINTY } from "@/api/lib/s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -77,7 +80,9 @@ const context = (
     orgAIConfig: null,
     orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
     promptCachingEnabled: false,
-    request: new Request("https://example.test/invoice/pdf"),
+    request: new Request("https://example.test/invoice/pdf", {
+      method: "POST",
+    }),
     route: "/test/invoice/pdf",
     safeDb: createSafeDb(testDb, [workspaceId], organizationId, userId),
     scopedDb: createScopedDb(testDb, [workspaceId], organizationId, userId),
@@ -88,31 +93,73 @@ const context = (
 };
 
 describe("invoice document export", () => {
-  test("returns a private draft attachment and records its download", async () => {
+  test("returns an expiring scoped artifact and records its download", async () => {
     const events: AuditEvent[] = [];
-    const response = await exportInvoicePdf.handler(context("own", events));
-    expect(response).toBeInstanceOf(Response);
-    if (!(response instanceof Response)) {
+    const writes: Parameters<
+      NonNullable<Parameters<typeof createInvoicePdfExport>[0]>
+    >[0][] = [];
+    const handler = createInvoicePdfExport(async (object) => {
+      writes.push(object);
+      return S3_OBJECT_WRITE_CERTAINTY.CONFIRMED;
+    });
+    const response = await handler.handler(context("own", events));
+    expect(response).toMatchObject({ fileName: "invoice-draft.pdf" });
+    expect("downloadUrl" in response).toBe(true);
+    if (!("downloadUrl" in response)) {
       return;
     }
-    expect(response.headers.get("content-type")).toBe("application/pdf");
-    expect(response.headers.get("content-disposition")).toContain(
+    const url = new URL(response.downloadUrl);
+    expect(url.pathname).toContain(
+      `exports/${fixture.ids.orgA}/${fixture.ids.wsA1}/invoices/${invoiceId}/`,
+    );
+    expect(url.searchParams.get("X-Amz-Expires")).toBe("300");
+    expect(url.searchParams.get("response-content-disposition")).toContain(
       "invoice-draft.pdf",
     );
-    expect(response.headers.get("cache-control")).toContain("no-store");
-    expect(await response.text()).toStartWith("%PDF-");
+    expect(url.searchParams.get("response-cache-control")).toContain(
+      "no-store",
+    );
+    expect(Date.parse(response.expiresAt) - Date.now()).toBeGreaterThan(
+      290_000,
+    );
+    expect(writes).toHaveLength(1);
+    const written = writes.at(0);
+    expect(written?.contentType).toBe("application/pdf");
+    expect(written?.key).toContain(
+      `exports/${fixture.ids.orgA}/${fixture.ids.wsA1}/`,
+    );
+    if (written?.data instanceof Uint8Array) {
+      expect(new TextDecoder().decode(written.data)).toStartWith("%PDF-");
+    }
     expect(events).toHaveLength(1);
     expect(events.at(0)).toMatchObject({
       action: "download",
       resourceType: "invoice",
       resourceId: invoiceId,
+      workspaceId: fixture.ids.wsA1,
     });
+  });
+  test("refuses delivery without a download audit when storage fails", async () => {
+    const events: AuditEvent[] = [];
+    const handler = createInvoicePdfExport(async () => {
+      throw new HandlerError({ status: 502, message: "Storage unavailable" });
+    });
+    const response = await handler.handler(context("own", events));
+    expect(response).toMatchObject({ code: 502 });
+    expect(response).not.toHaveProperty("downloadUrl");
+    expect(events).toHaveLength(0);
   });
   test.each(["neighbour", "other"] as const)(
     "returns no document or audit event for the %s scope",
     async (scope) => {
       const events: AuditEvent[] = [];
-      const response = await exportInvoicePdf.handler(context(scope, events));
+      let writes = 0;
+      const handler = createInvoicePdfExport(async () => {
+        writes += 1;
+        return S3_OBJECT_WRITE_CERTAINTY.CONFIRMED;
+      });
+      const response = await handler.handler(context(scope, events));
+      expect(writes).toBe(0);
       expect(response).toMatchObject({ code: 404 });
       expect(events).toHaveLength(0);
     },

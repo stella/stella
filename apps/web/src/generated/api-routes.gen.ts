@@ -8574,7 +8574,7 @@ export type WebRoutes = {
       ":workspaceId": {
         ":invoiceId": {
           pdf: {
-            get: {
+            post: {
               body: Record<never, never>;
               params: {
                 workspaceId: T8d02a37b3f;
@@ -8583,7 +8583,11 @@ export type WebRoutes = {
               query: Record<never, never>;
               headers: Record<never, never>;
               response: {
-                200: Response;
+                200: {
+                  downloadUrl: string;
+                  fileName: (string & valibot_Brand<"SanitizedFileName">);
+                  expiresAt: string;
+                };
                 400: T9a51b7d2bc;
                 401: T9a51b7d2bc;
                 402: T9a51b7d2bc;

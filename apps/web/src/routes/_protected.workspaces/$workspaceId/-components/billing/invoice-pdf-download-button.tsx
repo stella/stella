@@ -8,9 +8,9 @@ import { stellaToast } from "@stll/ui/toast";
 
 import { useLocale as useFormattingLocale } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
-import { apiUrl } from "@/lib/api-url";
+import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
-import { getExportBaseName, getExportFileName } from "@/lib/export-download";
+import { toSafeId } from "@/lib/safe-id";
 import { downloadFile } from "@/lib/utils";
 
 const PDF_DOWNLOAD_TIMEOUT_MS = 60_000;
@@ -18,13 +18,11 @@ const PDF_DOWNLOAD_TIMEOUT_MS = 60_000;
 type InvoicePdfDownloadButtonProps = {
   workspaceId: string;
   invoiceId: string;
-  invoiceNumber: string | null;
 };
 
 export const InvoicePdfDownloadButton = ({
   workspaceId,
   invoiceId,
-  invoiceNumber,
 }: InvoicePdfDownloadButtonProps) => {
   const t = useTranslations();
   const locale = useLocale();
@@ -32,29 +30,31 @@ export const InvoicePdfDownloadButton = ({
   const analytics = useAnalytics();
   const download = useMutation({
     mutationFn: async () => {
-      const response = await fetchWithTimeout(
-        apiUrl(
-          `/invoices/${encodeURIComponent(workspaceId)}/${encodeURIComponent(invoiceId)}/pdf`,
-        ),
-        {
-          credentials: "include",
-          headers: {
-            "Accept-Language": locale,
-            "x-stella-formatting-locale": formattingLocale,
+      const response = await api
+        .invoices({ workspaceId: toSafeId<"workspace">(workspaceId) })({
+          invoiceId: toSafeId<"invoice">(invoiceId),
+        })
+        .pdf.post(
+          {},
+          {
+            headers: {
+              "Accept-Language": locale,
+              "x-stella-formatting-locale": formattingLocale,
+            },
+            fetch: { signal: AbortSignal.timeout(PDF_DOWNLOAD_TIMEOUT_MS) },
           },
-          timeoutMs: PDF_DOWNLOAD_TIMEOUT_MS,
-        },
-      );
-      if (!response.ok) {
+        );
+      const { downloadUrl, fileName } = unwrapEden(response);
+      const file = await fetchWithTimeout(downloadUrl, {
+        timeoutMs: PDF_DOWNLOAD_TIMEOUT_MS,
+      });
+      if (!file.ok) {
         unwrapEden({
           data: null,
-          error: { status: response.status, value: await response.text() },
+          error: { status: file.status, value: "Invoice PDF download failed" },
         });
       }
-      const blob = await response.blob();
-      const fileName =
-        getExportFileName(response.headers.get("Content-Disposition")) ??
-        `${getExportBaseName(invoiceNumber ?? invoiceId)}.pdf`;
+      const blob = await file.blob();
       downloadFile(blob, fileName);
     },
     onError: (error) => {

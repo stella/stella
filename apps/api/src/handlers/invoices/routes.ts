@@ -41,7 +41,7 @@ export const invoicesRoute = new Elysia({
     params: readInvoiceById.config.params,
     permissions: readInvoiceById.config.permissions,
   })
-  .get("/:invoiceId/pdf", exportInvoicePdf.handler, {
+  .post("/:invoiceId/pdf", exportInvoicePdf.handler, {
     params: exportInvoicePdf.config.params,
     permissions: exportInvoicePdf.config.permissions,
   })

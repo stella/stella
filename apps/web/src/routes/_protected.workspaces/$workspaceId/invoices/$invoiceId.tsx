@@ -340,7 +340,6 @@ const InvoiceDetail = ({
         <div className="flex items-center gap-2">
           <InvoicePdfDownloadButton
             invoiceId={invoiceId}
-            invoiceNumber={invoice.invoiceNumber}
             workspaceId={workspaceId}
           />
           <InvoiceActions
