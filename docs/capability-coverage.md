@@ -659,7 +659,7 @@ mechanics, and similar), not gaps in coverage.
 | ---------------------- | ----- |
 | account_lifecycle      | 4     |
 | assistant_chat         | 16    |
-| auth_plumbing          | 9     |
+| auth_plumbing          | 12    |
 | billing_ui             | 1     |
 | chat_thread_ui         | 2     |
 | compound_consent       | 1     |
