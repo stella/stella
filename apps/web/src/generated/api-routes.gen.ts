@@ -4518,7 +4518,9 @@ export type WebRoutes = {
               query: Record<never, never>;
               headers: Record<never, never>;
               response: {
-                200: T5e3ac29766;
+                200: {
+                  mode: T914c41786d;
+                };
                 400: T9a51b7d2bc;
                 401: T9a51b7d2bc;
                 402: T9a51b7d2bc;
