@@ -15,7 +15,10 @@ import {
   withDecidedStopReasons,
 } from "@/api/lib/chat/provider-stop-reasons";
 import { TOOL_CALL_STEP_METADATA_KEY } from "@/api/lib/chat/tool-call-step";
-import { withUniqueToolCallIds } from "@/api/lib/chat/unique-tool-call-ids";
+import {
+  withUniqueToolCallIds,
+  withoutToolCallIdLedger,
+} from "@/api/lib/chat/unique-tool-call-ids";
 import { withModelPlaceholdersOmitted } from "@/api/lib/json-schema/null-optionals";
 
 // One owner for what every provider adapter's stream promises the rest of
@@ -359,7 +362,10 @@ export const withProviderStreamContract = (
         readOutputCeilingStopAsLength(
           decided(
             withToolCallSteps(
-              withUniqueToolCallIds(adapter.chatStream(options), options),
+              withUniqueToolCallIds(
+                adapter.chatStream(withoutToolCallIdLedger(options)),
+                options,
+              ),
             ),
           ),
         ),

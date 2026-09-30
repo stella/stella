@@ -99,8 +99,9 @@ const TOOL_CALL_ID_LEDGER_METADATA_KEY = "stellaToolCallIdLedger";
 
 /**
  * The `metadata` a run hands the engine so each of its requests reads
- * `ledger`. The engine passes `metadata` to every adapter request and never
- * onto the provider wire.
+ * `ledger`. The engine passes `metadata` to every adapter request, and some
+ * adapters (OpenAI Responses) send it to the provider, which accepts only
+ * string values; `withoutToolCallIdLedger` keeps the ledger off the wire.
  */
 export const toolCallIdLedgerMetadata = (ledger: ToolCallIdLedger) => ({
   [TOOL_CALL_ID_LEDGER_METADATA_KEY]: ledger,
@@ -109,6 +110,24 @@ export const toolCallIdLedgerMetadata = (ledger: ToolCallIdLedger) => ({
 type ToolCallIdRequest = {
   messages: readonly ModelMessage[];
   metadata?: Record<string, unknown> | undefined;
+};
+
+/** `request` as an adapter may read it: its metadata without the ledger. */
+export const withoutToolCallIdLedger = <Request extends ToolCallIdRequest>(
+  request: Request,
+): Request => {
+  const { metadata } = request;
+  if (metadata?.[TOOL_CALL_ID_LEDGER_METADATA_KEY] === undefined) {
+    return request;
+  }
+  return {
+    ...request,
+    metadata: Object.fromEntries(
+      Object.entries(metadata).filter(
+        ([key]) => key !== TOOL_CALL_ID_LEDGER_METADATA_KEY,
+      ),
+    ),
+  };
 };
 
 /** The run's ledger with `request`'s history taken, or one for the request
