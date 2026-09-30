@@ -138,14 +138,14 @@ export default eslintCompatPlugin({
             const owned = isIdentifier(node.object)
               ? ownerNamespaces.get(node.object.name)
               : undefined;
-            const name = memberPropertyName(node);
+            const name = isAstNode(node) ? memberPropertyName(node) : null;
             if (owned !== undefined && name !== null && owned.includes(name)) {
               context.report({ node, messageId: "ownedBuilder" });
             }
           },
           Property(node) {
             if (
-              node.computed !== true &&
+              !node.computed &&
               getPropertyName(node.key) === "systemPrompts" &&
               !isRequestModuleCall(node.value)
             ) {
@@ -157,7 +157,7 @@ export default eslintCompatPlugin({
             if (
               isAstNode(target) &&
               target.type === "MemberExpression" &&
-              target.computed !== true &&
+              !target.computed &&
               getPropertyName(target.property) === "systemPrompts" &&
               !isRequestModuleCall(node.right)
             ) {

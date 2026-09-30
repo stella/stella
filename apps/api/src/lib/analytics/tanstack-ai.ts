@@ -631,6 +631,8 @@ export const createTanStackAIAnalyticsCallbacks = ({
           }),
         catch: (error) => error,
       });
+      // A payload that cannot be normalized is reported once, by the metering
+      // below, which normalizes the same usage; the metric skips the call.
       if (Result.isOk(promptTokens)) {
         // Per model call rather than per run: a run parked at an approval or
         // a client tool reaches no terminal hook, and its calls count too.
@@ -641,11 +643,6 @@ export const createTanStackAIAnalyticsCallbacks = ({
           inputTokens: uncachedInputTokens + cacheReadTokens + cacheWriteTokens,
           provider: resolvedModelInfo.provider,
           surface: config.promptCacheSurface,
-        });
-      } else {
-        captureTelemetryError(promptTokens.error, {
-          source: "usage.tanstack_ai",
-          trace_id: config.traceId,
         });
       }
     }

@@ -100,7 +100,10 @@ const systemPromptsFor = ({
  */
 export const chatSystemPrompts = (
   input: ChatSystemPromptInput & { system: string },
-): SystemPrompt[] => systemPromptsFor(input).systemPrompts ?? [];
+): SystemPrompt[] => {
+  const { systemPrompts } = systemPromptsFor(input);
+  return systemPrompts === undefined ? [] : systemPrompts;
+};
 
 type ChatRequestOptionsInput = ChatSystemPromptInput & {
   maxOutputTokens: number | undefined;
