@@ -8,7 +8,7 @@ import {
   createRouter,
   RouterContextProvider,
 } from "@tanstack/react-router";
-import { describe, expect, setSystemTime, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
 import { FormattingProvider } from "@/i18n/formatting-context";
@@ -285,18 +285,13 @@ describe("the coverage page states what it counts", () => {
   });
 
   test("relative times follow the formatting locale, not the message language", () => {
-    setSystemTime(new Date("2026-09-01T02:00:00.000Z"));
-    try {
-      const english = render(<CaseLawCoveragePage coverage={COVERAGE} />);
-      const czech = render(<CaseLawCoveragePage coverage={COVERAGE} />, "cs");
+    const english = render(<CaseLawCoveragePage coverage={COVERAGE} />);
+    const czech = render(<CaseLawCoveragePage coverage={COVERAGE} />, "cs");
 
-      // The same sync instant, formatted twice: once per locale. Were the string
-      // read from the store instead of the context, both renders would agree.
-      expect(english).toContain("ago");
-      expect(czech).not.toContain("ago");
-    } finally {
-      setSystemTime();
-    }
+    // The same sync instant, formatted twice: once per locale. Were the string
+    // read from the store instead of the context, both renders would agree.
+    expect(english).toContain("ago");
+    expect(czech).not.toContain("ago");
   });
 
   test("figures the endpoint cannot state read as an empty page, not as zeros", () => {
