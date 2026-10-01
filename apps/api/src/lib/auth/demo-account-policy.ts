@@ -80,7 +80,7 @@ export const createDemoSessionFilter = (config: DemoAccountConfig) =>
       after: [
         {
           matcher: ({ path }) => path === "/get-session",
-          handler: createAuthMiddleware((ctx) => {
+          handler: createAuthMiddleware(async (ctx) => {
             const resolved = ctx.context.session;
             if (!resolved) {
               return undefined;
@@ -95,7 +95,7 @@ export const createDemoSessionFilter = (config: DemoAccountConfig) =>
               return undefined;
             }
             ctx.context.session = null;
-            return ctx.json(null);
+            return await ctx.json(null);
           }),
         },
       ],

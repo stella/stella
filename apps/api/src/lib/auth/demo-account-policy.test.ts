@@ -1,5 +1,5 @@
-import { memoryAdapter } from "@better-auth/memory-adapter";
 import { betterAuth } from "better-auth";
+import { memoryAdapter } from "better-auth/adapters/memory";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 

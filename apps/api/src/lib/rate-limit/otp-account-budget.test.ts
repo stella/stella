@@ -1,5 +1,5 @@
-import { memoryAdapter } from "@better-auth/memory-adapter";
 import { betterAuth } from "better-auth";
+import { memoryAdapter } from "better-auth/adapters/memory";
 import { APIError } from "better-auth/api";
 import { emailOTP } from "better-auth/plugins";
 import { panic, Result } from "better-result";

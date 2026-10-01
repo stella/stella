@@ -1267,13 +1267,14 @@ const createAuth = () => {
         roles,
         organizationHooks: {
           ...organizationLifecycleHooks,
-          beforeCreateOrganization({ user }) {
+          async beforeCreateOrganization({ user }) {
             requireDemoAccountAccess(
               checkConfiguredDemoAccountAccess({
                 email: user.email,
                 operation: "growth",
               }),
             );
+            await Promise.resolve();
           },
           async beforeDeleteOrganization({ organization: org }) {
             // Complete the deletion here, before the plugin's adapter runs.
