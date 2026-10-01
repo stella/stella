@@ -91,7 +91,10 @@ describe("period identity coverage", () => {
                 ts.isStringLiteral(property.initializer) &&
                 property.initializer.text === "background-job",
             );
-            if ((hasIndependentScope || isBackgroundJob) && !hasPeriodIdentity) {
+            if (
+              (hasIndependentScope || isBackgroundJob) &&
+              !hasPeriodIdentity
+            ) {
               concurrencyOnlyCallers.push(file);
             } else {
               callers.push(file);
