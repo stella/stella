@@ -1,8 +1,9 @@
-import { Result } from "better-result";
+import { Result, UnhandledException } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { API_FILE_SECURITY_REJECTED_ERROR_CODE } from "@stll/api-contract";
 import type { ApiFileSecurityIssue } from "@stll/api-contract";
+import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { env } from "@/api/env";
@@ -19,6 +20,7 @@ import {
 } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
+import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import {
   DatabaseError,
   DatabaseRlsError,
@@ -516,6 +518,56 @@ describe("a mapped status survives the transport wrapper", () => {
       analytics.restore();
     }
   };
+
+  test("raw and wrapped admission outcomes survive returned and thrown safe handlers", async () => {
+    const previousContact = env.ACTION_LIMIT_CONTACT_URL;
+    env.ACTION_LIMIT_CONTACT_URL = "https://example.test/contact";
+    try {
+      for (const reason of [
+        "busy",
+        "period_exhausted",
+        "not_enabled",
+        "unavailable",
+      ] as const) {
+        const refusal = new ActionAdmissionError({
+          reason,
+          message: "Private coordination detail",
+        });
+        const metadata = ACTION_ADMISSION_REFUSALS[refusal.code];
+        for (const wrapped of [
+          refusal,
+          new UnhandledException({ cause: refusal }),
+          new HandlerError({
+            status: 500,
+            message: "Request failed",
+            cause: refusal,
+          }),
+        ]) {
+          for (const mode of ["return", "throw"] as const) {
+            const response = await runEndpoint(async function* () {
+              if (mode === "throw") {
+                throw wrapped;
+              }
+              return Result.err(wrapped);
+            });
+            expect(response).toMatchObject({
+              code: metadata.status,
+              response: {
+                code: refusal.code,
+                message: metadata.message,
+                retryable: metadata.retryable,
+                ...(metadata.status === 403
+                  ? { contactUrl: env.ACTION_LIMIT_CONTACT_URL }
+                  : {}),
+              },
+            });
+          }
+        }
+      }
+    } finally {
+      env.ACTION_LIMIT_CONTACT_URL = previousContact;
+    }
+  });
 
   const upstreamRefusal = () =>
     new HandlerError({
