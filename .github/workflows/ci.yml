@@ -2131,7 +2131,7 @@ jobs:
         run: bun run test:postgres
 
       - name: Start corpus engine
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && needs.ci-plan.outputs.package_checks_required == 'true' }}
         run: |
           docker run -d --name corpus-engine \
             -p 127.0.0.1:7290:7280 -p 127.0.0.1:7291:7280 \
@@ -2141,7 +2141,7 @@ jobs:
             http://127.0.0.1:7290/health/readyz
 
       - name: Run corpus engine suites
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && needs.ci-plan.outputs.package_checks_required == 'true' }}
         working-directory: apps/api
         env:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella

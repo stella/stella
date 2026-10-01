@@ -1108,10 +1108,11 @@ test("folded service suites preserve both scopes and independent verdicts", () =
   const suites = services.steps.filter(
     ({ run }) => run?.includes("test:") || run?.includes(" test "),
   );
-  expect(suites.map(({ run }) => run)).toEqual([
-    "bun run test:postgres",
-    "bun run test:valkey",
-    "bun --filter @stll/collab test src/server.test.ts",
+  expect(suites.map(({ name }) => name)).toEqual([
+    "Run Postgres-gated API suites",
+    "Run corpus engine suites",
+    "Run Valkey-gated API suites",
+    "Run cross-replica collaboration suite",
   ]);
   for (const suite of suites) {
     const scope = suite.run?.includes("@stll/collab")
