@@ -2457,6 +2457,201 @@ describe("chat runtime", () => {
     expectSupersededSend(sent);
   });
 
+  // The server holds a run's RUN_FINISHED, which carries the interrupt an
+  // answer resolves, until it has stored the turn. The card is on screen and
+  // answerable before that, so an answer can arrive while the request is still
+  // open and the page does not know the interrupt yet. That answer must still
+  // continue the turn once the run hands the interrupt over, not stay on the
+  // card with nothing sent.
+  const earlyAnswerCases = [
+    {
+      kind: "an ask-user card",
+      interruptFor: createClientToolInterrupt,
+      toolCall: {
+        id: "tool-ask",
+        input: { question: "Which position titles should the playbook cover?" },
+        name: "ask-user",
+      },
+      answer: async (runtime: ReturnType<typeof createChatRuntime>) => {
+        await runtime.addToolResult({
+          tool: "ask-user",
+          toolCallId: "tool-ask",
+          output: {
+            answers: [
+              {
+                question: "Which position titles should the playbook cover?",
+                answer: "Engineer and Counsel",
+              },
+            ],
+          },
+        });
+      },
+      resume: {
+        interruptId: "client_tool_tool-ask",
+        payload: {
+          answers: [
+            {
+              question: "Which position titles should the playbook cover?",
+              answer: "Engineer and Counsel",
+            },
+          ],
+        },
+        status: "resolved",
+      },
+    },
+    {
+      kind: "a tool approval",
+      interruptFor: createApprovalInterrupt,
+      toolCall: {
+        id: "tool-save",
+        input: { name: "Employment terms" },
+        name: "save_playbook",
+      },
+      answer: async (runtime: ReturnType<typeof createChatRuntime>) => {
+        await runtime.resolveToolApproval({
+          approved: true,
+          id: "approval_tool-save",
+        });
+      },
+      resume: {
+        interruptId: "approval_tool-save",
+        payload: { approved: true },
+        status: "resolved",
+      },
+    },
+  ] as const;
+
+  for (const answerCase of earlyAnswerCases) {
+    test(`continues the turn when ${answerCase.kind} is answered before its run finishes`, async () => {
+      const threadId = toChatThreadId(`thread-early-${answerCase.toolCall.id}`);
+      const encoder = new TextEncoder();
+      const requests: unknown[] = [];
+      let pushFirstStream: (
+        chunks: readonly Record<string, unknown>[],
+      ) => void = () => {
+        throw new Error("The first request was not made");
+      };
+      let closeFirstStream: () => void = () => {
+        throw new Error("The first request was not made");
+      };
+      let markContinuationRequested: () => void = () => {
+        throw new Error("The continuation promise was not created");
+      };
+      const continuationRequested = new Promise<void>((resolve) => {
+        markContinuationRequested = resolve;
+      });
+      let markFirstRequestMade: (runId: string) => void = () => {
+        throw new Error("The first request promise was not created");
+      };
+      const firstRequestMade = new Promise<string>((resolve) => {
+        markFirstRequestMade = resolve;
+      });
+
+      globalThis.fetch = createFetchMock(async (_input, init) => {
+        const runId = parseChatRequestRunId(init);
+        requests.push(parseJsonRequestBody(init));
+        if (requests.length === 1) {
+          const body = new ReadableStream<Uint8Array>({
+            start: (controller) => {
+              pushFirstStream = (chunks) => {
+                for (const chunk of chunks) {
+                  controller.enqueue(
+                    encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`),
+                  );
+                }
+              };
+              closeFirstStream = () => {
+                controller.close();
+              };
+            },
+          });
+          markFirstRequestMade(runId);
+          return new Response(body, {
+            headers: { "Content-Type": "text/event-stream" },
+          });
+        }
+        markContinuationRequested();
+        return createSseResponse([
+          { type: "RUN_STARTED", threadId, runId },
+          {
+            type: "RUN_FINISHED",
+            threadId,
+            runId,
+            finishReason: "stop",
+            outcome: { type: "success" },
+          },
+        ]);
+      });
+      const runtime = createChatRuntime({
+        activeTurnId: null,
+        context: undefined,
+        initialMessages: [],
+        key: { scope: "global", threadId },
+        onError: (error) => {
+          throw error;
+        },
+        onFinish: () => {},
+        reloadThread: () => {},
+      });
+
+      const hasCompleteToolCall = () =>
+        runtime
+          .getSnapshot()
+          .messages.some((message) =>
+            message.parts.some(
+              (part) =>
+                part.type === "tool-call" &&
+                part.id === answerCase.toolCall.id &&
+                part.state === "input-complete",
+            ),
+          );
+      const toolCallShown = new Promise<void>((resolve) => {
+        const unsubscribe = runtime.subscribe(() => {
+          if (hasCompleteToolCall()) {
+            unsubscribe();
+            resolve();
+          }
+        });
+      });
+      const sent = sendThreadChatMessage(
+        runtime,
+        createOutgoingMessage(
+          "22222222-2222-4222-8222-222222222401",
+          "Save the playbook",
+        ),
+      );
+      const firstRunId = await firstRequestMade;
+      const chunks = createPendingInterruptChunks({
+        interrupt: answerCase.interruptFor(firstRunId),
+        runId: firstRunId,
+        threadId,
+        toolCall: answerCase.toolCall,
+      });
+      pushFirstStream(chunks.filter((chunk) => chunk.type !== "RUN_FINISHED"));
+      await toolCallShown;
+      // The answer leaves while the run that asked is still open, and before
+      // the page has seen the interrupt it resolves.
+      expect(runtime.getSnapshot().isLoading).toBe(true);
+      expect(
+        chunks.filter((chunk) => chunk.type === "RUN_FINISHED"),
+      ).toHaveLength(1);
+
+      const answered = answerCase.answer(runtime);
+      pushFirstStream(chunks.filter((chunk) => chunk.type === "RUN_FINISHED"));
+      closeFirstStream();
+      await sent;
+      await answered;
+      await continuationRequested;
+
+      expect(requests).toHaveLength(2);
+      expect(requests.at(1)).toMatchObject({
+        parentRunId: firstRunId,
+        resume: [answerCase.resume],
+        threadId,
+      });
+    });
+  }
+
   // An answer to one card of a batch waits for the rest of the batch before
   // it is submitted. A message that supersedes the batch withdraws what the
   // answer waited for; the answer concludes then, it does not wait forever.

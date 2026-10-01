@@ -11,7 +11,6 @@
 import { expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import nodePath from "node:path";
-import core from "ultracite/oxlint/core";
 
 import {
   libraryIgnorePatterns,
@@ -31,6 +30,7 @@ import {
   stringArray,
   trackedRepoFiles,
 } from "./oxlint-config-scopes.ts";
+import core from "./oxlint-presets/core.mjs";
 import {
   builtinRules,
   pluginScope,

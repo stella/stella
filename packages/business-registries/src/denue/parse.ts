@@ -1,3 +1,4 @@
+import { encodeRegistryComponent } from "../shared/encode-registry-component.js";
 import { trimToNull } from "../shared/strings.js";
 import type {
   DenueAddress,
@@ -33,7 +34,7 @@ const numberOrNull = (input: string | undefined): number | null => {
 };
 
 const buildRegistryUrl = (id: string): string =>
-  `${DENUE_WEB_BASE}?idee=${encodeURIComponent(id)}`;
+  `${DENUE_WEB_BASE}?idee=${encodeRegistryComponent(id)}`;
 
 type ParseLocationResult = {
   locality: string | null;

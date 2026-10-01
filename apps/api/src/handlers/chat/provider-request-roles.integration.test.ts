@@ -255,6 +255,7 @@ const ROLE_REQUESTS = {
       const user = first ?? panic("The transcript opens with a user message");
       const assistant = second ?? panic("The transcript answers it");
       await generateThreadTitle({
+        indexThread: async () => await Promise.resolve(),
         initialTitle: "New chat",
         messages: [user, assistant],
         organizationId: ids.orgA,
