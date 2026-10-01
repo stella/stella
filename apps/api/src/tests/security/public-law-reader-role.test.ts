@@ -152,7 +152,7 @@ const requiredQualifiedColumns = declaredColumnPairs
 
 const readableColumnPairs = async () => {
   const result = await testDb.execute<{ relation: string; column: string }>(sql`
-    SELECT tables.relname AS relation, columns.attname AS column
+    SELECT tables.relname AS relation, columns.attname AS "column"
     FROM pg_attribute AS columns
     INNER JOIN pg_class AS tables ON tables.oid = columns.attrelid
     INNER JOIN pg_namespace AS schemas ON schemas.oid = tables.relnamespace
@@ -163,7 +163,7 @@ const readableColumnPairs = async () => {
       AND has_column_privilege(
         ${READER_ROLE}, columns.attrelid, columns.attnum, 'SELECT'
       )
-    ORDER BY relation, column
+    ORDER BY relation, "column"
   `);
   return result.rows;
 };

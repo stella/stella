@@ -15,7 +15,8 @@ ALTER TABLE "case_law_decision_aliases" ENABLE ROW LEVEL SECURITY;--> statement-
 ALTER TABLE "case_law_decision_aliases" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE POLICY "case_law_ingestion_access" ON "case_law_decision_aliases"
   FOR ALL TO stella_ingestion USING (true) WITH CHECK (true);--> statement-breakpoint
-REVOKE ALL ON TABLE "case_law_decision_aliases" FROM PUBLIC, stella;--> statement-breakpoint
+REVOKE ALL ON TABLE "case_law_decision_aliases" FROM PUBLIC;--> statement-breakpoint
+REVOKE ALL PRIVILEGES ON TABLE "case_law_decision_aliases" FROM stella;--> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE ON TABLE "case_law_decision_aliases" TO stella_ingestion;--> statement-breakpoint
 
 -- Serialize alias changes and UUID creation before row locks so a stale

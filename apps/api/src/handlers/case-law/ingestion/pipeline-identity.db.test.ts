@@ -2053,7 +2053,14 @@ if (!databaseUrl || !runPostgresTests) {
           .delete(caseLawDecisions)
           .where(eq(caseLawDecisions.id, middle))
           .execute(),
-      ).rejects.toMatchObject({ cause: { code: "23503" } });
+      ).rejects.toMatchObject({
+        cause: {
+          code: "23001",
+          message: expect.stringContaining(
+            "case_law_decision_aliases_canonical_fk",
+          ),
+        },
+      });
       await db.insert(caseLawDecisionAliases).values({
         retiredDecisionId: middle,
         canonicalDecisionId: terminal,
@@ -2094,7 +2101,14 @@ if (!databaseUrl || !runPostgresTests) {
           .delete(caseLawDecisions)
           .where(eq(caseLawDecisions.id, terminal))
           .execute(),
-      ).rejects.toMatchObject({ cause: { code: "23503" } });
+      ).rejects.toMatchObject({
+        cause: {
+          code: "23001",
+          message: expect.stringContaining(
+            "case_law_decision_aliases_canonical_fk",
+          ),
+        },
+      });
       expect(
         db
           .insert(caseLawDecisions)

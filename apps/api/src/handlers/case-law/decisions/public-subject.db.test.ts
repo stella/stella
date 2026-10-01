@@ -765,7 +765,14 @@ test(
         .delete(caseLawDecisions)
         .where(eq(caseLawDecisions.id, middle))
         .execute(),
-    ).rejects.toMatchObject({ cause: { code: "23503" } });
+    ).rejects.toMatchObject({
+      cause: {
+        code: "23001",
+        message: expect.stringContaining(
+          "case_law_decision_aliases_canonical_fk",
+        ),
+      },
+    });
     await db
       .insert(caseLawDecisionAliases)
       .values({ retiredDecisionId: middle, canonicalDecisionId: final });
@@ -796,7 +803,14 @@ test(
         .delete(caseLawDecisions)
         .where(eq(caseLawDecisions.id, final))
         .execute(),
-    ).rejects.toMatchObject({ cause: { code: "23503" } });
+    ).rejects.toMatchObject({
+      cause: {
+        code: "23001",
+        message: expect.stringContaining(
+          "case_law_decision_aliases_canonical_fk",
+        ),
+      },
+    });
     const rows = await db
       .select({ target: caseLawDecisionAliases.canonicalDecisionId })
       .from(caseLawDecisionAliases)
