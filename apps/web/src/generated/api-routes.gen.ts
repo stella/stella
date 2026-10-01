@@ -18697,6 +18697,7 @@ export type WebRoutes = {
             matterNumberPadding: number;
             practiceJurisdictions: Array<T21e7b1b9fc>;
             promptCachingEnabled: Tfddd645dc8;
+            managedAIResidency: ("eu" | "us");
             memoryExtractionEnabled: Tfddd645dc8;
             timeMinimumUnitMinutes: number;
             timeEditWindowDays: number;
@@ -18859,6 +18860,7 @@ export type WebRoutes = {
     } & {
       post: {
         body: {
+          managedAIResidency?: never;
           matterNumberPattern?: string;
           matterNumberPadding?: number;
           promptCachingEnabled?: false | true;
@@ -18881,6 +18883,7 @@ export type WebRoutes = {
             memoryExtractionEnabled?: false | true;
             documentProcessingMode?: "off" | "searchable-text";
             promptCachingEnabled?: false | true;
+            managedAIResidency?: "eu" | "us";
             matterNumberPadding?: number;
             matterNumberPattern?: string;
           };

@@ -195,6 +195,7 @@ const buildArgs = (
   workspaceId: WORKSPACE_ID,
   entityVersionId: ENTITY_VERSION_ID,
   orgAIConfig: null,
+  managedAIResidency: "eu" as const,
   promptCachingEnabled: false,
   serviceTier: "standard" as const,
   usageMetering: {
