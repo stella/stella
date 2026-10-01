@@ -1027,7 +1027,7 @@ describe("runIngestionPipeline — document observer failures", () => {
         fetchPage: async () => {
           for (let fetch = 0; fetch < 100; fetch++) {
             await observePublisherDocumentFetch({
-              source: source.adapterKey,
+              source: czNsAdapter.key,
               fetch: async () => new Response("document"),
             });
           }

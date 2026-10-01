@@ -78,7 +78,7 @@ export const observeDocumentStageSafely = async ({
             }),
         });
   if (Result.isOk(delivered)) {
-    return;
+    return undefined;
   }
   const failure = {
     event: DOCUMENT_FETCH_EVENT.observerFailed,
