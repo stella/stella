@@ -143,21 +143,10 @@ export const ChatSelectionToolbar = ({
     });
     // The transcript scrolls (and streams) under a selection; the bar
     // follows the words, and hides once they leave the transcript. A
-    // confirmation has no words to follow, so it goes when the transcript
-    // moves; a scroll elsewhere (the new chat settling in) leaves it be.
-    const onScroll = (event: Event) => {
-      const root = rootRef.current;
-      const target = event.target;
-      if (
-        root !== null &&
-        target instanceof Node &&
-        (target.contains(root) || root.contains(target))
-      ) {
-        setConfirmAt(null);
-      }
-      onChange();
-    };
-    ownerDoc.addEventListener("scroll", onScroll, {
+    // confirmation ignores scrolling: opening the side panel narrows and
+    // scrolls the transcript itself, so only a new selection or its timeout
+    // ends it, and it stays where the reader was looking.
+    ownerDoc.addEventListener("scroll", onChange, {
       capture: true,
       passive: true,
       signal: controller.signal,
