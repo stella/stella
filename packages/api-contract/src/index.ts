@@ -453,6 +453,7 @@ export {
   VIEW_LAYOUT_TYPES,
 } from "./view-layout";
 export type {
+  ConvertibleViewLayoutType,
   DirectlyCreatableViewLayoutType,
   RequiredViewLayoutType,
   SingleViewLayoutType,
