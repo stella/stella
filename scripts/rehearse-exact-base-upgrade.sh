@@ -134,9 +134,8 @@ if [[ "${GITHUB_EVENT_NAME:-}" == "merge_group" ]]; then
   event_base="$(jq -r '.merge_group.base_sha // empty' "${GITHUB_EVENT_PATH:?GITHUB_EVENT_PATH is required in a merge group}")"
   [[ "$base_commit" == "$event_base" ]] \
     || fail "Rehearse against the merge group's base_sha ($event_base), not $base_commit."
-  candidate_parent="$(git -C "$repo_root" rev-parse --verify "${candidate_commit}^1" 2>/dev/null)" \
+  git -C "$repo_root" merge-base --is-ancestor "$base_commit" "$candidate_commit" \
     || fail "candidate is not built on the rehearsed base"
-  [[ "$candidate_parent" == "$base_commit" ]] || fail "candidate is not built on the rehearsed base"
 fi
 
 # The worktree and snapshots live outside the checkout, and are removed even

@@ -24,6 +24,7 @@ case "$3 $4" in
     else
       printf '%s\\n' "$BASE_SHA"
     fi ;;
+  "merge-base --is-ancestor") exit "\${FAKE_ANCESTRY_STATUS:-0}" ;;
   "worktree add") mkdir -p "$6/apps/api" ;;
   "worktree remove") ;;
   *) exit 9 ;;
@@ -180,11 +181,20 @@ for (const { outcome, exitCode, verdict, difference } of [
 
 const otherSha = "c".repeat(40);
 
-for (const { name, eventBase, parent, exitCode, message } of [
+for (const { name, eventBase, parent, ancestryStatus, exitCode, message } of [
   {
     name: "rehearses a candidate built on the merge group's base",
     eventBase: base,
     parent: base,
+    ancestryStatus: 0,
+    exitCode: 0,
+    message: null,
+  },
+  {
+    name: "rehearses grouped entries with an intermediate parent",
+    eventBase: base,
+    parent: otherSha,
+    ancestryStatus: 0,
     exitCode: 0,
     message: null,
   },
@@ -192,6 +202,7 @@ for (const { name, eventBase, parent, exitCode, message } of [
     name: "refuses a base other than the merge group's base_sha",
     eventBase: otherSha,
     parent: base,
+    ancestryStatus: 0,
     exitCode: 1,
     message: "Rehearse against the merge group's base_sha",
   },
@@ -199,6 +210,7 @@ for (const { name, eventBase, parent, exitCode, message } of [
     name: "refuses a candidate that is not built on the rehearsed base",
     eventBase: base,
     parent: otherSha,
+    ancestryStatus: 1,
     exitCode: 1,
     message: "candidate is not built on the rehearsed base",
   },
@@ -232,6 +244,7 @@ for (const { name, eventBase, parent, exitCode, message } of [
           CLEAN_DATABASE_URL: "postgres://local@127.0.0.1:5433/stella",
           FAKE_CANDIDATE: candidate,
           FAKE_PARENT: parent,
+          FAKE_ANCESTRY_STATUS: String(ancestryStatus),
           FAKE_OUTCOME: "pass",
           FAKE_STATE: directory,
         },
