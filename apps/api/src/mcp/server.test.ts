@@ -17,11 +17,16 @@ import type {
 import { panic, Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
+
+import { env } from "@/api/env";
 import {
   resetAnalyticsForTesting,
   setAnalyticsForTesting,
 } from "@/api/lib/analytics/client";
 import type { ServerAnalyticsCaptureParams } from "@/api/lib/analytics/server-analytics";
+import { runWithRequestId } from "@/api/lib/observability/request-context";
+import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
 import { recordMcpSessionInitialized } from "@/api/mcp/client-identity";
 import {
   MCP_ALL_RESOURCE_SCOPES,
@@ -193,6 +198,98 @@ describe("handleMcpHttpRequest", () => {
     readMcpResourceMock.mockImplementation(() => ({ contents: [] }));
     resolveMcpSessionContextMock.mockReset();
     resetAnalyticsForTesting();
+  });
+
+  test("native admission refusals keep their code and capture only infrastructure failure", async () => {
+    const previousEnabled = env.FEATURE_ACTION_ADMISSION;
+    const previousContact = env.ACTION_LIMIT_CONTACT_URL;
+    env.FEATURE_ACTION_ADMISSION = true;
+    env.ACTION_LIMIT_CONTACT_URL = "https://example.invalid/contact";
+    try {
+      for (const reason of [
+        "busy",
+        "period_exhausted",
+        "not_enabled",
+        "unavailable",
+      ] as const) {
+        captureErrorMock.mockClear();
+        const refusalError = new ActionAdmissionError({
+          reason,
+          message: "Private internal detail",
+        });
+        authenticateMcpRequestMock.mockResolvedValue(
+          Result.ok({
+            organizationId: "org_1",
+            scopes: ["stella:read"],
+            userId: "user_1",
+          }),
+        );
+        resolveMcpSessionContextMock.mockResolvedValue({
+          organizationId: "org_1",
+          userId: "user_1",
+        });
+        getMcpToolDefinitionMock.mockResolvedValue({
+          name: "get_document",
+          scope: "stella:read",
+          access: "read",
+          description: "Read a document",
+          inputSchema: { type: "object", properties: {} },
+        });
+        const handler = createMcpHttpRequestHandler({
+          admitAction: async () => Result.err(refusalError),
+          authenticateMcpRequest: authenticateMcpRequestMock,
+          captureError: (error, context) => {
+            captureErrorMock(error, context);
+          },
+          getMcpToolDefinition: getMcpToolDefinitionMock,
+          getMcpToolRequiredScopesHint: getMcpToolRequiredScopesHintMock,
+          handleMcpToolCall: handleMcpToolCallMock,
+          listMcpResources: listMcpResourcesMock,
+          listMcpTools: listMcpToolsMock,
+          readMcpResource: readMcpResourceMock,
+          recordMcpSessionInitialized,
+          resolveMcpSessionContext: resolveMcpSessionContextMock,
+        });
+        const response = await runWithRequestId(
+          "req_admission",
+          async () =>
+            await handler(
+              createMcpRequest({
+                id: 1,
+                jsonrpc: "2.0",
+                method: "tools/call",
+                params: { name: "get_document", arguments: {} },
+              }),
+            ),
+        );
+        const body =
+          await readTestJson<McpJsonResponse<CallToolResult>>(response);
+        const item = body.result.content.at(0);
+        const payload =
+          item?.type === "text" ? JSON.parse(item.text) : undefined;
+        const refusal = ACTION_ADMISSION_REFUSALS[refusalError.code];
+        const contact =
+          reason === "period_exhausted" || reason === "not_enabled";
+        expect(body.result.isError).toBe(true);
+        expect(payload?.error).toEqual({
+          code: refusalError.code,
+          message: refusal.message,
+          retryable: refusal.retryable,
+          ...(contact ? { contactUrl: "https://example.invalid/contact" } : {}),
+          hint: contact
+            ? `${refusal.hint} Contact: https://example.invalid/contact`
+            : refusal.hint,
+          requestId: "req_admission",
+        });
+        expect(captureErrorMock.mock.calls.length).toBe(
+          reason === "unavailable" ? 1 : 0,
+        );
+        expect(handleMcpToolCallMock).not.toHaveBeenCalled();
+      }
+    } finally {
+      env.FEATURE_ACTION_ADMISSION = previousEnabled;
+      env.ACTION_LIMIT_CONTACT_URL = previousContact;
+    }
   });
 
   test("returns a generic 401 for token validation failures", async () => {

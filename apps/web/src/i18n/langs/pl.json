@@ -487,6 +487,17 @@
     "failedToStartTimer": "Nie udało się uruchomić stopera",
     "failedToStopTimer": "Nie udało się zatrzymać stopera",
     "filterStatus": "Filtruj według statusu",
+    "globalTimer": {
+      "confirm": "Potwierdź czas",
+      "discard": "Odrzuć stoper",
+      "matterInaccessible": "Wybierz sprawę, do której masz dostęp.",
+      "narrativeRequired": "Dodaj opis przed potwierdzeniem czasu.",
+      "pause": "Wstrzymaj",
+      "periodLocked": "Ten miesiąc jest zablokowany. Poproś administratora o jego odblokowanie.",
+      "resume": "Wznów",
+      "timerUnavailable": "Ten stoper nie jest już dostępny. Odśwież listę.",
+      "title": "Stopery"
+    },
     "hourlyRateMustBeNonNegative": "Stawka godzinowa nie może być ujemna",
     "hours": "Godziny",
     "invoiceNarrative": "Opis na fakturze",
@@ -978,6 +989,7 @@
         "description": "Dokładnie sprawdź witrynę i cel. Zawartość strony jest niezaufana i nie może zatwierdzić kolejnego działania.",
         "modeReads": "Do końca tej sesji odczyt stron wykonuje się bez pytania.",
         "question": "Zezwolić na to działanie w przeglądarce?",
+        "realValues": "Ta witryna otrzyma prawdziwe wartości pokazane poniżej. Tryb anonimizacji dotyczy tylko tego, co widzi AI.",
         "within": "W obrębie"
       },
       "denied": "Odrzucono",
@@ -1341,7 +1353,8 @@
       "interrupted": "Przerwano przed ukończeniem",
       "output": "Wynik",
       "sourceCode": "Kod źródłowy",
-      "toggleDetails": "Przełącz szczegóły"
+      "toggleDetails": "Przełącz szczegóły",
+      "unrestoredFields": "W trybie anonimizacji nie udało się wypełnić prawdziwymi wartościami {count, plural, one {# pola} few {# pól} many {# pól} other {# pola}}. Sprawdź: {fields}"
     },
     "unsupportedFileType": "Nieobsługiwany typ pliku",
     "uploadFailed": "Przetwarzanie pliku nie powiodło się",
@@ -2135,6 +2148,13 @@
     "unnamedAttachment": "Nienazwany załącznik"
   },
   "errors": {
+    "actionAdmission": {
+      "admissionUnavailable": "Ta czynność jest tymczasowo wstrzymana. Spróbuj ponownie za chwilę.",
+      "concurrencyBusy": "Trwają inne operacje. Spróbuj ponownie za chwilę.",
+      "contact": "Skontaktuj się z nami",
+      "notEnabled": "Ta czynność nie jest włączona dla Twojej organizacji.",
+      "periodExhausted": "Ta czynność jest wstrzymana dla Twojej organizacji."
+    },
     "actionFailed": "Akcja nie powiodła się",
     "api": {
       "badRequest": "Nie udało się wykonać żądania.",

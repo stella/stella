@@ -1,7 +1,7 @@
 import { HarmBlockThreshold, HarmCategory } from "@google/genai";
 import { FetchHttpHandler } from "@smithy/fetch-http-handler";
 import { createModel, extendAdapter } from "@tanstack/ai";
-import type { AnyTextAdapter } from "@tanstack/ai";
+import type { AnyTextAdapter, ContentPart, ModelMessage } from "@tanstack/ai";
 import { createAnthropicChat } from "@tanstack/ai-anthropic";
 import type { AnthropicTextProviderOptions } from "@tanstack/ai-anthropic";
 import { BedrockConverseTextAdapter } from "@tanstack/ai-bedrock";
@@ -52,7 +52,9 @@ import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { orgAIConfigStatusError } from "@/api/lib/ai-config-response";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withProviderStreamContract } from "@/api/lib/chat/provider-stream-contract";
+import { validateDataUrl } from "@/api/lib/data-url";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { createStellaOpenRouterText } from "@/api/lib/stella-openrouter-text-adapter";
 
 const AI_PROVIDER_VALUES = new Set<string>(AI_PROVIDERS);
@@ -607,6 +609,45 @@ const requestOptionsOf = (input: object): { abortSignal?: AbortSignal } => {
   return signal instanceof AbortSignal ? { abortSignal: signal } : {};
 };
 
+/**
+ * `part` with an image given as a data URL (how a chat attachment reaches the
+ * model, `createRawChatFilePart`) carried as its inline bytes, the only image
+ * source Converse reads. The payload is bounded by the chat attachment limit
+ * before it is decoded. Any other URL is left as it is for the adapter to
+ * refuse: nothing is fetched on the model's behalf.
+ */
+const withInlineImageBytes = (part: ContentPart): ContentPart => {
+  if (part.type !== "image" || part.source.type !== "url") {
+    return part;
+  }
+  const inline = validateDataUrl({
+    maxBytes: FILE_SIZE_LIMIT_BYTES.chatContextFile,
+    url: part.source.value,
+  });
+  return Result.isError(inline)
+    ? part
+    : {
+        ...part,
+        source: {
+          type: "data",
+          value: inline.value.payload,
+          mimeType: inline.value.mimeType,
+        },
+      };
+};
+
+const withContent = (
+  message: ModelMessage,
+  content: ContentPart[],
+): ModelMessage => ({ ...message, content });
+
+const withInlineImages = (messages: ModelMessage[]): ModelMessage[] =>
+  messages.map((message) =>
+    Array.isArray(message.content)
+      ? withContent(message, message.content.map(withInlineImageBytes))
+      : message,
+  );
+
 // The AWS SDK's default Node HTTP/2 transport closes Converse streams early in Bun.
 class BunBedrockTextAdapter extends BedrockConverseTextAdapter<never> {
   private readonly requestHandler = new FetchHttpHandler();
@@ -620,8 +661,12 @@ class BunBedrockTextAdapter extends BedrockConverseTextAdapter<never> {
   // The run's cancel travels with the input built for it: every request path
   // (streaming, structured, structured streaming) builds on this input, and
   // spreading it keeps the symbol-keyed signal, which no command serializes.
+  // Its images go inline, the one form Converse reads.
   protected override buildInput(options: BedrockTextOptions) {
-    const input = super.buildInput(options);
+    const input = super.buildInput({
+      ...options,
+      messages: withInlineImages(options.messages),
+    });
     const signal = options.request?.signal;
     if (signal) {
       Reflect.set(input, REQUEST_SIGNAL, signal);

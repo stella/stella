@@ -12,6 +12,7 @@ import {
   type RegisteredSchedulerTaskName,
 } from "@/api/lib/scheduler/registry";
 import { computeNextRunAt } from "@/api/lib/scheduler/schedule";
+import { SWEEP_ACTION_COSTS_TASK } from "@/api/lib/scheduler/tasks/action-cost-retention";
 import { RECONCILE_BILINGUAL_RUNS_TASK } from "@/api/lib/scheduler/tasks/bilingual-run-reconcile";
 import { RECONCILE_BUFFER_INTENTS_TASK } from "@/api/lib/scheduler/tasks/buffer-intent-reconciliation";
 import { REFRESH_CASE_LAW_BROWSE_FACETS_TASK } from "@/api/lib/scheduler/tasks/case-law-browse-facet-refresh";
@@ -366,6 +367,16 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: REAP_OWNERLESS_CHAT_TURNS_TASK,
+  },
+  {
+    description: "Delete expired action cost observations",
+    id: "actions.sweepCosts.minute",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 60 * 1000 },
+    task: SWEEP_ACTION_COSTS_TASK,
+    enabled:
+      env.FEATURE_ACTION_COST_RECORDS &&
+      env.ACTION_COST_RETENTION_DAYS !== undefined,
   },
   {
     description: "Delete expired closed chat run logs",

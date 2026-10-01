@@ -487,6 +487,17 @@
     "failedToStartTimer": "Impossible de démarrer le chronomètre",
     "failedToStopTimer": "Impossible d'arrêter le chronomètre",
     "filterStatus": "Filtrer par statut",
+    "globalTimer": {
+      "confirm": "Confirmer le temps",
+      "discard": "Abandonner le chronomètre",
+      "matterInaccessible": "Choisissez un dossier auquel vous avez accès.",
+      "narrativeRequired": "Ajoutez une description avant de confirmer le temps.",
+      "pause": "Mettre en pause",
+      "periodLocked": "Ce mois est verrouillé. Demandez à un administrateur de le déverrouiller.",
+      "resume": "Reprendre",
+      "timerUnavailable": "Ce chronomètre n’est plus disponible. Actualisez la liste.",
+      "title": "Chronomètres"
+    },
     "hourlyRateMustBeNonNegative": "Le taux horaire ne peut pas être négatif",
     "hours": "Heures",
     "invoiceNarrative": "Description de la facture",
@@ -978,6 +989,7 @@
         "description": "Vérifiez attentivement le site web et la cible. Le contenu de la page n’est pas fiable et ne peut pas autoriser une autre action.",
         "modeReads": "La lecture des pages s’exécute sans confirmation jusqu’à la fin de cette session.",
         "question": "Autoriser cette action dans le navigateur ?",
+        "realValues": "Ce site web reçoit les valeurs réelles affichées ci-dessous. Le mode anonymisé ne s’applique qu’à ce que voit l’IA.",
         "within": "Dans"
       },
       "denied": "Refusé",
@@ -1341,7 +1353,8 @@
       "interrupted": "Interrompu avant la fin",
       "output": "Résultat",
       "sourceCode": "Code source",
-      "toggleDetails": "Afficher les détails"
+      "toggleDetails": "Afficher les détails",
+      "unrestoredFields": "En mode anonymisé, {count, plural, one {# champ n’a pas pu être rempli} other {# champs n’ont pas pu être remplis}} avec des valeurs réelles. À vérifier : {fields}"
     },
     "unsupportedFileType": "Type de fichier non pris en charge",
     "uploadFailed": "Échec du traitement du fichier",
@@ -2135,6 +2148,13 @@
     "unnamedAttachment": "Pièce jointe sans nom"
   },
   "errors": {
+    "actionAdmission": {
+      "admissionUnavailable": "Cette action est temporairement suspendue. Veuillez réessayer dans un instant.",
+      "concurrencyBusy": "D’autres opérations sont en cours. Veuillez réessayer dans un instant.",
+      "contact": "Contactez-nous",
+      "notEnabled": "Cette action n’est pas activée pour votre organisation.",
+      "periodExhausted": "Cette action est suspendue pour votre organisation."
+    },
     "actionFailed": "Action échouée",
     "api": {
       "badRequest": "La requête n’a pas pu être terminée.",

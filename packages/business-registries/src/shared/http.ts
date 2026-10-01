@@ -17,6 +17,7 @@ import { Temporal } from "temporal-polyfill/full";
 // through `init`.
 
 import { RegistryRateLimitedError } from "./errors.js";
+import { notifyRegistryRequest } from "./request-observer.js";
 
 /** Default per-request timeout. Every adapter used 10s. */
 export const DEFAULT_REGISTRY_TIMEOUT_MS = 10_000;
@@ -76,6 +77,8 @@ export const performRegistryRequest = async (
     options.timeoutMs ?? DEFAULT_REGISTRY_TIMEOUT_MS,
   );
   try {
+    options.signal?.throwIfAborted();
+    notifyRegistryRequest();
     // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- shared request helper; each registry client builds the URL from its fixed registry API base
     return await fetch(options.url, {
       ...options.init,

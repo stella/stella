@@ -62,6 +62,12 @@ import {
   truncateForCompaction,
 } from "@/api/lib/chat/compaction-tokens";
 import { chatMessageCursorCodec } from "@/api/lib/chat/message-cursor";
+import {
+  readThreadStoredContentSendModeOnTx,
+  THREAD_STORED_CONTENT_SEND_MODE,
+  threadStoredContentSendModeOf,
+} from "@/api/lib/chat/thread-stored-content-send-mode";
+import type { ThreadStoredContentSendMode } from "@/api/lib/chat/thread-stored-content-send-mode";
 import type { TimestampIdCursor } from "@/api/lib/db-pagination";
 import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 
@@ -132,7 +138,12 @@ export type ChatCompactionOutcome =
    */
   | { type: "no-summary" }
   /** Another run advanced the chain first, or a truncation invalidated it. */
-  | { type: "superseded" };
+  | { type: "superseded" }
+  /**
+   * The thread used anonymized mode by the time its delta would be sent or
+   * its checkpoint written, so neither happened.
+   */
+  | { type: "anonymized" };
 
 type RunChatThreadCompactionOptions = {
   abortSignal: AbortSignal;
@@ -204,6 +215,18 @@ export const runChatThreadCompaction = async (
       return Result.ok<ChatCompactionOutcome>({ type: "up-to-date" });
     }
 
+    // The claim filtered anonymized threads, but a turn may have switched this
+    // one since. Read again after the delta, right before it is sent.
+    const sendMode = yield* Result.await(
+      safeDb(
+        async (tx) =>
+          await readThreadStoredContentSendModeOnTx({ threadId, tx }),
+      ),
+    );
+    if (sendMode === THREAD_STORED_CONTENT_SEND_MODE.anonymized) {
+      return Result.ok<ChatCompactionOutcome>({ type: "anonymized" });
+    }
+
     const summaryMarkdown = yield* Result.await(
       summarizeDelta({ options, plan, priorSummary: checkpoint }),
     );
@@ -224,15 +247,21 @@ export const runChatThreadCompaction = async (
       ),
     );
 
-    return Result.ok<ChatCompactionOutcome>(
-      advanced
-        ? {
-            type: "advanced",
-            hasMoreDelta: plan.hasMoreDelta,
-            summarizedMessageCount: plan.messagesToSummarize.length,
-          }
-        : { type: "superseded" },
-    );
+    switch (advanced) {
+      case "advanced":
+        return Result.ok<ChatCompactionOutcome>({
+          type: "advanced",
+          hasMoreDelta: plan.hasMoreDelta,
+          summarizedMessageCount: plan.messagesToSummarize.length,
+        });
+      case "anonymized":
+        return Result.ok<ChatCompactionOutcome>({ type: "anonymized" });
+      case "superseded":
+        return Result.ok<ChatCompactionOutcome>({ type: "superseded" });
+      default:
+        advanced satisfies never;
+        return panic(`Unhandled checkpoint advance: ${String(advanced)}`);
+    }
   });
 
 const readActiveCheckpointOnTx = async ({
@@ -278,21 +307,27 @@ const readChainStateOnTx = async ({
   threadId: SafeId<"chatThread">;
   tx: Transaction;
 }): Promise<ChatCompactionChainState> => {
-  const [checkpoint, epoch] = await Promise.all([
+  const [checkpoint, gate] = await Promise.all([
     readActiveCheckpointOnTx({ threadId, tx }),
-    readCompactionEpochOnTx({ lock: false, threadId, tx }),
+    readCompactionGateOnTx({ lock: false, threadId, tx }),
   ]);
-  return { checkpoint, epoch };
+  return { checkpoint, epoch: gate.epoch };
+};
+
+type CompactionGate = {
+  epoch: number;
+  sendMode: ThreadStoredContentSendMode;
 };
 
 /**
- * The thread's invalidation epoch, optionally taking the row lock that
- * serializes concurrent compactions of the same thread.
+ * The thread's invalidation epoch and the send mode its stored content may
+ * leave under, optionally taking the row lock that serializes concurrent
+ * compactions of the same thread.
  *
- * Returns null when the thread is gone, which the caller treats the same way
- * as a changed epoch: there is nothing left to checkpoint.
+ * A missing thread reads as `MISSING_THREAD_EPOCH`, which the caller treats
+ * the same way as a changed epoch: there is nothing left to checkpoint.
  */
-const readCompactionEpochOnTx = async ({
+const readCompactionGateOnTx = async ({
   lock,
   threadId,
   tx,
@@ -300,9 +335,12 @@ const readCompactionEpochOnTx = async ({
   lock: boolean;
   threadId: SafeId<"chatThread">;
   tx: Transaction;
-}): Promise<number> => {
+}): Promise<CompactionGate> => {
   const query = tx
-    .select({ compactionEpoch: chatThreads.compactionEpoch })
+    .select({
+      compactionEpoch: chatThreads.compactionEpoch,
+      usedAnonymization: chatThreads.usedAnonymization,
+    })
     .from(chatThreads)
     .where(eq(chatThreads.id, threadId))
     .limit(1);
@@ -311,8 +349,13 @@ const readCompactionEpochOnTx = async ({
   // before awaiting it, which on its own pushed apps/api past its
   // instantiation budget. Awaiting first leaves it unioning two row arrays.
   const rows = lock ? await query.for("update") : await query;
-  // A missing thread cannot match any observed epoch, so the advance declines.
-  return rows.at(0)?.compactionEpoch ?? MISSING_THREAD_EPOCH;
+  const row = rows.at(0);
+  return {
+    // A missing thread cannot match any observed epoch, so the advance
+    // declines.
+    epoch: row?.compactionEpoch ?? MISSING_THREAD_EPOCH,
+    sendMode: threadStoredContentSendModeOf(row),
+  };
 };
 
 /**
@@ -668,9 +711,12 @@ type AdvanceCheckpointOptions = {
   tx: Transaction;
 };
 
+type AdvanceCheckpointResult = "advanced" | "anonymized" | "superseded";
+
 /**
  * Retire the checkpoint this run started from and install its replacement, or
- * decline if the chain moved underneath us.
+ * decline if the chain moved underneath us or the thread switched to
+ * anonymized mode.
  *
  * Two compare-and-sets, both against state read before summarization:
  *
@@ -688,23 +734,28 @@ const advanceCheckpointOnTx = async ({
   plan,
   summaryMarkdown,
   tx,
-}: AdvanceCheckpointOptions): Promise<boolean> => {
+}: AdvanceCheckpointOptions): Promise<AdvanceCheckpointResult> => {
   const { threadId } = options;
 
   // Serialize concurrent compactions of the same thread behind its row, so the
   // comparisons below read a settled chain rather than racing one.
-  const currentEpoch = await readCompactionEpochOnTx({
+  const gate = await readCompactionGateOnTx({
     lock: true,
     threadId,
     tx,
   });
-  if (currentEpoch !== observed.epoch) {
-    return false;
+  // A thread that switched to anonymized mode while the summary was made keeps
+  // no checkpoint built from its content: memory extraction reads checkpoints.
+  if (gate.sendMode === THREAD_STORED_CONTENT_SEND_MODE.anonymized) {
+    return "anonymized";
+  }
+  if (gate.epoch !== observed.epoch) {
+    return "superseded";
   }
 
   const current = await readActiveCheckpointOnTx({ threadId, tx });
   if ((current?.id ?? null) !== (observed.checkpoint?.id ?? null)) {
-    return false;
+    return "superseded";
   }
 
   const lastSummarized = plan.messagesToSummarize.at(-1);
@@ -765,7 +816,7 @@ const advanceCheckpointOnTx = async ({
       : new Date(),
   });
 
-  return true;
+  return "advanced";
 };
 
 type ResolveCheckpointMemoryEligibilityOptions = {

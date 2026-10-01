@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   buildRequestDurationRecord,
+  emitActionCostDropMetric,
   emitChatRunLogMetric,
   emitPromptCacheMetric,
   resetMetricLineSinkForTesting,
@@ -120,6 +121,30 @@ test("prompt-cache metrics emit a run's input, cached input and hit rate by surf
       PromptInputTokens: 1000,
       provider: "anthropic",
       surface: "chat",
+    });
+  } finally {
+    resetMetricLineSinkForTesting();
+  }
+});
+
+test("cost drop metrics count observations rather than failed batches", () => {
+  const lines: string[] = [];
+  setMetricLineSinkForTesting((line) => {
+    lines.push(line);
+  });
+  try {
+    emitActionCostDropMetric(7);
+    expect(lines).toHaveLength(1);
+    expect(JSON.parse(lines.at(0) ?? "null")).toMatchObject({
+      ActionCostObservationsDropped: 7,
+      _aws: {
+        CloudWatchMetrics: [
+          {
+            Dimensions: [[]],
+            Metrics: [{ Name: "ActionCostObservationsDropped", Unit: "Count" }],
+          },
+        ],
+      },
     });
   } finally {
     resetMetricLineSinkForTesting();

@@ -22,6 +22,7 @@ import {
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
+import { ActionAdmissionOutcome } from "@/components/action-admission-outcome";
 import {
   Message,
   MessageContent,
@@ -94,6 +95,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { dedupeById } from "@/lib/dedupe-by-id";
 import { detached } from "@/lib/detached";
+import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import {
   getUserFileContentUrl,
@@ -935,6 +937,26 @@ export const ChatErrorMessage = ({
   const canSendWithoutAnonymization =
     onSendWithoutAnonymization !== undefined &&
     isThirdPartyBoundaryRefusalError(error);
+
+  if (actionAdmissionOutcome(error)) {
+    return (
+      <Message from="assistant">
+        <MessageContent>
+          <ActionAdmissionOutcome
+            disabled={isGenerating}
+            error={error}
+            onRetry={
+              onResend
+                ? () => {
+                    detached(onResend(), "chat-thread-messages.resend");
+                  }
+                : undefined
+            }
+          />
+        </MessageContent>
+      </Message>
+    );
+  }
 
   return (
     <Message from="assistant">
