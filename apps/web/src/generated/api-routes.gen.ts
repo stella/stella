@@ -19116,8 +19116,8 @@ export type WebRoutes = {
           body: {
             decision?: {
               apiKey?: string;
-              modelId: string;
               provider: "typesafe";
+              modelId: string;
             } | null;
             overrideModels: {
               chat: T8aea504e13;
@@ -38642,8 +38642,8 @@ type T8ac3351254 = "ai_unavailable" | "enqueue_failed" | "internal" | "pin_conte
 type T8adc422ed8 = "bilingual" | "translated";
 
 type T8aea504e13 = {
-  modelId: string;
   provider: T4b83723412;
+  modelId: string;
 };
 
 type T8bbaf16642 = {
