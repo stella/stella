@@ -376,6 +376,7 @@
     },
     "@stll/api#test": {
       "dependsOn": [],
+      "env": ["API_TEST_SHARD"],
       // How many test batches run at once; it never changes results, so it
       // passes through without entering the cache key.
       "passThroughEnv": ["API_TEST_LANES"],
