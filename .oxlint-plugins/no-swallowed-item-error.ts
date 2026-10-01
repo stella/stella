@@ -82,16 +82,43 @@ const insideItemLoop = (node: unknown): boolean => {
   return false;
 };
 
-const emptyFallback = (node: unknown): boolean => {
+const constantFallback = (node: unknown): boolean => {
   const value = unwrapExpression(node);
-  return (
-    isIdentifier(value, "undefined") ||
-    (isAstNode(value) &&
-      ((value.type === "Literal" && value.value === null) ||
-        (value.type === "ArrayExpression" &&
-          Array.isArray(value.elements) &&
-          value.elements.length === 0)))
-  );
+  if (isIdentifier(value, "undefined")) {
+    return true;
+  }
+  if (!isAstNode(value)) {
+    return false;
+  }
+  switch (value.type) {
+    case "Literal":
+      return true;
+    case "TemplateLiteral":
+      return Array.isArray(value.expressions) && value.expressions.length === 0;
+    case "UnaryExpression":
+      return constantFallback(value.argument);
+    case "ArrayExpression":
+      return (
+        Array.isArray(value.elements) &&
+        value.elements.every(
+          (element) => element === null || constantFallback(element),
+        )
+      );
+    case "ObjectExpression":
+      return (
+        Array.isArray(value.properties) &&
+        value.properties.every(
+          (property) =>
+            isAstNode(property) &&
+            property.type === "Property" &&
+            property.kind === "init" &&
+            (property.computed === false || constantFallback(property.key)) &&
+            constantFallback(property.value),
+        )
+      );
+    default:
+      return false;
+  }
 };
 
 const swallowedBody = (node: unknown): boolean => {
@@ -100,7 +127,7 @@ const swallowedBody = (node: unknown): boolean => {
     return false;
   }
   if (body.type !== "BlockStatement") {
-    return emptyFallback(body);
+    return constantFallback(body);
   }
   if (!Array.isArray(body.body)) {
     return false;
@@ -111,7 +138,8 @@ const swallowedBody = (node: unknown): boolean => {
       (statement.type === "EmptyStatement" ||
         statement.type === "ContinueStatement" ||
         (statement.type === "ReturnStatement" &&
-          (statement.argument === null || emptyFallback(statement.argument)))),
+          (statement.argument === null ||
+            constantFallback(statement.argument)))),
   );
 };
 

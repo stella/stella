@@ -34,9 +34,39 @@ describe.serial("item errors remain observable", () => {
           "for (const item of items) { build(item).catch((error) => { failures.push(new ItemBuildFailed({ cause: error })); }); }",
           "for (const item of items) { const decode = () => { try { return JSON.parse(item); } catch { return null; } }; }",
           "function optional() { try { JSON.parse(raw); } catch { return undefined; } }",
+          'for (const item of items) { build(item).catch((error) => ({ type: "item_build_failed", cause: error })); }',
         ].join("\n"),
       ),
     ).toEqual([]);
+  });
+
+  test("rejects constant fallback values in every item catch form", async () => {
+    const fallbacks = [
+      "false",
+      "true",
+      "0",
+      "42",
+      "-1",
+      "1.5",
+      '""',
+      '"fallback"',
+      "`fallback`",
+      "{}",
+      "undefined",
+      "null",
+      "[]",
+      "void 0",
+      "[false, 42]",
+      '{ status: "failed" }',
+    ];
+    const source = fallbacks.flatMap((fallback) => [
+      `for (const item of items) { build(item).catch(() => (${fallback})); }`,
+      `items.map((item) => build(item).catch(() => { return ${fallback}; }));`,
+      `function run() { for (const item of items) { try { build(item); } catch { return ${fallback}; } } }`,
+    ]);
+    expect(await lintSingleRule(RULE, source.join("\n"))).toEqual(
+      source.map((_, index) => index + 1),
+    );
   });
 
   test("a ledgered hit is accepted, a new hit fails and stale entries fail", async () => {
