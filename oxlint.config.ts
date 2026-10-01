@@ -1,8 +1,5 @@
 import { defineConfig } from "oxlint";
 import type { OxlintOverride } from "oxlint";
-import core from "./scripts/oxlint-presets/core.mjs";
-import react from "./scripts/oxlint-presets/react.mjs";
-import shadcn from "./scripts/oxlint-presets/shadcn.mjs";
 
 import {
   libraryIgnorePatterns,
@@ -22,6 +19,9 @@ import {
   designLintBacklogOverrides,
 } from "./scripts/design-lint-policy.ts";
 import { OWNERSHIP } from "./scripts/ownership.ts";
+import core from "./scripts/oxlint-presets/core.mjs";
+import react from "./scripts/oxlint-presets/react.mjs";
+import shadcn from "./scripts/oxlint-presets/shadcn.mjs";
 import {
   DECLARATION_FILE_GLOB,
   RESULT_CONVENTION_ENABLED_GLOBS,
