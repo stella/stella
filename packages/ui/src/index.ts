@@ -32,6 +32,8 @@ export * from "./components/frame";
 export * from "./components/hex-color-picker";
 export * from "./components/input";
 export * from "./components/input-group";
+export * from "./components/list";
+export * from "./components/search-field";
 export * from "./components/input-otp";
 export * from "./components/label";
 export * from "./components/menu";

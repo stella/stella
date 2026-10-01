@@ -25,7 +25,11 @@ const config = {
     "admin or owner. To pull several skills out of a repository, use " +
     "skills.discover and then skills.import instead.",
   permissions: { agentSkill: ["create"] },
-  mcp: { type: "capability", reason: "agent_tool_authoring" },
+  mcp: {
+    type: "capability",
+    reason: "agent_tool_authoring",
+    consumesServices: false,
+  },
   body: importSkillBodySchema,
 } satisfies HandlerConfig;
 

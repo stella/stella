@@ -62,7 +62,11 @@ const readRateEntries = createSafeHandler(
       "for the table's fallback rate). A rate table that does not exist in " +
       "this matter returns an empty page rather than an error.",
     permissions: { rate: ["read"] },
-    mcp: { type: "capability", reason: "billing_admin" },
+    mcp: {
+      type: "capability",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
     access: "read",
     params: rateEntryParamsSchema,
     query: readRateEntriesQuerySchema,

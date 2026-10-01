@@ -26,7 +26,11 @@ const config = {
     "this matter, or when the matter already has a document-type classifier " +
     "column.",
   permissions: { property: ["create"] },
-  mcp: { type: "capability", reason: "workspace_schema" },
+  mcp: {
+    type: "capability",
+    reason: "workspace_schema",
+    consumesServices: false,
+  },
   body: createPropertyBodySchema,
 } satisfies WorkspaceHandlerConfig;
 

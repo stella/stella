@@ -213,6 +213,7 @@ const searchResult = async (
   const resolved = await resolveExpandedCorpusQuery({
     build: (expand) =>
       caseLawCorpusQuery({
+        jurisdiction: query.jurisdiction,
         text: query.query,
         filters: {
           court: query.court,

@@ -21,7 +21,11 @@ const config = {
     "member of the organization; a private one only by its author.",
   permissions: { chat: ["create"] },
   access: "read",
-  mcp: { type: "capability", reason: "agent_tool_authoring" },
+  mcp: {
+    type: "capability",
+    reason: "agent_tool_authoring",
+    consumesServices: false,
+  },
   params: getSkillParamsSchema,
 } satisfies HandlerConfig;
 

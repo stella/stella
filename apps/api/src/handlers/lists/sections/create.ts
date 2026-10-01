@@ -25,7 +25,11 @@ const config = {
     "position. Refused when the list is not active or already holds its " +
     "maximum number of sections.",
   permissions: { view: ["update"] },
-  mcp: { type: "capability", reason: "workspace_schema" },
+  mcp: {
+    type: "capability",
+    reason: "workspace_schema",
+    consumesServices: false,
+  },
   body: bodySchema,
 } satisfies WorkspaceHandlerConfig;
 

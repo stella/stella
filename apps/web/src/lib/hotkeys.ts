@@ -9,6 +9,7 @@ export const HOTKEYS = {
   TOGGLE_CHAT: "Mod+J",
   NEW_CHAT: "Mod+Shift+J",
   NEW_MATTER: "Mod+Shift+E",
+  LOG_TIME: "Mod+Alt+T",
   SELECT_ALL: "Mod+A",
   FIND: "Mod+F",
   ACCEPT_SUGGESTION: "Alt+Enter",
@@ -62,6 +63,7 @@ export type ShortcutLabelKey = Extract<
   | "navigation.toggleChat"
   | "navigation.showShortcuts"
   | "common.newMatter"
+  | "common.logTime"
   | "common.find"
   | "common.accept"
   | "common.previous"
@@ -123,6 +125,12 @@ export const SHORTCUT_GROUPS = [
         binding: { type: "hotkey", hotkey: HOTKEYS.NEW_MATTER },
         labelKey: "common.newMatter",
         contexts: ["global", "workspace"],
+      },
+      {
+        id: "logTime",
+        binding: { type: "hotkey", hotkey: HOTKEYS.LOG_TIME },
+        labelKey: "common.logTime",
+        contexts: ["global"],
       },
       {
         id: "newChat",

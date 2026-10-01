@@ -341,20 +341,24 @@ const releaseJobs = workflowJobs(
 const resultJob = v.parse(
   v.object({
     needs: v.array(v.string()),
-    steps: v.array(
-      v.object({
-        run: v.string(),
-        env: v.record(v.string(), v.string()),
-      }),
-    ),
+    steps: v.array(v.unknown()),
   }),
   ciJobs["ci-result"],
 );
 
-const resultStep = resultJob.steps.at(0);
-if (resultJob.steps.length !== 1 || !resultStep) {
+const evaluationSteps = resultJob.steps.filter((step) =>
+  v.is(v.object({ name: v.literal("Evaluate CI outcome") }), step),
+);
+if (evaluationSteps.length !== 1) {
   throw new TypeError("CI result must have exactly one evaluation step");
 }
+const resultStep = v.parse(
+  v.object({
+    run: v.string(),
+    env: v.record(v.string(), v.string()),
+  }),
+  evaluationSteps.at(0),
+);
 
 const jobScopes = v.parse(
   v.record(v.string(), v.nullable(v.string())),
@@ -784,20 +788,21 @@ test("a manual run supersedes only an older manual run on the same branch", () =
     v.object({
       concurrency: v.object({
         group: v.string(),
-        "cancel-in-progress": v.boolean(),
+        "cancel-in-progress": v.string(),
       }),
     }),
     Bun.YAML.parse(workflow),
   ).concurrency;
-  expect(concurrency["cancel-in-progress"]).toBe(true);
-  expect(concurrency.group).toBe(
-    [
-      "$",
-      "{{ github.event_name == 'workflow_dispatch'",
-      " && format('ci-dispatch-{0}', github.ref)",
-      " || format('{0}-{1}', github.workflow, github.ref) }}",
-    ].join(""),
+  expect(concurrency["cancel-in-progress"]).toBe(
+    `\${{ github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' }}`,
   );
+  expect(concurrency.group).toContain(
+    "github.event_name == 'workflow_dispatch' && format('ci-dispatch-{0}', github.ref)",
+  );
+  expect(concurrency.group).toContain(
+    "format('pr-{0}', github.event.pull_request.number || github.ref)",
+  );
+  expect(concurrency.group).toContain("format('run-{0}', github.run_id)");
 });
 
 test("a manual run plans the depth it was dispatched with, the merge queue always full, a pull request always fast", () => {

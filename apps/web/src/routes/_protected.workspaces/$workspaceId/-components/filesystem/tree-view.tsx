@@ -1640,6 +1640,11 @@ const FilesystemRow = ({
               className="size-4 shrink-0"
               fileName={file.fileName}
               mimeType={file.mimeType}
+              thumbnail={{
+                fieldId: file.fieldId,
+                hasThumbnail: file.hasThumbnail,
+                workspaceId,
+              }}
             />
           );
         }

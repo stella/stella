@@ -140,25 +140,44 @@ export const resolveCourtFilter = async ({
   context,
   country,
   court,
+  courts: requestedCourts,
 }: {
   context: McpRequestContext;
   country: string;
   court: string | undefined;
+  courts?: string[] | undefined;
 }): Promise<{
   court: string | undefined;
+  courts: string[] | undefined;
   warnings: AgentCaseLawSearchWarning[];
 }> => {
-  if (court === undefined) {
-    return { court, warnings: [] };
+  if (court === undefined && requestedCourts === undefined) {
+    return { court, courts: undefined, warnings: [] };
   }
   const courts = await loadCaseLawCourtNames(context, country);
   if (courts === null) {
-    return { court, warnings: [] };
+    return { court, courts: requestedCourts, warnings: [] };
   }
-  const reading = readCourtFilter({ country, court, courts });
+  const warnings: AgentCaseLawSearchWarning[] = [];
+  const read = (value: string) => {
+    const reading = readCourtFilter({ country, court: value, courts });
+    if (reading.warning !== null) {
+      warnings.push(reading.warning);
+    }
+    return reading.type === "court" ? reading.court : undefined;
+  };
+  const resolvedCourt = court === undefined ? undefined : read(court);
+  const resolvedCourts = requestedCourts?.flatMap((value) => {
+    const resolved = read(value);
+    return resolved === undefined ? [] : [resolved];
+  });
   return {
-    court: reading.type === "court" ? reading.court : undefined,
-    warnings: reading.warning === null ? [] : [reading.warning],
+    court: resolvedCourt,
+    courts:
+      resolvedCourts !== undefined && resolvedCourts.length > 0
+        ? [...new Set(resolvedCourts)]
+        : undefined,
+    warnings,
   };
 };
 

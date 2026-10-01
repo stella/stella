@@ -1,5 +1,6 @@
 import * as v from "valibot";
 
+import { redisSettingsSchema } from "@stll/redis-config";
 import { RUNTIME_MODE, type RuntimeMode } from "@stll/runtime-mode";
 
 const LOOPBACK_HOSTNAMES = new Set(["localhost", "127.0.0.1", "[::1]"]);
@@ -82,6 +83,7 @@ export const envCollabServerSchema = {
     "3002",
   ),
   STELLA_COLLAB_REDIS_URL: v.optional(v.pipe(v.string(), v.url())),
+  ...redisSettingsSchema.entries,
   STELLA_COLLAB_SERVICE_TOKEN: v.pipe(v.string(), v.minLength(32)),
   /**
    * Whether a `rediss://` connection verifies the server certificate chain.

@@ -6,6 +6,7 @@ import {
   CHAT_TURN_ID_HEADER,
   STELLA_API_VERSION_PREFIX,
 } from "@stll/api-contract";
+import { redisConnectionConfig } from "@stll/redis-config";
 
 import { initApiBackgroundWorkers } from "@/api/api-background-workers";
 import { env } from "@/api/env";
@@ -106,6 +107,8 @@ import {
   templateCategoriesRoute,
   templatesRoute,
 } from "@/api/handlers/templates/routes";
+import { timeApprovalQueueRoute } from "@/api/handlers/time-entries/approval-queue/routes";
+import { internalTimeEntriesRoute } from "@/api/handlers/time-entries/internal/routes";
 import { myTimeEntriesRoute } from "@/api/handlers/time-entries/me/routes";
 import { timeEntriesRoute } from "@/api/handlers/time-entries/routes";
 import { timeTimersRoute } from "@/api/handlers/time-timers/routes";
@@ -396,7 +399,13 @@ const api = new Elysia()
   .use(feedbackPublicRoute)
   .use(memoriesRoute)
   .use(notificationsRoute)
-  .use(new Elysia().use(myTimeEntriesRoute).use(timeTimersRoute))
+  .use(
+    new Elysia()
+      .use(timeApprovalQueueRoute)
+      .use(internalTimeEntriesRoute)
+      .use(myTimeEntriesRoute)
+      .use(timeTimersRoute),
+  )
   .use(localDevPublicRoutes)
   .use(smokeRoute)
   .use(operatorRoute)
@@ -596,6 +605,15 @@ const startS3RefreshLoop = () => {
 // schema mirror — must yield the fully constructed `api` without any of
 // these side effects (no DB, no Redis, no listen).
 const startServer = async (): Promise<void> => {
+  if (envBase.REDIS_URL !== undefined) {
+    const { mode } = redisConnectionConfig({
+      url: envBase.REDIS_URL,
+      settings: envBase,
+      rejectUnauthorized: envBase.REDIS_TLS_REJECT_UNAUTHORIZED,
+    }).unwrap("Redis connection configuration must be valid.");
+    logger.info("redis.connection.mode", { mode });
+  }
+
   startMemoryPressureHandler();
 
   // Start the SSE keep-alive heartbeat and cross-instance Redis subscriber

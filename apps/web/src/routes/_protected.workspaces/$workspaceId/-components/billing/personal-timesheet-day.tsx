@@ -24,31 +24,31 @@ import { Dialog, DialogPanel, DialogPopup, DialogTitle } from "@stll/ui/dialog";
 import { PencilIcon, PlusIcon, TrashIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
+import {
+  ManualTimeEntryForm,
+  type ManualTimeEntryValues,
+} from "@/components/billing/manual-time-entry-form";
 import { usePermissions } from "@/hooks/use-permissions";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { formatMinutes } from "@/lib/workspaces/format-duration";
 import {
+  useCreateTimeEntry,
+  useDecideTimeSuggestion,
+  useDeleteTimeEntry,
+  useUpdateTimeEntry,
+} from "@/lib/workspaces/mutations/time-entries";
+import {
   timeEntriesInfiniteOptions,
   timeEntrySuggestionsOptions,
   timeEntrySummaryOptions,
 } from "@/lib/workspaces/queries/time-entries";
 import {
-  ManualTimeEntryForm,
-  type ManualTimeEntryValues,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/manual-time-entry-form";
-import {
   timeEntryActionLabel,
   timeEntryNarrativeExcerpt,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-copy.logic";
 import { TimeSuggestionsLane } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-suggestions-lane";
-import {
-  useCreateTimeEntry,
-  useDecideTimeSuggestion,
-  useDeleteTimeEntry,
-  useUpdateTimeEntry,
-} from "@/routes/_protected.workspaces/$workspaceId/-mutations/time-entries";
 
 type PersonalTimesheetDayProps = {
   canCreateTimeEntry: boolean;

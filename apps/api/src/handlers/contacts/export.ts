@@ -34,7 +34,11 @@ const config = {
   description:
     "Export the contact directory as a bounded CSV or versioned JSON download.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "contact_directory" },
+  mcp: {
+    type: "capability",
+    reason: "contact_directory",
+    consumesServices: false,
+  },
   access: "read",
   transport: {
     type: "file-response",

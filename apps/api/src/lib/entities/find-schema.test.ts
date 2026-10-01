@@ -1,5 +1,5 @@
 import { Value } from "@sinclair/typebox/value";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, expectTypeOf, test } from "bun:test";
 import type { Static } from "elysia";
 
 import {
@@ -9,19 +9,6 @@ import {
 import type { EntityFindScopeType } from "@stll/api-contract";
 
 import { tFind, tFindScope } from "@/api/lib/entities/find-schema";
-
-// A subset would still typecheck, so bind both directions: the wire schema
-// accepts exactly the contract's scope kinds, and no more.
-type AssertEqual<A, B> = [A] extends [B]
-  ? [B] extends [A]
-    ? true
-    : never
-  : never;
-
-const wireTypeMatchesContract: AssertEqual<
-  Static<typeof tFindScope>["type"],
-  EntityFindScopeType
-> = true;
 
 describe("find schema", () => {
   test("a term cannot arrive without the scope it searches", () => {
@@ -78,7 +65,11 @@ describe("find term length", () => {
 
 describe("find scope schema", () => {
   test("accepts exactly the contract's scope kinds", () => {
-    expect(wireTypeMatchesContract).toBe(true);
+    // A subset would still typecheck, so pin equality: the wire schema
+    // accepts exactly the contract's scope kinds, and no more.
+    expectTypeOf<
+      Static<typeof tFindScope>["type"]
+    >().toEqualTypeOf<EntityFindScopeType>();
     expect(tFindScope.properties.type.anyOf.map((member) => member.const)) //
       .toEqual([...ENTITY_FIND_SCOPE_TYPES]);
   });
