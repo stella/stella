@@ -177,13 +177,15 @@ test(
           expect(occurrence.end).toBeLessThanOrEqual(text.length);
           expect(text.slice(occurrence.start, occurrence.end)).toBe(citation);
         }
-        expect(
-          shifted.value.occurrences.map((occurrence) => ({
+        const adjustedOccurrences = [];
+        for (const occurrence of shifted.value.occurrences) {
+          adjustedOccurrences.push({
             ...occurrence,
             start: occurrence.start - lead.length,
             end: occurrence.end - lead.length,
-          })),
-        ).toEqual(original.value.occurrences);
+          });
+        }
+        expect(adjustedOccurrences).toEqual(original.value.occurrences);
       }),
       propertyConfig({ seed: propertySeed() }),
     );
