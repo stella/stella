@@ -32,7 +32,7 @@ concurrency:
         && format('recheck-{0}', github.event.issue.number))
       || format('run-{0}', github.run_id)
     }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request_target' || (github.event_name == 'issue_comment' && github.event.issue.pull_request && github.event.comment.body == 'recheck') }}
 
 permissions:
   actions: write

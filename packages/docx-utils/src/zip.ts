@@ -1,4 +1,4 @@
-import JSZip from "jszip";
+import type JSZip from "jszip";
 
 /** Standard DOCX compression options */
 export const DOCX_COMPRESSION = {
@@ -7,9 +7,7 @@ export const DOCX_COMPRESSION = {
   compressionOptions: { level: 6 },
 };
 
-/** Load a DOCX file (ArrayBuffer) into a JSZip instance */
-export const loadDocx = async (buffer: ArrayBuffer): Promise<JSZip> =>
-  await JSZip.loadAsync(buffer);
+export { loadDocx } from "./archive.ts";
 
 /** Extract a text file from a ZIP */
 export const extractText = async (

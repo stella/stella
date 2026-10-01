@@ -27,12 +27,13 @@ export const PROVIDER_LABELS = {
   bedrock: "Bedrock",
 } as const satisfies Record<(typeof PROVIDER_KEYS)[number], string>;
 
-export const REGION_KEYS = ["global"] as const;
-
 export const ROLE_KEYS = ["chat", "fast", "reasoning", "pdf"] as const;
 
 export type ProviderValue = (typeof PROVIDER_KEYS)[number];
-export type RegionValue = (typeof REGION_KEYS)[number];
+export type RegionValue = Extract<
+  OrganizationAIConfig,
+  { configured: true }
+>["providers"][number]["region"];
 export type RoleValue = (typeof ROLE_KEYS)[number];
 
 export type ProviderValidationStatus = "checking" | "valid" | "invalid";
@@ -162,7 +163,10 @@ export const providerDraftsFromStoredProviders = (
       apiKeyMasked: providerConfig.apiKeyMasked,
       endpoint: providerConfig.endpoint ?? "",
       apiVersion: providerConfig.apiVersion,
-      region: "global",
+      region:
+        providerConfig.region === "eu" || providerConfig.region === "ch"
+          ? providerConfig.region
+          : "global",
       replacingKey: false,
     });
   }

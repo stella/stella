@@ -1,9 +1,9 @@
-import type { ActionPeriodIdentity } from "@/api/lib/rate-limit/action-period-budget";
+import type { AdmittedActionIdentity } from "@/api/lib/rate-limit/action-kinds";
 
-const MCP_TOOL_CALL_ACTION_KIND = "mcp.tools/call";
-
-export const mcpActionPeriodIdentity = (): ActionPeriodIdentity => ({
-  actionKind: MCP_TOOL_CALL_ACTION_KIND,
+export const mcpActionPeriodIdentity = (
+  consumesServices: boolean,
+): AdmittedActionIdentity => ({
+  actionKind: consumesServices ? "mcp.services/call" : "mcp.data/call",
   // RPC IDs are client-chosen correlation tokens, not idempotency keys.
   logicalPhaseId: Bun.randomUUIDv7(),
 });

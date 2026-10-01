@@ -1,6 +1,8 @@
 import { Result } from "better-result";
-import { and, eq, getColumns, ne } from "drizzle-orm";
+import { and, eq, getColumns, ne, or } from "drizzle-orm";
 import { t } from "elysia";
+
+import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 
 import { BILLING_STATUS, timeEntries, workspaces } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -20,7 +22,11 @@ const returnTimeEntry = createSafeRootHandler(
     description:
       "Return one draft or approved time entry to draft with a required comment (up to 2000 characters). Only its assigned approver or an organization owner/admin may return it. Running timers and locked periods are refused. The owner keeps seeing the last comment while editing; re-approval clears it. Billed or written-off entries cannot be returned.",
     permissions: { timeEntry: ["read"] },
-    mcp: { type: "capability", reason: "billing_admin" },
+    mcp: {
+      type: "capability",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
     access: "write",
     body: t.Object({
       id: tSafeId("timeEntry"),
@@ -70,7 +76,7 @@ const returnTimeEntry = createSafeRootHandler(
             running: timeEntryIsRunning(),
           })
           .from(timeEntries)
-          .innerJoin(
+          .leftJoin(
             workspaces,
             and(
               eq(timeEntries.workspaceId, workspaces.id),
@@ -81,7 +87,19 @@ const returnTimeEntry = createSafeRootHandler(
             and(
               eq(timeEntries.id, body.id),
               eq(timeEntries.organizationId, session.activeOrganizationId),
-              ne(workspaces.status, "deleting"),
+              or(
+                eq(
+                  timeEntries.activityGroup,
+                  TIME_ENTRY_ACTIVITY_GROUP.INTERNAL,
+                ),
+                and(
+                  eq(
+                    timeEntries.activityGroup,
+                    TIME_ENTRY_ACTIVITY_GROUP.CLIENT,
+                  ),
+                  ne(workspaces.status, "deleting"),
+                ),
+              ),
             ),
           )
           .limit(1)

@@ -295,7 +295,11 @@ const config = {
     "extraction and PDF and thumbnail derivatives. Use " +
     "entities.copy to copy into a different matter.",
   permissions: { entity: ["create"] },
-  mcp: { type: "capability", reason: "document_processing" },
+  mcp: {
+    type: "capability",
+    reason: "document_processing",
+    consumesServices: true,
+  },
   body: duplicateEntityBodySchema,
 } satisfies WorkspaceHandlerConfig;
 

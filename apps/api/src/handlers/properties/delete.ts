@@ -17,7 +17,11 @@ const config = {
     "and list placements. System properties, file properties, and properties " +
     "another property depends on are refused.",
   permissions: { property: ["delete"] },
-  mcp: { type: "capability", reason: "workspace_schema" },
+  mcp: {
+    type: "capability",
+    reason: "workspace_schema",
+    consumesServices: false,
+  },
   params: workspaceParams({ propertyId: tSafeId("property") }),
 } satisfies WorkspaceHandlerConfig;
 

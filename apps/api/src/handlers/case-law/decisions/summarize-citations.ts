@@ -7,6 +7,7 @@ import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { tSafeId } from "@/api/lib/custom-schema";
 
 const config = {
+  cache: { kind: "none" },
   mcp: { type: "internal", reason: "public_indexing" },
   params: t.Object({ decisionId: tSafeId("caseLawDecision") }),
 } satisfies PublicHandlerConfig;

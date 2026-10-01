@@ -199,6 +199,7 @@ export const externalToolDefinition = ({
     }),
   }),
   anonymized: DYNAMIC_GATEWAY_ANONYMIZED,
+  consumesServices: true,
   description: externalToolDescription({
     connectorDisplayName,
     description: cachedTool.description,
@@ -223,6 +224,7 @@ export const skillToolDefinition = (
     title: toDynamicToolTitle(skill.displayName) || skill.exposedName,
   },
   anonymized: DYNAMIC_GATEWAY_ANONYMIZED,
+  consumesServices: true,
   description: skill.description,
   inputSchema: SKILL_TOOL_INPUT.inputSchema,
   name: skill.exposedName,

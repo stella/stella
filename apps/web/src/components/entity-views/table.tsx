@@ -30,7 +30,10 @@ import { MattersNavIcon } from "@/components/matter-icon";
 import { MatterRefLink } from "@/components/matter-ref-link";
 import { UserIdentity } from "@/components/user-avatar";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
-import { getEntityName } from "@/components/workspaces/entity-utils";
+import {
+  getEntityName,
+  getFirstFile,
+} from "@/components/workspaces/entity-utils";
 import { ColumnToggle } from "@/components/workspaces/table/column-toggle";
 import { TableGroupHeader } from "@/components/workspaces/table/group-header";
 import { MetadataPopover } from "@/components/workspaces/table/metadata-popover";
@@ -464,6 +467,10 @@ const CollectionCell = ({ column, entry }: CollectionCellProps) => {
   switch (column) {
     case "_name": {
       const open = entryOpener(entry);
+      const file =
+        entry.type === "entity" && entry.entity.kind === "document"
+          ? getFirstFile(entry.entity)
+          : null;
       return (
         <button
           className="flex min-w-0 items-center gap-2 text-start"
@@ -473,8 +480,20 @@ const CollectionCell = ({ column, entry }: CollectionCellProps) => {
         >
           {entry.type === "entity" && (
             <EntityKindIcon
+              className="size-4 shrink-0"
+              fileName={file?.fileName}
               kind={entry.entity.kind}
+              mimeType={file?.mimeType}
               status={entry.entity.status ?? undefined}
+              thumbnail={
+                file?.mimeType.startsWith("image/")
+                  ? {
+                      fieldId: file.fieldId,
+                      workspaceId: entry.workspaceId,
+                      hasThumbnail: file.hasThumbnail,
+                    }
+                  : undefined
+              }
             />
           )}
           <UserText className="truncate font-medium">

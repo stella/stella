@@ -1,5 +1,4 @@
-import { describe, expect, test } from "bun:test";
-import { expectTypeOf } from "expect-type";
+import { describe, expect, test, expectTypeOf } from "bun:test";
 import * as v from "valibot";
 
 import { fieldMetaToolInputSchema } from "@/api/lib/docx/types";

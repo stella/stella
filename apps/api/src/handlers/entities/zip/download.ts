@@ -328,7 +328,11 @@ const config = {
     "Refused when the entity is not a folder; the grant is recorded in the " +
     "audit trail.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "document_processing" },
+  mcp: {
+    type: "capability",
+    reason: "document_processing",
+    consumesServices: false,
+  },
   access: "read",
   transport: {
     type: "file-response",
