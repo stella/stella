@@ -37,7 +37,10 @@ export const productionE2eInputs = (configPath) => {
     fail("Production E2E testDir must stay inside its E2E tree");
   }
   for (const file of readdirSync(testDirectory, { recursive: true })) {
-    if (SOURCE_EXTENSION.test(file) && statSync(path.join(testDirectory, file)).isFile()) {
+    if (
+      SOURCE_EXTENSION.test(file) &&
+      statSync(path.join(testDirectory, file)).isFile()
+    ) {
       pending.push(path.join(testDirectory, file));
     }
   }
