@@ -75,7 +75,7 @@ export default class StagingReporter implements Reporter {
     this.fatalError = true;
   }
 
-  onEnd(
+  async onEnd(
     result: Pick<FullResult, "status">,
   ): Promise<Pick<FullResult, "status">> {
     if (
@@ -84,11 +84,11 @@ export default class StagingReporter implements Reporter {
       this.gatingFailures > 0 ||
       this.reportOnlyFailures === 0
     ) {
-      return Promise.resolve({ status: result.status });
+      return await Promise.resolve({ status: result.status });
     }
     report(
       "Staging gating checks passed; declared report-only failures do not block verification.",
     );
-    return Promise.resolve({ status: "passed" });
+    return await Promise.resolve({ status: "passed" });
   }
 }
