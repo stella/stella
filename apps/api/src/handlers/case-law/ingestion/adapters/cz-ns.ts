@@ -193,7 +193,9 @@ const normalizeViewEntries = (
       return [];
     }
     if (Array.isArray(viewentry)) {
-      return viewentry;
+      // Array.isArray narrows the publisher shape to any[]; keep it unknown.
+      const entries: unknown[] = viewentry;
+      return entries;
     }
     return [viewentry];
   })();
