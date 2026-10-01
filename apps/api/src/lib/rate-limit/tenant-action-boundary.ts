@@ -12,13 +12,10 @@ import {
   withTenantActionSizePolicy,
 } from "@/api/lib/rate-limit/action-size-limits";
 
-export const TENANT_ACTION_DETAIL = "x-stella-tenant-action";
+import type { DocumentDecoration } from "./tenant-action-detail";
 
-declare module "elysia" {
-  type DocumentDecoration = {
-    [TENANT_ACTION_DETAIL]?: boolean;
-  };
-}
+export const TENANT_ACTION_DETAIL =
+  "x-stella-tenant-action" satisfies keyof DocumentDecoration;
 
 type TenantActionClassifierOptions = {
   routes: readonly InternalRoute[];
