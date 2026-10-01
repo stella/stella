@@ -8,6 +8,8 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { legislationDocuments } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { executedRows } from "@/api/lib/db/executed-rows";
+import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 
 const BATCH_SIZE = 200;
 
@@ -33,6 +35,7 @@ type StatuteSlugBackfillPageOptions = {
   db: ScopedDb;
   after: SafeId<"legislationDocument"> | null;
   size: number;
+  capture?: typeof captureError;
 };
 
 const readPage = async ({
@@ -70,21 +73,23 @@ const readPage = async ({
 const writePage = async (
   db: ScopedDb,
   assignments: readonly SlugAssignment[],
-): Promise<void> => {
+): Promise<number> => {
   const values = sql.join(
     assignments.map(({ id, slug }) => sql`(${id}::uuid, ${slug}::varchar)`),
     sql`, `,
   );
 
-  await db((tx) =>
+  const result = await db((tx) =>
     // audit: skip — backfills a derived public slug, not user-facing state
     tx.execute(sql`
       UPDATE ${legislationDocuments} AS d
       SET slug = v.slug
       FROM (VALUES ${values}) AS v(id, slug)
       WHERE d.id = v.id AND d.slug IS NULL
+      RETURNING d.id
     `),
   );
+  return executedRows(result).length;
 };
 
 type BackfillProgress = StatuteSlugBackfillResult & {
@@ -107,22 +112,51 @@ const planPage = (rows: readonly BackfillRow[]) => {
 
 /**
  * One bounded page; a tx-bound db callback keeps writes and the caller's
- * checkpoint atomic. Failures propagate so that neither can commit alone.
+ * checkpoint atomic. A savepoint isolates a poison page so later pages remain
+ * reachable; failed rows stay null and are retried by the next complete pass.
  */
 export const backfillStatuteSlugsPage = async (
   options: StatuteSlugBackfillPageOptions,
 ) => {
   const rows = await readPage(options);
   const { assignments, skipped } = planPage(rows);
+  let failed = 0;
+  let written = 0;
   if (assignments.length > 0) {
-    await writePage(options.db, assignments);
+    const write = await Result.tryPromise({
+      try: async () =>
+        await options.db((tx) =>
+          tx.transaction(
+            async (savepoint) =>
+              await writePage(
+                async (work) => await work(savepoint),
+                assignments,
+              ),
+          ),
+        ),
+      catch: (cause: unknown) => cause,
+    });
+    if (Result.isError(write)) {
+      // Statement cancellation shrinks and retries the page through the gate.
+      if (isPgError(write.error, PG_ERROR.QUERY_CANCELED)) {
+        throw write.error;
+      }
+      (options.capture ?? captureError)(write.error, {
+        after: options.after ?? "start",
+        step: "backfillStatuteSlugs",
+        failed: String(assignments.length),
+      });
+      failed = assignments.length;
+    } else {
+      written = write.value;
+    }
   }
   return {
     cursor: rows.at(-1)?.id ?? options.after,
     done: rows.length === 0,
-    written: assignments.length,
+    written,
     skipped,
-    failed: 0,
+    failed,
   };
 };
 
@@ -130,8 +164,12 @@ const backfillFrom = async (
   db: ScopedDb,
   progress: BackfillProgress,
 ): Promise<StatuteSlugBackfillResult> => {
-  const rows = await readPage({ db, after: progress.after, size: BATCH_SIZE });
-  if (rows.length === 0) {
+  const page = await backfillStatuteSlugsPage({
+    db,
+    after: progress.after,
+    size: BATCH_SIZE,
+  });
+  if (page.done) {
     return {
       written: progress.written,
       skipped: progress.skipped,
@@ -139,33 +177,13 @@ const backfillFrom = async (
     };
   }
 
-  const { assignments, skipped } = planPage(rows);
-
-  const write =
-    assignments.length === 0
-      ? Result.ok(undefined)
-      : await Result.tryPromise({
-          try: async () => await writePage(db, assignments),
-          catch: (cause: unknown) => cause,
-        });
-
-  if (Result.isError(write)) {
-    // One page's failure must not stall the scan: those rows stay null and a
-    // re-run retries them, so the walk moves on past this cursor.
-    captureError(write.error, {
-      after: progress.after ?? "start",
-      step: "backfillStatuteSlugs",
-    });
-  }
-
   // A keyset walk is sequential by construction: the next page's cursor is
   // the last id this page returned.
   return await backfillFrom(db, {
-    after: rows.at(-1)?.id ?? progress.after,
-    written:
-      progress.written + (Result.isError(write) ? 0 : assignments.length),
-    skipped: progress.skipped + skipped,
-    failed: progress.failed + (Result.isError(write) ? assignments.length : 0),
+    after: page.cursor,
+    written: progress.written + page.written,
+    skipped: progress.skipped + page.skipped,
+    failed: progress.failed + page.failed,
   });
 };
 

@@ -19,9 +19,9 @@
  * Self-checkpointing in two senses: a repaired row leaves the selection
  * predicate, so a completed run changes nothing and an interrupted run
  * resumes by running again, and every row written after the migration
- * satisfies the constraint already. Completion is a catalog fact,
- * `pg_constraint.convalidated`, which the phase reads before it walks anything
- * and the API's startup gate reads before it serves.
+ * satisfies the constraint already. The keyset cursor and adaptive holds are
+ * committed with each batch. Deploy and startup admit a pending checkpoint;
+ * `pg_constraint.convalidated` proves the walk completed.
  */
 
 import { panic } from "better-result";
@@ -108,7 +108,7 @@ const readBatchBoundary = async (
 /** A keyset cursor advances atomically with the idempotent range UPDATE. */
 const repairFrom = async (
   connection: OnlineMigrationConnection,
-  { readVerdict, sleep = Bun.sleep }: RepairRuntimeOptions,
+  { readVerdict, sleep = Bun.sleep, clock, log }: RepairRuntimeOptions,
 ): Promise<void> => {
   const runtime = createBackfillRuntime({
     name: REPAIR_NAME,
@@ -121,6 +121,8 @@ const repairFrom = async (
     },
     connection,
     readVerdict,
+    clock,
+    log,
   });
   try {
     let done = false;
@@ -164,6 +166,8 @@ const validateConstraint = async (
 type RepairRuntimeOptions = {
   readVerdict?: () => Promise<Verdict>;
   sleep?: (milliseconds: number) => Promise<void>;
+  clock?: () => number;
+  log?: (record: unknown) => void;
 };
 
 export const createCorpusProjectionDeleteReceiptRepair = (
@@ -175,6 +179,7 @@ export const createCorpusProjectionDeleteReceiptRepair = (
       connection,
       constraintName: CONSTRAINT_NAME,
       repairName: REPAIR_NAME,
+      backfillName: REPAIR_NAME,
       tableName: TABLE_NAME,
     }),
   repair: async (connection) => {

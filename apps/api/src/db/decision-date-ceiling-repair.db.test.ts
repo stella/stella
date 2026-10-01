@@ -397,7 +397,10 @@ test("an interrupted repair keeps its committed batches and resumes by running a
   expect((await constraintState(db))?.isValidated).toBe(false);
   expect(await DECISION_DATE_CEILING_REPAIR.readCompletion(dropped)).toEqual({
     reason: expect.stringContaining("is not validated"),
-    type: "incomplete",
+    type: "pending",
+    cursor: null,
+    heldSince: null,
+    holdUntil: null,
   });
 
   await DECISION_DATE_CEILING_REPAIR.repair(connectionOver(client));

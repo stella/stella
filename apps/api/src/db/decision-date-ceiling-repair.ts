@@ -22,9 +22,9 @@
  *
  * Self-checkpointing: a repaired row leaves the selection predicate, so an
  * interrupted run resumes by running again, a completed run finds nothing, and
- * there is no cursor or bookkeeping table to keep. Completion is a catalog
- * fact, `pg_constraint.convalidated`, which the phase reads before it repairs
- * anything and the API's startup gate reads before it serves.
+ * the rows supply the data checkpoint. The shared maintenance state persists
+ * adaptive sizing and holds. A committed checkpoint admits a pending repair
+ * through deploy and startup; `pg_constraint.convalidated` proves completion.
  */
 
 import type { SQL } from "drizzle-orm";
@@ -108,7 +108,7 @@ const reportUnreconciled = (rows: number): void => {
 /** The runtime owns the transaction, checkpoint, health read and per-batch slot. */
 const repairUntilEmpty = async (
   connection: OnlineMigrationConnection,
-  { readVerdict, sleep = Bun.sleep }: RepairRuntimeOptions,
+  { readVerdict, sleep = Bun.sleep, clock, log }: RepairRuntimeOptions,
 ): Promise<void> => {
   const runtime = createBackfillRuntime({
     name: REPAIR_NAME,
@@ -121,6 +121,8 @@ const repairUntilEmpty = async (
     },
     connection,
     readVerdict,
+    clock,
+    log,
   });
   try {
     let done = false;
@@ -168,6 +170,8 @@ const validateConstraint = async (
 type RepairRuntimeOptions = {
   readVerdict?: () => Promise<Verdict>;
   sleep?: (milliseconds: number) => Promise<void>;
+  clock?: () => number;
+  log?: (record: unknown) => void;
 };
 
 export const createDecisionDateCeilingRepair = (
@@ -179,6 +183,7 @@ export const createDecisionDateCeilingRepair = (
       connection,
       constraintName: CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT,
       repairName: REPAIR_NAME,
+      backfillName: REPAIR_NAME,
       tableName: TABLE_NAME,
     }),
   repair: async (connection) => {

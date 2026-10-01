@@ -4,7 +4,9 @@ Transport-free health decisions and adaptive throttling for database maintenance
 
 Import explicit entry points: `/health`, `/indicators`, and `/slot`.
 
-`combine` uses worst-wins severity: stop, unknown, degraded, normal. Index starts
+`combine` uses worst-wins severity: stop, unknown, degraded, normal. An explicitly
+disabled indicator reports `not_configured`, which remains in the logged signals
+and contributes no blocking severity. Index starts
 require normal health; backfill batches may run degraded with smaller batches.
 Unknown health blocks starts and holds batches, but never cancels running work.
 `decideWhileRunning` cancels after two consecutive real EBS readings below the
@@ -15,6 +17,12 @@ All decisions carry the signal values, thresholds and effective configuration.
 batches and adjusts sleep. Holds preserve size and carry `heldSince` and
 `holdUntil`; consumers persist them. `isHeldTooLong` uses the first hold in a streak.
 Readers, clocks and timeout scheduling are injectable; failures become unknown.
+The indicator timeout is logical: it returns unknown without cancelling an
+injected reader. SQL readers must cancel or bound their database work and await
+cleanup before reusing the session. The API adapter runs catalog reads in
+serialized transactions with a local statement timeout and drains cancellation
+and rollback before returning its verdict. CloudWatch requests use the effective
+staleness window and an abort signal.
 
 The priority slot is database-wide: index repair, index build, backfill batch.
 Index sessions retain shared intent locks across unsuccessful attempts and close
@@ -29,8 +37,17 @@ checkpoints together, persists holds, reduces timed-out batches without advancin
 the cursor, enforces configured local statement/lock budgets, and returns control on a hold. Completed passes reset their cursor so
 subsequent rule changes can rescan; every write must remain idempotent.
 The one CloudWatch adapter is `apps/api/src/lib/db/ebs-balance-reader.ts`.
-The runtime requires `DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER`; an absent identifier
-produces unknown health. Region and credentials use the AWS SDK provider chain.
+EBS configuration has three explicit states:
+
+- `DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER` set: read CloudWatch using the AWS SDK
+  region and credential provider chain. The identifier takes precedence if an
+  opt-out is also present; read failures and missing/stale metrics remain unknown.
+- `DB_LOAD_GATE_EBS_SIGNAL=disabled` with no identifier: for non-RDS, self-hosted
+  and local databases, report the nonblocking `not_configured` signal in every
+  decision. Transaction, autovacuum, busy-window and priority gates still apply.
+- Neither supplied: report unknown, hold maintenance and emit one
+  `database_load_gate_ebs_configuration_missing` error event per reader lifetime
+  naming both configuration keys. There is no implicit opt-out.
 
 Targeted unit tests run through `bun run test src/health.test.ts` or
 `src/indicators.test.ts` in this package. API fault and catalog tests are gated by

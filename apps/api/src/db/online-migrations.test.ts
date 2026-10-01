@@ -394,8 +394,25 @@ describe("online migrations", () => {
     const harness = createHarness({
       unvalidatedConstraints: [DECISION_DATE_CONSTRAINT],
     });
-    await expect(runOnlineMigrations(harness.pool)).rejects.toThrow(
-      BackfillHeldError,
+    const pending: unknown[] = [];
+    await runOnlineMigrations(harness.pool, {
+      log: (record) => pending.push(record),
+    });
+    await assertOnlineMigrationsApplied(harness.pool, {
+      log: (record) => pending.push(record),
+    });
+    expect(pending).toHaveLength(2);
+    expect(pending).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          event: "online_repair_pending",
+          completion: expect.objectContaining({
+            type: "pending",
+            holdUntil: expect.any(Number),
+            heldSince: expect.any(Number),
+          }),
+        }),
+      ]),
     );
     expect(
       indexOfStatement(harness.statements, VALIDATE_CONSTRAINT_FRAGMENT),
@@ -410,8 +427,25 @@ describe("online migrations", () => {
     const harness = createHarness({
       unvalidatedConstraints: [DELETE_RECEIPT_CONSTRAINT],
     });
-    await expect(runOnlineMigrations(harness.pool)).rejects.toThrow(
-      BackfillHeldError,
+    const pending: unknown[] = [];
+    await runOnlineMigrations(harness.pool, {
+      log: (record) => pending.push(record),
+    });
+    await assertOnlineMigrationsApplied(harness.pool, {
+      log: (record) => pending.push(record),
+    });
+    expect(pending).toHaveLength(2);
+    expect(pending).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          event: "online_repair_pending",
+          completion: expect.objectContaining({
+            type: "pending",
+            holdUntil: expect.any(Number),
+            heldSince: expect.any(Number),
+          }),
+        }),
+      ]),
     );
     expect(
       indexOfStatement(harness.statements, VALIDATE_DELETE_RECEIPT_FRAGMENT),
@@ -422,6 +456,52 @@ describe("online migrations", () => {
         'UPDATE public."corpus_index_projection_intents"',
       ),
     ).toBe(-1);
+    expect(harness.released()).toBe(true);
+  });
+
+  test("a hold without a durable checkpoint remains a deployment failure", async () => {
+    const harness = createHarness();
+    await expect(
+      runOnlineMigrations(harness.pool, {
+        repairs: [
+          {
+            name: "unpersisted-hold",
+            readCompletion: async () => ({
+              type: "incomplete",
+              reason: "not attempted",
+            }),
+            repair: async () => {
+              throw new BackfillHeldError({
+                message: "held",
+                holdUntil: 1,
+                heldSince: 0,
+              });
+            },
+          },
+        ],
+      }),
+    ).rejects.toThrow("hold has no durable pending checkpoint");
+    expect(harness.released()).toBe(true);
+  });
+
+  test("an ordinary repair failure still fails the online phase", async () => {
+    const harness = createHarness();
+    await expect(
+      runOnlineMigrations(harness.pool, {
+        repairs: [
+          {
+            name: "failed-repair",
+            readCompletion: async () => ({
+              type: "incomplete",
+              reason: "not attempted",
+            }),
+            repair: async () => {
+              throw new TypeError("repair write failed");
+            },
+          },
+        ],
+      }),
+    ).rejects.toThrow("repair write failed");
     expect(harness.released()).toBe(true);
   });
 

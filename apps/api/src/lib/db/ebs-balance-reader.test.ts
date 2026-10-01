@@ -35,6 +35,37 @@ const response = (
 });
 
 describe("the shared RDS EBS reader", () => {
+  test("requests the configured freshness window and can return points older than the default window", async () => {
+    const config = { ...defaultConfig, maxStalenessMs: 40 * 60_000 };
+    const sourceTime = NOW - 30 * 60_000;
+    const commands: GetMetricDataCommand[] = [];
+    const read = createEbsBalanceReader({
+      instanceIdentifier: "test-instance",
+      clock: () => NOW,
+      maxStalenessMs: config.maxStalenessMs,
+      client: {
+        send: async (command) => {
+          commands.push(command);
+          // Model CloudWatch filtering by the requested StartTime: a default
+          // window mutation must actually lose this otherwise healthy point.
+          const start = command.input.StartTime?.getTime();
+          if (start === undefined || sourceTime < start) {
+            return { $metadata: {}, MetricDataResults: [] };
+          }
+          return response(sourceTime, sourceTime);
+        },
+      },
+    });
+    const signal = await ebsBalance({ read, now: () => NOW, config });
+    expect(sourceTime).toBeLessThan(
+      NOW - defaultConfig.maxStalenessMs - 300_000,
+    );
+    expect(signal.kind).toBe("normal");
+    expect(signal.observedAt).toBe(new Date(sourceTime).toISOString());
+    expect(commands.at(0)?.input.StartTime).toEqual(
+      new Date(NOW - config.maxStalenessMs - 300_000),
+    );
+  });
   test("requests both minimum balances in five minute periods using the instance dimension", async () => {
     const commands: GetMetricDataCommand[] = [];
     const reader = createEbsBalanceReader({

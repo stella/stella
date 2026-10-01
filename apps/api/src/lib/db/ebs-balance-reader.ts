@@ -25,6 +25,7 @@ type EbsBalanceReaderOptions = {
   client?: MetricClient;
   clock?: () => number;
   timeoutMs?: number;
+  maxStalenessMs?: number;
 };
 
 const METRICS = {
@@ -70,6 +71,7 @@ export const createEbsBalanceReader = ({
   client: injectedClient,
   clock = () => Temporal.Now.instant().epochMilliseconds,
   timeoutMs = defaultConfig.readTimeoutMs,
+  maxStalenessMs = defaultConfig.maxStalenessMs,
 }: EbsBalanceReaderOptions) => {
   let client = injectedClient;
   return async () => {
@@ -82,9 +84,7 @@ export const createEbsBalanceReader = ({
     const now = clock();
     const response = await client.send(
       new GetMetricDataCommand({
-        StartTime: new Date(
-          now - defaultConfig.maxStalenessMs - PERIOD_SECONDS * 1000,
-        ),
+        StartTime: new Date(now - maxStalenessMs - PERIOD_SECONDS * 1000),
         EndTime: new Date(now),
         ScanBy: "TimestampDescending",
         MetricDataQueries: Object.entries(METRICS).map(([Id, MetricName]) => ({

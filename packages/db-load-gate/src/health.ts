@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
-export type SignalKind = "normal" | "degraded" | "stop" | "unknown";
+export type VerdictKind = "normal" | "degraded" | "stop" | "unknown";
+export type SignalKind = VerdictKind | "not_configured";
 export type WorkKind = "index_build" | "backfill_batch";
 export type Signal = {
   indicator:
@@ -14,7 +15,7 @@ export type Signal = {
   observedAt: string | null;
   reason: string;
 };
-export type Verdict = { kind: SignalKind; signals: Signal[] };
+export type Verdict = { kind: VerdictKind; signals: Signal[] };
 export type BusyWindow = { start: string; end: string; timeZone: string };
 export type HealthConfig = {
   startFloor: number;
@@ -124,6 +125,7 @@ export const validateConfig = (config: HealthConfig) => {
 };
 
 const severity = {
+  not_configured: 0,
   normal: 0,
   degraded: 1,
   unknown: 2,
@@ -131,9 +133,12 @@ const severity = {
 } as const satisfies Record<SignalKind, number>;
 
 export const combine = (signals: Signal[]): Verdict => {
-  let kind: SignalKind = signals.length === 0 ? "unknown" : "normal";
+  let kind: VerdictKind = signals.length === 0 ? "unknown" : "normal";
   for (const signal of signals) {
-    if (severity[signal.kind] > severity[kind]) {
+    if (
+      signal.kind !== "not_configured" &&
+      severity[signal.kind] > severity[kind]
+    ) {
       kind = signal.kind;
     }
   }

@@ -45,6 +45,7 @@ const valueByKind = {
   degraded: 50,
   stop: 10,
   unknown: null,
+  not_configured: null,
 } as const satisfies Record<SignalKind, number | null>;
 const verdict = (kind: SignalKind) =>
   combine([reading(valueByKind[kind], kind)]);
@@ -467,4 +468,23 @@ test("invalid configuration fails before a decision can authorize work", () => {
       }),
     ).toThrow(reason);
   }
+});
+
+test("explicitly unconfigured signals are logged and neutral for all other health kinds", () => {
+  const disabled = reading(null, "not_configured");
+  const onlyDisabled = combine([disabled]);
+  expect(onlyDisabled.kind).toBe("normal");
+  const start = decideStart(onlyDisabled, "index_build");
+  expect(start.decision).toBe("start");
+  expect(start.verdict.signals).toEqual([disabled]);
+  expectLogged(start);
+  for (const kind of kinds) {
+    const healthyOrBlocking = reading(valueByKind[kind], kind);
+    const combined = combine([disabled, healthyOrBlocking]);
+    expect(combined.kind).toBe(kind);
+    expect(combine([healthyOrBlocking, disabled]).kind).toBe(kind);
+    expectLogged(decideStart(combined, "index_build"));
+    expect(combined.signals).toEqual([disabled, healthyOrBlocking]);
+  }
+  expect(decideWhileRunning([disabled, disabled]).decision).toBe("continue");
 });

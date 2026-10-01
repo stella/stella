@@ -1,9 +1,10 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import {
   REWRITTEN_MIGRATION_INDEXES,
   type RequiredMigrationIndex,
 } from "../lib/db/migration-history";
+import { BackfillHeldError } from "./backfill-runtime";
 import { BETTER_AUTH_OAUTH_RESOURCE_REPAIR } from "./better-auth-oauth-resource-repair";
 import { CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR } from "./corpus-projection-delete-receipt-repair";
 import { DECISION_DATE_CEILING_REPAIR } from "./decision-date-ceiling-repair";
@@ -362,17 +363,29 @@ type OnlineIndexState = { type: "missing" } | PresentIndexState;
 
 type OnlineMigrationOperation = "repair" | "validate";
 
+type OnlineMigrationOptions = {
+  repairs?: readonly OnlineRepair[];
+  log?: (record: {
+    event: "online_repair_pending";
+    repair: string;
+    completion: Extract<OnlineRepairCompletion, { type: "pending" }>;
+  }) => void;
+};
+
 export const runOnlineMigrations = async (
   pool: OnlineMigrationPool,
-): Promise<void> => await processOnlineMigrations(pool, "repair");
+  options: OnlineMigrationOptions = {},
+): Promise<void> => await processOnlineMigrations(pool, "repair", options);
 
 export const assertOnlineMigrationsApplied = async (
   pool: OnlineMigrationPool,
-): Promise<void> => await processOnlineMigrations(pool, "validate");
+  options: OnlineMigrationOptions = {},
+): Promise<void> => await processOnlineMigrations(pool, "validate", options);
 
 const processOnlineMigrations = async (
   pool: OnlineMigrationPool,
   operation: OnlineMigrationOperation,
+  options: OnlineMigrationOptions,
 ): Promise<void> => {
   const connection = await pool.reserve();
   let lockAcquired = false;
@@ -391,7 +404,14 @@ const processOnlineMigrations = async (
     if (operation === "repair") {
       await retireReplacedIndexAt(connection);
     }
-    await processOnlineRepairAt(connection, operation);
+    await processOnlineRepairAt({
+      connection,
+      operation,
+      repairs: options.repairs ?? ONLINE_MIGRATION_REPAIRS,
+      log:
+        options.log ??
+        ((record) => process.stderr.write(`${JSON.stringify(record)}\n`)),
+    });
   } finally {
     try {
       if (lockAcquired) {
@@ -439,36 +459,83 @@ const processOnlineIndexCutoverAt = async (
   await processOnlineIndexCutoverAt(connection, operation, offset + 1);
 };
 
-const processOnlineRepairAt = async (
-  connection: OnlineMigrationConnection,
-  operation: OnlineMigrationOperation,
+type OnlineRepairWalkOptions = {
+  connection: OnlineMigrationConnection;
+  operation: OnlineMigrationOperation;
+  repairs: readonly OnlineRepair[];
+  log: NonNullable<OnlineMigrationOptions["log"]>;
+  offset?: number;
+};
+
+const processOnlineRepairAt = async ({
+  connection,
+  operation,
+  repairs,
+  log,
   offset = 0,
-): Promise<void> => {
-  const repair = ONLINE_MIGRATION_REPAIRS.at(offset);
+}: OnlineRepairWalkOptions): Promise<void> => {
+  const repair = repairs.at(offset);
   if (!repair) {
     return;
   }
 
   const completion = await repair.readCompletion(connection);
-  if (operation === "repair" && completion.type === "incomplete") {
-    await repair.repair(connection);
+  if (operation === "repair" && completion.type !== "complete") {
+    const outcome = await Result.tryPromise(
+      async () => await repair.repair(connection),
+    );
     await connection.execute(ONLINE_MIGRATION_LOCK_TIMEOUT_SQL);
-    assertRepairComplete(repair, await repair.readCompletion(connection));
+    if (
+      Result.isError(outcome) &&
+      !(outcome.error instanceof BackfillHeldError)
+    ) {
+      throw outcome.error;
+    }
+    const settled = await repair.readCompletion(connection);
+    if (Result.isError(outcome) && settled.type !== "pending") {
+      return panic(
+        `Online repair ${repair.name}: hold has no durable pending checkpoint`,
+      );
+    }
+    assertRepairDeployable(repair, settled);
+    if (settled.type === "pending") {
+      log({
+        event: "online_repair_pending",
+        repair: repair.name,
+        completion: settled,
+      });
+    }
   } else {
-    assertRepairComplete(repair, completion);
+    assertRepairDeployable(repair, completion);
+    if (completion.type === "pending") {
+      log({ event: "online_repair_pending", repair: repair.name, completion });
+    }
   }
-  await processOnlineRepairAt(connection, operation, offset + 1);
+  await processOnlineRepairAt({
+    connection,
+    operation,
+    repairs,
+    log,
+    offset: offset + 1,
+  });
 };
 
-const assertRepairComplete = (
+const assertRepairDeployable = (
   { name }: OnlineRepair,
   completion: OnlineRepairCompletion,
 ): void => {
-  if (completion.type === "incomplete") {
-    panic(
-      `Online repair ${name} is not complete: ${completion.reason}`,
-      completion.cause,
-    );
+  switch (completion.type) {
+    case "complete":
+    case "pending":
+      return;
+    case "incomplete":
+      return panic(
+        `Online repair ${name} is not complete: ${completion.reason}`,
+        completion.cause,
+      );
+    default:
+      completion satisfies never;
+      return panic(`Online repair ${name}: unexpected completion state`);
   }
 };
 

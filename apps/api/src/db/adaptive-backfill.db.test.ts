@@ -371,7 +371,12 @@ describe("adaptive backfill real Postgres fault recovery", () => {
           import.meta.url,
         ),
       ).text();
-      for (const statement of migration.split("--> statement-breakpoint")) {
+      for (const statement of migration
+        .replaceAll(
+          "public.database_backfill_states",
+          () => `${schema}.database_backfill_states`,
+        )
+        .split("--> statement-breakpoint")) {
         await client.unsafe(statement);
       }
       let now = Date.parse("2026-10-01T12:00:00.000Z");

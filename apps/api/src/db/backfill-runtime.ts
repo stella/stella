@@ -12,7 +12,6 @@ import {
   LONG_TRANSACTION_SQL,
   autovacuumOnTarget,
   busyWindow,
-  ebsBalance,
   longTransaction,
 } from "@stll/db-load-gate/indicators";
 import {
@@ -21,12 +20,17 @@ import {
 } from "@stll/db-load-gate/slot";
 import { Temporal } from "@stll/time";
 
-import { createEbsBalanceReader } from "../lib/db/ebs-balance-reader";
+import {
+  createEbsSignalReader,
+  resolveEbsConfiguration,
+} from "../lib/db/ebs-signal-reader";
 import { executedRows } from "../lib/db/executed-rows";
 import { isPgError, PG_ERROR } from "../lib/pg-error";
 import type { IngestionTransactionRunner } from "../lib/replay-safe-ingestion";
 import { isRecord } from "../lib/type-guards";
 import { runAdaptiveBackfillBatch } from "./adaptive-backfill";
+import { createBoundedIndicatorQuery } from "./indicator-query";
+import type { IndicatorQuery } from "./indicator-query";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
 import type { Transaction } from "./root";
 
@@ -36,10 +40,7 @@ export class BackfillHeldError extends TaggedError("BackfillHeldError")<{
   heldSince: number | null;
 }> {}
 
-type Query = (
-  statement: string,
-  parameters?: readonly (string | number | null)[],
-) => Promise<readonly unknown[]>;
+type Query = IndicatorQuery;
 type RuntimeOptions = {
   name: string;
   tableName: string;
@@ -56,7 +57,6 @@ type BatchWork<BatchTransaction, Value> = (options: {
 }) => Promise<{ cursor: string | null; done: boolean; value: Value }>;
 type DatabaseRuntimeOptions<BatchTransaction> = RuntimeOptions & {
   runInTransaction: IngestionTransactionRunner<BatchTransaction>;
-  query: Query;
   transactionQuery: (tx: BatchTransaction) => Query;
   slot: {
     tryAcquire: (tx: BatchTransaction) => Promise<boolean>;
@@ -113,17 +113,14 @@ const createVerdictReader = ({
 }) => {
   const initializeReader = async () => {
     const { envDbLoadGate } = await import("../env-db-load-gate");
-    const identifier = envDbLoadGate.DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER;
-    return identifier
-      ? createEbsBalanceReader({
-          instanceIdentifier: identifier,
-          clock,
-          timeoutMs: config.readTimeoutMs,
-        })
-      : async () => null;
+    return createEbsSignalReader({
+      configuration: resolveEbsConfiguration(envDbLoadGate),
+      clock,
+      config,
+    });
   };
   let initialized: ReturnType<typeof initializeReader> | undefined;
-  const read = async () => {
+  const readEbsSignal = async () => {
     initialized ??= initializeReader();
     return await (
       await initialized
@@ -132,7 +129,7 @@ const createVerdictReader = ({
   return async () =>
     combine(
       await Promise.all([
-        ebsBalance({ read, now: clock, config }),
+        readEbsSignal(),
         longTransaction({
           read: async () => {
             const row = (
@@ -170,18 +167,37 @@ const createRuntime = <BatchTransaction>({
   tableName,
   initialSize,
   runInTransaction,
-  query,
   transactionQuery,
   slot,
   close,
   config = defaultConfig,
   clock = () => Temporal.Now.instant().epochMilliseconds,
-  readVerdict = createVerdictReader({ query, tableName, clock, config }),
+  readVerdict,
   log = (record) =>
     process.stderr.write(
       `${JSON.stringify({ event: "database_backfill_decision", name, record })}\n`,
     ),
 }: DatabaseRuntimeOptions<BatchTransaction>) => {
+  const indicatorQueries = createBoundedIndicatorQuery({
+    runInTransaction,
+    transactionQuery,
+    readTimeoutMs: config.readTimeoutMs,
+  });
+  const readHealth =
+    readVerdict ??
+    createVerdictReader({
+      query: indicatorQueries.query,
+      tableName,
+      clock,
+      config,
+    });
+  const readSettledVerdict = async () => {
+    try {
+      return await readHealth();
+    } finally {
+      await indicatorQueries.settle();
+    }
+  };
   const step = async <Value>(work: BatchWork<BatchTransaction, Value>) => {
     const completion: { result?: { value: Value } } = {};
     const result = await runAdaptiveBackfillBatch({
@@ -189,7 +205,7 @@ const createRuntime = <BatchTransaction>({
       config,
       clock,
       log,
-      readVerdict,
+      readVerdict: readSettledVerdict,
       slot,
       readCheckpoint: async (tx) => {
         const q = transactionQuery(tx);
@@ -295,7 +311,6 @@ export const createScriptBackfillRuntime = async ({
   };
   return createRuntime({
     ...options,
-    query: drizzleQuery(db),
     transactionQuery: drizzleQuery,
     config: {
       ...(options.config ?? defaultConfig),
@@ -333,7 +348,6 @@ export const createBackfillRuntime = (
   return createRuntime({
     ...options,
     slot,
-    query: connection.query,
     transactionQuery: (tx) => tx.query,
     config: {
       ...(options.config ?? defaultConfig),
