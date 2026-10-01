@@ -6,6 +6,7 @@ import {
   decodeSourceRawEnvelopeObjects,
   encodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  StoredRawReadError,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   fetchSkUsListing,
@@ -71,11 +72,9 @@ test("publisher rows must match the stored document identity and docket", async 
   }
 });
 
-test("404, empty bodies and empty search results are unavailable", async () => {
+test("documented 204 and valid empty search results are unavailable", async () => {
   for (const response of [
-    new Response(null, { status: 404 }),
     new Response(null, { status: 204 }),
-    new Response(""),
     Response.json({ documents: [], numFound: 0 }),
   ]) {
     const pauses: number[] = [];
@@ -91,8 +90,8 @@ test("404, empty bodies and empty search results are unavailable", async () => {
   }
 });
 
-test("429 and 5xx back off with jitter then succeed or remain retryable", async () => {
-  for (const status of [429, 503]) {
+test("5xx back off with jitter then succeed or remain retryable", async () => {
+  for (const status of [500, 503]) {
     for (const recovers of [true, false]) {
       let requests = 0;
       const pauses: number[] = [];
@@ -115,6 +114,165 @@ test("429 and 5xx back off with jitter then succeed or remain retryable", async 
       expect(pauses.at(1)).toBeGreaterThanOrEqual(2000);
       expect(pauses.at(1)).toBeLessThan(3000);
       expect(outcome.type).toBe(recovers ? "listing" : "retry_later");
+    }
+  }
+});
+
+test("the first 429 halts the page with no further requests or checkpoint", async () => {
+  for (const statuses of [[429], [503, 429]]) {
+    let requests = 0;
+    let writes = 0;
+    let checkpoints = 0;
+    const pauses: number[] = [];
+    const result = await runSkUsRawPage({
+      rows: [cursor, { ...cursor, id: createSafeId<"caseLawDecision">() }],
+      mode: "apply",
+      complete: async () =>
+        await completeSkUsRawObservation({
+          ...identity,
+          raw: Result.ok(PDF),
+          contentType: "application/pdf",
+          mode: "apply",
+          fetchListing: async () =>
+            await fetchSkUsListing({
+              ...identity,
+              request: async () => {
+                const status = statuses.at(requests);
+                requests += 1;
+                return status === undefined
+                  ? Response.json({ documents: [listing], numFound: 1 })
+                  : new Response(null, { status });
+              },
+              pause: async (delay) => {
+                pauses.push(delay);
+              },
+            }),
+          writeCompletion: async () => {
+            writes += 1;
+            return "completed";
+          },
+        }),
+      checkpoint: async () => {
+        checkpoints += 1;
+      },
+    });
+    expect(requests).toBe(statuses.length);
+    expect(pauses).toHaveLength(statuses.length - 1);
+    expect(writes).toBe(0);
+    expect(checkpoints).toBe(0);
+    expect(result.stopped).toBe(true);
+    expect(result.cursor).toBeNull();
+    expect(result.counts["publisher_rate_limited"]).toBe(1);
+  }
+});
+
+test("a search 404 or undocumented empty body stops without checkpointing", async () => {
+  for (const response of [
+    new Response(null, { status: 404 }),
+    new Response(""),
+  ]) {
+    let requests = 0;
+    let checkpoints = 0;
+    let writes = 0;
+    const pauses: number[] = [];
+    const result = await runSkUsRawPage({
+      rows: [cursor, { ...cursor, id: createSafeId<"caseLawDecision">() }],
+      mode: "apply",
+      complete: async () =>
+        await completeSkUsRawObservation({
+          ...identity,
+          raw: Result.ok(PDF),
+          contentType: "application/pdf",
+          mode: "apply",
+          fetchListing: async () =>
+            await fetchSkUsListing({
+              ...identity,
+              request: async () => {
+                requests += 1;
+                return response;
+              },
+              pause: async (delay) => {
+                pauses.push(delay);
+              },
+            }),
+          writeCompletion: async () => {
+            writes += 1;
+            return "completed";
+          },
+        }),
+      checkpoint: async () => {
+        checkpoints += 1;
+      },
+    });
+    expect(requests).toBe(1);
+    expect(pauses).toEqual([]);
+    expect(checkpoints).toBe(0);
+    expect(writes).toBe(0);
+    expect(result.stopped).toBe(true);
+    expect(result.cursor).toBeNull();
+    expect(result.counts["listing_unavailable"]).toBe(0);
+    expect(result.counts["retry_later"]).toBe(1);
+  }
+});
+
+test("permanent raw-read failures are journaled terminal rejections, transient failures hold the cursor", async () => {
+  for (const permanent of [true, false]) {
+    for (const mode of ["apply", "dry-run"] as const) {
+      let fetches = 0;
+      let writes = 0;
+      let visits = 0;
+      const audited: unknown[] = [];
+      const next = { ...cursor, id: createSafeId<"caseLawDecision">() };
+      const result = await runSkUsRawPage({
+        rows: [cursor, next],
+        mode,
+        complete: async (row) => {
+          visits += 1;
+          if (row.id === next.id) {
+            return "already_complete";
+          }
+          return await completeSkUsRawObservation({
+            ...identity,
+            contentType: "application/pdf",
+            mode,
+            raw: Result.err(
+              new StoredRawReadError({
+                key: "legacy/payload",
+                message: "fixture raw read failed",
+                permanent,
+                cause: null,
+              }),
+            ),
+            fetchListing: async () => {
+              fetches += 1;
+              return { type: "listing", listing: listingJson };
+            },
+            writeCompletion: async () => {
+              writes += 1;
+              return "completed";
+            },
+          });
+        },
+        checkpoint: async (row, outcome) => {
+          audited.push({ row, outcome });
+        },
+      });
+      expect(fetches).toBe(0);
+      expect(writes).toBe(0);
+      expect(visits).toBe(permanent ? 2 : 1);
+      expect(result.stopped).toBe(!permanent);
+      expect(result.cursor).toEqual(permanent ? next : null);
+      expect(audited).toEqual(
+        permanent && mode === "apply"
+          ? [
+              { row: cursor, outcome: "raw_read_rejected" },
+              { row: next, outcome: "already_complete" },
+            ]
+          : [],
+      );
+      expect(
+        result.counts[permanent ? "raw_read_rejected" : "retry_later"],
+      ).toBe(1);
     }
   }
 });
@@ -286,7 +444,7 @@ test("dry runs and transient failures never persist a checkpoint", async () => {
 test("a dry run of a repairable legacy payload reaches no writer", async () => {
   let writes = 0;
   const outcome = await completeSkUsRawObservation({
-    raw: PDF,
+    raw: Result.ok(PDF),
     contentType: "application/pdf",
     ...identity,
     mode: "dry-run",

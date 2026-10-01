@@ -102,7 +102,8 @@ if (Result.isOk(checkpointRead)) {
   if (
     state.outcome === "would_complete" ||
     state.outcome === "retry_later" ||
-    state.outcome === "concurrent_write"
+    state.outcome === "concurrent_write" ||
+    state.outcome === "publisher_rate_limited"
   ) {
     panic("Checkpoint does not record a terminal applied outcome");
   }
@@ -175,21 +176,8 @@ const complete = async (
     return "listing_identity_mismatch";
   }
   const raw = await readStoredRawFromS3(oldKey);
-  if (Result.isError(raw)) {
-    console.info(
-      JSON.stringify({
-        id: row.id,
-        outcome: "retry_later",
-        error: raw.error._tag,
-      }),
-    );
-    return "retry_later";
-  }
-  if (raw.value === null) {
-    return "raw_unavailable";
-  }
-  return await completeSkUsRawObservation({
-    raw: raw.value,
+  const outcome = await completeSkUsRawObservation({
+    raw,
     contentType: row.source_raw_content_type,
     documentId,
     caseNumber: row.case_number,
@@ -246,6 +234,12 @@ const complete = async (
       return changed.length === 1 ? "completed" : "concurrent_write";
     },
   });
+  if (Result.isError(raw)) {
+    console.info(
+      JSON.stringify({ id: row.id, outcome, error: raw.error._tag }),
+    );
+  }
+  return outcome;
 };
 
 const counts: Record<string, number> = {};

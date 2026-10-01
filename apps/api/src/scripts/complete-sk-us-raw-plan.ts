@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { sql } from "drizzle-orm";
 
 import {
@@ -10,6 +10,7 @@ import {
 import type {
   SourceRawParts,
   SourceRawObjects,
+  StoredRawReadError,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type { SkUsListingFetchOutcome } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -74,6 +75,8 @@ export const SK_US_RAW_OUTCOMES = [
   "listing_unavailable",
   "listing_identity_mismatch",
   "raw_unavailable",
+  "raw_read_rejected",
+  "publisher_rate_limited",
   "retry_later",
   "concurrent_write",
 ] as const;
@@ -114,6 +117,7 @@ export const prepareSkUsRawCompletion = async ({
         | "raw_unavailable"
         | "listing_unavailable"
         | "listing_identity_mismatch"
+        | "publisher_rate_limited"
         | "retry_later";
     }
 > => {
@@ -149,6 +153,7 @@ export const prepareSkUsRawCompletion = async ({
       };
     case "listing_unavailable":
     case "listing_identity_mismatch":
+    case "publisher_rate_limited":
     case "retry_later":
       return { type: fetched.type };
     default:
@@ -163,7 +168,8 @@ export const completedSkUsRawEnvelope = ({
   objects,
 }: SkUsRawCompletion) => encodeSourceRawEnvelope(parts, objects);
 
-type CompleteSkUsRawObservationOptions = PrepareSkUsRawOptions & {
+type CompleteSkUsRawObservationOptions = Omit<PrepareSkUsRawOptions, "raw"> & {
+  raw: Result<Uint8Array | null, StoredRawReadError>;
   mode: "apply" | "dry-run";
   writeCompletion: (
     completion: SkUsRawCompletion,
@@ -173,10 +179,17 @@ type CompleteSkUsRawObservationOptions = PrepareSkUsRawOptions & {
 /** Both command modes make the same decision; only apply can reach storage. */
 export const completeSkUsRawObservation = async ({
   mode,
+  raw,
   writeCompletion,
   ...input
 }: CompleteSkUsRawObservationOptions): Promise<SkUsRawOutcome> => {
-  const prepared = await prepareSkUsRawCompletion(input);
+  if (Result.isError(raw)) {
+    return raw.error.permanent ? "raw_read_rejected" : "retry_later";
+  }
+  if (raw.value === null) {
+    return "raw_unavailable";
+  }
+  const prepared = await prepareSkUsRawCompletion({ ...input, raw: raw.value });
   if (prepared.type !== "prepared") {
     return prepared.type;
   }
@@ -214,7 +227,11 @@ export const runSkUsRawPage = async ({
       panic(`Unknown completion outcome: ${outcome}`);
     }
     counts[outcome] = count + 1;
-    if (outcome === "retry_later" || outcome === "concurrent_write") {
+    if (
+      outcome === "retry_later" ||
+      outcome === "concurrent_write" ||
+      outcome === "publisher_rate_limited"
+    ) {
       return { counts, cursor, stopped: true };
     }
     if (mode === "apply") {

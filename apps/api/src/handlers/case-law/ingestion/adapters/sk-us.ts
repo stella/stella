@@ -821,6 +821,7 @@ export type SkUsListingFetchOutcome =
   | { type: "listing"; listing: string }
   | { type: "listing_unavailable" }
   | { type: "listing_identity_mismatch" }
+  | { type: "publisher_rate_limited"; error: AdapterFetchError }
   | { type: "retry_later"; error: AdapterFetchError };
 
 type FetchSkUsListingOptions = {
@@ -872,7 +873,7 @@ export const fetchSkUsListing = async ({
           signal,
           timeoutMs: ADAPTER_TIMEOUT.REQUEST,
         });
-        if (response.status === 404 || response.status === 204) {
+        if (response.status === 204) {
           return { type: "listing_unavailable" };
         }
         if (!response.ok) {
@@ -884,9 +885,6 @@ export const fetchSkUsListing = async ({
           });
         }
         const body = await response.text();
-        if (body.length === 0) {
-          return { type: "listing_unavailable" };
-        }
         const data: unknown = JSON.parse(body);
         if (!isSearchResponse(data)) {
           throw new FetchBoundaryError({
@@ -915,10 +913,13 @@ export const fetchSkUsListing = async ({
       return fetched.value;
     }
     const cause = fetched.error.cause;
+    if (cause instanceof FetchBoundaryError && cause.status === 429) {
+      return { type: "publisher_rate_limited", error: fetched.error };
+    }
     const retryable =
-      !(cause instanceof FetchBoundaryError) ||
-      cause.status === 429 ||
-      (cause.status !== undefined && cause.status >= 500);
+      cause instanceof FetchBoundaryError &&
+      cause.status !== undefined &&
+      cause.status >= 500;
     if (attempt >= 2 || signal?.aborted || !retryable) {
       return { type: "retry_later", error: fetched.error };
     }
