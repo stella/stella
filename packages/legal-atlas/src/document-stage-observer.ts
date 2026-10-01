@@ -108,8 +108,7 @@ export const observeDocumentStageSafely = async ({
     return delivered.error.reason;
   }
   // The final fallback contains only the typed event, never the thrown payload.
-  // If both operational sinks fail, ingestion must still remain independent.
-  Result.try({
+  const fallback = Result.try({
     try: () => process.stderr.write(`${JSON.stringify(failure)}\n`),
     catch: (cause) =>
       new DocumentTelemetryObserverError({
@@ -118,6 +117,10 @@ export const observeDocumentStageSafely = async ({
         cause,
       }),
   });
+  if (Result.isError(fallback)) {
+    // Every operational sink failed; ingestion must still remain independent.
+    return delivered.error.reason;
+  }
   return delivered.error.reason;
 };
 
