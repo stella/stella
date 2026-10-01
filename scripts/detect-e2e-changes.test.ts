@@ -302,20 +302,29 @@ describe("detect-e2e-changes", () => {
       expect(result).toContain(`        ${requiredJob},\n`);
     }
 
-    // The route network baseline has a leg of its own, and the Playwright
-    // shards skip it there.
-    expect(production).toContain("shard: [1, 2, network-baseline]");
-    expect(workflowStep(production, "Check route network baseline")).toContain(
-      "matrix.shard == 'network-baseline'",
+    const baseline = workflowJob("network-baseline");
+    expect(production).toContain("shard: [1, 2]");
+    expect(production).not.toContain("Check route network baseline");
+    expect(result).toContain("        network-baseline,\n");
+    expect(baseline).toContain("needs: [ci-plan, web-build]");
+    expect(baseline).not.toContain("suite_depth == 'full'");
+    expect(workflowStep(baseline, "Check route network baseline")).toContain(
+      "run: bun --filter @stll/web test:e2e -- route-smoke.spec.ts",
     );
     for (const stepName of [
       "Run Playwright shard",
       "Run route-smoke Playwright shard",
     ]) {
-      expect(workflowStep(production, stepName), stepName).toContain(
+      expect(workflowStep(production, stepName), stepName).not.toContain(
         "matrix.shard != 'network-baseline'",
       );
     }
+    const requireStack = workflowStep(baseline, "Require a ready stack");
+    expect(requireStack).toContain("steps.e2e-stack.outputs.status != 'ready'");
+    expect(requireStack).toContain("exit 1");
+    expect(baseline.indexOf("- name: Require a ready stack")).toBeLessThan(
+      baseline.indexOf("- name: Check route network baseline"),
+    );
   });
 
   test("starts only infrastructure exercised by pull request E2E", () => {

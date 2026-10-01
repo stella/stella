@@ -80,7 +80,9 @@ hand-picking individual checks. For changes confined to documentation or skill
 instructions, run the owning generators and validators plus formatting checks
 instead. Passing does not certify `ci-result`: a pull request runs the core
 checks, the web and landing builds, and the path-scoped image smokes (the API
-image on arm64 only), while browser and e2e suites, service-backed suites, the
+image on arm64 only), plus the route network-budget comparison when its scope
+is selected. That performance guard uses the production browser stack at both
+fast and full depth. Other browser and e2e suites, service-backed suites, the
 other release architectures, and the mobile, Windows, and desktop Rust checks
 run only in the merge queue; land through `bun scripts/merge-bar.ts <pr>`
 (see Merging), which also refuses a head whose CI plan, and with it

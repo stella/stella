@@ -2724,6 +2724,12 @@ jobs:
           dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
           dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Require a ready stack
+        if: steps.e2e-stack.outputs.status != 'ready'
+        run: |
+          echo "::error::Network baseline comparison needs a ready E2E stack"
+          exit 1
+
       # Keep fixture cardinality equal to baseline generation and prevent other
       # specs' workspace events from refetching queries during measurement.
       - name: Check route network baseline
