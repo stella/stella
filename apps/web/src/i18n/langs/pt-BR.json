@@ -1094,6 +1094,7 @@
     "focusSuggestion": "Focar sugestão: {topic}",
     "folioCitationFallback": "pág. {n}",
     "forkFromHere": "Criar um novo chat a partir daqui",
+    "forkInSidePanel": "Criar um novo chat a partir daqui no painel lateral",
     "forkedFrom": "Criado a partir de <bdi>{title}</bdi>",
     "forkedFromUnavailable": "Criado a partir de um chat que não está mais disponível",
     "forkedThread": "De outro chat",
@@ -1153,6 +1154,7 @@
       "viaProvider": "pelo provedor {provider}"
     },
     "newChat": "Novo chat",
+    "newChatInSidePanel": "O novo chat está disponível no painel lateral",
     "noPromptPresetOnly": "Sem mensagem, apenas predefinição",
     "noThreads": "Ainda não há conversas",
     "officeCitationUnavailable": "Esta citação não está mais disponível.",
@@ -1200,6 +1202,12 @@
     "richContentLoading": "Carregando conteúdo interativo…",
     "richContentTitle": "Conteúdo interativo",
     "richContentUnavailable": "Não é possível exibir este conteúdo com segurança.",
+    "selection": {
+      "askInNewChat": "Perguntar em um novo chat",
+      "quoteInReply": "Citar na resposta",
+      "quotedText": "“{quote}”",
+      "toolbarLabel": "Texto selecionado"
+    },
     "sendError": "Ocorreu um problema ao enviar sua mensagem. Entre em contato com o suporte se o erro persistir.",
     "sendErrorAnonymizationBlocked": "A stella não conseguiu anonimizar um anexo, então nada foi enviado. Remova o arquivo ou envie esta mensagem sem anonimização.",
     "sendErrorEmptyCompletion": "A IA retornou uma resposta vazia. Tente novamente ou reformule sua mensagem.",

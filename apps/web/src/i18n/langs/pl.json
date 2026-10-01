@@ -1094,6 +1094,7 @@
     "focusSuggestion": "Ustaw fokus na sugestii: {topic}",
     "folioCitationFallback": "s. {n}",
     "forkFromHere": "Utwórz stąd nowy czat",
+    "forkInSidePanel": "Utwórz stąd nowy czat w panelu bocznym",
     "forkedFrom": "Utworzono na podstawie <bdi>{title}</bdi>",
     "forkedFromUnavailable": "Utworzono na podstawie czatu, który nie jest już dostępny",
     "forkedThread": "Z innego czatu",
@@ -1153,6 +1154,7 @@
       "viaProvider": "przez {provider}"
     },
     "newChat": "Nowy czat",
+    "newChatInSidePanel": "Nowy czat jest dostępny w panelu bocznym",
     "noPromptPresetOnly": "Brak wiadomości, tylko ustawienie wstępne",
     "noThreads": "Brak rozmów",
     "officeCitationUnavailable": "To cytowanie nie jest już dostępne.",
@@ -1200,6 +1202,12 @@
     "richContentLoading": "Wczytywanie interaktywnej treści…",
     "richContentTitle": "Treść interaktywna",
     "richContentUnavailable": "Nie można bezpiecznie wyświetlić tej treści.",
+    "selection": {
+      "askInNewChat": "Zapytaj w nowym czacie",
+      "quoteInReply": "Zacytuj w odpowiedzi",
+      "quotedText": "„{quote}”",
+      "toolbarLabel": "Zaznaczony tekst"
+    },
     "sendError": "Wystąpił problem podczas wysyłania wiadomości. Jeśli błąd będzie się powtarzał, skontaktuj się z pomocą techniczną.",
     "sendErrorAnonymizationBlocked": "stella nie mogła zanonimizować jednego załącznika, więc nic nie wysłano. Usuń plik albo wyślij tę wiadomość bez anonimizacji.",
     "sendErrorEmptyCompletion": "AI zwróciła pustą odpowiedź. Spróbuj ponownie lub przeformułuj wiadomość.",
