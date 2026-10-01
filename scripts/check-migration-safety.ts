@@ -1573,8 +1573,13 @@ const resolveExecutedSql = ({
     // Only literal format arguments can prove the target. Variables and
     // expressions must not masquerade as constant identifiers.
     const argumentShape = tail;
-    let unresolvedArgument = false;
     if (/^\s*(?:,\s*(?:E?'(?:[^']|'')*')\s*)*\)\s*$/iu.test(argumentShape)) {
+      // Each %I/%s consumes the next literal argument; more placeholders than
+      // arguments leaves the target unknown.
+      const placeholders = [...first.value.matchAll(/%%|%[Is]/gu)].filter(
+        ([match]) => match !== "%%",
+      ).length;
+      const unresolvedArgument = placeholders > literals.length - 1;
       let argument = 1;
       sql = first.value.replace(
         /%%|%([Is])/gu,
@@ -1584,7 +1589,6 @@ const resolveExecutedSql = ({
           }
           const value = literals[argument++]?.value;
           if (value === undefined) {
-            unresolvedArgument = true;
             return "%";
           }
           return kind === "I" ? `"${value.replaceAll('"', '""')}"` : value;
