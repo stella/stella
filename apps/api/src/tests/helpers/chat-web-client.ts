@@ -101,6 +101,8 @@ type WebChatModules = {
     onError: (error: Error) => void;
     onFinish: () => void;
     reloadThread: () => void;
+    scheduleEmit: (callback: () => void) => () => void;
+    stopSettlePollMs: number;
   }) => WebChatRuntime;
   resetChatRequestStateForTests: () => void;
   sanitizeRunningToolCalls: (messages: readonly UIMessage[]) => UIMessage[];
@@ -334,6 +336,13 @@ export const createWebChatClient = async ({
         errors.push(error);
       },
       onFinish: () => undefined,
+      // These conversations prove state parity; scheduling intervals are
+      // covered by the web runtime's emit and Stop tests.
+      scheduleEmit: (callback) => {
+        const timeout = setTimeout(callback, 0);
+        return () => clearTimeout(timeout);
+      },
+      stopSettlePollMs: 1,
       reloadThread: () => {
         reloading = (async () => {
           runtime = createRuntime(await reload());

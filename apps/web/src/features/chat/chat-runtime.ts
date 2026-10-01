@@ -196,6 +196,8 @@ type CreateChatRuntimeProps = {
   /** When subscribers hear about messages that changed while a response
    *  streams. Defaults to `STREAM_EMIT_INTERVAL_MS` later. */
   scheduleEmit?: ChatEmitScheduler | undefined;
+  /** Delay between checks while the server is settling an accepted Stop. */
+  stopSettlePollMs?: number | undefined;
 };
 
 type ActiveToolResultOperation = {
@@ -297,6 +299,7 @@ export const createChatRuntime = ({
   onFinish,
   reloadThread,
   scheduleEmit = scheduleStreamEmit,
+  stopSettlePollMs = STOP_SETTLE_POLL_MS,
 }: CreateChatRuntimeProps): ChatRuntime => {
   const listeners = new Set<() => void>();
   let activeToolResultOperation: ActiveToolResultOperation | undefined;
@@ -736,7 +739,7 @@ export const createChatRuntime = ({
       attempt < STOP_SETTLE_POLL_ATTEMPTS;
       attempt += 1
     ) {
-      await waitMs(STOP_SETTLE_POLL_MS);
+      await waitMs(stopSettlePollMs);
       answer = await requestChatTurnStop({
         threadId: key.threadId,
         turnId: stoppedTurn,
