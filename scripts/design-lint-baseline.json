@@ -610,7 +610,6 @@
     "packages/cli/src/registry-trust.ts": 1,
     "packages/scripts/src/model-catalog-capabilities-gen.ts": 1,
     "packages/scripts/src/property-timeout-convention.ts": 1,
-    "packages/ui/src/kanban/virtual-cell.tsx": 1,
     "scripts/check-marketing-content.ts": 1,
     "scripts/check-migration-safety.ts": 1,
     "scripts/ratchet.ts": 2,
