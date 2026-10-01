@@ -25,7 +25,7 @@ on:
 # PR runs supersede their predecessors. Manual runs supersede only older
 # manual runs on the same branch; merge-group runs remain isolated.
 concurrency:
-  group: &ci_concurrency_group ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number || github.ref) || github.event_name == 'workflow_dispatch' && format('ci-dispatch-{0}', github.ref) || format('run-{0}', github.run_id) }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number || github.ref) || github.event_name == 'workflow_dispatch' && format('ci-dispatch-{0}', github.ref) || format('run-{0}', github.run_id) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' }}
 
 permissions: {}
@@ -522,7 +522,7 @@ jobs:
   # hosted runner. Same-repository branches run immediately; forks wait for
   # the repository's Actions approval gate.
   agent-sandbox-docker:
-    name: &agent_sandbox_job_name Agent sandbox Docker isolation and lifecycle
+    name: Agent sandbox Docker isolation and lifecycle
     needs: ci-plan
     if: >-
       (needs.ci-plan.outputs.trusted == 'true'
@@ -3255,7 +3255,7 @@ jobs:
   # platforms: arm64 on a pull request, every released architecture at full
   # depth or on a version change.
   api-image-smoke:
-    name: &api_image_job_name API release image (${{ matrix.platform }})
+    name: API release image (${{ matrix.platform }})
     needs: ci-plan
     if: >-
       (needs.ci-plan.outputs.trusted == 'true'
@@ -3514,7 +3514,7 @@ jobs:
   # so Windows runs theirs. macOS executes the test suite.
   # Both are standard GitHub-hosted runners, free for public repositories.
   desktop-clippy:
-    name: &desktop_job_name Desktop Rust (${{ matrix.os }})
+    name: Desktop Rust (${{ matrix.os }})
     needs: ci-plan
     if: >-
       (needs.ci-plan.outputs.trusted == 'true'
@@ -3685,10 +3685,6 @@ jobs:
       - name: Evaluate CI outcome
         env:
           EVENT: ${{ github.event_name }}
-          CONCURRENCY_GROUP: *ci_concurrency_group
-          CANCEL_JOB_NAME_agent_sandbox_docker: *agent_sandbox_job_name
-          CANCEL_JOB_NAME_api_image_smoke: *api_image_job_name
-          CANCEL_JOB_NAME_desktop_clippy: *desktop_job_name
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
@@ -3737,34 +3733,42 @@ jobs:
           FAST_REQUIRED: >-
             ["api-image-smoke", "parser-version-guard", "web-image-smoke"]
         run: |
-          echo "PROOF_SIGNAL=check-run-annotations"
+          echo "PROOF_SIGNAL=newer-run-and-no-timeout"
           echo "PROOF_RUN_ID=$GITHUB_RUN_ID"
-          echo "PROOF_CONCURRENCY_GROUP=$CONCURRENCY_GROUP"
-          # A matrix need covers several jobs. Every cancelled leg must carry
-          # this run's concurrency annotation; timeouts and unknown causes fail closed.
+          echo "PROOF_REF=$GITHUB_REF"
+          # Queued jobs may have no concurrency annotation. A newer run in
+          # the same workflow/group proves supersession, unless any cancelled
+          # job timed out. Every API lookup fails closed.
           cancelled_dependencies_were_superseded() {
-            local jobs need name_key display urls url annotations expected
+            local current workflow created runs jobs urls url annotations
+            current=$(gh api "repos/$REPO/actions/runs/$GITHUB_RUN_ID") || return 1
+            workflow=$(jq -er '.workflow_id | select(type == "number")' <<< "$current") || return 1
+            created=$(jq -er '.created_at | select(type == "string" and length > 0) | @uri' <<< "$current") || return 1
+            runs=$(gh api --paginate --slurp "repos/$REPO/actions/workflows/$workflow/runs?event=$EVENT&created=%3E%3D$created&per_page=100") || return 1
+            jq -e --argjson current "$current" --arg event "$EVENT" --arg pr "$PR_NUMBER" '
+              any(.[].workflow_runs[];
+                .workflow_id == $current.workflow_id and .name == $current.name and .event == $event
+                and .id > $current.id and .run_number > $current.run_number
+                and .created_at >= $current.created_at
+                and (if $event == "workflow_dispatch" then .head_branch == $current.head_branch
+                  elif $event == "pull_request" then any(.pull_requests[]; (.number | tostring) == $pr)
+                  else false end))
+              ' <<< "$runs" > /dev/null || return 1
             jobs=$(gh api --paginate --slurp "repos/$REPO/actions/runs/$GITHUB_RUN_ID/jobs?filter=latest&per_page=100") || return 1
-            expected="Canceling since a higher priority waiting request for $CONCURRENCY_GROUP exists"
-            while IFS= read -r need; do
-              name_key="CANCEL_JOB_NAME_${need//-/_}"
-              display="${!name_key:-$need}"
-              # Matrix expressions in a name alias are empty in ci-result.
-              display="${display% \(\)}"
-              urls=$(jq -er --arg name "$display" '
-                [.[].jobs[] | select(.name == $name or (.name | startswith($name + " (")))
-                  | select(.conclusion == "cancelled") | .check_run_url]
-                | if length > 0 then .[] else error("Cancelled dependency has no cancelled jobs") end' <<< "$jobs") || return 1
-              while IFS= read -r url; do
-                [[ "$url" == "https://api.github.com/repos/$REPO/check-runs/"* ]] || return 1
-                annotations=$(gh api --paginate --slurp "$url/annotations?per_page=100") || return 1
-                jq -e --arg expected "$expected" '
-                  flatten
-                  | any(.[]; .message == $expected)
-                    and (any(.[]; (.message // "") | contains("has exceeded the maximum execution time")) | not)
-                  ' <<< "$annotations" > /dev/null || return 1
-              done <<< "$urls"
-            done < <(jq -r 'to_entries[] | select(.value.result == "cancelled") | .key' <<< "$NEEDS")
+            urls=$(jq -er '
+              [.[].jobs[] | select(.conclusion == "cancelled")]
+              | if length == 0 then error("Cancelled run has no cancelled jobs")
+                else [.[] | .check_run_url | select(. != null)] | join("\n") end
+              ' <<< "$jobs") || return 1
+            while IFS= read -r url; do
+              [[ -n "$url" ]] || continue
+              [[ "$url" == "https://api.github.com/repos/$REPO/check-runs/"* ]] || return 1
+              annotations=$(gh api --paginate --slurp "$url/annotations?per_page=100") || return 1
+              jq -e '
+                flatten
+                | any(.[]; (.message // "") | contains("has exceeded the maximum execution time")) | not
+                ' <<< "$annotations" > /dev/null || return 1
+            done <<< "$urls"
           }
 
           # The plan skips a draft pull request, and every job with it. The
@@ -3827,7 +3831,7 @@ jobs:
             fast)
               # Only an unlabelled pull request or a manual run plans `fast`:
               # its heavy suites skip by design. A cancelled dependency can
-              # also mean a timeout; require per-job concurrency annotations.
+              # also mean a timeout; verify a newer run and reject timeout annotations.
               if [[ "$EVENT" == "merge_group" ]]; then
                 echo "::error::$EVENT run planned suite depth 'fast'; the heavy suites must run."
                 exit 1
