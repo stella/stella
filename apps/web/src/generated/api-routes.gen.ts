@@ -2699,6 +2699,7 @@ export type WebRoutes = {
           response: {
             200: {
               presignedUrl: string;
+              name: string;
               origin: {
                 type: "authored";
               } | {
@@ -2710,7 +2711,6 @@ export type WebRoutes = {
                 license: string;
                 authors: Array<T8f22b22b9e>;
               };
-              name: string;
               tags: T51e1843fb9;
               id: Td4824cf25d;
               createdAt: string;
@@ -6177,10 +6177,10 @@ export type WebRoutes = {
       ":workspaceId": {
         patch: {
           body: {
+            name?: string;
             status?: string;
             location?: string | null;
             priority?: string;
-            name?: string;
             listItemType?: string;
             dueDate?: string | null;
             startAt?: string | null;
@@ -6328,10 +6328,10 @@ export type WebRoutes = {
                 flowReview: {
                   runId: T2e29c5e55f;
                 } | null;
+                name: string;
                 status: Tbe0400fa4c;
                 location: Tbe0400fa4c;
                 priority: Tbe0400fa4c;
-                name: string;
                 kind: T334757ea46;
                 metadata: {
                   url: string;
@@ -6377,10 +6377,10 @@ export type WebRoutes = {
                 } | null;
                 readOnly: Tfddd645dc8;
                 children: Array<{
+                  name: string;
                   status: Tbe0400fa4c;
                   location: Tbe0400fa4c;
                   priority: Tbe0400fa4c;
-                  name: string;
                   id: Tf742ada503;
                   createdAt: string;
                   listItemType: Tcdfc93c4d1;
@@ -22917,8 +22917,8 @@ export type WebRoutes = {
       post: {
         body: {
           command?: string;
-          body: string;
           name: string;
+          body: string;
           description: string;
           scope: T7906e8b72f;
         };
@@ -23234,8 +23234,8 @@ export type WebRoutes = {
       ":skillId": {
         patch: {
           body: {
-            body?: string;
             name?: string;
+            body?: string;
             description?: string;
             version?: string | null;
             enabled?: false | true;
@@ -24742,8 +24742,8 @@ export type WebRoutes = {
       ":workspaceId": {
         patch: {
           body: {
-            status?: string;
             name?: string;
+            status?: string;
             description?: string | null;
             id: T5ed75bc2cc;
           };
@@ -27757,8 +27757,8 @@ export type WebRoutes = {
             body: {
               locale?: string;
               existingFolders?: Array<{
-                path: string;
                 name: string;
+                path: string;
                 entityId: Tf742ada503;
               }>;
               userInstructions?: string;
@@ -29757,8 +29757,8 @@ export type WebRoutes = {
           headers: Record<never, never>;
           response: {
             200: {
-              status: T453834ba82;
               name: string;
+              status: T453834ba82;
               reference: string;
               id: T9e07a7d6cd;
               lastActivityAt: string;
