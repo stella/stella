@@ -785,3 +785,148 @@ describe("high-volume index-build migration rule", () => {
     );
   });
 });
+
+describe("indexes built by ALTER TABLE ADD constraints", () => {
+  it("keeps a minimal blocked build and allowed attachment fixture", () => {
+    expect(check(source(readSqlFixture("add-constraint/bad.sql")))).toEqual([
+      { file: "migration.sql", line: 1, ruleId: RULE_ID },
+    ]);
+    expect(check(source(readSqlFixture("add-constraint/good.sql")))).toEqual(
+      [],
+    );
+  });
+
+  it("recognizes mixed-case keywords and an unquoted relation", () => {
+    expect(
+      check(
+        source("aLtEr TaBlE IF EXISTS CaSe_LaW_DeCiSiOnS aDd UNIQUE (id);"),
+      ),
+    ).toHaveLength(1);
+  });
+
+  const additions = [
+    "ADD PRIMARY KEY (id)",
+    "ADD UNIQUE (id)",
+    "ADD UNIQUE NULLS NOT DISTINCT (id)",
+    "ADD EXCLUDE USING gist (id WITH =)",
+    'ADD CONSTRAINT "key" PRIMARY KEY (id)',
+    'ADD CONSTRAINT "key" UNIQUE (id)',
+    'ADD CONSTRAINT "key" EXCLUDE USING gist (id WITH =)',
+    "ADD COLUMN external_id integer UNIQUE",
+    "ADD COLUMN IF NOT EXISTS external_id integer PRIMARY KEY",
+    'ADD COLUMN "external_id" integer CONSTRAINT "key" UNIQUE',
+    "ADD COLUMN external_id integer DEFAULT (coalesce(1, 2)) UNIQUE",
+    "ADD COLUMN title text, ADD CONSTRAINT key UNIQUE (id)",
+    "ADD CHECK (id IN (1, 2)), ADD UNIQUE (id)",
+    "ADD CONSTRAINT attached UNIQUE USING INDEX ready, ADD UNIQUE (id)",
+    "ADD UNIQUE (id), ADD CONSTRAINT attached UNIQUE USING INDEX ready",
+  ];
+  it("blocks builds across constraint forms, table headers and size classes", () => {
+    for (const addition of additions) {
+      for (const header of ["", "ONLY ", "IF EXISTS ONLY "]) {
+        for (const table of HIGH_VOLUME_TABLES) {
+          const sql = `ALTER TABLE ${header}public."${table}" ${addition};`;
+          expect(check(source(sql))).toHaveLength(1);
+          expect(check(source(sql.replace(table, "documents")))).toEqual([]);
+          expect(
+            check(source(`CREATE TABLE public."${table}" (id int); ${sql}`)),
+          ).toEqual([]);
+        }
+      }
+    }
+  });
+
+  it.each([
+    "ADD PRIMARY KEY USING INDEX ready",
+    "ADD CONSTRAINT key UNIQUE USING INDEX ready",
+    "ADD CONSTRAINT key PRIMARY KEY USING INDEX ready",
+    'ADD CONSTRAINT "key" UNIQUE USING INDEX "ready"',
+    "ADD COLUMN title text DEFAULT 'UNIQUE PRIMARY KEY EXCLUDE'",
+    'ADD COLUMN "unique" text',
+    "ADD CHECK (id > 0)",
+    "ADD CONSTRAINT fk FOREIGN KEY (id) REFERENCES documents (id)",
+    "ALTER COLUMN title SET DEFAULT 'ADD UNIQUE'",
+    "DROP CONSTRAINT key",
+  ])("permits an ALTER action that builds no index: %s", (addition) => {
+    expect(
+      check(source(`ALTER TABLE case_law_decisions ${addition};`)),
+    ).toEqual([]);
+  });
+
+  it("preserves named constraint ownership for later reindexing", () => {
+    for (const constraint of [
+      "UNIQUE (id)",
+      "PRIMARY KEY (id)",
+      "EXCLUDE USING gist (id WITH =)",
+    ]) {
+      expect(
+        check(
+          source(
+            `ALTER TABLE documents ADD CONSTRAINT key ${constraint}; REINDEX INDEX key;`,
+          ),
+        ),
+      ).toEqual([]);
+      expect(
+        check(
+          source(
+            `ALTER TABLE case_law_decisions ADD CONSTRAINT key ${constraint}; REINDEX INDEX key;`,
+          ),
+        ),
+      ).toHaveLength(2);
+    }
+  });
+
+  it("ignores deferred and masked ADDs while scanning executable bodies", () => {
+    const sql = "ALTER TABLE case_law_decisions ADD UNIQUE (id);";
+    expect(
+      check(
+        source(
+          `-- ${sql}\nSELECT '${sql}'; CREATE FUNCTION later() RETURNS void LANGUAGE plpgsql AS $$ BEGIN ${sql} END $$;`,
+        ),
+      ),
+    ).toEqual([]);
+    expect(check(source(`DO $$ BEGIN ${sql} END $$;`))).toHaveLength(1);
+    expect(check(source(`DO $$ BEGIN EXECUTE '${sql}'; END $$;`))).toHaveLength(
+      1,
+    );
+    expect(
+      check(
+        source(
+          "DO $$ BEGIN EXECUTE format('ALTER TABLE %I ADD UNIQUE (id)', target); END $$;",
+        ),
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("keeps renamed high-volume tables subject to ADD checks", () => {
+    expect(
+      check(
+        source(
+          "ALTER TABLE case_law_decisions RENAME TO renamed; ALTER TABLE renamed ADD UNIQUE (id);",
+        ),
+      ),
+    ).toHaveLength(1);
+  });
+});
+
+describe("uppercase hexadecimal digits in executable E strings", () => {
+  it.each(["N", String.raw`\x4E`, String.raw`\u004E`, String.raw`\U0000004E`])(
+    "decodes %s before checking index builds",
+    (escapedN) => {
+      expect(
+        check(
+          source(
+            `DO E'BEGIN CREATE I${escapedN}DEX idx ON case_law_decisions (id); END';`,
+          ),
+        ),
+      ).toHaveLength(1);
+      expect(
+        check(
+          source(
+            `DO E'BEGIN CREATE I${escapedN}DEX idx ON documents (id); END';`,
+          ),
+        ),
+      ).toEqual([]);
+    },
+  );
+});

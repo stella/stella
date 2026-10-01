@@ -839,7 +839,7 @@ const consumeSingleQuotedCharacter = ({
 // PostgreSQL E strings support escaped characters and numeric byte/codepoint forms.
 const decodeEscapeString = (value: string): string =>
   value.replace(
-    /\\(U[0-9a-f]{8}|u[0-9a-f]{4}|x[0-9a-f]{1,2}|[0-7]{1,3}|[\s\S])/gu,
+    /\\(U[0-9a-fA-F]{8}|u[0-9a-fA-F]{4}|x[0-9a-fA-F]{1,2}|[0-7]{1,3}|[\s\S])/gu,
     (_match, escape: string) => {
       if (/^[Uux]/u.test(escape)) {
         return String.fromCodePoint(Number.parseInt(escape.slice(1), 16));
@@ -876,6 +876,9 @@ type QuotedBodyOptions = {
   enclosingLine: number;
 };
 
+const INDEX_BUILD_HINT_PATTERN =
+  /\b(?:CREATE\s+(?:UNIQUE\s+)?INDEX|REINDEX|ALTER\s+TABLE[\s\S]*?\bADD\b[\s\S]*?\b(?:PRIMARY\s+KEY|UNIQUE|EXCLUDE))\b/iu;
+
 const surfaceQuotedBody = ({
   prefix,
   body,
@@ -891,10 +894,9 @@ const surfaceQuotedBody = ({
   const literalFragments = bodyStatements.flatMap(({ literals }) =>
     literals.map(({ value }) => value),
   );
-  const executableIndexHint =
-    /\b(?:CREATE\s+(?:UNIQUE\s+)?INDEX|REINDEX)\b/iu.test(
-      literalFragments.join(" "),
-    );
+  const executableIndexHint = INDEX_BUILD_HINT_PATTERN.test(
+    literalFragments.join(" "),
+  );
   return bodyStatements.map((statement) => {
     statement.line += startLine - 1;
     statement.enclosingLine = enclosingLine;
@@ -1158,10 +1160,10 @@ const indexTokens = (statement: Statement): IndexToken[] => {
     index,
   }));
   for (const match of statement.text.matchAll(
-    /[A-Za-z_][A-Za-z0-9_$]*|[().]/gu,
+    /[A-Za-z_][A-Za-z0-9_$]*|[(),]/gu,
   )) {
     tokens.push({
-      kind: /^[().]$/u.test(match[0]) ? "punctuation" : "word",
+      kind: /^[(),]$/u.test(match[0]) ? "punctuation" : "word",
       value: match[0].toLowerCase(),
       index: match.index,
     });
@@ -1329,6 +1331,128 @@ const migrationReindexOperation = (
   };
 };
 
+// Commas inside expressions or index options do not delimit ALTER actions.
+const splitAlterActions = (tokens: IndexToken[]): IndexToken[][] => {
+  const actions: IndexToken[][] = [];
+  let action: IndexToken[] = [];
+  let depth = 0;
+  for (const token of tokens) {
+    if (token.value === "(") {
+      depth++;
+    }
+    if (token.value === ")") {
+      depth--;
+    }
+    if (token.value === "," && depth === 0) {
+      actions.push(action);
+      action = [];
+      continue;
+    }
+    action.push(token);
+  }
+  actions.push(action);
+  return actions;
+};
+
+const topLevelAlterTokens = (tokens: IndexToken[]): IndexToken[] => {
+  let depth = 0;
+  return tokens.filter((token) => {
+    if (token.value === "(") {
+      depth++;
+      return false;
+    }
+    if (token.value === ")") {
+      depth--;
+      return false;
+    }
+    return depth === 0;
+  });
+};
+
+const namedConstraintIndex = (
+  name: string,
+  table: IndexRelation,
+): IndexRelation => ({
+  schema: table.schema,
+  name,
+  key: JSON.stringify([table.schema, name]),
+  qualified: true,
+});
+
+const isIndexConstraint = (tokens: IndexToken[], position: number): boolean =>
+  isIndexKeyword(tokens[position], "unique") ||
+  isIndexKeyword(tokens[position], "exclude") ||
+  (isIndexKeyword(tokens[position], "primary") &&
+    isIndexKeyword(tokens[position + 1], "key"));
+
+const addedConstraintIndexes = (
+  action: IndexToken[],
+  table: IndexRelation,
+): MigrationIndexOperation[] => {
+  if (!isIndexKeyword(action[0], "add")) {
+    return [];
+  }
+  const tokens = topLevelAlterTokens(action);
+  const operations: MigrationIndexOperation[] = [];
+  let constraint: IndexRelation | undefined;
+  for (let position = 1; position < tokens.length; position++) {
+    if (isIndexKeyword(tokens[position], "constraint")) {
+      const name = readIndexRelation(tokens, position + 1);
+      constraint = name
+        ? namedConstraintIndex(name.relation.name, table)
+        : undefined;
+      position = (name?.next ?? position + 2) - 1;
+      continue;
+    }
+    if (!isIndexConstraint(tokens, position)) {
+      continue;
+    }
+    // Attaching an existing online-built index does not build another one.
+    const attached = tokens
+      .slice(position + 1)
+      .some(
+        (candidate, offset, tail) =>
+          isIndexKeyword(candidate, "using") &&
+          isIndexKeyword(tail[offset + 1], "index"),
+      );
+    if (!attached) {
+      operations.push({
+        type: "create-index",
+        table,
+        ...(constraint ? { index: constraint } : {}),
+      });
+    }
+    constraint = undefined;
+  }
+  return operations;
+};
+
+const migrationAlterIndexOperations = (
+  tokens: IndexToken[],
+  position: number,
+): MigrationIndexOperation[] => {
+  if (
+    !isIndexKeyword(tokens[position], "alter") ||
+    !isIndexKeyword(tokens[position + 1], "table")
+  ) {
+    return [];
+  }
+  let cursor = position + 2;
+  if (isIndexKeyword(tokens[cursor], "if")) {
+    cursor += 2;
+  }
+  if (isIndexKeyword(tokens[cursor], "only")) {
+    cursor++;
+  }
+  const table = readIndexRelation(tokens, cursor);
+  if (!table) {
+    return [];
+  }
+  return splitAlterActions(tokens.slice(table.next)).flatMap((action) =>
+    addedConstraintIndexes(action, table.relation),
+  );
+};
+
 const migrationIndexOperations = (
   statement: Statement,
 ): MigrationIndexOperation[] => {
@@ -1344,6 +1468,7 @@ const migrationIndexOperations = (
       operations.push(lifecycle);
       continue;
     }
+    operations.push(...migrationAlterIndexOperations(tokens, position));
     const reindex = migrationReindexOperation(tokens, position);
     if (reindex) {
       operations.push(reindex);
@@ -1547,7 +1672,7 @@ const dynamicIndexOperations = (
         }
       } else if (
         statement.executableIndexHint ||
-        /\b(?:CREATE\s+(?:UNIQUE\s+)?INDEX|REINDEX)\b/iu.test(
+        INDEX_BUILD_HINT_PATTERN.test(
           literals.map(({ value }) => value).join(" "),
         )
       ) {
