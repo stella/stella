@@ -2,6 +2,8 @@ import { panic, Result } from "better-result";
 import { type BunRedisRawClient, createBunRedisClient } from "bullmq";
 import { type RedisOptions, RedisClient, sleep } from "bun";
 
+import { redisConnectionConfig } from "@stll/redis-config";
+
 import { envBase } from "@/api/env-base";
 import { RedisClientClosedError } from "@/api/lib/errors/tagged-errors";
 import { connectionErrorFields } from "@/api/lib/errors/utils";
@@ -48,7 +50,7 @@ const configuredRedisUrl = (): string =>
  * a bounded ladder is what closes a long-lived client for good, so it is set
  * once here rather than left open to a per-call-site override.
  */
-export type RedisClientOverrides = Omit<RedisOptions, "maxRetries">;
+export type RedisClientOverrides = Omit<RedisOptions, "maxRetries" | "tls">;
 
 /**
  * The options every client here is constructed with. A named value rather
@@ -68,8 +70,8 @@ export const redisClientOptions = (
   // fail-fast semantics during an outage says so explicitly and bounds its own
   // commands, which is also what keeps the unbounded reconnect ladder above
   // from turning a queue into an outage-long backlog.
-  ...redisConnectionOptions(url),
   ...overrides,
+  ...redisConnectionOptions({ url }),
   maxRetries: RECONNECT_ATTEMPT_LIMIT,
 });
 
@@ -95,7 +97,10 @@ class ConfiguredRedisClient
   readonly url: string;
 
   constructor(url: string, overrides?: RedisClientOverrides) {
-    super(url, redisClientOptions(url, overrides));
+    const config = redisConnectionConfig({ url, settings: envBase }).unwrap(
+      "Redis connection configuration must be valid.",
+    );
+    super(config.url, redisClientOptions(url, overrides));
     this.url = url;
     // Register one owned dispatcher on each of Bun's native `onconnect` /
     // `onclose` setters, so a pub/sub subscriber can observe reconnects and a
