@@ -1,3 +1,4 @@
+// parser-output-unchanged: Validation rejects invalid publisher responses without transforming parsed decision content.
 import { Result } from "better-result";
 import * as cheerio from "cheerio";
 import { parseXmlDocument } from "slimdom";

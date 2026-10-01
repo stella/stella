@@ -137,6 +137,7 @@ const swallowedBody = (node: unknown): boolean => {
       isAstNode(statement) &&
       (statement.type === "EmptyStatement" ||
         statement.type === "ContinueStatement" ||
+        statement.type === "BreakStatement" ||
         (statement.type === "ReturnStatement" &&
           (statement.argument === null ||
             constantFallback(statement.argument)))),

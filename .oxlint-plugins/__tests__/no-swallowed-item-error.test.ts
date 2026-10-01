@@ -24,6 +24,18 @@ describe.serial("item errors remain observable", () => {
     ).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
   });
 
+  test("rejects unlabeled and labeled breaks that discard item failures", async () => {
+    expect(
+      await lintSingleRule(
+        RULE,
+        [
+          "for (const item of items) { try { build(item); } catch { break; } }",
+          "outer: for (const item of items) { try { build(item); } catch { break outer; } }",
+        ].join("\n"),
+      ),
+    ).toEqual([1, 2]);
+  });
+
   test("permits propagation, typed records and independently scoped parsing", async () => {
     expect(
       await lintSingleRule(

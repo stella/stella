@@ -1,3 +1,4 @@
+// parser-output-unchanged: Existing decision and supplement branches retain their output; the new failure branch and page counters only expose item failures.
 /**
  * Shared pagination helpers for case-law adapters.
  *

@@ -1041,6 +1041,43 @@ describe("the crawl keeps a refused row as its listing", () => {
     expect(page.unwrap().nextCursor).toBe("2025-06-12:0");
   });
 
+  test("a day of unkeyable rows counts failures without empty-day gap skipping", async () => {
+    const item = await itemByDocket(MINISTRY_LISTING, MINISTRY_DOCKET);
+    expect(
+      assembleCzRegionalDecision({ item, document: null, chain: null }).type,
+    ).toBe("unkeyable");
+    globalThis.fetch = asFetchMock(
+      async () =>
+        new Response(JSON.stringify({ items: [item], totalPages: 1 })),
+    );
+
+    const page = (
+      await czRegionalAdapter.fetchPage("2025-06-11:0:30", {})
+    ).unwrap();
+    expect(page.decisions).toHaveLength(0);
+    expect(page.itemBuildFailures).toEqual({
+      type: "item_build_failed",
+      count: 1,
+    });
+    expect(page.nextCursor).toBe("2025-06-12:0");
+  });
+
+  test("a document with no court counts as an item failure on a populated day", async () => {
+    const page = (
+      await crawlDay({
+        cursor: "2025-06-11:0:30",
+        withAppellate: false,
+        districtMetadata: { courtCode: "NONE" },
+      })
+    ).unwrap();
+    expect(page.decisions).toHaveLength(0);
+    expect(page.itemBuildFailures).toEqual({
+      type: "item_build_failed",
+      count: 1,
+    });
+    expect(page.nextCursor).toBe("2025-06-12:0");
+  });
+
   test("an assembly failure other than a refusal halts the page", async () => {
     // The first serialization of the district listing row fails as a defect
     // would; a listing-only fallback would serialize it again and succeed.

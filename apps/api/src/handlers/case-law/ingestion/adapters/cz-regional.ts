@@ -2104,15 +2104,28 @@ export const czRegionalAdapter = defineSourceAdapter({
         // their documents, and the cursor moves on.
         const decisions: IngestionResult[] = [];
         let deferred = 0;
+        const recordUnkeyableRow = (item: CzRegionalApiItem): void => {
+          refused += 1;
+          observeItemBuildFailure(
+            new AdapterFetchError({
+              adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+              cursor,
+              message: "Listing row has no decision identity",
+            }),
+            item.jednaciCislo ?? undefined,
+          );
+        };
         const pushListingRow = (item: CzRegionalApiItem): void => {
           const listed = assembleCzRegionalDecision({
             item,
             document: null,
             chain: null,
           });
-          if (listed.type !== "unkeyable") {
-            decisions.push(listed.decision);
+          if (listed.type === "unkeyable") {
+            recordUnkeyableRow(item);
+            return;
           }
+          decisions.push(listed.decision);
         };
         for (let i = 0; i < items.length; i += FINALDOC_CONCURRENCY) {
           const batch = items.slice(i, i + FINALDOC_CONCURRENCY);
@@ -2181,9 +2194,11 @@ export const czRegionalAdapter = defineSourceAdapter({
             // A crawl keeps a listed row whose document did not answer: the
             // observation is durable and `isListingOnly` keeps the document
             // in what a later reconciliation asks for again.
-            if (outcome.type !== "unkeyable") {
-              decisions.push(outcome.decision);
+            if (outcome.type === "unkeyable") {
+              recordUnkeyableRow(item);
+              continue;
             }
+            decisions.push(outcome.decision);
           }
         }
         if (deferred > 0) {
@@ -2212,7 +2227,7 @@ export const czRegionalAdapter = defineSourceAdapter({
           nextCursor: nextCzRegionalListingCursor({
             state,
             totalPages: json.totalPages ?? 1,
-            hasResults: decisions.length > 0 || refused > 0,
+            hasResults: json.items.length > 0,
           }),
         };
       },
