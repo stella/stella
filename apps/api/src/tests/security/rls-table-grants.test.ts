@@ -170,6 +170,9 @@ const POST_BOOTSTRAP_SCOPED_HANDOFF_TABLES = new Set([
 const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   // Maintenance checkpoints belong to the database owner, never request roles.
   "database_backfill_states",
+  "case_law_replay_batches",
+  "case_law_replay_blocked",
+  "case_law_replay_daily_rows",
   "action_cost_records",
   "action_cost_calls",
   // Search backfill retries are ingestion control state, not request data.

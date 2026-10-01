@@ -1,6 +1,6 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 /**
- * The only two doors through which an operator script reaches the case-law
+ * The write and read-only doors through which a script reaches the case-law
  * tables.
  *
  * Two passes that each behave on their own can still deadlock together: a
@@ -11,10 +11,11 @@ import { panic } from "better-result";
  * its first statement, and a second pass waits at the door instead of
  * interleaving.
  *
- * A script does not import a database handle; it asks one of these two
- * functions for one, so there is no third way to reach the tables:
+ * A script does not import a database handle; it asks one of these
+ * functions for one, so every writing pass holds the lane:
  *
- * - `enterCaseLawMaintenanceLane()` holds the lane and hands out the
+ * - `enterCaseLawMaintenanceLane()` waits for the lane;
+ *   `tryEnterCaseLawMaintenanceLane()` yields if held. Both hand out the
  *   write-capable handles.
  * - `openCaseLawReadOnlySession()` hands out handles whose every transaction
  *   is `READ ONLY`. A helper that writes through one fails with SQLSTATE
@@ -140,11 +141,18 @@ const openLaneConnection = async (): Promise<MaintenanceLaneSql> => {
  * lane. `execute` outside a transaction runs inside one, so there is no path
  * around the lane.
  */
-const laneRootHandle = (rootDb: typeof rootDatabase): CaseLawRootHandle => {
+const laneRootHandle = (
+  rootDb: typeof rootDatabase,
+  laneWaitMs?: number,
+): CaseLawRootHandle => {
   const transaction = async <T>(
     fn: (tx: Transaction) => Promise<T>,
   ): Promise<T> =>
-    await runUnderCorpusSchemaLane({ database: rootDb, work: fn });
+    await runUnderCorpusSchemaLane({
+      database: rootDb,
+      work: fn,
+      ...(laneWaitMs === undefined ? {} : { laneWaitMs }),
+    });
   return {
     transaction,
     execute: async <TRow extends Record<string, unknown>>(
@@ -153,12 +161,17 @@ const laneRootHandle = (rootDb: typeof rootDatabase): CaseLawRootHandle => {
   };
 };
 
-const loadWriteHandles = async (): Promise<CaseLawWriteHandles> => {
+const loadWriteHandles = async (
+  laneWaitMs?: number,
+): Promise<CaseLawWriteHandles> => {
   const { rlsDb, rootDb } = await import("@/api/db/root");
   const { createIngestionDb } = await import("@/api/db/scoped");
   return {
-    rootDb: laneRootHandle(rootDb),
-    ingestionDb: createIngestionDb(rlsDb),
+    rootDb: laneRootHandle(rootDb, laneWaitMs),
+    ingestionDb: createIngestionDb(
+      rlsDb,
+      laneWaitMs === undefined ? {} : { laneWaitMs },
+    ),
   };
 };
 
@@ -224,6 +237,39 @@ export const enterCaseLawMaintenanceLane =
     const handles = await loadWriteHandles();
     return { ...handles, ...hold };
   };
+
+/** A scheduled pass yields immediately when an operator holds the lane. */
+export const tryEnterCaseLawMaintenanceLane = async ({
+  sql: providedSql,
+}: Pick<
+  HoldLaneOptions,
+  "sql"
+> = {}): Promise<MaintenanceLaneSession | null> => {
+  const lock = providedSql ?? (await openLaneConnection());
+  const rows = await lock.unsafe(
+    "SELECT pg_try_advisory_lock(hashtext($1), hashtext($2)) AS acquired",
+    [CASE_LAW_MAINTENANCE_LANE.domain, CASE_LAW_MAINTENANCE_LANE.lane],
+  );
+  if (rows.at(0)?.["acquired"] !== true) {
+    await lock.end();
+    return null;
+  }
+  const loading = await Result.tryPromise(
+    async () => await loadWriteHandles(0),
+  );
+  if (loading.isErr()) {
+    await lock.end();
+    throw loading.error;
+  }
+  const handles = loading.value;
+  return {
+    ...handles,
+    waitedMs: 0,
+    release: async () => {
+      await lock.end();
+    },
+  };
+};
 
 type ReadOnlySessionOptions = {
   /** Handle override for tests. */

@@ -98,7 +98,7 @@ const decodeCheckpoint = (row: unknown) => {
   };
 };
 
-const createVerdictReader = ({
+const createBackfillVerdictReader = ({
   query,
   tableName,
   clock,
@@ -183,7 +183,7 @@ const createRuntime = <BatchTransaction>({
   });
   const readHealth =
     readVerdict ??
-    createVerdictReader({
+    createBackfillVerdictReader({
       query: indicatorQueries.query,
       tableName,
       clock,
@@ -308,6 +308,34 @@ const drizzleQuery =
     );
     return executedRows(await tx.execute(sql.join(parts, sql``)));
   };
+
+/** Read settled health signals without holding a transaction across replay I/O. */
+export const createScriptBackfillHealthReader = ({
+  db,
+  tableName,
+  clock,
+  config = defaultConfig,
+}: {
+  db: { transaction: IngestionTransactionRunner<Transaction> };
+  tableName: string;
+  clock: () => number;
+  config?: HealthConfig;
+}) => {
+  const bounded = createBoundedIndicatorQuery({
+    runInTransaction: db.transaction.bind(db),
+    transactionQuery: (tx: Transaction) => drizzleQuery(tx),
+    readTimeoutMs: config.readTimeoutMs,
+  });
+  return {
+    readVerdict: createBackfillVerdictReader({
+      query: bounded.query,
+      tableName,
+      clock,
+      config,
+    }),
+    settle: bounded.settle,
+  };
+};
 
 export const createScriptBackfillRuntime = ({
   db,
