@@ -23,6 +23,7 @@ import {
   advanceToolCallTiming,
   createToolCallTiming,
 } from "@/components/chat/tool-call-timing.logic";
+import { UnrestoredFieldsNotice } from "@/components/chat/unrestored-fields-notice";
 import {
   parseSkillResourceSource,
   type SkillResourceSource,
@@ -676,6 +677,7 @@ export const ToolCallCard = ({
           )}
         </div>
       )}
+      <UnrestoredFieldsNotice output={part.output} />
     </div>
   );
 };

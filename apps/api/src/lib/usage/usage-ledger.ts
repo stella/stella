@@ -51,6 +51,7 @@ import type {
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { UsageLimitExceededError } from "@/api/lib/errors/tagged-errors";
+import { currentActionCostIdentity } from "@/api/lib/usage/action-costs/context";
 
 /** A stored status this build does not know. */
 const UNRECOGNIZED_STATUS = "unrecognized" as const;
@@ -353,7 +354,10 @@ export const recordUsageEvent = async ({
     return owners.at(0)?.id ?? null;
   })();
 
+  const identity = currentActionCostIdentity(organizationId);
   const values = {
+    actionKind: identity?.actionKind ?? null,
+    logicalPhaseId: identity?.logicalPhaseId ?? null,
     organizationId,
     workspaceId: retainedWorkspaceId,
     userId,

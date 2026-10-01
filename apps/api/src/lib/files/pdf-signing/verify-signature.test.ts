@@ -1,11 +1,15 @@
 import { PDF } from "@libpdf/core";
-import { describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import crypto from "node:crypto";
 
 import { captureSigningDigest } from "@/api/lib/files/pdf-signing/sign-pdf";
 import { verifyDesktopSignature } from "@/api/lib/files/pdf-signing/verify-signature";
 import { createSelfSignedCertificate } from "@/api/tests/helpers/self-signed-certificate";
 import { settled } from "@/api/tests/helpers/settled";
+import { createTestRsaKeyPool } from "@/api/tests/helpers/test-pki";
+
+const keyPool = createTestRsaKeyPool();
+beforeEach(() => keyPool.reset());
 
 const SIGNING_TIME = new Date("2026-06-01T12:00:00.000Z");
 
@@ -19,6 +23,7 @@ const nodeKey = async (privateKey: CryptoKey) =>
 
 const prepare = async (keyType: "RSA" | "EC") => {
   const { der, privateKey } = await createSelfSignedCertificate({
+    keyPool,
     keyType,
     notAfter: new Date(SIGNING_TIME.getTime() + 3_600_000),
     notBefore: new Date(SIGNING_TIME.getTime() - 3_600_000),

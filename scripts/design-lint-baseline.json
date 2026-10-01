@@ -261,7 +261,6 @@
     "packages/ui/src/kanban/cell-action.tsx": 10,
     "packages/ui/src/kanban/fixtures/board-chrome.fixture.tsx": 1,
     "packages/ui/src/kanban/fixtures/card-sticky-header.fixture.tsx": 1,
-    "packages/ui/src/kanban/fixtures/sortable-interactions.fixture.tsx": 1,
     "packages/ui/src/kanban/fixtures/sticky-lane-controls.fixture.tsx": 1,
     "packages/ui/src/review/review-author-avatar.tsx": 4,
     "packages/ui/src/review/review-comment-card.tsx": 1
@@ -409,7 +408,6 @@
     "packages/ui/src/components/view-toolbar.tsx": 1,
     "packages/ui/src/components/workspace-shell.tsx": 2,
     "packages/ui/src/inspector/chrome.tsx": 2,
-    "packages/ui/src/kanban/sortable-interactions.tsx": 2,
     "packages/ui/src/kanban/subgroup-board.tsx": 1,
     "packages/ui/src/kanban/virtual-cell.tsx": 1
   },
@@ -612,7 +610,6 @@
     "packages/cli/src/registry-trust.ts": 1,
     "packages/scripts/src/model-catalog-capabilities-gen.ts": 1,
     "packages/scripts/src/property-timeout-convention.ts": 1,
-    "packages/ui/src/kanban/virtual-cell.tsx": 1,
     "scripts/check-marketing-content.ts": 1,
     "scripts/check-migration-safety.ts": 1,
     "scripts/ratchet.ts": 2,

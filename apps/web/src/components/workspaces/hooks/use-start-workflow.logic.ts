@@ -116,7 +116,7 @@ export const WORKFLOW_START_AI_UNAVAILABLE = {
 
 type PerformWorkflowStartArgs<TStatus extends string> = {
   captureError: (error: unknown) => void;
-  notifyFailure: () => void;
+  notifyFailure: (error: unknown) => void;
   onQueued: () => Promise<void>;
   /** Sends the request and unwraps it, so an error response throws. */
   request: () => Promise<{ status: TStatus }>;
@@ -148,7 +148,7 @@ export const performWorkflowStart = async <TStatus extends string>({
   });
   if (attempt.isErr()) {
     captureError(attempt.error);
-    notifyFailure();
+    notifyFailure(attempt.error);
     return WORKFLOW_START_FAILED;
   }
 

@@ -15,10 +15,13 @@ import type {
 } from "@modelcontextprotocol/server";
 import { panic, Result } from "better-result";
 
+import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
+
 import { env } from "@/api/env";
 import { detached } from "@/api/lib/analytics/capture";
 import {
   ActionAdmissionError,
+  actionAdmissionRefusal,
   withActionAdmission,
 } from "@/api/lib/rate-limit/action-admission";
 import { isEventStreamResponse, withSseHeartbeat } from "@/api/lib/sse";
@@ -138,6 +141,7 @@ const requiredScopesForTool = (
 };
 
 type McpServerDependencies = {
+  admitAction?: typeof withActionAdmission;
   authenticateMcpRequest: (
     token: string,
     options: { mode: McpMode },
@@ -619,6 +623,7 @@ const retryableToolErrorResult = (mode: McpMode): CallToolResult =>
   });
 
 export const createMcpHttpRequestHandler = ({
+  admitAction = withActionAdmission,
   authenticateMcpRequest,
   captureError,
   getMcpToolDefinition,
@@ -753,7 +758,7 @@ export const createMcpHttpRequestHandler = ({
         signal?.throwIfAborted();
         return result;
       };
-      if (!env.FEATURE_ACTION_ADMISSION) {
+      if (!env.FEATURE_ACTION_ADMISSION && !env.FEATURE_ACTION_COST_RECORDS) {
         return await run();
       }
 
@@ -771,8 +776,7 @@ export const createMcpHttpRequestHandler = ({
           toolRequest.params.arguments ?? {},
         );
       }
-      const admitted = await withActionAdmission({
-        enabled: true,
+      const admitted = await admitAction({
         organizationId: context.organizationId,
         userId: context.userId,
         periodIdentity: mcpActionPeriodIdentity(consumesServices),
@@ -781,15 +785,20 @@ export const createMcpHttpRequestHandler = ({
       if (Result.isOk(admitted)) {
         return admitted.value;
       }
-      if (
-        ActionAdmissionError.is(admitted.error) &&
-        admitted.error.reason === "busy"
-      ) {
+      if (ActionAdmissionError.is(admitted.error)) {
+        if (admitted.error.reason === "unavailable") {
+          captureError(admitted.error, {
+            phase: "action-admission",
+            source: "mcp",
+          });
+        }
+        const refusal = actionAdmissionRefusal(admitted.error);
         return mcpStructuredErrorResult({
-          code: "rate_limited",
-          message: admitted.error.message,
-          hint: "Wait for admission capacity, then retry this call.",
-          retryable: true,
+          code: refusal.code,
+          message: refusal.message,
+          hint: refusal.hint,
+          contactUrl: refusal.contactUrl,
+          retryable: ACTION_ADMISSION_REFUSALS[refusal.code].retryable,
         });
       }
       captureError(admitted.error, {

@@ -7,6 +7,7 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
+    "./action-admission": "./src/action-admission.ts",
     "./browser-control": "./src/browser-control.ts",
     "./browser-control-json-schema": "./src/browser-control-json-schema.ts",
     "./chat": "./src/chat.ts",
@@ -14,6 +15,7 @@
     "./json-schema-regex": "./src/json-schema-regex.ts",
     "./chat-docx-suggestions": "./src/chat-docx-suggestions.ts",
     "./chat-file-types": "./src/chat-file-types.ts",
+    "./sk-court-succession": "./src/sk-court-succession.ts",
     "./sk-court-tiers": "./src/sk-court-tiers.ts",
     "./case-law-court-tiers": "./src/case-law-court-tiers.ts",
     "./case-law-decision-resolution": "./src/case-law-decision-resolution.ts",

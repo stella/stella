@@ -1,3 +1,4 @@
+import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -16,6 +17,7 @@ import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { AI_MEMBER_ASSIGNMENT_REQUIRED_ERROR_CODE } from "@/api/lib/ai-config-response";
 import { toSafeId } from "@/api/lib/branded-types";
+import { toDataUrl } from "@/api/lib/data-url";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { StellaOpenRouterTextAdapter } from "@/api/lib/stella-openrouter-text-adapter";
 import type { TanStackModelOptions } from "@/api/lib/tanstack-ai-models";
@@ -581,6 +583,84 @@ describe("TanStack text model resolution", () => {
     // "model-chat" is not a catalogued id: no sampling params are sent.
     expect(model.modelOptions).toEqual({});
     expect(model.adapter.name).toBe("bedrock-converse");
+  });
+
+  test("sends a Bedrock model an attached image as its bytes", async () => {
+    const model = getTanStackTextModelForRole(
+      "chat",
+      orgConfigForProvider("bedrock"),
+      { organizationId: orgId },
+    );
+    const png = new Uint8Array([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+    ]);
+    const bodies: unknown[] = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = Object.assign(
+      async (
+        input: Parameters<typeof globalThis.fetch>[0],
+        init?: RequestInit,
+      ): Promise<Response> => {
+        const request =
+          input instanceof Request
+            ? input
+            : new Request(input.toString(), init);
+        bodies.push(await request.clone().json());
+        return new Response(JSON.stringify({ message: "stop" }), {
+          status: 400,
+          headers: {
+            "content-type": "application/json",
+            "x-amzn-errortype": "ValidationException",
+          },
+        });
+      },
+      { preconnect: originalFetch.preconnect },
+    );
+    try {
+      for await (const _chunk of model.adapter.chatStream({
+        logger: resolveDebugOption(false),
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", content: "Describe the attached image." },
+              {
+                type: "image",
+                // How a chat attachment reaches the model.
+                source: {
+                  type: "url",
+                  value: toDataUrl(png, "image/png"),
+                  mimeType: "image/png",
+                },
+              },
+            ],
+          },
+        ],
+        model: model.modelId,
+      })) {
+        // The refusal ends the stream once the request is written.
+      }
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    expect(bodies).toHaveLength(1);
+    expect(bodies.at(0)).toMatchObject({
+      messages: [
+        {
+          role: "user",
+          content: [
+            { text: "Describe the attached image." },
+            {
+              image: {
+                format: "png",
+                source: { bytes: Buffer.from(png).toString("base64") },
+              },
+            },
+          ],
+        },
+      ],
+    });
   });
 
   test("normalizes existing Google regional BYOK selections to global", () => {

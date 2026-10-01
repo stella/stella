@@ -12,6 +12,7 @@ import { withProviderStreamContract } from "@/api/lib/chat/provider-stream-contr
 import { createTanStackTextAdapterFactory } from "@/api/lib/tanstack-ai-models";
 import { CHAT_ORACLE } from "@/api/tests/helpers/chat-oracles";
 import type { OracleViolation } from "@/api/tests/helpers/chat-oracles";
+import { findProviderRuleViolations } from "@/api/tests/helpers/provider-request-schema";
 import { findTranscriptViolations } from "@/api/tests/helpers/provider-request-transcript";
 import type { ProviderRequest } from "@/api/tests/helpers/provider-request-transcript";
 import {
@@ -60,6 +61,7 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 const cassettes = loadProviderWireCassettes();
 
 const {
+  providerWireRequestRules: requestRules,
   providerWireRequestShape: requestShape,
   providerWireToolInput: toolInput,
 } = CHAT_ORACLE;
@@ -139,6 +141,15 @@ const expectPinnedRequests = (
   }
 };
 
+/** Every request the adapter sent is one its provider accepts, as far as the
+ *  provider's published schema and documented rules say. */
+const expectProviderRules = (sent: readonly ReplayedRequest[]) => {
+  expect(
+    sent.flatMap((request) => findProviderRuleViolations(request)),
+    JSON.stringify({ oracle: requestRules }),
+  ).toEqual([]);
+};
+
 const checkCassette = async (cassette: ProviderWireCassette) => {
   const { findings, requests, run, sent, transcripts } =
     await replayWireScenario({
@@ -150,6 +161,9 @@ const checkCassette = async (cassette: ProviderWireCassette) => {
     findWireContractViolations({ cassette, replay: findings, run }),
   );
   expectSettledTranscripts({ requests, transcripts });
+  // The rules first: a request a provider would refuse names the rule it
+  // breaks before it shows as a changed shape.
+  expectProviderRules(sent);
   expectPinnedRequests(cassette, sent);
 };
 

@@ -1,0 +1,70 @@
+name: Provider Request Schemas Check
+
+# The provider request schema test validates what the chat adapters send
+# against request schemas extracted from each provider's published
+# specification (apps/api/src/tests/fixtures/provider-request-schemas). This
+# nightly job downloads every specification again, from the keyless public
+# URL its sidecar records, and fails when a specification or the request
+# schema it yields no longer matches the vendored copy. Nothing is updated
+# automatically: a dispatch with update=true regenerates the schemas and
+# uploads them, with their diff, for a reviewed PR.
+
+on:
+  schedule:
+    # 04:53 UTC daily (off-minute to avoid the :00 stampede)
+    - cron: "53 4 * * *"
+  workflow_dispatch:
+    inputs:
+      update:
+        description: "Regenerate the vendored schemas and upload them for a PR"
+        type: boolean
+        required: false
+        default: false
+
+permissions: {}
+
+jobs:
+  provider-request-schemas-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        run: bun ci --ignore-scripts
+        env:
+          # .npmrc references NPM_TOKEN, but installs must not expose
+          # the real npm token to dependency lifecycle scripts.
+          NPM_TOKEN: ""
+
+      - name: Compare vendored schemas with the published specifications
+        if: ${{ !inputs.update }}
+        run: bun run check:provider-request-schemas
+
+      - name: Regenerate the vendored schemas
+        if: ${{ inputs.update }}
+        run: |
+          bun run update:provider-request-schemas
+          git diff --stat -- apps/api/src/tests/fixtures/provider-request-schemas
+          git diff -- apps/api/src/tests/fixtures/provider-request-schemas > provider-request-schemas.diff
+
+      - name: Upload the regenerated schemas
+        if: ${{ inputs.update }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: provider-request-schemas
+          path: |
+            apps/api/src/tests/fixtures/provider-request-schemas
+            provider-request-schemas.diff
+          retention-days: 7

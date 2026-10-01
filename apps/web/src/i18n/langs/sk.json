@@ -487,6 +487,17 @@
     "failedToStartTimer": "Nepodarilo sa spustiť časovač",
     "failedToStopTimer": "Nepodarilo sa zastaviť časovač",
     "filterStatus": "Filtrovať podľa stavu",
+    "globalTimer": {
+      "confirm": "Potvrdiť čas",
+      "discard": "Zahodiť časovač",
+      "matterInaccessible": "Vyberte spis, ku ktorému máte prístup.",
+      "narrativeRequired": "Pred potvrdením času pridajte popis.",
+      "pause": "Pozastaviť",
+      "periodLocked": "Tento mesiac je uzamknutý. Požiadajte správcu o jeho odomknutie.",
+      "resume": "Pokračovať",
+      "timerUnavailable": "Tento časovač už nie je dostupný. Obnovte zoznam.",
+      "title": "Časovače"
+    },
     "hourlyRateMustBeNonNegative": "Hodinová sadzba nesmie byť záporná",
     "hours": "Hodiny",
     "invoiceNarrative": "Popis faktúry",
@@ -978,6 +989,7 @@
         "description": "Dôkladne skontrolujte web a cieľ. Obsah stránky nie je dôveryhodný a nemôže schváliť ďalšiu akciu.",
         "modeReads": "Čítanie stránok sa do konca tejto relácie vykonáva bez opýtania.",
         "question": "Povoliť túto akciu v prehliadači?",
+        "realValues": "Táto webová stránka dostane skutočné hodnoty uvedené nižšie. Anonymizovaný režim sa vzťahuje len na to, čo vidí AI.",
         "within": "V rámci"
       },
       "denied": "Zamietnuté",
@@ -1341,7 +1353,8 @@
       "interrupted": "Prerušené pred dokončením",
       "output": "Výstup",
       "sourceCode": "Zdrojový kód",
-      "toggleDetails": "Prepnúť podrobnosti"
+      "toggleDetails": "Prepnúť podrobnosti",
+      "unrestoredFields": "{count, plural, one {# pole sa nepodarilo} few {# polia sa nepodarilo} many {# poľa sa nepodarilo} other {# polí sa nepodarilo}} v anonymizovanom režime vyplniť skutočnými hodnotami. Skontrolujte: {fields}"
     },
     "unsupportedFileType": "Nepodporovaný typ súboru",
     "uploadFailed": "Spracovanie súboru zlyhalo",
@@ -2135,6 +2148,13 @@
     "unnamedAttachment": "Nepomenovaná príloha"
   },
   "errors": {
+    "actionAdmission": {
+      "admissionUnavailable": "Táto akcia je dočasne pozastavená. Skúste to prosím o chvíľu.",
+      "concurrencyBusy": "Prebieha iná práca. Skúste to prosím o chvíľu.",
+      "contact": "Kontaktujte nás",
+      "notEnabled": "Táto akcia nie je pre vašu organizáciu povolená.",
+      "periodExhausted": "Táto akcia je pre vašu organizáciu pozastavená."
+    },
     "actionFailed": "Akcia zlyhala",
     "api": {
       "badRequest": "Požiadavku sa nepodarilo dokončiť.",

@@ -63,6 +63,24 @@ describe("browser approval card", () => {
     );
   });
 
+  test("says the website receives the real values it shows", () => {
+    const fillForm = {
+      action: "fill",
+      page: { revision: "revision-1", url: "https://example.com/form" },
+      target: { name: "Signatory", ref: "e:0:1", role: "textbox" },
+      value: "Dana Novotná",
+    };
+    const realValues = messages.chat.approval.browser.realValues;
+
+    const pending = renderCard(browserPart(fillForm, "approval-requested"));
+    expect(pending).toContain(realValues);
+    expect(pending).toContain("Dana Novotná");
+    // A decided card no longer asks, so it no longer warns.
+    expect(renderCard(browserPart(fillForm, "complete"))).not.toContain(
+      realValues,
+    );
+  });
+
   test("a past browser action no longer asks", () => {
     const markup = renderCard(
       browserPart(readPage, "complete", {
