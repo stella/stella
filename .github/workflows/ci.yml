@@ -2157,6 +2157,34 @@ jobs:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
         run: bun run test:postgres
 
+      - name: Start corpus engine
+        if: ${{ !cancelled() }}
+        run: |
+          docker run -d --name corpus-engine \
+            -p 127.0.0.1:7290:7280 -p 127.0.0.1:7291:7280 \
+            quickwit/quickwit:0.9.0@sha256:1e6169bf4e98a489fca397105f1698c1d80a0f9779f3cf652973bac8a0c3b2bd run
+          curl --fail --silent --show-error --retry 30 --retry-connrefused \
+            --retry-all-errors --retry-delay 1 --retry-max-time 60 --max-time 2 \
+            http://127.0.0.1:7290/health/readyz
+
+      - name: Run corpus engine suites
+        if: ${{ !cancelled() }}
+        working-directory: apps/api
+        env:
+          DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
+          STELLA_RUN_CORPUS_ENGINE_TESTS: "true"
+        run: |
+          mapfile -t engine_tests < <(grep -rl --include='*.test.ts' STELLA_RUN_CORPUS_ENGINE_TESTS src | sort)
+          test "${#engine_tests[@]}" -gt 0
+          bun test --preload ./src/tests/setup-env.ts --reporter=junit --reporter-outfile=engine-tests.xml "${engine_tests[@]}"
+          python3 -c 'import xml.etree.ElementTree as E; r=E.parse("engine-tests.xml").getroot(); n=len(list(r.iter("testcase"))); assert n > 0 and not any(list(r.iter(t)) for t in ("skipped", "failure", "error")) and not any(int(e.get(k, "0")) for e in r.iter() for k in ("skipped", "disabled", "failures", "errors")), "Engine tests must execute without skips or failures"; print(f"Executed {n} engine tests")'
+
+      - name: Corpus engine diagnostics and cleanup
+        if: always()
+        run: |
+          docker logs corpus-engine || true
+          docker rm -f corpus-engine || true
+
       # Independent of the Postgres verdict: a failure there should not hide
       # this runner's result.
       - name: Run Valkey-gated API suites
