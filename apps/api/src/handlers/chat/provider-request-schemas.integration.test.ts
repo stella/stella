@@ -317,21 +317,11 @@ const selectedCombinations: readonly ChatCombination[] = (() => {
 /**
  * What a combination's turn breaks today, by the rule it breaks. Each such
  * combination runs as a test marked failing under the finding's name, so it
- * fails loudly once the turn stops breaking the rule.
+ * fails loudly once the turn stops breaking the rule. None today: a new
+ * finding is a condition on the combination that returns the rule it breaks.
  */
-const knownFindingOf = (combination: ChatCombination): string | undefined => {
-  // Hydration hands an image to the model as a data URL
-  // (`createRawChatFilePart`), and the Bedrock Converse adapter takes only
-  // inline image bytes, so the turn fails before its request is sent.
-  // Minimal repro: a Bedrock chat turn with a PNG attached.
-  if (
-    combination.target.provider === "bedrock" &&
-    combination.attachment === "image"
-  ) {
-    return "a Bedrock turn with an image attachment fails before its request";
-  }
-  return undefined;
-};
+const knownFindingOf = (_combination: ChatCombination): string | undefined =>
+  undefined;
 
 // --- Conversations ------------------------------------------------------------
 

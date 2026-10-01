@@ -8,6 +8,7 @@ import { companyFormatKeys } from "@/components/company-format-library";
 import { readerAnnotationKeys } from "@/components/legal-reader/annotations/reader-annotations-query";
 import { savedSearchKeys } from "@/components/saved-searches.logic";
 import { chatKeys } from "@/features/chat/chat-query-contract";
+import { timeTimersOptions } from "@/features/time-timers/queries";
 import {
   linkedAccountsOptions,
   pendingDeletionTasksOptions,
@@ -379,10 +380,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     kind: "keyed",
     calls: ["fetchTimeEntries"],
     files: ["lib/workspaces/queries/time-entries.ts"],
-    keys: () => [
-      timeEntriesKeys.list(WORKSPACE, USER, {}),
-      timeEntriesKeys.activeTimer(WORKSPACE, USER),
-    ],
+    keys: () => [timeEntriesKeys.list(WORKSPACE, USER, {})],
   },
   "time-entries/approval-queue/list.ts": {
     kind: "no-web-caller",
@@ -419,8 +417,10 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     calls: ['api["time-timers"].admin.get'],
   },
   "time-timers/list.ts": {
-    kind: "no-web-caller",
+    kind: "keyed",
     calls: ['api["time-timers"].get'],
+    files: ["features/time-timers/queries.ts"],
+    keys: () => [timeTimersOptions(ORG, USER).queryKey],
   },
   "usage/get-lane.ts": {
     kind: "keyed",

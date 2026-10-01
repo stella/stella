@@ -1,3 +1,5 @@
+import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
+
 /**
  * Machine-readable error codes for the MCP tool-error envelope. The MCP server
  * is used almost exclusively by AI agents (and the companion CLI), so every
@@ -7,6 +9,7 @@
  * new failure mode must pick an existing code or add one here deliberately.
  */
 export const MCP_ERROR_CODES = [
+  ...Object.values(ACTION_ADMISSION_CODES),
   /** Input failed validation at the tool boundary (shape, type, range). */
   "validation_error",
   /** The session lacks the OAuth scope the tool requires. */
