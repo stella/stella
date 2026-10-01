@@ -426,6 +426,68 @@ describe("parseNsDecisionHtml", () => {
   });
 
   describe("related proceedings table", () => {
+    test.each([
+      { copies: 1, headerTag: "td" },
+      { copies: 2, headerTag: "td" },
+      { copies: 4, headerTag: "td" },
+      { copies: 1, headerTag: "th" },
+      { copies: 2, headerTag: "th" },
+      { copies: 4, headerTag: "th" },
+    ])(
+      "normalizes repeated complaint values while preserving source text ($copies copies, $headerTag headers)",
+      ({ copies, headerTag }) => {
+        const date = Array.from({ length: copies }, () => "05/25/2022").join(
+          "<br><br>",
+        );
+        const docket = Array.from(
+          { length: copies },
+          () => "IV.ÚS 1381/22",
+        ).join("<br><br>");
+        const html = `<table id="box-table-a"><tr><td colspan="2">Podána ústavní stížnost
+        <table><tr><${headerTag}>datum podání</${headerTag}><${headerTag}>spisová značka</${headerTag}></tr>
+        <tr><td>${date}</td><td>${docket}</td></tr></table></td></tr></table>`;
+        const { source } = extractNsMetadata(cheerio.load(html));
+        const row = source.ustavniStiznost?.at(0);
+        expect(row?.["datum podání"]).toEqual({
+          type: "date",
+          value: "2022-05-25",
+          sourceValue: Array.from({ length: copies }, () => "05/25/2022").join(
+            "\n\n",
+          ),
+          defects:
+            copies > 1
+              ? ["duplicated-value", "embedded-newlines", "us-date-format"]
+              : ["us-date-format"],
+        });
+        expect(row?.["spisová značka"]).toMatchObject({
+          type: "text",
+          value: "IV.ÚS 1381/22",
+        });
+      },
+    );
+
+    test.each([
+      { date: "02/30/2022", defects: ["us-date-format", "invalid-date"] },
+      {
+        date: "05/25/2022<br>05/26/2022",
+        defects: ["embedded-newlines", "us-date-format", "conflicting-values"],
+      },
+      { date: "unknown", defects: ["invalid-date"] },
+    ])(
+      "leaves an unresolved source date intact: $date",
+      ({ date, defects }) => {
+        const html = `<table id="box-table-a"><tr><td colspan="2">Podána ústavní stížnost
+        <table><tr><td>datum podání</td></tr><tr><td>${date}</td></tr></table>
+        </td></tr><tr><td>Datum rozhodnutí:</td><td>05/27/2022</td></tr></table>`;
+        const { source } = extractNsMetadata(cheerio.load(html));
+        expect(source.ustavniStiznost?.at(0)?.["datum podání"]).toEqual({
+          type: "unresolved-date",
+          sourceValue: date.replace("<br>", "\n"),
+          defects,
+        });
+      },
+    );
+
     test("extracts ústavní stížnost table", () => {
       const html = `<html><body>
         <table id="box-table-a"><tbody>
@@ -453,7 +515,7 @@ describe("parseNsDecisionHtml", () => {
       expect(tableBlocks.length).toBeGreaterThan(0);
 
       // Source metadata should contain parsed ústavní stížnost
-      expect(sourceMetadata["ustavniStiznost"]).toBeDefined();
+      expect(sourceMetadata.ustavniStiznost).toBeDefined();
     });
   });
 
