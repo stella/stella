@@ -1110,7 +1110,7 @@ export const createMcpHttpRequestHandler = ({
       // unauthenticated probe still receives the 401 + `WWW-Authenticate` that
       // drives OAuth discovery.
       if (incomingRequest.method === "DELETE") {
-        return withMcpCors(
+        return await withMcpCors(
           sessionOperationUnsupportedResponse(),
           session,
           mode,
@@ -1123,7 +1123,7 @@ export const createMcpHttpRequestHandler = ({
       // anyway.
       const frame = await withCappedRequestBody(incomingRequest);
       if (frame.status === "too_large") {
-        return withMcpCors(payloadTooLargeResponse(), session, mode);
+        return await withMcpCors(payloadTooLargeResponse(), session, mode);
       }
       const request = withTransportAcceptHeader(frame.request);
 
@@ -1150,7 +1150,7 @@ export const createMcpHttpRequestHandler = ({
         return retryableServerErrorResponse();
       }
 
-      return withMcpCors(response, session, mode);
+      return await withMcpCors(response, session, mode);
     } catch (error) {
       if (error instanceof McpOrganizationAccessError) {
         return accessDeniedResponse({ denial: "organization_forbidden", mode });

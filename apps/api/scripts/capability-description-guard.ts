@@ -120,7 +120,7 @@ export const computeLedgerDiff = ({
   return { unledgered, described, unknown, malformed };
 };
 
-const readCatalog = async (relativePath: string): Promise<CatalogEntry[]> => {
+const readCatalog = (relativePath: string): CatalogEntry[] => {
   const absolute = path.resolve(REPO_ROOT, relativePath);
   const raw = readCapabilityCatalog(pathToFileURL(`${absolute}/`));
   const parsed = parseCapabilityCatalog(raw);
@@ -167,8 +167,8 @@ type Loaded = {
   undescribed: string[];
 };
 
-const loadCatalog = async (): Promise<Loaded> => {
-  const entries = await readCatalog(CATALOG_PATH);
+const loadCatalog = (): Loaded => {
+  const entries = readCatalog(CATALOG_PATH);
   return {
     catalogIds: entries.map(({ id }) => id).toSorted(),
     undescribed: findUndescribedIds(entries),
@@ -176,7 +176,7 @@ const loadCatalog = async (): Promise<Loaded> => {
 };
 
 const runCheck = async (): Promise<number> => {
-  const { catalogIds, undescribed } = await loadCatalog();
+  const { catalogIds, undescribed } = loadCatalog();
 
   if (catalogIds.length === 0) {
     console.error(
@@ -242,7 +242,7 @@ const runCheck = async (): Promise<number> => {
 };
 
 const runWriteLedger = async (): Promise<number> => {
-  const { undescribed } = await loadCatalog();
+  const { undescribed } = loadCatalog();
   await writeLedger(undescribed);
   console.log(
     `capability-description-guard --write-ledger: wrote ${undescribed.length} capability ids to apps/api/capability-description-ledger.json`,
