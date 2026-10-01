@@ -3,7 +3,11 @@ import fc from "fast-check";
 
 import { propertyConfig } from "@stll/property-testing";
 
-import { parseApiTestShard, partitionTestFiles } from "./test-file-shards";
+import {
+  parseApiTestShard,
+  partitionTestFiles,
+  selectApiTestFiles,
+} from "./test-file-shards";
 
 test("partitions are complete, deterministic and bounded for every measured workload", () => {
   fc.assert(
@@ -93,4 +97,20 @@ test("invalid shard configuration and measurements fail before any tests run", (
       }),
     ).toThrow("Invalid duration");
   }
+});
+
+test("an API sub-shard must select files before the runner can start", () => {
+  expect(() =>
+    selectApiTestFiles({ files: [], durations: {}, shardValue: "1/4" }),
+  ).toThrow("selected zero test files");
+  expect(() =>
+    selectApiTestFiles({ files: ["one"], durations: {}, shardValue: "4/4" }),
+  ).toThrow("selected zero test files");
+  expect(
+    selectApiTestFiles({ files: ["one"], durations: {}, shardValue: "1/4" })
+      .testPaths,
+  ).toEqual(["one"]);
+  expect(
+    selectApiTestFiles({ files: [], durations: {}, shardValue: undefined }),
+  ).toEqual({ testPaths: [], shard: null });
 });

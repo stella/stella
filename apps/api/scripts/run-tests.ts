@@ -1,4 +1,3 @@
-import { panic } from "better-result";
 import { readdirSync, readFileSync, rmSync } from "node:fs";
 import { availableParallelism, tmpdir, totalmem } from "node:os";
 import path from "node:path";
@@ -24,11 +23,7 @@ import {
   SnapshotBuildError,
 } from "./test-db-snapshot-cache";
 import durations from "./test-durations.json";
-import {
-  API_TEST_SHARD_ENV,
-  parseApiTestShard,
-  partitionTestFiles,
-} from "./test-file-shards";
+import { API_TEST_SHARD_ENV, selectApiTestFiles } from "./test-file-shards";
 import {
   deriveTestLaneCount,
   laneRunExitCode,
@@ -51,18 +46,11 @@ const forwardedArguments = runnerArguments.filter(
 );
 
 const allTestPaths = listApiTestPaths(apiRoot);
-const shard = parseApiTestShard(process.env[API_TEST_SHARD_ENV]);
-const testPaths =
-  shard === null
-    ? allTestPaths
-    : partitionTestFiles({
-        files: allTestPaths,
-        durations,
-        count: shard.count,
-      }).at(shard.index - 1);
-if (testPaths === undefined) {
-  panic("API shard partition is missing");
-}
+const { testPaths, shard } = selectApiTestFiles({
+  files: allTestPaths,
+  durations,
+  shardValue: process.env[API_TEST_SHARD_ENV],
+});
 if (shard !== null) {
   console.log(
     `API test shard ${shard.index}/${shard.count}: ${testPaths.length}/${allTestPaths.length} files`,

@@ -127,11 +127,15 @@ export const apiShardValue = (shard: TestShardId): string => {
 const parseShard = (args: readonly string[]): TestShardId => {
   const [flag, value] = args;
   if (
-    (flag !== "--filters" && flag !== "--api-shard") ||
+    (flag !== "--filters" &&
+      flag !== "--api-shard" &&
+      flag !== "--verify-output") ||
     value === undefined ||
-    args.length > 2
+    args.length !== (flag === "--verify-output" ? 4 : 2)
   ) {
-    panic("Usage: bun scripts/test-shards.ts <--filters|--api-shard> <shard>");
+    panic(
+      "Usage: bun scripts/test-shards.ts <--filters|--api-shard> <shard>, or --verify-output <shard> <turbo-plan.json> <test-output.log>",
+    );
   }
   const shard = TEST_SHARD_IDS.find((id) => id === value);
   if (shard === undefined) {
@@ -142,14 +146,52 @@ const parseShard = (args: readonly string[]): TestShardId => {
   return shard;
 };
 
+type AssertApiShardExecutedOptions = {
+  shard: TestShardId;
+  taskIds: readonly string[];
+  output: string;
+};
+
+export const assertApiShardExecuted = ({
+  shard,
+  taskIds,
+  output,
+}: AssertApiShardExecutedOptions): void => {
+  const value = apiShardValue(shard);
+  if (value === "" || !taskIds.includes("@stll/api#test")) {
+    return;
+  }
+  const marker = new RegExp(
+    `API test shard ${value}: [1-9]\\d*/[1-9]\\d* files`,
+    "u",
+  );
+  if (!marker.test(output)) {
+    panic(`${shard} ran no API test files despite API being in scope`);
+  }
+};
+
 if (import.meta.main) {
   const shard = parseShard(process.argv.slice(2));
-  process.stdout.write(
-    process.argv[2] === "--api-shard"
-      ? `${apiShardValue(shard)}\n`
-      : `${shardFilters({
-          packageNames: workspacePackages().map(({ name }) => name),
-          shard,
-        }).join(" ")}\n`,
-  );
+  if (process.argv[2] === "--verify-output") {
+    const plan: { tasks: { taskId: string }[] } = JSON.parse(
+      readFileSync(process.argv[4] ?? panic("Missing Turbo plan"), "utf-8"),
+    );
+    assertApiShardExecuted({
+      shard,
+      taskIds: plan.tasks.map(({ taskId }) => taskId),
+      output: readFileSync(
+        process.argv[5] ?? panic("Missing test output"),
+        "utf-8",
+      ),
+    });
+  } else {
+    process.stdout.write(
+      process.argv[2] === "--api-shard"
+        ? `${apiShardValue(shard)}\n`
+        : `${shardFilters({
+            packageNames: workspacePackages().map(({ name }) => name),
+            shard,
+          }).join(" ")}\n`,
+    );
+  }
 }

@@ -75,3 +75,29 @@ export const parseApiTestShard = (value: string | undefined) => {
   }
   return { index, count };
 };
+
+type SelectApiTestFilesOptions = {
+  files: readonly string[];
+  durations: Readonly<Record<string, number>>;
+  shardValue: string | undefined;
+};
+
+export const selectApiTestFiles = ({
+  files,
+  durations,
+  shardValue,
+}: SelectApiTestFilesOptions) => {
+  const shard = parseApiTestShard(shardValue);
+  if (shard === null) {
+    return { testPaths: files, shard };
+  }
+  const testPaths = partitionTestFiles({
+    files,
+    durations,
+    count: shard.count,
+  }).at(shard.index - 1);
+  if (testPaths === undefined || testPaths.length === 0) {
+    panic(`API test shard ${shardValue} selected zero test files`);
+  }
+  return { testPaths, shard };
+};

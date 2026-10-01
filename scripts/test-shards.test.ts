@@ -10,6 +10,7 @@ import {
 } from "../apps/api/scripts/test-file-shards";
 import {
   apiShardValue,
+  assertApiShardExecuted,
   shardFilters,
   shardPackages,
   TEST_SHARD_IDS,
@@ -126,4 +127,25 @@ test("API sub-shards cover every discovered file exactly once, including new fil
   });
   expect(selected.toSorted()).toEqual(input.toSorted());
   expect(new Set(selected).size).toBe(input.length);
+});
+
+test("an in-scope API leg rejects help, empty or another shard's output", () => {
+  const taskIds = ["@stll/api#test"];
+  for (const output of [
+    "",
+    "Usage: bun run [flags] <script>",
+    "API test shard 1/4: 0/10 files",
+    "API test shard 2/4: 5/10 files",
+  ]) {
+    expect(() =>
+      assertApiShardExecuted({ shard: "api-1", taskIds, output }),
+    ).toThrow("ran no API test files");
+  }
+  assertApiShardExecuted({
+    shard: "api-1",
+    taskIds,
+    output: "@stll/api:test: API test shard 1/4: 5/10 files",
+  });
+  assertApiShardExecuted({ shard: "api-1", taskIds: [], output: "" });
+  assertApiShardExecuted({ shard: "rest", taskIds, output: "" });
 });
