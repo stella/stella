@@ -33572,7 +33572,10 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "timeNarrativeRequired",
                   },
                 ],
-                inputOnly: ["body.documentProcessingMode"],
+                inputOnly: [
+                  "body.documentProcessingMode",
+                  "body.managedAIResidency",
+                ],
                 paginated: false,
                 destructive: false,
                 scope: "admin_write",
@@ -33607,6 +33610,18 @@ export const generatedRouteMap: RouteNode = {
                         },
                         promptCachingEnabled: {
                           type: "boolean",
+                        },
+                        managedAIResidency: {
+                          anyOf: [
+                            {
+                              const: "eu",
+                              type: "string",
+                            },
+                            {
+                              const: "us",
+                              type: "string",
+                            },
+                          ],
                         },
                         memoryExtractionEnabled: {
                           type: "boolean",

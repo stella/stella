@@ -18697,6 +18697,7 @@ export type WebRoutes = {
             matterNumberPadding: number;
             practiceJurisdictions: Array<T21e7b1b9fc>;
             promptCachingEnabled: Tfddd645dc8;
+            managedAIResidency: ("eu" | "us");
             memoryExtractionEnabled: Tfddd645dc8;
             timeMinimumUnitMinutes: number;
             timeEditWindowDays: number;
@@ -18868,6 +18869,7 @@ export type WebRoutes = {
           timeEditWindowDays?: number;
           timeLockedThroughMonth?: string | null;
           timeNarrativeRequired?: false | true;
+          managedAIResidency?: never;
         };
         params: T5e3ac29766;
         query: Record<never, never>;
@@ -18881,6 +18883,7 @@ export type WebRoutes = {
             memoryExtractionEnabled?: false | true;
             documentProcessingMode?: "off" | "searchable-text";
             promptCachingEnabled?: false | true;
+            managedAIResidency?: "eu" | "us";
             matterNumberPadding?: number;
             matterNumberPattern?: string;
           };
