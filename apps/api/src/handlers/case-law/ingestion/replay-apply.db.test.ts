@@ -46,6 +46,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  splitStoredDecisionTextMetadata,
 } from "@/api/lib/case-law/decision-text";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
@@ -150,8 +151,7 @@ const textChangingAdapter = stubAdapter((stored) => ({
     court: stored.court,
     country: "EU",
     language: stored.language,
-    metadata: stored.metadata,
-    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+    ...splitStoredDecisionTextMetadata(stored.metadata),
     rawHash: "hash-from-the-new-parser",
     fulltext: NEW_PARSER_TEXT,
     documentAst: EMPTY_AST,
@@ -377,8 +377,7 @@ test("a restructure the flattened text does not show is still applied", async ()
       court: stored.court,
       country: "EU",
       language: stored.language,
-      metadata: stored.metadata,
-      textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      ...splitStoredDecisionTextMetadata(stored.metadata),
       rawHash: "hash-that-does-not-move",
       fulltext: RESTRUCTURED_TEXT,
       sections: STORED_SECTIONS,

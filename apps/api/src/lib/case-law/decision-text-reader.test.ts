@@ -35,7 +35,7 @@ const unknownEntries = fc.uniqueArray(
   { selector: ({ field }) => field, maxLength: 8 },
 );
 
-test("sparse writes stay identical while future sidecars read the same text states", () => {
+test("versioned writes and future sidecars read the same text states", () => {
   fc.assert(
     fc.property(
       fields,
@@ -46,8 +46,10 @@ test("sparse writes stay identical while future sidecars read the same text stat
           metadata: { publisher: "fixture" },
           textFields,
         });
-        const expected: Record<string, unknown> = { publisher: "fixture" };
-        const sparse = [];
+        const expected: Record<string, unknown> = {
+          publisher: "fixture",
+          _stellaDecisionTextAbsenceVersion: 2,
+        };
         const explicit = [];
         for (const field of DECISION_TEXT_FIELD_KEYS) {
           const value = textFields[field];
