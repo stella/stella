@@ -244,7 +244,11 @@ describe("detect-e2e-changes", () => {
 
   test("runs Redis collaboration checks for every owning boundary", () => {
     const plan = workflowJob("ci-plan");
-    const collabRedis = workflowJob("collab-redis");
+    const serviceSuites = workflowJob("service-suites");
+    const collabRedis = workflowStep(
+      serviceSuites,
+      "Run cross-replica collaboration suite",
+    );
 
     for (const collaborationPath of [
       "apps/collab/*",
@@ -255,13 +259,21 @@ describe("detect-e2e-changes", () => {
     ]) {
       expect(plan).toContain(collaborationPath);
     }
+    expect(plan).toContain(
+      `service_suites_required: ${githubExpression("steps.changed-files.outputs.package_checks_required == 'true' || steps.changed-files.outputs.collab_redis_required == 'true'")}`,
+    );
+    expect(serviceSuites).toContain(
+      "needs.ci-plan.outputs.service_suites_required == 'true'",
+    );
     expect(collabRedis).toContain(
-      "needs.ci-plan.outputs.collab_redis_required",
+      `if: ${githubExpression("!cancelled() && needs.ci-plan.outputs.collab_redis_required == 'true'")}`,
     );
     expect(collabRedis).toContain(
       "bun --filter @stll/collab test src/server.test.ts",
     );
-    expect(workflowJob("ci-result")).toContain("collab-redis");
+    const result = workflowJob("ci-result");
+    expect(result).toContain("service-suites,");
+    expect(result).toContain('"service-suites": "service_suites_required"');
   });
 
   test("keeps production, Vite canary, and landing work parallel", () => {
