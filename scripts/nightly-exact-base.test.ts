@@ -92,6 +92,7 @@ test("nightly rehearsal checks main and reports failures with isolated write per
         v.object({
           name: v.string(),
           uses: v.optional(v.string()),
+          run: v.optional(v.string()),
           with: v.optional(v.record(v.string(), v.unknown())),
           env: v.optional(v.record(v.string(), v.string())),
         }),
@@ -100,8 +101,14 @@ test("nightly rehearsal checks main and reports failures with isolated write per
     nightly["migration-exact-base-upgrade"],
   );
   expect(job.permissions).toEqual({ contents: "read" });
-  expect(job.steps.find(({ name }) => name === "Checkout")?.with?.["ref"]).toBe(
-    "main",
+  expect(
+    job.steps.find(({ name }) => name === "Checkout")?.with,
+  ).not.toHaveProperty("ref");
+  const resolveMain = job.steps.find(
+    ({ name }) => name === "Resolve previous main state",
+  )?.run;
+  expect(resolveMain).toContain(
+    "git fetch --no-tags origin refs/heads/main\ngit checkout --detach FETCH_HEAD\n",
   );
   expect(
     job.steps.find(

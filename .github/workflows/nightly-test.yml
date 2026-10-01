@@ -422,13 +422,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: main
           fetch-depth: 0
           persist-credentials: false
 
       - name: Resolve previous main state
         id: base
         run: |
+          git fetch --no-tags origin refs/heads/main
+          git checkout --detach FETCH_HEAD
           base=$(git rev-list -1 --first-parent --before="$(date -u -d '24 hours ago' +%FT%TZ)" HEAD)
           [[ "$base" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::No main commit exists before the nightly window"; exit 1; }
           echo "sha=$base" >> "$GITHUB_OUTPUT"
