@@ -128,7 +128,14 @@ export const prepareSkUsRawCompletion = async ({
     parts = {};
     file = raw;
   } else {
-    const text = new TextDecoder("utf-8", { fatal: true }).decode(raw);
+    // Undecodable bytes never change on a later read: terminal, not a retry.
+    const decoded = Result.try(() =>
+      new TextDecoder("utf-8", { fatal: true }).decode(raw),
+    );
+    if (Result.isError(decoded)) {
+      return { type: "raw_unavailable" };
+    }
+    const text = decoded.value;
     const envelope = decodeSourceRawEnvelope(text);
     if (envelope === null) {
       return { type: "raw_unavailable" };

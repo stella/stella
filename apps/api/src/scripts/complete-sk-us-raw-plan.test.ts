@@ -516,6 +516,46 @@ test("a dry run of a repairable legacy payload reaches no writer", async () => {
   expect(writes).toBe(0);
 });
 
+test("undecodable non-PDF bytes are a checkpointed terminal outcome, not a retry", async () => {
+  for (const contentType of [null, SOURCE_RAW_ENVELOPE_CONTENT_TYPE]) {
+    let fetches = 0;
+    let writes = 0;
+    const outcome = await completeSkUsRawObservation({
+      raw: Result.ok(PDF),
+      contentType,
+      ...identity,
+      mode: "apply",
+      fetchListing: async () => {
+        fetches += 1;
+        return { type: "listing", listing: listingJson };
+      },
+      writeCompletion: async () => {
+        writes += 1;
+        return "completed";
+      },
+    });
+    expect(outcome).toBe("raw_unavailable");
+    expect(fetches).toBe(0);
+    expect(writes).toBe(0);
+  }
+  const persisted: unknown[] = [];
+  const next = { ...cursor, id: createSafeId<"caseLawDecision">() };
+  const result = await runSkUsRawPage({
+    rows: [cursor, next],
+    mode: "apply",
+    complete: async (row) => (row === cursor ? "raw_unavailable" : "completed"),
+    checkpoint: async (row, outcome) => {
+      persisted.push([row, outcome]);
+    },
+  });
+  expect(result.stopped).toBe(false);
+  expect(result.cursor).toBe(next);
+  expect(persisted).toEqual([
+    [cursor, "raw_unavailable"],
+    [next, "completed"],
+  ]);
+});
+
 test("a crash between fetch and write retries the item, while a crash after write never refetches it", async () => {
   for (const crashAt of ["before_write", "after_write"] as const) {
     let stored = encoder.encode(
