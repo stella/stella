@@ -41,7 +41,10 @@ import type {
   StoredRawReparseOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
-import { validatePublisherPage } from "@/api/handlers/case-law/ingestion/adapters/publisher-page";
+import {
+  PublisherPageError,
+  validatePublisherPage,
+} from "@/api/handlers/case-law/ingestion/adapters/publisher-page";
 import {
   fetchPublisher,
   fetchWithRetry,
@@ -242,7 +245,7 @@ export type CzRegionalApiItem = {
 
 /** Paginated response from /api/opendata/{y}/{m}/{d}. */
 type CzRegionalPageResponse = {
-  items?: CzRegionalApiItem[] | null;
+  items: unknown[];
   totalPages?: number | null;
   pageNumber?: number | null;
 };
@@ -405,9 +408,26 @@ const isCzRegionalPageResponse = (
   value: unknown,
 ): value is CzRegionalPageResponse =>
   isRecord(value) &&
-  isArrayOf(value["items"], isCzRegionalApiItem) &&
+  Array.isArray(value["items"]) &&
   isNullishNumber(value["totalPages"]) &&
   isNullishNumber(value["pageNumber"]);
+
+const readCzRegionalListingItems = (rows: unknown[]) => {
+  const items: CzRegionalApiItem[] = [];
+  let failures = 0;
+  for (const row of rows) {
+    if (isCzRegionalApiItem(row)) {
+      items.push(row);
+      continue;
+    }
+    failures += 1;
+    logger.warn("case_law.ingestion.item_build_failed", {
+      adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+      "error.type": "invalid_listing_member",
+    });
+  }
+  return { items, failures };
+};
 
 /**
  * One decision's document payload, as served and as read.
@@ -1318,7 +1338,7 @@ export const listCzRegionalDayPage = async ({
     });
   }
   return {
-    items: arrayOrEmpty(json.items),
+    items: readCzRegionalListingItems(json.items).items,
     totalPages: json.totalPages ?? 1,
   };
 };
@@ -2007,7 +2027,8 @@ export const czRegionalAdapter = defineSourceAdapter({
             cursor,
           });
         }
-        const items = arrayOrEmpty(json.items);
+        const { items, failures } = readCzRegionalListingItems(json.items);
+        let refused = failures;
 
         // One document fetch per listed row, in batches of
         // FINALDOC_CONCURRENCY, then the row and its document are assembled
@@ -2019,7 +2040,6 @@ export const czRegionalAdapter = defineSourceAdapter({
         // stored listing-only with no request, the reconciliation asks for
         // their documents, and the cursor moves on.
         const decisions: IngestionResult[] = [];
-        let refused = 0;
         let deferred = 0;
         const pushListingRow = (item: CzRegionalApiItem): void => {
           const listed = assembleCzRegionalDecision({
@@ -2076,7 +2096,10 @@ export const czRegionalAdapter = defineSourceAdapter({
               continue;
             }
             if (Result.isError(attempt)) {
-              if (attempt.error instanceof AdapterFetchError) {
+              if (
+                attempt.error instanceof AdapterFetchError &&
+                !(attempt.error instanceof PublisherPageError)
+              ) {
                 throw attempt.error;
               }
               // One row the adapter refuses must not fail the page and pin the
