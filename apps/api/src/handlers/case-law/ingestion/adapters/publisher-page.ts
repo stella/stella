@@ -187,10 +187,10 @@ const readPublisherPageContent = ({
         return reject("interstitial");
       }
       return Result.ok(body);
+    default:
+      kind satisfies never;
+      return panic("Unhandled publisher page kind");
   }
-  // Every page kind returns above; a new kind fails here at compile time.
-  kind satisfies never;
-  return panic("Unhandled publisher page kind");
 };
 
 /** Validate the response before a listing parser can mistake refusal for absence. */
