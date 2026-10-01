@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "${GITHUB_WORKSPACE:?}/apps/web"
+echo "Container Playwright package: $(realpath node_modules/@playwright/test)"
 bun -e '
   import { existsSync } from "node:fs";
   import * as playwright from "@playwright/test";

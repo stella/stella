@@ -778,6 +778,8 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
 ]);
 
 export const TOOLING_ENV_KEYS = new Set([
+  // Preserve Bun global-store links inside browser containers.
+  "BUN_INSTALL_CACHE_DIR",
   // Browser commands use only executables baked into the pinned image.
   "PLAYWRIGHT_BROWSERS_PATH",
   "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD",

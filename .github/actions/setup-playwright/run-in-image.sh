@@ -18,9 +18,22 @@ if [[ "$#" -eq 0 ]]; then
 fi
 # Safe Chain may put a shell shim on PATH; mount Bun's native executable.
 bun_binary=$(bun -p 'process.execPath')
+# Isolated global-store entries link outside the workspace into this cache.
+bun_cache=$(bun pm cache)
+if [[ "$bun_cache" != /* || ! -d "$bun_cache" ]]; then
+  echo "::error::Bun install cache is missing or is not an absolute path" >&2
+  exit 1
+fi
+if [[ "$network" == none ]]; then
+  echo "Bun install cache: $bun_cache"
+  readlink "$workspace/apps/web/node_modules/@playwright/test" || true
+  realpath "$workspace/apps/web/node_modules/@playwright/test"
+fi
 args=(run --rm --init --ipc=host --network "$network"
   --user "$(id -u):$(id -g)"
   --volume "$workspace:$workspace"
+  --volume "$bun_cache:$bun_cache:ro"
+  --env "BUN_INSTALL_CACHE_DIR=$bun_cache"
   --volume "$bun_binary:/usr/local/bin/bun:ro"
   --volume "$bun_binary:/usr/local/bin/bunx:ro"
   --workdir "$PWD"
