@@ -9,14 +9,6 @@ import {
 import { Temporal } from "@stll/time";
 
 import { env } from "@/api/env";
-import {
-  runObservedAction,
-  type ActionCostRecorder,
-} from "@/api/lib/action-costs/context";
-import {
-  getActionCostRecorder,
-  reportMissingActionCostIdentity,
-} from "@/api/lib/action-costs/recorder";
 import type { SafeId } from "@/api/lib/branded-types";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -35,6 +27,14 @@ import {
   createRedisClient,
 } from "@/api/lib/redis-client";
 import { coordinationKey, type CoordinationKey } from "@/api/lib/redis-keys";
+import {
+  runObservedAction,
+  type ActionCostRecorder,
+} from "@/api/lib/usage/action-costs/context";
+import {
+  getActionCostRecorder,
+  reportMissingActionCostIdentity,
+} from "@/api/lib/usage/action-costs/recorder";
 
 type RedisCommands = {
   send: (command: string, args: string[]) => Promise<unknown>;
@@ -580,7 +580,9 @@ export const withActionAdmission = async <T>({
   try {
     outcome = await Result.tryPromise({
       try: () =>
-        admissionScope.run(executionScope, () => observedRun(controller.signal)),
+        admissionScope.run(executionScope, () =>
+          observedRun(controller.signal),
+        ),
       catch: (error: unknown) => error,
     });
   } finally {

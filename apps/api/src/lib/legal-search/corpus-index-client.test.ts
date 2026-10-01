@@ -3,11 +3,6 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { Temporal } from "@stll/time";
 
 import { envBase } from "@/api/env-base";
-import {
-  ACTION_COST_CALL_KIND,
-  runObservedAction,
-  type ActionCostObservation,
-} from "@/api/lib/action-costs/context";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   CORPUS_INDEX_CLUSTER_CONFIG,
@@ -30,6 +25,11 @@ import {
   RELEVANCE_ORDER,
 } from "@/api/lib/legal-search/corpus-search-order";
 import { isRecord } from "@/api/lib/type-guards";
+import {
+  ACTION_COST_CALL_KIND,
+  runObservedAction,
+  type ActionCostObservation,
+} from "@/api/lib/usage/action-costs/context";
 
 // Pins the corpus-index HTTP request contract. The engine defaults search
 // hits to document-id order unless `sort_by` is sent, and the rank-based

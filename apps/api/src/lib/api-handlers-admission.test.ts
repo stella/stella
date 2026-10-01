@@ -5,10 +5,6 @@ import { Elysia } from "elysia";
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 
 import { env } from "@/api/env";
-import {
-  currentActionCostIdentity,
-  type ActionCostObservation,
-} from "@/api/lib/action-costs/context";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -18,6 +14,10 @@ import {
   ActionAdmissionError,
   withActionAdmission,
 } from "@/api/lib/rate-limit/action-admission";
+import {
+  currentActionCostIdentity,
+  type ActionCostObservation,
+} from "@/api/lib/usage/action-costs/context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const context = (signal?: AbortSignal) => ({

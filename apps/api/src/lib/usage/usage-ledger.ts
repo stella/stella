@@ -49,9 +49,9 @@ import type {
   UsageServiceTier,
   UsageEntitlementStatus,
 } from "@/api/db/schema";
-import { currentActionCostIdentity } from "@/api/lib/action-costs/context";
 import type { SafeId } from "@/api/lib/branded-types";
 import { UsageLimitExceededError } from "@/api/lib/errors/tagged-errors";
+import { currentActionCostIdentity } from "@/api/lib/usage/action-costs/context";
 
 /** A stored status this build does not know. */
 const UNRECOGNIZED_STATUS = "unrecognized" as const;

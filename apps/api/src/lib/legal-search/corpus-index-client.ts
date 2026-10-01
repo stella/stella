@@ -4,16 +4,16 @@ import { fetchWithTimeout, type FetchWithTimeoutInit } from "@stll/fetch";
 import { Temporal } from "@stll/time";
 
 import { envBase } from "@/api/env-base";
-import {
-  ACTION_COST_CALL_KIND,
-  recordExternalActionCall,
-} from "@/api/lib/action-costs/context";
 import type { QuickwitCluster } from "@/api/lib/legal-search/corpus-generation-contract";
 import {
   CORPUS_INDEX_COMMIT_TIMEOUT_SECS,
   type CorpusIndexConfig,
 } from "@/api/lib/legal-search/corpus-index-config";
 import { isRecord } from "@/api/lib/type-guards";
+import {
+  ACTION_COST_CALL_KIND,
+  recordExternalActionCall,
+} from "@/api/lib/usage/action-costs/context";
 
 /**
  * Thin lazy HTTP client over corpus index's REST API. Built on first use

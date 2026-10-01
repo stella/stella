@@ -17,7 +17,7 @@ import { actionCostWriteQueries } from "./store";
 
 const migration = readFileSync(
   new URL(
-    "../../../drizzle/20261003122900_action_cost_records/migration.sql",
+    "../../../../drizzle/20261003122900_action_cost_records/migration.sql",
     import.meta.url,
   ),
   "utf-8",
@@ -63,7 +63,7 @@ const createDatabase = async () => {
   await db.exec(migration);
   const indexMigration = readFileSync(
     new URL(
-      "../../../drizzle/20261003123000_action_cost_usage_index/migration.sql",
+      "../../../../drizzle/20261003123000_action_cost_usage_index/migration.sql",
       import.meta.url,
     ),
     "utf-8",

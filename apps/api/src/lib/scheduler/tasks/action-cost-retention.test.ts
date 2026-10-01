@@ -1,6 +1,6 @@
 import { expect, mock, test } from "bun:test";
 
-import { ACTION_COST_RETENTION_BATCH_SIZE } from "@/api/lib/action-costs/retention";
+import { ACTION_COST_RETENTION_BATCH_SIZE } from "@/api/lib/usage/action-costs/retention";
 
 import { drainActionCosts } from "./action-cost-retention";
 

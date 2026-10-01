@@ -59,7 +59,9 @@ const createRecorder = () => {
     batchSize: WRITE_BATCH_SIZE,
     write: async (batch: ActionCostObservation[]) => {
       const { writeActionCostObservations } = await import("./store");
-      await writeActionCostObservations(batch);
+      const { openOrganizationFileUsageDb } =
+        await import("@/api/lib/db/maintenance-db");
+      await writeActionCostObservations(openOrganizationFileUsageDb(), batch);
     },
     onFailure: (cause, dropped) => drops.add(dropped, cause),
     onOverflow: () => drops.add(1),
@@ -86,3 +88,6 @@ export const flushActionCostRecords = async (): Promise<void> => {
 };
 
 export const reportMissingActionCostIdentity = (): void => drops.add(1);
+
+export const reportActionCostObservationFailure = (cause: unknown): void =>
+  drops.add(1, cause);

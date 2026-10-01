@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import { actionCostCalls, actionCostRecords } from "@/api/db/schema";
+import type { MaintenanceDb } from "@/api/lib/db/maintenance-db";
 
 import type { ActionCostObservation, ActionCostRecord } from "./context";
 
@@ -89,12 +90,10 @@ export const actionCostWriteQueries = (
 };
 
 export const writeActionCostObservations = async (
+  db: Pick<MaintenanceDb, "transaction">,
   batch: ActionCostObservation[],
 ): Promise<void> => {
-  // System observations are inaccessible to the tenant role. Resolve the owner
-  // connection only when the enabled recorder actually flushes a batch.
-  const { rootDb } = await import("@/api/db/root");
-  await rootDb.transaction(async (tx) => {
+  await db.transaction(async (tx) => {
     const queries = actionCostWriteQueries(tx, batch);
     await queries.at(0);
     await queries.at(1);

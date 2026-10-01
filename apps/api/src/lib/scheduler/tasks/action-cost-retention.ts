@@ -1,9 +1,9 @@
 import { env } from "@/api/env";
+import type { SchedulerTask } from "@/api/lib/scheduler/types";
 import {
   ACTION_COST_RETENTION_BATCH_SIZE,
   sweepActionCosts,
-} from "@/api/lib/action-costs/retention";
-import type { SchedulerTask } from "@/api/lib/scheduler/types";
+} from "@/api/lib/usage/action-costs/retention";
 
 export const SWEEP_ACTION_COSTS_TASK = "actions.sweepCosts" as const;
 const MAX_RETENTION_BATCHES_PER_RUN = 16;

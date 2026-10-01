@@ -125,12 +125,7 @@ import { myWorkRoute } from "@/api/handlers/work-obligations/my-work-route";
 import { workObligationsRoute } from "@/api/handlers/work-obligations/routes";
 import { workspaceEventsRoute } from "@/api/handlers/workspaces/events";
 import { workspacesRoute } from "@/api/handlers/workspaces/routes";
-import {
-  ACTION_COST_CALL_KIND,
-  recordExternalActionCall,
-} from "@/api/lib/action-costs/context";
-import { flushActionCostRecords } from "@/api/lib/action-costs/recorder";
-import { captureError, detached } from "@/api/lib/analytics/capture";
+import { detached } from "@/api/lib/analytics/capture";
 import { getAuth, realtimeAuthorizers } from "@/api/lib/auth";
 import { shouldRejectBrowserMutation } from "@/api/lib/browser-origin-guard";
 import {
@@ -185,6 +180,14 @@ import {
 import { startSse, stopSse } from "@/api/lib/sse";
 import { clearByokAdapterCache } from "@/api/lib/tanstack-ai-models";
 import { isUploadRateLimitedPath } from "@/api/lib/upload-rate-limit";
+import {
+  ACTION_COST_CALL_KIND,
+  recordExternalActionCall,
+} from "@/api/lib/usage/action-costs/context";
+import {
+  flushActionCostRecords,
+  reportActionCostObservationFailure,
+} from "@/api/lib/usage/action-costs/recorder";
 import { isLocalDevOpen, runtimeMode } from "@/api/runtime-mode";
 import {
   API_SHUTDOWN_OUTCOME,
@@ -630,7 +633,7 @@ const startServer = async (): Promise<void> => {
   const stopRegistryObservation = observeRegistryRequests({
     onRequest: () =>
       recordExternalActionCall(ACTION_COST_CALL_KIND.registryRequest),
-    onError: (error) => captureError(error, { phase: "action-cost-registry" }),
+    onError: reportActionCostObservationFailure,
   });
   startMemoryPressureHandler();
 
