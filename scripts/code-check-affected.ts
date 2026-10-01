@@ -100,6 +100,7 @@ export const OXLINT_CONFIGURATION_CACHE_INPUTS = [
   "$TURBO_ROOT$/oxlint.config.ts",
   "$TURBO_ROOT$/oxlint.result-boundary.config.ts",
   "$TURBO_ROOT$/.oxlint-plugins/**",
+  "$TURBO_ROOT$/scripts/oxlint-presets/**",
   "$TURBO_ROOT$/scripts/ownership.ts",
   "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
   "$TURBO_ROOT$/scripts/sql-perf-detector.ts",

@@ -27,7 +27,13 @@ import type {
 } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { toDataUrl } from "@/api/lib/data-url";
+import { anonymizeTextFieldsWithDependencies } from "@/api/mcp/anonymization-core";
+import { AnonymizedFieldBoundaryError } from "@/api/mcp/field-markers";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import {
+  createRewritingAnonymizeDependencies,
+  replaceFirstFieldDelimiterToken,
+} from "@/api/tests/helpers/anonymize-pipeline-fakes";
 import {
   asTestExecutable,
   asTestToolSet,
@@ -63,11 +69,11 @@ const anonymizeTextFieldsMock = mock(
       }
       return next;
     });
-    return {
+    return Result.ok({
       entityCount: fields.length,
       fields: anonymized,
       redactionMap,
-    };
+    });
   },
 );
 
@@ -279,11 +285,11 @@ describe("chat third-party anonymization boundary", () => {
           redactionMap.set(placeholder, field);
           return placeholder;
         });
-        return {
+        return Result.ok({
           entityCount: fields.length,
           fields: anonymized,
           redactionMap,
-        };
+        });
       },
     );
     const { scopedDb } = createScopedDbMock({});
@@ -331,11 +337,13 @@ describe("chat third-party anonymization boundary", () => {
 
   test("forces boundary IDs through structured object keys", async () => {
     const organizationId = "11111111-1111-4111-8111-111111111111";
-    const anonymizeIds = mock(async ({ fields }: { fields: string[] }) => ({
-      entityCount: fields.length,
-      fields: fields.map(() => "[MISC_1]"),
-      redactionMap: new Map([["[MISC_1]", fields.at(0) ?? ""]]),
-    }));
+    const anonymizeIds = mock(async ({ fields }: { fields: string[] }) =>
+      Result.ok({
+        entityCount: fields.length,
+        fields: fields.map(() => "[MISC_1]"),
+        redactionMap: new Map([["[MISC_1]", fields.at(0) ?? ""]]),
+      }),
+    );
     const { scopedDb } = createScopedDbMock({});
     const boundary = createChatThirdPartyBoundary({
       anonymizeFields: anonymizeIds,
@@ -871,13 +879,15 @@ describe("chat third-party anonymization boundary", () => {
     const organizationId = toSafeId<"organization">(
       "11111111-1111-4111-8111-111111111111",
     );
-    const anonymizeIds = mock(async ({ fields }: { fields: string[] }) => ({
-      entityCount: 1,
-      fields: fields.map((field) =>
-        field.replaceAll(organizationId, () => "[MISC_1]"),
-      ),
-      redactionMap: new Map([["[MISC_1]", organizationId]]),
-    }));
+    const anonymizeIds = mock(async ({ fields }: { fields: string[] }) =>
+      Result.ok({
+        entityCount: 1,
+        fields: fields.map((field) =>
+          field.replaceAll(organizationId, () => "[MISC_1]"),
+        ),
+        redactionMap: new Map([["[MISC_1]", organizationId]]),
+      }),
+    );
     const { scopedDb } = createScopedDbMock({});
     const boundary = createChatThirdPartyBoundary({
       anonymizeFields: anonymizeIds,
@@ -1208,8 +1218,8 @@ describe("chat third-party anonymization boundary", () => {
   });
 
   test("keeps MCP metadata envelope keys stable and restores only schema argument keys", async () => {
-    const anonymizeMetadata = mock(
-      async ({ fields }: { fields: string[] }) => ({
+    const anonymizeMetadata = mock(async ({ fields }: { fields: string[] }) =>
+      Result.ok({
         entityCount: fields.length,
         fields: fields.map((field) =>
           field
@@ -1282,13 +1292,15 @@ describe("chat third-party anonymization boundary", () => {
     const organizationId = toSafeId<"organization">(
       "11111111-1111-4111-8111-111111111111",
     );
-    const anonymizeIds = mock(async ({ fields }: { fields: string[] }) => ({
-      entityCount: 1,
-      fields: fields.map((field) =>
-        field.replaceAll(organizationId, () => "[MISC_1]"),
-      ),
-      redactionMap: new Map([["[MISC_1]", organizationId]]),
-    }));
+    const anonymizeIds = mock(async ({ fields }: { fields: string[] }) =>
+      Result.ok({
+        entityCount: 1,
+        fields: fields.map((field) =>
+          field.replaceAll(organizationId, () => "[MISC_1]"),
+        ),
+        redactionMap: new Map([["[MISC_1]", organizationId]]),
+      }),
+    );
     const { scopedDb } = createScopedDbMock({});
     const boundary = createChatThirdPartyBoundary({
       anonymizeFields: anonymizeIds,
@@ -1571,11 +1583,11 @@ describe("chat third-party anonymization boundary", () => {
         }
         return next;
       });
-      return {
+      return Result.ok({
         entityCount: redactionMap.size,
         fields: anonymized,
         redactionMap,
-      };
+      });
     });
     const { scopedDb } = createScopedDbMock({});
     const boundary = createChatThirdPartyBoundary({
@@ -1632,11 +1644,11 @@ describe("chat third-party anonymization boundary", () => {
         }
         return next;
       });
-      return {
+      return Result.ok({
         entityCount: redactionMap.size,
         fields: anonymized,
         redactionMap,
-      };
+      });
     });
     const { scopedDb } = createScopedDbMock({});
     const boundary = createChatThirdPartyBoundary({
@@ -1720,13 +1732,15 @@ describe("chat third-party anonymization boundary", () => {
   });
 
   test("keeps literal source placeholders distinct from new redactions", async () => {
-    const anonymizeSecret = mock(async ({ fields }: { fields: string[] }) => ({
-      entityCount: 1,
-      fields: fields.map((field) =>
-        field.replaceAll("Secret", () => "[MISC_2]"),
-      ),
-      redactionMap: new Map([["[MISC_2]", "Secret"]]),
-    }));
+    const anonymizeSecret = mock(async ({ fields }: { fields: string[] }) =>
+      Result.ok({
+        entityCount: 1,
+        fields: fields.map((field) =>
+          field.replaceAll("Secret", () => "[MISC_2]"),
+        ),
+        redactionMap: new Map([["[MISC_2]", "Secret"]]),
+      }),
+    );
     const { scopedDb } = createScopedDbMock({});
     const boundary = createChatThirdPartyBoundary({
       anonymizeFields: anonymizeSecret,
@@ -1755,18 +1769,20 @@ describe("chat third-party anonymization boundary", () => {
   });
 
   test("does not let extreme literal indices collapse new placeholders", async () => {
-    const anonymizeSecrets = mock(async ({ fields }: { fields: string[] }) => ({
-      entityCount: 2,
-      fields: fields.map((field) =>
-        field
-          .replaceAll("First", () => "[MISC_1]")
-          .replaceAll("Second", () => "[MISC_2]"),
-      ),
-      redactionMap: new Map([
-        ["[MISC_1]", "First"],
-        ["[MISC_2]", "Second"],
-      ]),
-    }));
+    const anonymizeSecrets = mock(async ({ fields }: { fields: string[] }) =>
+      Result.ok({
+        entityCount: 2,
+        fields: fields.map((field) =>
+          field
+            .replaceAll("First", () => "[MISC_1]")
+            .replaceAll("Second", () => "[MISC_2]"),
+        ),
+        redactionMap: new Map([
+          ["[MISC_1]", "First"],
+          ["[MISC_2]", "Second"],
+        ]),
+      }),
+    );
     const { scopedDb } = createScopedDbMock({});
     const boundary = createChatThirdPartyBoundary({
       anonymizeFields: anonymizeSecrets,
@@ -1946,7 +1962,11 @@ const anonymizeInOrderOfAppearance = async ({
     }
     return next;
   });
-  return { entityCount: redactionMap.size, fields: anonymized, redactionMap };
+  return Result.ok({
+    entityCount: redactionMap.size,
+    fields: anonymized,
+    redactionMap,
+  });
 };
 
 const createThreadBoundary = (
@@ -2194,5 +2214,60 @@ describe("the restorations a request's history holds", () => {
       { placeholder: "[PERSON_1]", original: "Alice" },
       { placeholder: "[PERSON_2]", original: "Bob" },
     ]);
+  });
+});
+
+describe("anonymization output that lost its field structure", () => {
+  const createBoundaryOverPipeline = (rewrite: (text: string) => string) => {
+    const { scopedDb } = createScopedDbMock({});
+    const dependencies = createRewritingAnonymizeDependencies(rewrite);
+    return createChatThirdPartyBoundary({
+      anonymizeFields: async (input) =>
+        await anonymizeTextFieldsWithDependencies({ ...input, dependencies }),
+      anonymizationScopeId: "workspace-A",
+      organizationId: toSafeId<"organization">(
+        "11111111-1111-4111-8111-111111111111",
+      ),
+      scopedDb,
+      sendMode: CHAT_SEND_MODE.anonymized,
+      threadRestorations: [{ placeholder: "[PERSON_1]", original: "Alice" }],
+    });
+  };
+
+  test("refuses the text and keeps the thread's placeholders unchanged", async () => {
+    const boundary = createBoundaryOverPipeline((text) =>
+      replaceFirstFieldDelimiterToken(text, "[ORGANIZATION_1]"),
+    );
+    if (boundary.type !== "anonymized") {
+      throw new TypeError("Expected anonymized boundary");
+    }
+    const placeholdersBefore = new Map(boundary.redactionMap);
+
+    const prepared = await prepareTextForThirdParty({
+      boundary,
+      text: "Bob briefed Alice.",
+    });
+
+    expect(Result.isError(prepared)).toBe(true);
+    if (Result.isOk(prepared)) {
+      return;
+    }
+    expect(prepared.error.status).toBe(500);
+    expect(prepared.error.cause).toBeInstanceOf(AnonymizedFieldBoundaryError);
+    expect(boundary.redactionMap).toEqual(placeholdersBefore);
+  });
+
+  test("passes the text through when the structure survives", async () => {
+    const boundary = createBoundaryOverPipeline((text) => text);
+
+    const prepared = await prepareTextForThirdParty({
+      boundary,
+      text: "Bob briefed Alice.",
+    });
+
+    // The thread already sent Alice under a placeholder, so she keeps it.
+    expect(Result.isOk(prepared) ? prepared.value : prepared.error).toBe(
+      "Bob briefed [PERSON_1].",
+    );
   });
 });
