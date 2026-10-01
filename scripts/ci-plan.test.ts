@@ -1087,7 +1087,7 @@ test("every browser suite belongs to exactly one required matrix leg", () => {
       }),
       steps: v.array(
         v.object({
-          name: v.optional(v.string()),
+          name: v.string(),
           if: v.optional(v.string()),
           run: v.optional(v.string()),
         }),
@@ -1102,13 +1102,15 @@ test("every browser suite belongs to exactly one required matrix leg", () => {
   const suites = browser.steps.filter(
     ({ run }) => run?.includes("test:browser") || run?.includes("test:e2e"),
   );
-  expect(suites.map(({ name }) => name).toSorted()).toEqual(
+  expect(
+    suites.map(({ name }) => name).toSorted((a, b) => a.localeCompare(b)),
+  ).toEqual(
     [
       "Test desktop browser interactions",
       "Test extension browser boundary",
       "Test UI browser interactions",
       "Test UI playground visuals",
-    ].toSorted(),
+    ].toSorted((a, b) => a.localeCompare(b)),
   );
   for (const suite of suites) {
     const legs = browser.strategy.matrix.suite.filter((leg) =>
