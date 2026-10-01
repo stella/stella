@@ -408,7 +408,7 @@ describe("derived general-court metadata", () => {
     );
     expect(outcome.type).toBe("parsed");
     if (outcome.type !== "parsed") {
-      return panic("the stored listing must be reparsable without its detail");
+      panic("the stored listing must be reparsable without its detail");
     }
     expect(outcome.result.sourceUrl).toBeUndefined();
     expect(outcome.result.metadata["sourceUrlStatus"]).toBe(
