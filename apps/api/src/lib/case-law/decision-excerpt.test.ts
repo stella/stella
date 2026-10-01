@@ -413,6 +413,29 @@ describe("the excerpt a corpus hit shows", () => {
 });
 
 describe("sentence excerpts for agent triage", () => {
+  test.each(["Match", "unmatched"])(
+    "translates a folded snippet's mark across a sentence boundary with query %s",
+    (query) => {
+      const preceding = `${"a".repeat(384)} tail.`;
+      const matched = "Match explains the holding.";
+      const passage = `${preceding}${" ".repeat(10)}${matched}`;
+      expect(preceding).toHaveLength(390);
+      expect(passage.indexOf("Match")).toBe(400);
+
+      const excerpt = corpusExcerpt({
+        engineSnippet: "tail. <mark>Match</mark>",
+        excerpt: "long",
+        language: null,
+        passage,
+        sentenceAligned: true,
+        tokens: tokenizeCorpusFreeText(query),
+      });
+
+      expect(stripSearchHighlightMarkup(excerpt ?? "")).toBe(matched);
+      expect(excerpt).toContain("<mark>Match</mark>");
+    },
+  );
+
   test("keeps the matched sentence whole at every position within a bounded window", () => {
     const sentences = Array.from(
       { length: 12 },
