@@ -111,11 +111,22 @@ const runScopedTransaction = async <
       : workspaceScope.serverValidatedWorkspaceIds;
   const wsIds = `{${workspaceIds.join(",")}}`;
 
-  return await database.transaction(async (tx: TTransaction) => {
-    if (userId === null) {
-      // A service actor has no membership-derived authority. Resolve its
-      // explicit workspace IDs against the tenant before changing the role.
-      await tx.execute(sql`SELECT set_config(
+  const transactionStartedAt = performance.now();
+  const phases = { beginMs: 0, setupMs: 0, callbackMs: 0, finishMs: 0 };
+  let setupStatements = 0;
+  let callbackFinishedAt: number | undefined;
+  let outcome = "failed";
+  try {
+    const result = await database.transaction(async (tx: TTransaction) => {
+      // Includes waiting to enter the driver's transaction, not only BEGIN SQL.
+      phases.beginMs = performance.now() - transactionStartedAt;
+      const setupStartedAt = performance.now();
+      try {
+        if (userId === null) {
+          // A service actor has no membership-derived authority. Resolve its
+          // explicit workspace IDs against the tenant before changing the role.
+          setupStatements += 1;
+          await tx.execute(sql`SELECT set_config(
         '${sql.raw(SETTING_WORKSPACE_IDS)}',
         coalesce((
           SELECT pg_catalog.array_agg(${workspaces.id})::text
@@ -125,18 +136,46 @@ const runScopedTransaction = async <
         ), '{}'),
         true
       )`);
-    }
-    await tx.execute(
-      sql`SELECT
+        }
+        setupStatements += 1;
+        await tx.execute(
+          sql`SELECT
         set_config('role', '${sql.raw(stella.name)}', true),
         set_config('${sql.raw(SETTING_WORKSPACE_IDS)}', ${userId === null ? sql`pg_catalog.current_setting('${sql.raw(SETTING_WORKSPACE_IDS)}', true)` : sql`${wsIds}`}, true),
         set_config('${sql.raw(SETTING_WORKSPACE_ACCESS_MODE)}', ${workspaceScope.type}, true),
         set_config('${sql.raw(SETTING_ORGANIZATION_ID)}', ${organizationId}, true),
         set_config('${sql.raw(SETTING_USER_ID)}', ${userId ?? ""}, true)`,
+        );
+      } finally {
+        phases.setupMs = performance.now() - setupStartedAt;
+      }
+      const callbackStartedAt = performance.now();
+      try {
+        return await fn(tx);
+      } finally {
+        callbackFinishedAt = performance.now();
+        phases.callbackMs = callbackFinishedAt - callbackStartedAt;
+      }
+    });
+    outcome = "committed";
+    return result;
+  } finally {
+    const transactionFinishedAt = performance.now();
+    phases.finishMs =
+      callbackFinishedAt === undefined
+        ? 0
+        : transactionFinishedAt - callbackFinishedAt;
+    process.stderr.write(
+      `SCOPED_DB_PROFILE_MS ${JSON.stringify({
+        totalMs: transactionFinishedAt - transactionStartedAt,
+        ...phases,
+        setupStatements,
+        actor: userId === null ? "service" : "user",
+        scope: workspaceScope.type,
+        outcome,
+      })}\n`,
     );
-
-    return await fn(tx);
-  });
+  }
 };
 
 /**
