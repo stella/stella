@@ -1723,6 +1723,14 @@ jobs:
         # The shard filters are exclusions, which subtract from that union, so
         # sharding narrows the scoped set instead of widening it.
         run: |
+          if [[ "$SHARD" == "api-1" ]]; then
+            unset API_TEST_SHARD
+            set -o pipefail
+            output="$RUNNER_TEMP/api-unsplit-output.log"
+            (cd apps/api && bun scripts/run-tests.ts) | tee "$output"
+            rg '^Ran [1-9][0-9]* of [1-9][0-9]* API test batches' "$output"
+            exit 0
+          fi
           args=()
           if [[ -n "$AFFECTED_FLAG" ]]; then
             scope=$(bun scripts/test-scope.ts --base "origin/$BASE_REF")
