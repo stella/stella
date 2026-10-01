@@ -6,12 +6,7 @@ import { useTranslations } from "use-intl";
 
 import { copyToClipboard } from "@stll/clipboard";
 import { Button } from "@stll/ui/button";
-import {
-  CheckIcon,
-  CopyIcon,
-  MessageSquarePlusIcon,
-  QuoteIcon,
-} from "@stll/ui/icons";
+import { CheckIcon, CopyIcon, NewChatIcon, QuoteIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
 import { useChatEditorManager } from "@/components/chat-editor-provider";
@@ -254,7 +249,7 @@ export const ChatSelectionToolbar = ({
                     size="sm"
                     variant="ghost"
                   >
-                    <MessageSquarePlusIcon className="size-3.5" />
+                    <NewChatIcon className="size-3.5" />
                     <span className={ACTION_LABEL_CLASS}>
                       {t("chat.selection.askInNewChat")}
                     </span>
