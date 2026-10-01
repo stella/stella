@@ -91,8 +91,9 @@ export const startChatExecutionAdmission = async ({
           reservePeriod: async (identity) => {
             const expectedKind =
               mode === "action" ? periodIdentity.actionKind : actionKind;
-            if (identity.actionKind !== expectedKind)
-              {panic("Chat reservation changed its action kind");}
+            if (identity.actionKind !== expectedKind) {
+              panic("Chat reservation changed its action kind");
+            }
             const reserved = await control.reservePeriod(identity);
             return Result.isError(reserved)
               ? Result.err(chatAdmissionError(reserved.error))
