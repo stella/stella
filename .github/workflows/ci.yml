@@ -1627,7 +1627,7 @@ jobs:
       # another.
       fail-fast: false
       matrix:
-        shard: [api-1, api-2, api-3, api-4, rest, web]
+        shard: [api-1, api-2, api-3, api-4, rest-web]
 
     steps:
       - name: Checkout
@@ -1697,8 +1697,9 @@ jobs:
         # Outside the workspace, so no shard filter selects it: one shard owns
         # it outright.
         if: >-
-          needs.ci-plan.outputs.package_checks_required == 'true'
-          && matrix.shard == 'rest'
+          !cancelled()
+          && needs.ci-plan.outputs.package_checks_required == 'true'
+          && matrix.shard == 'rest-web'
         run: bun --cwd .claude/mcp test
 
       # The API test runner sizes its parallel lanes from the runner's cores
@@ -1707,12 +1708,14 @@ jobs:
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: nproc; free -g
 
-      - name: Test
-        if: needs.ci-plan.outputs.package_checks_required == 'true'
+      - name: Test API or rest
+        if: >-
+          !cancelled()
+          && needs.ci-plan.outputs.package_checks_required == 'true'
         env:
           AFFECTED_FLAG: ${{ steps.affected.outputs.flag }}
           BASE_REF: ${{ github.base_ref || 'main' }}
-          SHARD: ${{ matrix.shard }}
+          SHARD: ${{ matrix.shard == 'rest-web' && 'rest' || matrix.shard }}
         # Not --affected: a suite that reads files outside its own package also
         # needs the packages its turbo.json test inputs name, and
         # `--affected --filter=X` intersects instead of widening.
@@ -1731,8 +1734,32 @@ jobs:
           read -r -a shard_args <<<"$(bun scripts/test-shards.ts --filters "$SHARD")"
           export API_TEST_SHARD="$(bun scripts/test-shards.ts --api-shard "$SHARD")"
           set -o pipefail
-          plan="$RUNNER_TEMP/test-plan.json"
-          output="$RUNNER_TEMP/test-output.log"
+          plan="$RUNNER_TEMP/test-plan-$SHARD.json"
+          output="$RUNNER_TEMP/test-output-$SHARD.log"
+          bun run test -- --concurrency=2 "${args[@]}" "${shard_args[@]}" --dry=json > "$plan"
+          bun run test -- --concurrency=2 --output-logs=full "${args[@]}" "${shard_args[@]}" | tee "$output"
+          bun scripts/test-shards.ts --verify-output "$SHARD" "$plan" "$output"
+
+      - name: Test web
+        if: >-
+          !cancelled()
+          && needs.ci-plan.outputs.package_checks_required == 'true'
+          && matrix.shard == 'rest-web'
+        env:
+          AFFECTED_FLAG: ${{ steps.affected.outputs.flag }}
+          BASE_REF: ${{ github.base_ref || 'main' }}
+          SHARD: web
+        run: |
+          args=()
+          if [[ -n "$AFFECTED_FLAG" ]]; then
+            scope=$(bun scripts/test-scope.ts --base "origin/$BASE_REF")
+            read -r -a args <<<"$scope"
+          fi
+          read -r -a shard_args <<<"$(bun scripts/test-shards.ts --filters "$SHARD")"
+          export API_TEST_SHARD="$(bun scripts/test-shards.ts --api-shard "$SHARD")"
+          set -o pipefail
+          plan="$RUNNER_TEMP/test-plan-$SHARD.json"
+          output="$RUNNER_TEMP/test-output-$SHARD.log"
           bun run test -- --concurrency=2 "${args[@]}" "${shard_args[@]}" --dry=json > "$plan"
           bun run test -- --concurrency=2 --output-logs=full "${args[@]}" "${shard_args[@]}" | tee "$output"
           bun scripts/test-shards.ts --verify-output "$SHARD" "$plan" "$output"
