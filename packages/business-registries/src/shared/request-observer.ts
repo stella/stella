@@ -7,7 +7,9 @@ type RegistryRequestObserver = {
 const observers = new Set<RegistryRequestObserver>();
 
 // Registration is explicit; importing a registry client starts no observer.
-export const observeRegistryRequests = (observer: RegistryRequestObserver) => {
+export const observeRegistryRequests = (
+  observer: RegistryRequestObserver,
+): (() => boolean) => {
   observers.add(observer);
   return () => observers.delete(observer);
 };
