@@ -302,7 +302,6 @@ describe("pdf signing session authorization", () => {
         sessionToken: redeemed?.sessionToken ?? "",
       },
       tokenDb,
-      { identity: { userId: ids.userA1, organizationId: ids.orgA } },
     );
     expect(authorized.status).toBe("authorized");
     if (authorized.status !== "authorized") {
@@ -428,7 +427,6 @@ describe("pdf signing session authorization", () => {
         sessionToken: redeemed?.sessionToken ?? "",
       },
       tokenDb,
-      { identity: { userId: ids.userA1, organizationId: ids.orgA } },
     );
     expect(authorized.status).toBe("authorized");
     if (authorized.status !== "authorized") {
@@ -631,7 +629,6 @@ describe("pdf signing finalization attempts", () => {
         sessionToken: redeemed?.sessionToken ?? "",
       },
       tokenDb,
-      { identity: { userId: ids.userA1, organizationId: ids.orgA } },
     );
     expect(answered.status).toBe("finalized");
     if (answered.status === "finalized") {

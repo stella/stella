@@ -3,7 +3,7 @@ import { Result } from "better-result";
 import { env } from "@/api/env";
 import { createSafeTokenHandler } from "@/api/lib/api-handlers";
 import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
-import { authorizeDesktopRegistry } from "@/api/lib/business-registries/desktop/auth";
+import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { redeemPdfSigningHandoff } from "@/api/lib/files/pdf-signing/sessions";
 import { permissiveBodySchema } from "@/api/lib/permissive-route-schema";
@@ -25,7 +25,7 @@ const config = {
 const redeemPdfSigningHandoffEndpoint = createSafeTokenHandler(
   config,
   async function* ({ body, request }) {
-    const identity = yield* Result.await(authorizeDesktopRegistry(request));
+    const identity = yield* Result.await(authorizeDesktopAccount(request));
     const handoffToken = body?.handoffToken;
     const redeemed = yield* Result.await(
       Result.tryPromise({

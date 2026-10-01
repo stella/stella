@@ -183,6 +183,7 @@ pub struct SessionManager {
   cleanup_paths: HashSet<String>,
   linked_account: Option<LinkedAccountSnapshot>,
   linked_account_web_origin: Option<String>,
+  selected_self_host_connection: Option<TrustedSelfHostConnection>,
   notification_preferences: DesktopNotificationPreferences,
   trusted_self_host_connections: Vec<TrustedSelfHostConnection>,
   update: DesktopUpdateSnapshot,
@@ -533,6 +534,7 @@ impl SessionManager {
       cleanup_paths: HashSet::new(),
       linked_account: None,
       linked_account_web_origin: None,
+      selected_self_host_connection: None,
       notification_preferences: DesktopNotificationPreferences::default(),
       trusted_self_host_connections: Vec::new(),
       update: DesktopUpdateSnapshot::default(),
@@ -555,6 +557,21 @@ impl SessionManager {
   pub async fn initialize(&mut self) {
     let store = session_store::load_session_store(&self.store_path).await;
 
+    // Older stores record only the remembered web origin. Restore its pair
+    // only when unique; an ambiguous API selection needs explicit reconnection.
+    self.selected_self_host_connection =
+      store.selected_self_host_connection.or_else(|| {
+        let origin = store.linked_account_web_origin.as_deref()?;
+        let mut matches = store
+          .trusted_self_host_connections
+          .iter()
+          .filter(|connection| connection.web_origin == origin);
+        let selected = matches.next()?;
+        if matches.next().is_some() {
+          return None;
+        }
+        Some(selected.clone())
+      });
     self.linked_account = store.linked_account;
     self.linked_account_web_origin = store.linked_account_web_origin;
     if let Some(prefs) = store.notification_preferences {
@@ -1055,13 +1072,11 @@ impl SessionManager {
       .then_some(web_origin)
   }
 
-  pub fn linked_self_host_api_base_url(&self) -> Option<&str> {
-    let web_origin = self.linked_self_host_origin()?;
+  pub fn selected_self_host_connection(&self) -> Option<&TrustedSelfHostConnection> {
+    let selected = self.selected_self_host_connection.as_ref()?;
     self
-      .trusted_self_host_connections
-      .iter()
-      .find(|connection| connection.web_origin == web_origin)
-      .map(|connection| connection.api_base_url.as_str())
+      .is_trusted_self_host_connection(&selected.web_origin, &selected.api_base_url)
+      .then_some(selected)
   }
 
   pub fn is_trusted_self_host_origin(&self, origin: &str) -> bool {
@@ -1133,6 +1148,11 @@ impl SessionManager {
     trusted_at: String,
   ) {
     let normalized_api_base_url = normalize_api_base_url(&api_base_url);
+    self.selected_self_host_connection = Some(TrustedSelfHostConnection {
+      web_origin: web_origin.clone(),
+      api_base_url: normalized_api_base_url.clone(),
+      trusted_at: trusted_at.clone(),
+    });
     if let Some(connection) =
       self
         .trusted_self_host_connections
@@ -2104,6 +2124,7 @@ impl SessionManager {
       &cleanup,
       &self.linked_account,
       &self.linked_account_web_origin,
+      &self.selected_self_host_connection,
       &self.notification_preferences,
       &persisted,
       &self.trusted_self_host_connections,
@@ -2824,6 +2845,35 @@ mod tests {
       Some("https://selfhost.example")
     );
 
+    tokio::fs::remove_file(path).await.unwrap();
+  }
+
+  #[tokio::test]
+  async fn the_selected_self_host_keeps_its_api_and_origin_together() {
+    let path = std::env::temp_dir().join(format!(
+      "stella-selected-selfhost-{}.json",
+      uuid::Uuid::new_v4()
+    ));
+    let mut manager = SessionManager::new();
+    manager.store_path = path.clone();
+    manager.trust_self_host_connection_for_test(
+      "https://selfhost.example".into(),
+      "https://api.first.example".into(),
+    );
+    manager.trust_self_host_connection_for_test(
+      "https://selfhost.example".into(),
+      "https://api.selected.example".into(),
+    );
+    let selected = manager.selected_self_host_connection().unwrap();
+    assert_eq!(selected.api_base_url, "https://api.selected.example");
+    assert_eq!(selected.web_origin, "https://selfhost.example");
+    manager.persist_sessions_result().await.unwrap();
+    let mut restored = SessionManager::new();
+    restored.store_path = path.clone();
+    restored.initialize().await;
+    let selected = restored.selected_self_host_connection().unwrap();
+    assert_eq!(selected.api_base_url, "https://api.selected.example");
+    assert_eq!(selected.web_origin, "https://selfhost.example");
     tokio::fs::remove_file(path).await.unwrap();
   }
 

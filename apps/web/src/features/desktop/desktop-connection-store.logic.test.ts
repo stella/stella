@@ -1,272 +1,90 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import {
-  createDesktopConnectionStore,
-  type DesktopConnectionState,
-  type DesktopLinkOutcome,
-} from "@/features/desktop/desktop-connection-store.logic";
+import { createDesktopConnectionStore } from "@/features/desktop/desktop-connection-store.logic";
+import type { DesktopLinkOutcome } from "@/features/desktop/desktop-connection-store.logic";
 
-/**
- * Store wired to scripted collaborators: the test decides when the bridge
- * answers and when the link succeeds, and records what each was asked to do.
- */
 const scriptedStore = () => {
-  const bridgeAnswered = Promise.withResolvers<boolean>();
   const linked = Promise.withResolvers<Result<DesktopLinkOutcome, unknown>>();
-  const linkCalls: number[] = [];
+  const calls: number[] = [];
   const errors: unknown[] = [];
-  const watchSignals: AbortSignal[] = [];
-  const seen: DesktopConnectionState[] = [];
-
   const store = createDesktopConnectionStore({
     link: async () => {
-      linkCalls.push(linkCalls.length);
+      calls.push(calls.length);
       return await linked.promise;
     },
-    onError: (error) => {
-      errors.push(error);
-    },
-    watch: async (signal) => {
-      watchSignals.push(signal);
-      return await bridgeAnswered.promise;
-    },
+    onError: (error) => errors.push(error),
   });
-
-  store.subscribe(() => {
-    seen.push(store.getState());
-  });
-
-  return {
-    bridgeAnswered,
-    errors,
-    linkCalls,
-    linked,
-    seen,
-    store,
-    watchSignals,
-  };
+  return { linked, calls, errors, store };
 };
 
-/** The store's own await chain is several ticks deep. */
-const flush = async () => {
-  for (let tick = 0; tick < 10; tick++) {
-    await Promise.resolve();
-  }
-};
-
-describe("desktop connection store", () => {
-  test("a mounted surface alone never touches the bridge", () => {
-    const { store, watchSignals } = scriptedStore();
-    store.retain();
-    store.retain();
-
+describe("desktop account connection", () => {
+  test("reading and subscribing never starts a link", () => {
+    const { store, calls } = scriptedStore();
+    const release = store.subscribe(() => {});
     expect(store.getState()).toEqual({ status: "idle" });
-    expect(watchSignals.length).toBe(0);
+    expect(store.getServerState()).toEqual({ status: "idle" });
+    release();
+    expect(calls).toEqual([]);
   });
 
-  test("the download gesture starts the watch and links when the bridge answers", async () => {
-    const { bridgeAnswered, linked, seen, store, watchSignals } =
-      scriptedStore();
-    store.retain();
-
-    const watching = store.startWatch();
-    expect(store.getState()).toEqual({ status: "waiting" });
-    expect(watchSignals.length).toBe(1);
-
-    bridgeAnswered.resolve(true);
-    await flush();
+  test("concurrent explicit connections join one attempt", async () => {
+    const { store, calls, linked } = scriptedStore();
+    const first = store.connect();
+    const second = store.connect();
     expect(store.getState()).toEqual({ status: "connecting" });
-
     linked.resolve(
       Result.ok({ status: "connected", email: "lawyer@example.com" }),
     );
-    await watching;
-    expect(store.getState()).toEqual({
+    expect(await first).toEqual({
       status: "connected",
       email: "lawyer@example.com",
     });
-    expect(seen.map(({ status }) => status)).toEqual([
-      "waiting",
-      "connecting",
-      "connected",
-    ]);
-  });
-
-  test("a watch that finds nothing falls back to saying nothing", async () => {
-    const { bridgeAnswered, linkCalls, store } = scriptedStore();
-    store.retain();
-
-    const watching = store.startWatch();
-    bridgeAnswered.resolve(false);
-    await watching;
-
-    expect(store.getState()).toEqual({ status: "idle" });
-    expect(linkCalls.length).toBe(0);
-  });
-
-  test("a second ordinary connect during the watch joins the running attempt", async () => {
-    const { bridgeAnswered, linkCalls, linked, store } = scriptedStore();
-    store.retain();
-    const watching = store.startWatch();
-    bridgeAnswered.resolve(true);
-    await flush();
-
-    const manual = store.connect();
-    linked.resolve(
-      Result.ok({ status: "connected", email: "lawyer@example.com" }),
-    );
-
-    expect(await manual).toEqual({
+    expect(await second).toEqual({
       status: "connected",
       email: "lawyer@example.com",
     });
-    await watching;
-    expect(linkCalls.length).toBe(1);
-  });
-
-  test("a manual connect during an automatic link joins the same account link", async () => {
-    const { bridgeAnswered, linkCalls, linked, store } = scriptedStore();
-    store.retain();
-    const watching = store.startWatch();
-    bridgeAnswered.resolve(true);
-    await flush();
-
-    const manual = store.connect();
-    linked.resolve(
-      Result.ok({ status: "connected", email: "watch@example.com" }),
-    );
-
-    expect(await manual).toEqual({
-      status: "connected",
-      email: "watch@example.com",
-    });
-    await watching;
-    expect(linkCalls.length).toBe(1);
-    expect(store.getState()).toEqual({
-      status: "connected",
-      email: "watch@example.com",
-    });
-  });
-
-  test("a manual link that wins retires the watch instead of linking twice", async () => {
-    const { bridgeAnswered, linkCalls, linked, store, watchSignals } =
-      scriptedStore();
-    store.retain();
-    const watching = store.startWatch();
-
-    linked.resolve(
-      Result.ok({ status: "connected", email: "lawyer@example.com" }),
-    );
-    expect(await store.connect()).toEqual({
-      status: "connected",
-      email: "lawyer@example.com",
-    });
-    expect(watchSignals[0]?.aborted).toBe(true);
-
-    // The bridge answers only now, with the watch still between probes when
-    // the click landed.
-    bridgeAnswered.resolve(true);
-    await watching;
-    expect(linkCalls.length).toBe(1);
+    expect(calls).toEqual([0]);
     expect(store.getState()).toEqual({
       status: "connected",
       email: "lawyer@example.com",
     });
   });
 
-  test("a failed link reports the error and keeps the UI on the error state", async () => {
-    const { bridgeAnswered, errors, linked, store } = scriptedStore();
-    store.retain();
-    const watching = store.startWatch();
-    bridgeAnswered.resolve(true);
-    await flush();
-
-    const failure = new Error("bridge refused the link");
+  test("a failed connection reports the error and allows an explicit retry", async () => {
+    const { store, calls, errors, linked } = scriptedStore();
+    const failure = new Error("connection refused");
+    const attempt = store.connect();
     linked.resolve(Result.err(failure));
-    await watching;
-
+    expect(await attempt).toEqual({ status: "error" });
     expect(store.getState()).toEqual({ status: "error" });
     expect(errors).toEqual([failure]);
-  });
-
-  test("a retry after a failure runs a fresh attempt", async () => {
-    const { bridgeAnswered, linkCalls, linked, store } = scriptedStore();
-    store.retain();
-    const watching = store.startWatch();
-    bridgeAnswered.resolve(true);
-    await flush();
-    linked.resolve(Result.err(new Error("bridge refused the link")));
-    await watching;
-
-    // The scripted link keeps failing, so the retry fails too; what matters
-    // is that it ran at all instead of joining the finished attempt.
     expect(await store.connect()).toEqual({ status: "error" });
-    expect(linkCalls.length).toBe(2);
+    expect(calls).toEqual([0, 1]);
   });
 
-  test("a second gesture shares the one watch and the one link", async () => {
-    const { bridgeAnswered, linkCalls, linked, store, watchSignals } =
-      scriptedStore();
-    store.retain();
-    const watching = store.startWatch();
-    const second = store.startWatch();
-
-    expect(watchSignals.length).toBe(1);
-
-    bridgeAnswered.resolve(true);
-    linked.resolve(
-      Result.ok({ status: "connected", email: "lawyer@example.com" }),
-    );
-    await Promise.all([watching, second]);
-    expect(linkCalls.length).toBe(1);
-  });
-
-  test("the watch survives one surface unmounting and stops with the last", async () => {
-    const { bridgeAnswered, store, watchSignals } = scriptedStore();
-    const first = store.retain();
-    const second = store.retain();
-    const watching = store.startWatch();
-    const signal = watchSignals[0];
-
-    first();
-    expect(signal?.aborted).toBe(false);
-
-    second();
-    expect(signal?.aborted).toBe(true);
-    expect(store.getState()).toEqual({ status: "idle" });
-
-    bridgeAnswered.resolve(false);
-    await watching;
-  });
-
-  test("a gesture after the link does not watch again", async () => {
-    const { bridgeAnswered, linked, store, watchSignals } = scriptedStore();
-    store.retain();
-    const watching = store.startWatch();
-    bridgeAnswered.resolve(true);
-    linked.resolve(
-      Result.ok({ status: "connected", email: "lawyer@example.com" }),
-    );
-    await watching;
-
-    await store.startWatch();
-    expect(watchSignals.length).toBe(1);
-    expect(store.getState()).toEqual({
-      status: "connected",
-      email: "lawyer@example.com",
+  test("a thrown failure is reported without escaping into the UI", async () => {
+    const failure = new Error("connection failed");
+    const errors: unknown[] = [];
+    const store = createDesktopConnectionStore({
+      link: async () => {
+        throw failure;
+      },
+      onError: (error) => errors.push(error),
     });
+    expect(await store.connect()).toEqual({ status: "error" });
+    expect(errors).toEqual([failure]);
+    expect(store.getState()).toEqual({ status: "error" });
   });
-});
 
-test("starting the browser step does not report a connected account", async () => {
-  const errors: unknown[] = [];
-  const store = createDesktopConnectionStore({
-    link: async () => Result.ok({ status: "started" }),
-    onError: (error) => errors.push(error),
-    watch: async () => false,
+  test("starting the browser step does not report a connected account", async () => {
+    const errors: unknown[] = [];
+    const store = createDesktopConnectionStore({
+      link: async () => Result.ok({ status: "started" }),
+      onError: (error) => errors.push(error),
+    });
+    expect(await store.connect()).toEqual({ status: "started" });
+    expect(store.getState()).toEqual({ status: "idle" });
+    expect(errors).toEqual([]);
   });
-  expect(await store.connect()).toEqual({ status: "started" });
-  expect(store.getState()).toEqual({ status: "idle" });
-  expect(errors).toEqual([]);
 });

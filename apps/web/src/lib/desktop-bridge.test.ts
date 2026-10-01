@@ -7,6 +7,7 @@ import {
   desktopBridgeProofHeaders,
   parseDesktopAccountChallenge,
   resolveDesktopAccountLink,
+  verifyDesktopConnectionStatus,
 } from "@/lib/desktop-bridge";
 
 const challenge = {
@@ -88,6 +89,111 @@ describe("authenticated account status", () => {
       expect(
         (await desktopBridgeProofHeaders(changed))["x-stella-bridge-proof"],
       ).not.toBe(headers["x-stella-bridge-proof"]);
+    }
+  });
+
+  test("accepts only fresh connection responses authenticated for this attempt", async () => {
+    const timestamp = "1790851200";
+    for (const status of ["pending", "connected", "failed"]) {
+      const payload = {
+        correlationId: challenge.correlationId,
+        status,
+        timestamp,
+        proof: createHmac("sha256", challenge.portSecret)
+          .update(`${challenge.correlationId}\n${status}\n${timestamp}`)
+          .digest("hex"),
+      };
+      for (const nowSeconds of [1_790_851_170, 1_790_851_200, 1_790_851_230]) {
+        expect(
+          await verifyDesktopConnectionStatus({
+            payload,
+            correlationId: challenge.correlationId,
+            portSecret: challenge.portSecret,
+            nowSeconds,
+          }),
+        ).toBe(status);
+      }
+      for (const invalid of [
+        {
+          payload,
+          nowSeconds: 1_790_851_231,
+          portSecret: challenge.portSecret,
+        },
+        {
+          payload,
+          nowSeconds: 1_790_851_169,
+          portSecret: challenge.portSecret,
+        },
+        { payload, nowSeconds: 1_790_851_200, portSecret: "c".repeat(64) },
+        {
+          payload: { ...payload, correlationId: "other" },
+          nowSeconds: 1_790_851_200,
+          portSecret: challenge.portSecret,
+        },
+        {
+          payload: { ...payload, timestamp: "1790851201" },
+          nowSeconds: 1_790_851_200,
+          portSecret: challenge.portSecret,
+        },
+        {
+          payload: {
+            ...payload,
+            status: status === "connected" ? "pending" : "connected",
+          },
+          nowSeconds: 1_790_851_200,
+          portSecret: challenge.portSecret,
+        },
+        {
+          payload: { ...payload, proof: "0".repeat(64) },
+          nowSeconds: 1_790_851_200,
+          portSecret: challenge.portSecret,
+        },
+        {
+          payload: { ...payload, status: "unknown" },
+          nowSeconds: 1_790_851_200,
+          portSecret: challenge.portSecret,
+        },
+        {
+          payload: { ...payload, timestamp: "NaN" },
+          nowSeconds: 1_790_851_200,
+          portSecret: challenge.portSecret,
+        },
+      ]) {
+        expect(
+          await verifyDesktopConnectionStatus({
+            ...invalid,
+            correlationId: challenge.correlationId,
+          }),
+        ).toBeNull();
+      }
+    }
+  });
+
+  test("unsigned status and incomplete proofs are rejected", async () => {
+    for (const payload of [
+      { status: "connected" },
+      {
+        status: "connected",
+        correlationId: challenge.correlationId,
+        timestamp: "1790851200",
+      },
+      {
+        status: "connected",
+        correlationId: challenge.correlationId,
+        timestamp: "1790851200",
+        proof: "bad",
+      },
+      null,
+      "connected",
+    ]) {
+      expect(
+        await verifyDesktopConnectionStatus({
+          payload,
+          correlationId: challenge.correlationId,
+          portSecret: challenge.portSecret,
+          nowSeconds: 1_790_851_200,
+        }),
+      ).toBeNull();
     }
   });
 

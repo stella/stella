@@ -355,9 +355,13 @@ struct BrowserConnection {
 }
 
 enum LinkRedemption {
-  Waiting { verifier: String },
+  Waiting {
+    verifier: zeroize::Zeroizing<String>,
+  },
   Redeeming,
-  Connected { identity: DesktopAccountIdentity },
+  Connected {
+    identity: DesktopAccountIdentity,
+  },
   Failed,
 }
 
@@ -380,7 +384,7 @@ fn new_browser_connection(
   use sha2::{Digest, Sha256};
   let api_base_url = crate::config::normalize_self_host_api_base_url(api_base_url)?;
   let web_origin = crate::config::normalize_self_host_web_origin(web_origin)?;
-  let verifier = random_secret()?;
+  let verifier = zeroize::Zeroizing::new(random_secret()?);
   let port_secret = random_secret()?;
   let correlation_id = uuid::Uuid::new_v4().to_string();
   let verifier_hash = hex::encode(Sha256::digest(verifier.as_bytes()));
@@ -420,8 +424,26 @@ fn begin_browser_connection(
   let mut pending = BROWSER_CONNECTION
     .lock()
     .map_err(|_| "Desktop connection is unavailable")?;
-  *pending = Some(connection);
+  reserve_browser_connection(&mut pending, connection, std::time::Instant::now())?;
   Ok(url)
+}
+
+fn reserve_browser_connection(
+  pending: &mut Option<BrowserConnection>,
+  connection: BrowserConnection,
+  now: std::time::Instant,
+) -> Result<(), String> {
+  if pending.as_ref().is_some_and(|current| {
+    now < current.expires_at
+      && matches!(
+        current.redemption,
+        LinkRedemption::Waiting { .. } | LinkRedemption::Redeeming
+      )
+  }) {
+    return Err("A desktop account connection is already pending".into());
+  }
+  *pending = Some(connection);
+  Ok(())
 }
 
 pub fn open_browser_connection(
@@ -510,6 +532,8 @@ enum RedeemedLink {
   },
   Credential {
     account: LinkedAccountSnapshot,
+    #[serde(rename = "organizationName")]
+    organization_name: String,
     key: String,
     #[serde(rename = "expiresAt")]
     expires_at: String,
@@ -552,11 +576,82 @@ pub async fn browser_connection_status(
   }
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SignedConnectionStatus {
+  correlation_id: String,
+  status: &'static str,
+  timestamp: String,
+  proof: String,
+}
+
+pub async fn signed_browser_connection_status(
+  state: &AccountState,
+  correlation_id: &str,
+) -> Result<SignedConnectionStatus, String> {
+  let status = browser_connection_status(state, correlation_id).await;
+  let pending = BROWSER_CONNECTION
+    .lock()
+    .map_err(|_| "Desktop connection is unavailable")?;
+  let connection = pending
+    .as_ref()
+    .ok_or("Desktop connection is unavailable")?;
+  if connection.correlation_id != correlation_id
+    || std::time::Instant::now() >= connection.expires_at
+  {
+    return Err("Desktop connection is unavailable".into());
+  }
+  let timestamp = chrono::Utc::now().timestamp().to_string();
+  let key =
+    ring::hmac::Key::new(ring::hmac::HMAC_SHA256, connection.port_secret.as_bytes());
+  let proof = hex::encode(
+    ring::hmac::sign(
+      &key,
+      format!("{correlation_id}\n{status}\n{timestamp}").as_bytes(),
+    )
+    .as_ref(),
+  );
+  Ok(SignedConnectionStatus {
+    correlation_id: correlation_id.to_string(),
+    status,
+    timestamp,
+    proof,
+  })
+}
+
+#[cfg(test)]
+pub(crate) struct BridgeProofFixture {
+  pub correlation_id: String,
+  pub port_secret: String,
+  previous: Option<BrowserConnection>,
+}
+
+#[cfg(test)]
+pub(crate) fn bridge_proof_fixture() -> BridgeProofFixture {
+  let (connection, _) =
+    new_browser_connection("https://api.stll.app", "http://localhost:3000").unwrap();
+  let correlation_id = connection.correlation_id.clone();
+  let port_secret = connection.port_secret.clone();
+  let previous = BROWSER_CONNECTION.lock().unwrap().replace(connection);
+  BridgeProofFixture {
+    correlation_id,
+    port_secret,
+    previous,
+  }
+}
+
+#[cfg(test)]
+impl Drop for BridgeProofFixture {
+  fn drop(&mut self) {
+    *BROWSER_CONNECTION.lock().unwrap() = self.previous.take();
+  }
+}
+
 struct PendingRedemption {
   correlation_id: String,
   api_base_url: String,
   web_origin: String,
-  verifier: String,
+  verifier: zeroize::Zeroizing<String>,
 }
 
 impl BrowserConnection {
@@ -662,6 +757,7 @@ async fn redeem_browser_connection(
     .send()
     .await
     .map_err(|_| "Desktop connection is unavailable")?;
+  drop(verifier);
   if !response.status().is_success() {
     return Err("Desktop connection was not accepted".into());
   }
@@ -690,11 +786,35 @@ async fn redeem_browser_connection(
     }
     RedeemedLink::Credential {
       account,
+      organization_name,
       key,
       expires_at,
     } => {
       if !is_valid_linked_account(&account) {
         return Err("Desktop connection is unavailable".into());
+      }
+      let approved = crate::deep_link::show_connection_confirmation(
+        app,
+        crate::deep_link::ConnectionConfirmation::Account {
+          email: &account.email,
+          organization_name: &organization_name,
+        },
+      )
+      .await;
+      if !matches!(approved, Ok(true)) {
+        crate::registry::request(
+          crate::registry::RegistryRequestAuth {
+            api_base_url: &api_base_url,
+            credential_key: &key,
+          },
+          serde_json::json!({"type":"revoke"}),
+        )
+        .await?;
+        return Err(
+          approved
+            .err()
+            .unwrap_or_else(|| "Desktop account connection was not approved".into()),
+        );
       }
       LinkAccountRequest {
         api_base_url: api_base_url.clone(),
@@ -721,6 +841,54 @@ async fn redeem_browser_connection(
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn an_unexpired_connection_cannot_be_replaced() {
+    let (connection, _) =
+      new_browser_connection("https://api.stll.app", "https://my.stll.app").unwrap();
+    let original_id = connection.correlation_id.clone();
+    let expires_at = connection.expires_at;
+    let mut pending = Some(connection);
+    let (replacement, _) =
+      new_browser_connection("https://api.stll.app", "https://my.stll.app").unwrap();
+    assert_eq!(
+      reserve_browser_connection(&mut pending, replacement, std::time::Instant::now()),
+      Err("A desktop account connection is already pending".into())
+    );
+    assert_eq!(pending.as_ref().unwrap().correlation_id, original_id);
+    let (replacement, _) =
+      new_browser_connection("https://api.stll.app", "https://my.stll.app").unwrap();
+    let replacement_id = replacement.correlation_id.clone();
+    assert!(reserve_browser_connection(&mut pending, replacement, expires_at).is_ok());
+    assert_eq!(pending.unwrap().correlation_id, replacement_id);
+  }
+
+  #[test]
+  fn a_finished_connection_allows_a_fresh_grant() {
+    for status in [
+      LinkRedemption::Failed,
+      LinkRedemption::Connected {
+        identity: fixture("stella_dr_fixture", 60).identity,
+      },
+    ] {
+      let (mut connection, _) =
+        new_browser_connection("https://api.stll.app", "https://my.stll.app").unwrap();
+      connection.redemption = status;
+      let mut pending = Some(connection);
+      let (replacement, _) =
+        new_browser_connection("https://api.stll.app", "https://my.stll.app").unwrap();
+      let replacement_id = replacement.correlation_id.clone();
+      assert!(
+        reserve_browser_connection(
+          &mut pending,
+          replacement,
+          std::time::Instant::now()
+        )
+        .is_ok()
+      );
+      assert_eq!(pending.unwrap().correlation_id, replacement_id);
+    }
+  }
 
   #[test]
   fn browser_connection_keeps_the_verifier_in_native_memory() {
@@ -752,8 +920,8 @@ mod tests {
       Some(&hex::encode(Sha256::digest(verifier.as_bytes())))
     );
     assert_eq!(fields.get("portSecret"), Some(&connection.port_secret));
-    assert!(!url.contains(verifier));
-    assert_ne!(verifier, &connection.port_secret);
+    assert!(!url.contains(verifier.as_str()));
+    assert_ne!(verifier.as_str(), connection.port_secret.as_str());
   }
 
   #[test]

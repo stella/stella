@@ -111,8 +111,16 @@ fn parse_deep_link(raw_url: &str) -> Option<DeepLinkAction> {
         let correlation_id = params.get("correlationId")?;
         let user_id = params.get("userId")?;
         let organization_id = params.get("organizationId")?;
-        for value in [correlation_id, user_id, organization_id] {
-          uuid::Uuid::parse_str(value).ok()?;
+        uuid::Uuid::parse_str(correlation_id).ok()?;
+        for value in [user_id, organization_id] {
+          if value.is_empty()
+            || value.len() > 128
+            || !value
+              .bytes()
+              .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
+          {
+            return None;
+          }
         }
         return Some(DeepLinkAction::CompleteAccount {
           correlation_id: correlation_id.clone(),
@@ -362,17 +370,22 @@ async fn confirm_and_trust_self_host(
   web_origin: String,
   api_base_url: String,
 ) -> Result<(), String> {
-  {
+  let trusted = {
     let mgr = manager.lock().await;
-    if mgr.is_trusted_self_host_connection(&web_origin, &api_base_url) {
-      return Ok(());
+    mgr.is_trusted_self_host_connection(&web_origin, &api_base_url)
+  };
+  if !trusted {
+    let approved = show_connection_confirmation(
+      &app_handle,
+      ConnectionConfirmation::SelfHost {
+        web_origin: &web_origin,
+        api_base_url: &api_base_url,
+      },
+    )
+    .await?;
+    if !approved {
+      return Err("Self-host desktop connection was not approved.".to_string());
     }
-  }
-
-  let approved =
-    show_self_host_connect_dialog(&app_handle, &web_origin, &api_base_url).await?;
-  if !approved {
-    return Err("Self-host desktop connection was not approved.".to_string());
   }
 
   let mut mgr = manager.lock().await;
@@ -382,10 +395,20 @@ async fn confirm_and_trust_self_host(
   Ok(())
 }
 
-async fn show_self_host_connect_dialog(
+pub(crate) enum ConnectionConfirmation<'a> {
+  SelfHost {
+    web_origin: &'a str,
+    api_base_url: &'a str,
+  },
+  Account {
+    email: &'a str,
+    organization_name: &'a str,
+  },
+}
+
+pub(crate) async fn show_connection_confirmation(
   app_handle: &AppHandle,
-  web_origin: &str,
-  api_base_url: &str,
+  confirmation: ConnectionConfirmation<'_>,
 ) -> Result<bool, String> {
   use tauri::Manager;
 
@@ -408,10 +431,32 @@ async fn show_self_host_connect_dialog(
   // The dialog holds no strings of its own; its wording travels in the hash
   // with the origins, so it renders in the language the rest of the app runs
   // in.
+  let (details, title_key) = match confirmation {
+    ConnectionConfirmation::SelfHost {
+      web_origin,
+      api_base_url,
+    } => (
+      format!(
+        "webOrigin={}&apiBaseUrl={}",
+        percent_encode(web_origin),
+        percent_encode(api_base_url)
+      ),
+      "dialog.selfHostWindowTitle",
+    ),
+    ConnectionConfirmation::Account {
+      email,
+      organization_name,
+    } => (
+      format!(
+        "mode=account&accountEmail={}&organizationName={}",
+        percent_encode(email),
+        percent_encode(organization_name)
+      ),
+      "dialog.accountWindowTitle",
+    ),
+  };
   let hash = format!(
-    "webOrigin={}&apiBaseUrl={}&strings={}&lang={}&dir={}",
-    percent_encode(web_origin),
-    percent_encode(api_base_url),
+    "{details}&strings={}&lang={}&dir={}",
     percent_encode(&crate::i18n::namespace_json("dialog")),
     percent_encode(crate::i18n::active_locale()),
     percent_encode(crate::i18n::text_direction()),
@@ -422,7 +467,7 @@ async fn show_self_host_connect_dialog(
     "selfhost-connect-dialog",
     tauri::WebviewUrl::App(format!("selfhost-connect-dialog.html#{hash}").into()),
   )
-  .title(crate::i18n::t("dialog.selfHostWindowTitle"))
+  .title(crate::i18n::t(title_key))
   .inner_size(420.0, 320.0)
   .resizable(false);
   let builder = crate::window_placement::centered_on_target_screen(
@@ -726,6 +771,49 @@ mod tests {
 
   const TOKEN: &str =
     "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+  #[test]
+  fn account_links_accept_provider_ids_and_require_a_uuid_correlation() {
+    let correlation = "11111111-1111-4111-8111-111111111111";
+    for identity in [
+      "a",
+      "provider_user-1",
+      "0123456789abcdefghijklmnopqrstuvwxyz",
+      correlation,
+    ] {
+      let action = parse_deep_link(&format!(
+        "stella://account/complete?correlationId={correlation}&userId={identity}&organizationId={identity}"
+      ));
+      assert_eq!(
+        action,
+        Some(DeepLinkAction::CompleteAccount {
+          correlation_id: correlation.into(),
+          user_id: identity.into(),
+          organization_id: identity.into(),
+        })
+      );
+    }
+    for identity in [
+      "".to_string(),
+      "a".repeat(129),
+      "invalid%2Fid".into(),
+      "invalid%20id".into(),
+      "ž".into(),
+    ] {
+      assert_eq!(
+        parse_deep_link(&format!(
+          "stella://account/complete?correlationId={correlation}&userId={identity}&organizationId={correlation}"
+        )),
+        None
+      );
+    }
+    assert_eq!(
+      parse_deep_link(&format!(
+        "stella://account/complete?correlationId=provider_id&userId={correlation}&organizationId={correlation}"
+      )),
+      None
+    );
+  }
 
   #[test]
   fn a_document_handoff_requires_the_connected_account_identity() {

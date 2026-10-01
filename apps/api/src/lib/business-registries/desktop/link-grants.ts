@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq, gt, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, like, lte, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import * as v from "valibot";
@@ -11,11 +11,15 @@ import { rootDb, rlsDb } from "@/api/db/root";
 import { createMembershipScopedDb } from "@/api/db/scoped";
 import { resolveCredentialMemberAuthorization } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
-import { DESKTOP_REGISTRY_PERMISSION } from "@/api/lib/business-registries/desktop/config";
+import { DESKTOP_ACCOUNT_PERMISSION } from "@/api/lib/business-registries/desktop/config";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { escapeLike } from "@/api/lib/escape-like";
 import { isMemberRole } from "@/api/lib/member-roles";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
-import { brandActorSessionIdentity } from "@/api/lib/safe-id-boundaries";
+import {
+  AUTH_PROVIDER_ID_PATTERN,
+  brandActorSessionIdentity,
+} from "@/api/lib/safe-id-boundaries";
 
 const LINK_GRANT_LIFETIME_MS = 60_000;
 const LINK_GRANT_PREFIX = "desktop-link";
@@ -37,10 +41,21 @@ type LinkGrantDb = {
     values: (row: typeof verification.$inferInsert) => PromiseLike<unknown>;
   };
   delete: (table: typeof verification) => {
-    where: (condition: SQL) => {
+    where: (condition: SQL | undefined) => {
       returning: () => PromiseLike<(typeof verification.$inferSelect)[]>;
     };
   };
+};
+
+const sweepExpiredLinkGrants = async (db: LinkGrantDb, now: Date) => {
+  const expired = sql`(select ${verification.id} from ${verification}
+    where ${like(verification.identifier, `${escapeLike(LINK_GRANT_PREFIX)}:%`)}
+    and ${lte(verification.expiresAt, sql`${now.toISOString()}::timestamptz`)}
+    limit 100)`;
+  await db
+    .delete(verification)
+    .where(inArray(verification.id, expired))
+    .returning();
 };
 
 type CreateDesktopLinkGrantOptions = {
@@ -62,6 +77,7 @@ export const createDesktopLinkGrant = async ({
 }: CreateDesktopLinkGrantOptions) =>
   await Result.tryPromise({
     try: async () => {
+      await sweepExpiredLinkGrants(db, now);
       const expiresAt = new Date(now.getTime() + LINK_GRANT_LIFETIME_MS);
       await db.insert(verification).values({
         id: `${LINK_GRANT_PREFIX}:${correlationId}`,
@@ -151,12 +167,15 @@ export const consumeDesktopLinkGrant = async ({
 const desktopLinkCredentials = v.strictObject({
   correlationId: v.pipe(v.string(), v.uuid()),
   verifier: v.pipe(v.string(), v.regex(/^[a-f0-9]{64}$/u)),
-  expectedUserId: v.pipe(v.string(), v.uuid()),
-  expectedOrganizationId: v.pipe(v.string(), v.uuid()),
+  expectedUserId: v.pipe(v.string(), v.regex(AUTH_PROVIDER_ID_PATTERN)),
+  expectedOrganizationId: v.pipe(v.string(), v.regex(AUTH_PROVIDER_ID_PATTERN)),
 });
 
+export const parseDesktopLinkCredentials = (input: unknown) =>
+  v.safeParse(desktopLinkCredentials, input);
+
 export const authorizeDesktopLinkGrant = async (input: unknown) => {
-  const parsed = v.safeParse(desktopLinkCredentials, input);
+  const parsed = parseDesktopLinkCredentials(input);
   if (!parsed.success) {
     return Result.err(
       new HandlerError({
@@ -187,7 +206,7 @@ export const authorizeDesktopLinkGrant = async (input: unknown) => {
     !isMemberRole(member.value.role) ||
     !hasMemberPermission(
       { role: member.value.role },
-      DESKTOP_REGISTRY_PERMISSION,
+      DESKTOP_ACCOUNT_PERMISSION,
     )
   ) {
     return Result.err(

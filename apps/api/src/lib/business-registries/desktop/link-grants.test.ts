@@ -1,20 +1,25 @@
+import type { Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
+import { eq } from "drizzle-orm";
 import { createHash } from "node:crypto";
 
-import { createSafeId } from "@/api/lib/branded-types";
+import { verification } from "@/api/db/auth-schema";
 import {
   authorizeDesktopLinkGrant,
   consumeDesktopLinkGrant,
   createDesktopLinkGrant,
+  parseDesktopLinkCredentials,
 } from "@/api/lib/business-registries/desktop/link-grants";
+import type { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 let db: TestDatabase;
 const now = new Date("2026-01-01T12:00:00.000Z");
 const verifier = "a".repeat(64);
-const userId = createSafeId<"user">();
-const organizationId = createSafeId<"organization">();
+const userId = mintAuthProviderId<"user">();
+const organizationId = mintAuthProviderId<"organization">();
 
 beforeAll(async () => {
   db = await getTestDb();
@@ -33,7 +38,7 @@ const issue = async () => {
     db,
     now,
   });
-  expect(result.isOk()).toBe(true);
+  expect(result.isErr() ? result.error : undefined).toBeUndefined();
   if (result.isOk()) {
     expect(result.value.expiresAt).toBe("2026-01-01T12:01:00.000Z");
   }
@@ -47,9 +52,7 @@ const issue = async () => {
   };
 };
 
-const expectRejected = (
-  result: Awaited<ReturnType<typeof consumeDesktopLinkGrant>>,
-) => {
+const expectRejected = (result: Result<unknown, HandlerError<401 | 503>>) => {
   expect(result.isErr()).toBe(true);
   if (result.isErr()) {
     expect(result.error.status).toBe(401);
@@ -128,4 +131,48 @@ test("account link requests require complete credentials", async () => {
   ]) {
     expectRejected(await authorizeDesktopLinkGrant(input));
   }
+});
+
+test("account completion accepts provider identity values", () => {
+  const parsed = parseDesktopLinkCredentials({
+    correlationId: Bun.randomUUIDv7(),
+    verifier,
+    expectedUserId: userId,
+    expectedOrganizationId: organizationId,
+  });
+  expect(userId).toHaveLength(32);
+  expect(organizationId).toHaveLength(32);
+  expect(parsed.success).toBe(true);
+  for (const expectedUserId of ["", " ", "a".repeat(129)]) {
+    expect(
+      parseDesktopLinkCredentials({
+        correlationId: Bun.randomUUIDv7(),
+        verifier,
+        expectedUserId,
+        expectedOrganizationId: organizationId,
+      }).success,
+    ).toBe(false);
+  }
+});
+
+test("issuing account links removes expired connection rows only", async () => {
+  const rowId = `desktop-link:${Bun.randomUUIDv7()}`;
+  const retainedId = Bun.randomUUIDv7();
+  await db.insert(verification).values([
+    { id: rowId, identifier: rowId, value: "pending", expiresAt: now },
+    {
+      id: retainedId,
+      identifier: "email-confirmation",
+      value: "pending",
+      expiresAt: now,
+    },
+  ]);
+  await issue();
+  expect(
+    await db.select().from(verification).where(eq(verification.id, rowId)),
+  ).toHaveLength(0);
+  expect(
+    await db.select().from(verification).where(eq(verification.id, retainedId)),
+  ).toHaveLength(1);
+  await db.delete(verification).where(eq(verification.id, retainedId));
 });

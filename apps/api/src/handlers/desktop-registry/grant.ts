@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
-import { DESKTOP_REGISTRY_PERMISSION } from "@/api/lib/business-registries/desktop/config";
+import { DESKTOP_ACCOUNT_PERMISSION } from "@/api/lib/business-registries/desktop/config";
 import { createDesktopLinkGrant } from "@/api/lib/business-registries/desktop/link-grants";
 import {
   CACHE_CONTROL_HEADER,
@@ -11,7 +11,7 @@ import {
 
 export default createSafeRootHandler(
   {
-    permissions: DESKTOP_REGISTRY_PERMISSION,
+    permissions: DESKTOP_ACCOUNT_PERMISSION,
     mcp: { type: "internal", reason: "auth_plumbing" },
     body: t.Object(
       {

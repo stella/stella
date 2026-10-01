@@ -28,10 +28,7 @@ export const Route = createFileRoute("/_protected/settings/account/desktop")({
 function DesktopPage() {
   const t = useTranslations();
   const platform = useHydrationSafeDesktopPlatform();
-  // Downloading the app starts a watch that links it as soon as it runs; the
-  // button below is the manual path and shares the same attempt, so the two
-  // cannot link twice.
-  const { connect, startWatch, state } = useDesktopAccountConnection();
+  const { connect, state } = useDesktopAccountConnection();
 
   const shortcut = platform === "mac" ? "⌘ ⇧ V" : "Ctrl + Shift + V";
 
@@ -46,12 +43,10 @@ function DesktopPage() {
         : { title: t("errors.actionFailed"), type: "error" },
     );
   };
-  // The desktop app opens this page with an account-link marker; a
-  // signed-in session completes the connection without another click.
+  // Capture the native challenge and remove its secret from browser history.
+  // Linking still requires the Connect button's explicit user gesture.
   useMountEffect(() => {
-    if (captureDesktopAccountLink()) {
-      detached(handleConnectDesktop(), "settings-account-desktop.handoff");
-    }
+    captureDesktopAccountLink();
   });
 
   return (
@@ -71,11 +66,7 @@ function DesktopPage() {
                 {t("settings.account.desktopAppDescription")}
               </p>
               <div className="mt-6">
-                <DesktopDownloadButtons
-                  onDownload={startWatch}
-                  platform={platform}
-                  size="lg"
-                />
+                <DesktopDownloadButtons platform={platform} size="lg" />
               </div>
             </div>
 

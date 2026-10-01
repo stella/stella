@@ -22,13 +22,22 @@ test("document handoffs require an authenticated desktop account", async () => {
       },
     ],
   ] as const) {
-    const response = await app.handle(
-      new Request(`http://localhost${path}`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-      }),
-    );
-    expect([path, response.status]).toEqual([path, 401]);
+    for (const authorization of [undefined, "Bearer unrelated-credential"]) {
+      const response = await app.handle(
+        new Request(`http://localhost${path}`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            ...(authorization ? { authorization } : {}),
+          },
+          body: JSON.stringify(body),
+        }),
+      );
+      expect([path, authorization, response.status]).toEqual([
+        path,
+        authorization,
+        401,
+      ]);
+    }
   }
 });

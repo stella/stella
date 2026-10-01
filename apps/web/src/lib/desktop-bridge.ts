@@ -20,8 +20,6 @@ import { toSafeId } from "@/lib/safe-id";
 const DESKTOP_BRIDGE_PORT = env.VITE_DESKTOP_BRIDGE_PORT;
 const DESKTOP_BRIDGE_URL = `http://127.0.0.1:${String(DESKTOP_BRIDGE_PORT)}`;
 const DESKTOP_HANDOFF_POLL_INTERVAL_MS = 750;
-const MIN_DESKTOP_BRIDGE_VERSION = 16;
-const DESKTOP_ACCOUNT_LINK_CAPABILITY = "account-link.v3";
 const DESKTOP_ACCOUNT_LINK_HASH = "#desktop-account";
 
 export class DesktopBridgeUnavailableError extends Error {
@@ -67,11 +65,6 @@ type OpenFileInDesktopInput = {
 
 type BridgeResponse = {
   message?: string;
-};
-
-type BridgeHealth = {
-  capabilities?: string[];
-  bridgeVersion?: number;
 };
 
 const DESKTOP_ACCOUNT_CHALLENGE_TTL_MS = 60_000;
@@ -163,16 +156,6 @@ export const desktopBridgeProofHeaders = async ({
 const isBridgeResponse = (value: unknown): value is BridgeResponse =>
   typeof value === "object" && value !== null;
 
-const isBridgeHealth = (value: unknown): value is BridgeHealth =>
-  typeof value === "object" &&
-  value !== null &&
-  (!("bridgeVersion" in value) || typeof value.bridgeVersion === "number") &&
-  (!("capabilities" in value) ||
-    (Array.isArray(value.capabilities) &&
-      value.capabilities.every(
-        (capability) => typeof capability === "string",
-      )));
-
 const parseDesktopConnectionStatus = (value: unknown) => {
   if (typeof value !== "object" || value === null || !("status" in value)) {
     return null;
@@ -185,6 +168,66 @@ const parseDesktopConnectionStatus = (value: unknown) => {
     default:
       return null;
   }
+};
+
+const DESKTOP_BRIDGE_RESPONSE_MAX_SKEW_SECONDS = 30;
+
+type VerifyDesktopConnectionOptions = {
+  payload: unknown;
+  correlationId: string;
+  portSecret: string;
+  nowSeconds: number;
+};
+
+export const verifyDesktopConnectionStatus = async ({
+  payload,
+  correlationId,
+  portSecret,
+  nowSeconds,
+}: VerifyDesktopConnectionOptions) => {
+  const status = parseDesktopConnectionStatus(payload);
+  if (
+    status === null ||
+    typeof payload !== "object" ||
+    payload === null ||
+    !("correlationId" in payload) ||
+    payload.correlationId !== correlationId ||
+    !("timestamp" in payload) ||
+    typeof payload.timestamp !== "string" ||
+    !/^[0-9]{1,16}$/u.test(payload.timestamp) ||
+    !("proof" in payload) ||
+    typeof payload.proof !== "string" ||
+    !/^[0-9a-f]{64}$/u.test(payload.proof)
+  ) {
+    return null;
+  }
+  const timestamp = Number(payload.timestamp);
+  if (
+    !Number.isSafeInteger(timestamp) ||
+    Math.abs(nowSeconds - timestamp) > DESKTOP_BRIDGE_RESPONSE_MAX_SKEW_SECONDS
+  ) {
+    return null;
+  }
+  const proof = payload.proof;
+  const signature = Uint8Array.from({ length: 32 }, (_, offset) =>
+    Number.parseInt(proof.slice(offset * 2, offset * 2 + 2), 16),
+  );
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(portSecret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["verify"],
+  );
+  const valid = await crypto.subtle.verify(
+    "HMAC",
+    key,
+    signature,
+    new TextEncoder().encode(
+      `${correlationId}\n${status}\n${payload.timestamp}`,
+    ),
+  );
+  return valid ? status : null;
 };
 
 /**
@@ -211,52 +254,6 @@ const parseBridgeResponse = async (response: Response) => {
     return null;
   }
 };
-
-const readBridgeHealth = async (
-  timeoutMs: number,
-  signal?: AbortSignal,
-): Promise<BridgeHealth | null> => {
-  const challenge = accountChallenge;
-  if (
-    !challenge ||
-    challenge.expiresAt <= Temporal.Now.instant().epochMilliseconds
-  ) {
-    return null;
-  }
-  try {
-    const response = await fetchWithTimeout(
-      `${DESKTOP_BRIDGE_URL}/health`,
-      loopback({
-        method: "GET",
-        ...(signal && { signal }),
-        timeoutMs,
-        headers: await desktopBridgeProofHeaders({
-          portSecret: challenge.portSecret,
-          timestamp: String(
-            Math.floor(Temporal.Now.instant().epochMilliseconds / 1000),
-          ),
-          path: "/health",
-        }),
-      }),
-    );
-    if (!response.ok) {
-      return null;
-    }
-
-    const payload: unknown = await response.json();
-    return isBridgeHealth(payload) ? payload : {};
-  } catch {
-    return null;
-  }
-};
-
-const isCompatibleDesktopBridge = (
-  health: BridgeHealth,
-  requiredCapability: string,
-) =>
-  typeof health.bridgeVersion === "number" &&
-  health.bridgeVersion >= MIN_DESKTOP_BRIDGE_VERSION &&
-  health.capabilities?.includes(requiredCapability) === true;
 
 const createDesktopEditHandoff = async ({
   entityId,
@@ -351,21 +348,6 @@ const waitForDesktopEditHandoffOpened = async ({
   throw new DesktopBridgeUnavailableError();
 };
 
-/**
- * Whether a running desktop app can link an account right now. Answers false
- * rather than throwing, and also for an app too old to link: a watch then keeps
- * polling instead of ending on a bridge that would refuse the link anyway.
- */
-export const isDesktopAccountLinkReachable = async (
-  signal?: AbortSignal,
-): Promise<boolean> => {
-  const health = await readBridgeHealth(500, signal);
-  return (
-    health !== null &&
-    isCompatibleDesktopBridge(health, DESKTOP_ACCOUNT_LINK_CAPABILITY)
-  );
-};
-
 const readDesktopConnection = async (
   correlationId: string,
   portSecret: string,
@@ -416,7 +398,20 @@ const readDesktopConnection = async (
   if (parsed.isErr()) {
     return parsed;
   }
-  const payload = parseDesktopConnectionStatus(parsed.value);
+  const verified = await Result.tryPromise({
+    try: async () =>
+      await verifyDesktopConnectionStatus({
+        payload: parsed.value,
+        correlationId,
+        portSecret,
+        nowSeconds: Math.floor(Temporal.Now.instant().epochMilliseconds / 1000),
+      }),
+    catch: () => new DesktopBridgeIncompatibleError(),
+  });
+  if (verified.isErr()) {
+    return verified;
+  }
+  const payload = verified.value;
   if (payload === null) {
     return Result.err(new DesktopBridgeIncompatibleError());
   }

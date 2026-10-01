@@ -4782,6 +4782,7 @@ dependencies = [
  "windows-native-keyring-store",
  "winsafe",
  "zbus-secret-service-keyring-store",
+ "zeroize",
  "zip 8.6.0",
 ]
 

@@ -5,7 +5,10 @@ import type { rootDb } from "@/api/db/root";
 import { desktopEditHandoffs } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { consumeDesktopEditHandoff } from "@/api/lib/desktop-edit-handoffs";
+import {
+  consumeDesktopEditHandoff,
+  DesktopHandoffAccountMismatchError,
+} from "@/api/lib/desktop-edit-handoffs";
 import {
   createDesktopEditHandoffToken,
   hashDesktopEditHandoffToken,
@@ -24,14 +27,14 @@ const REDEMPTION_TIME = new Date("2026-10-01T12:00:00.000Z");
 
 let testDb: TestDatabase;
 let ids: TestIds;
-let db: Pick<typeof rootDb, "update">;
+let db: Pick<typeof rootDb, "update" | "select">;
 const handoffIds: SafeId<"desktopEditHandoff">[] = [];
 
 beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
-  db = asTestRaw<Pick<typeof rootDb, "update">>(testDb);
+  db = asTestRaw<Pick<typeof rootDb, "update" | "select">>(testDb);
 });
 
 afterAll(async () => {
@@ -65,21 +68,28 @@ const seedHandoff = async (
   return { id, handoffToken };
 };
 
-test("a different account cannot consume another account's document link", async () => {
+test("document links report the account selection before redemption", async () => {
   const { id, handoffToken } = await seedHandoff();
   for (const identity of [
     { userId: ids.userA2, organizationId: ids.orgA },
     { userId: ids.userA1, organizationId: ids.orgB },
     { userId: ids.userB1, organizationId: ids.orgB },
   ]) {
-    expect(
-      await consumeDesktopEditHandoff({
-        handoffToken,
-        identity,
-        db,
-        now: REDEMPTION_TIME,
-      }),
-    ).toBeNull();
+    const result = await consumeDesktopEditHandoff({
+      handoffToken,
+      identity,
+      db,
+      now: REDEMPTION_TIME,
+    });
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error).toBeInstanceOf(DesktopHandoffAccountMismatchError);
+      expect(result.error).toMatchObject({
+        status: 409,
+        code: "desktop_account_mismatch",
+        message: "Desktop is linked to a different account or organization.",
+      });
+    }
   }
   const rows = await testDb
     .select({ consumedAt: desktopEditHandoffs.consumedAt })
@@ -92,7 +102,7 @@ test("a different account cannot consume another account's document link", async
       identity: { userId: ids.userA1, organizationId: ids.orgA },
       db,
       now: REDEMPTION_TIME,
-    }),
+    }).then((result) => result.unwrap()),
   ).toMatchObject({ id, createdBy: ids.userA1 });
 });
 
@@ -105,7 +115,7 @@ test("a document link is single use and expires before redemption", async () => 
       identity,
       db,
       now: REDEMPTION_TIME,
-    }),
+    }).then((result) => result.unwrap()),
   ).not.toBeNull();
   expect(
     await consumeDesktopEditHandoff({
@@ -113,7 +123,7 @@ test("a document link is single use and expires before redemption", async () => 
       identity,
       db,
       now: REDEMPTION_TIME,
-    }),
+    }).then((result) => result.unwrap()),
   ).toBeNull();
   const expired = await seedHandoff(REDEMPTION_TIME);
   expect(
@@ -122,6 +132,6 @@ test("a document link is single use and expires before redemption", async () => 
       identity,
       db,
       now: REDEMPTION_TIME,
-    }),
+    }).then((result) => result.unwrap()),
   ).toBeNull();
 });

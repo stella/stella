@@ -128,12 +128,25 @@ async fn connection_status(
 ) -> impl IntoResponse {
   let origin = get_origin(&headers);
   let allowed = is_allowed_origin(&state, origin.as_deref()).await;
-  let status =
-    crate::account::browser_connection_status(&state.account, &query.correlation_id)
-      .await;
+  let status = match crate::account::signed_browser_connection_status(
+    &state.account,
+    &query.correlation_id,
+  )
+  .await
+  {
+    Ok(status) => status,
+    Err(_) => {
+      return json_response(
+        StatusCode::UNAUTHORIZED,
+        serde_json::json!({"message":"Desktop connection is unavailable"}),
+        origin.as_deref(),
+        allowed,
+      );
+    }
+  };
   json_response(
     StatusCode::OK,
-    serde_json::json!({"status": status}),
+    serde_json::json!(status),
     origin.as_deref(),
     allowed,
   )
@@ -282,6 +295,64 @@ mod tests {
         .await
         .unwrap();
       assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+  }
+
+  #[tokio::test]
+  async fn a_connection_proof_authenticates_the_request_and_response() {
+    let fixture = crate::account::bridge_proof_fixture();
+    let uri = format!("/v1/connection?correlationId={}", fixture.correlation_id);
+    let timestamp = chrono::Utc::now().timestamp().to_string();
+    let key =
+      ring::hmac::Key::new(ring::hmac::HMAC_SHA256, fixture.port_secret.as_bytes());
+    let proof = hex::encode(
+      ring::hmac::sign(&key, format!("{timestamp}\nGET\n{uri}").as_bytes()).as_ref(),
+    );
+    for (origin, expected_status) in [
+      ("http://localhost:3000", StatusCode::OK),
+      ("https://other.example", StatusCode::UNAUTHORIZED),
+    ] {
+      let response = build_router(test_state())
+        .oneshot(
+          Request::builder()
+            .method("GET")
+            .uri(&uri)
+            .header("origin", origin)
+            .header("x-stella-bridge-time", &timestamp)
+            .header("x-stella-bridge-proof", &proof)
+            .body(Body::empty())
+            .unwrap(),
+        )
+        .await
+        .unwrap();
+      assert_eq!(response.status(), expected_status);
+      if expected_status != StatusCode::OK {
+        continue;
+      }
+      let bytes = axum::body::to_bytes(response.into_body(), 4096)
+        .await
+        .unwrap();
+      let reply: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+      assert_eq!(reply["correlationId"], fixture.correlation_id);
+      assert_eq!(reply["status"], "pending");
+      let timestamp = reply["timestamp"].as_str().unwrap();
+      let signature = hex::decode(reply["proof"].as_str().unwrap()).unwrap();
+      assert!(
+        ring::hmac::verify(
+          &key,
+          format!("{}\npending\n{timestamp}", fixture.correlation_id).as_bytes(),
+          &signature
+        )
+        .is_ok()
+      );
+      assert!(
+        ring::hmac::verify(
+          &key,
+          format!("{}\nconnected\n{timestamp}", fixture.correlation_id).as_bytes(),
+          &signature
+        )
+        .is_err()
+      );
     }
   }
 

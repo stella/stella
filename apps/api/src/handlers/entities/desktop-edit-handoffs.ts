@@ -15,7 +15,7 @@ import {
   createAuditRecorder,
 } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
-import { authorizeDesktopRegistry } from "@/api/lib/business-registries/desktop/auth";
+import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import {
   consumeDesktopEditHandoff,
@@ -245,16 +245,23 @@ export const redeemDesktopEditHandoffHandler = async ({
   request: Request;
   server: Parameters<typeof createAuditRecorder>[0]["server"];
 }) => {
-  const authorization = await authorizeDesktopRegistry(request);
+  const authorization = await authorizeDesktopAccount(request);
   if (authorization.isErr()) {
     return status(authorization.error.status, {
       message: authorization.error.message,
     });
   }
-  const handoff = await consumeDesktopEditHandoff({
+  const consumed = await consumeDesktopEditHandoff({
     handoffToken,
     identity: authorization.value,
   });
+  if (consumed.isErr()) {
+    return status(consumed.error.status, {
+      code: consumed.error.code,
+      message: consumed.error.message,
+    });
+  }
+  const handoff = consumed.value;
   if (!handoff) {
     return status(410, {
       message: "Desktop edit handoff expired or has already been used.",
@@ -350,7 +357,7 @@ export const acknowledgeDesktopEditHandoffOpenedHandler = async ({
   body: AcknowledgeDesktopEditHandoffOpenedBody;
   params: AcknowledgeDesktopEditHandoffOpenedParams;
 }) => {
-  const authorization = await authorizeDesktopRegistry(request);
+  const authorization = await authorizeDesktopAccount(request);
   if (authorization.isErr()) {
     return status(authorization.error.status, {
       message: authorization.error.message,
