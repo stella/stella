@@ -71,7 +71,7 @@ describe("queued action admission", () => {
   });
 
   test("propagates lease loss after execution starts without delaying the job", async () => {
-    let renew = () => {
+    let renew = (): void => {
       throw new Error("Expected lease renewal to be scheduled");
     };
     let delayed = false;
