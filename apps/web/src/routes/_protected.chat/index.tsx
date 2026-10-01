@@ -19,6 +19,7 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import {
   HistoryIcon,
+  MessageSquarePlusIcon,
   Minimize2Icon,
   PinIcon,
   PlusIcon,
@@ -40,6 +41,7 @@ import { cn } from "@stll/ui/utils";
 import {
   ChatSubmitPreservedError,
   useChatEditor,
+  useChatEditorManager,
 } from "@/components/chat-editor-provider";
 import type { ChatInputDraft } from "@/components/chat-editor-provider";
 import {
@@ -184,6 +186,7 @@ const MatterColleagues = ({
 
 function ChatIndex() {
   const t = useTranslations();
+  const { focusThread } = useChatEditorManager();
   const { ensureAIAvailable } = useAIKeyGate();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -788,7 +791,19 @@ function ChatIndex() {
             ),
           )
         ) : (
-          <LandingEmpty>{t("chat.landing.noRecentChats")}</LandingEmpty>
+          <LandingEmpty>
+            <div className="flex flex-col items-start gap-2.5">
+              {t("chat.landing.noRecentChats")}
+              <Button
+                onClick={() => focusThread(threadRef)}
+                size="sm"
+                variant="outline"
+              >
+                <MessageSquarePlusIcon className="size-4" />
+                {t("chat.newChat")}
+              </Button>
+            </div>
+          </LandingEmpty>
         )}
       </LandingSection>
     </LandingLayout>
