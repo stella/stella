@@ -96,7 +96,9 @@ describe("API deployment health receipt", () => {
     expect(consumers.length).toBeGreaterThan(0);
     for (const env of consumers) {
       for (const prefix of ["", "E2E_"]) {
-        if (!(`${prefix}EDGE_HEADER_VALUE` in env)) {continue;}
+        if (!(`${prefix}EDGE_HEADER_VALUE` in env)) {
+          continue;
+        }
         expect(env[`${prefix}EDGE_HEADER_NAME`]).toBe("x-stella-edge-token");
         expect(env[`${prefix}EDGE_HEADER_VALUE`]).toBe(
           `\${{ secrets.STAGING_VIEWER_ACCESS_TOKEN }}`,
