@@ -15,7 +15,7 @@ const config = {
     "Create an issuer profile for the active organization. The first active " +
     "profile becomes the default; later profiles can be made default explicitly.",
   permissions: { organizationSettings: ["update"] },
-  mcp: { type: "capability", reason: "billing_admin" },
+  mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   body: createSellerProfileBody,
 } satisfies HandlerConfig;
 

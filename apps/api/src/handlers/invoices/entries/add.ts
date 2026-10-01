@@ -1,7 +1,11 @@
 import { Result } from "better-result";
 import { and, eq, inArray, isNull } from "drizzle-orm";
-import { t } from "elysia";
+import { type Static, t } from "elysia";
 
+import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
+
+import type { SafeDb } from "@/api/db/safe-db";
+import { resultTx } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
   expenses,
@@ -13,7 +17,7 @@ import {
   checkInvoiceLineCapacity,
   expenseLineDraft,
   insertInvoiceLines,
-  lockDraftInvoiceForLines,
+  requireDraftInvoiceForEntryChanges,
   recalculateInvoiceTotals,
   timeEntryLineDraft,
 } from "@/api/handlers/invoices/invoice-lines";
@@ -27,11 +31,7 @@ import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { CentsAmount } from "@/api/lib/money";
 
-import {
-  INVOICE_ENTRIES_MODIFIED_MESSAGE,
-  InvoiceEntriesModifiedConcurrentlyError,
-  isInvoiceEntriesModifiedConcurrentlyError,
-} from "../concurrent-modification";
+import { INVOICE_ENTRIES_MODIFIED_MESSAGE } from "../concurrent-modification";
 
 const addEntriesBodySchema = t.Object({
   timeEntryIds: t.Optional(
@@ -98,31 +98,16 @@ const buildAttachEvents = (params: {
   return events;
 };
 
-const addEntries = createSafeHandler(
-  {
-    description:
-      "Attach approved, billable, not-yet-invoiced time entries and expenses " +
-      "to a draft invoice as invoice lines without VAT, marking them billed " +
-      "and recomputing the invoice totals. Every entry must match the " +
-      "invoice currency, because an invoice is single-currency and nothing " +
-      "is converted. Only draft " +
-      "invoices accept entries, and a concurrent change to the same entries " +
-      "fails with a retryable conflict rather than attaching part of the " +
-      "set.",
-    permissions: { invoice: ["update"] },
-    mcp: { type: "capability", reason: "billing_admin" },
-    params: invoiceParamsSchema,
-    body: addEntriesBodySchema,
-  },
-  async function* ({
-    safeDb,
-    session,
-    user,
-    workspaceId,
-    params,
-    body,
-    recordAuditEvent,
-  }) {
+type AttachmentPreflightOptions = {
+  invoiceId: SafeId<"invoice">;
+  workspaceId: SafeId<"workspace">;
+  body: Static<typeof addEntriesBodySchema>;
+};
+const validateAttachmentInputs = async (
+  safeDb: SafeDb,
+  { invoiceId, workspaceId, body }: AttachmentPreflightOptions,
+) =>
+  Result.gen(async function* () {
     if (
       (body.timeEntryIds?.length ?? 0) === 0 &&
       (body.expenseIds?.length ?? 0) === 0
@@ -135,16 +120,19 @@ const addEntries = createSafeHandler(
       );
     }
 
-    const now = new Date();
-
     const invoice = yield* Result.await(
       safeDb((tx) =>
         tx.query.invoices.findFirst({
           where: {
-            id: { eq: params.invoiceId },
+            id: { eq: invoiceId },
             workspaceId: { eq: workspaceId },
           },
-          columns: { id: true, status: true, currency: true },
+          columns: {
+            id: true,
+            status: true,
+            currency: true,
+            documentType: true,
+          },
         }),
       ),
     );
@@ -160,6 +148,15 @@ const addEntries = createSafeHandler(
         new HandlerError({
           status: 409,
           message: "Entries can only be added to draft invoices",
+        }),
+      );
+    }
+
+    if (invoice.documentType === "credit_note") {
+      return Result.err(
+        new HandlerError({
+          status: 422,
+          message: "Credit notes cannot bill time entries or expenses",
         }),
       );
     }
@@ -180,6 +177,7 @@ const addEntries = createSafeHandler(
             .where(
               and(
                 eq(timeEntries.workspaceId, workspaceId),
+                eq(timeEntries.activityGroup, TIME_ENTRY_ACTIVITY_GROUP.CLIENT),
                 inArray(timeEntries.id, timeEntryIds),
               ),
             ),
@@ -283,7 +281,57 @@ const addEntries = createSafeHandler(
       }
     }
 
-    const txResult = await safeDb(async (tx) => {
+    return Result.ok(undefined);
+  });
+
+const addEntries = createSafeHandler(
+  {
+    description:
+      "Attach approved, billable, not-yet-invoiced time entries and expenses " +
+      "to a draft invoice as invoice lines without VAT, marking them billed " +
+      "and recomputing the invoice totals. Every entry must match the " +
+      "invoice currency, because an invoice is single-currency and nothing " +
+      "is converted. Only draft " +
+      "invoices accept entries, and a concurrent change to the same entries " +
+      "fails with a retryable conflict rather than attaching part of the " +
+      "set.",
+    permissions: { invoice: ["update"] },
+    mcp: {
+      type: "capability",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
+    params: invoiceParamsSchema,
+    body: addEntriesBodySchema,
+  },
+  async function* ({
+    safeDb,
+    user,
+    session,
+    workspaceId,
+    params,
+    body,
+    recordAuditEvent,
+  }) {
+    yield* Result.await(
+      validateAttachmentInputs(safeDb, {
+        invoiceId: params.invoiceId,
+        workspaceId,
+        body,
+      }),
+    );
+    const now = new Date();
+    const { timeEntryIds, expenseIds } = body;
+
+    const entryChangeScope = {
+      invoiceId: params.invoiceId,
+      organizationId: session.activeOrganizationId,
+      workspaceId,
+      recordAuditEvent,
+      conflictMessage: INVOICE_ENTRIES_MODIFIED_MESSAGE,
+    };
+
+    const txResult = await resultTx(safeDb, async (tx) => {
       const runningError = await guardRunningTimeEntries({
         tx,
         workspaceId,
@@ -293,21 +341,23 @@ const addEntries = createSafeHandler(
           : { type: "none" },
       });
       if (runningError) {
-        return runningError;
+        return Result.err(runningError);
       }
-      // The running-entry guard locks timer owners, the matter and entries first;
-      // lock the invoice next, before changing its lines or totals.
-      const invoiceCheck = await lockDraftInvoiceForLines(
+      const invoiceResult = await requireDraftInvoiceForEntryChanges(
         tx,
-        {
-          invoiceId: params.invoiceId,
-          organizationId: session.activeOrganizationId,
-          workspaceId,
-        },
-        recordAuditEvent,
+        entryChangeScope,
       );
-      if (!invoiceCheck) {
-        return { ok: false as const, refusal: null };
+      if (invoiceResult.isErr()) {
+        return Result.err(invoiceResult.error);
+      }
+      const invoiceCheck = invoiceResult.value;
+      if (invoiceCheck.documentType === "credit_note") {
+        return Result.err(
+          new HandlerError({
+            status: 422,
+            message: "Credit notes cannot bill time entries or expenses",
+          }),
+        );
       }
       // Refused before any entry is claimed, so nothing partial commits.
       const capacity = await checkInvoiceLineCapacity(
@@ -316,7 +366,7 @@ const addEntries = createSafeHandler(
         (timeEntryIds?.length ?? 0) + (expenseIds?.length ?? 0),
       );
       if (capacity.isErr()) {
-        return { ok: false as const, refusal: capacity.error };
+        return Result.err(capacity.error);
       }
 
       let attachedTimeEntries: {
@@ -337,6 +387,7 @@ const addEntries = createSafeHandler(
           .where(
             and(
               eq(timeEntries.workspaceId, workspaceId),
+              eq(timeEntries.activityGroup, TIME_ENTRY_ACTIVITY_GROUP.CLIENT),
               inArray(timeEntries.id, timeEntryIds),
               eq(timeEntries.status, BILLING_STATUS.APPROVED),
               eq(timeEntries.billable, true),
@@ -356,7 +407,12 @@ const addEntries = createSafeHandler(
           });
 
         if (attachedTimeEntries.length !== timeEntryIds.length) {
-          throw new InvoiceEntriesModifiedConcurrentlyError();
+          return Result.err(
+            new HandlerError({
+              status: 409,
+              message: INVOICE_ENTRIES_MODIFIED_MESSAGE,
+            }),
+          );
         }
       }
 
@@ -394,7 +450,12 @@ const addEntries = createSafeHandler(
           });
 
         if (attachedExpenses.length !== expenseIds.length) {
-          throw new InvoiceEntriesModifiedConcurrentlyError();
+          return Result.err(
+            new HandlerError({
+              status: 409,
+              message: INVOICE_ENTRIES_MODIFIED_MESSAGE,
+            }),
+          );
         }
       }
 
@@ -418,7 +479,10 @@ const addEntries = createSafeHandler(
         now,
         recordAuditEvent,
       );
-      const totalAmount = totals.grossAmountMinor;
+      if (totals.isErr()) {
+        return Result.err(totals.error);
+      }
+      const totalAmount = totals.value.grossAmountMinor;
 
       await recordAuditEvent(
         tx,
@@ -429,32 +493,11 @@ const addEntries = createSafeHandler(
         }),
       );
 
-      return { ok: true as const, totalAmount };
+      return Result.ok({ totalAmount });
     });
 
-    if (Result.isError(txResult)) {
-      if (isInvoiceEntriesModifiedConcurrentlyError(txResult.error)) {
-        return Result.err(
-          new HandlerError({
-            status: 409,
-            message: INVOICE_ENTRIES_MODIFIED_MESSAGE,
-          }),
-        );
-      }
+    if (txResult.isErr()) {
       return Result.err(txResult.error);
-    }
-
-    if (HandlerError.is(txResult.value)) {
-      return Result.err(txResult.value);
-    }
-    if (!txResult.value.ok) {
-      return Result.err(
-        txResult.value.refusal ??
-          new HandlerError({
-            status: 409,
-            message: INVOICE_ENTRIES_MODIFIED_MESSAGE,
-          }),
-      );
     }
 
     return Result.ok({ totalAmount: txResult.value.totalAmount });

@@ -688,8 +688,8 @@ const flattenChildren = (
   const flat: AnyNode[] = [];
   for (const element of elements) {
     const $element = $(element);
-    if ($element.children("p, div, table").length > 0) {
-      flat.push(...flattenChildren($, $element.children().toArray()));
+    if (isTag(element) && $element.children("p, div, table").length > 0) {
+      flat.push(...flattenChildren($, $element.contents().toArray()));
       continue;
     }
     flat.push(element);
@@ -701,7 +701,7 @@ const buildBlocks = (
   $: cheerio.CheerioAPI,
   $document: cheerio.Cheerio<AnyNode>,
 ): Block[] => {
-  const children = flattenChildren($, $document.children().toArray());
+  const children = flattenChildren($, $document.contents().toArray());
   const builder: BlockBuilder = {
     blocks: [],
     sequence: 0,
@@ -721,7 +721,7 @@ const buildBlocks = (
   );
 
   for (const [index, child] of children.entries()) {
-    visitChild($, builder, $(child), index, lastPointIndex);
+    visitChild({ $, builder, $el: $(child), index, lastPointIndex });
   }
 
   return builder.blocks;
@@ -738,14 +738,23 @@ const classListOf = (el: cheerio.Cheerio<AnyNode>): string[] =>
       name.startsWith(CLASS_PREFIX) ? name.slice(CLASS_PREFIX.length) : name,
     );
 
-const visitChild = (
-  $: cheerio.CheerioAPI,
-  builder: BlockBuilder,
-  $el: cheerio.Cheerio<AnyNode>,
-  index: number,
-  lastPointIndex: number,
-): void => {
-  const tag = tagNameOf($el.get(0));
+type VisitChildOptions = {
+  $: cheerio.CheerioAPI;
+  builder: BlockBuilder;
+  $el: cheerio.Cheerio<AnyNode>;
+  index: number;
+  lastPointIndex: number;
+};
+
+const visitChild = ({
+  $,
+  builder,
+  $el,
+  index,
+  lastPointIndex,
+}: VisitChildOptions): void => {
+  const node = $el.get(0);
+  const tag = tagNameOf(node);
   const classes = classListOf($el);
 
   // `<hr class="coj-note">` opens the footnote list.
@@ -767,6 +776,23 @@ const visitChild = (
     }
     visitTable($, builder, $el);
     builder.inTitleRun = false;
+    return;
+  }
+
+  if (node !== undefined && isText(node)) {
+    const inlines: Inline[] = [];
+    appendTextInline(inlines, $el.text());
+    const normalizedInlines = collapseWhitespace(inlines);
+    const plainText = inlinesToPlainText(normalizedInlines).trim();
+    if (!plainText) {
+      return;
+    }
+    builder.inTitleRun = false;
+    pushParagraph(builder, {
+      ...roleOf(builder.zone),
+      inlines: normalizedInlines,
+      plainText,
+    });
     return;
   }
 
@@ -963,6 +989,13 @@ const visitTable = (
   builder: BlockBuilder,
   $table: cheerio.Cheerio<AnyNode>,
 ): void => {
+  $table.children("caption").each((_, caption) => {
+    const inlines = walkEcjInlines($, $(caption));
+    const plainText = inlinesToPlainText(inlines).trim();
+    if (plainText) {
+      pushParagraph(builder, { ...roleOf(builder.zone), inlines, plainText });
+    }
+  });
   // A spec-compliant tree builder gives every row an explicit section
   // parent, but that parent is `<tbody>` only for rows the source left
   // unsectioned: rows the source put in `<thead>` or `<tfoot>` stay

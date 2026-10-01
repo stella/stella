@@ -1075,7 +1075,11 @@ const config = {
     "and entities.rename. Per-document summaries are generated and cached " +
     "where missing, and the call consumes AI usage.",
   permissions: { workspace: ["read"], chat: ["create"] },
-  mcp: { type: "capability", reason: "document_processing" },
+  mcp: {
+    type: "capability",
+    reason: "document_processing",
+    consumesServices: true,
+  },
   access: "write",
   body: organizeSuggestionsBodySchema,
   // Folder-organisation is queued / "background"-shaped from the

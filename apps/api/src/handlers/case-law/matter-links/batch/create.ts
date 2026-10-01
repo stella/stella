@@ -37,7 +37,11 @@ const config = {
     "the same items safely; the second call reports them as `existing`. At " +
     "most as many items as the matter may hold links.",
   permissions: { entity: ["create"] },
-  mcp: { type: "capability", reason: "legal_corpus_admin" },
+  mcp: {
+    type: "capability",
+    reason: "legal_corpus_admin",
+    consumesServices: false,
+  },
   body: createMatterLinksBatchBodySchema,
 } satisfies WorkspaceHandlerConfig;
 

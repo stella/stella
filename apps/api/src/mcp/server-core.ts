@@ -22,13 +22,18 @@ import {
   withActionAdmission,
 } from "@/api/lib/rate-limit/action-admission";
 import { isEventStreamResponse, withSseHeartbeat } from "@/api/lib/sse";
+import { mcpActionPeriodIdentity } from "@/api/mcp/action-admission-identity";
 import {
   isMcpSession,
   type McpAuthenticationFailure,
   type McpSession,
 } from "@/api/mcp/auth";
-import { featureOmittedCapabilityIds } from "@/api/mcp/capability-tools";
+import {
+  invokedCapabilityConsumesServices,
+  featureOmittedCapabilityIds,
+} from "@/api/mcp/capability-tools";
 import type { RecordMcpSessionInitialized } from "@/api/mcp/client-identity";
+import { compatFetchConsumesServices } from "@/api/mcp/compat-tools";
 import {
   MCP_MAX_REQUEST_BODY_BYTES,
   MCP_NOTIFICATION_KEEP_ALIVE_MS,
@@ -752,10 +757,25 @@ export const createMcpHttpRequestHandler = ({
         return await run();
       }
 
+      let consumesServices = definition.consumesServices;
+      if (toolName === "invoke_capability") {
+        const classified = await invokedCapabilityConsumesServices(
+          toolRequest.params.arguments ?? {},
+        );
+        if (Result.isError(classified)) {
+          return serializeToolResult(classified.error);
+        }
+        consumesServices = classified.value;
+      } else if (toolName === "fetch" && mode !== "law") {
+        consumesServices = compatFetchConsumesServices(
+          toolRequest.params.arguments ?? {},
+        );
+      }
       const admitted = await withActionAdmission({
         enabled: true,
         organizationId: context.organizationId,
         userId: context.userId,
+        periodIdentity: mcpActionPeriodIdentity(consumesServices),
         run,
       });
       if (Result.isOk(admitted)) {
@@ -767,8 +787,8 @@ export const createMcpHttpRequestHandler = ({
       ) {
         return mcpStructuredErrorResult({
           code: "rate_limited",
-          message: "Concurrent action limit reached",
-          hint: "Wait for an active action to finish, then retry this call.",
+          message: admitted.error.message,
+          hint: "Wait for admission capacity, then retry this call.",
           retryable: true,
         });
       }

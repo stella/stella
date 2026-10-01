@@ -27,6 +27,16 @@
     "errorNotFound": "Nie znaleźliśmy oczekującego żądania dla tego kodu. Sprawdź kod i spróbuj ponownie.",
     "title": "Połącz swojego agenta"
   },
+  "agentSetup": {
+    "addressLabel": "Asystent poprosi o ten adres",
+    "copiedToast": "Instrukcje skopiowane. Wklej je do czatu z asystentem.",
+    "copy": "Skopiuj mu instrukcje",
+    "description": "Pytaj Claude lub ChatGPT o swoje sprawy i dokumenty. Wybierz asystenta, aby otworzyć krótką instrukcję; zajmie to około minuty.",
+    "instructions": "Połącz mnie ze stellą, moim prawniczym obszarem roboczym. Postępuj zgodnie z sekcją „Instructions for AI agents” na {guideUrl} i użyj tego adresu serwera: {mcpUrl}",
+    "openGuide": "Otwórz instrukcję dla {assistant}",
+    "selfSetupHint": "Korzystasz z Claude Code lub Codexa?",
+    "title": "Korzystaj ze stelli w swoim asystencie AI"
+  },
   "ai": {
     "chooseRewriteInstruction": "Opcje przeredagowania",
     "editWithAI": "Edytuj z AI",
@@ -521,6 +531,20 @@
     "noActiveTimer": "Brak aktywnego timera",
     "noEntries": "Brak wpisów czasu w tym okresie",
     "nonBillable": "Nierozliczalne",
+    "quickEntry": {
+      "entrySaved": "Wpis czasu zapisany",
+      "expenseSaved": "Wydatek zapisany",
+      "expenseTitle": "Dodaj wydatek",
+      "futureDate": "Wybierz dzisiejszą lub wcześniejszą datę.",
+      "invalidDate": "Wybierz prawidłową datę pracy.",
+      "minimumUnit": "Czas jest zaokrąglany w górę do minimalnej jednostki rozliczeniowej.",
+      "narrativeRequired": "Dodaj opis przed zapisaniem czasu.",
+      "outsideEditWindow": "Ta data wykracza poza termin edycji.",
+      "periodLocked": "Ten miesiąc jest zablokowany.",
+      "saveAndAddExpense": "Zapisz i dodaj wydatek",
+      "saveAndNew": "Zapisz i dodaj kolejny wpis",
+      "viewDay": "Pokaż dzień"
+    },
     "rates": {
       "addRate": "Dodaj stawkę",
       "createRateTable": "Utwórz tabelę stawek",
@@ -553,6 +577,26 @@
     "selectMatter": "Wybierz sprawę...",
     "selectMatterToStart": "Wybierz sprawę, aby rozpocząć mierzenie czasu",
     "selectedCount": "{count, plural, one {# zaznaczony} few {# zaznaczone} many {# zaznaczonych} other {# zaznaczonego}}",
+    "sellerProfiles": {
+      "add": "Dodaj profil sprzedawcy",
+      "archiveConfirm": "Zarchiwizować ten profil sprzedawcy? Nie będzie już dostępny dla nowych faktur.",
+      "bic": "Kod BIC / SWIFT",
+      "default": "Domyślny sprzedawca",
+      "defaultCurrency": "Domyślna waluta",
+      "description": "Zarządzaj danymi używanymi do wystawiania faktur.",
+      "edit": "Edytuj profil sprzedawcy",
+      "empty": "Brak profili sprzedawcy.",
+      "footerNotes": "Uwagi w stopce",
+      "invalidBic": "Wprowadź prawidłowy BIC.",
+      "invalidCurrency": "Wprowadź trzyliterowy kod waluty.",
+      "invalidIban": "Wprowadź prawidłowy IBAN.",
+      "legalName": "Nazwa prawna",
+      "registrationId": "Numer rejestracyjny",
+      "setDefault": "Ustaw jako domyślny",
+      "title": "Profile sprzedawcy",
+      "vatId": "Numer VAT"
+    },
+    "settingsTitle": "Rozliczenia",
     "split": {
       "addSplit": "Dodaj podział",
       "percentValue": "{value}%",
@@ -837,6 +881,7 @@
         "publishedOnWeb": "Opublikowano w sieci"
       },
       "statutes": "Powołane przepisy",
+      "textNotYetAvailable": "Sąd nie opublikował treści orzeczenia lub nie jest ona jeszcze tutaj dostępna.",
       "textPending": "Tekst orzeczenia jest wciąż pobierany",
       "textReadFailed": "Nie udało się wczytać tekstu orzeczenia",
       "textUnavailable": "Do tego orzeczenia nie ma dostępnego tekstu"
@@ -2258,7 +2303,8 @@
     "compareUnsupportedReasons": {
       "missingInBase": "Część dokumentu istnieje tylko w miejscu docelowym",
       "missingInTarget": "Część dokumentu istnieje tylko w bazie",
-      "notEditable": "Część dokumentu nie podlega edycji"
+      "notEditable": "Część dokumentu nie podlega edycji",
+      "unsupportedContent": "Ta wersja zawiera treść, której nie można jeszcze porównać."
     },
     "compareUnverified": "Niesprawdzone porównanie",
     "compareVerificationFailures": "{count, plural, one {Jedna kontrola dwukierunkowa nie powiodła się. Sprawdź porównanie, zanim na nim polegasz.} few {# kontrole dwukierunkowe nie powiodły się. Sprawdź porównanie, zanim na nim polegasz.} many {# kontroli dwukierunkowych nie powiodło się. Sprawdź porównanie, zanim na nim polegasz.} other {# kontroli dwukierunkowych nie powiodło się. Sprawdź porównanie, zanim na nim polegasz.}}",
@@ -3676,7 +3722,6 @@
     "aiTitle": "Połącz swojego dostawcę AI",
     "appsSubtitle": "stella działa też poza przeglądarką: na komputerze i w asystencie AI. Do tej konfiguracji możesz wrócić w dowolnym momencie.",
     "appsTitle": "Korzystaj ze stelli wszędzie",
-    "assistantDocsLink": "Jak podłączyć asystenta",
     "catalogueAlwaysOn": "Zawsze włączone",
     "catalogueClearSearch": "Wyczyść wyszukiwanie",
     "catalogueCommunityHeading": "Pozostałe",
@@ -4203,31 +4248,40 @@
       "wordEditShortcutPlaceholder": "np. JK"
     },
     "connections": {
+      "accessTitle": "{clientName} może",
+      "browseIntegrations": "Dodaj usługę",
       "cliDescription": "Zainstaluj klienta wiersza poleceń stella i zaloguj się, aby skryptować sprawy, dokumenty i szablony z terminala.",
-      "cliHelpHint": "Uruchom „stella --help”, aby zobaczyć pełną listę poleceń.",
       "cliInstallLabel": "Instalacja",
       "cliLoginLabel": "Logowanie",
       "cliTitle": "Interfejs wiersza poleceń",
-      "connectedAppsDescription": "Aplikacje i narzędzia, którym zezwolono na dostęp do konta.",
-      "connectedAppsEmpty": "Aplikacje, które autoryzujesz, na przykład Claude lub CLI stella, pojawią się tutaj.",
-      "connectedAppsTitle": "Połączone aplikacje",
-      "connectedColumn": "Połączono",
-      "description": "Połącz klientów MCP i interfejs wiersza poleceń z kontem.",
+      "connected": "Połączone",
+      "connectedAgo": "Połączono {time}",
+      "connectedAppsDescription": "Aplikacje, w których zalogowano się kontem stella. Odłącz te, których już nie używasz.",
+      "connectedAppsEmpty": "Jeszcze nic. Skonfiguruj powyżej Claude lub ChatGPT, a pojawi się tutaj.",
+      "connectedAppsTitle": "Aplikacje z dostępem",
+      "description": "Korzystaj ze stelli w asystencie AI i sprawdzaj, co ma dostęp do Twojego konta.",
+      "developerDescription": "Adresy serwera i narzędzie wiersza poleceń do konfiguracji technicznych.",
+      "developerTitle": "Dostęp dla programistów",
       "disconnectConfirmDescription": "Spowoduje to cofnięcie dostępu aplikacji {clientName} do Twojego konta oraz unieważnienie wszystkich wydanych przez nią tokenów. W każdej chwili możesz połączyć się ponownie.",
       "disconnectConfirmTitle": "Rozłączyć {clientName}?",
       "disconnectSuccess": "Rozłączono {clientName}",
+      "integrationsDescription": "Zewnętrzne usługi, z których AI może korzystać w Twoim imieniu, np. repozytorium dokumentów.",
+      "integrationsEmpty": "Dodaj pierwszą usługę",
+      "integrationsTitle": "Połączone usługi",
       "mcpAnonymizedLabel": "Zanonimizowany punkt końcowy",
-      "mcpAnonymizedNote": "Dostępny jest również zanonimizowany punkt końcowy; udostępnia te same narzędzia z zamaskowanymi danymi osobowymi.",
-      "mcpDescription": "Połącz klienta zgodnego z MCP, na przykład Claude lub Cursor, z kontem stella za pomocą tego adresu URL serwera.",
+      "mcpAnonymizedShortNote": "Te same narzędzia, dane osobowe zamaskowane.",
+      "mcpFullNote": "Pełny dostęp do Twoich spraw i dokumentów.",
       "mcpLawLabel": "Punkt końcowy korpusu prawnego",
-      "mcpLawNote": "Dostępny jest również punkt końcowy korpusu prawnego; udostępnia wyłącznie publiczne orzecznictwo i przepisy prawa i nie ma dostępu do danych spraw.",
-      "mcpStep1": "Dodaj powyższy adres URL jako niestandardowy konektor lub serwer MCP w swoim kliencie.",
-      "mcpStep2": "Zaloguj się, gdy przeglądarka o to poprosi.",
-      "mcpStep3": "Zatwierdź dostęp na ekranie zgody.",
+      "mcpLawShortNote": "Tylko publiczne orzecznictwo i przepisy, bez danych spraw.",
+      "mcpSetupHint": "Dodaj adres jako własny konektor w Claude, Cursorze lub innym kliencie MCP, a następnie zaloguj się i zatwierdź dostęp.",
       "mcpTitle": "Serwer MCP",
       "mcpUrlLabel": "Adres URL serwera",
-      "scopesLabel": "Dostęp",
-      "title": "Połączenia"
+      "noMatches": "Żadne połączenie nie pasuje do „{query}”",
+      "notConnected": "Niepołączone",
+      "permissionCount": "{count, plural, one {# uprawnienie} few {# uprawnienia} many {# uprawnień} other {# uprawnienia}}",
+      "searchPlaceholder": "Szukaj połączeń",
+      "title": "Połączenia",
+      "turnedOff": "Wyłączone"
     },
     "organization": {
       "activeMembers": "Aktywni członkowie",
@@ -4306,6 +4360,20 @@
       "renameDescription": "Członkowie od razu zobaczą nową nazwę.",
       "renameTitle": "Zmień nazwę organizacji",
       "renameTypeToConfirm": "Aby potwierdzić, wpisz nową nazwę: {name}",
+      "timePolicy": {
+        "description": "Ustaw zaokrąglanie czasu, terminy edycji i blokady miesięcy.",
+        "editWindow": "Termin edycji (dni)",
+        "editWindowHelp": "Zero pozwala na edycję tylko w dniu wykonania pracy.",
+        "invalidEditWindow": "Wprowadź całkowitą liczbę dni, równą zero lub większą.",
+        "invalidLockedMonth": "Wybierz zakończony miesiąc.",
+        "invalidMinimumUnit": "Wybierz jednostkę czasu, która dzieli 60 minut bez reszty.",
+        "lockedThrough": "Zablokowane do",
+        "lockedThroughHelp": "Wpisów z tego miesiąca i wcześniejszych miesięcy nie można edytować.",
+        "minimumUnit": "Minimalna jednostka czasu",
+        "minimumUnitHelp": "Czas jest rozliczany w wielokrotnościach tej liczby minut.",
+        "narrativeRequired": "Wymagaj opisu",
+        "title": "Zasady ewidencji czasu"
+      },
       "usage": "Użycie",
       "usageDescription": "Limity użycia i stan uprawnień tej organizacji",
       "usageEmptyDescription": "Skonfiguruj uprawnienie do użycia, aby włączyć mierzone funkcje AI w tej organizacji.",
@@ -5003,6 +5071,11 @@
     "whenNotToUsePlaceholder": "Kiedy unikać tego szablonu?",
     "whenToUse": "Kiedy używać",
     "whenToUsePlaceholder": "Kiedy należy używać tego szablonu? (pomaga AI w wyborze szablonu)"
+  },
+  "timesheets": {
+    "day": {
+      "internalWork": "Praca wewnętrzna"
+    }
   },
   "translate": {
     "dialog": {
