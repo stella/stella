@@ -11,6 +11,7 @@ import {
 import { featureFlagSchema } from "@/api/env-base-schema";
 import { SIGNUP_RATE_LIMIT_IP_SOURCE } from "@/api/lib/client-ip-config";
 import { isTimestampAuthorityUrlList } from "@/api/lib/files/pdf-signing/timestamp-authority-urls";
+import { AUTH_PROVIDER_ID_PATTERN } from "@/api/lib/safe-id-boundaries";
 import {
   isSecureGotenbergUrl,
   isTlsOrLoopbackUrl,
@@ -260,6 +261,9 @@ export const envApiServerSchema = {
     v.pipe(v.string(), v.trim(), v.toLowerCase(), v.email()),
   ),
   DEMO_ACCOUNT_OTP: v.optional(v.pipe(v.string(), v.digits(), v.length(6))),
+  DEMO_ACCOUNT_ORGANIZATION_ID: v.optional(
+    v.pipe(v.string(), v.regex(AUTH_PROVIDER_ID_PATTERN)),
+  ),
 
   /**
    * Plain-text token served at `/.well-known/openai-apps-challenge` so an

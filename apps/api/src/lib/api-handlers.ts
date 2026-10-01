@@ -27,6 +27,8 @@ import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CapabilityTransport } from "@/api/lib/capability-transport";
 import type { WorkspaceParamsSchema } from "@/api/lib/custom-schema";
+import { checkDemoAccountOperationForUser } from "@/api/lib/demo-account";
+import { requiresStandardAccount } from "@/api/lib/demo-account-policy";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
 import {
   DatabaseError,
@@ -919,6 +921,7 @@ export const admitFiniteAction = async function* <
 
 type HandlerAdmissionDependencies = {
   admit?: typeof withActionAdmission;
+  checkAccountOperation?: typeof checkDemoAccountOperationForUser;
 };
 
 const createSafeScopedHandler = <
@@ -928,7 +931,10 @@ const createSafeScopedHandler = <
 >(
   config: TConfig,
   handler: SafeHandlerFn<TContext, TResult>,
-  { admit = withActionAdmission }: HandlerAdmissionDependencies = {},
+  {
+    admit = withActionAdmission,
+    checkAccountOperation = checkDemoAccountOperationForUser,
+  }: HandlerAdmissionDependencies = {},
 ): SafeHandlerDefinition<TConfig, TContext, TResult> => ({
   config,
   handler: async (ctx): Promise<SafeHandlerResult<TResult>> => {
@@ -939,6 +945,15 @@ const createSafeScopedHandler = <
       });
     }
 
+    if (requiresStandardAccount(config.permissions)) {
+      const accountAccess = await checkAccountOperation(ctx.user.id);
+      if (Result.isError(accountAccess)) {
+        return toSafeStatusResponse(403, {
+          code: "account_access_unavailable",
+          message: "This operation is unavailable for this account.",
+        });
+      }
+    }
     // A handler that declares AI usage must not run when this request could
     // not read the org's stored config, or the org is barred from the
     // instance provider: `ctx.orgAIConfig` is null there, and resolving a

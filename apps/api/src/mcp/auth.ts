@@ -6,11 +6,13 @@ import * as v from "valibot";
 import type { PermissionInput } from "@stll/permissions";
 
 import { getAuthEndpointUrl, getAuthIssuerUrl } from "@/api/lib/auth-paths";
+import { checkDemoAccountOperationForUser } from "@/api/lib/demo-account";
 import {
   isMachineApiKeyCredential,
   machineApiKeyPermissionsSchema,
   parseMachineApiKeyPermissions,
 } from "@/api/lib/machine-api-key-config";
+import { brandActorSessionIdentity } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
 import { AGENT_RUN_TOKEN_PURPOSE } from "@/api/mcp/agent-run-token";
 import { resolveMachineApiKeySession as defaultResolveMachineApiKeySession } from "@/api/mcp/api-key-auth";
@@ -286,27 +288,49 @@ export const authenticateMcpRequest = async (
   {
     mode = "default",
     resolveApiKeySession = defaultResolveMachineApiKeySession,
+    checkAccountOperation = checkDemoAccountOperationForUser,
+    verifyToken,
   }: {
     mode?: McpMode | undefined;
     resolveApiKeySession?:
       | typeof defaultResolveMachineApiKeySession
       | undefined;
+    checkAccountOperation?: typeof checkDemoAccountOperationForUser;
+    verifyToken?: ReturnType<typeof getVerifyBearerToken>;
   } = {},
 ): Promise<Result<McpSession, McpAuthenticationFailure>> => {
-  if (isMachineApiKeyCredential(bearerToken)) {
-    return await Result.tryPromise({
-      try: async () => await resolveApiKeySession(bearerToken, { mode }),
-      catch: classifyMcpTokenVerificationError,
-    });
+  const authenticated = isMachineApiKeyCredential(bearerToken)
+    ? await Result.tryPromise({
+        try: async () => await resolveApiKeySession(bearerToken, { mode }),
+        catch: classifyMcpTokenVerificationError,
+      })
+    : (
+        await Result.tryPromise({
+          try: async () =>
+            await (verifyToken ?? getVerifyBearerToken())(
+              bearerToken,
+              getMcpAccessTokenVerificationOptions(mode),
+            ),
+          catch: classifyMcpTokenVerificationError,
+        })
+      ).andThen(extractMcpSession);
+  if (Result.isError(authenticated)) {
+    return authenticated;
   }
-
-  const payload = await Result.tryPromise({
-    try: async () =>
-      await getVerifyBearerToken()(
-        bearerToken,
-        getMcpAccessTokenVerificationOptions(mode),
-      ),
+  const { userId } = brandActorSessionIdentity(authenticated.value);
+  const accountOperation = await Result.tryPromise({
+    try: async () => await checkAccountOperation(userId),
     catch: classifyMcpTokenVerificationError,
   });
-  return payload.andThen(extractMcpSession);
+  if (Result.isError(accountOperation)) {
+    return accountOperation;
+  }
+  if (Result.isError(accountOperation.value)) {
+    return Result.err(
+      new McpAuthenticationError({
+        message: "This credential is unavailable for this account",
+      }),
+    );
+  }
+  return authenticated;
 };

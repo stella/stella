@@ -12,6 +12,7 @@ import {
   REF_PROJECTION_FAILURE_MESSAGE,
 } from "@/api/lib/chat/projection-schema";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import { checkDemoAccountAccess } from "@/api/lib/demo-account-policy";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
@@ -67,6 +68,79 @@ const buildContext = ({
   });
 
 describe("runRegistryWriteTool (orchestration)", () => {
+  test("checks account eligibility before dispatching restricted operations", async () => {
+    for (const toolName of [
+      "save_matter",
+      "delete_matter",
+      "manage_organization",
+      "link_matter_contact",
+      "set_practice_jurisdictions",
+    ] as const) {
+      for (const email of ["limited@example.test", "standard@example.test"]) {
+        const featureGate = mock(() => false);
+        const result = await runRegistryWriteTool(
+          {
+            toolName,
+            args: {},
+            context: buildContext(),
+            refRegistry: createChatRefRegistry(),
+          },
+          {
+            isMcpToolFeatureEnabled: featureGate,
+            checkAccountOperation: async (userId) => {
+              expect(userId).toBe("user_1");
+              return checkDemoAccountAccess({
+                email,
+                config: {
+                  email: "limited@example.test",
+                  organizationId: "org_1",
+                },
+                operation: "growth",
+              });
+            },
+          },
+        );
+        expect(Result.isError(result)).toBe(true);
+        if (Result.isError(result)) {
+          if (email === "limited@example.test") {
+            expect(result.error.kind).toBe("unavailable");
+            expect(result.error.message).toBe(
+              "This operation is unavailable for this account.",
+            );
+            expect(featureGate).not.toHaveBeenCalled();
+          } else {
+            expect(result.error.message).toBe(
+              "This feature is not enabled on this deployment.",
+            );
+            expect(featureGate).toHaveBeenCalledTimes(1);
+          }
+        }
+      }
+    }
+  });
+
+  test("keeps sandbox operations independent of account growth checks", async () => {
+    const accountGate = mock(async () => Result.ok());
+    const result = await runRegistryWriteTool(
+      {
+        toolName: "delete_time_entry",
+        args: {},
+        context: buildContext(),
+        refRegistry: createChatRefRegistry(),
+      },
+      {
+        isMcpToolFeatureEnabled: () => false,
+        checkAccountOperation: accountGate,
+      },
+    );
+    expect(Result.isError(result)).toBe(true);
+    expect(accountGate).not.toHaveBeenCalled();
+    if (Result.isError(result))
+      {expect(result.error.message).toBe(
+        "This feature is not enabled on this deployment.",
+      );}
+  });
+
   test("refuses a write the ref map keeps off the chat surface", async () => {
     const result = await runRegistryWriteTool({
       args: {},

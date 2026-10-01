@@ -68,7 +68,14 @@ import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
 import { verifyConfirmationOtp } from "@/api/lib/confirmation-otp";
 import { tUuid } from "@/api/lib/custom-schema";
 import { findAccountIdByEmail } from "@/api/lib/db/account-row";
+import {
+  assertDemoAccountAccess,
+  checkDemoAccountOperationForUser,
+  createConfiguredDemoSessionPolicy,
+  getDemoAccountConfig,
+} from "@/api/lib/demo-account";
 import { getDemoAccountOtpOverride } from "@/api/lib/demo-account-otp";
+import { createDemoSessionFilter } from "@/api/lib/demo-account-policy";
 import { detectedCountryFromRequestContext } from "@/api/lib/detected-country";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
 import { stashDevOtp } from "@/api/lib/dev-otp-store";
@@ -92,6 +99,7 @@ import { isMemberRole } from "@/api/lib/member-roles";
 import { resolveLoopbackClientRegistrationOverride } from "@/api/lib/oauth-loopback-registration";
 import { getBetterAuthOAuthResources } from "@/api/lib/oauth-resource-policy";
 import { bridgeOauthUiInteraction } from "@/api/lib/oauth-ui-fragment";
+import { logger } from "@/api/lib/observability/logger";
 import {
   enrichRequestContext,
   getRequestContext,
@@ -107,7 +115,9 @@ import {
   readAuthorizedMemberRole,
 } from "@/api/lib/permission-authorization";
 import { createAuthRateLimitStorage } from "@/api/lib/rate-limit/auth-storage";
+import { createOtpAccountLimitPlugin } from "@/api/lib/rate-limit/otp-account-budget";
 import type { RateLimitContext } from "@/api/lib/rate-limit/rate-limit";
+import { RedisRateLimitContext } from "@/api/lib/rate-limit/redis-context";
 import { memoizePerRequest } from "@/api/lib/request-memo";
 import {
   brandPersistedOrganizationId,
@@ -851,6 +861,13 @@ const oauthUiFragmentBridgePlugin = {
 // first use prevents the TDZ error when the test runner
 // evaluates this module before db/index.ts finishes.
 const createAuth = () => {
+  const demoConfig = getDemoAccountConfig();
+  const configuredDemoMode = demoConfig.organizationId
+    ? "bound"
+    : "unavailable";
+  logger.info("auth.account_policy", {
+    mode: demoConfig.email ? configuredDemoMode : "disabled",
+  });
   const oauthResources = getBetterAuthOAuthResources();
   const oauthResourceIdentifiers = oauthResources.map(
     ({ identifier }) => identifier,
@@ -1034,6 +1051,7 @@ const createAuth = () => {
         }
       : undefined,
     databaseHooks: {
+      session: { create: { before: createConfiguredDemoSessionPolicy() } },
       user: {
         create: {
           before: async (user, ctx) => {
@@ -1107,6 +1125,11 @@ const createAuth = () => {
     },
     plugins: [
       createSessionBearer(),
+      createDemoSessionFilter(demoConfig),
+      createOtpAccountLimitPlugin({
+        enabled: !env.E2E_DISABLE_AUTH_RATE_LIMIT,
+        context: new RedisRateLimitContext({ failurePolicy: "fail_closed" }),
+      }),
       // The after-hook on /get-session signs a `set-auth-jwt` response
       // header on every session resolution by reading the jwks table.
       // Nothing in the repo consumes that header: JWT issuance already
@@ -1201,6 +1224,9 @@ const createAuth = () => {
         roles,
         organizationHooks: {
           ...organizationLifecycleHooks,
+          async beforeCreateOrganization({ user }) {
+            assertDemoAccountAccess({ email: user.email, operation: "growth" });
+          },
           async beforeDeleteOrganization({ organization: org }) {
             // Complete the deletion here, before the plugin's adapter runs.
             // Everything that names the organization cascades away with it, and
@@ -1263,19 +1289,33 @@ const createAuth = () => {
           // A readable refusal before the plugin writes anything; the
           // `member_organization_capacity` trigger is what holds the bound
           // under concurrent additions.
-          async beforeCreateInvitation({ organization: org }) {
+          async beforeCreateInvitation({
+            organization: org,
+            invitation,
+            inviter,
+          }) {
+            assertDemoAccountAccess({
+              email: inviter.email,
+              operation: "growth",
+            });
+            assertDemoAccountAccess({
+              email: invitation.email,
+              operation: "growth",
+            });
             await refuseBeyondMemberCapacity(
               brandPersistedOrganizationId(org.id),
               "invitation",
             );
           },
-          async beforeAcceptInvitation({ organization: org }) {
+          async beforeAcceptInvitation({ organization: org, user }) {
+            assertDemoAccountAccess({ email: user.email, operation: "growth" });
             await refuseBeyondMemberCapacity(
               brandPersistedOrganizationId(org.id),
               "membership",
             );
           },
-          async beforeAddMember({ organization: org }) {
+          async beforeAddMember({ organization: org, user }) {
+            assertDemoAccountAccess({ email: user.email, operation: "growth" });
             await refuseBeyondMemberCapacity(
               brandPersistedOrganizationId(org.id),
               "membership",
@@ -1439,6 +1479,9 @@ const createAuth = () => {
           },
         },
         customAccessTokenClaims: async ({ referenceId, user }) => {
+          if (user) {
+            assertDemoAccountAccess({ email: user.email, operation: "growth" });
+          }
           if (!referenceId || !user) {
             return { org_id: referenceId };
           }
@@ -1468,6 +1511,65 @@ const createAuth = () => {
     ],
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
+        if (demoConfig.email) {
+          const email: unknown = ctx.body?.email;
+          if (
+            typeof email === "string" &&
+            isSessionCreatingAuthPath(ctx.path)
+          ) {
+            assertDemoAccountAccess({ email, operation: "sign-in" });
+          }
+          if (
+            ctx.path !== "/get-session" &&
+            !isSessionCreatingAuthPath(ctx.path) &&
+            ctx.path !== SEND_VERIFICATION_OTP_PATH
+          ) {
+            const resolved = await getAuthoritativeSessionFromCtx(ctx);
+            if (resolved) {
+              assertDemoAccountAccess({
+                email: resolved.user.email,
+                operation: "session",
+                organizationId: resolved.session.activeOrganizationId,
+              });
+              if (
+                (ctx.method !== "GET" &&
+                  ctx.path.startsWith("/organization/")) ||
+                ctx.path.startsWith("/api-key/") ||
+                ctx.path.startsWith("/oauth2/") ||
+                ctx.path === "/link-social" ||
+                ctx.path === "/delete-user" ||
+                ctx.path === "/change-email" ||
+                ctx.path.startsWith("/email-otp/request-email-change") ||
+                ctx.path === "/email-otp/change-email"
+              ) {
+                assertDemoAccountAccess({
+                  email: resolved.user.email,
+                  operation: "growth",
+                });
+              }
+            }
+          }
+          if (
+            ctx.path === "/api-key/create" &&
+            typeof ctx.body?.userId === "string"
+          ) {
+            const account = await ctx.context.internalAdapter.findUserById(
+              ctx.body.userId,
+            );
+            if (!account) {
+              throw new APIError("UNAUTHORIZED", { message: "Unauthorized" });
+            }
+            const access = await checkDemoAccountOperationForUser(
+              brandPersistedUserId(account.id),
+            );
+            if (Result.isError(access)) {
+              throw new APIError("FORBIDDEN", {
+                code: "account_access_unavailable",
+                message: "This operation is unavailable for this account.",
+              });
+            }
+          }
+        }
         await assertSelfhostEmailOtpAllowed(ctx.path);
 
         const loopbackRegistration =
