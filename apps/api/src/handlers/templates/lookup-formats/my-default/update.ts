@@ -16,7 +16,11 @@ const config = {
   // grant, not a floor under a missing one.
   permissions: { workspace: ["read"] },
   access: "write",
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  mcp: {
+    type: "capability",
+    reason: "template_authoring_ui",
+    consumesServices: false,
+  },
   body: t.Object(
     {
       registry: t.UnionEnum(LOOKUP_REGISTRIES),

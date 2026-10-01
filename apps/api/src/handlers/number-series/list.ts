@@ -53,7 +53,7 @@ true satisfies UnexpectedNumberSeriesListColumn extends never ? true : never;
 const config = {
   description: "List active document number series in the active organization.",
   permissions: { organizationSettings: ["update"] },
-  mcp: { type: "capability", reason: "billing_admin" },
+  mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   access: "read",
   query: t.Object({
     limit: t.Optional(

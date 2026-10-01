@@ -12,7 +12,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 const config = {
   description: "Archive a VAT rate period in the active organization.",
   permissions: { organizationSettings: ["update"] },
-  mcp: { type: "capability", reason: "billing_admin" },
+  mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   params: vatRateParams,
 } satisfies HandlerConfig;
 export default createSafeRootHandler(

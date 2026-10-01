@@ -122,8 +122,11 @@ export const WorkspaceShell = ({
         >
           {topBar({ compactNavigationTrigger })}
         </div>
+        {/* The top bar draws the one divider between the chrome and the
+            page. A route root that adds its own top border doubles it into a
+            2px line, so the slot takes the top border off its first child. */}
         <div
-          className="flex min-h-0 flex-1 flex-col overflow-auto overscroll-contain"
+          className="flex min-h-0 flex-1 flex-col overflow-auto overscroll-contain [&>*:first-child]:border-t-0"
           data-slot="workspace-shell-content"
         >
           {children}

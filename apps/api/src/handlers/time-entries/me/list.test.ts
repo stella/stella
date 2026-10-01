@@ -1,8 +1,11 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { inArray } from "drizzle-orm";
 
+import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
+
 import { timeEntries, workspaces } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
+import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { createSafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
 import { encodePaginationCursor } from "@/api/lib/pagination";
@@ -183,13 +186,11 @@ const listFor = async (query: ListCtx["query"]) =>
     }),
   );
 
-const isPage = (
-  value: unknown,
-): value is {
-  items: { id: string; workspaceId: string; workspaceName: string }[];
-  nextCursor: string | null;
-  limit: number;
-} =>
+type MyTimeEntryPage = Extract<
+  Awaited<ReturnType<typeof listMyTimeEntries.handler>>,
+  { items: unknown[] }
+>;
+const isPage = (value: unknown): value is MyTimeEntryPage =>
   typeof value === "object" &&
   value !== null &&
   "items" in value &&
@@ -202,15 +203,16 @@ describe("personal time entries", () => {
       throw new Error(`unexpected list response: ${JSON.stringify(result)}`);
     }
 
-    expect(result.items.map(({ id }) => id).toSorted()).toEqual(
-      [...visibleIds].toSorted(),
+    expect(result.items).toHaveLength(visibleIds.length);
+    expect(result.items.map(({ id }) => id)).toEqual(
+      expect.arrayContaining([...visibleIds]),
     );
-    expect(
-      result.items.map(({ workspaceId }) => workspaceId).toSorted(),
-    ).toEqual([ids.wsA1, ids.wsA2].toSorted());
-    expect(
-      result.items.map(({ workspaceName }) => workspaceName).toSorted(),
-    ).toEqual(["WS A1", "WS A2"]);
+    expect(result.items.map(({ workspaceId }) => workspaceId)).toEqual(
+      expect.arrayContaining([ids.wsA1, ids.wsA2]),
+    );
+    expect(result.items.map(({ workspaceName }) => workspaceName)).toEqual(
+      expect.arrayContaining(["WS A1", "WS A2"]),
+    );
     expect(result.nextCursor).toBeNull();
   });
 
@@ -253,4 +255,71 @@ describe("personal time entries", () => {
       response: { code: "invalid_cursor" },
     });
   });
+});
+
+test("my day includes the owner's internal work without exposing other members or tenants", async () => {
+  const own = createSafeId<"timeEntry">();
+  const other = createSafeId<"timeEntry">();
+  const foreign = createSafeId<"timeEntry">();
+  const internal = {
+    workspaceId: null,
+    activityGroup: TIME_ENTRY_ACTIVITY_GROUP.INTERNAL,
+    dateWorked: DAY,
+    timezoneId: "UTC",
+    durationMinutes: 37,
+    billedMinutes: 0,
+    rateAtEntry: cents(0),
+    currency: UNPRICED_TIME_ENTRY_CURRENCY,
+    billable: false,
+    noCharge: false,
+    narrative: "Internal work",
+  };
+  await testDb.insert(timeEntries).values([
+    { ...internal, id: own, organizationId: ids.orgA, userId: ids.userA1 },
+    { ...internal, id: other, organizationId: ids.orgA, userId: ids.userA2 },
+    { ...internal, id: foreign, organizationId: ids.orgB, userId: ids.userA1 },
+  ]);
+  try {
+    const page = await listFor({ date: DAY });
+    if (!isPage(page)) {
+      throw new Error(`unexpected day page: ${JSON.stringify(page)}`);
+    }
+    expect(page.items.map(({ id }) => id).toSorted()).toEqual(
+      [...visibleIds, own].toSorted(),
+    );
+    expect(page.items.find(({ id }) => id === own)).toMatchObject({
+      activityGroup: TIME_ENTRY_ACTIVITY_GROUP.INTERNAL,
+      workspaceId: null,
+      workspaceName: null,
+      workspaceReference: null,
+      durationMinutes: 37,
+      billedMinutes: 0,
+    });
+    for (const id of visibleIds) {
+      expect(page.items.find((row) => row.id === id)).toMatchObject({
+        activityGroup: TIME_ENTRY_ACTIVITY_GROUP.CLIENT,
+      });
+    }
+    const withoutMatters = await listMyTimeEntries.handler(
+      asTestRaw<ListCtx>({
+        query: { date: DAY },
+        request: new Request("https://example.test/time-entries/me"),
+        route: "/time-entries/me",
+        safeDb: createSafeDb(testDb, [], ids.orgA, ids.userA1),
+        session: { activeOrganizationId: ids.orgA },
+        user: { id: ids.userA1 },
+        memberRole: { role: "member" },
+      }),
+    );
+    if (!isPage(withoutMatters)) {
+      throw new Error(
+        `unexpected internal page: ${JSON.stringify(withoutMatters)}`,
+      );
+    }
+    expect(withoutMatters.items.map(({ id }) => id)).toEqual([own]);
+  } finally {
+    await testDb
+      .delete(timeEntries)
+      .where(inArray(timeEntries.id, [own, other, foreign]));
+  }
 });

@@ -13,15 +13,16 @@ import { Temporal } from "@stll/time";
 
 import { isMockAI } from "@/api/consts";
 import { env } from "@/api/env";
+import { ASK_USER_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
 import { logger } from "@/api/lib/observability/logger";
 import { registerTanStackMockTextAdapterFactory } from "@/api/lib/tanstack-ai-models";
 import { generateBatchMock } from "@/api/lib/workflow/generate-batch-mock";
 import { registerBatchGenerator } from "@/api/lib/workflow/generate-batch-provider";
 
 // Dev/test-only preload: wired via the api `dev` script's `--preload`, never
-// imported from `src/server.ts`. Registering the faker-backed mock generator here
+// imported from `src/server.ts`. Registering the mock generator here
 // (rather than referencing it from the production handlers) keeps
-// `generate-batch-mock` and `@faker-js/faker` out of the production build — both
+// `generate-batch-mock` out of the production build, including
 // the compiled binary and the knip `--production` graph.
 //
 // Who the mock answers (`mockAnswersRequest` in lib/tanstack-ai-models.ts):
@@ -63,6 +64,19 @@ const E2E_EMPTY_COMPLETION_MARKER = "Return an empty completion please";
 
 const EMPTY_COMPLETION_DELAY_MS = 1500;
 
+// A user message containing this marker makes the mock adapter ask the user a
+// question (the `ask-user` client tool) and then, once the answer is posted
+// back, stop with an empty text message while still reporting completion
+// tokens: the shape of a model that goes silent after a card is answered. The
+// continuation already holds the question, so this exercises the server's
+// empty-answer check on a message that is not itself empty.
+const E2E_EMPTY_CONTINUATION_MARKER = "Ask me, then answer with nothing please";
+
+const E2E_ASK_USER_ARGUMENTS = {
+  analysis: "The answer depends on the side the user represents.",
+  questions: [{ question: "Which side?", reason: "It decides the draft." }],
+};
+
 // A user message containing this marker makes the mock adapter answer with a
 // `create-document` tool call (a client-executed tool), the shape of a real
 // drafting turn: the run pauses at TanStack's native interrupt boundary, the
@@ -84,6 +98,25 @@ const E2E_CREATE_DOCUMENT_SOURCE =
 const E2E_CREATE_DOCUMENT_REPLY =
   "The draft is open in the panel. Placeholders left to fill: the parties " +
   "and the effective date.";
+
+// Added to the create-document marker, this makes the mock stream the call's
+// arguments as about five hundred small deltas over two to three seconds: the
+// shape of a real provider writing a large tool input, and the densest update
+// rate the chat client sees. A page that commits once per delta trips the web
+// app's render-storm canary.
+const E2E_STREAMED_TOOL_ARGS_MARKER = "streaming the arguments";
+const STREAMED_TOOL_ARGS_CLAUSE_COUNT = 40;
+const STREAMED_TOOL_ARGS_DELTA_LENGTH = 12;
+const STREAMED_TOOL_ARGS_DELTA_DELAY_MS = 5;
+const E2E_STREAMED_CREATE_DOCUMENT_SOURCE =
+  `@doc kind=agreement locale=en page=A4\n` +
+  `@title MUTUAL NON-DISCLOSURE AGREEMENT\n${Array.from(
+    { length: STREAMED_TOOL_ARGS_CLAUSE_COUNT },
+    (_, index) =>
+      `@clause Confidentiality undertaking ${String(index + 1)}\n` +
+      "[[Receiving Party]] keeps the Confidential Information of " +
+      "[[Disclosing Party]] secret and uses it only for the Purpose.\n",
+  ).join("")}@signatures\nparty: [[Party A]]\nparty: [[Party B]]\n`;
 
 const SLOW_STREAM_REPLY =
   "This mock reply streams back in many small pieces instead of arriving all " +
@@ -154,6 +187,169 @@ const resolveCreateDocumentPhase = ({
   return messages.at(-1)?.role === "tool" ? "reply" : "call";
 };
 
+type EmptyContinuationChunksOptions = {
+  /** Whether the user has answered the question the first run asked. */
+  answered: boolean;
+  messageId: string;
+  model: string;
+  runId: string;
+  threadId: string;
+  timestamp: number;
+};
+
+/**
+ * The run `E2E_EMPTY_CONTINUATION_MARKER` asks for: the question, then, once
+ * it is answered, an empty text message.
+ *
+ * @yields Each provider event of the run, after its `RUN_STARTED`.
+ */
+function* emptyContinuationChunks({
+  answered,
+  messageId,
+  model,
+  runId,
+  threadId,
+  timestamp,
+}: EmptyContinuationChunksOptions): Generator<AdapterYieldChunk> {
+  yield {
+    type: EventType.TEXT_MESSAGE_START,
+    messageId,
+    role: "assistant",
+    model,
+    timestamp,
+  };
+  if (answered) {
+    yield {
+      type: EventType.TEXT_MESSAGE_CONTENT,
+      messageId,
+      delta: "",
+      model,
+      timestamp,
+    };
+    yield { type: EventType.TEXT_MESSAGE_END, messageId, model, timestamp };
+    yield {
+      type: EventType.RUN_FINISHED,
+      runId,
+      threadId,
+      model,
+      timestamp,
+      finishReason: "stop",
+      usage: mockUsage,
+    };
+    return;
+  }
+  const toolCallId = "mock-ask-user-call";
+  yield {
+    type: EventType.TOOL_CALL_START,
+    toolCallId,
+    toolCallName: ASK_USER_TOOL_NAME,
+    parentMessageId: messageId,
+    timestamp,
+  };
+  yield {
+    type: EventType.TOOL_CALL_ARGS,
+    toolCallId,
+    delta: JSON.stringify(E2E_ASK_USER_ARGUMENTS),
+    model,
+    timestamp,
+  };
+  yield { type: EventType.TOOL_CALL_END, toolCallId, timestamp };
+  yield {
+    type: EventType.RUN_FINISHED,
+    runId,
+    threadId,
+    model,
+    timestamp,
+    finishReason: "tool_calls",
+    usage: mockUsage,
+  };
+}
+
+type CreateDocumentCallChunksOptions = {
+  messageId: string;
+  model: string;
+  runId: string;
+  /** Whether the arguments arrive as many small deltas or as one. */
+  streamedArguments: boolean;
+  threadId: string;
+  timestamp: number;
+};
+
+/**
+ * The run `E2E_CREATE_DOCUMENT_MARKER` asks for first: the `create-document`
+ * call the client answers.
+ *
+ * @yields Each provider event of the run, after its `RUN_STARTED`.
+ */
+async function* createDocumentCallChunks({
+  messageId,
+  model,
+  runId,
+  streamedArguments,
+  threadId,
+  timestamp,
+}: CreateDocumentCallChunksOptions): AsyncGenerator<AdapterYieldChunk> {
+  const toolCallId = "mock-create-document-call";
+  yield {
+    type: EventType.TEXT_MESSAGE_START,
+    messageId,
+    role: "assistant",
+    model,
+    timestamp,
+  };
+  yield {
+    type: EventType.TOOL_CALL_START,
+    toolCallId,
+    toolCallName: E2E_CREATE_DOCUMENT_TOOL_NAME,
+    parentMessageId: messageId,
+    timestamp,
+  };
+  if (streamedArguments) {
+    const serialized = JSON.stringify({
+      name: E2E_CREATE_DOCUMENT_NAME,
+      source: E2E_STREAMED_CREATE_DOCUMENT_SOURCE,
+    });
+    for (
+      let offset = 0;
+      offset < serialized.length;
+      offset += STREAMED_TOOL_ARGS_DELTA_LENGTH
+    ) {
+      yield {
+        type: EventType.TOOL_CALL_ARGS,
+        toolCallId,
+        delta: serialized.slice(
+          offset,
+          offset + STREAMED_TOOL_ARGS_DELTA_LENGTH,
+        ),
+        model,
+        timestamp,
+      };
+      await Bun.sleep(STREAMED_TOOL_ARGS_DELTA_DELAY_MS);
+    }
+  } else {
+    yield {
+      type: EventType.TOOL_CALL_ARGS,
+      toolCallId,
+      delta: JSON.stringify({
+        name: E2E_CREATE_DOCUMENT_NAME,
+        source: E2E_CREATE_DOCUMENT_SOURCE,
+      }),
+      model,
+      timestamp,
+    };
+  }
+  yield { type: EventType.TOOL_CALL_END, toolCallId, timestamp };
+  yield {
+    type: EventType.RUN_FINISHED,
+    runId,
+    threadId,
+    model,
+    timestamp,
+    finishReason: "tool_calls",
+    usage: mockUsage,
+  };
+}
+
 const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
   kind: "text",
   name: "mock",
@@ -190,44 +386,28 @@ const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
     } satisfies AdapterYieldChunk;
 
     if (createDocumentPhase === "call") {
-      yield {
-        type: EventType.TEXT_MESSAGE_START,
+      yield* createDocumentCallChunks({
         messageId,
-        role: "assistant",
         model,
+        runId: resolvedRunId,
+        streamedArguments: latestUserText.includes(
+          E2E_STREAMED_TOOL_ARGS_MARKER,
+        ),
+        threadId: resolvedThreadId,
         timestamp,
-      } satisfies AdapterYieldChunk;
-      yield {
-        type: EventType.TOOL_CALL_START,
-        toolCallId: "mock-create-document-call",
-        toolCallName: E2E_CREATE_DOCUMENT_TOOL_NAME,
-        parentMessageId: messageId,
-        timestamp,
-      } satisfies AdapterYieldChunk;
-      yield {
-        type: EventType.TOOL_CALL_ARGS,
-        toolCallId: "mock-create-document-call",
-        delta: JSON.stringify({
-          name: E2E_CREATE_DOCUMENT_NAME,
-          source: E2E_CREATE_DOCUMENT_SOURCE,
-        }),
+      });
+      return;
+    }
+
+    if (latestUserText.includes(E2E_EMPTY_CONTINUATION_MARKER)) {
+      yield* emptyContinuationChunks({
+        answered: messages.at(-1)?.role === "tool",
+        messageId,
         model,
-        timestamp,
-      } satisfies AdapterYieldChunk;
-      yield {
-        type: EventType.TOOL_CALL_END,
-        toolCallId: "mock-create-document-call",
-        timestamp,
-      } satisfies AdapterYieldChunk;
-      yield {
-        type: EventType.RUN_FINISHED,
         runId: resolvedRunId,
         threadId: resolvedThreadId,
-        model,
         timestamp,
-        finishReason: "tool_calls",
-        usage: mockUsage,
-      } satisfies AdapterYieldChunk;
+      });
       return;
     }
 

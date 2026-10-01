@@ -935,6 +935,7 @@ const createAuth = () => {
       // weaker protection, disable the path outright — removing the surface is
       // strictly stronger than the freshness it used to carry.
       "/unlink-account",
+      "/organization/leave",
     ],
     user: {
       additionalFields: AUTH_USER_ADDITIONAL_FIELDS,

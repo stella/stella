@@ -48,14 +48,9 @@ import {
   workspaceAccessMacro,
 } from "@/api/lib/auth";
 
-const TENANT_CACHE_CONTROL = "private, no-store";
-
 export const templatesRoute = new Elysia({
   prefix: "/templates",
 })
-  .onRequest(({ set }) => {
-    set.headers["Cache-Control"] = TENANT_CACHE_CONTROL;
-  })
   .use(authMacro)
   .use(permissionMacro)
   .use(workspaceAccessMacro)

@@ -1075,6 +1075,7 @@ const parseDecisionPage = ({
     decisionType: decisionForm?.toLowerCase(),
     fulltext: resolvedFulltext,
     sourceUrl,
+    documentUrl: sourceUrl,
     // Carried whenever the card was read, empty list included: a card whose
     // rapporteur cell the court has blanked states that the decision has no
     // judge on it, and dropping the field would leave the stored rows alone.

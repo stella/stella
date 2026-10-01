@@ -2,6 +2,8 @@ import { eq, gte, lte } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
+import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
+
 import { timeEntryStatusSchema } from "@/api/db/billing-validators";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { timeEntries } from "@/api/db/schema";
@@ -36,7 +38,10 @@ export const timeEntryExportConditions = ({
   workspaceId,
   query,
 }: TimeEntryExportConditionsOptions) => {
-  const conditions = [eq(timeEntries.workspaceId, workspaceId)];
+  const conditions = [
+    eq(timeEntries.workspaceId, workspaceId),
+    eq(timeEntries.activityGroup, TIME_ENTRY_ACTIVITY_GROUP.CLIENT),
+  ];
 
   if (query.dateFrom) {
     conditions.push(gte(timeEntries.dateWorked, query.dateFrom));

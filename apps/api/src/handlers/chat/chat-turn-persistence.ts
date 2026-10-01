@@ -84,6 +84,22 @@ const AI_ERROR_RETRYABLE = {
   unknown: true,
 } as const satisfies Record<AIErrorKind, boolean>;
 
+/**
+ * The failure code a failed run settles its turn with, when the caller names
+ * none: what the model or its provider did, by error kind.
+ */
+const AI_ERROR_FAILURE_CODE = {
+  empty_completion: "empty-response",
+  loop_detected: "provider-error",
+  model_unavailable: "provider-error",
+  provider_billing: "provider-error",
+  provider_credentials_rejected: "provider-error",
+  provider_stream_incomplete: "provider-error",
+  provider_unavailable: "provider-error",
+  quota_exhausted: "provider-error",
+  unknown: "provider-error",
+} as const satisfies Record<AIErrorKind, ChatTurnFailureCode>;
+
 export type ChatTurnAcceptance = {
   id: SafeId<"chatTurn">;
   organizationId: SafeId<"organization">;
@@ -1350,7 +1366,7 @@ export const settleChatTurnOnTx = async ({
         return {
           ...base,
           assistantMessageId,
-          failureCode: failureCode ?? "provider-error",
+          failureCode: failureCode ?? AI_ERROR_FAILURE_CODE[outcome.error],
           failureRetryable:
             failureRetryable ?? AI_ERROR_RETRYABLE[outcome.error],
           interactionToolCallId: null,

@@ -13,37 +13,56 @@ type ResolveResponseStatusOptions = {
  *
  * A handler can carry its status on the value it returns rather than on
  * `set`: `status(code, body)` holds it on the returned wrapper, and a
- * returned `Response` holds it on the response itself. Elysia applies
- * either while mapping the response, which happens after `onAfterHandle`
- * runs, so `set.status` still holds the default at that point. Reading
- * `set` alone therefore reports every such reply as a 200, including the
- * whole safe-handler error path and any upstream status a route forwards
- * verbatim.
+ * returned `Response` holds it on the response itself, except that a raw
+ * 200 lets `set.status` override it. Elysia applies this while mapping the
+ * response, after `onAfterHandle` runs. Reading `set` alone therefore loses
+ * status wrappers and non-200 raw responses, including safe-handler errors.
  */
 export const resolveResponseStatus = ({
   response,
   set,
 }: ResolveResponseStatusOptions): number => {
-  // `code` is generic over the status the call site passed, so it only
-  // narrows to a number once the instance is checked.
-  if (
-    response instanceof ElysiaCustomStatusResponse &&
-    typeof response.code === "number"
+  let value = response;
+  let selectedStatus = set.status;
+  // Each status wrapper replaces set.status before Elysia maps its payload.
+  while (
+    value instanceof ElysiaCustomStatusResponse &&
+    typeof value.code === "number"
   ) {
-    return response.code;
+    selectedStatus = value.code;
+    value = value.response;
   }
 
-  if (response instanceof Response) {
-    return response.status;
+  if (value instanceof Response && value.status !== DEFAULT_RESPONSE_STATUS) {
+    return value.status;
   }
 
-  if (typeof set.status === "number") {
-    return set.status;
+  if (typeof selectedStatus === "number") {
+    return selectedStatus;
   }
 
-  if (typeof set.status === "string") {
-    return StatusMap[set.status];
+  if (typeof selectedStatus === "string") {
+    return StatusMap[selectedStatus];
   }
 
   return DEFAULT_RESPONSE_STATUS;
+};
+
+/** Copy raw responses with the effective status and mutable headers. */
+export const normalizeResponseStatus = ({
+  response,
+  set,
+}: ResolveResponseStatusOptions) => {
+  let raw = response;
+  while (raw instanceof ElysiaCustomStatusResponse) {
+    raw = raw.response;
+  }
+  if (!(raw instanceof Response)) {
+    return undefined;
+  }
+  return new Response(raw.body, {
+    headers: raw.headers,
+    status: resolveResponseStatus({ response, set }),
+    statusText: raw.statusText,
+  });
 };

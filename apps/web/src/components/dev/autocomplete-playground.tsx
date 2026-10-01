@@ -1,12 +1,12 @@
 import { useId, useRef, useState } from "react";
 
-import { baseKeymap } from "prosemirror-commands";
-import { history, redo, undo } from "prosemirror-history";
-import { keymap } from "prosemirror-keymap";
-import { Schema } from "prosemirror-model";
-import type { Command } from "prosemirror-state";
-import { EditorState } from "prosemirror-state";
-import { EditorView } from "prosemirror-view";
+import { baseKeymap } from "@tiptap/pm/commands";
+import { history, redo, undo } from "@tiptap/pm/history";
+import { keymap } from "@tiptap/pm/keymap";
+import { Schema } from "@tiptap/pm/model";
+import type { Command } from "@tiptap/pm/state";
+import { EditorState } from "@tiptap/pm/state";
+import { EditorView } from "@tiptap/pm/view";
 
 import { fetchWithTimeout } from "@stll/fetch";
 import {
