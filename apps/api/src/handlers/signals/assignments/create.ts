@@ -25,7 +25,11 @@ const config = {
     "assignment with null.",
   permissions: { signal: ["resolve"] },
   access: "write",
-  mcp: { type: "capability", reason: "workflow_orchestration" },
+  mcp: {
+    type: "capability",
+    reason: "workflow_orchestration",
+    consumesServices: false,
+  },
   params: signalParamsSchema,
   body: assignBodySchema,
 } satisfies HandlerConfig;

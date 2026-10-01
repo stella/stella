@@ -20,7 +20,11 @@ const config = {
     "the type is appended at the end of the display order. Refused once the " +
     "organization holds the maximum number of document types.",
   permissions: { organizationSettings: ["update"] },
-  mcp: { type: "capability", reason: "workspace_schema" },
+  mcp: {
+    type: "capability",
+    reason: "workspace_schema",
+    consumesServices: false,
+  },
   body: createDocumentTypeBodySchema,
 } satisfies HandlerConfig;
 

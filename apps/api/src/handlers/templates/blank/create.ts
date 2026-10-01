@@ -85,7 +85,11 @@ const config = {
     "templates.create to upload a DOCX that already has {{field}} markers.",
   permissions: { template: ["create"] },
   // Not reachable through create_template (which requires a DOCX).
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  mcp: {
+    type: "capability",
+    reason: "template_authoring_ui",
+    consumesServices: false,
+  },
   body: createBlankTemplateBodySchema,
 } satisfies HandlerConfig;
 

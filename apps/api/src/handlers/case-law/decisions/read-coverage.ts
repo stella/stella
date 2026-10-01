@@ -1,15 +1,14 @@
 import { Result } from "better-result";
 
-import {
-  COVERAGE_CACHE_CONTROL,
-  readCaseLawCoverageHandler,
-} from "@/api/handlers/case-law/decisions/coverage";
+import { readCaseLawCoverageHandler } from "@/api/handlers/case-law/decisions/coverage";
 import { createSafePublicHandler } from "@/api/lib/api-handlers";
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import { preventPublicCaching } from "@/api/lib/security-headers";
 
 const config = {
-  // Not a capability: it takes no input, sets its own cache-control header,
+  cache: { kind: "public", maxAge: 900, swr: 3600 },
+  // Not a capability: it takes no input, opts into shared response caching,
   // and is gated by the public-law route hook, none of which the generic
   // invoke path can honor.
   mcp: { type: "internal", reason: "public_indexing" },
@@ -24,7 +23,9 @@ const readCaseLawCoverage = createSafePublicHandler(
         async () => await readCaseLawCoverageHandler(caseLawPublicReadDb),
       ),
     );
-    set.headers["cache-control"] = COVERAGE_CACHE_CONTROL;
+    if ("message" in response) {
+      preventPublicCaching(set);
+    }
 
     return Result.ok(response);
   },

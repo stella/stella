@@ -22,7 +22,11 @@ const config = {
   description:
     "Update supplied handling fields of a matter correspondence record. Omitted fields stay unchanged; null assignee clears assignment.",
   permissions: { workspace: ["update"] },
-  mcp: { type: "capability", reason: "correspondence" },
+  mcp: {
+    type: "capability",
+    reason: "correspondence",
+    consumesServices: false,
+  },
   params: workspaceParams({ correspondenceId: tSafeId("correspondence") }),
   body: t.Object({
     handlingState: t.Optional(

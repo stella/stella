@@ -1443,6 +1443,7 @@ describe("czUsAdapter.fetchPage", () => {
     expect(page.decisions[0]?.sourceUrl).toBe(
       "https://nalus.usoud.cz/Search/GetText.aspx?sz=1-78-24_1",
     );
+    expect(page.decisions[0]?.documentUrl).toBe(page.decisions[0]?.sourceUrl);
   });
 
   test("persists a listed identity with no text action", async () => {
@@ -1476,6 +1477,7 @@ describe("czUsAdapter.fetchPage", () => {
         listedOnlyReason: "missing-text-action",
       },
     });
+    expect(page.decisions[0]?.documentUrl).toBeUndefined();
     expect(page.decisions[0]?.sourceRawContentType).toBe(
       SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
     );

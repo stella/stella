@@ -41,7 +41,9 @@ const config = {
 } satisfies WorkspaceHandlerConfig;
 
 type ActivityFile = {
+  fieldId: string;
   fileName: string | null;
+  hasThumbnail: boolean;
   mimeType: string | null;
 };
 
@@ -50,7 +52,9 @@ type InternalActivity =
       activityAt: Date;
       cursorActivityAt: string;
       entityKind: (typeof entities.$inferSelect)["kind"];
+      fieldId: string | null;
       fileName: string | null;
+      hasThumbnail: boolean;
       id: string;
       mimeType: string | null;
       status: string | null;
@@ -69,7 +73,11 @@ type WorkspaceActivity =
   | {
       activityAt: string;
       entityKind: (typeof entities.$inferSelect)["kind"];
+      /** The file field the matter file thumbnail route serves. */
+      fieldId: string | null;
       fileName: string | null;
+      /** The file has a generated preview image; its own id stays server-side. */
+      hasThumbnail: boolean;
       id: string;
       mimeType: string | null;
       status: string | null;
@@ -102,7 +110,9 @@ const readWorkspaceActivity = createSafeHandler(
     );
     const entityFile = sql<ActivityFile | null>`(
       select jsonb_build_object(
+        'fieldId', ${fields.id},
         'fileName', ${fields.content}->>'fileName',
+        'hasThumbnail', ${fields.content}->>'thumbnailFileId' is not null,
         'mimeType', ${fields.content}->>'mimeType'
       )
       from ${fields}
@@ -192,7 +202,9 @@ const readWorkspaceActivity = createSafeHandler(
         activityAt: row.activityAt,
         cursorActivityAt: row.cursorActivityAt,
         entityKind: row.entityKind,
+        fieldId: row.file?.fieldId ?? null,
         fileName: row.file?.fileName ?? null,
+        hasThumbnail: row.file?.hasThumbnail ?? false,
         id: row.id,
         mimeType: row.file?.mimeType ?? null,
         status: row.status,
@@ -218,7 +230,9 @@ const readWorkspaceActivity = createSafeHandler(
         items.push({
           activityAt: item.activityAt.toISOString(),
           entityKind: item.entityKind,
+          fieldId: item.fieldId,
           fileName: item.fileName,
+          hasThumbnail: item.hasThumbnail,
           id: item.id,
           mimeType: item.mimeType,
           status: item.status,

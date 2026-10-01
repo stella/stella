@@ -821,11 +821,18 @@ const CONVERSATION_TIMEOUT_MS = 60_000;
 
 // --- Tests --------------------------------------------------------------------
 
-describe(`chat requests: ${String(combinations.included.length)} combinations the product can produce (${String(combinations.excluded.length)} excluded by a production predicate); ${runPlan.mode}: ${String(selectedCombinations.length)} run`, () => {
-  test("every excluded combination names the predicate that excludes it", () => {
+describe(`chat requests: ${String(combinations.included.length)} combinations the product can produce (${String(combinations.total - combinations.included.length)} excluded by a production predicate); ${runPlan.mode}: ${String(selectedCombinations.length)} run`, () => {
+  test("every combination is producible or excluded by a named predicate", () => {
     expect(
-      combinations.excluded.filter(({ predicate }) => predicate === ""),
+      [...combinations.excluded.keys()].filter((name) => name === ""),
     ).toEqual([]);
+    expect(
+      combinations.included.length +
+        [...combinations.excluded.values()].reduce(
+          (sum, count) => sum + count,
+          0,
+        ),
+    ).toBe(combinations.total);
   });
 
   test("every coverage entry states how it is covered", () => {

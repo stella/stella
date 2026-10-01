@@ -125,6 +125,7 @@
     "@stll/mojibake": "workspace:*",
     "@stll/money": "workspace:*",
     "@stll/permissions": "workspace:*",
+    "@stll/redis-config": "workspace:*",
     "@stll/runtime-mode": "workspace:*",
     "@stll/sanctions": "workspace:*",
     "@stll/skills": "workspace:*",
@@ -171,7 +172,6 @@
     "pkijs": "3.4.0",
     "postal-mime": "^3.0.0",
     "posthog-node": "^5.52.5",
-    "quickjs-emscripten": "^0.32.0",
     "quickjs-emscripten-core": "^0.32.0",
     "slimdom": "^4.3.5",
     "ssf": "catalog:",
@@ -181,7 +181,6 @@
   "devDependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.1138.0",
     "@electric-sql/pglite": "^0.5.8",
-    "@faker-js/faker": "^10.6.0",
     "@modelcontextprotocol/client": "2.0.0",
     "@modelcontextprotocol/ext-apps": "^2.0.0",
     "@stll/property-testing": "workspace:*",
@@ -190,7 +189,6 @@
     "ajv-formats": "catalog:",
     "bun-types": "catalog:",
     "drizzle-kit": "catalog:",
-    "expect-type": "^1.4.0",
     "fast-check": "catalog:",
     "pdfjs-dist": "^6.3.289"
   },

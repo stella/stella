@@ -53,7 +53,7 @@ true satisfies UnexpectedVatRateListColumn extends never ? true : never;
 const config = {
   description: "List active VAT rates in the active organization.",
   permissions: { organizationSettings: ["update"] },
-  mcp: { type: "capability", reason: "billing_admin" },
+  mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   access: "read",
   query: t.Object({
     on: t.Optional(t.String({ format: "date" })),

@@ -321,28 +321,41 @@ const OUTPUT_TOKEN_KEYS: ReadonlySet<string> = new Set([
   "output_tokens",
 ]);
 
-/** `value` with every output token count set to zero. */
-const withoutOutputTokens = (value: unknown): unknown => {
+/** The keys each format streams the answer's text under: Anthropic's and
+ *  Bedrock's `text`, OpenAI's `delta` and `text`, Gemini's part `text`, the
+ *  chat completions `content`. */
+const OUTPUT_TEXT_KEYS: ReadonlySet<string> = new Set([
+  "content",
+  "delta",
+  "text",
+]);
+
+/** `value` with its answer text blank and every output token count zero. */
+const withoutOutput = (value: unknown): unknown => {
   if (isUnknownArray(value)) {
-    return value.map(withoutOutputTokens);
+    return value.map(withoutOutput);
   }
   if (!isRecord(value)) {
     return value;
   }
   return Object.fromEntries(
-    Object.entries(value).map(([key, child]) => [
-      key,
-      OUTPUT_TOKEN_KEYS.has(key) && typeof child === "number"
-        ? 0
-        : withoutOutputTokens(child),
-    ]),
+    Object.entries(value).map(([key, child]) => {
+      if (OUTPUT_TOKEN_KEYS.has(key) && typeof child === "number") {
+        return [key, 0];
+      }
+      if (OUTPUT_TEXT_KEYS.has(key) && typeof child === "string") {
+        return [key, ""];
+      }
+      return [key, withoutOutput(child)];
+    }),
   );
 };
 
 /**
- * `cassette`'s answer as a completion the provider reports as empty (it
- * stops having produced no output tokens), which the chat attempt reads as
- * an empty completion and answers with its fallback model.
+ * `cassette`'s answer as a completion with nothing in it: it stops having
+ * streamed no text and reports no output tokens, which the chat attempt
+ * reads as an empty completion (by either measure) and answers with its
+ * fallback model.
  */
 export const emptyCompletionAnswer = (
   cassette: ProviderWireCassette,
@@ -358,7 +371,7 @@ export const emptyCompletionAnswer = (
           body: {
             ...body,
             text: mapDataEvents(body.text, (data) => {
-              const rewritten = withoutOutputTokens(data);
+              const rewritten = withoutOutput(data);
               return isRecord(rewritten) ? rewritten : data;
             }),
           },
@@ -372,7 +385,7 @@ export const emptyCompletionAnswer = (
         body: {
           ...body,
           messages: body.messages.map((message) => {
-            const payload = withoutOutputTokens(message.payload);
+            const payload = withoutOutput(message.payload);
             return isRecord(payload)
               ? { headers: message.headers, payload }
               : message;

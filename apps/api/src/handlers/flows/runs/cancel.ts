@@ -13,7 +13,11 @@ const config = {
     "that finished is not undone.",
   permissions: { flow: ["run"] },
   access: "write",
-  mcp: { type: "capability", reason: "workflow_orchestration" },
+  mcp: {
+    type: "capability",
+    reason: "workflow_orchestration",
+    consumesServices: false,
+  },
   params: flowRunParamsSchema,
 } satisfies WorkspaceHandlerConfig;
 

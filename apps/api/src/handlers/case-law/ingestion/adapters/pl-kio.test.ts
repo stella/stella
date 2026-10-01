@@ -502,6 +502,8 @@ type Seen = { url: string; body: string };
 type StubOverrides = {
   detailStatus?: number;
   contentStatus?: number;
+  /** Serves a document body of this many bytes instead of the fixture. */
+  contentBytes?: number;
   listingStatus?: number;
   /** Replaces the captured month listing, keyed by page number. */
   monthPages?: Readonly<Record<string, string>>;
@@ -541,6 +543,9 @@ const stubPublisher = async (
       return overrides.detailStatus === undefined
         ? html(detail)
         : html("<html>Brak strony</html>", overrides.detailStatus);
+    }
+    if (overrides.contentBytes !== undefined) {
+      return html("x".repeat(overrides.contentBytes));
     }
     return overrides.contentStatus === undefined
       ? html(content)
@@ -672,6 +677,20 @@ describe("walking a month", () => {
     expect(
       Result.isError(await plKioAdapter.fetchPage("2025-09:10+0", {})),
     ).toBe(true);
+  });
+
+  test("a document past the size cap keeps the record with no document", async () => {
+    await stubPublisher({ contentBytes: 16 * 1024 * 1024 + 1 });
+    const page = await plKioAdapter.fetchPage("2025-09:10+0", {});
+    expect(Result.isOk(page)).toBe(true);
+    if (Result.isOk(page)) {
+      expect(page.value.decisions).toHaveLength(10);
+      for (const decision of page.value.decisions) {
+        expect(decision.isListingOnly).toBeUndefined();
+        expect(decision.fulltext).toBeUndefined();
+        expect(decision.metadata["presiding"]).toBe("Ewa Sikorska");
+      }
+    }
   });
 
   test("a counted row without a record link is kept under a quarantine identity", async () => {

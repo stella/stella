@@ -47,28 +47,16 @@ export type DemoEngine = { run: (text: string) => Promise<ChatAnonResult> };
  */
 export const loadDemoEngine = async (): Promise<DemoEngine> => {
   const [
-    { Buffer },
     { runChatAnonPipeline },
     { loadNameDictionaries },
     { loadCityDictionary },
     anonymizeRuntime,
   ] = await Promise.all([
-    // oxlint-disable-next-line unicorn/prefer-node-protocol -- this is the `buffer` browser-polyfill package (npm, no Node dependency), not Node's own `node:buffer` core module; `node:buffer` would not resolve the same way in a browser/worker bundle
-    import("buffer"),
     import("@stll/anonymize-chat"),
     import("@stll/anonymize-data"),
     import("@stll/anonymize-data/cities"),
     import("@stll/anonymize-wasm"),
   ]);
-
-  // The napi-rs/emnapi wasm binding (@stll/anonymize-wasm's native glue) checks
-  // `globalThis.Buffer` for some Node-API operations; browsers/workers have no
-  // such global, so it throws "NotSupportBufferError" the first time that path
-  // is hit at runtime. Node itself would provide this for free — a worker in a
-  // real browser needs the polyfill installed before the pipeline actually
-  // runs, which this is: the modules above only read it once `run` is called.
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- ambient lib types claim globalThis.Buffer always exists; a real browser/worker genuinely may not have it, which is exactly the runtime gap this line covers
-  globalThis.Buffer ??= Buffer;
 
   const [names, cityResults] = await Promise.all([
     loadNameDictionaries(),

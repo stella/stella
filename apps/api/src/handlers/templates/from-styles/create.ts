@@ -114,7 +114,11 @@ const config = {
     "enter the template. Any upload whose file name ends in .docx is " +
     "accepted whatever media type it declares.",
   permissions: { template: ["create"] },
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  mcp: {
+    type: "capability",
+    reason: "template_authoring_ui",
+    consumesServices: false,
+  },
   transport: {
     type: "file-input",
     input: {

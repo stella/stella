@@ -114,7 +114,11 @@ const config = {
     "type, selects with no options, and formulas or conditions referring to " +
     "unknown paths. Read-only: it reports, it never repairs.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  mcp: {
+    type: "capability",
+    reason: "template_authoring_ui",
+    consumesServices: false,
+  },
   access: "read",
   params: checkTemplateParamsSchema,
 } satisfies HandlerConfig;
