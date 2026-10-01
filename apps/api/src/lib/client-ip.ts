@@ -1,5 +1,4 @@
 import { panic } from "better-result";
-import { Address4, Address6 } from "ip-address";
 /**
  * Resolves the client IP for a request, refusing to trust
  * `x-forwarded-for` unless the request actually arrived through a trusted
@@ -22,7 +21,7 @@ import { Address4, Address6 } from "ip-address";
  * `STELLA_CLIENT_ADDRESS_HEADER`. That header is read only from a trusted
  * peer and takes precedence over the `x-forwarded-for` chain.
  */
-import { BlockList, isIP, isIPv6 } from "node:net";
+import { BlockList, isIP, isIPv4, isIPv6 } from "node:net";
 
 import { env } from "@/api/env";
 import {
@@ -316,24 +315,57 @@ export const resolveSignupRateLimitClientIp = (
 
 const IPV6_RATE_LIMIT_PREFIX_LENGTH = 64;
 
-export const normalizeRateLimitClientAddress = (identity: string): string => {
-  const ipVersion = isIP(identity);
-  if (ipVersion === 4) {
-    return new Address4(identity).correctForm();
+// A valid IPv6 spelling may end in a dotted IPv4 address; rewrite it as the
+// two hex groups it stands for.
+const expandEmbeddedIPv4 = (address: string): string => {
+  const lastGroupStart = address.lastIndexOf(":") + 1;
+  const lastGroup = address.slice(lastGroupStart);
+  if (!lastGroup.includes(".")) {
+    return address;
   }
-  if (ipVersion !== 6) {
+  const value = lastGroup
+    .split(".")
+    .reduce((n, octet) => n * 256 + Number(octet), 0);
+  return `${address.slice(0, lastGroupStart)}${Math.floor(value / 65_536).toString(16)}:${(value % 65_536).toString(16)}`;
+};
+
+export const normalizeRateLimitClientAddress = (identity: string): string => {
+  if (isIPv4(identity) || !isIPv6(identity)) {
     return identity;
   }
-
-  const address = new Address6(identity);
-  if (address.isMapped4()) {
-    return address.to4().correctForm();
+  const zoneStart = identity.indexOf("%");
+  const address = expandEmbeddedIPv4(
+    zoneStart === -1 ? identity : identity.slice(0, zoneStart),
+  );
+  const [left = "", right = ""] = address.split("::");
+  const head = left === "" ? [] : left.split(":");
+  const tail = right === "" ? [] : right.split(":");
+  const groups = address.includes("::")
+    ? [
+        ...head,
+        ...Array.from({ length: 8 - head.length - tail.length }, () => "0"),
+        ...tail,
+      ]
+    : head;
+  const values = groups.map((group) => Number.parseInt(group, 16));
+  if (
+    values.slice(0, 5).every((group) => group === 0) &&
+    values.at(5) === 0xff_ff
+  ) {
+    const ipv4 = values
+      .slice(6)
+      .reduce((value, group) => value * 65_536 + group, 0);
+    return [24, 16, 8, 0]
+      .map((shift) => Math.floor(ipv4 / 2 ** shift) % 256)
+      .join(".");
   }
-  return new Address6(
-    `${address.correctForm()}/${IPV6_RATE_LIMIT_PREFIX_LENGTH}`,
-  )
-    .startAddress()
-    .correctForm();
+  const network = values.slice(0, IPV6_RATE_LIMIT_PREFIX_LENGTH / 16);
+  // The /64 mask supplies four trailing zero groups, so its trailing run is
+  // always the longest; no earlier run can contain more than three zeros.
+  while (network.at(-1) === 0) {
+    network.pop();
+  }
+  return `${network.map((group) => group.toString(16)).join(":")}::`;
 };
 
 export type RateLimitClientAddressOptions = {

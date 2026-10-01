@@ -63,6 +63,7 @@ describe("suggest_template_fields tool error handling", () => {
       orgAIConfig: null,
       safeDb: stubSafeDb,
       userId,
+      thirdPartyBoundary: { type: "raw" },
       dependencies: { suggestTemplateFields: suggestTemplateFieldsMock },
     });
 
