@@ -476,7 +476,7 @@ const evaluateResult = ({
     const name =
       v.parse(v.object({ name: v.optional(v.string()) }), ciJobs[job]).name ??
       job;
-    const checkId = String(jobs.length + 10);
+    const checkId: string = String(jobs.length + 10);
     jobs.push({
       name:
         name.replace(/\$\{\{[^}]+\}\}/gu, "fixture") +
