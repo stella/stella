@@ -1445,7 +1445,7 @@ test("corpus outbound attempts carry distinct call identities inside the admitte
   await runObservedAction({
     identity: {
       organizationId: toSafeId<"organization">("fixture-org"),
-      actionKind: "fixture",
+      actionKind: "mcp.services/call",
       logicalPhaseId: "fixture-phase",
     },
     userId: null,
