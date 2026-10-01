@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, expectTypeOf, test } from "bun:test";
 
 import { env } from "@/api/env";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -9,6 +9,7 @@ import {
   withActionAdmission,
   reserveQueuedKickoffPeriod,
 } from "./action-admission";
+import { BACKGROUND_ACTION_KIND } from "./action-kinds";
 
 const organizationId = toSafeId<"organization">("background_org");
 const userId = toSafeId<"user">("background_user");
@@ -19,34 +20,55 @@ const policy = {
 };
 
 describe("background action admission", () => {
+  test("requires a classified background kind without a period identity", () => {
+    type AdmissionOptions = Parameters<typeof withActionAdmission>[0];
+    type BackgroundOptions = Extract<
+      AdmissionOptions,
+      { execution: "background-job" }
+    >;
+    expectTypeOf<
+      Omit<BackgroundOptions, "actionKind">
+    >().not.toExtend<AdmissionOptions>();
+    expectTypeOf<
+      Omit<BackgroundOptions, "periodIdentity"> & {
+        periodIdentity: {
+          actionKind: "workflow.start";
+          logicalPhaseId: string;
+        };
+      }
+    >().not.toExtend<AdmissionOptions>();
+  });
   test("uses its separate two-key pool without period accounting", async () => {
-    const calls: string[][] = [];
-    const redis = {
-      send: async (_command: string, args: string[]) => {
-        calls.push(args);
-        return 1;
-      },
-    };
+    for (const actionKind of Object.values(BACKGROUND_ACTION_KIND)) {
+      const calls: string[][] = [];
+      const redis = {
+        send: async (_command: string, args: string[]) => {
+          calls.push(args);
+          return 1;
+        },
+      };
 
-    const result = await withActionAdmission({
-      organizationId,
-      userId,
-      enabled: true,
-      policy,
-      execution: "background-job",
-      periodPolicy: { periodMs: 86_400_000, limit: 1 },
-      redis,
-      run: async () => "done",
-    });
+      const result = await withActionAdmission({
+        organizationId,
+        userId,
+        enabled: true,
+        policy,
+        execution: "background-job",
+        actionKind,
+        periodPolicy: { periodMs: 86_400_000, limit: 1 },
+        redis,
+        run: async () => "done",
+      });
 
-    expect(result).toEqual(Result.ok("done"));
-    const acquire = calls.find((args) =>
-      args.at(0)?.includes("ZREMRANGEBYSCORE"),
-    );
-    expect(acquire?.at(1)).toBe("2");
-    expect(acquire?.at(2)).toContain("background:organization");
-    expect(acquire?.at(3)).toContain("background:user:");
-    expect(acquire?.some((arg) => arg.includes(":period:"))).toBe(false);
+      expect(result).toEqual(Result.ok("done"));
+      const acquire = calls.find((args) =>
+        args.at(0)?.includes("ZREMRANGEBYSCORE"),
+      );
+      expect(acquire?.at(1)).toBe("2");
+      expect(acquire?.at(2)).toContain("background:organization");
+      expect(acquire?.at(3)).toContain("background:user:");
+      expect(acquire?.some((arg) => arg.includes(":period:"))).toBe(false);
+    }
   });
 
   test("a nested kickoff at cap one reuses its lease and reserves one run", async () => {
@@ -190,6 +212,7 @@ describe("background action admission", () => {
       enabled: true,
       policy,
       execution: "background-job",
+      actionKind: BACKGROUND_ACTION_KIND.extraction,
       redis,
       run: async () =>
         await withActionAdmission({
@@ -198,6 +221,7 @@ describe("background action admission", () => {
           enabled: true,
           policy,
           execution: "background-job",
+          actionKind: BACKGROUND_ACTION_KIND.extraction,
           redis,
           run: async () => "nested background",
         }),

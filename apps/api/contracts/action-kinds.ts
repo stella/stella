@@ -1,13 +1,20 @@
 import type {
   ActionKindDefinition,
   AdmittedActionIdentity,
+  ConcurrencyOnlyActionKind,
 } from "@/api/lib/rate-limit/action-kinds";
 
-({ consumesServices: true }) satisfies ActionKindDefinition;
-({ consumesServices: false }) satisfies ActionKindDefinition;
+({
+  consumesServices: true,
+  admission: "period",
+}) satisfies ActionKindDefinition;
+({
+  consumesServices: false,
+  admission: "period",
+}) satisfies ActionKindDefinition;
 
 // @ts-expect-error every admission kind must declare whether it consumes services
-({}) satisfies ActionKindDefinition;
+({ admission: "period" }) satisfies ActionKindDefinition;
 
 ({
   actionKind: "chat.improve-prompt",
@@ -19,3 +26,20 @@ import type {
   actionKind: "unknown.action",
   logicalPhaseId: "phase",
 }) satisfies AdmittedActionIdentity;
+
+// @ts-expect-error every registered kind must choose its admission mode
+({ consumesServices: true }) satisfies ActionKindDefinition;
+
+({
+  // @ts-expect-error background kinds cannot reserve a period action
+  actionKind: "workflow.background",
+  logicalPhaseId: "phase",
+}) satisfies AdmittedActionIdentity;
+
+"workflow.background" satisfies ConcurrencyOnlyActionKind;
+"flow.background" satisfies ConcurrencyOnlyActionKind;
+
+// @ts-expect-error kickoff kinds cannot use background admission
+"workflow.start" satisfies ConcurrencyOnlyActionKind;
+// @ts-expect-error unregistered kinds cannot use background admission
+"unknown.action" satisfies ConcurrencyOnlyActionKind;

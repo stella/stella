@@ -43,9 +43,12 @@ import { logger } from "@/api/lib/observability/logger";
 import { markPropertiesFresh } from "@/api/lib/properties/property-status";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import {
+  BACKGROUND_ACTION_KIND,
+  QUEUED_ACTION_KIND,
+} from "@/api/lib/rate-limit/action-kinds";
+import {
   runBackgroundJob,
   runQueuedKickoff,
-  QUEUED_ACTION_KIND,
 } from "@/api/lib/rate-limit/queued-action-admission";
 import {
   createBullMqConnection,
@@ -1010,6 +1013,7 @@ const processWorkflowJob = async (
   }, jobTimeoutMs);
   try {
     await runBackgroundJob({
+      actionKind: BACKGROUND_ACTION_KIND.extraction,
       organizationId: brandPersistedOrganizationId(job.data.organizationId),
       userId: brandPersistedUserId(job.data.userId),
       job,

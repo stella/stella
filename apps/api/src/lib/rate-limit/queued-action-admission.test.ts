@@ -4,11 +4,14 @@ import { describe, expect, test } from "bun:test";
 
 import { env } from "@/api/env";
 import { toSafeId } from "@/api/lib/branded-types";
+import {
+  BACKGROUND_ACTION_KIND,
+  QUEUED_ACTION_KIND,
+} from "@/api/lib/rate-limit/action-kinds";
 
 import { ActionAdmissionError, withActionAdmission } from "./action-admission";
 import {
   admissionRetryDelayMs,
-  QUEUED_ACTION_KIND,
   runBackgroundJob,
   runQueuedKickoff,
 } from "./queued-action-admission";
@@ -37,6 +40,7 @@ describe("queued action admission", () => {
       const controller = new AbortController();
 
       const operation = runBackgroundJob({
+        actionKind: BACKGROUND_ACTION_KIND.flow,
         organizationId,
         userId,
         job: {
@@ -68,13 +72,23 @@ describe("queued action admission", () => {
       const lease = new AbortController();
       const jobTimeout = new AbortController();
       let executionSignal: AbortSignal | undefined;
-      const admission: typeof withActionAdmission = async ({ run }) =>
-        await Result.tryPromise({
+      const admission: typeof withActionAdmission = async ({
+        run,
+        execution,
+        actionKind,
+        periodIdentity,
+      }) => {
+        expect(execution).toBe("background-job");
+        expect(actionKind).toBe(BACKGROUND_ACTION_KIND.flow);
+        expect(periodIdentity).toBeUndefined();
+        return await Result.tryPromise({
           try: async () => await run(lease.signal),
           catch: (error: unknown) => error,
         });
+      };
 
       const result = await runBackgroundJob({
+        actionKind: BACKGROUND_ACTION_KIND.flow,
         organizationId,
         userId,
         job: { moveToDelayed: async () => undefined },
@@ -263,6 +277,7 @@ describe("queued action admission", () => {
         },
       });
     const owner = runBackgroundJob({
+      actionKind: BACKGROUND_ACTION_KIND.flow,
       organizationId,
       userId,
       admission,
@@ -277,6 +292,7 @@ describe("queued action admission", () => {
     const deferred: { index: number; at: number }[] = [];
     const contender = async (index: number) =>
       await runBackgroundJob({
+        actionKind: BACKGROUND_ACTION_KIND.flow,
         organizationId,
         userId,
         admission,

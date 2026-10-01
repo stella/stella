@@ -6,6 +6,7 @@ import { drainFanOut } from "@stll/concurrency";
 import { toSafeId } from "@/api/lib/branded-types";
 
 import { withActionAdmission } from "./action-admission";
+import { BACKGROUND_ACTION_KIND } from "./action-kinds";
 
 const organizationId = toSafeId<"organization">("fanout_org");
 const userId = toSafeId<"user">("fanout_user");
@@ -89,6 +90,7 @@ describe("queued fan-out admission ownership", () => {
         enabled: true,
         policy,
         execution: "background-job",
+        actionKind: BACKGROUND_ACTION_KIND.extraction,
         redis,
         timing,
         run: async (leaseSignal) =>
@@ -137,6 +139,7 @@ describe("queued fan-out admission ownership", () => {
       enabled: true,
       policy,
       execution: "background-job",
+      actionKind: BACKGROUND_ACTION_KIND.extraction,
       redis,
       timing,
       run: async () => {
@@ -160,6 +163,7 @@ describe("queued fan-out admission ownership", () => {
       enabled: true,
       policy,
       execution: "background-job",
+      actionKind: BACKGROUND_ACTION_KIND.extraction,
       redis,
       timing,
       run: async () => "next job",

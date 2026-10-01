@@ -12,7 +12,10 @@ import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
-import type { AdmittedActionIdentity } from "@/api/lib/rate-limit/action-kinds";
+import type {
+  AdmittedActionIdentity,
+  ConcurrencyOnlyActionKind,
+} from "@/api/lib/rate-limit/action-kinds";
 import {
   ACTION_PERIOD_ACQUIRE_SCRIPT,
   actionPeriodArguments,
@@ -202,22 +205,31 @@ const configuredPolicy = (
   return Result.ok({ organizationConcurrency, userConcurrency, leaseMs });
 };
 
-type ActionAdmissionOptions = {
+type ActionAdmissionOptions<T = unknown> = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
-  run: (signal: AbortSignal) => Promise<unknown>;
+  run: (signal: AbortSignal) => Promise<T>;
   enabled?: boolean;
   scope?: "inherit" | "independent";
   policy?: ActionAdmissionPolicy;
-  execution?: "queued-kickoff" | "background-job" | undefined;
   periodReservation?: "on-acceptance" | undefined;
-  periodIdentity?: AdmittedActionIdentity | undefined;
   periodPolicy?: ActionPeriodPolicy | undefined;
   redis?: RedisCommands | undefined;
   redisReady?: () => Promise<RedisCommands>;
   createId?: () => string;
   timing?: AdmissionTiming;
-};
+} & (
+  | {
+      execution: "background-job";
+      actionKind: ConcurrencyOnlyActionKind;
+      periodIdentity?: never;
+    }
+  | {
+      execution?: "queued-kickoff" | undefined;
+      actionKind?: never;
+      periodIdentity?: AdmittedActionIdentity | undefined;
+    }
+);
 
 type AdmissionTiming = {
   now: () => number;
@@ -560,9 +572,7 @@ export const withActionAdmission = async <T>({
   redisReady = admissionRedis.ready,
   createId = () => Bun.randomUUIDv7(),
   timing = defaultTiming,
-}: Omit<ActionAdmissionOptions, "run"> & {
-  run: (signal: AbortSignal) => Promise<T>;
-}): Promise<Result<T, unknown>> => {
+}: ActionAdmissionOptions<T>): Promise<Result<T, unknown>> => {
   if (!enabled) {
     return await Result.tryPromise({
       try: async () => await run(new AbortController().signal),

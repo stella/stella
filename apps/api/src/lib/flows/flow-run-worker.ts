@@ -20,6 +20,7 @@ import {
 } from "@/api/lib/flows/flow-run-queue";
 import { logger } from "@/api/lib/observability/logger";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
+import { BACKGROUND_ACTION_KIND } from "@/api/lib/rate-limit/action-kinds";
 import { runBackgroundJob } from "@/api/lib/rate-limit/queued-action-admission";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 import { brandPersistedFlowRunId } from "@/api/lib/safe-id-boundaries";
@@ -81,6 +82,7 @@ const executeAdmittedFlowStep = async ({
     return;
   }
   await runBackgroundJob({
+    actionKind: BACKGROUND_ACTION_KIND.flow,
     organizationId: workspace.organizationId,
     userId: actor,
     job,

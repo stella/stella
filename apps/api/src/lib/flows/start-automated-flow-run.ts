@@ -17,10 +17,8 @@ import { enqueueFlowStep } from "@/api/lib/flows/flow-run-queue";
 import type { FlowTriggerSource } from "@/api/lib/flows/flow-types";
 import { buildFlowRunRows } from "@/api/lib/flows/start-flow-run";
 import { logger } from "@/api/lib/observability/logger";
-import {
-  runQueuedKickoff,
-  QUEUED_ACTION_KIND,
-} from "@/api/lib/rate-limit/queued-action-admission";
+import { QUEUED_ACTION_KIND } from "@/api/lib/rate-limit/action-kinds";
+import { runQueuedKickoff } from "@/api/lib/rate-limit/queued-action-admission";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 /**

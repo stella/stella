@@ -10,11 +10,8 @@ import {
   withActionAdmission,
   reserveQueuedKickoffPeriod,
 } from "./action-admission";
-
-export const QUEUED_ACTION_KIND = {
-  extraction: "workflow.start",
-  flow: "flow.start",
-} as const;
+import type { ConcurrencyOnlyActionKind } from "./action-kinds";
+import type { QUEUED_ACTION_KIND } from "./action-kinds";
 
 // BullMQ delays do not consume the job's failure attempts. A busy pool never hot-loops.
 const MIN_ADMISSION_RETRY_MS = 1000;
@@ -76,6 +73,7 @@ export const runQueuedKickoff = async <T>({
 };
 
 type BackgroundJobOptions<T> = {
+  actionKind: ConcurrencyOnlyActionKind;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   job: {
@@ -91,6 +89,7 @@ type BackgroundJobOptions<T> = {
 };
 
 export const runBackgroundJob = async <T>({
+  actionKind,
   organizationId,
   userId,
   job,
@@ -104,6 +103,7 @@ export const runBackgroundJob = async <T>({
     organizationId,
     userId,
     execution: "background-job",
+    actionKind,
     run: async (leaseSignal) =>
       await run(AbortSignal.any([signal, leaseSignal])),
   });
