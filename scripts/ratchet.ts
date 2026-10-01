@@ -3896,8 +3896,8 @@ type AssessBaselineIncreaseOptions = {
   metrics?: readonly RatchetMetric[];
 };
 
-// A raised allowance must be exactly the writer's source delta, including
-// unused merge-base headroom. Recomputing it avoids a second stored total or
+// A raised allowance must match either writer: the source delta retaining
+// merge-base headroom, or --all's exact current scan. Recomputing both avoids
 // an editable provenance marker that could authorize a baseline-only increase.
 export const assessBaselineIncrease = ({
   baseline,
@@ -3913,19 +3913,25 @@ export const assessBaselineIncrease = ({
     if (entry.count <= (mergeBaseEntry?.count ?? 0)) {
       continue;
     }
+    const head = requireSnapshot(current, metric.id);
     const expected = rebaseSnapshot({
       allowlist: metricGate(metric).allowlist,
       mergeBaseEntry,
       base: requireSnapshot(baseSnapshot, metric.id),
-      head: requireSnapshot(current, metric.id),
+      head,
     });
-    const paths = new Set([
-      ...Object.keys(entry.files),
-      ...Object.keys(expected.files),
-    ]);
-    if ([...paths].some((file) => entry.files[file] !== expected.files[file])) {
+    const matchesWriter = [expected, head].some((candidate) => {
+      const paths = new Set([
+        ...Object.keys(entry.files),
+        ...Object.keys(candidate.files),
+      ]);
+      return [...paths].every(
+        (file) => entry.files[file] === candidate.files[file],
+      );
+    });
+    if (!matchesWriter) {
       errors.push(
-        `${metric.id}: raised baseline ${mergeBaseEntry?.count ?? 0} -> ${entry.count} does not match the --write source delta (expected ${expected.count})`,
+        `${metric.id}: raised baseline ${mergeBaseEntry?.count ?? 0} -> ${entry.count} does not match the --write source delta (expected ${expected.count}) or --all current scan (expected ${head.count})`,
       );
     }
   }

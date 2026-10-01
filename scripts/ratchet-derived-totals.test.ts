@@ -100,6 +100,23 @@ describe("derived ratchet budgets", () => {
     );
     expect(assess(snapshot({ "a.ts": 4, "b.ts": 4 }))).toEqual([]);
   });
+
+  test("full regeneration tightens unused headroom while recording a real regression", () => {
+    const assess = (entry: ReturnType<typeof snapshot>) =>
+      assessBaselineIncrease({
+        baseline: { "test-metric": entry },
+        mergeBaseBaseline: { "test-metric": snapshot({ "a.ts": 2 }) },
+        current: { "test-metric": snapshot({ "a.ts": 3 }) },
+        baseSnapshot: { "test-metric": snapshot({ "a.ts": 1 }) },
+        metrics: [metric],
+      });
+    expect(assess(snapshot({ "a.ts": 3 }))).toEqual([]);
+    expect(assess(snapshot({ "a.ts": 4 }))).toEqual([]);
+    expect(assess(snapshot({ "a.ts": 5 })).length).toBeGreaterThan(0);
+    expect(
+      assess(snapshot({ "a.ts": 3, "absent.ts": 1 })).length,
+    ).toBeGreaterThan(0);
+  });
 });
 
 const ROOT = path.resolve(import.meta.dir, "..");
@@ -312,6 +329,25 @@ test("CI rejects hand-raised budgets and accepts writer deltas and decreases", (
     ratchet(root, "--write");
     commit(root, "writer decrease");
     succeed(root, [process.execPath, "scripts/ratchet.ts", "--check"]);
+  });
+}, 30_000);
+
+test("the real --write --all and later CI check accept an exact scan with merge-base headroom", () => {
+  withClone((root) => {
+    // Keep the baseline budget at 2 while the merge-base source counts only 1.
+    write({ root, relative: FIRST, contents: casts(1) });
+    commit(root, "unused headroom");
+    git(root, "update-ref", "refs/remotes/origin/main", "HEAD");
+    git(root, "checkout", "-b", "full-regeneration");
+    write({ root, relative: FIRST, contents: casts(3) });
+    ratchet(root, "--write", "--all");
+    const generated = JSON.parse(
+      readFileSync(path.join(root, BASELINE), "utf-8"),
+    );
+    expect(generated["as-casts"].files[FIRST]).toBe(3);
+    expect(generated["as-casts"]).not.toHaveProperty("count");
+    commit(root, "full regeneration");
+    ratchet(root, "--check");
   });
 }, 30_000);
 
