@@ -430,6 +430,233 @@ const filterPlanByPropertyIds = (
   return filteredPlan;
 };
 
+type PlanAndEnqueueWorkflowOptions = Omit<
+  StartWorkflowArgs,
+  "kickoff" | "runStateStore" | "serviceTier"
+> & {
+  requestId: SafeId<"extractionRun">;
+  runStateStore: ReturnType<typeof getRootWorkflowRunStateStore>;
+  serviceTier: AIRequestServiceTier;
+  releaseClaimAndFail: (cause: unknown) => Promise<StartWorkflowResult>;
+};
+
+const planAndEnqueueWorkflow = async (
+  {
+    workspaceId,
+    organizationId,
+    userId,
+    scopedDb,
+    entityIds: inputEntityIds,
+    entityIdsOrder: inputOrder,
+    propertyIds: inputPropertyIds,
+    serviceTier,
+    runStateStore,
+    extractionRunStore,
+    queue,
+    requestId,
+    releaseClaimAndFail,
+  }: PlanAndEnqueueWorkflowOptions,
+  signal?: AbortSignal,
+): Promise<StartWorkflowResult> => {
+  const runKey = { id: requestId, organizationId, workspaceId };
+  const requestIdSet = await Result.tryPromise({
+    try: async () =>
+      await runStateStore.setRequestId({
+        requestId,
+        runLockTtlSec: RUNNING_LOCK_TTL_SEC,
+        workspaceId,
+      }),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(requestIdSet)) {
+    return await releaseClaimAndFail(requestIdSet.error);
+  }
+
+  // Every run that plans or enqueues work has its lifecycle row, so a start
+  // that cannot record its run dispatches nothing.
+  const runCreated = await Result.tryPromise({
+    try: async () =>
+      await extractionRunStore.create({
+        ...runKey,
+        requestedBy: userId,
+        scope: extractionRunScope({
+          entityIds: inputEntityIds,
+          propertyIds: inputPropertyIds,
+        }),
+      }),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(runCreated)) {
+    return await releaseClaimAndFail(runCreated.error);
+  }
+
+  try {
+    signal?.throwIfAborted();
+    const executionPlanData = await getExecutionPlanData(workspaceId, scopedDb);
+    signal?.throwIfAborted();
+
+    // Property-status freshness is an optimization for full-workspace
+    // runs ("nothing changed, skip"). It must be bypassed when the
+    // caller is asking for an explicit re-run: entity backfills
+    // ("backfill these new rows") and column reruns ("re-extract this
+    // column") both need the property in the plan even if it is
+    // marked fresh. The per-entity / per-property targeting below
+    // still scopes the actual computation correctly.
+    const planInput =
+      (inputEntityIds && inputEntityIds.length > 0) ||
+      (inputPropertyIds && inputPropertyIds.length > 0)
+        ? {
+            ...executionPlanData,
+            properties: executionPlanData.properties.map((p) => ({
+              ...p,
+              status: "stale" as const,
+            })),
+          }
+        : executionPlanData;
+
+    const fullExecutionPlan = getPropertyExecutionPlan(planInput);
+
+    const executionPlan =
+      inputPropertyIds && inputPropertyIds.length > 0
+        ? filterPlanByPropertyIds(fullExecutionPlan, inputPropertyIds)
+        : fullExecutionPlan;
+
+    const hasWork = executionPlan.some((level) =>
+      level.some((batch) => batch.properties.length > 0),
+    );
+
+    if (!hasWork) {
+      await extractionRunStore
+        .skip(runKey)
+        .catch((error: unknown) => captureError(error, { workspaceId }));
+      await runStateStore.clear(workspaceId);
+      return { status: "skipped" };
+    }
+    const runLockTtlSec = computeWorkflowRunLockTtlSec(
+      executionPlan,
+      serviceTier,
+    );
+    await runStateStore.extendPlanningLease({ runLockTtlSec, workspaceId });
+
+    const isExplicitRun =
+      inputEntityIds !== undefined && inputEntityIds.length > 0;
+    const fullWorkflowCreatedAtCutoff = isExplicitRun
+      ? null
+      : await readFullWorkflowSnapshotCursor({ scopedDb });
+    const explicitEntityIds = isExplicitRun
+      ? resolveWorkflowTargetEntityIds({
+          entityRows: await fetchExplicitWorkflowTargetRows({
+            inputEntityIds,
+            scopedDb,
+            workspaceId,
+          }),
+          inputEntityIds,
+          inputOrder,
+        })
+      : [];
+    const fullWorkflowEntityIds = isExplicitRun
+      ? []
+      : await collectFullWorkflowTargetIds({
+          createdAtCutoff:
+            fullWorkflowCreatedAtCutoff ??
+            panic("Full workflow target collection requires a snapshot cursor"),
+          scopedDb,
+          workspaceId,
+        });
+    const targetEntityIds = isExplicitRun
+      ? explicitEntityIds
+      : fullWorkflowEntityIds;
+    const targetCount = targetEntityIds.length;
+
+    if (targetCount === 0) {
+      await extractionRunStore
+        .skip(runKey)
+        .catch((error: unknown) => captureError(error, { workspaceId }));
+      await runStateStore.clear(workspaceId);
+      return { status: "skipped" };
+    }
+
+    // Finalization requires one request-bound snapshot. Keeping the scope,
+    // properties, and service tier in one versioned value prevents partial
+    // expiry from silently widening a run's freshness scope.
+    const planPropertyIds = executionPlan.flatMap((level) =>
+      level.flatMap((batch) => batch.properties.map((p) => p.id)),
+    );
+    const isCellScopedRun =
+      inputPropertyIds &&
+      inputPropertyIds.length > 0 &&
+      inputEntityIds &&
+      inputEntityIds.length > 0;
+    await runStateStore.initializeCompletion({
+      manifest: {
+        version: 1,
+        requestId,
+        freshnessScope: isCellScopedRun ? "cells" : "workspace",
+        propertyIds: planPropertyIds,
+        serviceTier,
+      },
+      runLockTtlSec,
+      targetCount,
+      workspaceId,
+    });
+
+    await extractionRunStore
+      .start({ ...runKey, total: targetCount })
+      .catch((error: unknown) => captureError(error, { workspaceId }));
+
+    // Broadcast running status
+    broadcastWorkflowStatus(workspaceId);
+
+    // Select once for the whole workflow. The same queue instance owns every
+    // chunk and any partial-enqueue cleanup, so one request cannot straddle
+    // queue classes even during a rolling routing change.
+    const q =
+      queue ?? getQueueForClass(workflowQueueClassForServiceTier(serviceTier));
+    const queuedJobIds: string[] = [];
+    try {
+      for (const chunk of chunked(
+        targetEntityIds,
+        LIMITS.workflowEntityBatchSize,
+      )) {
+        const chunkJobIds = chunk.map((entityId) =>
+          workflowEntityJobId({ entityId, requestId }),
+        );
+        queuedJobIds.push(...chunkJobIds);
+        signal?.throwIfAborted();
+        await enqueueEntityJobs({
+          entityIds: chunk,
+          executionPlan,
+          jobIds: chunkJobIds,
+          organizationId,
+          q,
+          requestId,
+          runLockTtlSec,
+          serviceTier,
+          userId,
+          workspaceId,
+          ...(inputPropertyIds &&
+            inputPropertyIds.length > 0 && {
+              forcePropertyIds: inputPropertyIds,
+            }),
+        });
+      }
+    } catch (error: unknown) {
+      await removeQueuedWorkflowJobs(q, queuedJobIds);
+      throw error;
+    }
+
+    return { status: "started" };
+  } catch (error: unknown) {
+    await extractionRunStore
+      .fail({ ...runKey, errorCode: errorTag(error) })
+      .catch((runError: unknown) => captureError(runError, { workspaceId }));
+    await runStateStore.clear(workspaceId);
+    broadcastWorkflowStatus(workspaceId);
+    captureError(error, { workspaceId });
+    return { status: "failed" };
+  }
+};
+
 /**
  * Start a workflow: build execution plan, enqueue entity jobs.
  */
@@ -448,7 +675,6 @@ export const startWorkflow = async ({
   queue,
 }: StartWorkflowArgs): Promise<StartWorkflowResult> => {
   const requestId = createSafeId<"extractionRun">();
-  const runKey = { id: requestId, organizationId, workspaceId };
 
   // Check if already running (atomic check-and-set). The TTL is the
   // safety net for an uncleanly-killed worker; tuned tight enough that
@@ -462,13 +688,10 @@ export const startWorkflow = async ({
     return { status: "already-running" };
   }
 
-  // Between the claim above and the try below, a throw would escape holding a
-  // lock nobody owns: the caller sees an exception, and its retry is answered
-  // `already-running` by the claim it orphaned, which reads as a run in
-  // flight. Report the same in-band failure the rest of the start path
-  // reports instead, releasing the claim first. Releasing is best-effort by
-  // necessity — the release travels the connection that just failed — and the
-  // hour-long TTL plus `reconcileOrphanedWorkflows` remain the backstop.
+  // Recording a claimed run can fail before planning starts. Release only
+  // this request's claim and report the same in-band failure as enqueueing.
+  // Release is best-effort on a failed connection; the claim TTL and orphan
+  // reconciliation remain the backstop.
   const releaseClaimAndFail = async (
     cause: unknown,
   ): Promise<StartWorkflowResult> => {
@@ -485,212 +708,27 @@ export const startWorkflow = async ({
     return { status: "failed" };
   };
 
-  const planAndEnqueue = async (
-    signal?: AbortSignal,
-  ): Promise<StartWorkflowResult> => {
-    const requestIdSet = await Result.tryPromise({
-      try: async () =>
-        await runStateStore.setRequestId({
-          requestId,
-          runLockTtlSec: RUNNING_LOCK_TTL_SEC,
-          workspaceId,
-        }),
-      catch: (cause) => cause,
-    });
-    if (Result.isError(requestIdSet)) {
-      return await releaseClaimAndFail(requestIdSet.error);
-    }
-
-    // Every run that plans or enqueues work has its lifecycle row, so a start
-    // that cannot record its run dispatches nothing.
-    const runCreated = await Result.tryPromise({
-      try: async () =>
-        await extractionRunStore.create({
-          ...runKey,
-          requestedBy: userId,
-          scope: extractionRunScope({
-            entityIds: inputEntityIds,
-            propertyIds: inputPropertyIds,
-          }),
-        }),
-      catch: (cause) => cause,
-    });
-    if (Result.isError(runCreated)) {
-      return await releaseClaimAndFail(runCreated.error);
-    }
-
-    try {
-      signal?.throwIfAborted();
-      const executionPlanData = await getExecutionPlanData(
+  const planAndEnqueue = async (signal?: AbortSignal) =>
+    await planAndEnqueueWorkflow(
+      {
         workspaceId,
+        organizationId,
+        userId,
         scopedDb,
-      );
-      signal?.throwIfAborted();
-
-      // Property-status freshness is an optimization for full-workspace
-      // runs ("nothing changed, skip"). It must be bypassed when the
-      // caller is asking for an explicit re-run: entity backfills
-      // ("backfill these new rows") and column reruns ("re-extract this
-      // column") both need the property in the plan even if it is
-      // marked fresh. The per-entity / per-property targeting below
-      // still scopes the actual computation correctly.
-      const planInput =
-        (inputEntityIds && inputEntityIds.length > 0) ||
-        (inputPropertyIds && inputPropertyIds.length > 0)
-          ? {
-              ...executionPlanData,
-              properties: executionPlanData.properties.map((p) => ({
-                ...p,
-                status: "stale" as const,
-              })),
-            }
-          : executionPlanData;
-
-      const fullExecutionPlan = getPropertyExecutionPlan(planInput);
-
-      const executionPlan =
-        inputPropertyIds && inputPropertyIds.length > 0
-          ? filterPlanByPropertyIds(fullExecutionPlan, inputPropertyIds)
-          : fullExecutionPlan;
-
-      const hasWork = executionPlan.some((level) =>
-        level.some((batch) => batch.properties.length > 0),
-      );
-
-      if (!hasWork) {
-        await extractionRunStore
-          .skip(runKey)
-          .catch((error: unknown) => captureError(error, { workspaceId }));
-        await runStateStore.clear(workspaceId);
-        return { status: "skipped" };
-      }
-      const runLockTtlSec = computeWorkflowRunLockTtlSec(
-        executionPlan,
         serviceTier,
-      );
-      await runStateStore.extendPlanningLease({ runLockTtlSec, workspaceId });
-
-      const isExplicitRun =
-        inputEntityIds !== undefined && inputEntityIds.length > 0;
-      const fullWorkflowCreatedAtCutoff = isExplicitRun
-        ? null
-        : await readFullWorkflowSnapshotCursor({ scopedDb });
-      const explicitEntityIds = isExplicitRun
-        ? resolveWorkflowTargetEntityIds({
-            entityRows: await fetchExplicitWorkflowTargetRows({
-              inputEntityIds,
-              scopedDb,
-              workspaceId,
-            }),
-            inputEntityIds,
-            inputOrder,
-          })
-        : [];
-      const fullWorkflowEntityIds = isExplicitRun
-        ? []
-        : await collectFullWorkflowTargetIds({
-            createdAtCutoff:
-              fullWorkflowCreatedAtCutoff ??
-              panic(
-                "Full workflow target collection requires a snapshot cursor",
-              ),
-            scopedDb,
-            workspaceId,
-          });
-      const targetEntityIds = isExplicitRun
-        ? explicitEntityIds
-        : fullWorkflowEntityIds;
-      const targetCount = targetEntityIds.length;
-
-      if (targetCount === 0) {
-        await extractionRunStore
-          .skip(runKey)
-          .catch((error: unknown) => captureError(error, { workspaceId }));
-        await runStateStore.clear(workspaceId);
-        return { status: "skipped" };
-      }
-
-      // Finalization requires one request-bound snapshot. Keeping the scope,
-      // properties, and service tier in one versioned value prevents partial
-      // expiry from silently widening a run's freshness scope.
-      const planPropertyIds = executionPlan.flatMap((level) =>
-        level.flatMap((batch) => batch.properties.map((p) => p.id)),
-      );
-      const isCellScopedRun =
-        inputPropertyIds &&
-        inputPropertyIds.length > 0 &&
-        inputEntityIds &&
-        inputEntityIds.length > 0;
-      await runStateStore.initializeCompletion({
-        manifest: {
-          version: 1,
-          requestId,
-          freshnessScope: isCellScopedRun ? "cells" : "workspace",
-          propertyIds: planPropertyIds,
-          serviceTier,
-        },
-        runLockTtlSec,
-        targetCount,
-        workspaceId,
-      });
-
-      await extractionRunStore
-        .start({ ...runKey, total: targetCount })
-        .catch((error: unknown) => captureError(error, { workspaceId }));
-
-      // Broadcast running status
-      broadcastWorkflowStatus(workspaceId);
-
-      // Select once for the whole workflow. The same queue instance owns every
-      // chunk and any partial-enqueue cleanup, so one request cannot straddle
-      // queue classes even during a rolling routing change.
-      const q =
-        queue ??
-        getQueueForClass(workflowQueueClassForServiceTier(serviceTier));
-      const queuedJobIds: string[] = [];
-      try {
-        for (const chunk of chunked(
-          targetEntityIds,
-          LIMITS.workflowEntityBatchSize,
-        )) {
-          const chunkJobIds = chunk.map((entityId) =>
-            workflowEntityJobId({ entityId, requestId }),
-          );
-          queuedJobIds.push(...chunkJobIds);
-          signal?.throwIfAborted();
-          await enqueueEntityJobs({
-            entityIds: chunk,
-            executionPlan,
-            jobIds: chunkJobIds,
-            organizationId,
-            q,
-            requestId,
-            runLockTtlSec,
-            serviceTier,
-            userId,
-            workspaceId,
-            ...(inputPropertyIds &&
-              inputPropertyIds.length > 0 && {
-                forcePropertyIds: inputPropertyIds,
-              }),
-          });
-        }
-      } catch (error: unknown) {
-        await removeQueuedWorkflowJobs(q, queuedJobIds);
-        throw error;
-      }
-
-      return { status: "started" };
-    } catch (error: unknown) {
-      await extractionRunStore
-        .fail({ ...runKey, errorCode: errorTag(error) })
-        .catch((runError: unknown) => captureError(runError, { workspaceId }));
-      await runStateStore.clear(workspaceId);
-      broadcastWorkflowStatus(workspaceId);
-      captureError(error, { workspaceId });
-      return { status: "failed" };
-    }
-  };
+        runStateStore,
+        extractionRunStore,
+        requestId,
+        releaseClaimAndFail,
+        ...(inputEntityIds !== undefined && { entityIds: inputEntityIds }),
+        ...(inputOrder !== undefined && { entityIdsOrder: inputOrder }),
+        ...(inputPropertyIds !== undefined && {
+          propertyIds: inputPropertyIds,
+        }),
+        ...(queue !== undefined && { queue }),
+      },
+      signal,
+    );
   if (!env.FEATURE_ACTION_ADMISSION) {
     return await planAndEnqueue();
   }
