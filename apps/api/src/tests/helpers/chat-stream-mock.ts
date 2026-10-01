@@ -2,7 +2,8 @@ import { panic } from "better-result";
 import { afterEach, mock } from "bun:test";
 
 import type { ChatTurnRun } from "@/api/handlers/chat/chat-turn-run";
-import type { StreamChatProps } from "@/api/handlers/chat/stream-chat";
+import type { streamChat } from "@/api/handlers/chat/stream-chat";
+import { sseResponse } from "@/api/lib/sse";
 
 /** A dispatch-only stub still owns the handed-over run until teardown. */
 export const createChatStreamMock = () => {
@@ -17,10 +18,12 @@ export const createChatStreamMock = () => {
     }
     runs.clear();
   });
-  return mock(async ({ run }: StreamChatProps) => {
+  return mock(async ({ run }: Parameters<typeof streamChat>[0]) => {
     runs.add(run);
-    return new Response("stream started", {
-      headers: { "Content-Type": "text/event-stream" },
-    });
+    return sseResponse(
+      new ReadableStream<Uint8Array>({
+        start: (controller) => controller.close(),
+      }),
+    );
   });
 };
