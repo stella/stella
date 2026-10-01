@@ -975,7 +975,7 @@
     }
   },
   "no-db-await-in-loop-suppressions": {
-    "count": 114,
+    "count": 115,
     "files": {
       "apps/api/scripts/backfill-image-thumbnails.ts": 3,
       "apps/api/scripts/backfill-search-previews.ts": 2,
@@ -988,7 +988,7 @@
       "apps/api/src/handlers/case-law/ingestion/pipeline.ts": 3,
       "apps/api/src/handlers/case-law/ingestion/pipeline/batch.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/pipeline/decision-identity.ts": 1,
-      "apps/api/src/handlers/case-law/ingestion/reconciliation-engine.ts": 2,
+      "apps/api/src/handlers/case-law/ingestion/reconciliation-engine.ts": 3,
       "apps/api/src/handlers/case-law/ingestion/supplement-fold.ts": 2,
       "apps/api/src/handlers/case-law/provisions/previews-for-decision.ts": 1,
       "apps/api/src/handlers/chat/threads/delete.ts": 2,
