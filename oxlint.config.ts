@@ -1,8 +1,5 @@
 import { defineConfig } from "oxlint";
 import type { OxlintOverride } from "oxlint";
-import core from "ultracite/oxlint/core";
-import react from "ultracite/oxlint/react";
-import shadcn from "ultracite/oxlint/shadcn";
 
 import {
   libraryIgnorePatterns,
@@ -22,6 +19,9 @@ import {
   designLintBacklogOverrides,
 } from "./scripts/design-lint-policy.ts";
 import { OWNERSHIP } from "./scripts/ownership.ts";
+import core from "./scripts/oxlint-presets/core.mjs";
+import react from "./scripts/oxlint-presets/react.mjs";
+import shadcn from "./scripts/oxlint-presets/shadcn.mjs";
 import {
   DECLARATION_FILE_GLOB,
   RESULT_CONVENTION_ENABLED_GLOBS,
@@ -135,6 +135,10 @@ const publicSsrAmbientStateRules = {
 } satisfies NonNullable<OxlintOverride["rules"]>;
 
 const fixtureRuleOverrides = [
+  fixtureRuleOverride("drizzle.fixture.ts", [
+    "drizzle/enforce-delete-with-where",
+    "drizzle/enforce-update-with-where",
+  ]),
   {
     files: [".oxlint-plugins/__fixtures__/public-ssr-ambient-state.fixture.ts"],
     rules: publicSsrAmbientStateRules,
@@ -1144,7 +1148,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-raw-cache-control.ts",
     "@tanstack/eslint-plugin-query",
     "@tanstack/eslint-plugin-router",
-    "eslint-plugin-drizzle",
+    "./.oxlint-plugins/drizzle.ts",
     "oxlint-tailwindcss",
     "@stll/oxlint-config/no-raw-colors",
     "./.oxlint-plugins/no-raw-date-input.ts",
@@ -1645,7 +1649,6 @@ export default defineConfig({
               "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx",
               "apps/web/src/components/ai-suggestions/host.tsx",
               "apps/web/src/components/bilingual-run-panel.tsx",
-              "apps/web/src/components/chat-mention-list.tsx",
               "apps/web/src/components/chat/ask-user-card.tsx",
               "apps/web/src/components/chat/chat-prompt-improve-button.tsx",
               "apps/web/src/components/chat/chat-thread-messages.tsx",
@@ -1691,7 +1694,6 @@ export default defineConfig({
               "apps/web/src/routes/_protected.settings/account.profile.tsx",
               "apps/web/src/routes/_protected.settings/organization.usage.tsx",
               "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-row.tsx",
-              "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/timer-controls.tsx",
               "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx",
               "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/extraction-run-progress.tsx",
               "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx",
@@ -3737,11 +3739,6 @@ export default defineConfig({
                 file: "apps/api/src/lib/db/account-row.ts",
                 reason:
                   "single-account reads and writes keyed by the caller's own user id, or by the email a sign-in or OTP request names before any organization exists",
-              },
-              {
-                file: "apps/api/src/handlers/operator/query.ts",
-                reason:
-                  "operator registrations are instance-wide by design: the endpoint is token-gated at the deployment level, so there is no organization to scope by",
               },
               {
                 file: "apps/api/src/handlers/workspaces/read-overview-activity-actors.query.ts",

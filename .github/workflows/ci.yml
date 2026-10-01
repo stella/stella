@@ -3,7 +3,7 @@ name: CI Checks
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
-  # The merge queue builds main plus one pull request and merges only if this
+  # The merge queue builds main plus queued pull requests and merges only if this
   # workflow reports `ci-result` success on that commit, so release-boundary
   # checks must include merge_group and validate the tree that will land.
   merge_group:
@@ -44,6 +44,7 @@ jobs:
       actions: read
     outputs:
       trusted: ${{ steps.check.outputs.trusted }}
+      playwright_image: ${{ steps.browser-image.outputs.image }}
       # `fast` runs guards, lint, typecheck, unit tests, builds, and the
       # path-scoped image smokes. `full` adds the heavy suites (browsers,
       # services, other platforms). Every heavy job gates on
@@ -178,6 +179,11 @@ jobs:
           fetch-depth: 0
           filter: blob:none
           persist-credentials: false
+
+      - name: Resolve browser image
+        id: browser-image
+        if: steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch'
+        run: echo "image=$(cat .github/actions/setup-playwright/image.txt)" >> "$GITHUB_OUTPUT"
 
       - name: Check changed file scope
         if: >-
@@ -613,6 +619,41 @@ jobs:
         run: |
           docker ps --all --quiet --filter "ancestor=$AGENT_ENGINE_DOCKER_IMAGE" | xargs --no-run-if-empty docker rm --force
           docker network rm "$AGENT_ENGINE_DOCKER_NETWORK" 2>/dev/null || true
+
+  # Parser versions must advance whenever an adapter's parser inputs change.
+  # This guard reads Git history and needs no dependency installation.
+  parser-version-guard:
+    needs: ci-plan
+    if: >-
+      needs.ci-plan.outputs.trusted == 'true'
+      || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+
+      - name: Check parser version guard
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
+          HEAD_SHA: ${{ github.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
+        run: |
+          bun test scripts/check-parser-versions.test.ts
+          bun scripts/check-parser-versions.ts
 
   # The repository guards. The suites this job used to run serially after them
   # are ci-tests and ci-browser, which run as separate jobs so they overlap
@@ -1310,24 +1351,11 @@ jobs:
             DATABASE_URL=postgresql://invalid bun --no-env-file run knip --production --strict --no-progress --include unlisted,unresolved --workspace "$workspace"
           done
 
-      - name: Knip unused-dependency checks
+      - name: Knip workspace dependency checks
         if: needs.ci-plan.outputs.package_checks_required == 'true'
-        # Complements the production import gate above: flags declared
-        # `dependencies`/`devDependencies` that no file in the workspace
-        # imports (non-production run so test/e2e/tooling files count as
-        # usage). Scoped to the shipping apps, matching the loop above.
-        #
-        # Only the `dependencies` issue type is enforced here. `exports`
-        # and `types` are no longer off: they are budgeted repo-wide by the
-        # dead-export step below, which counts them per workspace and lets
-        # the count only fall. `files` stays OFF (see the `exclude` in
-        # knip.json): the unused-file set is dominated by feature slices
-        # whose ship-or-delete call is a product decision (e.g. the
-        # flag-gated time-billing components), not mechanical dead code.
-        run: |
-          for workspace in apps/api apps/legal-atlas-runner apps/web; do
-            DATABASE_URL=postgresql://invalid bun --no-env-file run knip --no-progress --include dependencies --workspace "$workspace"
-          done
+        # Include test and tooling imports in every workspace. The production
+        # gate above also checks deployment boundaries for the server apps.
+        run: bun run dependencies:check
 
       - name: Knip dead-export check (packages/cli)
         if: needs.ci-plan.outputs.package_checks_required == 'true'
@@ -1369,6 +1397,7 @@ jobs:
         run: bun run --filter @stll/catalogue check-pinned
 
       - name: Property-test convention guard
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: |
           bun test packages/property-testing/src/convention.test.ts
           bun test packages/property-testing/src/ci-gate-coverage.test.ts
@@ -1420,7 +1449,7 @@ jobs:
       # publishable package.
       - name: Test published export artifact guard
         if: needs.ci-plan.outputs.package_checks_required == 'true'
-        run: bun test scripts/published-export-guards.test.ts
+        run: bun test scripts/published-export-guards.test.ts scripts/check-published-exports.test.ts
 
       - name: Test publish manifest transformation
         # scripts/publish-manifest.ts imports better-result, so this needs the
@@ -1627,7 +1656,7 @@ jobs:
       # another.
       fail-fast: false
       matrix:
-        shard: [api, rest, web]
+        shard: [api-1, api-2, api-3, api-4, rest-web]
 
     steps:
       - name: Checkout
@@ -1697,8 +1726,9 @@ jobs:
         # Outside the workspace, so no shard filter selects it: one shard owns
         # it outright.
         if: >-
-          needs.ci-plan.outputs.package_checks_required == 'true'
-          && matrix.shard == 'rest'
+          !cancelled()
+          && needs.ci-plan.outputs.package_checks_required == 'true'
+          && matrix.shard == 'rest-web'
         run: bun --cwd .claude/mcp test
 
       # The API test runner sizes its parallel lanes from the runner's cores
@@ -1707,12 +1737,14 @@ jobs:
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: nproc; free -g
 
-      - name: Test
-        if: needs.ci-plan.outputs.package_checks_required == 'true'
+      - name: Test API or rest
+        if: >-
+          !cancelled()
+          && needs.ci-plan.outputs.package_checks_required == 'true'
         env:
           AFFECTED_FLAG: ${{ steps.affected.outputs.flag }}
           BASE_REF: ${{ github.base_ref || 'main' }}
-          SHARD: ${{ matrix.shard }}
+          SHARD: ${{ matrix.shard == 'rest-web' && 'rest' || matrix.shard }}
         # Not --affected: a suite that reads files outside its own package also
         # needs the packages its turbo.json test inputs name, and
         # `--affected --filter=X` intersects instead of widening.
@@ -1729,7 +1761,37 @@ jobs:
             read -r -a args <<<"$scope"
           fi
           read -r -a shard_args <<<"$(bun scripts/test-shards.ts --filters "$SHARD")"
-          bun run test -- --concurrency=2 "${args[@]}" "${shard_args[@]}"
+          export API_TEST_SHARD="$(bun scripts/test-shards.ts --api-shard "$SHARD")"
+          set -o pipefail
+          plan="$RUNNER_TEMP/test-plan-$SHARD.json"
+          output="$RUNNER_TEMP/test-output-$SHARD.log"
+          bun run test -- --concurrency=2 "${args[@]}" "${shard_args[@]}" --dry=json > "$plan"
+          bun run test -- --concurrency=2 --output-logs=full "${args[@]}" "${shard_args[@]}" | tee "$output"
+          bun scripts/test-shards.ts --verify-output "$SHARD" "$plan" "$output"
+
+      - name: Test web
+        if: >-
+          !cancelled()
+          && needs.ci-plan.outputs.package_checks_required == 'true'
+          && matrix.shard == 'rest-web'
+        env:
+          AFFECTED_FLAG: ${{ steps.affected.outputs.flag }}
+          BASE_REF: ${{ github.base_ref || 'main' }}
+          SHARD: web
+        run: |
+          args=()
+          if [[ -n "$AFFECTED_FLAG" ]]; then
+            scope=$(bun scripts/test-scope.ts --base "origin/$BASE_REF")
+            read -r -a args <<<"$scope"
+          fi
+          read -r -a shard_args <<<"$(bun scripts/test-shards.ts --filters "$SHARD")"
+          export API_TEST_SHARD="$(bun scripts/test-shards.ts --api-shard "$SHARD")"
+          set -o pipefail
+          plan="$RUNNER_TEMP/test-plan-$SHARD.json"
+          output="$RUNNER_TEMP/test-output-$SHARD.log"
+          bun run test -- --concurrency=2 "${args[@]}" "${shard_args[@]}" --dry=json > "$plan"
+          bun run test -- --concurrency=2 --output-logs=full "${args[@]}" "${shard_args[@]}" | tee "$output"
+          bun scripts/test-shards.ts --verify-output "$SHARD" "$plan" "$output"
 
   # The browser-backed suites. They share one Playwright install, so they stay
   # in a single job rather than one per suite.
@@ -1742,7 +1804,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     container:
-      image: mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
+      image: ${{ needs.ci-plan.outputs.playwright_image }}
       options: --init --ipc=host
     defaults:
       run:
@@ -2123,6 +2185,34 @@ jobs:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
         run: bun run test:postgres
 
+      - name: Start corpus engine
+        if: ${{ !cancelled() }}
+        run: |
+          docker run -d --name corpus-engine \
+            -p 127.0.0.1:7290:7280 -p 127.0.0.1:7291:7280 \
+            quickwit/quickwit:0.9.0@sha256:1e6169bf4e98a489fca397105f1698c1d80a0f9779f3cf652973bac8a0c3b2bd run
+          curl --fail --silent --show-error --retry 30 --retry-connrefused \
+            --retry-all-errors --retry-delay 1 --retry-max-time 60 --max-time 2 \
+            http://127.0.0.1:7290/health/readyz
+
+      - name: Run corpus engine suites
+        if: ${{ !cancelled() }}
+        working-directory: apps/api
+        env:
+          DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
+          STELLA_RUN_CORPUS_ENGINE_TESTS: "true"
+        run: |
+          mapfile -t engine_tests < <(grep -rl --include='*.test.ts' STELLA_RUN_CORPUS_ENGINE_TESTS src | sort)
+          test "${#engine_tests[@]}" -gt 0
+          bun test --preload ./src/tests/setup-env.ts --reporter=junit --reporter-outfile=engine-tests.xml "${engine_tests[@]}"
+          python3 -c 'import xml.etree.ElementTree as E; r=E.parse("engine-tests.xml").getroot(); n=len(list(r.iter("testcase"))); assert n > 0 and not any(list(r.iter(t)) for t in ("skipped", "failure", "error")) and not any(int(e.get(k, "0")) for e in r.iter() for k in ("skipped", "disabled", "failures", "errors")), "Engine tests must execute without skips or failures"; print(f"Executed {n} engine tests")'
+
+      - name: Corpus engine diagnostics and cleanup
+        if: always()
+        run: |
+          docker logs corpus-engine || true
+          docker rm -f corpus-engine || true
+
       # Independent of the Postgres verdict: a failure there should not hide
       # this runner's result.
       - name: Run Valkey-gated API suites
@@ -2223,7 +2313,7 @@ jobs:
   migration-exact-base-upgrade:
     # Reports only until a burn-in supports wiring it into ci-result.
     # Compare the queued upgrade from main's exact schema with a clean
-    # install. The merge queue builds one PR per group, so base_sha is exact.
+    # install, using the event base before any grouped entries are applied.
     needs: ci-plan
     if: >-
       github.event_name == 'merge_group'
@@ -2741,7 +2831,7 @@ jobs:
           E2E_EXECUTION_PROFILE: network-baseline
           E2E_EXPECT_DEV_ROUTES: "false"
           PLAYWRIGHT_BLOB_OUTPUT_NAME: report-network-baseline.zip
-        run: bun --filter @stll/web test:e2e -- route-smoke.spec.ts
+        run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e -- route-smoke.spec.ts
 
       # Playwright clears its report directory at the next invocation.
       - name: Upload network baseline blob report
@@ -2763,7 +2853,7 @@ jobs:
           E2E_EXECUTION_PROFILE: ci-production-parallel
           E2E_EXPECT_DEV_ROUTES: "false"
         run: >-
-          bun --filter @stll/web test:e2e --
+          bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e --
           --grep-invert='route-smoke'
           --shard=${{ matrix.shard }}/2
 
@@ -2778,7 +2868,7 @@ jobs:
           E2E_EXPECT_DEV_ROUTES: "false"
           E2E_OUTPUT_DIR: test-results/route-smoke-${{ matrix.shard }}
         run: >-
-          bun --filter @stll/web test:e2e --
+          bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e --
           --project=route-smoke
           --shard=${{ matrix.shard }}/2
           --grep-invert="route-smoke.spec.ts"
@@ -2823,8 +2913,6 @@ jobs:
       && needs.ci-plan.outputs.stack_redaction_browsers_required == 'true'
       && needs.ci-plan.outputs.suite_depth == 'full'
     runs-on: ubuntu-latest
-    # The Playwright system dependencies come from the runner's apt mirror,
-    # whose throughput varies widely between runs.
     timeout-minutes: 35
     permissions:
       contents: read
@@ -2842,21 +2930,13 @@ jobs:
         env:
           NPM_TOKEN: ""
 
-      # Playwright installs pinned browsers; the runner's Chrome channel is unrelated.
-      - name: Disable runner Chrome apt source
-        run: |
-          chrome_apt_source=/etc/apt/sources.list.d/google-chrome.list
-          if [[ -f "$chrome_apt_source" ]]; then
-            sudo mv "$chrome_apt_source" "$chrome_apt_source.disabled"
-          fi
-
-      - name: Install Firefox and WebKit
-        run: |
-          bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/install-deps.sh" firefox webkit
-          bunx playwright install firefox webkit
+      - name: Verify Firefox and WebKit in the pinned image
+        uses: ./.github/actions/setup-playwright
+        with:
+          browsers: firefox webkit
 
       - name: Test browser stack redaction
-        run: bun --filter @stll/web test:e2e:stack-redaction
+        run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:stack-redaction
 
   e2e-vite-canary:
     needs: ci-plan
@@ -2957,13 +3037,13 @@ jobs:
           E2E_EXPECT_DEV_ROUTES: "true"
           PLAYWRIGHT_BLOB_OUTPUT_NAME: report-vite-canary.zip
         run: >-
-          bun --filter @stll/web test:e2e --
+          bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e --
           e2e/specs/vite-dependency-canary.spec.ts
           --project chromium
 
       - name: Test anonymized PDF export
         if: steps.e2e-stack.outputs.status == 'ready'
-        run: bun --filter @stll/web test:e2e:anonymized-export
+        run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:anonymized-export
 
       # Own output dir, not uploaded: the blob reporter clears its directory
       # per invocation, so sharing it would drop the canary blob, and a collab
@@ -2974,7 +3054,7 @@ jobs:
         env:
           E2E_EXPECT_DEV_ROUTES: "true"
           E2E_OUTPUT_DIR: test-results-collab
-        run: bun --filter @stll/web test:e2e:collab -- --project chromium
+        run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:collab -- --project chromium
 
       - name: Show API errors after a Vite canary failure
         if: failure() && steps.e2e-stack.outputs.status == 'ready'
@@ -3076,7 +3156,7 @@ jobs:
         uses: ./.github/actions/setup-playwright
 
       - name: Check landing islands
-        run: E2E_LANDING_URL=http://localhost:4321 bun --filter @stll/web test:e2e:landing
+        run: E2E_LANDING_URL=http://localhost:4321 bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:landing
 
       - name: Stop landing preview server
         if: always()
@@ -3574,6 +3654,7 @@ jobs:
       [
         ci-plan,
         agent-sandbox-docker,
+        parser-version-guard,
         ci-checks,
         ci-browser,
         ci-tests,
@@ -3602,6 +3683,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      actions: read
+      checks: read
       # A skipped plan passes only while the pull request is still a draft.
       pull-requests: read
     steps:
@@ -3642,6 +3725,7 @@ jobs:
             "marketing-screenshots": "marketing_screenshots_required",
             "migration-upgrade-rehearsal": "migration_rehearsal_required",
             "mobile-build": "mobile_build_required",
+            "parser-version-guard": null,
             "release-typecheck": "release_typecheck_required",
             "service-suites": "package_checks_required",
             "stack-redaction-browsers": "stack_redaction_browsers_required",
@@ -3653,8 +3737,43 @@ jobs:
           # Jobs a fast-depth run must also see succeed once their scope is
           # planned; any other job may skip there.
           FAST_REQUIRED: >-
-            ["api-image-smoke", "web-image-smoke"]
+            ["api-image-smoke", "parser-version-guard", "web-image-smoke"]
         run: |
+          # Queued jobs may have no concurrency annotation. A newer run in
+          # the same workflow/group proves supersession, unless any cancelled
+          # job timed out. Every API lookup fails closed.
+          cancelled_dependencies_were_superseded() {
+            local current workflow created runs jobs urls url annotations
+            current=$(gh api "repos/$REPO/actions/runs/$GITHUB_RUN_ID") || return 1
+            workflow=$(jq -er '.workflow_id | select(type == "number")' <<< "$current") || return 1
+            created=$(jq -er '.created_at | select(type == "string" and length > 0) | @uri' <<< "$current") || return 1
+            runs=$(gh api --paginate --slurp "repos/$REPO/actions/workflows/$workflow/runs?event=$EVENT&created=%3E%3D$created&per_page=100") || return 1
+            jq -e --argjson current "$current" --arg event "$EVENT" --arg pr "$PR_NUMBER" '
+              any(.[].workflow_runs[];
+                .workflow_id == $current.workflow_id and .name == $current.name and .event == $event
+                and .id > $current.id and .run_number > $current.run_number
+                and .created_at >= $current.created_at
+                and (if $event == "workflow_dispatch" then .head_branch == $current.head_branch
+                  elif $event == "pull_request" then any(.pull_requests[]; (.number | tostring) == $pr)
+                  else false end))
+              ' <<< "$runs" > /dev/null || return 1
+            jobs=$(gh api --paginate --slurp "repos/$REPO/actions/runs/$GITHUB_RUN_ID/jobs?filter=latest&per_page=100") || return 1
+            urls=$(jq -er '
+              [.[].jobs[] | select(.conclusion == "cancelled")]
+              | if length == 0 then error("Cancelled run has no cancelled jobs")
+                else [.[] | .check_run_url | select(. != null)] | join("\n") end
+              ' <<< "$jobs") || return 1
+            while IFS= read -r url; do
+              [[ -n "$url" ]] || continue
+              [[ "$url" == "https://api.github.com/repos/$REPO/check-runs/"* ]] || return 1
+              annotations=$(gh api --paginate --slurp "$url/annotations?per_page=100") || return 1
+              jq -e '
+                flatten
+                | any(.[]; (.message // "") | contains("has exceeded the maximum execution time")) | not
+                ' <<< "$annotations" > /dev/null || return 1
+            done <<< "$urls"
+          }
+
           # The plan skips a draft pull request, and every job with it. The
           # event's draft flag can be stale: a push to a draft followed by
           # marking it ready queues the draft run after the ready one, which
@@ -3676,8 +3795,12 @@ jobs:
           # Only a pull request or a manual run is ever superseded by a newer
           # run; a cancelled merge group certifies nothing.
           if [[ "$PLAN_RESULT" == "cancelled" && "$EVENT" != "merge_group" ]]; then
-            echo "CI run was superseded by a newer run (cancel-in-progress). Passing."
-            exit 0
+            if jq -e 'all(.[]; .result == "success" or .result == "skipped" or .result == "cancelled")' <<< "$NEEDS" > /dev/null && cancelled_dependencies_were_superseded; then
+              echo "CI run was superseded by a newer run (cancel-in-progress). Passing."
+              exit 0
+            fi
+            echo "::error::CI planning was cancelled without verified supersession."
+            exit 1
           fi
 
           if [[ "$PLAN_RESULT" != "success" ]]; then
@@ -3710,8 +3833,8 @@ jobs:
               ;;
             fast)
               # Only an unlabelled pull request or a manual run plans `fast`:
-              # its heavy suites skip by design, and a cancelled job means a
-              # newer run replaced this one.
+              # its heavy suites skip by design. A cancelled dependency can
+              # also mean a timeout; verify a newer run and reject timeout annotations.
               if [[ "$EVENT" == "merge_group" ]]; then
                 echo "::error::$EVENT run planned suite depth 'fast'; the heavy suites must run."
                 exit 1
@@ -3722,10 +3845,11 @@ jobs:
                 echo "::error::CI checks failed: $failed"
                 exit 1
               fi
-              # A planned fast-required job that skipped checked nothing.
+              # Fast-required jobs must run when their scope is planned;
+              # scope-less jobs are always planned.
               skipped=$(jq -r --argjson plan "$PLAN" --argjson scopes "$JOB_SCOPES" --argjson required "$FAST_REQUIRED" '
                 [to_entries[] | .key as $job | select($required | index($job))
-                  | select($plan[$scopes[$job]] == "true" and .value.result == "skipped")
+                  | select(($scopes[$job] == null or $plan[$scopes[$job]] == "true") and .value.result == "skipped")
                   | "\($job) (planned, skipped)"]
                 | join(", ")' <<< "$NEEDS")
               if [[ -n "$skipped" ]]; then
@@ -3734,6 +3858,10 @@ jobs:
               fi
               cancelled=$(jq -r '[to_entries[] | select(.value.result == "cancelled") | .key] | join(", ")' <<< "$NEEDS")
               if [[ -n "$cancelled" ]]; then
+                if ! cancelled_dependencies_were_superseded; then
+                  echo "::error::CI jobs were cancelled without verified supersession: $cancelled"
+                  exit 1
+                fi
                 echo "CI run was superseded by a newer run (cancel-in-progress): $cancelled. Passing."
               fi
               ;;

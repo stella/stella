@@ -2450,6 +2450,83 @@ const countLibTopLevelEntries =
     return { count, files };
   };
 
+const THIRD_PARTY_DEPENDENCY_SECTIONS = [
+  "dependencies",
+  "devDependencies",
+  "peerDependencies",
+  "optionalDependencies",
+] as const;
+
+const parseJson5Record = (
+  root: string,
+  rel: string,
+): Record<string, unknown> => {
+  const parsed = Result.try((): unknown =>
+    Bun.JSON5.parse(readFileSync(path.join(root, rel), "utf-8")),
+  );
+  if (Result.isError(parsed) || !isRecord(parsed.value)) {
+    return panic(`${rel} must contain a JSON5 object`);
+  }
+  return parsed.value;
+};
+
+const countDirectThirdPartyDeclarations: RepoCounter = (root) => {
+  const manifests = ["package.json"];
+  for (const group of ["apps", "packages"] as const) {
+    const directory = path.join(root, group);
+    if (!existsSync(directory)) {
+      continue;
+    }
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      if (
+        entry.isDirectory() &&
+        existsSync(path.join(directory, entry.name, "package.json"))
+      ) {
+        manifests.push(`${group}/${entry.name}/package.json`);
+      }
+    }
+  }
+
+  const files: Record<string, number> = {};
+  let count = 0;
+  for (const rel of manifests.toSorted()) {
+    const manifest = parseJson5Record(root, rel);
+    let declarations = 0;
+    for (const section of THIRD_PARTY_DEPENDENCY_SECTIONS) {
+      const dependencies = manifest[section];
+      if (dependencies === undefined) {
+        continue;
+      }
+      if (!isRecord(dependencies)) {
+        return panic(`${rel} ${section} must be an object`);
+      }
+      for (const specifier of Object.values(dependencies)) {
+        if (typeof specifier !== "string") {
+          return panic(`${rel} ${section} values must be strings`);
+        }
+        if (!specifier.startsWith("workspace:")) {
+          declarations += 1;
+        }
+      }
+    }
+    if (declarations > 0) {
+      files[rel] = declarations;
+      count += declarations;
+    }
+  }
+  return { count, files };
+};
+
+const countLockfilePackageEntries: RepoCounter = (root) => {
+  const lockfile = parseJson5Record(root, "bun.lock");
+  const packages = lockfile["packages"];
+  if (!isRecord(packages)) {
+    return panic("bun.lock packages must be an object");
+  }
+  const count = Object.keys(packages).length;
+  return { count, files: count === 0 ? {} : { "bun.lock": count } };
+};
+
 // --- Duplicate token blocks -------------------------------------------------
 // A copy-paste detector, in-house because a stock one over this whole tree ran
 // for fifteen minutes without finishing. Stock detectors parse; this one is
@@ -3218,7 +3295,30 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
       "direct children of apps/web/src/lib, files and directories alike (tests and __fixtures__ excluded); the flat bucket only shrinks — new code goes into a domain directory or a package",
     count: countLibTopLevelEntries(WEB_LIB_DIR),
   },
+  {
+    scope: "repo",
+    id: "direct-third-party-declarations",
+    description:
+      "direct third-party dependency declarations across root and apps/*/packages/* manifests (dependencies, devDependencies, peerDependencies, optionalDependencies); excludes workspace: links, including @stll links, and shrinks only",
+    count: countDirectThirdPartyDeclarations,
+  },
 ];
+
+const REPORT_ONLY_METRICS = [
+  {
+    scope: "repo",
+    id: "lockfile-package-entries",
+    description:
+      "resolution entries in bun.lock; informational, with no growth budget",
+    count: countLockfilePackageEntries,
+  },
+] as const satisfies readonly RatchetMetric[];
+
+const printReportOnlyMetrics = (root: string): void => {
+  for (const metric of REPORT_ONLY_METRICS) {
+    console.log(`  ${metric.id}: ${metric.count(root).count} (report only)`);
+  }
+};
 
 const PER_FILE_METRIC_IDS: ReadonlySet<string> = new Set(
   RATCHET_METRICS.filter(
@@ -3680,6 +3780,7 @@ const runReport = (): number => {
       }
     }
   }
+  printReportOnlyMetrics(REPO_ROOT);
   return 0;
 };
 
@@ -3983,6 +4084,7 @@ const runWrite = (all: boolean): number => {
 };
 
 const runCheck = (): number => {
+  printReportOnlyMetrics(REPO_ROOT);
   const current = scanAll(REPO_ROOT);
   const baseline = readBaseline();
 
@@ -5759,9 +5861,99 @@ const deltaWriteSelfTestFailures = (): string[] => {
   return failures;
 };
 
+const dependencyMetricSelfTestFailures = (root: string): string[] => {
+  const failures: string[] = [];
+  const dependencyFixtureRoot = path.join(root, "dependency-metrics");
+  mkdirSync(path.join(dependencyFixtureRoot, "apps", "client"), {
+    recursive: true,
+  });
+  mkdirSync(path.join(dependencyFixtureRoot, "packages", "shared"), {
+    recursive: true,
+  });
+  writeFileSync(
+    path.join(dependencyFixtureRoot, "package.json"),
+    JSON.stringify({
+      dependencies: { rootRuntime: "^1.0.0" },
+      devDependencies: { rootTool: "^2.0.0", "@stll/local": "workspace:*" },
+      optionalDependencies: { rootOptional: "^3.0.0" },
+    }),
+  );
+  writeFileSync(
+    path.join(dependencyFixtureRoot, "apps", "client", "package.json"),
+    JSON.stringify({
+      dependencies: {
+        "@stll/published": "1.2.3",
+        "@stll/local": "workspace:*",
+      },
+      devDependencies: { appTool: "^1.0.0" },
+      peerDependencies: { appPeer: "^2.0.0" },
+      optionalDependencies: { appOptional: "^3.0.0" },
+    }),
+  );
+  writeFileSync(
+    path.join(dependencyFixtureRoot, "packages", "shared", "package.json"),
+    JSON.stringify({ name: "@stll/shared", dependencies: {} }),
+  );
+  writeFileSync(
+    path.join(dependencyFixtureRoot, "bun.lock"),
+    '{ packages: { "first@1.0.0": [], "@scope/second@2.0.0": [] }, workspaces: { "": {} } }',
+  );
+  const directDependencies = countDirectThirdPartyDeclarations(
+    dependencyFixtureRoot,
+  );
+  if (directDependencies.count !== 7) {
+    failures.push(
+      `direct-third-party-declarations counted ${directDependencies.count}, expected 7`,
+    );
+  }
+  if (directDependencies.files["apps/client/package.json"] !== 4) {
+    failures.push(
+      "direct-third-party-declarations did not count every app dependency section or excluded a published @stll dependency",
+    );
+  }
+  if (
+    diffMetric(
+      "direct-third-party-declarations",
+      {
+        count: 8,
+        files: {
+          "apps/client/package.json": 5,
+          "package.json": 3,
+        },
+      },
+      directDependencies,
+    ).status !== "regressed"
+  ) {
+    failures.push(
+      "direct-third-party-declarations did not flag declaration growth",
+    );
+  }
+  const lockfileEntries = countLockfilePackageEntries(dependencyFixtureRoot);
+  if (lockfileEntries.count !== 2 || lockfileEntries.files["bun.lock"] !== 2) {
+    failures.push(
+      `lockfile-package-entries counted ${lockfileEntries.count}, expected 2 resolution entries`,
+    );
+  }
+  for (const metric of REPORT_ONLY_METRICS) {
+    if (RATCHET_METRICS.some(({ id }) => id === metric.id)) {
+      failures.push(`${metric.id} must not have a shrink-only budget`);
+    }
+  }
+  writeFileSync(
+    path.join(dependencyFixtureRoot, "bun.lock"),
+    '{ packages: { "first@1.0.0": [], "second@2.0.0": [], "third@3.0.0": [] } }',
+  );
+  if (countLockfilePackageEntries(dependencyFixtureRoot).count !== 3) {
+    failures.push("lockfile-package-entries did not report resolution growth");
+  }
+  return failures;
+};
+
 const runSelfTest = (): number => {
   const failures: string[] = [];
   const root = mkdtempSync(path.join(tmpdir(), "ratchet-selftest-"));
+
+  failures.push(...dependencyMetricSelfTestFailures(root));
 
   const validConfiguration = inspectConfiguration([{ id: "one-metric" }], {
     "one-metric": {
@@ -6224,6 +6416,8 @@ const runSelfTest = (): number => {
       "const z = value as Widget;\n",
     );
 
+    writeFileSync(path.join(root, "package.json"), "{}");
+    writeFileSync(path.join(root, "bun.lock"), "{ packages: {} }");
     const snapshot = scanAll(root);
 
     failures.push(...asCastSelfTestFailures(snapshot));

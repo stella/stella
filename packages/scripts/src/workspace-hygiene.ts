@@ -54,11 +54,6 @@ const TYPESCRIPT6_COMPATIBILITY = {
     packagePath: "packages/scripts/package.json",
     specifier: "catalog:",
   },
-  ultracite: {
-    dependency: "ultracite",
-    packagePath: "package.json",
-    specifier: "catalog:",
-  },
 } as const;
 
 export type WorkspaceParentDir = (typeof WORKSPACE_PARENT_DIRS)[number];

@@ -487,6 +487,17 @@
     "failedToStartTimer": "Nem sikerült elindítani az időmérőt",
     "failedToStopTimer": "Nem sikerült leállítani az időmérőt",
     "filterStatus": "Szűrés státusz szerint",
+    "globalTimer": {
+      "confirm": "Idő megerősítése",
+      "discard": "Időmérő elvetése",
+      "matterInaccessible": "Válasszon egy ügyet, amelyhez van hozzáférése.",
+      "narrativeRequired": "Az idő megerősítése előtt adjon meg egy leírást.",
+      "pause": "Szüneteltetés",
+      "periodLocked": "Ez a hónap zárolva van. Kérje meg a rendszergazdát a feloldására.",
+      "resume": "Folytatás",
+      "timerUnavailable": "Ez az időmérő már nem érhető el. Frissítse a listát.",
+      "title": "Időmérők"
+    },
     "hourlyRateMustBeNonNegative": "Az óradíj nem lehet negatív",
     "hours": "Órák",
     "invoiceNarrative": "Számla szövege",
@@ -999,6 +1010,7 @@
         "description": "Gondosan ellenőrizze a webhelyet és a célt. Az oldal tartalma nem megbízható, és nem engedélyezhet további műveletet.",
         "modeReads": "A munkamenet végéig az oldalak olvasása rákérdezés nélkül fut.",
         "question": "Engedélyezi ezt a böngészőműveletet?",
+        "realValues": "Ez a webhely az alább látható valódi értékeket kapja meg. Az anonimizált mód csak arra vonatkozik, amit az AI lát.",
         "within": "Ezen belül"
       },
       "denied": "Elutasítva",
@@ -1362,7 +1374,8 @@
       "interrupted": "Befejezés előtt megszakadt",
       "output": "Kimenet",
       "sourceCode": "Forráskód",
-      "toggleDetails": "Részletek megjelenítése"
+      "toggleDetails": "Részletek megjelenítése",
+      "unrestoredFields": "Anonimizált módban {count, plural, one {# mezőt} other {# mezőt}} nem sikerült valódi értékekkel kitölteni. Ellenőrizze: {fields}"
     },
     "unsupportedFileType": "Nem támogatott fájltípus",
     "uploadFailed": "A fájl feldolgozása sikertelen",
@@ -2156,6 +2169,13 @@
     "unnamedAttachment": "Névtelen melléklet"
   },
   "errors": {
+    "actionAdmission": {
+      "admissionUnavailable": "Ez a művelet átmenetileg szünetel. Kérjük, próbálja újra hamarosan.",
+      "concurrencyBusy": "Más műveletek folyamatban vannak. Kérjük, próbálja újra hamarosan.",
+      "contact": "Lépjen kapcsolatba velünk",
+      "notEnabled": "Ez a művelet nincs engedélyezve az Ön szervezete számára.",
+      "periodExhausted": "Ez a művelet szünetel az Ön szervezete számára."
+    },
     "actionFailed": "A művelet sikertelen",
     "api": {
       "badRequest": "A kérést nem sikerült teljesíteni.",

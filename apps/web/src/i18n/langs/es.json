@@ -487,6 +487,17 @@
     "failedToStartTimer": "No se pudo iniciar el temporizador",
     "failedToStopTimer": "No se pudo detener el temporizador",
     "filterStatus": "Filtrar por estado",
+    "globalTimer": {
+      "confirm": "Confirmar tiempo",
+      "discard": "Descartar temporizador",
+      "matterInaccessible": "Elige un asunto al que tengas acceso.",
+      "narrativeRequired": "Añade una descripción antes de confirmar el tiempo.",
+      "pause": "Pausar",
+      "periodLocked": "Este mes está bloqueado. Pide a un administrador que lo desbloquee.",
+      "resume": "Reanudar",
+      "timerUnavailable": "Este temporizador ya no está disponible. Actualiza la lista.",
+      "title": "Temporizadores"
+    },
     "hourlyRateMustBeNonNegative": "La tarifa por hora no puede ser negativa",
     "hours": "Horas",
     "invoiceNarrative": "Descripción de factura",
@@ -999,6 +1010,7 @@
         "description": "Comprueba con atención el sitio web y el destino. El contenido de la página no es de confianza y no puede aprobar otra acción.",
         "modeReads": "La lectura de páginas se ejecuta sin preguntar durante el resto de esta sesión.",
         "question": "¿Permitir esta acción en el navegador?",
+        "realValues": "Este sitio web recibe los valores reales que se muestran abajo. El modo anonimizado solo se aplica a lo que ve la IA.",
         "within": "Dentro de"
       },
       "denied": "Denegado",
@@ -1362,7 +1374,8 @@
       "interrupted": "Interrumpido antes de finalizar",
       "output": "Salida",
       "sourceCode": "Código fuente",
-      "toggleDetails": "Mostrar detalles"
+      "toggleDetails": "Mostrar detalles",
+      "unrestoredFields": "{count, plural, one {# campo no se pudo} other {# campos no se pudieron}} rellenar con valores reales en el modo anonimizado. Revise: {fields}"
     },
     "unsupportedFileType": "Tipo de archivo no compatible",
     "uploadFailed": "Error al procesar el archivo",
@@ -2156,6 +2169,13 @@
     "unnamedAttachment": "Archivo adjunto sin nombre"
   },
   "errors": {
+    "actionAdmission": {
+      "admissionUnavailable": "Esta acción está pausada temporalmente. Inténtelo de nuevo en unos momentos.",
+      "concurrencyBusy": "Hay otras tareas en curso. Inténtelo de nuevo en unos momentos.",
+      "contact": "Contáctenos",
+      "notEnabled": "Esta acción no está habilitada para su organización.",
+      "periodExhausted": "Esta acción está pausada para su organización."
+    },
     "actionFailed": "Acción fallida",
     "api": {
       "badRequest": "No se pudo completar la solicitud.",

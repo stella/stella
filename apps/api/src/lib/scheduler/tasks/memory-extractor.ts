@@ -24,6 +24,10 @@ import {
   createChatRefRegistry,
 } from "@/api/lib/chat/ref-registry";
 import { readChatThreadNames } from "@/api/lib/chat/thread-names";
+import {
+  readThreadStoredContentSendModeOnTx,
+  THREAD_STORED_CONTENT_SEND_MODE,
+} from "@/api/lib/chat/thread-stored-content-send-mode";
 import { errorTag } from "@/api/lib/errors/utils";
 import { loadCompactionTranscript } from "@/api/lib/memory/compaction-transcript";
 import { sanitizeMemoryContent } from "@/api/lib/memory/memory-content-safety";
@@ -377,6 +381,16 @@ const extractCandidates = async (
       // before provider transmission. The outer check avoids needless setup;
       // this one closes the opt-out window around the actual model call.
       if (!(await hasCurrentExtractionConsent(db, compaction))) {
+        return null;
+      }
+      // Extraction has no anonymization step: a thread that switched to
+      // anonymized mode after the claim is not sent, and later claims skip it.
+      if (
+        (await readThreadStoredContentSendModeOnTx({
+          threadId: compaction.threadId,
+          tx: db,
+        })) === THREAD_STORED_CONTENT_SEND_MODE.anonymized
+      ) {
         return null;
       }
 

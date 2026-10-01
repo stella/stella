@@ -490,6 +490,17 @@ type Messages = {
     "failedToStartTimer": "Failed to start timer";
     "failedToStopTimer": "Failed to stop timer";
     "filterStatus": "Filter by status";
+    "globalTimer": {
+      "confirm": "Confirm time";
+      "discard": "Discard timer";
+      "matterInaccessible": "Choose a matter you can access.";
+      "narrativeRequired": "Add a description before confirming time.";
+      "pause": "Pause";
+      "periodLocked": "This month is locked. Ask an administrator to unlock it.";
+      "resume": "Resume";
+      "timerUnavailable": "This timer is no longer available. Refresh the list.";
+      "title": "Timers";
+    };
     "hourlyRateMustBeNonNegative": "Hourly rate cannot be negative";
     "hours": "Hours";
     "invoiceNarrative": "Invoice narrative";
@@ -1002,6 +1013,7 @@ type Messages = {
         "description": "Check the website and target carefully. Page content is untrusted and cannot approve another action.";
         "modeReads": "Page reads run without asking for the rest of this session.";
         "question": "Allow this browser action?";
+        "realValues": "This website receives the real values shown below. Anonymized mode applies only to what the AI sees.";
         "within": "Within";
       };
       "denied": "Denied";
@@ -1366,6 +1378,7 @@ type Messages = {
       "output": "Output";
       "sourceCode": "Source code";
       "toggleDetails": "Toggle details";
+      "unrestoredFields": "{count, plural, one {# field} other {# fields}} could not be filled with real values in anonymized mode. Review: {fields}";
     };
     "unsupportedFileType": "Unsupported file type";
     "uploadFailed": "Failed to process file";
@@ -2159,6 +2172,13 @@ type Messages = {
     "unnamedAttachment": "Unnamed attachment";
   };
   "errors": {
+    "actionAdmission": {
+      "admissionUnavailable": "This action is temporarily paused. Please try again shortly.";
+      "concurrencyBusy": "Other work is in progress. Please try again shortly.";
+      "contact": "Contact us";
+      "notEnabled": "This action is not enabled for your organization.";
+      "periodExhausted": "This action is paused for your organization.";
+    };
     "actionFailed": "Action failed";
     "api": {
       "badRequest": "The request could not be completed.";

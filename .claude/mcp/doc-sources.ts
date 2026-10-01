@@ -16,12 +16,28 @@ export type NoLlmsTxtExclusion = {
 };
 
 export const DOC_SOURCES = {
+  Anthropic: {
+    dependencies: ["@anthropic-ai/sdk"],
+    url: "https://platform.claude.com/llms.txt",
+  },
+  Mistral: {
+    dependencies: ["@mistralai/mistralai"],
+    url: "https://docs.mistral.ai/llms.txt",
+  },
+  OpenAI: {
+    dependencies: ["openai"],
+    url: "https://developers.openai.com/llms.txt",
+  },
+  OpenRouter: {
+    dependencies: ["@openrouter/sdk"],
+    url: "https://openrouter.ai/docs/llms.txt",
+  },
   Elysia: {
     dependencies: ["elysia", "@elysia/cors", "@elysia/eden"],
     url: "https://elysiajs.com/llms.txt",
   },
   Drizzle: {
-    dependencies: ["drizzle-orm", "drizzle-kit", "eslint-plugin-drizzle"],
+    dependencies: ["drizzle-orm", "drizzle-kit"],
     url: "https://orm.drizzle.team/llms.txt",
   },
   TanStack: {
@@ -92,10 +108,6 @@ export const DOC_SOURCES = {
     dependencies: ["@base-ui/react"],
     url: "https://base-ui.com/llms.txt",
   },
-  DndKit: {
-    dependencies: ["@dnd-kit/core", "@dnd-kit/sortable"],
-    url: "https://dndkit.com/llms.txt",
-  },
   Valibot: {
     dependencies: ["valibot", "@valibot/to-json-schema"],
     url: "https://valibot.dev/llms.txt",
@@ -139,6 +151,7 @@ export const DOC_SOURCES = {
       "expo-router",
       "expo-status-bar",
       "expo-system-ui",
+      "expo-updates",
       "react-native-safe-area-context",
       "react-native-screens",
     ],
@@ -166,10 +179,6 @@ export const DOC_SOURCES = {
       "@smithy/fetch-http-handler",
     ],
     url: "https://docs.aws.amazon.com/sdk-for-javascript/v3/developer-guide/llms.txt",
-  },
-  AGUI: {
-    dependencies: ["@ag-ui/core"],
-    url: "https://docs.ag-ui.com/llms.txt",
   },
   Bun: {
     dependencies: ["bun-types"],
@@ -248,10 +257,6 @@ export const DOC_SOURCES = {
     dependencies: ["tsdown"],
     url: "https://tsdown.dev/llms.txt",
   },
-  Ultracite: {
-    dependencies: ["ultracite"],
-    url: "https://www.ultracite.ai/llms.txt",
-  },
   WXT: {
     dependencies: ["wxt"],
     url: "https://wxt.dev/llms.txt",
@@ -315,7 +320,6 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "@types/chrome",
   "@types/hast",
   "@types/node",
-  "@typescript-eslint/utils",
   "@typescript/native",
   "@vscode/markdown-editor",
   "@vscode/observables",
@@ -333,10 +337,10 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "eslint",
   "expo-doctor",
   "franc",
+  "happy-dom",
   "immer",
   "input-otp",
   "ioredis",
-  "ip-address",
   "jose",
   "jszip",
   "katex",
@@ -371,6 +375,14 @@ export const DOC_SOURCE_EXCLUSIONS = [
 ]
   .map(noLlmsTxt)
   .concat(
+    {
+      checkedAt: "2026-09-30T00:00:00.000Z",
+      dependency: "@standard-schema/spec",
+      explanation:
+        "https://standardschema.dev/llms.txt returns 404. Use the specification at https://standardschema.dev and the typed interfaces in @standard-schema/spec directly.",
+      expiresAt: "2026-10-30T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
     {
       checkedAt: "2026-09-27T00:00:00.000Z",
       dependency: "mailauth",

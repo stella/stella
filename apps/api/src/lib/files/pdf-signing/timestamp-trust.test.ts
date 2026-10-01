@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -7,7 +7,13 @@ import {
   configuredTimestampTrustAnchors,
   parseTrustAnchors,
 } from "@/api/lib/files/pdf-signing/timestamp-trust";
-import { createTestCertificate } from "@/api/tests/helpers/test-pki";
+import {
+  createTestRsaKeyPool,
+  createTestCertificate,
+} from "@/api/tests/helpers/test-pki";
+
+const keyPool = createTestRsaKeyPool();
+beforeEach(() => keyPool.reset());
 
 const pemOf = (der: Uint8Array) =>
   `-----BEGIN CERTIFICATE-----\n${Buffer.from(der)
@@ -16,8 +22,14 @@ const pemOf = (der: Uint8Array) =>
 
 describe("timestamp trust anchors", () => {
   test("reads every certificate of an inline bundle and skips broken blocks", async () => {
-    const first = await createTestCertificate({ commonName: "Anchor one" });
-    const second = await createTestCertificate({ commonName: "Anchor two" });
+    const first = await createTestCertificate({
+      keyPool,
+      commonName: "Anchor one",
+    });
+    const second = await createTestCertificate({
+      keyPool,
+      commonName: "Anchor two",
+    });
     const bundle = `${pemOf(first.der)}junk\n-----BEGIN CERTIFICATE-----\nbm90IGEgY2VydA==\n-----END CERTIFICATE-----\n${pemOf(second.der)}`;
 
     expect(
@@ -26,7 +38,10 @@ describe("timestamp trust anchors", () => {
   });
 
   test("reads a bundle from a path", async () => {
-    const anchor = await createTestCertificate({ commonName: "Anchor" });
+    const anchor = await createTestCertificate({
+      keyPool,
+      commonName: "Anchor",
+    });
     const directory = mkdtempSync(path.join(tmpdir(), "tsa-trust-"));
     const file = path.join(directory, "anchors.pem");
     writeFileSync(file, pemOf(anchor.der));

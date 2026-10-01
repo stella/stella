@@ -487,6 +487,17 @@
     "failedToStartTimer": "Neizdevās palaist taimeri",
     "failedToStopTimer": "Neizdevās apturēt taimeri",
     "filterStatus": "Filtrēt pēc statusa",
+    "globalTimer": {
+      "confirm": "Apstiprināt laiku",
+      "discard": "Atmest taimeri",
+      "matterInaccessible": "Izvēlieties lietu, kurai jums ir piekļuve.",
+      "narrativeRequired": "Pirms laika apstiprināšanas pievienojiet aprakstu.",
+      "pause": "Pauzēt",
+      "periodLocked": "Šis mēnesis ir bloķēts. Lūdziet administratoram to atbloķēt.",
+      "resume": "Turpināt",
+      "timerUnavailable": "Šis taimeris vairs nav pieejams. Atsvaidziniet sarakstu.",
+      "title": "Taimeri"
+    },
     "hourlyRateMustBeNonNegative": "Stundas likme nedrīkst būt negatīva",
     "hours": "Stundas",
     "invoiceNarrative": "Rēķina apraksts",
@@ -999,6 +1010,7 @@
         "description": "Rūpīgi pārbaudiet vietni un mērķi. Lapas saturs nav uzticams un nevar apstiprināt citu darbību.",
         "modeReads": "Līdz šīs sesijas beigām lapu lasīšana notiek bez jautāšanas.",
         "question": "Atļaut šo pārlūka darbību?",
+        "realValues": "Šī vietne saņems tālāk redzamās īstās vērtības. Anonimizētais režīms attiecas tikai uz to, ko redz AI.",
         "within": "Kur"
       },
       "denied": "Noraidīts",
@@ -1362,7 +1374,8 @@
       "interrupted": "Pārtraukts pirms pabeigšanas",
       "output": "Izvade",
       "sourceCode": "Pirmkods",
-      "toggleDetails": "Pārslēgt detaļas"
+      "toggleDetails": "Pārslēgt detaļas",
+      "unrestoredFields": "Anonimizētajā režīmā ar īstajām vērtībām neizdevās aizpildīt {count, plural, zero {# laukus} one {# lauku} other {# laukus}}. Pārbaudiet: {fields}"
     },
     "unsupportedFileType": "Neatbalstīts faila tips",
     "uploadFailed": "Neizdevās apstrādāt failu",
@@ -2156,6 +2169,13 @@
     "unnamedAttachment": "Pielikums bez nosaukuma"
   },
   "errors": {
+    "actionAdmission": {
+      "admissionUnavailable": "Šī darbība ir īslaicīgi apturēta. Lūdzu, drīzumā mēģiniet vēlreiz.",
+      "concurrencyBusy": "Notiek citas darbības. Lūdzu, drīzumā mēģiniet vēlreiz.",
+      "contact": "Sazinieties ar mums",
+      "notEnabled": "Šī darbība jūsu organizācijai nav iespējota.",
+      "periodExhausted": "Šī darbība jūsu organizācijai ir apturēta."
+    },
     "actionFailed": "Darbība neizdevās",
     "api": {
       "badRequest": "Pieprasījumu neizdevās pabeigt.",
