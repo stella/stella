@@ -258,15 +258,55 @@ esac
     },
   );
 
-  // The enqueue mutation reported a front position while the release pull
-  // request actually sat behind other entries. Only the queue read after the
-  // enqueue decides, and anything but first fails the run.
+  // The mutation can report first place before the fresh queue read agrees.
   test.each([
-    { queuedAt: 3, exitCode: 1, output: "behind #4101, #4102" },
-    { queuedAt: 1, exitCode: 0, output: "verified first in the queue" },
+    {
+      queuedAt: 3,
+      jump: true,
+      absent: true,
+      mutationJump: true,
+      exitCode: 2,
+      output: "queue read did not list it yet",
+    },
+    {
+      queuedAt: 3,
+      jump: false,
+      absent: true,
+      mutationJump: false,
+      exitCode: 1,
+      output: "GitHub queued the PR without the jump (position 1)",
+    },
+    {
+      queuedAt: 3,
+      jump: true,
+      mutationJump: false,
+      exitCode: 2,
+      output: "JUMP PENDING (position 3, state QUEUED)",
+    },
+    { queuedAt: 3, jump: false, exitCode: 1, output: "JUMP DROPPED" },
+    { queuedAt: 3, jump: undefined, exitCode: 1, output: "JUMP DROPPED" },
+    {
+      queuedAt: 3,
+      jump: true,
+      exitCode: 2,
+      output: "JUMP PENDING (position 3, state QUEUED)",
+    },
+    {
+      queuedAt: 1,
+      jump: true,
+      exitCode: 0,
+      output: "verified first in the queue",
+    },
   ])(
-    "an explicit release jump stays exempt from a hold and is verified after enqueueing: position $queuedAt",
-    ({ queuedAt, exitCode, output }) => {
+    "an explicit release jump stays exempt from a hold and is verified after enqueueing: position $queuedAt, jump $jump, absent $absent, mutation jump $mutationJump",
+    ({
+      queuedAt,
+      jump,
+      absent = false,
+      mutationJump = true,
+      exitCode,
+      output,
+    }) => {
       const directory = mkdtempSync(path.join(tmpdir(), "merge-bar-jump-"));
       const executable = path.join(directory, "gh");
       const pullRequest = JSON.stringify({
@@ -290,6 +330,8 @@ esac
       });
       const others = [4101, 4102].map((number, index) => ({
         position: index < queuedAt - 1 ? index + 1 : index + 2,
+        jump: false,
+        state: "QUEUED",
         pullRequest: { number },
       }));
       const queue = JSON.stringify({
@@ -297,11 +339,18 @@ esac
           repository: {
             mergeQueue: {
               entries: {
-                totalCount: 3,
-                nodes: [
-                  ...others,
-                  { position: queuedAt, pullRequest: { number: 123 } },
-                ],
+                totalCount: absent ? 2 : 3,
+                nodes: absent
+                  ? others
+                  : [
+                      ...others,
+                      {
+                        position: queuedAt,
+                        jump,
+                        state: "QUEUED",
+                        pullRequest: { number: 123 },
+                      },
+                    ],
               },
             },
           },
@@ -317,8 +366,12 @@ case "$*" in
       *--jq*) printf '%s\\n' '123';;
       *) printf '%s\\n' '[{"number":123,"title":"chore: release v0.9.42","isDraft":false,"isCrossRepository":false}]';;
     esac;;
-  *enqueuePullRequest*) printf '%s\\n' '{"data":{"enqueuePullRequest":{"mergeQueueEntry":{"position":1}}}}';;
-  *'mergeQueue(branch'*) printf '%s\\n' '${queue}';;
+  *enqueuePullRequest*)
+    case "$*" in *'mergeQueueEntry { id position jump state }'*) ;; *) exit 97;; esac
+    printf '%s\\n' '{"data":{"enqueuePullRequest":{"mergeQueueEntry":{"id":"entry","position":1,"jump":${mutationJump},"state":"QUEUED"}}}}';;
+  *'mergeQueue(branch'*)
+    case "$*" in *'position jump state pullRequest'*) ;; *) exit 98;; esac
+    printf '%s\\n' '${queue}';;
   *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
   *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}},{"type":"merge_queue","parameters":{}}]';;
   *check-runs/1*) printf '%s\\n' '{"details_url":"https://github.com/stella/stella/actions/runs/1"}';;
@@ -354,6 +407,18 @@ esac
         expect(
           `${result.stdout.toString()}${result.stderr.toString()}`,
         ).toContain(output);
+        if (absent) {
+          expect(result.stderr.toString()).toContain(
+            exitCode === 2
+              ? "JUMP PENDING (position 1, state QUEUED)"
+              : "JUMP DROPPED",
+          );
+        }
+        if (exitCode === 2) {
+          expect(result.stderr.toString()).toContain(
+            `pw sub pr ${PRIVATE_REPO}#123 --on merged,closed,checks-failed`,
+          );
+        }
       } finally {
         rmSync(directory, { recursive: true, force: true });
       }
@@ -1168,49 +1233,37 @@ describe("explicit merge queue jumps", () => {
   });
 
   test.each([
-    { positions: [6, 1], exitCode: 0, sleeps: 1, seen: "6, 1" },
-    {
-      positions: [6, 6, 6, 6, 6],
-      exitCode: 1,
-      sleeps: 4,
-      seen: "6, 6, 6, 6, 6",
-    },
-    { positions: [1], exitCode: 0, sleeps: 0, seen: "1" },
+    { position: 6, jump: false, exitCode: 1, verdict: "JUMP DROPPED" },
+    { position: 6, jump: true, exitCode: 2, verdict: "JUMP PENDING" },
+    { position: 1, jump: true, exitCode: 0, verdict: "QUEUED AT THE FRONT" },
+    { position: 1, jump: false, exitCode: 0, verdict: "QUEUED AT THE FRONT" },
   ])(
-    "queue placement settles with reads $positions",
-    ({ positions, exitCode, sleeps, seen }) => {
-      const delays: number[] = [];
+    "a single queue read distinguishes position $position with jump $jump",
+    ({ position, jump, exitCode, verdict }) => {
       let reads = 0;
-      const verdict = verifyFrontOfQueue({
+      const result = verifyFrontOfQueue({
         gateway: {
           readMergeQueue: (branch) => {
             expect(branch).toBe("main");
-            const position = positions.at(reads);
-            expect(position).toBeDefined();
             reads += 1;
-            return position === undefined
-              ? []
-              : [{ pullNumber: 4112, position }];
-          },
-          sleep: (milliseconds) => {
-            delays.push(milliseconds);
+            return [{ pullNumber: 4112, position, jump, state: "QUEUED" }];
           },
         },
         pullNumber: 4112,
+        repo: PRIVATE_REPO,
         branch: "main",
         context: "jump accepted",
         release: false,
       });
-      expect(verdict.exitCode).toBe(exitCode);
-      expect(verdict.message).toContain(
-        exitCode === 0 ? "QUEUED AT THE FRONT" : "NOT AT THE FRONT",
-      );
-      expect(verdict.message).toContain(`positions seen: ${seen}`);
-      expect(reads).toBe(positions.length);
-      expect(delays).toHaveLength(sleeps);
-      expect(
-        delays.reduce((total, delay) => total + delay, 0),
-      ).toBeLessThanOrEqual(20_000);
+      expect(result.exitCode).toBe(exitCode);
+      expect(result.message).toContain(verdict);
+      expect(reads).toBe(1);
+      if (exitCode === 2) {
+        expect(result.message).toContain("position 6, state QUEUED");
+        expect(result.message).toContain(
+          `pw sub pr ${PRIVATE_REPO}#4112 --on merged,closed,checks-failed`,
+        );
+      }
     },
   );
 
@@ -1218,20 +1271,21 @@ describe("explicit merge queue jumps", () => {
     { entries: [] },
     {
       entries: [
-        { pullNumber: 4112, position: 1 },
-        { pullNumber: 4101, position: 0 },
+        { pullNumber: 4112, position: 1, jump: true, state: "QUEUED" },
+        { pullNumber: 4101, position: 0, jump: false, state: "QUEUED" },
       ],
     },
   ])("incomplete or conflicting queue reads fail closed: %j", ({ entries }) => {
     const verdict = verifyFrontOfQueue({
-      gateway: { readMergeQueue: () => entries, sleep: () => {} },
+      gateway: { readMergeQueue: () => entries },
       pullNumber: 4112,
+      repo: PRIVATE_REPO,
       branch: "main",
       context: "jump accepted",
       release: false,
     });
     expect(verdict.exitCode).toBe(1);
-    expect(verdict.message).toContain("NOT AT THE FRONT");
+    expect(verdict.message).toContain("JUMP DROPPED");
   });
 
   test("a pull request first in the queue is at the front", () => {

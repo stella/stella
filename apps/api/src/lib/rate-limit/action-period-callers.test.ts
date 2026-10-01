@@ -6,8 +6,9 @@ const propertyName = (name: ts.PropertyName) =>
   ts.isIdentifier(name) || ts.isStringLiteral(name) ? name.text : undefined;
 
 describe("period identity coverage", () => {
-  test("every current shared admission caller supplies a phase identity and finite declarations name their kind", async () => {
+  test("finite admission callers supply a phase identity and independent concurrency-only callers stay explicit", async () => {
     const callers: string[] = [];
+    const concurrencyOnlyCallers: string[] = [];
     const declarations: string[] = [];
     const authorizedFiniteCallers: string[] = [];
     for (const file of new Bun.Glob("**/*.ts").scanSync({
@@ -44,26 +45,48 @@ describe("period identity coverage", () => {
       if (file === "lib/api-handlers.ts") {
         admissionNames.add("admit");
       }
+      const discoverAdmissionDefaults = (node: ts.Node): void => {
+        if (
+          ts.isBindingElement(node) &&
+          ts.isIdentifier(node.name) &&
+          node.initializer &&
+          ts.isIdentifier(node.initializer) &&
+          admissionNames.has(node.initializer.text)
+        ) {
+          admissionNames.add(node.name.text);
+        }
+        ts.forEachChild(node, discoverAdmissionDefaults);
+      };
+      discoverAdmissionDefaults(tree);
       const visit = (node: ts.Node): void => {
         if (
           ts.isCallExpression(node) &&
           ts.isIdentifier(node.expression) &&
           admissionNames.has(node.expression.text)
         ) {
-          callers.push(file);
           const options = node.arguments.at(0);
           expect(options && ts.isObjectLiteralExpression(options), file).toBe(
             true,
           );
           if (options && ts.isObjectLiteralExpression(options)) {
-            expect(
-              options.properties.some(
-                (property) =>
-                  ts.isPropertyAssignment(property) &&
-                  propertyName(property.name) === "periodIdentity",
-              ),
-              file,
-            ).toBe(true);
+            const hasIndependentScope = options.properties.some(
+              (property) =>
+                ts.isPropertyAssignment(property) &&
+                propertyName(property.name) === "scope" &&
+                ts.isStringLiteral(property.initializer) &&
+                property.initializer.text === "independent",
+            );
+            const hasPeriodIdentity = options.properties.some(
+              (property) =>
+                ts.isPropertyAssignment(property) &&
+                propertyName(property.name) === "periodIdentity",
+            );
+            if (hasIndependentScope && !hasPeriodIdentity) {
+              concurrencyOnlyCallers.push(file);
+            } else {
+              callers.push(file);
+              expect(hasPeriodIdentity, file).toBe(true);
+            }
           }
         }
         if (
@@ -117,6 +140,9 @@ describe("period identity coverage", () => {
     expect(callers.toSorted()).toEqual([
       "lib/api-handlers.ts",
       "mcp/server-core.ts",
+    ]);
+    expect(concurrencyOnlyCallers).toEqual([
+      "handlers/chat/chat-execution-admission.ts",
     ]);
     expect(declarations.toSorted()).toEqual([
       "handlers/chat/improve-prompt.ts",

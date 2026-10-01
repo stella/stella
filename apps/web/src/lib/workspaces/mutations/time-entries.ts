@@ -156,55 +156,6 @@ export const useDeleteTimeEntry = () => {
   });
 };
 
-type StartTimerVars = {
-  workspaceId: string;
-  workItemId: string;
-  timezoneId: string;
-  narrative?: string;
-};
-
-export const useStartTimer = () => {
-  const analytics = useAnalytics();
-
-  return useMutation({
-    mutationFn: async ({ workspaceId, ...body }: StartTimerVars) => {
-      await sendTimeEntryMutation({
-        workspaceId,
-        mutation: {
-          type: "timer_start",
-          body: { queryKey: timeEntriesKeys.all(workspaceId), ...body },
-        },
-      });
-    },
-    onError: (error) => {
-      analytics.captureError(error);
-    },
-  });
-};
-
-type StopTimerVars = {
-  workspaceId: string;
-};
-
-export const useStopTimer = () => {
-  const analytics = useAnalytics();
-
-  return useMutation({
-    mutationFn: async ({ workspaceId }: StopTimerVars) => {
-      await sendTimeEntryMutation({
-        workspaceId,
-        mutation: {
-          type: "timer_stop",
-          body: { queryKey: timeEntriesKeys.all(workspaceId) },
-        },
-      });
-    },
-    onError: (error) => {
-      analytics.captureError(error);
-    },
-  });
-};
-
 type BatchUpdateVars = {
   workspaceId: string;
   ids: string[];

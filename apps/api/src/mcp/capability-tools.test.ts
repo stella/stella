@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
+
 import type { Transaction } from "@/api/db/root";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -1720,6 +1722,32 @@ describe("invoke_capability file-response gate (fix-6)", () => {
       payload: { ok: true },
       textFields: [],
     });
+  });
+
+  test("admission refusals preserve the shared contract and request receipt", () => {
+    for (const [code, refusal] of Object.entries(ACTION_ADMISSION_REFUSALS)) {
+      const hint = `${refusal.hint} Contact: https://example.invalid/contact`;
+      const result = runWithRequestId("req_refusal", () =>
+        mapHandlerResult({
+          id: "x.y",
+          access: "write",
+          result: new ElysiaCustomStatusResponse(refusal.status, {
+            code,
+            message: refusal.message,
+            hint,
+          }),
+        }),
+      );
+      expect(mappedError(result)).toEqual(
+        expect.objectContaining({
+          code,
+          message: refusal.message,
+          hint,
+          retryable: refusal.retryable,
+          requestId: "req_refusal",
+        }),
+      );
+    }
   });
 
   test("(layer b) mapHandlerResult maps a status response onto the envelope", () => {
