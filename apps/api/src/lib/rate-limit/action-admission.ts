@@ -223,7 +223,7 @@ type ActionAdmissionControl = {
 };
 
 const disabledControl: ActionAdmissionControl = {
-  reservePeriod: () => Promise.resolve(Result.ok(undefined)),
+  reservePeriod: async () => await Promise.resolve(Result.ok(undefined)),
 };
 
 type ActionAdmissionReservation =
