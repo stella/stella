@@ -1921,6 +1921,10 @@ jobs:
       && needs.ci-plan.outputs.suite_depth == 'full'
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [desktop, ui]
     container:
       image: ${{ needs.ci-plan.outputs.playwright_image }}
       options: --init --ipc=host
@@ -2046,17 +2050,17 @@ jobs:
           dependency-mode: preinstalled
 
       - name: Test UI browser interactions
-        if: steps.ui-browser-tests.outputs.required == 'true'
+        if: matrix.suite == 'ui' && steps.ui-browser-tests.outputs.required == 'true'
         run: bun --filter @stll/ui test:browser
 
       - name: Test desktop browser interactions
-        if: steps.ui-browser-tests.outputs.required == 'true'
+        if: matrix.suite == 'desktop' && steps.ui-browser-tests.outputs.required == 'true'
         run: |
           cd apps/desktop
           bun run test:browser
 
       - name: Upload desktop browser failures
-        if: failure() && steps.ui-browser-tests.outputs.required == 'true'
+        if: matrix.suite == 'desktop' && failure() && steps.ui-browser-tests.outputs.required == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: desktop-browser-failures
@@ -2065,11 +2069,11 @@ jobs:
           if-no-files-found: ignore
 
       - name: Test UI playground visuals
-        if: steps.ui-browser-tests.outputs.required == 'true'
+        if: matrix.suite == 'ui' && steps.ui-browser-tests.outputs.required == 'true'
         run: bun --filter @stll/web test:e2e:ui-playground
 
       - name: Test extension browser boundary
-        if: steps.extension-browser-tests.outputs.required == 'true'
+        if: matrix.suite == 'ui' && steps.extension-browser-tests.outputs.required == 'true'
         run: bun --filter @stll/extension test:e2e
 
   code-quality-api:

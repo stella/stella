@@ -698,6 +698,7 @@ const SURFACE_SHOWS = {
     const threadId = await seedThread();
     const [first, second] = chatMessagesOf(TRANSCRIPT);
     await generateThreadTitle({
+      indexThread: async () => await Promise.resolve(),
       initialTitle: INITIAL_TITLE,
       messages: [
         first ?? panic("The transcript opens with a user message"),
