@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import {
@@ -136,12 +137,14 @@ const openPage = (): Page => {
   return { errors, heard, runtime, scheduler };
 };
 
-const send = (page: Page) => {
-  void sendThreadChatMessage(page.runtime, {
-    content: "Draft the NDA",
-    id: toSafeId<"chatMessage">("018f0000-0000-7000-8000-000000000001"),
-  }).catch(() => undefined);
-};
+const send = (page: Page) =>
+  Result.tryPromise(
+    async () =>
+      await sendThreadChatMessage(page.runtime, {
+        content: "Draft the NDA",
+        id: toSafeId<"chatMessage">("018f0000-0000-7000-8000-000000000001"),
+      }),
+  );
 
 const RUN_STARTED = { runId: RUN_ID, threadId: THREAD_ID, type: "RUN_STARTED" };
 const ANSWER_STARTED = {
@@ -183,12 +186,12 @@ const firstHeard = (
 const openStreamingPage = async () => {
   const server = installStream();
   const page = openPage();
-  send(page);
+  const sent = send(page);
   await tick();
   server.push(RUN_STARTED, ANSWER_STARTED);
   await tick();
   page.scheduler.run();
-  return { page, server };
+  return { page, server, sent };
 };
 
 describe("chat runtime emits while a response streams", () => {
@@ -200,7 +203,7 @@ describe("chat runtime emits while a response streams", () => {
   });
 
   test("tells subscribers once about a burst of chunks", async () => {
-    const { page, server } = await openStreamingPage();
+    const { page, server, sent } = await openStreamingPage();
     const heardBefore = page.heard.length;
 
     server.push(...textDeltas(BURST));
@@ -218,10 +221,12 @@ describe("chat runtime emits while a response streams", () => {
     expect(page.heard).toHaveLength(heardBefore + 1);
     expect(answerText(page.heard.at(-1))).toBe(expectedText(BURST));
     expect(page.scheduler.pending()).toBe(0);
+    server.close();
+    expect(await sent).toEqual(Result.ok(undefined));
   });
 
   test("delivers the finished answer with the end of the run", async () => {
-    const { page, server } = await openStreamingPage();
+    const { page, server, sent } = await openStreamingPage();
     const heardBefore = page.heard.length;
 
     server.push(
@@ -247,10 +252,11 @@ describe("chat runtime emits while a response streams", () => {
     expect(answerText(ended)).toBe(expectedText(BURST));
     expect(page.scheduler.pending()).toBe(0);
     expect(page.errors).toEqual([]);
+    expect(await sent).toEqual(Result.ok(undefined));
   });
 
   test("delivers the chunks before an error with the error", async () => {
-    const { page, server } = await openStreamingPage();
+    const { page, server, sent } = await openStreamingPage();
     const heardBefore = page.heard.length;
 
     server.push(...textDeltas(BURST), {
@@ -270,10 +276,12 @@ describe("chat runtime emits while a response streams", () => {
     expect(failed).toBeDefined();
     expect(answerText(failed)).toBe(expectedText(BURST));
     expect(page.errors).toHaveLength(1);
+    expect(await sent).toEqual(Result.ok(undefined));
+    expect(page.errors.at(0)?.message).toBe("The provider failed");
   });
 
   test("delivers a client call's whole input when the run pauses for it", async () => {
-    const { page, server } = await openStreamingPage();
+    const { page, server, sent } = await openStreamingPage();
     const input = { name: "NDA", source: "@title NDA ".repeat(BURST) };
     const serialized = JSON.stringify(input);
     const argumentDeltas = Array.from(
@@ -324,5 +332,6 @@ describe("chat runtime emits while a response streams", () => {
     ]);
     // Far fewer emits than deltas, none of them from the scheduler.
     expect(page.heard.length - heardBefore).toBeLessThan(10);
+    expect(await sent).toEqual(Result.ok(undefined));
   });
 });

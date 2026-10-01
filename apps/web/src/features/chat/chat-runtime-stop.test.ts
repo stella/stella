@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import {
@@ -241,12 +242,14 @@ const openPage = (): Page => {
   return page;
 };
 
-const send = (page: Page, id: string) => {
-  void sendThreadChatMessage(page.runtime, {
-    content: "Draft the NDA",
-    id: toSafeId<"chatMessage">(id),
-  }).catch(() => undefined);
-};
+const send = (page: Page, id: string) =>
+  Result.tryPromise(
+    async () =>
+      await sendThreadChatMessage(page.runtime, {
+        content: "Draft the NDA",
+        id: toSafeId<"chatMessage">(id),
+      }),
+  );
 
 describe("the composer's Stop", () => {
   beforeEach(() => {
@@ -259,7 +262,7 @@ describe("the composer's Stop", () => {
   test("stops the turn on the server, then closes the request and reloads", async () => {
     const server = installServer([TURN_A]);
     const page = openPage();
-    send(page, "018f0000-0000-7000-8000-000000000001");
+    const sent = send(page, "018f0000-0000-7000-8000-000000000001");
     await tick();
 
     page.runtime.stop();
@@ -281,12 +284,13 @@ describe("the composer's Stop", () => {
     ]);
     expect(page.reloads).toBe(1);
     expect(page.runtime.getSnapshot().stop).toEqual({ status: "idle" });
+    expect(await sent).toEqual(Result.ok(undefined));
   });
 
   test("keeps Stop available when the server refuses it", async () => {
     const server = installServer([TURN_A]);
     const page = openPage();
-    send(page, "018f0000-0000-7000-8000-000000000002");
+    const sent = send(page, "018f0000-0000-7000-8000-000000000002");
     await tick();
 
     page.runtime.stop();
@@ -314,12 +318,13 @@ describe("the composer's Stop", () => {
     await tick();
     expect(server.chats[0]?.aborted()).toBe(true);
     expect(page.reloads).toBe(1);
+    expect(await sent).toEqual(Result.ok(undefined));
   });
 
   test("ignores an answer about a turn the page has left", async () => {
     const server = installServer([TURN_A, TURN_B]);
     const page = openPage();
-    send(page, "018f0000-0000-7000-8000-000000000003");
+    const firstSent = send(page, "018f0000-0000-7000-8000-000000000003");
     await tick();
     page.runtime.stop();
     await tick();
@@ -327,7 +332,7 @@ describe("the composer's Stop", () => {
     // sent the next message.
     server.chats[0]?.end();
     await tick();
-    send(page, "018f0000-0000-7000-8000-000000000004");
+    const secondSent = send(page, "018f0000-0000-7000-8000-000000000004");
     await tick();
     expect(server.chats).toHaveLength(2);
 
@@ -337,13 +342,16 @@ describe("the composer's Stop", () => {
     expect(server.chats[1]?.aborted()).toBe(false);
     expect(page.reloads).toBe(0);
     expect(page.runtime.getSnapshot().stop).toEqual({ status: "idle" });
+    server.chats[1]?.end();
+    expect(await firstSent).toEqual(Result.ok(undefined));
+    expect(await secondSent).toEqual(Result.ok(undefined));
   });
 
   test("keeps a stopped turn's late client result on the page", async () => {
     // A continuation would be served, so only the page can keep it back.
     const server = installServer([TURN_A, TURN_A], "client-call");
     const page = openPage();
-    send(page, "018f0000-0000-7000-8000-000000000005");
+    const sent = send(page, "018f0000-0000-7000-8000-000000000005");
     await tick();
     // The fixture must reach the fault: the page runs the turn's client call.
     expect(
@@ -365,26 +373,28 @@ describe("the composer's Stop", () => {
     await tick();
 
     expect(server.log).toEqual([`chat ${TURN_A}`, `cancel ${TURN_A}`]);
+    expect(await sent).toEqual(Result.ok(undefined));
   });
 
   test("takes a refused continuation of the stopped turn quietly", async () => {
     const server = installServer([TURN_A], "client-call");
     const page = openPage();
-    send(page, "018f0000-0000-7000-8000-000000000006");
+    const sent = send(page, "018f0000-0000-7000-8000-000000000006");
     await tick();
     // The page posts the call's result, and the user stops before the
     // server answers it.
-    void page.runtime
-      .addToolResult({
-        output: {
-          destination: "download",
-          fileName: "NDA.docx",
-          success: true,
-        },
-        tool: "create-document",
-        toolCallId: CLIENT_CALL_ID,
-      })
-      .catch(() => undefined);
+    const continuation = Result.tryPromise(
+      async () =>
+        await page.runtime.addToolResult({
+          output: {
+            destination: "download",
+            fileName: "NDA.docx",
+            success: true,
+          },
+          tool: "create-document",
+          toolCallId: CLIENT_CALL_ID,
+        }),
+    );
     await tick();
     // The fixture must reach the fault: the continuation is in flight.
     expect(server.held).toHaveLength(1);
@@ -411,12 +421,14 @@ describe("the composer's Stop", () => {
       stop: { status: "idle" },
     });
     expect(page.reloads).toBe(1);
+    expect(await continuation).toEqual(Result.ok(undefined));
+    expect(await sent).toEqual(Result.ok(undefined));
   });
 
   test("leaving the thread closes the request and asks the server nothing", async () => {
     const server = installServer([TURN_A]);
     const page = openPage();
-    send(page, "018f0000-0000-7000-8000-000000000007");
+    const sent = send(page, "018f0000-0000-7000-8000-000000000007");
     await tick();
 
     page.runtime.leave();
@@ -425,12 +437,13 @@ describe("the composer's Stop", () => {
     expect(server.log).toEqual([`chat ${TURN_A}`, `abort ${TURN_A}`]);
     expect(page.reloads).toBe(1);
     expect(page.runtime.getSnapshot().stop).toEqual({ status: "idle" });
+    expect(await sent).toEqual(Result.ok(undefined));
   });
 
   test("shows Stop again when asking whether the stop settled fails", async () => {
     const server = installServer([TURN_A]);
     const page = openPage();
-    send(page, "018f0000-0000-7000-8000-000000000008");
+    const sent = send(page, "018f0000-0000-7000-8000-000000000008");
     await tick();
     page.runtime.stop();
     await tick();
@@ -457,5 +470,7 @@ describe("the composer's Stop", () => {
       turnAbandoned: false,
     });
     expect(page.reloads).toBe(0);
+    server.chats[0]?.end();
+    expect(await sent).toEqual(Result.ok(undefined));
   });
 });

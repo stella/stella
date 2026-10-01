@@ -1,3 +1,7 @@
+// Empty and constant fallback handlers discard failures. Item loops must
+// surface them; tests must assert outcomes or explain an intentional swallow
+// on the catch line or directly above it. Reasons document intent, not proof
+// that an arbitrary handler observes every failure.
 import type { ESTree } from "@oxlint/plugins";
 import { eslintCompatPlugin } from "@oxlint/plugins";
 import { panic } from "better-result";
@@ -13,6 +17,9 @@ import {
 } from "./utils.ts";
 
 const RULE_NAME = "no-swallowed-item-error";
+const MIN_REASON_LENGTH = 12;
+const PLACEHOLDER_REASON =
+  /^(?:todo|fixme|tbd)\b|^(?:placeholder(?:\s+reason)?|reason(?:\s+goes)?\s+here|explain\s+(?:why|here)|best[- ]effort(?:\s+cleanup)?|ignore(?:\s+(?:errors|failures))?|test(?:\s+only)?|cleanup)[.! ]*$/iu;
 const ITERATION_METHODS = new Set([
   "map",
   "flatMap",
@@ -147,6 +154,92 @@ const swallowedBody = (node: unknown): boolean => {
 export default eslintCompatPlugin({
   meta: { name: RULE_NAME },
   rules: {
+    "no-test-swallowed-error": {
+      meta: {
+        type: "problem",
+        schema: [],
+        messages: {
+          swallowed:
+            "Assert the promise outcome or place // swallow-ok: <specific reason> (at least 12 characters) on the catch line or directly above it.",
+        },
+      },
+      createOnce(context) {
+        let reasonLines = new Set<number>();
+        let precedingReasonLines = new Set<number>();
+        const report = (node: ESTree.CatchClause | ESTree.CallExpression) => {
+          const callee =
+            node.type === "CallExpression"
+              ? unwrapExpression(node.callee)
+              : null;
+          const anchor =
+            isAstNode(callee) &&
+            callee.type === "MemberExpression" &&
+            isAstNode(callee.property)
+              ? callee.property
+              : node;
+          const line = context.sourceCode.getLocFromIndex(anchor.range[0]).line;
+          if (reasonLines.has(line) || precedingReasonLines.has(line - 1)) {
+            return;
+          }
+          context.report({ node: anchor, messageId: "swallowed" });
+        };
+        return {
+          before() {
+            reasonLines = new Set();
+            precedingReasonLines = new Set();
+          },
+          Program() {
+            for (const comment of context.sourceCode.getAllComments()) {
+              if (comment.type !== "Line") {
+                continue;
+              }
+              const reason = /^\s*swallow-ok:\s*(.+)$/u
+                .exec(comment.value)
+                ?.at(1)
+                ?.trim();
+              if (
+                reason !== undefined &&
+                reason.length >= MIN_REASON_LENGTH &&
+                !PLACEHOLDER_REASON.test(reason) &&
+                /\p{L}/u.test(reason) &&
+                !/^(.)\1+$/u.test(reason)
+              ) {
+                const { line, column } = context.sourceCode.getLocFromIndex(
+                  comment.range[0],
+                );
+                reasonLines.add(line);
+                const prefix = context.sourceCode.text.slice(
+                  comment.range[0] - column,
+                  comment.range[0],
+                );
+                if (prefix.trim() === "") {
+                  precedingReasonLines.add(line);
+                }
+              }
+            }
+          },
+          CatchClause(node) {
+            if (node.body.body.length === 0) {
+              report(node);
+            }
+          },
+          CallExpression(node) {
+            const callee = unwrapExpression(node.callee);
+            const callback = unwrapExpression(node.arguments.at(0));
+            if (
+              isAstNode(callee) &&
+              callee.type === "MemberExpression" &&
+              memberPropertyName(callee) === "catch" &&
+              isAstNode(callback) &&
+              FUNCTION_TYPES.has(callback.type) &&
+              swallowedBody(callback.body)
+            ) {
+              report(node);
+            }
+          },
+        };
+      },
+    },
     [RULE_NAME]: {
       meta: {
         type: "problem",
