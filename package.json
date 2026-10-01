@@ -75,6 +75,8 @@
     "i18n:check": "turbo run i18n:check --",
     "i18n:sync": "turbo run i18n:sync --",
     "check:model-catalog": "bun packages/scripts/src/model-catalog-upstream.ts && bun packages/scripts/src/model-catalog-capabilities-gen.ts --check",
+    "check:provider-request-schemas": "bun apps/api/scripts/provider-request-schemas.ts --check",
+    "update:provider-request-schemas": "bun apps/api/scripts/provider-request-schemas.ts --write",
     "canary:ai-provider": "bun --cwd apps/api canary:ai-provider",
     "record:provider-cassettes": "bun --cwd apps/api record:provider-cassettes",
     "canary:mcp": "bun --filter @stll/api canary:mcp",
