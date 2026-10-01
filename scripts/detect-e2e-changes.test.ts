@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
@@ -245,7 +246,10 @@ describe("detect-e2e-changes", () => {
     expect(plan).toContain("persist-credentials: false");
     expect(
       plan.match(/steps\.check\.outputs\.trusted == 'true'/gu),
-    ).toHaveLength(2);
+    ).toHaveLength(3);
+    expect(workflowStep(plan, "Resolve browser image")).toContain(
+      "if: steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch'",
+    );
     expect(workflow).not.toContain("needs.trust-check");
     expect(workflow).not.toContain("needs.ci-changes");
   });
@@ -288,7 +292,7 @@ describe("detect-e2e-changes", () => {
     expect(canaryRun).toBe(
       [
         ">-",
-        "          bun --filter @stll/web test:e2e --",
+        '          bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e --',
         "          e2e/specs/vite-dependency-canary.spec.ts",
         "          --project chromium",
       ].join("\n"),
@@ -1039,10 +1043,11 @@ test("every workflow browser command uses the pinned image and no reachable brow
         expect(step.run ?? "", `${file}:${job}`).not.toMatch(forbidden);
       }
       if (!imageJob) {
-        for (const step of browserSteps)
-          {expect(step.run, `${file}:${job}`).toContain(
+        for (const step of browserSteps) {
+          expect(step.run, `${file}:${job}`).toContain(
             ".github/actions/setup-playwright/run-in-image.sh",
-          );}
+          );
+        }
       }
     }
   }
@@ -1075,9 +1080,11 @@ test("browser image runner preserves argv, cwd, verdict and only browser inputs,
     "../.github/actions/setup-playwright/run-in-image.sh",
   );
   const root = path.resolve(import.meta.dirname, "..");
+  const cache = path.join(directory, ".bun/install/cache");
+  mkdirSync(cache, { recursive: true });
   writeFileSync(
     path.join(directory, "bun"),
-    "#!/usr/bin/env bash\necho /native/bun\n",
+    '#!/usr/bin/env bash\ncase "$*" in\n  "-p process.execPath") echo /native/bun ;;\n  "pm cache") printf "%s\\n" "$BUN_INSTALL_CACHE_DIR" ;;\n  *) exit 4 ;;\nesac\n',
     { mode: 0o755 },
   );
   writeFileSync(
@@ -1104,6 +1111,7 @@ test("browser image runner preserves argv, cwd, verdict and only browser inputs,
           env: {
             PATH: `${directory}:${process.env["PATH"] ?? ""}`,
             GITHUB_WORKSPACE: root,
+            BUN_INSTALL_CACHE_DIR: cache,
             CI: "true",
             E2E_EXECUTION_PROFILE: "network-baseline",
             E2E_EDGE_HEADER_VALUE: "fixture",
@@ -1122,6 +1130,11 @@ test("browser image runner preserves argv, cwd, verdict and only browser inputs,
         path.join(root, "apps/web"),
       );
       expect(args).toContain(`${root}:${root}`);
+      expect(args).toContain(`${cache}:${cache}:ro`);
+      expect(args).toContain(`BUN_INSTALL_CACHE_DIR=${cache}`);
+      expect(args).not.toContain(
+        `${process.env["HOME"]}:${process.env["HOME"]}`,
+      );
       expect(args).toContain("/native/bun:/usr/local/bin/bun:ro");
       expect(args).toContain("/native/bun:/usr/local/bin/bunx:ro");
       expect(args).toContain("PLAYWRIGHT_BROWSERS_PATH=/ms-playwright");
