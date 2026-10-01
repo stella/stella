@@ -4248,7 +4248,7 @@ export type WebRoutes = {
             currency: Tbe0400fa4c;
             notes: Tbe0400fa4c;
             color: Tbe0400fa4c;
-            organizationId: Tb1d68817ba;
+            organizationId: Td3fe96409e;
             prefix: Tbe0400fa4c;
             middleName: Tbe0400fa4c;
             suffix: Tbe0400fa4c;
@@ -4526,7 +4526,7 @@ export type WebRoutes = {
               currency: Tbe0400fa4c;
               notes: Tbe0400fa4c;
               color: Tbe0400fa4c;
-              organizationId: Tb1d68817ba;
+              organizationId: Td3fe96409e;
               prefix: Tbe0400fa4c;
               middleName: Tbe0400fa4c;
               suffix: Tbe0400fa4c;
@@ -8887,7 +8887,7 @@ export type WebRoutes = {
                 buyerCity: Tbe0400fa4c;
                 buyerPostalCode: Tbe0400fa4c;
                 buyerCountry: Tbe0400fa4c;
-                organizationId: Tb1d68817ba;
+                organizationId: Td3fe96409e;
                 timeEntries: Array<{
                   status: T96f3e623c3;
                   id: T4e3529b6dc;
@@ -10948,7 +10948,7 @@ export type WebRoutes = {
               connectors: Array<{
                 id: Ta10437f406;
                 slug: string;
-                organizationId: (Tb1d68817ba | null);
+                organizationId: (Td3fe96409e | null);
                 displayName: string;
                 description: string;
                 url: string;
@@ -12741,20 +12741,57 @@ export type WebRoutes = {
         };
       };
     } & {
+      "redeem-link": {
+        post: {
+          body: {
+            correlationId?: unknown;
+            verifier?: unknown;
+            expectedUserId?: unknown;
+            expectedOrganizationId?: unknown;
+          } | null;
+          params: T5e3ac29766;
+          query: unknown;
+          headers: unknown;
+          response: {
+            200: T5e3ac29766;
+            400: T9a51b7d2bc;
+            401: T9a51b7d2bc;
+            402: T9a51b7d2bc;
+            403: T9a51b7d2bc;
+            404: T9a51b7d2bc;
+            409: T9a51b7d2bc;
+            413: T9a51b7d2bc;
+            422: (T9a51b7d2bc | {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            });
+            428: T9a51b7d2bc;
+            429: T9a51b7d2bc;
+            500: T9a51b7d2bc;
+            502: T9a51b7d2bc;
+            503: T9a51b7d2bc;
+          };
+        };
+      };
+    } & {
       grant: {
         post: {
-          body: Record<never, never>;
+          body: {
+            correlationId: string;
+            verifierHash: string;
+          };
           params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
             200: {
-              account: {
-                email: string;
-                name: string;
-                verifiedAt: string;
-              };
-              key: string;
+              userId: T56ed95d57c;
+              organizationId: Td3fe96409e;
               expiresAt: string;
             };
             400: T9a51b7d2bc;
@@ -15083,6 +15120,10 @@ export type WebRoutes = {
           response: {
             200: {
               apiBaseUrl: string;
+              identity: {
+                userId: T56ed95d57c;
+                organizationId: Td3fe96409e;
+              };
               entityId: Tf742ada503;
               handoffId: T16de477cfb;
               linkedAccount: {
@@ -15095,6 +15136,7 @@ export type WebRoutes = {
               workspaceId: T9e07a7d6cd;
             };
             400: T4d5e4f5d1c;
+            401: T376625c3d0;
             403: {
               readonly message: "Desktop editing permission was revoked.";
             };
@@ -15120,6 +15162,7 @@ export type WebRoutes = {
             } | {
               readonly message: "Internal server error";
             };
+            503: T376625c3d0;
           };
         };
       };
@@ -15140,6 +15183,7 @@ export type WebRoutes = {
               200: {
                 ok: Tfddd645dc8;
               };
+              401: T062be45de0;
               410: {
                 readonly message: "Desktop edit handoff acknowledgement was rejected.";
               };
@@ -15152,6 +15196,7 @@ export type WebRoutes = {
                 property?: string;
                 expected?: string;
               };
+              503: T062be45de0;
             };
           };
         };
@@ -15447,6 +15492,10 @@ export type WebRoutes = {
           response: {
             200: {
               apiBaseUrl: string;
+              identity: {
+                userId: T56ed95d57c;
+                organizationId: Td3fe96409e;
+              };
               documentName: string;
               expiresAt: string;
               sessionId: T613c5cabbb;
@@ -29204,7 +29253,7 @@ export type WebRoutes = {
                 role: Tdedb951219;
                 isPrimary: Tfddd645dc8;
                 notes: Tbe0400fa4c;
-                organizationId: Tb1d68817ba;
+                organizationId: Td3fe96409e;
                 contact: {
                   type: T1dacb02040;
                   id: Tbf83a7d346;
@@ -29255,7 +29304,7 @@ export type WebRoutes = {
                 role: Tdedb951219;
                 isPrimary: Tfddd645dc8;
                 notes: Tbe0400fa4c;
-                organizationId: Tb1d68817ba;
+                organizationId: Td3fe96409e;
               };
               400: T9a51b7d2bc;
               401: T9a51b7d2bc;
@@ -29765,7 +29814,7 @@ export type WebRoutes = {
               createdAt: string;
               billingReference: Tbe0400fa4c;
               color: Tbe0400fa4c;
-              organizationId: Tb1d68817ba;
+              organizationId: Td3fe96409e;
               clientId: Tb411b93636;
               leadUserId: Tbe0400fa4c;
               stampedVersionCount: number;
@@ -34711,6 +34760,10 @@ type T0604484dde = {
   id: T1fc3209762;
 };
 
+type T062be45de0 = {
+  readonly message: string;
+};
+
 type T06588da39f = "reference" | "tiers";
 
 type T066db31a61 = {
@@ -36647,6 +36700,10 @@ type T37645f97e3 = {
   state: Tfafd241922;
   output?: T3a8e541c8b;
 } & T4d73965770;
+
+type T376625c3d0 = {
+  readonly message: string;
+};
 
 type T376e5c32ed = {
   kind: "attorney";
@@ -39643,10 +39700,6 @@ type Tb19925bd53 = {
   }>;
 };
 
-type Tb1d68817ba = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "organization";
-};
-
 type Tb2028981db = {
   content: T26d760a340;
   question: string;
@@ -40481,6 +40534,10 @@ type Td236e2b0da = {
 type Td2e9147457 = {
   readonly value: Record<never, never>;
   readonly issues?: undefined;
+};
+
+type Td3fe96409e = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "organization";
 };
 
 type Td43d5a192e = {
