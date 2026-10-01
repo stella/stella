@@ -12380,7 +12380,7 @@ export type WebRoutes = {
             convert: {
               post: {
                 body: {
-                  targetType: (number | string);
+                  targetType: ("avt" | "calendar" | "filesystem" | "kanban" | "table" | "timeline");
                 };
                 params: {
                   workspaceId: T8d02a37b3f;
