@@ -147,14 +147,6 @@ export const envApiServerSchema = {
    */
   SMOKE_SESSION_SECRET: v.optional(v.pipe(v.string(), v.minLength(32))),
   /**
-   * Bearer token for the operator registrations endpoint
-   * (handlers/operator): lets an instance operator list recent
-   * account registrations over HTTP instead of opening a database
-   * shell. Unset disables the endpoint entirely (requests return
-   * 404), mirroring how other optional operational surfaces behave.
-   */
-  OPERATOR_METRICS_TOKEN: v.optional(v.pipe(v.string(), v.minLength(32))),
-  /**
    * Deployment-owned bearer credential for collaboration snapshot transport.
    * Unset disables the service-only load/store routes.
    */
@@ -339,14 +331,38 @@ export const envApiServerSchema = {
   FEATURE_TODOS: featureFlagSchema,
   FEATURE_MCP: featureFlagSchema,
   FEATURE_ACTION_ADMISSION: featureFlagSchema,
+  ACTION_LIMIT_CONTACT_URL: v.optional(
+    v.pipe(v.string(), v.url(), v.regex(/^https?:\/\//u)),
+  ),
   ACTION_ADMISSION_ORG_CONCURRENCY: v.optional(
     v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1)),
   ),
   ACTION_ADMISSION_USER_CONCURRENCY: v.optional(
     v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1)),
   ),
+  // Operators must set the lease above the admission store's failover window.
+  // Renewal errors retry inside that window; losing admission is not a user stop.
   ACTION_ADMISSION_LEASE_MS: v.optional(
     v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1)),
+  ),
+  // Optional operator-owned action windows; no built-in allowance.
+  ACTION_ADMISSION_PERIOD_MS: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(Number.MAX_SAFE_INTEGER),
+    ),
+  ),
+  ACTION_ADMISSION_PERIOD_ACTIONS: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(Number.MAX_SAFE_INTEGER),
+    ),
   ),
   FEATURE_DESKTOP_EDITING: featureFlagSchema,
   FEATURE_TIME_BILLING: featureFlagSchema,

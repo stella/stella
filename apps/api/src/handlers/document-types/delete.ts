@@ -15,7 +15,11 @@ const config = {
     "keep their stored label; the call is refused while any playbook is scoped " +
     "to the type.",
   permissions: { organizationSettings: ["update"] },
-  mcp: { type: "capability", reason: "workspace_schema" },
+  mcp: {
+    type: "capability",
+    reason: "workspace_schema",
+    consumesServices: false,
+  },
   params: documentTypeParamsSchema,
 } satisfies HandlerConfig;
 

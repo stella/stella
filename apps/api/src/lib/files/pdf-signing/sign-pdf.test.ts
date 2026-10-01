@@ -1,5 +1,5 @@
 import { PDF } from "@libpdf/core";
-import { describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import crypto from "node:crypto";
 
 import { createTrackedRevocationProvider } from "@/api/lib/files/pdf-signing/revocation";
@@ -19,12 +19,16 @@ import { createSignedPdf } from "@/api/tests/helpers/signed-pdf";
 import {
   createTestCertificate,
   createTestCrl,
+  createTestRsaKeyPool,
 } from "@/api/tests/helpers/test-pki";
 import type { TestCertificate } from "@/api/tests/helpers/test-pki";
 import {
   createTestTimestampAuthority,
   createTestTimestampCertificate,
 } from "@/api/tests/helpers/timestamp-token";
+
+const keyPool = createTestRsaKeyPool();
+beforeEach(() => keyPool.reset());
 
 /** DigestInfo header for SHA-256, RFC 8017 9.2 step 2. */
 const SHA256_DIGEST_INFO_PREFIX = Buffer.from(
@@ -70,6 +74,7 @@ const digestOf = async (
 
 const buildInvocation = async () => {
   const { der, privateKey } = await createSelfSignedCertificate({
+    keyPool,
     notBefore: new Date(SIGNING_TIME.getTime() - 3_600_000),
     notAfter: new Date(SIGNING_TIME.getTime() + 3_600_000),
   });
@@ -208,7 +213,7 @@ describe("two-phase PDF signing", () => {
 
     const locked = await digestOf({
       ...invocation,
-      basePdf: await createSignedPdf({ certify: 1 }),
+      basePdf: await createSignedPdf({ keyPool, certify: 1 }),
     }).catch((error: unknown) => error);
     expect(locked).toBeInstanceOf(PdfSigningCertifiedDocumentError);
 
@@ -218,7 +223,7 @@ describe("two-phase PDF signing", () => {
       expect(
         await digestOf({
           ...invocation,
-          basePdf: await createSignedPdf({ certify: permission }),
+          basePdf: await createSignedPdf({ keyPool, certify: permission }),
         }),
       ).toMatch(/^[0-9a-f]{64}$/u);
     }
@@ -228,7 +233,7 @@ describe("two-phase PDF signing", () => {
     const { invocation, privateKey } = await buildInvocation();
     const digestHex = await digestOf(invocation);
     const signature = await signDigestLikeAKeychain(privateKey, digestHex);
-    const working = await createTestTimestampAuthority();
+    const working = await createTestTimestampAuthority({ keyPool });
 
     const applied = await settled(
       applySignature({
@@ -279,16 +284,19 @@ describe("two-phase PDF signing", () => {
       timestampSigner?: TestCertificate;
     }) => {
       const root = await createTestCertificate({
+        keyPool,
         commonName: "Root",
         isCa: true,
       });
       const issuing = await createTestCertificate({
+        keyPool,
         commonName: "Issuing CA",
         crlUrl: ROOT_CRL_URL,
         isCa: true,
         issuer: root,
       });
       const leaf = await createTestCertificate({
+        keyPool,
         caIssuersUrl: "http://pki.example/issuing.cer",
         commonName: "Jane Counsel",
         crlUrl: CRL_URL,
@@ -324,7 +332,9 @@ describe("two-phase PDF signing", () => {
       );
 
       const tsa = await createTestTimestampAuthority(
-        timestampSigner === undefined ? {} : { signer: timestampSigner },
+        timestampSigner === undefined
+          ? { keyPool }
+          : { signer: timestampSigner },
       );
 
       // LibPDF's own fetching goes through the global `fetch`; nothing may
@@ -410,12 +420,14 @@ describe("two-phase PDF signing", () => {
       // The authority's key is issued by a CA the token does not carry and
       // no AIA URL leads to: its time cannot be validated long term.
       const tsaCa = await createTestCertificate({
+        keyPool,
         commonName: "Timestamp CA",
         isCa: true,
       });
       const { applied } = await signUnderIssuingCa({
         chainComplete: true,
         timestampSigner: await createTestTimestampCertificate({
+          keyPool,
           issuer: tsaCa,
         }),
       });
@@ -441,6 +453,7 @@ describe("two-phase PDF signing", () => {
 
     test("trusts time whose chain reaches a configured CA", async () => {
       const tsaCa = await createTestCertificate({
+        keyPool,
         commonName: "Timestamp CA",
         isCa: true,
       });
@@ -448,6 +461,7 @@ describe("two-phase PDF signing", () => {
         chainComplete: true,
         timestampAnchors: () => [tsaCa.der],
         timestampSigner: await createTestTimestampCertificate({
+          keyPool,
           issuer: tsaCa,
         }),
       });
@@ -462,16 +476,21 @@ describe("two-phase PDF signing", () => {
 
     test("never trusts a timestamp key minted under an ordinary certificate", async () => {
       const root = await createTestCertificate({
+        keyPool,
         commonName: "Root",
         isCa: true,
       });
       const ordinary = await createTestCertificate({
+        keyPool,
         commonName: "Ordinary holder",
         issuer: root,
       });
       // A timestamping key issued by a certificate that is not a CA: it
       // chains to the configured root by name and signature only.
-      const minted = await createTestTimestampCertificate({ issuer: ordinary });
+      const minted = await createTestTimestampCertificate({
+        keyPool,
+        issuer: ordinary,
+      });
       const { applied } = await signUnderIssuingCa({
         chainComplete: true,
         timestampAnchors: () => [root.der],
@@ -508,7 +527,7 @@ describe("two-phase PDF signing", () => {
 
   test("refuses, before any digest exists, to rewrite a PDF that is already signed", async () => {
     const { invocation } = await buildInvocation();
-    const signed = await createSignedPdf();
+    const signed = await createSignedPdf({ keyPool });
     // A broken cross-reference makes LibPDF repair the file, after which it
     // can only save a full rewrite.
     const text = Buffer.from(signed).toString("latin1");
@@ -687,6 +706,7 @@ describe("two-phase PDF signing", () => {
       const applied = await signWith([
         {
           authority: await createTestTimestampAuthority({
+            keyPool,
             misbehaviour: { imprint: new Uint8Array(32).fill(3) },
           }),
           url: "https://tsa.example/",
@@ -706,6 +726,7 @@ describe("two-phase PDF signing", () => {
       const applied = await signWith([
         {
           authority: await createTestTimestampAuthority({
+            keyPool,
             misbehaviour: { padding: 60 },
           }),
           url: "https://tsa.example/",

@@ -37,7 +37,11 @@ const config = {
     "verification status with who verified it and when.",
   permissions: { workspace: ["read"] },
   access: "read",
-  mcp: { type: "capability", reason: "workspace_schema" },
+  mcp: {
+    type: "capability",
+    reason: "workspace_schema",
+    consumesServices: false,
+  },
   params: paramsSchema,
   query: querySchema,
 } satisfies WorkspaceHandlerConfig;

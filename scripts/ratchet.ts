@@ -34,6 +34,10 @@
 //   bun scripts/ratchet.ts --write    record this change's delta from origin/main
 //     --base <ref>                    use an explicit base commit instead
 //     --all                           regenerate every baseline entry
+//   bun scripts/ratchet.ts --write-improvements-only
+//     --base <ref>                    write only if head and delta never regress
+//   bun scripts/ratchet.ts --check-improvements-only
+//                                     verify that trusted delta candidate
 //   bun scripts/ratchet.ts --self-test prove each counter counts what it claims
 //
 // CI-only wiring lives in .github/workflows/ci.yml and scripts/verify.sh
@@ -2228,7 +2232,7 @@ type RepoMetricResult = {
 
 type RepoCounter = (root: string) => RepoMetricResult;
 
-type RatchetMetric =
+export type RatchetMetric =
   | {
       readonly scope: "file";
       readonly id: string;
@@ -2292,6 +2296,14 @@ const countInternalModuleMockLedgerEntries: FileCounter = (content) => {
   const parsed: unknown = JSON.parse(content);
   if (!Array.isArray(parsed)) {
     panic("internal-module-mock ledger must be a JSON array");
+  }
+  return parsed.length;
+};
+
+const countParserValidatorLedgerEntries: FileCounter = (content) => {
+  const parsed: unknown = JSON.parse(content);
+  if (!Array.isArray(parsed)) {
+    panic("parser-validator-call ledger must be a JSON array");
   }
   return parsed.length;
 };
@@ -2437,6 +2449,83 @@ const countLibTopLevelEntries =
     }
     return { count, files };
   };
+
+const THIRD_PARTY_DEPENDENCY_SECTIONS = [
+  "dependencies",
+  "devDependencies",
+  "peerDependencies",
+  "optionalDependencies",
+] as const;
+
+const parseJson5Record = (
+  root: string,
+  rel: string,
+): Record<string, unknown> => {
+  const parsed = Result.try((): unknown =>
+    Bun.JSON5.parse(readFileSync(path.join(root, rel), "utf-8")),
+  );
+  if (Result.isError(parsed) || !isRecord(parsed.value)) {
+    return panic(`${rel} must contain a JSON5 object`);
+  }
+  return parsed.value;
+};
+
+const countDirectThirdPartyDeclarations: RepoCounter = (root) => {
+  const manifests = ["package.json"];
+  for (const group of ["apps", "packages"] as const) {
+    const directory = path.join(root, group);
+    if (!existsSync(directory)) {
+      continue;
+    }
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      if (
+        entry.isDirectory() &&
+        existsSync(path.join(directory, entry.name, "package.json"))
+      ) {
+        manifests.push(`${group}/${entry.name}/package.json`);
+      }
+    }
+  }
+
+  const files: Record<string, number> = {};
+  let count = 0;
+  for (const rel of manifests.toSorted()) {
+    const manifest = parseJson5Record(root, rel);
+    let declarations = 0;
+    for (const section of THIRD_PARTY_DEPENDENCY_SECTIONS) {
+      const dependencies = manifest[section];
+      if (dependencies === undefined) {
+        continue;
+      }
+      if (!isRecord(dependencies)) {
+        return panic(`${rel} ${section} must be an object`);
+      }
+      for (const specifier of Object.values(dependencies)) {
+        if (typeof specifier !== "string") {
+          return panic(`${rel} ${section} values must be strings`);
+        }
+        if (!specifier.startsWith("workspace:")) {
+          declarations += 1;
+        }
+      }
+    }
+    if (declarations > 0) {
+      files[rel] = declarations;
+      count += declarations;
+    }
+  }
+  return { count, files };
+};
+
+const countLockfilePackageEntries: RepoCounter = (root) => {
+  const lockfile = parseJson5Record(root, "bun.lock");
+  const packages = lockfile["packages"];
+  if (!isRecord(packages)) {
+    return panic("bun.lock packages must be an object");
+  }
+  const count = Object.keys(packages).length;
+  return { count, files: count === 0 ? {} : { "bun.lock": count } };
+};
 
 // --- Duplicate token blocks -------------------------------------------------
 // A copy-paste detector, in-house because a stock one over this whole tree ran
@@ -3111,6 +3200,15 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
   },
   {
     scope: "file",
+    id: "parser-validator-call-ledger-entries",
+    description:
+      "legacy parser validator imports and calls; validation moves to the pipeline and this ledger only shrinks",
+    include: ["scripts/parser-validator-call-ledger.json"],
+    exclude: () => false,
+    count: countParserValidatorLedgerEntries,
+  },
+  {
+    scope: "file",
     id: "internal-module-mock-ledger-entries",
     description:
       "grandfathered mock.module targets of workspace modules, one per <test file>::<module> pair in scripts/internal-module-mock-ledger.json (each replaces a real dependency with a fabrication the mocked module's contract changes cannot fail)",
@@ -3197,7 +3295,30 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
       "direct children of apps/web/src/lib, files and directories alike (tests and __fixtures__ excluded); the flat bucket only shrinks — new code goes into a domain directory or a package",
     count: countLibTopLevelEntries(WEB_LIB_DIR),
   },
+  {
+    scope: "repo",
+    id: "direct-third-party-declarations",
+    description:
+      "direct third-party dependency declarations across root and apps/*/packages/* manifests (dependencies, devDependencies, peerDependencies, optionalDependencies); excludes workspace: links, including @stll links, and shrinks only",
+    count: countDirectThirdPartyDeclarations,
+  },
 ];
+
+const REPORT_ONLY_METRICS = [
+  {
+    scope: "repo",
+    id: "lockfile-package-entries",
+    description:
+      "resolution entries in bun.lock; informational, with no growth budget",
+    count: countLockfilePackageEntries,
+  },
+] as const satisfies readonly RatchetMetric[];
+
+const printReportOnlyMetrics = (root: string): void => {
+  for (const metric of REPORT_ONLY_METRICS) {
+    console.log(`  ${metric.id}: ${metric.count(root).count} (report only)`);
+  }
+};
 
 const PER_FILE_METRIC_IDS: ReadonlySet<string> = new Set(
   RATCHET_METRICS.filter(
@@ -3217,8 +3338,8 @@ const metricGate = (metric: RatchetMetric): DiffOptions =>
 
 // --- Scanning ---------------------------------------------------------------
 
-type MetricSnapshot = { count: number; files: Record<string, number> };
-type Baseline = Record<string, MetricSnapshot>;
+export type MetricSnapshot = { count: number; files: Record<string, number> };
+export type Baseline = Record<string, MetricSnapshot>;
 
 type ConfigurationInspection =
   | { status: "valid"; baseline: Baseline }
@@ -3558,7 +3679,7 @@ type MetricStatus = "ok" | "regressed" | "dropped" | "stale";
 
 type RegressedFile = { file: string; from: number; to: number };
 
-type MetricDiff = {
+export type MetricDiff = {
   id: string;
   status: MetricStatus;
   current: number;
@@ -3659,6 +3780,260 @@ const runReport = (): number => {
       }
     }
   }
+  printReportOnlyMetrics(REPO_ROOT);
+  return 0;
+};
+
+type DeltaBaselineOptions = {
+  head: Baseline;
+  mergeBaseBaseline: Baseline;
+  baseSnapshot: Baseline;
+};
+
+const deltaBaseline = ({
+  head,
+  mergeBaseBaseline,
+  baseSnapshot,
+}: DeltaBaselineOptions): Baseline => {
+  const snapshot: Baseline = {};
+  for (const metric of RATCHET_METRICS) {
+    const current = requireSnapshot(head, metric.id);
+    snapshot[metric.id] = rebaseSnapshot({
+      allowlist: metricGate(metric).allowlist,
+      mergeBaseEntry: mergeBaseBaseline[metric.id],
+      base: requireSnapshot(baseSnapshot, metric.id),
+      head: current,
+    });
+  }
+  return snapshot;
+};
+
+export type ImprovementsOnlyAssessment = {
+  readonly allowed: boolean;
+  readonly diffs: readonly MetricDiff[];
+};
+
+type AssessImprovementsOnlyOptions = {
+  current: Baseline;
+  baseline: Baseline;
+  metrics?: readonly RatchetMetric[];
+};
+
+export const assessImprovementsOnly = ({
+  current,
+  baseline,
+  metrics = RATCHET_METRICS,
+}: AssessImprovementsOnlyOptions): ImprovementsOnlyAssessment => {
+  const diffs = metrics.map((metric) =>
+    diffMetric(
+      metric.id,
+      requireSnapshot(current, metric.id),
+      baseline[metric.id] ?? { count: 0, files: {} },
+      metricGate(metric),
+    ),
+  );
+  return {
+    allowed: diffs.every(({ status }) => status !== "regressed"),
+    diffs,
+  };
+};
+
+type AssessImprovementWriteOptions = {
+  current: Baseline;
+  candidate: Baseline;
+  baseline: Baseline;
+  metrics?: readonly RatchetMetric[];
+};
+
+export const assessImprovementWrite = ({
+  current,
+  candidate,
+  baseline,
+  metrics = RATCHET_METRICS,
+}: AssessImprovementWriteOptions): ImprovementsOnlyAssessment => {
+  const currentAssessment = assessImprovementsOnly({
+    current,
+    baseline,
+    metrics,
+  });
+  const candidateAssessment = assessImprovementsOnly({
+    current: candidate,
+    baseline,
+    metrics,
+  });
+  const diffs = [...currentAssessment.diffs, ...candidateAssessment.diffs];
+  return {
+    allowed: diffs.every(({ status }) => status !== "regressed"),
+    diffs,
+  };
+};
+
+type WriteImprovementBaselineOptions = {
+  assessment: ImprovementsOnlyAssessment;
+  candidate: string;
+  path: string;
+};
+
+export const writeImprovementBaseline = ({
+  assessment,
+  candidate,
+  path: baselinePath,
+}: WriteImprovementBaselineOptions): "written" | "unchanged" | "refused" => {
+  if (!assessment.allowed) {
+    return "refused";
+  }
+  const existing = readFileSync(baselinePath, "utf-8");
+  if (
+    candidate === existing ||
+    assessment.diffs.every(({ status }) => status === "ok")
+  ) {
+    return "unchanged";
+  }
+  writeFileSync(baselinePath, candidate);
+  return "written";
+};
+
+const readBaselineAtHead = (): { baseline: Baseline; order: string[] } => {
+  const raw = readGit(["show", `HEAD:${BASELINE_REL}`]);
+  const parsed = Result.try((): unknown => JSON.parse(raw));
+  if (Result.isError(parsed) || !isRecord(parsed.value)) {
+    return panic(`ratchet baseline at HEAD is not a JSON object`);
+  }
+  const inspection = inspectConfiguration(
+    Object.keys(parsed.value).map((id) => ({ id })),
+    parsed.value,
+  );
+  if (inspection.status === "invalid") {
+    return panic(inspection.errors.join("\n"));
+  }
+  return { baseline: inspection.baseline, order: Object.keys(parsed.value) };
+};
+
+const improvementsMergeBase = (): string => {
+  const baseIndex = process.argv.indexOf("--base");
+  const baseRef = baseIndex === -1 ? undefined : process.argv.at(baseIndex + 1);
+  if (baseIndex !== -1 && (baseRef === undefined || baseRef.startsWith("--"))) {
+    return panic("--base requires a commit reference");
+  }
+  const ref = baseRef ?? readGit(["merge-base", "origin/main", "HEAD"]);
+  return readGit([
+    "rev-parse",
+    "--verify",
+    "--end-of-options",
+    `${ref}^{commit}`,
+  ]);
+};
+
+type ImprovementsOnlyContext = {
+  candidate: Baseline;
+  assessment: ImprovementsOnlyAssessment;
+  serialized: string;
+};
+
+type BuildImprovementsOnlyContextOptions = {
+  mergeBase: string;
+  baselineAtHead: { baseline: Baseline; order: string[] };
+};
+
+const buildImprovementsOnlyContext = ({
+  mergeBase,
+  baselineAtHead,
+}: BuildImprovementsOnlyContextOptions): ImprovementsOnlyContext => {
+  const head = scanAll(REPO_ROOT);
+  const candidate = deltaBaseline({
+    head,
+    mergeBaseBaseline: readMergeBaseBaseline(mergeBase),
+    baseSnapshot: scanMergeBase(mergeBase),
+  });
+  return {
+    candidate,
+    assessment: assessImprovementWrite({
+      current: head,
+      candidate,
+      baseline: baselineAtHead.baseline,
+    }),
+    serialized: serializeBaseline(candidate, baselineAtHead.order),
+  };
+};
+
+const writeImprovementsOnly = (): number => {
+  if (process.argv.includes("--all")) {
+    return panic("--write-improvements-only cannot be combined with --all");
+  }
+  const baselineAtHead = readBaselineAtHead();
+  const context = buildImprovementsOnlyContext({
+    mergeBase: improvementsMergeBase(),
+    baselineAtHead,
+  });
+  const result = writeImprovementBaseline({
+    assessment: context.assessment,
+    candidate: context.serialized,
+    path: BASELINE_PATH,
+  });
+  if (result === "refused") {
+    console.error(
+      "ratchet --write-improvements-only: refused; metric(s) regressed:",
+    );
+    for (const diff of context.assessment.diffs.filter(
+      ({ status }) => status === "regressed",
+    )) {
+      console.error(`  ${diff.id}: ${diff.baseline} -> ${diff.current}`);
+      for (const { file, from, to } of diff.regressedFiles) {
+        console.error(`      ${file}: ${from} -> ${to}`);
+      }
+    }
+    return 0;
+  }
+  if (result === "unchanged") {
+    console.log(
+      "ratchet --write-improvements-only: unchanged; no baseline write needed.",
+    );
+    return 0;
+  }
+  console.log(`Wrote ratchet baseline to ${BASELINE_REL}:`);
+  for (const metric of RATCHET_METRICS) {
+    const snap = requireSnapshot(context.candidate, metric.id);
+    console.log(
+      `  ${metric.id.padEnd(30)} ${String(snap.count).padStart(5)} across ${Object.keys(snap.files).length} file(s)`,
+    );
+  }
+  return 0;
+};
+
+const checkImprovementsOnly = (): number => {
+  if (process.argv.includes("--all")) {
+    return panic("--check-improvements-only cannot be combined with --all");
+  }
+  const baselineAtHead = readBaselineAtHead();
+  const context = buildImprovementsOnlyContext({
+    mergeBase: improvementsMergeBase(),
+    baselineAtHead,
+  });
+  if (!context.assessment.allowed) {
+    console.error(
+      "ratchet --check-improvements-only: failed; metric(s) regressed:",
+    );
+    for (const diff of context.assessment.diffs.filter(
+      ({ status }) => status === "regressed",
+    )) {
+      console.error(`  ${diff.id}: ${diff.baseline} -> ${diff.current}`);
+      for (const { file, from, to } of diff.regressedFiles) {
+        console.error(`      ${file}: ${from} -> ${to}`);
+      }
+    }
+    return 1;
+  }
+  const expected = context.serialized;
+  const actual = readFileSync(BASELINE_PATH, "utf-8");
+  if (actual !== expected) {
+    console.error(
+      `ratchet --check-improvements-only: ${BASELINE_REL} does not match the trusted delta candidate.`,
+    );
+    return 1;
+  }
+  console.log(
+    "ratchet --check-improvements-only: baseline matches the trusted delta candidate.",
+  );
   return 0;
 };
 
@@ -3687,16 +4062,11 @@ const runWrite = (all: boolean): number => {
           ]);
     const baseline = readMergeBaseBaseline(mergeBase);
     const base = scanMergeBase(mergeBase);
-    snapshot = {};
-    for (const metric of RATCHET_METRICS) {
-      const current = requireSnapshot(head, metric.id);
-      snapshot[metric.id] = rebaseSnapshot({
-        allowlist: metricGate(metric).allowlist,
-        mergeBaseEntry: baseline[metric.id],
-        base: requireSnapshot(base, metric.id),
-        head: current,
-      });
-    }
+    snapshot = deltaBaseline({
+      head,
+      mergeBaseBaseline: baseline,
+      baseSnapshot: base,
+    });
   }
   writeFileSync(BASELINE_PATH, serializeBaseline(snapshot, existingOrder));
   console.log(`Wrote ratchet baseline to ${BASELINE_REL}:`);
@@ -3714,6 +4084,7 @@ const runWrite = (all: boolean): number => {
 };
 
 const runCheck = (): number => {
+  printReportOnlyMetrics(REPO_ROOT);
   const current = scanAll(REPO_ROOT);
   const baseline = readBaseline();
 
@@ -4628,6 +4999,12 @@ const SELF_TEST_INTERNAL_MODULE_MOCK_LEDGER = `${JSON.stringify(
   2,
 )}\n`;
 const EXPECTED_INTERNAL_MODULE_MOCK_LEDGER_ENTRIES = 3;
+const SELF_TEST_PARSER_VALIDATOR_LEDGER = `${JSON.stringify([
+  "apps/api/src/handlers/case-law/ingestion/parsers/alpha.ts::import::1",
+  "apps/api/src/handlers/case-law/ingestion/parsers/alpha.ts::call::1",
+  "apps/api/src/lib/legal-search/parsers/beta.ts::call::1",
+])}\n`;
+const EXPECTED_PARSER_VALIDATOR_LEDGER_ENTRIES = 3;
 // Expected: the two tables that declare organizationId AND spread wsPolicies().
 // Excluded: the workspace-only table with no organizationId column, the table
 // already on wsOrganizationPolicies, the org-only table, the table whose only
@@ -5203,6 +5580,26 @@ const asCastSelfTestFailures = (snapshot: Baseline): string[] => {
   return failures;
 };
 
+const ledgerSelfTestFailures = (snapshot: Baseline): string[] => {
+  const failures: string[] = [];
+  for (const { id, expected } of [
+    {
+      id: "parser-validator-call-ledger-entries",
+      expected: EXPECTED_PARSER_VALIDATOR_LEDGER_ENTRIES,
+    },
+    {
+      id: "internal-module-mock-ledger-entries",
+      expected: EXPECTED_INTERNAL_MODULE_MOCK_LEDGER_ENTRIES,
+    },
+  ]) {
+    const metric = requireSnapshot(snapshot, id);
+    if (metric.count !== expected) {
+      failures.push(`${id} counted ${metric.count}, expected ${expected}`);
+    }
+  }
+  return failures;
+};
+
 // The repo-scope metrics assert on a layout rather than one file's text, so
 // each check names the count it expects plus the files that must and must not
 // appear in its per-file breakdown.
@@ -5464,9 +5861,99 @@ const deltaWriteSelfTestFailures = (): string[] => {
   return failures;
 };
 
+const dependencyMetricSelfTestFailures = (root: string): string[] => {
+  const failures: string[] = [];
+  const dependencyFixtureRoot = path.join(root, "dependency-metrics");
+  mkdirSync(path.join(dependencyFixtureRoot, "apps", "client"), {
+    recursive: true,
+  });
+  mkdirSync(path.join(dependencyFixtureRoot, "packages", "shared"), {
+    recursive: true,
+  });
+  writeFileSync(
+    path.join(dependencyFixtureRoot, "package.json"),
+    JSON.stringify({
+      dependencies: { rootRuntime: "^1.0.0" },
+      devDependencies: { rootTool: "^2.0.0", "@stll/local": "workspace:*" },
+      optionalDependencies: { rootOptional: "^3.0.0" },
+    }),
+  );
+  writeFileSync(
+    path.join(dependencyFixtureRoot, "apps", "client", "package.json"),
+    JSON.stringify({
+      dependencies: {
+        "@stll/published": "1.2.3",
+        "@stll/local": "workspace:*",
+      },
+      devDependencies: { appTool: "^1.0.0" },
+      peerDependencies: { appPeer: "^2.0.0" },
+      optionalDependencies: { appOptional: "^3.0.0" },
+    }),
+  );
+  writeFileSync(
+    path.join(dependencyFixtureRoot, "packages", "shared", "package.json"),
+    JSON.stringify({ name: "@stll/shared", dependencies: {} }),
+  );
+  writeFileSync(
+    path.join(dependencyFixtureRoot, "bun.lock"),
+    '{ packages: { "first@1.0.0": [], "@scope/second@2.0.0": [] }, workspaces: { "": {} } }',
+  );
+  const directDependencies = countDirectThirdPartyDeclarations(
+    dependencyFixtureRoot,
+  );
+  if (directDependencies.count !== 7) {
+    failures.push(
+      `direct-third-party-declarations counted ${directDependencies.count}, expected 7`,
+    );
+  }
+  if (directDependencies.files["apps/client/package.json"] !== 4) {
+    failures.push(
+      "direct-third-party-declarations did not count every app dependency section or excluded a published @stll dependency",
+    );
+  }
+  if (
+    diffMetric(
+      "direct-third-party-declarations",
+      {
+        count: 8,
+        files: {
+          "apps/client/package.json": 5,
+          "package.json": 3,
+        },
+      },
+      directDependencies,
+    ).status !== "regressed"
+  ) {
+    failures.push(
+      "direct-third-party-declarations did not flag declaration growth",
+    );
+  }
+  const lockfileEntries = countLockfilePackageEntries(dependencyFixtureRoot);
+  if (lockfileEntries.count !== 2 || lockfileEntries.files["bun.lock"] !== 2) {
+    failures.push(
+      `lockfile-package-entries counted ${lockfileEntries.count}, expected 2 resolution entries`,
+    );
+  }
+  for (const metric of REPORT_ONLY_METRICS) {
+    if (RATCHET_METRICS.some(({ id }) => id === metric.id)) {
+      failures.push(`${metric.id} must not have a shrink-only budget`);
+    }
+  }
+  writeFileSync(
+    path.join(dependencyFixtureRoot, "bun.lock"),
+    '{ packages: { "first@1.0.0": [], "second@2.0.0": [], "third@3.0.0": [] } }',
+  );
+  if (countLockfilePackageEntries(dependencyFixtureRoot).count !== 3) {
+    failures.push("lockfile-package-entries did not report resolution growth");
+  }
+  return failures;
+};
+
 const runSelfTest = (): number => {
   const failures: string[] = [];
   const root = mkdtempSync(path.join(tmpdir(), "ratchet-selftest-"));
+
+  failures.push(...dependencyMetricSelfTestFailures(root));
 
   const validConfiguration = inspectConfiguration([{ id: "one-metric" }], {
     "one-metric": {
@@ -5740,6 +6227,11 @@ const runSelfTest = (): number => {
     );
     writeFixture(
       root,
+      "scripts/parser-validator-call-ledger.json",
+      SELF_TEST_PARSER_VALIDATOR_LEDGER,
+    );
+    writeFixture(
+      root,
       INTERNAL_MODULE_MOCK_LEDGER_REL,
       SELF_TEST_INTERNAL_MODULE_MOCK_LEDGER,
     );
@@ -5924,23 +6416,15 @@ const runSelfTest = (): number => {
       "const z = value as Widget;\n",
     );
 
+    writeFileSync(path.join(root, "package.json"), "{}");
+    writeFileSync(path.join(root, "bun.lock"), "{ packages: {} }");
     const snapshot = scanAll(root);
 
     failures.push(...asCastSelfTestFailures(snapshot));
     failures.push(...failureSinkSelfTestFailures(snapshot));
     failures.push(...ownerHandleAllowlistSelfTestFailures(snapshot));
 
-    const mockLedgerMetric = requireSnapshot(
-      snapshot,
-      "internal-module-mock-ledger-entries",
-    );
-    if (
-      mockLedgerMetric.count !== EXPECTED_INTERNAL_MODULE_MOCK_LEDGER_ENTRIES
-    ) {
-      failures.push(
-        `internal-module-mock-ledger-entries counted ${mockLedgerMetric.count}, expected ${EXPECTED_INTERNAL_MODULE_MOCK_LEDGER_ENTRIES}`,
-      );
-    }
+    failures.push(...ledgerSelfTestFailures(snapshot));
 
     const nullishMetric = requireSnapshot(snapshot, "nullish-array-fallback");
     if (nullishMetric.count !== EXPECTED_NULLISH) {
@@ -6339,6 +6823,12 @@ const runSelfTest = (): number => {
 const main = (): number => {
   if (process.argv.includes("--self-test")) {
     return runSelfTest();
+  }
+  if (process.argv.includes("--check-improvements-only")) {
+    return checkImprovementsOnly();
+  }
+  if (process.argv.includes("--write-improvements-only")) {
+    return writeImprovementsOnly();
   }
   if (process.argv.includes("--write")) {
     return runWrite(process.argv.includes("--all"));

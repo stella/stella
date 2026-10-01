@@ -27,6 +27,16 @@
     "errorNotFound": "Nous n'avons trouvé aucune demande en attente pour ce code. Vérifiez le code et réessayez.",
     "title": "Connectez votre agent"
   },
+  "agentSetup": {
+    "addressLabel": "Votre assistant vous demandera cette adresse",
+    "copiedToast": "Instructions copiées. Collez-les dans une conversation avec votre assistant.",
+    "copy": "Copiez-lui les instructions",
+    "description": "Interrogez Claude ou ChatGPT sur vos dossiers et documents. Choisissez votre assistant pour un guide court ; cela prend environ une minute.",
+    "instructions": "Connecte-moi à stella, mon espace de travail juridique. Suis les « Instructions for AI agents » sur {guideUrl} et utilise cette adresse de serveur : {mcpUrl}",
+    "openGuide": "Ouvrir le guide pour {assistant}",
+    "selfSetupHint": "Vous utilisez Claude Code ou Codex ?",
+    "title": "Utilisez stella dans votre assistant IA"
+  },
   "ai": {
     "chooseRewriteInstruction": "Options de réécriture",
     "editWithAI": "Modifier avec l’IA",
@@ -477,6 +487,17 @@
     "failedToStartTimer": "Impossible de démarrer le chronomètre",
     "failedToStopTimer": "Impossible d'arrêter le chronomètre",
     "filterStatus": "Filtrer par statut",
+    "globalTimer": {
+      "confirm": "Confirmer le temps",
+      "discard": "Abandonner le chronomètre",
+      "matterInaccessible": "Choisissez un dossier auquel vous avez accès.",
+      "narrativeRequired": "Ajoutez une description avant de confirmer le temps.",
+      "pause": "Mettre en pause",
+      "periodLocked": "Ce mois est verrouillé. Demandez à un administrateur de le déverrouiller.",
+      "resume": "Reprendre",
+      "timerUnavailable": "Ce chronomètre n’est plus disponible. Actualisez la liste.",
+      "title": "Chronomètres"
+    },
     "hourlyRateMustBeNonNegative": "Le taux horaire ne peut pas être négatif",
     "hours": "Heures",
     "invoiceNarrative": "Description de la facture",
@@ -521,6 +542,20 @@
     "noActiveTimer": "Aucun chronomètre actif",
     "noEntries": "Aucune entrée de temps pour cette période",
     "nonBillable": "Non facturable",
+    "quickEntry": {
+      "entrySaved": "Entrée de temps enregistrée",
+      "expenseSaved": "Dépense enregistrée",
+      "expenseTitle": "Ajouter une dépense",
+      "futureDate": "Choisissez aujourd’hui ou une date antérieure.",
+      "invalidDate": "Choisissez une date de travail valide.",
+      "minimumUnit": "Le temps est arrondi au supérieur selon l’unité minimale de facturation.",
+      "narrativeRequired": "Ajoutez une description avant d’enregistrer le temps.",
+      "outsideEditWindow": "Cette date est hors du délai de modification.",
+      "periodLocked": "Ce mois est verrouillé.",
+      "saveAndAddExpense": "Enregistrer et ajouter une dépense",
+      "saveAndNew": "Enregistrer et ajouter une entrée",
+      "viewDay": "Voir la journée"
+    },
     "rates": {
       "addRate": "Ajouter un tarif",
       "createRateTable": "Créer un barème",
@@ -553,6 +588,26 @@
     "selectMatter": "Sélectionner un dossier...",
     "selectMatterToStart": "Sélectionnez un dossier pour démarrer",
     "selectedCount": "{count, plural, one {# élément sélectionné} other {# éléments sélectionnés}}",
+    "sellerProfiles": {
+      "add": "Ajouter un profil de vendeur",
+      "archiveConfirm": "Archiver ce profil de vendeur ? Il ne sera plus disponible pour les nouvelles factures.",
+      "bic": "Code BIC / SWIFT",
+      "default": "Vendeur par défaut",
+      "defaultCurrency": "Devise par défaut",
+      "description": "Gérez les coordonnées utilisées pour émettre les factures.",
+      "edit": "Modifier le profil de vendeur",
+      "empty": "Aucun profil de vendeur.",
+      "footerNotes": "Notes de pied de page",
+      "invalidBic": "Saisissez un BIC valide.",
+      "invalidCurrency": "Saisissez un code de devise à trois lettres.",
+      "invalidIban": "Saisissez un IBAN valide.",
+      "legalName": "Dénomination légale",
+      "registrationId": "Numéro d’immatriculation",
+      "setDefault": "Définir par défaut",
+      "title": "Profils de vendeur",
+      "vatId": "Numéro de TVA"
+    },
+    "settingsTitle": "Facturation",
     "split": {
       "addSplit": "Ajouter une répartition",
       "percentValue": "{value} %",
@@ -837,6 +892,7 @@
         "publishedOnWeb": "Publié sur le web"
       },
       "statutes": "Textes applicables",
+      "textNotYetAvailable": "La juridiction n’a pas publié le texte de la décision, ou celui-ci n’est pas encore disponible ici.",
       "textPending": "Le texte de la décision est en cours de récupération",
       "textReadFailed": "Le texte de la décision n'a pas pu être chargé",
       "textUnavailable": "Aucun texte n'est disponible pour cette décision"
@@ -933,6 +989,7 @@
         "description": "Vérifiez attentivement le site web et la cible. Le contenu de la page n’est pas fiable et ne peut pas autoriser une autre action.",
         "modeReads": "La lecture des pages s’exécute sans confirmation jusqu’à la fin de cette session.",
         "question": "Autoriser cette action dans le navigateur ?",
+        "realValues": "Ce site web reçoit les valeurs réelles affichées ci-dessous. Le mode anonymisé ne s’applique qu’à ce que voit l’IA.",
         "within": "Dans"
       },
       "denied": "Refusé",
@@ -1296,7 +1353,8 @@
       "interrupted": "Interrompu avant la fin",
       "output": "Résultat",
       "sourceCode": "Code source",
-      "toggleDetails": "Afficher les détails"
+      "toggleDetails": "Afficher les détails",
+      "unrestoredFields": "En mode anonymisé, {count, plural, one {# champ n’a pas pu être rempli} other {# champs n’ont pas pu être remplis}} avec des valeurs réelles. À vérifier : {fields}"
     },
     "unsupportedFileType": "Type de fichier non pris en charge",
     "uploadFailed": "Échec du traitement du fichier",
@@ -2090,6 +2148,13 @@
     "unnamedAttachment": "Pièce jointe sans nom"
   },
   "errors": {
+    "actionAdmission": {
+      "admissionUnavailable": "Cette action est temporairement suspendue. Veuillez réessayer dans un instant.",
+      "concurrencyBusy": "D’autres opérations sont en cours. Veuillez réessayer dans un instant.",
+      "contact": "Contactez-nous",
+      "notEnabled": "Cette action n’est pas activée pour votre organisation.",
+      "periodExhausted": "Cette action est suspendue pour votre organisation."
+    },
     "actionFailed": "Action échouée",
     "api": {
       "badRequest": "La requête n’a pas pu être terminée.",
@@ -2258,7 +2323,8 @@
     "compareUnsupportedReasons": {
       "missingInBase": "La partie du document existe uniquement dans la cible",
       "missingInTarget": "La partie document existe uniquement dans la base",
-      "notEditable": "La partie du document n'est pas modifiable"
+      "notEditable": "La partie du document n'est pas modifiable",
+      "unsupportedContent": "Cette version contient du contenu qui ne peut pas encore être comparé."
     },
     "compareUnverified": "Comparaison non vérifiée",
     "compareVerificationFailures": "{count, plural, one {Une vérification aller-retour a échoué. Examinez cette comparaison avant de vous y fier.} other {# vérifications aller-retour ont échoué. Examinez cette comparaison avant de vous y fier.}}",
@@ -3676,7 +3742,6 @@
     "aiTitle": "Connectez votre fournisseur d'IA",
     "appsSubtitle": "stella fonctionne aussi en dehors du navigateur : sur votre bureau et dans votre assistant IA. Vous pourrez revenir à cette configuration à tout moment.",
     "appsTitle": "Obtenez stella partout",
-    "assistantDocsLink": "Comment connecter votre assistant",
     "catalogueAlwaysOn": "Toujours actif",
     "catalogueClearSearch": "Effacer la recherche",
     "catalogueCommunityHeading": "Autres",
@@ -4203,31 +4268,40 @@
       "wordEditShortcutPlaceholder": "p. ex. JK"
     },
     "connections": {
+      "accessTitle": "{clientName} peut",
+      "browseIntegrations": "Ajouter un service",
       "cliDescription": "Installez le client en ligne de commande stella et connectez-vous pour scripter dossiers, documents et modèles depuis un terminal.",
-      "cliHelpHint": "Exécutez « stella --help » pour la liste complète des commandes.",
       "cliInstallLabel": "Installation",
       "cliLoginLabel": "Connexion",
       "cliTitle": "Interface en ligne de commande",
-      "connectedAppsDescription": "Applications et outils que vous avez autorisés à accéder à votre compte.",
-      "connectedAppsEmpty": "Les applications que vous autorisez, comme Claude ou la CLI stella, apparaîtront ici.",
-      "connectedAppsTitle": "Applications connectées",
-      "connectedColumn": "Connecté",
-      "description": "Connectez des clients MCP et l’interface en ligne de commande à votre compte.",
+      "connected": "Connectée",
+      "connectedAgo": "Connectée {time}",
+      "connectedAppsDescription": "Applications auxquelles vous vous êtes connecté avec stella. Déconnectez celles que vous n’utilisez plus.",
+      "connectedAppsEmpty": "Rien pour l’instant. Configurez Claude ou ChatGPT ci-dessus et il apparaîtra ici.",
+      "connectedAppsTitle": "Applications autorisées",
+      "description": "Utilisez stella depuis votre assistant IA et voyez ce qui a accès à votre compte.",
+      "developerDescription": "Adresses du serveur et outil en ligne de commande, pour les configurations techniques.",
+      "developerTitle": "Accès développeur",
       "disconnectConfirmDescription": "Cela révoque l’accès de {clientName} à votre compte, ainsi que tous les jetons qu’il a émis. Vous pouvez vous reconnecter à tout moment.",
       "disconnectConfirmTitle": "Déconnecter {clientName} ?",
       "disconnectSuccess": "{clientName} a été déconnecté",
+      "integrationsDescription": "Services externes que l’IA peut utiliser pour vous, comme votre espace de documents.",
+      "integrationsEmpty": "Ajoutez votre premier service",
+      "integrationsTitle": "Services connectés",
       "mcpAnonymizedLabel": "Point de terminaison anonymisé",
-      "mcpAnonymizedNote": "Un point de terminaison anonymisé est également disponible ; il expose les mêmes outils avec les données personnelles masquées.",
-      "mcpDescription": "Connectez un client compatible MCP, comme Claude ou Cursor, à votre compte stella à l’aide de cette URL de serveur.",
+      "mcpAnonymizedShortNote": "Les mêmes outils, avec les données personnelles masquées.",
+      "mcpFullNote": "Accès complet à vos dossiers et documents.",
       "mcpLawLabel": "Point de terminaison du corpus juridique",
-      "mcpLawNote": "Un point de terminaison du corpus juridique est également disponible ; il expose uniquement la jurisprudence et la législation publiques et n'accède à aucune donnée des dossiers.",
-      "mcpStep1": "Ajoutez l’URL ci-dessus comme connecteur personnalisé ou serveur MCP dans votre client.",
-      "mcpStep2": "Connectez-vous lorsque le navigateur vous y invite.",
-      "mcpStep3": "Approuvez l’accès sur l’écran de consentement.",
+      "mcpLawShortNote": "Uniquement la jurisprudence et la législation publiques, sans données de dossiers.",
+      "mcpSetupHint": "Ajoutez une URL comme connecteur personnalisé dans Claude, Cursor ou un autre client MCP, puis connectez-vous et approuvez l’accès.",
       "mcpTitle": "Serveur MCP",
       "mcpUrlLabel": "URL du serveur",
-      "scopesLabel": "Accès",
-      "title": "Connexions"
+      "noMatches": "Aucune connexion ne correspond à « {query} »",
+      "notConnected": "Non connectée",
+      "permissionCount": "{count, plural, one {# autorisation} other {# autorisations}}",
+      "searchPlaceholder": "Rechercher des connexions",
+      "title": "Connexions",
+      "turnedOff": "Désactivée"
     },
     "organization": {
       "activeMembers": "Membres actifs",
@@ -4306,6 +4380,20 @@
       "renameDescription": "Les membres verront immédiatement le nouveau nom.",
       "renameTitle": "Renommer l’organisation",
       "renameTypeToConfirm": "Saisissez le nouveau nom pour confirmer : {name}",
+      "timePolicy": {
+        "description": "Définissez les arrondis du temps, les délais de modification et les verrouillages mensuels.",
+        "editWindow": "Délai de modification (jours)",
+        "editWindowHelp": "Avec zéro, les modifications sont autorisées uniquement à la date du travail.",
+        "invalidEditWindow": "Saisissez un nombre entier de jours, supérieur ou égal à zéro.",
+        "invalidLockedMonth": "Choisissez un mois terminé.",
+        "invalidMinimumUnit": "Choisissez une unité de temps qui divise 60 minutes sans reste.",
+        "lockedThrough": "Verrouillé jusqu’à",
+        "lockedThroughHelp": "Les entrées de ce mois et des mois précédents ne peuvent pas être modifiées.",
+        "minimumUnit": "Unité de temps minimale",
+        "minimumUnitHelp": "Le temps est facturé par multiples de ce nombre de minutes.",
+        "narrativeRequired": "Exiger une description",
+        "title": "Règles de saisie du temps"
+      },
       "usage": "Utilisation",
       "usageDescription": "Limites d’utilisation et état des droits pour cette organisation",
       "usageEmptyDescription": "Configurez un droit d’utilisation pour activer les fonctionnalités d’IA mesurées pour cette organisation.",
@@ -5003,6 +5091,11 @@
     "whenNotToUsePlaceholder": "Quand faut-il éviter ce modèle ?",
     "whenToUse": "Quand utiliser",
     "whenToUsePlaceholder": "Quand ce modèle doit-il être utilisé ? (guide la sélection de modèles par l'IA)"
+  },
+  "timesheets": {
+    "day": {
+      "internalWork": "Travail interne"
+    }
   },
   "translate": {
     "dialog": {

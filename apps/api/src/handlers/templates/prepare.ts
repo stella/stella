@@ -27,7 +27,11 @@ const config = {
   // docx), so it needs `template: ["create"]` like `/create`, not bare workspace
   // read; this also keeps a read-only role from spending org AI here.
   permissions: { template: ["create"] },
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  mcp: {
+    type: "capability",
+    reason: "template_authoring_ui",
+    consumesServices: true,
+  },
   transport: {
     type: "file-input",
     input: { field: "file", required: true, mediaTypes: [DOCX_MIME_TYPE] },

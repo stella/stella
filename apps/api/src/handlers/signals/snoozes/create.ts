@@ -26,7 +26,11 @@ const config = {
     "once that time passes.",
   permissions: { signal: ["resolve"] },
   access: "write",
-  mcp: { type: "capability", reason: "workflow_orchestration" },
+  mcp: {
+    type: "capability",
+    reason: "workflow_orchestration",
+    consumesServices: false,
+  },
   params: signalParamsSchema,
   body: snoozeBodySchema,
 } satisfies HandlerConfig;

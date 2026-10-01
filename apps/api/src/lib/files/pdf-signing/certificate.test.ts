@@ -1,10 +1,14 @@
-import { describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 
 import { inspectSigningCertificate } from "@/api/lib/files/pdf-signing/certificate";
 import {
   createSelfSignedCertificate,
   KEY_USAGE,
 } from "@/api/tests/helpers/self-signed-certificate";
+import { createTestRsaKeyPool } from "@/api/tests/helpers/test-pki";
+
+const keyPool = createTestRsaKeyPool();
+beforeEach(() => keyPool.reset());
 
 const NOW = new Date("2026-06-01T12:00:00.000Z");
 const HOUR_MS = 3_600_000;
@@ -12,10 +16,12 @@ const HOUR_MS = 3_600_000;
 describe("signing certificate inspection", () => {
   test("derives the key family and CMS algorithm from the certificate, not the client", async () => {
     const rsa = await createSelfSignedCertificate({
+      keyPool,
       notBefore: new Date(NOW.getTime() - HOUR_MS),
       notAfter: new Date(NOW.getTime() + HOUR_MS),
     });
     const ec = await createSelfSignedCertificate({
+      keyPool,
       keyType: "EC",
       notBefore: new Date(NOW.getTime() - HOUR_MS),
       notAfter: new Date(NOW.getTime() + HOUR_MS),
@@ -35,6 +41,7 @@ describe("signing certificate inspection", () => {
 
   test("fingerprints the exact bytes it was given", async () => {
     const { der } = await createSelfSignedCertificate({
+      keyPool,
       notBefore: new Date(NOW.getTime() - HOUR_MS),
       notAfter: new Date(NOW.getTime() + HOUR_MS),
     });
@@ -46,6 +53,7 @@ describe("signing certificate inspection", () => {
 
   test("refuses a certificate outside its validity window", async () => {
     const { der } = await createSelfSignedCertificate({
+      keyPool,
       notBefore: new Date(NOW.getTime() - 2 * HOUR_MS),
       notAfter: new Date(NOW.getTime() - HOUR_MS),
     });
@@ -63,6 +71,7 @@ describe("signing certificate inspection", () => {
 
   test("refuses a certificate that is not valid yet", async () => {
     const { der } = await createSelfSignedCertificate({
+      keyPool,
       notBefore: new Date(NOW.getTime() + HOUR_MS),
       notAfter: new Date(NOW.getTime() + 2 * HOUR_MS),
     });
@@ -79,14 +88,17 @@ describe("signing certificate inspection", () => {
       notAfter: new Date(NOW.getTime() + HOUR_MS),
     };
     const encipherment = await createSelfSignedCertificate({
+      keyPool,
       ...window,
       keyUsage: KEY_USAGE.keyEncipherment,
     });
     const nonRepudiation = await createSelfSignedCertificate({
+      keyPool,
       ...window,
       keyUsage: KEY_USAGE.nonRepudiation,
     });
     const unconstrained = await createSelfSignedCertificate({
+      keyPool,
       ...window,
       keyUsage: "none",
     });

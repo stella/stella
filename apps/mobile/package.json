@@ -27,6 +27,7 @@
     "expo-router": "~57.0.22",
     "expo-status-bar": "~57.0.1",
     "expo-system-ui": "~57.0.4",
+    "expo-updates": "~57.0.23",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
     "react-native": "0.86.3",

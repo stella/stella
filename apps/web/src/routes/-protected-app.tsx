@@ -37,12 +37,12 @@ import { cn } from "@stll/ui/utils";
 import { WorkspaceEndRail } from "@stll/ui/workspace-shell";
 import { WorkspaceFrame } from "@stll/workspace-ui/workspace-frame";
 
+import { ApiVersionMismatchReporter } from "@/components/api-version-mismatch-refresh";
 import "@/features/case-law/case-decision-details-inspector-registration";
 import "@/features/case-law/case-decision-inspector-registration";
 import "@/features/inbox/signal-inspector-registration";
 import "@/features/statutes/provision-inspector-registration";
 import "@/features/statutes/statute-inspector-registration";
-import { ApiVersionMismatchReporter } from "@/components/api-version-mismatch-refresh";
 import { AppSidebar } from "@/components/app-sidebar";
 import { resolveSidebarWorkspaceId } from "@/components/app-sidebar.logic";
 import { AppBreadcrumbs } from "@/components/breadcrumbs/app-breadcrumbs";
@@ -58,6 +58,7 @@ import type { InspectorTab } from "@/components/inspector/inspector-tabs-store";
 import { inspectorPaneWidthStorageKey } from "@/components/inspector/pane-width-storage";
 import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog";
 import { NotificationBell } from "@/components/notification-bell";
+import { QuickEntry } from "@/components/quick-entry";
 import { AIAvailabilityProvider } from "@/components/require-ai-key";
 import { SelfhostUpdateBanner } from "@/components/selfhost-update-banner";
 import { ShortcutEchoHud } from "@/components/shortcut-echo-hud";
@@ -72,6 +73,7 @@ import { AttachedTemplateUploadDialog } from "@/components/workspaces/attached-t
 import { CreateMatterDialog } from "@/components/workspaces/create-matter-dialog";
 import { DocumentReferenceUploadDialog } from "@/components/workspaces/document-reference-upload-dialog";
 import { useGlobalChatMentionRegistration } from "@/features/chat/hooks/use-global-chat-mention-registration";
+import { GlobalTimer } from "@/features/time-timers/global-timer";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useInboxPreviewEnabled } from "@/hooks/use-inbox-preview";
@@ -267,6 +269,7 @@ export const ProtectedAppFrame = ({
                     moves between their two slots instead of being rebuilt
                     when the document and the review trade panes. */}
                 <DocxEditorHost />
+                <QuickEntry />
                 <CreateMatterDialog />
                 <AttachedTemplateUploadDialog />
                 <DocumentReferenceUploadDialog />
@@ -406,6 +409,7 @@ function ProtectedContent() {
           </Button>
         </>
       )}
+      <GlobalTimer />
       {inboxPreviewEnabled && <NotificationBell />}
       {canShowInspectorButton && (
         <div className="contents md:hidden">

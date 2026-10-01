@@ -15,7 +15,7 @@ here as its CLI form). Projected from the same handler enumeration that builds
 A capability id is its handler path under `apps/api/src/handlers/`, joined
 with `.`: `<domain>[.<resource>…].<action>`. The action is one word:
 a canonical verb (`list`, `get`, `create`, `update`, `delete`)
-or a domain verb (`add`, `approve`, `archive`, `cancel`, `check`, `clip`, `clone`, `compare`, `confirm`, `convert`, `copy`, `count`, `diff`, `discover`, `discard`, `download`, `duplicate`, `export`, `fill`, `generate`, `import`, `install`, `link`, `lookup`, `move`, `pause`, `prefill`, `prepare`, `preview`, `remove`, `rename`, `reorder`, `replace`, `resolve`, `restore`, `resume`, `retry`, `review`, `rewrite`, `run`, `search`, `split`, `start`, `stop`, `suggest`, `summarize`, `sync`, `transition`, `unarchive`, `unlink`, `upload`, `upsert`).
+or a domain verb (`add`, `approve`, `archive`, `cancel`, `check`, `clip`, `clone`, `compare`, `confirm`, `convert`, `copy`, `count`, `diff`, `discover`, `discard`, `download`, `duplicate`, `export`, `fill`, `generate`, `import`, `install`, `link`, `lookup`, `move`, `pause`, `prefill`, `prepare`, `preview`, `remove`, `rename`, `reorder`, `replace`, `resolve`, `return`, `restore`, `resume`, `retry`, `review`, `rewrite`, `run`, `search`, `split`, `start`, `stop`, `suggest`, `summarize`, `sync`, `transition`, `unarchive`, `unlink`, `upload`, `upsert`).
 A compound action is a nested resource: `clauses.categories.create`, not
 `clauses.categories-create`.
 
@@ -564,12 +564,16 @@ A compound action is a nested resource: `clauses.categories.create`, not
 
 | Capability                                  | Access             | Scope                | Feature              | Reachable via                                                                                                                                                                                                                                                               |
 | ------------------------------------------- | ------------------ | -------------------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `time-entries.approval-queue.approve`       | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries approval-queue-approve`                                                                                                                                                                                                    |
+| `time-entries.approval-queue.list`          | read               | stella:read          | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries approval-queue-list`                                                                                                                                                                                                       |
+| `time-entries.approval-queue.return`        | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries approval-queue-return`                                                                                                                                                                                                     |
 | `time-entries.batch.delete`                 | write, destructive | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries batch-delete`                                                                                                                                                                                                              |
 | `time-entries.batch.update`                 | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries batch-update`                                                                                                                                                                                                              |
 | `time-entries.create`                       | write              | stella:billing_write | FEATURE_TIME_BILLING | curated tool `save_time_entry`                                                                                                                                                                                                                                              |
 | `time-entries.csv.export`                   | read               | stella:read          | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries csv-export`                                                                                                                                                                                                                |
 | `time-entries.delete`                       | write, destructive | stella:billing_write | FEATURE_TIME_BILLING | curated tool `delete_time_entry`                                                                                                                                                                                                                                            |
 | `time-entries.get`                          | read               | stella:read          | FEATURE_TIME_BILLING | covered by `list_time_entries`                                                                                                                                                                                                                                              |
+| `time-entries.internal.create`              | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries internal-create`                                                                                                                                                                                                           |
 | `time-entries.ledes.export`                 | read               | stella:read          | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries ledes-export`                                                                                                                                                                                                              |
 | `time-entries.list`                         | read               | stella:read          | FEATURE_TIME_BILLING | curated tool `list_time_entries`                                                                                                                                                                                                                                            |
 | `time-entries.me.list`                      | read               | stella:read          | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries me-list`                                                                                                                                                                                                                   |
@@ -656,13 +660,12 @@ mechanics, and similar), not gaps in coverage.
 | ---------------------- | ----- |
 | account_lifecycle      | 4     |
 | assistant_chat         | 16    |
-| auth_plumbing          | 9     |
+| auth_plumbing          | 16    |
 | billing_ui             | 1     |
 | chat_thread_ui         | 2     |
 | compound_consent       | 1     |
 | deploy_mechanics       | 1     |
 | document_processing    | 25    |
-| health_infra           | 1     |
 | hosted_billing         | 6     |
 | mcp_transport          | 11    |
 | native_tool_ui         | 9     |
@@ -672,5 +675,5 @@ mechanics, and similar), not gaps in coverage.
 | search_ui              | 15    |
 | session_token_exchange | 20    |
 | ui_navigation_state    | 9     |
-| upload_mechanics       | 14    |
+| upload_mechanics       | 15    |
 | url_preview            | 2     |

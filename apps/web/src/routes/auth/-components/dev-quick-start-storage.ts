@@ -7,6 +7,7 @@ import {
   type DevQuickStartAttempt,
 } from "./dev-quick-start.logic";
 
+// Attempts belong to a tab; another tab must not replace its org or seed.
 const DEV_QUICK_START_STORAGE_KEY = "stella.devQuickStart.attempt";
 
 const devQuickStartAttemptSchema = v.strictObject({
@@ -30,7 +31,7 @@ export const parseDevQuickStartAttempt = (
 export const readDevQuickStartAttempt = (): DevQuickStartAttempt | null => {
   try {
     return parseDevQuickStartAttempt(
-      localStorage.getItem(DEV_QUICK_START_STORAGE_KEY),
+      sessionStorage.getItem(DEV_QUICK_START_STORAGE_KEY),
     );
   } catch {
     return null;
@@ -41,16 +42,8 @@ export const writeDevQuickStartAttempt = (
   attempt: DevQuickStartAttempt,
 ): void => {
   try {
-    writeStoredJson(localStorage, DEV_QUICK_START_STORAGE_KEY, attempt);
+    writeStoredJson(sessionStorage, DEV_QUICK_START_STORAGE_KEY, attempt);
   } catch {
     // Storage can be unavailable or blocked; persistence is best-effort.
-  }
-};
-
-export const clearDevQuickStartAttempt = (): void => {
-  try {
-    localStorage.removeItem(DEV_QUICK_START_STORAGE_KEY);
-  } catch {
-    // Storage can be unavailable or blocked; clearing is best-effort.
   }
 };

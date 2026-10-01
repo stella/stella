@@ -83,7 +83,11 @@ const config = {
     "text it was written against, and whether it has been resolved.",
   permissions: { chat: ["create"] },
   access: "read",
-  mcp: { type: "capability", reason: "agent_tool_authoring" },
+  mcp: {
+    type: "capability",
+    reason: "agent_tool_authoring",
+    consumesServices: false,
+  },
   params: listSkillCommentsParamsSchema,
 } satisfies HandlerConfig;
 

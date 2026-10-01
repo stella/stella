@@ -228,6 +228,7 @@ export type McpToolDefinition = McpToolAccessBranch &
      */
     additionalScopes?: readonly ToolScope[];
     anonymized: McpAnonymizedPolicy;
+    consumesServices: boolean;
     description: string;
     /**
      * Deployment feature flag gating this tool. When set, the tool is dropped
@@ -432,6 +433,7 @@ export type InternalToolStructuredError = {
   hint?: string;
   issues?: readonly McpValidationIssue[];
   retryable?: boolean;
+  contactUrl?: string;
   requestId?: string;
 };
 

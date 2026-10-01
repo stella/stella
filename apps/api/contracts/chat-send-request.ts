@@ -1,4 +1,4 @@
-import { expectTypeOf } from "expect-type";
+import { expectTypeOf } from "bun:test";
 
 import type { ChatSendRequest as PortableChatSendRequest } from "@stll/api-contract";
 

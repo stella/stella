@@ -11,7 +11,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 const config = {
   description: "Archive a number series so it cannot allocate another number.",
   permissions: { organizationSettings: ["update"] },
-  mcp: { type: "capability", reason: "billing_admin" },
+  mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   params: numberSeriesParams,
 } satisfies HandlerConfig;
 

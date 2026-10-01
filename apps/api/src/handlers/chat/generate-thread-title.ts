@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { CHAT_TITLE_SOURCE, chatThreads } from "@/api/db/schema";
+import { startChatExecutionAdmission } from "@/api/handlers/chat/chat-execution-admission";
 import { aiTitlingMayReplace } from "@/api/handlers/chat/thread-title";
 import {
   buildThreadTitlePrompt,
@@ -18,10 +19,26 @@ import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  readThreadStoredContentSendModeOnTx,
+  THREAD_STORED_CONTENT_SEND_MODE,
+} from "@/api/lib/chat/thread-stored-content-send-mode";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 
 const TITLE_GENERATION_TIMEOUT_MS = 10_000;
+
+const SEND_MODE_READ_FAILED_SINK = failureSink({
+  event: "chat.thread_title.send_mode_read_failed",
+  expected: [],
+});
+
+const TITLE_ADMISSION_FAILED = failureSink({
+  event: "chat.thread_title.admission_failed",
+  expected: [],
+});
 
 type GenerateThreadTitleProps = {
   initialTitle: string;
@@ -36,7 +53,8 @@ type GenerateThreadTitleProps = {
   userId: SafeId<"user">;
 };
 
-export const generateThreadTitle = async ({
+const generateAdmittedThreadTitle = async ({
+  admissionSignal,
   initialTitle,
   messages,
   organizationId,
@@ -47,7 +65,9 @@ export const generateThreadTitle = async ({
   threadId,
   threadWorkspaceId,
   userId,
-}: GenerateThreadTitleProps): Promise<void> => {
+}: GenerateThreadTitleProps & {
+  admissionSignal?: AbortSignal | undefined;
+}): Promise<void> => {
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     usageMetering: {
       actionType: "background",
@@ -64,9 +84,28 @@ export const generateThreadTitle = async ({
     traceId: Bun.randomUUIDv7(),
   });
 
+  // Queued by a raw turn; read again before sending, since the thread may
+  // have switched to anonymized mode since.
+  const sendMode = await safeDb(
+    async (tx) => await readThreadStoredContentSendModeOnTx({ threadId, tx }),
+  );
+  if (Result.isError(sendMode)) {
+    observeFailure(sendMode.error, { sink: SEND_MODE_READ_FAILED_SINK });
+    return;
+  }
+  if (sendMode.value === THREAD_STORED_CONTENT_SEND_MODE.anonymized) {
+    return;
+  }
+
   try {
     const text = await generateTanStackTextForRole({
-      abortSignal: AbortSignal.timeout(TITLE_GENERATION_TIMEOUT_MS),
+      abortSignal:
+        admissionSignal === undefined
+          ? AbortSignal.timeout(TITLE_GENERATION_TIMEOUT_MS)
+          : AbortSignal.any([
+              AbortSignal.timeout(TITLE_GENERATION_TIMEOUT_MS),
+              admissionSignal,
+            ]),
       finishPolicy: TITLE_FINISH_POLICY,
       maxOutputTokens: TITLE_MAX_OUTPUT_TOKENS,
       role: "fast",
@@ -168,5 +207,30 @@ export const generateThreadTitle = async ({
     if (isUnanticipatedAIFailure(error)) {
       captureError(error, { threadId });
     }
+  }
+};
+
+// A detached title outlives the chat attempt and therefore owns a fresh lease.
+export const generateThreadTitle = async (
+  props: GenerateThreadTitleProps,
+): Promise<void> => {
+  const admitted = await startChatExecutionAdmission({
+    organizationId: props.organizationId,
+    userId: props.userId,
+  });
+  if (Result.isError(admitted)) {
+    observeFailure(admitted.error, {
+      sink: TITLE_ADMISSION_FAILED,
+      ctx: { threadId: props.threadId },
+    });
+    return;
+  }
+  try {
+    await generateAdmittedThreadTitle({
+      ...props,
+      admissionSignal: admitted.value?.signal,
+    });
+  } finally {
+    await admitted.value?.release();
   }
 };

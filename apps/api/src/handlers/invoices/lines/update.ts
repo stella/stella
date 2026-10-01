@@ -5,7 +5,7 @@ import { t } from "elysia";
 import { INVOICE_LINE_SOURCE } from "@stll/api-contract";
 import type { InvoiceTotals } from "@stll/invoicing";
 
-import { abortableTx } from "@/api/db/safe-db";
+import { resultTx } from "@/api/db/safe-db";
 import { invoiceLines } from "@/api/db/schema";
 import {
   type InvoiceLineDraft,
@@ -65,7 +65,11 @@ const updateInvoiceLine = createSafeHandler(
       "expense line takes its amount from the entry. Omitted fields stay " +
       "unchanged. Only draft invoices can be edited.",
     permissions: { invoice: ["update"] },
-    mcp: { type: "capability", reason: "billing_admin" },
+    mcp: {
+      type: "capability",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
     params: lineParamsSchema,
     body: updateLineBodySchema,
   },
@@ -92,10 +96,10 @@ const updateInvoiceLine = createSafeHandler(
       Result.err(new HandlerError({ status, message }));
 
     const result = yield* Result.await(
-      abortableTx(
+      resultTx(
         safeDb,
         async (tx): Promise<Result<UpdatedLine, HandlerError>> => {
-          const invoice = await lockDraftInvoiceForLines(
+          const invoiceResult = await lockDraftInvoiceForLines(
             tx,
             {
               invoiceId: params.invoiceId,
@@ -104,6 +108,10 @@ const updateInvoiceLine = createSafeHandler(
             },
             recordAuditEvent,
           );
+          if (invoiceResult.isErr()) {
+            return Result.err(invoiceResult.error);
+          }
+          const invoice = invoiceResult.value;
           if (!invoice) {
             return refuse(409, "Invoice not found or not in draft status");
           }
@@ -142,7 +150,7 @@ const updateInvoiceLine = createSafeHandler(
             quantity: line.quantity,
             unit: line.unit,
             unitPrice: line.unitPrice,
-            netAmount: line.netAmount,
+            netAmount: cents(Math.abs(line.netAmount)),
             ...vat,
             source: line.source,
             timeEntryId: line.timeEntryId,
@@ -164,7 +172,7 @@ const updateInvoiceLine = createSafeHandler(
             }
             draft = manual.value;
           }
-          const priced = priceLines([draft]);
+          const priced = priceLines([draft], invoice.documentType);
           if (priced.isErr()) {
             return Result.err(priced.error);
           }
@@ -199,6 +207,10 @@ const updateInvoiceLine = createSafeHandler(
             recordAuditEvent,
           );
 
+          if (totals.isErr()) {
+            return Result.err(totals.error);
+          }
+
           // Field names only: a line description can quote privileged work.
           await recordAuditEvent(tx, {
             action: AUDIT_ACTION.UPDATE,
@@ -210,12 +222,12 @@ const updateInvoiceLine = createSafeHandler(
             metadata: { lineId: line.id, changedFields },
           });
 
-          return Result.ok({ id: line.id, totals });
+          return Result.ok({ id: line.id, totals: totals.value });
         },
       ),
     );
 
-    return result;
+    return Result.ok(result);
   },
 );
 

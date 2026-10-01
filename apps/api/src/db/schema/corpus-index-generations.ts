@@ -224,3 +224,57 @@ export const corpusIndexGroupEnrollments = p.pgTable(
     ...publicLawReaderPolicies(),
   ],
 );
+
+/**
+ * Append-only trail of index-group attestation withdrawals: which group, the
+ * digest it was attested against, who withdrew it and why, written in the
+ * withdrawing transaction (`withdrawCorpusIndexGroupEnrollmentTx`). Global,
+ * like the registry, so it cannot live in the organization-keyed audit log;
+ * it has no foreign key so it outlives the enrollment a rebuild deletes.
+ */
+export const corpusIndexGroupWithdrawals = p.pgTable(
+  "corpus_index_group_withdrawals",
+  {
+    id: p.bigint({ mode: "number" }).generatedAlwaysAsIdentity({
+      name: "corpus_index_group_withdrawals_id_seq",
+    }),
+    family: p.text({ enum: CORPUS_FAMILIES }).notNull(),
+    generation: p
+      .varchar({ length: CORPUS_INDEX_GENERATION_MAX_LENGTH })
+      .notNull(),
+    indexGroup: p.varchar("index_group", { length: 32 }).notNull(),
+    effectiveDigest: p.varchar("effective_digest", { length: 64 }).notNull(),
+    actor: p.varchar({ length: 128 }).notNull(),
+    reason: p.varchar({ length: 2048 }).notNull(),
+    withdrawnAt: timestamptz("withdrawn_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p.primaryKey({
+      name: "corpus_index_group_withdrawals_pkey",
+      columns: [t.id],
+    }),
+    p.check(
+      "corpus_index_group_withdrawals_family_values",
+      sql`${t.family} IN (${sqlValues(CORPUS_FAMILIES)})`,
+    ),
+    p.check(
+      "corpus_index_group_withdrawals_digest_shape",
+      sql`${t.effectiveDigest} ~ '^[0-9a-f]{64}$'`,
+    ),
+    p.check(
+      "corpus_index_group_withdrawals_actor_shape",
+      sql`${t.actor} ~ '^[a-z0-9][a-z0-9:._@/-]*$'`,
+    ),
+    p.check(
+      "corpus_index_group_withdrawals_reason_present",
+      sql`length(btrim(${t.reason})) > 0`,
+    ),
+    p.pgPolicy("corpus_index_group_withdrawals_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`true`,
+      withCheck: sql`true`,
+    }),
+    ...globalCaseLawPolicies(),
+  ],
+);

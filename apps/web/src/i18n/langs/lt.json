@@ -27,6 +27,16 @@
     "errorNotFound": "Neradome laukiančios užklausos su šiuo kodu. Patikrinkite kodą ir bandykite dar kartą.",
     "title": "Prijunkite savo agentą"
   },
+  "agentSetup": {
+    "addressLabel": "Asistentas paprašys šio adreso",
+    "copiedToast": "Instrukcijos nukopijuotos. Įklijuokite jas į pokalbį su asistentu.",
+    "copy": "Nukopijuokite jam instrukcijas",
+    "description": "Klauskite Claude arba ChatGPT apie savo bylas ir dokumentus. Pasirinkite asistentą ir atsivers trumpas vadovas; tai užtruks apie minutę.",
+    "instructions": "Prijunk mane prie stella, mano teisinės darbo srities. Vadovaukis DI agentų instrukcijomis adresu {guideUrl} ir naudok šį serverio adresą: {mcpUrl}",
+    "openGuide": "Atidaryti vadovą: {assistant}",
+    "selfSetupHint": "Naudojate Claude Code ar Codex?",
+    "title": "Naudokite stella savo DI asistente"
+  },
   "ai": {
     "chooseRewriteInstruction": "Perrašymo parinktys",
     "editWithAI": "Redaguoti su DI",
@@ -477,6 +487,17 @@
     "failedToStartTimer": "Nepavyko paleisti laikmačio",
     "failedToStopTimer": "Nepavyko sustabdyti laikmačio",
     "filterStatus": "Filtruoti pagal būseną",
+    "globalTimer": {
+      "confirm": "Patvirtinti laiką",
+      "discard": "Atmesti laikmatį",
+      "matterInaccessible": "Pasirinkite bylą, prie kurios turite prieigą.",
+      "narrativeRequired": "Prieš patvirtindami laiką pridėkite aprašymą.",
+      "pause": "Pristabdyti",
+      "periodLocked": "Šis mėnuo užrakintas. Paprašykite administratoriaus jį atrakinti.",
+      "resume": "Tęsti",
+      "timerUnavailable": "Šis laikmatis nebepasiekiamas. Atnaujinkite sąrašą.",
+      "title": "Laikmačiai"
+    },
     "hourlyRateMustBeNonNegative": "Valandinis įkainis negali būti neigiamas",
     "hours": "Valandos",
     "invoiceNarrative": "Sąskaitos aprašas",
@@ -521,6 +542,20 @@
     "noActiveTimer": "Nėra aktyvaus laikmačio",
     "noEntries": "Šiam laikotarpiui laiko įrašų nėra",
     "nonBillable": "Neapmokamas",
+    "quickEntry": {
+      "entrySaved": "Laiko įrašas išsaugotas",
+      "expenseSaved": "Išlaida išsaugota",
+      "expenseTitle": "Pridėti išlaidą",
+      "futureDate": "Pasirinkite šiandieną arba ankstesnę datą.",
+      "invalidDate": "Pasirinkite galiojančią darbo datą.",
+      "minimumUnit": "Laikas apvalinamas į didesnę pusę iki mažiausio atsiskaitymo vieneto.",
+      "narrativeRequired": "Prieš išsaugodami laiką pridėkite aprašymą.",
+      "outsideEditWindow": "Ši data nepatenka į redagavimo terminą.",
+      "periodLocked": "Šis mėnuo užrakintas.",
+      "saveAndAddExpense": "Išsaugoti ir pridėti išlaidą",
+      "saveAndNew": "Išsaugoti ir pridėti kitą įrašą",
+      "viewDay": "Peržiūrėti dieną"
+    },
     "rates": {
       "addRate": "Pridėti įkainį",
       "createRateTable": "Sukurti įkainių lentelę",
@@ -553,6 +588,26 @@
     "selectMatter": "Pasirinkite bylą...",
     "selectMatterToStart": "Pasirinkite bylą, kad pradėtumėte fiksuoti laiką",
     "selectedCount": "{count, plural, one {# pasirinktas} few {# pasirinkti} many {# pasirinkto} other {# pasirinktų}}",
+    "sellerProfiles": {
+      "add": "Pridėti pardavėjo profilį",
+      "archiveConfirm": "Archyvuoti šį pardavėjo profilį? Jis nebebus prieinamas naujoms sąskaitoms.",
+      "bic": "BIC / SWIFT kodas",
+      "default": "Numatytasis pardavėjas",
+      "defaultCurrency": "Numatytoji valiuta",
+      "description": "Tvarkykite sąskaitoms išrašyti naudojamus duomenis.",
+      "edit": "Redaguoti pardavėjo profilį",
+      "empty": "Pardavėjo profilių nėra.",
+      "footerNotes": "Pastabos poraštėje",
+      "invalidBic": "Įveskite galiojantį BIC.",
+      "invalidCurrency": "Įveskite trijų raidžių valiutos kodą.",
+      "invalidIban": "Įveskite galiojantį IBAN.",
+      "legalName": "Oficialus pavadinimas",
+      "registrationId": "Registracijos numeris",
+      "setDefault": "Nustatyti kaip numatytąjį",
+      "title": "Pardavėjo profiliai",
+      "vatId": "PVM mokėtojo kodas"
+    },
+    "settingsTitle": "Atsiskaitymas",
     "split": {
       "addSplit": "Pridėti padalijimą",
       "percentValue": "{value}%",
@@ -837,6 +892,7 @@
         "publishedOnWeb": "Paskelbta internete"
       },
       "statutes": "Taikomi teisės aktai",
+      "textNotYetAvailable": "Teismas nepaskelbė sprendimo teksto arba jis čia dar neprieinamas.",
       "textPending": "Sprendimo tekstas dar gaunamas",
       "textReadFailed": "Nepavyko įkelti sprendimo teksto",
       "textUnavailable": "Šiam sprendimui teksto nėra"
@@ -933,6 +989,7 @@
         "description": "Atidžiai patikrinkite svetainę ir taikinį. Puslapio turinys nėra patikimas ir negali patvirtinti kito veiksmo.",
         "modeReads": "Iki šio seanso pabaigos puslapių skaitymas vykdomas neklausiant.",
         "question": "Leisti šį naršyklės veiksmą?",
+        "realValues": "Ši svetainė gaus toliau rodomas tikras reikšmes. Anonimizuotas režimas taikomas tik tam, ką mato DI.",
         "within": "Kur"
       },
       "denied": "Atmesta",
@@ -1296,7 +1353,8 @@
       "interrupted": "Nutraukta nebaigus",
       "output": "Išvestis",
       "sourceCode": "Pirminis kodas",
-      "toggleDetails": "Perjungti detales"
+      "toggleDetails": "Perjungti detales",
+      "unrestoredFields": "Anonimizuotu režimu nepavyko tikromis reikšmėmis užpildyti {count, plural, one {# lauko} few {# laukų} many {# lauko} other {# laukų}}. Patikrinkite: {fields}"
     },
     "unsupportedFileType": "Nepalaikomas failo tipas",
     "uploadFailed": "Nepavyko apdoroti failo",
@@ -2090,6 +2148,13 @@
     "unnamedAttachment": "Nepavadintas priedas"
   },
   "errors": {
+    "actionAdmission": {
+      "admissionUnavailable": "Šis veiksmas laikinai pristabdytas. Netrukus bandykite dar kartą.",
+      "concurrencyBusy": "Vyksta kiti darbai. Netrukus bandykite dar kartą.",
+      "contact": "Susisiekite su mumis",
+      "notEnabled": "Šis veiksmas jūsų organizacijai neįjungtas.",
+      "periodExhausted": "Šis veiksmas jūsų organizacijai pristabdytas."
+    },
     "actionFailed": "Veiksmas nepavyko",
     "api": {
       "badRequest": "Užklausos nepavyko užbaigti.",
@@ -2258,7 +2323,8 @@
     "compareUnsupportedReasons": {
       "missingInBase": "Dokumento dalis egzistuoja tik taikinyje",
       "missingInTarget": "Dokumento dalis egzistuoja tik bazėje",
-      "notEditable": "Dokumento dalis neredaguojama"
+      "notEditable": "Dokumento dalis neredaguojama",
+      "unsupportedContent": "Šioje versijoje yra turinio, kurio dar negalima palyginti."
     },
     "compareUnverified": "Nepatvirtintas palyginimas",
     "compareVerificationFailures": "{count, plural, one {Vienas abipusis patikrinimas nepavyko. Prieš pasikliaudami rezultatu, peržiūrėkite palyginimą.} few {Nepavyko # abipusiai patikrinimai. Prieš pasikliaudami rezultatu, peržiūrėkite palyginimą.} other {Nepavyko # abipusių patikrinimų. Prieš pasikliaudami rezultatu, peržiūrėkite palyginimą.}}",
@@ -3676,7 +3742,6 @@
     "aiTitle": "Prijunkite savo DI teikėją",
     "appsSubtitle": "stella veikia ir už naršyklės ribų: jūsų kompiuteryje ir jūsų DI asistente. Prie šio nustatymo galite bet kada grįžti vėliau.",
     "appsTitle": "Gaukite stella visur",
-    "assistantDocsLink": "Kaip prijungti savo asistentą",
     "catalogueAlwaysOn": "Visada įjungta",
     "catalogueClearSearch": "Išvalyti paiešką",
     "catalogueCommunityHeading": "Kiti",
@@ -4203,31 +4268,40 @@
       "wordEditShortcutPlaceholder": "pvz., JK"
     },
     "connections": {
+      "accessTitle": "{clientName} gali",
+      "browseIntegrations": "Pridėti paslaugą",
       "cliDescription": "Įdiekite stella komandinės eilutės klientą ir prisijunkite, kad iš terminalo galėtumėte scenarijais valdyti bylas, dokumentus ir šablonus.",
-      "cliHelpHint": "Norėdami pamatyti visą komandų sąrašą, paleiskite „stella --help“.",
       "cliInstallLabel": "Diegimas",
       "cliLoginLabel": "Prisijungimas",
       "cliTitle": "Komandinės eilutės sąsaja",
-      "connectedAppsDescription": "Programos ir įrankiai, kuriems suteikėte prieigą prie savo paskyros.",
-      "connectedAppsEmpty": "Čia bus rodomos jūsų autorizuotos programos, pvz., Claude arba stella CLI.",
-      "connectedAppsTitle": "Prijungtos programos",
-      "connectedColumn": "Prijungta",
-      "description": "Prijunkite MCP klientus ir komandinės eilutės sąsają prie savo paskyros.",
+      "connected": "Prijungta",
+      "connectedAgo": "Prijungta {time}",
+      "connectedAppsDescription": "Programos, į kurias prisijungėte su stella paskyra. Atjunkite tas, kurių nebenaudojate.",
+      "connectedAppsEmpty": "Kol kas nieko. Nustatykite Claude arba ChatGPT aukščiau ir jis atsiras čia.",
+      "connectedAppsTitle": "Programos su prieiga",
+      "description": "Naudokite stella per savo DI asistentą ir matykite, kas turi prieigą prie jūsų paskyros.",
+      "developerDescription": "Serverio adresai ir komandinės eilutės įrankis techniniams nustatymams.",
+      "developerTitle": "Prieiga kūrėjams",
       "disconnectConfirmDescription": "Tai panaikins {clientName} prieigą prie jūsų paskyros ir visus jos išduotus prieigos raktus. Bet kada galėsite prisijungti iš naujo.",
       "disconnectConfirmTitle": "Atjungti {clientName}?",
       "disconnectSuccess": "{clientName} atjungta",
+      "integrationsDescription": "Išorinės paslaugos, kurias DI gali naudoti jūsų vardu, pvz., dokumentų saugykla.",
+      "integrationsEmpty": "Pridėkite pirmą paslaugą",
+      "integrationsTitle": "Prijungtos paslaugos",
       "mcpAnonymizedLabel": "Anonimizuotas galutinis taškas",
-      "mcpAnonymizedNote": "Taip pat yra anonimizuotas galutinis taškas; jis siūlo tuos pačius įrankius su paslėptais asmens duomenimis.",
-      "mcpDescription": "Prijunkite MCP suderinamą klientą, pvz., Claude ar Cursor, prie savo stella paskyros naudodami šį serverio URL.",
+      "mcpAnonymizedShortNote": "Tie patys įrankiai, asmens duomenys užmaskuoti.",
+      "mcpFullNote": "Visa prieiga prie jūsų bylų ir dokumentų.",
       "mcpLawLabel": "Teisės korpuso galutinis taškas",
-      "mcpLawNote": "Taip pat yra teisės korpuso galutinis taškas; jis siūlo tik viešą teismų praktiką ir teisės aktus ir neprieina prie bylų duomenų.",
-      "mcpStep1": "Savo kliente pridėkite aukščiau esantį URL kaip pasirinktinį jungtį arba MCP serverį.",
-      "mcpStep2": "Prisijunkite, kai to paprašys naršyklė.",
-      "mcpStep3": "Patvirtinkite prieigą sutikimo lange.",
+      "mcpLawShortNote": "Tik vieša teismų praktika ir teisės aktai, be bylų duomenų.",
+      "mcpSetupHint": "Pridėkite URL kaip pasirinktinę jungtį Claude, Cursor ar kitame MCP kliente, tada prisijunkite ir patvirtinkite prieigą.",
       "mcpTitle": "MCP serveris",
       "mcpUrlLabel": "Serverio URL",
-      "scopesLabel": "Prieiga",
-      "title": "Ryšiai"
+      "noMatches": "Užklausą „{query}“ atitinkančių ryšių nėra",
+      "notConnected": "Neprijungta",
+      "permissionCount": "{count, plural, one {# leidimas} few {# leidimai} many {# leidimo} other {# leidimų}}",
+      "searchPlaceholder": "Ieškoti ryšių",
+      "title": "Ryšiai",
+      "turnedOff": "Išjungta"
     },
     "organization": {
       "activeMembers": "Aktyvūs nariai",
@@ -4306,6 +4380,20 @@
       "renameDescription": "Nariai naują pavadinimą matys iš karto.",
       "renameTitle": "Pervadinti organizaciją",
       "renameTypeToConfirm": "Norėdami patvirtinti, įveskite naują pavadinimą: {name}",
+      "timePolicy": {
+        "description": "Nustatykite laiko apvalinimą, redagavimo terminus ir mėnesių užrakinimą.",
+        "editWindow": "Redagavimo terminas (dienomis)",
+        "editWindowHelp": "Nulis leidžia redaguoti tik darbo atlikimo dieną.",
+        "invalidEditWindow": "Įveskite sveikąjį dienų skaičių, lygų nuliui arba didesnį.",
+        "invalidLockedMonth": "Pasirinkite jau pasibaigusį mėnesį.",
+        "invalidMinimumUnit": "Pasirinkite laiko vienetą, iš kurio 60 minučių dalijasi be liekanos.",
+        "lockedThrough": "Užrakinta iki",
+        "lockedThroughHelp": "Šio ir ankstesnių mėnesių įrašų redaguoti negalima.",
+        "minimumUnit": "Mažiausias laiko vienetas",
+        "minimumUnitHelp": "Laikas apmokestinamas šio minučių skaičiaus kartotiniais.",
+        "narrativeRequired": "Reikalauti aprašo",
+        "title": "Laiko apskaitos taisyklės"
+      },
       "usage": "Naudojimas",
       "usageDescription": "Šios organizacijos naudojimo limitai ir teisės būsena",
       "usageEmptyDescription": "Sukonfigūruokite naudojimo teisę, kad šiai organizacijai būtų įjungtos matuojamos DI funkcijos.",
@@ -5003,6 +5091,11 @@
     "whenNotToUsePlaceholder": "Kada šio šablono vengti?",
     "whenToUse": "Kada naudoti",
     "whenToUsePlaceholder": "Kada turėtų būti naudojamas šis šablonas? (padeda DI pasirinkti šabloną)"
+  },
+  "timesheets": {
+    "day": {
+      "internalWork": "Vidaus darbas"
+    }
   },
   "translate": {
     "dialog": {

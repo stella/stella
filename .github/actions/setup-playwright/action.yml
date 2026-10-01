@@ -7,7 +7,7 @@ inputs:
     required: false
     default: chromium
   dependency-mode:
-    description: Use full for deterministic screenshot fonts; otherwise verify launch compatibility
+    description: Use preinstalled for the pinned container, full for screenshot fonts, or launch-verified for hosts
     required: false
     default: launch-verified
 
@@ -20,7 +20,7 @@ runs:
         DEPENDENCY_MODE: ${{ inputs.dependency-mode }}
       run: |
         case "$DEPENDENCY_MODE" in
-          full|launch-verified) ;;
+          full|launch-verified|preinstalled) ;;
           *)
             echo "::error::Unknown Playwright dependency mode: $DEPENDENCY_MODE"
             exit 1
@@ -35,6 +35,7 @@ runs:
         echo "version=$version" >> "$GITHUB_OUTPUT"
 
     - name: Restore Playwright browser
+      if: inputs.dependency-mode != 'preinstalled'
       id: browser-cache
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
@@ -45,6 +46,7 @@ runs:
 
     # Playwright installs pinned browsers; the runner's Chrome channel is unrelated.
     - name: Disable runner Chrome apt source
+      if: inputs.dependency-mode != 'preinstalled'
       shell: bash
       run: |
         chrome_apt_source=/etc/apt/sources.list.d/google-chrome.list
@@ -53,14 +55,15 @@ runs:
         fi
 
     - name: Install browsers on cache miss
-      if: steps.browser-cache.outputs.cache-hit != 'true'
+      if: inputs.dependency-mode != 'preinstalled' && steps.browser-cache.outputs.cache-hit != 'true'
       shell: bash
       env:
         BROWSERS: ${{ inputs.browsers }}
       run: |
         cd apps/web
         read -r -a browsers <<<"$BROWSERS"
-        bunx playwright install --with-deps "${browsers[@]}"
+        bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/install-deps.sh" "${browsers[@]}"
+        bunx playwright install "${browsers[@]}"
 
     - name: Install deterministic screenshot dependencies
       if: steps.browser-cache.outputs.cache-hit == 'true' && inputs.dependency-mode == 'full'
@@ -70,7 +73,7 @@ runs:
       run: |
         cd apps/web
         read -r -a browsers <<<"$BROWSERS"
-        bunx playwright install-deps "${browsers[@]}"
+        bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/install-deps.sh" "${browsers[@]}"
 
     - name: Verify browser host dependencies
       shell: bash
@@ -94,12 +97,12 @@ runs:
           exit 0
         fi
 
-        if [[ "$PLAYWRIGHT_CACHE_HIT" != "true" || "$DEPENDENCY_MODE" == "full" ]]; then
+        if [[ "$DEPENDENCY_MODE" == "preinstalled" || "$PLAYWRIGHT_CACHE_HIT" != "true" || "$DEPENDENCY_MODE" == "full" ]]; then
           echo "::error::Playwright browsers ($BROWSERS) failed to launch after installing their declared dependencies"
           exit 1
         fi
 
         echo "::warning::Cached browsers need additional host dependencies; installing them now"
         read -r -a browsers <<<"$BROWSERS"
-        bunx playwright install-deps "${browsers[@]}"
+        bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/install-deps.sh" "${browsers[@]}"
         verify_browsers

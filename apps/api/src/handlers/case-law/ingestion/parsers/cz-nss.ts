@@ -24,6 +24,7 @@
  */
 
 import * as cheerio from "cheerio";
+import { isComment, isText } from "domhandler";
 import type { AnyNode } from "domhandler";
 
 import {
@@ -403,42 +404,77 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
   const body = $("body");
   body.find("div[style*='-aw-headerfooter-type']").remove();
 
-  // Walk top-level children in document order to
-  // preserve the correct sequence of <p>, <ol>, <ul>,
-  // <div>, and <table>. Some decisions use <div> for
-  // content blocks (e.g., cost breakdowns, footnotes).
-  body.find("p, ol, ul, table, div").each((_, el) => {
-    const $el = $(el);
-    const tag = el.tagName.toLowerCase();
-
-    // Anything inside a list item is already emitted by that item's
-    // inline walk, which recurses through the whole subtree, so
-    // matching a descendant block here would duplicate its text.
-    // Aspose commonly wraps item content in a <p>, and a nested list
-    // in a <ul>/<ol>. A <table> inside an item therefore reaches the
-    // AST as the item's flattened text rather than as a table block:
-    // that is rule 10's trade, completeness before fidelity.
-    if ($el.parents("li").length > 0) {
-      return;
-    }
-
-    // Skip <div> elements that contain child block
-    // elements — those children are matched separately
-    // by the selector, so processing the <div> would
-    // double-count. Only process leaf-level <div>s.
-    if (tag === "div") {
-      if ($el.find("p, ol, ul, table, div").length > 0) {
+  const blockSelector =
+    "p, ol, ul, table, div, blockquote, h1, h2, h3, h4, h5, h6";
+  const visitContents = ($container: cheerio.Cheerio<AnyNode>): void => {
+    let run: AnyNode[] = [];
+    const flush = (): void => {
+      if (run.length === 0) {
         return;
       }
-
-      const chunk = styledBlockChunk($, $el);
+      const $run = $("<div></div>").append($(run).clone());
+      const chunk = styledBlockChunk($, $run);
       if (chunk !== null) {
         chunks.push(chunk);
+      }
+      run = [];
+    };
+    $container.contents().each((_, child) => {
+      const $child = $(child);
+      if ($child.is(blockSelector) || $child.find(blockSelector).length > 0) {
+        flush();
+        visit(child);
+        return;
+      }
+      run.push(child);
+    });
+    flush();
+  };
+
+  const visit = (el: AnyNode): void => {
+    if (isComment(el)) {
+      return;
+    }
+    const $el = $(el);
+    const tag = "tagName" in el ? el.tagName.toLowerCase() : "";
+    if (tag === "script" || tag === "style") {
+      return;
+    }
+    if (
+      tag === "body" ||
+      (tag &&
+        $el.find(blockSelector).length > 0 &&
+        tag !== "table" &&
+        tag !== "ol" &&
+        tag !== "ul")
+    ) {
+      visitContents($el);
+      return;
+    }
+    if (isText(el)) {
+      const plainText = el.data.trim();
+      if (plainText) {
+        chunks.push({
+          inlines: [{ type: "text", text: plainText }],
+          plainText,
+          centered: false,
+          bold: false,
+          letterSpacing: false,
+          fontSize: 12,
+          listItemIndex: null,
+          footnote: null,
+        });
       }
       return;
     }
 
     if (tag === "table") {
+      $el.children("caption").each((_caption, caption) => {
+        const chunk = styledBlockChunk($, $(caption));
+        if (chunk !== null) {
+          chunks.push(chunk);
+        }
+      });
       // Extract each row as a paragraph. Cell values are
       // joined with " | " to preserve tabular structure
       // in plain text (e.g., cost breakdowns, fee summaries).
@@ -492,7 +528,11 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
       const startAttr = $el.attr("start");
       let listStart = startAttr ? Number.parseInt(startAttr, 10) : 1;
 
-      $el.find("> li").each((_li, liEl) => {
+      $el.contents().each((_li, liEl) => {
+        if (!("tagName" in liEl) || liEl.tagName.toLowerCase() !== "li") {
+          visit(liEl);
+          return;
+        }
         const $li = $(liEl);
         const inlines = normalizeNssInlines(walkInlines($, $li));
         const plainText = inlinesToPlainText(inlines).trim();
@@ -522,7 +562,8 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
     if (chunk !== null) {
       chunks.push(chunk);
     }
-  });
+  };
+  visitContents(body);
 
   return chunks;
 };

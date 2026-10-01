@@ -242,6 +242,8 @@ const EXAMPLE_VALUES: Record<string, string> = {
 };
 
 const DESCRIPTION_OVERRIDES: Record<string, string> = {
+  ACTION_LIMIT_CONTACT_URL:
+    "Public http(s) contact link shown when an action is paused or not enabled.",
   AGENT_SANDBOX_DOCKER_NETWORK:
     "Locked-down Docker network used by agent sandboxes. It must deny arbitrary egress.",
   AGENT_SANDBOX_DOCKER_SOCKET:
@@ -362,8 +364,6 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Microsoft OAuth client secret; required when the matching web login flag is enabled.",
   MICROSOFT_AUTH_TENANT_ID:
     "Microsoft OAuth tenant selector accepted by the configured application registration.",
-  OPERATOR_METRICS_TOKEN:
-    "Bearer token for registration metrics. Unset disables the endpoint; use a long random value.",
   POSTHOG_KEY:
     'PostHog project key. The placeholder "phc_" disables capture for local development.',
   POSTHOG_LOCAL_DEBUG:
@@ -609,7 +609,7 @@ export const requirementFor = (schema: v.GenericSchema): EnvRequirement => {
 };
 
 const exposureFor = (name: string, owner: EnvOwner): EnvExposure => {
-  if (owner === ENV_OWNER.web) {
+  if (owner === ENV_OWNER.web || name === "ACTION_LIMIT_CONTACT_URL") {
     return ENV_EXPOSURE.public;
   }
   if (INTERNAL_SERVER_KEYS.has(name)) {
@@ -825,8 +825,10 @@ export const TOOLING_ENV_KEYS = new Set([
   "E2E_SOAK_SEED",
   "E2E_SOAK_STEPS",
   "E2E_WEB_URL",
+  "EVENT_NAME",
   "EXPECTED_COMMIT",
   "GH_READ_TOKEN",
+  "HEAD_SHA",
   "LANDING_SITE",
   "MARKETING_CAPTURE",
   "MARKETING_COMMIT",
@@ -836,14 +838,18 @@ export const TOOLING_ENV_KEYS = new Set([
   "MCP_APP_INPUT",
   "MCP_CANARY_BASE_URL",
   "MCP_CANARY_TOKEN",
+  "MERGE_GROUP_HEAD_REF",
   "MODE",
   "NETWORK_CANARY_URL",
   "PGLITE_TEST_SNAPSHOT",
+  "PR_HEAD_SHA",
   "PRODUCT_MEDIA_S3_BUCKET",
   "PROPERTY_ROLE_BACKFILL_BATCH_SIZE",
   "PROPERTY_TEST_NUM_RUNS_FACTOR",
   "PROPERTY_TEST_SEED",
   "PROPERTY_TEST_TIMEOUT_BASE_MS",
+  "PROVIDER_REQUEST_COMBINATIONS",
+  "PROVIDER_REQUEST_SHARD",
   "RAILWAY_API_TOKEN",
   "RAILWAY_PROJECT_TOKEN",
   "RAILWAY_SMOKE_API_URL",
@@ -863,18 +869,16 @@ export const TOOLING_ENV_KEYS = new Set([
   "REHEARSAL_DECISIONS",
   "REHEARSAL_MIGRATE_BUDGET_SECONDS",
   "REHEARSAL_PRODUCTION_READY_URL",
-  "RELAY_EVENT",
-  "RELAY_HEAD_SHA",
-  "RELAY_PULL_REQUESTS",
   "RELEASE_REF",
   "REPO",
+  "REPOSITORY",
   "RETRY_ATTEMPTS",
-  "REVIEW_GATE_BASE",
   "RETRY_DELAYS_SECONDS",
   "SMOKE_AI_JOURNEY",
   "SMOKE_AI_OPENAI_API_KEY",
   "SMOKE_API_URL",
   "SMOKE_TEST",
+  "STAGING_STATE",
   "STELLA_AGENT_CAPTURE_LOG",
   "STELLA_COLLAB_TEST_REDIS_CONTAINER_ID",
   "STELLA_COLLAB_TEST_REDIS_URL",
@@ -883,6 +887,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_DESKTOP_SMOKE_API_URL",
   "STELLA_DEV_INSTANCE",
   "STELLA_INFRA_OFFSET",
+  "STELLA_MERGE_HOLD",
+  "STELLA_MERGE_HOLD_CHECKED_BY_WORKFLOW",
   "STELLA_PORT_OFFSET",
   "STELLA_QUERY_PLAN_SCALE_PROFILE",
   "STELLA_RUN_CORPUS_ENGINE_TESTS",
@@ -897,6 +903,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_UPDATE_PLAN_CONTRACTS",
   "TANSTACK_DRIFT_INSTALL_OUTCOME",
   "TURBO_SCM_BASE",
+  "UPDATE_PROVIDER_REQUEST_PATHS",
   "WXT_STELLA_ORIGINS",
 ]);
 

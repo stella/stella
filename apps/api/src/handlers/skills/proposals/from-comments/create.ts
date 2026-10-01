@@ -65,7 +65,11 @@ const config = {
     "unresolved, and bundled skills are refused. Consumes AI usage.",
   permissions: { agentSkill: ["propose"] },
   access: "write",
-  mcp: { type: "capability", reason: "agent_tool_authoring" },
+  mcp: {
+    type: "capability",
+    reason: "agent_tool_authoring",
+    consumesServices: true,
+  },
   params: fromCommentsParamsSchema,
   body: fromCommentsBodySchema,
   // Queued / "flex" tier — applying a comment batch is asynchronous from the
