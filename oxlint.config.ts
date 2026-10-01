@@ -1691,7 +1691,6 @@ export default defineConfig({
               "apps/web/src/routes/_protected.settings/account.profile.tsx",
               "apps/web/src/routes/_protected.settings/organization.usage.tsx",
               "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-row.tsx",
-              "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/timer-controls.tsx",
               "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx",
               "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/extraction-run-progress.tsx",
               "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx",

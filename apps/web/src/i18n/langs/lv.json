@@ -487,6 +487,17 @@
     "failedToStartTimer": "Neizdevās palaist taimeri",
     "failedToStopTimer": "Neizdevās apturēt taimeri",
     "filterStatus": "Filtrēt pēc statusa",
+    "globalTimer": {
+      "confirm": "Apstiprināt laiku",
+      "discard": "Atmest taimeri",
+      "matterInaccessible": "Izvēlieties lietu, kurai jums ir piekļuve.",
+      "narrativeRequired": "Pirms laika apstiprināšanas pievienojiet aprakstu.",
+      "pause": "Pauzēt",
+      "periodLocked": "Šis mēnesis ir bloķēts. Lūdziet administratoram to atbloķēt.",
+      "resume": "Turpināt",
+      "timerUnavailable": "Šis taimeris vairs nav pieejams. Atsvaidziniet sarakstu.",
+      "title": "Taimeri"
+    },
     "hourlyRateMustBeNonNegative": "Stundas likme nedrīkst būt negatīva",
     "hours": "Stundas",
     "invoiceNarrative": "Rēķina apraksts",

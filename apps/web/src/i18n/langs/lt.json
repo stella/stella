@@ -487,6 +487,17 @@
     "failedToStartTimer": "Nepavyko paleisti laikmačio",
     "failedToStopTimer": "Nepavyko sustabdyti laikmačio",
     "filterStatus": "Filtruoti pagal būseną",
+    "globalTimer": {
+      "confirm": "Patvirtinti laiką",
+      "discard": "Atmesti laikmatį",
+      "matterInaccessible": "Pasirinkite bylą, prie kurios turite prieigą.",
+      "narrativeRequired": "Prieš patvirtindami laiką pridėkite aprašymą.",
+      "pause": "Pristabdyti",
+      "periodLocked": "Šis mėnuo užrakintas. Paprašykite administratoriaus jį atrakinti.",
+      "resume": "Tęsti",
+      "timerUnavailable": "Šis laikmatis nebepasiekiamas. Atnaujinkite sąrašą.",
+      "title": "Laikmačiai"
+    },
     "hourlyRateMustBeNonNegative": "Valandinis įkainis negali būti neigiamas",
     "hours": "Valandos",
     "invoiceNarrative": "Sąskaitos aprašas",

@@ -487,6 +487,17 @@
     "failedToStartTimer": "Taimeri käivitamine ebaõnnestus",
     "failedToStopTimer": "Taimeri peatamine ebaõnnestus",
     "filterStatus": "Filtreeri oleku järgi",
+    "globalTimer": {
+      "confirm": "Kinnita aeg",
+      "discard": "Loobu taimerist",
+      "matterInaccessible": "Valige toimik, millele teil on juurdepääs.",
+      "narrativeRequired": "Enne aja kinnitamist lisage kirjeldus.",
+      "pause": "Peata",
+      "periodLocked": "See kuu on lukustatud. Paluge administraatoril see avada.",
+      "resume": "Jätka",
+      "timerUnavailable": "See taimer pole enam saadaval. Värskendage loendit.",
+      "title": "Taimerid"
+    },
     "hourlyRateMustBeNonNegative": "Tunnitasu ei tohi olla negatiivne",
     "hours": "Tunnid",
     "invoiceNarrative": "Arve selgitus",
