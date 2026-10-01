@@ -20,6 +20,7 @@ type TeamAvatarsProps = {
   /** Inner text size class, e.g. "text-3xs". */
   textSize?: string;
   maxVisible?: number;
+  totalCount?: number;
   emptyFallback?: React.ReactNode;
 };
 
@@ -29,17 +30,22 @@ export const TeamAvatars = ({
   size = "size-6",
   textSize = "text-3xs",
   maxVisible = 3,
+  totalCount = members.length,
   emptyFallback,
   // Explicit ReactNode: `emptyFallback` widens the inferred return to a type
   // containing React 19's Promise<AwaitedReactNode> member, which
   // promise-function-async would otherwise flag on this sync component.
 }: TeamAvatarsProps): React.ReactNode => {
   const t = useTranslations();
-  if (members.length === 0) {
-    return emptyFallback ?? <span className="text-muted-foreground">—</span>;
+  if (totalCount === 0) {
+    return emptyFallback === undefined ? (
+      <span className="text-muted-foreground">—</span>
+    ) : (
+      emptyFallback
+    );
   }
   const visible = members.slice(0, maxVisible);
-  const overflow = members.length - visible.length;
+  const overflow = totalCount - visible.length;
 
   return (
     <div className="flex items-center -space-x-1">

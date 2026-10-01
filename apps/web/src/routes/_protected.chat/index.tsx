@@ -102,7 +102,8 @@ import { runReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
-import { workspaceMembersOptions } from "@/lib/workspaces/queries/workspace-members";
+import type { WorkspaceMemberPreview } from "@/lib/workspaces/queries/workspace-member-previews";
+import { workspaceMemberPreviewsOptions } from "@/lib/workspaces/queries/workspace-member-previews";
 import { ThreadsSheet } from "@/routes/_protected.chat/-components/threads-sheet";
 
 export const Route = createFileRoute("/_protected/chat/")({
@@ -144,30 +145,38 @@ const protectedRouteApi = getRouteApi("/_protected");
 /** Who else works on a matter, as a compact avatar stack on its row. */
 const MatterColleagues = ({
   currentUserId,
-  matterId,
+  preview,
 }: {
   currentUserId: string;
-  matterId: string;
+  preview: WorkspaceMemberPreview | undefined;
 }) => {
-  const { data: members } = useQuery(workspaceMembersOptions(matterId));
-  const colleagues = (members ?? []).flatMap(({ user, userId }) =>
-    user === null || userId === currentUserId
-      ? []
-      : [
-          {
-            userEmail: user.email,
-            userId,
-            userImage: user.image,
-            userName: user.name,
-          },
-        ],
+  if (!preview) {
+    return null;
+  }
+  const colleagues = preview.members.flatMap(
+    ({ email, userId, image, name }) =>
+      userId === currentUserId
+        ? []
+        : [
+            {
+              userEmail: email,
+              userId,
+              userImage: image,
+              userName: name,
+            },
+          ],
   );
-
+  const viewerCount = preview.members.some(
+    (member) => member.userId === currentUserId,
+  )
+    ? 1
+    : 0;
   return (
     <TeamAvatars
       emptyFallback={null}
       leadUserId={null}
       members={colleagues}
+      totalCount={preview.total - viewerCount}
       size="size-6"
     />
   );
@@ -361,6 +370,9 @@ function ChatIndex() {
 
   const visibleMatters =
     pinnedMatters.length > 0 ? pinnedMatters : lastAccessedMatters;
+  const { data: memberPreviews } = useQuery(
+    workspaceMemberPreviewsOptions(visibleMatters.map((matter) => matter.id)),
+  );
   const mattersHeading =
     pinnedMatters.length > 0
       ? t("chat.landing.pinnedMatters")
@@ -663,7 +675,12 @@ function ChatIndex() {
                     title={matter.name}
                   />
                 </span>
-                <MatterColleagues currentUserId={userId} matterId={matter.id} />
+                <MatterColleagues
+                  currentUserId={userId}
+                  preview={memberPreviews?.previews.find(
+                    (preview) => preview.workspaceId === matter.id,
+                  )}
+                />
               </Link>
             </MatterContextMenu>
           ))
