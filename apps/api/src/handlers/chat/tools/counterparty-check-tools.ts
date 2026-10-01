@@ -6,6 +6,7 @@ import type {
   runEntityCheck,
 } from "@stll/business-registries/entity-checks";
 
+import type { RawModeOnlyChatToolName } from "@/api/handlers/chat/tools/raw-mode-only-tools";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import { raiseChatToolError } from "@/api/handlers/chat/tools/tool-failure";
 import { runEntityCheckShared } from "@/api/lib/business-registries/entity-checks";
@@ -15,7 +16,8 @@ import {
   toEntityCheckSubject,
 } from "@/api/mcp/matter-tools";
 
-export const COUNTERPARTY_CHECK_TOOL_NAME = "counterparty_check" as const;
+export const COUNTERPARTY_CHECK_TOOL_NAME =
+  "counterparty_check" as const satisfies RawModeOnlyChatToolName;
 
 const TOOL_DESCRIPTION =
   "Screen a company or a person against an official register for due " +

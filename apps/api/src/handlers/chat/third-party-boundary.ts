@@ -23,6 +23,7 @@ import {
   isChatAttachmentPart,
   isProviderVisibleChatPart,
 } from "@/api/handlers/chat/chat-message-parts";
+import { isRawModeOnlyChatTool } from "@/api/handlers/chat/tools/raw-mode-only-tools";
 import {
   CHAT_TOOL_POLICY_KIND,
   getChatToolPolicy,
@@ -564,6 +565,60 @@ export const deanonymizeUnknownStringsFromBoundary = (
     : walkLenient(deanonymized, literalLenient);
 };
 
+const INDEXED_PLACEHOLDER_ANYWHERE = /\[[A-Z][A-Z0-9_]*_\d+\]/u;
+
+type RestoredText = {
+  /** False when a placeholder this boundary cannot name stays in the text. */
+  complete: boolean;
+  text: string;
+};
+
+/**
+ * Restore model-written text that will be saved or shown with the real
+ * values: every placeholder this boundary sent, bracketed or bare, becomes
+ * its original. A placeholder it never sent (one the model made up) cannot
+ * be restored, so the result says the text is incomplete instead of letting
+ * it pass as filled.
+ */
+export const restoreTextFromBoundary = (
+  boundary: ChatThirdPartyBoundary,
+  text: string,
+): RestoredText => {
+  if (boundary.type === "raw") {
+    return { complete: true, text };
+  }
+  const restored = deanonymizeUnknownStringsFromBoundary(
+    boundary,
+    text,
+    "lenient",
+  );
+  const restoredText = typeof restored === "string" ? restored : text;
+  return {
+    complete: !INDEXED_PLACEHOLDER_ANYWHERE.test(restoredText),
+    text: restoredText,
+  };
+};
+
+/** Whether a restored value tree still holds a placeholder the boundary
+ *  cannot name, anywhere in its strings. */
+export const holdsUnrestoredPlaceholder = (
+  boundary: ChatThirdPartyBoundary,
+  value: unknown,
+): boolean => {
+  if (boundary.type === "raw") {
+    return false;
+  }
+  if (typeof value === "string") {
+    return INDEXED_PLACEHOLDER_ANYWHERE.test(value);
+  }
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  return Object.values(value).some((nested) =>
+    holdsUnrestoredPlaceholder(boundary, nested),
+  );
+};
+
 const walkStrict = (value: unknown, map: Map<string, string>): unknown => {
   if (typeof value === "string") {
     return PLACEHOLDER_LIKE.test(value) ? deanonymise(value, map) : value;
@@ -678,40 +733,107 @@ export const prepareTextForThirdParty = async ({
     return Result.ok(text);
   }
 
-  const anonymizeFields = boundary.anonymizeFields ?? anonymizeTextFields;
-  reserveSourcePlaceholders(boundary, [text]);
-  const protectedInput = protectBoundaryPlaceholders(boundary, [
-    encodeLateLiteralPlaceholders(boundary, text),
-  ]);
-  const anonymized = await Result.tryPromise({
-    try: async () =>
-      await anonymizeFields({
-        context: boundary.pipelineContext,
-        fields: protectedInput.fields,
-        forcedSensitiveValues: forcedSensitiveValuesForFields(boundary, [text]),
-        catalogs: {
-          type: "preloaded",
-          excludedCanonicals: await boundary.excludedCanonicals,
-          gazetteerEntries: await boundary.gazetteerEntries,
+  let prepared = text;
+  const batch = await prepareTextBatchForThirdParty({
+    boundary,
+    replacements: [
+      {
+        type: "replace",
+        text,
+        apply: (value) => {
+          prepared = value;
         },
-        organizationId: boundary.organizationId,
-        workspaceId: boundary.anonymizationScopeId,
-      }),
-    catch: (cause) =>
-      new HandlerError({
-        status: 500,
-        message: "Failed to anonymize content before sending it to the AI.",
-        cause,
-      }),
+      },
+    ],
   });
-
-  if (Result.isError(anonymized)) {
-    return Result.err(anonymized.error);
+  if (Result.isError(batch)) {
+    return Result.err(batch.error);
   }
+  return Result.ok(prepared);
+};
 
-  const rewritten = rewriteBoundaryPlaceholders(boundary, anonymized.value);
-  mergeRedactionMap(boundary.redactionMap, rewritten.redactionMap);
-  return Result.ok(protectedInput.restore(rewritten.fields).at(0) ?? "");
+const PLACEHOLDER_TOKEN_SPLIT = /(\[[A-Z][A-Z0-9_]*\])/u;
+const HAS_LETTER_OR_DIGIT = /[\p{L}\p{N}]/u;
+
+/**
+ * The placeholder each value mapped earlier on this boundary (this request's
+ * batches, then the thread's stored turns) is sent under. A placeholder that
+ * also appears literally in the source is only reused once it has an alias,
+ * the same rule `findExistingPlaceholder` applies to new redactions.
+ */
+const earlierMappingsByOriginal = (
+  boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>,
+  batchRedactionMap: ReadonlyMap<string, string>,
+): Map<string, string> => {
+  const aliased = new Set(boundary.literalPlaceholderAliases.values());
+  const byOriginal = new Map<string, string>();
+  for (const [placeholder, original] of [
+    ...batchRedactionMap,
+    ...boundary.redactionMap,
+    ...boundary.historicalRedactionMap,
+  ]) {
+    if (
+      byOriginal.has(original) ||
+      !HAS_LETTER_OR_DIGIT.test(original) ||
+      (boundary.sourcePlaceholders.has(placeholder) &&
+        !aliased.has(placeholder))
+    ) {
+      continue;
+    }
+    byOriginal.set(original, placeholder);
+  }
+  return byOriginal;
+};
+
+/**
+ * Replace every whole-word occurrence of a value mapped earlier with the
+ * placeholder it was sent under, outside existing placeholder tokens. The
+ * detector decides per batch; this keeps a value it recognised once from
+ * reaching the provider in a later batch where it was not recognised again.
+ */
+const applyEarlierMappings = (
+  boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>,
+  {
+    batchRedactionMap,
+    fields,
+  }: {
+    batchRedactionMap: ReadonlyMap<string, string>;
+    fields: readonly string[];
+  },
+): { fields: string[]; used: Map<string, string> } => {
+  const byOriginal = earlierMappingsByOriginal(boundary, batchRedactionMap);
+  const used = new Map<string, string>();
+  if (byOriginal.size === 0) {
+    return { fields: [...fields], used };
+  }
+  const pattern = new RegExp(
+    `(?<![\\p{L}\\p{N}_])(?:${[...byOriginal.keys()]
+      .toSorted((a, b) => b.length - a.length)
+      .map(escapeRegex)
+      .join("|")})(?![\\p{L}\\p{N}_])`,
+    "gu",
+  );
+  const replaceOriginals = (segment: string) =>
+    segment.replaceAll(pattern, (original) => {
+      const placeholder = byOriginal.get(original);
+      if (placeholder === undefined) {
+        return original;
+      }
+      used.set(placeholder, original);
+      return placeholder;
+    });
+  return {
+    fields: fields.map((field) =>
+      field
+        .split(PLACEHOLDER_TOKEN_SPLIT)
+        .map((segment, index) =>
+          // Odd indices are the captured placeholder tokens.
+          index % 2 === 1 ? segment : replaceOriginals(segment),
+        )
+        .join(""),
+    ),
+    used,
+  };
 };
 
 const prepareTextBatchForThirdParty = async ({
@@ -763,7 +885,11 @@ const prepareTextBatchForThirdParty = async ({
   }
 
   const rewritten = rewriteBoundaryPlaceholders(boundary, anonymized.value);
-  const restoredFields = protectedInput.restore(rewritten.fields);
+  const forced = applyEarlierMappings(boundary, {
+    batchRedactionMap: rewritten.redactionMap,
+    fields: protectedInput.restore(rewritten.fields),
+  });
+  const restoredFields = forced.fields;
 
   for (let index = 0; index < replacements.length; index += 1) {
     const replacement = replacements.at(index);
@@ -785,6 +911,7 @@ const prepareTextBatchForThirdParty = async ({
   }
 
   mergeRedactionMap(boundary.redactionMap, rewritten.redactionMap);
+  mergeRedactionMap(boundary.redactionMap, forced.used);
   for (let index = 0; index < replacements.length; index += 1) {
     const replacement = replacements.at(index);
     if (replacement?.type !== "replace") {
@@ -919,24 +1046,145 @@ const preparePartForThirdParty = ({
     return Result.ok(part);
   }
 
-  if (part.type === "text" || part.type === "thinking") {
-    const prepared = { ...part };
-    queueTextReplacement(replacements, part.content, (value) => {
-      prepared.content = value;
-    });
-    return Result.ok(prepared);
+  // Every stored part type decides how it crosses the anonymized boundary. A
+  // new part type fails typecheck here, and an unknown one at runtime stops
+  // the request rather than being sent as stored.
+  switch (part.type) {
+    case "text":
+    case "thinking": {
+      const prepared = { ...part };
+      queueTextReplacement(replacements, part.content, (value) => {
+        prepared.content = value;
+      });
+      return Result.ok(prepared);
+    }
+    case "image":
+    case "document":
+      return isChatAttachmentPart(part)
+        ? anonymizePlainTextFile({ part, replacements })
+        : refuseUnpreparedPart(part.type);
+    case "tool-call":
+    case "tool-result":
+      return anonymizeToolPart({ boundary, part, replacements });
+    case "structured-output":
+      return anonymizeStructuredOutputPart({ boundary, part, replacements });
+    // Presentation-only parts are removed before preparation; one that still
+    // arrives here is refused instead of sent as stored.
+    case "audio":
+    case "video":
+    case "ui-resource":
+    case "subagent":
+      return refuseUnpreparedPart(part.type);
+    default:
+      part satisfies never;
+      return panic(
+        `Unhandled stored part type: ${String(Reflect.get(part, "type"))}`,
+      );
   }
-
-  if (isChatAttachmentPart(part)) {
-    return anonymizePlainTextFile({ part, replacements });
-  }
-
-  if (part.type === "tool-call" || part.type === "tool-result") {
-    return anonymizeToolPart({ boundary, part, replacements });
-  }
-
-  return Result.ok(part);
 };
+
+const refuseUnpreparedPart = (
+  partType: string,
+): Result<never, BoundaryRefusal> =>
+  Result.err(
+    new HandlerError({
+      code: CHAT_TRANSPORT_ERROR_CODE.thirdPartyBoundaryRefusal,
+      status: 422,
+      message: `Cannot send a stored ${partType} part to the AI in anonymized mode.`,
+    }),
+  );
+
+type StructuredOutputPart = Extract<
+  ChatMessage["parts"][number],
+  { type: "structured-output" }
+>;
+
+const stringifyPreparedJson = (value: unknown): string => {
+  const serialized: unknown = JSON.stringify(value);
+  return typeof serialized === "string"
+    ? serialized
+    : panic("Prepared structured output is not JSON-serializable");
+};
+
+/**
+ * A structured output replays to the model as its `raw` JSON text, and
+ * adapters may read the typed fields beside it. Every text-bearing field is
+ * prepared: `raw` as JSON when it parses (a streaming buffer as text), the
+ * parsed `data` and `partial` values like tool payloads, and `reasoning` and
+ * `errorMessage` as text.
+ */
+const anonymizeStructuredOutputPart = ({
+  boundary,
+  part,
+  replacements,
+}: {
+  boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>;
+  part: StructuredOutputPart;
+  replacements: TextReplacement[];
+}): Result<StructuredOutputPart, BoundaryRefusal> =>
+  Result.gen(function* () {
+    const prepared: StructuredOutputPart = { ...part };
+
+    const raw = parseToolResultContent(part.raw);
+    switch (raw.type) {
+      case "json": {
+        const rawValue = yield* anonymizeUnknownStrings({
+          apply: (value) => {
+            prepared.raw = stringifyPreparedJson(value);
+          },
+          boundary,
+          replacements,
+          value: raw.value,
+        });
+        prepared.raw = stringifyPreparedJson(rawValue);
+        break;
+      }
+      case "text":
+        queueTextReplacement(replacements, part.raw, (value) => {
+          prepared.raw = value;
+        });
+        break;
+      default:
+        raw satisfies never;
+        return panic(`Unhandled structured output raw: ${String(raw)}`);
+    }
+
+    if (part.data !== undefined) {
+      prepared.data = yield* anonymizeUnknownStrings({
+        apply: (value) => {
+          prepared.data = value;
+        },
+        boundary,
+        replacements,
+        value: part.data,
+      });
+    }
+
+    if (part.partial !== undefined) {
+      prepared.partial = yield* anonymizeUnknownStrings({
+        apply: (value) => {
+          prepared.partial = value;
+        },
+        boundary,
+        replacements,
+        value: part.partial,
+      });
+    }
+
+    if (part.reasoning !== undefined) {
+      queueTextReplacement(replacements, part.reasoning, (value) => {
+        prepared.reasoning = value;
+      });
+    }
+
+    if (part.errorMessage !== undefined) {
+      queueTextReplacement(replacements, part.errorMessage, (value) => {
+        prepared.errorMessage = value;
+      });
+    }
+
+    return Result.ok(prepared);
+  });
 
 const toProviderVisibleMessage = (
   message: ChatMessage,
@@ -975,6 +1223,39 @@ const removeProviderInvisibleParts = (
   return visibleMessages;
 };
 
+/**
+ * Remove the stored calls and results of tools chat offers only in raw mode.
+ * A thread that switched to anonymized mode would otherwise replay output the
+ * anonymized boundary cannot prepare faithfully.
+ */
+const removeRawModeOnlyToolParts = (messages: ChatMessage[]): ChatMessage[] => {
+  const removedCallIds = new Set<string>();
+  for (const message of messages) {
+    for (const part of message.parts) {
+      if (part.type === "tool-call" && isRawModeOnlyChatTool(part.name)) {
+        removedCallIds.add(part.id);
+      }
+    }
+  }
+
+  const kept: ChatMessage[] = [];
+  for (const message of messages) {
+    const parts = message.parts.filter(
+      (part) =>
+        !(
+          (part.type === "tool-call" && removedCallIds.has(part.id)) ||
+          (part.type === "tool-result" &&
+            (removedCallIds.has(part.toolCallId) ||
+              (part.name !== undefined && isRawModeOnlyChatTool(part.name))))
+        ),
+    );
+    if (parts.length > 0) {
+      kept.push(toProviderVisibleMessage(message, parts));
+    }
+  }
+  return kept;
+};
+
 export const prepareMessagesForThirdParty = async ({
   boundary,
   messages,
@@ -982,11 +1263,14 @@ export const prepareMessagesForThirdParty = async ({
   boundary: ChatThirdPartyBoundary;
   messages: ChatMessage[];
 }): Promise<Result<ChatMessage[], BoundaryRefusal>> => {
-  const providerVisibleMessages = removeProviderInvisibleParts(messages);
+  const modelVisibleMessages = removeProviderInvisibleParts(messages);
 
   if (boundary.type === "raw") {
-    return Result.ok(providerVisibleMessages);
+    return Result.ok(modelVisibleMessages);
   }
+
+  const providerVisibleMessages =
+    removeRawModeOnlyToolParts(modelVisibleMessages);
 
   reserveThirdPartyBoundarySourcePlaceholders({
     boundary,

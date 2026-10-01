@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { Temporal } from "@stll/time";
 
 import { envBase } from "@/api/env-base";
+import { toSafeId } from "@/api/lib/branded-types";
 import {
   CORPUS_INDEX_CLUSTER_CONFIG,
   CORPUS_INDEX_COMMIT,
@@ -24,6 +25,11 @@ import {
   RELEVANCE_ORDER,
 } from "@/api/lib/legal-search/corpus-search-order";
 import { isRecord } from "@/api/lib/type-guards";
+import {
+  ACTION_COST_CALL_KIND,
+  runObservedAction,
+  type ActionCostObservation,
+} from "@/api/lib/usage/action-costs/context";
 
 // Pins the corpus-index HTTP request contract. The engine defaults search
 // hits to document-id order unless `sort_by` is sent, and the rank-based
@@ -1431,4 +1437,43 @@ test.each([
   expect(
     parseCorpusIndexScoredSearchResponse(response, ["document_id"]),
   ).toBeNull();
+});
+
+test("corpus outbound attempts carry distinct call identities inside the admitted action", async () => {
+  responseBody = { num_hits: 0, hits: [], snippets: [] };
+  const rows: ActionCostObservation[] = [];
+  await runObservedAction({
+    identity: {
+      organizationId: toSafeId<"organization">("fixture-org"),
+      actionKind: "mcp.services/call",
+      logicalPhaseId: "fixture-phase",
+    },
+    userId: null,
+    recorder: {
+      enqueue: (row) => {
+        rows.push(row);
+      },
+      estimate: () => null,
+      callRate: () => 7,
+    },
+    run: async () => {
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const outcome = await getCorpusIndexClient("q09").search({
+          indexId: "fixture-index",
+          query: "fixture",
+          maxHits: 3,
+        });
+        expect(outcome.isOk()).toBe(true);
+      }
+    },
+  });
+  const calls = rows.filter((row) => row.type === "call");
+  expect(requests).toHaveLength(2);
+  expect(calls).toHaveLength(requests.length);
+  expect(calls.at(0)?.record).toMatchObject({
+    kind: ACTION_COST_CALL_KIND.corpusRequest,
+    measuredMicroUnits: 7,
+    logicalPhaseId: "fixture-phase",
+  });
+  expect(calls.at(0)?.record.callId).not.toBe(calls.at(1)?.record.callId);
 });

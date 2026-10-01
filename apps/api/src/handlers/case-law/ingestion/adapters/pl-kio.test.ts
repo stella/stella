@@ -7,7 +7,7 @@
  */
 
 import { Result } from "better-result";
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import {
   decodeSourceRawEnvelope,
@@ -43,9 +43,16 @@ const gzFixtureText = async (name: string): Promise<string> =>
   );
 
 const originalFetch = globalThis.fetch;
+const originalSleep = Bun.sleep;
+
+beforeEach(() => {
+  // These fixtures prove retry outcomes; backoff timing is covered by retry.test.ts.
+  Bun.sleep = async () => {};
+});
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  Bun.sleep = originalSleep;
 });
 
 const html = (body: string, status = 200): Response =>
@@ -618,9 +625,10 @@ describe("walking a month", () => {
   });
 
   test("a refused listing is the page's error and moves no cursor", async () => {
-    await stubPublisher({ listingStatus: 503 });
+    const seen = await stubPublisher({ listingStatus: 503 });
     const page = await plKioAdapter.fetchPage("2025-09:0+0", {});
     expect(Result.isError(page)).toBe(true);
+    expect(listingRequests(seen)).toHaveLength(3);
   });
 
   test("a page yielding fewer rows than its count promises fails rather than advancing", async () => {

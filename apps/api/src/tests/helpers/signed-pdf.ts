@@ -22,6 +22,7 @@ import {
 import { panic } from "better-result";
 
 import { createTestCertificate } from "@/api/tests/helpers/test-pki";
+import type { TestRsaKeyPool } from "@/api/tests/helpers/test-pki";
 
 const concat = (parts: readonly Uint8Array[]): Uint8Array<ArrayBuffer> => {
   const out = new Uint8Array(parts.reduce((sum, part) => sum + part.length, 0));
@@ -34,9 +35,12 @@ const concat = (parts: readonly Uint8Array[]): Uint8Array<ArrayBuffer> => {
 };
 
 /** A signer over a per-run test certificate; see `test-pki.ts`. */
-const createSigner = async (): Promise<CryptoKeySigner> => {
+const createSigner = async (
+  keyPool?: TestRsaKeyPool,
+): Promise<CryptoKeySigner> => {
   const { der, privateKey } = await createTestCertificate({
     commonName: "stella signed pdf fixture",
+    ...(keyPool !== undefined && { keyPool }),
   });
   return new CryptoKeySigner(privateKey, der, "RSA", "RSASSA-PKCS1-v1_5");
 };
@@ -57,6 +61,7 @@ export type SignatureHidingRevision =
   | "remove-signature-field";
 
 type SignedPdfOptions = {
+  keyPool?: TestRsaKeyPool;
   /**
    * Certify the first signature with DocMDP at this permission level; `null`
    * leaves `/P` out, which readers take as 2. Out-of-range numbers are
@@ -170,6 +175,7 @@ const appendHidingRevision = async (
  * a later revision that hides the signature from the current form view.
  */
 export const createSignedPdf = async ({
+  keyPool,
   certify,
   hidingRevision,
   signatures = 1,
@@ -178,7 +184,7 @@ export const createSignedPdf = async ({
   const unsigned = PDF.create();
   drawScan(unsigned);
   let bytes = await unsigned.save({ useXRefStream: xrefStream });
-  const signer = await createSigner();
+  const signer = await createSigner(keyPool);
   for (let index = 0; index < signatures; index += 1) {
     const pdf = await PDF.load(bytes);
     if (index === 0 && certify !== undefined) {

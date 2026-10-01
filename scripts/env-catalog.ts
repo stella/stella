@@ -365,8 +365,6 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Microsoft OAuth client secret; required when the matching web login flag is enabled.",
   MICROSOFT_AUTH_TENANT_ID:
     "Microsoft OAuth tenant selector accepted by the configured application registration.",
-  OPERATOR_METRICS_TOKEN:
-    "Bearer token for registration metrics. Unset disables the endpoint; use a long random value.",
   POSTHOG_KEY:
     'PostHog project key. The placeholder "phc_" disables capture for local development.',
   POSTHOG_LOCAL_DEBUG:
@@ -831,6 +829,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "EVENT_NAME",
   "EXPECTED_COMMIT",
   "GH_READ_TOKEN",
+  "HEAD_SHA",
   "LANDING_SITE",
   "MARKETING_CAPTURE",
   "MARKETING_COMMIT",
@@ -844,6 +843,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "MODE",
   "NETWORK_CANARY_URL",
   "PGLITE_TEST_SNAPSHOT",
+  "PR_HEAD_SHA",
   "PRODUCT_MEDIA_S3_BUCKET",
   "PROPERTY_ROLE_BACKFILL_BATCH_SIZE",
   "PROPERTY_TEST_NUM_RUNS_FACTOR",
@@ -879,6 +879,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "SMOKE_AI_OPENAI_API_KEY",
   "SMOKE_API_URL",
   "SMOKE_TEST",
+  "STAGING_STATE",
   "STELLA_AGENT_CAPTURE_LOG",
   "STELLA_COLLAB_TEST_REDIS_CONTAINER_ID",
   "STELLA_COLLAB_TEST_REDIS_URL",
@@ -903,6 +904,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_UPDATE_PLAN_CONTRACTS",
   "TANSTACK_DRIFT_INSTALL_OUTCOME",
   "TURBO_SCM_BASE",
+  "TURN_OUTCOME_COMBINATIONS",
+  "TURN_OUTCOME_SHARD",
   "UPDATE_PROVIDER_REQUEST_PATHS",
   "WXT_STELLA_ORIGINS",
 ]);
