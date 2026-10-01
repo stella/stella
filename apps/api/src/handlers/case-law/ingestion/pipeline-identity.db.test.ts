@@ -2055,7 +2055,8 @@ if (!databaseUrl || !runPostgresTests) {
           .execute(),
       ).rejects.toMatchObject({
         cause: {
-          code: "23001",
+          code: "ERR_POSTGRES_SERVER_ERROR",
+          errno: "23001",
           message: expect.stringContaining(
             "case_law_decision_aliases_canonical_fk",
           ),
@@ -2103,7 +2104,8 @@ if (!databaseUrl || !runPostgresTests) {
           .execute(),
       ).rejects.toMatchObject({
         cause: {
-          code: "23001",
+          code: "ERR_POSTGRES_SERVER_ERROR",
+          errno: "23001",
           message: expect.stringContaining(
             "case_law_decision_aliases_canonical_fk",
           ),
