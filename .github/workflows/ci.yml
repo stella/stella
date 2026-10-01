@@ -632,7 +632,6 @@ jobs:
       pull-requests: read
 
     steps:
-
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -776,7 +775,6 @@ jobs:
       pull-requests: read
 
     steps:
-
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -967,7 +965,6 @@ jobs:
       pull-requests: read
 
     steps:
-
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -2082,6 +2079,16 @@ jobs:
           fi
           bun run code-check:affected -- --leg api --base "origin/$BASE_REF"
 
+      - name: Result consumption
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            bun run check:result-consumption -- --all --leg api
+          else
+            bun run check:result-consumption -- --base "origin/$BASE_REF" --leg api
+          fi
 
   code-quality-web:
     needs: ci-plan
@@ -2137,6 +2144,16 @@ jobs:
           fi
           bun run code-check:affected -- --leg web --base "origin/$BASE_REF"
 
+      - name: Result consumption
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            bun run check:result-consumption -- --all --leg web
+          else
+            bun run check:result-consumption -- --base "origin/$BASE_REF" --leg web
+          fi
 
   code-quality-rest:
     needs: ci-plan
@@ -2219,17 +2236,6 @@ jobs:
       - name: Projection totality
         run: bun run check:projection-totality
 
-      - name: Result consumption
-        env:
-          BASE_REF: ${{ github.base_ref || 'main' }}
-          EVENT_NAME: ${{ github.event_name }}
-        run: |
-          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
-            bun run check:result-consumption -- --all
-          else
-            bun run check:result-consumption -- --base "origin/$BASE_REF"
-          fi
-
       - name: Database awaits in loops
         # Type-aware N+1 guard over the API source and scripts: an awaited
         # database call, a call handed a database handle, or a helper that
@@ -2249,6 +2255,17 @@ jobs:
         run: |
           bun test scripts/check-api-timeout-mutations.test.ts
           bun run check:api-timeout-mutations
+
+      - name: Result consumption
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            bun run check:result-consumption -- --all --leg rest
+          else
+            bun run check:result-consumption -- --base "origin/$BASE_REF" --leg rest
+          fi
 
   collab-redis:
     needs: ci-plan

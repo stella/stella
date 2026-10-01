@@ -11,6 +11,8 @@ import path from "node:path";
 import {
   CODE_CHECK_LEGS,
   ownsCodeCheckPath,
+} from "../packages/scripts/src/code-quality-partition";
+import {
   ALL_WORKSPACE_CACHE_INPUTS,
   ALL_WORKSPACE_TYPECHECK_CACHE_INPUTS,
   DEPENDENCY_CACHE_INPUTS,
@@ -698,8 +700,38 @@ const workspaceManifests = (): WorkspaceManifest[] =>
   );
 
 describe("parallel code-quality legs", () => {
+  test("runs result consumption with the same plan scope and owner in every leg", () => {
+    const workflow = readFileSync(".github/workflows/ci.yml", "utf-8");
+    for (const leg of CODE_CHECK_LEGS) {
+      const start = workflow.indexOf(`\n  code-quality-${leg}:\n`);
+      expect(start).toBeGreaterThanOrEqual(0);
+      const nextJob = workflow
+        .slice(start + 1)
+        .search(/\n {2}[a-z][a-z0-9-]*:\n/u);
+      const job =
+        nextJob === -1
+          ? workflow.slice(start)
+          : workflow.slice(start, start + 1 + nextJob);
+      expect(job.match(/- name: Result consumption/gu)).toHaveLength(1);
+      expect(job).toContain(
+        `bun run check:result-consumption -- --all --leg ${leg}`,
+      );
+      expect(job).toContain(
+        `bun run check:result-consumption -- --base "origin/$BASE_REF" --leg ${leg}`,
+      );
+    }
+  });
+
   test("partition the unsplit workspace tasks and root commands at every scope", () => {
-    const workspaces = new Set([...WORKSPACES, "packages/new-workspace"]);
+    const manifests = workspaceManifests();
+    const scriptsByWorkspace = new Map(
+      manifests.map(({ workspace, scripts }) => [workspace, scripts]),
+    );
+    const workspaces = new Set([
+      ...manifests.map(({ workspace }) => workspace),
+      ...WORKSPACES,
+      "packages/new-workspace",
+    ]);
     const plans = [
       plan(["bun.lock"], [...WORKSPACES]),
       plan(["apps/web/src/new.ts"], ["apps/web", "packages/ui"]),
@@ -732,7 +764,14 @@ describe("parallel code-quality legs", () => {
                 !excluded.has(workspace),
             )
             .flatMap((workspace) =>
-              tasks.map((task) => `${workspace}#${task}`),
+              tasks
+                .filter(
+                  (task) =>
+                    !scriptsByWorkspace.has(workspace) ||
+                    typeof scriptsByWorkspace.get(workspace)?.[task] ===
+                      "string",
+                )
+                .map((task) => `${workspace}#${task}`),
             );
         });
       const unsplit = expand(scopedCommands(planned));

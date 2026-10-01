@@ -16,6 +16,11 @@ import { panic } from "better-result";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 
+import {
+  CODE_CHECK_LEGS,
+  ownsCodeCheckPath,
+  type CodeCheckLeg,
+} from "../packages/scripts/src/code-quality-partition";
 import { isChangedLintPath } from "./lint-paths";
 import {
   isResultConventionExcludedFile,
@@ -336,25 +341,6 @@ export const planCheck = ({
 };
 
 type CheckScope = { type: "all" } | { type: "affected"; base: string };
-
-export const CODE_CHECK_LEGS = ["api", "web", "rest"] as const;
-export type CodeCheckLeg = (typeof CODE_CHECK_LEGS)[number];
-
-const NAMED_LEG_PATHS = {
-  api: "apps/api",
-  web: "apps/web",
-  rest: null,
-} as const;
-
-export const ownsCodeCheckPath = (file: string, leg: CodeCheckLeg): boolean => {
-  const owner = NAMED_LEG_PATHS[leg];
-  if (owner !== null) {
-    return file === owner || file.startsWith(`${owner}/`);
-  }
-  return !CODE_CHECK_LEGS.some(
-    (other) => other !== "rest" && ownsCodeCheckPath(file, other),
-  );
-};
 
 export const codeCheckExclusions = (
   workspaces: ReadonlySet<string>,
