@@ -32,6 +32,12 @@ const neutralEnv = (): void => {
     Reflect.deleteProperty(process.env, key);
   }
 };
+// Settles the run first, so assertions after it see the finished run.
+const rejectionOf = async (run: Promise<void>): Promise<unknown> =>
+  run.then(
+    () => undefined,
+    (error: unknown) => error,
+  );
 const FILE = "packages/property-testing/src/assert-property.test.ts";
 const PIN = {
   seed: 123,
@@ -239,7 +245,7 @@ test("async failures reject with replay details before generated examples", asyn
     values.push(value);
     return false;
   });
-  await expect(
+  const failure = await rejectionOf(
     runProperty({
       file: FILE,
       id: "async replay",
@@ -247,7 +253,9 @@ test("async failures reject with replay details before generated examples", asyn
       params: { numRuns: 1, examples: [[99]] },
       pinned: [PIN],
     }),
-  ).rejects.toThrow("Replay: PROPERTY_TEST_SEED=123");
+  );
+  expect(failure).toBeInstanceOf(PropertyAssertionError);
+  expect(String(failure)).toContain("Replay: PROPERTY_TEST_SEED=123");
   expect(values).toEqual([1]);
 });
 
@@ -268,11 +276,13 @@ test("pins retain their own paths under a different environment replay", () => {
 
 test("rejects custom reporters instead of allowing a failure to be swallowed", () => {
   neutralEnv();
+  // Built untyped: the option is deprecated, and callers may still pass it.
+  const legacy = { reporter: () => {} };
   expect(() =>
     assertProperty(
       "reporter boundary",
       fc.property(fc.constant(1), () => false),
-      { reporter: () => {} },
+      legacy,
     ),
   ).toThrow("custom reporters are unsupported");
 });
@@ -291,7 +301,7 @@ test("nightly time limits cannot truncate pinned replays", async () => {
     return true;
   });
   // The generated run interrupts before its first result; the pin must finish first.
-  await expect(
+  const failure = await rejectionOf(
     runProperty({
       file: FILE,
       id: "untruncated pins",
@@ -299,7 +309,9 @@ test("nightly time limits cannot truncate pinned replays", async () => {
       params: { numRuns: 1 },
       pinned: [PIN],
     }),
-  ).rejects.toThrow("Replay: PROPERTY_TEST_SEED=456");
+  );
+  expect(failure).toBeInstanceOf(PropertyAssertionError);
+  expect(String(failure)).toContain("Replay: PROPERTY_TEST_SEED=456");
   expect(calls).toBeGreaterThanOrEqual(10);
   expect(calls).toBeLessThan(12);
 });

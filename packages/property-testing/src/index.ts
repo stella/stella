@@ -52,6 +52,7 @@ const DEFAULT_PROPERTY_TEST_TIMEOUT_MS = 5000;
 // `Plugin<Ts>`. The plugin never reads generated values: it times each run
 // and clears its timer when the runs complete.
 const timeLimitPlugin = <Ts>(timeLimit: number): fc.Plugin<Ts> =>
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the plugin never reads generated values
   fc.interruptAfterTimeLimit(timeLimit) as fc.Plugin<Ts>;
 
 // Treat the common CI values as enabled, but honor an explicit opt-out
@@ -241,6 +242,10 @@ export class PropertyAssertionError extends Error {
   }
 }
 
+const isSyncProperty = <Ts>(
+  property: fc.IRawProperty<Ts>,
+): property is fc.IProperty<Ts> => !property.isAsync();
+
 type PropertyRunOptions<Ts> = {
   file: string;
   id: string;
@@ -250,14 +255,23 @@ type PropertyRunOptions<Ts> = {
 };
 
 /** Internal seam: identity and pins are supplied by the public boundary. */
-export const runProperty = <Ts>({
+export function runProperty<Ts>(
+  options: PropertyRunOptions<Ts> & { property: fc.IAsyncProperty<Ts> },
+): Promise<void>;
+export function runProperty<Ts>(
+  options: PropertyRunOptions<Ts> & { property: fc.IProperty<Ts> },
+): void;
+export function runProperty<Ts>(
+  options: PropertyRunOptions<Ts>,
+): void | Promise<void>;
+export function runProperty<Ts>({
   file,
   id,
   property,
   params,
   pinned,
-}: PropertyRunOptions<Ts>): void | Promise<void> => {
-  if (params.reporter !== undefined || params.asyncReporter !== undefined) {
+}: PropertyRunOptions<Ts>): void | Promise<void> {
+  if ("reporter" in params || "asyncReporter" in params) {
     throw new PropertyTestConfigError(
       "assertProperty owns failure reporting; custom reporters are unsupported",
     );
@@ -308,40 +322,42 @@ export const runProperty = <Ts>({
         },
       ],
     };
+    const message = fc.defaultReportMessage(details) ?? "Property failed";
     throw new PropertyAssertionError(
-      `${fc.defaultReportMessage(details)}\n\nReplay: ${replay}\nPin: ${JSON.stringify(hint)} in ${PROPERTY_SEEDS_FILE}`,
+      `${message}\n\nReplay: ${replay}\nPin: ${JSON.stringify(hint)} in ${PROPERTY_SEEDS_FILE}`,
       { cause: details.errorInstance },
     );
   };
-  const generated = propertyConfig({
-    ...params,
-    reporter: report,
-  });
+  // fast-check runs completion hooks inside the check and rethrows the first
+  // error, so the report replaces fast-check's own failure.
+  const reportPlugin: fc.Plugin<Ts> = () => ({ onAllRunsComplete: report });
+  const plugins = [...(params.plugins ?? []), reportPlugin];
+  const generated = propertyConfig({ ...params, plugins });
   // Pinned runs preserve their recorded path and cannot be truncated by a nightly time box.
   const replays = pinned.map(({ seed, path: replayPath }) => {
     const { path: _path, plugins: _plugins, ...base } = generated;
     return {
       ...base,
-      ...(params.plugins === undefined ? {} : { plugins: params.plugins }),
+      plugins,
       seed,
       ...(replayPath === undefined ? {} : { path: replayPath }),
       examples: [],
-      reporter: report,
     };
   });
-  if (property.isAsync()) {
-    return (async () => {
-      for (const replay of replays) {
-        await fc.assert(property, replay);
-      }
-      await fc.assert(property, generated);
-    })();
+  if (isSyncProperty(property)) {
+    for (const replay of replays) {
+      fc.assert(property, replay);
+    }
+    fc.assert(property, generated);
+    return;
   }
-  for (const replay of replays) {
-    fc.assert(property, replay);
-  }
-  fc.assert(property, generated);
-};
+  return (async () => {
+    for (const replay of replays) {
+      await fc.assert(property, replay);
+    }
+    await fc.assert(property, generated);
+  })();
+}
 
 export function assertProperty<Ts>(
   id: string,
