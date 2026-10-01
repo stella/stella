@@ -2135,6 +2135,13 @@
     "unnamedAttachment": "Névtelen melléklet"
   },
   "errors": {
+    "actionAdmission": {
+      "admissionUnavailable": "Ez a művelet átmenetileg szünetel. Kérjük, próbálja újra hamarosan.",
+      "concurrencyBusy": "Más műveletek folyamatban vannak. Kérjük, próbálja újra hamarosan.",
+      "contact": "Lépjen kapcsolatba velünk",
+      "notEnabled": "Ez a művelet nincs engedélyezve az Ön szervezete számára.",
+      "periodExhausted": "Ez a művelet szünetel az Ön szervezete számára."
+    },
     "actionFailed": "A művelet sikertelen",
     "api": {
       "badRequest": "A kérést nem sikerült teljesíteni.",

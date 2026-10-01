@@ -2135,6 +2135,13 @@
     "unnamedAttachment": "Anexo sem nome"
   },
   "errors": {
+    "actionAdmission": {
+      "admissionUnavailable": "Esta ação está temporariamente pausada. Tente novamente em instantes.",
+      "concurrencyBusy": "Há outras tarefas em andamento. Tente novamente em instantes.",
+      "contact": "Entre em contato",
+      "notEnabled": "Esta ação não está habilitada para sua organização.",
+      "periodExhausted": "Esta ação está pausada para sua organização."
+    },
     "actionFailed": "Falha na ação",
     "api": {
       "badRequest": "Não foi possível concluir a solicitação.",

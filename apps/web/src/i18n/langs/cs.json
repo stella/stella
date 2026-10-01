@@ -2135,6 +2135,13 @@
     "unnamedAttachment": "Nepojmenovaná příloha"
   },
   "errors": {
+    "actionAdmission": {
+      "admissionUnavailable": "Tato akce je dočasně pozastavena. Zkuste to prosím za chvíli.",
+      "concurrencyBusy": "Probíhá jiná práce. Zkuste to prosím za chvíli.",
+      "contact": "Kontaktujte nás",
+      "notEnabled": "Tato akce není pro vaši organizaci povolena.",
+      "periodExhausted": "Tato akce je pro vaši organizaci pozastavena."
+    },
     "actionFailed": "Akce se nezdařila",
     "api": {
       "badRequest": "Požadavek se nepodařilo dokončit.",

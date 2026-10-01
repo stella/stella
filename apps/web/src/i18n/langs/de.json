@@ -2135,6 +2135,13 @@
     "unnamedAttachment": "Unbenannter Anhang"
   },
   "errors": {
+    "actionAdmission": {
+      "admissionUnavailable": "Diese Aktion ist vorübergehend pausiert. Bitte versuchen Sie es in Kürze erneut.",
+      "concurrencyBusy": "Andere Vorgänge laufen noch. Bitte versuchen Sie es in Kürze erneut.",
+      "contact": "Kontaktieren Sie uns",
+      "notEnabled": "Diese Aktion ist für Ihre Organisation nicht aktiviert.",
+      "periodExhausted": "Diese Aktion ist für Ihre Organisation pausiert."
+    },
     "actionFailed": "Aktion fehlgeschlagen",
     "api": {
       "badRequest": "Die Anfrage konnte nicht abgeschlossen werden.",

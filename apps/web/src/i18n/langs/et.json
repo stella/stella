@@ -2135,6 +2135,13 @@
     "unnamedAttachment": "Nimetu manus"
   },
   "errors": {
+    "actionAdmission": {
+      "admissionUnavailable": "See toiming on ajutiselt peatatud. Palun proovige varsti uuesti.",
+      "concurrencyBusy": "Muud toimingud on pooleli. Palun proovige varsti uuesti.",
+      "contact": "Võtke meiega ühendust",
+      "notEnabled": "See toiming ei ole teie organisatsiooni jaoks lubatud.",
+      "periodExhausted": "See toiming on teie organisatsiooni jaoks peatatud."
+    },
     "actionFailed": "Toiming ebaõnnestus",
     "api": {
       "badRequest": "Päringut ei saanud lõpule viia.",

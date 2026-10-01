@@ -2135,6 +2135,13 @@
     "unnamedAttachment": "مرفق بلا اسم"
   },
   "errors": {
+    "actionAdmission": {
+      "admissionUnavailable": "هذا الإجراء متوقف مؤقتًا. يُرجى المحاولة مجددًا بعد قليل.",
+      "concurrencyBusy": "هناك أعمال أخرى قيد التنفيذ. يُرجى المحاولة مجددًا بعد قليل.",
+      "contact": "تواصل معنا",
+      "notEnabled": "هذا الإجراء غير مفعّل لمؤسستك.",
+      "periodExhausted": "هذا الإجراء متوقف لمؤسستك."
+    },
     "actionFailed": "فشل الإجراء",
     "api": {
       "badRequest": "تعذر إكمال الطلب.",

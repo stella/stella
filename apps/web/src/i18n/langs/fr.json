@@ -2135,6 +2135,13 @@
     "unnamedAttachment": "Pièce jointe sans nom"
   },
   "errors": {
+    "actionAdmission": {
+      "admissionUnavailable": "Cette action est temporairement suspendue. Veuillez réessayer dans un instant.",
+      "concurrencyBusy": "D’autres opérations sont en cours. Veuillez réessayer dans un instant.",
+      "contact": "Contactez-nous",
+      "notEnabled": "Cette action n’est pas activée pour votre organisation.",
+      "periodExhausted": "Cette action est suspendue pour votre organisation."
+    },
     "actionFailed": "Action échouée",
     "api": {
       "badRequest": "La requête n’a pas pu être terminée.",

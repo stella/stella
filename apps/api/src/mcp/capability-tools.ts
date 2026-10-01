@@ -5,6 +5,10 @@ import { panic, Result } from "better-result";
 import { ElysiaCustomStatusResponse } from "elysia";
 import * as v from "valibot";
 
+import {
+  ACTION_ADMISSION_REFUSALS,
+  isActionAdmissionCode,
+} from "@stll/api-contract/action-admission";
 import capabilityCatalogRaw from "@stll/cli/capability-catalog.json";
 import type { PermissionInput } from "@stll/permissions";
 
@@ -698,6 +702,23 @@ const mapStatusResponse = (
   statusCode: number,
   responseBody: unknown,
 ): InternalToolErrorResult => {
+  if (isRecord(responseBody) && isActionAdmissionCode(responseBody["code"])) {
+    const code = responseBody["code"];
+    const refusal = ACTION_ADMISSION_REFUSALS[code];
+    return structuredErrorResult({
+      code,
+      message: refusal.message,
+      hint:
+        typeof responseBody["hint"] === "string"
+          ? responseBody["hint"]
+          : refusal.hint,
+      retryable: refusal.retryable,
+      contactUrl:
+        typeof responseBody["contactUrl"] === "string"
+          ? responseBody["contactUrl"]
+          : undefined,
+    });
+  }
   const code = statusCodeToErrorCode(statusCode);
   const message = statusResponseMessage(responseBody);
   if (code === "internal_error") {

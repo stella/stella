@@ -2135,6 +2135,13 @@
     "unnamedAttachment": "Archivo adjunto sin nombre"
   },
   "errors": {
+    "actionAdmission": {
+      "admissionUnavailable": "Esta acción está pausada temporalmente. Inténtelo de nuevo en unos momentos.",
+      "concurrencyBusy": "Hay otras tareas en curso. Inténtelo de nuevo en unos momentos.",
+      "contact": "Contáctenos",
+      "notEnabled": "Esta acción no está habilitada para su organización.",
+      "periodExhausted": "Esta acción está pausada para su organización."
+    },
     "actionFailed": "Acción fallida",
     "api": {
       "badRequest": "No se pudo completar la solicitud.",
