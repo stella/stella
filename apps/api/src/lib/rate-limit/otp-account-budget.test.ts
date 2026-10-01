@@ -12,6 +12,33 @@ import {
 } from "@/api/lib/rate-limit/otp-account-budget";
 import { RedisRateLimitContext } from "@/api/lib/rate-limit/redis-context";
 
+type PostAuthOptions = {
+  path: string;
+  body: Record<string, unknown>;
+  headers?: { cookie: string };
+};
+
+const postAuth = async (
+  auth: { handler: (request: Request) => Promise<Response> },
+  { path, body, headers }: PostAuthOptions,
+) => {
+  const response = await auth.handler(
+    new Request(`http://localhost:3001/api/auth${path}`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: "http://localhost:3001",
+        ...headers,
+      },
+      body: JSON.stringify(body),
+    }),
+  );
+  if (path === "/email-otp/send-verification-otp") {
+    expect(response.status).toBe(200);
+  }
+  return response;
+};
+
 const createCounter = () => {
   let now = Date.now();
   const counters = new Map<string, { count: number; expiresAt: number }>();
@@ -59,6 +86,73 @@ const reserveAllowed = async (
 };
 
 describe("account verification budget", () => {
+  const nativeVerificationCases = [
+    { path: "/sign-in/email-otp", type: "sign-in", extra: {} },
+    {
+      path: "/email-otp/check-verification-otp",
+      type: "sign-in",
+      extra: { type: "sign-in" },
+    },
+    { path: "/email-otp/verify-email", type: "email-verification", extra: {} },
+    {
+      path: "/email-otp/reset-password",
+      type: "forget-password",
+      extra: { password: "fixture-password" },
+    },
+  ] as const;
+  test.each(
+    nativeVerificationCases.flatMap(({ path, type, extra }) =>
+      [false, true].map((enabled) => ({ path, type, extra, enabled })),
+    ),
+  )(
+    "retains native per-code responses: %j",
+    async ({ path, type, extra, enabled }) => {
+      const auth = betterAuth({
+        baseURL: "http://localhost:3001",
+        secret: "test-secret-that-is-long-enough-for-better-auth",
+        database: memoryAdapter({
+          user: [],
+          session: [],
+          account: [],
+          verification: [],
+        }),
+        plugins: [
+          createOtpAccountLimitPlugin({
+            enabled,
+            context: createCounter().context,
+          }),
+          emailOTP({
+            generateOTP: () => "123456",
+            sendVerificationOTP: async () => undefined,
+          }),
+        ],
+      });
+      const context = await auth.$context;
+      await context.internalAdapter.createUser(
+        {
+          email: "account@example.test",
+          name: "Account",
+          emailVerified: true,
+        },
+        { method: "email-otp" },
+      );
+      await postAuth(auth, {
+        path: "/email-otp/send-verification-otp",
+        body: { email: "account@example.test", type },
+      });
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        const response = await postAuth(auth, {
+          path,
+          body: { email: "account@example.test", otp: "654321", ...extra },
+        });
+        expect(response.status).toBe(attempt < 3 ? 400 : 403);
+        expect(await response.json()).toMatchObject({
+          code: attempt < 3 ? "INVALID_OTP" : "TOO_MANY_ATTEMPTS",
+        });
+      }
+    },
+  );
+
   test("keeps a bounded local budget when the shared counter is unavailable", async () => {
     const context = new RedisRateLimitContext({
       failurePolicy: "fail_open_local",
@@ -121,6 +215,7 @@ describe("account verification budget", () => {
             context: counter.context,
           }),
           emailOTP({
+            allowedAttempts: OTP_ACCOUNT_BUDGET.max + 1,
             generateOTP: () => "123456",
             sendVerificationOTP: async () => undefined,
           }),
@@ -140,18 +235,21 @@ describe("account verification budget", () => {
         const body = { email: "ACCOUNT@EXAMPLE.TEST", otp };
         switch (path) {
           case "sign-in":
-            return await auth.api.signInEmailOTP({ body, asResponse: true });
+            return await postAuth(auth, { path: "/sign-in/email-otp", body });
           case "check":
-            return await auth.api.checkVerificationOTP({
+            return await postAuth(auth, {
+              path: "/email-otp/check-verification-otp",
               body: { ...body, type: "sign-in" },
-              asResponse: true,
             });
           case "verify-email":
-            return await auth.api.verifyEmailOTP({ body, asResponse: true });
+            return await postAuth(auth, {
+              path: "/email-otp/verify-email",
+              body,
+            });
           case "reset-password":
-            return await auth.api.resetPasswordEmailOTP({
+            return await postAuth(auth, {
+              path: "/email-otp/reset-password",
               body: { ...body, password: "fixture-password" },
-              asResponse: true,
             });
         }
       };
@@ -165,7 +263,8 @@ describe("account verification budget", () => {
         "reset-password": "forget-password",
       } as const;
       for (let attempt = 0; attempt <= 10; attempt += 1) {
-        await auth.api.sendVerificationOTP({
+        await postAuth(auth, {
+          path: "/email-otp/send-verification-otp",
           body: { email: "account@example.test", type: type[path] },
         });
         expect((await verify("654321")).status).toBe(attempt < 10 ? 400 : 429);
@@ -191,6 +290,7 @@ describe("account verification budget", () => {
           context: counter.context,
         }),
         emailOTP({
+          allowedAttempts: OTP_ACCOUNT_BUDGET.max + 1,
           generateOTP: () => "123456",
           sendVerificationOTP: async () => undefined,
         }),
@@ -204,20 +304,21 @@ describe("account verification budget", () => {
         value: "123456:0",
         expiresAt: new Date(Date.now() - 1000),
       });
-      const response = await auth.api.signInEmailOTP({
+      const response = await postAuth(auth, {
+        path: "/sign-in/email-otp",
         body: { email: "account@example.test", otp: "654321" },
-        asResponse: true,
       });
       expect(response.status).toBe(400);
     }
-    await auth.api.sendVerificationOTP({
+    await postAuth(auth, {
+      path: "/email-otp/send-verification-otp",
       body: { email: "account@example.test", type: "sign-in" },
     });
     expect(
       (
-        await auth.api.signInEmailOTP({
+        await postAuth(auth, {
+          path: "/sign-in/email-otp",
           body: { email: "account@example.test", otp: "123456" },
-          asResponse: true,
         })
       ).status,
     ).toBe(200);
@@ -293,21 +394,23 @@ describe("account verification budget", () => {
             context: counter.context,
           }),
           emailOTP({
+            allowedAttempts: OTP_ACCOUNT_BUDGET.max + 1,
             generateOTP: () => "123456",
             sendVerificationOTP: async () => undefined,
           }),
         ],
       });
       for (let attempt = 0; attempt <= OTP_ACCOUNT_BUDGET.max; attempt += 1) {
-        await auth.api.sendVerificationOTP({
+        await postAuth(auth, {
+          path: "/email-otp/send-verification-otp",
           body: { email: "account@example.test", type: "sign-in" },
         });
-        const response = await auth.api.signInEmailOTP({
+        const response = await postAuth(auth, {
+          path: "/sign-in/email-otp",
           body: {
             email: "account@example.test",
             otp: valid ? "123456" : "654321",
           },
-          asResponse: true,
         });
         const failureStatus = attempt < OTP_ACCOUNT_BUDGET.max ? 400 : 429;
         expect(response.status).toBe(valid ? 200 : failureStatus);
@@ -331,18 +434,20 @@ describe("account verification budget", () => {
           context: createCounter().context,
         }),
         emailOTP({
+          allowedAttempts: OTP_ACCOUNT_BUDGET.max + 1,
           changeEmail: { enabled: true },
           generateOTP: () => "123456",
           sendVerificationOTP: async () => undefined,
         }),
       ],
     });
-    await auth.api.sendVerificationOTP({
+    await postAuth(auth, {
+      path: "/email-otp/send-verification-otp",
       body: { email: "account@example.test", type: "sign-in" },
     });
-    const signedIn = await auth.api.signInEmailOTP({
+    const signedIn = await postAuth(auth, {
+      path: "/sign-in/email-otp",
       body: { email: "account@example.test", otp: "123456" },
-      asResponse: true,
     });
     expect(signedIn.status).toBe(200);
     const cookie = signedIn.headers
@@ -351,23 +456,24 @@ describe("account verification budget", () => {
       .join("; ");
     expect(cookie).not.toBe("");
     for (let attempt = 0; attempt < OTP_ACCOUNT_BUDGET.max * 2; attempt += 1) {
-      const response = await auth.api.changeEmailEmailOTP({
+      const response = await postAuth(auth, {
+        path: "/email-otp/change-email",
         body: { newEmail: "updated@example.test", otp: "654321" },
         headers: { cookie },
-        asResponse: true,
       });
       expect(response.status).toBe(400);
     }
     for (let attempt = 0; attempt <= OTP_ACCOUNT_BUDGET.max; attempt += 1) {
       const newEmail = `updated-${attempt}@example.test`;
-      await auth.api.requestEmailChangeEmailOTP({
+      await postAuth(auth, {
+        path: "/email-otp/request-email-change",
         body: { newEmail },
         headers: { cookie },
       });
-      const response = await auth.api.changeEmailEmailOTP({
+      const response = await postAuth(auth, {
+        path: "/email-otp/change-email",
         body: { newEmail: newEmail.toUpperCase(), otp: "654321" },
         headers: { cookie },
-        asResponse: true,
       });
       expect(response.status).toBe(
         attempt < OTP_ACCOUNT_BUDGET.max ? 400 : 429,
@@ -375,13 +481,13 @@ describe("account verification budget", () => {
     }
     expect(
       (
-        await auth.api.changeEmailEmailOTP({
+        await postAuth(auth, {
+          path: "/email-otp/change-email",
           body: {
             newEmail: `updated-${OTP_ACCOUNT_BUDGET.max}@example.test`,
             otp: "123456",
           },
           headers: { cookie },
-          asResponse: true,
         })
       ).status,
     ).toBe(429);
@@ -403,18 +509,20 @@ describe("account verification budget", () => {
           context: createCounter().context,
         }),
         emailOTP({
+          allowedAttempts: OTP_ACCOUNT_BUDGET.max + 1,
           changeEmail: { enabled: true, verifyCurrentEmail: true },
           generateOTP: () => "123456",
           sendVerificationOTP: async () => undefined,
         }),
       ],
     });
-    await auth.api.sendVerificationOTP({
+    await postAuth(auth, {
+      path: "/email-otp/send-verification-otp",
       body: { email: "account@example.test", type: "sign-in" },
     });
-    const signedIn = await auth.api.signInEmailOTP({
+    const signedIn = await postAuth(auth, {
+      path: "/sign-in/email-otp",
       body: { email: "account@example.test", otp: "123456" },
-      asResponse: true,
     });
     expect(signedIn.status).toBe(200);
     const cookie = signedIn.headers
@@ -424,34 +532,35 @@ describe("account verification budget", () => {
     for (let attempt = 0; attempt < OTP_ACCOUNT_BUDGET.max * 2; attempt += 1) {
       expect(
         (
-          await auth.api.requestEmailChangeEmailOTP({
+          await postAuth(auth, {
+            path: "/email-otp/request-email-change",
             body: { newEmail: "updated@example.test", otp: "654321" },
             headers: { cookie },
-            asResponse: true,
           })
         ).status,
       ).toBe(400);
     }
     for (let attempt = 0; attempt <= OTP_ACCOUNT_BUDGET.max; attempt += 1) {
-      await auth.api.sendVerificationOTP({
+      await postAuth(auth, {
+        path: "/email-otp/send-verification-otp",
         body: { email: "account@example.test", type: "email-verification" },
       });
       expect(
         (
-          await auth.api.requestEmailChangeEmailOTP({
+          await postAuth(auth, {
+            path: "/email-otp/request-email-change",
             body: { newEmail: "updated@example.test", otp: "654321" },
             headers: { cookie },
-            asResponse: true,
           })
         ).status,
       ).toBe(attempt < OTP_ACCOUNT_BUDGET.max ? 400 : 429);
     }
     expect(
       (
-        await auth.api.requestEmailChangeEmailOTP({
+        await postAuth(auth, {
+          path: "/email-otp/request-email-change",
           body: { newEmail: "updated@example.test", otp: "123456" },
           headers: { cookie },
-          asResponse: true,
         })
       ).status,
     ).toBe(429);
