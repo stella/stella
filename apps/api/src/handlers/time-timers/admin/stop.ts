@@ -18,7 +18,11 @@ const stopMemberTimer = createSafeRootHandler(
       "End a member's running timer in the active organization into that member's draft entry. Only organization owners and admins can end timers. Uses the timer description first; supply narrative when it is empty and policy requires one. Refuses inaccessible matters and locked months without changing the timer. Retry the same ID to retrieve the original entry. The work date uses the timer owner's timezone.",
     permissions: { timeEntry: ["approve"] },
     access: "write",
-    mcp: { type: "capability", reason: "billing_admin" },
+    mcp: {
+      type: "capability",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
     params: timerParams,
     body: t.Object({
       narrative: t.Optional(t.String({ maxLength: 10_000 })),

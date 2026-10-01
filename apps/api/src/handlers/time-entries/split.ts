@@ -41,7 +41,11 @@ const splitEntry = createSafeHandler(
       "apportioned and re-rounded to the billing increment. A billed or " +
       "written-off entry, and a duration too short to divide, are refused.",
     permissions: { timeEntry: ["approve"] },
-    mcp: { type: "capability", reason: "billing_admin" },
+    mcp: {
+      type: "capability",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
     access: "write",
     body: splitEntryBodySchema,
   },

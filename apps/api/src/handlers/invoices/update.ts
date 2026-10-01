@@ -214,7 +214,11 @@ const updateInvoice = createSafeHandler(
       "require an eligible original in the same matter. Currency cannot change while " +
       "the invoice has lines or attached entries.",
     permissions: { invoice: ["update"] },
-    mcp: { type: "capability", reason: "billing_admin" },
+    mcp: {
+      type: "capability",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
     params: invoiceParamsSchema,
     body: updateInvoiceBodySchema,
   },

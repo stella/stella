@@ -13,7 +13,7 @@ const config = {
   description:
     "Delete a personal saved time narrative in the active organization.",
   permissions: { timeEntry: ["update"] },
-  mcp: { type: "capability", reason: "billing_admin" },
+  mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   params: savedTimeNarrativeParamsSchema,
 } satisfies HandlerConfig;
 

@@ -110,7 +110,11 @@ const config = {
     "template survive as history, but the template and its files cannot be " +
     "recovered.",
   permissions: { template: ["delete"] },
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  mcp: {
+    type: "capability",
+    reason: "template_authoring_ui",
+    consumesServices: false,
+  },
   params: deleteTemplateParamsSchema,
 } satisfies HandlerConfig;
 

@@ -17,7 +17,11 @@ const config = {
     "AI-extracted, when the document is read-only, when the cell is locked, " +
     "and while another workflow is already running in the matter.",
   permissions: { workspace: ["update"] },
-  mcp: { type: "capability", reason: "workflow_orchestration" },
+  mcp: {
+    type: "capability",
+    reason: "workflow_orchestration",
+    consumesServices: true,
+  },
   body: t.Object({
     entityId: tSafeId("entity"),
     propertyId: tSafeId("property"),

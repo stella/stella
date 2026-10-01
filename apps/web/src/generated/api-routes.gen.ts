@@ -6,6 +6,7 @@ import type { AgendaItemWireFields as stll_api_contract_AgendaItemWireFields, Ch
 import type { CompareNode as stll_conditions_CompareNode, ConditionNode as stll_conditions_ConditionNode, GroupNode as stll_conditions_GroupNode, PredicateNode as stll_conditions_PredicateNode } from "@stll/conditions";
 import type { FolioAgentApplyOperationsSummary as stll_folio_agents_FolioAgentApplyOperationsSummary, FolioAgentBlock as stll_folio_agents_FolioAgentBlock, FolioAgentChange as stll_folio_agents_FolioAgentChange, FolioAgentComment as stll_folio_agents_FolioAgentComment, FolioAgentDocumentOutline as stll_folio_agents_FolioAgentDocumentOutline, FolioAgentScopedFindTextResult as stll_folio_agents_FolioAgentScopedFindTextResult, FolioAgentSectionRead as stll_folio_agents_FolioAgentSectionRead } from "@stll/folio-agents";
 import type { CompareChange as stll_folio_core_CompareChange, CompareCompatibility as stll_folio_core_CompareCompatibility, CompareUnsupportedPart as stll_folio_core_CompareUnsupportedPart, CompareVerification as stll_folio_core_CompareVerification } from "@stll/folio-core";
+import type { InvoiceTotals as stll_invoicing_InvoiceTotals } from "@stll/invoicing";
 import type { CentsAmount as stll_money_CentsAmount } from "@stll/money";
 import type { FieldDateFormat as stll_template_conditions_FieldDateFormat, NamedCondition as stll_template_conditions_NamedCondition } from "@stll/template-conditions";
 import type { AudioPart as tanstack_ai_AudioPart, ContentPart as tanstack_ai_ContentPart, DocumentPart as tanstack_ai_DocumentPart, ImagePart as tanstack_ai_ImagePart, JSONSchema as tanstack_ai_JSONSchema, StructuredOutputPart as tanstack_ai_StructuredOutputPart, SubagentStatus as tanstack_ai_SubagentStatus, TextPart as tanstack_ai_TextPart, ThinkingPart as tanstack_ai_ThinkingPart, ToolCallPart as tanstack_ai_ToolCallPart, ToolExecutionContext as tanstack_ai_ToolExecutionContext, ToolResultState as tanstack_ai_ToolResultState, UIResourcePart as tanstack_ai_UIResourcePart, VideoPart as tanstack_ai_VideoPart } from "@tanstack/ai";
@@ -8485,7 +8486,7 @@ export type WebRoutes = {
                   vatAmount: stll_money_CentsAmount;
                   grossAmount: stll_money_CentsAmount;
                 }>;
-                totals: T5a0acd1281;
+                totals: stll_invoicing_InvoiceTotals;
                 paidAt: Tbe0400fa4c;
                 finalizedAt: Tbe0400fa4c;
                 createdAt: string;
@@ -8531,13 +8532,13 @@ export type WebRoutes = {
                 expenses: Array<{
                   description: string;
                   id: T22259c97a4;
+                  category: Tcb19db2b80;
                   currency: string;
                   matterId: Tf742ada503;
                   billable: Tfddd645dc8;
                   invoiceDescription: Tbe0400fa4c;
                   dateIncurred: string;
                   amount: stll_money_CentsAmount;
-                  category: Tcb19db2b80;
                   markup: number;
                   matter: {
                     name: string;
@@ -8884,7 +8885,7 @@ export type WebRoutes = {
               response: {
                 200: {
                   id: T74aae47c1a;
-                  totals: T5a0acd1281;
+                  totals: stll_invoicing_InvoiceTotals;
                 };
                 400: T9a51b7d2bc;
                 401: T9a51b7d2bc;
@@ -8936,7 +8937,7 @@ export type WebRoutes = {
                 response: {
                   200: {
                     id: T74aae47c1a;
-                    totals: T5a0acd1281;
+                    totals: stll_invoicing_InvoiceTotals;
                   };
                   400: T9a51b7d2bc;
                   401: T9a51b7d2bc;
@@ -8982,7 +8983,7 @@ export type WebRoutes = {
                 response: {
                   200: {
                     id: T74aae47c1a;
-                    totals: T5a0acd1281;
+                    totals: stll_invoicing_InvoiceTotals;
                   };
                   400: T9a51b7d2bc;
                   401: T9a51b7d2bc;
@@ -9021,10 +9022,10 @@ export type WebRoutes = {
             status?: "approved" | "billed" | "draft" | "written_off";
             cursor?: string;
             limit?: number;
+            category?: "courier" | "expert_witness" | "filing_fee" | "other" | "printing" | "travel";
             userId?: string;
             matterId?: Tf742ada503;
             billable?: false | true;
-            category?: "courier" | "expert_witness" | "filing_fee" | "other" | "printing" | "travel";
             dateFrom?: string;
             dateTo?: string;
           };
@@ -9083,11 +9084,11 @@ export type WebRoutes = {
             invoiceDescription?: string | null;
             markup?: number;
             description: string;
+            category: Tcb19db2b80;
             currency: string;
             matterId: Tf742ada503;
             dateIncurred: string;
             amount: number;
-            category: Tcb19db2b80;
             timezoneId: string;
           };
           params: T3ba9545800;
@@ -9127,13 +9128,13 @@ export type WebRoutes = {
           body: {
             status?: "approved" | "draft";
             description?: string;
+            category?: "courier" | "expert_witness" | "filing_fee" | "other" | "printing" | "travel";
             currency?: string;
             matterId?: Tf742ada503;
             billable?: false | true;
             invoiceDescription?: string | null;
             dateIncurred?: string;
             amount?: number;
-            category?: "courier" | "expert_witness" | "filing_fee" | "other" | "printing" | "travel";
             markup?: number;
             id: T22259c97a4;
           };
@@ -18963,7 +18964,7 @@ export type WebRoutes = {
               reasoning: T8aea504e13;
             };
             providers: Array<{
-              region?: "global";
+              region?: "ch" | "eu" | "global";
               apiKey?: string;
               provider: T4b83723412;
             }>;
@@ -19399,7 +19400,7 @@ export type WebRoutes = {
       "validate-provider": {
         post: {
           body: {
-            region?: "global";
+            region?: "ch" | "eu" | "global";
             provider: T4b83723412;
             apiKey: string;
           };
@@ -21421,6 +21422,8 @@ export type WebRoutes = {
               cursor?: string;
               limit?: number;
               court?: string;
+              courts?: Array<string>;
+              category?: string;
               language?: string;
               sort?: "newest" | "relevance";
               strict?: false | true;
@@ -21429,6 +21432,7 @@ export type WebRoutes = {
               dateFrom?: string;
               dateTo?: string;
               excerpt?: "long" | "medium" | "short";
+              hasLegalSentence?: false | true;
               alternatives?: Array<{
                 term: string;
                 alternatives: Array<string>;
@@ -21445,8 +21449,8 @@ export type WebRoutes = {
                 facets: {
                   source: Array<T033348b898>;
                   court: Array<{
-                    tierLabel: Tc79049686d;
                     courts: Array<T033348b898>;
+                    tierLabel: Tc79049686d;
                   }>;
                   language: Array<T033348b898>;
                   decisionType: Array<T033348b898>;
@@ -28814,8 +28818,8 @@ export type WebRoutes = {
               query: {
                 cursor?: string;
                 limit?: number;
-                action?: "add" | "all" | "cancel" | "create" | "delete" | "execute" | "remove" | "review" | "update";
                 category?: "all" | "automation" | "correspondence" | "court" | "documents" | "matter" | "tasks" | "team";
+                action?: "add" | "all" | "cancel" | "create" | "delete" | "execute" | "remove" | "review" | "update";
                 from?: string;
                 actorId?: string;
                 toExclusive?: string;
@@ -28945,8 +28949,8 @@ export type WebRoutes = {
                   workspaceId: T8d02a37b3f;
                 };
                 query: {
-                  action?: "add" | "all" | "cancel" | "create" | "delete" | "execute" | "remove" | "review" | "update";
                   category?: "all" | "automation" | "correspondence" | "court" | "documents" | "matter" | "tasks" | "team";
+                  action?: "add" | "all" | "cancel" | "create" | "delete" | "execute" | "remove" | "review" | "update";
                   from?: string;
                   actorId?: string;
                   toExclusive?: string;
@@ -37335,19 +37339,6 @@ type T59c690454c = {
     role: string;
     excerpt: string;
     createdAt: string;
-  }>;
-};
-
-type T5a0acd1281 = {
-  netAmountMinor: stll_money_CentsAmount;
-  vatAmountMinor: stll_money_CentsAmount;
-  grossAmountMinor: stll_money_CentsAmount;
-  vatBreakdown: Array<{
-    vatRateBps: number;
-    vatTreatment: ("domestic_vat" | "exempt" | "not_vat_payer" | "reverse_charge");
-    netAmountMinor: stll_money_CentsAmount;
-    vatAmountMinor: stll_money_CentsAmount;
-    grossAmountMinor: stll_money_CentsAmount;
   }>;
 };
 
