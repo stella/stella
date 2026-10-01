@@ -675,7 +675,307 @@ jobs:
   # are ci-tests and ci-browser, which run as separate jobs so they overlap
   # instead of queueing behind one another. The three share nothing but the
   # checkout and the install.
-  ci-checks:
+  ci-checks-generated:
+    needs: ci-plan
+    if: >-
+      needs.ci-plan.outputs.trusted == 'true'
+      || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    # 25m, matching code-quality.
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      # Release PR state for the release CLI changeset hold.
+      pull-requests: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+          submodules: true
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Turbo remote cache
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+
+      - name: Install dependencies
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          # .npmrc references NPM_TOKEN, but PR installs must not expose
+          # the real npm token to dependency lifecycle scripts.
+          NPM_TOKEN: ""
+
+      - name: Prepare environment
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # `cp`, not `mv`: renaming the tracked .env.example dirties the
+        # working tree in apps/api and apps/web, and `turbo --affected`
+        # counts working-tree changes — so every PR (even web-only ones)
+        # ran the api AND web test suites concurrently and could OOM the
+        # runner (exit 137). The copy leaves the tree clean; .env is
+        # gitignored and invisible to affected-detection.
+        run: |
+          cd ./apps/api
+          cp .env.example .env
+          cd ../web
+          cp .env.example .env
+
+      - name: CLI registry snapshot guard
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # The CLI and shared chat-policy projections must match the live MCP
+        # registry: regenerate all of them and fail on any diff so a registry
+        # change cannot silently ship stale CLI, web approval, or skill behavior.
+        # Regenerate: `bun run codegen` in packages/cli.
+        run: |
+          (cd packages/cli && bun run codegen)
+          git diff --exit-code -- \
+            chatgpt-app-submission.json \
+            packages/api-contract/src/mcp-chat-tool-policy.gen.ts \
+            packages/cli/src/generated \
+            packages/cli/skills
+
+      - name: MCP App bundle guard
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # The API serves the committed single-file bundle, not the TypeScript
+        # source. Regenerate it and fail on any diff so source tests and the
+        # production resource cannot silently exercise different app code.
+        run: |
+          (cd apps/api && bun run build:mcp-apps)
+          git diff --exit-code -- "apps/api/src/mcp/apps/*/generated/app.html.txt"
+
+      - name: Capability catalog drift guard
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # The committed capability catalog (every `tool`/`covered` safe handler,
+        # projected to id + input schema + permissions + scope + access +
+        # destructive) must match the live handler graph. `--check` regenerates
+        # it in-memory and byte-compares against the committed JSON, so a handler
+        # or mapping-table change cannot silently ship a stale catalog.
+        # Regenerate: `bun --env-file=apps/api/.env
+        # apps/api/scripts/export-capability-catalog.ts`.
+        run: |
+          bun apps/api/scripts/export-capability-catalog.ts --check
+
+      - name: Web API types drift guard
+        if: >-
+          needs.ci-plan.outputs.package_checks_required == 'true'
+          && needs.ci-plan.outputs.web_api_types_required == 'true'
+        # apps/web type-checks against API types printed from the API's own
+        # inference instead of compiling the API. `--check` fails when the
+        # committed file is stale and asserts each printed type is identical
+        # to the inferred one. Regenerate: `bun --filter @stll/api
+        # gen:web-api-types`.
+        run: bun --filter @stll/api gen:web-api-types --check
+
+      - name: Route tree drift guard
+        if: >-
+          needs.ci-plan.outputs.package_checks_required == 'true'
+          && needs.ci-plan.outputs.route_tree_required == 'true'
+        run: bun --filter @stll/web generate:route-tree --check
+
+      # Nothing in ordinary development resolves a package the way an install
+      # does: in-repo consumers read `exports` pointing at ./src. This runs the
+      # real publish path for each source-exported package — build,
+      # prepare-publish, pack — then resolves and imports every declared
+      # subpath from the built dist, so a missing build entry or an unshipped
+      # file fails here rather than after publication.
+      - name: Published export map guard
+        if: >-
+          needs.ci-plan.outputs.package_checks_required == 'true'
+          && needs.ci-plan.outputs.published_exports_required == 'true'
+        run: |
+          bun scripts/check-published-exports.ts packages/auth-model
+          bun scripts/check-published-exports.ts packages/ai-catalog
+          bun scripts/check-published-exports.ts packages/anonymize-chat
+          bun scripts/check-published-exports.ts packages/chat
+          bun scripts/check-published-exports.ts packages/ssr-kit
+          bun scripts/check-published-exports.ts packages/ssr-testkit
+          bun scripts/check-published-exports.ts packages/start-runtime
+          bun scripts/check-published-exports.ts packages/ui
+          bun scripts/check-published-exports.ts packages/money
+          bun scripts/check-published-exports.ts packages/calculations
+          bun scripts/check-published-exports.ts packages/workspace-model
+          bun scripts/check-published-exports.ts packages/workspace-ui
+          bun scripts/check-published-exports.ts packages/stable-stringify
+          bun scripts/check-published-exports.ts packages/time
+          bun scripts/check-published-exports.ts packages/text-normalize
+          bun scripts/check-published-exports.ts packages/agent-input
+
+  ci-checks-policy:
+    needs: ci-plan
+    if: >-
+      needs.ci-plan.outputs.trusted == 'true'
+      || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    # 25m, matching code-quality.
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      # Release PR state for the release CLI changeset hold.
+      pull-requests: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+          submodules: true
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Turbo remote cache
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+
+      - name: Install dependencies
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          # .npmrc references NPM_TOKEN, but PR installs must not expose
+          # the real npm token to dependency lifecycle scripts.
+          NPM_TOKEN: ""
+
+      - name: Prepare environment
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # `cp`, not `mv`: renaming the tracked .env.example dirties the
+        # working tree in apps/api and apps/web, and `turbo --affected`
+        # counts working-tree changes — so every PR (even web-only ones)
+        # ran the api AND web test suites concurrently and could OOM the
+        # runner (exit 137). The copy leaves the tree clean; .env is
+        # gitignored and invisible to affected-detection.
+        run: |
+          cd ./apps/api
+          cp .env.example .env
+          cd ../web
+          cp .env.example .env
+
+      - name: Compute affected flag
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        id: affected
+        # The flag scopes the format run and, empty, marks the workflow_dispatch
+        # full run for every step that reads it. The test run scopes itself
+        # through scripts/test-scope.ts, which has to widen the affected set.
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            echo "flag=" >> "$GITHUB_OUTPUT"
+          else
+            echo "flag=--affected" >> "$GITHUB_OUTPUT"
+            echo "TURBO_SCM_BASE=origin/$BASE_REF" >> "$GITHUB_ENV"
+          fi
+
+      - name: Format
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # Call turbo directly: the `format:check` script already
+        # contains `-- --check`, so appending `--affected` via
+        # `bun run` would land it after turbo's `--` and forward it
+        # to oxfmt instead of filtering packages.
+        env:
+          AFFECTED_FLAG: ${{ steps.affected.outputs.flag }}
+        run: |
+          bun run format:guard
+          args=()
+          [[ -z "$AFFECTED_FLAG" ]] || args+=("$AFFECTED_FLAG")
+          bun --bun turbo run format "${args[@]}" -- --check
+
+      - name: Ratchet guard
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # Whole-repo convention metrics (see RATCHET_METRICS in
+        # scripts/ratchet.ts) that may only ever
+        # decrease. Each metric's current count is compared to a committed
+        # baseline; a rise fails CI (a new violation), a fall just prompts a
+        # `--write` to lock in the improvement. Line-based counters, no AST —
+        # fast. The --self-test run first proves each counter counts what it
+        # claims and that a rise regresses, so a broken guard cannot pass
+        # silently. Regenerate: `bun scripts/ratchet.ts --write`.
+        run: |
+          bun test scripts/ratchet-improvements.test.ts scripts/autofix-ratchet-boundary.test.ts scripts/ratchet-derived-totals.test.ts
+          bun scripts/ratchet.ts --self-test
+          bun scripts/ratchet.ts --check
+
+      - name: Documentation source policy rule
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # Every direct dependency must have an exact llms.txt source or a
+        # time-bounded, explained quarantine.
+        run: |
+          bun test ./.oxlint-plugins/__tests__
+          bun run check:docs-sources
+
+      - name: Instruction references
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # AGENTS.md and .claude/skills/*/SKILL.md name repository
+        # paths, package scripts, module exports and oxlint rule ids that
+        # nothing compiles, so a rename leaves the instruction quietly wrong and
+        # every agent reading it is misled. This guard resolves each named
+        # reference against the tree. Intentional examples live in
+        # scripts/instruction-references-allowlist.json, and an entry that
+        # suppresses nothing fails as stale. The --self-test run first proves
+        # each matcher still fires, so a broken guard cannot pass silently.
+        run: |
+          bun scripts/check-instruction-references.ts --self-test
+          bun run check:instruction-references
+
+      - name: Knip production dependency checks
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # Static gate paired with the image boot smokes (api-image-smoke,
+        # api-image-deps): knip --strict verifies production code imports
+        # only `dependencies` (never a devDependency) and flags transitively
+        # resolved (phantom) packages a `turbo prune` would drop. Scoped to
+        # the apps that ship a pruned runtime; each declares its real
+        # production entry (a `!` entry, a start script, or the SSR server
+        # entry). New runtimes are enrolled here deliberately, alongside a
+        # boot/compile smoke.
+        run: |
+          for workspace in apps/api apps/legal-atlas-runner apps/web; do
+            DATABASE_URL=postgresql://invalid bun --no-env-file run knip --production --strict --no-progress --include unlisted,unresolved --workspace "$workspace"
+          done
+
+      - name: Knip workspace dependency checks
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # Include test and tooling imports in every workspace. The production
+        # gate above also checks deployment boundaries for the server apps.
+        run: bun run dependencies:check
+
+      - name: Knip dead-export check (packages/cli)
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # The CLI is small enough to enforce the `exports`/`types` issue
+        # types today (the apps above are not; see the note in the step
+        # before). An exported helper that no runtime or test path calls is
+        # how "login never persists the default server" shipped: the
+        # persistence function existed, unused. Test files are entries in
+        # knip.json so test-only exports count as used; anything else that
+        # is exported but unreferenced fails here.
+        run: |
+          DATABASE_URL=postgresql://invalid bun --no-env-file run knip --no-progress --include exports,types,nsExports --workspace packages/cli
+
+      - name: Knip dead-export budget (all workspaces)
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # What the packages/cli step enforces at zero, every other workspace
+        # carries as a decrease-only budget: one knip run for the whole repo,
+        # counted per workspace against scripts/knip-exports-baseline.json. A
+        # rise fails here and names the offending symbols; a fall only prompts
+        # `bun scripts/knip-exports-ratchet.ts --write` so the improvement can
+        # never regress. The parser tests run first, so a broken summary cannot
+        # pass silently.
+        run: |
+          bun test scripts/knip-exports-ratchet.test.ts
+          bun run check:knip-exports
+
+  ci-checks-rest:
     needs: ci-plan
     if: >-
       needs.ci-plan.outputs.trusted == 'true'
@@ -879,23 +1179,6 @@ jobs:
           cd ../web
           cp .env.example .env
 
-      - name: Compute affected flag
-        if: needs.ci-plan.outputs.package_checks_required == 'true'
-        id: affected
-        # The flag scopes the format run and, empty, marks the workflow_dispatch
-        # full run for every step that reads it. The test run scopes itself
-        # through scripts/test-scope.ts, which has to widen the affected set.
-        env:
-          BASE_REF: ${{ github.base_ref || 'main' }}
-          EVENT_NAME: ${{ github.event_name }}
-        run: |
-          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
-            echo "flag=" >> "$GITHUB_OUTPUT"
-          else
-            echo "flag=--affected" >> "$GITHUB_OUTPUT"
-            echo "TURBO_SCM_BASE=origin/$BASE_REF" >> "$GITHUB_ENV"
-          fi
-
       - name: Check i18n sync
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: bun run i18n:check
@@ -987,20 +1270,6 @@ jobs:
             echo "::warning::Stale marketing recordings for this release (see step log). Re-record with \`bun run marketing:reshoot\`."
           fi
 
-      - name: Format
-        if: needs.ci-plan.outputs.package_checks_required == 'true'
-        # Call turbo directly: the `format:check` script already
-        # contains `-- --check`, so appending `--affected` via
-        # `bun run` would land it after turbo's `--` and forward it
-        # to oxfmt instead of filtering packages.
-        env:
-          AFFECTED_FLAG: ${{ steps.affected.outputs.flag }}
-        run: |
-          bun run format:guard
-          args=()
-          [[ -z "$AFFECTED_FLAG" ]] || args+=("$AFFECTED_FLAG")
-          bun --bun turbo run format "${args[@]}" -- --check
-
       - name: Rust format
         if: needs.ci-plan.outputs.desktop_rust_checks_required == 'true'
         run: cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml -- --check
@@ -1060,21 +1329,6 @@ jobs:
         # Every built-in rule of an enabled plugin is named in the config, on
         # or off, so an oxlint upgrade cannot add rules nobody decided on.
         run: bun scripts/check-oxlint-rule-decisions.ts
-
-      - name: Ratchet guard
-        if: needs.ci-plan.outputs.package_checks_required == 'true'
-        # Whole-repo convention metrics (see RATCHET_METRICS in
-        # scripts/ratchet.ts) that may only ever
-        # decrease. Each metric's current count is compared to a committed
-        # baseline; a rise fails CI (a new violation), a fall just prompts a
-        # `--write` to lock in the improvement. Line-based counters, no AST —
-        # fast. The --self-test run first proves each counter counts what it
-        # claims and that a rise regresses, so a broken guard cannot pass
-        # silently. Regenerate: `bun scripts/ratchet.ts --write`.
-        run: |
-          bun test scripts/ratchet-improvements.test.ts scripts/autofix-ratchet-boundary.test.ts scripts/ratchet-derived-totals.test.ts
-          bun scripts/ratchet.ts --self-test
-          bun scripts/ratchet.ts --check
 
       - name: Result boundary enrolment
         if: needs.ci-plan.outputs.package_checks_required == 'true'
@@ -1206,80 +1460,6 @@ jobs:
           bun scripts/chat-fixture-guard.ts --self-test
           bun scripts/chat-fixture-guard.ts
 
-      - name: CLI registry snapshot guard
-        if: needs.ci-plan.outputs.package_checks_required == 'true'
-        # The CLI and shared chat-policy projections must match the live MCP
-        # registry: regenerate all of them and fail on any diff so a registry
-        # change cannot silently ship stale CLI, web approval, or skill behavior.
-        # Regenerate: `bun run codegen` in packages/cli.
-        run: |
-          (cd packages/cli && bun run codegen)
-          git diff --exit-code -- \
-            chatgpt-app-submission.json \
-            packages/api-contract/src/mcp-chat-tool-policy.gen.ts \
-            packages/cli/src/generated \
-            packages/cli/skills
-
-      - name: MCP App bundle guard
-        if: needs.ci-plan.outputs.package_checks_required == 'true'
-        # The API serves the committed single-file bundle, not the TypeScript
-        # source. Regenerate it and fail on any diff so source tests and the
-        # production resource cannot silently exercise different app code.
-        run: |
-          (cd apps/api && bun run build:mcp-apps)
-          git diff --exit-code -- "apps/api/src/mcp/apps/*/generated/app.html.txt"
-
-      - name: Documentation source policy rule
-        if: needs.ci-plan.outputs.package_checks_required == 'true'
-        # Every direct dependency must have an exact llms.txt source or a
-        # time-bounded, explained quarantine.
-        run: |
-          bun test ./.oxlint-plugins/__tests__
-          bun run check:docs-sources
-
-      - name: Instruction references
-        if: needs.ci-plan.outputs.package_checks_required == 'true'
-        # AGENTS.md and .claude/skills/*/SKILL.md name repository
-        # paths, package scripts, module exports and oxlint rule ids that
-        # nothing compiles, so a rename leaves the instruction quietly wrong and
-        # every agent reading it is misled. This guard resolves each named
-        # reference against the tree. Intentional examples live in
-        # scripts/instruction-references-allowlist.json, and an entry that
-        # suppresses nothing fails as stale. The --self-test run first proves
-        # each matcher still fires, so a broken guard cannot pass silently.
-        run: |
-          bun scripts/check-instruction-references.ts --self-test
-          bun run check:instruction-references
-
-      - name: Capability catalog drift guard
-        if: needs.ci-plan.outputs.package_checks_required == 'true'
-        # The committed capability catalog (every `tool`/`covered` safe handler,
-        # projected to id + input schema + permissions + scope + access +
-        # destructive) must match the live handler graph. `--check` regenerates
-        # it in-memory and byte-compares against the committed JSON, so a handler
-        # or mapping-table change cannot silently ship a stale catalog.
-        # Regenerate: `bun --env-file=apps/api/.env
-        # apps/api/scripts/export-capability-catalog.ts`.
-        run: |
-          bun apps/api/scripts/export-capability-catalog.ts --check
-
-      - name: Web API types drift guard
-        if: >-
-          needs.ci-plan.outputs.package_checks_required == 'true'
-          && needs.ci-plan.outputs.web_api_types_required == 'true'
-        # apps/web type-checks against API types printed from the API's own
-        # inference instead of compiling the API. `--check` fails when the
-        # committed file is stale and asserts each printed type is identical
-        # to the inferred one. Regenerate: `bun --filter @stll/api
-        # gen:web-api-types`.
-        run: bun --filter @stll/api gen:web-api-types --check
-
-      - name: Route tree drift guard
-        if: >-
-          needs.ci-plan.outputs.package_checks_required == 'true'
-          && needs.ci-plan.outputs.route_tree_required == 'true'
-        run: bun --filter @stll/web generate:route-tree --check
-
       - name: Model catalog snapshot drift guard
         if: needs.ci-plan.outputs.model_catalog_drift_required == 'true'
         # These fetch models.dev and OpenRouter and byte-compare the
@@ -1341,52 +1521,6 @@ jobs:
         # uses still reports growth, shrinkage, a changed tool count and a
         # missing audience, so a broken guard cannot pass silently.
         run: bun apps/api/scripts/mcp-surface-baseline.ts --self-test
-
-      - name: Knip production dependency checks
-        if: needs.ci-plan.outputs.package_checks_required == 'true'
-        # Static gate paired with the image boot smokes (api-image-smoke,
-        # api-image-deps): knip --strict verifies production code imports
-        # only `dependencies` (never a devDependency) and flags transitively
-        # resolved (phantom) packages a `turbo prune` would drop. Scoped to
-        # the apps that ship a pruned runtime; each declares its real
-        # production entry (a `!` entry, a start script, or the SSR server
-        # entry). New runtimes are enrolled here deliberately, alongside a
-        # boot/compile smoke.
-        run: |
-          for workspace in apps/api apps/legal-atlas-runner apps/web; do
-            DATABASE_URL=postgresql://invalid bun --no-env-file run knip --production --strict --no-progress --include unlisted,unresolved --workspace "$workspace"
-          done
-
-      - name: Knip workspace dependency checks
-        if: needs.ci-plan.outputs.package_checks_required == 'true'
-        # Include test and tooling imports in every workspace. The production
-        # gate above also checks deployment boundaries for the server apps.
-        run: bun run dependencies:check
-
-      - name: Knip dead-export check (packages/cli)
-        if: needs.ci-plan.outputs.package_checks_required == 'true'
-        # The CLI is small enough to enforce the `exports`/`types` issue
-        # types today (the apps above are not; see the note in the step
-        # before). An exported helper that no runtime or test path calls is
-        # how "login never persists the default server" shipped: the
-        # persistence function existed, unused. Test files are entries in
-        # knip.json so test-only exports count as used; anything else that
-        # is exported but unreferenced fails here.
-        run: |
-          DATABASE_URL=postgresql://invalid bun --no-env-file run knip --no-progress --include exports,types,nsExports --workspace packages/cli
-
-      - name: Knip dead-export budget (all workspaces)
-        if: needs.ci-plan.outputs.package_checks_required == 'true'
-        # What the packages/cli step enforces at zero, every other workspace
-        # carries as a decrease-only budget: one knip run for the whole repo,
-        # counted per workspace against scripts/knip-exports-baseline.json. A
-        # rise fails here and names the offending symbols; a fall only prompts
-        # `bun scripts/knip-exports-ratchet.ts --write` so the improvement can
-        # never regress. The parser tests run first, so a broken summary cannot
-        # pass silently.
-        run: |
-          bun test scripts/knip-exports-ratchet.test.ts
-          bun run check:knip-exports
 
       - name: Catalogue pinned-content check
         if: needs.ci-plan.outputs.package_checks_required == 'true'
@@ -1462,34 +1596,6 @@ jobs:
         # install above; a workflow-only PR skips both.
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: bun test scripts/publish-manifest.test.ts
-
-      # Nothing in ordinary development resolves a package the way an install
-      # does: in-repo consumers read `exports` pointing at ./src. This runs the
-      # real publish path for each source-exported package — build,
-      # prepare-publish, pack — then resolves and imports every declared
-      # subpath from the built dist, so a missing build entry or an unshipped
-      # file fails here rather than after publication.
-      - name: Published export map guard
-        if: >-
-          needs.ci-plan.outputs.package_checks_required == 'true'
-          && needs.ci-plan.outputs.published_exports_required == 'true'
-        run: |
-          bun scripts/check-published-exports.ts packages/auth-model
-          bun scripts/check-published-exports.ts packages/ai-catalog
-          bun scripts/check-published-exports.ts packages/anonymize-chat
-          bun scripts/check-published-exports.ts packages/chat
-          bun scripts/check-published-exports.ts packages/ssr-kit
-          bun scripts/check-published-exports.ts packages/ssr-testkit
-          bun scripts/check-published-exports.ts packages/start-runtime
-          bun scripts/check-published-exports.ts packages/ui
-          bun scripts/check-published-exports.ts packages/money
-          bun scripts/check-published-exports.ts packages/calculations
-          bun scripts/check-published-exports.ts packages/workspace-model
-          bun scripts/check-published-exports.ts packages/workspace-ui
-          bun scripts/check-published-exports.ts packages/stable-stringify
-          bun scripts/check-published-exports.ts packages/time
-          bun scripts/check-published-exports.ts packages/text-normalize
-          bun scripts/check-published-exports.ts packages/agent-input
 
       # Release ordering is a safety property. This test has no workspace
       # dependencies, so it remains runnable when a PR changes only workflows
@@ -1953,7 +2059,141 @@ jobs:
         if: steps.extension-browser-tests.outputs.required == 'true'
         run: bun --filter @stll/extension test:e2e
 
-  code-quality:
+  code-quality-api:
+    needs: ci-plan
+    if: >-
+      needs.ci-plan.outputs.package_checks_required == 'true'
+      && (needs.ci-plan.outputs.trusted == 'true'
+          || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+          submodules: true
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Turbo remote cache
+        # code-quality runs cacheable workspace and root checks. Restore the
+        # same artifact store as ci-checks instead of rebuilding on every
+        # ephemeral runner; the job is restricted to trusted code above.
+        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+
+      - name: Install dependencies
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          # .npmrc references NPM_TOKEN, but PR installs must not expose
+          # the real npm token to dependency lifecycle scripts.
+          NPM_TOKEN: ""
+
+      - name: Prepare environment
+        run: |
+          cd ./apps/api
+          cp .env.example .env
+          cd ../web
+          cp .env.example .env
+
+      - name: Code quality
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            bun run code-check -- --leg api
+            exit 0
+          fi
+          bun run code-check:affected -- --leg api --base "origin/$BASE_REF"
+
+      - name: Result consumption
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            bun run check:result-consumption -- --all --leg api
+          else
+            bun run check:result-consumption -- --base "origin/$BASE_REF" --leg api
+          fi
+
+  code-quality-web:
+    needs: ci-plan
+    if: >-
+      needs.ci-plan.outputs.package_checks_required == 'true'
+      && (needs.ci-plan.outputs.trusted == 'true'
+          || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+          submodules: true
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Turbo remote cache
+        # code-quality runs cacheable workspace and root checks. Restore the
+        # same artifact store as ci-checks instead of rebuilding on every
+        # ephemeral runner; the job is restricted to trusted code above.
+        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+
+      - name: Install dependencies
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          # .npmrc references NPM_TOKEN, but PR installs must not expose
+          # the real npm token to dependency lifecycle scripts.
+          NPM_TOKEN: ""
+
+      - name: Prepare environment
+        run: |
+          cd ./apps/api
+          cp .env.example .env
+          cd ../web
+          cp .env.example .env
+
+      - name: Code quality
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            bun run code-check -- --leg web
+            exit 0
+          fi
+          bun run code-check:affected -- --leg web --base "origin/$BASE_REF"
+
+      - name: Result consumption
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            bun run check:result-consumption -- --all --leg web
+          else
+            bun run check:result-consumption -- --base "origin/$BASE_REF" --leg web
+          fi
+
+  code-quality-rest:
     needs: ci-plan
     if: >-
       needs.ci-plan.outputs.package_checks_required == 'true'
@@ -2021,10 +2261,10 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
         run: |
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
-            bun run code-check
+            bun run code-check -- --leg rest
             exit 0
           fi
-          bun run code-check:affected -- --base "origin/$BASE_REF"
+          bun run code-check:affected -- --leg rest --base "origin/$BASE_REF"
 
       - name: Query cache types
         if: needs.ci-plan.outputs.package_checks_required == 'true'
@@ -2035,17 +2275,6 @@ jobs:
 
       - name: Projection totality
         run: bun run check:projection-totality
-
-      - name: Result consumption
-        env:
-          BASE_REF: ${{ github.base_ref || 'main' }}
-          EVENT_NAME: ${{ github.event_name }}
-        run: |
-          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
-            bun run check:result-consumption -- --all
-          else
-            bun run check:result-consumption -- --base "origin/$BASE_REF"
-          fi
 
       - name: Database awaits in loops
         # Type-aware N+1 guard over the API source and scripts: an awaited
@@ -2066,6 +2295,17 @@ jobs:
         run: |
           bun test scripts/check-api-timeout-mutations.test.ts
           bun run check:api-timeout-mutations
+
+      - name: Result consumption
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            bun run check:result-consumption -- --all --leg rest
+          else
+            bun run check:result-consumption -- --base "origin/$BASE_REF" --leg rest
+          fi
 
   # API suites that need real services, at full depth only. The Postgres
   # suites use behavior PGlite cannot reproduce (partial indexes, advisory
@@ -3690,10 +3930,14 @@ jobs:
         dependency-malware,
         agent-sandbox-docker,
         parser-version-guard,
-        ci-checks,
+        ci-checks-generated,
+        ci-checks-policy,
+        ci-checks-rest,
         ci-browser,
         ci-tests,
-        code-quality,
+        code-quality-api,
+        code-quality-web,
+        code-quality-rest,
         service-suites,
         release-typecheck,
         fix-tests-on-base,
@@ -3745,9 +3989,13 @@ jobs:
             "api-image-deps": "api_image_deps_required",
             "api-image-smoke": "api_image_smoke_required",
             "ci-browser": null,
-            "ci-checks": null,
+            "ci-checks-generated": null,
+            "ci-checks-policy": null,
+            "ci-checks-rest": null,
             "ci-tests": null,
-            "code-quality": "package_checks_required",
+            "code-quality-api": "package_checks_required",
+            "code-quality-web": "package_checks_required",
+            "code-quality-rest": "package_checks_required",
             "dependency-malware": "dependency_malware_required",
             "desktop-clippy": "desktop_rust_checks_required",
             "e2e-landing": "e2e_landing_required",

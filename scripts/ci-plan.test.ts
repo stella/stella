@@ -843,7 +843,7 @@ test("a failed dependency stays red beside a cancelled sibling even during super
       expect(
         evaluateResult({
           event,
-          results: { "ci-tests": "cancelled", "code-quality": "failure" },
+          results: { "ci-tests": "cancelled", "code-quality-api": "failure" },
           suiteDepth: SUITE_DEPTH.fast,
           cancellationEvidence,
         }),
@@ -876,7 +876,7 @@ test("only a pull request or a manual run skips heavy suites or passes a superse
     expect(
       evaluateResult({
         event,
-        results: { "ci-tests": "cancelled", "code-quality": "failure" },
+        results: { "ci-tests": "cancelled", "code-quality-api": "failure" },
         suiteDepth: fast,
       }),
       event,
@@ -1141,7 +1141,7 @@ test("ci-checks gates each generated-output guard on its planned scope", () => {
         v.object({ name: v.optional(v.string()), if: v.optional(v.string()) }),
       ),
     }),
-    ciJobs["ci-checks"],
+    ciJobs["ci-checks-generated"],
   ).steps;
   for (const [name, scope] of [
     ["Web API types drift guard", "web_api_types_required"],
@@ -1365,6 +1365,34 @@ test("manual full-depth runs leave the merge-group-only exact-base job unplanned
   }
 });
 
+test("every parallel quality and guard leg fails closed at full depth", () => {
+  for (const job of [
+    "code-quality-api",
+    "code-quality-web",
+    "code-quality-rest",
+    "ci-checks-generated",
+    "ci-checks-policy",
+    "ci-checks-rest",
+  ]) {
+    expect(resultJob.needs).toContain(job);
+    expect(jobScopes[job]).toBe(
+      job.startsWith("code-quality-") ? "package_checks_required" : null,
+    );
+    for (const event of FULL_DEPTH_EVENTS) {
+      for (const result of ["failure", "cancelled", "skipped", ""]) {
+        expect(
+          evaluateResult({
+            event,
+            suiteDepth: SUITE_DEPTH.full,
+            results: { [job]: result },
+          }),
+          `${event} ${job} ${result}`,
+        ).toBe(1);
+      }
+    }
+  }
+});
+
 test("folded service suites preserve both scopes and independent verdicts", () => {
   const plan = v.parse(
     v.object({ outputs: v.record(v.string(), v.string()) }),
@@ -1473,18 +1501,28 @@ test("Bun cache saves are main-only and queue Turbo caches remain readable", () 
 });
 
 test("property-testing guards run only when dependencies are installed", () => {
-  const steps = jobSteps(ciJobs["ci-checks"]);
-  const installCondition = steps.find(
-    ({ name }) => name === "Install dependencies",
-  )?.if;
-  expect(installCondition).toBeDefined();
-  const guards = steps.filter(({ run }) =>
-    run?.includes("bun test packages/property-testing/"),
-  );
-  expect(guards.length).toBeGreaterThan(0);
-  for (const guard of guards) {
-    expect(guard.if, guard.name).toBe(installCondition);
+  let guardCount = 0;
+  for (const job of [
+    "ci-checks-generated",
+    "ci-checks-policy",
+    "ci-checks-rest",
+  ]) {
+    const steps = jobSteps(ciJobs[job]);
+    const installCondition = steps.find(
+      ({ name }) => name === "Install dependencies",
+    )?.if;
+    const guards = steps.filter(({ run }) =>
+      run?.includes("bun test packages/property-testing/"),
+    );
+    guardCount += guards.length;
+    if (guards.length > 0) {
+      expect(installCondition, job).toBeDefined();
+    }
+    for (const guard of guards) {
+      expect(guard.if, `${job}: ${String(guard.name)}`).toBe(installCondition);
+    }
   }
+  expect(guardCount).toBeGreaterThan(0);
 });
 
 test("dependency inputs plan a malware scan and unrelated paths do not", () => {
