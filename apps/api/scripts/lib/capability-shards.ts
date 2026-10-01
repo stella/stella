@@ -12,7 +12,9 @@ export const serializeCapabilityShard = (entry: {
     }
     return Object.fromEntries(
       Object.entries(value).toSorted(([a], [b]) => {
-        if (a === b) {return 0;}
+        if (a === b) {
+          return 0;
+        }
         return a < b ? -1 : 1;
       }),
     );
