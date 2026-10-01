@@ -159,7 +159,10 @@ export const toCallResult = (
   });
   if (serialized.isErr()) {
     if (onSerializationError !== undefined) {
-      Result.try(() => onSerializationError(serialized.error));
+      // Observer failures must preserve the original structured tool failure.
+      Result.try(() => onSerializationError(serialized.error)).unwrapOr(
+        undefined,
+      );
     }
     return {
       content: [
