@@ -252,6 +252,16 @@ export const extractNsMetadata = ($: cheerio.CheerioAPI): MetadataResult => {
       return trimmed ? [trimmed] : [];
     });
 
+  const metadataCellText = (cell: AnyNode) => {
+    const copy = $(cell).clone();
+    // Cheerio's text() omits breaks; keep boundaries without changing the DOM
+    // used by the structured value splitter and complaint table walker.
+    copy.find("br").each((_, br) => {
+      $(br).replaceWith(new Text("\n"));
+    });
+    return copy.text().trim();
+  };
+
   const metadataTable: SourceMetadataTable = {
     captions: metaTable
       .children("caption")
@@ -265,7 +275,7 @@ export const extractNsMetadata = ($: cheerio.CheerioAPI): MetadataResult => {
     metadataTable.rows.push(
       tds.toArray().map((cell) => ({
         type: $(cell).is("th") ? "header" : "data",
-        text: $(cell).text().trim(),
+        text: metadataCellText(cell),
       })),
     );
     if (tds.length < 2) {
@@ -319,8 +329,8 @@ export const extractNsMetadata = ($: cheerio.CheerioAPI): MetadataResult => {
       return;
     }
 
-    const labelText = $(tds[0]).text().trim();
-    const valueText = $(tds[1]).text().trim();
+    const labelText = metadataCellText(tds[0]);
+    const valueText = metadataCellText(tds[1]);
 
     if (!valueText) {
       return;

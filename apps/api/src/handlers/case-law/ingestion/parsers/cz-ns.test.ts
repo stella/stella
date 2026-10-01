@@ -587,6 +587,55 @@ describe("parseNsDecisionHtml", () => {
 });
 
 describe("source table text retention", () => {
+  test("preserves breaks in unknown, additional and recognized metadata cells", () => {
+    for (const separator of [
+      "<br>",
+      "<br/>",
+      "<BR />",
+      "&lt;br&gt;",
+      "&lt;br/&gt;",
+      "&lt;BR /&gt;",
+    ]) {
+      const { canonical, source } = extractNsMetadata(
+        cheerio.load(`<table id="box-table-a">
+          <tr><th>Unknown${separator}label</th>
+            <td>${separator}<b>foo${separator}bar</b>${separator}baz</td>
+            <td>extra${separator}value</td></tr>
+          <tr><td>Kategorie rozhodnutí:</td><td>foo${separator}bar</td></tr>
+          <tr><td>Heslo:</td><td>${separator}foo${separator}bar</td></tr>
+          <tr><td>Dotčené předpisy:</td><td>${separator}foo${separator}bar</td></tr>
+          <tr><th>Standalone${separator}header</th></tr>
+        </table>`),
+      );
+      expect(source["metadataTable"]).toEqual({
+        captions: [],
+        rows: [
+          [
+            { type: "header", text: "Unknown\nlabel" },
+            { type: "data", text: "foo\nbar\nbaz" },
+            { type: "data", text: "extra\nvalue" },
+          ],
+          [
+            { type: "data", text: "Kategorie rozhodnutí:" },
+            { type: "data", text: "foo\nbar" },
+          ],
+          [
+            { type: "data", text: "Heslo:" },
+            { type: "data", text: "foo\nbar" },
+          ],
+          [
+            { type: "data", text: "Dotčené předpisy:" },
+            { type: "data", text: "foo\nbar" },
+          ],
+          [{ type: "header", text: "Standalone\nheader" }],
+        ],
+      });
+      expect(source["kategorieRozhodnuti"]).toBe("foo\nbar");
+      expect(canonical.keywords).toEqual(["foo", "bar"]);
+      expect(canonical.statutes).toEqual(canonical.keywords);
+    }
+  });
+
   test("escaped metadata breaks retain ordered values like HTML breaks", () => {
     const values = [
       "odmítnuto pro zjevnou neopodstatněnost",
