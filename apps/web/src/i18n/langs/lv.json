@@ -487,6 +487,17 @@
     "failedToStartTimer": "Neizdevās palaist taimeri",
     "failedToStopTimer": "Neizdevās apturēt taimeri",
     "filterStatus": "Filtrēt pēc statusa",
+    "globalTimer": {
+      "confirm": "Apstiprināt laiku",
+      "discard": "Atmest taimeri",
+      "matterInaccessible": "Izvēlieties lietu, kurai jums ir piekļuve.",
+      "narrativeRequired": "Pirms laika apstiprināšanas pievienojiet aprakstu.",
+      "pause": "Pauzēt",
+      "periodLocked": "Šis mēnesis ir bloķēts. Lūdziet administratoram to atbloķēt.",
+      "resume": "Turpināt",
+      "timerUnavailable": "Šis taimeris vairs nav pieejams. Atsvaidziniet sarakstu.",
+      "title": "Taimeri"
+    },
     "hourlyRateMustBeNonNegative": "Stundas likme nedrīkst būt negatīva",
     "hours": "Stundas",
     "invoiceNarrative": "Rēķina apraksts",
@@ -2135,6 +2146,13 @@
     "unnamedAttachment": "Pielikums bez nosaukuma"
   },
   "errors": {
+    "actionAdmission": {
+      "admissionUnavailable": "Šī darbība ir īslaicīgi apturēta. Lūdzu, drīzumā mēģiniet vēlreiz.",
+      "concurrencyBusy": "Notiek citas darbības. Lūdzu, drīzumā mēģiniet vēlreiz.",
+      "contact": "Sazinieties ar mums",
+      "notEnabled": "Šī darbība jūsu organizācijai nav iespējota.",
+      "periodExhausted": "Šī darbība jūsu organizācijai ir apturēta."
+    },
     "actionFailed": "Darbība neizdevās",
     "api": {
       "badRequest": "Pieprasījumu neizdevās pabeigt.",

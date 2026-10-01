@@ -179,10 +179,14 @@
     "valibot": "catalog:"
   },
   "devDependencies": {
+    "@anthropic-ai/sdk": "0.97.1",
     "@aws-sdk/client-bedrock-runtime": "^3.1138.0",
     "@electric-sql/pglite": "^0.5.8",
+    "@mistralai/mistralai": "2.2.0",
     "@modelcontextprotocol/client": "2.0.0",
     "@modelcontextprotocol/ext-apps": "^2.0.0",
+    "@openrouter/sdk": "0.13.20",
+    "@standard-schema/spec": "^1.1.0",
     "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "ajv": "catalog:",
@@ -190,6 +194,7 @@
     "bun-types": "catalog:",
     "drizzle-kit": "catalog:",
     "fast-check": "catalog:",
+    "openai": "6.49.0",
     "pdfjs-dist": "^6.3.289"
   },
   "ciGateTestRunners": {

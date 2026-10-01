@@ -5,6 +5,7 @@ import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
   createBackgroundAuditRecorder,
+  createAuditRecorder,
 } from "@/api/lib/audit-log";
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -298,5 +299,61 @@ describe("createBackgroundAuditRecorder", () => {
     });
 
     expect(inserted[0]).toMatchObject({ activityCategory: "tasks" });
+  });
+});
+
+describe("audit detail projection", () => {
+  test("request and background recorders use the same thread detail policy", async () => {
+    const bindings = {
+      organizationId: safeId<"organization">("org-1"),
+      userId: safeId<"user">("user-1"),
+      workspaceId: safeId<"workspace">("workspace-1"),
+    };
+    const recorders = [
+      createBackgroundAuditRecorder({
+        ...bindings,
+        execution: {
+          performer: { type: "user", id: bindings.userId },
+          trigger: { type: "direct" },
+        },
+      }),
+      createAuditRecorder({
+        ...bindings,
+        request: new Request("https://example.test"),
+        server: null,
+      }),
+    ];
+    for (const recorder of recorders) {
+      let inserted: Record<string, unknown>[] = [];
+      const tx = asTestRaw<Transaction>({
+        insert: () => ({
+          values: async (rows: Record<string, unknown>[]) => {
+            inserted = rows;
+          },
+        }),
+      });
+      await recorder(tx, {
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
+        resourceId: "thread-1",
+        changes: {
+          title: { old: "Chat A", new: "Chat B" },
+          chatModel: { old: "model-a", new: "model-b" },
+          created: {
+            old: null,
+            new: { title: "Chat A", chatModel: "model-a" },
+          },
+        },
+        metadata: { title: "Chat A", threadId: "thread-1" },
+      });
+      expect(inserted.at(0)?.["changes"]).toEqual({
+        chatModel: { old: "model-a", new: "model-b" },
+        created: { old: null, new: { chatModel: "model-a" } },
+      });
+      expect(inserted.at(0)?.["metadata"]).toMatchObject({
+        threadId: "thread-1",
+      });
+      expect(inserted.at(0)?.["metadata"]).not.toHaveProperty("title");
+    }
   });
 });

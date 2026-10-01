@@ -1,5 +1,8 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import { Elysia } from "elysia";
+
+import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 
 import { env } from "@/api/env";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
@@ -7,7 +10,10 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
+import {
+  ActionAdmissionError,
+  withActionAdmission,
+} from "@/api/lib/rate-limit/action-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const context = (signal?: AbortSignal) => ({
@@ -81,6 +87,74 @@ const withFeature = async (enabled: boolean, run: () => Promise<void>) => {
 };
 
 describe("finite HTTP action admission", () => {
+  test("each refusal preserves response headers and exposes only its curated contract", async () => {
+    await withFeature(true, async () => {
+      const previousContact = env.ACTION_LIMIT_CONTACT_URL;
+      env.ACTION_LIMIT_CONTACT_URL = "https://example.test/contact";
+      const reasons = [
+        "busy",
+        "period_exhausted",
+        "not_enabled",
+        "unavailable",
+      ] as const;
+      try {
+        for (const reason of reasons) {
+          const refusal = new ActionAdmissionError({
+            reason,
+            message: "private implementation detail",
+          });
+          const metadata = ACTION_ADMISSION_REFUSALS[refusal.code];
+          let calls = 0;
+          const endpoint = createSafeRootHandler(
+            config,
+            async function* () {
+              calls += 1;
+              return Result.ok({ ok: true });
+            },
+            { admit: async () => Result.err(refusal) },
+          );
+          const app = new Elysia().post("/action", async ({ set }) => {
+            set.headers["access-control-allow-origin"] = "https://example.test";
+            set.headers["x-content-type-options"] = "nosniff";
+            set.headers["x-request-id"] = "request_example";
+            return await endpoint.handler(asTestRaw({ ...context(), set }));
+          });
+          const response = await app.handle(
+            new Request("http://localhost/action", { method: "POST" }),
+          );
+          expect(response.status).toBe(metadata.status);
+          expect(response.headers.get("access-control-allow-origin")).toBe(
+            "https://example.test",
+          );
+          expect(response.headers.get("x-content-type-options")).toBe(
+            "nosniff",
+          );
+          expect(response.headers.get("x-request-id")).toBe("request_example");
+          expect(response.headers.get("retry-after")).toBeNull();
+          const body = await response.json();
+          expect(body).toMatchObject({
+            code: refusal.code,
+            message: metadata.message,
+            retryable: metadata.retryable,
+          });
+          expect(JSON.stringify(body)).not.toContain(
+            "private implementation detail",
+          );
+          if (reason === "period_exhausted" || reason === "not_enabled") {
+            expect(body).toMatchObject({
+              contactUrl: env.ACTION_LIMIT_CONTACT_URL,
+            });
+          } else {
+            expect(body).not.toHaveProperty("contactUrl");
+          }
+          expect(calls).toBe(0);
+        }
+      } finally {
+        env.ACTION_LIMIT_CONTACT_URL = previousContact;
+      }
+    });
+  });
+
   test("admitted finite HTTP requests supply their canonical kind and distinct request identities", async () => {
     await withFeature(true, async () => {
       const identities: unknown[] = [];
@@ -278,7 +352,7 @@ describe("finite HTTP action admission", () => {
       );
       expect(await endpoint.handler(asTestRaw(context()))).toMatchObject({
         code: 429,
-        response: { code: "rate_limited" },
+        response: { code: "action_concurrency_busy" },
       });
       expect(calls).toBe(0);
       expect(deps.counts()).toEqual({ acquisitions: 1, releases: 0 });
@@ -315,7 +389,7 @@ describe("finite HTTP action admission", () => {
       );
       expect(await endpoint.handler(asTestRaw(context()))).toMatchObject({
         code: 503,
-        response: { code: "service_unavailable" },
+        response: { code: "action_admission_unavailable" },
       });
       expect(calls).toBe(0);
     });

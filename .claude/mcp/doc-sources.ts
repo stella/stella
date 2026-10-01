@@ -16,6 +16,22 @@ export type NoLlmsTxtExclusion = {
 };
 
 export const DOC_SOURCES = {
+  Anthropic: {
+    dependencies: ["@anthropic-ai/sdk"],
+    url: "https://platform.claude.com/llms.txt",
+  },
+  Mistral: {
+    dependencies: ["@mistralai/mistralai"],
+    url: "https://docs.mistral.ai/llms.txt",
+  },
+  OpenAI: {
+    dependencies: ["openai"],
+    url: "https://developers.openai.com/llms.txt",
+  },
+  OpenRouter: {
+    dependencies: ["@openrouter/sdk"],
+    url: "https://openrouter.ai/docs/llms.txt",
+  },
   Elysia: {
     dependencies: ["elysia", "@elysia/cors", "@elysia/eden"],
     url: "https://elysiajs.com/llms.txt",
@@ -139,6 +155,7 @@ export const DOC_SOURCES = {
       "expo-router",
       "expo-status-bar",
       "expo-system-ui",
+      "expo-updates",
       "react-native-safe-area-context",
       "react-native-screens",
     ],
@@ -333,6 +350,7 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "eslint",
   "expo-doctor",
   "franc",
+  "happy-dom",
   "immer",
   "input-otp",
   "ioredis",
@@ -371,6 +389,14 @@ export const DOC_SOURCE_EXCLUSIONS = [
 ]
   .map(noLlmsTxt)
   .concat(
+    {
+      checkedAt: "2026-09-30T00:00:00.000Z",
+      dependency: "@standard-schema/spec",
+      explanation:
+        "https://standardschema.dev/llms.txt returns 404. Use the specification at https://standardschema.dev and the typed interfaces in @standard-schema/spec directly.",
+      expiresAt: "2026-10-30T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
     {
       checkedAt: "2026-09-27T00:00:00.000Z",
       dependency: "mailauth",

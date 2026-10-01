@@ -5,10 +5,15 @@ import {
   normalizeApiError,
   parseApiErrorValue,
 } from "@stll/api-contract";
+import {
+  ACTION_ADMISSION_REFUSALS,
+  isActionAdmissionCode,
+} from "@stll/api-contract/action-admission";
 
 import type { TranslationKey } from "@/i18n/types";
 import { API_ERROR_TAG } from "@/lib/errors/api-tag";
 import {
+  ACTION_ADMISSION_ERROR_KEYS,
   STATUS_ERROR_KEYS,
   STATUS_TO_KEY,
   translateError,
@@ -28,11 +33,20 @@ const TOO_MANY_REQUESTS_STATUS = 429;
 export const shouldRetryAPIRequest = (
   failureCount: number,
   error: unknown,
-): boolean =>
-  failureCount < MAX_API_RETRY_COUNT &&
-  (!APIError.is(error) ||
-    error.status === TOO_MANY_REQUESTS_STATUS ||
-    error.status >= 500);
+): boolean => {
+  if (APIError.is(error) && isActionAdmissionCode(error.code)) {
+    return (
+      failureCount < MAX_API_RETRY_COUNT &&
+      ACTION_ADMISSION_REFUSALS[error.code].retryable
+    );
+  }
+  return (
+    failureCount < MAX_API_RETRY_COUNT &&
+    (!APIError.is(error) ||
+      error.status === TOO_MANY_REQUESTS_STATUS ||
+      error.status >= 500)
+  );
+};
 
 export type ToAPIErrorProps = {
   status: number;
@@ -124,6 +138,7 @@ const isUsageRejectionReason = (
   Object.hasOwn(USAGE_REJECTION_REASON_KEYS, reason);
 
 export const isDisplayableAPIError = (error: APIError): boolean =>
+  isActionAdmissionCode(error.code) ||
   (typeof error.code === "string" && isKnownErrorCode(error.code)) ||
   (error.status === 402 &&
     typeof error.details?.["reason"] === "string" &&
@@ -147,6 +162,9 @@ type LocalizeAPIErrorInput = {
 };
 
 const localizeAPIError = ({ code, details, status }: LocalizeAPIErrorInput) => {
+  if (isActionAdmissionCode(code)) {
+    return translateError(ACTION_ADMISSION_ERROR_KEYS[code]);
+  }
   if (code && isKnownErrorCode(code)) {
     return translateError(CODE_ERROR_KEYS[code]);
   }
