@@ -3,7 +3,7 @@ name: CI Checks
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
-  # The merge queue builds main plus one pull request and merges only if this
+  # The merge queue builds main plus queued pull requests and merges only if this
   # workflow reports `ci-result` success on that commit, so release-boundary
   # checks must include merge_group and validate the tree that will land.
   merge_group:
@@ -2223,7 +2223,7 @@ jobs:
   migration-exact-base-upgrade:
     # Reports only until a burn-in supports wiring it into ci-result.
     # Compare the queued upgrade from main's exact schema with a clean
-    # install. The merge queue builds one PR per group, so base_sha is exact.
+    # install, using the event base before any grouped entries are applied.
     needs: ci-plan
     if: >-
       github.event_name == 'merge_group'
