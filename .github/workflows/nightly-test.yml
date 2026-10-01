@@ -83,7 +83,7 @@ jobs:
         env:
           E2E_SOAK_SEED: ${{ github.run_id }}
           E2E_SOAK_STEPS: "200"
-        run: bun --filter @stll/web test:e2e:soak
+        run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:soak
 
       - name: Add replay instructions
         if: failure() && steps.e2e-stack.outputs.status == 'ready'
