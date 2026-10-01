@@ -1994,7 +1994,7 @@ if (!databaseUrl || !runPostgresTests) {
           .where(eq(caseLawDecisionAliases.retiredDecisionId, first)),
       ).toEqual(initial);
 
-      await expect(
+      expect(
         db
           .insert(caseLawDecisionAliases)
           .values({ retiredDecisionId: middle, canonicalDecisionId: first })
@@ -2002,7 +2002,7 @@ if (!databaseUrl || !runPostgresTests) {
       ).rejects.toMatchObject({
         cause: { message: expect.stringContaining("Decision alias cycle") },
       });
-      await expect(
+      expect(
         db
           .insert(caseLawDecisionAliases)
           .values({ retiredDecisionId: later, canonicalDecisionId: missing })
@@ -2012,7 +2012,7 @@ if (!databaseUrl || !runPostgresTests) {
           message: expect.stringContaining("Decision alias target is not live"),
         },
       });
-      await expect(
+      expect(
         db
           .insert(caseLawDecisionAliases)
           .values({
@@ -2032,7 +2032,7 @@ if (!databaseUrl || !runPostgresTests) {
         { retiredDecisionId: later },
         { createdAt: new Date("2000-01-01T00:00:00Z") },
       ]) {
-        await expect(
+        expect(
           db
             .update(caseLawDecisionAliases)
             .set(patch)
@@ -2048,7 +2048,7 @@ if (!databaseUrl || !runPostgresTests) {
           },
         });
       }
-      await expect(
+      expect(
         db
           .delete(caseLawDecisions)
           .where(eq(caseLawDecisions.id, middle))
@@ -2089,13 +2089,13 @@ if (!databaseUrl || !runPostgresTests) {
       for (const retired of [first, middle, later]) {
         expect(rows).toContainEqual({ retired, target: terminal });
       }
-      await expect(
+      expect(
         db
           .delete(caseLawDecisions)
           .where(eq(caseLawDecisions.id, terminal))
           .execute(),
       ).rejects.toMatchObject({ cause: { code: "23503" } });
-      await expect(
+      expect(
         db
           .insert(caseLawDecisions)
           .values({
@@ -2110,7 +2110,7 @@ if (!databaseUrl || !runPostgresTests) {
       ).rejects.toMatchObject({
         cause: { message: expect.stringContaining("Decision UUID is retired") },
       });
-      await expect(
+      expect(
         db
           .update(caseLawDecisions)
           .set({ id: first })
