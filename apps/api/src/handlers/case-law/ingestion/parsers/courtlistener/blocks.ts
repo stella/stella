@@ -627,7 +627,9 @@ export const sourceTextOf = (
         ? printed.slice(label.length)
         : printed.replace(/^\*?/u, "").replace(anchor.label, "");
       paginationCharacters += printed.length - rest.length;
-      current += ` ${rest} `;
+      if (rest !== "") {
+        current += ` ${rest} `;
+      }
       return;
     }
     if (inNote && vocabulary.backlink(node)) {
