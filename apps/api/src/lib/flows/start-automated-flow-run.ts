@@ -16,10 +16,17 @@ import type {
 import { enqueueFlowStep } from "@/api/lib/flows/flow-run-queue";
 import type { FlowTriggerSource } from "@/api/lib/flows/flow-types";
 import { buildFlowRunRows } from "@/api/lib/flows/start-flow-run";
+import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { QUEUED_ACTION_KIND } from "@/api/lib/rate-limit/action-kinds";
 import { runQueuedKickoff } from "@/api/lib/rate-limit/queued-action-admission";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
+
+const AUTOMATED_RUN_START_FAILURE = failureSink({
+  event: "flow.automated_run_start_failed",
+  expected: [],
+});
 
 /**
  * Shared tail for both automated triggers (schedule + file-upload): guarantee
@@ -73,6 +80,7 @@ type StartAutomatedFlowRunDependencies = {
     input: Omit<InsertAutomatedFlowRunWithinCapInput, "database">,
   ) => Promise<InsertAutomatedFlowRunWithinCapResult>;
   enqueueStep: typeof enqueueFlowStep;
+  kickoff?: typeof runQueuedKickoff;
 };
 
 /**
@@ -117,6 +125,7 @@ export const startAutomatedFlowRun = async (
     resolveAuthorization,
     insertWithinCap,
     enqueueStep,
+    kickoff = runQueuedKickoff,
   }: StartAutomatedFlowRunDependencies,
 ): Promise<void> => {
   if (createdByUserId === null) {
@@ -219,7 +228,6 @@ export const startAutomatedFlowRun = async (
       return;
     }
 
-    signal?.throwIfAborted();
     // Enqueue after the rows commit. A failure here leaves the run `pending`; the
     // worker's boot reconciler re-enqueues its current step, so the run is never
     // permanently stranded.
@@ -253,7 +261,7 @@ export const startAutomatedFlowRun = async (
   }
   const started = await Result.tryPromise({
     try: async () =>
-      await runQueuedKickoff({
+      await kickoff({
         organizationId,
         userId: brandPersistedUserId(createdByUserId),
         actionKind: QUEUED_ACTION_KIND.flow,
@@ -264,10 +272,9 @@ export const startAutomatedFlowRun = async (
     catch: (cause) => cause,
   });
   if (Result.isError(started)) {
-    captureError(started.error, logContext);
-    logger.error("flow.automated_run_start_failed", {
-      ...logContext,
-      "error.type": errorTag(started.error),
+    observeFailure(started.error, {
+      sink: AUTOMATED_RUN_START_FAILURE,
+      ctx: { workspaceId, organizationId },
     });
   }
 };

@@ -13,6 +13,7 @@ import type {
   FlowStep,
   FlowTriggerSource,
 } from "@/api/lib/flows/flow-types";
+import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
 import { QUEUED_ACTION_KIND } from "@/api/lib/rate-limit/action-kinds";
 import { runQueuedKickoff } from "@/api/lib/rate-limit/queued-action-admission";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
@@ -63,6 +64,7 @@ export type StartFlowRunOptions = {
     steps: FlowStep[];
   }) => Promise<HandlerError<402 | 428 | 500> | null>;
   enqueueStep?: typeof enqueueFlowStep;
+  kickoff?: typeof runQueuedKickoff;
 };
 
 export type StartFlowRunResult = {
@@ -131,6 +133,11 @@ export const buildFlowRunRows = ({
   };
 };
 
+type StartFlowRunOutcome = Result<
+  StartFlowRunResult,
+  FlowRunStartError | SafeDbError | ActionAdmissionError
+>;
+
 export const startFlowRun = async ({
   safeDb,
   organizationId,
@@ -141,9 +148,8 @@ export const startFlowRun = async ({
   enqueueDelayMs,
   admit,
   enqueueStep = enqueueFlowStep,
-}: StartFlowRunOptions): Promise<
-  Result<StartFlowRunResult, FlowRunStartError | SafeDbError>
-> =>
+  kickoff = runQueuedKickoff,
+}: StartFlowRunOptions): Promise<StartFlowRunOutcome> =>
   await Result.gen(async function* () {
     const definition = yield* Result.await(
       safeDb((tx) =>
@@ -216,7 +222,6 @@ export const startFlowRun = async ({
           }),
         );
 
-        signal?.throwIfAborted();
         // Enqueue after the rows commit. A failure here leaves the run `pending`;
         // the worker's boot reconciler re-enqueues its current step, so the run is
         // never permanently stranded.
@@ -255,7 +260,7 @@ export const startFlowRun = async ({
     const started = yield* Result.await(
       Result.tryPromise({
         try: async () =>
-          await runQueuedKickoff({
+          await kickoff({
             organizationId,
             userId: brandPersistedUserId(actorId),
             actionKind: QUEUED_ACTION_KIND.flow,
@@ -263,11 +268,13 @@ export const startFlowRun = async ({
             run: createAndEnqueue,
           }),
         catch: (cause) =>
-          new FlowRunStartError({
-            reason: "admission-refused",
-            message: "Flow action admission refused",
-            cause,
-          }),
+          ActionAdmissionError.is(cause)
+            ? cause
+            : new FlowRunStartError({
+                reason: "admission-refused",
+                message: "Flow action admission refused",
+                cause,
+              }),
       }),
     );
     return started;
