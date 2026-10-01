@@ -14,19 +14,23 @@ import { ChatSendLifecycle } from "./send-message";
 import { createLazyExternalMcpToolsLoader } from "./tools/external-mcp-tools";
 
 describe("send lifecycle checkpoint indexing", () => {
-  test("replays retain their thread/run identity while new phases have distinct identities", async () => {
+  test("replays retain their turn/run identity and a fresh turn can reuse an old run id", async () => {
     const identities: string[] = [];
-    for (const thread of ["thread-a", "thread-b"]) {
+    for (const turn of ["turn-a", "turn-b"]) {
       const db = createScopedDbMock({});
       const lifecycle = new ChatSendLifecycle({
         indexThread: async () => undefined,
         startAdmission: async (options) => {
-          expect(options.mode).toBe("action");
-          if (options.mode === "action") {
-            expect(options.periodIdentity.actionKind).toBe("chat.send");
-            identities.push(options.periodIdentity.logicalPhaseId);
-          }
-          return Result.ok(undefined);
+          expect(options.mode).toBe("concurrency-only");
+          return Result.ok({
+            signal: new AbortController().signal,
+            release: async () => undefined,
+            reservePeriod: async (identity) => {
+              expect(identity.actionKind).toBe("chat.send");
+              identities.push(identity.logicalPhaseId);
+              return Result.ok(undefined);
+            },
+          });
         },
         externalMcpToolsLoader: createLazyExternalMcpToolsLoader(async () => {
           throw new ActionAdmissionError({
@@ -37,23 +41,44 @@ describe("send lifecycle checkpoint indexing", () => {
         recordAuditEvent: async () => undefined,
         rollbackSideEffects: async () => Result.ok(undefined),
         safeDb: db.safeDb,
-        threadId: toSafeId<"chatThread">(thread),
+        threadId: toSafeId<"chatThread">("same-thread"),
         userId: toSafeId<"user">("phase_user"),
         workspaceId: null,
       });
+      expect(
+        Result.isOk(
+          await lifecycle.admitExecution({
+            organizationId: toSafeId<"organization">("phase_org"),
+            checkpoint: undefined,
+          }),
+        ),
+      ).toBe(true);
+      lifecycle.claimTurn(
+        { id: toSafeId<"chatTurn">(turn), executionId: turn },
+        undefined,
+      );
       for (const runId of [
         "initial",
         "initial",
         "regeneration",
         "approved-child",
       ]) {
-        const outcome = await lifecycle.admitExecution({
-          organizationId: toSafeId<"organization">("phase_org"),
-          checkpoint: undefined,
-          runId,
-        });
+        const outcome = await lifecycle.reserveExecutionPeriod(runId);
         expect(Result.isOk(outcome)).toBe(true);
       }
+      const run = lifecycle.startRun(undefined);
+      const response = run.produce(
+        (async function* () {
+          yield {
+            type: "RUN_STARTED",
+            runId: "matrix-run",
+            threadId: "same-thread",
+            timestamp: 0,
+          } as const;
+          await run.settle(async () => undefined);
+        })(),
+      );
+      await response.text();
       await lifecycle.cleanup();
     }
     expect(identities.at(0)).toBe(identities.at(1));
@@ -117,14 +142,20 @@ describe("send lifecycle checkpoint indexing", () => {
         },
         startAdmission: async (options) => {
           expect(options).toMatchObject({
-            mode: "action",
-            periodIdentity: {
-              actionKind: "chat.send",
-              logicalPhaseId: JSON.stringify([threadId, "run_lifecycle"]),
-            },
+            mode: "concurrency-only",
           });
           return Result.ok({
             signal: admission.signal,
+            reservePeriod: async (identity) => {
+              expect(identity).toEqual({
+                actionKind: "chat.send",
+                logicalPhaseId: JSON.stringify([
+                  "turn_lifecycle",
+                  "run_lifecycle",
+                ]),
+              });
+              return Result.ok(undefined);
+            },
             release: async () => undefined,
           });
         },
@@ -149,11 +180,13 @@ describe("send lifecycle checkpoint indexing", () => {
         checkpoint,
       );
       const acquired = await lifecycle.admitExecution({
-        runId: "run_lifecycle",
         organizationId: toSafeId<"organization">("organization_lifecycle"),
         checkpoint,
       });
       expect(Result.isOk(acquired)).toBe(true);
+      expect(
+        Result.isOk(await lifecycle.reserveExecutionPeriod("run_lifecycle")),
+      ).toBe(true);
       const run =
         phase === "handed-over" ? lifecycle.startRun(undefined) : undefined;
       admission.abort(

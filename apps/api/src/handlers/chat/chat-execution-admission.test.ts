@@ -38,9 +38,13 @@ const coordination = ({
         });
       }
       const script = args.at(0);
-      if (script?.includes("ZREMRANGEBYSCORE")) {
-        acquisitions += 1;
-        if (mode === "busy" || active.size >= userConcurrency) {
+      const acquire = script?.includes("ZREMRANGEBYSCORE");
+      const reserve = script?.includes("HEXISTS") && !acquire;
+      if (acquire || reserve) {
+        if (acquire) {
+          acquisitions += 1;
+        }
+        if (acquire && (mode === "busy" || active.size >= userConcurrency)) {
           return 0;
         }
         const counted = args.at(1) === "3";
@@ -67,7 +71,12 @@ const coordination = ({
             message: "Missing lease identity",
           });
         }
-        active.add(id);
+        if (reserve && !active.has(id)) {
+          return -2;
+        }
+        if (acquire) {
+          active.add(id);
+        }
         return 1;
       }
       if (script?.includes("ZSCORE")) {
@@ -116,6 +125,46 @@ const executionOf = async (
 };
 
 describe("chat execution admission owns settlement independently of transport readiness", () => {
+  test("claimed phases reserve once on the existing slot and fresh turns count an old run id anew", async () => {
+    const store = coordination({
+      periodPolicy: { periodMs: 86_400_000, limit: 2 },
+    });
+    for (const [index, turn] of ["turn-a", "turn-b", "turn-c"].entries()) {
+      const execution = await executionOf(
+        startChatExecutionAdmission({
+          mode: "concurrency-only",
+          enabled: true,
+          organizationId,
+          userId,
+          admit: store.admit,
+        }),
+      );
+      try {
+        const identity = {
+          actionKind: "chat.send",
+          logicalPhaseId: JSON.stringify([turn, "old-run"]),
+        };
+        const first = await execution.reservePeriod(identity);
+        if (index < 2) {
+          expect(Result.isOk(first)).toBe(true);
+          expect(Result.isOk(await execution.reservePeriod(identity))).toBe(
+            true,
+          );
+        } else {
+          expect(Result.isError(first)).toBe(true);
+          if (Result.isError(first)) {
+            expect(first.error.code).toBe("rate_limited");
+          }
+        }
+        expect(store.periodCount()).toBe(Math.min(index + 1, 2));
+        expect(store.counts().active).toBe(1);
+        expect(store.counts().acquisitions).toBe(index + 1);
+      } finally {
+        await execution.release();
+      }
+    }
+  });
+
   test("each chat phase counts once across retries and detached titles count no period action", async () => {
     const store = coordination({
       periodPolicy: { periodMs: 86_400_000, limit: 3 },

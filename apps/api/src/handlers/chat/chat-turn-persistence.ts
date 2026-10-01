@@ -1174,6 +1174,44 @@ type ChatTurnRunStart = ChatTurnExecutionStanding | "run-taken";
 /** The index that makes a run id name one turn in its organization. */
 const CHAT_TURN_RUN_ID_INDEX = "chat_turns_org_run_id_uidx";
 
+const classifyRunIdWrite = (
+  written: Result<ChatTurnExecutionStanding, SafeDbError>,
+): Result<ChatTurnRunStart, SafeDbError> => {
+  if (
+    Result.isError(written) &&
+    isPgConstraintError(
+      written.error,
+      PG_ERROR.UNIQUE_VIOLATION,
+      CHAT_TURN_RUN_ID_INDEX,
+    )
+  ) {
+    return Result.ok("run-taken");
+  }
+  return written;
+};
+
+/** Bind the owned turn before pre-dispatch work without changing its expiry. */
+export const bindChatTurnRunId = async ({
+  execution,
+  runId,
+  safeDb,
+}: {
+  execution: ChatTurnExecution;
+  runId: string;
+  safeDb: SafeDb;
+}): Promise<Result<ChatTurnRunStart, SafeDbError>> =>
+  classifyRunIdWrite(
+    await safeDb(async (tx) => {
+      // audit: skip — execution correlation; durable turn outcomes are audited at settlement
+      const bound = await tx
+        .update(chatTurns)
+        .set({ runId })
+        .where(ownedByExecution(execution))
+        .returning({ cancelRequestedAt: chatTurns.cancelRequestedAt });
+      return standingOf(bound.at(0));
+    }),
+  );
+
 /**
  * Start the run `runId` for a claimed execution, immediately before provider
  * dispatch: bind the client-minted run id to the turn and start the run's
@@ -1196,17 +1234,7 @@ export const startChatTurnRun = async ({
     runId,
     safeDb,
   });
-  if (
-    Result.isError(started) &&
-    isPgConstraintError(
-      started.error,
-      PG_ERROR.UNIQUE_VIOLATION,
-      CHAT_TURN_RUN_ID_INDEX,
-    )
-  ) {
-    return Result.ok("run-taken");
-  }
-  return started;
+  return classifyRunIdWrite(started);
 };
 
 /** Advisory preflight check; startChatTurnRun remains the atomic run-id fence. */

@@ -18,8 +18,21 @@ const EXECUTION_ADMISSION_FAILURE = failureSink({
 
 export type ChatExecutionAdmission = {
   signal: AbortSignal;
+  reservePeriod: (
+    identity: ActionPeriodIdentity,
+  ) => Promise<Result<void, HandlerError>>;
   /** Release only after provider, fenced persistence and heartbeat work settle. */
   release: () => Promise<void>;
+};
+
+const chatAdmissionError = (error: unknown) => {
+  const busy = ActionAdmissionError.is(error) && error.reason === "busy";
+  return new HandlerError({
+    status: busy ? 429 : 503,
+    code: busy ? "rate_limited" : "service_unavailable",
+    message: busy ? error.message : "Action admission is unavailable",
+    cause: error,
+  });
 };
 
 type StartChatExecutionAdmissionOptions = {
@@ -59,7 +72,7 @@ export const startChatExecutionAdmission = async ({
     organizationId,
     userId,
     ...(mode === "action" ? { mode, periodIdentity } : { mode }),
-    run: async (signal) => {
+    run: async (signal, control) => {
       state.status = "executing";
       const loss = () =>
         observeFailure(signal.reason, { sink: EXECUTION_ADMISSION_FAILURE });
@@ -67,6 +80,12 @@ export const startChatExecutionAdmission = async ({
       ready.resolve(
         Result.ok({
           signal,
+          reservePeriod: async (identity) => {
+            const reserved = await control.reservePeriod(identity);
+            return Result.isError(reserved)
+              ? Result.err(chatAdmissionError(reserved.error))
+              : reserved;
+          },
           release: async () => {
             finished.resolve(undefined);
             await completion;
@@ -82,21 +101,7 @@ export const startChatExecutionAdmission = async ({
   }).then((outcome) => {
     if (Result.isError(outcome)) {
       if (state.status === "acquiring") {
-        const busy =
-          ActionAdmissionError.is(outcome.error) &&
-          outcome.error.reason === "busy";
-        ready.resolve(
-          Result.err(
-            new HandlerError({
-              status: busy ? 429 : 503,
-              code: busy ? "rate_limited" : "service_unavailable",
-              message: busy
-                ? outcome.error.message
-                : "Action admission is unavailable",
-              cause: outcome.error,
-            }),
-          ),
-        );
+        ready.resolve(Result.err(chatAdmissionError(outcome.error)));
       } else {
         // Settlement already owns the durable outcome. Do not make it
         // retryable just because the ephemeral lease or its release failed.

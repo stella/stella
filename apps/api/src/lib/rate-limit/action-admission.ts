@@ -1,4 +1,4 @@
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { AsyncLocalStorage } from "node:async_hooks";
 
 import {
@@ -137,6 +137,18 @@ redis.call("PEXPIRE", KEYS[2], ARGV[2])
 return 1
 `;
 
+const RESERVE_PERIOD_SCRIPT = `
+local clock = redis.call("TIME")
+local now = clock[1] * 1000 + math.floor(clock[2] / 1000)
+local orgExpiry = redis.call("ZSCORE", KEYS[1], ARGV[4])
+local userExpiry = redis.call("ZSCORE", KEYS[2], ARGV[4])
+if orgExpiry == false or userExpiry == false or tonumber(orgExpiry) <= now or tonumber(userExpiry) <= now then
+  return -2
+end
+${ACTION_PERIOD_ACQUIRE_SCRIPT}
+return 1
+`;
+
 const RELEASE_SCRIPT = `
 redis.call("ZREM", KEYS[1], ARGV[1])
 redis.call("ZREM", KEYS[2], ARGV[1])
@@ -192,7 +204,7 @@ const configuredPolicy = (): Result<
 type ActionAdmissionOptions<T = unknown> = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
-  run: (signal: AbortSignal) => Promise<T>;
+  run: (signal: AbortSignal, control: ActionAdmissionControl) => Promise<T>;
   enabled?: boolean;
   scope?: "inherit" | "independent";
   policy?: ActionAdmissionPolicy;
@@ -202,6 +214,16 @@ type ActionAdmissionOptions<T = unknown> = {
   createId?: () => string;
   timing?: AdmissionTiming;
   costRecorder?: ActionCostRecorder | null;
+};
+
+type ActionAdmissionControl = {
+  reservePeriod: (
+    identity: ActionPeriodIdentity,
+  ) => Promise<Result<void, ActionAdmissionError>>;
+};
+
+const disabledControl: ActionAdmissionControl = {
+  reservePeriod: async () => Result.ok(undefined),
 };
 
 type ActionAdmissionReservation =
@@ -223,6 +245,7 @@ type AdmissionScope = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   signal: AbortSignal;
+  control: ActionAdmissionControl;
   status: "active" | "settled";
 };
 
@@ -276,7 +299,8 @@ const createAdmissionExecutor = ({
         ) => {
           // Renewal and release touch concurrency keys alone.
           const scriptKeys =
-            script === ACQUIRE_SCRIPT && window !== null
+            (script === ACQUIRE_SCRIPT || script === RESERVE_PERIOD_SCRIPT) &&
+            window !== null
               ? [keys.organization, keys.user, window.key]
               : [keys.organization, keys.user];
           return await withCommandTimeout({
@@ -292,7 +316,9 @@ const createAdmissionExecutor = ({
         };
         const reply = await send(budget, args);
         const storeNow =
-          script === ACQUIRE_SCRIPT ? staleActionPeriodTime(reply) : null;
+          script === ACQUIRE_SCRIPT || script === RESERVE_PERIOD_SCRIPT
+            ? staleActionPeriodTime(reply)
+            : null;
         if (budget === null || storeNow === null) {
           return Result.ok(reply);
         }
@@ -370,9 +396,9 @@ type ObservedAdmissionRunOptions<T> = Pick<
   ActionAdmissionOptions,
   "organizationId" | "userId"
 > & {
-  periodIdentity: ActionAdmissionOptions["periodIdentity"];
+  periodIdentity: AdmittedActionIdentity | undefined;
   costRecorder: ActionAdmissionOptions["costRecorder"];
-  run: (signal: AbortSignal) => Promise<T>;
+  run: (signal: AbortSignal, control: ActionAdmissionControl) => Promise<T>;
 };
 
 const createObservedAdmissionRun = <T>({
@@ -386,10 +412,10 @@ const createObservedAdmissionRun = <T>({
     costRecorder === null
       ? undefined
       : (costRecorder ?? getActionCostRecorder());
-  return async (signal: AbortSignal): Promise<T> => {
+  return async (signal: AbortSignal, control: ActionAdmissionControl): Promise<T> => {
     const executeRun = async () => {
       signal.throwIfAborted();
-      return await run(signal);
+      return await run(signal, control);
     };
     if (recorder === undefined) {
       return await executeRun();
@@ -412,6 +438,142 @@ const createObservedAdmissionRun = <T>({
  * Nested admission must be awaited: same-caller work shares the parent's lease
  * and signal only until that parent settles. Detached execution needs a fresh scope.
  */
+type ResolveAdmissionPeriodOptions = {
+  organizationId: SafeId<"organization">;
+  identity: ActionPeriodIdentity | undefined;
+  policy: ActionPeriodPolicy | undefined;
+};
+
+const resolveAdmissionPeriod = ({
+  organizationId,
+  identity,
+  policy,
+}: ResolveAdmissionPeriodOptions): Result<
+  ActionPeriodBudget | null,
+  ActionAdmissionError
+> => {
+  const resolved = resolveActionPeriodBudget({
+    organizationId,
+    identity,
+    policy,
+    nowMs: Temporal.Now.instant().epochMilliseconds,
+  });
+  return Result.isError(resolved)
+    ? Result.err(
+        new ActionAdmissionError({
+          message: resolved.error.message,
+          reason: "unavailable",
+          cause: resolved.error,
+        }),
+      )
+    : resolved;
+};
+
+type PeriodReservationControlOptions = AdmissionExecutorOptions & {
+  signal: AbortSignal;
+  isActive: () => boolean;
+  periodPolicy: ActionPeriodPolicy | undefined;
+  limits: ActionAdmissionPolicy;
+  leaseId: string;
+};
+
+const createPeriodReservationControl = ({
+  keys,
+  budget,
+  organizationId,
+  periodIdentity,
+  redis,
+  redisReady,
+  signal,
+  isActive,
+  periodPolicy,
+  limits,
+  leaseId,
+}: PeriodReservationControlOptions): ActionAdmissionControl => {
+  const reservePhase = async (
+    identity: ActionPeriodIdentity,
+  ): Promise<Result<void, ActionAdmissionError>> => {
+    if (signal.aborted || !isActive()) {
+      return Result.err(
+        new ActionAdmissionError({
+          message: "Action admission is unavailable",
+          reason: "unavailable",
+          cause: signal.reason,
+        }),
+      );
+    }
+    const resolved = resolveActionPeriodBudget({
+      organizationId,
+      identity,
+      policy: periodPolicy,
+      nowMs: Temporal.Now.instant().epochMilliseconds,
+    });
+    if (Result.isError(resolved)) {
+      return Result.err(
+        new ActionAdmissionError({
+          message: resolved.error.message,
+          reason: "unavailable",
+          cause: resolved.error,
+        }),
+      );
+    }
+    if (resolved.value === null) {
+      return Result.ok(undefined);
+    }
+    const reserve = createAdmissionExecutor({
+      keys,
+      budget: resolved.value,
+      organizationId,
+      periodIdentity: identity,
+      redis,
+      redisReady,
+    });
+    const reply = await reserve(RESERVE_PERIOD_SCRIPT, [
+      String(limits.leaseMs),
+      String(limits.organizationConcurrency),
+      String(limits.userConcurrency),
+      leaseId,
+      ...actionPeriodArguments(resolved.value),
+    ]);
+    if (Result.isError(reply)) {
+      return reply;
+    }
+    return validateAdmissionReply(reply.value);
+  };
+  let reservation:
+    | {
+        identity: ActionPeriodIdentity;
+        result: Promise<Result<void, ActionAdmissionError>>;
+      }
+    | undefined =
+    budget !== null && periodIdentity !== undefined
+      ? {
+          identity: periodIdentity,
+          result: Promise.resolve(Result.ok(undefined)),
+        }
+      : undefined;
+  return {
+    reservePeriod: async (identity) => {
+      if (reservation !== undefined) {
+        if (
+          reservation.identity.actionKind !== identity.actionKind ||
+          reservation.identity.logicalPhaseId !== identity.logicalPhaseId
+        ) {
+          panic("An admission cannot reserve two logical phases");
+        }
+        return await reservation.result;
+      }
+      const stableIdentity = {
+        actionKind: identity.actionKind,
+        logicalPhaseId: identity.logicalPhaseId,
+      };
+      const result = reservePhase(stableIdentity);
+      reservation = { identity: stableIdentity, result };
+      return await result;
+    },
+  };
+};
+
 export const withActionAdmission = async <T>({
   organizationId,
   userId,
@@ -437,7 +599,7 @@ export const withActionAdmission = async <T>({
   });
   if (!enabled) {
     return await Result.tryPromise({
-      try: async () => await observedRun(new AbortController().signal),
+      try: async () => await observedRun(new AbortController().signal, disabledControl),
       catch: (error: unknown) => error,
     });
   }
@@ -445,21 +607,12 @@ export const withActionAdmission = async <T>({
   const resolvedBudget =
     mode === "concurrency-only"
       ? Result.ok(null)
-      : resolveActionPeriodBudget({
+      : resolveAdmissionPeriod({
           organizationId,
           identity: periodIdentity,
           policy: periodPolicy,
-          nowMs: Temporal.Now.instant().epochMilliseconds,
         });
-  if (Result.isError(resolvedBudget)) {
-    return Result.err(
-      new ActionAdmissionError({
-        message: resolvedBudget.error.message,
-        reason: "unavailable",
-        cause: resolvedBudget.error,
-      }),
-    );
-  }
+  if (Result.isError(resolvedBudget)) {return resolvedBudget;}
   const budget = resolvedBudget.value;
 
   const inherited = admissionScope.getStore();
@@ -472,7 +625,7 @@ export const withActionAdmission = async <T>({
     return await Result.tryPromise({
       try: async () => {
         inherited.signal.throwIfAborted();
-        const value = await observedRun(inherited.signal);
+        const value = await observedRun(inherited.signal, inherited.control);
         return value;
       },
       catch: (error: unknown) => error,
@@ -584,19 +737,33 @@ export const withActionAdmission = async <T>({
   }
 
   let outcome: Result<T, unknown>;
+  const control = createPeriodReservationControl({
+    keys,
+    budget,
+    organizationId,
+    periodIdentity,
+    redis,
+    redisReady,
+    signal: controller.signal,
+    isActive: () => executionScope.status === "active",
+    periodPolicy,
+    limits,
+    leaseId,
+  });
   const executionScope: AdmissionScope = {
     organizationId,
     userId,
     signal: controller.signal,
+    control,
     status: "active",
   };
   try {
     outcome = await Result.tryPromise({
       try: async () =>
-        await admissionScope.run(
-          executionScope,
-          async () => await observedRun(controller.signal),
-        ),
+        await admissionScope.run(executionScope, async () => {
+          controller.signal.throwIfAborted();
+          return await observedRun(controller.signal, control);
+        }),
       catch: (error: unknown) => error,
     });
   } finally {

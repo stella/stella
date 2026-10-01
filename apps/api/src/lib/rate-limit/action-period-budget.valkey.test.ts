@@ -41,6 +41,66 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
   });
 } else {
   describe("periodic action admission (valkey)", () => {
+    test("same-run replays reserve once while a fresh turn using an old run id counts anew", async () => {
+      await withStore(async ({ client, organizationId }) => {
+        let budgetKey: string | undefined;
+        let acquisitions = 0;
+        const admit: typeof withActionAdmission = async (options) =>
+          await withActionAdmission({
+            ...options,
+            policy,
+            periodPolicy: { periodMs: 86_400_000, limit: 2 },
+            redis: {
+              send: async (command, args) => {
+                if (args.at(0)?.includes("ZREMRANGEBYSCORE")) {
+                  acquisitions += 1;
+                }
+                if (args.at(1) === "3") {
+                  budgetKey = args.at(4);
+                }
+                return await client.send(command, args);
+              },
+            },
+          });
+        for (const [index, turn] of [
+          "original-turn",
+          "original-turn",
+          "new-turn",
+          "refused-turn",
+        ].entries()) {
+          const phase = await startChatExecutionAdmission({
+            mode: "concurrency-only",
+            enabled: true,
+            organizationId,
+            userId,
+            admit,
+          });
+          if (Result.isError(phase) || phase.value === undefined) {
+            panic("Expected chat phase admission");
+          }
+          try {
+            const reserved = await phase.value.reservePeriod({
+              actionKind: "chat.send",
+              logicalPhaseId: JSON.stringify([turn, "old-run"]),
+            });
+            expect(Result.isOk(reserved)).toBe(index < 3);
+            if (Result.isError(reserved)) {
+              expect(reserved.error.code).toBe("rate_limited");
+            }
+            if (!budgetKey) {
+              panic("Missing period key");
+            }
+            expect(await client.send("HGET", [budgetKey, "count"])).toBe(
+              index < 2 ? "1" : "2",
+            );
+            expect(acquisitions).toBe(index + 1);
+          } finally {
+            await phase.value.release();
+          }
+        }
+      });
+    });
+
     test("a first-message phase and its detached title consume one period action", async () => {
       await withStore(async ({ client, organizationId }) => {
         const firstMessageIdentity = {
@@ -59,6 +119,8 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
               send: async (command, args) => {
                 if (args.at(0)?.includes("ZREMRANGEBYSCORE")) {
                   acquisitions += 1;
+                }
+                if (args.at(1) === "3") {
                   budgetKey ??= args.at(4);
                 }
                 return await client.send(command, args);
@@ -69,14 +131,19 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
           organizationId,
           userId,
           enabled: true,
-          mode: "action",
-          periodIdentity: firstMessageIdentity,
+          mode: "concurrency-only",
           admit,
         });
         if (Result.isError(phase) || phase.value === undefined) {
           panic("Expected chat phase admission");
         }
         try {
+          expect(
+            Result.isOk(await phase.value.reservePeriod(firstMessageIdentity)),
+          ).toBe(true);
+          expect(
+            Result.isOk(await phase.value.reservePeriod(firstMessageIdentity)),
+          ).toBe(true);
           const title = await startChatExecutionAdmission({
             organizationId,
             userId,
@@ -327,11 +394,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
           organizationId,
           userId,
           enabled: true,
-          mode: "action",
-          periodIdentity: {
-            actionKind: "chat.improve-prompt",
-            logicalPhaseId: "cross-boundary-phase",
-          },
+          mode: "concurrency-only",
           admit: async (options) =>
             await withActionAdmission({
               ...options,
@@ -348,12 +411,15 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
               },
               redis: {
                 send: async (command, args) => {
-                  if (args.at(0)?.includes("ZREMRANGEBYSCORE")) {
+                  if (args.at(1) === "3") {
                     endMs = Number(args.at(10));
                     budgetKey = args.at(4);
                   }
                   const response = await client.send(command, args);
-                  if (args.at(0)?.includes("ZSCORE")) {
+                  if (
+                    args.at(0)?.includes("ZSCORE") &&
+                    !args.at(0)?.includes("HEXISTS")
+                  ) {
                     finishRenewal(undefined);
                   }
                   return response;
@@ -365,6 +431,14 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
           panic("Expected chat phase admission");
         }
         try {
+          expect(
+            Result.isOk(
+              await result.value.reservePeriod({
+                actionKind: "chat.send",
+                logicalPhaseId: "cross-boundary-phase",
+              }),
+            ),
+          ).toBe(true);
           await Bun.sleep(Math.max(0, endMs - Date.now()) + 20);
           if (!trigger) {
             panic("Renewal not scheduled");
