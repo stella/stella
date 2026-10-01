@@ -3842,29 +3842,13 @@ export type WebRoutes = {
         checks: {
           post: {
             body: {
-              name?: string;
-              country?: "CZ" | "SK";
               firstName?: string;
               lastName?: string;
-              dateOfBirth?: {
-                precision: "year";
-                year: number;
-              } | {
-                precision: "month";
-                year: number;
-                month: number;
-              } | {
-                precision: "day";
-                year: number;
-                month: number;
-                day: number;
-              };
-              nationalityCodes?: Array<string>;
               taxId?: string;
               birthDate?: string;
               companyId?: string;
-              check: ("cz-insolvency" | "cz-vat-reliability" | "sanctions");
-              subjectType: ("company-id" | "organization" | "person" | "tax-id");
+              check: Ta70e9835f3;
+              subjectType: T7aebf701ec;
             };
             params: T5e3ac29766;
             query: Record<never, never>;
@@ -3894,55 +3878,7 @@ export type WebRoutes = {
                 findings: [T69c6723040, ...T69c6723040[]];
                 totalMatches: number;
                 record: Tb165f0f166;
-              }) | (T1b3c18c274 & Tbffa2a23cb) | (T1b3c18c274 & T096dadd2e6) | (T1b3c18c274 & Tebd3ce2c77) | {
-                status: ("clear" | "possible-match" | "unavailable");
-                checkedAt: string;
-                cutoff: number;
-                lists: Array<((T304328c782 & Tf0ef1a069d & {
-                  status: "clear";
-                  reason: null;
-                  totalMatches: 0;
-                  truncated: false;
-                  possibleMatches: T9449cd95bd;
-                }) | (T304328c782 & Tf0ef1a069d & {
-                  status: "possible-match";
-                  reason: null;
-                  totalMatches: number;
-                  truncated: Tfddd645dc8;
-                  possibleMatches: [Teae76f4456, ...Teae76f4456[]];
-                }) | (T304328c782 & {
-                  status: "unavailable";
-                  reason: ("access-denied" | "company-not-found" | "load-failed" | "not-loaded" | "registry-unavailable" | "stale");
-                  editionId: Tbe0400fa4c;
-                  publishedAt: Tbe0400fa4c;
-                  verifiedAt: Tbe0400fa4c;
-                  totalMatches: 0;
-                  truncated: false;
-                  possibleMatches: T9449cd95bd;
-                }))>;
-              } & {
-                kind: "sanctions";
-                subject: {
-                  type: "organization";
-                  name: string;
-                  identifiers: Array<string>;
-                  resolvedFrom: {
-                    type: "company-id";
-                    value: string;
-                    country: T4b2953aefa;
-                    registry: ("ares" | "rpo");
-                  } | null;
-                } | {
-                  type: "person";
-                  name: string;
-                  dateOfBirth: Tee853e2e09;
-                  nationalityCodes: Array<Tc1a998b77c>;
-                } | {
-                  type: "company-id";
-                  value: string;
-                  country: T4b2953aefa;
-                };
-              });
+              }) | (T1b3c18c274 & Tbffa2a23cb) | (T1b3c18c274 & T096dadd2e6) | (T1b3c18c274 & Tebd3ce2c77));
               400: T9a51b7d2bc;
               401: T9a51b7d2bc;
               402: T9a51b7d2bc;
@@ -4555,7 +4491,7 @@ export type WebRoutes = {
           headers: Record<never, never>;
           response: {
             200: {
-              dateOfBirth: Tee853e2e09;
+              dateOfBirth: (T87d6a3582a | T4390c87707 | T667bb98824 | null);
               clientMatterCount: number;
               clientMatters: Array<{
                 name: string;
@@ -6160,1473 +6096,6 @@ export type WebRoutes = {
         };
       };
     };
-    lists: (T43ff0c9596 & {
-      ":workspaceId": {
-        get: {
-          body: Record<never, never>;
-          params: T62128c5ec5;
-          query: {
-            status?: string;
-            cursor?: string;
-            limit?: number;
-          };
-          headers: Record<never, never>;
-          response: {
-            200: {
-              items: Array<{
-                id: T5ed75bc2cc;
-                name: string;
-                description: Tbe0400fa4c;
-                status: Teced05ac51;
-                createdAt: string;
-                updatedAt: string;
-              }>;
-              nextCursor: Tbe0400fa4c;
-              limit: number;
-            };
-            400: T9a51b7d2bc;
-            401: T9a51b7d2bc;
-            402: T9a51b7d2bc;
-            403: Tddfcdef857;
-            404: T98724a80a4;
-            409: T9a51b7d2bc;
-            413: T9a51b7d2bc;
-            422: (T9a51b7d2bc | {
-              type: "validation";
-              on: string;
-              summary?: string;
-              message?: string;
-              found?: unknown;
-              property?: string;
-              expected?: string;
-            });
-            428: T9a51b7d2bc;
-            429: T9a51b7d2bc;
-            500: T9a51b7d2bc;
-            502: T9a51b7d2bc;
-            503: T9a51b7d2bc;
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        put: {
-          body: {
-            description?: string | null;
-            name: string;
-          };
-          params: T62128c5ec5;
-          query: Record<never, never>;
-          headers: Record<never, never>;
-          response: {
-            200: {
-              id: T5ed75bc2cc;
-            };
-            400: T9a51b7d2bc;
-            401: T9a51b7d2bc;
-            402: T9a51b7d2bc;
-            403: Tddfcdef857;
-            404: T98724a80a4;
-            409: T9a51b7d2bc;
-            413: T9a51b7d2bc;
-            422: (T9a51b7d2bc | {
-              type: "validation";
-              on: string;
-              summary?: string;
-              message?: string;
-              found?: unknown;
-              property?: string;
-              expected?: string;
-            });
-            428: T9a51b7d2bc;
-            429: T9a51b7d2bc;
-            500: T9a51b7d2bc;
-            502: T9a51b7d2bc;
-            503: T9a51b7d2bc;
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        patch: {
-          body: {
-            status?: string;
-            name?: string;
-            description?: string | null;
-            id: T5ed75bc2cc;
-          };
-          params: T62128c5ec5;
-          query: Record<never, never>;
-          headers: Record<never, never>;
-          response: {
-            200: {
-              id: T5ed75bc2cc;
-            };
-            400: T9a51b7d2bc;
-            401: T9a51b7d2bc;
-            402: T9a51b7d2bc;
-            403: Tddfcdef857;
-            404: T98724a80a4;
-            409: T9a51b7d2bc;
-            413: T9a51b7d2bc;
-            422: (T9a51b7d2bc | {
-              type: "validation";
-              on: string;
-              summary?: string;
-              message?: string;
-              found?: unknown;
-              property?: string;
-              expected?: string;
-            });
-            428: T9a51b7d2bc;
-            429: T9a51b7d2bc;
-            500: T9a51b7d2bc;
-            502: T9a51b7d2bc;
-            503: T9a51b7d2bc;
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        sections: {
-          post: {
-            body: {
-              position?: string;
-              name: string;
-              listId: T5ed75bc2cc;
-            };
-            params: {
-              workspaceId: string;
-            };
-            query: Record<never, never>;
-            headers: Record<never, never>;
-            response: {
-              200: {
-                id: T0a54ae7a2b;
-              };
-              400: T9a51b7d2bc;
-              401: T9a51b7d2bc;
-              402: T9a51b7d2bc;
-              403: Tddfcdef857;
-              404: T98724a80a4;
-              409: T9a51b7d2bc;
-              413: T9a51b7d2bc;
-              422: (T9a51b7d2bc | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: T9a51b7d2bc;
-              429: T9a51b7d2bc;
-              500: T9a51b7d2bc;
-              502: T9a51b7d2bc;
-              503: T9a51b7d2bc;
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        columns: {
-          post: {
-            body: {
-              required?: false | true;
-              position?: number;
-              propertyId: T173eec1550;
-              listId: T5ed75bc2cc;
-            };
-            params: {
-              workspaceId: string;
-            };
-            query: Record<never, never>;
-            headers: Record<never, never>;
-            response: {
-              200: {
-                id: Tfb7cce8440;
-              };
-              400: T9a51b7d2bc;
-              401: T9a51b7d2bc;
-              402: T9a51b7d2bc;
-              403: Tddfcdef857;
-              404: T98724a80a4;
-              409: T9a51b7d2bc;
-              413: T9a51b7d2bc;
-              422: (T9a51b7d2bc | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: T9a51b7d2bc;
-              429: T9a51b7d2bc;
-              500: T9a51b7d2bc;
-              502: T9a51b7d2bc;
-              503: T9a51b7d2bc;
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        generations: {
-          post: {
-            body: {
-              instruction: string;
-              listId: T5ed75bc2cc;
-              sources: Array<{
-                entityId: Tf742ada503;
-                entityVersionId: Tb86085a330;
-              }>;
-            };
-            params: {
-              workspaceId: string;
-            };
-            query: Record<never, never>;
-            headers: Record<never, never>;
-            response: {
-              200: {
-                id: T9bf0b27838;
-                status: "running";
-              };
-              400: T9a51b7d2bc;
-              401: T9a51b7d2bc;
-              402: T9a51b7d2bc;
-              403: Tddfcdef857;
-              404: T98724a80a4;
-              409: T9a51b7d2bc;
-              413: T9a51b7d2bc;
-              422: (T9a51b7d2bc | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: T9a51b7d2bc;
-              429: T9a51b7d2bc;
-              500: T9a51b7d2bc;
-              502: T9a51b7d2bc;
-              503: T9a51b7d2bc;
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        "generation-candidates": {
-          post: {
-            body: {
-              candidates: Array<{
-                status?: string | null;
-                priority?: string | null;
-                description?: string | null;
-                dueDate?: string | null;
-                suggestedAssigneeUserIds?: Array<T56ed95d57c>;
-                name: string;
-                itemType: string;
-                sources: Array<{
-                  quote?: string | null;
-                  entityId: Tf742ada503;
-                  entityVersionId: Tb86085a330;
-                  locator: {
-                    type: "document";
-                  } | {
-                    type: "docx-block";
-                    blockId: string;
-                  } | {
-                    type: "pdf-page";
-                    pageNumber: number;
-                  };
-                }>;
-              }>;
-              runId: T9bf0b27838;
-              listId: T5ed75bc2cc;
-            };
-            params: {
-              workspaceId: string;
-            };
-            query: Record<never, never>;
-            headers: Record<never, never>;
-            response: {
-              200: {
-                ids: Array<T116acb8596>;
-                status: "review";
-              };
-              400: T9a51b7d2bc;
-              401: T9a51b7d2bc;
-              402: T9a51b7d2bc;
-              403: Tddfcdef857;
-              404: T98724a80a4;
-              409: T9a51b7d2bc;
-              413: T9a51b7d2bc;
-              422: (T9a51b7d2bc | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: T9a51b7d2bc;
-              429: T9a51b7d2bc;
-              500: T9a51b7d2bc;
-              502: T9a51b7d2bc;
-              503: T9a51b7d2bc;
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        "generation-candidates": {
-          accept: {
-            post: {
-              body: {
-                sectionId?: T0a54ae7a2b;
-                runId: T9bf0b27838;
-                listId: T5ed75bc2cc;
-                candidateId: T116acb8596;
-              };
-              params: {
-                workspaceId: string;
-              };
-              query: Record<never, never>;
-              headers: Record<never, never>;
-              response: {
-                200: {
-                  entityId: Tf742ada503;
-                };
-                400: T9a51b7d2bc;
-                401: T9a51b7d2bc;
-                402: T9a51b7d2bc;
-                403: Tddfcdef857;
-                404: T98724a80a4;
-                409: T9a51b7d2bc;
-                413: T9a51b7d2bc;
-                422: (T9a51b7d2bc | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: T9a51b7d2bc;
-                429: T9a51b7d2bc;
-                500: T9a51b7d2bc;
-                502: T9a51b7d2bc;
-                503: T9a51b7d2bc;
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        "generation-candidates": {
-          reject: {
-            post: {
-              body: {
-                runId: T9bf0b27838;
-                listId: T5ed75bc2cc;
-                candidateId: T116acb8596;
-              };
-              params: {
-                workspaceId: string;
-              };
-              query: Record<never, never>;
-              headers: Record<never, never>;
-              response: {
-                200: {
-                  id: T116acb8596;
-                };
-                400: T9a51b7d2bc;
-                401: T9a51b7d2bc;
-                402: T9a51b7d2bc;
-                403: Tddfcdef857;
-                404: T98724a80a4;
-                409: T9a51b7d2bc;
-                413: T9a51b7d2bc;
-                422: (T9a51b7d2bc | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: T9a51b7d2bc;
-                429: T9a51b7d2bc;
-                500: T9a51b7d2bc;
-                502: T9a51b7d2bc;
-                503: T9a51b7d2bc;
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        "item-sources": {
-          post: {
-            body: {
-              quote?: string | null;
-              listId: T5ed75bc2cc;
-              sourceEntityId: Tf742ada503;
-              sourceEntityVersionId: Tb86085a330;
-              itemEntityId: Tf742ada503;
-              locator: {
-                type: "document";
-              } | {
-                type: "docx-block";
-                blockId: string;
-              } | {
-                type: "pdf-page";
-                pageNumber: number;
-              };
-            };
-            params: Tdfa6d7299b;
-            query: Record<never, never>;
-            headers: Record<never, never>;
-            response: {
-              200: {
-                id: Tfaa06c2259;
-              };
-              400: T9a51b7d2bc;
-              401: T9a51b7d2bc;
-              402: T9a51b7d2bc;
-              403: Tddfcdef857;
-              404: T98724a80a4;
-              409: T9a51b7d2bc;
-              413: T9a51b7d2bc;
-              422: (T9a51b7d2bc | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: T9a51b7d2bc;
-              429: T9a51b7d2bc;
-              500: T9a51b7d2bc;
-              502: T9a51b7d2bc;
-              503: T9a51b7d2bc;
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        "item-comments": {
-          post: {
-            body: {
-              body: string;
-              listId: T5ed75bc2cc;
-              itemEntityId: Tf742ada503;
-            };
-            params: {
-              workspaceId: string;
-            };
-            query: Record<never, never>;
-            headers: Record<never, never>;
-            response: {
-              200: {
-                id: (string & valibot_Brand<"SafeId"> & {
-                  readonly __safeIdType?: "legalListItemComment";
-                });
-              };
-              400: T9a51b7d2bc;
-              401: T9a51b7d2bc;
-              402: T9a51b7d2bc;
-              403: Tddfcdef857;
-              404: T98724a80a4;
-              409: T9a51b7d2bc;
-              413: T9a51b7d2bc;
-              422: (T9a51b7d2bc | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: T9a51b7d2bc;
-              429: T9a51b7d2bc;
-              500: T9a51b7d2bc;
-              502: T9a51b7d2bc;
-              503: T9a51b7d2bc;
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        "item-reviews": {
-          post: {
-            body: {
-              note?: string | null;
-              decision: string;
-              listId: T5ed75bc2cc;
-              itemEntityId: Tf742ada503;
-            };
-            params: {
-              workspaceId: string;
-            };
-            query: Record<never, never>;
-            headers: Record<never, never>;
-            response: {
-              200: {
-                id: (string & valibot_Brand<"SafeId"> & {
-                  readonly __safeIdType?: "legalListItemReview";
-                });
-              };
-              400: T9a51b7d2bc;
-              401: T9a51b7d2bc;
-              402: T9a51b7d2bc;
-              403: Tddfcdef857;
-              404: T98724a80a4;
-              409: T9a51b7d2bc;
-              413: T9a51b7d2bc;
-              422: (T9a51b7d2bc | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: T9a51b7d2bc;
-              429: T9a51b7d2bc;
-              500: T9a51b7d2bc;
-              502: T9a51b7d2bc;
-              503: T9a51b7d2bc;
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        "item-sources": {
-          patch: {
-            body: {
-              status: string;
-              id: Tfaa06c2259;
-              listId: T5ed75bc2cc;
-              itemEntityId: Tf742ada503;
-            };
-            params: Tdfa6d7299b;
-            query: Record<never, never>;
-            headers: Record<never, never>;
-            response: {
-              200: {
-                id: Tfaa06c2259;
-              };
-              400: T9a51b7d2bc;
-              401: T9a51b7d2bc;
-              402: T9a51b7d2bc;
-              403: Tddfcdef857;
-              404: T98724a80a4;
-              409: T9a51b7d2bc;
-              413: T9a51b7d2bc;
-              422: (T9a51b7d2bc | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: T9a51b7d2bc;
-              429: T9a51b7d2bc;
-              500: T9a51b7d2bc;
-              502: T9a51b7d2bc;
-              503: T9a51b7d2bc;
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        items: {
-          patch: {
-            body: {
-              description?: string | null;
-              position?: string;
-              sectionId?: T0a54ae7a2b | null;
-              listId: T5ed75bc2cc;
-              itemEntityId: Tf742ada503;
-            };
-            params: {
-              workspaceId: string;
-            };
-            query: Record<never, never>;
-            headers: Record<never, never>;
-            response: {
-              200: {
-                id: Tf742ada503;
-              };
-              400: T9a51b7d2bc;
-              401: T9a51b7d2bc;
-              402: T9a51b7d2bc;
-              403: Tddfcdef857;
-              404: T98724a80a4;
-              409: T9a51b7d2bc;
-              413: T9a51b7d2bc;
-              422: (T9a51b7d2bc | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: T9a51b7d2bc;
-              429: T9a51b7d2bc;
-              500: T9a51b7d2bc;
-              502: T9a51b7d2bc;
-              503: T9a51b7d2bc;
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        "item-fact-details": {
-          put: {
-            body: {
-              medium: Tbe0400fa4c;
-              listId: T5ed75bc2cc;
-              confidence: T2233e69cfb;
-              itemEntityId: Tf742ada503;
-              occurredOn: {
-                date: string;
-                precision: ("day" | "month" | "year");
-              } | null;
-              evidenceKind: Tbe0400fa4c;
-              interpretationNote: Tbe0400fa4c;
-              scoring: Tad12f531bb;
-            };
-            params: {
-              workspaceId: string;
-            };
-            query: Record<never, never>;
-            headers: Record<never, never>;
-            response: {
-              200: {
-                medium: Tbe0400fa4c;
-                confidence: T2233e69cfb;
-                itemEntityId: Tf742ada503;
-                occurredOn: Tbe0400fa4c;
-                evidenceKind: Tbe0400fa4c;
-                interpretationNote: Tbe0400fa4c;
-                scoring: Tad12f531bb;
-                occurredOnPrecision: T4a9a2dd4a4;
-              };
-              400: T9a51b7d2bc;
-              401: T9a51b7d2bc;
-              402: T9a51b7d2bc;
-              403: Tddfcdef857;
-              404: T98724a80a4;
-              409: T9a51b7d2bc;
-              413: T9a51b7d2bc;
-              422: (T9a51b7d2bc | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: T9a51b7d2bc;
-              429: T9a51b7d2bc;
-              500: T9a51b7d2bc;
-              502: T9a51b7d2bc;
-              503: T9a51b7d2bc;
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        "claim-reviews": {
-          post: {
-            body: {
-              runId: T3185916700;
-              event: {
-                status: T19752008a0;
-                kind: "status";
-              } | {
-                kind: "override";
-                state: T25af101672;
-              } | {
-                kind: "note";
-                note: string;
-              } | {
-                kind: "reopen";
-              } | {
-                kind: "record-conflict";
-                resolution: {
-                  kind: "governed";
-                  factEntityId: Tf742ada503;
-                } | {
-                  kind: "escalated";
-                } | null;
-              };
-              claimId: T06a9543aed;
-            };
-            params: {
-              workspaceId: string;
-            };
-            query: Record<never, never>;
-            headers: Record<never, never>;
-            response: {
-              200: {
-                claimId: T06a9543aed;
-                review: Tc528191da5;
-              };
-              400: T9a51b7d2bc;
-              401: T9a51b7d2bc;
-              402: T9a51b7d2bc;
-              403: Tddfcdef857;
-              404: T98724a80a4;
-              409: T9a51b7d2bc;
-              413: T9a51b7d2bc;
-              422: (T9a51b7d2bc | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: T9a51b7d2bc;
-              429: T9a51b7d2bc;
-              500: T9a51b7d2bc;
-              502: T9a51b7d2bc;
-              503: T9a51b7d2bc;
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        "claim-reviews": {
-          bulk: {
-            post: {
-              body: {
-                runId: T3185916700;
-                claimIds: Array<T06a9543aed>;
-              };
-              params: {
-                workspaceId: string;
-              };
-              query: Record<never, never>;
-              headers: Record<never, never>;
-              response: {
-                200: {
-                  reviews: (readonly [] | Array<{
-                    claimId: T06a9543aed;
-                    review: Tc528191da5;
-                  }>);
-                };
-                400: T9a51b7d2bc;
-                401: T9a51b7d2bc;
-                402: T9a51b7d2bc;
-                403: Tddfcdef857;
-                404: T98724a80a4;
-                409: T9a51b7d2bc;
-                413: T9a51b7d2bc;
-                422: (T9a51b7d2bc | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: T9a51b7d2bc;
-                429: T9a51b7d2bc;
-                500: T9a51b7d2bc;
-                502: T9a51b7d2bc;
-                503: T9a51b7d2bc;
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        verifications: {
-          post: {
-            body: {
-              confirmedUnits?: number;
-              entityId: Tf742ada503;
-              fileFieldId: T6993bee61f;
-              listId: T5ed75bc2cc;
-            };
-            params: {
-              workspaceId: string;
-            };
-            query: Record<never, never>;
-            headers: Record<never, never>;
-            response: {
-              200: {
-                runId: T3185916700;
-                status: "queued";
-              };
-              400: T9a51b7d2bc;
-              401: T9a51b7d2bc;
-              402: T9a51b7d2bc;
-              403: Tddfcdef857;
-              404: T98724a80a4;
-              409: T9a51b7d2bc;
-              413: T9a51b7d2bc;
-              422: (T9a51b7d2bc | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: T9a51b7d2bc;
-              429: T9a51b7d2bc;
-              500: T9a51b7d2bc;
-              502: T9a51b7d2bc;
-              503: T9a51b7d2bc;
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        verifications: {
-          latest: {
-            post: {
-              body: {
-                documents: Array<{
-                  entityId: Tf742ada503;
-                  fileFieldId: T6993bee61f;
-                }>;
-              };
-              params: {
-                workspaceId: string;
-              };
-              query: Record<never, never>;
-              headers: Record<never, never>;
-              response: {
-                200: {
-                  runs: Array<T1c0d9c2cf5>;
-                };
-                400: T9a51b7d2bc;
-                401: T9a51b7d2bc;
-                402: T9a51b7d2bc;
-                403: Tddfcdef857;
-                404: T98724a80a4;
-                409: T9a51b7d2bc;
-                413: T9a51b7d2bc;
-                422: (T9a51b7d2bc | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: T9a51b7d2bc;
-                429: T9a51b7d2bc;
-                500: T9a51b7d2bc;
-                502: T9a51b7d2bc;
-                503: T9a51b7d2bc;
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        verifications: {
-          get: {
-            body: Record<never, never>;
-            params: {
-              workspaceId: T8d02a37b3f;
-            };
-            query: {
-              cursor?: string;
-              limit?: number;
-              entityId: Tf742ada503;
-              fileFieldId: T6993bee61f;
-            };
-            headers: Record<never, never>;
-            response: {
-              200: {
-                items: Array<T1c0d9c2cf5>;
-                nextCursor: Tbe0400fa4c;
-                limit: number;
-              };
-              400: T9a51b7d2bc;
-              401: T9a51b7d2bc;
-              402: T9a51b7d2bc;
-              403: Tddfcdef857;
-              404: T98724a80a4;
-              409: T9a51b7d2bc;
-              413: T9a51b7d2bc;
-              422: (T9a51b7d2bc | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: T9a51b7d2bc;
-              429: T9a51b7d2bc;
-              500: T9a51b7d2bc;
-              502: T9a51b7d2bc;
-              503: T9a51b7d2bc;
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        verifications: {
-          ":runId": {
-            get: {
-              body: Record<never, never>;
-              params: {
-                workspaceId: T8d02a37b3f;
-                runId: T3185916700;
-              };
-              query: Record<never, never>;
-              headers: Record<never, never>;
-              response: {
-                200: {
-                  id: T3185916700;
-                  entityId: Tf742ada503;
-                  fileFieldId: T6993bee61f;
-                  entityVersionId: Tb86085a330;
-                  evidence: {
-                    listId: T5ed75bc2cc;
-                    facts: ReadonlyArray<{
-                      factEntityId: Tf742ada503;
-                      text: string;
-                      occurredOn: Tbe0400fa4c;
-                      occurredOnPrecision: T4a9a2dd4a4;
-                      evidenceKind: Tbe0400fa4c;
-                      medium: Tbe0400fa4c;
-                      confidence: ("high" | "low" | "medium" | null);
-                      interpretationNote: Tbe0400fa4c;
-                      sources: ReadonlyArray<{
-                        sourceEntityId: Tf742ada503;
-                        sourceEntityVersionId: Tb86085a330;
-                        sourceName?: string;
-                        locator: Tb14bbccf94;
-                        quote: Tbe0400fa4c;
-                      }>;
-                    }>;
-                  };
-                  status: T2832369547;
-                  errorCode: T77d06e55fd;
-                  pipelineVersion: number;
-                  modelRef: Tbe0400fa4c;
-                  requestedBy: Tbe0400fa4c;
-                  createdAt: string;
-                  startedAt: Tbe0400fa4c;
-                  finishedAt: Tbe0400fa4c;
-                  blocks: Array<{
-                    ordinal: number;
-                    blockId: string;
-                    kind: ("docx-block" | "pdf-page");
-                    pageNumber: T588d0ee653;
-                    text: string;
-                  }>;
-                  claims: Array<{
-                    id: T06a9543aed;
-                    position: number;
-                    type: ("fact" | "opinion" | "unverifiable");
-                    framing: ("asserted" | "recalled");
-                    verdict: {
-                      state: T9717780ffe;
-                      score: number;
-                      recordConflict: null;
-                    } | {
-                      state: ("nocover" | "notverifiable");
-                      score: null;
-                      recordConflict: null;
-                    } | {
-                      state: "recordconflict";
-                      score: null;
-                      recordConflict: {
-                        subject: string;
-                        factEntityIds: readonly [Tf742ada503, Tf742ada503];
-                        values: readonly [string, string];
-                        governingStates: readonly [T9717780ffe, T9717780ffe];
-                      };
-                    };
-                    text: string;
-                    anchor: {
-                      type: "docx-block";
-                      blockId: string;
-                      start: number;
-                      end: number;
-                    } | {
-                      type: "pdf-page";
-                      pageNumber: number;
-                      start: number;
-                      end: number;
-                    };
-                    refs: Array<{
-                      factEntityId: Tf742ada503;
-                      rel: ("conflicts" | "record" | "supports");
-                    }>;
-                    review: (Tc528191da5 | null);
-                  }>;
-                };
-                400: T9a51b7d2bc;
-                401: T9a51b7d2bc;
-                402: T9a51b7d2bc;
-                403: Tddfcdef857;
-                404: T98724a80a4;
-                409: T9a51b7d2bc;
-                413: T9a51b7d2bc;
-                422: (T9a51b7d2bc | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: T9a51b7d2bc;
-                429: T9a51b7d2bc;
-                500: T9a51b7d2bc;
-                502: T9a51b7d2bc;
-                503: T9a51b7d2bc;
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        ":listId": {
-          generations: {
-            ":runId": {
-              candidates: {
-                get: {
-                  body: Record<never, never>;
-                  params: {
-                    workspaceId: T8d02a37b3f;
-                    runId: T9bf0b27838;
-                    listId: T5ed75bc2cc;
-                  };
-                  query: {
-                    cursor?: string;
-                    limit?: number;
-                  };
-                  headers: Record<never, never>;
-                  response: {
-                    200: {
-                      runStatus: T66d278db93;
-                      items: Array<{
-                        id: T116acb8596;
-                        position: number;
-                        name: string;
-                        description: Tbe0400fa4c;
-                        itemType: ("event" | "fact" | "issue" | "requirement" | "task");
-                        itemStatus: ("cancelled" | "done" | "in_progress" | "in_review" | "open" | null);
-                        priority: ("high" | "low" | "medium" | "none" | "urgent" | null);
-                        dueDate: Tbe0400fa4c;
-                        suggestedAssigneeUserIds: Array<T56ed95d57c>;
-                        status: ("accepted" | "accepting" | "pending" | "rejected");
-                        acceptedEntityId: Tf058fe611e;
-                      } & {
-                        sources: Array<{
-                          id: (string & valibot_Brand<"SafeId"> & {
-                            readonly __safeIdType?: "legalListGenerationCandidateSource";
-                          });
-                          candidateId: T116acb8596;
-                          sourceEntityId: Tf742ada503;
-                          sourceEntityVersionId: Tb86085a330;
-                          locator: Tb14bbccf94;
-                          quote: Tbe0400fa4c;
-                        }>;
-                      }>;
-                      nextCursor: Tbe0400fa4c;
-                      limit: number;
-                    };
-                    400: T9a51b7d2bc;
-                    401: T9a51b7d2bc;
-                    402: T9a51b7d2bc;
-                    403: Tddfcdef857;
-                    404: T98724a80a4;
-                    409: T9a51b7d2bc;
-                    413: T9a51b7d2bc;
-                    422: (T9a51b7d2bc | {
-                      type: "validation";
-                      on: string;
-                      summary?: string;
-                      message?: string;
-                      found?: unknown;
-                      property?: string;
-                      expected?: string;
-                    });
-                    428: T9a51b7d2bc;
-                    429: T9a51b7d2bc;
-                    500: T9a51b7d2bc;
-                    502: T9a51b7d2bc;
-                    503: T9a51b7d2bc;
-                  };
-                };
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        ":listId": {
-          generations: {
-            get: {
-              body: Record<never, never>;
-              params: {
-                workspaceId: T8d02a37b3f;
-                listId: T5ed75bc2cc;
-              };
-              query: {
-                cursor?: string;
-                limit?: number;
-              };
-              headers: Record<never, never>;
-              response: {
-                200: {
-                  items: Array<{
-                    id: T9bf0b27838;
-                    status: T66d278db93;
-                    instruction: string;
-                    createdAt: string;
-                    updatedAt: string;
-                    completedAt: Tdf2b0d1150;
-                  }>;
-                  nextCursor: Tbe0400fa4c;
-                  limit: number;
-                };
-                400: T9a51b7d2bc;
-                401: T9a51b7d2bc;
-                402: T9a51b7d2bc;
-                403: Tddfcdef857;
-                404: T98724a80a4;
-                409: T9a51b7d2bc;
-                413: T9a51b7d2bc;
-                422: (T9a51b7d2bc | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: T9a51b7d2bc;
-                429: T9a51b7d2bc;
-                500: T9a51b7d2bc;
-                502: T9a51b7d2bc;
-                503: T9a51b7d2bc;
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        ":listId": {
-          get: {
-            body: Record<never, never>;
-            params: {
-              workspaceId: T8d02a37b3f;
-              listId: T5ed75bc2cc;
-            };
-            query: Record<never, never>;
-            headers: Record<never, never>;
-            response: {
-              200: {
-                id: T5ed75bc2cc;
-                name: string;
-                description: Tbe0400fa4c;
-                status: Teced05ac51;
-                createdAt: string;
-                updatedAt: string;
-                itemCount: number;
-                sections: Array<{
-                  name: string;
-                  id: T0a54ae7a2b;
-                  workspaceId: T9e07a7d6cd;
-                  createdAt: string;
-                  updatedAt: string;
-                  position: string;
-                  listId: T5ed75bc2cc;
-                }>;
-                columns: Array<{
-                  id: Tfb7cce8440;
-                  propertyId: T173eec1550;
-                  position: number;
-                  required: Tfddd645dc8;
-                  name: string;
-                }>;
-              };
-              400: T9a51b7d2bc;
-              401: T9a51b7d2bc;
-              402: T9a51b7d2bc;
-              403: Tddfcdef857;
-              404: T98724a80a4;
-              409: T9a51b7d2bc;
-              413: T9a51b7d2bc;
-              422: (T9a51b7d2bc | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: T9a51b7d2bc;
-              429: T9a51b7d2bc;
-              500: T9a51b7d2bc;
-              502: T9a51b7d2bc;
-              503: T9a51b7d2bc;
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        ":listId": {
-          items: {
-            get: {
-              body: Record<never, never>;
-              params: {
-                workspaceId: T8d02a37b3f;
-                listId: T5ed75bc2cc;
-              };
-              query: {
-                cursor?: string;
-                limit?: number;
-              };
-              headers: Record<never, never>;
-              response: {
-                200: {
-                  items: Array<{
-                    id: Tf742ada503;
-                    name: string;
-                    itemType: Tcdfc93c4d1;
-                    status: Tbe0400fa4c;
-                    priority: Tbe0400fa4c;
-                    dueDate: Tbe0400fa4c;
-                    sectionId: (T0a54ae7a2b | null);
-                    position: string;
-                    description: Tbe0400fa4c;
-                    reviewStatus: ("changes_requested" | "in_review" | "rejected" | "unreviewed" | "verified");
-                    createdAt: string;
-                    updatedAt: string;
-                    factDetails: {
-                      confidence: T2233e69cfb;
-                      occurredOn: Tbe0400fa4c;
-                      occurredOnPrecision: T4a9a2dd4a4;
-                      evidenceKind: Tbe0400fa4c;
-                      medium: Tbe0400fa4c;
-                      interpretationNote: Tbe0400fa4c;
-                      scoring: Tad12f531bb;
-                    } | null;
-                    firstSource: {
-                      documentId: Tf742ada503;
-                      documentName: string;
-                      locator: Tb14bbccf94;
-                    } | null;
-                  } & {
-                    customFields: Array<{
-                      entityId: Tf742ada503;
-                      propertyId: T173eec1550;
-                      content: Te4799562ab;
-                    }>;
-                  }>;
-                  nextCursor: Tbe0400fa4c;
-                  limit: number;
-                };
-                400: T9a51b7d2bc;
-                401: T9a51b7d2bc;
-                402: T9a51b7d2bc;
-                403: Tddfcdef857;
-                404: T98724a80a4;
-                409: T9a51b7d2bc;
-                413: T9a51b7d2bc;
-                422: (T9a51b7d2bc | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: T9a51b7d2bc;
-                429: T9a51b7d2bc;
-                500: T9a51b7d2bc;
-                502: T9a51b7d2bc;
-                503: T9a51b7d2bc;
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        ":listId": {
-          items: {
-            ":itemEntityId": {
-              activity: {
-                get: {
-                  body: Record<never, never>;
-                  params: {
-                    workspaceId: T8d02a37b3f;
-                    listId: T5ed75bc2cc;
-                    itemEntityId: Tf742ada503;
-                  };
-                  query: {
-                    cursor?: string;
-                    limit?: number;
-                  };
-                  headers: Record<never, never>;
-                  response: {
-                    200: {
-                      items: Array<{
-                        id: T3ae9eb741e;
-                        action: string;
-                        actorName: Tbe0400fa4c;
-                        changes: T775353dad5;
-                        createdAt: string;
-                        operation: Tbe0400fa4c;
-                      }>;
-                      nextCursor: Tbe0400fa4c;
-                      limit: number;
-                    };
-                    400: T9a51b7d2bc;
-                    401: T9a51b7d2bc;
-                    402: T9a51b7d2bc;
-                    403: Tddfcdef857;
-                    404: T98724a80a4;
-                    409: T9a51b7d2bc;
-                    413: T9a51b7d2bc;
-                    422: (T9a51b7d2bc | {
-                      type: "validation";
-                      on: string;
-                      summary?: string;
-                      message?: string;
-                      found?: unknown;
-                      property?: string;
-                      expected?: string;
-                    });
-                    428: T9a51b7d2bc;
-                    429: T9a51b7d2bc;
-                    500: T9a51b7d2bc;
-                    502: T9a51b7d2bc;
-                    503: T9a51b7d2bc;
-                  };
-                };
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        ":listId": {
-          items: {
-            ":itemEntityId": {
-              sources: {
-                get: {
-                  body: Record<never, never>;
-                  params: {
-                    workspaceId: T8d02a37b3f;
-                    listId: T5ed75bc2cc;
-                    itemEntityId: Tf742ada503;
-                  };
-                  query: {
-                    cursor?: string;
-                    limit?: number;
-                  };
-                  headers: Record<never, never>;
-                  response: {
-                    200: {
-                      items: Array<{
-                        id: Tfaa06c2259;
-                        sourceEntityId: Tf742ada503;
-                        sourceEntityVersionId: Tb86085a330;
-                        locator: Tb14bbccf94;
-                        quote: Tbe0400fa4c;
-                        verificationStatus: ("rejected" | "unverified" | "verified");
-                        verifiedBy: Tbe0400fa4c;
-                        verifiedAt: Tdf2b0d1150;
-                        createdAt: string;
-                      }>;
-                      nextCursor: Tbe0400fa4c;
-                      limit: number;
-                    };
-                    400: T9a51b7d2bc;
-                    401: T9a51b7d2bc;
-                    402: T9a51b7d2bc;
-                    403: Tddfcdef857;
-                    404: T98724a80a4;
-                    409: T9a51b7d2bc;
-                    413: T9a51b7d2bc;
-                    422: (T9a51b7d2bc | {
-                      type: "validation";
-                      on: string;
-                      summary?: string;
-                      message?: string;
-                      found?: unknown;
-                      property?: string;
-                      expected?: string;
-                    });
-                    428: T9a51b7d2bc;
-                    429: T9a51b7d2bc;
-                    500: T9a51b7d2bc;
-                    502: T9a51b7d2bc;
-                    503: T9a51b7d2bc;
-                  };
-                };
-              };
-            };
-          };
-        };
-      };
-    });
     tasks: (T43ff0c9596 & {
       ":workspaceId": {
         put: {
@@ -14389,9 +12858,9 @@ export type WebRoutes = {
             errorReference?: string;
             client: ("cli" | "desktop" | "mcp" | "other" | "web");
           };
-          evidence?: string;
           expected?: string;
           steps?: string;
+          evidence?: string;
           kind: ("bug" | "docs" | "idea" | "missing_capability");
           title: string;
           area: ("billing" | "case_law" | "chat" | "contacts" | "desktop" | "documents" | "legislation" | "matters" | "mcp_cli" | "other" | "tasks" | "templates" | "web_app");
@@ -26183,6 +24652,1473 @@ export type WebRoutes = {
         };
       };
     };
+    lists: (T43ff0c9596 & {
+      ":workspaceId": {
+        get: {
+          body: Record<never, never>;
+          params: T62128c5ec5;
+          query: {
+            status?: string;
+            cursor?: string;
+            limit?: number;
+          };
+          headers: Record<never, never>;
+          response: {
+            200: {
+              items: Array<{
+                id: T5ed75bc2cc;
+                name: string;
+                description: Tbe0400fa4c;
+                status: Teced05ac51;
+                createdAt: string;
+                updatedAt: string;
+              }>;
+              nextCursor: Tbe0400fa4c;
+              limit: number;
+            };
+            400: T9a51b7d2bc;
+            401: T9a51b7d2bc;
+            402: T9a51b7d2bc;
+            403: Tddfcdef857;
+            404: T98724a80a4;
+            409: T9a51b7d2bc;
+            413: T9a51b7d2bc;
+            422: (T9a51b7d2bc | {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            });
+            428: T9a51b7d2bc;
+            429: T9a51b7d2bc;
+            500: T9a51b7d2bc;
+            502: T9a51b7d2bc;
+            503: T9a51b7d2bc;
+          };
+        };
+      };
+    } & {
+      ":workspaceId": {
+        put: {
+          body: {
+            description?: string | null;
+            name: string;
+          };
+          params: T62128c5ec5;
+          query: Record<never, never>;
+          headers: Record<never, never>;
+          response: {
+            200: {
+              id: T5ed75bc2cc;
+            };
+            400: T9a51b7d2bc;
+            401: T9a51b7d2bc;
+            402: T9a51b7d2bc;
+            403: Tddfcdef857;
+            404: T98724a80a4;
+            409: T9a51b7d2bc;
+            413: T9a51b7d2bc;
+            422: (T9a51b7d2bc | {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            });
+            428: T9a51b7d2bc;
+            429: T9a51b7d2bc;
+            500: T9a51b7d2bc;
+            502: T9a51b7d2bc;
+            503: T9a51b7d2bc;
+          };
+        };
+      };
+    } & {
+      ":workspaceId": {
+        patch: {
+          body: {
+            status?: string;
+            name?: string;
+            description?: string | null;
+            id: T5ed75bc2cc;
+          };
+          params: T62128c5ec5;
+          query: Record<never, never>;
+          headers: Record<never, never>;
+          response: {
+            200: {
+              id: T5ed75bc2cc;
+            };
+            400: T9a51b7d2bc;
+            401: T9a51b7d2bc;
+            402: T9a51b7d2bc;
+            403: Tddfcdef857;
+            404: T98724a80a4;
+            409: T9a51b7d2bc;
+            413: T9a51b7d2bc;
+            422: (T9a51b7d2bc | {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            });
+            428: T9a51b7d2bc;
+            429: T9a51b7d2bc;
+            500: T9a51b7d2bc;
+            502: T9a51b7d2bc;
+            503: T9a51b7d2bc;
+          };
+        };
+      };
+    } & {
+      ":workspaceId": {
+        sections: {
+          post: {
+            body: {
+              position?: string;
+              name: string;
+              listId: T5ed75bc2cc;
+            };
+            params: {
+              workspaceId: string;
+            };
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                id: T0a54ae7a2b;
+              };
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: Tddfcdef857;
+              404: T98724a80a4;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: (T9a51b7d2bc | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    } & {
+      ":workspaceId": {
+        columns: {
+          post: {
+            body: {
+              required?: false | true;
+              position?: number;
+              propertyId: T173eec1550;
+              listId: T5ed75bc2cc;
+            };
+            params: {
+              workspaceId: string;
+            };
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                id: Tfb7cce8440;
+              };
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: Tddfcdef857;
+              404: T98724a80a4;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: (T9a51b7d2bc | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    } & {
+      ":workspaceId": {
+        generations: {
+          post: {
+            body: {
+              instruction: string;
+              listId: T5ed75bc2cc;
+              sources: Array<{
+                entityId: Tf742ada503;
+                entityVersionId: Tb86085a330;
+              }>;
+            };
+            params: {
+              workspaceId: string;
+            };
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                id: T9bf0b27838;
+                status: "running";
+              };
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: Tddfcdef857;
+              404: T98724a80a4;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: (T9a51b7d2bc | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    } & {
+      ":workspaceId": {
+        "generation-candidates": {
+          post: {
+            body: {
+              candidates: Array<{
+                status?: string | null;
+                priority?: string | null;
+                description?: string | null;
+                dueDate?: string | null;
+                suggestedAssigneeUserIds?: Array<T56ed95d57c>;
+                name: string;
+                itemType: string;
+                sources: Array<{
+                  quote?: string | null;
+                  entityId: Tf742ada503;
+                  entityVersionId: Tb86085a330;
+                  locator: {
+                    type: "document";
+                  } | {
+                    type: "docx-block";
+                    blockId: string;
+                  } | {
+                    type: "pdf-page";
+                    pageNumber: number;
+                  };
+                }>;
+              }>;
+              runId: T9bf0b27838;
+              listId: T5ed75bc2cc;
+            };
+            params: {
+              workspaceId: string;
+            };
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                ids: Array<T116acb8596>;
+                status: "review";
+              };
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: Tddfcdef857;
+              404: T98724a80a4;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: (T9a51b7d2bc | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    } & {
+      ":workspaceId": {
+        "generation-candidates": {
+          accept: {
+            post: {
+              body: {
+                sectionId?: T0a54ae7a2b;
+                runId: T9bf0b27838;
+                listId: T5ed75bc2cc;
+                candidateId: T116acb8596;
+              };
+              params: {
+                workspaceId: string;
+              };
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  entityId: Tf742ada503;
+                };
+                400: T9a51b7d2bc;
+                401: T9a51b7d2bc;
+                402: T9a51b7d2bc;
+                403: Tddfcdef857;
+                404: T98724a80a4;
+                409: T9a51b7d2bc;
+                413: T9a51b7d2bc;
+                422: (T9a51b7d2bc | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: T9a51b7d2bc;
+                429: T9a51b7d2bc;
+                500: T9a51b7d2bc;
+                502: T9a51b7d2bc;
+                503: T9a51b7d2bc;
+              };
+            };
+          };
+        };
+      };
+    } & {
+      ":workspaceId": {
+        "generation-candidates": {
+          reject: {
+            post: {
+              body: {
+                runId: T9bf0b27838;
+                listId: T5ed75bc2cc;
+                candidateId: T116acb8596;
+              };
+              params: {
+                workspaceId: string;
+              };
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  id: T116acb8596;
+                };
+                400: T9a51b7d2bc;
+                401: T9a51b7d2bc;
+                402: T9a51b7d2bc;
+                403: Tddfcdef857;
+                404: T98724a80a4;
+                409: T9a51b7d2bc;
+                413: T9a51b7d2bc;
+                422: (T9a51b7d2bc | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: T9a51b7d2bc;
+                429: T9a51b7d2bc;
+                500: T9a51b7d2bc;
+                502: T9a51b7d2bc;
+                503: T9a51b7d2bc;
+              };
+            };
+          };
+        };
+      };
+    } & {
+      ":workspaceId": {
+        "item-sources": {
+          post: {
+            body: {
+              quote?: string | null;
+              listId: T5ed75bc2cc;
+              sourceEntityId: Tf742ada503;
+              sourceEntityVersionId: Tb86085a330;
+              itemEntityId: Tf742ada503;
+              locator: {
+                type: "document";
+              } | {
+                type: "docx-block";
+                blockId: string;
+              } | {
+                type: "pdf-page";
+                pageNumber: number;
+              };
+            };
+            params: Tdfa6d7299b;
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                id: Tfaa06c2259;
+              };
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: Tddfcdef857;
+              404: T98724a80a4;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: (T9a51b7d2bc | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    } & {
+      ":workspaceId": {
+        "item-comments": {
+          post: {
+            body: {
+              body: string;
+              listId: T5ed75bc2cc;
+              itemEntityId: Tf742ada503;
+            };
+            params: {
+              workspaceId: string;
+            };
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                id: (string & valibot_Brand<"SafeId"> & {
+                  readonly __safeIdType?: "legalListItemComment";
+                });
+              };
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: Tddfcdef857;
+              404: T98724a80a4;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: (T9a51b7d2bc | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    } & {
+      ":workspaceId": {
+        "item-reviews": {
+          post: {
+            body: {
+              note?: string | null;
+              decision: string;
+              listId: T5ed75bc2cc;
+              itemEntityId: Tf742ada503;
+            };
+            params: {
+              workspaceId: string;
+            };
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                id: (string & valibot_Brand<"SafeId"> & {
+                  readonly __safeIdType?: "legalListItemReview";
+                });
+              };
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: Tddfcdef857;
+              404: T98724a80a4;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: (T9a51b7d2bc | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    } & {
+      ":workspaceId": {
+        "item-sources": {
+          patch: {
+            body: {
+              status: string;
+              id: Tfaa06c2259;
+              listId: T5ed75bc2cc;
+              itemEntityId: Tf742ada503;
+            };
+            params: Tdfa6d7299b;
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                id: Tfaa06c2259;
+              };
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: Tddfcdef857;
+              404: T98724a80a4;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: (T9a51b7d2bc | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    } & {
+      ":workspaceId": {
+        items: {
+          patch: {
+            body: {
+              description?: string | null;
+              position?: string;
+              sectionId?: T0a54ae7a2b | null;
+              listId: T5ed75bc2cc;
+              itemEntityId: Tf742ada503;
+            };
+            params: {
+              workspaceId: string;
+            };
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                id: Tf742ada503;
+              };
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: Tddfcdef857;
+              404: T98724a80a4;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: (T9a51b7d2bc | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    } & {
+      ":workspaceId": {
+        "item-fact-details": {
+          put: {
+            body: {
+              medium: Tbe0400fa4c;
+              listId: T5ed75bc2cc;
+              confidence: T2233e69cfb;
+              itemEntityId: Tf742ada503;
+              occurredOn: {
+                date: string;
+                precision: ("day" | "month" | "year");
+              } | null;
+              evidenceKind: Tbe0400fa4c;
+              interpretationNote: Tbe0400fa4c;
+              scoring: Tad12f531bb;
+            };
+            params: {
+              workspaceId: string;
+            };
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                medium: Tbe0400fa4c;
+                confidence: T2233e69cfb;
+                itemEntityId: Tf742ada503;
+                occurredOn: Tbe0400fa4c;
+                evidenceKind: Tbe0400fa4c;
+                interpretationNote: Tbe0400fa4c;
+                scoring: Tad12f531bb;
+                occurredOnPrecision: T4a9a2dd4a4;
+              };
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: Tddfcdef857;
+              404: T98724a80a4;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: (T9a51b7d2bc | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    } & {
+      ":workspaceId": {
+        "claim-reviews": {
+          post: {
+            body: {
+              runId: T3185916700;
+              event: {
+                status: T19752008a0;
+                kind: "status";
+              } | {
+                kind: "override";
+                state: T25af101672;
+              } | {
+                kind: "note";
+                note: string;
+              } | {
+                kind: "reopen";
+              } | {
+                kind: "record-conflict";
+                resolution: {
+                  kind: "governed";
+                  factEntityId: Tf742ada503;
+                } | {
+                  kind: "escalated";
+                } | null;
+              };
+              claimId: T06a9543aed;
+            };
+            params: {
+              workspaceId: string;
+            };
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                claimId: T06a9543aed;
+                review: Tc528191da5;
+              };
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: Tddfcdef857;
+              404: T98724a80a4;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: (T9a51b7d2bc | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    } & {
+      ":workspaceId": {
+        "claim-reviews": {
+          bulk: {
+            post: {
+              body: {
+                runId: T3185916700;
+                claimIds: Array<T06a9543aed>;
+              };
+              params: {
+                workspaceId: string;
+              };
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  reviews: (readonly [] | Array<{
+                    claimId: T06a9543aed;
+                    review: Tc528191da5;
+                  }>);
+                };
+                400: T9a51b7d2bc;
+                401: T9a51b7d2bc;
+                402: T9a51b7d2bc;
+                403: Tddfcdef857;
+                404: T98724a80a4;
+                409: T9a51b7d2bc;
+                413: T9a51b7d2bc;
+                422: (T9a51b7d2bc | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: T9a51b7d2bc;
+                429: T9a51b7d2bc;
+                500: T9a51b7d2bc;
+                502: T9a51b7d2bc;
+                503: T9a51b7d2bc;
+              };
+            };
+          };
+        };
+      };
+    } & {
+      ":workspaceId": {
+        verifications: {
+          post: {
+            body: {
+              confirmedUnits?: number;
+              entityId: Tf742ada503;
+              fileFieldId: T6993bee61f;
+              listId: T5ed75bc2cc;
+            };
+            params: {
+              workspaceId: string;
+            };
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                runId: T3185916700;
+                status: "queued";
+              };
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: Tddfcdef857;
+              404: T98724a80a4;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: (T9a51b7d2bc | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    } & {
+      ":workspaceId": {
+        verifications: {
+          latest: {
+            post: {
+              body: {
+                documents: Array<{
+                  entityId: Tf742ada503;
+                  fileFieldId: T6993bee61f;
+                }>;
+              };
+              params: {
+                workspaceId: string;
+              };
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  runs: Array<T1c0d9c2cf5>;
+                };
+                400: T9a51b7d2bc;
+                401: T9a51b7d2bc;
+                402: T9a51b7d2bc;
+                403: Tddfcdef857;
+                404: T98724a80a4;
+                409: T9a51b7d2bc;
+                413: T9a51b7d2bc;
+                422: (T9a51b7d2bc | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: T9a51b7d2bc;
+                429: T9a51b7d2bc;
+                500: T9a51b7d2bc;
+                502: T9a51b7d2bc;
+                503: T9a51b7d2bc;
+              };
+            };
+          };
+        };
+      };
+    } & {
+      ":workspaceId": {
+        verifications: {
+          get: {
+            body: Record<never, never>;
+            params: {
+              workspaceId: T8d02a37b3f;
+            };
+            query: {
+              cursor?: string;
+              limit?: number;
+              entityId: Tf742ada503;
+              fileFieldId: T6993bee61f;
+            };
+            headers: Record<never, never>;
+            response: {
+              200: {
+                items: Array<T1c0d9c2cf5>;
+                nextCursor: Tbe0400fa4c;
+                limit: number;
+              };
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: Tddfcdef857;
+              404: T98724a80a4;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: (T9a51b7d2bc | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    } & {
+      ":workspaceId": {
+        verifications: {
+          ":runId": {
+            get: {
+              body: Record<never, never>;
+              params: {
+                workspaceId: T8d02a37b3f;
+                runId: T3185916700;
+              };
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  id: T3185916700;
+                  entityId: Tf742ada503;
+                  fileFieldId: T6993bee61f;
+                  entityVersionId: Tb86085a330;
+                  evidence: {
+                    listId: T5ed75bc2cc;
+                    facts: ReadonlyArray<{
+                      factEntityId: Tf742ada503;
+                      text: string;
+                      occurredOn: Tbe0400fa4c;
+                      occurredOnPrecision: T4a9a2dd4a4;
+                      evidenceKind: Tbe0400fa4c;
+                      medium: Tbe0400fa4c;
+                      confidence: ("high" | "low" | "medium" | null);
+                      interpretationNote: Tbe0400fa4c;
+                      sources: ReadonlyArray<{
+                        sourceEntityId: Tf742ada503;
+                        sourceEntityVersionId: Tb86085a330;
+                        sourceName?: string;
+                        locator: Tb14bbccf94;
+                        quote: Tbe0400fa4c;
+                      }>;
+                    }>;
+                  };
+                  status: T2832369547;
+                  errorCode: T77d06e55fd;
+                  pipelineVersion: number;
+                  modelRef: Tbe0400fa4c;
+                  requestedBy: Tbe0400fa4c;
+                  createdAt: string;
+                  startedAt: Tbe0400fa4c;
+                  finishedAt: Tbe0400fa4c;
+                  blocks: Array<{
+                    ordinal: number;
+                    blockId: string;
+                    kind: ("docx-block" | "pdf-page");
+                    pageNumber: T588d0ee653;
+                    text: string;
+                  }>;
+                  claims: Array<{
+                    id: T06a9543aed;
+                    position: number;
+                    type: ("fact" | "opinion" | "unverifiable");
+                    framing: ("asserted" | "recalled");
+                    verdict: {
+                      state: T9717780ffe;
+                      score: number;
+                      recordConflict: null;
+                    } | {
+                      state: ("nocover" | "notverifiable");
+                      score: null;
+                      recordConflict: null;
+                    } | {
+                      state: "recordconflict";
+                      score: null;
+                      recordConflict: {
+                        subject: string;
+                        factEntityIds: readonly [Tf742ada503, Tf742ada503];
+                        values: readonly [string, string];
+                        governingStates: readonly [T9717780ffe, T9717780ffe];
+                      };
+                    };
+                    text: string;
+                    anchor: {
+                      type: "docx-block";
+                      blockId: string;
+                      start: number;
+                      end: number;
+                    } | {
+                      type: "pdf-page";
+                      pageNumber: number;
+                      start: number;
+                      end: number;
+                    };
+                    refs: Array<{
+                      factEntityId: Tf742ada503;
+                      rel: ("conflicts" | "record" | "supports");
+                    }>;
+                    review: (Tc528191da5 | null);
+                  }>;
+                };
+                400: T9a51b7d2bc;
+                401: T9a51b7d2bc;
+                402: T9a51b7d2bc;
+                403: Tddfcdef857;
+                404: T98724a80a4;
+                409: T9a51b7d2bc;
+                413: T9a51b7d2bc;
+                422: (T9a51b7d2bc | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: T9a51b7d2bc;
+                429: T9a51b7d2bc;
+                500: T9a51b7d2bc;
+                502: T9a51b7d2bc;
+                503: T9a51b7d2bc;
+              };
+            };
+          };
+        };
+      };
+    } & {
+      ":workspaceId": {
+        ":listId": {
+          generations: {
+            ":runId": {
+              candidates: {
+                get: {
+                  body: Record<never, never>;
+                  params: {
+                    workspaceId: T8d02a37b3f;
+                    runId: T9bf0b27838;
+                    listId: T5ed75bc2cc;
+                  };
+                  query: {
+                    cursor?: string;
+                    limit?: number;
+                  };
+                  headers: Record<never, never>;
+                  response: {
+                    200: {
+                      runStatus: T66d278db93;
+                      items: Array<{
+                        id: T116acb8596;
+                        position: number;
+                        name: string;
+                        description: Tbe0400fa4c;
+                        itemType: ("event" | "fact" | "issue" | "requirement" | "task");
+                        itemStatus: ("cancelled" | "done" | "in_progress" | "in_review" | "open" | null);
+                        priority: ("high" | "low" | "medium" | "none" | "urgent" | null);
+                        dueDate: Tbe0400fa4c;
+                        suggestedAssigneeUserIds: Array<T56ed95d57c>;
+                        status: ("accepted" | "accepting" | "pending" | "rejected");
+                        acceptedEntityId: Tf058fe611e;
+                      } & {
+                        sources: Array<{
+                          id: (string & valibot_Brand<"SafeId"> & {
+                            readonly __safeIdType?: "legalListGenerationCandidateSource";
+                          });
+                          candidateId: T116acb8596;
+                          sourceEntityId: Tf742ada503;
+                          sourceEntityVersionId: Tb86085a330;
+                          locator: Tb14bbccf94;
+                          quote: Tbe0400fa4c;
+                        }>;
+                      }>;
+                      nextCursor: Tbe0400fa4c;
+                      limit: number;
+                    };
+                    400: T9a51b7d2bc;
+                    401: T9a51b7d2bc;
+                    402: T9a51b7d2bc;
+                    403: Tddfcdef857;
+                    404: T98724a80a4;
+                    409: T9a51b7d2bc;
+                    413: T9a51b7d2bc;
+                    422: (T9a51b7d2bc | {
+                      type: "validation";
+                      on: string;
+                      summary?: string;
+                      message?: string;
+                      found?: unknown;
+                      property?: string;
+                      expected?: string;
+                    });
+                    428: T9a51b7d2bc;
+                    429: T9a51b7d2bc;
+                    500: T9a51b7d2bc;
+                    502: T9a51b7d2bc;
+                    503: T9a51b7d2bc;
+                  };
+                };
+              };
+            };
+          };
+        };
+      };
+    } & {
+      ":workspaceId": {
+        ":listId": {
+          generations: {
+            get: {
+              body: Record<never, never>;
+              params: {
+                workspaceId: T8d02a37b3f;
+                listId: T5ed75bc2cc;
+              };
+              query: {
+                cursor?: string;
+                limit?: number;
+              };
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  items: Array<{
+                    id: T9bf0b27838;
+                    status: T66d278db93;
+                    instruction: string;
+                    createdAt: string;
+                    updatedAt: string;
+                    completedAt: Tdf2b0d1150;
+                  }>;
+                  nextCursor: Tbe0400fa4c;
+                  limit: number;
+                };
+                400: T9a51b7d2bc;
+                401: T9a51b7d2bc;
+                402: T9a51b7d2bc;
+                403: Tddfcdef857;
+                404: T98724a80a4;
+                409: T9a51b7d2bc;
+                413: T9a51b7d2bc;
+                422: (T9a51b7d2bc | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: T9a51b7d2bc;
+                429: T9a51b7d2bc;
+                500: T9a51b7d2bc;
+                502: T9a51b7d2bc;
+                503: T9a51b7d2bc;
+              };
+            };
+          };
+        };
+      };
+    } & {
+      ":workspaceId": {
+        ":listId": {
+          get: {
+            body: Record<never, never>;
+            params: {
+              workspaceId: T8d02a37b3f;
+              listId: T5ed75bc2cc;
+            };
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                id: T5ed75bc2cc;
+                name: string;
+                description: Tbe0400fa4c;
+                status: Teced05ac51;
+                createdAt: string;
+                updatedAt: string;
+                itemCount: number;
+                sections: Array<{
+                  name: string;
+                  id: T0a54ae7a2b;
+                  workspaceId: T9e07a7d6cd;
+                  createdAt: string;
+                  updatedAt: string;
+                  position: string;
+                  listId: T5ed75bc2cc;
+                }>;
+                columns: Array<{
+                  id: Tfb7cce8440;
+                  propertyId: T173eec1550;
+                  position: number;
+                  required: Tfddd645dc8;
+                  name: string;
+                }>;
+              };
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: Tddfcdef857;
+              404: T98724a80a4;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: (T9a51b7d2bc | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    } & {
+      ":workspaceId": {
+        ":listId": {
+          items: {
+            get: {
+              body: Record<never, never>;
+              params: {
+                workspaceId: T8d02a37b3f;
+                listId: T5ed75bc2cc;
+              };
+              query: {
+                cursor?: string;
+                limit?: number;
+              };
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  items: Array<{
+                    id: Tf742ada503;
+                    name: string;
+                    itemType: Tcdfc93c4d1;
+                    status: Tbe0400fa4c;
+                    priority: Tbe0400fa4c;
+                    dueDate: Tbe0400fa4c;
+                    sectionId: (T0a54ae7a2b | null);
+                    position: string;
+                    description: Tbe0400fa4c;
+                    reviewStatus: ("changes_requested" | "in_review" | "rejected" | "unreviewed" | "verified");
+                    createdAt: string;
+                    updatedAt: string;
+                    factDetails: {
+                      confidence: T2233e69cfb;
+                      occurredOn: Tbe0400fa4c;
+                      occurredOnPrecision: T4a9a2dd4a4;
+                      evidenceKind: Tbe0400fa4c;
+                      medium: Tbe0400fa4c;
+                      interpretationNote: Tbe0400fa4c;
+                      scoring: Tad12f531bb;
+                    } | null;
+                    firstSource: {
+                      documentId: Tf742ada503;
+                      documentName: string;
+                      locator: Tb14bbccf94;
+                    } | null;
+                  } & {
+                    customFields: Array<{
+                      entityId: Tf742ada503;
+                      propertyId: T173eec1550;
+                      content: Te4799562ab;
+                    }>;
+                  }>;
+                  nextCursor: Tbe0400fa4c;
+                  limit: number;
+                };
+                400: T9a51b7d2bc;
+                401: T9a51b7d2bc;
+                402: T9a51b7d2bc;
+                403: Tddfcdef857;
+                404: T98724a80a4;
+                409: T9a51b7d2bc;
+                413: T9a51b7d2bc;
+                422: (T9a51b7d2bc | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: T9a51b7d2bc;
+                429: T9a51b7d2bc;
+                500: T9a51b7d2bc;
+                502: T9a51b7d2bc;
+                503: T9a51b7d2bc;
+              };
+            };
+          };
+        };
+      };
+    } & {
+      ":workspaceId": {
+        ":listId": {
+          items: {
+            ":itemEntityId": {
+              activity: {
+                get: {
+                  body: Record<never, never>;
+                  params: {
+                    workspaceId: T8d02a37b3f;
+                    listId: T5ed75bc2cc;
+                    itemEntityId: Tf742ada503;
+                  };
+                  query: {
+                    cursor?: string;
+                    limit?: number;
+                  };
+                  headers: Record<never, never>;
+                  response: {
+                    200: {
+                      items: Array<{
+                        id: T3ae9eb741e;
+                        action: string;
+                        actorName: Tbe0400fa4c;
+                        changes: T775353dad5;
+                        createdAt: string;
+                        operation: Tbe0400fa4c;
+                      }>;
+                      nextCursor: Tbe0400fa4c;
+                      limit: number;
+                    };
+                    400: T9a51b7d2bc;
+                    401: T9a51b7d2bc;
+                    402: T9a51b7d2bc;
+                    403: Tddfcdef857;
+                    404: T98724a80a4;
+                    409: T9a51b7d2bc;
+                    413: T9a51b7d2bc;
+                    422: (T9a51b7d2bc | {
+                      type: "validation";
+                      on: string;
+                      summary?: string;
+                      message?: string;
+                      found?: unknown;
+                      property?: string;
+                      expected?: string;
+                    });
+                    428: T9a51b7d2bc;
+                    429: T9a51b7d2bc;
+                    500: T9a51b7d2bc;
+                    502: T9a51b7d2bc;
+                    503: T9a51b7d2bc;
+                  };
+                };
+              };
+            };
+          };
+        };
+      };
+    } & {
+      ":workspaceId": {
+        ":listId": {
+          items: {
+            ":itemEntityId": {
+              sources: {
+                get: {
+                  body: Record<never, never>;
+                  params: {
+                    workspaceId: T8d02a37b3f;
+                    listId: T5ed75bc2cc;
+                    itemEntityId: Tf742ada503;
+                  };
+                  query: {
+                    cursor?: string;
+                    limit?: number;
+                  };
+                  headers: Record<never, never>;
+                  response: {
+                    200: {
+                      items: Array<{
+                        id: Tfaa06c2259;
+                        sourceEntityId: Tf742ada503;
+                        sourceEntityVersionId: Tb86085a330;
+                        locator: Tb14bbccf94;
+                        quote: Tbe0400fa4c;
+                        verificationStatus: ("rejected" | "unverified" | "verified");
+                        verifiedBy: Tbe0400fa4c;
+                        verifiedAt: Tdf2b0d1150;
+                        createdAt: string;
+                      }>;
+                      nextCursor: Tbe0400fa4c;
+                      limit: number;
+                    };
+                    400: T9a51b7d2bc;
+                    401: T9a51b7d2bc;
+                    402: T9a51b7d2bc;
+                    403: Tddfcdef857;
+                    404: T98724a80a4;
+                    409: T9a51b7d2bc;
+                    413: T9a51b7d2bc;
+                    422: (T9a51b7d2bc | {
+                      type: "validation";
+                      on: string;
+                      summary?: string;
+                      message?: string;
+                      found?: unknown;
+                      property?: string;
+                      expected?: string;
+                    });
+                    428: T9a51b7d2bc;
+                    429: T9a51b7d2bc;
+                    500: T9a51b7d2bc;
+                    502: T9a51b7d2bc;
+                    503: T9a51b7d2bc;
+                  };
+                };
+              };
+            };
+          };
+        };
+      };
+    });
     "work-obligations": (T43ff0c9596 & {
       ":workspaceId": {
         ":entityId": {
@@ -33266,37 +33202,23 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
-  name: "counterparty_check";
-  description: string;
-  inputSchema?: tanstack_ai_JSONSchema;
-  outputSchema?: undefined;
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: T631856df6b;
-  execute?: {
-    (args: unknown, context?: Tc88149628d): unknown;
-  };
-  readonly [__symbol0]?: T350a170d52;
-} | {
-  __toolSide: "client";
-  name: "boe_search_legislation";
+  name: "boe_find_related_laws";
   description: string;
   inputSchema?: {
     readonly "~standard": {
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: T4fa3ad8093 | undefined;
+      readonly types?: T5de736febe | undefined;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T641b83000f | Promise<(Tfc86db9c4b | T641b83000f)>);
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Te1486aaecd | Promise<(Tfc86db9c4b | Te1486aaecd)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: T4fa3ad8093 | undefined;
+      readonly types?: T5de736febe | undefined;
     };
   };
   outputSchema?: undefined;
@@ -33305,7 +33227,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   lazy?: false | true;
   metadata?: T631856df6b;
   execute?: {
-    (args: T2f5bcad84c, context?: Tc88149628d): unknown;
+    (args: T8136384b1e, context?: Tc88149628d): unknown;
   };
   readonly [__symbol0]?: T350a170d52;
 } | {
@@ -33340,36 +33262,6 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
-  name: "boe_get_law_structure";
-  description: string;
-  inputSchema?: {
-    readonly "~standard": {
-      readonly jsonSchema: Tc49e8b2305;
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T7165758c88 | undefined;
-    };
-  } & {
-    readonly "~standard": {
-      readonly validate: {
-        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Tb44e1703bb | Promise<(Tfc86db9c4b | Tb44e1703bb)>);
-      };
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T7165758c88 | undefined;
-    };
-  };
-  outputSchema?: undefined;
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: T631856df6b;
-  execute?: {
-    (args: T73467fd01f, context?: Tc88149628d): unknown;
-  };
-  readonly [__symbol0]?: T350a170d52;
-} | {
-  __toolSide: "client";
   name: "boe_get_law_block";
   description: string;
   inputSchema?: {
@@ -33400,23 +33292,23 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
-  name: "boe_find_related_laws";
+  name: "boe_get_law_structure";
   description: string;
   inputSchema?: {
     readonly "~standard": {
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: T5de736febe | undefined;
+      readonly types?: T7165758c88 | undefined;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Te1486aaecd | Promise<(Tfc86db9c4b | Te1486aaecd)>);
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Tb44e1703bb | Promise<(Tfc86db9c4b | Tb44e1703bb)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: T5de736febe | undefined;
+      readonly types?: T7165758c88 | undefined;
     };
   };
   outputSchema?: undefined;
@@ -33425,7 +33317,37 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   lazy?: false | true;
   metadata?: T631856df6b;
   execute?: {
-    (args: T8136384b1e, context?: Tc88149628d): unknown;
+    (args: T73467fd01f, context?: Tc88149628d): unknown;
+  };
+  readonly [__symbol0]?: T350a170d52;
+} | {
+  __toolSide: "client";
+  name: "boe_search_legislation";
+  description: string;
+  inputSchema?: {
+    readonly "~standard": {
+      readonly jsonSchema: Tc49e8b2305;
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T4fa3ad8093 | undefined;
+    };
+  } & {
+    readonly "~standard": {
+      readonly validate: {
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T641b83000f | Promise<(Tfc86db9c4b | T641b83000f)>);
+      };
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T4fa3ad8093 | undefined;
+    };
+  };
+  outputSchema?: undefined;
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T631856df6b;
+  execute?: {
+    (args: T2f5bcad84c, context?: Tc88149628d): unknown;
   };
   readonly [__symbol0]?: T350a170d52;
 } | {
@@ -33460,69 +33382,23 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
-  name: "use-browser";
+  name: "counterparty_check";
   description: string;
   inputSchema?: {
     readonly "~standard": {
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: Tda018e6666 | undefined;
+      readonly types?: T119167339e | undefined;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T9899c62a18 | Promise<(Tfc86db9c4b | T9899c62a18)>);
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Td536646f91 | Promise<(Tfc86db9c4b | Td536646f91)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: Tda018e6666 | undefined;
-    };
-  };
-  outputSchema?: {
-    readonly "~standard": {
-      readonly jsonSchema: Tc49e8b2305;
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T8d5e2ac251 | undefined;
-    };
-  } & {
-    readonly "~standard": {
-      readonly validate: {
-        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T17f9c80581 | Promise<(Tfc86db9c4b | T17f9c80581)>);
-      };
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T8d5e2ac251 | undefined;
-    };
-  };
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: T631856df6b;
-  execute?: {
-    (args: Tb33a71380a, context?: Tc88149628d): (Td617134437 | Tc38488b75b | Promise<Taa699009ad>);
-  };
-  readonly [__symbol0]?: T350a170d52;
-} | {
-  __toolSide: "client";
-  name: "infosoud_lookup_case";
-  description: string;
-  inputSchema?: {
-    readonly "~standard": {
-      readonly jsonSchema: Tc49e8b2305;
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T367a10cc51 | undefined;
-    };
-  } & {
-    readonly "~standard": {
-      readonly validate: {
-        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Td0c9b180ad | Promise<(Tfc86db9c4b | Td0c9b180ad)>);
-      };
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T367a10cc51 | undefined;
+      readonly types?: T119167339e | undefined;
     };
   };
   outputSchema?: undefined;
@@ -33531,529 +33407,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   lazy?: false | true;
   metadata?: T631856df6b;
   execute?: {
-    (args: T466db84340, context?: Tc88149628d): unknown;
-  };
-  readonly [__symbol0]?: T350a170d52;
-} | {
-  __toolSide: "client";
-  name: "update-entity-fields";
-  description: string;
-  inputSchema?: {
-    readonly "~standard": {
-      readonly jsonSchema: Tc49e8b2305;
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T4c7ffc5c98 | undefined;
-    };
-  } & {
-    readonly "~standard": {
-      readonly validate: {
-        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T6a8b8e209a | Promise<(Tfc86db9c4b | T6a8b8e209a)>);
-      };
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T4c7ffc5c98 | undefined;
-    };
-  };
-  outputSchema?: {
-    readonly "~standard": {
-      readonly jsonSchema: Tc49e8b2305;
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: Ta94982c099 | undefined;
-    };
-  } & {
-    readonly "~standard": {
-      readonly validate: {
-        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T9a8daf49a9 | Promise<(Tfc86db9c4b | T9a8daf49a9)>);
-      };
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: Ta94982c099 | undefined;
-    };
-  };
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: T631856df6b;
-  execute?: {
-    (args: T09610a4d6a, context?: Tc88149628d): (T3a8e541c8b | Promise<T3a8e541c8b>);
-  };
-  readonly [__symbol0]?: T350a170d52;
-} | {
-  __toolSide: "client";
-  name: "suggest_changes";
-  description: string;
-  inputSchema?: T631856df6b | {
-    readonly "~standard": {
-      readonly jsonSchema: Tc49e8b2305;
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T699c14b14c | undefined;
-    };
-  } & {
-    readonly "~standard": {
-      readonly validate: {
-        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Tdc2a8db8cb | Promise<(Tfc86db9c4b | Tdc2a8db8cb)>);
-      };
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T699c14b14c | undefined;
-    };
-  };
-  outputSchema?: undefined;
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: T631856df6b;
-  execute?: {
-    (args: unknown, context?: Tc88149628d): unknown;
-  };
-  readonly [__symbol0]?: T350a170d52;
-} | {
-  __toolSide: "client";
-  name: "get_document_outline";
-  description: string;
-  inputSchema?: T631856df6b;
-  outputSchema?: undefined;
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: T631856df6b;
-  execute?: T114ef593c6;
-  readonly [__symbol0]?: T350a170d52;
-} | {
-  __toolSide: "client";
-  name: "read_section";
-  description: string;
-  inputSchema?: T631856df6b;
-  outputSchema?: undefined;
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: T631856df6b;
-  execute?: T114ef593c6;
-  readonly [__symbol0]?: T350a170d52;
-} | {
-  __toolSide: "client";
-  name: "list_stories";
-  description: string;
-  inputSchema?: T631856df6b;
-  outputSchema?: undefined;
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: T631856df6b;
-  execute?: T114ef593c6;
-  readonly [__symbol0]?: T350a170d52;
-} | {
-  __toolSide: "client";
-  name: "read_story";
-  description: string;
-  inputSchema?: T631856df6b;
-  outputSchema?: undefined;
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: T631856df6b;
-  execute?: T114ef593c6;
-  readonly [__symbol0]?: T350a170d52;
-} | {
-  __toolSide: "client";
-  name: "find_text";
-  description: string;
-  inputSchema?: T631856df6b;
-  outputSchema?: undefined;
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: T631856df6b;
-  execute?: T114ef593c6;
-  readonly [__symbol0]?: T350a170d52;
-} | {
-  __toolSide: "client";
-  name: "read_comments";
-  description: string;
-  inputSchema?: T631856df6b;
-  outputSchema?: undefined;
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: T631856df6b;
-  execute?: T114ef593c6;
-  readonly [__symbol0]?: T350a170d52;
-} | {
-  __toolSide: "client";
-  name: "read_changes";
-  description: string;
-  inputSchema?: T631856df6b;
-  outputSchema?: undefined;
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: T631856df6b;
-  execute?: T114ef593c6;
-  readonly [__symbol0]?: T350a170d52;
-} | {
-  __toolSide: "client";
-  name: "add_comment";
-  description: string;
-  inputSchema?: T631856df6b;
-  outputSchema?: undefined;
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: T631856df6b;
-  execute?: T114ef593c6;
-  readonly [__symbol0]?: T350a170d52;
-} | {
-  __toolSide: "client";
-  name: "reply_comment";
-  description: string;
-  inputSchema?: T631856df6b;
-  outputSchema?: undefined;
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: T631856df6b;
-  execute?: T114ef593c6;
-  readonly [__symbol0]?: T350a170d52;
-} | {
-  __toolSide: "client";
-  name: "resolve_comment";
-  description: string;
-  inputSchema?: T631856df6b;
-  outputSchema?: undefined;
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: T631856df6b;
-  execute?: T114ef593c6;
-  readonly [__symbol0]?: T350a170d52;
-} | {
-  __toolSide: "client";
-  name: "show_in_document";
-  description: string;
-  inputSchema?: T631856df6b;
-  outputSchema?: undefined;
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: T631856df6b;
-  execute?: T114ef593c6;
-  readonly [__symbol0]?: T350a170d52;
-} | {
-  __toolSide: "client";
-  name: "create_matter_document";
-  description: string;
-  inputSchema?: {
-    readonly "~standard": {
-      readonly jsonSchema: Tc49e8b2305;
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T2e2021adee | undefined;
-    };
-  } & {
-    readonly "~standard": {
-      readonly validate: {
-        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T51f6ece09d | Promise<(Tfc86db9c4b | T51f6ece09d)>);
-      };
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T2e2021adee | undefined;
-    };
-  };
-  outputSchema?: {
-    readonly "~standard": {
-      readonly jsonSchema: Tc49e8b2305;
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: Tde7fb406e1 | undefined;
-    };
-  } & {
-    readonly "~standard": {
-      readonly validate: {
-        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T3012ed5aad | Promise<(Tfc86db9c4b | T3012ed5aad)>);
-      };
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: Tde7fb406e1 | undefined;
-    };
-  };
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: T631856df6b;
-  execute?: {
-    (args: Taeaa3ad44e, context?: Tc88149628d): (T6c9afce89f | Promise<T6c9afce89f>);
-  };
-  readonly [__symbol0]?: T350a170d52;
-} | {
-  __toolSide: "client";
-  name: "web_search";
-  description: string;
-  inputSchema?: {
-    readonly "~standard": {
-      readonly jsonSchema: Tc49e8b2305;
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T43c61826c6 | undefined;
-    };
-  } & {
-    readonly "~standard": {
-      readonly validate: {
-        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Ta1f9b4de71 | Promise<(Tfc86db9c4b | Ta1f9b4de71)>);
-      };
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T43c61826c6 | undefined;
-    };
-  };
-  outputSchema?: {
-    readonly "~standard": {
-      readonly jsonSchema: Tc49e8b2305;
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T921fd22a21 | undefined;
-    };
-  } & {
-    readonly "~standard": {
-      readonly validate: {
-        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Ta43e2dcaa2 | Promise<(Tfc86db9c4b | Ta43e2dcaa2)>);
-      };
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T921fd22a21 | undefined;
-    };
-  };
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: T631856df6b;
-  execute?: {
-    (args: Tbbfb0e2dc0, context?: Tc88149628d): (Tddb0458281 | Promise<Tddb0458281>);
-  };
-  readonly [__symbol0]?: T350a170d52;
-} | {
-  __toolSide: "client";
-  name: "fetch_url";
-  description: string;
-  inputSchema?: {
-    readonly "~standard": {
-      readonly jsonSchema: Tc49e8b2305;
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: Tf273198011 | undefined;
-    };
-  } & {
-    readonly "~standard": {
-      readonly validate: {
-        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T984d9f8701 | Promise<(Tfc86db9c4b | T984d9f8701)>);
-      };
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: Tf273198011 | undefined;
-    };
-  };
-  outputSchema?: {
-    readonly "~standard": {
-      readonly jsonSchema: Tc49e8b2305;
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T5728aceaa2 | undefined;
-    };
-  } & {
-    readonly "~standard": {
-      readonly validate: {
-        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Tf2f09f50cf | Promise<(Tfc86db9c4b | Tf2f09f50cf)>);
-      };
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T5728aceaa2 | undefined;
-    };
-  };
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: T631856df6b;
-  execute?: {
-    (args: T1ea5eea592, context?: Tc88149628d): (T8161ebccd4 | Promise<T8161ebccd4>);
-  };
-  readonly [__symbol0]?: T350a170d52;
-} | {
-  __toolSide: "client";
-  name: "search-chat-history";
-  description: string;
-  inputSchema?: {
-    readonly "~standard": {
-      readonly jsonSchema: Tc49e8b2305;
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T692b04920e | undefined;
-    };
-  } & {
-    readonly "~standard": {
-      readonly validate: {
-        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T39bd2e99da | Promise<(Tfc86db9c4b | T39bd2e99da)>);
-      };
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T692b04920e | undefined;
-    };
-  };
-  outputSchema?: {
-    readonly "~standard": {
-      readonly jsonSchema: Tc49e8b2305;
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T71cf339d21 | undefined;
-    };
-  } & {
-    readonly "~standard": {
-      readonly validate: {
-        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T2a09c7df07 | Promise<(Tfc86db9c4b | T2a09c7df07)>);
-      };
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T71cf339d21 | undefined;
-    };
-  };
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: T631856df6b;
-  execute?: {
-    (args: Tfe8087360e, context?: Tc88149628d): (T51cc6664d5 | Promise<T51cc6664d5>);
-  };
-  readonly [__symbol0]?: T350a170d52;
-} | {
-  __toolSide: "client";
-  name: "expand-chat-history";
-  description: string;
-  inputSchema?: {
-    readonly "~standard": {
-      readonly jsonSchema: Tc49e8b2305;
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: Tc601a26749 | undefined;
-    };
-  } & {
-    readonly "~standard": {
-      readonly validate: {
-        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T239c95b432 | Promise<(Tfc86db9c4b | T239c95b432)>);
-      };
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: Tc601a26749 | undefined;
-    };
-  };
-  outputSchema?: {
-    readonly "~standard": {
-      readonly jsonSchema: Tc49e8b2305;
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: Td7a8af8a91 | undefined;
-    };
-  } & {
-    readonly "~standard": {
-      readonly validate: {
-        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Te846513736 | Promise<(Tfc86db9c4b | Te846513736)>);
-      };
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: Td7a8af8a91 | undefined;
-    };
-  };
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: T631856df6b;
-  execute?: {
-    (args: Ta1379e699e, context?: Tc88149628d): (Tdefb828a83 | Promise<Tdefb828a83>);
-  };
-  readonly [__symbol0]?: T350a170d52;
-} | {
-  __toolSide: "client";
-  name: "search-past-chats";
-  description: string;
-  inputSchema?: Tc7057093bd;
-  outputSchema?: Taec8e40e3e;
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: T631856df6b;
-  execute?: Tcaa4ce6922;
-  readonly [__symbol0]?: T350a170d52;
-} | {
-  __toolSide: "client";
-  name: "search-all-past-chats";
-  description: string;
-  inputSchema?: Tc7057093bd;
-  outputSchema?: Taec8e40e3e;
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: T631856df6b;
-  execute?: Tcaa4ce6922;
-  readonly [__symbol0]?: T350a170d52;
-} | {
-  __toolSide: "client";
-  name: "describe_template";
-  description: string;
-  inputSchema?: {
-    readonly "~standard": {
-      readonly jsonSchema: Tc49e8b2305;
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T4deb005d6d | undefined;
-    };
-  } & {
-    readonly "~standard": {
-      readonly validate: {
-        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Tcfcb60a90e | Promise<(Tfc86db9c4b | Tcfcb60a90e)>);
-      };
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T4deb005d6d | undefined;
-    };
-  };
-  outputSchema?: undefined;
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: T631856df6b;
-  execute?: {
-    (args: Ta297fc92a3, context?: Tc88149628d): unknown;
-  };
-  readonly [__symbol0]?: T350a170d52;
-} | {
-  __toolSide: "client";
-  name: "suggest_template_fields";
-  description: string;
-  inputSchema?: {
-    readonly "~standard": {
-      readonly jsonSchema: Tc49e8b2305;
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T25fd06afe1 | undefined;
-    };
-  } & {
-    readonly "~standard": {
-      readonly validate: {
-        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Tb13124e7c6 | Promise<(Tfc86db9c4b | Tb13124e7c6)>);
-      };
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T25fd06afe1 | undefined;
-    };
-  };
-  outputSchema?: undefined;
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: T631856df6b;
-  execute?: {
-    (args: T81f0fdb1b7, context?: Tc88149628d): unknown;
+    (args: Tf1ef3fc0b0, context?: Tc88149628d): unknown;
   };
   readonly [__symbol0]?: T350a170d52;
 } | {
@@ -34104,23 +33458,23 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
-  name: "spawn_subagents";
+  name: "create_matter_document";
   description: string;
   inputSchema?: {
     readonly "~standard": {
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: T6bd5a18bc8 | undefined;
+      readonly types?: T2e2021adee | undefined;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T1e5e71d2be | Promise<(Tfc86db9c4b | T1e5e71d2be)>);
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T51f6ece09d | Promise<(Tfc86db9c4b | T51f6ece09d)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: T6bd5a18bc8 | undefined;
+      readonly types?: T2e2021adee | undefined;
     };
   };
   outputSchema?: {
@@ -34128,16 +33482,16 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: T6da17dcfb9 | undefined;
+      readonly types?: Tde7fb406e1 | undefined;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T0e694e7f35 | Promise<(Tfc86db9c4b | T0e694e7f35)>);
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T3012ed5aad | Promise<(Tfc86db9c4b | T3012ed5aad)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: T6da17dcfb9 | undefined;
+      readonly types?: Tde7fb406e1 | undefined;
     };
   };
   needsApproval?: true;
@@ -34145,7 +33499,345 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   lazy?: false | true;
   metadata?: T631856df6b;
   execute?: {
-    (args: T4a592a8301, context?: Tc88149628d): (T0e2086ec76 | Promise<T0e2086ec76>);
+    (args: Taeaa3ad44e, context?: Tc88149628d): (T6c9afce89f | Promise<T6c9afce89f>);
+  };
+  readonly [__symbol0]?: T350a170d52;
+} | {
+  __toolSide: "client";
+  name: "describe_template";
+  description: string;
+  inputSchema?: {
+    readonly "~standard": {
+      readonly jsonSchema: Tc49e8b2305;
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T4deb005d6d | undefined;
+    };
+  } & {
+    readonly "~standard": {
+      readonly validate: {
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Tcfcb60a90e | Promise<(Tfc86db9c4b | Tcfcb60a90e)>);
+      };
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T4deb005d6d | undefined;
+    };
+  };
+  outputSchema?: undefined;
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T631856df6b;
+  execute?: {
+    (args: Ta297fc92a3, context?: Tc88149628d): unknown;
+  };
+  readonly [__symbol0]?: T350a170d52;
+} | {
+  __toolSide: "client";
+  name: "discover_tools";
+  description: string;
+  inputSchema?: undefined;
+  outputSchema?: undefined;
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T631856df6b;
+  execute?: T114ef593c6;
+  readonly [__symbol0]?: T350a170d52;
+} | {
+  __toolSide: "client";
+  name: "execute_typescript";
+  description: string;
+  inputSchema?: undefined;
+  outputSchema?: undefined;
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T631856df6b;
+  execute?: T114ef593c6;
+  readonly [__symbol0]?: T350a170d52;
+} | {
+  __toolSide: "client";
+  name: "expand-chat-history";
+  description: string;
+  inputSchema?: {
+    readonly "~standard": {
+      readonly jsonSchema: Tc49e8b2305;
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: Tc601a26749 | undefined;
+    };
+  } & {
+    readonly "~standard": {
+      readonly validate: {
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T239c95b432 | Promise<(Tfc86db9c4b | T239c95b432)>);
+      };
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: Tc601a26749 | undefined;
+    };
+  };
+  outputSchema?: {
+    readonly "~standard": {
+      readonly jsonSchema: Tc49e8b2305;
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: Td7a8af8a91 | undefined;
+    };
+  } & {
+    readonly "~standard": {
+      readonly validate: {
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Te846513736 | Promise<(Tfc86db9c4b | Te846513736)>);
+      };
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: Td7a8af8a91 | undefined;
+    };
+  };
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T631856df6b;
+  execute?: {
+    (args: Ta1379e699e, context?: Tc88149628d): (Tdefb828a83 | Promise<Tdefb828a83>);
+  };
+  readonly [__symbol0]?: T350a170d52;
+} | {
+  __toolSide: "client";
+  name: "fetch_url";
+  description: string;
+  inputSchema?: {
+    readonly "~standard": {
+      readonly jsonSchema: Tc49e8b2305;
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: Tf273198011 | undefined;
+    };
+  } & {
+    readonly "~standard": {
+      readonly validate: {
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T984d9f8701 | Promise<(Tfc86db9c4b | T984d9f8701)>);
+      };
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: Tf273198011 | undefined;
+    };
+  };
+  outputSchema?: {
+    readonly "~standard": {
+      readonly jsonSchema: Tc49e8b2305;
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T5728aceaa2 | undefined;
+    };
+  } & {
+    readonly "~standard": {
+      readonly validate: {
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Tf2f09f50cf | Promise<(Tfc86db9c4b | Tf2f09f50cf)>);
+      };
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T5728aceaa2 | undefined;
+    };
+  };
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T631856df6b;
+  execute?: {
+    (args: T1ea5eea592, context?: Tc88149628d): (T8161ebccd4 | Promise<T8161ebccd4>);
+  };
+  readonly [__symbol0]?: T350a170d52;
+} | {
+  __toolSide: "client";
+  name: "find_text";
+  description: string;
+  inputSchema?: T631856df6b;
+  outputSchema?: undefined;
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T631856df6b;
+  execute?: T114ef593c6;
+  readonly [__symbol0]?: T350a170d52;
+} | {
+  __toolSide: "client";
+  name: "get_document_outline";
+  description: string;
+  inputSchema?: T631856df6b;
+  outputSchema?: undefined;
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T631856df6b;
+  execute?: T114ef593c6;
+  readonly [__symbol0]?: T350a170d52;
+} | {
+  __toolSide: "client";
+  name: "list_stories";
+  description: string;
+  inputSchema?: T631856df6b;
+  outputSchema?: undefined;
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T631856df6b;
+  execute?: T114ef593c6;
+  readonly [__symbol0]?: T350a170d52;
+} | {
+  __toolSide: "client";
+  name: "read_changes";
+  description: string;
+  inputSchema?: T631856df6b;
+  outputSchema?: undefined;
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T631856df6b;
+  execute?: T114ef593c6;
+  readonly [__symbol0]?: T350a170d52;
+} | {
+  __toolSide: "client";
+  name: "read_comments";
+  description: string;
+  inputSchema?: T631856df6b;
+  outputSchema?: undefined;
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T631856df6b;
+  execute?: T114ef593c6;
+  readonly [__symbol0]?: T350a170d52;
+} | {
+  __toolSide: "client";
+  name: "read_section";
+  description: string;
+  inputSchema?: T631856df6b;
+  outputSchema?: undefined;
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T631856df6b;
+  execute?: T114ef593c6;
+  readonly [__symbol0]?: T350a170d52;
+} | {
+  __toolSide: "client";
+  name: "read_story";
+  description: string;
+  inputSchema?: T631856df6b;
+  outputSchema?: undefined;
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T631856df6b;
+  execute?: T114ef593c6;
+  readonly [__symbol0]?: T350a170d52;
+} | {
+  __toolSide: "client";
+  name: "show_in_document";
+  description: string;
+  inputSchema?: T631856df6b;
+  outputSchema?: undefined;
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T631856df6b;
+  execute?: T114ef593c6;
+  readonly [__symbol0]?: T350a170d52;
+} | {
+  __toolSide: "client";
+  name: "suggest_changes";
+  description: string;
+  inputSchema?: T631856df6b | {
+    readonly "~standard": {
+      readonly jsonSchema: Tc49e8b2305;
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T699c14b14c | undefined;
+    };
+  } & {
+    readonly "~standard": {
+      readonly validate: {
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Tdc2a8db8cb | Promise<(Tfc86db9c4b | Tdc2a8db8cb)>);
+      };
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T699c14b14c | undefined;
+    };
+  };
+  outputSchema?: undefined;
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T631856df6b;
+  execute?: {
+    (args: unknown, context?: Tc88149628d): unknown;
+  };
+  readonly [__symbol0]?: T350a170d52;
+} | {
+  __toolSide: "client";
+  name: "add_comment";
+  description: string;
+  inputSchema?: T631856df6b;
+  outputSchema?: undefined;
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T631856df6b;
+  execute?: T114ef593c6;
+  readonly [__symbol0]?: T350a170d52;
+} | {
+  __toolSide: "client";
+  name: "reply_comment";
+  description: string;
+  inputSchema?: T631856df6b;
+  outputSchema?: undefined;
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T631856df6b;
+  execute?: T114ef593c6;
+  readonly [__symbol0]?: T350a170d52;
+} | {
+  __toolSide: "client";
+  name: "resolve_comment";
+  description: string;
+  inputSchema?: T631856df6b;
+  outputSchema?: undefined;
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T631856df6b;
+  execute?: T114ef593c6;
+  readonly [__symbol0]?: T350a170d52;
+} | {
+  __toolSide: "client";
+  name: "infosoud_lookup_case";
+  description: string;
+  inputSchema?: {
+    readonly "~standard": {
+      readonly jsonSchema: Tc49e8b2305;
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T367a10cc51 | undefined;
+    };
+  } & {
+    readonly "~standard": {
+      readonly validate: {
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Td0c9b180ad | Promise<(Tfc86db9c4b | Td0c9b180ad)>);
+      };
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T367a10cc51 | undefined;
+    };
+  };
+  outputSchema?: undefined;
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T631856df6b;
+  execute?: {
+    (args: T466db84340, context?: Tc88149628d): unknown;
   };
   readonly [__symbol0]?: T350a170d52;
 } | {
@@ -34196,33 +33888,293 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
-  name: "execute_typescript";
+  name: "search-chat-history";
   description: string;
-  inputSchema?: undefined;
-  outputSchema?: undefined;
+  inputSchema?: {
+    readonly "~standard": {
+      readonly jsonSchema: Tc49e8b2305;
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T692b04920e | undefined;
+    };
+  } & {
+    readonly "~standard": {
+      readonly validate: {
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T39bd2e99da | Promise<(Tfc86db9c4b | T39bd2e99da)>);
+      };
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T692b04920e | undefined;
+    };
+  };
+  outputSchema?: {
+    readonly "~standard": {
+      readonly jsonSchema: Tc49e8b2305;
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T71cf339d21 | undefined;
+    };
+  } & {
+    readonly "~standard": {
+      readonly validate: {
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T2a09c7df07 | Promise<(Tfc86db9c4b | T2a09c7df07)>);
+      };
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T71cf339d21 | undefined;
+    };
+  };
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
   metadata?: T631856df6b;
-  execute?: T114ef593c6;
+  execute?: {
+    (args: Tfe8087360e, context?: Tc88149628d): (T51cc6664d5 | Promise<T51cc6664d5>);
+  };
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
-  name: "discover_tools";
+  name: "search-past-chats";
   description: string;
-  inputSchema?: undefined;
+  inputSchema?: Tc7057093bd;
+  outputSchema?: Taec8e40e3e;
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T631856df6b;
+  execute?: Tcaa4ce6922;
+  readonly [__symbol0]?: T350a170d52;
+} | {
+  __toolSide: "client";
+  name: "search-all-past-chats";
+  description: string;
+  inputSchema?: Tc7057093bd;
+  outputSchema?: Taec8e40e3e;
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T631856df6b;
+  execute?: Tcaa4ce6922;
+  readonly [__symbol0]?: T350a170d52;
+} | {
+  __toolSide: "client";
+  name: "suggest_template_fields";
+  description: string;
+  inputSchema?: {
+    readonly "~standard": {
+      readonly jsonSchema: Tc49e8b2305;
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T25fd06afe1 | undefined;
+    };
+  } & {
+    readonly "~standard": {
+      readonly validate: {
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Tb13124e7c6 | Promise<(Tfc86db9c4b | Tb13124e7c6)>);
+      };
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T25fd06afe1 | undefined;
+    };
+  };
   outputSchema?: undefined;
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
   metadata?: T631856df6b;
-  execute?: T114ef593c6;
+  execute?: {
+    (args: T81f0fdb1b7, context?: Tc88149628d): unknown;
+  };
+  readonly [__symbol0]?: T350a170d52;
+} | {
+  __toolSide: "client";
+  name: "update-entity-fields";
+  description: string;
+  inputSchema?: {
+    readonly "~standard": {
+      readonly jsonSchema: Tc49e8b2305;
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T4c7ffc5c98 | undefined;
+    };
+  } & {
+    readonly "~standard": {
+      readonly validate: {
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T6a8b8e209a | Promise<(Tfc86db9c4b | T6a8b8e209a)>);
+      };
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T4c7ffc5c98 | undefined;
+    };
+  };
+  outputSchema?: {
+    readonly "~standard": {
+      readonly jsonSchema: Tc49e8b2305;
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: Ta94982c099 | undefined;
+    };
+  } & {
+    readonly "~standard": {
+      readonly validate: {
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T9a8daf49a9 | Promise<(Tfc86db9c4b | T9a8daf49a9)>);
+      };
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: Ta94982c099 | undefined;
+    };
+  };
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T631856df6b;
+  execute?: {
+    (args: T09610a4d6a, context?: Tc88149628d): (T3a8e541c8b | Promise<T3a8e541c8b>);
+  };
+  readonly [__symbol0]?: T350a170d52;
+} | {
+  __toolSide: "client";
+  name: "use-browser";
+  description: string;
+  inputSchema?: {
+    readonly "~standard": {
+      readonly jsonSchema: Tc49e8b2305;
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: Tda018e6666 | undefined;
+    };
+  } & {
+    readonly "~standard": {
+      readonly validate: {
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T9899c62a18 | Promise<(Tfc86db9c4b | T9899c62a18)>);
+      };
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: Tda018e6666 | undefined;
+    };
+  };
+  outputSchema?: {
+    readonly "~standard": {
+      readonly jsonSchema: Tc49e8b2305;
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T8d5e2ac251 | undefined;
+    };
+  } & {
+    readonly "~standard": {
+      readonly validate: {
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T17f9c80581 | Promise<(Tfc86db9c4b | T17f9c80581)>);
+      };
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T8d5e2ac251 | undefined;
+    };
+  };
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T631856df6b;
+  execute?: {
+    (args: Tb33a71380a, context?: Tc88149628d): (Td617134437 | Tc38488b75b | Promise<Taa699009ad>);
+  };
+  readonly [__symbol0]?: T350a170d52;
+} | {
+  __toolSide: "client";
+  name: "web_search";
+  description: string;
+  inputSchema?: {
+    readonly "~standard": {
+      readonly jsonSchema: Tc49e8b2305;
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T43c61826c6 | undefined;
+    };
+  } & {
+    readonly "~standard": {
+      readonly validate: {
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Ta1f9b4de71 | Promise<(Tfc86db9c4b | Ta1f9b4de71)>);
+      };
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T43c61826c6 | undefined;
+    };
+  };
+  outputSchema?: {
+    readonly "~standard": {
+      readonly jsonSchema: Tc49e8b2305;
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T921fd22a21 | undefined;
+    };
+  } & {
+    readonly "~standard": {
+      readonly validate: {
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Ta43e2dcaa2 | Promise<(Tfc86db9c4b | Ta43e2dcaa2)>);
+      };
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T921fd22a21 | undefined;
+    };
+  };
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T631856df6b;
+  execute?: {
+    (args: Tbbfb0e2dc0, context?: Tc88149628d): (Tddb0458281 | Promise<Tddb0458281>);
+  };
+  readonly [__symbol0]?: T350a170d52;
+} | {
+  __toolSide: "client";
+  name: "spawn_subagents";
+  description: string;
+  inputSchema?: {
+    readonly "~standard": {
+      readonly jsonSchema: Tc49e8b2305;
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T6bd5a18bc8 | undefined;
+    };
+  } & {
+    readonly "~standard": {
+      readonly validate: {
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T1e5e71d2be | Promise<(Tfc86db9c4b | T1e5e71d2be)>);
+      };
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T6bd5a18bc8 | undefined;
+    };
+  };
+  outputSchema?: {
+    readonly "~standard": {
+      readonly jsonSchema: Tc49e8b2305;
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T6da17dcfb9 | undefined;
+    };
+  } & {
+    readonly "~standard": {
+      readonly validate: {
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T0e694e7f35 | Promise<(Tfc86db9c4b | T0e694e7f35)>);
+      };
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T6da17dcfb9 | undefined;
+    };
+  };
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T631856df6b;
+  execute?: {
+    (args: T4a592a8301, context?: Tc88149628d): (T0e2086ec76 | Promise<T0e2086ec76>);
+  };
   readonly [__symbol0]?: T350a170d52;
 }>, unknown, undefined> & {
   metadata?: T0afdf1a25a;
 });
 
-export type ChatPart = (tanstack_ai_AudioPart<unknown> | tanstack_ai_DocumentPart<unknown> | tanstack_ai_ImagePart<unknown> | tanstack_ai_StructuredOutputPart<unknown> | tanstack_ai_UIResourcePart | tanstack_ai_VideoPart<unknown> | tanstack_ai_client_SubagentPart | tanstack_ai_client_TextPart | tanstack_ai_client_ThinkingPart | tanstack_ai_client_ToolResultPart | Te2c1a8a498 | Tda8f0f96e8 | T61d4286dcb | T7382bd77d4 | Tba6edcbeb9 | T14ae4bed9b | Td9a96e07c3 | T0548b5740f | T5922ccec9f | T953b8b828f | Tb5c31df0ee | T0cb52bc3d9 | Tbd752f6459 | Tf666d2dda4 | T2f1eb9f087 | T41e8180893 | Td8bd350a0d | T396413b1f2 | T0f5b7a8f75 | Tcfc2bcdf0c | Tbec7099b68 | Te7bcf4f8cd | Tf580acfc9a | T43a95a3581 | T2f4d996387 | T708cb204fe | T61e931b9a3 | Td00a89251b | Tb89b7edf1b | T3958c3b3af | Tddeee5f72e | T832cfa2544 | T54ad5c389f | Tf540c7cacc | Tf7089f7953 | Te0862af907 | Te2f4644948 | T7177f7c683 | Ta85ccee7af | T7e246539c7 | T5fcbd957c4 | T3f7112bc47 | Tdd40b6002f | T63213f6a66 | T37645f97e3 | Tb675330ce6 | Teff0fd014f | T291799859b | Tfd761de317 | Ta9703ec17d | Td43d5a192e | T7f8a36b7e8 | T1906714431 | Tac064ee8a2 | Taee4ff1ecc | T22503d92e1 | T87debc7a12 | Tda26afd3a5 | Ta70c642bca | Tebb9fbb4f8 | Ta5b5eca36c | Tbcccb22aed | Tb33e966012 | T580bd0de31 | Td55da643d6 | Td15a61239d | T4b08c72cf3 | Td8667c9636 | T9f7b063dac | Tb23918f1b2 | T3dd22338ec);
+export type ChatPart = (tanstack_ai_AudioPart<unknown> | tanstack_ai_DocumentPart<unknown> | tanstack_ai_ImagePart<unknown> | tanstack_ai_StructuredOutputPart<unknown> | tanstack_ai_UIResourcePart | tanstack_ai_VideoPart<unknown> | tanstack_ai_client_SubagentPart | tanstack_ai_client_TextPart | tanstack_ai_client_ThinkingPart | tanstack_ai_client_ToolResultPart | Te2c1a8a498 | Tda8f0f96e8 | T61d4286dcb | T7382bd77d4 | Tba6edcbeb9 | T14ae4bed9b | Td9a96e07c3 | T0548b5740f | T5922ccec9f | T953b8b828f | Tb5c31df0ee | T0cb52bc3d9 | Tbd752f6459 | Tf666d2dda4 | T2f1eb9f087 | T41e8180893 | Td8bd350a0d | T396413b1f2 | T0f5b7a8f75 | Tcfc2bcdf0c | Tbec7099b68 | Te7bcf4f8cd | Tf580acfc9a | T43a95a3581 | T2f4d996387 | T708cb204fe | T61e931b9a3 | Td00a89251b | Tb89b7edf1b | T3958c3b3af | Tddeee5f72e | T832cfa2544 | T54ad5c389f | Tf540c7cacc | Tf7089f7953 | T5fcbd957c4 | T7177f7c683 | T7e246539c7 | Ta85ccee7af | Te2f4644948 | T3f7112bc47 | Te0862af907 | T4b08c72cf3 | Tda26afd3a5 | Td55da643d6 | T3dd22338ec | Tb23918f1b2 | Tbcccb22aed | Tebb9fbb4f8 | Td43d5a192e | Teff0fd014f | Tfd761de317 | T1906714431 | T7f8a36b7e8 | T291799859b | Ta9703ec17d | T87debc7a12 | Tb675330ce6 | Tac064ee8a2 | Taee4ff1ecc | T22503d92e1 | T63213f6a66 | T9f7b063dac | Ta5b5eca36c | Tb33e966012 | T580bd0de31 | Td15a61239d | T37645f97e3 | Tdd40b6002f | Ta70c642bca | Td8667c9636);
 
 export type ChatSourceDocument = Tcde02c03e1;
 
@@ -34359,65 +34311,73 @@ export type ChatUITools = {
     input: Tee258ffbbe;
     output: unknown;
   };
-  counterparty_check: {
-    input: unknown;
-    output: unknown;
-  };
-  boe_search_legislation: {
-    input: T2f5bcad84c;
+  boe_find_related_laws: {
+    input: T8136384b1e;
     output: unknown;
   };
   boe_get_law: {
     input: T1cd5f6c01f;
     output: unknown;
   };
-  boe_get_law_structure: {
-    input: T73467fd01f;
-    output: unknown;
-  };
   boe_get_law_block: {
     input: T3913e4550c;
     output: unknown;
   };
-  boe_find_related_laws: {
-    input: T8136384b1e;
+  boe_get_law_structure: {
+    input: T73467fd01f;
+    output: unknown;
+  };
+  boe_search_legislation: {
+    input: T2f5bcad84c;
     output: unknown;
   };
   borme_get_summary: {
     input: T4c60d2e7ad;
     output: unknown;
   };
-  "use-browser": {
-    input: Tb33a71380a;
-    output: T1bc07bd9cb;
-  };
-  infosoud_lookup_case: {
-    input: T466db84340;
+  counterparty_check: {
+    input: Tf1ef3fc0b0;
     output: unknown;
   };
-  "update-entity-fields": {
-    input: T09610a4d6a;
-    output: T6f9e2e6853;
+  review_folder_consistency: {
+    input: Tbb0cc35d34;
+    output: T88a38d2a60;
   };
   create_matter_document: {
     input: Taeaa3ad44e;
     output: Tccd7994462;
   };
-  web_search: {
-    input: Tbbfb0e2dc0;
-    output: Td5ded8ed3b;
+  describe_template: {
+    input: Ta297fc92a3;
+    output: unknown;
+  };
+  discover_tools: {
+    input: unknown;
+    output: unknown;
+  };
+  execute_typescript: {
+    input: unknown;
+    output: unknown;
+  };
+  "expand-chat-history": {
+    input: Ta1379e699e;
+    output: Tf40440a0f9;
   };
   fetch_url: {
     input: T1ea5eea592;
     output: T116d4a6834;
   };
+  infosoud_lookup_case: {
+    input: T466db84340;
+    output: unknown;
+  };
+  remember: {
+    input: T74837627f5;
+    output: T9b129e6597;
+  };
   "search-chat-history": {
     input: Tfe8087360e;
     output: T0800a1cff9;
-  };
-  "expand-chat-history": {
-    input: Ta1379e699e;
-    output: Tf40440a0f9;
   };
   "search-past-chats": {
     input: Tfe8087360e;
@@ -34427,33 +34387,25 @@ export type ChatUITools = {
     input: Tfe8087360e;
     output: T59c690454c;
   };
-  describe_template: {
-    input: Ta297fc92a3;
-    output: unknown;
-  };
   suggest_template_fields: {
     input: T81f0fdb1b7;
     output: unknown;
   };
-  review_folder_consistency: {
-    input: Tbb0cc35d34;
-    output: T88a38d2a60;
+  "update-entity-fields": {
+    input: T09610a4d6a;
+    output: T6f9e2e6853;
+  };
+  "use-browser": {
+    input: Tb33a71380a;
+    output: T1bc07bd9cb;
+  };
+  web_search: {
+    input: Tbbfb0e2dc0;
+    output: Td5ded8ed3b;
   };
   spawn_subagents: {
     input: T4a592a8301;
     output: Tb2b1f765a2;
-  };
-  remember: {
-    input: T74837627f5;
-    output: T9b129e6597;
-  };
-  execute_typescript: {
-    input: unknown;
-    output: unknown;
-  };
-  discover_tools: {
-    input: unknown;
-    output: unknown;
   };
 } & {
   read_document: {
@@ -34461,6 +34413,103 @@ export type ChatUITools = {
     output: (T42b0ce8576 | {
       ok: true;
       result: Array<stll_folio_agents_FolioAgentBlock>;
+    });
+  };
+  find_text: {
+    input: {
+      query: string;
+      matchCase?: false | true;
+      wholeWord?: false | true;
+      scope?: {
+        type: "document";
+      } | {
+        type: "section";
+        handle: Td615a955de;
+      } | {
+        type: "page";
+        page: number;
+      } | {
+        type: "story";
+        handle: T8ee3aa7cc6;
+      };
+    };
+    output: (T42b0ce8576 | {
+      ok: true;
+      result: stll_folio_agents_FolioAgentScopedFindTextResult;
+    });
+  };
+  get_document_outline: {
+    input: {
+      maxDepth?: number;
+    };
+    output: (T42b0ce8576 | {
+      ok: true;
+      result: stll_folio_agents_FolioAgentDocumentOutline;
+    });
+  };
+  list_stories: {
+    input: Tba428f02e1;
+    output: (T42b0ce8576 | {
+      ok: true;
+      result: Array<T0ca223e5b8>;
+    });
+  };
+  read_changes: {
+    input: Tba428f02e1;
+    output: (T42b0ce8576 | {
+      ok: true;
+      result: Array<stll_folio_agents_FolioAgentChange>;
+    });
+  };
+  read_comments: {
+    input: {
+      filter?: "all" | "open" | "resolved";
+    };
+    output: (T42b0ce8576 | {
+      ok: true;
+      result: Array<stll_folio_agents_FolioAgentComment>;
+    });
+  };
+  read_section: {
+    input: {
+      handle: Td615a955de;
+      maxBlocks?: number;
+      afterBlockId?: string;
+    };
+    output: (T42b0ce8576 | {
+      ok: true;
+      result: stll_folio_agents_FolioAgentSectionRead;
+    });
+  };
+  read_story: {
+    input: {
+      handle: T8ee3aa7cc6;
+    };
+    output: (T42b0ce8576 | {
+      ok: true;
+      result: T0ca223e5b8;
+    });
+  };
+  show_in_document: {
+    input: {
+      blockId: string;
+      range?: never;
+    } | {
+      blockId?: never;
+      range: {
+        type: "textRange";
+        story: "main";
+        blockId: string;
+        startOffset: number;
+        endOffset: number;
+        selectedTextHash: string;
+      };
+    };
+    output: (T42b0ce8576 | {
+      ok: true;
+      result: {
+        shown: Tfddd645dc8;
+      };
     });
   };
   suggest_changes: {
@@ -34489,81 +34538,6 @@ export type ChatUITools = {
       message: string;
       retryable: true;
     } | T42b0ce8576 | Tfe2faf9844;
-  };
-  get_document_outline: {
-    input: {
-      maxDepth?: number;
-    };
-    output: (T42b0ce8576 | {
-      ok: true;
-      result: stll_folio_agents_FolioAgentDocumentOutline;
-    });
-  };
-  read_section: {
-    input: {
-      handle: Td615a955de;
-      maxBlocks?: number;
-      afterBlockId?: string;
-    };
-    output: (T42b0ce8576 | {
-      ok: true;
-      result: stll_folio_agents_FolioAgentSectionRead;
-    });
-  };
-  list_stories: {
-    input: Tba428f02e1;
-    output: (T42b0ce8576 | {
-      ok: true;
-      result: Array<T0ca223e5b8>;
-    });
-  };
-  read_story: {
-    input: {
-      handle: T8ee3aa7cc6;
-    };
-    output: (T42b0ce8576 | {
-      ok: true;
-      result: T0ca223e5b8;
-    });
-  };
-  find_text: {
-    input: {
-      query: string;
-      matchCase?: false | true;
-      wholeWord?: false | true;
-      scope?: {
-        type: "document";
-      } | {
-        type: "section";
-        handle: Td615a955de;
-      } | {
-        type: "page";
-        page: number;
-      } | {
-        type: "story";
-        handle: T8ee3aa7cc6;
-      };
-    };
-    output: (T42b0ce8576 | {
-      ok: true;
-      result: stll_folio_agents_FolioAgentScopedFindTextResult;
-    });
-  };
-  read_comments: {
-    input: {
-      filter?: "all" | "open" | "resolved";
-    };
-    output: (T42b0ce8576 | {
-      ok: true;
-      result: Array<stll_folio_agents_FolioAgentComment>;
-    });
-  };
-  read_changes: {
-    input: Tba428f02e1;
-    output: (T42b0ce8576 | {
-      ok: true;
-      result: Array<stll_folio_agents_FolioAgentChange>;
-    });
   };
   add_comment: {
     input: {
@@ -34597,28 +34571,6 @@ export type ChatUITools = {
       ok: true;
       result: {
         resolved: Tfddd645dc8;
-      };
-    });
-  };
-  show_in_document: {
-    input: {
-      blockId: string;
-      range?: never;
-    } | {
-      blockId?: never;
-      range: {
-        type: "textRange";
-        story: "main";
-        blockId: string;
-        startOffset: number;
-        endOffset: number;
-        selectedTextHash: string;
-      };
-    };
-    output: (T42b0ce8576 | {
-      ok: true;
-      result: {
-        shown: Tfddd645dc8;
       };
     });
   };
@@ -35209,6 +35161,11 @@ type T116d4a6834 = {
 
 type T117607dc8d = "file-upload" | "manual" | "schedule";
 
+type T119167339e = {
+  readonly input: Tf1ef3fc0b0;
+  readonly output: Tc497209a93;
+};
+
 type T11ae381356 = {
   kind: "contact";
   field: Td16108295a;
@@ -35577,7 +35534,7 @@ type T21ddbd121a = {
 };
 
 type T21e7b1b9fc = {
-  countryCode: Tc1a998b77c;
+  countryCode: ("AD" | "AE" | "AF" | "AG" | "AI" | "AL" | "AM" | "AO" | "AQ" | "AR" | "AS" | "AT" | "AU" | "AW" | "AX" | "AZ" | "BA" | "BB" | "BD" | "BE" | "BF" | "BG" | "BH" | "BI" | "BJ" | "BL" | "BM" | "BN" | "BO" | "BQ" | "BR" | "BS" | "BT" | "BV" | "BW" | "BY" | "BZ" | "CA" | "CC" | "CD" | "CF" | "CG" | "CH" | "CI" | "CK" | "CL" | "CM" | "CN" | "CO" | "CR" | "CU" | "CV" | "CW" | "CX" | "CY" | "CZ" | "DE" | "DJ" | "DK" | "DM" | "DO" | "DZ" | "EC" | "EE" | "EG" | "EH" | "ER" | "ES" | "ET" | "FI" | "FJ" | "FK" | "FM" | "FO" | "FR" | "GA" | "GB" | "GD" | "GE" | "GF" | "GG" | "GH" | "GI" | "GL" | "GM" | "GN" | "GP" | "GQ" | "GR" | "GS" | "GT" | "GU" | "GW" | "GY" | "HK" | "HM" | "HN" | "HR" | "HT" | "HU" | "ID" | "IE" | "IL" | "IM" | "IN" | "IO" | "IQ" | "IR" | "IS" | "IT" | "JE" | "JM" | "JO" | "JP" | "KE" | "KG" | "KH" | "KI" | "KM" | "KN" | "KP" | "KR" | "KW" | "KY" | "KZ" | "LA" | "LB" | "LC" | "LI" | "LK" | "LR" | "LS" | "LT" | "LU" | "LV" | "LY" | "MA" | "MC" | "MD" | "ME" | "MF" | "MG" | "MH" | "MK" | "ML" | "MM" | "MN" | "MO" | "MP" | "MQ" | "MR" | "MS" | "MT" | "MU" | "MV" | "MW" | "MX" | "MY" | "MZ" | "NA" | "NC" | "NE" | "NF" | "NG" | "NI" | "NL" | "NO" | "NP" | "NR" | "NU" | "NZ" | "OM" | "PA" | "PE" | "PF" | "PG" | "PH" | "PK" | "PL" | "PM" | "PN" | "PR" | "PS" | "PT" | "PW" | "PY" | "QA" | "RE" | "RO" | "RS" | "RU" | "RW" | "SA" | "SB" | "SC" | "SD" | "SE" | "SG" | "SH" | "SI" | "SJ" | "SK" | "SL" | "SM" | "SN" | "SO" | "SR" | "SS" | "ST" | "SV" | "SX" | "SY" | "SZ" | "TC" | "TD" | "TF" | "TG" | "TH" | "TJ" | "TK" | "TL" | "TM" | "TN" | "TO" | "TR" | "TT" | "TV" | "TW" | "TZ" | "UA" | "UG" | "UM" | "US" | "UY" | "UZ" | "VA" | "VC" | "VE" | "VG" | "VI" | "VN" | "VU" | "WF" | "WS" | "XK" | "YE" | "YT" | "ZA" | "ZM" | "ZW");
   isPrimary: Tfddd645dc8;
 };
 
@@ -36599,18 +36556,6 @@ type T3012ed5aad = {
   readonly issues?: undefined;
 };
 
-type T304328c782 = {
-  source: ("ch" | "cz" | "eu" | "uk" | "un" | "us-non-sdn" | "us-sdn");
-  issuer: ("CH" | "CZ" | "EU" | "GB" | "UA" | "UN" | "US");
-  classification: ("binding" | "informational");
-  pendingUpdate: {
-    code: ("below-minimum" | "contracted" | "source-mismatch" | "stale");
-    heldAt: string;
-    previousCount: T588d0ee653;
-    nextCount: T588d0ee653;
-  } | null;
-};
-
 type T310abc7c1b = {
   pattern: Tbe0400fa4c;
   range: Tbe0400fa4c;
@@ -37179,8 +37124,6 @@ type T4b08c72cf3 = {
   output?: Tad027ba68a;
 } & T4d73965770;
 
-type T4b2953aefa = "CZ" | "SK";
-
 type T4b83723412 = "anthropic" | "bedrock" | "google" | "mistral" | "openai" | "openrouter";
 
 type T4c3eeb6df3 = {
@@ -37303,8 +37246,6 @@ type T501a665986 = string & valibot_Brand<"SafeId"> & {
 };
 
 type T504bb6d30f = Ta307d8fb8c | Tbc510e9400;
-
-type T5130e1fe7d = "match" | "mismatch" | "not-compared";
 
 type T51cc6664d5 = {
   query: string;
@@ -37485,6 +37426,7 @@ type T5971389af6 = {
   } | {
     type: "none";
   };
+  severity: ("critical" | "info" | "notice" | "warning");
   evidence: {
     kind: "request.submitted";
     description: string;
@@ -37537,7 +37479,6 @@ type T5971389af6 = {
     daysUntilDeadline: number;
     obligationStatus: ("active" | "awaiting_acknowledgement");
   };
-  severity: ("critical" | "info" | "notice" | "warning");
   createdByUserId: Tbe0400fa4c;
   scoutKey: string;
   confidence: T588d0ee653;
@@ -37923,7 +37864,7 @@ type T6b718d91dc = {
     error?: string;
     metadata?: T631856df6b;
     createdAt?: string;
-  } | Te2c1a8a498 | Tda8f0f96e8 | T61d4286dcb | T7382bd77d4 | Tba6edcbeb9 | T14ae4bed9b | Td9a96e07c3 | T0548b5740f | T5922ccec9f | T953b8b828f | Tb5c31df0ee | T0cb52bc3d9 | Tbd752f6459 | Tf666d2dda4 | T2f1eb9f087 | T41e8180893 | Td8bd350a0d | T396413b1f2 | T0f5b7a8f75 | Tcfc2bcdf0c | Tbec7099b68 | Te7bcf4f8cd | Tf580acfc9a | T43a95a3581 | T2f4d996387 | T708cb204fe | T61e931b9a3 | Td00a89251b | Tb89b7edf1b | T3958c3b3af | Tddeee5f72e | T832cfa2544 | T54ad5c389f | Tf540c7cacc | Tf7089f7953 | Te0862af907 | Te2f4644948 | T7177f7c683 | Ta85ccee7af | T7e246539c7 | T5fcbd957c4 | T3f7112bc47 | Tdd40b6002f | T63213f6a66 | T37645f97e3 | Tb675330ce6 | Teff0fd014f | T291799859b | Tfd761de317 | Ta9703ec17d | Td43d5a192e | T7f8a36b7e8 | T1906714431 | Tac064ee8a2 | Taee4ff1ecc | T22503d92e1 | T87debc7a12 | Tda26afd3a5 | Ta70c642bca | Tebb9fbb4f8 | Ta5b5eca36c | Tbcccb22aed | Tb33e966012 | T580bd0de31 | Td55da643d6 | Td15a61239d | T4b08c72cf3 | Td8667c9636 | T9f7b063dac | Tb23918f1b2 | T3dd22338ec | {
+  } | Te2c1a8a498 | Tda8f0f96e8 | T61d4286dcb | T7382bd77d4 | Tba6edcbeb9 | T14ae4bed9b | Td9a96e07c3 | T0548b5740f | T5922ccec9f | T953b8b828f | Tb5c31df0ee | T0cb52bc3d9 | Tbd752f6459 | Tf666d2dda4 | T2f1eb9f087 | T41e8180893 | Td8bd350a0d | T396413b1f2 | T0f5b7a8f75 | Tcfc2bcdf0c | Tbec7099b68 | Te7bcf4f8cd | Tf580acfc9a | T43a95a3581 | T2f4d996387 | T708cb204fe | T61e931b9a3 | Td00a89251b | Tb89b7edf1b | T3958c3b3af | Tddeee5f72e | T832cfa2544 | T54ad5c389f | Tf540c7cacc | Tf7089f7953 | T5fcbd957c4 | T7177f7c683 | T7e246539c7 | Ta85ccee7af | Te2f4644948 | T3f7112bc47 | Te0862af907 | T4b08c72cf3 | Tda26afd3a5 | Td55da643d6 | T3dd22338ec | Tb23918f1b2 | Tbcccb22aed | Tebb9fbb4f8 | Td43d5a192e | Teff0fd014f | Tfd761de317 | T1906714431 | T7f8a36b7e8 | T291799859b | Ta9703ec17d | T87debc7a12 | Tb675330ce6 | Tac064ee8a2 | Taee4ff1ecc | T22503d92e1 | T63213f6a66 | T9f7b063dac | Ta5b5eca36c | Tb33e966012 | T580bd0de31 | Td15a61239d | T37645f97e3 | Tdd40b6002f | Ta70c642bca | Td8667c9636 | {
     type: "subagent";
     subagent: {
       stop?: {
@@ -38282,6 +38223,8 @@ type T7a0a473ce3 = "common.anonymizationLabels.address" | "common.country" | "co
 type T7a3ee17d2d = {
   [key: string]: unknown;
 };
+
+type T7aebf701ec = "company-id" | "person" | "tax-id";
 
 type T7af392baeb = {
   fileFieldId?: T6993bee61f;
@@ -38814,8 +38757,6 @@ type T92e9230d1b = Response | {
   finishedAt: string;
   message: string;
 };
-
-type T9449cd95bd = [];
 
 type T94af9a40b9 = {
   canApplyEdits?: false | true;
@@ -39376,6 +39317,8 @@ type Ta70c642bca = {
   state: Tfafd241922;
   output?: Tddb0458281;
 } & T4d73965770;
+
+type Ta70e9835f3 = "cz-insolvency" | "cz-vat-reliability";
 
 type Ta716eb8a48 = {
   dataBoxes?: Array<{
@@ -40118,8 +40061,6 @@ type Tc0f5c8e964 = "draft" | "finalized" | "paid" | "sent" | "void";
 
 type Tc18269d27b = "asset" | "knowledge" | "prompt" | "reference" | "script" | "template";
 
-type Tc1a998b77c = "AD" | "AE" | "AF" | "AG" | "AI" | "AL" | "AM" | "AO" | "AQ" | "AR" | "AS" | "AT" | "AU" | "AW" | "AX" | "AZ" | "BA" | "BB" | "BD" | "BE" | "BF" | "BG" | "BH" | "BI" | "BJ" | "BL" | "BM" | "BN" | "BO" | "BQ" | "BR" | "BS" | "BT" | "BV" | "BW" | "BY" | "BZ" | "CA" | "CC" | "CD" | "CF" | "CG" | "CH" | "CI" | "CK" | "CL" | "CM" | "CN" | "CO" | "CR" | "CU" | "CV" | "CW" | "CX" | "CY" | "CZ" | "DE" | "DJ" | "DK" | "DM" | "DO" | "DZ" | "EC" | "EE" | "EG" | "EH" | "ER" | "ES" | "ET" | "FI" | "FJ" | "FK" | "FM" | "FO" | "FR" | "GA" | "GB" | "GD" | "GE" | "GF" | "GG" | "GH" | "GI" | "GL" | "GM" | "GN" | "GP" | "GQ" | "GR" | "GS" | "GT" | "GU" | "GW" | "GY" | "HK" | "HM" | "HN" | "HR" | "HT" | "HU" | "ID" | "IE" | "IL" | "IM" | "IN" | "IO" | "IQ" | "IR" | "IS" | "IT" | "JE" | "JM" | "JO" | "JP" | "KE" | "KG" | "KH" | "KI" | "KM" | "KN" | "KP" | "KR" | "KW" | "KY" | "KZ" | "LA" | "LB" | "LC" | "LI" | "LK" | "LR" | "LS" | "LT" | "LU" | "LV" | "LY" | "MA" | "MC" | "MD" | "ME" | "MF" | "MG" | "MH" | "MK" | "ML" | "MM" | "MN" | "MO" | "MP" | "MQ" | "MR" | "MS" | "MT" | "MU" | "MV" | "MW" | "MX" | "MY" | "MZ" | "NA" | "NC" | "NE" | "NF" | "NG" | "NI" | "NL" | "NO" | "NP" | "NR" | "NU" | "NZ" | "OM" | "PA" | "PE" | "PF" | "PG" | "PH" | "PK" | "PL" | "PM" | "PN" | "PR" | "PS" | "PT" | "PW" | "PY" | "QA" | "RE" | "RO" | "RS" | "RU" | "RW" | "SA" | "SB" | "SC" | "SD" | "SE" | "SG" | "SH" | "SI" | "SJ" | "SK" | "SL" | "SM" | "SN" | "SO" | "SR" | "SS" | "ST" | "SV" | "SX" | "SY" | "SZ" | "TC" | "TD" | "TF" | "TG" | "TH" | "TJ" | "TK" | "TL" | "TM" | "TN" | "TO" | "TR" | "TT" | "TV" | "TW" | "TZ" | "UA" | "UG" | "UM" | "US" | "UY" | "UZ" | "VA" | "VC" | "VE" | "VG" | "VI" | "VN" | "VU" | "WF" | "WS" | "XK" | "YE" | "YT" | "ZA" | "ZM" | "ZW";
-
 type Tc23cfaebea = {
   street: Tbe0400fa4c;
   postalCode: Tbe0400fa4c;
@@ -40148,6 +40089,22 @@ type Tc42c89297d = {
   sourceToolName?: string;
   url: string;
   title: string;
+};
+
+type Tc497209a93 = {
+  check: Ta70e9835f3;
+  subject: {
+    type: "company-id";
+    company_id: string;
+  } | {
+    type: "tax-id";
+    tax_id: string;
+  } | {
+    type: "person";
+    first_name: string;
+    last_name: string;
+    birth_date: string;
+  };
 };
 
 type Tc49e8b2305 = {
@@ -40544,6 +40501,11 @@ type Td4c150f9a7 = {
   kind: "cz-insolvency";
   source: Tc73807a034;
   subject: Te6e750ecc6;
+};
+
+type Td536646f91 = {
+  readonly value: Tc497209a93;
+  readonly issues?: undefined;
 };
 
 type Td55da643d6 = {
@@ -41249,27 +41211,6 @@ type Teab768a417 = {
 
 type Teaca50a829 = "manual" | "suggested" | "timer";
 
-type Teae76f4456 = {
-  sourceEntryId: string;
-  editionId: string;
-  score: number;
-  sourceUrl: string;
-  name: Tbe0400fa4c;
-  referenceNumber: Tbe0400fa4c;
-  entityType: ("aircraft" | "organisation" | "person" | "unknown" | "vessel");
-  programme: Tbe0400fa4c;
-  listedOn: Tbe0400fa4c;
-  evidence: {
-    nameScore: number;
-    matchedName: Tbe0400fa4c;
-    birthDate: T5130e1fe7d;
-    nationality: T5130e1fe7d;
-    entityType: T5130e1fe7d;
-    identifier: T5130e1fe7d;
-    conflicts: Array<("birth-date" | "entity-type" | "nationality")>;
-  };
-};
-
 type Teaea18eeca = {
   workspaceId: string;
 };
@@ -41313,7 +41254,7 @@ type Tebc5a69b82 = {
 type Tebd3ce2c77 = {
   status: "not-covered";
   reason: ("subject-type-not-supported" | "tax-id-required");
-  supportedSubjectTypes: Array<("company-id" | "person" | "tax-id")>;
+  supportedSubjectTypes: Array<T7aebf701ec>;
 };
 
 type Tebe6fae3ef = "approved" | "rejected";
@@ -41350,8 +41291,6 @@ type Tee36eb0f81 = {
   key: string;
   labelKey: T7a0a473ce3;
 };
-
-type Tee853e2e09 = T87d6a3582a | T4390c87707 | T667bb98824 | null;
 
 type Teec166880c = {
   skillId?: T352ed14c79;
@@ -41455,12 +41394,6 @@ type Tf08a9b25af = {
   id: Tfc8a750351;
 };
 
-type Tf0ef1a069d = {
-  editionId: string;
-  publishedAt: string;
-  verifiedAt: string;
-};
-
 type Tf1048cd75f = {
   code?: string;
   message: string;
@@ -41494,6 +41427,22 @@ type Tf1e33da2e2 = {
     expectedOutput?: string | undefined;
     model?: string | undefined;
   }>;
+};
+
+type Tf1ef3fc0b0 = {
+  check: Ta70e9835f3;
+  subject: {
+    type: "company-id";
+    company_id: string;
+  } | {
+    type: "tax-id";
+    tax_id: string;
+  } | {
+    type: "person";
+    first_name: string;
+    last_name: string;
+    birth_date: string;
+  };
 };
 
 type Tf273198011 = {

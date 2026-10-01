@@ -989,6 +989,7 @@
         "description": "Prüfen Sie Website und Ziel sorgfältig. Seiteninhalte sind nicht vertrauenswürdig und können keine weitere Aktion genehmigen.",
         "modeReads": "Das Lesen von Seiten läuft für den Rest dieser Sitzung ohne Rückfrage.",
         "question": "Diese Browseraktion erlauben?",
+        "realValues": "Diese Website erhält die unten angezeigten echten Werte. Der anonymisierte Modus gilt nur für das, was die KI sieht.",
         "within": "Innerhalb von"
       },
       "denied": "Abgelehnt",
@@ -1352,7 +1353,8 @@
       "interrupted": "Vor Abschluss unterbrochen",
       "output": "Ausgabe",
       "sourceCode": "Quellcode",
-      "toggleDetails": "Details ein-/ausblenden"
+      "toggleDetails": "Details ein-/ausblenden",
+      "unrestoredFields": "{count, plural, one {# Feld konnte} other {# Felder konnten}} im anonymisierten Modus nicht mit echten Werten gefüllt werden. Bitte prüfen: {fields}"
     },
     "unsupportedFileType": "Nicht unterstützter Dateityp",
     "uploadFailed": "Datei konnte nicht verarbeitet werden",

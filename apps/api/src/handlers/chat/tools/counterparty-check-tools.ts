@@ -5,6 +5,7 @@ import * as v from "valibot";
 import type { runEntityCheck } from "@stll/business-registries/entity-checks";
 
 import type { ScopedDb } from "@/api/db/safe-db";
+import type { RawModeOnlyChatToolName } from "@/api/handlers/chat/tools/raw-mode-only-tools";
 import { toRegistryChatToolError } from "@/api/handlers/chat/tools/registry-adapter/registry-tool-error";
 import { toToolInputSchema } from "@/api/handlers/chat/tools/registry-adapter/tool-input-schema";
 import { raiseChatToolError } from "@/api/handlers/chat/tools/tool-failure";
@@ -25,7 +26,8 @@ import {
 import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
 import { validationErrorResult } from "@/api/mcp/tool-utils";
 
-export const COUNTERPARTY_CHECK_TOOL_NAME = "counterparty_check" as const;
+export const COUNTERPARTY_CHECK_TOOL_NAME =
+  "counterparty_check" as const satisfies RawModeOnlyChatToolName;
 
 const MCP_TOOL_NAME = "check_counterparty";
 

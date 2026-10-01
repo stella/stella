@@ -25,10 +25,7 @@ import { createBoeTools } from "@/api/handlers/chat/tools/boe-tools";
 import { createBrowserControlTool } from "@/api/handlers/chat/tools/browser-control-tool";
 import { createBusinessRegistryTools } from "@/api/handlers/chat/tools/business-registry-tools";
 import { createChatHistoryTools } from "@/api/handlers/chat/tools/chat-history-tools";
-import {
-  COUNTERPARTY_CHECK_TOOL_NAME,
-  createCounterpartyCheckTools,
-} from "@/api/handlers/chat/tools/counterparty-check-tools";
+import { createCounterpartyCheckTools } from "@/api/handlers/chat/tools/counterparty-check-tools";
 import {
   CREATE_DOCUMENT_TOOL_NAME,
   createCreateDocumentTool,
@@ -40,10 +37,7 @@ import {
   type ChatCodeModeToolMap,
   type ChatScriptCallTools,
 } from "@/api/handlers/chat/tools/execute/chat-code-mode";
-import {
-  createFolderConsistencyReviewTools,
-  REVIEW_FOLDER_CONSISTENCY_TOOL_NAME,
-} from "@/api/handlers/chat/tools/folder-consistency-review-tool";
+import { createFolderConsistencyReviewTools } from "@/api/handlers/chat/tools/folder-consistency-review-tool";
 import {
   createFolioAgentDocTools,
   createSuggestChangesTools,
@@ -58,6 +52,7 @@ import {
   SEARCH_PAST_CHATS_TOOL_NAME,
 } from "@/api/handlers/chat/tools/past-chat-tools";
 import type { PastChatScope } from "@/api/handlers/chat/tools/past-chat-tools";
+import { RAW_MODE_ONLY_CHAT_TOOL_NAMES } from "@/api/handlers/chat/tools/raw-mode-only-tools";
 import {
   buildChatWriteTools,
   type ChatRegistryWriteToolMap,
@@ -977,6 +972,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
         userId,
         orgAIConfig,
         recordAuditEvent,
+        thirdPartyBoundary,
       })
     : {};
 
@@ -990,6 +986,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
         organizationId,
         userId,
         orgAIConfig,
+        thirdPartyBoundary,
       })
     : {};
 
@@ -1131,10 +1128,9 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     unavailableReasons: new Map([
       ...(thirdPartyBoundary.type === "raw"
         ? []
-        : [
-            COUNTERPARTY_CHECK_TOOL_NAME,
-            REVIEW_FOLDER_CONSISTENCY_TOOL_NAME,
-          ].map((name) => [name, "anonymized mode is on"] as const)),
+        : RAW_MODE_ONLY_CHAT_TOOL_NAMES.map(
+            (name) => [name, "anonymized mode is on"] as const,
+          )),
       ...(webResearchAvailable
         ? []
         : [WEB_SEARCH_TOOL_NAME, FETCH_URL_TOOL_NAME].map(
