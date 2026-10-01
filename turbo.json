@@ -71,6 +71,7 @@
         "$TURBO_ROOT$/oxlint.config.ts",
         "$TURBO_ROOT$/oxlint.result-boundary.config.ts",
         "$TURBO_ROOT$/.oxlint-plugins/**",
+        "$TURBO_ROOT$/scripts/oxlint-presets/**",
         "$TURBO_ROOT$/scripts/ownership.ts",
         "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
         "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
@@ -91,13 +92,15 @@
         "$TURBO_ROOT$/oxlint.config.ts",
         "$TURBO_ROOT$/oxlint.result-boundary.config.ts",
         "$TURBO_ROOT$/.oxlint-plugins/**",
+        "$TURBO_ROOT$/scripts/oxlint-presets/**",
         "$TURBO_ROOT$/scripts/ownership.ts",
         "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
         "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
         "$TURBO_ROOT$/apps/api/src/db/high-volume-tables.ts",
         "$TURBO_ROOT$/scripts/sql-perf-scope.ts",
         "$TURBO_ROOT$/scripts/design-lint-policy.ts",
-        "$TURBO_ROOT$/scripts/design-lint-baseline.json"
+        "$TURBO_ROOT$/scripts/design-lint-baseline.json",
+        "$TURBO_ROOT$/tsconfig.tooling.json"
       ],
       "cache": false
     },
