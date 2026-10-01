@@ -1,7 +1,7 @@
 import { panic, Result } from "better-result";
 import type { TransactionSQL } from "bun";
 import { describe, expect, test } from "bun:test";
-import { getTableColumns, getTableName } from "drizzle-orm";
+import { getColumns, getTableName } from "drizzle-orm";
 import fc from "fast-check";
 
 import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
@@ -79,15 +79,16 @@ const guards = [
   const table =
     tables.find((candidate) => getTableName(candidate) === tableName) ??
     panic(`unknown guard table ${tableName}`);
-  const columns = Object.values(getTableColumns(table));
+  const columns = Object.values(getColumns(table));
   const names = (match[1] ?? panic("trigger has no columns")).split(", ");
   return {
     tableName,
-    columns: names.map(
-      (name) =>
-        columns.find((column) => column.name === name) ??
-        panic(`unknown guarded column ${tableName}.${name}`),
-    ),
+    columns: names.map((name) => {
+      const column =
+        columns.find((candidate) => candidate.name === name) ??
+        panic(`unknown guarded column ${tableName}.${name}`);
+      return { name, sqlType: String(column.getSQLType()) };
+    }),
   };
 });
 
@@ -146,7 +147,7 @@ const withFixture = async (fn: (client: TransactionSQL) => Promise<void>) => {
       await tx.unsafe(`SET LOCAL search_path TO "${namespace}", public`);
       for (const { tableName, columns } of guards) {
         const definitions = columns.map(
-          (column) => `"${column.name}" ${column.getSQLType()}`,
+          ({ name, sqlType }) => `"${name}" ${sqlType}`,
         );
         await tx.unsafe(
           `CREATE TABLE "${tableName}" (fixture_id integer PRIMARY KEY, unrelated integer DEFAULT 0, ${definitions.join(", ")})`,
@@ -196,7 +197,7 @@ const expectMarkupFailure = async ({
   column,
   value,
 }: MarkupFailureOptions) => {
-  const result = await Result.tryPromise(() =>
+  const result = await Result.tryPromise(async () =>
     client.savepoint(async (tx) => {
       await tx.unsafe(
         column === "metadata"
@@ -254,7 +255,7 @@ if (!runPostgresTests || !databaseUrl) {
             )) {
               const { name } = column;
               const limit = Number(
-                column.getSQLType().match(/varchar\((\d+)\)/u)?.[1] ?? Infinity,
+                /varchar\((\d+)\)/u.exec(column.sqlType)?.[1] ?? Infinity,
               );
               for (const value of BLOCK.filter(
                 (candidate) => candidate.length <= limit,
@@ -293,7 +294,7 @@ if (!runPostgresTests || !databaseUrl) {
             )) {
               const { name } = column;
               const limit = Number(
-                column.getSQLType().match(/varchar\((\d+)\)/u)?.[1] ?? Infinity,
+                /varchar\((\d+)\)/u.exec(column.sqlType)?.[1] ?? Infinity,
               );
               for (const value of [
                 ...ALLOW.filter((candidate) => candidate.length <= limit),
