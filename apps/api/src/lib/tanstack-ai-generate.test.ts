@@ -16,6 +16,10 @@ import type { AIErrorKind } from "@/api/lib/ai-error";
 import { toSafeId } from "@/api/lib/branded-types";
 import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
+import {
+  MANAGED_PROVIDER_UNAVAILABLE_CODE,
+  managedProviderUnavailable,
+} from "@/api/lib/provider-data-policy";
 import { StructuredOutputBudgetError } from "@/api/lib/structured-output-budget";
 import {
   chatTurnOutputTokens,
@@ -385,6 +389,75 @@ afterEach(() => {
 });
 
 describe("TanStack AI structured output generation", () => {
+  for (const path of [
+    "text",
+    "object",
+    "text-stream",
+    "object-stream",
+  ] as const) {
+    test(`preserves configured provider availability on ${path}`, async () => {
+      const error = managedProviderUnavailable("openrouter");
+      const objectPath = path === "object" || path === "object-stream";
+      queueRun(
+        objectPath
+          ? throwingRun(error)
+          : runErrorRun({
+              code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
+              message: error.message,
+            }),
+      );
+      queueRun(
+        objectPath ? objectRun({ answer: "ok" }) : textRun(["ok"], "stop"),
+      );
+      const options = {
+        caching: noCaching,
+        organizationId: null,
+        orgAIConfig: null,
+        prompt: "Reply with the answer.",
+        role: "chat" as const,
+        serviceTier: "flex" as const,
+        tenantWorkspaceIds: [],
+      };
+      const outputSchema = v.strictObject({ answer: v.string() });
+      const caught = await (async () => {
+        switch (path) {
+          case "text":
+            return await generateTextForTestModel(options);
+          case "object":
+            return await generateObjectForTestModel({
+              ...options,
+              outputSchema,
+            });
+          case "text-stream":
+            for await (const _chunk of streamTextForTestModel(options)) {
+              /* consume stream */
+            }
+            return;
+          case "object-stream":
+            for await (const _chunk of streamObjectForTestModel({
+              ...options,
+              outputSchema,
+            })) {
+              /* consume stream */
+            }
+            return;
+          default:
+            path satisfies never;
+        }
+      })().then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+      expect(caught).toMatchObject({
+        status: 503,
+        code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
+        message: error.message,
+      });
+      expect(classifyAIError(caught)).toBe("provider_unavailable");
+      expect(providerRequests).toHaveLength(1);
+    });
+  }
+
   test("converts Valibot schemas into TanStack JSON-schema-compatible schemas", () => {
     const tanStackSchema = toTanStackValibotSchema(
       v.strictObject({ answer: v.string() }),

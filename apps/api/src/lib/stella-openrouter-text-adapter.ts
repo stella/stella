@@ -1,15 +1,26 @@
-import type { ContentPart } from "@tanstack/ai";
+import { EventType } from "@tanstack/ai";
+import type { AdapterYieldChunk, ContentPart } from "@tanstack/ai";
 import { OpenRouterTextAdapter } from "@tanstack/ai-openrouter";
 import type {
   createOpenRouterText,
   OpenRouterConfig,
 } from "@tanstack/ai-openrouter";
+import { Result } from "better-result";
 
 import { withOptionalsNullable } from "@/api/lib/json-schema/null-optionals";
+import { readProviderStatus } from "@/api/lib/observability/failure-evidence";
+import {
+  managedProviderUnavailable,
+  PROVIDER_DATA_POLICY,
+} from "@/api/lib/provider-data-policy";
 
 type OpenRouterModel = Parameters<typeof createOpenRouterText>[0];
 type OpenRouterTextOptions = Parameters<
   OpenRouterTextAdapter<OpenRouterModel>["chatStream"]
+>[0];
+
+type OpenRouterStructuredOptions = Parameters<
+  OpenRouterTextAdapter<OpenRouterModel>["structuredOutput"]
 >[0];
 
 const DATA_URL_PREFIX = "data:";
@@ -90,6 +101,82 @@ const OPENROUTER_RETRY: NonNullable<OpenRouterConfig["retryConfig"]> = {
   },
   retryConnectionErrors: true,
 };
+
+const isManagedRoutingRefusal = (error: unknown): boolean => {
+  const status = readProviderStatus(error)?.status;
+  return status === 403 || status === 404;
+};
+
+const withManagedRoutingErrors = async function* (
+  stream: AsyncIterable<AdapterYieldChunk>,
+): AsyncGenerator<AdapterYieldChunk> {
+  for await (const chunk of stream) {
+    if (
+      chunk.type !== EventType.RUN_ERROR ||
+      chunk.code === "aborted" ||
+      !isManagedRoutingRefusal(chunk.rawEvent ?? chunk)
+    ) {
+      yield chunk;
+      continue;
+    }
+    const error = managedProviderUnavailable("openrouter");
+    const { rawEvent: _providerEvent, ...event } = chunk;
+    yield {
+      ...event,
+      message: error.message,
+      code: error.code,
+      error: { message: error.message, code: error.code },
+    };
+  }
+};
+
+class ManagedOpenRouterTextAdapter extends StellaOpenRouterTextAdapter {
+  override chatStream(options: OpenRouterTextOptions) {
+    return withManagedRoutingErrors(super.chatStream(options));
+  }
+
+  override structuredOutputStream(options: OpenRouterStructuredOptions) {
+    return withManagedRoutingErrors(super.structuredOutputStream(options));
+  }
+
+  override async structuredOutput(options: OpenRouterStructuredOptions) {
+    const result = await Result.tryPromise({
+      try: () => super.structuredOutput(options),
+      catch: (error) => error,
+    });
+    if (Result.isOk(result)) {
+      return result.value;
+    }
+    if (isManagedRoutingRefusal(result.error)) {
+      throw managedProviderUnavailable("openrouter");
+    }
+    throw result.error;
+  }
+
+  protected override mapOptionsToRequest(options: OpenRouterTextOptions) {
+    const request = super.mapOptionsToRequest(options);
+    return {
+      ...request,
+      provider: {
+        ...request.provider,
+        ...PROVIDER_DATA_POLICY.instance.openrouter.provider,
+      },
+    };
+  }
+}
+
+export const createManagedOpenRouterText = (
+  model: OpenRouterModel,
+  apiKey: string,
+): StellaOpenRouterTextAdapter =>
+  new ManagedOpenRouterTextAdapter(
+    {
+      apiKey,
+      retryConfig: OPENROUTER_RETRY,
+      serverURL: PROVIDER_DATA_POLICY.instance.openrouter.serverURL,
+    },
+    model,
+  );
 
 export const createStellaOpenRouterText = (
   model: OpenRouterModel,

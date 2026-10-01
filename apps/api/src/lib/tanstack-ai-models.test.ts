@@ -324,10 +324,17 @@ describe("TanStack service tiers", () => {
 
 describe("TanStack text model resolution", () => {
   test("reports an instance provider only when TanStack can serve it", () => {
-    expect(hasTanStackInstanceProvider()).toBe(true);
+    expect(hasTanStackInstanceProvider()).toBe(false);
+    const previousProvider = env.AI_PROVIDER;
+    env.AI_PROVIDER = "openrouter";
+    try {
+      expect(hasTanStackInstanceProvider()).toBe(true);
+    } finally {
+      env.AI_PROVIDER = previousProvider;
+    }
   });
 
-  test("allows explicit Bedrock instance provider to use SigV4 without a bearer key", () => {
+  test("checks the managed policy for ambient Bedrock credentials", () => {
     const originalEnv = {
       AI_PROVIDER: env.AI_PROVIDER,
       BEDROCK_API_KEY: env.BEDROCK_API_KEY,
@@ -339,16 +346,13 @@ describe("TanStack text model resolution", () => {
       env.BEDROCK_API_KEY = undefined;
       delete process.env["BEDROCK_API_KEY"];
 
-      const model = getTanStackTextModelForRole("chat", null, {
-        organizationId: orgId,
-      });
+      expect(() =>
+        getTanStackTextModelForRole("chat", null, {
+          organizationId: orgId,
+        }),
+      ).toThrow("Managed AI is not available");
 
-      expect(hasTanStackInstanceProvider()).toBe(true);
-      expect(model).toMatchObject({
-        keySource: "instance",
-        provider: "bedrock",
-      });
-      expect(model.adapter.name).toBe("bedrock-converse");
+      expect(hasTanStackInstanceProvider()).toBe(false);
     } finally {
       Object.assign(env, originalEnv);
       if (originalProcessBedrockApiKey === undefined) {
@@ -359,7 +363,7 @@ describe("TanStack text model resolution", () => {
     }
   });
 
-  test("auto-detects Mistral when stale unsupported provider credentials exist", () => {
+  test("checks the managed policy for an automatically selected provider", () => {
     const originalEnv = {
       AI_PROVIDER: env.AI_PROVIDER,
       ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY,
@@ -389,26 +393,30 @@ describe("TanStack text model resolution", () => {
         "https://example.endpoints.huggingface.cloud/v1";
       env.MISTRAL_API_KEY = "test-mistral-instance-key";
 
-      const model = getTanStackTextModelForRole("chat", null, {
-        organizationId: orgId,
-      });
+      expect(() =>
+        getTanStackTextModelForRole("chat", null, {
+          organizationId: orgId,
+        }),
+      ).toThrow('Managed AI is not available for provider "mistral"');
 
-      expect(hasTanStackInstanceProvider()).toBe(true);
-      expect(model.provider).toBe("mistral");
-      expect(model.adapter.name).toBe("mistral");
+      expect(hasTanStackInstanceProvider()).toBe(false);
     } finally {
       Object.assign(env, originalEnv);
     }
   });
 
-  test("resolves instance OpenAI models through an arbitrary-id compatible adapter", () => {
-    const model = getTanStackTextModelById("openai::gpt-5.4", null, {
-      role: "reasoning",
-      organizationId: orgId,
-    });
+  test("resolves customer OpenAI models through an arbitrary-id compatible adapter", () => {
+    const model = getTanStackTextModelById(
+      "openai::gpt-5.4",
+      orgConfigForProvider("openai"),
+      {
+        role: "reasoning",
+        organizationId: orgId,
+      },
+    );
 
     expect(model).toMatchObject({
-      keySource: "instance",
+      keySource: "byok",
       provider: "openai",
       modelId: "gpt-5.4",
     });
@@ -451,10 +459,14 @@ describe("TanStack text model resolution", () => {
     const originalKey = env.GOOGLE_GENERATIVE_AI_API_KEY;
     env.GOOGLE_GENERATIVE_AI_API_KEY = "test-google-key";
     try {
-      const model = getTanStackTextModelById("google::gemini-3.6-flash", null, {
-        role: "chat",
-        organizationId: null,
-      });
+      const model = getTanStackTextModelById(
+        "google::gemini-3.6-flash",
+        orgConfigForProvider("google"),
+        {
+          role: "chat",
+          organizationId: null,
+        },
+      );
 
       expect(looseOptions(model.modelOptions).thinkingConfig).toBeUndefined();
     } finally {

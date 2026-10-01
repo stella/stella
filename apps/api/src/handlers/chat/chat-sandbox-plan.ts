@@ -4,6 +4,7 @@ import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { logger } from "@/api/lib/observability/logger";
+import { assertManagedProviderAvailable } from "@/api/lib/provider-data-policy";
 import { mintAgentRunToken } from "@/api/mcp/agent-run-token";
 
 const MCP_SERVER_NAME = "stella";
@@ -36,6 +37,8 @@ export const resolveChatSandboxPlan = async (
       message: "Agent sandbox runs are not enabled for this deployment.",
     });
   }
+
+  assertManagedProviderAvailable("agent_sandbox");
 
   const image = env.AGENT_SANDBOX_IMAGE;
   const harnessModel = env.AGENT_SANDBOX_HARNESS_MODEL;

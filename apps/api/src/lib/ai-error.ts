@@ -32,6 +32,7 @@ import {
   readEvidence,
   readProviderStatus,
 } from "@/api/lib/observability/failure-evidence";
+import { MANAGED_PROVIDER_UNAVAILABLE_CODE } from "@/api/lib/provider-data-policy";
 
 export { AI_ERROR_KINDS };
 export type { AIErrorKind };
@@ -181,6 +182,10 @@ const classifyAIErrorInternal = (
       return "unknown";
     }
     seen.add(error);
+  }
+
+  if (isRecord(error) && error["code"] === MANAGED_PROVIDER_UNAVAILABLE_CODE) {
+    return "provider_unavailable";
   }
 
   if (ChatLoopDetectedError.is(error)) {

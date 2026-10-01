@@ -55,7 +55,15 @@ import { withProviderStreamContract } from "@/api/lib/chat/provider-stream-contr
 import { validateDataUrl } from "@/api/lib/data-url";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
-import { createStellaOpenRouterText } from "@/api/lib/stella-openrouter-text-adapter";
+import {
+  assertManagedProviderAvailable,
+  isManagedProviderAvailable,
+  managedProviderUnavailable,
+} from "@/api/lib/provider-data-policy";
+import {
+  createManagedOpenRouterText,
+  createStellaOpenRouterText,
+} from "@/api/lib/stella-openrouter-text-adapter";
 
 const AI_PROVIDER_VALUES = new Set<string>(AI_PROVIDERS);
 const ANTHROPIC_LEGACY_THINKING_BUDGET_TOKENS = 10_000;
@@ -561,17 +569,29 @@ const createExtendedOpenAIAdapter = (
   return openai(modelId, apiKey);
 };
 
-const createExtendedOpenRouterAdapter = (
-  modelId: string,
-  apiKey: string,
-): AnyTextAdapter => {
-  const openrouter = extendAdapter(createStellaOpenRouterText, [
-    createModel(modelId, {
-      input: ["text", "image", "document"] as const,
-      features: ["structured_outputs"] as const,
-      modelOptions: OPENROUTER_CHAT_MODEL_OPTIONS,
-    }),
-  ]);
+type OpenRouterAdapterOptions = {
+  modelId: string;
+  apiKey: string;
+  keySource: "byok" | "instance";
+};
+
+const createExtendedOpenRouterAdapter = ({
+  modelId,
+  apiKey,
+  keySource,
+}: OpenRouterAdapterOptions): AnyTextAdapter => {
+  const openrouter = extendAdapter(
+    keySource === "byok"
+      ? createStellaOpenRouterText
+      : createManagedOpenRouterText,
+    [
+      createModel(modelId, {
+        input: ["text", "image", "document"] as const,
+        features: ["structured_outputs"] as const,
+        modelOptions: OPENROUTER_CHAT_MODEL_OPTIONS,
+      }),
+    ],
+  );
   return openrouter(modelId, apiKey);
 };
 
@@ -778,6 +798,9 @@ export const createTanStackTextAdapterFactory = (
       return adapter;
     };
   }
+  if (options.apiKey === undefined) {
+    assertManagedProviderAvailable(options.provider);
+  }
   const factory = createProviderTextAdapterFactory(options);
   return (modelId) => withProviderStreamContract(factory(modelId), stopReasons);
 };
@@ -824,7 +847,12 @@ const createProviderTextAdapterFactory = ({
         apiKey ?? env.OPENROUTER_API_KEY,
         "OPENROUTER_API_KEY",
       );
-      return (modelId) => createExtendedOpenRouterAdapter(modelId, key);
+      return (modelId) =>
+        createExtendedOpenRouterAdapter({
+          modelId,
+          apiKey: key,
+          keySource: apiKey === undefined ? "instance" : "byok",
+        });
     }
     case "mistral": {
       const key = requireCredential(
@@ -897,7 +925,7 @@ const resolveProvider = (): AIProvider => {
   );
 };
 
-export const hasTanStackInstanceProvider = (): boolean => {
+const hasConfiguredTanStackInstanceProvider = (): boolean => {
   if (env.REQUIRE_PERSONAL_AI_KEY) {
     return false;
   }
@@ -913,6 +941,10 @@ export const hasTanStackInstanceProvider = (): boolean => {
     hasInstanceProviderCredentials(env.AI_PROVIDER)
   );
 };
+
+export const hasTanStackInstanceProvider = (): boolean =>
+  hasConfiguredTanStackInstanceProvider() &&
+  (isMockTextAdapterActive() || isManagedProviderAvailable(resolveProvider()));
 
 const providerRegion = (
   config: OrgAIProviderConfig,
@@ -1064,7 +1096,7 @@ export const requireTanStackAIAvailableForRole = ({
   }
 
   if (!orgConfig) {
-    if (!hasTanStackInstanceProvider()) {
+    if (!hasConfiguredTanStackInstanceProvider()) {
       return Result.err(byokRoleNotConfiguredError(role));
     }
 
@@ -1076,6 +1108,10 @@ export const requireTanStackAIAvailableForRole = ({
         return Result.err(byokProviderRoleUnsupportedError(provider, role));
       }
       return panic("Unsupported TanStack AI role provider.");
+    }
+
+    if (!isMockTextAdapterActive() && !isManagedProviderAvailable(provider)) {
+      return Result.err(managedProviderUnavailable(provider));
     }
 
     return Result.ok(undefined);

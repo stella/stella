@@ -62,6 +62,7 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import { logger } from "@/api/lib/observability/logger";
 import { markAiRequest } from "@/api/lib/observability/request-context";
+import { MANAGED_PROVIDER_UNAVAILABLE_CODE } from "@/api/lib/provider-data-policy";
 import {
   providerSafeJsonSchemaOptionsForTanStackProvider,
   type ProviderSafeJsonSchemaProjectionOptions,
@@ -556,7 +557,7 @@ const throwIfTanStackRunError = (chunk: PublicStreamChunk): void => {
 const tanStackRunError = (chunk: RunErrorEvent): HandlerError => {
   const cause: unknown = chunk.rawEvent ?? providerErrorBody(chunk.message);
   return new HandlerError({
-    status: 502,
+    status: chunk.code === MANAGED_PROVIDER_UNAVAILABLE_CODE ? 503 : 502,
     message: chunk.message,
     ...(chunk.code ? { code: chunk.code } : {}),
     ...(cause === undefined ? {} : { cause }),
@@ -581,9 +582,16 @@ const tanStackRunError = (chunk: RunErrorEvent): HandlerError => {
  * the failure, so an engine-internal error keeps its own identity.
  */
 const withRecoveredProviderStatus = (error: unknown): unknown => {
-  if (!(error instanceof Error) || classifyAIError(error) !== "unknown") {
-    return error;
+  if (!(error instanceof Error)) {return error;}
+  if (hasManagedProviderUnavailableCode(error)) {
+    return new HandlerError({
+      status: 503,
+      code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
+      message: error.message,
+      cause: error,
+    });
   }
+  if (classifyAIError(error) !== "unknown") {return error;}
   const cause = providerErrorBody(error.message);
   if (cause === undefined) {
     return error;
@@ -606,6 +614,7 @@ const shouldRetryWithStandardServiceTier = ({
   serviceTier: AIRequestServiceTier;
 }): boolean =>
   model.provider === "openai" &&
+  !hasManagedProviderUnavailableCode(error) &&
   isDeferredServiceTier(serviceTier) &&
   isRetryableServiceTierFallbackError(error);
 
@@ -619,6 +628,16 @@ const shouldRetryWithStandardServiceTier = ({
 // the retry is decided on is the status the failure is named by; the depth
 // bound keeps a cyclic cause from hanging the request.
 const MAX_CAUSE_DEPTH = 8;
+
+const hasManagedProviderUnavailableCode = (error: unknown): boolean => {
+  let current = error;
+  for (let depth = 0; depth < MAX_CAUSE_DEPTH; depth += 1) {
+    if (!isRecord(current)) {return false;}
+    if (current["code"] === MANAGED_PROVIDER_UNAVAILABLE_CODE) {return true;}
+    current = current["cause"];
+  }
+  return false;
+};
 
 const providerErrorInCauseChain = (
   error: unknown,

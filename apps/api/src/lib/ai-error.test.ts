@@ -34,6 +34,10 @@ import type {
   ChatTerminalError,
   HandlerErrorStatusCode,
 } from "@/api/lib/errors/tagged-errors";
+import {
+  MANAGED_PROVIDER_UNAVAILABLE_CODE,
+  managedProviderUnavailable,
+} from "@/api/lib/provider-data-policy";
 
 const apiCallError = (statusCode: number) =>
   ({
@@ -73,6 +77,18 @@ const providerErrorBody = (code: number, status: string) =>
   }) satisfies Record<string, unknown>;
 
 describe("classifyAIError", () => {
+  test("classifies configured provider availability errors consistently", () => {
+    const error = managedProviderUnavailable("openrouter");
+    for (const input of [
+      error,
+      { code: MANAGED_PROVIDER_UNAVAILABLE_CODE },
+      new Error(error.message, { cause: error }),
+    ]) {
+      expect(classifyAIError(input)).toBe("provider_unavailable");
+      expect(isAnticipatedAIFailure(input)).toBe(true);
+    }
+  });
+
   test("maps chat loop stops to a stable stream error kind", () => {
     const error = new ChatLoopDetectedError({
       message:
