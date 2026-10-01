@@ -55,7 +55,7 @@ test("public tools render the same document content for both session states", as
   for (const path of ["/tools", "/tools/contract-review"]) {
     const signedIn = await page.goto(path, {
       timeout: PUBLIC_SSR_TIMEOUT_MS,
-      waitUntil: "load",
+      waitUntil: "domcontentloaded",
     });
     expect(signedIn).not.toBeNull();
     if (!signedIn) {
@@ -71,10 +71,13 @@ test("public tools render the same document content for both session states", as
       requiredContent: ["<main", "Contract Review"],
       status: signedIn.status(),
     });
-    const main = page.getByRole("main");
+    const main = page.locator("main:not(:has(main))");
+    await expect(main).toHaveCount(1);
     await expect(main.getByRole("heading", { level: 1 })).toBeVisible();
-    const signedInContent = await main.textContent();
-    expect(signedInContent.length).toBeGreaterThan(0);
+    const [signedInContent] = v.parse(
+      v.tuple([identityValue]),
+      await main.allInnerTexts(),
+    );
     const cookies = await context.cookies();
     expect(cookies.length).toBeGreaterThan(0);
     await context.clearCookies();
@@ -85,7 +88,7 @@ test("public tools render the same document content for both session states", as
     expect(await anonymousSession.json()).toBeNull();
     const anonymous = await page.goto(path, {
       timeout: PUBLIC_SSR_TIMEOUT_MS,
-      waitUntil: "load",
+      waitUntil: "domcontentloaded",
     });
     expect(anonymous).not.toBeNull();
     if (!anonymous) {
