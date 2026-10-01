@@ -1310,24 +1310,11 @@ jobs:
             DATABASE_URL=postgresql://invalid bun --no-env-file run knip --production --strict --no-progress --include unlisted,unresolved --workspace "$workspace"
           done
 
-      - name: Knip unused-dependency checks
+      - name: Knip workspace dependency checks
         if: needs.ci-plan.outputs.package_checks_required == 'true'
-        # Complements the production import gate above: flags declared
-        # `dependencies`/`devDependencies` that no file in the workspace
-        # imports (non-production run so test/e2e/tooling files count as
-        # usage). Scoped to the shipping apps, matching the loop above.
-        #
-        # Only the `dependencies` issue type is enforced here. `exports`
-        # and `types` are no longer off: they are budgeted repo-wide by the
-        # dead-export step below, which counts them per workspace and lets
-        # the count only fall. `files` stays OFF (see the `exclude` in
-        # knip.json): the unused-file set is dominated by feature slices
-        # whose ship-or-delete call is a product decision (e.g. the
-        # flag-gated time-billing components), not mechanical dead code.
-        run: |
-          for workspace in apps/api apps/legal-atlas-runner apps/web; do
-            DATABASE_URL=postgresql://invalid bun --no-env-file run knip --no-progress --include dependencies --workspace "$workspace"
-          done
+        # Include test and tooling imports in every workspace. The production
+        # gate above also checks deployment boundaries for the server apps.
+        run: bun run dependencies:check
 
       - name: Knip dead-export check (packages/cli)
         if: needs.ci-plan.outputs.package_checks_required == 'true'
@@ -1420,7 +1407,7 @@ jobs:
       # publishable package.
       - name: Test published export artifact guard
         if: needs.ci-plan.outputs.package_checks_required == 'true'
-        run: bun test scripts/published-export-guards.test.ts
+        run: bun test scripts/published-export-guards.test.ts scripts/check-published-exports.test.ts
 
       - name: Test publish manifest transformation
         # scripts/publish-manifest.ts imports better-result, so this needs the

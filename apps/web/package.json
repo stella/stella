@@ -167,6 +167,7 @@
     "@types/react-dom": "catalog:react19",
     "@vitejs/plugin-react": "catalog:",
     "bun-types": "catalog:",
+    "happy-dom": "20.14.5",
     "oxc-transform-react": "catalog:",
     "rollup-plugin-visualizer": "^7.1.1",
     "tailwindcss": "catalog:",
