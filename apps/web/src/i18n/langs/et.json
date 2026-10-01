@@ -487,6 +487,17 @@
     "failedToStartTimer": "Taimeri käivitamine ebaõnnestus",
     "failedToStopTimer": "Taimeri peatamine ebaõnnestus",
     "filterStatus": "Filtreeri oleku järgi",
+    "globalTimer": {
+      "confirm": "Kinnita aeg",
+      "discard": "Loobu taimerist",
+      "matterInaccessible": "Valige toimik, millele teil on juurdepääs.",
+      "narrativeRequired": "Enne aja kinnitamist lisage kirjeldus.",
+      "pause": "Peata",
+      "periodLocked": "See kuu on lukustatud. Paluge administraatoril see avada.",
+      "resume": "Jätka",
+      "timerUnavailable": "See taimer pole enam saadaval. Värskendage loendit.",
+      "title": "Taimerid"
+    },
     "hourlyRateMustBeNonNegative": "Tunnitasu ei tohi olla negatiivne",
     "hours": "Tunnid",
     "invoiceNarrative": "Arve selgitus",
@@ -978,6 +989,7 @@
         "description": "Kontrollige veebisaiti ja sihtmärki hoolikalt. Lehe sisu ei ole usaldusväärne ega saa järgmist toimingut lubada.",
         "modeReads": "Lehtede lugemine toimub selle seansi lõpuni küsimata.",
         "question": "Kas lubada see brauseritoiming?",
+        "realValues": "See veebisait saab allpool näidatud tegelikud väärtused. Anonüümitud režiim kehtib ainult selle kohta, mida AI näeb.",
         "within": "Asukoht"
       },
       "denied": "Keelatud",
@@ -1341,7 +1353,8 @@
       "interrupted": "Katkes enne lõpetamist",
       "output": "Väljund",
       "sourceCode": "Lähtekood",
-      "toggleDetails": "Üksikasjade lülitamine"
+      "toggleDetails": "Üksikasjade lülitamine",
+      "unrestoredFields": "Anonüümitud režiimis ei õnnestunud {count, plural, one {# välja} other {# välja}} tegelike väärtustega täita. Kontrollige: {fields}"
     },
     "unsupportedFileType": "Toetamata failitüüp",
     "uploadFailed": "Faili töötlemine ebaõnnestus",

@@ -14,6 +14,10 @@ import {
   ActionAdmissionError,
   withActionAdmission,
 } from "@/api/lib/rate-limit/action-admission";
+import {
+  currentActionCostIdentity,
+  type ActionCostObservation,
+} from "@/api/lib/usage/action-costs/context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const context = (signal?: AbortSignal) => ({
@@ -181,6 +185,51 @@ describe("finite HTTP action admission", () => {
       }
       expect(identities.at(0)).not.toEqual(identities.at(1));
     });
+  });
+
+  test("observation-only HTTP execution keeps identity without coordination", async () => {
+    const previous = env.FEATURE_ACTION_COST_RECORDS;
+    env.FEATURE_ACTION_COST_RECORDS = true;
+    try {
+      await withFeature(false, async () => {
+        const rows: ActionCostObservation[] = [];
+        const endpoint = createSafeRootHandler(
+          config,
+          async function* (ctx) {
+            expect(
+              currentActionCostIdentity(ctx.session.activeOrganizationId),
+            ).toMatchObject({
+              actionKind: config.actionAdmission.actionKind,
+            });
+            return Result.ok({ ok: true });
+          },
+          {
+            admit: async (options) =>
+              await withActionAdmission({
+                ...options,
+                costRecorder: {
+                  enqueue: (row) => {
+                    rows.push(row);
+                  },
+                  estimate: () => null,
+                  callRate: () => null,
+                },
+                redis: {
+                  send: async () => {
+                    throw new TypeError("Unexpected coordination");
+                  },
+                },
+              }),
+          },
+        );
+        expect(await endpoint.handler(asTestRaw(context()))).toEqual({
+          ok: true,
+        });
+        expect(rows.map((row) => row.type)).toEqual(["action", "action"]);
+      });
+    } finally {
+      env.FEATURE_ACTION_COST_RECORDS = previous;
+    }
   });
 
   test("flag off preserves payload, typed errors and request signal without coordination", async () => {

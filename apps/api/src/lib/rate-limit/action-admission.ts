@@ -30,6 +30,14 @@ import {
   createRedisClient,
 } from "@/api/lib/redis-client";
 import { coordinationKey, type CoordinationKey } from "@/api/lib/redis-keys";
+import {
+  runObservedAction,
+  type ActionCostRecorder,
+} from "@/api/lib/usage/action-costs/context";
+import {
+  getActionCostRecorder,
+  reportMissingActionCostIdentity,
+} from "@/api/lib/usage/action-costs/recorder";
 
 type RedisCommands = {
   send: (command: string, args: string[]) => Promise<unknown>;
@@ -218,6 +226,7 @@ type ActionAdmissionOptions<T = unknown> = {
   redisReady?: () => Promise<RedisCommands>;
   createId?: () => string;
   timing?: AdmissionTiming;
+  costRecorder?: ActionCostRecorder | null;
 } & (
   | {
       execution: "background-job";
@@ -552,6 +561,47 @@ const settledAdmissionOutcome = <T>(
   return outcome;
 };
 
+type ObservedAdmissionRunOptions<T> = Pick<
+  ActionAdmissionOptions,
+  "organizationId" | "userId"
+> & {
+  periodIdentity: ActionAdmissionOptions["periodIdentity"];
+  costRecorder: ActionAdmissionOptions["costRecorder"];
+  run: (signal: AbortSignal) => Promise<T>;
+};
+
+const createObservedAdmissionRun = <T>({
+  organizationId,
+  userId,
+  periodIdentity,
+  costRecorder,
+  run,
+}: ObservedAdmissionRunOptions<T>) => {
+  const recorder =
+    costRecorder === null
+      ? undefined
+      : (costRecorder ?? getActionCostRecorder());
+  return async (signal: AbortSignal): Promise<T> => {
+    const executeRun = async () => {
+      signal.throwIfAborted();
+      return await run(signal);
+    };
+    if (recorder === undefined) {
+      return await executeRun();
+    }
+    if (periodIdentity === undefined) {
+      reportMissingActionCostIdentity();
+      return await executeRun();
+    }
+    return await runObservedAction({
+      identity: { organizationId, ...periodIdentity },
+      userId,
+      recorder,
+      run: executeRun,
+    });
+  };
+};
+
 /**
  * The disabled branch never opens Valkey or reads admission configuration.
  * Nested admission must be awaited: same-caller work shares the parent's lease
@@ -572,10 +622,18 @@ export const withActionAdmission = async <T>({
   redisReady = admissionRedis.ready,
   createId = () => Bun.randomUUIDv7(),
   timing = defaultTiming,
+  costRecorder,
 }: ActionAdmissionOptions<T>): Promise<Result<T, unknown>> => {
+  const observedRun = createObservedAdmissionRun({
+    organizationId,
+    userId,
+    periodIdentity,
+    costRecorder,
+    run,
+  });
   if (!enabled) {
     return await Result.tryPromise({
-      try: async () => await run(new AbortController().signal),
+      try: async () => await observedRun(new AbortController().signal),
       catch: (error: unknown) => error,
     });
   }
@@ -611,7 +669,7 @@ export const withActionAdmission = async <T>({
       redisReady,
       execution,
       periodReservation,
-      run,
+      run: observedRun,
     });
   }
 
@@ -741,10 +799,10 @@ export const withActionAdmission = async <T>({
   try {
     outcome = await Result.tryPromise({
       try: async () =>
-        await admissionScope.run(executionScope, async () => {
-          controller.signal.throwIfAborted();
-          return await run(controller.signal);
-        }),
+        await admissionScope.run(
+          executionScope,
+          async () => await observedRun(controller.signal),
+        ),
       catch: (error: unknown) => error,
     });
   } finally {

@@ -6,6 +6,7 @@ import {
   CHAT_TURN_ID_HEADER,
   STELLA_API_VERSION_PREFIX,
 } from "@stll/api-contract";
+import { observeRegistryRequests } from "@stll/business-registries/shared/request-observer";
 import { redisConnectionConfig } from "@stll/redis-config";
 
 import { initApiBackgroundWorkers } from "@/api/api-background-workers";
@@ -79,7 +80,6 @@ import { meRoute } from "@/api/handlers/me/routes";
 import { memoriesRoute } from "@/api/handlers/memories/routes";
 import { notificationsRoute } from "@/api/handlers/notifications/routes";
 import { numberSeriesRoute } from "@/api/handlers/number-series/routes";
-import { operatorRoute } from "@/api/handlers/operator/routes";
 import { organizationSettingsRoute } from "@/api/handlers/organization-settings/routes";
 import { playbooksRoute } from "@/api/handlers/playbooks/routes";
 import { playbookRunsRoute } from "@/api/handlers/playbooks/run-route";
@@ -179,6 +179,14 @@ import {
 import { startSse, stopSse } from "@/api/lib/sse";
 import { clearByokAdapterCache } from "@/api/lib/tanstack-ai-models";
 import { isUploadRateLimitedPath } from "@/api/lib/upload-rate-limit";
+import {
+  ACTION_COST_CALL_KIND,
+  recordExternalActionCall,
+} from "@/api/lib/usage/action-costs/context";
+import {
+  flushActionCostRecords,
+  reportActionCostObservationFailure,
+} from "@/api/lib/usage/action-costs/recorder";
 import { isLocalDevOpen, runtimeMode } from "@/api/runtime-mode";
 import {
   API_SHUTDOWN_OUTCOME,
@@ -415,7 +423,6 @@ const api = new Elysia()
   )
   .use(localDevPublicRoutes)
   .use(smokeRoute)
-  .use(operatorRoute)
   .mount(getAuth().handler)
   .group(STELLA_API_VERSION_PREFIX, (app) =>
     app
@@ -621,6 +628,11 @@ const startServer = async (): Promise<void> => {
     logger.info("redis.connection.mode", { mode });
   }
 
+  const stopRegistryObservation = observeRegistryRequests({
+    onRequest: () =>
+      recordExternalActionCall(ACTION_COST_CALL_KIND.registryRequest),
+    onError: reportActionCostObservationFailure,
+  });
   startMemoryPressureHandler();
 
   // Start the SSE keep-alive heartbeat and cross-instance Redis subscriber
@@ -714,6 +726,11 @@ const startServer = async (): Promise<void> => {
       stopSse,
       timeout: Bun.sleep(WORKER_SHUTDOWN_TIMEOUT_MS),
     });
+    await Promise.race([
+      flushActionCostRecords(),
+      Bun.sleep(WORKER_SHUTDOWN_TIMEOUT_MS),
+    ]);
+    stopRegistryObservation();
     closeActionAdmissionRedis();
     switch (outcome) {
       case API_SHUTDOWN_OUTCOME.drained:
