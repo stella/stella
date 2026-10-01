@@ -153,7 +153,12 @@ describe("document-stage observation windows", () => {
                 observations.push(event);
               },
             });
-      await expect(run).rejects.toBe(error);
+      // bun-types declares `.rejects` matchers as void; capture the rejection.
+      const rejection: unknown = await run.then(
+        () => null,
+        (error: unknown) => error,
+      );
+      expect(rejection).toBe(error);
       expect(
         observations.filter(
           (event) => event.event === DOCUMENT_FETCH_EVENT.fetchOutcome,
@@ -366,7 +371,13 @@ describe("document-stage observation windows", () => {
       },
       now: () => 0,
     });
-    await expect(run).rejects.toBe(error);
+    // bun-types declares `.rejects` matchers as void, so awaiting one trips
+    // type-aware lint; capture the rejection explicitly instead.
+    const rejection: unknown = await run.then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(rejection).toBe(error);
     expect(observations.at(0)).toEqual({
       event: DOCUMENT_FETCH_EVENT.fetchOutcome,
       source: ADAPTER_KEYS.CZ_NSS,
