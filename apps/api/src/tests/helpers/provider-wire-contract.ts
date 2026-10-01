@@ -833,16 +833,20 @@ export const replayWireScenario = async ({
   cancelAfterFirstDelta,
   cassette,
   chunking,
+  recordedRetryResponses,
   replay,
 }: {
   cancelAfterFirstDelta?: boolean | undefined;
   cassette: ProviderWireCassette;
   /** Where the bodies are cut into reads; the replay's default otherwise. */
   chunking?: Chunking | undefined;
+  /** Keep these responses on the SDK's recorded backoff before the hint. */
+  recordedRetryResponses?: number | undefined;
   replay: ProviderWireReplay;
 }) => {
   replay.serve(cassette, {
     chunking,
+    recordedRetryResponses,
     ...(cancelAfterFirstDelta === true
       ? { holdAfterBytes: holdPoint(cassette) }
       : {}),

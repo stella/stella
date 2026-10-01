@@ -44,6 +44,7 @@ jobs:
       actions: read
     outputs:
       trusted: ${{ steps.check.outputs.trusted }}
+      playwright_image: ${{ steps.browser-image.outputs.image }}
       # `fast` runs guards, lint, typecheck, unit tests, builds, and the
       # path-scoped image smokes. `full` adds the heavy suites (browsers,
       # services, other platforms). Every heavy job gates on
@@ -178,6 +179,11 @@ jobs:
           fetch-depth: 0
           filter: blob:none
           persist-credentials: false
+
+      - name: Resolve browser image
+        id: browser-image
+        if: steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch'
+        run: echo "image=$(cat .github/actions/setup-playwright/image.txt)" >> "$GITHUB_OUTPUT"
 
       - name: Check changed file scope
         if: >-
@@ -1761,7 +1767,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     container:
-      image: mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
+      image: ${{ needs.ci-plan.outputs.playwright_image }}
       options: --init --ipc=host
     defaults:
       run:
@@ -2800,7 +2806,7 @@ jobs:
           E2E_EXECUTION_PROFILE: network-baseline
           E2E_EXPECT_DEV_ROUTES: "false"
           PLAYWRIGHT_BLOB_OUTPUT_NAME: report-network-baseline.zip
-        run: bun --filter @stll/web test:e2e -- route-smoke.spec.ts
+        run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e -- route-smoke.spec.ts
 
       # Playwright clears its report directory at the next invocation.
       - name: Upload network baseline blob report
@@ -2822,7 +2828,7 @@ jobs:
           E2E_EXECUTION_PROFILE: ci-production-parallel
           E2E_EXPECT_DEV_ROUTES: "false"
         run: >-
-          bun --filter @stll/web test:e2e --
+          bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e --
           --grep-invert='route-smoke'
           --shard=${{ matrix.shard }}/2
 
@@ -2837,7 +2843,7 @@ jobs:
           E2E_EXPECT_DEV_ROUTES: "false"
           E2E_OUTPUT_DIR: test-results/route-smoke-${{ matrix.shard }}
         run: >-
-          bun --filter @stll/web test:e2e --
+          bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e --
           --project=route-smoke
           --shard=${{ matrix.shard }}/2
           --grep-invert="route-smoke.spec.ts"
@@ -2882,8 +2888,6 @@ jobs:
       && needs.ci-plan.outputs.stack_redaction_browsers_required == 'true'
       && needs.ci-plan.outputs.suite_depth == 'full'
     runs-on: ubuntu-latest
-    # The Playwright system dependencies come from the runner's apt mirror,
-    # whose throughput varies widely between runs.
     timeout-minutes: 35
     permissions:
       contents: read
@@ -2901,21 +2905,13 @@ jobs:
         env:
           NPM_TOKEN: ""
 
-      # Playwright installs pinned browsers; the runner's Chrome channel is unrelated.
-      - name: Disable runner Chrome apt source
-        run: |
-          chrome_apt_source=/etc/apt/sources.list.d/google-chrome.list
-          if [[ -f "$chrome_apt_source" ]]; then
-            sudo mv "$chrome_apt_source" "$chrome_apt_source.disabled"
-          fi
-
-      - name: Install Firefox and WebKit
-        run: |
-          bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/install-deps.sh" firefox webkit
-          bunx playwright install firefox webkit
+      - name: Verify Firefox and WebKit in the pinned image
+        uses: ./.github/actions/setup-playwright
+        with:
+          browsers: firefox webkit
 
       - name: Test browser stack redaction
-        run: bun --filter @stll/web test:e2e:stack-redaction
+        run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:stack-redaction
 
   e2e-vite-canary:
     needs: ci-plan
@@ -3016,13 +3012,13 @@ jobs:
           E2E_EXPECT_DEV_ROUTES: "true"
           PLAYWRIGHT_BLOB_OUTPUT_NAME: report-vite-canary.zip
         run: >-
-          bun --filter @stll/web test:e2e --
+          bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e --
           e2e/specs/vite-dependency-canary.spec.ts
           --project chromium
 
       - name: Test anonymized PDF export
         if: steps.e2e-stack.outputs.status == 'ready'
-        run: bun --filter @stll/web test:e2e:anonymized-export
+        run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:anonymized-export
 
       # Own output dir, not uploaded: the blob reporter clears its directory
       # per invocation, so sharing it would drop the canary blob, and a collab
@@ -3033,7 +3029,7 @@ jobs:
         env:
           E2E_EXPECT_DEV_ROUTES: "true"
           E2E_OUTPUT_DIR: test-results-collab
-        run: bun --filter @stll/web test:e2e:collab -- --project chromium
+        run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:collab -- --project chromium
 
       - name: Show API errors after a Vite canary failure
         if: failure() && steps.e2e-stack.outputs.status == 'ready'
@@ -3135,7 +3131,7 @@ jobs:
         uses: ./.github/actions/setup-playwright
 
       - name: Check landing islands
-        run: E2E_LANDING_URL=http://localhost:4321 bun --filter @stll/web test:e2e:landing
+        run: E2E_LANDING_URL=http://localhost:4321 bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:landing
 
       - name: Stop landing preview server
         if: always()
