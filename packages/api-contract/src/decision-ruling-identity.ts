@@ -12,6 +12,7 @@ export type RulingIdentityInput = {
   readonly country: string;
   readonly court?: string | null | undefined;
   readonly courtId?: string | null | undefined;
+  /** Caller-validated ISO calendar date; derivation does not rewrite it. */
   readonly decisionDate?: string | null | undefined;
   readonly caseNumber?: string | null | undefined;
   readonly identifiers?: readonly DecisionIdentifier[] | undefined;
