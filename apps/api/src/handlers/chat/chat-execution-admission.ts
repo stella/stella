@@ -7,6 +7,7 @@ import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   ActionAdmissionError,
+  actionAdmissionRefusal,
   withActionAdmission,
 } from "@/api/lib/rate-limit/action-admission";
 
@@ -75,19 +76,19 @@ export const startChatExecutionAdmission = async ({
   }).then((outcome) => {
     if (Result.isError(outcome)) {
       if (state.status === "acquiring") {
-        const busy =
-          ActionAdmissionError.is(outcome.error) &&
-          outcome.error.reason === "busy";
+        const error = outcome.error;
         ready.resolve(
           Result.err(
-            new HandlerError({
-              status: busy ? 429 : 503,
-              code: busy ? "rate_limited" : "service_unavailable",
-              message: busy
-                ? "Concurrent action limit reached"
-                : "Action admission is unavailable",
-              cause: outcome.error,
-            }),
+            ActionAdmissionError.is(error)
+              ? new HandlerError({
+                  ...actionAdmissionRefusal(error),
+                  cause: error,
+                })
+              : new HandlerError({
+                  status: 503,
+                  message: "Action admission is unavailable",
+                  cause: error,
+                }),
           ),
         );
       } else {

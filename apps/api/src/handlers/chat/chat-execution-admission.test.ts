@@ -1,9 +1,18 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import {
+  ACTION_ADMISSION_CODES,
+  ACTION_ADMISSION_REFUSALS,
+} from "@stll/api-contract/action-admission";
+
+import { env } from "@/api/env";
 import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
+import {
+  ActionAdmissionError,
+  withActionAdmission,
+} from "@/api/lib/rate-limit/action-admission";
 
 import { startChatExecutionAdmission } from "./chat-execution-admission";
 
@@ -85,6 +94,46 @@ const executionOf = async (
 };
 
 describe("chat execution admission owns settlement independently of transport readiness", () => {
+  test("every preflight refusal keeps its canonical code and recovery metadata", async () => {
+    const previousContact = env.ACTION_LIMIT_CONTACT_URL;
+    env.ACTION_LIMIT_CONTACT_URL = "https://example.test/contact";
+    try {
+      for (const reason of [
+        "busy",
+        "period_exhausted",
+        "not_enabled",
+        "unavailable",
+      ] as const) {
+        const error = new ActionAdmissionError({
+          reason,
+          message: "Private coordination detail",
+        });
+        const admitted = await startChatExecutionAdmission({
+          enabled: true,
+          organizationId,
+          userId,
+          admit: async () => Result.err(error),
+        });
+        expect(Result.isError(admitted)).toBe(true);
+        if (Result.isError(admitted)) {
+          const metadata = ACTION_ADMISSION_REFUSALS[error.code];
+          expect(admitted.error).toMatchObject({
+            code: error.code,
+            status: metadata.status,
+            message: metadata.message,
+            retryable: metadata.retryable,
+            cause: error,
+          });
+          expect(admitted.error.contactUrl).toBe(
+            metadata.status === 403 ? env.ACTION_LIMIT_CONTACT_URL : undefined,
+          );
+        }
+      }
+    } finally {
+      env.ACTION_LIMIT_CONTACT_URL = previousContact;
+    }
+  });
+
   test("a ready transport keeps its slot until close and repeated close releases only once", async () => {
     const store = coordination();
     const options = {
@@ -135,7 +184,9 @@ describe("chat execution admission owns settlement independently of transport re
       if (Result.isError(acquired)) {
         expect(acquired.error.status).toBe(mode === "busy" ? 429 : 503);
         expect(acquired.error.code).toBe(
-          mode === "busy" ? "rate_limited" : "service_unavailable",
+          mode === "busy"
+            ? ACTION_ADMISSION_CODES.concurrencyBusy
+            : ACTION_ADMISSION_CODES.admissionUnavailable,
         );
       }
       expect(store.counts()).toEqual({

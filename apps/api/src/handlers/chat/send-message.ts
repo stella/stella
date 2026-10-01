@@ -251,6 +251,10 @@ import { resolveMemorySourceWorkspaceIds } from "@/api/lib/memory/memory-provena
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { sanitizeForPrompt, untrustedText } from "@/api/lib/prompt-safety";
+import {
+  ActionAdmissionError,
+  actionAdmissionRefusal,
+} from "@/api/lib/rate-limit/action-admission";
 import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
 import { extractFileTextResult } from "@/api/lib/search/extract-content";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
@@ -562,12 +566,17 @@ export class ChatSendLifecycle {
     if (!this.admission?.signal.aborted) {
       return Result.ok(undefined);
     }
+    const error = this.admission.signal.reason;
     return Result.err(
       new HandlerError({
-        status: 503,
-        code: "service_unavailable",
-        message: "Action admission is unavailable",
-        cause: this.admission.signal.reason,
+        ...(ActionAdmissionError.is(error)
+          ? actionAdmissionRefusal(error)
+          : {
+              status: 503 as const,
+              code: "service_unavailable",
+              message: "Action admission is unavailable",
+            }),
+        cause: error,
       }),
     );
   }

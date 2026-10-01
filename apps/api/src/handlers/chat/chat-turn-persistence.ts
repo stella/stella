@@ -1366,9 +1366,17 @@ export const settleChatTurnOnTx = async ({
         return {
           ...base,
           assistantMessageId,
-          failureCode: failureCode ?? AI_ERROR_FAILURE_CODE[outcome.error],
+          // Admission detail belongs to the server-owned message metadata;
+          // the row uses the existing internal code accepted by its CHECK.
+          failureCode:
+            outcome.refusal === undefined
+              ? (failureCode ?? AI_ERROR_FAILURE_CODE[outcome.error])
+              : "internal",
+
           failureRetryable:
-            failureRetryable ?? AI_ERROR_RETRYABLE[outcome.error],
+            outcome.refusal?.retryable ??
+            failureRetryable ??
+            AI_ERROR_RETRYABLE[outcome.error],
           interactionToolCallId: null,
           interactionType: null,
           interruptionReason: null,

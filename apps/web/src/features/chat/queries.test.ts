@@ -16,7 +16,12 @@ import {
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
   CHAT_TURN_INTENT,
 } from "@stll/api-contract";
+import {
+  ACTION_ADMISSION_CODES,
+  ACTION_ADMISSION_REFUSALS,
+} from "@stll/api-contract/action-admission";
 
+import { getChatAssistantTurnError } from "@/components/chat/chat-ui-tools";
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import { selectCreateDocumentDrafts } from "@/components/chat/create-document-draft.logic";
 import { chatKeys } from "@/features/chat/chat-query-contract";
@@ -44,6 +49,7 @@ import {
 } from "@/features/chat/queries";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
+import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
 import { APIError } from "@/lib/errors/api";
 import { toSafeId, type SafeId } from "@/lib/safe-id";
 import { workspaceActivityOptions } from "@/lib/workspaces/queries";
@@ -2673,6 +2679,69 @@ describe("chat runtime", () => {
         },
       },
     });
+  });
+
+  test("native chat admission refusals render identically over HTTP, stream and reload", async () => {
+    for (const code of Object.values(ACTION_ADMISSION_CODES)) {
+      const metadata = ACTION_ADMISSION_REFUSALS[code];
+      const refusal = {
+        code,
+        ...metadata,
+        contactUrl: "https://example.test/contact",
+      };
+      const stored = {
+        id: assistantMessageId,
+        role: "assistant",
+        parts: [],
+        metadata: {
+          turnOutcome: { type: "failed", error: "unknown", refusal },
+        },
+      } satisfies PersistedChatMessage;
+      const expected = actionAdmissionOutcome(
+        getChatAssistantTurnError(stored),
+      );
+      for (const transport of ["http", "stream"] as const) {
+        const threadId = toChatThreadId(`thread-${code}-${transport}`);
+        globalThis.fetch = createFetchMock(async () =>
+          transport === "http"
+            ? new Response(JSON.stringify(refusal), {
+                headers: { "Content-Type": "application/json" },
+                status: metadata.status,
+              })
+            : createSseResponse([
+                { type: "RUN_STARTED", threadId, runId: "run-refused" },
+                {
+                  type: "RUN_ERROR",
+                  code,
+                  message: metadata.message,
+                  rawEvent: refusal,
+                },
+              ]),
+        );
+        const reported: Error[] = [];
+        const runtime = createChatRuntime({
+          activeTurnId: null,
+          context: undefined,
+          initialMessages: [],
+          key: { scope: "global", threadId },
+          onError: (error) => {
+            reported.push(error);
+          },
+          onFinish: () => {},
+          reloadThread: () => {},
+        });
+        await sendThreadChatMessage(
+          runtime,
+          createOutgoingMessage("22222222-2222-4222-8222-222222222204"),
+        );
+        expect(reported).toHaveLength(1);
+        expect(actionAdmissionOutcome(reported.at(0))).toEqual(expected);
+        expect(actionAdmissionOutcome(runtime.getSnapshot().error)).toEqual(
+          expected,
+        );
+        expect(runtime.getSnapshot().status).toBe("error");
+      }
+    }
   });
 
   // A refused chat request must not reach the user as the connection

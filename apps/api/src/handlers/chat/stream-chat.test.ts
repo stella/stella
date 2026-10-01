@@ -27,6 +27,10 @@ import {
   CHAT_TRANSPORT_ERROR_CODE,
 } from "@stll/anonymize-chat";
 import { BUILT_IN_CHAT_TOOL_POLICY_KINDS } from "@stll/api-contract";
+import {
+  ACTION_ADMISSION_CODES,
+  ACTION_ADMISSION_REFUSALS,
+} from "@stll/api-contract/action-admission";
 
 import {
   createChatAttachmentPart,
@@ -812,7 +816,16 @@ describe("admission loss preserves complete interaction checkpoints", () => {
         });
         expect(finish?.outcome).toEqual(
           checkpoint === "incomplete"
-            ? { type: "failed", error: "provider_unavailable" }
+            ? {
+                type: "failed",
+                error: "provider_unavailable",
+                refusal: {
+                  code: ACTION_ADMISSION_CODES.admissionUnavailable,
+                  ...ACTION_ADMISSION_REFUSALS[
+                    ACTION_ADMISSION_CODES.admissionUnavailable
+                  ],
+                },
+              }
             : {
                 type: "awaiting-user",
                 interaction: { type: checkpoint, toolCallId: "call-1" },
@@ -820,7 +833,7 @@ describe("admission loss preserves complete interaction checkpoints", () => {
         );
         expect(
           emitted.some((chunk) => chunk.type === EventType.RUN_ERROR),
-        ).toBe(false);
+        ).toBe(checkpoint === "incomplete" && exit !== "teardown");
         expect(
           finish?.responseMessage.parts.some(
             (part) => part.type === "tool-call",
@@ -942,7 +955,16 @@ describe("late admission loss retains a completed and charged response", () => {
         expect(finish?.outcome).toEqual(
           completed
             ? { type: "completed" }
-            : { type: "failed", error: "provider_unavailable" },
+            : {
+                type: "failed",
+                error: "provider_unavailable",
+                refusal: {
+                  code: ACTION_ADMISSION_CODES.admissionUnavailable,
+                  ...ACTION_ADMISSION_REFUSALS[
+                    ACTION_ADMISSION_CODES.admissionUnavailable
+                  ],
+                },
+              },
         );
         expect(finish?.responseMessage.parts).toContainEqual({
           type: "text",
@@ -951,7 +973,7 @@ describe("late admission loss retains a completed and charged response", () => {
         expect(charges).toBe(completed ? 1 : 0);
         expect(
           emitted.some((chunk) => chunk.type === EventType.RUN_ERROR),
-        ).toBe(false);
+        ).toBe(!completed && exit !== "teardown");
         if (completed && exit !== "teardown") {
           expect(
             emitted.filter((chunk) => chunk.type === EventType.RUN_FINISHED),

@@ -178,7 +178,10 @@ import type { ChatTerminalError } from "@/api/lib/errors/tagged-errors";
 import { errorFingerprint } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { providerSafeJsonSchemaOptionsForTanStackProvider } from "@/api/lib/provider-safe-json-schema";
-import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
+import {
+  ActionAdmissionError,
+  actionAdmissionRefusal,
+} from "@/api/lib/rate-limit/action-admission";
 import {
   chatTurnOutputTokens,
   mergeGenerationOptions,
@@ -1938,8 +1941,8 @@ const createStreamSettlement = ({
       abortSignal: streamControlSignal(abortSignal, runSignal),
       deadlineSignal,
     });
-  const admissionLossOutcome = () =>
-    resolveAdmissionLossOutcome({
+  const admissionLossOutcome = (): ChatTurnOutcome => {
+    const outcome = resolveAdmissionLossOutcome({
       deferredRunFinishedChunks,
       getRestorableCheckpoint,
       getResponseMessage,
@@ -1947,6 +1950,19 @@ const createStreamSettlement = ({
       producedAnswer: getProducedAnswer(),
       toolCallsWithCompleteInput,
     });
+    if (
+      outcome.type !== "failed" ||
+      outcome.error === "empty_completion" ||
+      !ActionAdmissionError.is(abortSignal.reason)
+    ) {
+      return outcome;
+    }
+    return {
+      type: "failed",
+      error: outcome.error,
+      refusal: actionAdmissionRefusal(abortSignal.reason),
+    };
+  };
   const terminalize = async ({
     flushProcessor = false,
     outcome,
@@ -2004,11 +2020,27 @@ const createStreamSettlement = ({
     terminal.state = "settled";
     await onFinish({ outcome, responseMessage: terminalResponseMessage });
   };
+  const admissionFailureChunks = function* (
+    outcome: ChatTurnOutcome,
+  ): Generator<PublicStreamChunk> {
+    if (outcome.type !== "failed" || outcome.refusal === undefined) {
+      return;
+    }
+    const refusal = outcome.refusal;
+    yield {
+      type: EventType.RUN_ERROR,
+      code: refusal.code,
+      message: refusal.message,
+      rawEvent: refusal,
+      timestamp: Temporal.Now.instant().epochMilliseconds,
+    };
+  };
   return {
     admissionLost,
     admissionCutByControl,
     cutShortOutcome,
     admissionLossOutcome,
+    admissionFailureChunks,
     terminalize,
   };
 };
@@ -2149,6 +2181,7 @@ export const processServerChatStream = async function* ({
     admissionCutByControl,
     cutShortOutcome,
     admissionLossOutcome,
+    admissionFailureChunks,
     terminalize,
   } = createStreamSettlement({
     abortSignal,
@@ -2209,15 +2242,14 @@ export const processServerChatStream = async function* ({
         (admissionLost() || admissionCutByControl())
       ) {
         usage = tokenUsageFromTerminalChunk(sourceChunk) ?? usage;
-        await terminalize({
-          flushProcessor: admissionCutByControl(),
-          outcome: admissionCutByControl()
-            ? cutShortOutcome()
-            : admissionLossOutcome(),
-        });
+        const outcome = admissionCutByControl()
+          ? cutShortOutcome()
+          : admissionLossOutcome();
+        await terminalize({ flushProcessor: admissionCutByControl(), outcome });
         for (const finish of deferredRunFinishedChunks.splice(0)) {
           yield finish;
         }
+        yield* admissionFailureChunks(outcome);
         return;
       }
       const processed = processPersistenceChunk({
@@ -2252,15 +2284,14 @@ export const processServerChatStream = async function* ({
     }
 
     if (admissionLost() || admissionCutByControl()) {
-      await terminalize({
-        flushProcessor: admissionCutByControl(),
-        outcome: admissionCutByControl()
-          ? cutShortOutcome()
-          : admissionLossOutcome(),
-      });
+      const outcome = admissionCutByControl()
+        ? cutShortOutcome()
+        : admissionLossOutcome();
+      await terminalize({ flushProcessor: admissionCutByControl(), outcome });
       for (const chunk of deferredRunFinishedChunks.splice(0)) {
         yield chunk;
       }
+      yield* admissionFailureChunks(outcome);
       return;
     }
     const finalRunFinishedChunks = deferredRunFinishedChunks.splice(0);
@@ -2294,10 +2325,12 @@ export const processServerChatStream = async function* ({
     }
   } catch (error) {
     if (admissionLost()) {
-      await terminalize({ outcome: admissionLossOutcome() });
+      const outcome = admissionLossOutcome();
+      await terminalize({ outcome });
       for (const finish of deferredRunFinishedChunks.splice(0)) {
         yield finish;
       }
+      yield* admissionFailureChunks(outcome);
       return;
     }
     const kind = classifyAIError(error);
