@@ -101,6 +101,21 @@ import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
  * Pages are 0-indexed. A null cursor starts from 30 days ago.
  */
 
+const itemBuildFailed = failureSink({
+  event: "case_law.ingestion.item_build_failed",
+  expected: [],
+});
+
+const observeItemBuildFailure = (error: unknown, documentId?: string): void => {
+  observeFailure(classifyFailure(error, "upstream_unavailable"), {
+    sink: itemBuildFailed,
+    ctx: {
+      adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+      ...(documentId === undefined ? {} : { documentId }),
+    },
+  });
+};
+
 const BASE_URL = "https://rozhodnuti.justice.cz/api";
 
 /** The only language this source publishes; half of the fallback identity. */
@@ -421,10 +436,13 @@ const readCzRegionalListingItems = (rows: unknown[]) => {
       continue;
     }
     failures += 1;
-    logger.warn("case_law.ingestion.item_build_failed", {
-      adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
-      "error.type": "invalid_listing_member",
-    });
+    observeItemBuildFailure(
+      new AdapterFetchError({
+        adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+        cursor: null,
+        message: "Invalid listing member",
+      }),
+    );
   }
   return { items, failures };
 };
@@ -530,7 +548,7 @@ const fetchFinaldoc = async (
     }
 
     const raw = await response.text();
-    validatePublisherPage({
+    const validatedPage = validatePublisherPage({
       body: raw,
       headers: response.headers,
       adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
@@ -540,10 +558,22 @@ const fetchFinaldoc = async (
         minBytes: 2,
         shape: (value) =>
           isCzRegionalFinaldoc(value) &&
-          typeof value.uuid === "string" &&
-          value.uuid.trim() !== "",
+          [
+            "uuid",
+            "verdictText",
+            "justificationText",
+            "header",
+            "verdict",
+            "justification",
+            "information",
+            "styles",
+            "metadata",
+          ].some((field) => Object.hasOwn(value, field)),
       },
     });
+    if (validatedPage.isErr()) {
+      throw validatedPage.error;
+    }
     return readCzRegionalDocument(raw);
   } catch (error) {
     // The caller's cancellation ends the page.
@@ -1323,13 +1353,17 @@ export const listCzRegionalDayPage = async ({
     });
   }
 
-  const json = validatePublisherPage({
+  const validatedPage = validatePublisherPage({
     body: await response.text(),
     headers: response.headers,
     adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
     cursor,
     expectation: { kind: "json", minBytes: 2, shape: isCzRegionalPageResponse },
   });
+  if (validatedPage.isErr()) {
+    throw validatedPage.error;
+  }
+  const json = validatedPage.value;
   if (!isCzRegionalPageResponse(json)) {
     throw new AdapterFetchError({
       message: "CZ Regional API returned an invalid payload",
@@ -2009,7 +2043,7 @@ export const czRegionalAdapter = defineSourceAdapter({
           });
         }
 
-        const json = validatePublisherPage({
+        const validatedPage = validatePublisherPage({
           body: await response.text(),
           headers: response.headers,
           adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
@@ -2020,6 +2054,10 @@ export const czRegionalAdapter = defineSourceAdapter({
             shape: isCzRegionalPageResponse,
           },
         });
+        if (validatedPage.isErr()) {
+          throw validatedPage.error;
+        }
+        const json = validatedPage.value;
         if (!isCzRegionalPageResponse(json)) {
           throw new AdapterFetchError({
             message: "CZ Regional API returned an invalid payload",
@@ -2107,11 +2145,10 @@ export const czRegionalAdapter = defineSourceAdapter({
               // the identity is held and the reconciliation asks for the
               // document again (and parks the refusal) instead of losing it.
               refused += 1;
-              logger.warn("case_law.ingestion.item_build_failed", {
-                adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
-                ...(item.jednaciCislo ? { caseNumber: item.jednaciCislo } : {}),
-                "error.type": errorTag(attempt.error),
-              });
+              observeItemBuildFailure(
+                attempt.error,
+                item.jednaciCislo ?? undefined,
+              );
               pushListingRow(item);
               continue;
             }

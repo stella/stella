@@ -1,4 +1,3 @@
-import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
@@ -124,19 +123,15 @@ describe("publisher response contracts", () => {
   ] as const;
   for (const fixture of cases) {
     test(`rejects ${fixture.name} with a typed reason`, () => {
-      const result = Result.try({
-        try: () =>
-          validatePublisherPage({
-            ...context,
-            body: fixture.body,
-            expectation: {
-              kind: fixture.kind,
-              ...("minBytes" in fixture ? { minBytes: fixture.minBytes } : {}),
-              ...("shape" in fixture ? { shape: fixture.shape } : {}),
-            },
-            ...("headers" in fixture ? { headers: fixture.headers } : {}),
-          }),
-        catch: (error) => error,
+      const result = validatePublisherPage({
+        ...context,
+        body: fixture.body,
+        expectation: {
+          kind: fixture.kind,
+          ...("minBytes" in fixture ? { minBytes: fixture.minBytes } : {}),
+          ...("shape" in fixture ? { shape: fixture.shape } : {}),
+        },
+        ...("headers" in fixture ? { headers: fixture.headers } : {}),
       });
       expect(result.isErr()).toBe(true);
       if (result.isErr()) {
@@ -154,7 +149,7 @@ describe("publisher response contracts", () => {
         ...context,
         body: "[]",
         expectation: { kind: "json", shape: Array.isArray },
-      }),
+      }).unwrap(),
     ).toEqual([]);
     expect(
       validatePublisherPage({
@@ -164,35 +159,35 @@ describe("publisher response contracts", () => {
           "content-type": "application/problem+json; charset=utf-8",
         }),
         expectation: { kind: "json" },
-      }),
+      }).unwrap(),
     ).toEqual({});
     expect(
       validatePublisherPage({
         ...context,
         body: "<r/>",
         expectation: { kind: "xml" },
-      }),
+      }).unwrap(),
     ).toBe("<r/>");
     expect(
       validatePublisherPage({
         ...context,
         body: "<p>x</p>",
         expectation: { kind: "html" },
-      }),
+      }).unwrap(),
     ).toBe("<p>x</p>");
     expect(
       validatePublisherPage({
         ...context,
         body: "<form><table><tr><td>1</td></tr></table></form>",
         expectation: { kind: "html" },
-      }),
+      }).unwrap(),
     ).toBe("<form><table><tr><td>1</td></tr></table></form>");
     expect(
       validatePublisherPage({
         ...context,
         body: "%PDF-1.7\n%%EOF\n",
         expectation: { kind: "pdf" },
-      }),
+      }).unwrap(),
     ).toBe("%PDF-1.7\n%%EOF\n");
   });
   test("accepts a complete publisher archive", async () => {
@@ -204,7 +199,7 @@ describe("publisher response contracts", () => {
         ...context,
         body: bytes,
         expectation: { kind: "zip" },
-      }),
+      }).unwrap(),
     ).toBe(bytes);
   });
 });

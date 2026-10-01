@@ -760,7 +760,7 @@ const parseItemWithDetail = async (
   if (!isSkApiItem(raw)) {
     logger.warn("case_law.ingestion.item_build_failed", {
       adapterKey: ADAPTER_KEYS.SK_COURTS,
-      identity: skCourtsListingIdentity(raw),
+      identity: JSON.stringify(skCourtsListingIdentity(raw)),
       reason: "Invalid listing member",
     });
     return { type: "item_build_failed", decision: null };
@@ -1740,7 +1740,7 @@ const createBackfillPage = (readCourt: SkCourtRegistryReader) =>
     ],
 
     parseResponse: async (response) => {
-      const json = validatePublisherPage({
+      const validatedPage = validatePublisherPage({
         adapterKey: ADAPTER_KEYS.SK_COURTS,
         cursor: null,
         headers: response.headers,
@@ -1751,6 +1751,10 @@ const createBackfillPage = (readCourt: SkCourtRegistryReader) =>
           shape: isSkApiResponse,
         },
       });
+      if (validatedPage.isErr()) {
+        throw validatedPage.error;
+      }
+      const json = validatedPage.value;
       if (!isSkApiResponse(json)) {
         return panic("Validated Slovak court listing has an invalid envelope");
       }

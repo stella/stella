@@ -1,4 +1,3 @@
-import { Result } from "better-result";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
@@ -17,19 +16,14 @@ test("arbitrary response bodies only pass a JSON listing contract when they pars
         fc.array(fc.jsonValue()).map((items) => JSON.stringify({ items })),
       ),
       (body) => {
-        const validated = Result.try({
-          try: () =>
-            validatePublisherPage({
-              body,
-              adapterKey: "cz-regional",
-              cursor: null,
-              expectation: {
-                kind: "json",
-                shape: (value) =>
-                  isRecord(value) && Array.isArray(value["items"]),
-              },
-            }),
-          catch: (error) => error,
+        const validated = validatePublisherPage({
+          body,
+          adapterKey: "cz-regional",
+          cursor: null,
+          expectation: {
+            kind: "json",
+            shape: (value) => isRecord(value) && Array.isArray(value["items"]),
+          },
         });
         if (validated.isErr()) {
           expect(validated.error).toBeInstanceOf(PublisherPageError);
