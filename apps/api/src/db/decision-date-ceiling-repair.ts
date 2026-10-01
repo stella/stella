@@ -129,8 +129,8 @@ const repairUntilEmpty = async (
     return await runBackfillPass({
       holdPolicy: "propagate",
       sleep,
-      step: () =>
-        runtime.step(async ({ tx, size, cursor }) => {
+      step: async () =>
+        await runtime.step(async ({ tx, size, cursor }) => {
           await tx.execute(`SET LOCAL lock_timeout = '${BATCH_LOCK_TIMEOUT}'`);
           await tx.execute(
             `SET LOCAL statement_timeout = '${BATCH_STATEMENT_TIMEOUT}'`,

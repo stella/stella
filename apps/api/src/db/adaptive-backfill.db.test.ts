@@ -145,9 +145,11 @@ const withFixture = async (
                     ...parameters,
                   ]),
               }),
-            release: () => Promise.resolve(),
+            release: async () => {},
           },
-          log: (record) => records.push(record),
+          log: (record) => {
+            records.push(record);
+          },
           runInTransaction,
           readCheckpoint: async (tx) => {
             const state = (
