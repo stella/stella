@@ -388,11 +388,21 @@ const fetchDetail = async (
     return null;
   }
 
-  const json: unknown = await response.json();
-  if (!isSkDetailItem(json)) {
+  const parsed = await Result.tryPromise({
+    try: async (): Promise<unknown> => await response.json(),
+    catch: (cause) => cause,
+  });
+  if (parsed.isErr()) {
+    logger.warn("case_law.ingestion.detail_parse_failed", {
+      adapterKey: ADAPTER_KEYS.SK_COURTS,
+      guid,
+    });
     return null;
   }
-  return json;
+  if (!isSkDetailItem(parsed.value)) {
+    return null;
+  }
+  return parsed.value;
 };
 
 /**
