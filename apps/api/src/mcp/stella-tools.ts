@@ -670,6 +670,34 @@ const searchCaseLawArgsSchema = nullAsAbsent(
         v.description("Filter by court name"),
       ),
     ),
+    courts: v.optional(
+      v.pipe(
+        v.array(v.pipe(v.string(), v.minLength(1), v.maxLength(512))),
+        v.minLength(1),
+        v.maxLength(16),
+        v.description(
+          'Match any listed court. For Czech apex courts use ["NS", "NSS", "ÚS"]. Combined with court, both filters must match.',
+        ),
+      ),
+    ),
+    category: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.maxLength(128),
+        v.description(
+          'Exact publisher category from metadata.category, for example "A" or "B"; this does not imply Sbírka publication. Applied to live rows within the bounded candidate scan; corpus-index facets and total are unavailable.',
+        ),
+      ),
+    ),
+    has_legal_sentence: v.optional(
+      v.pipe(
+        v.boolean(),
+        v.description(
+          "True requires a non-empty stored legal sentence (právní věta); false selects decisions without one. Applied to live rows within the bounded candidate scan; corpus-index facets and total are unavailable.",
+        ),
+      ),
+    ),
     country: countryInputSchema(
       `Required corpus country. Admitted: ${ADMITTED_CASE_LAW_COUNTRIES}.`,
     ),
@@ -937,6 +965,8 @@ export const STELLA_TOOL_DEFINITIONS = [
         tool: SEARCH_CASE_LAW_TOOL,
       }),
       court: FILTER_NORMALIZATION,
+      courts: { kind: "string-list" },
+      category: FILTER_NORMALIZATION,
       language: FILTER_NORMALIZATION,
       decision_type: FILTER_NORMALIZATION,
     },
@@ -1950,6 +1980,30 @@ type CaseLawQueryOutcome =
   | { exhausted: true }
   | { exhausted: false; page: SearchCaseLawSuccess };
 
+const caseLawSearchRequestFilters = ({
+  category,
+  has_legal_sentence: hasLegalSentence,
+  language,
+  decision_type: decisionType,
+  source_id: sourceId,
+  date_from: dateFrom,
+  date_to: dateTo,
+  sort,
+  strict,
+}: v.InferOutput<typeof searchCaseLawArgsSchema>) => ({
+  ...(category === undefined ? {} : { category }),
+  ...(hasLegalSentence === undefined ? {} : { hasLegalSentence }),
+  ...(language === undefined ? {} : { language }),
+  ...(decisionType === undefined ? {} : { decisionType }),
+  ...(sourceId === undefined
+    ? {}
+    : { sourceId: brandPersistedCaseLawSourceId(sourceId) }),
+  ...(dateFrom === undefined ? {} : { dateFrom }),
+  ...(dateTo === undefined ? {} : { dateTo }),
+  ...(sort === undefined ? {} : { sort }),
+  ...(strict === undefined ? {} : { strict }),
+});
+
 const handleSearchCaseLawTool: TypedMcpToolHandler<
   v.InferInput<typeof SEARCH_CASE_LAW_PROJECTION>
 > = async ({ args, context }) => {
@@ -1960,15 +2014,11 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
   const {
     country,
     court,
+    courts,
     cursor,
-    date_from: dateFrom,
-    date_to: dateTo,
     decision_type: decisionType,
     language,
     queries,
-    sort,
-    source_id: sourceId,
-    strict,
   } = parsed.output;
   const limit = parsed.output.limit ?? DEFAULT_SEARCH_LIMIT;
   const publicCountry = publicCaseLawCountry(country);
@@ -2005,8 +2055,16 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
 
   // A court filter is read onto a stored court before any query runs, so
   // every phrasing and every continuation of this call narrows the same way.
-  const { court: courtFilter, warnings: filterWarnings } =
-    await resolveCourtFilter({ context, country: publicCountry, court });
+  const {
+    court: courtFilter,
+    courts: courtListFilter,
+    warnings: filterWarnings,
+  } = await resolveCourtFilter({
+    context,
+    country: publicCountry,
+    court,
+    courts,
+  });
 
   // `limit` bounds the MERGED page, so each query is asked for its share of
   // it and every hit a query returns is emitted. Slicing the merge instead
@@ -2035,16 +2093,9 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
       limit: perQueryLimit,
       ...(typeof subCursor === "string" ? { cursor: subCursor } : {}),
       ...(courtFilter === undefined ? {} : { court: courtFilter }),
+      ...(courtListFilter === undefined ? {} : { courts: courtListFilter }),
+      ...caseLawSearchRequestFilters(parsed.output),
       country: publicCountry,
-      ...(language === undefined ? {} : { language }),
-      ...(decisionType === undefined ? {} : { decisionType }),
-      ...(sourceId === undefined
-        ? {}
-        : { sourceId: brandPersistedCaseLawSourceId(sourceId) }),
-      ...(dateFrom === undefined ? {} : { dateFrom }),
-      ...(dateTo === undefined ? {} : { dateTo }),
-      ...(sort === undefined ? {} : { sort }),
-      ...(strict === undefined ? {} : { strict }),
     };
     return {
       body,

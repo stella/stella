@@ -18,6 +18,7 @@
  */
 
 import { toMarkdownBytes } from "@firecrawl/anydoc";
+import { Result } from "better-result";
 import { load } from "cheerio";
 
 import {
@@ -31,6 +32,7 @@ import {
   parseEmail,
   parsedEmailToText,
   type EmailAttachment,
+  type EmailParseError,
 } from "@/api/lib/files/email-to-html";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -188,8 +190,12 @@ const extractEmailPlaintext = async ({
   maxChars: number;
   mimeType: string;
   nestingDepth: number;
-}): Promise<string | null> => {
-  const parsed = await parseEmail(toArrayBuffer(fileBytes), mimeType);
+}): Promise<Result<string | null, EmailParseError>> => {
+  const parsedResult = await parseEmail(toArrayBuffer(fileBytes), mimeType);
+  if (parsedResult.isErr()) {
+    return parsedResult;
+  }
+  const parsed = parsedResult.value;
   const parts: string[] = [];
   const body = parsedEmailToText(parsed);
   if (body) {
@@ -197,7 +203,7 @@ const extractEmailPlaintext = async ({
   }
 
   if (nestingDepth >= EMAIL_MAX_NESTING_DEPTH) {
-    return joinExtractedParts(parts, maxChars);
+    return Result.ok(joinExtractedParts(parts, maxChars));
   }
 
   for (const attachment of parsed.attachments
@@ -230,7 +236,7 @@ const extractEmailPlaintext = async ({
     );
   }
 
-  return joinExtractedParts(parts, maxChars);
+  return Result.ok(joinExtractedParts(parts, maxChars));
 };
 
 const extractAttachmentPlaintext = async ({
@@ -244,16 +250,21 @@ const extractAttachmentPlaintext = async ({
   mimeType: string;
   nestingDepth: number;
 }): Promise<string | null> => {
-  try {
-    return await extract(bytes, mimeType, maxChars, nestingDepth);
-  } catch (error) {
+  const result = (
+    await Result.tryPromise({
+      try: async () => await extract(bytes, mimeType, maxChars, nestingDepth),
+      catch: (error) => error,
+    })
+  ).andThen((extracted) => extracted);
+  if (result.isErr()) {
     // The email keeps its other text; the parent reads this line back to
     // record the attachment that did not contribute any.
     process.stderr.write(
-      formatAttachmentIssue(classifyAttachmentError(error, mimeType)),
+      formatAttachmentIssue(classifyAttachmentError(result.error, mimeType)),
     );
     return null;
   }
+  return result.value;
 };
 
 const extract = async (
@@ -261,7 +272,7 @@ const extract = async (
   mimeType: string,
   maxChars: number,
   nestingDepth = 0,
-): Promise<string | null> => {
+): Promise<Result<string | null, EmailParseError>> => {
   const normalizedMimeType = normalizeMimeType(mimeType);
   let text: string | null = null;
 
@@ -282,7 +293,7 @@ const extract = async (
   } else if (isDirectTextMimeType(normalizedMimeType)) {
     text = extractDirectText(fileBytes, normalizedMimeType);
   } else if (normalizedMimeType in EMAIL_MIME_TYPES) {
-    text = await extractEmailPlaintext({
+    return await extractEmailPlaintext({
       fileBytes,
       maxChars,
       mimeType: normalizedMimeType,
@@ -291,10 +302,10 @@ const extract = async (
   }
 
   if (!text || text.trim().length === 0) {
-    return null;
+    return Result.ok(null);
   }
 
-  return text.slice(0, maxChars);
+  return Result.ok(text.slice(0, maxChars));
 };
 
 const resolveAttachmentMimeType = (
@@ -347,13 +358,19 @@ const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
 try {
   const mimeType = process.argv[2] ?? "";
   const fileBytes = new Uint8Array(await Bun.stdin.arrayBuffer());
-  const text = await extract(
+  const result = await extract(
     fileBytes,
     mimeType,
     LIMITS.extractedContentMaxChars,
   );
-  if (text) {
-    process.stdout.write(text);
+  if (result.isErr()) {
+    process.stderr.write(
+      `extraction-worker error: ${result.error.constructor.name}\n`,
+    );
+    process.exit(1);
+  }
+  if (result.value) {
+    process.stdout.write(result.value);
   }
   process.exit(0);
 } catch (error) {
