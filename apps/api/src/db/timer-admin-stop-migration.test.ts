@@ -1,6 +1,8 @@
 import { PGlite } from "@electric-sql/pglite";
 import { Result } from "better-result";
-import { expect, test } from "bun:test";
+import { beforeAll, expect, test } from "bun:test";
+
+import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 const RUNNING_TIMER_ID = "00000000-0000-4000-8000-000000000001";
 const PAUSED_TIMER_ID = "00000000-0000-4000-8000-000000000002";
@@ -18,7 +20,7 @@ const assertRlsRefusal = async (operation: () => Promise<unknown>) => {
   }
 };
 
-const createDatabase = async (role: string) => {
+const buildDatabase = async () => {
   const db = await PGlite.create();
   await db.exec(`
     CREATE ROLE stella;
@@ -38,9 +40,6 @@ const createDatabase = async (role: string) => {
     INSERT INTO "user" VALUES ('manager'), ('member-a'), ('member-b');
     INSERT INTO "member" VALUES ('org-a', 'manager', 'member'), ('org-a', 'member-a', 'member'), ('org-b', 'member-b', 'member');
   `);
-  await db.query("UPDATE member SET role = $1 WHERE user_id = 'manager'", [
-    role,
-  ]);
   await db.exec(
     await Bun.file(
       new URL(
@@ -75,6 +74,21 @@ const createDatabase = async (role: string) => {
     ($1, 'org-a', 'member-a'), ($2, 'org-b', 'member-b')`,
     [RUNNING_TIMER_ID, FOREIGN_TIMER_ID],
   );
+  return db;
+};
+
+let migratedSnapshot: Blob;
+
+beforeAll(async () => {
+  await using template = await buildDatabase();
+  migratedSnapshot = await template.dumpDataDir();
+});
+
+const createDatabase = async (role: string) => {
+  const db = await createTestPglite(migratedSnapshot);
+  await db.query("UPDATE member SET role = $1 WHERE user_id = 'manager'", [
+    role,
+  ]);
   await db.exec(
     `SET ROLE stella; SET app.organization_id = 'org-a'; SET app.user_id = 'manager';`,
   );
