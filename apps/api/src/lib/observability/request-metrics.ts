@@ -3,8 +3,6 @@ import { panic } from "better-result";
 import type { AIProvider } from "@stll/ai-catalog";
 import { Temporal } from "@stll/time";
 
-import type { ChatTurnFailureCode } from "@/api/handlers/chat/chat-turn-state";
-import type { ChatTurnOutcome } from "@/api/handlers/chat/types";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 /**
@@ -220,14 +218,22 @@ export const emitActionCostDropMetric = (dropped: number): void => {
 
 const CHAT_TURN_SETTLEMENT_METRIC_NAME = "ChatTurnSettlements";
 
-type ChatTurnSettlementMetricInput = {
+/**
+ * The outcome and failure code are the chat slice's closed sets; they are type
+ * parameters so this shared module does not import the slice, and the caller's
+ * types keep them closed.
+ */
+type ChatTurnSettlementMetricInput<
+  TOutcome extends string,
+  TFailureCode extends string,
+> = {
   /** The status the turn settled with. */
-  outcome: ChatTurnOutcome["type"];
+  outcome: TOutcome;
   /** The third-party boundary the turn's provider input crossed. */
   mode: "anonymized" | "raw";
   /** The turn's provider; `none` when it ended before a model was resolved. */
   provider: AIProvider | "none";
-  failureCode: ChatTurnFailureCode | null;
+  failureCode: TFailureCode | null;
 };
 
 /**
@@ -237,13 +243,18 @@ type ChatTurnSettlementMetricInput = {
  * Every dimension is a closed set; the failure code rides along as a
  * queryable property, never a thread, turn or tenant id.
  */
-export const buildChatTurnSettlementRecord = ({
+export const buildChatTurnSettlementRecord = <
+  TOutcome extends string,
+  TFailureCode extends string,
+>({
   failureCode,
   mode,
   outcome,
   provider,
   timestamp,
-}: ChatTurnSettlementMetricInput & { timestamp: number }) => ({
+}: ChatTurnSettlementMetricInput<TOutcome, TFailureCode> & {
+  timestamp: number;
+}) => ({
   _aws: {
     Timestamp: timestamp,
     CloudWatchMetrics: [
@@ -264,8 +275,11 @@ export const buildChatTurnSettlementRecord = ({
   [CHAT_TURN_SETTLEMENT_METRIC_NAME]: 1,
 });
 
-export const emitChatTurnSettlementMetric = (
-  input: ChatTurnSettlementMetricInput,
+export const emitChatTurnSettlementMetric = <
+  TOutcome extends string,
+  TFailureCode extends string,
+>(
+  input: ChatTurnSettlementMetricInput<TOutcome, TFailureCode>,
 ): void => {
   writeMetricLine(
     buildChatTurnSettlementRecord({
