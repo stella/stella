@@ -57,7 +57,7 @@ test("rejects retries overrides inside Playwright projects and use options", () 
         retries: 0,
         projects: [
           { name: "chromium", retries: 1 },
-          { name: "webkit", use: { retries: process.env["RETRIES"] } },
+          { name: "webkit", use: { retries: getRetryCount() } },
         ],
       });
     `),
@@ -108,7 +108,7 @@ test("resolves named describe options and rejects dynamic override spreads", () 
         `
           const options = { retries: 0 };
           describe.configure(options);
-          const dynamic = { retries: process.env["RETRIES"] };
+          const dynamic = { retries: getRetryCount() };
           test.describe.configure(dynamic);
           test.describe.configure({ retries: 0, ...unknownOptions });
         `,
@@ -147,7 +147,7 @@ test("finds retry flags passed through actual TS process invocations", () => {
         `
           const args = ["bun", "test", "--retry", "2"] as const;
           Bun.spawn(args);
-          spawn("bun", ["test", "--retries", process.env["RETRY"]]);
+          spawn("bun", ["test", "--retries", getRetryCount()]);
           Bun.spawn(["curl", "--retry", "2"]);
         `,
       ],
