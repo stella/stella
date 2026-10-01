@@ -901,7 +901,7 @@ describe("detect-e2e-changes", () => {
     ]);
     stub("bunx", [
       '[[ "$*" == "playwright install-deps firefox webkit" ]]',
-      `rg -q '^DPkg::Lock::Timeout "300";$' "$APT_CONFIG_CAPTURE"`,
+      `grep -Fqx 'DPkg::Lock::Timeout "300";' "$APT_CONFIG_CAPTURE"`,
       'if [[ ! -f "$APT_ATTEMPT_STATE" ]]; then touch "$APT_ATTEMPT_STATE"; exit 124; fi',
       "exit 0",
     ]);
