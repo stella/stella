@@ -1,11 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
-import {
-  DOCX_MAX_ENTRIES,
-  DocxArchiveError,
-  loadDocxArchive,
-} from "@/api/lib/docx-archive";
+import { DocxArchiveError, loadDocxArchive } from "@/api/lib/docx-archive";
 
 const buildArchive = async (
   files: { path: string; content: string | Uint8Array }[],
@@ -62,12 +58,14 @@ describe("loadDocxArchive", () => {
   });
 
   test("rejects archives that declare too many entries", async () => {
-    const files = Array.from({ length: DOCX_MAX_ENTRIES + 1 }, (_, i) => ({
+    const files = Array.from({ length: 3 }, (_, i) => ({
       path: `entry-${i}.txt`,
       content: "x",
     }));
     const buffer = await buildArchive(files);
-    const error = await captureRejection(loadDocxArchive(buffer));
+    const error = await captureRejection(
+      loadDocxArchive(buffer, { maxEntries: 2 }),
+    );
     expect(error).toMatchObject({
       _tag: "DocxArchiveError",
       reason: "too-many-entries",
@@ -101,14 +99,12 @@ describe("loadDocxArchive", () => {
     });
   });
 
-  test("streaming read rejects an entry that exceeds the per-entry cap", async () => {
+  test("applies entry budgets during validation", async () => {
     const buffer = await buildArchive([
-      { path: "word/document.xml", content: "<doc/>" },
-      { path: "word/comments.xml", content: "X".repeat(8) },
+      { path: "comments.xml", content: "X".repeat(8) },
     ]);
-    const archive = await loadDocxArchive(buffer, { maxEntryBytes: 4 });
     const error = await captureRejection(
-      archive.readEntryString("word/comments.xml"),
+      loadDocxArchive(buffer, { maxEntryBytes: 4 }),
     );
     expect(error).toMatchObject({
       _tag: "DocxArchiveError",

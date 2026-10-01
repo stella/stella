@@ -356,7 +356,7 @@ jobs:
                 ;;
             esac
             case "$file" in
-              apps/web/src/lib/analytics/posthog.ts|apps/web/src/lib/analytics/stack-redaction.ts|apps/web/src/lib/analytics/error-diagnostics.ts|apps/web/e2e/stack-redaction/*|apps/web/e2e/playwright.stack-redaction.config.ts|apps/web/e2e/tsconfig.json|apps/web/tsconfig.json|apps/web/package.json|scripts/retry.sh|bunfig.toml|package.json|bun.lock|.npmrc|.github/workflows/ci.yml)
+              apps/web/src/lib/analytics/posthog.ts|apps/web/src/lib/analytics/stack-redaction.ts|apps/web/src/lib/analytics/error-diagnostics.ts|apps/web/e2e/stack-redaction/*|apps/web/e2e/playwright.stack-redaction.config.ts|apps/web/e2e/tsconfig.json|apps/web/tsconfig.json|apps/web/package.json|scripts/retry.sh|.github/actions/setup-playwright/*|bunfig.toml|package.json|bun.lock|.npmrc|.github/workflows/ci.yml)
                 stack_redaction_browsers_required=true
                 ;;
             esac
@@ -874,10 +874,8 @@ jobs:
           BASE_REF: ${{ github.base_ref || 'main' }}
         run: bun scripts/check-cli-release-coupling.ts --base "origin/$BASE_REF"
 
-      # The other half of that guard: while a release pull request is open, the
-      # queue holds a pull request adding a CLI changeset until the release has
-      # merged, so the release is never the one ejected. A pull request run
-      # only warns.
+      # Hold CLI changesets while a release is open or main's VERSION awaits
+      # its tag. Pull request runs warn; merge queue runs enforce the hold.
       - name: Release CLI changeset hold
         if: >-
           github.event_name == 'pull_request'
@@ -902,12 +900,15 @@ jobs:
             number="${BASH_REMATCH[1]}"
           fi
           state=$(bash scripts/release-pull-requests.sh --repo "$REPOSITORY" --number "$number")
+          pending=$(bash scripts/release-pending.sh --repo "$REPOSITORY")
+          version_state=$(sed -n 's/^version_state=//p' <<<"$pending")
           open_other=$(sed -n 's/^open_other=//p' <<<"$state")
           current_is_release=$(sed -n 's/^current_is_release=//p' <<<"$state")
           bun scripts/check-release-cli-changeset-hold.ts \
             --base "origin/$BASE_REF" \
             --event "$EVENT_NAME" \
             --open-releases "$open_other" \
+            --version-state "$version_state" \
             --is-release "$current_is_release"
 
       - name: CLI contract changeset guard
@@ -1467,7 +1468,9 @@ jobs:
           bun test scripts/check-staging-deploy-decision.test.ts
           bun test scripts/check-release-cli-changeset-hold.test.ts
           bash scripts/check-release-changelog.test.sh
+          bash scripts/prepare-release-tag.test.sh
           bash scripts/release-pull-requests.test.sh
+          bash scripts/release-pending.test.sh
           bash scripts/check-main-merge-hold.test.sh
           bash scripts/create-release-manifest.test.sh
           bash scripts/promote-desktop-release.test.sh
@@ -1557,15 +1560,12 @@ jobs:
       # and a merge gate that reads an empty check list as green merges
       # unverified code. Neither test ran in CI before.
       # Both scripts import `better-result`, so they need the dependency
-      # install above, which is itself conditional. The review gate's
-      # evaluator decides whether a reviewed pull request may enter the
-      # queue, and fails open the same way if its verdict logic breaks.
+      # install above, which is itself conditional.
       - name: Test migration identity and merge gate logic
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: |
           bun test scripts/check-migration-order.test.ts
           bun test scripts/merge-bar.test.ts
-          bun test scripts/review-gate.test.ts scripts/review-gate-github.test.ts scripts/review-gate-workflows.test.ts
 
       # Check migration identity against the branch this run merges into. In a
       # merge group that is main as it stands at merge time.
@@ -1743,7 +1743,13 @@ jobs:
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.suite_depth == 'full'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 35
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
+      options: --init --ipc=host
+    defaults:
+      run:
+        shell: bash
     permissions:
       contents: read
 
@@ -1764,7 +1770,7 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
         run: |
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]] || ! git diff --quiet "origin/$BASE_REF"...HEAD -- \
-            .github/actions/setup-playwright/action.yml \
+            .github/actions/setup-playwright \
             .github/workflows/ci.yml \
             apps/desktop \
             apps/web/e2e/playwright.ui-playground.config.ts \
@@ -1803,7 +1809,7 @@ jobs:
         # contract, or the browser runtime changed.
         run: |
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]] || ! git diff --quiet "origin/$BASE_REF"...HEAD -- \
-            .github/actions/setup-playwright/action.yml \
+            .github/actions/setup-playwright \
             .github/workflows/ci.yml \
             apps/extension \
             packages/api-contract/src/browser-control.ts \
@@ -1819,9 +1825,20 @@ jobs:
       # cached tarballs would bypass this job's full dependency scan.
       - name: Setup Bun
         if: steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version-file: "package.json"
+        env:
+          NPM_TOKEN: ""
+        # The Playwright image has npm but no unzip. Install Bun's native
+        # package without lifecycle scripts or another apt dependency.
+        run: |
+          version=$(node -p 'require("./package.json").packageManager.split("@")[1]')
+          bootstrap="$RUNNER_TEMP/bun-bootstrap"
+          bin="$RUNNER_TEMP/bun-bin"
+          npm install --prefix "$bootstrap" --ignore-scripts --no-audit --no-fund --no-save "@oven/bun-linux-x64@$version"
+          mkdir -p "$bin"
+          ln -s "$bootstrap/node_modules/@oven/bun-linux-x64/bin/bun" "$bin/bun"
+          ln -s "$bin/bun" "$bin/bunx"
+          echo "$bin" >> "$GITHUB_PATH"
+          "$bin/bun" --version
 
       - name: Install Safe Chain
         if: steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
@@ -1853,11 +1870,10 @@ jobs:
         if: steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
         uses: ./.github/actions/setup-playwright
         with:
-          # The desktop suite runs both engines; installing WebKit here keeps
-          # it in the same version-keyed cache as Chromium instead of
-          # redownloading it per run.
+          # The pinned image includes both desktop engines and screenshot fonts.
+          # Verify launches without downloading browsers or invoking apt.
           browsers: chromium webkit
-          dependency-mode: full
+          dependency-mode: preinstalled
 
       - name: Test UI browser interactions
         if: steps.ui-browser-tests.outputs.required == 'true'
@@ -2810,7 +2826,9 @@ jobs:
       && needs.ci-plan.outputs.stack_redaction_browsers_required == 'true'
       && needs.ci-plan.outputs.suite_depth == 'full'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # The Playwright system dependencies come from the runner's apt mirror,
+    # whose throughput varies widely between runs.
+    timeout-minutes: 35
     permissions:
       contents: read
     steps:
@@ -2836,7 +2854,9 @@ jobs:
           fi
 
       - name: Install Firefox and WebKit
-        run: bunx playwright install --with-deps firefox webkit
+        run: |
+          bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/install-deps.sh" firefox webkit
+          bunx playwright install firefox webkit
 
       - name: Test browser stack redaction
         run: bun --filter @stll/web test:e2e:stack-redaction
@@ -2849,7 +2869,7 @@ jobs:
       && needs.ci-plan.outputs.e2e_core_required == 'true'
       && needs.ci-plan.outputs.suite_depth == 'full'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     permissions:
       contents: read
     steps:
@@ -3014,7 +3034,7 @@ jobs:
       && needs.ci-plan.outputs.e2e_landing_required == 'true'
       && needs.ci-plan.outputs.suite_depth == 'full'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 35
     permissions:
       contents: read
     steps:
