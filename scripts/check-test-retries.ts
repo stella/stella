@@ -8,6 +8,7 @@ import ts from "typescript";
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const PLAYWRIGHT_CONFIG = /(?:^|\/)playwright[^/]*\.config\.(?:[cm]?[jt]s)$/u;
 const SOURCE_FILE = /\.(?:[cm]?[jt]s|tsx|jsx)$/u;
+const SHELL_FILE = /\.sh$/u;
 const PACKAGE_FILE = /(?:^|\/)package\.json$/u;
 const WORKFLOW_FILE = /^\.github\/(?:workflows|actions)\/.*\.ya?ml$/u;
 const PROCESS_CALL_NAMES = new Set([
@@ -266,8 +267,11 @@ const processCommand = (
 ): string | undefined => {
   const expression = call.expression;
   let name: string | undefined;
-  if (ts.isPropertyAccessExpression(expression)) {name = expression.name.text;}
-  else if (ts.isIdentifier(expression)) {name = expression.text;}
+  if (ts.isPropertyAccessExpression(expression)) {
+    name = expression.name.text;
+  } else if (ts.isIdentifier(expression)) {
+    name = expression.text;
+  }
   if (name === undefined || !PROCESS_CALL_NAMES.has(name)) {
     return undefined;
   }
@@ -324,6 +328,17 @@ const effectiveRetries = (
         value = spread.value;
         unknownOverride = spread.unknownOverride;
       }
+      continue;
+    }
+    // Shorthand values are not literal retry policies; reject them even when
+    // a same-named binding happens to be zero today.
+    if (
+      ts.isShorthandPropertyAssignment(member) &&
+      member.name.text === "retries"
+    ) {
+      explicit = true;
+      value = undefined;
+      unknownOverride = false;
       continue;
     }
     if (
@@ -661,6 +676,10 @@ export const findTestRetryViolations = (
     if (isSourceFile(file) && hasRetryRelevantSyntax(source)) {
       findings.push(...scanTestSource(file, source));
     }
+    if (SHELL_FILE.test(file)) {
+      const commands = source.replace(/^\s*#.*$/gmu, "");
+      findings.push(...scanCommand(file, commands, "shell launcher"));
+    }
     if (PACKAGE_FILE.test(file)) {
       findings.push(...scanPackage(file, source));
     }
@@ -681,6 +700,7 @@ const trackedSources = (): Map<string, string> => {
       (file) =>
         isPlaywrightConfig(file) ||
         isSourceFile(file) ||
+        SHELL_FILE.test(file) ||
         PACKAGE_FILE.test(file) ||
         WORKFLOW_FILE.test(file),
     );

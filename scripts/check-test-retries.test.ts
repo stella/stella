@@ -213,3 +213,56 @@ test("uses parsed YAML commands and rejects retry flags with any value", () => {
 test("the tracked repository has no automated test retries", () => {
   expect(checkTestRetries()).toEqual([]);
 }, 15_000);
+
+test.each(["2", "0", "getRetryCount()"])(
+  "rejects shorthand retry settings in projects: %s",
+  (initializer) => {
+    expect(
+      config(`
+      const retries = ${initializer};
+      export default defineConfig({ retries: 0, projects: [{ retries }] });
+    `),
+    ).toHaveLength(1);
+  },
+);
+
+test.each(["2", "0", "getRetryCount()"])(
+  "rejects shorthand retry settings in describe options: %s",
+  (initializer) => {
+    expect(
+      findTestRetryViolations(
+        new Map([
+          [
+            "apps/example/tests/example.spec.ts",
+            `const retries = ${initializer}; test.describe.configure({ retries });`,
+          ],
+        ]),
+      ),
+    ).toHaveLength(1);
+  },
+);
+
+test("scans shell launchers while allowing install and download retries", () => {
+  const findings = findTestRetryViolations(
+    new Map([
+      [
+        "scripts/example.sh",
+        [
+          "#!/usr/bin/env bash",
+          "bash scripts/retry.sh bun test",
+          "bun test --retries=2",
+          "bun test \\\n        --rerun-each=2",
+          "bash scripts/retry.sh bun ci --ignore-scripts",
+          "bash scripts/retry.sh bun install --frozen-lockfile",
+          "bash scripts/retry.sh curl --retry 5 https://example.test/file",
+          "# bun test --retries=2",
+        ].join("\n"),
+      ],
+    ]),
+  );
+  expect(findings.map(({ message }) => message)).toEqual([
+    "shell launcher wraps a test command in scripts/retry.sh",
+    "shell launcher passes a test retry option",
+    "shell launcher passes a test retry option",
+  ]);
+});
