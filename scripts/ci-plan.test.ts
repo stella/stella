@@ -1524,3 +1524,55 @@ test("property-testing guards run only when dependencies are installed", () => {
   }
   expect(guardCount).toBeGreaterThan(0);
 });
+
+test("every browser suite belongs to exactly one required matrix leg", () => {
+  const browser = v.parse(
+    v.object({
+      strategy: v.object({
+        "fail-fast": v.literal(false),
+        matrix: v.object({ suite: v.array(v.string()) }),
+      }),
+      steps: v.array(
+        v.object({
+          name: v.string(),
+          if: v.optional(v.string()),
+          run: v.optional(v.string()),
+        }),
+      ),
+    }),
+    ciJobs["ci-browser"],
+  );
+  expect(new Set(browser.strategy.matrix.suite)).toEqual(
+    new Set(["desktop", "ui"]),
+  );
+  expect(browser.strategy.matrix.suite).toHaveLength(2);
+  const suites = browser.steps.filter(
+    ({ run }) => run?.includes("test:browser") || run?.includes("test:e2e"),
+  );
+  expect(
+    suites.map(({ name }) => name).toSorted((a, b) => a.localeCompare(b)),
+  ).toEqual(
+    [
+      "Test desktop browser interactions",
+      "Test extension browser boundary",
+      "Test UI browser interactions",
+      "Test UI playground visuals",
+    ].toSorted((a, b) => a.localeCompare(b)),
+  );
+  for (const suite of suites) {
+    const legs = browser.strategy.matrix.suite.filter((leg) =>
+      suite.if?.includes(`matrix.suite == '${leg}'`),
+    );
+    expect(legs, suite.name).toHaveLength(1);
+    expect(suite.if, suite.name).toContain("outputs.required == 'true'");
+  }
+  expect(resultJob.needs).toContain("ci-browser");
+  expect(jobScopes["ci-browser"]).toBeNull();
+  for (const event of FULL_DEPTH_EVENTS) {
+    for (const result of ["failure", "cancelled", "skipped"]) {
+      expect(evaluateResult({ event, results: { "ci-browser": result } })).toBe(
+        1,
+      );
+    }
+  }
+});
