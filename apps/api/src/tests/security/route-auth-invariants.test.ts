@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import nodePath from "node:path";
 
@@ -63,7 +64,11 @@ describe("root route registrations", () => {
 
     const rootSource = source.slice(rootStart, versionedStart);
     const plugins = [...rootSource.matchAll(/\.use\(\s*(\w+)\s*\)/gu)].map(
-      (match) => match[1],
+      (match) => {
+        const plugin = match.at(1);
+        if (plugin === undefined) {panic("Expected route plugin capture");}
+        return plugin;
+      },
     );
     expect(plugins.toSorted(compareCodeUnit)).toEqual([
       "agentAuthConfirmRoute",
