@@ -1132,9 +1132,10 @@ test("browser image runner preserves argv, cwd, verdict and only browser inputs,
       expect(args).toContain(`${root}:${root}`);
       expect(args).toContain(`${cache}:${cache}:ro`);
       expect(args).toContain(`BUN_INSTALL_CACHE_DIR=${cache}`);
-      expect(args).not.toContain(
-        `${process.env["HOME"]}:${process.env["HOME"]}`,
-      );
+      const hostHome = process.env["HOME"];
+      if (hostHome !== undefined) {
+        expect(args).not.toContain(`${hostHome}:${hostHome}`);
+      }
       expect(args).toContain("/native/bun:/usr/local/bin/bun:ro");
       expect(args).toContain("/native/bun:/usr/local/bin/bunx:ro");
       expect(args).toContain("PLAYWRIGHT_BROWSERS_PATH=/ms-playwright");
