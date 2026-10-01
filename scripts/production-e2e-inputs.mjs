@@ -33,7 +33,7 @@ export const productionE2eInputs = (configPath) => {
   if (existsSync(tsconfig)) {
     pending.push(tsconfig);
   }
-  if (!testDirectory.startsWith(`${root}${path.sep}`)) {
+  if (!testDirectory.startsWith(`${String(root)}${String(path.sep)}`)) {
     fail("Production E2E testDir must stay inside its E2E tree");
   }
   for (const file of readdirSync(testDirectory, { recursive: true })) {
@@ -73,20 +73,22 @@ export const productionE2eInputs = (configPath) => {
         continue;
       }
       const resolved = path.resolve(path.dirname(file), reference);
-      if (!resolved.startsWith(`${root}${path.sep}`)) {
+      if (!resolved.startsWith(`${String(root)}${String(path.sep)}`)) {
         continue;
       }
       const candidates = [
         resolved,
-        `${resolved}.ts`,
-        `${resolved}.tsx`,
+        `${String(resolved)}.ts`,
+        `${String(resolved)}.tsx`,
         path.join(resolved, "index.ts"),
       ];
       const input = candidates.find(
         (candidate) => existsSync(candidate) && statSync(candidate).isFile(),
       );
       if (input === undefined) {
-        fail(`Unresolved production E2E input: ${reference} in ${file}`);
+        fail(
+          `Unresolved production E2E input: ${String(reference)} in ${file}`,
+        );
       }
       pending.push(input);
     }
@@ -101,14 +103,19 @@ if (
   const changedFiles = process.argv.slice(2);
   const root = path.dirname(CONFIG_PATH);
   const absoluteFiles = changedFiles.map((file) => path.resolve(file));
-  if (!absoluteFiles.some((file) => file.startsWith(`${root}${path.sep}`))) {
+  if (
+    !absoluteFiles.some((file) =>
+      file.startsWith(`${String(root)}${String(path.sep)}`),
+    )
+  ) {
     console.log(false);
   } else {
     const { testDirectory, files } = productionE2eInputs(CONFIG_PATH);
     console.log(
       absoluteFiles.some(
         (file) =>
-          file.startsWith(`${testDirectory}${path.sep}`) || files.has(file),
+          file.startsWith(`${String(testDirectory)}${String(path.sep)}`) ||
+          files.has(file),
       ),
     );
   }
