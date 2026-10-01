@@ -1731,7 +1731,8 @@ jobs:
           read -r -a shard_args <<<"$(bun scripts/test-shards.ts --filters "$SHARD")"
           export API_TEST_SHARD="$(bun scripts/test-shards.ts --api-shard "$SHARD")"
           if [[ "$SHARD" == "api-1" ]]; then
-            bun --cwd apps/api run test
+            cd apps/api
+            bun scripts/run-tests.ts
           else
             bun run test -- --concurrency=2 --log-order=stream --output-logs=full "${args[@]}" "${shard_args[@]}"
           fi
