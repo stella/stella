@@ -1222,6 +1222,37 @@ export const caseLawDecisionSourceIdentities = p.pgTable(
   ],
 );
 
+/** Retired UUIDs outlive their rows; targets remain live and chains are flattened. */
+export const caseLawDecisionAliases = p.pgTable(
+  "case_law_decision_aliases",
+  {
+    retiredDecisionId: safeUuid<"caseLawDecision">(
+      "retired_decision_id",
+    ).primaryKey(),
+    canonicalDecisionId: safeUuid<"caseLawDecision">(
+      "canonical_decision_id",
+    ).notNull(),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p
+      .index("case_law_decision_aliases_canonical_idx")
+      .on(t.canonicalDecisionId),
+    p
+      .foreignKey({
+        name: "case_law_decision_aliases_canonical_fk",
+        columns: [t.canonicalDecisionId],
+        foreignColumns: [caseLawDecisions.id],
+      })
+      .onDelete("restrict"),
+    p.check(
+      "case_law_decision_aliases_not_self",
+      sql`${t.retiredDecisionId} <> ${t.canonicalDecisionId}`,
+    ),
+    ...caseLawIngestionOnlyPolicies(),
+  ],
+);
+
 /**
  * Documents a publisher serves under their own id that belong inside another
  * decision's document: SAOS publishes the written reasons of a ruling apart

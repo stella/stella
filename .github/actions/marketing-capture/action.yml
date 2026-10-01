@@ -188,7 +188,7 @@ runs:
     - name: Install Playwright browsers
       uses: ./.github/actions/setup-playwright
       with:
-        dependency-mode: full
+        dependency-mode: container
 
     - name: Seed deterministic marketing content
       shell: bash
@@ -205,9 +205,9 @@ runs:
         # The `--update-snapshots` flag lives in the package script alone, so
         # there is one place that knows how a baseline is rewritten.
         if [[ "$MODE" == "update" ]]; then
-          bun --filter @stll/web test:e2e:marketing:update
+          bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:marketing:update
         else
-          bun --filter @stll/web test:e2e:marketing
+          bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:marketing
         fi
 
     - name: Stop production web server
