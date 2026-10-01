@@ -92,6 +92,8 @@ import {
   createPlaybookBaseline,
   hasPlaybookDraftChanges,
   hasResolvedPositionSources,
+  invalidatedSnapshotAt,
+  isSeedableDetail,
   resolvePlaybookScrollTop,
   resolvePositionSources,
   toPositionSourceLookup,
@@ -178,11 +180,22 @@ const PlaybookEditorLoader = ({
   // freshly refetched (already-invalidated) detail instead of holding on to
   // its own stale name/description/positions state.
   const [reloadKey, setReloadKey] = useState(0);
-  const detailQuery = useQuery(
-    playbookDetailOptions(organizationId, playbookId),
+  const queryClient = useQueryClient();
+  const detailOptions = playbookDetailOptions(organizationId, playbookId);
+  // Read once at mount: reopening after a save finds the detail invalidated
+  // but still holding its pre-save content until this mount's refetch lands.
+  const [invalidatedAt] = useState(() =>
+    invalidatedSnapshotAt(queryClient.getQueryState(detailOptions.queryKey)),
   );
+  const detailQuery = useQuery(detailOptions);
+  const awaitingFreshDetail =
+    !detailQuery.isError &&
+    !isSeedableDetail({
+      invalidatedAt,
+      dataUpdatedAt: detailQuery.dataUpdatedAt,
+    });
 
-  if (detailQuery.isPending) {
+  if (detailQuery.isPending || awaitingFreshDetail) {
     return (
       <div className="flex flex-1 items-center justify-center p-8">
         <p className="text-muted-foreground text-sm">
@@ -519,22 +532,6 @@ const PlaybookEditorForm = ({
     });
   };
 
-  /**
-   * Move the token to a freshly-returned `updatedAt`, and write it into the
-   * cached detail so a remount before the invalidation round-trip lands does
-   * not seed a token the client already knows is superseded.
-   */
-  const syncUpdatedAt = (id: string, next: string) => {
-    setUpdatedAt(next);
-    queryClient.setQueryData(
-      playbookDetailOptions(organizationId, id).queryKey,
-      (previous) =>
-        previous && "updatedAt" in previous
-          ? { ...previous, updatedAt: next }
-          : previous,
-    );
-  };
-
   const takeFreshToken = async (id: string) => {
     const fresh = await queryClient.query({
       ...playbookDetailOptions(organizationId, id),
@@ -659,7 +656,7 @@ const PlaybookEditorForm = ({
         reportSaveFailure(response.error);
         return false;
       }
-      syncUpdatedAt(playbookId, response.data.updatedAt);
+      setUpdatedAt(response.data.updatedAt);
     }
 
     // What was just persisted is the new clean state; the draft may have moved
@@ -741,13 +738,13 @@ const PlaybookEditorForm = ({
         .approve.post({ expectedUpdatedAt });
       return unwrapEden(response);
     },
-    onSuccess: (data, { id }) => {
+    onSuccess: (data) => {
       setStatus("approved");
       setApprovedAt(data.approvedAt);
       // The approval's own `updatedAt`, not `approvedAt` standing in for it:
       // the two happen to coincide today, and a client that leans on that
       // breaks the moment the handler stops writing them together.
-      syncUpdatedAt(id, data.updatedAt);
+      setUpdatedAt(data.updatedAt);
       detached(
         queryClient.invalidateQueries({
           queryKey: knowledgeKeys.playbooks.all(organizationId),

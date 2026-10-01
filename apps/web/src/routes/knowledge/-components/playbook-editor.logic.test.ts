@@ -1,3 +1,4 @@
+import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -21,6 +22,8 @@ import {
   createPlaybookBaseline,
   hasPlaybookDraftChanges,
   hasResolvedPositionSources,
+  invalidatedSnapshotAt,
+  isSeedableDetail,
   resolvePlaybookScrollTop,
   resolvePositionSources,
   toPositionSourceLookup,
@@ -47,6 +50,60 @@ describe("Playbook outline navigation", () => {
         topOffset: 24,
       }),
     ).toBe(0);
+  });
+});
+
+describe("Seeding the editor from the cached detail", () => {
+  const key = ["playbook", "detail"];
+
+  // The cache as the list-to-editor round trip leaves it: the detail was read,
+  // then a save invalidated it while no editor was observing it.
+  const cacheAfterSave = () => {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(key, { name: "before save" });
+    return queryClient;
+  };
+
+  test("a reopened editor waits for the refetch instead of seeding pre-save content", async () => {
+    const queryClient = cacheAfterSave();
+    await queryClient.invalidateQueries({ queryKey: key });
+    const invalidatedAt = invalidatedSnapshotAt(queryClient.getQueryState(key));
+    const stale = queryClient.getQueryState(key);
+
+    expect(
+      isSeedableDetail({
+        invalidatedAt,
+        dataUpdatedAt: stale?.dataUpdatedAt ?? 0,
+      }),
+    ).toBe(false);
+
+    // Strictly later than the stale snapshot, as any real refetch is.
+    await Bun.sleep(2);
+    await queryClient.query({
+      queryKey: key,
+      queryFn: () => ({ name: "after save" }),
+    });
+    const fresh = queryClient.getQueryState(key);
+
+    expect(fresh?.data).toEqual({ name: "after save" });
+    expect(
+      isSeedableDetail({
+        invalidatedAt,
+        dataUpdatedAt: fresh?.dataUpdatedAt ?? 0,
+      }),
+    ).toBe(true);
+  });
+
+  test("an editor opened on a detail nothing invalidated seeds at once", () => {
+    const queryClient = cacheAfterSave();
+    const state = queryClient.getQueryState(key);
+
+    expect(
+      isSeedableDetail({
+        invalidatedAt: invalidatedSnapshotAt(state),
+        dataUpdatedAt: state?.dataUpdatedAt ?? 0,
+      }),
+    ).toBe(true);
   });
 });
 

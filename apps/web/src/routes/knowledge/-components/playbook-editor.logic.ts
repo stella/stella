@@ -1,3 +1,5 @@
+import type { QueryState } from "@tanstack/react-query";
+
 import { stableStringify } from "@stll/stable-stringify";
 
 import { optionalArray } from "@/lib/arrays";
@@ -137,6 +139,33 @@ export const hasPlaybookDraftChanges = ({
   }
   return playbookDraftFingerprint(current) !== baseline.fingerprint;
 };
+
+// ── Seeding from the cached detail ────────────────────
+
+type CachedDetailState = Pick<QueryState, "isInvalidated" | "dataUpdatedAt">;
+
+/**
+ * When the detail a mount finds in the cache was invalidated by a write (this
+ * editor's save or approve, a chat save, a restore), when that stale snapshot
+ * was fetched; null when the cache holds nothing invalidated. The form seeds
+ * once and saves a full replace, so seeding from pre-write content would put
+ * back whatever the write changed.
+ */
+export const invalidatedSnapshotAt = (state: CachedDetailState | undefined) =>
+  state?.isInvalidated === true ? state.dataUpdatedAt : null;
+
+type IsSeedableDetailArgs = {
+  /** From `invalidatedSnapshotAt`, read once when the editor mounts. */
+  invalidatedAt: number | null;
+  dataUpdatedAt: number;
+};
+
+/** Whether the detail now in hand is newer than the invalidated snapshot. */
+export const isSeedableDetail = ({
+  invalidatedAt,
+  dataUpdatedAt,
+}: IsSeedableDetailArgs) =>
+  invalidatedAt === null || dataUpdatedAt !== invalidatedAt;
 
 // ── Position sources ──────────────────────────────────
 
