@@ -11,6 +11,8 @@ import {
 import { and, asc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { DECISION_DOCUMENT_ROLE } from "@stll/api-contract/decision-document-role";
+
 import { authRelationsPart } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -294,6 +296,7 @@ const supplementRow = async (
         sourceHash: caseLawDecisionSupplements.sourceHash,
         mergedSourceHash: caseLawDecisionSupplements.mergedSourceHash,
         sourceRawS3Key: caseLawDecisionSupplements.sourceRawS3Key,
+        metadata: caseLawDecisionSupplements.metadata,
       })
       .from(caseLawDecisionSupplements)
       .where(
@@ -368,6 +371,9 @@ describe("reasons published apart from their ruling", () => {
     expect(ruling.fulltext).toContain(RULING_TEXT);
     expect(ruling.fulltext).toContain(REASONS_TEXT);
     expect(ruling.decisionType).toBe("wyrok");
+    expect(ruling.metadata?.["documentRole"]).toBe(
+      DECISION_DOCUMENT_ROLE.RULING,
+    );
     expect(ruling.sourceHash).not.toBe(before.sourceHash);
     expect(ruling.metadata?.[DOCUMENT_SUPPLEMENTS_METADATA_KEY]).toEqual([
       expect.objectContaining({ kind: "reasons", sourceDocumentId: "339001" }),
@@ -376,6 +382,9 @@ describe("reasons published apart from their ruling", () => {
     const stored = await supplementRow(fixture.sourceId, "339001");
     expect(stored.decisionId).toBe(ruling.id);
     expect(stored.mergedSourceHash).toBe(stored.sourceHash);
+    expect(stored.metadata?.["documentRole"]).toBe(
+      DECISION_DOCUMENT_ROLE.REASONS,
+    );
   });
 
   test("arriving before their ruling stand alone, then merge when it arrives", async () => {
@@ -393,6 +402,9 @@ describe("reasons published apart from their ruling", () => {
     expect(standalone.decisionType).toBe(
       PL_COURTS_STANDALONE_REASONS_DECISION_TYPE,
     );
+    expect(standalone.metadata?.["documentRole"]).toBe(
+      DECISION_DOCUMENT_ROLE.REASONS,
+    );
     expect(standalone.fulltext).toContain(REASONS_TEXT);
     expect(await citationsOf(standalone.id)).toEqual([
       "sygn. akt V CSK 293/14",
@@ -408,6 +420,10 @@ describe("reasons published apart from their ruling", () => {
 
     const ruling = await decisionBy(fixture.sourceId, "339002");
     expect(ruling.fulltext).toContain(REASONS_TEXT);
+    expect(ruling.decisionType).toBe("wyrok");
+    expect(ruling.metadata?.["documentRole"]).toBe(
+      DECISION_DOCUMENT_ROLE.RULING,
+    );
     expect(await citationsOf(ruling.id)).toEqual(["sygn. akt V CSK 293/14"]);
     const stored = await supplementRow(fixture.sourceId, "339001");
     expect(stored.decisionId).toBe(ruling.id);
@@ -430,6 +446,39 @@ describe("reasons published apart from their ruling", () => {
     });
     expect(await citationsOf(absorbed.id)).toEqual([]);
     expect(await publishedIds(fixture.sourceId)).toEqual(["339002"]);
+  });
+
+  test("an unknown publisher role stays unknown in both supplement and standalone metadata", async () => {
+    const fixture = await newSource();
+    const reasons = supplementOf(REASONS);
+    await ingestSupplement(fixture, {
+      ...reasons,
+      document: { ...reasons.document, documentRole: undefined },
+    });
+    const standalone = await decisionBy(fixture.sourceId, "339001");
+    const stored = await supplementRow(fixture.sourceId, "339001");
+    expect(standalone.metadata?.["documentRole"]).toBeUndefined();
+    expect(stored.metadata?.["documentRole"]).toBeUndefined();
+    expect(standalone.decisionType).toBe(
+      PL_COURTS_STANDALONE_REASONS_DECISION_TYPE,
+    );
+  });
+
+  test("a supplement kind cannot contradict a known publisher role", async () => {
+    const fixture = await newSource();
+    const reasons = supplementOf(REASONS);
+    await expect(
+      ingestSupplement(fixture, {
+        ...reasons,
+        document: {
+          ...reasons.document,
+          documentRole: DECISION_DOCUMENT_ROLE.RULING,
+        },
+      }),
+    ).rejects.toThrow(
+      "Supplement kind contradicts the publisher document role",
+    );
+    expect(await decisionRows(fixture.sourceId)).toEqual([]);
   });
 
   test("an absorption older than the standalone row's last observation leaves it alone", async () => {
@@ -468,6 +517,13 @@ describe("reasons published apart from their ruling", () => {
       objects: [...fake.objects.keys()].toSorted(byCodeUnit),
     });
     const merged = await snapshot();
+    expect(merged.rows.at(0)?.metadata?.["documentRole"]).toBe(
+      DECISION_DOCUMENT_ROLE.RULING,
+    );
+    expect(merged.rows.at(0)?.decisionType).toBe("wyrok");
+    expect(merged.supplement.metadata?.["documentRole"]).toBe(
+      DECISION_DOCUMENT_ROLE.REASONS,
+    );
 
     const again = await ingestSupplement(fixture, supplementOf(REASONS));
     expect(again.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
