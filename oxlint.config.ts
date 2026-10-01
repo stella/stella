@@ -1,8 +1,5 @@
 import { defineConfig } from "oxlint";
 import type { OxlintOverride } from "oxlint";
-import core from "ultracite/oxlint/core";
-import react from "ultracite/oxlint/react";
-import shadcn from "ultracite/oxlint/shadcn";
 
 import {
   libraryIgnorePatterns,
@@ -22,6 +19,9 @@ import {
   designLintBacklogOverrides,
 } from "./scripts/design-lint-policy.ts";
 import { OWNERSHIP } from "./scripts/ownership.ts";
+import core from "./scripts/oxlint-presets/core.mjs";
+import react from "./scripts/oxlint-presets/react.mjs";
+import shadcn from "./scripts/oxlint-presets/shadcn.mjs";
 import {
   DECLARATION_FILE_GLOB,
   RESULT_CONVENTION_ENABLED_GLOBS,
@@ -135,6 +135,10 @@ const publicSsrAmbientStateRules = {
 } satisfies NonNullable<OxlintOverride["rules"]>;
 
 const fixtureRuleOverrides = [
+  fixtureRuleOverride("drizzle.fixture.ts", [
+    "drizzle/enforce-delete-with-where",
+    "drizzle/enforce-update-with-where",
+  ]),
   ...[
     "no-swallowed-item-error.fixture.ts",
     "no-swallowed-item-error.fixture.legacy.ts",
@@ -1153,7 +1157,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-raw-cache-control.ts",
     "@tanstack/eslint-plugin-query",
     "@tanstack/eslint-plugin-router",
-    "eslint-plugin-drizzle",
+    "./.oxlint-plugins/drizzle.ts",
     "oxlint-tailwindcss",
     "@stll/oxlint-config/no-raw-colors",
     "./.oxlint-plugins/no-raw-date-input.ts",
@@ -1655,7 +1659,6 @@ export default defineConfig({
               "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx",
               "apps/web/src/components/ai-suggestions/host.tsx",
               "apps/web/src/components/bilingual-run-panel.tsx",
-              "apps/web/src/components/chat-mention-list.tsx",
               "apps/web/src/components/chat/ask-user-card.tsx",
               "apps/web/src/components/chat/chat-prompt-improve-button.tsx",
               "apps/web/src/components/chat/chat-thread-messages.tsx",

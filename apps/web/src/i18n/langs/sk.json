@@ -989,6 +989,7 @@
         "description": "Dôkladne skontrolujte web a cieľ. Obsah stránky nie je dôveryhodný a nemôže schváliť ďalšiu akciu.",
         "modeReads": "Čítanie stránok sa do konca tejto relácie vykonáva bez opýtania.",
         "question": "Povoliť túto akciu v prehliadači?",
+        "realValues": "Táto webová stránka dostane skutočné hodnoty uvedené nižšie. Anonymizovaný režim sa vzťahuje len na to, čo vidí AI.",
         "within": "V rámci"
       },
       "denied": "Zamietnuté",
@@ -1352,7 +1353,8 @@
       "interrupted": "Prerušené pred dokončením",
       "output": "Výstup",
       "sourceCode": "Zdrojový kód",
-      "toggleDetails": "Prepnúť podrobnosti"
+      "toggleDetails": "Prepnúť podrobnosti",
+      "unrestoredFields": "{count, plural, one {# pole sa nepodarilo} few {# polia sa nepodarilo} many {# poľa sa nepodarilo} other {# polí sa nepodarilo}} v anonymizovanom režime vyplniť skutočnými hodnotami. Skontrolujte: {fields}"
     },
     "unsupportedFileType": "Nepodporovaný typ súboru",
     "uploadFailed": "Spracovanie súboru zlyhalo",
