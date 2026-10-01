@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { readdirSync, readFileSync, rmSync } from "node:fs";
 import { availableParallelism, tmpdir, totalmem } from "node:os";
 import path from "node:path";
@@ -22,6 +23,12 @@ import {
   snapshotKey,
   SnapshotBuildError,
 } from "./test-db-snapshot-cache";
+import durations from "./test-durations.json";
+import {
+  API_TEST_SHARD_ENV,
+  parseApiTestShard,
+  partitionTestFiles,
+} from "./test-file-shards";
 import {
   deriveTestLaneCount,
   laneRunExitCode,
@@ -43,7 +50,24 @@ const forwardedArguments = runnerArguments.filter(
   (argument) => argument !== PROPERTY_FLAG,
 );
 
-const testPaths = listApiTestPaths(apiRoot);
+const allTestPaths = listApiTestPaths(apiRoot);
+const shard = parseApiTestShard(process.env[API_TEST_SHARD_ENV]);
+const testPaths =
+  shard === null
+    ? allTestPaths
+    : partitionTestFiles({
+        files: allTestPaths,
+        durations,
+        count: shard.count,
+      }).at(shard.index - 1);
+if (testPaths === undefined) {
+  panic("API shard partition is missing");
+}
+if (shard !== null) {
+  console.log(
+    `API test shard ${shard.index}/${shard.count}: ${testPaths.length}/${allTestPaths.length} files`,
+  );
+}
 
 // Hidden directories are tool caches; `node_modules` is third-party code. A
 // test file colocated with a package-root module (`drizzle.config.test.ts`

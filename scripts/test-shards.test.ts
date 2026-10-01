@@ -2,7 +2,14 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
+import { listApiTestPaths } from "../apps/api/scripts/api-test-plan";
+import durations from "../apps/api/scripts/test-durations.json";
 import {
+  parseApiTestShard,
+  partitionTestFiles,
+} from "../apps/api/scripts/test-file-shards";
+import {
+  apiShardValue,
   shardFilters,
   shardPackages,
   TEST_SHARD_IDS,
@@ -45,9 +52,11 @@ test("every named shard package is a workspace package that has tests", () => {
   }
 });
 
-test("the shards partition every package that has a test script", () => {
+test("the shard families partition every package that has a test script", () => {
   const seen = new Map<string, string>();
-  for (const shard of TEST_SHARD_IDS) {
+  for (const shard of TEST_SHARD_IDS.filter(
+    (id) => apiShardValue(id) === "" || apiShardValue(id).startsWith("1/"),
+  )) {
     for (const name of shardPackages({ packageNames, shard })) {
       const owner = seen.get(name);
       if (owner !== undefined) {
@@ -97,4 +106,24 @@ test("exactly one shard runs the .claude/mcp suite", () => {
   }
   const shardIds: readonly string[] = TEST_SHARD_IDS;
   expect(shardIds).toContain(gate);
+});
+
+test("API sub-shards cover every discovered file exactly once, including new files", () => {
+  const files = listApiTestPaths(
+    path.resolve(import.meta.dirname, "../apps/api"),
+  );
+  const newFile = "src/new-shard-census.test.ts";
+  expect(files).not.toContain(newFile);
+  expect(durations).not.toHaveProperty(newFile);
+  const input = [...files, newFile];
+  const selected = TEST_SHARD_IDS.flatMap((id) => {
+    const shard = parseApiTestShard(apiShardValue(id));
+    return shard === null
+      ? []
+      : (partitionTestFiles({ files: input, durations, count: shard.count }).at(
+          shard.index - 1,
+        ) ?? []);
+  });
+  expect(selected.toSorted()).toEqual(input.toSorted());
+  expect(new Set(selected).size).toBe(input.length);
 });
