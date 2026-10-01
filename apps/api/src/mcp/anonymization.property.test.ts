@@ -165,6 +165,44 @@ const shortEntryFields = (entries: readonly GazetteerEntry[]) => {
   return fc.array(shortField, { minLength: 1, maxLength: 5 });
 };
 
+/**
+ * A deny-list case with one entry placed at a chosen field edge: first or
+ * last in a chosen field, either touching the field boundary or separated
+ * from it by whitespace, and separated from the rest of the field so it
+ * stands as its own word.
+ */
+const shortEntryAtFieldEdge = shortEntries.chain((entries) =>
+  fc
+    .record({
+      fields: shortEntryFields(entries),
+      name: fc.constantFrom(...entries.map((entry) => entry.canonical)),
+      fieldPick: fc.nat(),
+      edge: fc.constantFrom("leading", "trailing"),
+      spacing: fc.constantFrom("", " ", "\n"),
+      separator: fc.constantFrom(" ", "\n", ", "),
+    })
+    .map(({ edge, fieldPick, fields: input, name, separator, spacing }) => {
+      const fieldIndex = fieldPick % input.length;
+      const rest = input[fieldIndex] ?? "";
+      const placed =
+        edge === "leading"
+          ? `${spacing}${name}${separator}${rest}`
+          : `${rest}${separator}${name}${spacing}`;
+      return {
+        edge,
+        entries,
+        fieldIndex,
+        input: input.map((value, index) =>
+          index === fieldIndex ? placed : value,
+        ),
+        name,
+        spacing,
+      };
+    }),
+);
+
+const PLACEHOLDER_SOURCE = String.raw`\[[A-Z][A-Z0-9_]*_\d+\]`;
+
 const PLACEHOLDER = /\[[A-Z][A-Z0-9_]*_\d+\]/gu;
 
 /**
@@ -279,15 +317,12 @@ describe("anonymizing several fields through the pipeline", () => {
   );
 
   test(
-    "keeps every field boundary when short deny-list names match near it",
+    "redacts a short deny-list name at a field edge and keeps every boundary",
     async () => {
-      let redactedRuns = 0;
       await fc.assert(
         fc.asyncProperty(
-          shortEntries.chain((entries) =>
-            shortEntryFields(entries).map((input) => ({ entries, input })),
-          ),
-          async ({ entries, input }) => {
+          shortEntryAtFieldEdge,
+          async ({ edge, entries, fieldIndex, input, name, spacing }) => {
             const anonymized = await anonymizeTextFields({
               catalogs: {
                 type: "preloaded",
@@ -307,14 +342,20 @@ describe("anonymizing several fields through the pipeline", () => {
             for (const [index, value] of result.fields.entries()) {
               expect(isRedactionOf(value, input[index] ?? "")).toBe(true);
             }
-            if (result.redactionMap.size > 0) {
-              redactedRuns += 1;
-            }
+            const target = result.fields[fieldIndex] ?? "";
+            const edgePattern =
+              edge === "leading"
+                ? new RegExp(`^${spacing}${PLACEHOLDER_SOURCE}`, "u")
+                : new RegExp(`${PLACEHOLDER_SOURCE}${spacing}$`, "u");
+            expect({ name, edge, target }).toEqual({
+              name,
+              edge,
+              target: expect.stringMatching(edgePattern),
+            });
           },
         ),
         propertyConfig({ numRuns: 100, seed: propertySeed() }),
       );
-      expect(redactedRuns).toBeGreaterThan(0);
     },
     propertyTestTimeout(60_000),
   );

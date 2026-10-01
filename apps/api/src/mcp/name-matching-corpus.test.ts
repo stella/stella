@@ -15,38 +15,45 @@ import type {
 } from "@/api/mcp/__fixtures__/name-matching-corpus";
 import {
   measureNameMatchingCorpus,
+  NAME_MATCHING_MATCHERS,
   nameMatchingCaseHeld,
-} from "@/api/mcp/name-matching-corpus.measure";
+} from "@/api/tests/helpers/name-matching-corpus";
 
 /**
  * Minimum number of redact cases per class that must stay redacted on the
- * anonymized request path. Raise a floor when a change redacts more; never
+ * anonymized request path. `held` counts every redacted case; `attributed`
+ * counts the cases only the matcher under test redacts, where the same fields
+ * without it stay visible. Raise a floor when a change redacts more; never
  * lower one to make a change pass.
  *
  * `typo-1` misses a one-letter typo of a five-letter name, which the matcher
- * now treats as too short for approximate matching; the next matcher release
+ * treats as too short for approximate matching; the next matcher release
  * raises this floor to the full class.
  */
 const RECALL_FLOORS = {
-  exact: 11,
-  case: 7,
-  "diacritics-dropped": 8,
-  "diacritics-added": 5,
-  "typo-1": 6,
-  "typo-2": 6,
-  inflected: 13,
-  "inflected-diacritics-dropped": 7,
-  "legal-form-variant": 11,
-  split: 9,
-  "forced-exact": 2,
-  "forced-case": 1,
-  "forced-embedded": 2,
-} as const satisfies Record<NameMatchingRedactClass, number>;
+  exact: { held: 11, attributed: 3 },
+  case: { held: 7, attributed: 7 },
+  "diacritics-dropped": { held: 8, attributed: 0 },
+  "diacritics-added": { held: 5, attributed: 3 },
+  "typo-1": { held: 6, attributed: 0 },
+  "typo-2": { held: 6, attributed: 2 },
+  inflected: { held: 13, attributed: 7 },
+  "inflected-diacritics-dropped": { held: 7, attributed: 4 },
+  "legal-form-variant": { held: 11, attributed: 2 },
+  split: { held: 9, attributed: 4 },
+  "forced-exact": { held: 2, attributed: 2 },
+  "forced-case": { held: 1, attributed: 1 },
+  "forced-embedded": { held: 2, attributed: 2 },
+} as const satisfies Record<
+  NameMatchingRedactClass,
+  { held: number; attributed: number }
+>;
 
 /**
- * Maximum number of keep cases per class that may be redacted, in every mode
- * that runs the class. Lower a ceiling when a change redacts less; never raise
- * one to make a change pass.
+ * Maximum number of keep cases per class the matcher under test may redact
+ * (redacted with it, intact without it), for every matcher that runs the
+ * class. Lower a ceiling when a change redacts less; never raise one to make
+ * a change pass.
  *
  * `marker` allows the one short name glued to a digit inside a marker-like
  * wrapper; the next matcher release lowers it to zero.
@@ -137,47 +144,44 @@ describe("name-matching corpus", () => {
   });
 
   test("recall and false positives on the anonymized request path stay within each class bound", async () => {
-    const report = await measureNameMatchingCorpus({
-      modes: ["deny-list", "forced"],
-    });
-    const denyList = report["deny-list"] ?? {};
-    const forced = report.forced ?? {};
-
-    const belowFloor = Object.entries(RECALL_FLOORS)
-      .map(([kind, floor]) => ({
+    const report = await measureNameMatchingCorpus();
+    const tallies = NAME_MATCHING_MATCHERS.flatMap((matcher) =>
+      Object.entries(report[matcher]).map(([kind, tally]) => ({
+        matcher,
         kind,
-        floor,
-        held:
-          (kind.startsWith("forced-") ? forced : denyList)[kind]?.passed ?? 0,
-      }))
-      .filter(({ floor, held }) => held < floor);
+        tally,
+      })),
+    );
 
+    const floors: ReadonlyMap<string, { held: number; attributed: number }> =
+      new Map(Object.entries(RECALL_FLOORS));
     const ceilings: ReadonlyMap<string, number> = new Map(
       Object.entries(FALSE_POSITIVE_CEILINGS),
     );
-    const modes = [
-      ["deny-list", denyList],
-      ["forced", forced],
-    ] as const;
-    const aboveCeiling = modes.flatMap(([mode, tallies]) =>
-      Object.entries(tallies).flatMap(([kind, tally]) => {
-        if (tally.expectation !== "keep") {
-          return [];
-        }
-        const ceiling = ceilings.get(kind);
-        const redacted = tally.total - tally.passed;
-        return ceiling === undefined || redacted > ceiling
-          ? [{ mode, kind, ceiling, redacted, failures: tally.failures }]
+    const outOfBounds = tallies.flatMap(({ matcher, kind, tally }) => {
+      if (tally.expectation === "redact") {
+        const floor = floors.get(kind);
+        return floor === undefined ||
+          tally.held < floor.held ||
+          tally.attributed < floor.attributed
+          ? [{ matcher, kind, bound: JSON.stringify(floor), tally }]
           : [];
-      }),
+      }
+      const ceiling = ceilings.get(kind);
+      return ceiling === undefined || tally.attributedFalsePositives > ceiling
+        ? [{ matcher, kind, bound: JSON.stringify(ceiling), tally }]
+        : [];
+    });
+    const measuredKinds = new Set(tallies.map(({ kind }) => kind));
+    const unmeasured = [...floors.keys(), ...ceilings.keys()].filter(
+      (kind) => !measuredKinds.has(kind),
+    );
+    const splitFailures = tallies.filter(
+      ({ tally }) => tally.splitFailures > 0,
     );
 
-    const unmeasured = [...ceilings.keys()].filter(
-      (kind) => !modes.some(([, tallies]) => kind in tallies),
-    );
-
-    expect(belowFloor).toEqual([]);
-    expect(aboveCeiling).toEqual([]);
+    expect(outOfBounds).toEqual([]);
     expect(unmeasured).toEqual([]);
+    expect(splitFailures).toEqual([]);
   }, 60_000);
 });
