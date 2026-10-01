@@ -97,7 +97,7 @@ export const startChatExecutionAdmission = async ({
             const reserved = await control.reservePeriod(identity);
             return Result.isError(reserved)
               ? Result.err(chatAdmissionError(reserved.error))
-              : reserved;
+              : Result.ok(reserved.value);
           },
           release: async () => {
             finished.resolve(undefined);

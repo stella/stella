@@ -1141,32 +1141,47 @@ export const withClaimedChatTurnExecution = async <T>({
     return { execution, value: await mutate({ execution, tx }) };
   });
 
+type WriteChatTurnRunOwnershipOptions = {
+  execution: ChatTurnExecution;
+  safeDb: SafeDb;
+} & ({ mode: "bind"; runId: string } | { mode: "renew"; runId?: string });
+
+const writeChatTurnRunOwnership = async ({
+  execution,
+  runId,
+  safeDb,
+  mode,
+}: WriteChatTurnRunOwnershipOptions): Promise<
+  Result<ChatTurnExecutionStanding, SafeDbError>
+> =>
+  await safeDb(async (tx) => {
+    // audit: skip — execution ownership; durable turn outcomes are audited at settlement
+    const written = await tx
+      .update(chatTurns)
+      .set(
+        mode === "bind"
+          ? { runId }
+          : {
+              leaseExpiresAt: nextChatTurnRunLeaseExpiry(),
+              ...(runId === undefined ? {} : { runId }),
+            },
+      )
+      .where(ownedByExecution(execution))
+      .returning({ cancelRequestedAt: chatTurns.cancelRequestedAt });
+    return standingOf(written.at(0));
+  });
+
 /**
  * Extend a producing run's lease by `CHAT_TURN_RUN_LEASE_MS`. This conditional
  * write makes the renewed lease a proof that the caller still owns the turn:
  * an owner that finds it lost no longer owns any effect of the turn.
  */
-export const renewChatTurnExecutionLease = async ({
-  execution,
-  runId,
-  safeDb,
-}: {
+export const renewChatTurnExecutionLease = async (options: {
   execution: ChatTurnExecution;
   runId?: string;
   safeDb: SafeDb;
 }): Promise<Result<ChatTurnExecutionStanding, SafeDbError>> =>
-  await safeDb(async (tx) => {
-    // audit: skip — ephemeral execution ownership; terminal state is audited at settlement
-    const renewed = await tx
-      .update(chatTurns)
-      .set({
-        leaseExpiresAt: nextChatTurnRunLeaseExpiry(),
-        ...(runId === undefined ? {} : { runId }),
-      })
-      .where(ownedByExecution(execution))
-      .returning({ cancelRequestedAt: chatTurns.cancelRequestedAt });
-    return standingOf(renewed.at(0));
-  });
+  await writeChatTurnRunOwnership({ ...options, mode: "renew" });
 
 /** How starting a run went: its standing, or its id already names a turn. */
 type ChatTurnRunStart = ChatTurnExecutionStanding | "run-taken";
@@ -1201,15 +1216,7 @@ export const bindChatTurnRunId = async ({
   safeDb: SafeDb;
 }): Promise<Result<ChatTurnRunStart, SafeDbError>> =>
   classifyRunIdWrite(
-    await safeDb(async (tx) => {
-      // audit: skip — execution correlation; durable turn outcomes are audited at settlement
-      const bound = await tx
-        .update(chatTurns)
-        .set({ runId })
-        .where(ownedByExecution(execution))
-        .returning({ cancelRequestedAt: chatTurns.cancelRequestedAt });
-      return standingOf(bound.at(0));
-    }),
+    await writeChatTurnRunOwnership({ execution, runId, safeDb, mode: "bind" }),
   );
 
 /**

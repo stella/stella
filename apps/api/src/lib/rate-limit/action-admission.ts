@@ -466,7 +466,7 @@ const resolveAdmissionPeriod = ({
           cause: resolved.error,
         }),
       )
-    : resolved;
+    : Result.ok(resolved.value);
 };
 
 type PeriodReservationControlOptions = AdmissionExecutorOptions & {

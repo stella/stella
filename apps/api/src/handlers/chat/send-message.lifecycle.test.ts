@@ -1,3 +1,4 @@
+import { EventType } from "@tanstack/ai";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
@@ -71,7 +72,7 @@ describe("send lifecycle checkpoint indexing", () => {
       const response = run.produce(
         (async function* () {
           yield {
-            type: "RUN_STARTED",
+            type: EventType.RUN_STARTED,
             runId: "matrix-run",
             threadId: "same-thread",
             timestamp: 0,
