@@ -588,6 +588,7 @@ test(
       {
         id: retiredId,
         sourceId: openSourceId,
+        sourceDocumentId: "alias-reader-retired",
         country: "CZE",
         court: "Nejvyšší soud",
         language: "cs",
@@ -596,6 +597,7 @@ test(
       {
         id: survivorId,
         sourceId: openSourceId,
+        sourceDocumentId: "alias-reader-survivor",
         country: "CZE",
         court: "Nejvyšší soud",
         language: "cs",
@@ -654,7 +656,7 @@ test(
       });
     }
     expect(await (await get(`/d/${openId}`)).json()).toEqual(beforeCz);
-    await expect(
+    expect(
       db
         .insert(caseLawDecisions)
         .values({
@@ -715,7 +717,7 @@ test(
       { retiredDecisionId: later },
       { createdAt: new Date("2000-01-01T00:00:00Z") },
     ]) {
-      await expect(
+      expect(
         db
           .update(caseLawDecisionAliases)
           .set(patch)
@@ -729,7 +731,7 @@ test(
         },
       });
     }
-    await expect(
+    expect(
       db
         .update(caseLawDecisionAliases)
         .set({ canonicalDecisionId: final })
@@ -740,7 +742,7 @@ test(
         message: expect.stringContaining("Conflicting decision alias target"),
       },
     });
-    await expect(
+    expect(
       db
         .insert(caseLawDecisionAliases)
         .values({ retiredDecisionId: middle, canonicalDecisionId: first })
@@ -748,7 +750,7 @@ test(
     ).rejects.toMatchObject({
       cause: { message: expect.stringContaining("Decision alias cycle") },
     });
-    await expect(
+    expect(
       db
         .insert(caseLawDecisionAliases)
         .values({ retiredDecisionId: middle, canonicalDecisionId: missingId })
@@ -758,7 +760,7 @@ test(
         message: expect.stringContaining("Decision alias target is not live"),
       },
     });
-    await expect(
+    expect(
       db
         .delete(caseLawDecisions)
         .where(eq(caseLawDecisions.id, middle))
@@ -789,7 +791,7 @@ test(
         .from(caseLawDecisionAliases)
         .where(eq(caseLawDecisionAliases.retiredDecisionId, later)),
     ).toEqual([{ target: final }]);
-    await expect(
+    expect(
       db
         .delete(caseLawDecisions)
         .where(eq(caseLawDecisions.id, final))
@@ -883,7 +885,17 @@ test(
         .insert(caseLawDecisionAliases)
         .values({ retiredDecisionId: retiredId, canonicalDecisionId: openId });
     });
-    await expect(
+    expect(
+      db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL ROLE stella`);
+        await tx
+          .select({ id: caseLawDecisionAliases.retiredDecisionId })
+          .from(caseLawDecisionAliases);
+      }),
+    ).rejects.toMatchObject({
+      cause: { message: expect.stringContaining("permission denied") },
+    });
+    expect(
       db.transaction(async (tx) => {
         await tx.execute(sql`SET LOCAL ROLE stella_public_law_reader`);
         await tx
@@ -894,7 +906,7 @@ test(
     ).rejects.toMatchObject({
       cause: { message: expect.stringContaining("permission denied") },
     });
-    await expect(
+    expect(
       db.transaction(async (tx) => {
         await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
         await tx
@@ -922,7 +934,7 @@ test(
         message: "Decision alias crosses publisher sources",
       },
     ]) {
-      await expect(
+      expect(
         db
           .insert(caseLawDecisionAliases)
           .values({
