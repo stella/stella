@@ -38,7 +38,7 @@ export const productionE2eInputs = (configPath) => {
   }
   for (const file of readdirSync(testDirectory, {
     recursive: true,
-    encoding: "utf8",
+    encoding: "utf-8",
   })) {
     if (
       SOURCE_EXTENSION.test(file) &&
