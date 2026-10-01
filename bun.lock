@@ -484,7 +484,6 @@
       "name": "@stll/agent-engine",
       "version": "0.0.0",
       "dependencies": {
-        "@ag-ui/core": "catalog:",
         "@tanstack/ai": "catalog:",
         "@tanstack/ai-codex": "catalog:",
         "@tanstack/ai-persistence": "catalog:",
@@ -934,9 +933,9 @@
       "dependencies": {
         "@stll/country-codes": "workspace:*",
         "@stll/fuzzy-search": "catalog:",
+        "@stll/time": "workspace:*",
         "better-result": "catalog:",
         "saxes": "catalog:",
-        "temporal-polyfill": "catalog:",
       },
       "devDependencies": {
         "@stll/property-testing": "workspace:*",
@@ -1262,7 +1261,6 @@
     "undici": "8.10.2",
   },
   "catalog": {
-    "@ag-ui/core": "1.0.0",
     "@base-ui/react": "1.8.0",
     "@better-auth/api-key": "1.7.5",
     "@better-auth/cimd": "1.7.5",
