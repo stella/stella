@@ -121,15 +121,25 @@ test("honors an environment replay path only for its matching explicit seed", ()
   expect(propertyConfig({ seed: 123 }).path).toBeUndefined();
 });
 
-test("time boxes only exploratory generation and leaves interruption non-failing", () => {
+test("time boxes only exploratory generation and leaves interruption non-failing", async () => {
   neutralEnv();
   process.env["PROPERTY_TEST_TIME_LIMIT_MS"] = "50";
-  expect(propertyConfig().interruptAfterTimeLimit).toBeUndefined();
+  expect(propertyConfig().plugins).toBeUndefined();
   process.env["PROPERTY_TEST_NUM_RUNS_FACTOR"] = "10";
-  expect(propertyConfig()).toMatchObject({
-    interruptAfterTimeLimit: 50,
-    markInterruptAsFailure: false,
-  });
+  const callerPlugin: fc.Plugin<[number]> = () => ({});
+  const withCallerPlugin = propertyConfig({ plugins: [callerPlugin] }).plugins;
+  expect(withCallerPlugin).toHaveLength(2);
+  expect(withCallerPlugin?.[0]).toBe(callerPlugin);
+  // 1000 runs of 20 ms would take 20 s; the 50 ms box stops them early.
+  const details = await fc.check(
+    fc.asyncProperty(fc.nat(), async () => {
+      await Bun.sleep(20);
+      return true;
+    }),
+    propertyConfig({ numRuns: 100 }),
+  );
+  expect(details.interrupted).toBe(true);
+  expect(details.failed).toBe(false);
   process.env["PROPERTY_TEST_TIME_LIMIT_MS"] = "invalid";
   expect(() => propertyConfig()).toThrow(
     "PROPERTY_TEST_TIME_LIMIT_MS must be a positive integer",

@@ -102,7 +102,12 @@ export const propertyConfig = <Ts>(
     ...(seed === undefined ? {} : { seed }),
     ...(replayPath === undefined ? {} : { path: replayPath }),
     ...(factor > 1 && timeLimit !== undefined
-      ? { interruptAfterTimeLimit: timeLimit, markInterruptAsFailure: false }
+      ? {
+          plugins: [
+            ...(params.plugins ?? []),
+            fc.interruptAfterTimeLimit(timeLimit),
+          ],
+        }
       : {}),
     numRuns: Math.ceil(baseNumRuns * factor),
   };
@@ -303,14 +308,10 @@ export const runProperty = <Ts>({
   });
   // Pinned runs preserve their recorded path and cannot be truncated by a nightly time box.
   const replays = pinned.map(({ seed, path: replayPath }) => {
-    const {
-      path: _path,
-      interruptAfterTimeLimit: _limit,
-      markInterruptAsFailure: _mark,
-      ...base
-    } = generated;
+    const { path: _path, plugins: _plugins, ...base } = generated;
     return {
       ...base,
+      ...(params.plugins === undefined ? {} : { plugins: params.plugins }),
       seed,
       ...(replayPath === undefined ? {} : { path: replayPath }),
       examples: [],
