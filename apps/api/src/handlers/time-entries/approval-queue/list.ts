@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { and, asc, eq, gt, gte, isNull, lte, ne, or } from "drizzle-orm";
 import { t } from "elysia";
 
+import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { parsePlainDate } from "@stll/time";
 
 import { BILLING_STATUS, timeEntries, workspaces } from "@/api/db/schema";
@@ -34,6 +35,7 @@ import { validateOrgUserId } from "@/api/lib/validated-org-user-id";
 
 const queueColumns = {
   id: timeEntries.id,
+  activityGroup: timeEntries.activityGroup,
   workspaceId: timeEntries.workspaceId,
   userId: timeEntries.userId,
   dateWorked: timeEntries.dateWorked,
@@ -85,9 +87,13 @@ true satisfies ExtraQueueColumn extends never ? true : never;
 const listApprovalQueue = createSafeRootHandler(
   {
     description:
-      "List draft time entries awaiting the signed-in user's approval in accessible matters. Owners/admins also see drafts without an assigned approver. Optionally filter work dates (from/to, YYYY-MM-DD), timekeeper (member), and matter. Returns logged durationMinutes separately from adjusted billedMinutes and the last return comment. Follow nextCursor for the next bounded page.",
+      "List draft time entries awaiting the signed-in user's approval, including internal work and accessible client matters. Owners/admins also see drafts without an assigned approver. Optionally filter work dates (from/to, YYYY-MM-DD), timekeeper (member), and matter. Returns logged durationMinutes separately from adjusted billedMinutes and the last return comment. Follow nextCursor for the next bounded page.",
     permissions: { timeEntry: ["read"] },
-    mcp: { type: "capability", reason: "billing_admin" },
+    mcp: {
+      type: "capability",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
     access: "read",
     query: t.Object({
       from: t.Optional(t.String({ format: "date" })),
@@ -164,7 +170,7 @@ const listApprovalQueue = createSafeRootHandler(
         tx
           .select(queueColumns)
           .from(timeEntries)
-          .innerJoin(
+          .leftJoin(
             workspaces,
             and(
               eq(timeEntries.workspaceId, workspaces.id),
@@ -175,7 +181,19 @@ const listApprovalQueue = createSafeRootHandler(
             and(
               eq(timeEntries.organizationId, session.activeOrganizationId),
               eq(timeEntries.status, BILLING_STATUS.DRAFT),
-              ne(workspaces.status, "deleting"),
+              or(
+                eq(
+                  timeEntries.activityGroup,
+                  TIME_ENTRY_ACTIVITY_GROUP.INTERNAL,
+                ),
+                and(
+                  eq(
+                    timeEntries.activityGroup,
+                    TIME_ENTRY_ACTIVITY_GROUP.CLIENT,
+                  ),
+                  ne(workspaces.status, "deleting"),
+                ),
+              ),
               canApproveTimeEntries(memberRole)
                 ? or(
                     eq(timeEntries.approverUserId, user.id),

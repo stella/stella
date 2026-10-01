@@ -239,7 +239,7 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
     { id: ENTITY_VIEW_GROUP.MATTER, label: t("common.matter") },
   ];
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden border-t">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <fieldset
         disabled={remove.isPending}
         className="flex min-w-0 flex-wrap items-center border-b"

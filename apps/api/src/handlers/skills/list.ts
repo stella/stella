@@ -48,7 +48,11 @@ const config = {
     "you may manage team skills.",
   permissions: { chat: ["create"] },
   access: "read",
-  mcp: { type: "capability", reason: "agent_tool_authoring" },
+  mcp: {
+    type: "capability",
+    reason: "agent_tool_authoring",
+    consumesServices: false,
+  },
   query: listSkillsQuerySchema,
 } satisfies HandlerConfig;
 

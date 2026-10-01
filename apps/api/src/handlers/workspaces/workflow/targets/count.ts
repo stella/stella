@@ -15,7 +15,11 @@ const config = {
     "matters.workflow.start to size the run.",
   permissions: { workspace: ["update"] },
   access: "read",
-  mcp: { type: "capability", reason: "workflow_orchestration" },
+  mcp: {
+    type: "capability",
+    reason: "workflow_orchestration",
+    consumesServices: false,
+  },
   body: t.Object({
     // Bounded by what a run may actually be launched against: the same cap
     // `matters.workflow.start` puts on its own entity list, so every set

@@ -318,7 +318,7 @@ function ContactImportStudio() {
   const step = currentStep(state, review.results !== null);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden border-t">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <header className="border-b px-4 py-4 sm:px-6">
         <div className="mx-auto flex max-w-6xl flex-col gap-4">
           <div>

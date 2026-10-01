@@ -103,7 +103,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
         expect(errors).toHaveLength(0);
         const budget = resolveActionPeriodBudget({
           organizationId,
-          identity: { actionKind: "mcp.tools/call", logicalPhaseId: "lookup" },
+          identity: { actionKind: "mcp.data/call", logicalPhaseId: "lookup" },
           policy: { periodMs: 86_400_000, limit: 2 },
           nowMs: Temporal.Now.instant().epochMilliseconds,
         });

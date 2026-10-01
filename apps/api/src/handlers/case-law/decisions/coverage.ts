@@ -483,9 +483,6 @@ export const loadCaseLawCoverage = async ({
   });
 };
 
-export const COVERAGE_CACHE_CONTROL =
-  "public, max-age=900, stale-while-revalidate=3600";
-
 export const readCaseLawCoverageHandler = async (
   caseLawDb: CaseLawPublicReadDb,
 ): Promise<CaseLawCoverage | { message: string }> => {

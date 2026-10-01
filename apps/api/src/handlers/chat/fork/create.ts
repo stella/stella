@@ -62,7 +62,11 @@ const config = {
     "it came from and starts with no compaction state of its own.",
   permissions: { chat: ["create"] },
   access: "write",
-  mcp: { type: "capability", reason: "assistant_chat" },
+  mcp: {
+    type: "capability",
+    reason: "assistant_chat",
+    consumesServices: false,
+  },
   params: t.Object({ threadId: tSafeId("chatThread") }),
   query: t.Object({
     workspaceId: t.Optional(tSafeId("workspace")),

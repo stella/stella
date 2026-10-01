@@ -49,7 +49,11 @@ const config = {
     "refused. Claims that already have a status are left as they are. Returns " +
     "the review of every claim that was marked.",
   permissions: { entity: ["update"] },
-  mcp: { type: "capability", reason: "document_processing" },
+  mcp: {
+    type: "capability",
+    reason: "document_processing",
+    consumesServices: false,
+  },
   body: bodySchema,
 } satisfies WorkspaceHandlerConfig;
 

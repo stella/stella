@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, expectTypeOf, test } from "bun:test";
 
 import {
   LEGISLATION_URL_FIELDS,
@@ -33,23 +33,12 @@ const document = (
   ...urls,
 });
 
-type Assert<TCondition extends true> = TCondition;
-
-/**
- * True while every `…Url` field the document input carries is one the guard
- * checks. A new URL field that nobody adds to `LEGISLATION_URL_FIELDS` makes
- * this `false`, and the assignment below stops compiling — a URL the guard
- * skips is a URL that reaches storage unchecked.
- */
-type EveryUrlFieldIsChecked = Assert<
-  [Exclude<LegislationUrlBearingField, LegislationUrlField>] extends [never]
-    ? true
-    : false
->;
-
 test("every URL-bearing field of the document input is checked", () => {
-  const everyUrlFieldIsChecked: EveryUrlFieldIsChecked = true;
-  expect(everyUrlFieldIsChecked).toBe(true);
+  // A new `…Url` field that nobody adds to `LEGISLATION_URL_FIELDS` stops this
+  // compiling: a URL the guard skips is a URL that reaches storage unchecked.
+  expectTypeOf<
+    Exclude<LegislationUrlBearingField, LegislationUrlField>
+  >().toBeNever();
   expect([...LEGISLATION_URL_FIELDS].toSorted()).toEqual([
     "documentUrl",
     "sourceUrl",

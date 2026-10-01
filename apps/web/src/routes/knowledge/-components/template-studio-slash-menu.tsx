@@ -2,9 +2,9 @@ import type { MouseEvent as ReactMouseEvent, RefObject } from "react";
 import { useCallback, useMemo, useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Transaction } from "prosemirror-state";
-import { TextSelection } from "prosemirror-state";
-import type { EditorView } from "prosemirror-view";
+import type { Transaction } from "@tiptap/pm/state";
+import { TextSelection } from "@tiptap/pm/state";
+import type { EditorView } from "@tiptap/pm/view";
 import { useDebounce } from "use-debounce";
 import { useTranslations } from "use-intl";
 

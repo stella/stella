@@ -1,3 +1,5 @@
+import { expectTypeOf } from "bun:test";
+
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import type { WebApiRoutes } from "@/lib/eden-client";
 
@@ -5,19 +7,9 @@ import type { WebApiRoutes } from "@/lib/eden-client";
 // revives it, so a response type claiming `Date` would let `.getTime()`
 // type-check and throw at runtime.
 
-type Expect<Condition extends true> = Condition;
-type Equal<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+expectTypeOf<PublicCaseLawDecision["createdAt"]>().toEqualTypeOf<string>();
+expectTypeOf<PublicCaseLawDecision["updatedAt"]>().toEqualTypeOf<string>();
 
-export type DecisionTimestampsAreWireStrings = Expect<
-  Equal<
-    Pick<PublicCaseLawDecision, "createdAt" | "updatedAt">,
-    { createdAt: string; updatedAt: string }
-  >
->;
-
-export type WorkspaceTimestampIsWireString = Expect<
-  Equal<
-    WebApiRoutes["workspaces"][":workspaceId"]["get"]["response"][200]["createdAt"],
-    string
-  >
->;
+expectTypeOf<
+  WebApiRoutes["workspaces"][":workspaceId"]["get"]["response"][200]["createdAt"]
+>().toEqualTypeOf<string>();

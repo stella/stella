@@ -1,6 +1,6 @@
+import { EditorState, TextSelection } from "@tiptap/pm/state";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
-import { EditorState, TextSelection } from "prosemirror-state";
 
 import {
   fromProseDoc,
@@ -98,7 +98,7 @@ describe("evidence references", () => {
   });
 
   test("removing the first exhibit renumbers later references and undo restores them", async () => {
-    const { closeHistory, history, undo } = await import("prosemirror-history");
+    const { closeHistory, history, undo } = await import("@tiptap/pm/history");
     let state = EditorState.create({
       schema,
       plugins: [history(), createEvidenceReferencesPlugin()],

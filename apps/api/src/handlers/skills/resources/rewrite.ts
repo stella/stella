@@ -35,7 +35,11 @@ const config = {
     "content without saving it: persist it with skills.resources.update. " +
     "Consumes AI usage.",
   permissions: { agentSkill: ["update"] },
-  mcp: { type: "capability", reason: "agent_tool_authoring" },
+  mcp: {
+    type: "capability",
+    reason: "agent_tool_authoring",
+    consumesServices: true,
+  },
   params: rewriteSkillResourceParamsSchema,
   body: rewriteSkillResourceBodySchema,
   requiresUsage: { actionType: "chat", modelRole: "fast" },

@@ -24,13 +24,8 @@ on:
 # A newer recording for the same pull request supersedes the running one.
 # Other labels get their own group, so adding one never cancels a recording.
 concurrency:
-  group: >-
-    network-baseline-record-${{ github.event.pull_request.number || inputs.pr }}-${{
-      (github.event_name == 'workflow_dispatch' || github.event.label.name == 'baseline:record')
-      && 'record'
-      || github.event.label.name
-    }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ (github.event_name == 'pull_request') && format('pr-{0}-label-{1}', github.event.pull_request.number || github.ref, github.event.label.name) || format('run-{0}', github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions: {}
 

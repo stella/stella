@@ -205,7 +205,7 @@ test("a multipart revision flushes alone between ordinary revisions", () => {
   ).toEqual(["last"]);
 });
 
-test("the commit mode picks the ingest the request runs through", async () => {
+test("all coordinator modes wait for publication, including serving catch-up", async () => {
   const calls: string[] = [];
   const client = {
     ingestCommittedBatch: async () => {
@@ -232,7 +232,10 @@ test("the commit mode picks the ingest the request runs through", async () => {
     ).toBe(true);
   }
 
-  expect(calls).toEqual(Object.values(CORPUS_PROJECTION_APPEND_COMMIT_MODE));
+  expect(calls).toEqual([
+    CORPUS_PROJECTION_APPEND_COMMIT_MODE.published,
+    CORPUS_PROJECTION_APPEND_COMMIT_MODE.published,
+  ]);
 });
 
 /**

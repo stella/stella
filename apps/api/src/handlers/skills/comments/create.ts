@@ -45,7 +45,11 @@ const config = {
     "comment survives the text moving on.",
   permissions: { agentSkill: ["comment"] },
   access: "write",
-  mcp: { type: "capability", reason: "agent_tool_authoring" },
+  mcp: {
+    type: "capability",
+    reason: "agent_tool_authoring",
+    consumesServices: false,
+  },
   params: createSkillCommentParamsSchema,
   body: createSkillCommentBodySchema,
 } satisfies HandlerConfig;

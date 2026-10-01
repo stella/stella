@@ -58,17 +58,45 @@ const runInTransaction = async <TResult>(
   );
 
 const runCycle = async (
-  ingestQueuedBatch: (
+  ingestCommittedBatch: (
     indexId: string,
     ndjson: string,
   ) => Promise<Result<void, CorpusIndexError>>,
-) =>
-  await executeCorpusProjectionAppendCycle({
+) => {
+  const revisionCounts = new Map<string, number>();
+  return await executeCorpusProjectionAppendCycle({
     runInTransaction,
     client: {
-      ingestCommittedBatch: async () =>
-        panic("A queued cycle must not use committed ingestion"),
-      ingestQueuedBatch,
+      ingestCommittedBatch: async (indexId, ndjson) => {
+        const result = await ingestCommittedBatch(indexId, ndjson);
+        if (result.isErr()) {
+          return result;
+        }
+        for (const line of ndjson.split("\n")) {
+          const { projection_revision } = JSON.parse(line);
+          if (typeof projection_revision !== "string") {
+            panic("Accepted document has no projection revision");
+          }
+          revisionCounts.set(
+            projection_revision,
+            (revisionCounts.get(projection_revision) ?? 0) + 1,
+          );
+        }
+        return result;
+      },
+      ingestQueuedBatch: async () =>
+        panic("Projection append must wait for publication"),
+      aggregate: async ({ query }) =>
+        Result.ok({
+          projection_revisions: {
+            buckets: Array.from(revisionCounts, ([key, doc_count]) => ({
+              key,
+              doc_count,
+            })).filter(({ key }) => query.includes(`"${key}"`)),
+            doc_count_error_upper_bound: 0,
+            sum_other_doc_count: 0,
+          },
+        }),
     },
     commitMode: CORPUS_PROJECTION_APPEND_COMMIT_MODE.queued,
     family: TARGET.family,
@@ -80,6 +108,7 @@ const runCycle = async (
     retryDelayMs: 5000,
     payloadRetryLimit: 3,
   });
+};
 
 beforeAll(
   async () => {

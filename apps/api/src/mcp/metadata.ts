@@ -23,7 +23,6 @@ export const createMcpMetadataHeaders = () =>
     "Access-Control-Allow-Methods": MCP_DISCOVERY_ALLOW_HEADER,
     "Access-Control-Allow-Headers": MCP_ALLOWED_HEADERS.join(", "),
     "Access-Control-Expose-Headers": MCP_EXPOSE_HEADERS.join(", "),
-    "Cache-Control": "public, max-age=300",
     [STELLA_MCP_API_CONTRACT_HEADER]: String(STELLA_MCP_API_CONTRACT_VERSION),
     [STELLA_CLI_MINIMUM_HEADER]: STELLA_CLI_MINIMUM_VERSION,
   });

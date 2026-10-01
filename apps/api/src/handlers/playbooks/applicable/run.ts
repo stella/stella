@@ -29,7 +29,11 @@ const config = {
     "many document runs opened. Use playbooks.run for a single playbook.",
   permissions: { playbook: ["apply"] },
   access: "write",
-  mcp: { type: "capability", reason: "knowledge_library_admin" },
+  mcp: {
+    type: "capability",
+    reason: "knowledge_library_admin",
+    consumesServices: true,
+  },
   params: workspaceParams({}),
 } satisfies WorkspaceHandlerConfig;
 

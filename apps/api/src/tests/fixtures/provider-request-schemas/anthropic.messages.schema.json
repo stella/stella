@@ -1,0 +1,7139 @@
+{
+  "$defs": {
+    "BetaAdvisorToolResultErrorCode": {
+      "enum": [
+        "max_uses_exceeded",
+        "prompt_too_long",
+        "too_many_requests",
+        "overloaded",
+        "unavailable",
+        "execution_time_exceeded",
+        "model_not_found"
+      ],
+      "type": "string"
+    },
+    "BetaAdvisorTool_20260301": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_callers": {
+          "items": {
+            "$ref": "#/$defs/BetaAllowedCaller"
+          },
+          "type": "array"
+        },
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "caching": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "defer_loading": {
+          "type": "boolean"
+        },
+        "max_tokens": {
+          "anyOf": [
+            {
+              "minimum": 1024,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "max_uses": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "model": {
+          "$ref": "#/$defs/Model"
+        },
+        "name": {
+          "const": "advisor",
+          "type": "string"
+        },
+        "strict": {
+          "type": "boolean"
+        },
+        "type": {
+          "const": "advisor_20260301",
+          "type": "string"
+        }
+      },
+      "required": ["model", "name", "type"],
+      "type": "object"
+    },
+    "BetaAllThinkingTurns": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "all",
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "BetaAllowedCaller": {
+      "enum": [
+        "direct",
+        "code_execution_20250825",
+        "code_execution_20260120",
+        "code_execution_20260521"
+      ],
+      "type": "string"
+    },
+    "BetaBase64ImageSource": {
+      "additionalProperties": false,
+      "properties": {
+        "data": {
+          "format": "byte",
+          "type": "string"
+        },
+        "media_type": {
+          "enum": ["image/jpeg", "image/png", "image/gif", "image/webp"],
+          "type": "string"
+        },
+        "type": {
+          "const": "base64",
+          "type": "string"
+        }
+      },
+      "required": ["data", "media_type", "type"],
+      "type": "object"
+    },
+    "BetaBase64PDFSource": {
+      "additionalProperties": false,
+      "properties": {
+        "data": {
+          "format": "byte",
+          "type": "string"
+        },
+        "media_type": {
+          "const": "application/pdf",
+          "type": "string"
+        },
+        "type": {
+          "const": "base64",
+          "type": "string"
+        }
+      },
+      "required": ["data", "media_type", "type"],
+      "type": "object"
+    },
+    "BetaBashCodeExecutionToolResultErrorCode": {
+      "enum": [
+        "invalid_tool_input",
+        "unavailable",
+        "too_many_requests",
+        "execution_time_exceeded",
+        "output_file_too_large"
+      ],
+      "type": "string"
+    },
+    "BetaBashTool_20241022": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_callers": {
+          "items": {
+            "$ref": "#/$defs/BetaAllowedCaller"
+          },
+          "type": "array"
+        },
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "defer_loading": {
+          "type": "boolean"
+        },
+        "input_examples": {
+          "items": {
+            "additionalProperties": {
+              "$ref": "#/$defs/BetaJsonValue"
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "name": {
+          "const": "bash",
+          "type": "string"
+        },
+        "strict": {
+          "type": "boolean"
+        },
+        "type": {
+          "const": "bash_20241022",
+          "type": "string"
+        }
+      },
+      "required": ["name", "type"],
+      "type": "object"
+    },
+    "BetaBashTool_20250124": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_callers": {
+          "items": {
+            "$ref": "#/$defs/BetaAllowedCaller"
+          },
+          "type": "array"
+        },
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "defer_loading": {
+          "type": "boolean"
+        },
+        "input_examples": {
+          "items": {
+            "additionalProperties": {
+              "$ref": "#/$defs/BetaJsonValue"
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "name": {
+          "const": "bash",
+          "type": "string"
+        },
+        "strict": {
+          "type": "boolean"
+        },
+        "type": {
+          "const": "bash_20250124",
+          "type": "string"
+        }
+      },
+      "required": ["name", "type"],
+      "type": "object"
+    },
+    "BetaBrowserCloseTabConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "defer_loading": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaBrowserDoubleClickConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "defer_loading": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaBrowserFileUploadConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "defer_loading": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaBrowserFindConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "defer_loading": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaBrowserFormInputConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "defer_loading": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaBrowserGetPageTextConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "defer_loading": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaBrowserHoldKeyConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "defer_loading": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaBrowserHoverConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "defer_loading": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaBrowserJavascriptExecConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "defer_loading": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaBrowserKeyConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "defer_loading": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaBrowserLeftClickConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "defer_loading": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaBrowserLeftClickDragConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "defer_loading": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaBrowserLeftMouseDownConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "defer_loading": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaBrowserLeftMouseUpConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "defer_loading": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaBrowserListTabsConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "defer_loading": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaBrowserMiddleClickConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "defer_loading": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaBrowserMouseMoveConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "defer_loading": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaBrowserNavigateConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "defer_loading": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaBrowserNewTabConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "defer_loading": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaBrowserReadConsoleConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "defer_loading": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaBrowserReadNetworkConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "defer_loading": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaBrowserReadPageConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "defer_loading": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaBrowserRightClickConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "defer_loading": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaBrowserScreenshotConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "defer_loading": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaBrowserScrollConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "defer_loading": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaBrowserScrollToConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "defer_loading": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaBrowserStateChangeDownloadCompleted": {
+      "additionalProperties": false,
+      "properties": {
+        "download_id": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f\\u2028\\u2029]*$",
+          "type": "string"
+        },
+        "path": {
+          "anyOf": [
+            {
+              "maxLength": 4096,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f\\u2028\\u2029]*$"
+        },
+        "size_bytes": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "const": "download_completed",
+          "type": "string"
+        },
+        "url": {
+          "maxLength": 4096,
+          "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f\\u2028\\u2029]*$",
+          "type": "string"
+        }
+      },
+      "required": ["download_id", "type", "url"],
+      "type": "object"
+    },
+    "BetaBrowserStateChangeDownloadFailed": {
+      "additionalProperties": false,
+      "properties": {
+        "download_id": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f\\u2028\\u2029]*$",
+          "type": "string"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "maxLength": 4096,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f\\u2028\\u2029]*$"
+        },
+        "type": {
+          "const": "download_failed",
+          "type": "string"
+        },
+        "url": {
+          "maxLength": 4096,
+          "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f\\u2028\\u2029]*$",
+          "type": "string"
+        }
+      },
+      "required": ["download_id", "type", "url"],
+      "type": "object"
+    },
+    "BetaBrowserStateChangeDownloadStarted": {
+      "additionalProperties": false,
+      "properties": {
+        "download_id": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f\\u2028\\u2029]*$",
+          "type": "string"
+        },
+        "type": {
+          "const": "download_started",
+          "type": "string"
+        },
+        "url": {
+          "maxLength": 4096,
+          "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f\\u2028\\u2029]*$",
+          "type": "string"
+        }
+      },
+      "required": ["download_id", "type", "url"],
+      "type": "object"
+    },
+    "BetaBrowserStateChangeTabOpened": {
+      "additionalProperties": false,
+      "properties": {
+        "tab_id": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f\\u2028\\u2029]*$",
+          "type": "string"
+        },
+        "type": {
+          "const": "tab_opened",
+          "type": "string"
+        }
+      },
+      "required": ["tab_id", "type"],
+      "type": "object"
+    },
+    "BetaBrowserStateTabEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "active": {
+          "type": "boolean"
+        },
+        "tab_id": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f\\u2028\\u2029]*$",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 4096,
+          "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f\\u2028\\u2029]*$",
+          "type": "string"
+        },
+        "url": {
+          "maxLength": 4096,
+          "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f\\u2028\\u2029]*$",
+          "type": "string"
+        }
+      },
+      "required": ["tab_id", "title", "url"],
+      "type": "object"
+    },
+    "BetaBrowserSwitchTabConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "defer_loading": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaBrowserToolsetConfigs": {
+      "additionalProperties": false,
+      "properties": {
+        "close_tab": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaBrowserCloseTabConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "double_click": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaBrowserDoubleClickConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "file_upload": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaBrowserFileUploadConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "find": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaBrowserFindConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "form_input": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaBrowserFormInputConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "get_page_text": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaBrowserGetPageTextConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "hold_key": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaBrowserHoldKeyConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "hover": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaBrowserHoverConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "javascript_exec": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaBrowserJavascriptExecConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "key": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaBrowserKeyConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "left_click": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaBrowserLeftClickConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "left_click_drag": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaBrowserLeftClickDragConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "left_mouse_down": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaBrowserLeftMouseDownConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "left_mouse_up": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaBrowserLeftMouseUpConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "list_tabs": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaBrowserListTabsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "middle_click": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaBrowserMiddleClickConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "mouse_move": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaBrowserMouseMoveConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "navigate": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaBrowserNavigateConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "new_tab": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaBrowserNewTabConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "read_console": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaBrowserReadConsoleConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "read_network": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaBrowserReadNetworkConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "read_page": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaBrowserReadPageConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "right_click": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaBrowserRightClickConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "screenshot": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaBrowserScreenshotConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "scroll": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaBrowserScrollConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "scroll_to": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaBrowserScrollToConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "switch_tab": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaBrowserSwitchTabConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "triple_click": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaBrowserTripleClickConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaBrowserTypeConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "wait": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaBrowserWaitConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "zoom": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaBrowserZoomConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaBrowserToolset_20260801": {
+      "additionalProperties": false,
+      "properties": {
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "configs": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaBrowserToolsetConfigs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "const": "browser_toolset_20260801",
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "BetaBrowserTripleClickConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "defer_loading": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaBrowserTypeConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "defer_loading": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaBrowserWaitConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "defer_loading": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaBrowserZoomConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "defer_loading": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaCacheControlEphemeral": {
+      "additionalProperties": false,
+      "properties": {
+        "ttl": {
+          "enum": ["5m", "1h"],
+          "type": "string"
+        },
+        "type": {
+          "const": "ephemeral",
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "BetaClearThinking20251015": {
+      "additionalProperties": false,
+      "properties": {
+        "keep": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaThinkingTurns"
+                },
+                {
+                  "$ref": "#/$defs/BetaAllThinkingTurns"
+                }
+              ]
+            },
+            {
+              "const": "all",
+              "type": "string"
+            }
+          ]
+        },
+        "type": {
+          "const": "clear_thinking_20251015",
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "BetaClearToolUses20250919": {
+      "additionalProperties": false,
+      "properties": {
+        "clear_at_least": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaInputTokensClearAtLeast"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "clear_tool_inputs": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "exclude_tools": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "keep": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaToolUsesKeep"
+            }
+          ]
+        },
+        "trigger": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaInputTokensTrigger"
+            },
+            {
+              "$ref": "#/$defs/BetaToolUsesTrigger"
+            }
+          ]
+        },
+        "type": {
+          "const": "clear_tool_uses_20250919",
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "BetaCodeExecutionToolResultErrorCode": {
+      "enum": [
+        "invalid_tool_input",
+        "unavailable",
+        "too_many_requests",
+        "execution_time_exceeded"
+      ],
+      "type": "string"
+    },
+    "BetaCodeExecutionTool_20250522": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_callers": {
+          "items": {
+            "$ref": "#/$defs/BetaAllowedCaller"
+          },
+          "type": "array"
+        },
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "defer_loading": {
+          "type": "boolean"
+        },
+        "name": {
+          "const": "code_execution",
+          "type": "string"
+        },
+        "strict": {
+          "type": "boolean"
+        },
+        "type": {
+          "const": "code_execution_20250522",
+          "type": "string"
+        }
+      },
+      "required": ["name", "type"],
+      "type": "object"
+    },
+    "BetaCodeExecutionTool_20250825": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_callers": {
+          "items": {
+            "$ref": "#/$defs/BetaAllowedCaller"
+          },
+          "type": "array"
+        },
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "defer_loading": {
+          "type": "boolean"
+        },
+        "name": {
+          "const": "code_execution",
+          "type": "string"
+        },
+        "strict": {
+          "type": "boolean"
+        },
+        "type": {
+          "const": "code_execution_20250825",
+          "type": "string"
+        }
+      },
+      "required": ["name", "type"],
+      "type": "object"
+    },
+    "BetaCodeExecutionTool_20260120": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_callers": {
+          "items": {
+            "$ref": "#/$defs/BetaAllowedCaller"
+          },
+          "type": "array"
+        },
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "defer_loading": {
+          "type": "boolean"
+        },
+        "name": {
+          "const": "code_execution",
+          "type": "string"
+        },
+        "strict": {
+          "type": "boolean"
+        },
+        "type": {
+          "const": "code_execution_20260120",
+          "type": "string"
+        }
+      },
+      "required": ["name", "type"],
+      "type": "object"
+    },
+    "BetaCodeExecutionTool_20260521": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_callers": {
+          "items": {
+            "$ref": "#/$defs/BetaAllowedCaller"
+          },
+          "type": "array"
+        },
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "defer_loading": {
+          "type": "boolean"
+        },
+        "name": {
+          "const": "code_execution",
+          "type": "string"
+        },
+        "strict": {
+          "type": "boolean"
+        },
+        "type": {
+          "const": "code_execution_20260521",
+          "type": "string"
+        }
+      },
+      "required": ["name", "type"],
+      "type": "object"
+    },
+    "BetaCompact20260112": {
+      "additionalProperties": false,
+      "properties": {
+        "instructions": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pause_after_compaction": {
+          "type": "boolean"
+        },
+        "trigger": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaInputTokensTrigger"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "const": "compact_20260112",
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "BetaComputerCursorPositionConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "defer_loading": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaComputerDoubleClickConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "defer_loading": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaComputerHoldKeyConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "defer_loading": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaComputerKeyConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "defer_loading": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaComputerLeftClickConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "defer_loading": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaComputerLeftClickDragConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "defer_loading": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaComputerLeftMouseDownConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "defer_loading": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaComputerLeftMouseUpConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "defer_loading": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaComputerMiddleClickConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "defer_loading": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaComputerMouseMoveConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "defer_loading": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaComputerRightClickConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "defer_loading": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaComputerScreenshotConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "defer_loading": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaComputerScrollConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "defer_loading": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaComputerToolsetConfigs": {
+      "additionalProperties": false,
+      "properties": {
+        "cursor_position": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaComputerCursorPositionConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "double_click": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaComputerDoubleClickConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "hold_key": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaComputerHoldKeyConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "key": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaComputerKeyConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "left_click": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaComputerLeftClickConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "left_click_drag": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaComputerLeftClickDragConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "left_mouse_down": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaComputerLeftMouseDownConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "left_mouse_up": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaComputerLeftMouseUpConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "middle_click": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaComputerMiddleClickConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "mouse_move": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaComputerMouseMoveConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "right_click": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaComputerRightClickConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "screenshot": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaComputerScreenshotConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "scroll": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaComputerScrollConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "triple_click": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaComputerTripleClickConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaComputerTypeConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "wait": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaComputerWaitConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "zoom": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaComputerZoomConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaComputerToolset_20260801": {
+      "additionalProperties": false,
+      "properties": {
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "configs": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaComputerToolsetConfigs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "const": "computer_toolset_20260801",
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "BetaComputerTripleClickConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "defer_loading": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaComputerTypeConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "defer_loading": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaComputerUseTool_20241022": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_callers": {
+          "items": {
+            "$ref": "#/$defs/BetaAllowedCaller"
+          },
+          "type": "array"
+        },
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "defer_loading": {
+          "type": "boolean"
+        },
+        "display_height_px": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "display_number": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "display_width_px": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "input_examples": {
+          "items": {
+            "additionalProperties": {
+              "$ref": "#/$defs/BetaJsonValue"
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "name": {
+          "const": "computer",
+          "type": "string"
+        },
+        "strict": {
+          "type": "boolean"
+        },
+        "type": {
+          "const": "computer_20241022",
+          "type": "string"
+        }
+      },
+      "required": ["display_height_px", "display_width_px", "name", "type"],
+      "type": "object"
+    },
+    "BetaComputerUseTool_20250124": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_callers": {
+          "items": {
+            "$ref": "#/$defs/BetaAllowedCaller"
+          },
+          "type": "array"
+        },
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "defer_loading": {
+          "type": "boolean"
+        },
+        "display_height_px": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "display_number": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "display_width_px": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "input_examples": {
+          "items": {
+            "additionalProperties": {
+              "$ref": "#/$defs/BetaJsonValue"
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "name": {
+          "const": "computer",
+          "type": "string"
+        },
+        "strict": {
+          "type": "boolean"
+        },
+        "type": {
+          "const": "computer_20250124",
+          "type": "string"
+        }
+      },
+      "required": ["display_height_px", "display_width_px", "name", "type"],
+      "type": "object"
+    },
+    "BetaComputerUseTool_20251124": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_callers": {
+          "items": {
+            "$ref": "#/$defs/BetaAllowedCaller"
+          },
+          "type": "array"
+        },
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "defer_loading": {
+          "type": "boolean"
+        },
+        "display_height_px": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "display_number": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "display_width_px": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "enable_zoom": {
+          "type": "boolean"
+        },
+        "input_examples": {
+          "items": {
+            "additionalProperties": {
+              "$ref": "#/$defs/BetaJsonValue"
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "name": {
+          "const": "computer",
+          "type": "string"
+        },
+        "strict": {
+          "type": "boolean"
+        },
+        "type": {
+          "const": "computer_20251124",
+          "type": "string"
+        }
+      },
+      "required": ["display_height_px", "display_width_px", "name", "type"],
+      "type": "object"
+    },
+    "BetaComputerWaitConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "defer_loading": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaComputerZoomConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "defer_loading": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaContainerParams": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "skills": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/BetaSkillParams"
+              },
+              "maxItems": 20,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaContentBlockSource": {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "items": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/BetaRequestTextBlock"
+                  },
+                  {
+                    "$ref": "#/$defs/BetaRequestImageBlock"
+                  }
+                ]
+              },
+              "type": "array"
+            }
+          ]
+        },
+        "type": {
+          "const": "content",
+          "type": "string"
+        }
+      },
+      "required": ["content", "type"],
+      "type": "object"
+    },
+    "BetaContextManagementConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "edits": {
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/BetaClearToolUses20250919"
+              },
+              {
+                "$ref": "#/$defs/BetaClearThinking20251015"
+              },
+              {
+                "$ref": "#/$defs/BetaCompact20260112"
+              }
+            ]
+          },
+          "minItems": 0,
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "BetaCreateMessageParams": {
+      "additionalProperties": false,
+      "properties": {
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "container": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaContainerParams"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "context_management": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaContextManagementConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "diagnostics": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaDiagnosticsParam"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "fallback_credit_token": {
+          "anyOf": [
+            {
+              "maxLength": 2048,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/BetaFallbackCreditTokenParam"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "fallbacks": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/BetaFallbackConfigV2"
+              },
+              "maxItems": 3,
+              "minItems": 1,
+              "type": "array"
+            },
+            {
+              "const": "default",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "inference_geo": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "max_tokens": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "mcp_servers": {
+          "items": {
+            "$ref": "#/$defs/BetaRequestMCPServerURLDefinition"
+          },
+          "maxItems": 20,
+          "type": "array"
+        },
+        "messages": {
+          "items": {
+            "$ref": "#/$defs/BetaInputMessage"
+          },
+          "type": "array"
+        },
+        "metadata": {
+          "$ref": "#/$defs/BetaMetadata"
+        },
+        "model": {
+          "$ref": "#/$defs/Model"
+        },
+        "output_config": {
+          "$ref": "#/$defs/BetaOutputConfig"
+        },
+        "output_format": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaJsonOutputFormat"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "service_tier": {
+          "enum": ["auto", "standard_only"],
+          "type": "string"
+        },
+        "speed": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaSpeed"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "stop_sequences": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "stream": {
+          "type": "boolean"
+        },
+        "system": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "items": {
+                "$ref": "#/$defs/BetaRequestTextBlock"
+              },
+              "type": "array"
+            }
+          ]
+        },
+        "temperature": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        "thinking": {
+          "$ref": "#/$defs/BetaThinkingConfigParam"
+        },
+        "tool_choice": {
+          "$ref": "#/$defs/BetaToolChoice"
+        },
+        "tools": {
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/BetaTool"
+              },
+              {
+                "$ref": "#/$defs/BetaBashTool_20241022"
+              },
+              {
+                "$ref": "#/$defs/BetaBashTool_20250124"
+              },
+              {
+                "$ref": "#/$defs/BetaCodeExecutionTool_20250522"
+              },
+              {
+                "$ref": "#/$defs/BetaCodeExecutionTool_20250825"
+              },
+              {
+                "$ref": "#/$defs/BetaCodeExecutionTool_20260120"
+              },
+              {
+                "$ref": "#/$defs/BetaCodeExecutionTool_20260521"
+              },
+              {
+                "$ref": "#/$defs/BetaBrowserToolset_20260801"
+              },
+              {
+                "$ref": "#/$defs/BetaComputerUseTool_20241022"
+              },
+              {
+                "$ref": "#/$defs/BetaMemoryTool_20250818"
+              },
+              {
+                "$ref": "#/$defs/BetaComputerUseTool_20250124"
+              },
+              {
+                "$ref": "#/$defs/BetaTextEditor_20241022"
+              },
+              {
+                "$ref": "#/$defs/BetaComputerUseTool_20251124"
+              },
+              {
+                "$ref": "#/$defs/BetaComputerToolset_20260801"
+              },
+              {
+                "$ref": "#/$defs/BetaTextEditor_20250124"
+              },
+              {
+                "$ref": "#/$defs/BetaTextEditor_20250429"
+              },
+              {
+                "$ref": "#/$defs/BetaTextEditor_20250728"
+              },
+              {
+                "$ref": "#/$defs/BetaWebSearchTool_20250305"
+              },
+              {
+                "$ref": "#/$defs/BetaWebFetchTool_20250910"
+              },
+              {
+                "$ref": "#/$defs/BetaWebSearchTool_20260209"
+              },
+              {
+                "$ref": "#/$defs/BetaWebFetchTool_20260209"
+              },
+              {
+                "$ref": "#/$defs/BetaWebFetchTool_20260309"
+              },
+              {
+                "$ref": "#/$defs/BetaWebSearchTool_20260318"
+              },
+              {
+                "$ref": "#/$defs/BetaWebFetchTool_20260318"
+              },
+              {
+                "$ref": "#/$defs/BetaAdvisorTool_20260301"
+              },
+              {
+                "$ref": "#/$defs/BetaToolSearchToolBM25_20251119"
+              },
+              {
+                "$ref": "#/$defs/BetaToolSearchToolRegex_20251119"
+              },
+              {
+                "$ref": "#/$defs/BetaMCPToolset"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "top_k": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "top_p": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        }
+      },
+      "required": ["model", "messages", "max_tokens"],
+      "type": "object"
+    },
+    "BetaDiagnosticsParam": {
+      "additionalProperties": false,
+      "properties": {
+        "previous_message_id": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaDirectCaller": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "direct",
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "BetaEffortLevel": {
+      "enum": ["low", "medium", "high", "xhigh", "max"],
+      "type": "string"
+    },
+    "BetaFallbackConfigV2": {
+      "additionalProperties": true,
+      "properties": {
+        "max_tokens": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "model": {
+          "$ref": "#/$defs/Model"
+        },
+        "output_config": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaOutputConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "speed": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaSpeed"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "thinking": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaThinkingConfigEnabled"
+                },
+                {
+                  "$ref": "#/$defs/BetaThinkingConfigDisabled"
+                },
+                {
+                  "$ref": "#/$defs/BetaThinkingConfigAdaptive"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": ["model"],
+      "type": "object"
+    },
+    "BetaFallbackCreditTokenParam": {
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "enum": ["strict", "best_effort"],
+          "type": "string"
+        },
+        "token": {
+          "maxLength": 2048,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": ["token"],
+      "type": "object"
+    },
+    "BetaFileDocumentSource": {
+      "additionalProperties": false,
+      "properties": {
+        "file_id": {
+          "type": "string"
+        },
+        "type": {
+          "const": "file",
+          "type": "string"
+        }
+      },
+      "required": ["file_id", "type"],
+      "type": "object"
+    },
+    "BetaFileImageSource": {
+      "additionalProperties": false,
+      "properties": {
+        "file_id": {
+          "type": "string"
+        },
+        "type": {
+          "const": "file",
+          "type": "string"
+        }
+      },
+      "required": ["file_id", "type"],
+      "type": "object"
+    },
+    "BetaInputContentBlock": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/BetaRequestTextBlock"
+        },
+        {
+          "$ref": "#/$defs/BetaRequestImageBlock"
+        },
+        {
+          "$ref": "#/$defs/BetaRequestDocumentBlock"
+        },
+        {
+          "$ref": "#/$defs/BetaRequestSearchResultBlock"
+        },
+        {
+          "$ref": "#/$defs/BetaRequestThinkingBlock"
+        },
+        {
+          "$ref": "#/$defs/BetaRequestRedactedThinkingBlock"
+        },
+        {
+          "$ref": "#/$defs/BetaRequestToolUseBlock"
+        },
+        {
+          "$ref": "#/$defs/BetaRequestToolResultBlock"
+        },
+        {
+          "$ref": "#/$defs/BetaRequestServerToolUseBlock"
+        },
+        {
+          "$ref": "#/$defs/BetaRequestWebSearchToolResultBlock"
+        },
+        {
+          "$ref": "#/$defs/BetaRequestWebFetchToolResultBlock"
+        },
+        {
+          "$ref": "#/$defs/BetaRequestAdvisorToolResultBlock"
+        },
+        {
+          "$ref": "#/$defs/BetaRequestCodeExecutionToolResultBlock"
+        },
+        {
+          "$ref": "#/$defs/BetaRequestBashCodeExecutionToolResultBlock"
+        },
+        {
+          "$ref": "#/$defs/BetaRequestTextEditorCodeExecutionToolResultBlock"
+        },
+        {
+          "$ref": "#/$defs/BetaRequestToolSearchToolResultBlock"
+        },
+        {
+          "$ref": "#/$defs/BetaRequestMCPToolUseBlock"
+        },
+        {
+          "$ref": "#/$defs/BetaRequestMCPToolResultBlock"
+        },
+        {
+          "$ref": "#/$defs/BetaRequestContainerUploadBlock"
+        },
+        {
+          "$ref": "#/$defs/BetaRequestCompactionBlock"
+        },
+        {
+          "$ref": "#/$defs/BetaRequestToolAdditionBlock"
+        },
+        {
+          "$ref": "#/$defs/BetaRequestToolRemovalBlock"
+        },
+        {
+          "$ref": "#/$defs/BetaRequestFallbackBlock"
+        }
+      ]
+    },
+    "BetaInputMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "clear_at": {
+          "anyOf": [
+            {
+              "enum": ["next_user_message", "never"],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "content": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "items": {
+                "$ref": "#/$defs/BetaInputContentBlock"
+              },
+              "type": "array"
+            }
+          ]
+        },
+        "output_config": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaSystemMessageOutputConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "role": {
+          "enum": ["user", "assistant", "system"],
+          "type": "string"
+        }
+      },
+      "required": ["content", "role"],
+      "type": "object"
+    },
+    "BetaInputSchema": {
+      "additionalProperties": true,
+      "properties": {
+        "properties": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "required": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "const": "object",
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "BetaInputTokensClearAtLeast": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "input_tokens",
+          "type": "string"
+        },
+        "value": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": ["type", "value"],
+      "type": "object"
+    },
+    "BetaInputTokensTrigger": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "input_tokens",
+          "type": "string"
+        },
+        "value": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": ["type", "value"],
+      "type": "object"
+    },
+    "BetaJsonOutputFormat": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "type": {
+          "const": "json_schema",
+          "type": "string"
+        }
+      },
+      "required": ["schema", "type"],
+      "type": "object"
+    },
+    "BetaJsonValue": {},
+    "BetaMCPToolConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "defer_loading": {
+          "type": "boolean"
+        },
+        "enabled": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "BetaMCPToolDefaultConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "defer_loading": {
+          "type": "boolean"
+        },
+        "enabled": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "BetaMCPToolset": {
+      "additionalProperties": false,
+      "properties": {
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "configs": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/BetaMCPToolConfig"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "default_config": {
+          "$ref": "#/$defs/BetaMCPToolDefaultConfig"
+        },
+        "mcp_server_name": {
+          "maxLength": 255,
+          "minLength": 1,
+          "type": "string"
+        },
+        "type": {
+          "const": "mcp_toolset",
+          "type": "string"
+        }
+      },
+      "required": ["mcp_server_name", "type"],
+      "type": "object"
+    },
+    "BetaMemoryTool_20250818": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_callers": {
+          "items": {
+            "$ref": "#/$defs/BetaAllowedCaller"
+          },
+          "type": "array"
+        },
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "defer_loading": {
+          "type": "boolean"
+        },
+        "input_examples": {
+          "items": {
+            "additionalProperties": {
+              "$ref": "#/$defs/BetaJsonValue"
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "name": {
+          "const": "memory",
+          "type": "string"
+        },
+        "strict": {
+          "type": "boolean"
+        },
+        "type": {
+          "const": "memory_20250818",
+          "type": "string"
+        }
+      },
+      "required": ["name", "type"],
+      "type": "object"
+    },
+    "BetaMetadata": {
+      "additionalProperties": false,
+      "properties": {
+        "user_id": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaOutputConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "effort": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaEffortLevel"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "format": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaJsonOutputFormat"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "task_budget": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaTokenTaskBudget"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaPlainTextSource": {
+      "additionalProperties": false,
+      "properties": {
+        "data": {
+          "type": "string"
+        },
+        "media_type": {
+          "const": "text/plain",
+          "type": "string"
+        },
+        "type": {
+          "const": "text",
+          "type": "string"
+        }
+      },
+      "required": ["data", "media_type", "type"],
+      "type": "object"
+    },
+    "BetaRequestAdvisorRedactedResultBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "encrypted_content": {
+          "type": "string"
+        },
+        "stop_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "const": "advisor_redacted_result",
+          "type": "string"
+        }
+      },
+      "required": ["encrypted_content", "type"],
+      "type": "object"
+    },
+    "BetaRequestAdvisorResultBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "stop_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "text": {
+          "type": "string"
+        },
+        "type": {
+          "const": "advisor_result",
+          "type": "string"
+        }
+      },
+      "required": ["text", "type"],
+      "type": "object"
+    },
+    "BetaRequestAdvisorToolResultBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "content": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaRequestAdvisorToolResultError"
+            },
+            {
+              "$ref": "#/$defs/BetaRequestAdvisorResultBlock"
+            },
+            {
+              "$ref": "#/$defs/BetaRequestAdvisorRedactedResultBlock"
+            }
+          ]
+        },
+        "tool_use_id": {
+          "pattern": "^srvtoolu_[a-zA-Z0-9_]+$",
+          "type": "string"
+        },
+        "type": {
+          "const": "advisor_tool_result",
+          "type": "string"
+        }
+      },
+      "required": ["content", "tool_use_id", "type"],
+      "type": "object"
+    },
+    "BetaRequestAdvisorToolResultError": {
+      "additionalProperties": false,
+      "properties": {
+        "error_code": {
+          "$ref": "#/$defs/BetaAdvisorToolResultErrorCode"
+        },
+        "type": {
+          "const": "advisor_tool_result_error",
+          "type": "string"
+        }
+      },
+      "required": ["error_code", "type"],
+      "type": "object"
+    },
+    "BetaRequestBashCodeExecutionOutputBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "file_id": {
+          "type": "string"
+        },
+        "type": {
+          "const": "bash_code_execution_output",
+          "type": "string"
+        }
+      },
+      "required": ["file_id", "type"],
+      "type": "object"
+    },
+    "BetaRequestBashCodeExecutionResultBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "items": {
+            "$ref": "#/$defs/BetaRequestBashCodeExecutionOutputBlock"
+          },
+          "type": "array"
+        },
+        "return_code": {
+          "type": "integer"
+        },
+        "stderr": {
+          "type": "string"
+        },
+        "stdout": {
+          "type": "string"
+        },
+        "type": {
+          "const": "bash_code_execution_result",
+          "type": "string"
+        }
+      },
+      "required": ["content", "return_code", "stderr", "stdout", "type"],
+      "type": "object"
+    },
+    "BetaRequestBashCodeExecutionToolResultBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "content": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaRequestBashCodeExecutionToolResultError"
+            },
+            {
+              "$ref": "#/$defs/BetaRequestBashCodeExecutionResultBlock"
+            }
+          ]
+        },
+        "tool_use_id": {
+          "pattern": "^srvtoolu_[a-zA-Z0-9_]+$",
+          "type": "string"
+        },
+        "type": {
+          "const": "bash_code_execution_tool_result",
+          "type": "string"
+        }
+      },
+      "required": ["content", "tool_use_id", "type"],
+      "type": "object"
+    },
+    "BetaRequestBashCodeExecutionToolResultError": {
+      "additionalProperties": false,
+      "properties": {
+        "error_code": {
+          "$ref": "#/$defs/BetaBashCodeExecutionToolResultErrorCode"
+        },
+        "type": {
+          "const": "bash_code_execution_tool_result_error",
+          "type": "string"
+        }
+      },
+      "required": ["error_code", "type"],
+      "type": "object"
+    },
+    "BetaRequestBrowserStateBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "state_changes": {
+          "anyOf": [
+            {
+              "items": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/BetaBrowserStateChangeTabOpened"
+                  },
+                  {
+                    "$ref": "#/$defs/BetaBrowserStateChangeDownloadStarted"
+                  },
+                  {
+                    "$ref": "#/$defs/BetaBrowserStateChangeDownloadCompleted"
+                  },
+                  {
+                    "$ref": "#/$defs/BetaBrowserStateChangeDownloadFailed"
+                  }
+                ]
+              },
+              "maxItems": 200,
+              "minItems": 1,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tabs": {
+          "items": {
+            "$ref": "#/$defs/BetaBrowserStateTabEntry"
+          },
+          "maxItems": 100,
+          "type": "array"
+        },
+        "type": {
+          "const": "browser_state",
+          "type": "string"
+        }
+      },
+      "required": ["tabs", "type"],
+      "type": "object"
+    },
+    "BetaRequestCharLocationCitation": {
+      "additionalProperties": false,
+      "properties": {
+        "cited_text": {
+          "type": "string"
+        },
+        "document_index": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "document_title": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "end_char_index": {
+          "type": "integer"
+        },
+        "start_char_index": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "type": {
+          "const": "char_location",
+          "type": "string"
+        }
+      },
+      "required": [
+        "cited_text",
+        "document_index",
+        "document_title",
+        "end_char_index",
+        "start_char_index",
+        "type"
+      ],
+      "type": "object"
+    },
+    "BetaRequestCitationsConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "BetaRequestCodeExecutionOutputBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "file_id": {
+          "type": "string"
+        },
+        "type": {
+          "const": "code_execution_output",
+          "type": "string"
+        }
+      },
+      "required": ["file_id", "type"],
+      "type": "object"
+    },
+    "BetaRequestCodeExecutionResultBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "items": {
+            "$ref": "#/$defs/BetaRequestCodeExecutionOutputBlock"
+          },
+          "type": "array"
+        },
+        "return_code": {
+          "type": "integer"
+        },
+        "stderr": {
+          "type": "string"
+        },
+        "stdout": {
+          "type": "string"
+        },
+        "type": {
+          "const": "code_execution_result",
+          "type": "string"
+        }
+      },
+      "required": ["content", "return_code", "stderr", "stdout", "type"],
+      "type": "object"
+    },
+    "BetaRequestCodeExecutionToolResultBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "content": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaRequestCodeExecutionToolResultError"
+            },
+            {
+              "$ref": "#/$defs/BetaRequestCodeExecutionResultBlock"
+            },
+            {
+              "$ref": "#/$defs/BetaRequestEncryptedCodeExecutionResultBlock"
+            }
+          ]
+        },
+        "tool_use_id": {
+          "pattern": "^srvtoolu_[a-zA-Z0-9_]+$",
+          "type": "string"
+        },
+        "type": {
+          "const": "code_execution_tool_result",
+          "type": "string"
+        }
+      },
+      "required": ["content", "tool_use_id", "type"],
+      "type": "object"
+    },
+    "BetaRequestCodeExecutionToolResultError": {
+      "additionalProperties": false,
+      "properties": {
+        "error_code": {
+          "$ref": "#/$defs/BetaCodeExecutionToolResultErrorCode"
+        },
+        "type": {
+          "const": "code_execution_tool_result_error",
+          "type": "string"
+        }
+      },
+      "required": ["error_code", "type"],
+      "type": "object"
+    },
+    "BetaRequestCompactionBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "content": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "encrypted_content": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "const": "compaction",
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "BetaRequestContainerUploadBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "file_id": {
+          "type": "string"
+        },
+        "type": {
+          "const": "container_upload",
+          "type": "string"
+        }
+      },
+      "required": ["file_id", "type"],
+      "type": "object"
+    },
+    "BetaRequestContentBlockLocationCitation": {
+      "additionalProperties": false,
+      "properties": {
+        "cited_text": {
+          "type": "string"
+        },
+        "document_index": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "document_title": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "end_block_index": {
+          "type": "integer"
+        },
+        "start_block_index": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "type": {
+          "const": "content_block_location",
+          "type": "string"
+        }
+      },
+      "required": [
+        "cited_text",
+        "document_index",
+        "document_title",
+        "end_block_index",
+        "start_block_index",
+        "type"
+      ],
+      "type": "object"
+    },
+    "BetaRequestDocumentBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "citations": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaRequestCitationsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "context": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaBase64PDFSource"
+            },
+            {
+              "$ref": "#/$defs/BetaPlainTextSource"
+            },
+            {
+              "$ref": "#/$defs/BetaContentBlockSource"
+            },
+            {
+              "$ref": "#/$defs/BetaURLPDFSource"
+            },
+            {
+              "$ref": "#/$defs/BetaFileDocumentSource"
+            }
+          ]
+        },
+        "title": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "const": "document",
+          "type": "string"
+        }
+      },
+      "required": ["source", "type"],
+      "type": "object"
+    },
+    "BetaRequestEncryptedCodeExecutionResultBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "items": {
+            "$ref": "#/$defs/BetaRequestCodeExecutionOutputBlock"
+          },
+          "type": "array"
+        },
+        "encrypted_stdout": {
+          "type": "string"
+        },
+        "return_code": {
+          "type": "integer"
+        },
+        "stderr": {
+          "type": "string"
+        },
+        "type": {
+          "const": "encrypted_code_execution_result",
+          "type": "string"
+        }
+      },
+      "required": [
+        "content",
+        "encrypted_stdout",
+        "return_code",
+        "stderr",
+        "type"
+      ],
+      "type": "object"
+    },
+    "BetaRequestFallbackBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "from": {
+          "$ref": "#/$defs/BetaRequestFallbackHopInfo"
+        },
+        "to": {
+          "$ref": "#/$defs/BetaRequestFallbackHopInfo"
+        },
+        "trigger": {},
+        "type": {
+          "const": "fallback",
+          "type": "string"
+        }
+      },
+      "required": ["from", "to", "type"],
+      "type": "object"
+    },
+    "BetaRequestFallbackHopInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "model": {
+          "$ref": "#/$defs/Model"
+        }
+      },
+      "required": ["model"],
+      "type": "object"
+    },
+    "BetaRequestImageBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaBase64ImageSource"
+            },
+            {
+              "$ref": "#/$defs/BetaURLImageSource"
+            },
+            {
+              "$ref": "#/$defs/BetaFileImageSource"
+            }
+          ]
+        },
+        "transformations": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaRequestImageTransformations"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "const": "image",
+          "type": "string"
+        }
+      },
+      "required": ["source", "type"],
+      "type": "object"
+    },
+    "BetaRequestImageTransformations": {
+      "additionalProperties": false,
+      "properties": {
+        "oversized_image": {
+          "enum": ["downsize", "error"],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "BetaRequestMCPServerToolConfiguration": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_tools": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaRequestMCPServerURLDefinition": {
+      "additionalProperties": false,
+      "properties": {
+        "authorization_token": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "tool_configuration": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaRequestMCPServerToolConfiguration"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "const": "url",
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": ["name", "type", "url"],
+      "type": "object"
+    },
+    "BetaRequestMCPToolResultBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "content": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "items": {
+                "$ref": "#/$defs/BetaRequestTextBlock"
+              },
+              "type": "array"
+            }
+          ]
+        },
+        "is_error": {
+          "type": "boolean"
+        },
+        "tool_use_id": {
+          "pattern": "^[a-zA-Z0-9_-]+$",
+          "type": "string"
+        },
+        "type": {
+          "const": "mcp_tool_result",
+          "type": "string"
+        }
+      },
+      "required": ["tool_use_id", "type"],
+      "type": "object"
+    },
+    "BetaRequestMCPToolUseBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "id": {
+          "pattern": "^[a-zA-Z0-9_-]+$",
+          "type": "string"
+        },
+        "input": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "name": {
+          "type": "string"
+        },
+        "server_name": {
+          "type": "string"
+        },
+        "type": {
+          "const": "mcp_tool_use",
+          "type": "string"
+        }
+      },
+      "required": ["id", "input", "name", "server_name", "type"],
+      "type": "object"
+    },
+    "BetaRequestPageLocationCitation": {
+      "additionalProperties": false,
+      "properties": {
+        "cited_text": {
+          "type": "string"
+        },
+        "document_index": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "document_title": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "end_page_number": {
+          "type": "integer"
+        },
+        "start_page_number": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "type": {
+          "const": "page_location",
+          "type": "string"
+        }
+      },
+      "required": [
+        "cited_text",
+        "document_index",
+        "document_title",
+        "end_page_number",
+        "start_page_number",
+        "type"
+      ],
+      "type": "object"
+    },
+    "BetaRequestRedactedThinkingBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "data": {
+          "type": "string"
+        },
+        "type": {
+          "const": "redacted_thinking",
+          "type": "string"
+        }
+      },
+      "required": ["data", "type"],
+      "type": "object"
+    },
+    "BetaRequestSearchResultBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "citations": {
+          "$ref": "#/$defs/BetaRequestCitationsConfig"
+        },
+        "content": {
+          "items": {
+            "$ref": "#/$defs/BetaRequestTextBlock"
+          },
+          "type": "array"
+        },
+        "source": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "type": {
+          "const": "search_result",
+          "type": "string"
+        }
+      },
+      "required": ["content", "source", "title", "type"],
+      "type": "object"
+    },
+    "BetaRequestSearchResultLocationCitation": {
+      "additionalProperties": false,
+      "properties": {
+        "cited_text": {
+          "type": "string"
+        },
+        "end_block_index": {
+          "type": "integer"
+        },
+        "search_result_index": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source": {
+          "type": "string"
+        },
+        "start_block_index": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "const": "search_result_location",
+          "type": "string"
+        }
+      },
+      "required": [
+        "cited_text",
+        "end_block_index",
+        "search_result_index",
+        "source",
+        "start_block_index",
+        "title",
+        "type"
+      ],
+      "type": "object"
+    },
+    "BetaRequestServerToolUseBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "caller": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaDirectCaller"
+            },
+            {
+              "$ref": "#/$defs/BetaServerToolCaller"
+            },
+            {
+              "$ref": "#/$defs/BetaServerToolCaller_20260120"
+            }
+          ]
+        },
+        "id": {
+          "pattern": "^srvtoolu_[a-zA-Z0-9_]+$",
+          "type": "string"
+        },
+        "input": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "name": {
+          "enum": [
+            "advisor",
+            "web_search",
+            "web_fetch",
+            "code_execution",
+            "bash_code_execution",
+            "text_editor_code_execution",
+            "tool_search_tool_regex",
+            "tool_search_tool_bm25"
+          ],
+          "type": "string"
+        },
+        "type": {
+          "const": "server_tool_use",
+          "type": "string"
+        }
+      },
+      "required": ["id", "input", "name", "type"],
+      "type": "object"
+    },
+    "BetaRequestTextBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "citations": {
+          "anyOf": [
+            {
+              "items": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/BetaRequestCharLocationCitation"
+                  },
+                  {
+                    "$ref": "#/$defs/BetaRequestPageLocationCitation"
+                  },
+                  {
+                    "$ref": "#/$defs/BetaRequestContentBlockLocationCitation"
+                  },
+                  {
+                    "$ref": "#/$defs/BetaRequestWebSearchResultLocationCitation"
+                  },
+                  {
+                    "$ref": "#/$defs/BetaRequestSearchResultLocationCitation"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "text": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "type": {
+          "const": "text",
+          "type": "string"
+        }
+      },
+      "required": ["text", "type"],
+      "type": "object"
+    },
+    "BetaRequestTextEditorCodeExecutionCreateResultBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "is_file_update": {
+          "type": "boolean"
+        },
+        "type": {
+          "const": "text_editor_code_execution_create_result",
+          "type": "string"
+        }
+      },
+      "required": ["is_file_update", "type"],
+      "type": "object"
+    },
+    "BetaRequestTextEditorCodeExecutionStrReplaceResultBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "lines": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "new_lines": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "new_start": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "old_lines": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "old_start": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "const": "text_editor_code_execution_str_replace_result",
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "BetaRequestTextEditorCodeExecutionToolResultBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "content": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaRequestTextEditorCodeExecutionToolResultError"
+            },
+            {
+              "$ref": "#/$defs/BetaRequestTextEditorCodeExecutionViewResultBlock"
+            },
+            {
+              "$ref": "#/$defs/BetaRequestTextEditorCodeExecutionCreateResultBlock"
+            },
+            {
+              "$ref": "#/$defs/BetaRequestTextEditorCodeExecutionStrReplaceResultBlock"
+            }
+          ]
+        },
+        "tool_use_id": {
+          "pattern": "^srvtoolu_[a-zA-Z0-9_]+$",
+          "type": "string"
+        },
+        "type": {
+          "const": "text_editor_code_execution_tool_result",
+          "type": "string"
+        }
+      },
+      "required": ["content", "tool_use_id", "type"],
+      "type": "object"
+    },
+    "BetaRequestTextEditorCodeExecutionToolResultError": {
+      "additionalProperties": false,
+      "properties": {
+        "error_code": {
+          "$ref": "#/$defs/BetaTextEditorCodeExecutionToolResultErrorCode"
+        },
+        "error_message": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "const": "text_editor_code_execution_tool_result_error",
+          "type": "string"
+        }
+      },
+      "required": ["error_code", "type"],
+      "type": "object"
+    },
+    "BetaRequestTextEditorCodeExecutionViewResultBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "type": "string"
+        },
+        "file_type": {
+          "enum": ["text", "image", "pdf"],
+          "type": "string"
+        },
+        "num_lines": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "start_line": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "total_lines": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "const": "text_editor_code_execution_view_result",
+          "type": "string"
+        }
+      },
+      "required": ["content", "file_type", "type"],
+      "type": "object"
+    },
+    "BetaRequestThinkingBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "signature": {
+          "type": "string"
+        },
+        "thinking": {
+          "type": "string"
+        },
+        "type": {
+          "const": "thinking",
+          "type": "string"
+        }
+      },
+      "required": ["signature", "thinking", "type"],
+      "type": "object"
+    },
+    "BetaRequestToolAdditionBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tool": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaToolChangeToolReference"
+            },
+            {
+              "$ref": "#/$defs/BetaToolChangeMCPToolReference"
+            },
+            {
+              "$ref": "#/$defs/BetaToolChangeMCPToolsetReference"
+            }
+          ]
+        },
+        "type": {
+          "const": "tool_addition",
+          "type": "string"
+        }
+      },
+      "required": ["tool", "type"],
+      "type": "object"
+    },
+    "BetaRequestToolReferenceBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tool_name": {
+          "maxLength": 256,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_-]{1,256}$",
+          "type": "string"
+        },
+        "type": {
+          "const": "tool_reference",
+          "type": "string"
+        }
+      },
+      "required": ["tool_name", "type"],
+      "type": "object"
+    },
+    "BetaRequestToolRemovalBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tool": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaToolChangeToolReference"
+            },
+            {
+              "$ref": "#/$defs/BetaToolChangeMCPToolReference"
+            },
+            {
+              "$ref": "#/$defs/BetaToolChangeMCPToolsetReference"
+            }
+          ]
+        },
+        "type": {
+          "const": "tool_removal",
+          "type": "string"
+        }
+      },
+      "required": ["tool", "type"],
+      "type": "object"
+    },
+    "BetaRequestToolResultBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "content": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "items": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/BetaRequestTextBlock"
+                  },
+                  {
+                    "$ref": "#/$defs/BetaRequestImageBlock"
+                  },
+                  {
+                    "$ref": "#/$defs/BetaRequestSearchResultBlock"
+                  },
+                  {
+                    "$ref": "#/$defs/BetaRequestDocumentBlock"
+                  },
+                  {
+                    "$ref": "#/$defs/BetaRequestToolReferenceBlock"
+                  },
+                  {
+                    "$ref": "#/$defs/BetaRequestBrowserStateBlock"
+                  }
+                ]
+              },
+              "type": "array"
+            }
+          ]
+        },
+        "is_error": {
+          "type": "boolean"
+        },
+        "tool_use_id": {
+          "pattern": "^[a-zA-Z0-9_-]+$",
+          "type": "string"
+        },
+        "toolset_name": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9_-]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "const": "tool_result",
+          "type": "string"
+        }
+      },
+      "required": ["tool_use_id", "type"],
+      "type": "object"
+    },
+    "BetaRequestToolSearchToolResultBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "content": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaRequestToolSearchToolResultError"
+            },
+            {
+              "$ref": "#/$defs/BetaRequestToolSearchToolSearchResultBlock"
+            }
+          ]
+        },
+        "tool_use_id": {
+          "pattern": "^srvtoolu_[a-zA-Z0-9_]+$",
+          "type": "string"
+        },
+        "type": {
+          "const": "tool_search_tool_result",
+          "type": "string"
+        }
+      },
+      "required": ["content", "tool_use_id", "type"],
+      "type": "object"
+    },
+    "BetaRequestToolSearchToolResultError": {
+      "additionalProperties": false,
+      "properties": {
+        "error_code": {
+          "$ref": "#/$defs/BetaToolSearchToolResultErrorCode"
+        },
+        "error_message": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "const": "tool_search_tool_result_error",
+          "type": "string"
+        }
+      },
+      "required": ["error_code", "type"],
+      "type": "object"
+    },
+    "BetaRequestToolSearchToolSearchResultBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "tool_references": {
+          "items": {
+            "$ref": "#/$defs/BetaRequestToolReferenceBlock"
+          },
+          "type": "array"
+        },
+        "type": {
+          "const": "tool_search_tool_search_result",
+          "type": "string"
+        }
+      },
+      "required": ["tool_references", "type"],
+      "type": "object"
+    },
+    "BetaRequestToolUseBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "caller": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaDirectCaller"
+            },
+            {
+              "$ref": "#/$defs/BetaServerToolCaller"
+            },
+            {
+              "$ref": "#/$defs/BetaServerToolCaller_20260120"
+            }
+          ]
+        },
+        "id": {
+          "pattern": "^[a-zA-Z0-9_-]+$",
+          "type": "string"
+        },
+        "input": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "name": {
+          "maxLength": 200,
+          "minLength": 1,
+          "type": "string"
+        },
+        "toolset_name": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9_-]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "const": "tool_use",
+          "type": "string"
+        }
+      },
+      "required": ["id", "input", "name", "type"],
+      "type": "object"
+    },
+    "BetaRequestWebFetchResultBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "$ref": "#/$defs/BetaRequestDocumentBlock"
+        },
+        "retrieved_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "const": "web_fetch_result",
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": ["content", "type", "url"],
+      "type": "object"
+    },
+    "BetaRequestWebFetchToolResultBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "caller": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaDirectCaller"
+            },
+            {
+              "$ref": "#/$defs/BetaServerToolCaller"
+            },
+            {
+              "$ref": "#/$defs/BetaServerToolCaller_20260120"
+            }
+          ]
+        },
+        "content": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaRequestWebFetchToolResultError"
+            },
+            {
+              "$ref": "#/$defs/BetaRequestWebFetchResultBlock"
+            }
+          ]
+        },
+        "tool_use_id": {
+          "pattern": "^srvtoolu_[a-zA-Z0-9_]+$",
+          "type": "string"
+        },
+        "type": {
+          "const": "web_fetch_tool_result",
+          "type": "string"
+        }
+      },
+      "required": ["content", "tool_use_id", "type"],
+      "type": "object"
+    },
+    "BetaRequestWebFetchToolResultError": {
+      "additionalProperties": false,
+      "properties": {
+        "error_code": {
+          "$ref": "#/$defs/BetaWebFetchToolResultErrorCode"
+        },
+        "type": {
+          "const": "web_fetch_tool_result_error",
+          "type": "string"
+        }
+      },
+      "required": ["error_code", "type"],
+      "type": "object"
+    },
+    "BetaRequestWebSearchResultBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "encrypted_content": {
+          "type": "string"
+        },
+        "page_age": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "type": {
+          "const": "web_search_result",
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": ["encrypted_content", "title", "type", "url"],
+      "type": "object"
+    },
+    "BetaRequestWebSearchResultLocationCitation": {
+      "additionalProperties": false,
+      "properties": {
+        "cited_text": {
+          "type": "string"
+        },
+        "encrypted_index": {
+          "type": "string"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "const": "web_search_result_location",
+          "type": "string"
+        },
+        "url": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": ["cited_text", "encrypted_index", "title", "type", "url"],
+      "type": "object"
+    },
+    "BetaRequestWebSearchToolResultBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "caller": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaDirectCaller"
+            },
+            {
+              "$ref": "#/$defs/BetaServerToolCaller"
+            },
+            {
+              "$ref": "#/$defs/BetaServerToolCaller_20260120"
+            }
+          ]
+        },
+        "content": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/BetaRequestWebSearchResultBlock"
+              },
+              "type": "array"
+            },
+            {
+              "$ref": "#/$defs/BetaRequestWebSearchToolResultError"
+            }
+          ]
+        },
+        "tool_use_id": {
+          "pattern": "^srvtoolu_[a-zA-Z0-9_]+$",
+          "type": "string"
+        },
+        "type": {
+          "const": "web_search_tool_result",
+          "type": "string"
+        }
+      },
+      "required": ["content", "tool_use_id", "type"],
+      "type": "object"
+    },
+    "BetaRequestWebSearchToolResultError": {
+      "additionalProperties": false,
+      "properties": {
+        "error_code": {
+          "$ref": "#/$defs/BetaWebSearchToolResultErrorCode"
+        },
+        "type": {
+          "const": "web_search_tool_result_error",
+          "type": "string"
+        }
+      },
+      "required": ["error_code", "type"],
+      "type": "object"
+    },
+    "BetaServerToolCaller": {
+      "additionalProperties": false,
+      "properties": {
+        "tool_id": {
+          "pattern": "^srvtoolu_[a-zA-Z0-9_]+$",
+          "type": "string"
+        },
+        "type": {
+          "const": "code_execution_20250825",
+          "type": "string"
+        }
+      },
+      "required": ["tool_id", "type"],
+      "type": "object"
+    },
+    "BetaServerToolCaller_20260120": {
+      "additionalProperties": false,
+      "properties": {
+        "tool_id": {
+          "pattern": "^srvtoolu_[a-zA-Z0-9_]+$",
+          "type": "string"
+        },
+        "type": {
+          "const": "code_execution_20260120",
+          "type": "string"
+        }
+      },
+      "required": ["tool_id", "type"],
+      "type": "object"
+    },
+    "BetaSkillParams": {
+      "additionalProperties": false,
+      "properties": {
+        "skill_id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        "type": {
+          "enum": ["anthropic", "custom"],
+          "type": "string"
+        },
+        "version": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": ["skill_id", "type"],
+      "type": "object"
+    },
+    "BetaSpeed": {
+      "enum": ["standard", "fast"],
+      "type": "string"
+    },
+    "BetaSystemMessageOutputConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "effort": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaEffortLevel"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaTextEditorCodeExecutionToolResultErrorCode": {
+      "enum": [
+        "invalid_tool_input",
+        "unavailable",
+        "too_many_requests",
+        "execution_time_exceeded",
+        "file_not_found"
+      ],
+      "type": "string"
+    },
+    "BetaTextEditor_20241022": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_callers": {
+          "items": {
+            "$ref": "#/$defs/BetaAllowedCaller"
+          },
+          "type": "array"
+        },
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "defer_loading": {
+          "type": "boolean"
+        },
+        "input_examples": {
+          "items": {
+            "additionalProperties": {
+              "$ref": "#/$defs/BetaJsonValue"
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "name": {
+          "const": "str_replace_editor",
+          "type": "string"
+        },
+        "strict": {
+          "type": "boolean"
+        },
+        "type": {
+          "const": "text_editor_20241022",
+          "type": "string"
+        }
+      },
+      "required": ["name", "type"],
+      "type": "object"
+    },
+    "BetaTextEditor_20250124": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_callers": {
+          "items": {
+            "$ref": "#/$defs/BetaAllowedCaller"
+          },
+          "type": "array"
+        },
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "defer_loading": {
+          "type": "boolean"
+        },
+        "input_examples": {
+          "items": {
+            "additionalProperties": {
+              "$ref": "#/$defs/BetaJsonValue"
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "name": {
+          "const": "str_replace_editor",
+          "type": "string"
+        },
+        "strict": {
+          "type": "boolean"
+        },
+        "type": {
+          "const": "text_editor_20250124",
+          "type": "string"
+        }
+      },
+      "required": ["name", "type"],
+      "type": "object"
+    },
+    "BetaTextEditor_20250429": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_callers": {
+          "items": {
+            "$ref": "#/$defs/BetaAllowedCaller"
+          },
+          "type": "array"
+        },
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "defer_loading": {
+          "type": "boolean"
+        },
+        "input_examples": {
+          "items": {
+            "additionalProperties": {
+              "$ref": "#/$defs/BetaJsonValue"
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "name": {
+          "const": "str_replace_based_edit_tool",
+          "type": "string"
+        },
+        "strict": {
+          "type": "boolean"
+        },
+        "type": {
+          "const": "text_editor_20250429",
+          "type": "string"
+        }
+      },
+      "required": ["name", "type"],
+      "type": "object"
+    },
+    "BetaTextEditor_20250728": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_callers": {
+          "items": {
+            "$ref": "#/$defs/BetaAllowedCaller"
+          },
+          "type": "array"
+        },
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "defer_loading": {
+          "type": "boolean"
+        },
+        "input_examples": {
+          "items": {
+            "additionalProperties": {
+              "$ref": "#/$defs/BetaJsonValue"
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "max_characters": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name": {
+          "const": "str_replace_based_edit_tool",
+          "type": "string"
+        },
+        "strict": {
+          "type": "boolean"
+        },
+        "type": {
+          "const": "text_editor_20250728",
+          "type": "string"
+        }
+      },
+      "required": ["name", "type"],
+      "type": "object"
+    },
+    "BetaThinkingBlockBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "prefix_mismatch_behavior": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaThinkingPrefixMismatchBehavior"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BetaThinkingConfigAdaptive": {
+      "additionalProperties": false,
+      "properties": {
+        "block_binding": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaThinkingBlockBinding"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "display": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaThinkingDisplayMode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "const": "adaptive",
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "BetaThinkingConfigDisabled": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "disabled",
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "BetaThinkingConfigEnabled": {
+      "additionalProperties": false,
+      "properties": {
+        "block_binding": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaThinkingBlockBinding"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "budget_tokens": {
+          "minimum": 1024,
+          "type": "integer"
+        },
+        "display": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaThinkingDisplayMode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "const": "enabled",
+          "type": "string"
+        }
+      },
+      "required": ["budget_tokens", "type"],
+      "type": "object"
+    },
+    "BetaThinkingConfigParam": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/BetaThinkingConfigEnabled"
+        },
+        {
+          "$ref": "#/$defs/BetaThinkingConfigDisabled"
+        },
+        {
+          "$ref": "#/$defs/BetaThinkingConfigAdaptive"
+        }
+      ]
+    },
+    "BetaThinkingDisplayMode": {
+      "enum": ["summarized", "omitted", "updates"],
+      "type": "string"
+    },
+    "BetaThinkingPrefixMismatchBehavior": {
+      "enum": ["error", "drop_block"],
+      "type": "string"
+    },
+    "BetaThinkingTurns": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "thinking_turns",
+          "type": "string"
+        },
+        "value": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": ["type", "value"],
+      "type": "object"
+    },
+    "BetaTokenTaskBudget": {
+      "additionalProperties": false,
+      "properties": {
+        "remaining": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "minimum": 0
+        },
+        "total": {
+          "minimum": 1024,
+          "type": "integer"
+        },
+        "type": {
+          "const": "tokens",
+          "type": "string"
+        }
+      },
+      "required": ["total", "type"],
+      "type": "object"
+    },
+    "BetaTool": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_callers": {
+          "items": {
+            "$ref": "#/$defs/BetaAllowedCaller"
+          },
+          "type": "array"
+        },
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "defer_loading": {
+          "type": "boolean"
+        },
+        "description": {
+          "type": "string"
+        },
+        "eager_input_streaming": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "input_examples": {
+          "items": {
+            "additionalProperties": {
+              "$ref": "#/$defs/BetaJsonValue"
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "input_schema": {
+          "$ref": "#/$defs/BetaInputSchema"
+        },
+        "name": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_-]{1,128}$",
+          "type": "string"
+        },
+        "strict": {
+          "type": "boolean"
+        },
+        "type": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "const": "custom",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "required": ["name", "input_schema"],
+      "type": "object"
+    },
+    "BetaToolChangeMCPToolReference": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "server_name": {
+          "type": "string"
+        },
+        "type": {
+          "const": "mcp_tool_reference",
+          "type": "string"
+        }
+      },
+      "required": ["name", "server_name", "type"],
+      "type": "object"
+    },
+    "BetaToolChangeMCPToolsetReference": {
+      "additionalProperties": false,
+      "properties": {
+        "server_name": {
+          "type": "string"
+        },
+        "type": {
+          "const": "mcp_toolset_reference",
+          "type": "string"
+        }
+      },
+      "required": ["server_name", "type"],
+      "type": "object"
+    },
+    "BetaToolChangeToolReference": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "pattern": "^[a-zA-Z0-9_-]{1,128}$",
+          "type": "string"
+        },
+        "type": {
+          "const": "tool_reference",
+          "type": "string"
+        }
+      },
+      "required": ["name", "type"],
+      "type": "object"
+    },
+    "BetaToolChoice": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/BetaToolChoiceAuto"
+        },
+        {
+          "$ref": "#/$defs/BetaToolChoiceAny"
+        },
+        {
+          "$ref": "#/$defs/BetaToolChoiceTool"
+        },
+        {
+          "$ref": "#/$defs/BetaToolChoiceNone"
+        }
+      ]
+    },
+    "BetaToolChoiceAny": {
+      "additionalProperties": false,
+      "properties": {
+        "disable_parallel_tool_use": {
+          "type": "boolean"
+        },
+        "type": {
+          "const": "any",
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "BetaToolChoiceAuto": {
+      "additionalProperties": false,
+      "properties": {
+        "disable_parallel_tool_use": {
+          "type": "boolean"
+        },
+        "type": {
+          "const": "auto",
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "BetaToolChoiceNone": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "none",
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "BetaToolChoiceTool": {
+      "additionalProperties": false,
+      "properties": {
+        "disable_parallel_tool_use": {
+          "type": "boolean"
+        },
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "const": "tool",
+          "type": "string"
+        }
+      },
+      "required": ["name", "type"],
+      "type": "object"
+    },
+    "BetaToolSearchToolBM25_20251119": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_callers": {
+          "items": {
+            "$ref": "#/$defs/BetaAllowedCaller"
+          },
+          "type": "array"
+        },
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "defer_loading": {
+          "type": "boolean"
+        },
+        "name": {
+          "const": "tool_search_tool_bm25",
+          "type": "string"
+        },
+        "strict": {
+          "type": "boolean"
+        },
+        "type": {
+          "enum": ["tool_search_tool_bm25_20251119", "tool_search_tool_bm25"],
+          "type": "string"
+        }
+      },
+      "required": ["name", "type"],
+      "type": "object"
+    },
+    "BetaToolSearchToolRegex_20251119": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_callers": {
+          "items": {
+            "$ref": "#/$defs/BetaAllowedCaller"
+          },
+          "type": "array"
+        },
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "defer_loading": {
+          "type": "boolean"
+        },
+        "name": {
+          "const": "tool_search_tool_regex",
+          "type": "string"
+        },
+        "strict": {
+          "type": "boolean"
+        },
+        "type": {
+          "enum": ["tool_search_tool_regex_20251119", "tool_search_tool_regex"],
+          "type": "string"
+        }
+      },
+      "required": ["name", "type"],
+      "type": "object"
+    },
+    "BetaToolSearchToolResultErrorCode": {
+      "enum": [
+        "invalid_tool_input",
+        "unavailable",
+        "too_many_requests",
+        "execution_time_exceeded"
+      ],
+      "type": "string"
+    },
+    "BetaToolUsesKeep": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "tool_uses",
+          "type": "string"
+        },
+        "value": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": ["type", "value"],
+      "type": "object"
+    },
+    "BetaToolUsesTrigger": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "tool_uses",
+          "type": "string"
+        },
+        "value": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": ["type", "value"],
+      "type": "object"
+    },
+    "BetaURLImageSource": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "url",
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": ["type", "url"],
+      "type": "object"
+    },
+    "BetaURLPDFSource": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "url",
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": ["type", "url"],
+      "type": "object"
+    },
+    "BetaUserLocation": {
+      "additionalProperties": false,
+      "properties": {
+        "city": {
+          "anyOf": [
+            {
+              "maxLength": 255,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "country": {
+          "anyOf": [
+            {
+              "maxLength": 2,
+              "minLength": 2,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "region": {
+          "anyOf": [
+            {
+              "maxLength": 255,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "timezone": {
+          "anyOf": [
+            {
+              "maxLength": 255,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "const": "approximate",
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "BetaWebFetchToolResultErrorCode": {
+      "enum": [
+        "invalid_tool_input",
+        "url_too_long",
+        "url_not_allowed",
+        "url_not_in_prior_context",
+        "url_not_accessible",
+        "unsupported_content_type",
+        "too_many_requests",
+        "max_uses_exceeded",
+        "unavailable"
+      ],
+      "type": "string"
+    },
+    "BetaWebFetchTool_20250910": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_callers": {
+          "items": {
+            "$ref": "#/$defs/BetaAllowedCaller"
+          },
+          "type": "array"
+        },
+        "allowed_domains": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "blocked_domains": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "citations": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaRequestCitationsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "defer_loading": {
+          "type": "boolean"
+        },
+        "max_content_tokens": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "max_uses": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name": {
+          "const": "web_fetch",
+          "type": "string"
+        },
+        "strict": {
+          "type": "boolean"
+        },
+        "type": {
+          "const": "web_fetch_20250910",
+          "type": "string"
+        }
+      },
+      "required": ["name", "type"],
+      "type": "object"
+    },
+    "BetaWebFetchTool_20260209": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_callers": {
+          "items": {
+            "$ref": "#/$defs/BetaAllowedCaller"
+          },
+          "type": "array"
+        },
+        "allowed_domains": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "blocked_domains": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "citations": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaRequestCitationsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "defer_loading": {
+          "type": "boolean"
+        },
+        "max_content_tokens": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "max_uses": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name": {
+          "const": "web_fetch",
+          "type": "string"
+        },
+        "strict": {
+          "type": "boolean"
+        },
+        "type": {
+          "const": "web_fetch_20260209",
+          "type": "string"
+        }
+      },
+      "required": ["name", "type"],
+      "type": "object"
+    },
+    "BetaWebFetchTool_20260309": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_callers": {
+          "items": {
+            "$ref": "#/$defs/BetaAllowedCaller"
+          },
+          "type": "array"
+        },
+        "allowed_domains": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "blocked_domains": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "citations": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaRequestCitationsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "defer_loading": {
+          "type": "boolean"
+        },
+        "max_content_tokens": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "max_uses": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name": {
+          "const": "web_fetch",
+          "type": "string"
+        },
+        "strict": {
+          "type": "boolean"
+        },
+        "type": {
+          "const": "web_fetch_20260309",
+          "type": "string"
+        },
+        "use_cache": {
+          "type": "boolean"
+        }
+      },
+      "required": ["name", "type"],
+      "type": "object"
+    },
+    "BetaWebFetchTool_20260318": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_callers": {
+          "items": {
+            "$ref": "#/$defs/BetaAllowedCaller"
+          },
+          "type": "array"
+        },
+        "allowed_domains": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "blocked_domains": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "citations": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaRequestCitationsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "defer_loading": {
+          "type": "boolean"
+        },
+        "max_content_tokens": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "max_uses": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name": {
+          "const": "web_fetch",
+          "type": "string"
+        },
+        "response_inclusion": {
+          "enum": ["full", "excluded"],
+          "type": "string"
+        },
+        "strict": {
+          "type": "boolean"
+        },
+        "type": {
+          "const": "web_fetch_20260318",
+          "type": "string"
+        },
+        "use_cache": {
+          "type": "boolean"
+        }
+      },
+      "required": ["name", "type"],
+      "type": "object"
+    },
+    "BetaWebSearchToolResultErrorCode": {
+      "enum": [
+        "invalid_tool_input",
+        "unavailable",
+        "max_uses_exceeded",
+        "too_many_requests",
+        "query_too_long",
+        "request_too_large"
+      ],
+      "type": "string"
+    },
+    "BetaWebSearchTool_20250305": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_callers": {
+          "items": {
+            "$ref": "#/$defs/BetaAllowedCaller"
+          },
+          "type": "array"
+        },
+        "allowed_domains": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "blocked_domains": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "defer_loading": {
+          "type": "boolean"
+        },
+        "max_uses": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name": {
+          "const": "web_search",
+          "type": "string"
+        },
+        "strict": {
+          "type": "boolean"
+        },
+        "type": {
+          "const": "web_search_20250305",
+          "type": "string"
+        },
+        "user_location": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaUserLocation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": ["name", "type"],
+      "type": "object"
+    },
+    "BetaWebSearchTool_20260209": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_callers": {
+          "items": {
+            "$ref": "#/$defs/BetaAllowedCaller"
+          },
+          "type": "array"
+        },
+        "allowed_domains": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "blocked_domains": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "defer_loading": {
+          "type": "boolean"
+        },
+        "max_uses": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name": {
+          "const": "web_search",
+          "type": "string"
+        },
+        "strict": {
+          "type": "boolean"
+        },
+        "type": {
+          "const": "web_search_20260209",
+          "type": "string"
+        },
+        "user_location": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaUserLocation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": ["name", "type"],
+      "type": "object"
+    },
+    "BetaWebSearchTool_20260318": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_callers": {
+          "items": {
+            "$ref": "#/$defs/BetaAllowedCaller"
+          },
+          "type": "array"
+        },
+        "allowed_domains": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "blocked_domains": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cache_control": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BetaCacheControlEphemeral"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "defer_loading": {
+          "type": "boolean"
+        },
+        "max_uses": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name": {
+          "const": "web_search",
+          "type": "string"
+        },
+        "response_inclusion": {
+          "enum": ["full", "excluded"],
+          "type": "string"
+        },
+        "strict": {
+          "type": "boolean"
+        },
+        "type": {
+          "const": "web_search_20260318",
+          "type": "string"
+        },
+        "user_location": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BetaUserLocation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": ["name", "type"],
+      "type": "object"
+    },
+    "Model": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "const": "claude-fable-5-1"
+        },
+        {
+          "const": "claude-mythos-5-1"
+        },
+        {
+          "const": "claude-sonnet-5"
+        },
+        {
+          "const": "claude-fable-5"
+        },
+        {
+          "const": "claude-mythos-5"
+        },
+        {
+          "const": "claude-opus-5"
+        },
+        {
+          "const": "claude-opus-4-8"
+        },
+        {
+          "const": "claude-opus-4-7"
+        },
+        {
+          "const": "claude-mythos-preview"
+        },
+        {
+          "const": "claude-opus-4-6"
+        },
+        {
+          "const": "claude-sonnet-4-6"
+        },
+        {
+          "const": "claude-haiku-4-5"
+        },
+        {
+          "const": "claude-haiku-4-5-20251001"
+        },
+        {
+          "const": "claude-opus-4-5"
+        },
+        {
+          "const": "claude-opus-4-5-20251101"
+        },
+        {
+          "const": "claude-sonnet-4-5"
+        },
+        {
+          "const": "claude-sonnet-4-5-20250929"
+        }
+      ]
+    }
+  },
+  "$ref": "#/$defs/BetaCreateMessageParams",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

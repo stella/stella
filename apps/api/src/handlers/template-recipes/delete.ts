@@ -18,7 +18,11 @@ const config = {
     "of template fields) from the organization. Templates already built with " +
     "it keep the fields that were inserted, and there is no in-use check.",
   permissions: { template: ["delete"] },
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  mcp: {
+    type: "capability",
+    reason: "template_authoring_ui",
+    consumesServices: false,
+  },
   params: deleteTemplateRecipeParamsSchema,
 } satisfies HandlerConfig;
 
