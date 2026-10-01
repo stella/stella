@@ -3,5 +3,5 @@
   "compilerOptions": {
     "tsBuildInfoFile": "${configDir}/.cache/tsbuildinfo.contracts.json"
   },
-  "include": ["contracts", "../../types"]
+  "include": ["contracts", "types", "../../types"]
 }
