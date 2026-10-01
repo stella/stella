@@ -555,7 +555,6 @@ const reuseAdmissionScope = async <T>({
     try: async () => {
       scope.signal.throwIfAborted();
       const value = await run(scope.signal);
-      scope.signal.throwIfAborted();
       return value;
     },
     catch: (error: unknown) => error,
