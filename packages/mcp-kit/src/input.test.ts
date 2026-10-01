@@ -121,3 +121,49 @@ describe("tool arguments require a directly declared object root", () => {
     }
   });
 });
+
+describe("argument property ownership", () => {
+  test.each(["toString", "constructor", "__proto__"])(
+    "preserves declared %s as an own property without changing the prototype",
+    (key) => {
+      const entry = { injected: true };
+      const read = readToolInput({
+        schema: {
+          type: "object",
+          properties: Object.fromEntries([[key, { type: "object" }]]),
+          required: [key],
+        },
+        value: Object.fromEntries([[key, entry]]),
+        access: "read",
+      });
+      expect(read.ok).toBe(true);
+      if (!read.ok) {
+        return;
+      }
+      expect(Object.getPrototypeOf(read.value)).toBe(Object.prototype);
+      expect(Object.hasOwn(read.value, key)).toBe(true);
+      expect(read.value[key]).toEqual(entry);
+      expect(Object.hasOwn(read.value, "injected")).toBe(false);
+      expect(read.value["injected"]).toBeUndefined();
+    },
+  );
+
+  test.each(["toString", "constructor", "__proto__"])(
+    "refuses missing required %s despite its inherited value",
+    (key) => {
+      const read = readToolInput({
+        schema: {
+          type: "object",
+          properties: Object.fromEntries([[key, { type: "object" }]]),
+          required: [key],
+        },
+        value: {},
+        access: "read",
+      });
+      expect(read).toMatchObject({
+        ok: false,
+        issues: [{ path: key, message: `Missing parameter: ${key}` }],
+      });
+    },
+  );
+});

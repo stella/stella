@@ -492,6 +492,38 @@ describe("capability tools", () => {
     expect(many.listTools()).toEqual(one.listTools());
   });
 
+  test("ordinal pagination visits every name once across page sizes and registry orders", async () => {
+    const names = ["Z", "_", "a", "a-", "a_", "z", "ä", "č", "保存", "📄"];
+    for (const registryNames of [names, names.toReversed()]) {
+      const paginated = createToolSurface({
+        tools: registryNames.map((name) => ({ ...STATS, name})),
+      });
+      for (const limit of [1, 2, 3, names.length]) {
+        let cursor: unknown;
+        for (let offset = 0; offset < names.length; offset += limit) {
+          const page = payload(
+            await paginated.callTool(
+              CAPABILITY_TOOL_NAMES.list,
+              { limit, ...(cursor === undefined ? {} : { cursor }) },
+              { calls: [] },
+            ),
+          );
+          const expectedNames = names.slice(offset, offset + limit);
+          expect(page["items"]).toHaveLength(expectedNames.length);
+          expect(page["items"]).toMatchObject(
+            expectedNames.map((id) => ({ id })),
+          );
+          cursor = page["nextCursor"];
+          if (offset + limit < names.length) {
+            expect(cursor).toBeString();
+          } else {
+            expect(cursor).toBeNull();
+          }
+        }
+      }
+    }
+  });
+
   test("portable cursors round-trip Unicode names and reject malformed encodings", async () => {
     const names = ["a.čtení", "b.保存", "c.📄"];
     const unicode = createToolSurface({

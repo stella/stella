@@ -366,6 +366,13 @@ const runTool = async <Context>({
   );
 };
 
+const compareCapabilityNames = (left: string, right: string): number => {
+  if (left < right) {
+    return -1;
+  }
+  return left > right ? 1 : 0;
+};
+
 const buildRegistry = <Context>(tools: readonly ToolDefinition<Context>[]) => {
   const byName = new Map<string, ToolDefinition<Context>>();
   const reserved = new Set<string>(Object.values(CAPABILITY_TOOL_NAMES));
@@ -404,12 +411,7 @@ export const createToolSurface = <Context>({
   const byName = buildRegistry(tools);
   const lazy = tools
     .filter((tool) => tool.direct === undefined)
-    .toSorted((a, b) => {
-      if (a.name < b.name) {
-        return -1;
-      }
-      return a.name > b.name ? 1 : 0;
-    });
+    .toSorted((a, b) => compareCapabilityNames(a.name, b.name));
   const names = [...byName.keys()];
 
   const unknownCapability = (id: string): ToolOutcome =>
@@ -446,7 +448,7 @@ export const createToolSurface = <Context>({
       (tool) =>
         (domain === undefined || tool.domain === domain) &&
         (access === "all" || tool.access === access) &&
-        (after === undefined || tool.name > after),
+        (after === undefined || compareCapabilityNames(tool.name, after) > 0),
     );
     const page = matching.slice(0, limit);
     const last = page.at(-1);

@@ -202,7 +202,7 @@ export const readToolInput = ({
   }
   const read = isRecord(normalized.value) ? normalized.value : {};
   const missing = required
-    .filter((key) => read[key] === undefined)
+    .filter((key) => !Object.hasOwn(read, key) || read[key] === undefined)
     .map((key) => ({ path: key, message: `Missing parameter: ${key}` }));
   if (missing.length > 0) {
     return refusal(
