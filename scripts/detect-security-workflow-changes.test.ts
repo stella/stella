@@ -224,25 +224,34 @@ test("migration coverage preserves every prior dependency and excludes unrelated
 });
 
 test("unknown PR bases, diff failures and non-PR events run the checks", () => {
-  for (const scope of ["codeql", "migrations"]) {
-    for (const env of [
-      { EVENT_NAME: "pull_request", BASE_SHA: "", HEAD_SHA: "" },
-      {
-        EVENT_NAME: "pull_request",
-        BASE_SHA: "1".repeat(40),
-        HEAD_SHA: "2".repeat(40),
-      },
-      { EVENT_NAME: "schedule", BASE_SHA: "", HEAD_SHA: "" },
-      { EVENT_NAME: "push", BASE_SHA: "", HEAD_SHA: "" },
-      { EVENT_NAME: "workflow_dispatch", BASE_SHA: "", HEAD_SHA: "" },
-    ]) {
-      const result = Bun.spawnSync(["bash", script, scope], {
-        cwd: import.meta.dirname,
-        env: { ...process.env, ...env },
-      });
-      expect(result.exitCode).toBe(0);
-      expect(result.stdout.toString().trim()).toBe("true");
+  // Unknown objects in the CI partial clone can trigger remote lazy fetches.
+  // One repository without a remote exercises diff failure without network I/O.
+  const cwd = mkdtempSync(path.join(tmpdir(), "security-filter-invalid-base-"));
+  try {
+    const initialized = Bun.spawnSync(["git", "init", "-q"], { cwd });
+    expect(initialized.exitCode).toBe(0);
+    for (const scope of ["codeql", "migrations"]) {
+      for (const env of [
+        { EVENT_NAME: "pull_request", BASE_SHA: "", HEAD_SHA: "" },
+        {
+          EVENT_NAME: "pull_request",
+          BASE_SHA: "1".repeat(40),
+          HEAD_SHA: "2".repeat(40),
+        },
+        { EVENT_NAME: "schedule", BASE_SHA: "", HEAD_SHA: "" },
+        { EVENT_NAME: "push", BASE_SHA: "", HEAD_SHA: "" },
+        { EVENT_NAME: "workflow_dispatch", BASE_SHA: "", HEAD_SHA: "" },
+      ]) {
+        const result = Bun.spawnSync(["bash", script, scope], {
+          cwd,
+          env: { ...process.env, ...env },
+        });
+        expect(result.exitCode).toBe(0);
+        expect(result.stdout.toString().trim()).toBe("true");
+      }
     }
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
   }
 });
 
