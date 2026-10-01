@@ -1,5 +1,5 @@
 // Passive regression fixture for the mutation's own filter chain.
-type Mutation = {
+export type Mutation = {
   where: (filter: unknown) => Mutation;
   returning: () => Mutation;
   set: (values: unknown) => Mutation;

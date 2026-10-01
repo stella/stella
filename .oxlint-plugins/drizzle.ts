@@ -1,3 +1,4 @@
+import type { CreateOnceRule } from "@oxlint/plugins";
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import { getPropertyName } from "./utils.ts";
@@ -40,7 +41,24 @@ const hasWhere = (node) => {
   return false;
 };
 
-const rule = (mutation: "delete" | "update") => ({
+const configuredReceiverNames = (option: unknown): string | string[] => {
+  if (
+    typeof option !== "object" ||
+    option === null ||
+    !("drizzleObjectName" in option)
+  ) {
+    return [];
+  }
+  const names = option.drizzleObjectName;
+  if (typeof names === "string") {
+    return names;
+  }
+  return Array.isArray(names)
+    ? names.filter((name): name is string => typeof name === "string")
+    : [];
+};
+
+const rule = (mutation: "delete" | "update"): CreateOnceRule => ({
   meta: {
     type: "problem",
     messages: {
@@ -64,12 +82,12 @@ const rule = (mutation: "delete" | "update") => ({
           return;
         }
         if (
-          node.parent?.type !== "CallExpression" ||
+          node.parent.type !== "CallExpression" ||
           node.parent.callee !== node
         ) {
           return;
         }
-        const names = context.options.at(0)?.drizzleObjectName ?? [];
+        const names = configuredReceiverNames(context.options.at(0));
         const name = receiverName(node.object);
         if (
           typeof names === "string"
@@ -84,7 +102,7 @@ const rule = (mutation: "delete" | "update") => ({
         const nextMember = node.parent.parent;
         const reportNode =
           mutation === "update" &&
-          nextMember?.type === "MemberExpression" &&
+          nextMember.type === "MemberExpression" &&
           getPropertyName(nextMember.property) === "set"
             ? nextMember
             : node;
@@ -101,7 +119,11 @@ const rule = (mutation: "delete" | "update") => ({
 export default eslintCompatPlugin({
   meta: { name: "drizzle" },
   rules: {
-    "enforce-delete-with-where": rule("delete"),
-    "enforce-update-with-where": rule("update"),
+    "enforce-delete-with-where": {
+      ...rule("delete"),
+    },
+    "enforce-update-with-where": {
+      ...rule("update"),
+    },
   },
 });
