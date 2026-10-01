@@ -1775,6 +1775,7 @@
       "GET /v1/organization-settings/ai-availability",
       "GET /v1/seller-profiles",
       "GET /v1/signals/count",
+      "GET /v1/time-timers",
       "GET /v1/workspaces/navigation"
     ],
     "requestCounts": {
@@ -1787,6 +1788,7 @@
       "GET /v1/organization-settings/ai-availability": 1,
       "GET /v1/seller-profiles": 1,
       "GET /v1/signals/count": 1,
+      "GET /v1/time-timers": 1,
       "GET /v1/workspaces/navigation": 1
     },
     "dbQueries": {
@@ -1798,6 +1800,7 @@
       "GET /v1/organization-settings/ai-availability": 2,
       "GET /v1/seller-profiles": 4,
       "GET /v1/signals/count": 4,
+      "GET /v1/time-timers": 4,
       "GET /v1/workspaces/navigation": 4
     },
     "responseSizes": {
@@ -1809,6 +1812,7 @@
       "GET /v1/organization-settings/ai-availability": 1024,
       "GET /v1/seller-profiles": 1024,
       "GET /v1/signals/count": 1024,
+      "GET /v1/time-timers": 1024,
       "GET /v1/workspaces/navigation": 1024
     }
   },
