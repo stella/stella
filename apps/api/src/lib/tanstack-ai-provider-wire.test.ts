@@ -79,7 +79,7 @@ beforeAll(() => {
   previousBedrockEndpoint = process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"];
   process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"] =
     "https://bedrock-runtime.us-east-1.amazonaws.com.cassette.invalid";
-  replay = installProviderWireReplay();
+  replay = installProviderWireReplay({ retryAfterMs: 1 });
 });
 
 afterAll(() => {
@@ -154,6 +154,12 @@ const checkCassette = async (cassette: ProviderWireCassette) => {
   const { findings, requests, run, sent, transcripts } =
     await replayWireScenario({
       cassette,
+      // One existing server-error case per SDK exercises its default first backoff.
+      recordedRetryResponses:
+        cassette.scenario === "server-error" &&
+        (cassette.provider === "openai" || cassette.provider === "anthropic")
+          ? 1
+          : 0,
       replay,
     });
   expectContract(
@@ -165,6 +171,12 @@ const checkCassette = async (cassette: ProviderWireCassette) => {
   // breaks before it shows as a changed shape.
   expectProviderRules(sent);
   expectPinnedRequests(cassette, sent);
+  if (
+    (cassette.provider === "openai" || cassette.provider === "anthropic") &&
+    (cassette.scenario === "rate-limit" || cassette.scenario === "server-error")
+  ) {
+    expect(sent.map(({ exchange }) => exchange)).toEqual([0, 0, 0]);
+  }
 };
 
 const checkCancel = async (provider: ProviderWireProvider) => {
@@ -297,6 +309,43 @@ describe("provider wire corpus", () => {
       { index: 0, version: "sent" },
     ]);
   });
+
+  test.each(["openai", "anthropic"] as const)(
+    "%s retry hints preserve the recorded response and one default backoff",
+    async (provider) => {
+      const cassette = cassetteFor(cassettes, provider, "server-error");
+      const recorded = JSON.stringify(cassette);
+      const exchange =
+        cassette.exchanges.at(0) ?? panic("The retry cassette has an exchange");
+      replay.takeRequests();
+      replay.serve(cassette, { recordedRetryResponses: 1 });
+      const hints: (string | null)[] = [];
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const response = await fetch(
+          `https://api.${provider}.com${exchange.request.path}`,
+          {
+            method: exchange.request.method,
+            body: JSON.stringify({ model: cassette.model }),
+          },
+        );
+        hints.push(response.headers.get("retry-after-ms"));
+        expect(response.status).toBe(exchange.response.status);
+        expect(new Uint8Array(await response.arrayBuffer())).toEqual(
+          bodyBytesOf(exchange.response.body),
+        );
+        for (const [name, value] of Object.entries(exchange.response.headers)) {
+          expect(response.headers.get(name)).toBe(value);
+        }
+      }
+      expect(hints).toEqual([null, "1"]);
+      expect(replay.requests().map(({ exchange: index }) => index)).toEqual([
+        0, 0,
+      ]);
+      expect(replay.takeFindings()).toEqual({ unexpected: [], unconsumed: [] });
+      expect(replay.takeRequests()).toHaveLength(2);
+      expect(JSON.stringify(cassette)).toBe(recorded);
+    },
+  );
 
   test("a tool call ended twice is a finding", async () => {
     // The real adapter's run, with one TOOL_CALL_END repeated.
