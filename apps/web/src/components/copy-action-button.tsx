@@ -23,20 +23,22 @@ type CopyActionButtonProps = Omit<
 export const CopyActionButton = ({ text, ...props }: CopyActionButtonProps) => {
   const t = useTranslations();
 
+  const copy = async () => {
+    const copied = await copyToClipboard(text);
+    if (Result.isError(copied)) {
+      getAnalytics().captureError(copied.error);
+      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      return false;
+    }
+    return true;
+  };
+
   return (
     <CopyButton
       {...props}
       copiedLabel={t("common.copied")}
       label={t("common.copy")}
-      onCopy={async () => {
-        const copied = await copyToClipboard(text);
-        if (Result.isError(copied)) {
-          getAnalytics().captureError(copied.error);
-          stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
-          return false;
-        }
-        return true;
-      }}
+      onCopy={copy}
     />
   );
 };

@@ -63,7 +63,9 @@ export const CopyButton = ({
   return (
     <Button
       {...buttonProps}
-      aria-label={iconOnly ? currentLabel : undefined}
+      // Named by the current label in both shapes, so the action is found
+      // by its name whether or not the label is visible.
+      aria-label={currentLabel}
       className={className}
       data-copied={copied ? "" : undefined}
       onClick={() => {
