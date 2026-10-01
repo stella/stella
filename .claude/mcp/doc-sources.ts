@@ -180,10 +180,6 @@ export const DOC_SOURCES = {
     ],
     url: "https://docs.aws.amazon.com/sdk-for-javascript/v3/developer-guide/llms.txt",
   },
-  AGUI: {
-    dependencies: ["@ag-ui/core"],
-    url: "https://docs.ag-ui.com/llms.txt",
-  },
   Bun: {
     dependencies: ["bun-types"],
     url: "https://bun.sh/llms.txt",

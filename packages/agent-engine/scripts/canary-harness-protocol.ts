@@ -1,4 +1,4 @@
-import { EventType } from "@ag-ui/core";
+import { EventType } from "@tanstack/ai";
 import type { StreamChunk } from "@tanstack/ai";
 import { tanstackMetadata } from "@tanstack/ai/adapter-internals";
 import { panic } from "better-result";
