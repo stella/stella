@@ -6,16 +6,23 @@ import {
   eq,
   isNotNull,
   isNull,
+  gt,
+  lte,
+  lt,
+  or,
+  notExists,
   sql,
   type SQL,
 } from "drizzle-orm";
 
 import type { DecisionPrimaryReferenceType } from "@stll/legal-ast/decision-identifier";
 
+import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawDecisions,
+  caseLawReplayBlocked,
   caseLawSources,
 } from "@/api/db/schema";
 import { STORED_RAW_REPARSE_REJECTION } from "@/api/handlers/case-law/ingestion/adapter";
@@ -195,6 +202,7 @@ export const CASE_LAW_REPLAY_SCOPE = {
  */
 export type CaseLawReplayScope =
   | (typeof CASE_LAW_REPLAY_SCOPE)[keyof typeof CASE_LAW_REPLAY_SCOPE]
+  | { type: "decision"; decisionId: SafeId<"caseLawDecision"> }
   | { type: "court"; court: string }
   | { type: "celex"; celex: string };
 
@@ -202,6 +210,8 @@ const replayScopePredicate = (scope: CaseLawReplayScope): SQL | undefined => {
   switch (scope.type) {
     case "source":
       return undefined;
+    case "decision":
+      return eq(caseLawDecisions.id, scope.decisionId);
     case "court":
       return eq(caseLawDecisions.court, scope.court);
     case "celex":
@@ -212,10 +222,18 @@ const replayScopePredicate = (scope: CaseLawReplayScope): SQL | undefined => {
   }
 };
 
+/** Operator replay keeps its timestamp order; background work walks only parser lag by ID. */
+export type ReplaySelection =
+  | { type: "operator" }
+  | { type: "background"; currentParserVersion: number };
+
+const OPERATOR_REPLAY_SELECTION = { type: "operator" } as const;
+
 type SelectReplayPageOptions = {
   scopedDb: ScopedDb;
   sourceId: SafeId<"caseLawSource">;
   scope: CaseLawReplayScope;
+  selection?: ReplaySelection;
   /** Boundary row id; the page returns rows strictly after it. */
   after: SafeId<"caseLawDecision"> | null;
   /** Last row of the run; the page returns nothing past it. */
@@ -244,10 +262,46 @@ const replayableRows = (
     isNull(caseLawDecisions.redactedAt),
   );
 
+const replaySelectionPredicate = (
+  selection: ReplaySelection,
+  tx: Transaction,
+): SQL | undefined => {
+  switch (selection.type) {
+    case "operator":
+      return undefined;
+    case "background":
+      return and(
+        or(
+          isNull(caseLawDecisions.parserVersion),
+          lt(caseLawDecisions.parserVersion, selection.currentParserVersion),
+        ),
+        notExists(
+          tx
+            .select({ id: caseLawReplayBlocked.decisionId })
+            .from(caseLawReplayBlocked)
+            .where(
+              and(
+                eq(caseLawReplayBlocked.sourceId, caseLawDecisions.sourceId),
+                eq(caseLawReplayBlocked.decisionId, caseLawDecisions.id),
+                eq(
+                  caseLawReplayBlocked.parserVersionTo,
+                  selection.currentParserVersion,
+                ),
+              ),
+            ),
+        ),
+      );
+    default:
+      selection satisfies never;
+      return panic(`Unhandled replay selection: ${String(selection)}`);
+  }
+};
+
 type SelectScopeEndOptions = {
   scopedDb: ScopedDb;
   sourceId: SafeId<"caseLawSource">;
   scope: CaseLawReplayScope;
+  selection?: ReplaySelection;
 };
 
 /**
@@ -264,14 +318,24 @@ export const selectScopeEnd = async ({
   scopedDb,
   sourceId,
   scope,
+  selection = OPERATOR_REPLAY_SELECTION,
 }: SelectScopeEndOptions): Promise<SafeId<"caseLawDecision"> | null> => {
   const last = (
     await scopedDb((tx) =>
       tx
         .select({ id: caseLawDecisions.id })
         .from(caseLawDecisions)
-        .where(replayableRows(sourceId, scope))
-        .orderBy(desc(caseLawDecisions.createdAt), desc(caseLawDecisions.id))
+        .where(
+          and(
+            replayableRows(sourceId, scope),
+            replaySelectionPredicate(selection, tx),
+          ),
+        )
+        .orderBy(
+          ...(selection.type === "background"
+            ? [desc(caseLawDecisions.id)]
+            : [desc(caseLawDecisions.createdAt), desc(caseLawDecisions.id)]),
+        )
         .limit(1),
     )
   ).at(0);
@@ -286,7 +350,17 @@ export const selectReplayPage = async ({
   after,
   until,
   limit,
+  selection = OPERATOR_REPLAY_SELECTION,
 }: SelectReplayPageOptions): Promise<ReplayDecisionRow[]> => {
+  const afterPredicate = () => {
+    if (after === null) {
+      return undefined;
+    }
+    if (selection.type === "background") {
+      return gt(caseLawDecisions.id, after);
+    }
+    return sql`(${caseLawDecisions.createdAt}, ${caseLawDecisions.id}) > (select b.created_at, b.id from case_law_decisions b where b.id = ${after})`;
+  };
   const rows = await scopedDb((tx) =>
     tx
       .select({
@@ -315,18 +389,23 @@ export const selectReplayPage = async ({
       .where(
         and(
           replayableRows(sourceId, scope),
+          replaySelectionPredicate(selection, tx),
           // Both boundary rows' `(created_at, id)` are looked up by id inside
           // the database, so the comparisons stay at the column's microsecond
           // precision. A boundary carried out as a JS `Date` would be
           // truncated to milliseconds, and an ascending keyset over a
           // truncated boundary re-serves the row it stopped on forever.
-          after === null
-            ? undefined
-            : sql`(${caseLawDecisions.createdAt}, ${caseLawDecisions.id}) > (select b.created_at, b.id from case_law_decisions b where b.id = ${after})`,
-          sql`(${caseLawDecisions.createdAt}, ${caseLawDecisions.id}) <= (select e.created_at, e.id from case_law_decisions e where e.id = ${until})`,
+          afterPredicate(),
+          selection.type === "background"
+            ? lte(caseLawDecisions.id, until)
+            : sql`(${caseLawDecisions.createdAt}, ${caseLawDecisions.id}) <= (select e.created_at, e.id from case_law_decisions e where e.id = ${until})`,
         ),
       )
-      .orderBy(asc(caseLawDecisions.createdAt), asc(caseLawDecisions.id))
+      .orderBy(
+        ...(selection.type === "background"
+          ? [asc(caseLawDecisions.id)]
+          : [asc(caseLawDecisions.createdAt), asc(caseLawDecisions.id)]),
+      )
       .limit(limit),
   );
 
@@ -1089,6 +1168,12 @@ export type ReplayCaseLawSourceOptions = {
   pageSize: number;
   after?: SafeId<"caseLawDecision"> | null;
   scope: CaseLawReplayScope;
+  selection?: ReplaySelection;
+  /** Awaited before advancing the in-memory cursor; receives every outcome. */
+  onRow?: (options: {
+    row: ReplayDecisionRow;
+    report: ReplayRowReport;
+  }) => void | Promise<void>;
   /** Defaults to reporting; withdrawing is opted into per run. */
   rejectionPolicy?: ReplayRejectionPolicy;
   /** Test seam; production withdraws through the canonical stores. */
@@ -1162,6 +1247,8 @@ export const replayCaseLawSource = async ({
   pageSize,
   after = null,
   scope,
+  selection = OPERATOR_REPLAY_SELECTION,
+  onRow,
   rejectionPolicy = REPLAY_REJECTION_POLICY.REPORT,
   withdraw = withdrawCaseLawDecisionDocument,
 }: ReplayCaseLawSourceOptions): Promise<ReplayRun> => {
@@ -1238,6 +1325,7 @@ export const replayCaseLawSource = async ({
       return false;
     }
     const rowReport = attempt.value;
+    await onRow?.({ row, report: rowReport });
 
     visited += 1;
     outcomes[rowReport.outcome] += 1;
@@ -1266,7 +1354,7 @@ export const replayCaseLawSource = async ({
 
   // Read before the first page: the walk visits the rows the scope held when
   // it was asked to, not the ones an ingestion adds while it runs.
-  const until = await selectScopeEnd({ scopedDb, sourceId, scope });
+  const until = await selectScopeEnd({ scopedDb, sourceId, scope, selection });
   if (until === null) {
     return ran();
   }
@@ -1286,6 +1374,7 @@ export const replayCaseLawSource = async ({
       after: cursor,
       until,
       limit: remaining,
+      selection,
     });
     if (page.length === 0) {
       return;

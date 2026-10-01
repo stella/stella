@@ -14,6 +14,7 @@ const SCRIPTS_DIR = path.join(API_SRC, "scripts");
 const LANE_MODULE = "@/api/lib/case-law/maintenance-lane";
 const DOORS = [
   "enterCaseLawMaintenanceLane",
+  "tryEnterCaseLawMaintenanceLane",
   "openCaseLawReadOnlySession",
 ] as const;
 
@@ -160,8 +161,8 @@ const doorsOpened = (name: string): string[] =>
 
 describe("case-law maintenance lane", () => {
   // The structural rule: a case-law script that can reach the database does
-  // so through one of the two doors and nothing else. A script that imports
-  // a handle directly has found a third way and fails here; one that opens
+  // so through the write or read-only door and nothing else. A script that imports
+  // a handle directly has found another way and fails here; one that opens
   // no door yet reaches the database has found another, which is the same
   // finding from the other side. Pure planners and formatters reach nothing
   // and need nothing.
@@ -213,6 +214,7 @@ describe("case-law maintenance lane", () => {
     expect(doorsImported(source)).toEqual([]);
     expect(doorsOpened("backfill-cz-us-judges.ts")).toContain(
       "enterCaseLawMaintenanceLane",
+      "tryEnterCaseLawMaintenanceLane",
     );
   });
 

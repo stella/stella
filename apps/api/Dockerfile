@@ -124,6 +124,12 @@ RUN bun build \
     --target bun \
     --outfile /app/replay-case-law-source.js \
     apps/api/src/scripts/replay-case-law-source.ts
+# One bounded, load-aware background replay tick; enrolment is reviewed in code.
+RUN bun build \
+    --define __STELLA_RELEASE__=true \
+    --target bun \
+    --outfile /app/replay-tick.js \
+    apps/api/src/scripts/replay-tick.ts
 # Case-law erasure and raw-storage operator passes. They delete from the
 # documents bucket, so they run inside the API task, whose role may:
 #   ["bun", "/app/redact-case-law-decision.js", "<decision id>"]
@@ -325,6 +331,7 @@ COPY --chown=stella:stella --from=builder /app/better-auth-17-backfill.js /app/b
 COPY --chown=stella:stella --from=builder /app/database-census.js /app/database-census.js
 COPY --chown=stella:stella --from=builder /app/better-auth-sign-in-replay.js /app/better-auth-sign-in-replay.js
 COPY --chown=stella:stella --from=builder /app/replay-case-law-source.js /app/replay-case-law-source.js
+COPY --chown=stella:stella --from=builder /app/replay-tick.js /app/replay-tick.js
 COPY --chown=stella:stella --from=builder /app/redact-case-law-decision.js /app/redact-case-law-decision.js
 COPY --chown=stella:stella --from=builder /app/case-law-raw-layout.js /app/case-law-raw-layout.js
 COPY --chown=stella:stella --from=builder /app/decision-analysis-candidates.js /app/decision-analysis-candidates.js

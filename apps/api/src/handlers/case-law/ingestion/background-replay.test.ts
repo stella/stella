@@ -1,0 +1,299 @@
+import { Result } from "better-result";
+import { expect, test } from "bun:test";
+
+import { defaultConfig } from "@stll/db-load-gate/health";
+
+import {
+  runBackgroundReplayTick,
+  type BackgroundReplayBatch,
+  type BackgroundReplayDependencies,
+  type BackgroundReplaySource,
+} from "@/api/handlers/case-law/ingestion/background-replay";
+import type { ReplayRunReport } from "@/api/handlers/case-law/ingestion/replay";
+import { createSafeId } from "@/api/lib/branded-types";
+
+const fixture = (dailyBudget = 3) => {
+  const source: BackgroundReplaySource = {
+    id: createSafeId<"caseLawSource">(),
+    adapterKey: "cz-nss",
+    currentParserVersion: 3,
+    dailyBudget,
+    mode: "enrolled",
+    rowsBehind: 20,
+    oldestAgeMs: 1000,
+    blockedCount: 0,
+  };
+  let clock = Date.UTC(2026, 9, 1);
+  let spent = 0;
+  let completed = 0;
+  let pending: BackgroundReplayBatch | null = null;
+  let leased = false;
+  let slotted = false;
+  let writes = 0;
+  const batch = (): BackgroundReplayBatch => ({
+    id: `receipt-${spent}`,
+    source,
+    decisionId: createSafeId<"caseLawDecision">(),
+    parserVersionFrom: 1,
+    targetParserVersion: 3,
+  });
+  const success = (current: BackgroundReplayBatch): ReplayRunReport => ({
+    visited: 1,
+    outcomes: {
+      applied: 1,
+      unchanged: 0,
+      "would-apply": 0,
+      rejected: 0,
+      "missing-payload": 0,
+      retryable: 0,
+      withdrawn: 0,
+      "withdraw-incomplete": 0,
+      "would-withdraw": 0,
+    },
+    rejections: {
+      "incomplete-metadata": 0,
+      "identity-mismatch": 0,
+      "raw-fidelity-lost": 0,
+      "unsupported-content": 0,
+      "no-document": 0,
+      supplement: 0,
+    },
+    problems: [],
+    omittedProblems: 0,
+    resumeAfter: current.decisionId,
+    haltReason: null,
+  });
+  const dependencies: BackgroundReplayDependencies = {
+    chooseSource: async () => source,
+    killRequested: async () => false,
+    acquireLease: async () => {
+      if (leased) {
+        return null;
+      }
+      leased = true;
+      return async () => {
+        leased = false;
+      };
+    },
+    acquireHeavySlot: async () => {
+      if (slotted) {
+        return null;
+      }
+      slotted = true;
+      return async () => {
+        slotted = false;
+      };
+    },
+    loadGateState: async () => null,
+    saveGateState: async () => {
+      writes += 1;
+    },
+    gate: async () => ({ kind: "normal", signals: [] }),
+    pendingBatch: async () =>
+      pending === null
+        ? { type: "empty" }
+        : { type: "reserved", batch: pending },
+    reserveBatch: async () => {
+      if (spent >= source.dailyBudget) {
+        return { type: "budget-exhausted" };
+      }
+      spent += 1;
+      pending = batch();
+      writes += 1;
+      return { type: "reserved", batch: pending };
+    },
+    previewBatch: async () => batch(),
+    replay: async (current, { apply }) => {
+      if (apply) {
+        expect(leased).toBe(true);
+        expect(slotted).toBe(true);
+      }
+      const report = success(current);
+      if (!apply) {
+        report.outcomes.applied = 0;
+        report.outcomes["would-apply"] = 1;
+      }
+      return report;
+    },
+    completeBatch: async () => {
+      pending = null;
+      completed += 1;
+      writes += 1;
+    },
+    metric: () => {},
+    now: () => clock,
+    sleep: async (milliseconds) => {
+      clock += milliseconds;
+    },
+  };
+  const run = async (maxRows = 10) =>
+    runBackgroundReplayTick({
+      dependencies,
+      maxRows,
+      maxDurationMs: 60_000,
+      errorRateCeiling: 0.1,
+      healthConfig: { ...defaultConfig, minSleepMs: 0 },
+    });
+  return {
+    source,
+    dependencies,
+    run,
+    success,
+    counts: () => ({ spent, completed, writes, leased, slotted }),
+    nextDay: () => {
+      clock += 86_400_000;
+      spent = 0;
+    },
+  };
+};
+
+test("every tick respects both the daily reservation budget and its own bound", async () => {
+  for (let budget = 1; budget <= 8; budget += 1) {
+    for (let limit = 1; limit <= 8; limit += 1) {
+      const state = fixture(budget);
+      const report = await state.run(limit);
+      expect(report.applied).toBe(Math.min(budget, limit));
+      expect(state.counts().spent).toBe(Math.min(budget, limit));
+      expect(state.counts().completed).toBe(report.applied);
+      expect(state.counts().leased).toBe(false);
+      expect(state.counts().slotted).toBe(false);
+    }
+  }
+});
+
+test("budget exhaustion exits and a fresh UTC day's budget permits more work", async () => {
+  const state = fixture(2);
+  expect((await state.run()).status).toBe("budget-exhausted");
+  expect((await state.run()).applied).toBe(0);
+  state.nextDay();
+  expect((await state.run()).applied).toBe(2);
+});
+
+test("a gate stop after one row holds without reserving the next row", async () => {
+  const state = fixture();
+  state.dependencies.gate = async () => ({
+    kind: state.counts().completed === 0 ? "normal" : "unknown",
+    signals: [],
+  });
+  const report = await state.run();
+  expect(report.status).toBe("held");
+  expect(state.counts().spent).toBe(1);
+  expect(state.counts().completed).toBe(1);
+});
+
+test("kill switches at batch boundaries and during health I/O prevent new reservations", async () => {
+  const state = fixture();
+  state.dependencies.killRequested = async () => state.counts().completed === 1;
+  expect((await state.run()).status).toBe("killed");
+  expect(state.counts().spent).toBe(1);
+  const duringHealth = fixture();
+  let killed = false;
+  duringHealth.dependencies.killRequested = async () => killed;
+  duringHealth.dependencies.gate = async () => {
+    killed = true;
+    return { kind: "normal", signals: [] };
+  };
+  expect((await duringHealth.run()).status).toBe("killed");
+  expect(duringHealth.counts().spent).toBe(0);
+});
+
+test("dry runs never acquire writing ownership or mutate durable state", async () => {
+  const state = fixture();
+  state.source.mode = "dry-run";
+  const report = await state.run(4);
+  expect(report.attempted).toBe(3);
+  expect(report.applied).toBe(0);
+  expect(state.counts()).toEqual({
+    spent: 0,
+    completed: 0,
+    writes: 0,
+    leased: false,
+    slotted: false,
+  });
+});
+
+test("overlapping ticks admit only one owner while replay waits on external I/O", async () => {
+  const state = fixture();
+  const entered = Promise.withResolvers<undefined>();
+  const resume = Promise.withResolvers<undefined>();
+  state.dependencies.replay = async (batch) => {
+    entered.resolve(undefined);
+    await resume.promise;
+    return state.success(batch);
+  };
+  const first = state.run(1);
+  await entered.promise;
+  expect((await state.run(1)).status).toBe("lease-unavailable");
+  expect(state.counts().spent).toBe(1);
+  resume.resolve(undefined);
+  expect((await first).applied).toBe(1);
+  expect(state.counts().completed).toBe(1);
+});
+
+test("a failed receipt completion resumes the charged reservation before selecting new work", async () => {
+  const state = fixture(1);
+  const complete = state.dependencies.completeBatch;
+  state.dependencies.completeBatch = async () => {
+    throw new TypeError("receipt unavailable");
+  };
+  const failed = await Result.tryPromise({
+    try: async () => await state.run(),
+    catch: (cause: unknown) => cause,
+  });
+  expect(failed.isErr()).toBe(true);
+  if (failed.isErr()) {
+    expect(failed.error).toBeInstanceOf(TypeError);
+    if (failed.error instanceof TypeError) {
+      expect(failed.error.message).toBe("receipt unavailable");
+    }
+  }
+  expect(state.counts().spent).toBe(1);
+  expect(state.counts().leased).toBe(false);
+  state.dependencies.completeBatch = complete;
+  const report = await state.run();
+  expect(report.applied).toBe(1);
+  expect(state.counts().spent).toBe(1);
+  expect(state.counts().completed).toBe(1);
+});
+
+test("retryable outcomes keep their receipt pending and stop at the error ceiling", async () => {
+  const state = fixture(1);
+  state.dependencies.replay = async (batch) => {
+    const report = state.success(batch);
+    report.outcomes.applied = 0;
+    report.outcomes.retryable = 1;
+    return report;
+  };
+  expect((await state.run()).status).toBe("error-ceiling");
+  expect(state.counts().completed).toBe(0);
+  state.dependencies.replay = async (batch) => state.success(batch);
+  expect((await state.run()).applied).toBe(1);
+  expect(state.counts().spent).toBe(1);
+});
+
+test("a halted replay without visited rows never completes its reservation", async () => {
+  const state = fixture();
+  state.dependencies.replay = async (batch) => {
+    const report = state.success(batch);
+    report.visited = 0;
+    report.outcomes.applied = 0;
+    report.haltReason = "source lease lost";
+    return report;
+  };
+  const report = await state.run();
+  expect(report.status).toBe("error-ceiling");
+  expect(report.errors).toBe(1);
+  expect(state.counts().completed).toBe(0);
+});
+
+test("higher priority work can claim the heavy slot at the next batch boundary", async () => {
+  const state = fixture();
+  const acquire = state.dependencies.acquireHeavySlot;
+  state.dependencies.acquireHeavySlot = async () =>
+    state.counts().completed === 0 ? acquire() : null;
+  expect((await state.run()).status).toBe("slot-unavailable");
+  expect(state.counts().completed).toBe(1);
+  expect(state.counts().spent).toBe(1);
+  expect(state.counts().leased).toBe(false);
+  expect(state.counts().slotted).toBe(false);
+});
