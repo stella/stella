@@ -148,6 +148,9 @@ const fixtureRuleOverrides = [
       "no-swallowed-item-error/no-swallowed-item-error",
     ]),
   ),
+  fixtureRuleOverride("no-swallowed-item-error.fixture.test.ts", [
+    "no-swallowed-item-error/no-test-swallowed-error",
+  ]),
   {
     files: [".oxlint-plugins/__fixtures__/public-ssr-ambient-state.fixture.ts"],
     rules: publicSsrAmbientStateRules,
@@ -3063,6 +3066,14 @@ export default defineConfig({
       ],
       excludeFiles: ["**/*.test.ts"],
       rules: { "no-swallowed-item-error/no-swallowed-item-error": "error" },
+    },
+    {
+      files: [
+        "{apps,packages,scripts}/**/*.{test,spec}.{ts,tsx,js,jsx,mts,cts,mjs,cjs}",
+        "{apps,packages,scripts}/**/{tests,__tests__}/**/*.{ts,tsx,js,jsx,mts,cts,mjs,cjs}",
+        ".oxlint-plugins/__fixtures__/no-swallowed-item-error.fixture.test.ts",
+      ],
+      rules: { "no-swallowed-item-error/no-test-swallowed-error": "error" },
     },
     {
       files: [

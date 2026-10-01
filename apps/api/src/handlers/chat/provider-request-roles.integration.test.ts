@@ -690,6 +690,7 @@ const requestsOf = async (
       // The answer is a text stream whatever the request asked for; a
       // builder that reads it as something else fails after its request
       // was captured.
+      // swallow-ok: rejection is asserted once the known request-builder defect is fixed
       .catch(() => undefined);
     return [...replay.requests()];
   } finally {

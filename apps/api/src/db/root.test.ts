@@ -44,6 +44,7 @@ if (!databaseUrl || !runPostgresTests) {
                 markTransactionReady?.();
               });
             });
+            // swallow-ok: cleanup drain only; the original transaction participates in the readiness race below
             heldTransactionSettled = heldTransaction.catch(() => undefined);
 
             try {
