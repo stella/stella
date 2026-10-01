@@ -1,5 +1,5 @@
 import { defineConfig } from "oxlint";
-import shadcn from "ultracite/oxlint/shadcn";
+import shadcn from "./scripts/oxlint-presets/shadcn.mjs";
 
 import repository from "./oxlint.config.ts";
 import {

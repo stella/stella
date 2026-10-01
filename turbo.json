@@ -89,6 +89,7 @@
         "$TURBO_ROOT$/.claude/mcp/**",
         "$TURBO_ROOT$/.npmrc",
         "$TURBO_ROOT$/.oxlint-plugins/**",
+        "$TURBO_ROOT$/scripts/oxlint-presets/**",
         "$TURBO_ROOT$/apps/**",
         "$TURBO_ROOT$/bunfig.toml",
         "$TURBO_ROOT$/package.json",
@@ -157,6 +158,7 @@
         "$TURBO_ROOT$/oxlint.config.ts",
         "$TURBO_ROOT$/oxlint.result-boundary.config.ts",
         "$TURBO_ROOT$/.oxlint-plugins/**",
+        "$TURBO_ROOT$/scripts/oxlint-presets/**",
         "$TURBO_ROOT$/scripts/ownership.ts",
         "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
         "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
@@ -183,6 +185,7 @@
         "$TURBO_ROOT$/oxlint.config.ts",
         "$TURBO_ROOT$/oxlint.result-boundary.config.ts",
         "$TURBO_ROOT$/.oxlint-plugins/**",
+        "$TURBO_ROOT$/scripts/oxlint-presets/**",
         "$TURBO_ROOT$/scripts/ownership.ts",
         "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
         "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
@@ -208,6 +211,7 @@
         "$TURBO_ROOT$/oxlint.config.ts",
         "$TURBO_ROOT$/oxlint.result-boundary.config.ts",
         "$TURBO_ROOT$/.oxlint-plugins/**",
+        "$TURBO_ROOT$/scripts/oxlint-presets/**",
         "$TURBO_ROOT$/scripts/ownership.ts",
         "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
         "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
@@ -228,6 +232,7 @@
         "$TURBO_ROOT$/oxlint.config.ts",
         "$TURBO_ROOT$/oxlint.result-boundary.config.ts",
         "$TURBO_ROOT$/.oxlint-plugins/**",
+        "$TURBO_ROOT$/scripts/oxlint-presets/**",
         "$TURBO_ROOT$/scripts/ownership.ts",
         "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
         "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
@@ -282,6 +287,7 @@
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.github/workflows/ai-provider-canary.yml",
         "$TURBO_ROOT$/.oxlint-plugins/**",
+        "$TURBO_ROOT$/scripts/oxlint-presets/**",
         "$TURBO_ROOT$/apps/web/src/components/chat/**",
         "$TURBO_ROOT$/apps/web/src/features/chat/chat-runtime.ts",
         "$TURBO_ROOT$/oxlint.config.ts"
@@ -292,6 +298,7 @@
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.oxlint-plugins/**",
+        "$TURBO_ROOT$/scripts/oxlint-presets/**",
         "$TURBO_ROOT$/apps/api/src/**",
         "$TURBO_ROOT$/apps/landing/public/fonts/CabinetGrotesk-Regular.otf",
         "$TURBO_ROOT$/apps/landing/public/images/gradients/**",
@@ -337,6 +344,7 @@
         "$TURBO_ROOT$/apps/**",
         "$TURBO_ROOT$/packages/**",
         "$TURBO_ROOT$/.oxlint-plugins/**",
+        "$TURBO_ROOT$/scripts/oxlint-presets/**",
         "$TURBO_ROOT$/oxlint.config.ts",
         "$TURBO_ROOT$/scripts/**"
       ]
