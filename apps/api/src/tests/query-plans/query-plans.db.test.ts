@@ -196,8 +196,11 @@ test("outstanding-document fixture keeps the exact pending set selective", async
       SELECT pg_relation_size('case_law_decisions_document_outstanding_idx')::integer AS bytes
     `),
   ).at(0);
-  expect(index).toMatchObject({ bytes: expect.any(Number) });
-  expect(isRecord(index) ? index["bytes"] : 0).toBeGreaterThan(0);
+  const bytes =
+    isRecord(index) && typeof index["bytes"] === "number"
+      ? index["bytes"]
+      : panic("Outstanding-document index size is not numeric");
+  expect(bytes).toBeGreaterThan(0);
 });
 
 test("outstanding-document schema definition matches its online index repair", async () => {

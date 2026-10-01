@@ -287,17 +287,19 @@ export const withDocumentStageWindow = async ({
       }
       filled += 1;
     }
-    for (const { document } of page.supplements ?? []) {
-      if (
-        !(
-          hasUsableAst(document.documentAst) ||
-          Boolean(document.fulltext?.trim())
-        )
-      ) {
-        unresolved += 1;
-        continue;
+    if (page.supplements !== undefined) {
+      for (const { document } of page.supplements) {
+        if (
+          !(
+            hasUsableAst(document.documentAst) ||
+            Boolean(document.fulltext?.trim())
+          )
+        ) {
+          unresolved += 1;
+          continue;
+        }
+        filled += 1;
       }
-      filled += 1;
     }
   }
   await flushFetchOutcomes(context);

@@ -43,7 +43,7 @@ describe("document telemetry containment", () => {
     },
     {
       name: "never resolving promise",
-      observe: () => new Promise<void>(() => {}),
+      observe: async () => await new Promise<void>(() => {}),
       reason: "timeout",
     },
   ];

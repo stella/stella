@@ -30,10 +30,10 @@ type DocumentStageObserverOptions = {
   ) => void | Promise<void>;
 };
 
-const reportObserverFailure = async (
+const reportObserverFailure = (
   { event, ...attributes }: DocumentTelemetryObserverFailure,
   signal: AbortSignal,
-): Promise<void> => {
+): void => {
   signal.throwIfAborted();
   process.stderr.write(`${JSON.stringify({ event, ...attributes })}\n`);
 };
