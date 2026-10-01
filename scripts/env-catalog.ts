@@ -778,6 +778,8 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
 ]);
 
 export const TOOLING_ENV_KEYS = new Set([
+  // ci-result evaluates each independently scoped suite in folded jobs.
+  "FOLDED_SUITES",
   "AGENT_ENGINE_DOCKER_CANARY_URL",
   "AGENT_ENGINE_DOCKER_IMAGE",
   "AGENT_ENGINE_DOCKER_NETWORK",
