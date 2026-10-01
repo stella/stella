@@ -16,7 +16,11 @@ const config = {
     "clause is deleted: clauses filed under the category become uncategorized, " +
     "and its child categories are re-parented to its own parent.",
   permissions: { clause: ["delete"] },
-  mcp: { type: "capability", reason: "knowledge_library_admin" },
+  mcp: {
+    type: "capability",
+    reason: "knowledge_library_admin",
+    consumesServices: false,
+  },
   params: deleteClauseCategoryParamsSchema,
 } satisfies HandlerConfig;
 

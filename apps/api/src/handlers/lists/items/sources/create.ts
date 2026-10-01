@@ -42,7 +42,11 @@ const config = {
     "matter. A new source starts unverified; change that with " +
     "lists.items.sources.verification.update.",
   permissions: { entity: ["update"] },
-  mcp: { type: "capability", reason: "workspace_schema" },
+  mcp: {
+    type: "capability",
+    reason: "workspace_schema",
+    consumesServices: false,
+  },
   body: bodySchema,
 } satisfies WorkspaceHandlerConfig;
 

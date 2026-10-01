@@ -42,7 +42,11 @@ const config = {
     "candidate is left pending. A candidate whose sources have disappeared " +
     "is refused and the reserved item is cleaned up.",
   permissions: { entity: ["create"] },
-  mcp: { type: "capability", reason: "workflow_orchestration" },
+  mcp: {
+    type: "capability",
+    reason: "workflow_orchestration",
+    consumesServices: false,
+  },
   body: bodySchema,
 } satisfies WorkspaceHandlerConfig;
 

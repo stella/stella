@@ -101,7 +101,11 @@ const config = {
     "draft instead of a 404. Page further back with chat.older-messages.list.",
   permissions: { chat: ["create"] },
   access: "read",
-  mcp: { type: "capability", reason: "assistant_chat" },
+  mcp: {
+    type: "capability",
+    reason: "assistant_chat",
+    consumesServices: false,
+  },
   params: t.Object({ threadId: tSafeId("chatThread") }),
   query: t.Object({
     allowMissingThread: t.Optional(t.Boolean()),

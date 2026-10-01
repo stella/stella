@@ -98,7 +98,11 @@ const config = {
   description:
     "List the current user's recently used playbooks in the active organization.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "knowledge_library_admin" },
+  mcp: {
+    type: "capability",
+    reason: "knowledge_library_admin",
+    consumesServices: false,
+  },
   access: "read",
   query: recentPlaybooksQuerySchema,
 } satisfies HandlerConfig;
