@@ -71,6 +71,7 @@ import {
   listChatHistoryItems,
   mergeGroupedChatThreadPages,
 } from "@/features/chat/queries";
+import { TeamAvatars } from "@/features/workspaces/team-avatars";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -103,7 +104,6 @@ import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { workspaceMembersOptions } from "@/lib/workspaces/queries/workspace-members";
 import { ThreadsSheet } from "@/routes/_protected.chat/-components/threads-sheet";
-import { TeamAvatars } from "@/routes/_protected.workspaces/-components/team-avatars";
 
 export const Route = createFileRoute("/_protected/chat/")({
   loader: ({ context }) => {
