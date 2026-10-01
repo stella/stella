@@ -10,6 +10,10 @@ import {
   type CorpusIndexConfig,
 } from "@/api/lib/legal-search/corpus-index-config";
 import { isRecord } from "@/api/lib/type-guards";
+import {
+  ACTION_COST_CALL_KIND,
+  recordExternalActionCall,
+} from "@/api/lib/usage/action-costs/context";
 
 /**
  * Thin lazy HTTP client over corpus index's REST API. Built on first use
@@ -458,9 +462,12 @@ const fetchCorpusIndex = async (
   baseUrl: string,
   path: string,
   init: FetchWithTimeoutInit,
-): Promise<Response> =>
+): Promise<Response> => {
+  init.signal?.throwIfAborted();
+  recordExternalActionCall(ACTION_COST_CALL_KIND.corpusRequest);
   // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- baseUrl is one of the configured corpus index cluster URLs; path is Stella-built
-  await fetchWithTimeout(`${baseUrl}${path}`, init);
+  return await fetchWithTimeout(`${baseUrl}${path}`, init);
+};
 
 /** Liveness of the cluster's search endpoint; resolves with the raw response. */
 export const probeCorpusIndexSearchLiveness = async (

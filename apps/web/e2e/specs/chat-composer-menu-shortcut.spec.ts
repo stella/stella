@@ -24,20 +24,21 @@ test("the slash shortcut opens a Skills popup that survives pointer movement", a
   });
   await expect(rootMenu).not.toBeVisible();
 
-  // Anchored to the (+) button like the root menu it replaces (start-aligned;
-  // which side it lands on depends on the viewport's free space).
+  // Anchored at the caret (start-aligned; which side it lands on depends on
+  // the viewport's free space), so in a blank composer it starts where the
+  // text does.
   const plusButton = page.getByRole("button", {
     name: "Open attachments and tools menu",
   });
   const popup = page.getByRole("menu", { name: "Skills" });
-  const [popupBox, buttonBox] = await Promise.all([
+  const [popupBox, composerBox] = await Promise.all([
     popup.boundingBox(),
-    plusButton.boundingBox(),
+    composer.boundingBox(),
   ]);
-  if (!popupBox || !buttonBox) {
-    throw new Error("Skills popup or (+) button is not laid out");
+  if (!popupBox || !composerBox) {
+    throw new Error("Skills popup or composer is not laid out");
   }
-  expect(Math.abs(popupBox.x - buttonBox.x)).toBeLessThanOrEqual(2);
+  expect(Math.abs(popupBox.x - composerBox.x)).toBeLessThanOrEqual(16);
 
   // Sweep the pointer across where the root menu's items would sit and into
   // the popup; Base UI's hover timers are 100ms, so wait past them.
@@ -107,4 +108,30 @@ test("the at-sign shortcut opens a Context popup and hands focus back on Escape"
   await page.keyboard.press("Escape");
   await expect(mattersSearch).not.toBeVisible();
   await expect(composer).toBeFocused();
+});
+
+test("the pickers open wherever a word starts and stay literal inside one", async ({
+  page,
+}) => {
+  await page.goto("/chat", { waitUntil: "commit" });
+  const composer = page.getByRole("textbox", { name: /type your question/iu });
+  await expect(composer).toBeVisible({ timeout: 30_000 });
+  await composer.click();
+
+  // Inside a word the character types normally.
+  await page.keyboard.type("jan@firm.cz and/or");
+  await expect(composer).toHaveText("jan@firm.cz and/or");
+  const mattersSearch = page.getByRole("textbox", { name: "Search matters" });
+  await expect(mattersSearch).not.toBeVisible();
+
+  // After a space it opens the picker without inserting the character, and
+  // Backspace in the empty search hands the caret back to the editor.
+  await page.keyboard.type(" ");
+  await page.keyboard.press("@");
+  await expect(mattersSearch).toBeFocused();
+  await page.keyboard.press("Backspace");
+  await expect(mattersSearch).not.toBeVisible();
+  await expect(composer).toBeFocused();
+  await page.keyboard.type("x");
+  await expect(composer).toHaveText("jan@firm.cz and/or x");
 });

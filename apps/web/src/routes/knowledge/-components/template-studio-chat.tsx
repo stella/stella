@@ -1411,6 +1411,7 @@ const TemplateStudioChatInner = ({
           anonymized={anonymized}
           attachmentsEnabled
           canSubmitNow={canSubmitWithCurrentSnapshot}
+          context={{ activeOrganizationId, threadRef }}
           editorController={editorController}
           emptyPlaceholder={
             <span

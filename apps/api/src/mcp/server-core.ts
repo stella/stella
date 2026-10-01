@@ -758,7 +758,7 @@ export const createMcpHttpRequestHandler = ({
         signal?.throwIfAborted();
         return result;
       };
-      if (!env.FEATURE_ACTION_ADMISSION) {
+      if (!env.FEATURE_ACTION_ADMISSION && !env.FEATURE_ACTION_COST_RECORDS) {
         return await run();
       }
 
@@ -777,7 +777,6 @@ export const createMcpHttpRequestHandler = ({
         );
       }
       const admitted = await admitAction({
-        enabled: true,
         organizationId: context.organizationId,
         userId: context.userId,
         periodIdentity: mcpActionPeriodIdentity(consumesServices),
