@@ -9,7 +9,12 @@ import { AI_ERROR_KINDS } from "@stll/api-contract";
 import { propertyTestTimeout } from "@stll/property-testing";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
+import {
+  agentSkills,
+  chatMessages,
+  chatThreads,
+  chatTurns,
+} from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import { toChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
@@ -203,6 +208,7 @@ let replay: ProviderWireReplay;
 let previousMockAI: typeof env.USE_MOCK_AI;
 let previousBedrockEndpoint: string | undefined;
 const seededThreadIds: SafeId<"chatThread">[] = [];
+const seededSkillIds: SafeId<"agentSkill">[] = [];
 
 beforeAll(async () => {
   const fixture = await getRlsFixture();
@@ -232,6 +238,11 @@ afterAll(async () => {
     await testDb
       .delete(chatThreads)
       .where(inArray(chatThreads.id, seededThreadIds));
+  }
+  if (seededSkillIds.length > 0) {
+    await testDb
+      .delete(agentSkills)
+      .where(inArray(agentSkills.id, seededSkillIds));
   }
   await releaseRlsFixture();
 });
@@ -430,6 +441,7 @@ const activeSkillOf = async () => {
     slug: skillName,
     userId: ids.userA1,
   });
+  seededSkillIds.push(skillId);
   return { skillId, skillName };
 };
 
