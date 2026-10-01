@@ -1649,7 +1649,7 @@ jobs:
       # another.
       fail-fast: false
       matrix:
-        shard: [api, rest, web]
+        shard: [api-1, api-2, api-3, api-4, rest, web]
 
     steps:
       - name: Checkout
@@ -1751,7 +1751,13 @@ jobs:
             read -r -a args <<<"$scope"
           fi
           read -r -a shard_args <<<"$(bun scripts/test-shards.ts --filters "$SHARD")"
-          bun run test -- --concurrency=2 "${args[@]}" "${shard_args[@]}"
+          export API_TEST_SHARD="$(bun scripts/test-shards.ts --api-shard "$SHARD")"
+          set -o pipefail
+          plan="$RUNNER_TEMP/test-plan.json"
+          output="$RUNNER_TEMP/test-output.log"
+          bun run test -- --concurrency=2 "${args[@]}" "${shard_args[@]}" --dry=json > "$plan"
+          bun run test -- --concurrency=2 --output-logs=full "${args[@]}" "${shard_args[@]}" | tee "$output"
+          bun scripts/test-shards.ts --verify-output "$SHARD" "$plan" "$output"
 
   # The browser-backed suites. They share one Playwright install, so they stay
   # in a single job rather than one per suite.
