@@ -81,11 +81,12 @@ if (!databaseUrl || !runPostgresTests) {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const { db } = openClient();
         const prefix = `pause.${Bun.randomUUIDv7()}.`;
-        const definitions = DECLARED_SCHEDULER_JOBS.map((definition) =>
-          ({ ...definition, db,
-            enabled: "enabled" in definition ? definition.enabled : true,
-            id: `${prefix}${definition.id}`,}),
-        );
+        const definitions = DECLARED_SCHEDULER_JOBS.map((definition) => ({
+          ...definition,
+          db,
+          enabled: "enabled" in definition ? definition.enabled : true,
+          id: `${prefix}${definition.id}`,
+        }));
         const ids = definitions.map(({ id }) => id);
         expect(ids.length).toBeGreaterThan(0);
         try {
