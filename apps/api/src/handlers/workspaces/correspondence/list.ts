@@ -77,7 +77,11 @@ const config = {
   description:
     "List correspondence filed in a matter, newest received first. When intake is not direct, from, to, and the message date (sentAt) are asserted by the forwarder and are not verified; authentication verdicts in authenticatedSender describe the delivery, not the extracted original.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "correspondence" },
+  mcp: {
+    type: "capability",
+    reason: "correspondence",
+    consumesServices: false,
+  },
   access: "read",
   query: t.Object({
     cursor: t.Optional(tPaginationCursor()),

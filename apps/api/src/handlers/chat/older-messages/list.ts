@@ -23,7 +23,11 @@ const config = {
     "scope must match the one it was created in.",
   permissions: { chat: ["create"] },
   access: "read",
-  mcp: { type: "capability", reason: "assistant_chat" },
+  mcp: {
+    type: "capability",
+    reason: "assistant_chat",
+    consumesServices: false,
+  },
   params: t.Object({ threadId: tSafeId("chatThread") }),
   query: t.Object({
     before: t.String(),

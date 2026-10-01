@@ -31,7 +31,11 @@ const config = {
     "used more than once, and stays fully editable afterwards. Team scope " +
     "requires admin or owner.",
   permissions: { agentSkill: ["create"] },
-  mcp: { type: "capability", reason: "agent_tool_authoring" },
+  mcp: {
+    type: "capability",
+    reason: "agent_tool_authoring",
+    consumesServices: false,
+  },
   body: fromBlueprintBodySchema,
 } satisfies HandlerConfig;
 

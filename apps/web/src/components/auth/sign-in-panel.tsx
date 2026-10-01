@@ -1,10 +1,9 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
 
-import { useForm } from "@tanstack/react-form";
+import { useForm, useSelector } from "@tanstack/react-form";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { useSelector } from "@tanstack/react-store";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 

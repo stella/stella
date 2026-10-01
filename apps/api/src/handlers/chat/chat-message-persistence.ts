@@ -696,6 +696,7 @@ const reportStoredTurnDefects = ({
 
 type PersistTerminalAssistantTurnProps = {
   execution: ChatTurnExecution;
+  indexThread?: PersistMessageProps["indexThread"];
   failure?:
     | {
         code: ChatTurnFailureCode;
@@ -711,8 +712,9 @@ type PersistTerminalAssistantTurnProps = {
   workspaceId: SafeId<"workspace"> | null;
 };
 
-const persistTerminalAssistantTurn = async ({
+export const persistTerminalAssistantTurn = async ({
   execution,
+  indexThread,
   failure,
   outcome,
   owningAssistantMessage,
@@ -730,6 +732,7 @@ const persistTerminalAssistantTurn = async ({
       stopped,
     });
     return await persistMessage({
+      indexThread,
       persistencePlan:
         owningAssistantMessage === undefined
           ? { type: "insert", message: settlement.message }

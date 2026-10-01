@@ -28,7 +28,11 @@ const config = {
     "the name, description, status, and timestamps.",
   permissions: { workspace: ["read"] },
   access: "read",
-  mcp: { type: "capability", reason: "workspace_schema" },
+  mcp: {
+    type: "capability",
+    reason: "workspace_schema",
+    consumesServices: false,
+  },
   query: querySchema,
 } satisfies WorkspaceHandlerConfig;
 

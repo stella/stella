@@ -48,7 +48,11 @@ const config = {
     "optionally the prompt as it stands. Returns one single-line prompt of " +
     "at most 280 characters and stores nothing. Consumes AI usage.",
   permissions: { property: ["create"] },
-  mcp: { type: "capability", reason: "workspace_schema" },
+  mcp: {
+    type: "capability",
+    reason: "workspace_schema",
+    consumesServices: true,
+  },
   body: suggestPromptBodySchema,
   requiresUsage: { actionType: "chat", modelRole: "fast" },
 } satisfies WorkspaceHandlerConfig;

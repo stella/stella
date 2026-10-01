@@ -1273,6 +1273,13 @@
   }
 }
 
+/* A page-level scroller whose content height changes while you use it
+ * (filtering, expanding, loading). Reserving the track keeps the scrollbar's
+ * appearing and disappearing from shifting the whole layout sideways. */
+@utility scrollbar-stable {
+  scrollbar-gutter: stable;
+}
+
 /* A scroll container with no scrollbar and no reserved track. For strips
  * whose overflow is signalled another way (an edge fade, a visible partial
  * item): a hover-revealed scrollbar would still reserve its track only when

@@ -15,6 +15,7 @@ import {
 } from "../execution-profile";
 import { apiDelete, apiPut } from "../helpers/api";
 import { ROUTE_ERROR_HEADING } from "../helpers/app-shell";
+import { findChromeDividerProblems } from "../helpers/chrome-divider";
 import {
   CORRESPONDENCE_SMOKE_SUBJECT,
   createTestCorrespondence,
@@ -155,6 +156,9 @@ const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
   }),
   staticRoute("/settings/organization/document-types"),
   staticRoute("/settings/organization/matter-numbering"),
+  staticRoute("/settings/organization/billing", {
+    expectation: { kind: "settles" },
+  }),
   staticRoute("/settings/organization/members"),
   staticRoute("/settings/organization/usage"),
   staticRoute("/inbox"),
@@ -542,6 +546,12 @@ const measureRouteTarget = async ({
     await assertNoRouteBoundary(page, route.template);
     assertFinalDestination(page, route);
     await assertRouteContentVisible(page, route.template);
+    // The chrome draws the one divider under the breadcrumb bar; a page row
+    // with its own top border on that line doubles it into a 2px rule.
+    expect(
+      await findChromeDividerProblems(page),
+      `${route.template} must show exactly one divider under the app chrome`,
+    ).toEqual([]);
     browserErrors.assertEmpty(`unexpected browser errors on ${route.template}`);
     // Captured after the route shell and tracked API work are ready, so the
     // manifest reflects the fully-rendered route.

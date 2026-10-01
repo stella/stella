@@ -1,15 +1,13 @@
-import { createFileRoute, notFound } from "@tanstack/react-router";
+import { createFileRoute, notFound, Outlet } from "@tanstack/react-router";
 
 import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launch";
-import { PublicTemplatesCatalogue } from "@/routes/knowledge/-public/public-templates-catalogue";
 
-// The published catalogue, the same for every visitor; a member reaches it
-// from the library's catalogue tab.
+// The catalogue and its detail pages share the public availability gate.
 export const Route = createFileRoute("/knowledge/templates_/catalogue")({
   beforeLoad: () => {
     if (!isPublicKnowledgeEnabled()) {
       notFound({ throw: true });
     }
   },
-  component: PublicTemplatesCatalogue,
+  component: Outlet,
 });

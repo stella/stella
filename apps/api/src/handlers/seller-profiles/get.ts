@@ -55,7 +55,7 @@ true satisfies UnexpectedSellerProfileGetColumn extends never ? true : never;
 const config = {
   description: "Read one active issuer profile in the active organization.",
   permissions: { organizationSettings: ["update"] },
-  mcp: { type: "capability", reason: "billing_admin" },
+  mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   access: "read",
   params: sellerProfileParams,
 } satisfies HandlerConfig;

@@ -15,6 +15,10 @@ import { getRequestId } from "@/api/lib/observability/request-context";
 import { withCommandTimeout } from "@/api/lib/rate-limit/redis-command-timeout";
 import { createRedisClient } from "@/api/lib/redis-client";
 import { coordinationKey } from "@/api/lib/redis-keys";
+import {
+  CACHE_CONTROL_HEADER,
+  PRIVATE_CACHE_CONTROL,
+} from "@/api/lib/security-headers";
 
 const BEARER_SCHEME = "bearer";
 const SHA256_HEX_PATTERN = /^[a-f0-9]{64}$/u;
@@ -252,7 +256,7 @@ export const createSecurityCanaryInterceptor =
     }
 
     set.status = 403;
-    set.headers["cache-control"] = "no-store";
+    set.headers[CACHE_CONTROL_HEADER] = PRIVATE_CACHE_CONTROL;
     set.headers[SECURITY_CANARY_WARNING_HEADER] = SECURITY_CANARY_WARNING;
     return { message: SECURITY_CANARY_WARNING };
   };

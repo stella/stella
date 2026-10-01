@@ -80,6 +80,22 @@ describe("normalizePolarEvent — subscription lifecycle", () => {
     });
   }
 
+  test("preserves provider creation time independently of modification time", () => {
+    const created_at = "2026-06-01T00:00:00Z";
+    const modified_at = "2026-06-03T00:00:00Z";
+    for (const { native } of cases) {
+      const result = normalizePolarEvent(
+        { type: native, data: polarSubscription({ created_at, modified_at }) },
+        native,
+      );
+      const parsed = v.parse(hostedUsageWebhookEventSchema, result.candidate);
+      expect(parsed.data).toMatchObject({
+        created_at,
+        occurred_at: modified_at,
+      });
+    }
+  });
+
   test("omits quantity when Polar seats is null so dispatch defaults to one", () => {
     const result = normalizePolarEvent(
       { type: "subscription.active", data: polarSubscription({ seats: null }) },
