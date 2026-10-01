@@ -62,7 +62,7 @@ test.skipIf(!process.env["CI"])(
     const temporary = mkdtempSync(path.join(tmpdir(), "stella-shard-merge-"));
     const checkout = path.join(temporary, "checkout");
     const run = async (command: string[], cwd = checkout) => {
-      const process = Bun.spawn(command, {
+      const child = Bun.spawn(command, {
         cwd,
         env: {
           ...process.env,
@@ -73,9 +73,9 @@ test.skipIf(!process.env["CI"])(
         stderr: "pipe",
       });
       const [exitCode, stdout, stderr] = await Promise.all([
-        process.exited,
-        new Response(process.stdout).text(),
-        new Response(process.stderr).text(),
+        child.exited,
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
       ]);
       return { exitCode, stdout, stderr };
     };
@@ -87,7 +87,7 @@ test.skipIf(!process.env["CI"])(
       ).toBe(0);
       return result.stdout.trim();
     };
-    const generate = (check = false) =>
+    const generate = async (check = false) =>
       run([
         process.execPath,
         "--env-file=apps/api/.env.example",

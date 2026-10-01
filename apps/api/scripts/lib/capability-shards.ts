@@ -2,23 +2,26 @@ import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-/** Arrays preserve contract order; object keys have one locale-independent order. */
-export const serializeCapabilityShard = (entry: {
-  readonly id: string;
-}): string =>
-  `${JSON.stringify(entry, (_key, value: unknown) => {
-    if (typeof value !== "object" || value === null || Array.isArray(value)) {
-      return value;
+/** JSON projection with sorted object keys; arrays retain their exact order. */
+export const serializeCapabilityJson = (value: unknown) =>
+  JSON.stringify(value, (_key, child: unknown) => {
+    if (typeof child !== "object" || child === null || Array.isArray(child)) {
+      return child;
     }
     return Object.fromEntries(
-      Object.entries(value).toSorted(([a], [b]) => {
+      Object.entries(child).toSorted(([a], [b]) => {
         if (a === b) {
           return 0;
         }
         return a < b ? -1 : 1;
       }),
     );
-  })}\n`;
+  });
+
+/** The complete canonical contract document, terminated by one newline. */
+export const serializeCapabilityShard = (entry: {
+  readonly id: string;
+}): string => `${serializeCapabilityJson(entry)}\n`;
 
 type CapabilityShardOptions = {
   directory: string;

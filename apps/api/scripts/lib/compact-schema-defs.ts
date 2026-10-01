@@ -10,10 +10,10 @@
 // This pass hoists every repeated subschema into the entry's own `$defs` and
 // replaces each occurrence with `{"$ref": "#/$defs/<name>"}`. Nothing is
 // simplified, widened, or dropped: `expandSchemaDefs` inlines the
-// refs back to the byte-identical source document, and the exporter asserts
-// that round trip for every capability before it writes anything.
+// refs back to the byte-identical canonical source document. The exporter
+// asserts that round trip for every capability before it writes anything.
 //
-// Determinism: def names are a content hash of the subschema's serialization,
+// Determinism: def names hash the canonical subschema serialization,
 // so the same input always produces the same artifact, and an unrelated schema
 // change cannot renumber every other def.
 
@@ -23,6 +23,7 @@ import {
   DEFS_KEY,
   DEFS_REF_PREFIX,
 } from "../../../../packages/cli/src/expand-schema-defs";
+import { serializeCapabilityJson } from "./capability-shards";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -261,10 +262,11 @@ const savingOf = (body: unknown, refCount: number): number =>
 /**
  * Hoist every profitably repeated subschema of one capability's input schema
  * into `$defs`. Entries with nothing worth hoisting (the large majority) come
- * back byte-identical to their input, with no `$defs` key added.
+ * back byte-identical to their canonical JSON input, with no `$defs` key added.
  *
- * The input is JSON round-tripped first: handler configs are TypeBox schemas,
- * which carry non-enumerable symbol metadata that `JSON.stringify` drops. The
+ * The input is JSON round-tripped with sorted object keys before hashing:
+ * the shard serializer uses this same canonical source format. Handler configs
+ * are TypeBox schemas with non-enumerable symbol metadata that JSON drops. The
  * round trip makes the value compacted here exactly the value that would have
  * been serialized, so the exporter's round-trip gate compares like with like.
  */
@@ -273,7 +275,7 @@ export const compactSchemaDefs = (
 ): CompactionResult => {
   // oxlint-disable-next-line unicorn/prefer-structured-clone -- NOT a deep clone: the JSON projection is the point. `structuredClone` would carry through TypeBox's metadata and values JSON drops, so what gets compacted would stop matching what gets written.
   const document: CapabilityInputSchemaParts = JSON.parse(
-    JSON.stringify(inputSchema),
+    serializeCapabilityJson(inputSchema),
   );
   const reserved = findReservedKeyword(document);
   if (reserved !== null) {
@@ -367,8 +369,7 @@ export const compactSchemaDefs = (
       continue;
     }
 
-    // `$defs` last and name-sorted: the parts keep the key order they always
-    // had, so an entry's diff shows the refs and the new block, nothing else.
+    // Name-sorted defs; the shard serializer canonicalizes the complete output.
     const defs: JsonRecord = {};
     for (const name of [...bodies.keys()].toSorted()) {
       defs[name] = bodies.get(name);

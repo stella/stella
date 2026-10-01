@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 
 import { readCapabilityCatalog } from "../../../../packages/cli/src/capability-catalog-data";
 import { expandSchemaDefs } from "../../../../packages/cli/src/expand-schema-defs";
@@ -6,6 +7,10 @@ import {
   inputSchemaByteSize,
   MAX_CAPABILITY_SCHEMA_BYTES,
 } from "./capability-catalog";
+import {
+  serializeCapabilityJson,
+  serializeCapabilityShard,
+} from "./capability-shards";
 import { compactSchemaDefs } from "./compact-schema-defs";
 
 // THE correctness gate for `$defs` compaction. A compacted schema that admits
@@ -87,7 +92,12 @@ describe("committed capability catalog", () => {
 describe("compact/expand round trip over every catalog entry", () => {
   test("expanding then recompacting reproduces the committed artifact exactly", () => {
     const mismatches: string[] = [];
-    for (const [id, compacted] of compactedById) {
+    for (const entry of catalogEntries) {
+      const id = entry["id"];
+      if (typeof id !== "string") {
+        throw new TypeError("Capability id is not a string");
+      }
+      const compacted = compactedById.get(id);
       if (compacted === undefined) {
         continue;
       }
@@ -111,15 +121,26 @@ describe("compact/expand round trip over every catalog entry", () => {
       // Deterministic down to the byte, in a different process than the one
       // that wrote the artifact.
       if (
-        JSON.stringify(recompacted.inputSchema) !== JSON.stringify(compacted)
+        serializeCapabilityShard({
+          ...entry,
+          id,
+          inputSchema: recompacted.inputSchema,
+        }) !==
+        readFileSync(
+          new URL(
+            `../../../../packages/cli/capabilities/${id}.json`,
+            import.meta.url,
+          ),
+          "utf-8",
+        )
       ) {
         mismatches.push(`${id}: recompaction did not reproduce the artifact`);
         continue;
       }
       // The other direction, so neither pass can drift from the other.
       if (
-        JSON.stringify(expandSchemaDefs(recompacted.inputSchema)) !==
-        JSON.stringify(expanded)
+        serializeCapabilityJson(expandSchemaDefs(recompacted.inputSchema)) !==
+        serializeCapabilityJson(expanded)
       ) {
         mismatches.push(`${id}: re-expansion did not reproduce the schema`);
       }
@@ -164,7 +185,7 @@ describe("compactSchemaDefs", () => {
     expect(expandSchemaDefs(result.inputSchema)).toEqual(source);
   });
 
-  test("leaves a schema with nothing worth hoisting byte-identical", () => {
+  test("leaves a schema with nothing worth hoisting in canonical source bytes", () => {
     const source = {
       query: { type: "object", properties: { id: { type: "string" } } },
     };
@@ -173,8 +194,81 @@ describe("compactSchemaDefs", () => {
     if (result.status !== "compacted") {
       return;
     }
-    expect(JSON.stringify(result.inputSchema)).toBe(JSON.stringify(source));
+    expect(serializeCapabilityJson(result.inputSchema)).toBe(
+      serializeCapabilityJson(source),
+    );
     expect(result.inputSchema.$defs).toBeUndefined();
+  });
+
+  test("fragment key order does not change defs or canonical compacted bytes", () => {
+    const reverseKeys = (value: unknown): unknown => {
+      if (Array.isArray(value)) {
+        return value.map(reverseKeys);
+      }
+      if (!isRecord(value)) {
+        return value;
+      }
+      return Object.fromEntries(
+        Object.entries(value)
+          .toReversed()
+          .map(([key, child]) => [key, reverseKeys(child)]),
+      );
+    };
+    const entries = Object.entries(condition);
+    const orders = entries.flatMap((first, firstIndex) =>
+      entries.flatMap((second, secondIndex) => {
+        if (firstIndex === secondIndex) {
+          return [];
+        }
+        return [
+          [
+            first,
+            second,
+            ...entries.filter(
+              (_entry, index) => index !== firstIndex && index !== secondIndex,
+            ),
+          ],
+        ];
+      }),
+    );
+    expect(orders).toHaveLength(6);
+    const fragments = orders.flatMap((order) => {
+      const fragment = Object.fromEntries(order);
+      return [fragment, reverseKeys(fragment)];
+    });
+    expect(JSON.stringify(fragments.at(0))).not.toBe(
+      JSON.stringify(fragments.at(1)),
+    );
+    const baselineSource = {
+      body: {
+        type: "object",
+        properties: { first: condition, second: condition },
+      },
+    };
+    const baseline = compactSchemaDefs(baselineSource);
+    expect(baseline.status).toBe("compacted");
+    if (baseline.status !== "compacted") {
+      return;
+    }
+    const expected = serializeCapabilityJson(baseline.inputSchema);
+    expect(Object.keys(baseline.inputSchema.$defs ?? {})).toHaveLength(1);
+    for (const first of fragments) {
+      for (const second of fragments) {
+        const source = {
+          body: { type: "object", properties: { first, second } },
+        };
+        const result = compactSchemaDefs(source);
+        expect(result.status).toBe("compacted");
+        if (result.status !== "compacted") {
+          return;
+        }
+        expect(result.inputSchema.$defs).toEqual(baseline.inputSchema.$defs);
+        expect(serializeCapabilityJson(result.inputSchema)).toBe(expected);
+        expect(
+          serializeCapabilityJson(expandSchemaDefs(result.inputSchema)),
+        ).toBe(serializeCapabilityJson(source));
+      }
+    }
   });
 
   test("sizes a non-ASCII fragment by its UTF-8 bytes, not code units", () => {
@@ -219,7 +313,9 @@ describe("compactSchemaDefs", () => {
     if (result.status !== "compacted") {
       return;
     }
-    expect(JSON.stringify(result.inputSchema)).toBe(JSON.stringify(source));
+    expect(serializeCapabilityJson(result.inputSchema)).toBe(
+      serializeCapabilityJson(source),
+    );
   });
 
   test("hoists a repeated subschema nested inside another hoisted one", () => {
