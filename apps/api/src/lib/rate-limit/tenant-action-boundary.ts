@@ -17,7 +17,7 @@ export const TENANT_ACTION_DETAIL = "x-stella-tenant-action";
 declare module "elysia" {
   type DocumentDecoration = {
     [TENANT_ACTION_DETAIL]?: boolean;
-  }
+  };
 }
 
 type TenantActionClassifierOptions = {
