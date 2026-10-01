@@ -6,6 +6,7 @@ import type { AgendaItemWireFields as stll_api_contract_AgendaItemWireFields, Ch
 import type { CompareNode as stll_conditions_CompareNode, ConditionNode as stll_conditions_ConditionNode, GroupNode as stll_conditions_GroupNode, PredicateNode as stll_conditions_PredicateNode } from "@stll/conditions";
 import type { FolioAgentApplyOperationsSummary as stll_folio_agents_FolioAgentApplyOperationsSummary, FolioAgentBlock as stll_folio_agents_FolioAgentBlock, FolioAgentChange as stll_folio_agents_FolioAgentChange, FolioAgentComment as stll_folio_agents_FolioAgentComment, FolioAgentDocumentOutline as stll_folio_agents_FolioAgentDocumentOutline, FolioAgentScopedFindTextResult as stll_folio_agents_FolioAgentScopedFindTextResult, FolioAgentSectionRead as stll_folio_agents_FolioAgentSectionRead } from "@stll/folio-agents";
 import type { CompareChange as stll_folio_core_CompareChange, CompareCompatibility as stll_folio_core_CompareCompatibility, CompareUnsupportedPart as stll_folio_core_CompareUnsupportedPart, CompareVerification as stll_folio_core_CompareVerification } from "@stll/folio-core";
+import type { InvoiceTotals as stll_invoicing_InvoiceTotals } from "@stll/invoicing";
 import type { CentsAmount as stll_money_CentsAmount } from "@stll/money";
 import type { FieldDateFormat as stll_template_conditions_FieldDateFormat, NamedCondition as stll_template_conditions_NamedCondition } from "@stll/template-conditions";
 import type { AudioPart as tanstack_ai_AudioPart, ContentPart as tanstack_ai_ContentPart, DocumentPart as tanstack_ai_DocumentPart, ImagePart as tanstack_ai_ImagePart, JSONSchema as tanstack_ai_JSONSchema, StructuredOutputPart as tanstack_ai_StructuredOutputPart, SubagentStatus as tanstack_ai_SubagentStatus, TextPart as tanstack_ai_TextPart, ThinkingPart as tanstack_ai_ThinkingPart, ToolCallPart as tanstack_ai_ToolCallPart, ToolExecutionContext as tanstack_ai_ToolExecutionContext, ToolResultState as tanstack_ai_ToolResultState, UIResourcePart as tanstack_ai_UIResourcePart, VideoPart as tanstack_ai_VideoPart } from "@tanstack/ai";
@@ -8485,7 +8486,7 @@ export type WebRoutes = {
                   vatAmount: stll_money_CentsAmount;
                   grossAmount: stll_money_CentsAmount;
                 }>;
-                totals: T5a0acd1281;
+                totals: stll_invoicing_InvoiceTotals;
                 paidAt: Tbe0400fa4c;
                 finalizedAt: Tbe0400fa4c;
                 createdAt: string;
@@ -8884,7 +8885,7 @@ export type WebRoutes = {
               response: {
                 200: {
                   id: T74aae47c1a;
-                  totals: T5a0acd1281;
+                  totals: stll_invoicing_InvoiceTotals;
                 };
                 400: T9a51b7d2bc;
                 401: T9a51b7d2bc;
@@ -8936,7 +8937,7 @@ export type WebRoutes = {
                 response: {
                   200: {
                     id: T74aae47c1a;
-                    totals: T5a0acd1281;
+                    totals: stll_invoicing_InvoiceTotals;
                   };
                   400: T9a51b7d2bc;
                   401: T9a51b7d2bc;
@@ -8982,7 +8983,7 @@ export type WebRoutes = {
                 response: {
                   200: {
                     id: T74aae47c1a;
-                    totals: T5a0acd1281;
+                    totals: stll_invoicing_InvoiceTotals;
                   };
                   400: T9a51b7d2bc;
                   401: T9a51b7d2bc;
@@ -37338,19 +37339,6 @@ type T59c690454c = {
     role: string;
     excerpt: string;
     createdAt: string;
-  }>;
-};
-
-type T5a0acd1281 = {
-  netAmountMinor: stll_money_CentsAmount;
-  vatAmountMinor: stll_money_CentsAmount;
-  grossAmountMinor: stll_money_CentsAmount;
-  vatBreakdown: Array<{
-    vatRateBps: number;
-    vatTreatment: ("domestic_vat" | "exempt" | "not_vat_payer" | "reverse_charge");
-    netAmountMinor: stll_money_CentsAmount;
-    vatAmountMinor: stll_money_CentsAmount;
-    grossAmountMinor: stll_money_CentsAmount;
   }>;
 };
 
