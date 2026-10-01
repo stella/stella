@@ -144,15 +144,18 @@ describe("plain-text item rejection", () => {
       }),
     ];
     for (const error of errors) {
-      await expect(
-        buildPlainTextItem({
-          adapterKey: ADAPTER_KEYS.CZ_NSS,
-
-          rawListing: "{}",
-          build: async () => await Promise.reject(error),
-          decisionOf: () => undefined,
-        }),
-      ).rejects.toBe(error);
+      // bun-types declares `.rejects` matchers as void, so the rejection is
+      // captured explicitly instead.
+      const rejection: unknown = await buildPlainTextItem({
+        adapterKey: ADAPTER_KEYS.CZ_NSS,
+        rawListing: "{}",
+        build: async () => await Promise.reject(error),
+        decisionOf: () => undefined,
+      }).then(
+        () => null,
+        (error: unknown) => error,
+      );
+      expect(rejection).toBe(error);
     }
   });
 });

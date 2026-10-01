@@ -313,7 +313,7 @@ describe("a configured policy drives the crawl", () => {
       globalThis.fetch = originalFetch;
     };
     globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-      const url = String(input);
+      const url = input instanceof Request ? input.url : input.toString();
       return new Response(
         JSON.stringify(url.includes("/judgments/") ? {} : { items: rows }),
         {
