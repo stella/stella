@@ -458,21 +458,6 @@ const commitRateWhileStreaming = async (kind: StreamChunkKind) => {
   };
 };
 
-/**
- * Kinds whose deltas each reach the page as their own commit today: the chat
- * runtime tells its subscribers about every chunk that changes the messages.
- * Each runs as a known finding: its stream must still reach the page and
- * finish, and only its rate is expected over the budget, so it fails loudly
- * once the page commits at a bounded rate and the entry goes.
- */
-const OVER_BUDGET_TODAY: ReadonlySet<StreamChunkKind> = new Set([
-  "reasoning",
-  "subagent",
-  "text",
-  "tool-input",
-  "tool-output",
-]);
-
 const KINDS = Object.keys(STREAM_CHUNK_COMMIT_BUDGET).filter(
   (kind): kind is StreamChunkKind => kind in STREAM_CHUNK_COMMIT_BUDGET,
 );
@@ -501,25 +486,12 @@ describe(`${ORACLE}: the thread page's commit rate while each kind of chunk stre
   for (const kind of KINDS) {
     const { commitsPerSecond: budget, streams } =
       STREAM_CHUNK_COMMIT_BUDGET[kind];
-    const known = OVER_BUDGET_TODAY.has(kind);
-    const rule = `the thread page commits at a bounded rate while ${kind} streams`;
-    test(
-      known ? `known finding: ${rule}` : rule,
-      async () => {
-        const measured = await commitRateWhileStreaming(kind);
-        expect(measured.unexpected).toEqual([]);
-        expect(measured.finished).toBe(true);
-        const detail = `${ORACLE}: ${String(measured.commits)} commits while ${streams} streamed (${String(measured.kindEvents)} events), budget ${String(budget)}/s`;
-        if (known) {
-          expect(
-            measured.commitsPerSecond,
-            `${detail}; within budget now: drop ${kind} from OVER_BUDGET_TODAY`,
-          ).toBeGreaterThan(budget);
-        } else {
-          expect(measured.commitsPerSecond, detail).toBeLessThanOrEqual(budget);
-        }
-      },
-      30_000,
-    );
+    test(`the thread page commits at a bounded rate while ${kind} streams`, async () => {
+      const measured = await commitRateWhileStreaming(kind);
+      expect(measured.unexpected).toEqual([]);
+      expect(measured.finished).toBe(true);
+      const detail = `${ORACLE}: ${String(measured.commits)} commits while ${streams} streamed (${String(measured.kindEvents)} events), budget ${String(budget)}/s`;
+      expect(measured.commitsPerSecond, detail).toBeLessThanOrEqual(budget);
+    }, 30_000);
   }
 });

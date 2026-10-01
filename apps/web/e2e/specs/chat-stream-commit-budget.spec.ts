@@ -12,22 +12,8 @@ import { expect, test } from "../helpers/test";
 // budget. The dev-only render-storm canary counts every commit of the app
 // (`RENDER_COMMIT_COUNT_GLOBAL`) and fails any spec on a sustained storm
 // through the `browserErrors` fixture. A production build has neither, so
-// there the spec does not run.
-
-/**
- * Kinds whose deltas each reach the page as their own commit today: the chat
- * runtime tells its subscribers about every chunk that changes the messages.
- * Each runs as a known finding: only its rate is expected over the budget, so
- * it fails loudly once the page commits at a bounded rate. A subagent's run and its
- * status steps stream inside the server's tool call, so the page sees none
- * of their deltas.
- */
-const OVER_BUDGET_TODAY: ReadonlySet<StreamChunkKind> = new Set([
-  "reasoning",
-  "text",
-  "tool-input",
-  "tool-output",
-]);
+// there the spec does not run. A subagent's run and its status steps stream
+// inside the server's tool call, so the page sees none of their deltas.
 
 const KINDS = Object.keys(STREAM_CHUNK_COMMIT_BUDGET).filter(
   (kind): kind is StreamChunkKind => kind in STREAM_CHUNK_COMMIT_BUDGET,
@@ -104,15 +90,6 @@ for (const kind of KINDS) {
       ).toHaveCount(0);
     }
     const detail = `chat.render.stream-commits-bounded: ${String(commits)} commits in ${seconds.toFixed(1)} s while ${streams} streamed`;
-    // A known finding: only the rate is expected over the budget; the page
-    // must still stream and settle as above.
-    if (OVER_BUDGET_TODAY.has(kind)) {
-      expect(
-        commits / seconds,
-        `${detail}; within budget now: drop ${kind} from OVER_BUDGET_TODAY`,
-      ).toBeGreaterThan(budget);
-    } else {
-      expect(commits / seconds, detail).toBeLessThanOrEqual(budget);
-    }
+    expect(commits / seconds, detail).toBeLessThanOrEqual(budget);
   });
 }

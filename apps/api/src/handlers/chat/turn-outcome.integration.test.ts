@@ -143,27 +143,12 @@ const surfacePlan = planCombinationRun({
 });
 
 /**
- * A rule some turns do not keep yet: its name, the oracles its breach trips,
- * and whether the breach also moves the turn's settlement.
+ * A rule some turns do not keep yet: its name and the oracles its breach
+ * trips. A turn that breaks one still settles as it must.
  */
 type KnownRule = {
   name: string;
   oracles: readonly OracleViolation["oracle"][];
-  settlement: boolean;
-};
-
-/** A run that streams nothing visible (empty or whitespace text, reasoning
- *  alone, a filter or length stop with no text) settles its turn as a
- *  retryable `empty-response` failure, measured against what its message
- *  held before the run. */
-const EMPTY_RUN_RULE: KnownRule = {
-  name: "a run that shows nothing fails retryably as an empty response",
-  oracles: [
-    CHAT_ORACLE.clientNoErrors,
-    CHAT_ORACLE.turnCompletedShowsAnswer,
-    CHAT_ORACLE.turnEmptyFailsRetryably,
-  ],
-  settlement: true,
 };
 
 /** What the page shows of a whitespace-only answer on a new message is what
@@ -172,7 +157,6 @@ const EMPTY_RUN_RULE: KnownRule = {
 const WHITESPACE_RULE: KnownRule = {
   name: "a whitespace-only answer reloads as the page showed it",
   oracles: [CHAT_ORACLE.liveEqualsReload],
-  settlement: false,
 };
 
 /** The page of a summarized thread shows the thread, never the summary the
@@ -180,7 +164,6 @@ const WHITESPACE_RULE: KnownRule = {
 const COMPACTION_SUMMARY_RULE: KnownRule = {
   name: "a compacted thread's summary stays off the page",
   oracles: [CHAT_ORACLE.liveEqualsReload],
-  settlement: false,
 };
 
 /**
@@ -194,15 +177,7 @@ const knownTurnRulesOf = ({
   provider,
   shape,
 }: TurnCombination): KnownRule[] => {
-  const answer = shapeAnswerOf(cassettes, provider, shape);
   const rules: KnownRule[] = [];
-  if (
-    !("notApplicable" in answer) &&
-    answer.verdict.kind === "nothing" &&
-    position !== "after-tool-result"
-  ) {
-    rules.push(EMPTY_RUN_RULE);
-  }
   if (
     shape === "whitespace" &&
     provider !== "google" &&
@@ -911,10 +886,9 @@ describe(`settled chat turns: ${String(turns.included.length)} combinations the 
       const result = await runTurn(combination);
       // A known finding still breaks its rules, and nothing else.
       const allowed = new Set(known.flatMap(({ oracles }) => oracles));
-      const settlementMayMove = known.some(({ settlement }) => settlement);
       const knownView = (view: TurnResult, stillBroken: boolean) => ({
         reasoningStored: view.reasoningStored,
-        settlement: settlementMayMove ? "may differ" : view.settlement,
+        settlement: view.settlement,
         stillBroken,
         unexpected: view.violations.filter(
           ({ oracle }) => !allowed.has(oracle),
