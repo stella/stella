@@ -1,8 +1,10 @@
 import { describe, test, expectTypeOf } from "bun:test";
 
+import type { ActionKindDefinition } from "@/api/lib/rate-limit/action-kinds";
 import type {
   AllHandlerOutputsTyped,
   HandlerOutputsMatchByName,
+  McpToolDefinition,
   McpToolHandler,
   TypedMcpToolHandler,
 } from "@/api/mcp/tool-types";
@@ -53,5 +55,19 @@ describe("typed tool output contract", () => {
         "test_tool"
       >
     >().toEqualTypeOf<false>();
+  });
+});
+
+describe("MCP service classification contract", () => {
+  test("rejects a tool without an explicit service classification", () => {
+    expectTypeOf<
+      Omit<McpToolDefinition, "consumesServices">
+    >().not.toExtend<McpToolDefinition>();
+    expectTypeOf<
+      McpToolDefinition["consumesServices"]
+    >().toEqualTypeOf<boolean>();
+    expectTypeOf<
+      ActionKindDefinition["consumesServices"]
+    >().toEqualTypeOf<boolean>();
   });
 });

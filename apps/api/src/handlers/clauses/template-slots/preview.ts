@@ -38,7 +38,11 @@ const config = {
     "document. Slots that are unlinked, or whose target version cannot be " +
     "resolved, are left out and keep their marker visible.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "knowledge_library_admin" },
+  mcp: {
+    type: "capability",
+    reason: "knowledge_library_admin",
+    consumesServices: false,
+  },
   access: "read",
   params: templateSlotPreviewParamsSchema,
 } satisfies HandlerConfig;

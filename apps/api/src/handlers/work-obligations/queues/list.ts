@@ -60,7 +60,11 @@ const config = {
   description:
     "List the signed-in user's governed work with cursor pagination. The queues partition the work: at-risk holds every open obligation already due, to-acknowledge the rest awaiting acknowledgement, upcoming the rest already acknowledged, and completed the finished work.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "workflow_orchestration" },
+  mcp: {
+    type: "capability",
+    reason: "workflow_orchestration",
+    consumesServices: false,
+  },
   access: "read",
   query: myWorkQuery,
 } satisfies HandlerConfig;

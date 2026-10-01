@@ -215,7 +215,11 @@ const transitionInvoice = createSafeHandler(
       "reference an eligible original and cannot exceed its total. Voiding releases " +
       "attached entries and clears the paid timestamp.",
     permissions: { invoice: ["update"] },
-    mcp: { type: "capability", reason: "billing_admin" },
+    mcp: {
+      type: "capability",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
     params: invoiceParamsSchema,
     body: transitionInvoiceBodySchema,
   },

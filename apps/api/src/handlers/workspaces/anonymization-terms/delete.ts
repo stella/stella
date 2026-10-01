@@ -14,7 +14,11 @@ const config = {
     "on its own. Only entries scoped to this matter can be removed here, never " +
     "organization-wide ones; text already sent to a provider is unaffected.",
   permissions: { workspace: ["update"] },
-  mcp: { type: "capability", reason: "anonymization_admin" },
+  mcp: {
+    type: "capability",
+    reason: "anonymization_admin",
+    consumesServices: false,
+  },
   params: workspaceParams({
     entryId: tSafeId("anonymizationBlacklistEntry"),
   }),

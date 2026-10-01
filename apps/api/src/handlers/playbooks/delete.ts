@@ -16,7 +16,11 @@ const config = {
     "work as ordinary columns, no longer owned by any playbook. Recorded " +
     "review findings are kept as well. There is no in-use check.",
   permissions: { playbook: ["delete"] },
-  mcp: { type: "capability", reason: "knowledge_library_admin" },
+  mcp: {
+    type: "capability",
+    reason: "knowledge_library_admin",
+    consumesServices: false,
+  },
   params: playbookDefinitionParamsSchema,
 } satisfies HandlerConfig;
 

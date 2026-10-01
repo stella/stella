@@ -19,7 +19,7 @@ const config = {
   description:
     "Update a personal saved time narrative in the active organization.",
   permissions: { timeEntry: ["update"] },
-  mcp: { type: "capability", reason: "billing_admin" },
+  mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   params: savedTimeNarrativeParamsSchema,
   body: t.Object({
     name: t.Optional(t.String({ minLength: 1, maxLength: 128 })),

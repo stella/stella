@@ -205,7 +205,11 @@ const config = {
     "comma-separated list to export a subset; the number of rows is capped. " +
     "The JSON form is exactly what clauses.import reads back.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "knowledge_library_admin" },
+  mcp: {
+    type: "capability",
+    reason: "knowledge_library_admin",
+    consumesServices: false,
+  },
   access: "read",
   transport: {
     type: "file-response",

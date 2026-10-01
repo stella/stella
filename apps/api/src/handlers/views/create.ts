@@ -47,7 +47,11 @@ const config = {
     "overview view and one correspondence view, and a fixed maximum of " +
     "views in total.",
   permissions: { view: ["create"] },
-  mcp: { type: "capability", reason: "workspace_schema" },
+  mcp: {
+    type: "capability",
+    reason: "workspace_schema",
+    consumesServices: false,
+  },
   body: tCreateViewInputSchema,
 } satisfies WorkspaceHandlerConfig;
 

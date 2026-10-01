@@ -16,7 +16,11 @@ const config = {
   description:
     "Revoke an approved shared mailbox sender while retaining its approval history.",
   permissions: { organizationSettings: ["update"] },
-  mcp: { type: "capability", reason: "correspondence" },
+  mcp: {
+    type: "capability",
+    reason: "correspondence",
+    consumesServices: false,
+  },
   params: paramsSchema,
 } satisfies HandlerConfig;
 

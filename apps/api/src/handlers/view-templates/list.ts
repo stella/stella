@@ -13,7 +13,11 @@ const config = {
     "layout, layout type, and the columns that layout needs. Personal: " +
     "templates saved by other members are never returned.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "workspace_schema" },
+  mcp: {
+    type: "capability",
+    reason: "workspace_schema",
+    consumesServices: false,
+  },
   access: "read",
 } satisfies WorkspaceHandlerConfig;
 

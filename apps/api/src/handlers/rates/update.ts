@@ -32,7 +32,11 @@ const updateRateTable = createSafeHandler(
       "flag has none, and rate resolution handles that. Rates already " +
       "recorded on time entries are not rewritten.",
     permissions: { rate: ["update"] },
-    mcp: { type: "capability", reason: "billing_admin" },
+    mcp: {
+      type: "capability",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
     body: updateRateTableBodySchema,
   },
   async function* ({ safeDb, workspaceId, body, recordAuditEvent }) {

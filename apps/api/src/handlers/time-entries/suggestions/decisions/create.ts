@@ -293,7 +293,11 @@ const createTimeSuggestionDecision = createSafeHandler(
       "the suggestion for good and is idempotent: repeating it returns the " +
       "decision already stored, including an earlier accept.",
     permissions: { timeEntry: ["create"] },
-    mcp: { type: "capability", reason: "billing_admin" },
+    mcp: {
+      type: "capability",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
     body: createTimeSuggestionDecisionBodySchema,
   },
   async function* ({

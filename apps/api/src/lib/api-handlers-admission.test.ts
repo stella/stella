@@ -23,7 +23,7 @@ const context = (signal?: AbortSignal) => ({
 });
 
 const config = {
-  actionAdmission: { type: "handler", actionKind: "test.finite-action" },
+  actionAdmission: { type: "handler", actionKind: "chat.improve-prompt" },
   permissions: { chat: ["create"] },
   mcp: { type: "internal", reason: "assistant_chat" },
 } satisfies HandlerConfig;

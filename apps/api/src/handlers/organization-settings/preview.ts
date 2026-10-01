@@ -73,7 +73,11 @@ const config = {
     "it would take. Nothing is stored and no counter is advanced.",
   permissions: { organizationSettings: ["update"] },
   access: "read",
-  mcp: { type: "capability", reason: "anonymization_admin" },
+  mcp: {
+    type: "capability",
+    reason: "anonymization_admin",
+    consumesServices: false,
+  },
   body: previewOrganizationSettingsBodySchema,
 } satisfies HandlerConfig;
 

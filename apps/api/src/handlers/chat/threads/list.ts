@@ -33,7 +33,11 @@ const config = {
     "and cursor.",
   permissions: { chat: ["create"] },
   access: "read",
-  mcp: { type: "capability", reason: "assistant_chat" },
+  mcp: {
+    type: "capability",
+    reason: "assistant_chat",
+    consumesServices: false,
+  },
   query: t.Object({
     cursor: t.Optional(tPaginationCursor()),
     search: t.Optional(t.String({ maxLength: LIMITS.searchQueryMaxLength })),

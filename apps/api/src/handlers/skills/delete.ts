@@ -20,7 +20,11 @@ const config = {
     "or owner and private skills only by their author; bundled skills, which " +
     "cannot be edited, can still be deleted here.",
   permissions: { agentSkill: ["delete"] },
-  mcp: { type: "capability", reason: "agent_tool_authoring" },
+  mcp: {
+    type: "capability",
+    reason: "agent_tool_authoring",
+    consumesServices: false,
+  },
   params: deleteSkillParamsSchema,
 } satisfies HandlerConfig;
 
