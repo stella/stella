@@ -10,10 +10,6 @@ import { ScrollArea } from "@stll/ui/scroll-area";
 import { cn } from "@stll/ui/utils";
 
 import {
-  SuggestedActionSurface,
-  type SuggestedActionSurfaceName,
-} from "@/components/suggested-actions";
-import {
   StickToBottomContext,
   useStickToBottom,
   useStickToBottomContext,
@@ -117,93 +113,49 @@ export const ConversationEmptyState = ({
   </div>
 );
 
-type ConversationScrollButtonBaseProps = Omit<
+type ConversationScrollButtonProps = Omit<
   ComponentProps<typeof Button>,
   "onClick" | "size" | "variant"
 >;
 
-type ConversationScrollButtonProps = ConversationScrollButtonBaseProps &
-  (
-    | {
-        placement?: "floating";
-        surface?: never;
-      }
-    | {
-        placement: "inline";
-        surface: SuggestedActionSurfaceName;
-      }
-  );
-
 /**
- * Whether the scroll-to-bottom action shows. Exported so a row that overlays
- * the inline action can reserve its footprint under the same rule.
+ * The scroll-to-bottom action: one round button, always centered above
+ * whatever sits at the bottom of the conversation. Callers only set its
+ * vertical offset, so it never moves sideways between states.
  */
-export const isScrollActionVisible = ({
-  isAtBottom,
-  isScrollable,
-}: {
-  isAtBottom: boolean;
-  isScrollable: boolean;
-}) => isScrollable && !isAtBottom;
-
 export const ConversationScrollButton = ({
   className,
-  placement = "floating",
-  surface = "plain",
   ...props
 }: ConversationScrollButtonProps) => {
   const t = useTranslations();
   const { isAtBottom, isScrollable, scrollToBottom } =
     useStickToBottomContext();
-  const isVisible = isScrollActionVisible({ isAtBottom, isScrollable });
 
-  if (!isVisible && placement === "floating") {
+  if (!isScrollable || isAtBottom) {
     return null;
   }
 
-  const button = (
+  return (
     <Button
       aria-label={t("common.scrollToBottom")}
       className={cn(
         "before:rounded-full",
-        placement === "floating"
-          ? [
-              // The outline variant is translucent in dark mode (content
-              // shows through the button). Pin an opaque surface in both
-              // themes; isolate/z-10 keep it above the scrolled content.
-              "bg-background dark:bg-background hover:bg-muted",
-              "isolate shadow-sm",
-              "absolute bottom-4 left-1/2 z-10 -translate-x-1/2 rounded-full",
-            ]
-          : "size-full rounded-full sm:size-full",
+        // The outline variant is translucent in dark mode (content shows
+        // through the button). Pin an opaque surface in both themes;
+        // isolate/z-10 keep it above the scrolled content.
+        "bg-background dark:bg-background hover:bg-muted",
+        "isolate shadow-sm",
+        "absolute bottom-4 left-1/2 z-10 -translate-x-1/2 rounded-full",
         className,
       )}
       {...props}
       onClick={() => scrollToBottom()}
-      size={placement === "floating" ? "icon" : "icon-sm"}
+      size="icon"
       type="button"
-      variant={
-        placement === "floating" || surface === "plain" ? "outline" : "ghost"
-      }
+      variant="outline"
     >
       <ArrowDownIcon className="size-4" />
     </Button>
-  );
-
-  if (placement !== "inline") {
-    return button;
-  }
-
-  // `size-7` matches the suggested-action chips beside it. `className` lands
-  // on the slot, not the button: the caller positions the slot in its row.
-  return (
-    <SuggestedActionSurface
-      aria-hidden={!isVisible || undefined}
-      className={cn("size-7 shrink-0", !isVisible && "invisible", className)}
-      surface={surface}
-    >
-      {isVisible && button}
-    </SuggestedActionSurface>
   );
 };
 

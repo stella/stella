@@ -30,7 +30,7 @@ test("announces the scroll action in the active locale", () => {
   expect(html).not.toContain('aria-label="Scroll to bottom"');
 });
 
-test("keeps the inline scroll action outside the suggested-followups group", () => {
+test("keeps the scroll action outside the suggested-followups group", () => {
   const html = renderToStaticMarkup(
     <IntlProvider locale="ar" messages={messages} timeZone="UTC">
       <StickToBottomContext value={STICK_TO_BOTTOM}>
@@ -51,7 +51,7 @@ test("keeps the inline scroll action outside the suggested-followups group", () 
   expect(scrollActionIndex).toBeGreaterThan(suggestedGroupEnd);
 });
 
-test("reserves the inline scroll slot while the action is hidden", () => {
+test("drops the scroll action at the bottom without leaving a slot", () => {
   const html = renderToStaticMarkup(
     <IntlProvider locale="ar" messages={messages} timeZone="UTC">
       <StickToBottomContext value={{ ...STICK_TO_BOTTOM, isAtBottom: true }}>
@@ -60,8 +60,7 @@ test("reserves the inline scroll slot while the action is hidden", () => {
     </IntlProvider>,
   );
 
-  expect(html).toContain('aria-hidden="true"');
-  expect(html).toContain("invisible");
+  expect(html).not.toContain("invisible");
   expect(html).not.toContain('aria-label="التمرير إلى الأسفل"');
   expect(html).toContain(
     `aria-label="${messages.chat.suggestedFollowupsLabel}"`,

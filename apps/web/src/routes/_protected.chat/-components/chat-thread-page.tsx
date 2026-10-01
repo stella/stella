@@ -686,8 +686,8 @@ export const ChatThreadPage = ({
                 clears. A sibling of the fade rather than a child of the
                 isolated <Conversation>, so its z-10 wins against the fade
                 instead of being dimmed by it. Hidden while follow-up chips
-                show: the chip row then carries the scroll action at its
-                trailing end. */}
+                show: the chip row then carries it, centered just
+                above the chips. */}
               <ConversationScrollButton
                 className={cn(
                   "bottom-[calc(var(--composer-block-h,7rem)+0.5rem)]",
