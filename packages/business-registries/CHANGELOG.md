@@ -1,5 +1,17 @@
 # @stll/business-registries
 
+## 0.11.0
+
+### Minor Changes
+
+- [#4326](https://github.com/stella/stella/pull/4326) [`ff31a57`](https://github.com/stella/stella/commit/ff31a57adcce31d3b8c46e95218348bb3f31bc70) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add an opt-in request observation hook.
+
+## 0.10.2
+
+### Patch Changes
+
+- [#4213](https://github.com/stella/stella/pull/4213) [`dffae58`](https://github.com/stella/stella/commit/dffae589d650ef11eb42c0e63ffdef2c4edbf5d5) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Simplify XML response validation.
+
 ## 0.10.1
 
 ### Patch Changes

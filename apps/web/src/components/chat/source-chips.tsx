@@ -15,6 +15,7 @@ import {
   type CaseLawDecisionSourceReference,
   useExternalSourceStore,
 } from "@/components/chat/external-source-store";
+import { findMcpConnectorIconHref } from "@/components/chat/mcp-connector-icon";
 import type {
   ExternalSourceEntry,
   SourceDocumentEntry,
@@ -31,7 +32,6 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { ChatMessage, ChatSourceDocument } from "@/lib/api-contract";
 import { detached } from "@/lib/detached";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
-import { sanitizeHref } from "@/lib/sanitize-href";
 import { navigateToWorkspaceFolder } from "@/lib/workspaces/reveal-navigation";
 
 type SourceChipsProps = {
@@ -427,37 +427,4 @@ const SourceChip = ({
       </BidiText>
     </button>
   );
-};
-
-const findMcpConnectorIconHref = ({
-  connectorSlug,
-  connectors,
-}: {
-  connectorSlug: string;
-  connectors: {
-    iconUrl: string | null;
-    slug: string;
-    url: string;
-  }[];
-}): string | undefined => {
-  const connector = connectors.find(
-    (item) => sanitizeMcpToolNamePart(item.slug) === connectorSlug,
-  );
-  if (!connector) {
-    return undefined;
-  }
-
-  const iconHref = connector.iconUrl ?? fallbackIconUrl(connector.url);
-  return iconHref === undefined ? undefined : sanitizeHref(iconHref);
-};
-
-const sanitizeMcpToolNamePart = (value: string): string =>
-  value.replace(/[^a-zA-Z0-9_-]/gu, "_");
-
-const fallbackIconUrl = (rawUrl: string): string | undefined => {
-  try {
-    return new URL("/favicon.ico", rawUrl).toString();
-  } catch {
-    return undefined;
-  }
 };

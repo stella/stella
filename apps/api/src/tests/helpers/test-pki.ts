@@ -27,6 +27,31 @@ const RSA_KEY = {
   hash: "SHA-256",
 } as const;
 
+/** File-owned immutable keys; reset allocation before each test. */
+export const createTestRsaKeyPool = () => {
+  const pairs: Promise<Readonly<CryptoKeyPair>>[] = [];
+  let nextPair = 0;
+  return {
+    reset: () => {
+      nextPair = 0;
+    },
+    take: async () => {
+      const cached = pairs.at(nextPair);
+      nextPair += 1;
+      if (cached !== undefined) {
+        return await cached;
+      }
+      const generated = crypto.subtle
+        .generateKey(RSA_KEY, true, ["sign", "verify"])
+        .then((pair) => Object.freeze(pair));
+      pairs.push(generated);
+      return await generated;
+    },
+  };
+};
+
+export type TestRsaKeyPool = ReturnType<typeof createTestRsaKeyPool>;
+
 export type TestCertificate = {
   certificate: pkijs.Certificate;
   der: Uint8Array;
@@ -34,6 +59,7 @@ export type TestCertificate = {
 };
 
 type TestCertificateOptions = {
+  keyPool?: TestRsaKeyPool;
   caIssuersUrl?: string;
   commonName: string;
   crlUrl?: string;
@@ -76,6 +102,7 @@ export const createTestCertificate = async ({
   extendedKeyUsages,
   extendedKeyUsagesCritical = false,
   isCa = false,
+  keyPool,
   keyUsage,
   pathLength,
   issuer,
@@ -83,10 +110,10 @@ export const createTestCertificate = async ({
   notBefore = new Date(Date.now() - 60_000),
   ocspUrl,
 }: TestCertificateOptions): Promise<TestCertificate> => {
-  const keys = await crypto.subtle.generateKey(RSA_KEY, true, [
-    "sign",
-    "verify",
-  ]);
+  const keys =
+    keyPool === undefined
+      ? await crypto.subtle.generateKey(RSA_KEY, true, ["sign", "verify"])
+      : await keyPool.take();
   const certificate = new pkijs.Certificate();
   certificate.version = 2;
   serial += 1;

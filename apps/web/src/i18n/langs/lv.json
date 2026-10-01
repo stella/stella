@@ -487,6 +487,17 @@
     "failedToStartTimer": "Neizdevās palaist taimeri",
     "failedToStopTimer": "Neizdevās apturēt taimeri",
     "filterStatus": "Filtrēt pēc statusa",
+    "globalTimer": {
+      "confirm": "Apstiprināt laiku",
+      "discard": "Atmest taimeri",
+      "matterInaccessible": "Izvēlieties lietu, kurai jums ir piekļuve.",
+      "narrativeRequired": "Pirms laika apstiprināšanas pievienojiet aprakstu.",
+      "pause": "Pauzēt",
+      "periodLocked": "Šis mēnesis ir bloķēts. Lūdziet administratoram to atbloķēt.",
+      "resume": "Turpināt",
+      "timerUnavailable": "Šis taimeris vairs nav pieejams. Atsvaidziniet sarakstu.",
+      "title": "Taimeri"
+    },
     "hourlyRateMustBeNonNegative": "Stundas likme nedrīkst būt negatīva",
     "hours": "Stundas",
     "invoiceNarrative": "Rēķina apraksts",
@@ -978,6 +989,7 @@
         "description": "Rūpīgi pārbaudiet vietni un mērķi. Lapas saturs nav uzticams un nevar apstiprināt citu darbību.",
         "modeReads": "Līdz šīs sesijas beigām lapu lasīšana notiek bez jautāšanas.",
         "question": "Atļaut šo pārlūka darbību?",
+        "realValues": "Šī vietne saņems tālāk redzamās īstās vērtības. Anonimizētais režīms attiecas tikai uz to, ko redz AI.",
         "within": "Kur"
       },
       "denied": "Noraidīts",
@@ -1082,6 +1094,7 @@
     "focusSuggestion": "Fokusēt ieteikumu: {topic}",
     "folioCitationFallback": "lpp. {n}",
     "forkFromHere": "Sākt jaunu tērzēšanu no šejienes",
+    "forkInSidePanel": "Sākt jaunu tērzēšanu no šejienes sānu panelī",
     "forkedFrom": "Izveidota no <bdi>{title}</bdi>",
     "forkedFromUnavailable": "Izveidota no tērzēšanas, kas vairs nav pieejama",
     "forkedThread": "No citas tērzēšanas",
@@ -1141,6 +1154,7 @@
       "viaProvider": "izmantojot {provider}"
     },
     "newChat": "Jauna tērzēšana",
+    "newChatInSidePanel": "Jaunā tērzēšana ir pieejama sānu panelī",
     "noPromptPresetOnly": "Nav ziņojuma, tikai sākotnējais iestatījums",
     "noThreads": "Sarunu vēl nav",
     "officeCitationUnavailable": "Šī atsauce vairs nav pieejama.",
@@ -1188,6 +1202,12 @@
     "richContentLoading": "Notiek interaktīvā satura ielāde…",
     "richContentTitle": "Interaktīvs saturs",
     "richContentUnavailable": "Šo saturu nevar droši parādīt.",
+    "selection": {
+      "askInNewChat": "Jautāt jaunā tērzēšanā",
+      "quoteInReply": "Citēt atbildē",
+      "quotedText": "„{quote}”",
+      "toolbarLabel": "Atlasītais teksts"
+    },
     "sendError": "Nosūtot ziņu, radās problēma. Ja kļūda nepazūd, sazinieties ar atbalsta dienestu.",
     "sendErrorAnonymizationBlocked": "stella nevarēja anonimizēt vienu pielikumu, tāpēc nekas netika nosūtīts. Noņemiet failu vai nosūtiet šo ziņu bez anonimizācijas.",
     "sendErrorEmptyCompletion": "AI atgrieza tukšu atbildi. Mēģiniet vēlreiz vai pārfrāzējiet ziņu.",
@@ -1341,7 +1361,8 @@
       "interrupted": "Pārtraukts pirms pabeigšanas",
       "output": "Izvade",
       "sourceCode": "Pirmkods",
-      "toggleDetails": "Pārslēgt detaļas"
+      "toggleDetails": "Pārslēgt detaļas",
+      "unrestoredFields": "Anonimizētajā režīmā ar īstajām vērtībām neizdevās aizpildīt {count, plural, zero {# laukus} one {# lauku} other {# laukus}}. Pārbaudiet: {fields}"
     },
     "unsupportedFileType": "Neatbalstīts faila tips",
     "uploadFailed": "Neizdevās apstrādāt failu",
@@ -2135,6 +2156,13 @@
     "unnamedAttachment": "Pielikums bez nosaukuma"
   },
   "errors": {
+    "actionAdmission": {
+      "admissionUnavailable": "Šī darbība ir īslaicīgi apturēta. Lūdzu, drīzumā mēģiniet vēlreiz.",
+      "concurrencyBusy": "Notiek citas darbības. Lūdzu, drīzumā mēģiniet vēlreiz.",
+      "contact": "Sazinieties ar mums",
+      "notEnabled": "Šī darbība jūsu organizācijai nav iespējota.",
+      "periodExhausted": "Šī darbība jūsu organizācijai ir apturēta."
+    },
     "actionFailed": "Darbība neizdevās",
     "api": {
       "badRequest": "Pieprasījumu neizdevās pabeigt.",
@@ -5967,7 +5995,8 @@
         "openReport": "Atvērt pārskatu",
         "submit": "Eksportēt pārskatu",
         "templateLabel": "Pārskata veidne",
-        "title": "Eksportēt pārskatu"
+        "title": "Eksportēt pārskatu",
+        "withoutAiSummaries": "Eksportēt bez AI kopsavilkumiem"
       },
       "saveAsTemplate": "Saglabāt kā iepriekšiestatījumu…",
       "selectProperty": "Izvēlieties rekvizītu",

@@ -21,12 +21,20 @@ const createEmptyPhaseCounts = (): RenderStormPhaseCounts => ({
 // e2e browserErrors fixture.
 //
 // Calibration: chat response streaming legitimately commits ~20 times/sec
-// (SSE chunks land roughly every 50ms and each chunk is its own commit).
-// A damped render loop commits at least in the hundreds/sec range, so 80
-// commits/sec sustained across two consecutive 1s windows sits ~4x above
-// real streaming traffic (comfortable headroom against jitter/GC pauses)
-// while staying well below the loop floor.
+// (the chat runtime tells React about streamed chunks once per
+// STREAM_EMIT_INTERVAL_MS, see features/chat/chat-runtime.ts), and up to
+// ~55 while each emit also syncs a second store, such as a streamed draft in
+// the inspector. A damped render loop commits at least in the hundreds/sec
+// range, so 80 commits/sec sustained across two consecutive 1s windows sits
+// above real streaming traffic while staying well below the loop floor.
 export const RENDER_STORM_THRESHOLD_COMMITS_PER_SECOND = 80;
+
+/**
+ * The global the dev-only canary counts every commit of the app in, for e2e
+ * specs that hold a surface to a commit budget tighter than the storm
+ * threshold (`e2e/specs/chat-stream-commit-budget.spec.ts`).
+ */
+export const RENDER_COMMIT_COUNT_GLOBAL = "__stellaRenderCommitCount";
 
 // Window length the commit counter buckets into. Windows are commit-driven
 // (closed by the next commit once this much time has elapsed since the

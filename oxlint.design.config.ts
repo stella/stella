@@ -1,5 +1,4 @@
 import { defineConfig } from "oxlint";
-import shadcn from "ultracite/oxlint/shadcn";
 
 import repository from "./oxlint.config.ts";
 import {
@@ -12,6 +11,7 @@ import {
   isDesignLintLocalRuleScope,
   sizeLintPolicyOverrides,
 } from "./scripts/design-lint-policy.ts";
+import shadcn from "./scripts/oxlint-presets/shadcn.mjs";
 
 // Design-system pass for scripts/design-lint-baseline.ts: the tracked rules
 // under the repository policy, without the backlog overrides, so the guard can

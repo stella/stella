@@ -14,10 +14,13 @@ import {
   hasModuleScopeProcessEnvMutation,
   isDbTest,
   SOLO_TEST_PATHS,
+  splitMemoryBoundedBatches,
   splitSoloTests,
   TEST_BATCH_KIND,
+  TEST_BATCH_RSS_HEADROOM_RATIO,
   type TestBatchKind,
 } from "./test-batch-plan";
+import peakRssMb from "./test-peak-rss.json";
 
 // Every directory of this package that holds test files. `evals/` carries
 // only its own colocated unit tests (e.g. `evals/lib/model-turn.test.ts`),
@@ -277,9 +280,14 @@ export const planApiTestBatches = async ({
   ];
   // A solo path runs alone whatever class it lands in (a solo file that starts
   // mocking a module must not rejoin a shared batch). Splitting after
-  // composition leaves every other batch's files together.
+  // composition preserves mock compatibility; memory splitting only removes
+  // neighbours whose combined estimates exceed the composition budget.
   for (const group of composed) {
-    group.testBatches = splitSoloTests(group.testBatches, SOLO_TEST_PATHS);
+    group.testBatches = splitMemoryBoundedBatches({
+      batches: splitSoloTests(group.testBatches, SOLO_TEST_PATHS),
+      peakRssMb,
+      budgetMb: group.maxPeakRssMb * TEST_BATCH_RSS_HEADROOM_RATIO,
+    });
   }
   return composed;
 };

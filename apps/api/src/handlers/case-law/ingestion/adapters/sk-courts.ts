@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
 
+import { skCourtSuccessionReferences } from "@stll/api-contract/sk-court-succession";
 import { mapWithConcurrency } from "@stll/concurrency";
 import {
   skDocumentErrorDiagnostics,
@@ -569,10 +570,17 @@ export const assembleSkCourtsDecision = ({
       : undefined;
   const registryUnavailable =
     courtRegistry?.status === "unavailable" ? courtRegistry : undefined;
+  const courtSuccession = skCourtSuccessionReferences(
+    court,
+    courtRegistry?.status === "available"
+      ? courtRegistry.record.nazov
+      : undefined,
+  );
   const rawJson = JSON.stringify({
     item,
     directoryMetadata,
     registryUnavailable,
+    courtSuccession,
   });
   const rawHash = hashContent(rawJson);
 
@@ -624,6 +632,7 @@ export const assembleSkCourtsDecision = ({
     textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
     metadata: checkedDecisionMetadata({
       ...directoryMetadata,
+      courtSuccession,
       ...(registryUnavailable === undefined
         ? {}
         : { courtRegistry: registryUnavailable }),

@@ -113,4 +113,28 @@ describe("local Quickwit generation", () => {
     expect(stringArrayField(q09, "profiles")).toEqual(["quickwit09"]);
     expect(stringArrayField(q09Setup, "profiles")).toEqual(["quickwit09"]);
   });
+
+  test("CI runs the same engine image the manifest declares", async () => {
+    const services = await readComposeServices();
+    const composeImage = stringField(
+      recordField(services, "quickwit09"),
+      "image",
+    );
+    const workflow = await Bun.file(
+      new URL("../.github/workflows/ci.yml", import.meta.url),
+    ).text();
+    const workflowImages = [
+      ...workflow.matchAll(/quickwit\/quickwit:[^\s"']+/gu),
+    ].map(([image]) => image);
+
+    // A workflow copy of the image must move with the manifest, or the
+    // contract suites keep passing against an engine nobody deploys.
+    expect(workflowImages.length).toBeGreaterThan(0);
+    for (const image of workflowImages) {
+      expect(image).toStartWith(
+        `quickwit/quickwit:${QUICKWIT_V09_BINARY_VERSION}@sha256:`,
+      );
+      expect(image).toBe(composeImage);
+    }
+  });
 });

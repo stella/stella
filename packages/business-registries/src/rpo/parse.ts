@@ -1,3 +1,4 @@
+import { encodeRegistryComponent } from "../shared/encode-registry-component.js";
 import { trimToNull } from "../shared/strings.js";
 import type {
   RpoAddress,
@@ -257,7 +258,7 @@ const pickIco = (hit: RpoRawSearchHit): string | null =>
   trimToNull(pickCurrentOrLatest(hit.identifiers)?.value);
 
 export const entityUrl = (rpoId: number): string =>
-  `${ENTITY_URL_BASE}${encodeURIComponent(String(rpoId))}`;
+  `${ENTITY_URL_BASE}${encodeRegistryComponent(String(rpoId))}`;
 
 /**
  * Parse an `/entity/{id}` payload into the domain shape.

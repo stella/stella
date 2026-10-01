@@ -1,5 +1,23 @@
 # @stll/ui
 
+## 0.39.0
+
+### Minor Changes
+
+- [#4339](https://github.com/stella/stella/pull/4339) [`8c81796`](https://github.com/stella/stella/commit/8c81796e512762094793acc16eb13f3e49c7cc61) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Remove the unused sortable Kanban layer: `KanbanSortableBoard`, `useKanbanSortable`, `KanbanDragHandle` and the `sortable` prop of `KanbanVirtualCell` are no longer exported.
+
+- [#4358](https://github.com/stella/stella/pull/4358) [`deb3ce4`](https://github.com/stella/stella/commit/deb3ce49c36f89c6371731d6706e777ad8fbed3b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `CopyButton`, which confirms a copy in place; semantic `NewChatIcon` and `AddCommentIcon`; and a centered slot in `ComposerStatusRow`.
+
+## 0.38.0
+
+### Minor Changes
+
+- [#4262](https://github.com/stella/stella/pull/4262) [`3f1bdaf`](https://github.com/stella/stella/commit/3f1bdafb817d599f49d21c5d853ea76720278236) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add grouped list and search field components.
+
+### Patch Changes
+
+- [#4283](https://github.com/stella/stella/pull/4283) [`f215762`](https://github.com/stella/stella/commit/f2157623605b1a08efbed05866773da8b8618d93) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `WorkspaceShell` keeps a single divider under its top bar: the content slot drops the top border of its first child.
+
 ## 0.37.1
 
 ### Patch Changes

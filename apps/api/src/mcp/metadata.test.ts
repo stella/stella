@@ -128,6 +128,7 @@ describe("MCP protected resource metadata", () => {
       STELLA_CLI_MINIMUM_VERSION,
     );
     expect(headers.get("x-stella-cli-latest")).toBeNull();
+    expect(headers.get("Cache-Control")).toBeNull();
   });
 
   test("returns browser-friendly MCP transport headers", () => {

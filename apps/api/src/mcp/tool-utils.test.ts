@@ -447,6 +447,7 @@ describe("structuredErrorResult", () => {
       message: "slow down",
       hint: "retry after the window",
       retryable: true,
+      contactUrl: "https://example.test/contact",
     });
 
     expect(JSON.parse(errorText(result))).toEqual({
@@ -455,6 +456,7 @@ describe("structuredErrorResult", () => {
         message: "slow down",
         hint: "retry after the window",
         retryable: true,
+        contactUrl: "https://example.test/contact",
       },
     });
   });
@@ -466,6 +468,7 @@ describe("structuredErrorResult", () => {
 
     expect(text).not.toContain("hint");
     expect(text).not.toContain("retryable");
+    expect(text).not.toContain("contactUrl");
   });
 
   test("includes issues under error.issues when non-empty", () => {
