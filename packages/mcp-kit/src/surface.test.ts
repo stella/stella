@@ -13,9 +13,9 @@ import type { McpJsonValue, ToolCallResult, ToolDefinition } from "./types";
 type Context = { calls: { name: string; args: Record<string, unknown> }[] };
 
 const record =
-  (name: string) => (args: Record<string, unknown>, context: Context) => {
+  (name: string) => async (args: Record<string, unknown>, context: Context) => {
     context.calls.push({ name, args });
-    return Promise.resolve(jsonSuccess({ tool: name, args }));
+    return jsonSuccess({ tool: name, args });
   };
 
 const SEARCH: ToolDefinition<Context> = {
@@ -67,10 +67,8 @@ const STATS: ToolDefinition<Context> = {
   access: "read",
   domain: "items",
   inputSchema: { type: "object", properties: {} },
-  run: () =>
-    Promise.resolve(
-      failure({ code: "stale", message: "Out of date.", retryable: true }),
-    ),
+  run: async () =>
+    failure({ code: "stale", message: "Out of date.", retryable: true }),
 };
 
 const THROWS: ToolDefinition<Context> = {
@@ -79,7 +77,9 @@ const THROWS: ToolDefinition<Context> = {
   access: "read",
   domain: "misc",
   inputSchema: { type: "object", properties: {} },
-  run: () => Promise.reject(new Error("boom")),
+  run: async () => {
+    throw new Error("boom");
+  },
 };
 
 const surface = createToolSurface({ tools: [SEARCH, ARCHIVE, STATS, THROWS] });
@@ -445,11 +445,15 @@ describe("capability tools", () => {
   });
 
   test("bounds compact descriptions with escaped Unicode metadata and oversized examples", async () => {
-    for (const name of ["\u0000".repeat(128), "📄".repeat(32)]) {
+    for (const { name, summary } of [
+      { name: "\u0000".repeat(128), summary: "\u0000".repeat(1000) },
+      { name: "📄".repeat(32), summary: `a${"\u0301".repeat(4000)}` },
+      { name: "graphemes", summary: `${"a".repeat(119)}👨‍👩‍👧‍👦z` },
+    ]) {
       const tool = {
         ...ARCHIVE,
         name,
-        summary: "\u0000".repeat(1000),
+        summary,
         exampleInput: { id: "é".repeat(4000) },
         inputSchema: {
           type: "object",
@@ -471,6 +475,9 @@ describe("capability tools", () => {
         example: { capability: name, input: {} },
         omittedParameters: 1,
       });
+      if (name === "graphemes") {
+        expect(payload(result)["description"]).toBe(`${"a".repeat(119)}👨‍👩‍👧‍👦`);
+      }
     }
   });
 
@@ -644,12 +651,16 @@ describe("calling a tool", () => {
       "private provider response",
     ]) {
       const observations: { cause: unknown; event: unknown }[] = [];
+      const rejection = Promise.withResolvers();
       const rejected = createToolSurface({
-        tools: [{ ...THROWS, run: () => Promise.reject(cause) }],
+        tools: [
+          { ...THROWS, run: async () => jsonSuccess(await rejection.promise) },
+        ],
         onError: (error, event) => {
           observations.push({ cause: error, event });
         },
       });
+      rejection.reject(cause);
       for (const name of [THROWS.name, CAPABILITY_TOOL_NAMES.invoke]) {
         const result = await rejected.callTool(
           name,
@@ -677,7 +688,7 @@ describe("calling a tool", () => {
     cyclic.next = cyclic;
     const observations: unknown[] = [];
     const broken = createToolSurface({
-      tools: [{ ...THROWS, run: () => Promise.resolve(success(cyclic)) }],
+      tools: [{ ...THROWS, run: async () => success(cyclic) }],
       onError: (cause, event) => {
         observations.push({ cause, event });
       },

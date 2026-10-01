@@ -141,9 +141,22 @@ const describeCompact = <Context>(tool: ToolDefinition<Context>) => {
   const properties = isRecord(schema["properties"]) ? schema["properties"] : {};
   const required = Array.isArray(schema["required"]) ? schema["required"] : [];
   const parameters: ParameterOutline[] = [];
+  let description = "";
+  let summaryLength = 0;
+  const segments = new Intl.Segmenter(undefined, {
+    granularity: "grapheme",
+  }).segment(tool.summary);
+  for (const { segment } of segments) {
+    const candidate = description + segment;
+    if (summaryLength === 120 || jsonBytes(candidate) > 720) {
+      break;
+    }
+    description = candidate;
+    summaryLength += 1;
+  }
   const outline = {
     id: tool.name,
-    description: [...tool.summary].slice(0, 120).join(""),
+    description,
     access: tool.access,
     destructive: destructiveOf(tool),
     parameters,
@@ -245,7 +258,8 @@ const readMetaArgs = (
     }
     if (
       !hasJsonType(entry, property.type) ||
-      (property.enum !== undefined && !property.enum.includes(String(entry)))
+      (property.enum !== undefined &&
+        (typeof entry !== "string" || !property.enum.includes(entry)))
     ) {
       issues.push({
         path: key,
@@ -325,7 +339,7 @@ const runTool = async <Context>({
     );
   }
   const execution = await Result.tryPromise({
-    try: () => tool.run(read.value, context),
+    try: async () => tool.run(read.value, context),
     catch: (cause) => {
       observeFailure({
         onError,

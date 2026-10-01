@@ -7,7 +7,7 @@ import {
   success,
   toCallResult,
 } from "./envelope";
-import type { McpJsonValue } from "./types";
+import type { McpJsonValue, ToolCallResult } from "./types";
 
 const INTERNAL_RESULT = {
   content: [
@@ -23,7 +23,7 @@ const INTERNAL_RESULT = {
     },
   ],
   isError: true,
-};
+} satisfies ToolCallResult;
 
 describe("tool results preserve JSON data or return a safe error", () => {
   test("preserves primitive and nested JSON values and normalization notes", () => {
@@ -92,9 +92,9 @@ describe("tool results preserve JSON data or return a safe error", () => {
     cyclic.next = cyclic;
     const causes: unknown[] = [];
     expect(
-      toCallResult(success(cyclic), ["private note"], (cause) =>
-        causes.push(cause),
-      ),
+      toCallResult(success(cyclic), ["private note"], (cause) => {
+        causes.push(cause);
+      }),
     ).toEqual(INTERNAL_RESULT);
     expect(causes).toHaveLength(1);
     expect(causes.at(0)).toBeInstanceOf(Error);

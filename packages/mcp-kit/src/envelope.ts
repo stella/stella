@@ -155,11 +155,7 @@ export const toCallResult = (
     if (!isMcpJsonValue(value)) {
       panic("Tool result is not a JSON value.");
     }
-    const text = JSON.stringify(value);
-    if (text === undefined) {
-      panic("Tool result serialization produced no text.");
-    }
-    return text;
+    return JSON.stringify(value);
   });
   if (serialized.isErr()) {
     if (onSerializationError !== undefined) {
