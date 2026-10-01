@@ -241,40 +241,35 @@ const complete = async (
   return outcome;
 };
 
+// Select the invocation's bounded cursor list once; per-item work rereads the
+// live pointer before its guarded write, and checkpoints still advance per item.
+const selection = selectSkUsRawPageStatement({ sourceId, after, limit });
+const explain = executedRows(await execute(sql`EXPLAIN ${selection}`));
+const plan = v
+  .parse(v.array(v.object({ "QUERY PLAN": v.string() })), explain)
+  .map((row) => row["QUERY PLAN"])
+  .join("\n");
+if (
+  plan.includes("Seq Scan") ||
+  plan.includes("Sort") ||
+  !plan.includes("Index Only Scan")
+) {
+  panic(`Selection requires an ordered index-only plan: ${plan}`);
+}
+const selected = v.parse(
+  v.array(
+    v.object({
+      id: v.pipe(v.string(), v.uuid()),
+      created_at: v.pipe(v.string(), v.isoTimestamp()),
+    }),
+  ),
+  executedRows(await execute(selection)),
+);
 const counts: Record<string, number> = {};
 let scanned = 0;
 let stopped = false;
-while (scanned < limit) {
-  const selection = selectSkUsRawPageStatement({
-    sourceId,
-    after,
-    limit: Math.min(pageSize, limit - scanned),
-  });
-  // EXPLAIN without execution, on the exact range this page will read.
-  const explain = executedRows(await execute(sql`EXPLAIN ${selection}`));
-  const plan = v
-    .parse(v.array(v.object({ "QUERY PLAN": v.string() })), explain)
-    .map((row) => row["QUERY PLAN"])
-    .join("\n");
-  if (
-    plan.includes("Seq Scan") ||
-    plan.includes("Sort") ||
-    !plan.includes("Index Only Scan")
-  ) {
-    panic(`Selection requires an ordered index-only plan: ${plan}`);
-  }
-  const page = v.parse(
-    v.array(
-      v.object({
-        id: v.pipe(v.string(), v.uuid()),
-        created_at: v.pipe(v.string(), v.isoTimestamp()),
-      }),
-    ),
-    executedRows(await execute(selection)),
-  );
-  if (page.length === 0) {
-    break;
-  }
+for (let offset = 0; offset < selected.length; offset += pageSize) {
+  const page = selected.slice(offset, offset + pageSize);
   const result = await runSkUsRawPage({
     rows: page.map((row) => ({
       id: brandPersistedCaseLawDecisionId(row.id),
