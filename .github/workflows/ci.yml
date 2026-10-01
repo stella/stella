@@ -46,8 +46,8 @@ jobs:
       trusted: ${{ steps.check.outputs.trusted }}
       # `fast` runs guards, lint, typecheck, unit tests, builds, and the
       # path-scoped image smokes. `full` adds the heavy suites (browsers,
-      # services, other platforms). Every heavy job gates on
-      # `suite_depth == 'full'`.
+      # services, other platforms). Production E2E also runs on PRs
+      # that change its spec tree.
       suite_depth: ${{ steps.depth.outputs.suite_depth }}
       agent_sandbox_docker_required: ${{ steps.changed-files.outputs.agent_sandbox_docker_required }}
       api_image_deps_required: ${{ steps.changed-files.outputs.api_image_deps_required }}
@@ -57,6 +57,7 @@ jobs:
       collab_redis_required: ${{ steps.changed-files.outputs.collab_redis_required }}
       desktop_rust_checks_required: ${{ steps.changed-files.outputs.desktop_rust_checks_required }}
       e2e_core_required: ${{ steps.changed-files.outputs.e2e_core_required }}
+      e2e_production_required: ${{ steps.changed-files.outputs.e2e_production_required }}
       e2e_landing_required: ${{ steps.changed-files.outputs.e2e_landing_required }}
       fix_tests_on_base_required: ${{ steps.changed-files.outputs.fix_tests_on_base_required }}
       landing_build_required: ${{ steps.changed-files.outputs.landing_build_required }}
@@ -193,8 +194,10 @@ jobs:
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
             # e2e-landing runs, and builds the landing site, at full depth only.
             landing_build_required=true
+            e2e_production_required=false
             if [[ "$SUITE_DEPTH" == "full" ]]; then
               landing_build_required=false
+              e2e_production_required=true
             fi
             {
               echo "agent_sandbox_docker_required=true"
@@ -204,6 +207,7 @@ jobs:
               echo "collab_redis_required=true"
               echo "desktop_rust_checks_required=true"
               echo "e2e_core_required=true"
+              echo "e2e_production_required=$e2e_production_required"
               echo "e2e_landing_required=true"
               echo "fix_tests_on_base_required=false"
               echo "landing_build_required=$landing_build_required"
@@ -239,6 +243,7 @@ jobs:
               echo "collab_redis_required=false"
               echo "desktop_rust_checks_required=false"
               echo "e2e_core_required=false"
+              echo "e2e_production_required=false"
               echo "e2e_landing_required=false"
               echo "fix_tests_on_base_required=false"
               echo "landing_build_required=false"
@@ -471,6 +476,15 @@ jobs:
             landing_build_required=false
           fi
 
+          # Production shards run at full depth for core changes, and on
+          # fast PRs only when their spec/fixture/config tree changes.
+          e2e_production_required=false
+          if [[ "$SUITE_DEPTH" == "full" && "$e2e_core_required" == "true" ]]; then
+            e2e_production_required=true
+          elif [[ "$EVENT_NAME" == "pull_request" ]]; then
+            e2e_production_required=$(bash scripts/detect-e2e-changes.sh pr-core "${changed_files[@]}")
+          fi
+
           # The production e2e shards consume web-build's artifact, so any
           # e2e-triggering change must also produce a web build.
           if [[ "$e2e_core_required" == "true" ]]; then
@@ -487,6 +501,7 @@ jobs:
             echo "collab_redis_required=$collab_redis_required"
             echo "desktop_rust_checks_required=$desktop_rust_checks_required"
             echo "e2e_core_required=$e2e_core_required"
+            echo "e2e_production_required=$e2e_production_required"
             echo "e2e_landing_required=$e2e_landing_required"
             echo "fix_tests_on_base_required=$fix_tests_on_base_required"
             echo "landing_build_required=$landing_build_required"
@@ -2695,9 +2710,8 @@ jobs:
       always()
       && (needs.ci-plan.outputs.trusted == 'true'
           || github.event_name == 'workflow_dispatch')
-      && needs.ci-plan.outputs.e2e_core_required == 'true'
+      && needs.ci-plan.outputs.e2e_production_required == 'true'
       && needs.web-build.result == 'success'
-      && needs.ci-plan.outputs.suite_depth == 'full'
     runs-on: ubuntu-latest
     timeout-minutes: 12
     permissions:
@@ -3634,7 +3648,7 @@ jobs:
             "collab-redis": "collab_redis_required",
             "desktop-clippy": "desktop_rust_checks_required",
             "e2e-landing": "e2e_landing_required",
-            "e2e-production-shard": "e2e_core_required",
+            "e2e-production-shard": "e2e_production_required",
             "e2e-vite-canary": "e2e_core_required",
             "fix-tests-on-base": "fix_tests_on_base_required",
             "landing-build": "landing_build_required",
@@ -3653,7 +3667,7 @@ jobs:
           # Jobs a fast-depth run must also see succeed once their scope is
           # planned; any other job may skip there.
           FAST_REQUIRED: >-
-            ["api-image-smoke", "web-image-smoke"]
+            ["api-image-smoke", "web-image-smoke", "e2e-production-shard"]
         run: |
           # The plan skips a draft pull request, and every job with it. The
           # event's draft flag can be stale: a push to a draft followed by

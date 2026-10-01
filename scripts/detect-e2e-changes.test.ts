@@ -121,7 +121,10 @@ const workflowStepRun = (job: string, stepName: string): string => {
   return (runEnd === -1 ? run : run.slice(0, runEnd)).trimEnd();
 };
 
-const detects = (scope: "core" | "landing" | "marketing", files: string[]) =>
+const detects = (
+  scope: "core" | "landing" | "marketing" | "pr-core",
+  files: string[],
+) =>
   Bun.spawnSync(["bash", script, scope, ...files], {
     stdout: "pipe",
   })
@@ -690,7 +693,7 @@ describe("detect-e2e-changes", () => {
         "      always()",
         "      && (needs.ci-plan.outputs.trusted == 'true'",
         "          || github.event_name == 'workflow_dispatch')",
-        "      && needs.ci-plan.outputs.e2e_core_required == 'true'",
+        "      && needs.ci-plan.outputs.e2e_production_required == 'true'",
         "      && needs.web-build.result == 'success'",
       ].join("\n"),
     );
@@ -1019,5 +1022,53 @@ describe("detect-e2e-changes", () => {
       `E2E_OUTPUT_DIR: test-results/route-smoke-\${{ matrix.shard }}`,
     );
     expect(workflow).not.toContain("path: apps/web/test-results/blob-report/");
+  });
+});
+
+describe("PR production E2E scope", () => {
+  test("runs for specs, helpers, fixtures and Playwright configuration", () => {
+    for (const file of [
+      "apps/web/e2e/new.spec.ts",
+      "apps/web/e2e/specs/new.spec.ts",
+      "apps/web/e2e/helpers/auth.ts",
+      "apps/web/e2e/fixtures/new.json",
+      "apps/web/e2e/playwright.config.ts",
+    ]) {
+      expect(detects("pr-core", [file]), file).toBe("true");
+    }
+  });
+
+  test("leaves marketing-only inputs to the marketing workflow", () => {
+    for (const file of [
+      "apps/web/e2e/marketing/product-screenshots.spec.ts",
+      "apps/web/e2e/playwright.marketing.config.ts",
+    ]) {
+      expect(detects("pr-core", [file]), file).toBe("false");
+      expect(detects("marketing", [file]), file).toBe("true");
+    }
+  });
+
+  test("does not widen PR shards for runtime or orchestration changes", () => {
+    for (const file of [
+      "apps/api/src/handlers/tasks/get.ts",
+      "apps/web/src/routes/index.tsx",
+      "packages/ui/src/button.tsx",
+      "README.md",
+      "bun.lock",
+      ".github/workflows/ci.yml",
+      "scripts/detect-e2e-changes.sh",
+    ]) {
+      expect(detects("pr-core", [file]), file).toBe("false");
+    }
+    expect(detects("pr-core", [])).toBe("false");
+  });
+
+  test("marketing exclusions cannot hide a core spec in the same diff", () => {
+    const files = [
+      "apps/web/e2e/marketing/product.spec.ts",
+      "apps/web/e2e/new.spec.ts",
+    ];
+    expect(detects("pr-core", files)).toBe("true");
+    expect(detects("pr-core", files.toReversed())).toBe("true");
   });
 });
