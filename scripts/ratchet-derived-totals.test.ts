@@ -130,7 +130,7 @@ const casts = (count: number) =>
   ).join("\n")}\n`;
 
 const run = (cwd: string, command: readonly string[]) => {
-  const result = Bun.spawnSync(command, {
+  const result = Bun.spawnSync([...command], {
     cwd,
     env: {
       ...process.env,
