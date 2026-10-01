@@ -50,7 +50,11 @@ const config = {
     "skills.resources.upload for a DOCX or PDF whose text must be extracted " +
     "first.",
   permissions: { agentSkill: ["update"] },
-  mcp: { type: "capability", reason: "agent_tool_authoring" },
+  mcp: {
+    type: "capability",
+    reason: "agent_tool_authoring",
+    consumesServices: false,
+  },
   params: createSkillResourceParamsSchema,
   body: createSkillResourceBodySchema,
 } satisfies HandlerConfig;

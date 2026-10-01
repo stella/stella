@@ -176,6 +176,12 @@ export const AppBreadcrumbs = () => {
       </BreadcrumbLink>,
     ),
     defineBreadcrumb(
+      ["/settings/organization/billing"],
+      <BreadcrumbLink to="/settings/organization/billing">
+        {t("billing.settingsTitle")}
+      </BreadcrumbLink>,
+    ),
+    defineBreadcrumb(
       ["/settings/organization/matter-numbering"],
       <BreadcrumbLink to="/settings/organization/matter-numbering">
         {t("settings.organization.matterNumbering")}

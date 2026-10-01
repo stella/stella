@@ -50,7 +50,10 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
             enabled: true,
             policy,
             periodPolicy,
-            periodIdentity: { actionKind: "chat.send", logicalPhaseId },
+            periodIdentity: {
+              actionKind: "chat.improve-prompt",
+              logicalPhaseId,
+            },
             redis: client,
             run: async () => {
               ran += 1;
@@ -69,7 +72,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
         const resolved = resolveActionPeriodBudget({
           organizationId,
           identity: {
-            actionKind: "chat.send",
+            actionKind: "chat.improve-prompt",
             logicalPhaseId: `phase-${accepted}`,
           },
           policy: periodPolicy,
@@ -102,7 +105,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
               policy,
               periodPolicy,
               periodIdentity: {
-                actionKind: "workflow.start",
+                actionKind: "chat.suggest-thread-title",
                 logicalPhaseId: "run",
               },
               redis: client,
@@ -125,7 +128,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
           policy,
           periodPolicy: { periodMs: 86_400_000, limit: 1 },
           periodIdentity: {
-            actionKind: "chat.send",
+            actionKind: "chat.improve-prompt",
             logicalPhaseId: "delayed-phase",
           },
           redis: {
@@ -143,7 +146,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
                 const stale = resolveActionPeriodBudget({
                   organizationId,
                   identity: {
-                    actionKind: "chat.send",
+                    actionKind: "chat.improve-prompt",
                     logicalPhaseId: "delayed-phase",
                   },
                   policy: { periodMs: 86_400_000, limit: 1 },
@@ -205,7 +208,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
           policy,
           periodPolicy,
           periodIdentity: {
-            actionKind: "chat.send",
+            actionKind: "chat.improve-prompt",
             logicalPhaseId: "renewed-phase",
           },
           timing: {
@@ -262,7 +265,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
           policy,
           periodPolicy: { periodMs: 2000, limit: 1 },
           periodIdentity: {
-            actionKind: "chat.send",
+            actionKind: "chat.improve-prompt",
             logicalPhaseId: "cross-boundary-phase",
           },
           timing: {
@@ -307,7 +310,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
         const nextPeriod = resolveActionPeriodBudget({
           organizationId,
           identity: {
-            actionKind: "chat.send",
+            actionKind: "chat.improve-prompt",
             logicalPhaseId: "cross-boundary-phase",
           },
           policy: { periodMs: 2000, limit: 1 },
@@ -337,7 +340,10 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
           enabled: true,
           policy: singlePolicy,
           periodPolicy,
-          periodIdentity: { actionKind: "chat.send", logicalPhaseId: "first" },
+          periodIdentity: {
+            actionKind: "chat.improve-prompt",
+            logicalPhaseId: "first",
+          },
           redis: client,
           run: async () => {
             enter(undefined);
@@ -353,7 +359,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
             policy: singlePolicy,
             periodPolicy,
             periodIdentity: {
-              actionKind: "chat.send",
+              actionKind: "chat.improve-prompt",
               logicalPhaseId: "refused",
             },
             redis: client,
@@ -364,7 +370,10 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
           expect(Result.isError(refused)).toBe(true);
           const resolved = resolveActionPeriodBudget({
             organizationId,
-            identity: { actionKind: "chat.send", logicalPhaseId: "refused" },
+            identity: {
+              actionKind: "chat.improve-prompt",
+              logicalPhaseId: "refused",
+            },
             policy: periodPolicy,
             nowMs: Date.now(),
           });

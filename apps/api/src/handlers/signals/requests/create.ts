@@ -30,7 +30,11 @@ const config = {
     "Post a manual request into the inbox: a piece of work for the legal " +
     "team, optionally scoped to a matter and assigned to a colleague.",
   permissions: { signal: ["create"] },
-  mcp: { type: "capability", reason: "workflow_orchestration" },
+  mcp: {
+    type: "capability",
+    reason: "workflow_orchestration",
+    consumesServices: false,
+  },
   body: createRequestBodySchema,
 } satisfies HandlerConfig;
 

@@ -38,7 +38,11 @@ export default createSafeHandler(
       "exceeds the document size limit or the matter is at its entity limit.",
     body: createFromLegalSourceBodySchema,
     permissions: { entity: ["create"] },
-    mcp: { type: "capability", reason: "document_processing" },
+    mcp: {
+      type: "capability",
+      reason: "document_processing",
+      consumesServices: true,
+    },
   },
   async function* (ctx) {
     const {

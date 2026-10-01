@@ -11,7 +11,11 @@ const config = {
   description: "Read a document translation run and its progress.",
   permissions: { workspace: ["read"] },
   access: "read",
-  mcp: { type: "capability", reason: "document_processing" },
+  mcp: {
+    type: "capability",
+    reason: "document_processing",
+    consumesServices: false,
+  },
   params: workspaceParams({ runId: tSafeId("documentTranslationRun") }),
 } satisfies WorkspaceHandlerConfig;
 

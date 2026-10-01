@@ -41,7 +41,7 @@ const config = {
     "is in the future or older than the entry-age limit. The expense starts " +
     "as a draft.",
   permissions: { expense: ["create"] },
-  mcp: { type: "capability", reason: "billing_admin" },
+  mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   body: createExpenseBodySchema,
 } satisfies WorkspaceHandlerConfig;
 

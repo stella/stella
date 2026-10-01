@@ -620,6 +620,7 @@ export const corpusFreeTextClause = (
  */
 export type CaseLawCorpusFilters = {
   court?: string | undefined;
+  courts?: readonly string[] | undefined;
   /**
    * Partitions the court filter's documents all carry, added beside the
    * exact court clause so the engine can skip splits; never alone
@@ -709,6 +710,11 @@ export const caseLawCorpusQuery = ({
           .join(" OR ")})`,
       );
     }
+  }
+  if (filters.courts !== undefined && filters.courts.length > 0) {
+    clauses.push(
+      `(${filters.courts.map((court) => `court:${quoteCorpusValue(court)}`).join(" OR ")})`,
+    );
   }
   if (filters.dateFrom || filters.dateTo) {
     clauses.push(

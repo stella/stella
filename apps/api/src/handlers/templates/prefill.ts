@@ -172,7 +172,11 @@ const config = {
     "Consumes AI usage.",
   permissions: { template: ["use"] },
   access: "write",
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  mcp: {
+    type: "capability",
+    reason: "template_authoring_ui",
+    consumesServices: true,
+  },
   // The only OPTIONAL file field in the catalog: `file` is one of three source
   // modes, so the capability stays invokable over JSON with `text` and/or
   // `entityIds`. Clients hide `file` from the JSON surface and refuse it when

@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import * as v from "valibot";
 
@@ -294,6 +294,7 @@ const compatFetchArgsSchema = nullAsAbsent(
 
 export const COMPAT_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
+    consumesServices: true,
     annotations: {
       title: "Search",
       destructiveHint: false,
@@ -320,6 +321,7 @@ export const COMPAT_TOOL_DEFINITIONS = [
     scope: "stella:search",
   }),
   defineValibotMcpTool({
+    consumesServices: true,
     annotations: {
       title: "Fetch",
       destructiveHint: false,
@@ -490,6 +492,29 @@ const handleCompatSearchTool: McpToolHandler<
         }),
     results: [...matter.results, ...corpus.results],
   };
+};
+
+/** Resolves the fetch target with the same schema and id reader as dispatch. */
+export const compatFetchConsumesServices = (args: unknown): boolean => {
+  const parsed = v.safeParse(compatFetchArgsSchema, args);
+  if (!parsed.success) {
+    return true;
+  }
+  const id = decodeCompatId(parsed.output.id);
+  if (id === null) {
+    return true;
+  }
+  switch (id.kind) {
+    case "document":
+      return false;
+    case "decision":
+    case "statute":
+      return true;
+    default: {
+      id satisfies never;
+      return panic("Unclassified compat fetch target");
+    }
+  }
 };
 
 const handleCompatFetchTool: McpToolHandler<
