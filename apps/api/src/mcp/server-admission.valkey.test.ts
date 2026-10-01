@@ -63,7 +63,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
               organizationId,
               userId,
               periodIdentity: {
-                actionKind: "mcp.tools/call",
+                actionKind: "mcp.data/call",
                 logicalPhaseId: "nested-completed",
               },
               run: async (signal) => {

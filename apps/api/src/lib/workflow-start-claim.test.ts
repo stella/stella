@@ -335,7 +335,7 @@ describe("accepted extraction kickoff", () => {
                   organizationId: ORGANIZATION_ID,
                   userId: USER_ID,
                   periodIdentity: {
-                    actionKind: "mcp.tools/call",
+                    actionKind: "mcp.services/call",
                     logicalPhaseId: "parent-call",
                   },
                   run: start,
