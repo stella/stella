@@ -3683,6 +3683,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      actions: read
+      checks: read
       # A skipped plan passes only while the pull request is still a draft.
       pull-requests: read
     steps:
@@ -3737,6 +3739,41 @@ jobs:
           FAST_REQUIRED: >-
             ["api-image-smoke", "parser-version-guard", "web-image-smoke"]
         run: |
+          # Queued jobs may have no concurrency annotation. A newer run in
+          # the same workflow/group proves supersession, unless any cancelled
+          # job timed out. Every API lookup fails closed.
+          cancelled_dependencies_were_superseded() {
+            local current workflow created runs jobs urls url annotations
+            current=$(gh api "repos/$REPO/actions/runs/$GITHUB_RUN_ID") || return 1
+            workflow=$(jq -er '.workflow_id | select(type == "number")' <<< "$current") || return 1
+            created=$(jq -er '.created_at | select(type == "string" and length > 0) | @uri' <<< "$current") || return 1
+            runs=$(gh api --paginate --slurp "repos/$REPO/actions/workflows/$workflow/runs?event=$EVENT&created=%3E%3D$created&per_page=100") || return 1
+            jq -e --argjson current "$current" --arg event "$EVENT" --arg pr "$PR_NUMBER" '
+              any(.[].workflow_runs[];
+                .workflow_id == $current.workflow_id and .name == $current.name and .event == $event
+                and .id > $current.id and .run_number > $current.run_number
+                and .created_at >= $current.created_at
+                and (if $event == "workflow_dispatch" then .head_branch == $current.head_branch
+                  elif $event == "pull_request" then any(.pull_requests[]; (.number | tostring) == $pr)
+                  else false end))
+              ' <<< "$runs" > /dev/null || return 1
+            jobs=$(gh api --paginate --slurp "repos/$REPO/actions/runs/$GITHUB_RUN_ID/jobs?filter=latest&per_page=100") || return 1
+            urls=$(jq -er '
+              [.[].jobs[] | select(.conclusion == "cancelled")]
+              | if length == 0 then error("Cancelled run has no cancelled jobs")
+                else [.[] | .check_run_url | select(. != null)] | join("\n") end
+              ' <<< "$jobs") || return 1
+            while IFS= read -r url; do
+              [[ -n "$url" ]] || continue
+              [[ "$url" == "https://api.github.com/repos/$REPO/check-runs/"* ]] || return 1
+              annotations=$(gh api --paginate --slurp "$url/annotations?per_page=100") || return 1
+              jq -e '
+                flatten
+                | any(.[]; (.message // "") | contains("has exceeded the maximum execution time")) | not
+                ' <<< "$annotations" > /dev/null || return 1
+            done <<< "$urls"
+          }
+
           # The plan skips a draft pull request, and every job with it. The
           # event's draft flag can be stale: a push to a draft followed by
           # marking it ready queues the draft run after the ready one, which
@@ -3758,8 +3795,12 @@ jobs:
           # Only a pull request or a manual run is ever superseded by a newer
           # run; a cancelled merge group certifies nothing.
           if [[ "$PLAN_RESULT" == "cancelled" && "$EVENT" != "merge_group" ]]; then
-            echo "CI run was superseded by a newer run (cancel-in-progress). Passing."
-            exit 0
+            if jq -e 'all(.[]; .result == "success" or .result == "skipped" or .result == "cancelled")' <<< "$NEEDS" > /dev/null && cancelled_dependencies_were_superseded; then
+              echo "CI run was superseded by a newer run (cancel-in-progress). Passing."
+              exit 0
+            fi
+            echo "::error::CI planning was cancelled without verified supersession."
+            exit 1
           fi
 
           if [[ "$PLAN_RESULT" != "success" ]]; then
@@ -3792,8 +3833,8 @@ jobs:
               ;;
             fast)
               # Only an unlabelled pull request or a manual run plans `fast`:
-              # its heavy suites skip by design, and a cancelled job means a
-              # newer run replaced this one.
+              # its heavy suites skip by design. A cancelled dependency can
+              # also mean a timeout; verify a newer run and reject timeout annotations.
               if [[ "$EVENT" == "merge_group" ]]; then
                 echo "::error::$EVENT run planned suite depth 'fast'; the heavy suites must run."
                 exit 1
@@ -3817,6 +3858,10 @@ jobs:
               fi
               cancelled=$(jq -r '[to_entries[] | select(.value.result == "cancelled") | .key] | join(", ")' <<< "$NEEDS")
               if [[ -n "$cancelled" ]]; then
+                if ! cancelled_dependencies_were_superseded; then
+                  echo "::error::CI jobs were cancelled without verified supersession: $cancelled"
+                  exit 1
+                fi
                 echo "CI run was superseded by a newer run (cancel-in-progress): $cancelled. Passing."
               fi
               ;;
