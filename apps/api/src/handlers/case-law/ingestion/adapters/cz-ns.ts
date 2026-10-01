@@ -40,6 +40,7 @@ import type {
   StoredRawReparseOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
+import { validatePublisherPage } from "@/api/handlers/case-law/ingestion/adapters/publisher-page";
 import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   INGESTION_USER_AGENT,
@@ -1382,7 +1383,23 @@ export const czNsAdapter = defineSourceAdapter({
           });
         }
 
-        const json = await listResponse.json();
+        const json = validatePublisherPage({
+          adapterKey: ADAPTER_KEYS.CZ_NS,
+          cursor,
+          headers: listResponse.headers,
+          body: await listResponse.text(),
+          expectation: {
+            kind: "json",
+            minBytes: 2,
+            shape: (value) =>
+              isDominoViewResponse(value) &&
+              typeof value["@toplevelentries"] === "string" &&
+              /^\d+$/u.test(value["@toplevelentries"]) &&
+              (Number(value["@toplevelentries"]) === 0 ||
+                start > Number(value["@toplevelentries"]) ||
+                normalizeViewEntries(value.viewentry).length > 0),
+          },
+        });
         if (!isDominoViewResponse(json)) {
           throw new AdapterFetchError({
             message: "CZ Supreme Court list returned an invalid payload",

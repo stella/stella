@@ -1,0 +1,203 @@
+import type { ESTree } from "@oxlint/plugins";
+import { eslintCompatPlugin } from "@oxlint/plugins";
+import { panic } from "better-result";
+import { createHash } from "node:crypto";
+
+import ledger from "../scripts/swallowed-item-error-ledger.json" with { type: "json" };
+import {
+  filenameForContext,
+  isAstNode,
+  isIdentifier,
+  memberPropertyName,
+  unwrapExpression,
+} from "./utils.ts";
+
+const RULE_NAME = "no-swallowed-item-error";
+const ITERATION_METHODS = new Set([
+  "map",
+  "flatMap",
+  "forEach",
+  "each",
+  "filter",
+  "reduce",
+  "some",
+  "every",
+  "find",
+]);
+const FUNCTION_TYPES = new Set([
+  "ArrowFunctionExpression",
+  "FunctionExpression",
+  "FunctionDeclaration",
+]);
+const LOOP_TYPES = new Set([
+  "ForStatement",
+  "ForOfStatement",
+  "ForInStatement",
+  "WhileStatement",
+  "DoWhileStatement",
+]);
+const ledgerByFile = new Map<string, Set<string>>();
+for (const [index, entry] of ledger.entries()) {
+  const previous = index === 0 ? undefined : ledger.at(index - 1);
+  if (
+    !entry.reason.trim() ||
+    (previous !== undefined && previous.id >= entry.id)
+  ) {
+    panic(
+      "swallowed-item-error ledger must be reasoned, sorted and duplicate-free",
+    );
+  }
+  const [file, fingerprint] = entry.id.split("::");
+  if (!file || !fingerprint || !/^[a-f0-9]{64}$/u.test(fingerprint)) {
+    panic("invalid swallowed-item-error ledger entry");
+  }
+  const budget = ledgerByFile.get(file) ?? new Set<string>();
+  budget.add(fingerprint);
+  ledgerByFile.set(file, budget);
+}
+
+const insideItemLoop = (node: unknown): boolean => {
+  if (!isAstNode(node)) {
+    return false;
+  }
+  let parent = node.parent;
+  while (isAstNode(parent)) {
+    if (LOOP_TYPES.has(parent.type)) {
+      return true;
+    }
+    if (FUNCTION_TYPES.has(parent.type)) {
+      const call = parent.parent;
+      if (!isAstNode(call) || call.type !== "CallExpression") {
+        return false;
+      }
+      const callee = unwrapExpression(call.callee);
+      return (
+        isAstNode(callee) &&
+        callee.type === "MemberExpression" &&
+        ITERATION_METHODS.has(memberPropertyName(callee) ?? "")
+      );
+    }
+    parent = parent.parent;
+  }
+  return false;
+};
+
+const emptyFallback = (node: unknown): boolean => {
+  const value = unwrapExpression(node);
+  return (
+    isIdentifier(value, "undefined") ||
+    (isAstNode(value) &&
+      ((value.type === "Literal" && value.value === null) ||
+        (value.type === "ArrayExpression" &&
+          Array.isArray(value.elements) &&
+          value.elements.length === 0)))
+  );
+};
+
+const swallowedBody = (node: unknown): boolean => {
+  const body = unwrapExpression(node);
+  if (!isAstNode(body)) {
+    return false;
+  }
+  if (body.type !== "BlockStatement") {
+    return emptyFallback(body);
+  }
+  if (!Array.isArray(body.body)) {
+    return false;
+  }
+  return body.body.every(
+    (statement) =>
+      isAstNode(statement) &&
+      (statement.type === "EmptyStatement" ||
+        statement.type === "ContinueStatement" ||
+        (statement.type === "ReturnStatement" &&
+          (statement.argument === null || emptyFallback(statement.argument)))),
+  );
+};
+
+export default eslintCompatPlugin({
+  meta: { name: RULE_NAME },
+  rules: {
+    [RULE_NAME]: {
+      meta: {
+        type: "problem",
+        schema: [],
+        messages: {
+          swallowed:
+            "Item failures must propagate or produce a typed failure record surfaced by ingestion.",
+          stale:
+            "Remove {{entry}} from scripts/swallowed-item-error-ledger.json: the swallowed item error no longer exists.",
+        },
+      },
+      createOnce(context) {
+        let budget = new Set<string>();
+        let seen = new Set<string>();
+        let file = "";
+        const record = (node: ESTree.CatchClause | ESTree.CallExpression) => {
+          const owner = node.type === "CatchClause" ? node.parent : node;
+          // Tokens preserve literal contents while ignoring formatting and comments.
+          const tokens = context.sourceCode
+            .getTokens(owner)
+            .map((token) => token.value);
+          const id = createHash("sha256")
+            .update(JSON.stringify(tokens))
+            .digest("hex");
+          const duplicate = seen.has(id);
+          seen.add(id);
+          if (!budget.has(id) || duplicate) {
+            context.report({ node, messageId: "swallowed" });
+          }
+        };
+        return {
+          before() {
+            budget = new Set();
+            seen = new Set();
+            file = "";
+            const filename = filenameForContext(context);
+            for (const [entryFile, entries] of ledgerByFile) {
+              if (
+                filename === entryFile ||
+                filename.endsWith(`/${entryFile}`)
+              ) {
+                file = entryFile;
+                budget = entries;
+                break;
+              }
+            }
+          },
+          CatchClause(node) {
+            if (insideItemLoop(node) && swallowedBody(node.body)) {
+              record(node);
+            }
+          },
+          CallExpression(node) {
+            const callee = unwrapExpression(node.callee);
+            const callback = unwrapExpression(node.arguments.at(0));
+            if (
+              isAstNode(callee) &&
+              callee.type === "MemberExpression" &&
+              memberPropertyName(callee) === "catch" &&
+              isAstNode(callback) &&
+              FUNCTION_TYPES.has(callback.type) &&
+              insideItemLoop(node) &&
+              swallowedBody(callback.body)
+            ) {
+              record(node);
+            }
+          },
+          "Program:exit"(node) {
+            for (const entry of budget) {
+              if (!seen.has(entry)) {
+                context.report({
+                  node,
+                  messageId: "stale",
+                  data: { entry: `${file}::${entry}` },
+                });
+              }
+            }
+          },
+        };
+      },
+    },
+  },
+});
