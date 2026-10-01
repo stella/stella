@@ -384,6 +384,7 @@ type EvaluateResultOptions = {
   unplannedScopes?: readonly string[];
   /** The pull request's draft state as the API reports it now; unset fails the lookup. */
   liveDraft?: boolean;
+  runCancelled?: boolean;
 };
 
 const PULL_REQUEST = { repo: "stella/stella", number: "7" } as const;
@@ -415,6 +416,7 @@ const evaluateResult = ({
     : SUITE_DEPTH.full,
   unplannedScopes = [],
   liveDraft,
+  runCancelled = false,
 }: EvaluateResultOptions) => {
   const plan = Object.fromEntries(
     Object.values(jobScopes).flatMap((scope) =>
@@ -433,6 +435,7 @@ const evaluateResult = ({
     cmd: ["bash", "-eu", "-c", resultStep.run],
     env: {
       EVENT: event,
+      RUN_CANCELLED: String(runCancelled),
       FAKE_LIVE_DRAFT: liveDraft === undefined ? "" : String(liveDraft),
       JOB_SCOPES: resultStep.env["JOB_SCOPES"] ?? "",
       NEEDS: JSON.stringify(needs),
@@ -579,6 +582,46 @@ test("a full-depth run passes jobs whose scope was not planned only when skipped
 // dispatched with. Both can be superseded by a newer run.
 const FAST_DEPTH_EVENTS = [EVENT.pullRequest, EVENT.workflowDispatch] as const;
 
+test("fast-depth cancelled dependencies pass only when the workflow run was cancelled", () => {
+  expect(resultStep.env["RUN_CANCELLED"]).toBe(
+    ["$", "{{ cancelled() }}"].join(""),
+  );
+  fc.assert(
+    fc.property(
+      fc.constantFrom(...resultJob.needs),
+      fc.constantFrom(...FAST_DEPTH_EVENTS),
+      fc.boolean(),
+      (job, event, runCancelled) => {
+        expect(
+          evaluateResult({
+            event,
+            results: { [job]: "cancelled" },
+            suiteDepth: SUITE_DEPTH.fast,
+            runCancelled,
+          }),
+          `${event} ${job}, run cancelled: ${String(runCancelled)}`,
+        ).toBe(runCancelled ? 0 : 1);
+      },
+    ),
+    propertyConfig({ numRuns: 100 }),
+  );
+});
+
+test("a failed dependency stays red beside a cancelled sibling even during supersession", () => {
+  for (const event of FAST_DEPTH_EVENTS) {
+    for (const runCancelled of [false, true]) {
+      expect(
+        evaluateResult({
+          event,
+          results: { "ci-tests": "cancelled", "code-quality": "failure" },
+          suiteDepth: SUITE_DEPTH.fast,
+          runCancelled,
+        }),
+      ).toBe(1);
+    }
+  }
+});
+
 test("only a pull request or a manual run skips heavy suites or passes a superseded run", () => {
   expect(heavyJobs.length).toBeGreaterThan(0);
   const skippedHeavy = Object.fromEntries(
@@ -595,6 +638,7 @@ test("only a pull request or a manual run skips heavy suites or passes a superse
         event,
         results: { "ci-tests": "cancelled" },
         suiteDepth: fast,
+        runCancelled: true,
       }),
       event,
     ).toBe(0);
@@ -612,6 +656,7 @@ test("only a pull request or a manual run skips heavy suites or passes a superse
         event,
         results: { "ci-plan": "cancelled" },
         suiteDepth: fast,
+        runCancelled: true,
       }),
       event,
     ).toBe(0);
@@ -665,7 +710,12 @@ test("a skipped plan passes only while the pull request is still a draft", () =>
     resultJob.needs.map((job) => [job, "cancelled"]),
   );
   expect(
-    evaluateResult({ event, results: cancelledReadyRun, liveDraft: false }),
+    evaluateResult({
+      event,
+      results: cancelledReadyRun,
+      liveDraft: false,
+      runCancelled: true,
+    }),
   ).toBe(0);
   expect(
     evaluateResult({
@@ -715,7 +765,11 @@ test("a fast-depth run requires every selected fast-required job to run", () => 
       1,
     );
     expect(
-      evaluateResult({ event, results: { [job]: "cancelled" } }),
+      evaluateResult({
+        event,
+        results: { [job]: "cancelled" },
+        runCancelled: true,
+      }),
       job,
     ).toBe(0);
     if (typeof scope === "string") {

@@ -3631,6 +3631,7 @@ jobs:
       - name: Evaluate CI outcome
         env:
           EVENT: ${{ github.event_name }}
+          RUN_CANCELLED: ${{ cancelled() }}
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
@@ -3699,7 +3700,7 @@ jobs:
 
           # Only a pull request or a manual run is ever superseded by a newer
           # run; a cancelled merge group certifies nothing.
-          if [[ "$PLAN_RESULT" == "cancelled" && "$EVENT" != "merge_group" ]]; then
+          if [[ "$PLAN_RESULT" == "cancelled" && "$EVENT" != "merge_group" && "$RUN_CANCELLED" == "true" ]]; then
             echo "CI run was superseded by a newer run (cancel-in-progress). Passing."
             exit 0
           fi
@@ -3734,8 +3735,8 @@ jobs:
               ;;
             fast)
               # Only an unlabelled pull request or a manual run plans `fast`:
-              # its heavy suites skip by design, and a cancelled job means a
-              # newer run replaced this one.
+              # its heavy suites skip by design. A cancelled dependency can
+              # also mean a timeout; only run-level cancellation is supersession.
               if [[ "$EVENT" == "merge_group" ]]; then
                 echo "::error::$EVENT run planned suite depth 'fast'; the heavy suites must run."
                 exit 1
@@ -3759,6 +3760,10 @@ jobs:
               fi
               cancelled=$(jq -r '[to_entries[] | select(.value.result == "cancelled") | .key] | join(", ")' <<< "$NEEDS")
               if [[ -n "$cancelled" ]]; then
+                if [[ "$RUN_CANCELLED" != "true" ]]; then
+                  echo "::error::CI jobs were cancelled without run-level cancellation: $cancelled"
+                  exit 1
+                fi
                 echo "CI run was superseded by a newer run (cancel-in-progress): $cancelled. Passing."
               fi
               ;;
