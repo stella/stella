@@ -2,7 +2,7 @@
 // WebApiContract in apps/api/src/eden-contract.ts. Do not edit.
 // Regenerate: bun --filter @stll/api gen:web-api-types
 import type { toolApprovalCapability as __symbol0 } from "../../node_modules/@tanstack/ai/dist/esm/activities/chat/tools/tool-definition.js";
-import type { AgendaItemWireFields as stll_api_contract_AgendaItemWireFields, ChatSkillContextNeed as stll_api_contract_ChatSkillContextNeed, ChatThreadOrigin as stll_api_contract_ChatThreadOrigin, ContactImportIssueCode as stll_api_contract_ContactImportIssueCode, DocumentReferenceMatch as stll_api_contract_DocumentReferenceMatch, EmailAttachmentDescriptor as stll_api_contract_EmailAttachmentDescriptor, EmailCitationBlock as stll_api_contract_EmailCitationBlock, SafeId as stll_api_contract_SafeId, SavedSearchCriteria as stll_api_contract_SavedSearchCriteria, SearchTotal as stll_api_contract_SearchTotal, TemplateRecipeDefinition as stll_api_contract_TemplateRecipeDefinition } from "@stll/api-contract";
+import type { AgendaItemWireFields as stll_api_contract_AgendaItemWireFields, ChatSkillContextNeed as stll_api_contract_ChatSkillContextNeed, ChatThreadOrigin as stll_api_contract_ChatThreadOrigin, ContactImportIssueCode as stll_api_contract_ContactImportIssueCode, ConvertibleViewLayoutType as stll_api_contract_ConvertibleViewLayoutType, DocumentReferenceMatch as stll_api_contract_DocumentReferenceMatch, EmailAttachmentDescriptor as stll_api_contract_EmailAttachmentDescriptor, EmailCitationBlock as stll_api_contract_EmailCitationBlock, SafeId as stll_api_contract_SafeId, SavedSearchCriteria as stll_api_contract_SavedSearchCriteria, SearchTotal as stll_api_contract_SearchTotal, TemplateRecipeDefinition as stll_api_contract_TemplateRecipeDefinition } from "@stll/api-contract";
 import type { CompareNode as stll_conditions_CompareNode, ConditionNode as stll_conditions_ConditionNode, GroupNode as stll_conditions_GroupNode, PredicateNode as stll_conditions_PredicateNode } from "@stll/conditions";
 import type { FolioAgentApplyOperationsSummary as stll_folio_agents_FolioAgentApplyOperationsSummary, FolioAgentBlock as stll_folio_agents_FolioAgentBlock, FolioAgentChange as stll_folio_agents_FolioAgentChange, FolioAgentComment as stll_folio_agents_FolioAgentComment, FolioAgentDocumentOutline as stll_folio_agents_FolioAgentDocumentOutline, FolioAgentScopedFindTextResult as stll_folio_agents_FolioAgentScopedFindTextResult, FolioAgentSectionRead as stll_folio_agents_FolioAgentSectionRead } from "@stll/folio-agents";
 import type { CompareChange as stll_folio_core_CompareChange, CompareCompatibility as stll_folio_core_CompareCompatibility, CompareUnsupportedPart as stll_folio_core_CompareUnsupportedPart, CompareVerification as stll_folio_core_CompareVerification } from "@stll/folio-core";
@@ -12380,7 +12380,7 @@ export type WebRoutes = {
             convert: {
               post: {
                 body: {
-                  targetType: ("avt" | "calendar" | "filesystem" | "kanban" | "table" | "timeline");
+                  targetType: stll_api_contract_ConvertibleViewLayoutType;
                 };
                 params: {
                   workspaceId: T8d02a37b3f;
