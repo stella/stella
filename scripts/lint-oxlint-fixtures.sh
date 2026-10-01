@@ -13,7 +13,7 @@
 set -euo pipefail
 
 bun scripts/check-swallowed-item-error-ledger.ts --self-test
-bun scripts/check-swallowed-item-error-ledger.ts --base "${RATCHET_BASE_REF:-origin/main}"
+bun scripts/check-swallowed-item-error-ledger.ts
 
 # Plugin sources have to load under Node's ESM resolver, not only Bun's.
 #
