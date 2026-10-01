@@ -36,7 +36,7 @@ test.each(["exports", "source aliases"])(
         );
         for (const name of ["properties", "views"]) {
           await Bun.write(
-            path.join(packageDir, "src", `${name  }.ts`),
+            path.join(packageDir, "src", `${name}.ts`),
             "export const source = true;\n",
           );
         }
