@@ -1,22 +1,31 @@
 import * as asn1js from "asn1js";
-import { describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import * as pkijs from "pkijs";
 
 import type { PkiFetcher } from "@/api/lib/files/pdf-signing/pki-fetch";
 import { createTrackedRevocationProvider } from "@/api/lib/files/pdf-signing/revocation";
 import { findRevokedCertificates } from "@/api/lib/files/pdf-signing/validation-data";
 import {
+  createTestRsaKeyPool,
   createTestCertificate,
   createTestCrl,
   createTestOcspResponse,
 } from "@/api/tests/helpers/test-pki";
 
+const keyPool = createTestRsaKeyPool();
+beforeEach(() => keyPool.reset());
+
 const CRL_URL = "http://crl.example/issuing.crl";
 const OCSP_URL = "http://ocsp.example/";
 
 const buildLeaf = async () => {
-  const root = await createTestCertificate({ commonName: "Root", isCa: true });
+  const root = await createTestCertificate({
+    keyPool,
+    commonName: "Root",
+    isCa: true,
+  });
   const leaf = await createTestCertificate({
+    keyPool,
     commonName: "Jane Counsel",
     crlUrl: CRL_URL,
     issuer: root,
@@ -119,6 +128,7 @@ describe("revocation data for long-term validation", () => {
   test("ignores an OCSP answer about another certificate", async () => {
     const { leaf, root } = await buildLeaf();
     const other = await createTestCertificate({
+      keyPool,
       commonName: "Someone else",
       issuer: root,
     });
@@ -136,6 +146,7 @@ describe("revocation data for long-term validation", () => {
   test("only trusts a CRL the issuer signed", async () => {
     const { leaf, root } = await buildLeaf();
     const impostor = await createTestCertificate({
+      keyPool,
       commonName: "Root",
       isCa: true,
     });
@@ -173,6 +184,7 @@ describe("revocation data for long-term validation", () => {
       // Same name as the real issuer, different key: a forged "good" that
       // would otherwise hide a revocation.
       const impostor = await createTestCertificate({
+        keyPool,
         commonName: "Root",
         isCa: true,
       });
@@ -207,11 +219,13 @@ describe("revocation data for long-term validation", () => {
     test("accepts a responder the issuer delegated for OCSP, and only that", async () => {
       const { leaf, root } = await buildLeaf();
       const delegated = await createTestCertificate({
+        keyPool,
         commonName: "Root OCSP responder",
         extendedKeyUsages: ["1.3.6.1.5.5.7.3.9"],
         issuer: root,
       });
       const undelegated = await createTestCertificate({
+        keyPool,
         commonName: "Root web server",
         extendedKeyUsages: ["1.3.6.1.5.5.7.3.1"],
         issuer: root,
@@ -246,6 +260,7 @@ describe("revocation data for long-term validation", () => {
       // Correctly issued and authorized for OCSP, but no longer valid: its
       // key may have been retired, so what it signs proves nothing now.
       const expired = await createTestCertificate({
+        keyPool,
         commonName: "Root OCSP responder",
         extendedKeyUsages: ["1.3.6.1.5.5.7.3.9"],
         issuer: root,

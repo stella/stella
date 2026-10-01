@@ -433,6 +433,7 @@ export type InternalToolStructuredError = {
   hint?: string;
   issues?: readonly McpValidationIssue[];
   retryable?: boolean;
+  contactUrl?: string;
   requestId?: string;
 };
 

@@ -1,21 +1,8 @@
 import MentionExtension from "@tiptap/extension-mention";
-import type { MentionNodeAttrs } from "@tiptap/extension-mention";
-import {
-  mergeAttributes,
-  ReactNodeViewRenderer,
-  ReactRenderer,
-} from "@tiptap/react";
-import { findSuggestionMatch } from "@tiptap/suggestion";
-import type {
-  SuggestionMatch,
-  SuggestionOptions,
-  SuggestionProps,
-  Trigger,
-} from "@tiptap/suggestion";
+import { mergeAttributes, ReactNodeViewRenderer } from "@tiptap/react";
 
 import type { EntityKind, ResourceRef } from "@stll/api-contract";
 
-import { ChatMentionList } from "@/components/chat-mention-list";
 import { ChatMentionNode } from "@/components/chat-mention-node";
 
 export type { MentionCategory } from "@/components/chat/chat-mention-href";
@@ -102,28 +89,15 @@ export const ChatMention = MentionExtension.extend({
   renderHTML({ HTMLAttributes }) {
     return ["entity-mention", mergeAttributes(HTMLAttributes)];
   },
+  // Only the chip node: the composer (+) menu's "@" shortcut is the one
+  // picker, so tiptap's inline suggestion plugin is never installed.
+  addProseMirrorPlugins() {
+    return [];
+  },
 });
 
 const MAX_SUGGESTIONS_PER_CATEGORY = 5;
 const MAX_TOTAL_SUGGESTIONS = 15;
-
-export const findChatSuggestionMatch = (trigger: Trigger): SuggestionMatch => {
-  const match = findSuggestionMatch({
-    ...trigger,
-    allowedPrefixes: null,
-  });
-  if (match === null || match.range.from === trigger.$position.start()) {
-    return match;
-  }
-
-  const precedingText = trigger.$position.doc.textBetween(
-    match.range.from - 1,
-    match.range.from,
-    "\0",
-    "\0",
-  );
-  return /^\s$/u.test(precedingText) ? match : null;
-};
 
 type SelectChatSuggestionItemsOptions = {
   localItems: ChatMentionOption[];
@@ -161,63 +135,3 @@ export const selectChatSuggestionItems = ({
 
   return result;
 };
-
-export const createChatSuggestion = (
-  getItems: () => ChatMentionOption[] | Promise<ChatMentionOption[]>,
-  searchItems: (query: string) => Promise<ChatMentionOption[]>,
-  loadWorkspaceEntities: (
-    workspace: ChatWorkspaceMentionOption,
-    query: string,
-  ) => Promise<ChatMentionOption[]>,
-): Omit<SuggestionOptions<ChatMentionOption, MentionNodeAttrs>, "editor"> => ({
-  allowSpaces: true,
-  allowedPrefixes: null,
-  findSuggestionMatch: findChatSuggestionMatch,
-  items: async ({ query }) => {
-    const [localItems, searchedItems] = await Promise.all([
-      getItems(),
-      searchItems(query),
-    ]);
-
-    return selectChatSuggestionItems({
-      localItems,
-      query,
-      searchedItems,
-    });
-  },
-
-  render: () => {
-    let component: ReactRenderer<
-      ReturnType<NonNullable<SuggestionOptions["render"]>>,
-      SuggestionProps<ChatMentionOption, MentionNodeAttrs>
-    > | null = null;
-
-    return {
-      onStart: (props) => {
-        if (!props.clientRect) {
-          return;
-        }
-
-        component = new ReactRenderer(ChatMentionList, {
-          props: {
-            ...props,
-            loadWorkspaceEntities,
-          },
-          editor: props.editor,
-        });
-      },
-
-      onUpdate(props) {
-        component?.updateProps(props);
-      },
-
-      onKeyDown(props) {
-        return !!component?.ref?.onKeyDown?.(props);
-      },
-
-      onExit() {
-        component?.destroy();
-      },
-    };
-  },
-});

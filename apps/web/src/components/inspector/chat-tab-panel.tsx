@@ -657,6 +657,7 @@ export const ChatTabPanel = ({
           <PromptBar
             anonymized={anonymized}
             attachmentsEnabled
+            context={{ activeOrganizationId, threadRef }}
             editorController={editorController}
             emptyPlaceholder={
               <PromptBarPlaceholderContent>
