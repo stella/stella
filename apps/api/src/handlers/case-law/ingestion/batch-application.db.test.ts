@@ -318,7 +318,7 @@ const crawlCaller: Caller = {
           sourceLease,
           scopedDb,
           maxPages: 1,
-          batchRecordLimit,
+          ...(batchRecordLimit === undefined ? {} : { batchRecordLimit }),
           corpus,
         }),
       catch: (cause) => cause,
