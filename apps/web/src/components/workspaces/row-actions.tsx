@@ -1409,9 +1409,12 @@ const RowFeatureMenuActions = ({
         entity.kind !== "task" &&
         file !== null &&
         onOpenVersionHistory !== undefined && (
+          // "Open", not the inspector's "Move to main view": from a file
+          // row nothing is moved, and "Move" here would read as relocating
+          // the file (see "Copy/Move to matter" in the same menu).
           <MenuItem onClick={onOpenVersionHistory}>
             <Maximize2Icon />
-            {t("inspector.moveToMain")}
+            {t("common.open")}
           </MenuItem>
         )}
       {onEditPages !== undefined && (

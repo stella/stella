@@ -50,6 +50,9 @@ export const clausesForTokens = (
 ): RegistryFormatClause[] =>
   clauses.filter(({ requires }) =>
     requires.every((token) => {
+      if (!Object.hasOwn(tokens, token)) {
+        return false;
+      }
       const value = tokens[token];
       return value !== null && value !== undefined && value.trim() !== "";
     }),

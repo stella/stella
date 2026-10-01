@@ -1,3 +1,4 @@
+import { encodeRegistryComponent } from "../shared/encode-registry-component.js";
 import { trimToNull } from "../shared/strings.js";
 import type {
   RechercheEntreprisesAddress,
@@ -183,7 +184,7 @@ export const parseCompany = (
     registeredAt: trimToNull(raw.date_creation),
     ceasedAt: trimToNull(raw.date_fermeture),
     directors: parseDirectors(raw.dirigeants),
-    registryUrl: `${ANNUAIRE_BASE}${encodeURIComponent(raw.siren)}`,
+    registryUrl: `${ANNUAIRE_BASE}${encodeRegistryComponent(raw.siren)}`,
   };
 };
 

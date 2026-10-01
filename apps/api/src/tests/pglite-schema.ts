@@ -623,3 +623,26 @@ export const installPgliteMigration = async ({
     await db.execute(sql.raw(statement));
   }
 };
+
+/** Install alias graph invariants which declarative schema push cannot express. */
+export const installPgliteDecisionAliases = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261003123000_case_law_decision_aliases",
+      "migration.sql",
+    ),
+  ).filter((statement) => {
+    const source = executableSql(statement);
+    return (
+      source.startsWith("CREATE FUNCTION") ||
+      source.startsWith("CREATE TRIGGER") ||
+      source.startsWith('ALTER TABLE "case_law_decision_aliases" FORCE')
+    );
+  });
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};

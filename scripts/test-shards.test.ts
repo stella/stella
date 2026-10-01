@@ -2,9 +2,18 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
+import { listApiTestPaths } from "../apps/api/scripts/api-test-plan";
+import durations from "../apps/api/scripts/test-durations.json";
 import {
+  parseApiTestShard,
+  partitionTestFiles,
+} from "../apps/api/scripts/test-file-shards";
+import {
+  apiShardValue,
+  assertApiShardExecuted,
   shardFilters,
   shardPackages,
+  TEST_JOB_SHARDS,
   TEST_SHARD_IDS,
   TEST_SHARD_PACKAGES,
   workspacePackages,
@@ -45,9 +54,11 @@ test("every named shard package is a workspace package that has tests", () => {
   }
 });
 
-test("the shards partition every package that has a test script", () => {
+test("the shard families partition every package that has a test script", () => {
   const seen = new Map<string, string>();
-  for (const shard of TEST_SHARD_IDS) {
+  for (const shard of TEST_SHARD_IDS.filter(
+    (id) => apiShardValue(id) === "" || apiShardValue(id).startsWith("1/"),
+  )) {
     for (const name of shardPackages({ packageNames, shard })) {
       const owner = seen.get(name);
       if (owner !== undefined) {
@@ -75,26 +86,99 @@ test("a shard's filters exclude every package it does not own", () => {
 
 // The workflow matrix is the other half of the shard map: a shard the matrix
 // omits runs nowhere, and its packages would leave CI silently.
-test("the ci-tests matrix runs exactly the declared shards", () => {
+test("the ci-tests matrix runs exactly the declared jobs", () => {
   const declared = /\n {8}shard: \[(?<ids>[^\]]+)\]\n/u.exec(ciTestsJob())
     ?.groups?.["ids"];
   if (declared === undefined) {
     throw new Error("ci-tests declares no shard matrix");
   }
   expect(declared.split(",").map((id) => id.trim())).toEqual([
-    ...TEST_SHARD_IDS,
+    ...Object.keys(TEST_JOB_SHARDS),
   ]);
+});
+
+test("merged jobs run every suite exactly once and preserve the package partition", () => {
+  const suites = Object.values(TEST_JOB_SHARDS).flat();
+  expect(suites.toSorted()).toEqual([...TEST_SHARD_IDS].toSorted());
+  const merged = TEST_JOB_SHARDS["rest-web"].flatMap((shard) =>
+    shardPackages({ packageNames, shard }),
+  );
+  expect(new Set(merged).size).toBe(merged.length);
+  expect(merged.toSorted()).toEqual(
+    packageNames.filter((name) => name !== "@stll/api").toSorted(),
+  );
+});
+
+test("both suites in the merged leg report a verdict after an earlier failure", () => {
+  const job = ciTestsJob();
+  for (const name of ["Test API or rest", "Test web", "Test .claude/mcp"]) {
+    const step = job
+      .split(`      - name: ${name}\n`)
+      .at(1)
+      ?.split("      - name:")
+      .at(0);
+    expect(step).toBeDefined();
+    expect(step).toContain("!cancelled()");
+    expect(step).toContain(
+      "needs.ci-plan.outputs.package_checks_required == 'true'",
+    );
+  }
+  expect(job).toMatch(
+    /SHARD: \$\{\{ matrix\.shard == 'rest-web' && 'rest' \|\| matrix\.shard \}\}/u,
+  );
+  expect(job).toContain("SHARD: web");
 });
 
 test("exactly one shard runs the .claude/mcp suite", () => {
   const job = ciTestsJob();
   expect(job.match(/bun --cwd \.claude\/mcp test/gu)).toHaveLength(1);
-  const gate = /matrix\.shard == '(?<shard>[a-z]+)'/u.exec(job)?.groups?.[
+  const gate = /matrix\.shard == '(?<shard>[a-z-]+)'/u.exec(job)?.groups?.[
     "shard"
   ];
   if (gate === undefined) {
     throw new Error("the .claude/mcp step is not gated on a shard");
   }
-  const shardIds: readonly string[] = TEST_SHARD_IDS;
+  const shardIds = Object.keys(TEST_JOB_SHARDS);
   expect(shardIds).toContain(gate);
+});
+
+test("API sub-shards cover every discovered file exactly once, including new files", () => {
+  const files = listApiTestPaths(
+    path.resolve(import.meta.dirname, "../apps/api"),
+  );
+  const newFile = "src/new-shard-census.test.ts";
+  expect(files).not.toContain(newFile);
+  expect(durations).not.toHaveProperty(newFile);
+  const input = [...files, newFile];
+  const selected = TEST_SHARD_IDS.flatMap((id) => {
+    const shard = parseApiTestShard(apiShardValue(id));
+    return shard === null
+      ? []
+      : (partitionTestFiles({ files: input, durations, count: shard.count }).at(
+          shard.index - 1,
+        ) ?? []);
+  });
+  expect(selected.toSorted()).toEqual(input.toSorted());
+  expect(new Set(selected).size).toBe(input.length);
+});
+
+test("an in-scope API leg rejects help, empty or another shard's output", () => {
+  const taskIds = ["@stll/api#test"];
+  for (const output of [
+    "",
+    "Usage: bun run [flags] <script>",
+    "API test shard 1/4: 0/10 files",
+    "API test shard 2/4: 5/10 files",
+  ]) {
+    expect(() =>
+      assertApiShardExecuted({ shard: "api-1", taskIds, output }),
+    ).toThrow("ran no API test files");
+  }
+  assertApiShardExecuted({
+    shard: "api-1",
+    taskIds,
+    output: "@stll/api:test: API test shard 1/4: 5/10 files",
+  });
+  assertApiShardExecuted({ shard: "api-1", taskIds: [], output: "" });
+  assertApiShardExecuted({ shard: "rest", taskIds, output: "" });
 });

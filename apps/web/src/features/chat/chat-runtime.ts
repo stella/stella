@@ -523,6 +523,34 @@ export const createChatRuntime = ({
     tools: [browserTool.tool],
   });
 
+  /**
+   * Wait for the page's request to end before answering a card or an
+   * approval. The server sends a run's RUN_FINISHED, which carries the
+   * interrupt an answer resolves, only once it has stored the turn, so the
+   * card can be answered before the page knows that interrupt. TanStack
+   * applies such an answer to the message, finds nothing to resolve, and then
+   * hydrates the interrupt as pending: the card reads answered and the turn
+   * never continues. Once the request has ended the interrupt is known.
+   * Resolves false when the user stopped the turn meanwhile: its answers
+   * never leave the page. A request closed by `client.stop()` needs no check
+   * here; TanStack drops an answer to the stream it stopped.
+   */
+  const awaitRequestEnd = async (): Promise<boolean> => {
+    if (!snapshot.isLoading) {
+      return true;
+    }
+    await new Promise<void>((resolve) => {
+      const listener = () => {
+        if (!snapshot.isLoading) {
+          listeners.delete(listener);
+          resolve();
+        }
+      };
+      listeners.add(listener);
+    });
+    return !isStoppedTurn();
+  };
+
   const withBody = async (
     options: ChatSendMessageOptions | undefined,
     action: () => Promise<void>,
@@ -660,6 +688,9 @@ export const createChatRuntime = ({
     response: { approved: boolean; id: string },
     options: ChatSendMessageOptions | undefined,
   ) => {
+    if (!(await awaitRequestEnd())) {
+      return;
+    }
     await withBody(options, async () => {
       const interrupt = client
         .getInterrupts()
@@ -813,6 +844,9 @@ export const createChatRuntime = ({
         return;
       }
       await enqueueToolResult(async () => {
+        if (!(await awaitRequestEnd())) {
+          return;
+        }
         const messagesBeforeResult = snapshot.messages;
         const errorBeforeResult = snapshot.error;
         const operation: ActiveToolResultOperation = { rejection: undefined };

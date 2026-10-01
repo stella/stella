@@ -3,22 +3,6 @@ name: Database Migrations
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
-    paths:
-      - "apps/api/src/db/**"
-      - "apps/api/src/server.ts"
-      - "apps/api/src/lib/db/**"
-      - "apps/api/drizzle/**"
-      - "apps/api/drizzle.config.ts"
-      - "scripts/check-migration-safety.ts"
-      - "scripts/check-migration-safety.test.ts"
-      - "scripts/check-migration-index-builds.test.ts"
-      - "scripts/migration-index-findings.json"
-      - "scripts/fixtures/migration-index-builds/**"
-      - "scripts/check-migrations.sh"
-      - "scripts/rehearse-better-auth-constraint-retry.sh"
-      - ".squawk.toml"
-      - ".github/workflows/db-migrations.yml"
-      - ".github/workflows/release.yml"
   workflow_dispatch:
 
 concurrency:
@@ -28,8 +12,46 @@ concurrency:
 permissions: {}
 
 jobs:
+  scope:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      required: ${{ steps.changes.outputs.required }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+
+      - name: Detect relevant changes
+        id: changes
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          required=true
+          if detected=$(bash scripts/detect-security-workflow-changes.sh migrations); then
+            if [[ "$detected" == "false" ]]; then required=false; fi
+          else
+            echo "::warning::Change detector failed; running checks"
+          fi
+          echo "required=$required" >> "$GITHUB_OUTPUT"
+          if [[ "$required" == "false" ]]; then
+            echo "skipped: no migration change" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
   check:
-    if: github.event.pull_request.draft != true || github.event_name != 'pull_request'
+    needs: scope
+    if: >-
+      always()
+      && (github.event_name != 'pull_request' || github.event.pull_request.draft != true)
+      && (needs.scope.result != 'success' || needs.scope.outputs.required != 'false')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -64,7 +86,11 @@ jobs:
     # Validates that the shipped migrate entrypoint can apply every migration
     # end-to-end against an empty Postgres. Catches: ordering bugs, syntax
     # errors, and any migration that would crash on a real DB.
-    if: github.event.pull_request.draft != true || github.event_name != 'pull_request'
+    needs: scope
+    if: >-
+      always()
+      && (github.event_name != 'pull_request' || github.event.pull_request.draft != true)
+      && (needs.scope.result != 'success' || needs.scope.outputs.required != 'false')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

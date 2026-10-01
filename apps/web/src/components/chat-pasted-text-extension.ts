@@ -1,5 +1,5 @@
 import { mergeAttributes, Node } from "@tiptap/core";
-import type { Editor } from "@tiptap/core";
+import type { Editor, JSONContent } from "@tiptap/core";
 import { ReactNodeViewRenderer } from "@tiptap/react";
 
 import { SKILL_REF_HREF_PREFIX } from "@stll/api-contract";
@@ -26,6 +26,14 @@ const isPastedTextSource = (value: unknown): value is PastedTextSource =>
   typeof value === "string" &&
   PASTED_TEXT_SOURCES.some((source) => source === value);
 
+/** The chip and the space after it, as composer (or stored draft) content. */
+export const pastedTextChipContent = (
+  attrs: PastedTextAttrs,
+): JSONContent[] => [
+  { type: PASTED_TEXT_NODE_NAME, attrs },
+  { type: "text", text: " " },
+];
+
 type InsertPastedTextChipOptions = {
   /** When set, replace this range (e.g. the `/skill` trigger). */
   replaceRange?: { from: number; to: number };
@@ -46,10 +54,7 @@ export const insertPastedTextChip = (
   attrs: PastedTextAttrs,
   { replaceRange }: InsertPastedTextChipOptions = {},
 ): boolean => {
-  const content = [
-    { type: PASTED_TEXT_NODE_NAME, attrs },
-    { type: "text", text: " " },
-  ];
+  const content = pastedTextChipContent(attrs);
   const chain = editor.chain().focus();
   const ran = replaceRange
     ? chain.insertContentAt(replaceRange, content).run()

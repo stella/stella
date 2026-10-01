@@ -19,6 +19,7 @@ export * from "./components/checkbox";
 export * from "./components/color-picker";
 export * from "./components/combobox";
 export * from "./components/command";
+export * from "./components/copy-button";
 export * from "./calendar";
 export * from "./components/date-picker-popover";
 export * from "./components/destructive-action-confirmation";

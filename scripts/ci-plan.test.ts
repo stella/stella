@@ -7,6 +7,10 @@ import * as v from "valibot";
 
 import { propertyConfig } from "@stll/property-testing";
 
+import queuedJob from "./__fixtures__/ci-cancellation/queued-job.json";
+import supersessionAnnotations from "./__fixtures__/ci-cancellation/supersession.json";
+import timeoutAnnotations from "./__fixtures__/ci-cancellation/timeout.json";
+
 const workflow = readFileSync(
   new URL("../.github/workflows/ci.yml", import.meta.url),
   "utf-8",
@@ -384,20 +388,59 @@ type EvaluateResultOptions = {
   unplannedScopes?: readonly string[];
   /** The pull request's draft state as the API reports it now; unset fails the lookup. */
   liveDraft?: boolean;
+  cancellationEvidence?: "superseded" | "timeout" | "missing" | "wrong-group";
+  apiFailure?: "current-run" | "runs" | "jobs" | "annotations";
+  newerRun?:
+    | "same-group"
+    | "none"
+    | "other-ref"
+    | "other-pr"
+    | "other-workflow"
+    | "other-event"
+    | "older"
+    | "same-time";
+  queuedCancellation?: "with-check" | "without-check";
+  missingJob?: boolean;
+  matrixTimeoutSibling?: boolean;
 };
 
 const PULL_REQUEST = { repo: "stella/stella", number: "7" } as const;
 
-// The step reads the live draft state through `gh`; this stand-in answers
-// only the pull request the run belongs to, and fails like the API when told
-// nothing.
+// Fake only the GitHub endpoints the extracted evaluator actually calls.
 const fakeGhDirectory = mkdtempSync(nodePath.join(tmpdir(), "ci-result-gh-"));
 writeFileSync(
   nodePath.join(fakeGhDirectory, "gh"),
   `#!/usr/bin/env bash
-[[ "$*" == "api repos/${PULL_REQUEST.repo}/pulls/${PULL_REQUEST.number} --jq .draft" ]] || exit 2
-[[ -n "\${FAKE_LIVE_DRAFT:-}" ]] || exit 1
-echo "$FAKE_LIVE_DRAFT"
+set -eu
+[[ "$1" == "api" ]] || exit 2
+shift
+while [[ "$1" == "--paginate" || "$1" == "--slurp" ]]; do shift; done
+endpoint="$1"
+case "$endpoint" in
+  "repos/${PULL_REQUEST.repo}/pulls/${PULL_REQUEST.number}")
+    [[ -n "\${FAKE_LIVE_DRAFT:-}" ]] || exit 1
+    echo "$FAKE_LIVE_DRAFT"
+    ;;
+  "repos/${PULL_REQUEST.repo}/actions/runs/123")
+    [[ "$FAKE_API_FAILURE" != "current-run" ]] || exit 1
+    echo "$FAKE_CURRENT_RUN"
+    ;;
+  "repos/${PULL_REQUEST.repo}/actions/workflows/42/runs?event="*)
+    [[ "$FAKE_API_FAILURE" != "runs" ]] || exit 1
+    echo "$FAKE_RUNS"
+    ;;
+  "repos/${PULL_REQUEST.repo}/actions/runs/123/jobs?filter=latest&per_page=100")
+    [[ "$FAKE_API_FAILURE" != "jobs" ]] || exit 1
+    echo "$FAKE_JOBS"
+    ;;
+  https://api.github.com/repos/${PULL_REQUEST.repo}/check-runs/*/annotations?per_page=100)
+    [[ "$FAKE_API_FAILURE" != "annotations" ]] || exit 1
+    check="\${endpoint%/annotations*}"
+    check="\${check##*/}"
+    jq -e --arg check "$check" '.[$check]' <<< "$FAKE_ANNOTATIONS"
+    ;;
+  *) exit 2 ;;
+esac
 `,
   { mode: 0o755 },
 );
@@ -415,6 +458,12 @@ const evaluateResult = ({
     : SUITE_DEPTH.full,
   unplannedScopes = [],
   liveDraft,
+  cancellationEvidence = "timeout",
+  apiFailure,
+  missingJob = false,
+  matrixTimeoutSibling = false,
+  newerRun = "same-group",
+  queuedCancellation,
 }: EvaluateResultOptions) => {
   const plan = Object.fromEntries(
     Object.values(jobScopes).flatMap((scope) =>
@@ -429,10 +478,100 @@ const evaluateResult = ({
       { result: results[job] ?? "success", outputs: {} },
     ]),
   );
+  const group =
+    "CI Checks-ci-dispatch-refs/heads/ci/result-cancellation-signal-proof";
+  const annotations = {
+    superseded: supersessionAnnotations,
+    timeout: timeoutAnnotations,
+    missing: [],
+    "wrong-group": supersessionAnnotations.map(({ message }) => ({
+      message: message.replace(group, "a different concurrency group"),
+    })),
+  }[cancellationEvidence];
+  const jobs = [];
+  const checkAnnotations: Record<string, unknown> = {};
+  for (const [job, result] of Object.entries(needs)) {
+    if (result.result !== "cancelled") {
+      continue;
+    }
+    const name =
+      v.parse(v.object({ name: v.optional(v.string()) }), ciJobs[job]).name ??
+      job;
+    const checkId: string = String(jobs.length + 10);
+    jobs.push({
+      name:
+        name.replace(/\$\{\{[^}]+\}\}/gu, "fixture") +
+        (job === "ci-tests" ? " (api-1)" : ""),
+      conclusion: "cancelled",
+      check_run_url: `https://api.github.com/repos/${PULL_REQUEST.repo}/check-runs/${checkId}`,
+    });
+    checkAnnotations[checkId] = [annotations];
+  }
+  if (matrixTimeoutSibling) {
+    const checkId = "999";
+    jobs.push({
+      name: "ci-tests (api-2)",
+      conclusion: "cancelled",
+      check_run_url: `https://api.github.com/repos/${PULL_REQUEST.repo}/check-runs/${checkId}`,
+    });
+    checkAnnotations[checkId] = [timeoutAnnotations];
+  }
+  if (queuedCancellation !== undefined) {
+    const checkId = queuedJob.check_run_url.split("/").at(-1);
+    if (checkId === undefined) {
+      throw new TypeError("Recorded queued job has no check run ID");
+    }
+    jobs.push({
+      name: queuedJob.name,
+      conclusion: queuedJob.conclusion,
+      check_run_url:
+        queuedCancellation === "with-check" ? queuedJob.check_run_url : null,
+    });
+    checkAnnotations[checkId] = queuedJob.annotations;
+  }
+  const currentRun = {
+    id: 123,
+    name: "CI Checks",
+    workflow_id: 42,
+    run_number: 100,
+    created_at: "2026-10-01T17:42:59Z",
+    head_branch: "ci/result-job-annotation-proof",
+    event,
+    pull_requests:
+      event === EVENT.pullRequest
+        ? [{ number: Number(PULL_REQUEST.number) }]
+        : [],
+  };
+  let createdAt = "2026-10-01T17:43:00Z";
+  if (newerRun === "older") {
+    createdAt = "2026-10-01T17:42:58Z";
+  } else if (newerRun === "same-time") {
+    createdAt = currentRun.created_at;
+  }
+  const successor = {
+    ...currentRun,
+    id: newerRun === "older" ? 122 : 124,
+    workflow_id: newerRun === "other-workflow" ? 43 : 42,
+    run_number: newerRun === "older" ? 99 : 101,
+    created_at: createdAt,
+    head_branch:
+      newerRun === "other-ref" ? "other-branch" : currentRun.head_branch,
+    event: newerRun === "other-event" ? "push" : event,
+    pull_requests:
+      newerRun === "other-pr" ? [{ number: 8 }] : currentRun.pull_requests,
+  };
   const run = Bun.spawnSync({
     cmd: ["bash", "-eu", "-c", resultStep.run],
     env: {
       EVENT: event,
+      GITHUB_RUN_ID: "123",
+      FAKE_API_FAILURE: apiFailure ?? "",
+      FAKE_CURRENT_RUN: JSON.stringify(currentRun),
+      FAKE_RUNS: JSON.stringify([
+        { workflow_runs: newerRun === "none" ? [] : [successor] },
+      ]),
+      FAKE_JOBS: JSON.stringify([{ jobs: missingJob ? [] : jobs }]),
+      FAKE_ANNOTATIONS: JSON.stringify(checkAnnotations),
       FAKE_LIVE_DRAFT: liveDraft === undefined ? "" : String(liveDraft),
       JOB_SCOPES: resultStep.env["JOB_SCOPES"] ?? "",
       NEEDS: JSON.stringify(needs),
@@ -579,6 +718,140 @@ test("a full-depth run passes jobs whose scope was not planned only when skipped
 // dispatched with. Both can be superseded by a newer run.
 const FAST_DEPTH_EVENTS = [EVENT.pullRequest, EVENT.workflowDispatch] as const;
 
+test.each(resultJob.needs)(
+  "cancelled %s passes only with a newer run in the same group and no timeout",
+  (job) => {
+    for (const event of FAST_DEPTH_EVENTS) {
+      for (const cancellationEvidence of [
+        "superseded",
+        "timeout",
+        "missing",
+        "wrong-group",
+      ] as const) {
+        expect(
+          evaluateResult({
+            event,
+            results: { [job]: "cancelled" },
+            suiteDepth: SUITE_DEPTH.fast,
+            cancellationEvidence,
+          }),
+          `${job} ${event} ${cancellationEvidence}`,
+        ).toBe(cancellationEvidence === "timeout" ? 1 : 0);
+      }
+    }
+  },
+);
+
+test("cancelled dependencies fail closed on API errors, missing jobs and mixed matrix causes", () => {
+  const cancelled = {
+    event: EVENT.pullRequest,
+    results: { "ci-tests": "cancelled" },
+    cancellationEvidence: "superseded",
+  } as const;
+  for (const apiFailure of [
+    "current-run",
+    "runs",
+    "jobs",
+    "annotations",
+  ] as const) {
+    expect(evaluateResult({ ...cancelled, apiFailure })).toBe(1);
+  }
+  expect(evaluateResult({ ...cancelled, missingJob: true })).toBe(1);
+  expect(evaluateResult({ ...cancelled, matrixTimeoutSibling: true })).toBe(1);
+});
+
+test("supersession needs a newer run of the same workflow and concurrency group", () => {
+  for (const event of FAST_DEPTH_EVENTS) {
+    for (const newerRun of [
+      "none",
+      "other-workflow",
+      "other-event",
+      "older",
+    ] as const) {
+      expect(
+        evaluateResult({
+          event,
+          suiteDepth: SUITE_DEPTH.fast,
+          results: { "ci-tests": "cancelled" },
+          cancellationEvidence: "missing",
+          newerRun,
+        }),
+      ).toBe(1);
+    }
+    const otherGroup = event === EVENT.pullRequest ? "other-pr" : "other-ref";
+    expect(
+      evaluateResult({
+        event,
+        suiteDepth: SUITE_DEPTH.fast,
+        results: { "ci-tests": "cancelled" },
+        newerRun: otherGroup,
+      }),
+    ).toBe(1);
+    expect(
+      evaluateResult({
+        event,
+        suiteDepth: SUITE_DEPTH.fast,
+        results: { "ci-tests": "cancelled" },
+        cancellationEvidence: "missing",
+        newerRun: "same-time",
+      }),
+    ).toBe(0);
+  }
+});
+
+test("queued cancelled jobs need no annotations or check run when supersession is proved", () => {
+  expect(queuedJob.steps).toHaveLength(0);
+  expect(queuedJob.annotations.flat()).toHaveLength(0);
+  for (const queuedCancellation of ["with-check", "without-check"] as const) {
+    expect(
+      evaluateResult({
+        event: EVENT.workflowDispatch,
+        suiteDepth: SUITE_DEPTH.fast,
+        results: { "e2e-production-shard": "cancelled" },
+        cancellationEvidence: "missing",
+        queuedCancellation,
+      }),
+    ).toBe(0);
+    expect(
+      evaluateResult({
+        event: EVENT.workflowDispatch,
+        suiteDepth: SUITE_DEPTH.fast,
+        results: { "e2e-production-shard": "cancelled" },
+        cancellationEvidence: "missing",
+        queuedCancellation,
+        newerRun: "none",
+      }),
+    ).toBe(1);
+    expect(
+      evaluateResult({
+        event: EVENT.workflowDispatch,
+        suiteDepth: SUITE_DEPTH.fast,
+        results: {
+          "ci-tests": "cancelled",
+          "e2e-production-shard": "cancelled",
+        },
+        queuedCancellation,
+        matrixTimeoutSibling: true,
+      }),
+    ).toBe(1);
+  }
+});
+
+test("a failed dependency stays red beside a cancelled sibling even during supersession", () => {
+  for (const event of FAST_DEPTH_EVENTS) {
+    for (const cancellationEvidence of ["timeout", "superseded"] as const) {
+      expect(
+        evaluateResult({
+          event,
+          results: { "ci-tests": "cancelled", "code-quality-api": "failure" },
+          suiteDepth: SUITE_DEPTH.fast,
+          cancellationEvidence,
+        }),
+      ).toBe(1);
+    }
+  }
+});
+
 test("only a pull request or a manual run skips heavy suites or passes a superseded run", () => {
   expect(heavyJobs.length).toBeGreaterThan(0);
   const skippedHeavy = Object.fromEntries(
@@ -595,6 +868,7 @@ test("only a pull request or a manual run skips heavy suites or passes a superse
         event,
         results: { "ci-tests": "cancelled" },
         suiteDepth: fast,
+        cancellationEvidence: "superseded",
       }),
       event,
     ).toBe(0);
@@ -602,7 +876,7 @@ test("only a pull request or a manual run skips heavy suites or passes a superse
     expect(
       evaluateResult({
         event,
-        results: { "ci-tests": "cancelled", "code-quality": "failure" },
+        results: { "ci-tests": "cancelled", "code-quality-api": "failure" },
         suiteDepth: fast,
       }),
       event,
@@ -612,6 +886,7 @@ test("only a pull request or a manual run skips heavy suites or passes a superse
         event,
         results: { "ci-plan": "cancelled" },
         suiteDepth: fast,
+        cancellationEvidence: "superseded",
       }),
       event,
     ).toBe(0);
@@ -665,7 +940,12 @@ test("a skipped plan passes only while the pull request is still a draft", () =>
     resultJob.needs.map((job) => [job, "cancelled"]),
   );
   expect(
-    evaluateResult({ event, results: cancelledReadyRun, liveDraft: false }),
+    evaluateResult({
+      event,
+      results: cancelledReadyRun,
+      liveDraft: false,
+      cancellationEvidence: "superseded",
+    }),
   ).toBe(0);
   expect(
     evaluateResult({
@@ -715,7 +995,11 @@ test("a fast-depth run requires every selected fast-required job to run", () => 
       1,
     );
     expect(
-      evaluateResult({ event, results: { [job]: "cancelled" } }),
+      evaluateResult({
+        event,
+        results: { [job]: "cancelled" },
+        cancellationEvidence: "superseded",
+      }),
       job,
     ).toBe(0);
     if (typeof scope === "string") {
@@ -754,6 +1038,7 @@ const jobSteps = (job: unknown) =>
         v.object({
           name: v.optional(v.string()),
           run: v.optional(v.string()),
+          if: v.optional(v.string()),
         }),
       ),
     }),
@@ -856,7 +1141,7 @@ test("ci-checks gates each generated-output guard on its planned scope", () => {
         v.object({ name: v.optional(v.string()), if: v.optional(v.string()) }),
       ),
     }),
-    ciJobs["ci-checks"],
+    ciJobs["ci-checks-generated"],
   ).steps;
   for (const [name, scope] of [
     ["Web API types drift guard", "web_api_types_required"],
@@ -1078,6 +1363,166 @@ test("manual full-depth runs leave the merge-group-only exact-base job unplanned
   } finally {
     rmSync(directory, { force: true, recursive: true });
   }
+});
+
+test("every parallel quality and guard leg fails closed at full depth", () => {
+  for (const job of [
+    "code-quality-api",
+    "code-quality-web",
+    "code-quality-rest",
+    "ci-checks-generated",
+    "ci-checks-policy",
+    "ci-checks-rest",
+  ]) {
+    expect(resultJob.needs).toContain(job);
+    expect(jobScopes[job]).toBe(
+      job.startsWith("code-quality-") ? "package_checks_required" : null,
+    );
+    for (const event of FULL_DEPTH_EVENTS) {
+      for (const result of ["failure", "cancelled", "skipped", ""]) {
+        expect(
+          evaluateResult({
+            event,
+            suiteDepth: SUITE_DEPTH.full,
+            results: { [job]: result },
+          }),
+          `${event} ${job} ${result}`,
+        ).toBe(1);
+      }
+    }
+  }
+});
+
+test("folded service suites preserve both scopes and independent verdicts", () => {
+  const plan = v.parse(
+    v.object({ outputs: v.record(v.string(), v.string()) }),
+    ciJobs["ci-plan"],
+  );
+  expect(plan.outputs["service_suites_required"]).toBe(
+    `\${{ steps.changed-files.outputs.package_checks_required == 'true' || steps.changed-files.outputs.collab_redis_required == 'true' }}`,
+  );
+  expect(jobScopes["service-suites"]).toBe("service_suites_required");
+  expect(ciJobs).not.toHaveProperty("collab-redis");
+  const services = v.parse(
+    v.object({
+      services: v.record(v.string(), v.object({ ports: v.array(v.string()) })),
+      steps: v.array(
+        v.object({
+          name: v.string(),
+          if: v.optional(v.string()),
+          run: v.optional(v.string()),
+          env: v.optional(v.record(v.string(), v.string())),
+        }),
+      ),
+    }),
+    ciJobs["service-suites"],
+  );
+  const suites = services.steps.filter(
+    ({ run }) => run?.includes("test:") || run?.includes(" test "),
+  );
+  expect(suites.map(({ name }) => name)).toEqual([
+    "Run Postgres-gated API suites",
+    "Run corpus engine suites",
+    "Run Valkey-gated API suites",
+    "Run cross-replica collaboration suite",
+  ]);
+  for (const suite of suites) {
+    const scope = suite.run?.includes("@stll/collab")
+      ? "collab_redis_required"
+      : "package_checks_required";
+    const predicate = `needs.ci-plan.outputs.${scope} == 'true'`;
+    expect(suite.if).toBe(
+      suite.run === "bun run test:postgres"
+        ? predicate
+        : `\${{ !cancelled() && ${predicate} }}`,
+    );
+  }
+  const collab = suites.find(({ run }) => run?.includes("@stll/collab"));
+  const valkey = suites.find(({ run }) => run === "bun run test:valkey");
+  expect(collab?.env?.["STELLA_COLLAB_TEST_REDIS_CONTAINER_ID"]).toBe(
+    `\${{ job.services.redis.id }}`,
+  );
+  const collabPort = new URL(
+    collab?.env?.["STELLA_COLLAB_TEST_REDIS_URL"] ?? "",
+  ).port;
+  const valkeyPort = new URL(valkey?.env?.["REDIS_URL"] ?? "").port;
+  expect(collabPort).not.toBe(valkeyPort);
+  expect(services.services["redis"]?.ports).toEqual([`${collabPort}:6379`]);
+  expect(services.services["valkey"]?.ports).toEqual([`${valkeyPort}:6379`]);
+  for (const event of FULL_DEPTH_EVENTS) {
+    for (const result of ["failure", "cancelled", "skipped"]) {
+      expect(
+        evaluateResult({ event, results: { "service-suites": result } }),
+      ).toBe(1);
+    }
+    expect(
+      evaluateResult({
+        event,
+        results: { "service-suites": "skipped" },
+        unplannedScopes: ["service_suites_required"],
+      }),
+    ).toBe(0);
+  }
+});
+
+test("Bun cache saves are main-only and queue Turbo caches remain readable", () => {
+  const configured = v.parse(
+    v.object({ env: v.record(v.string(), v.string()) }),
+    Bun.YAML.parse(workflow),
+  );
+  expect(configured.env["TURBO_CACHE"]).toBe(
+    `\${{ github.event_name == 'merge_group' && 'local:rw,remote:r' || 'local:rw,remote:rw' }}`,
+  );
+  const cacheSteps = Object.values(ciJobs)
+    .flatMap(
+      (job) =>
+        v.parse(
+          v.object({
+            steps: v.optional(
+              v.array(
+                v.object({
+                  uses: v.optional(v.string()),
+                  with: v.optional(v.record(v.string(), v.unknown())),
+                }),
+              ),
+              [],
+            ),
+          }),
+          job,
+        ).steps,
+    )
+    .filter(({ uses }) =>
+      uses?.startsWith("stella/.github/actions/setup-bun-cached@"),
+    );
+  expect(cacheSteps.length).toBeGreaterThan(0);
+  for (const step of cacheSteps) {
+    expect(step.with?.["save"]).toBe(`\${{ github.ref == 'refs/heads/main' }}`);
+  }
+});
+
+test("property-testing guards run only when dependencies are installed", () => {
+  let guardCount = 0;
+  for (const job of [
+    "ci-checks-generated",
+    "ci-checks-policy",
+    "ci-checks-rest",
+  ]) {
+    const steps = jobSteps(ciJobs[job]);
+    const installCondition = steps.find(
+      ({ name }) => name === "Install dependencies",
+    )?.if;
+    const guards = steps.filter(({ run }) =>
+      run?.includes("bun test packages/property-testing/"),
+    );
+    guardCount += guards.length;
+    if (guards.length > 0) {
+      expect(installCondition, job).toBeDefined();
+    }
+    for (const guard of guards) {
+      expect(guard.if, `${job}: ${String(guard.name)}`).toBe(installCondition);
+    }
+  }
+  expect(guardCount).toBeGreaterThan(0);
 });
 
 test("every browser suite belongs to exactly one required matrix leg", () => {

@@ -132,11 +132,26 @@ describe("API deployment health receipt", () => {
     expect(apiBuildStart).toBeGreaterThan(healthJobStart);
     expect(webBuildStart).toBeGreaterThan(apiBuildStart);
     expect(promoteStart).toBeGreaterThan(webBuildStart);
-    expect(promoteJob).toContain("/etc/apt/sources.list.d/google-chrome.list");
-    expect(promoteJob).toContain("Disable runner Chrome apt source");
-    expect(promoteJob.indexOf("Disable runner Chrome apt source")).toBeLessThan(
-      promoteJob.indexOf("Install Playwright browser"),
+    const imageSetupStart = promoteJob.indexOf(
+      "      - name: Verify image-provided Chromium",
     );
+    const browserSmokeStart = promoteJob.indexOf(
+      "      - name: Run staging web smoke",
+    );
+    expect(imageSetupStart).toBeGreaterThanOrEqual(0);
+    expect(browserSmokeStart).toBeGreaterThan(imageSetupStart);
+    const imageSetup = promoteJob.slice(imageSetupStart, browserSmokeStart);
+    expect(imageSetup).toContain(
+      "if: steps.current.outputs.promoted == 'true'",
+    );
+    expect(imageSetup).toContain("uses: ./.github/actions/setup-playwright");
+    expect(promoteJob).toContain(
+      'run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:staging',
+    );
+    expect(promoteJob).not.toContain(
+      "/etc/apt/sources.list.d/google-chrome.list",
+    );
+    expect(promoteJob).not.toContain("playwright install");
     // The gate only reads: it decides whether to promote, never promotes.
     // Both delimiters are asserted so a missing block cannot slice to "" and
     // satisfy the write check by being empty.
