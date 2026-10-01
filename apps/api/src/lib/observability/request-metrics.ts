@@ -299,7 +299,7 @@ export const ANONYMIZATION_REFUSAL_REASONS = [
   // The anonymizer itself failed.
   "pipeline_error",
   // Anonymizing would change a value that must cross unchanged (a name, an
-  // id, a URL).
+  // id, a URL), or the field structure it was given did not survive it.
   "field_boundary",
   // Content the anonymizer cannot read or prepare.
   "unsupported_content",
