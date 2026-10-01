@@ -1,6 +1,8 @@
 import { PGlite } from "@electric-sql/pglite";
 import { Result } from "better-result";
-import { expect, test } from "bun:test";
+import { beforeAll, expect, test } from "bun:test";
+
+import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 const expectRejected = async (operation: Promise<unknown>, message: RegExp) => {
   const outcome = await Result.tryPromise(async () => await operation);
@@ -12,7 +14,7 @@ const expectRejected = async (operation: Promise<unknown>, message: RegExp) => {
   }
 };
 
-const createDatabase = async () => {
+const buildDatabase = async () => {
   const db = await PGlite.create();
   await db.exec(`
     CREATE ROLE stella;
@@ -44,6 +46,15 @@ const createDatabase = async () => {
   );
   return db;
 };
+
+let migratedSnapshot: Blob;
+
+beforeAll(async () => {
+  await using template = await buildDatabase();
+  migratedSnapshot = await template.dumpDataDir();
+});
+
+const createDatabase = async () => await createTestPglite(migratedSnapshot);
 
 const insertTimer = async (
   db: PGlite,
