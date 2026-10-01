@@ -63,7 +63,7 @@
     "files": {}
   },
   "direct-root-connection-imports": {
-    "count": 57,
+    "count": 56,
     "files": {
       "apps/api/scripts/apply-search-migration.ts": 1,
       "apps/api/src/agent-auth/id-jag.ts": 1,
@@ -102,7 +102,6 @@
       "apps/api/src/lib/machine-api-key-queries.ts": 1,
       "apps/api/src/lib/notifications.ts": 1,
       "apps/api/src/lib/oauth-connections.ts": 1,
-      "apps/api/src/lib/operator-read-db.ts": 1,
       "apps/api/src/lib/public-law-read-db.ts": 1,
       "apps/api/src/lib/root-scoped-db.ts": 1,
       "apps/api/src/lib/scheduler/jobs.ts": 1,
@@ -1711,6 +1710,7 @@
       "apps/api/src/lib/api-handlers.ts": 1,
       "apps/api/src/lib/api-key-plugin-configs.ts": 1,
       "apps/api/src/lib/array.ts": 1,
+      "apps/api/src/lib/audit-log-details.ts": 1,
       "apps/api/src/lib/audit-log.constants.ts": 1,
       "apps/api/src/lib/audit-log.ts": 1,
       "apps/api/src/lib/audited-download.ts": 1,
@@ -1869,7 +1869,6 @@
       "apps/api/src/lib/ocr-local": 1,
       "apps/api/src/lib/ocr-searchable-pdf-worker.ts": 1,
       "apps/api/src/lib/ocr-searchable-pdf.ts": 1,
-      "apps/api/src/lib/operator-read-db.ts": 1,
       "apps/api/src/lib/optimistic-concurrency.ts": 1,
       "apps/api/src/lib/organization-lifecycle-hooks.ts": 1,
       "apps/api/src/lib/organization-storage-teardown.ts": 1,

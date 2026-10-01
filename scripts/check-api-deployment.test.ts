@@ -57,39 +57,59 @@ describe("API deployment health receipt", () => {
   });
 
   test("staging checks share their access configuration", async () => {
-    const workflow = await Bun.file(
-      new URL("../.github/workflows/deploy-staging.yml", import.meta.url),
-    ).text();
-    const parsed = v.parse(
-      v.object({
-        jobs: v.record(
-          v.string(),
-          v.object({
-            steps: v.array(
+    const workflowSchema = v.object({
+      jobs: v.record(
+        v.string(),
+        v.object({
+          steps: v.optional(
+            v.array(
               v.object({
                 run: v.optional(v.string()),
-                env: v.optional(v.record(v.string(), v.string())),
+                env: v.optional(v.record(v.string(), v.unknown())),
               }),
             ),
-          }),
-        ),
-      }),
-      Bun.YAML.parse(workflow),
-    );
-    const consumers = Object.values(parsed.jobs)
-      .flatMap(({ steps }) => steps)
-      .filter(
-        ({ run }) =>
-          run?.includes("$STAGING_HEALTH_URL") ||
-          run?.includes("test:e2e:staging") ||
-          run?.includes("apps/api/src/scripts/post-deploy-smoke.ts"),
+          ),
+        }),
+      ),
+    });
+    // Steps that reach staging through the viewer lock, found by what they
+    // run, so a step that drops its access entries is still checked.
+    const stagingTargets = [
+      "$STAGING_HEALTH_URL",
+      "test:e2e:staging",
+      "apps/api/src/scripts/post-deploy-smoke.ts",
+      "apps/api/src/scripts/post-deploy-response-policy.ts",
+    ];
+    const workflowsDir = new URL("../.github/workflows/", import.meta.url);
+    const consumers: { run: string; env: Record<string, unknown> }[] = [];
+    for await (const file of new Bun.Glob("*.yml").scan(
+      workflowsDir.pathname,
+    )) {
+      const parsed = v.parse(
+        workflowSchema,
+        Bun.YAML.parse(await Bun.file(new URL(file, workflowsDir)).text()),
       );
+      for (const { steps } of Object.values(parsed.jobs)) {
+        for (const { run = "", env = {} } of steps ?? []) {
+          if (
+            stagingTargets.some((target) => run.includes(target)) ||
+            Object.keys(env).some((key) => key.endsWith("EDGE_HEADER_VALUE"))
+          ) {
+            consumers.push({ run, env });
+          }
+        }
+      }
+    }
 
-    expect(consumers.length).toBeGreaterThan(0);
+    // Every target is still found, so a renamed script cannot drop out.
+    for (const target of stagingTargets) {
+      expect(consumers.some(({ run }) => run.includes(target))).toBe(true);
+    }
+    // One source for the staging access value, so rotating it is one change.
     for (const { run, env } of consumers) {
-      const prefix = run?.includes("$STAGING_HEALTH_URL") ? "" : "E2E_";
-      expect(env?.[`${prefix}EDGE_HEADER_NAME`]).toBe("x-stella-edge-token");
-      expect(env?.[`${prefix}EDGE_HEADER_VALUE`]).toBe(
+      const prefix = run.includes("$STAGING_HEALTH_URL") ? "" : "E2E_";
+      expect(env[`${prefix}EDGE_HEADER_NAME`]).toBe("x-stella-edge-token");
+      expect(env[`${prefix}EDGE_HEADER_VALUE`]).toBe(
         `\${{ secrets.STAGING_VIEWER_ACCESS_TOKEN }}`,
       );
     }

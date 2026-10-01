@@ -2,13 +2,19 @@ import { buildCommand } from "@stricli/core";
 import type { Command } from "@stricli/core";
 import { Result } from "better-result";
 
+import { actionAdmissionRefusalOutput } from "../action-admission-refusal.js";
 import type { Context } from "../context.js";
 import { formatCapabilityCommand } from "../generate-capability-tree.js";
-import { EXIT_CODES } from "../mcp-constants.js";
+import { EXIT_CODES, resolveMcpErrorCodeExit } from "../mcp-constants.js";
 import { buildCommonFlags, type CommonFlagValues } from "../output-flags.js";
-import { buildRenderPlan, renderResult, terminalWidth } from "../output.js";
 import {
-  mapClientErrorExit,
+  buildRenderPlan,
+  renderResult,
+  terminalWidth,
+  type OutputFormat,
+} from "../output.js";
+import {
+  renderClientError,
   readOutputFormat,
   renderToolError,
   reservedFlagUsageError,
@@ -68,18 +74,32 @@ type UploadFlags = CommonFlagValues & {
 const renderNestedFailure = ({
   context,
   failure,
+  format,
 }: {
   context: Context;
+  format: OutputFormat;
   failure: Exclude<UploadFailure, { type: "finalize" }>;
 }): void => {
   const writers = writersFor(context);
   if (failure.type === "client") {
-    writers.stderr(`${failure.error.message}\n`);
-    setExit(context, mapClientErrorExit(failure.error));
+    renderClientError({ context, error: failure.error, writers, format });
     return;
   }
   if (failure.type === "tool") {
-    renderToolError({ context, result: failure.result, writers });
+    renderToolError({ context, result: failure.result, writers, format });
+    return;
+  }
+  if (failure.type === "put" && failure.admission !== undefined) {
+    writers.stderr(
+      actionAdmissionRefusalOutput({ refusal: failure.admission, format }),
+    );
+    if (failure.cleanupWarning !== undefined) {
+      writers.stderr(`warning: ${failure.cleanupWarning}\n`);
+    }
+    setExit(
+      context,
+      resolveMcpErrorCodeExit(failure.admission.code) ?? EXIT_CODES.server,
+    );
     return;
   }
   writers.stderr(`${failure.message}\n`);
@@ -251,10 +271,18 @@ export const uploadCommand: Command<Context> = buildCommand<
     }
 
     if (uploaded.error.type !== "finalize") {
-      renderNestedFailure({ context: this, failure: uploaded.error });
+      renderNestedFailure({
+        context: this,
+        failure: uploaded.error,
+        format: readOutputFormat(flags, this),
+      });
       return;
     }
-    renderNestedFailure({ context: this, failure: uploaded.error.failure });
+    renderNestedFailure({
+      context: this,
+      failure: uploaded.error.failure,
+      format: readOutputFormat(flags, this),
+    });
     writers.stderr(
       `hint: retry finalization with '${formatCapabilityCommand("uploads.update")} --matter-id ${flags.matterId} --upload-id ${uploaded.error.uploadId}'\n`,
     );

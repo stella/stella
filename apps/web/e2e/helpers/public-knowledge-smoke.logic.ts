@@ -1,6 +1,7 @@
 import { Window } from "happy-dom";
 
 import { PUBLIC_KNOWLEDGE_META } from "../../src/routes/-root-head";
+import { stagingCheckDisposition, type StagingState } from "./staging-state";
 
 const normalizeMountedApiPath = (pathname: string): string =>
   pathname.replace(/^\/api(?=\/(?:v1|auth)(?:\/|$))/u, "");
@@ -50,4 +51,28 @@ export const classifyPublicKnowledgeWebProbe = (
     state = "enabled";
   }
   return state;
+};
+
+type PublicKnowledgeVisitorSkipOptions = {
+  apiEnabled: boolean;
+  webEnabled: boolean;
+  state: StagingState;
+};
+
+export const publicKnowledgeVisitorSkipReason = ({
+  apiEnabled,
+  webEnabled,
+  state,
+}: PublicKnowledgeVisitorSkipOptions): string | undefined => {
+  if (!apiEnabled && !webEnabled) {
+    return "Public Knowledge is disabled on API and web";
+  }
+  if (webEnabled) {
+    return undefined;
+  }
+  const disposition = stagingCheckDisposition(state, "public-knowledge-flags");
+  if (disposition.mode === "gating") {
+    return undefined;
+  }
+  return `Public Knowledge web routes unavailable: declared ${disposition.reason}`;
 };
