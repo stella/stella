@@ -10,8 +10,10 @@ import {
   withActionAdmission,
   reserveQueuedKickoffPeriod,
 } from "./action-admission";
-import type { ConcurrencyOnlyActionKind } from "./action-kinds";
-import type { QUEUED_ACTION_KIND } from "./action-kinds";
+import type {
+  ConcurrencyOnlyActionKind,
+  QUEUED_ACTION_KIND,
+} from "./action-kinds";
 
 // BullMQ delays do not consume the job's failure attempts. A busy pool never hot-loops.
 const MIN_ADMISSION_RETRY_MS = 1000;
