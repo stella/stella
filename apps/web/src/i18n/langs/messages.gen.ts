@@ -2138,6 +2138,13 @@ type Messages = {
     "unnamedAttachment": "Unnamed attachment";
   };
   "errors": {
+    "actionAdmission": {
+      "admissionUnavailable": "This action is temporarily paused. Please try again shortly.";
+      "concurrencyBusy": "Other work is in progress. Please try again shortly.";
+      "contact": "Contact us";
+      "notEnabled": "This action is not enabled for your organization.";
+      "periodExhausted": "This action is paused for your organization.";
+    };
     "actionFailed": "Action failed";
     "api": {
       "badRequest": "The request could not be completed.";

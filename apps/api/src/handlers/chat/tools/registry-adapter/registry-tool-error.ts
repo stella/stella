@@ -1,3 +1,5 @@
+import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
+
 import type { ChatToolErrorKind } from "@/api/lib/errors/tagged-errors";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import type { McpErrorCode } from "@/api/mcp/error-codes";
@@ -11,6 +13,10 @@ const MCP_CODE_TO_CHAT_KIND = {
   confirmation_required: "invalid-input",
   permission_denied: "unavailable",
   usage_limited: "limit",
+  [ACTION_ADMISSION_CODES.periodExhausted]: "limit",
+  [ACTION_ADMISSION_CODES.notEnabled]: "unavailable",
+  [ACTION_ADMISSION_CODES.concurrencyBusy]: "transient",
+  [ACTION_ADMISSION_CODES.admissionUnavailable]: "transient",
   // A 409 needs a different action (refetch state, rename, regenerate), which
   // is the model correcting its input, not a defect or a bare retry.
   conflict: "invalid-input",

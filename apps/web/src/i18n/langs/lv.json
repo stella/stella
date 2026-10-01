@@ -2135,6 +2135,13 @@
     "unnamedAttachment": "Pielikums bez nosaukuma"
   },
   "errors": {
+    "actionAdmission": {
+      "admissionUnavailable": "Šī darbība ir īslaicīgi apturēta. Lūdzu, drīzumā mēģiniet vēlreiz.",
+      "concurrencyBusy": "Notiek citas darbības. Lūdzu, drīzumā mēģiniet vēlreiz.",
+      "contact": "Sazinieties ar mums",
+      "notEnabled": "Šī darbība jūsu organizācijai nav iespējota.",
+      "periodExhausted": "Šī darbība jūsu organizācijai ir apturēta."
+    },
     "actionFailed": "Darbība neizdevās",
     "api": {
       "badRequest": "Pieprasījumu neizdevās pabeigt.",
