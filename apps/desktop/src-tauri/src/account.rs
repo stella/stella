@@ -249,6 +249,7 @@ pub async fn link(
   state: &AccountState,
   request: LinkAccountRequest,
   web_origin: &str,
+  expected_identity: &DesktopAccountIdentity,
 ) -> Result<LinkOutcome, String> {
   let pending = LinkedAccount::from_request(request, web_origin)?;
   // Do not publish a profile for a credential the API has not accepted.
@@ -266,6 +267,11 @@ pub async fn link(
   )
   .await?;
   let account = pending.with_server_account(&config)?;
+  if account.identity.user_id != expected_identity.user_id
+    || account.identity.organization_id != expected_identity.organization_id
+  {
+    return Err("Desktop account connection does not match".into());
+  }
   store.save(account).await?;
   Ok(LinkOutcome::Linked)
 }
@@ -336,9 +342,497 @@ pub async fn account_disconnect(
   Ok(())
 }
 
+const LINK_APPROVAL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
+const BRIDGE_PROOF_WINDOW_SECONDS: i64 = 30;
+
+struct BrowserConnection {
+  correlation_id: String,
+  api_base_url: String,
+  web_origin: String,
+  port_secret: String,
+  expires_at: std::time::Instant,
+  redemption: LinkRedemption,
+}
+
+enum LinkRedemption {
+  Waiting { verifier: String },
+  Redeeming,
+  Connected { identity: DesktopAccountIdentity },
+  Failed,
+}
+
+static BROWSER_CONNECTION: std::sync::Mutex<Option<BrowserConnection>> =
+  std::sync::Mutex::new(None);
+
+fn random_secret() -> Result<String, String> {
+  use ring::rand::SecureRandom;
+  let mut bytes = [0_u8; 32];
+  ring::rand::SystemRandom::new()
+    .fill(&mut bytes)
+    .map_err(|_| "Could not start desktop connection".to_string())?;
+  Ok(hex::encode(bytes))
+}
+
+fn new_browser_connection(
+  api_base_url: &str,
+  web_origin: &str,
+) -> Result<(BrowserConnection, String), String> {
+  use sha2::{Digest, Sha256};
+  let api_base_url = crate::config::normalize_self_host_api_base_url(api_base_url)?;
+  let web_origin = crate::config::normalize_self_host_web_origin(web_origin)?;
+  let verifier = random_secret()?;
+  let port_secret = random_secret()?;
+  let correlation_id = uuid::Uuid::new_v4().to_string();
+  let verifier_hash = hex::encode(Sha256::digest(verifier.as_bytes()));
+  let mut url = reqwest::Url::parse(&format!("{web_origin}/settings/account/desktop"))
+    .map_err(|_| "Could not start desktop connection".to_string())?;
+  let params = reqwest::Url::parse_with_params(
+    "https://localhost",
+    [
+      ("correlationId", correlation_id.as_str()),
+      ("verifierHash", verifier_hash.as_str()),
+      ("portSecret", port_secret.as_str()),
+    ],
+  )
+  .map_err(|_| "Could not start desktop connection".to_string())?;
+  url.set_fragment(Some(&format!(
+    "desktop-account?{}",
+    params.query().unwrap_or_default()
+  )));
+  Ok((
+    BrowserConnection {
+      correlation_id,
+      api_base_url,
+      web_origin,
+      port_secret,
+      expires_at: std::time::Instant::now() + LINK_APPROVAL_TIMEOUT,
+      redemption: LinkRedemption::Waiting { verifier },
+    },
+    url.to_string(),
+  ))
+}
+
+fn begin_browser_connection(
+  api_base_url: &str,
+  web_origin: &str,
+) -> Result<String, String> {
+  let (connection, url) = new_browser_connection(api_base_url, web_origin)?;
+  let mut pending = BROWSER_CONNECTION
+    .lock()
+    .map_err(|_| "Desktop connection is unavailable")?;
+  *pending = Some(connection);
+  Ok(url)
+}
+
+pub fn open_browser_connection(
+  app: &tauri::AppHandle,
+  api_base_url: &str,
+  web_origin: &str,
+) -> Result<(), String> {
+  use tauri_plugin_opener::OpenerExt;
+  let url = begin_browser_connection(api_base_url, web_origin)?;
+  app
+    .opener()
+    .open_url(url, None::<&str>)
+    .map_err(|_| "Could not open desktop connection".into())
+}
+
+fn valid_bridge_proof(
+  connection: &BrowserConnection,
+  timestamp: &str,
+  proof: &str,
+  method: &str,
+  uri: &str,
+  now: i64,
+) -> bool {
+  let Ok(seconds) = timestamp.parse::<i64>() else {
+    return false;
+  };
+  if now.abs_diff(seconds) > BRIDGE_PROOF_WINDOW_SECONDS.unsigned_abs() {
+    return false;
+  }
+  let Ok(signature) = hex::decode(proof) else {
+    return false;
+  };
+  let key =
+    ring::hmac::Key::new(ring::hmac::HMAC_SHA256, connection.port_secret.as_bytes());
+  ring::hmac::verify(
+    &key,
+    format!("{timestamp}\n{method}\n{uri}").as_bytes(),
+    &signature,
+  )
+  .is_ok()
+}
+
+pub fn authorize_bridge_request(
+  origin: Option<&str>,
+  timestamp: Option<&str>,
+  proof: Option<&str>,
+  method: &str,
+  uri: &str,
+) -> bool {
+  let (Some(origin), Some(timestamp), Some(proof)) = (origin, timestamp, proof) else {
+    return false;
+  };
+  let Ok(pending) = BROWSER_CONNECTION.lock() else {
+    return false;
+  };
+  let Some(connection) = pending.as_ref() else {
+    return false;
+  };
+  connection.web_origin == origin
+    && std::time::Instant::now() < connection.expires_at
+    && method == "GET"
+    && valid_bridge_proof(
+      connection,
+      timestamp,
+      proof,
+      method,
+      uri,
+      chrono::Utc::now().timestamp(),
+    )
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RedeemLinkRequest<'a> {
+  correlation_id: &'a str,
+  verifier: &'a str,
+  expected_user_id: &'a str,
+  expected_organization_id: &'a str,
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "status", rename_all = "camelCase", deny_unknown_fields)]
+enum RedeemedLink {
+  Connected {
+    identity: DesktopAccountIdentity,
+  },
+  Credential {
+    account: LinkedAccountSnapshot,
+    key: String,
+    #[serde(rename = "expiresAt")]
+    expires_at: String,
+  },
+}
+
+pub async fn browser_connection_status(
+  state: &AccountState,
+  correlation_id: &str,
+) -> &'static str {
+  let expected = {
+    let Ok(pending) = BROWSER_CONNECTION.lock() else {
+      return "failed";
+    };
+    let Some(connection) = pending.as_ref() else {
+      return "failed";
+    };
+    if connection.correlation_id != correlation_id
+      || std::time::Instant::now() >= connection.expires_at
+    {
+      return "failed";
+    }
+    match &connection.redemption {
+      LinkRedemption::Waiting { .. } | LinkRedemption::Redeeming => return "pending",
+      LinkRedemption::Failed => return "failed",
+      LinkRedemption::Connected { identity } => {
+        (connection.api_base_url.clone(), identity.clone())
+      }
+    }
+  };
+  match current(state).await {
+    Ok(Some(account))
+      if account.api_base_url == expected.0
+        && account.identity.user_id == expected.1.user_id
+        && account.identity.organization_id == expected.1.organization_id =>
+    {
+      "connected"
+    }
+    Ok(_) | Err(_) => "failed",
+  }
+}
+
+struct PendingRedemption {
+  correlation_id: String,
+  api_base_url: String,
+  web_origin: String,
+  verifier: String,
+}
+
+impl BrowserConnection {
+  fn claim(
+    &mut self,
+    correlation_id: &str,
+    now: std::time::Instant,
+  ) -> Result<PendingRedemption, String> {
+    if self.correlation_id != correlation_id
+      || now >= self.expires_at
+      || !matches!(self.redemption, LinkRedemption::Waiting { .. })
+    {
+      return Err("Desktop connection is unavailable".into());
+    }
+    let LinkRedemption::Waiting { verifier } =
+      std::mem::replace(&mut self.redemption, LinkRedemption::Redeeming)
+    else {
+      unreachable!("only a waiting connection can be claimed");
+    };
+    Ok(PendingRedemption {
+      correlation_id: self.correlation_id.clone(),
+      api_base_url: self.api_base_url.clone(),
+      web_origin: self.web_origin.clone(),
+      verifier,
+    })
+  }
+}
+
+pub async fn complete_browser_connection(
+  app: &tauri::AppHandle,
+  correlation_id: &str,
+  expected_identity: DesktopAccountIdentity,
+) -> Result<(), String> {
+  let pending = {
+    let mut connection = BROWSER_CONNECTION
+      .lock()
+      .map_err(|_| "Desktop connection is unavailable")?;
+    connection
+      .as_mut()
+      .ok_or("Desktop connection is unavailable")?
+      .claim(correlation_id, std::time::Instant::now())?
+  };
+  let result = redeem_browser_connection(app, pending, expected_identity.clone()).await;
+  if let Ok(mut pending) = BROWSER_CONNECTION.lock() {
+    if let Some(connection) = pending.as_mut()
+      && connection.correlation_id == correlation_id
+    {
+      connection.redemption = if result.is_ok() {
+        LinkRedemption::Connected {
+          identity: expected_identity,
+        }
+      } else {
+        LinkRedemption::Failed
+      };
+    }
+  }
+  result
+}
+
+async fn redeem_browser_connection(
+  app: &tauri::AppHandle,
+  pending: PendingRedemption,
+  expected_identity: DesktopAccountIdentity,
+) -> Result<(), String> {
+  use tauri::Manager;
+  let PendingRedemption {
+    api_base_url,
+    web_origin,
+    verifier,
+    correlation_id,
+  } = pending;
+  let state = app.state::<AccountState>();
+  let saved = current(&state).await?;
+  if let Some(saved) = &saved {
+    if saved.api_base_url != api_base_url
+      || saved.identity.user_id != expected_identity.user_id
+      || saved.identity.organization_id != expected_identity.organization_id
+    {
+      return Err(
+        "Disconnect the current desktop account before connecting another".into(),
+      );
+    }
+  }
+  let client =
+    crate::http_client::DesktopHttpClient::new(crate::http_client::HttpClientOptions {
+      redirect: reqwest::redirect::Policy::none(),
+      timeout: None,
+    })
+    .map_err(|_| "Desktop connection is unavailable")?;
+  let mut redeem_request = client
+    .post(format!("{api_base_url}/v1/desktop-registry/redeem-link"))
+    .json(&RedeemLinkRequest {
+      correlation_id: &correlation_id,
+      verifier: &verifier,
+      expected_user_id: &expected_identity.user_id,
+      expected_organization_id: &expected_identity.organization_id,
+    })
+    .timeout(std::time::Duration::from_secs(20));
+  if let Some(saved) = &saved {
+    redeem_request = redeem_request.bearer_auth(&saved.credential.key);
+  }
+  let response = redeem_request
+    .send()
+    .await
+    .map_err(|_| "Desktop connection is unavailable")?;
+  if !response.status().is_success() {
+    return Err("Desktop connection was not accepted".into());
+  }
+  let redeemed = response
+    .json::<RedeemedLink>()
+    .await
+    .map_err(|_| "Desktop connection is unavailable")?;
+  let request = match redeemed {
+    RedeemedLink::Connected { identity } => {
+      let Some(current) = current(&state).await? else {
+        return Err("Desktop connection is unavailable".into());
+      };
+      if identity.user_id != expected_identity.user_id
+        || identity.organization_id != expected_identity.organization_id
+        || current.identity.user_id != identity.user_id
+        || current.identity.organization_id != identity.organization_id
+        || current.api_base_url != api_base_url
+        || saved
+          .as_ref()
+          .is_none_or(|saved| saved.credential.key != current.credential.key)
+      {
+        return Err("Desktop connection does not match".into());
+      }
+      notify(app);
+      return Ok(());
+    }
+    RedeemedLink::Credential {
+      account,
+      key,
+      expires_at,
+    } => {
+      if !is_valid_linked_account(&account) {
+        return Err("Desktop connection is unavailable".into());
+      }
+      LinkAccountRequest {
+        api_base_url: api_base_url.clone(),
+        credential: DesktopAccountCredential { key, expires_at },
+      }
+    }
+  };
+  let credential_key = request.credential.key.clone();
+  if let Err(error) = link(&state, request, &web_origin, &expected_identity).await {
+    crate::registry::request(
+      crate::registry::RegistryRequestAuth {
+        api_base_url: &api_base_url,
+        credential_key: &credential_key,
+      },
+      serde_json::json!({"type":"revoke"}),
+    )
+    .await?;
+    return Err(error);
+  }
+  notify(app);
+  Ok(())
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn browser_connection_keeps_the_verifier_in_native_memory() {
+    use sha2::{Digest, Sha256};
+    let (connection, url) =
+      new_browser_connection("https://api.stll.app", "https://my.stll.app").unwrap();
+    let LinkRedemption::Waiting { verifier } = &connection.redemption else {
+      panic!("new connection must wait");
+    };
+    let parsed = reqwest::Url::parse(&url).unwrap();
+    let fragment = parsed
+      .fragment()
+      .unwrap()
+      .strip_prefix("desktop-account?")
+      .unwrap();
+    let fields: std::collections::HashMap<_, _> =
+      reqwest::Url::parse(&format!("https://localhost?{fragment}"))
+        .unwrap()
+        .query_pairs()
+        .into_owned()
+        .collect();
+    assert_eq!(fields.len(), 3);
+    assert_eq!(
+      fields.get("correlationId"),
+      Some(&connection.correlation_id)
+    );
+    assert_eq!(
+      fields.get("verifierHash"),
+      Some(&hex::encode(Sha256::digest(verifier.as_bytes())))
+    );
+    assert_eq!(fields.get("portSecret"), Some(&connection.port_secret));
+    assert!(!url.contains(verifier));
+    assert_ne!(verifier, &connection.port_secret);
+  }
+
+  #[test]
+  fn browser_connection_claims_require_a_current_matching_request() {
+    let (mut connection, _) =
+      new_browser_connection("https://api.stll.app", "https://my.stll.app").unwrap();
+    let correlation_id = connection.correlation_id.clone();
+    let now = std::time::Instant::now();
+    assert!(connection.claim("another", now).is_err());
+    assert!(
+      connection
+        .claim(&correlation_id, connection.expires_at)
+        .is_err()
+    );
+    assert!(connection.claim(&correlation_id, now).is_ok());
+    assert!(connection.claim(&correlation_id, now).is_err());
+    assert!(matches!(connection.redemption, LinkRedemption::Redeeming));
+    connection.redemption = LinkRedemption::Connected {
+      identity: fixture("stella_dr_fixture", 60).identity,
+    };
+    assert!(connection.claim(&correlation_id, now).is_err());
+    assert!(matches!(
+      connection.redemption,
+      LinkRedemption::Connected { .. }
+    ));
+  }
+
+  #[test]
+  fn bridge_proofs_match_the_connection_and_request_window() {
+    let (connection, _) =
+      new_browser_connection("https://api.stll.app", "https://my.stll.app").unwrap();
+    let timestamp = "1790851200";
+    let now = timestamp.parse::<i64>().unwrap();
+    let path = "/v1/account?apiBaseUrl=https%3A%2F%2Fapi.stll.app";
+    let key =
+      ring::hmac::Key::new(ring::hmac::HMAC_SHA256, connection.port_secret.as_bytes());
+    let proof = hex::encode(
+      ring::hmac::sign(&key, format!("{timestamp}\nGET\n{path}").as_bytes()).as_ref(),
+    );
+    assert!(valid_bridge_proof(
+      &connection,
+      timestamp,
+      &proof,
+      "GET",
+      path,
+      now
+    ));
+    assert!(valid_bridge_proof(
+      &connection,
+      timestamp,
+      &proof,
+      "GET",
+      path,
+      now + 30
+    ));
+    for (time, signature, method, uri, at) in [
+      (timestamp, "", "GET", path, now),
+      (timestamp, "invalid", "GET", path, now),
+      (timestamp, proof.as_str(), "POST", path, now),
+      (timestamp, proof.as_str(), "GET", "/health", now),
+      (timestamp, proof.as_str(), "GET", path, now + 31),
+      (timestamp, proof.as_str(), "GET", path, now - 31),
+      ("invalid", proof.as_str(), "GET", path, now),
+    ] {
+      assert!(!valid_bridge_proof(
+        &connection,
+        time,
+        signature,
+        method,
+        uri,
+        at
+      ));
+    }
+    let (another, _) =
+      new_browser_connection("https://api.stll.app", "https://my.stll.app").unwrap();
+    assert!(!valid_bridge_proof(
+      &another, timestamp, &proof, "GET", path, now
+    ));
+  }
 
   fn fixture(key: &str, expires_in: i64) -> LinkedAccount {
     LinkedAccount {

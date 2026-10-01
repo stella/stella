@@ -1,11 +1,13 @@
 import type { Result } from "better-result";
 
-type DesktopConnectionOutcome =
+export type DesktopLinkOutcome =
   | { status: "connected"; email: string }
-  | { status: "error" };
+  | { status: "started" };
+
+type DesktopConnectionOutcome = DesktopLinkOutcome | { status: "error" };
 
 export type DesktopConnectionState =
-  | DesktopConnectionOutcome
+  | Exclude<DesktopConnectionOutcome, { status: "started" }>
   | { status: "connecting" }
   | { status: "idle" }
   | { status: "waiting" };
@@ -14,7 +16,7 @@ const IDLE = { status: "idle" } as const satisfies DesktopConnectionState;
 
 type DesktopConnectionStoreOptions = {
   /** Link the account to a running app with a typed failure result. */
-  link: () => Promise<Result<string, unknown>>;
+  link: () => Promise<Result<DesktopLinkOutcome, unknown>>;
   /** Report a link failure; the store itself never throws into the UI. */
   onError: (error: unknown) => void;
   /** Resolve true once the local bridge answers, false when the watch ends. */
@@ -67,7 +69,7 @@ export const createDesktopConnectionStore = ({
       .then(
         (result): DesktopConnectionOutcome => {
           if (result.isOk()) {
-            return { status: "connected", email: result.value };
+            return result.value;
           }
           onError(result.error);
           return { status: "error" };
@@ -88,7 +90,7 @@ export const createDesktopConnectionStore = ({
           watcher?.abort();
           watcher = null;
         }
-        publish(outcome);
+        publish(outcome.status === "started" ? IDLE : outcome);
         return outcome;
       });
 

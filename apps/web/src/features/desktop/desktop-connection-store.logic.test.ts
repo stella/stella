@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 import {
   createDesktopConnectionStore,
   type DesktopConnectionState,
+  type DesktopLinkOutcome,
 } from "@/features/desktop/desktop-connection-store.logic";
 
 /**
@@ -12,7 +13,7 @@ import {
  */
 const scriptedStore = () => {
   const bridgeAnswered = Promise.withResolvers<boolean>();
-  const linked = Promise.withResolvers<Result<string, unknown>>();
+  const linked = Promise.withResolvers<Result<DesktopLinkOutcome, unknown>>();
   const linkCalls: number[] = [];
   const errors: unknown[] = [];
   const watchSignals: AbortSignal[] = [];
@@ -77,7 +78,9 @@ describe("desktop connection store", () => {
     await flush();
     expect(store.getState()).toEqual({ status: "connecting" });
 
-    linked.resolve(Result.ok("lawyer@example.com"));
+    linked.resolve(
+      Result.ok({ status: "connected", email: "lawyer@example.com" }),
+    );
     await watching;
     expect(store.getState()).toEqual({
       status: "connected",
@@ -110,7 +113,9 @@ describe("desktop connection store", () => {
     await flush();
 
     const manual = store.connect();
-    linked.resolve(Result.ok("lawyer@example.com"));
+    linked.resolve(
+      Result.ok({ status: "connected", email: "lawyer@example.com" }),
+    );
 
     expect(await manual).toEqual({
       status: "connected",
@@ -128,7 +133,9 @@ describe("desktop connection store", () => {
     await flush();
 
     const manual = store.connect();
-    linked.resolve(Result.ok("watch@example.com"));
+    linked.resolve(
+      Result.ok({ status: "connected", email: "watch@example.com" }),
+    );
 
     expect(await manual).toEqual({
       status: "connected",
@@ -148,7 +155,9 @@ describe("desktop connection store", () => {
     store.retain();
     const watching = store.startWatch();
 
-    linked.resolve(Result.ok("lawyer@example.com"));
+    linked.resolve(
+      Result.ok({ status: "connected", email: "lawyer@example.com" }),
+    );
     expect(await store.connect()).toEqual({
       status: "connected",
       email: "lawyer@example.com",
@@ -206,7 +215,9 @@ describe("desktop connection store", () => {
     expect(watchSignals.length).toBe(1);
 
     bridgeAnswered.resolve(true);
-    linked.resolve(Result.ok("lawyer@example.com"));
+    linked.resolve(
+      Result.ok({ status: "connected", email: "lawyer@example.com" }),
+    );
     await Promise.all([watching, second]);
     expect(linkCalls.length).toBe(1);
   });
@@ -234,7 +245,9 @@ describe("desktop connection store", () => {
     store.retain();
     const watching = store.startWatch();
     bridgeAnswered.resolve(true);
-    linked.resolve(Result.ok("lawyer@example.com"));
+    linked.resolve(
+      Result.ok({ status: "connected", email: "lawyer@example.com" }),
+    );
     await watching;
 
     await store.startWatch();
@@ -244,4 +257,16 @@ describe("desktop connection store", () => {
       email: "lawyer@example.com",
     });
   });
+});
+
+test("starting the browser step does not report a connected account", async () => {
+  const errors: unknown[] = [];
+  const store = createDesktopConnectionStore({
+    link: async () => Result.ok({ status: "started" }),
+    onError: (error) => errors.push(error),
+    watch: async () => false,
+  });
+  expect(await store.connect()).toEqual({ status: "started" });
+  expect(store.getState()).toEqual({ status: "idle" });
+  expect(errors).toEqual([]);
 });

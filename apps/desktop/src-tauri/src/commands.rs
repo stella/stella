@@ -38,13 +38,22 @@ pub async fn open_stella_account(
     .as_ref()
     .map(|account| account.web_origin.as_str())
     .or(linked_self_host_origin.as_deref());
-  let mut url = stella_account_url(web_origin);
   if linked.is_none() {
-    url.push_str("#desktop-account");
+    let api_base_url = {
+      let manager = state.lock().await;
+      manager.linked_self_host_api_base_url().map(str::to_owned)
+    };
+    let api_base_url = match (linked_self_host_origin.as_ref(), api_base_url) {
+      (Some(_), Some(api)) => api,
+      (Some(_), None) => return Err("Desktop account server is unavailable".into()),
+      (None, _) => "https://api.stll.app".to_string(),
+    };
+    let origin = web_origin.unwrap_or("https://my.stll.app");
+    return crate::account::open_browser_connection(&app, &api_base_url, origin);
   }
   app
     .opener()
-    .open_url(url, None::<&str>)
+    .open_url(stella_account_url(web_origin), None::<&str>)
     .map_err(|e| format!("stella desktop could not open stella web: {e}"))
 }
 

@@ -1,318 +1,139 @@
-import { panic, Result } from "better-result";
-import { afterEach, describe, expect, mock, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
+import { createHmac } from "node:crypto";
+import { readFileSync } from "node:fs";
 
 import {
   DesktopAccountConflictError,
-  DesktopAccountLinkCleanupError,
-  DesktopBridgeUnavailableError,
-  completeDesktopAccountLink,
-  desktopAccountLinkRequest,
-  isDesktopAccountLink,
+  desktopBridgeProofHeaders,
+  parseDesktopAccountChallenge,
   resolveDesktopAccountLink,
-  retryAmbiguousAccountLink,
-  revokeDesktopCredential,
 } from "@/lib/desktop-bridge";
-import type { AccountLinkPostError } from "@/lib/desktop-bridge";
 
-const originalFetch = globalThis.fetch;
-
-afterEach(() => {
-  globalThis.fetch = originalFetch;
-});
-
-const setFetch = (
-  handler: (...args: Parameters<typeof fetch>) => ReturnType<typeof fetch>,
-) => {
-  const fetchMock = mock(handler);
-  globalThis.fetch = Object.assign(fetchMock, {
-    preconnect: originalFetch.preconnect,
-  });
-  return fetchMock;
+const challenge = {
+  correlationId: "90123344-5566-7788-9900-aabbccddeeff",
+  verifierHash: "a".repeat(64),
+  portSecret: "b".repeat(64),
 };
+const fragment = `#desktop-account?${new URLSearchParams(challenge).toString()}`;
 
-describe("desktop credential revocation", () => {
-  const options = {
-    apiBaseUrl: "https://api.example.com",
-    key: "stella_dr_fixture",
-  };
+describe("account link challenges", () => {
+  test("accepts a complete native challenge", () => {
+    expect(parseDesktopAccountChallenge(fragment) !== null).toBe(true);
+    expect(parseDesktopAccountChallenge(fragment)).toEqual(challenge);
+  });
 
-  test("returns a transport failure instead of throwing", async () => {
-    const transportError = new TypeError("network down");
-    setFetch(async () => {
-      throw transportError;
+  test("rejects missing, duplicate, malformed, and extra fields", () => {
+    for (const key of Object.keys(challenge)) {
+      const missing = new URLSearchParams(challenge);
+      missing.delete(key);
+      expect(
+        parseDesktopAccountChallenge(
+          `#desktop-account?${missing.toString()}`,
+        ) !== null,
+      ).toBe(false);
+      const duplicate = new URLSearchParams(challenge);
+      duplicate.append(key, "value");
+      expect(
+        parseDesktopAccountChallenge(
+          `#desktop-account?${duplicate.toString()}`,
+        ) !== null,
+      ).toBe(false);
+      const malformed = new URLSearchParams(challenge);
+      malformed.set(key, "value");
+      expect(
+        parseDesktopAccountChallenge(
+          `#desktop-account?${malformed.toString()}`,
+        ) !== null,
+      ).toBe(false);
+    }
+    for (const hash of [
+      "#desktop-account",
+      "#desktop-account=secret",
+      "#desktop-registry=nonce",
+      `${fragment}&verifier=secret`,
+      `${fragment}&credential=secret`,
+      `${fragment}&unknown=value`,
+    ]) {
+      expect(parseDesktopAccountChallenge(hash) !== null).toBe(false);
+    }
+  });
+});
+
+describe("authenticated account status", () => {
+  test("sends a request-bound proof without the port secret", async () => {
+    const path =
+      "/v1/connection?correlationId=90123344-5566-7788-9900-aabbccddeeff";
+    const timestamp = "1790851200";
+    const headers = await desktopBridgeProofHeaders({
+      portSecret: challenge.portSecret,
+      timestamp,
+      path,
     });
-    const outcome = await revokeDesktopCredential(options);
-    if (outcome.status !== "error") {
-      panic("Expected revocation to report the transport failure");
-    }
-    expect(outcome.error).toBe(transportError);
-  });
-
-  test("treats success and an already unusable credential as revoked", async () => {
-    for (const status of [200, 401]) {
-      setFetch(async () => new Response(null, { status }));
-      expect((await revokeDesktopCredential(options)).isOk()).toBe(true);
-    }
-  });
-
-  test("reports any other rejection", async () => {
-    setFetch(async () => new Response(null, { status: 500 }));
-    expect((await revokeDesktopCredential(options)).isErr()).toBe(true);
-  });
-});
-
-describe("desktop account-link hash", () => {
-  test("accepts only the exact nonsecret account-link marker", () => {
-    expect(isDesktopAccountLink("#desktop-account")).toBe(true);
-    expect(isDesktopAccountLink("#desktop-account=secret")).toBe(false);
-    expect(isDesktopAccountLink("#desktop-registry=nonce")).toBe(false);
-  });
-});
-
-test("a refused account link revokes its newly minted credential", async () => {
-  const linkError = new Error("bridge refused link");
-  const revoked: string[] = [];
-  const outcome = await completeDesktopAccountLink({
-    apiBaseUrl: "https://api.example.com",
-    grant: {
-      account: {
-        email: "lawyer@example.com",
-        name: null,
-        verifiedAt: "2026-09-12T20:00:00.000Z",
+    expect(headers).toEqual({
+      "x-stella-bridge-time": timestamp,
+      "x-stella-bridge-proof": createHmac("sha256", challenge.portSecret)
+        .update(`${timestamp}\nGET\n${path}`)
+        .digest("hex"),
+    });
+    expect(JSON.stringify(headers)).not.toContain(challenge.portSecret);
+    for (const changed of [
+      { portSecret: "c".repeat(64), timestamp, path },
+      { portSecret: challenge.portSecret, timestamp: "1790851201", path },
+      {
+        portSecret: challenge.portSecret,
+        timestamp,
+        path: `${path}&other=value`,
       },
-      expiresAt: "2026-09-19T20:00:00.000Z",
-      key: "stella_dr_fixture",
-    },
-    postLink: async () => Result.err({ type: "rejected", cause: linkError }),
-    revoke: async (key) => {
-      revoked.push(key);
-      return Result.ok(undefined);
-    },
+    ]) {
+      expect(
+        (await desktopBridgeProofHeaders(changed))["x-stella-bridge-proof"],
+      ).not.toBe(headers["x-stella-bridge-proof"]);
+    }
   });
 
-  if (outcome.status !== "error") {
-    panic("Expected account link to fail");
-  }
-  expect(outcome.error).toBe(linkError);
-  expect(revoked).toEqual(["stella_dr_fixture"]);
-});
-
-test("a cleanup failure reports both failures with the link error as cause", async () => {
-  const linkError = new Error("bridge refused link");
-  const cleanupError = new Error("revoke failed");
-  const outcome = await completeDesktopAccountLink({
-    apiBaseUrl: "https://api.example.com",
-    grant: {
-      account: {
-        email: "lawyer@example.com",
-        name: null,
-        verifiedAt: "2026-09-12T20:00:00.000Z",
-      },
-      expiresAt: "2026-09-19T20:00:00.000Z",
-      key: "stella_dr_fixture",
-    },
-    postLink: async () => Result.err({ type: "rejected", cause: linkError }),
-    revoke: async () => Result.err(cleanupError),
-  });
-
-  if (outcome.status !== "error") {
-    panic("Expected account link and cleanup to fail");
-  }
-  expect(outcome.error).toBeInstanceOf(DesktopAccountLinkCleanupError);
-  expect(outcome.error).toMatchObject({
-    message: "Desktop account link failed and credential cleanup failed",
-    cause: linkError,
-    cleanupError,
-  });
-});
-
-test("the one account-link request carries only the server-minted credential", () => {
-  const account = {
-    email: "lawyer@example.com",
-    name: "Example Lawyer",
+  const browserAccount = {
+    identity: { userId: "user-1", organizationId: "org-1" },
+    email: "existing@example.com",
+    name: null,
     verifiedAt: "2026-09-12T20:00:00.000Z",
   };
-  expect(
-    desktopAccountLinkRequest("https://api.example.com", {
-      account,
-      expiresAt: "2026-09-19T20:00:00.000Z",
-      key: "stella_dr_fixture",
-    }),
-  ).toEqual({
-    apiBaseUrl: "https://api.example.com",
-    credential: {
-      expiresAt: "2026-09-19T20:00:00.000Z",
-      key: "stella_dr_fixture",
-    },
-  });
-});
+  const linkedIdentity = browserAccount.identity;
 
-test("an ambiguous link retries the identical credential and accepts its acknowledgement", async () => {
-  const request = desktopAccountLinkRequest("https://api.example.com", {
-    account: { email: "lawyer@example.com", name: null, verifiedAt: "now" },
-    expiresAt: "later",
-    key: "stella_dr_fixture",
-  });
-  const received: (typeof request)[] = [];
-  const outcome = await retryAmbiguousAccountLink(request, async (body) => {
-    received.push(body);
-    return received.length === 1
-      ? Result.err({
-          type: "ambiguous",
-          cause: new DesktopBridgeUnavailableError(),
-        } satisfies AccountLinkPostError)
-      : Result.ok(undefined);
-  });
-
-  expect(outcome.status).toBe("ok");
-  expect(received).toEqual([request, request]);
-});
-
-test("a rejection after an ambiguous attempt never revokes a possibly committed credential", async () => {
-  let attempts = 0;
-  let revocations = 0;
-  const outcome = await completeDesktopAccountLink({
-    apiBaseUrl: "https://api.example.com",
-    grant: {
-      account: { email: "lawyer@example.com", name: null, verifiedAt: "now" },
-      expiresAt: "later",
-      key: "stella_dr_fixture",
-    },
-    postLink: async (request) =>
-      await retryAmbiguousAccountLink(request, async () => {
-        attempts += 1;
-        return Result.err(
-          attempts === 1
-            ? ({
-                type: "ambiguous",
-                cause: new Error("timeout"),
-              } satisfies AccountLinkPostError)
-            : ({
-                type: "rejected",
-                cause: new Error("conflict"),
-              } satisfies AccountLinkPostError),
-        );
-      }),
-    revoke: async () => {
-      revocations += 1;
-      return Result.ok(undefined);
-    },
-  });
-
-  expect(outcome.status).toBe("error");
-  if (outcome.status !== "error") {
-    panic("Expected the response-loss retry to remain ambiguous");
-  }
-  expect(outcome.error).toEqual(new Error("conflict"));
-  expect(attempts).toBe(2);
-  expect(revocations).toBe(0);
-});
-
-test("repeated transport ambiguity preserves the possibly committed credential", async () => {
-  let attempts = 0;
-  let revocations = 0;
-  const outcome = await completeDesktopAccountLink({
-    apiBaseUrl: "https://api.example.com",
-    grant: {
-      account: { email: "lawyer@example.com", name: null, verifiedAt: "now" },
-      expiresAt: "later",
-      key: "stella_dr_fixture",
-    },
-    postLink: async (request) =>
-      await retryAmbiguousAccountLink(request, async () => {
-        attempts += 1;
-        return Result.err({
-          type: "ambiguous",
-          cause: new Error("timeout"),
-        } satisfies AccountLinkPostError);
-      }),
-    revoke: async () => {
-      revocations += 1;
-      return Result.ok(undefined);
-    },
-  });
-
-  expect(outcome.status).toBe("error");
-  expect(attempts).toBe(2);
-  expect(revocations).toBe(0);
-});
-
-test("repeating a link for the same account neither mints nor writes", async () => {
-  const calls: string[] = [];
-  const outcome = await resolveDesktopAccountLink({
-    apiBaseUrl: "https://api.example.com",
-    browserAccount: {
-      identity: { userId: "user-1", organizationId: "org-1" },
-      email: "updated@example.com",
-      name: "Current browser profile",
-      verifiedAt: "2026-09-12T20:00:00.000Z",
-    },
-    desktopAccount: {
-      status: "connected",
-      identity: { userId: "user-1", organizationId: "org-1" },
-      account: {
-        email: "lawyer@example.com",
-        name: "Persisted desktop profile",
-        verifiedAt: "2026-09-11T20:00:00.000Z",
-      },
-      expiresAt: "2026-09-19T20:00:00.000Z",
-    },
-    mintGrant: async () => {
-      calls.push("mint");
-      throw new Error("must not mint");
-    },
-    postLink: async () => {
-      calls.push("write");
-      return Result.ok(undefined);
-    },
-    revoke: async () => {
-      calls.push("revoke");
-      return Result.ok(undefined);
-    },
-  });
-
-  if (outcome.status !== "ok") {
-    panic("Expected repeated account link to succeed");
-  }
-  expect(outcome.value).toBe("lawyer@example.com");
-  expect(calls).toEqual([]);
-});
-
-test("matching email in another account must be disconnected before replacement", async () => {
-  const browserIdentities = [
-    { userId: "user-1", organizationId: "org-2" },
-    { userId: "user-2", organizationId: "org-1" },
-    { userId: "user-2", organizationId: "org-2" },
-  ];
-  for (const identity of browserIdentities) {
-    const outcome = await resolveDesktopAccountLink({
-      apiBaseUrl: "https://api.example.com",
-      browserAccount: {
-        identity,
-        email: "existing@example.com",
-        name: "Existing Account",
-        verifiedAt: "2026-09-12T20:00:00.000Z",
-      },
-      desktopAccount: {
-        status: "connected",
-        identity: { userId: "user-1", organizationId: "org-1" },
-        account: {
-          email: "existing@example.com",
-          name: null,
-          verifiedAt: "2026-09-11T20:00:00.000Z",
-        },
-        expiresAt: "2026-09-19T20:00:00.000Z",
-      },
-      mintGrant: async () => {
-        throw new Error("must not mint");
-      },
-      postLink: async () => Result.ok(undefined),
-      revoke: async () => Result.ok(undefined),
+  test("reports success only for the browser account identity", () => {
+    const outcome = resolveDesktopAccountLink({
+      browserAccount,
+      linkedIdentity,
     });
-
-    if (outcome.status !== "error") {
-      panic("Expected different account link to fail");
+    expect(outcome.isOk()).toBe(true);
+    if (outcome.isOk()) {
+      expect(outcome.value).toBe(browserAccount.email);
     }
-    expect(outcome.error).toBeInstanceOf(DesktopAccountConflictError);
-  }
+    for (const identity of [
+      { userId: "user-1", organizationId: "org-2" },
+      { userId: "user-2", organizationId: "org-1" },
+      { userId: "user-2", organizationId: "org-2" },
+    ]) {
+      const mismatch = resolveDesktopAccountLink({
+        browserAccount: { ...browserAccount, identity },
+        linkedIdentity,
+      });
+      expect(mismatch.isErr()).toBe(true);
+      if (mismatch.isErr()) {
+        expect(mismatch.error).toBeInstanceOf(DesktopAccountConflictError);
+      }
+    }
+  });
+});
+
+test("browser bridge traffic cannot post document sessions or credentials", () => {
+  const source = readFileSync(
+    new URL("desktop-bridge.ts", import.meta.url),
+    "utf-8",
+  );
+  // Every browser loopback request in this owner must be a read; native pulls
+  // document sessions and account credentials directly from the server.
+  expect(source).not.toMatch(/method:\s*["']POST["']/u);
+  expect(source).not.toContain("/v1/open-file");
+  expect(source).not.toContain("/v1/link-account");
+  expect(source).not.toContain('"desktop-edit-sessions"');
 });

@@ -1055,6 +1055,15 @@ impl SessionManager {
       .then_some(web_origin)
   }
 
+  pub fn linked_self_host_api_base_url(&self) -> Option<&str> {
+    let web_origin = self.linked_self_host_origin()?;
+    self
+      .trusted_self_host_connections
+      .iter()
+      .find(|connection| connection.web_origin == web_origin)
+      .map(|connection| connection.api_base_url.as_str())
+  }
+
   pub fn is_trusted_self_host_origin(&self, origin: &str) -> bool {
     self
       .trusted_self_host_connections

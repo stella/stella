@@ -7,7 +7,6 @@ import { useMountEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { externalApiOrigin } from "@/lib/api-origins";
 import {
-  connectSelfHostedDesktop,
   isDesktopAccountLinkReachable,
   linkDesktopAccount,
 } from "@/lib/desktop-bridge";
@@ -15,12 +14,6 @@ import { detached } from "@/lib/detached";
 
 const linkAccountToRunningDesktop = async () => {
   const apiBaseUrl = externalApiOrigin();
-  if (env.VITE_SELFHOST) {
-    await connectSelfHostedDesktop({
-      apiBaseUrl,
-      webOrigin: window.location.origin,
-    });
-  }
 
   return await linkDesktopAccount({ apiBaseUrl });
 };

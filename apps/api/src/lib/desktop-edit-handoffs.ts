@@ -1,4 +1,4 @@
-import { and, eq, gte, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, eq, gt, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { member } from "@/api/db/auth-schema";
 import { rootDb, rlsDb } from "@/api/db/root";
@@ -29,20 +29,41 @@ export type ConsumedDesktopEditHandoff = {
   workspaceId: SafeId<"workspace">;
 };
 
-export const consumeDesktopEditHandoff = async (
-  handoffToken: string,
-): Promise<ConsumedDesktopEditHandoff | null> => {
-  const now = new Date();
+type DesktopHandoffIdentity = {
+  userId: SafeId<"user">;
+  organizationId: SafeId<"organization">;
+};
+
+type ConsumeDesktopEditHandoffOptions = {
+  handoffToken: string;
+  identity: DesktopHandoffIdentity;
+  db?: Pick<typeof rootDb, "update">;
+  now?: Date;
+};
+
+export const consumeDesktopEditHandoff = async ({
+  handoffToken,
+  identity,
+  db = rootDb,
+  now = new Date(),
+}: ConsumeDesktopEditHandoffOptions): Promise<ConsumedDesktopEditHandoff | null> => {
   const tokenHash = hashDesktopEditHandoffToken(handoffToken);
 
-  const rows = await rootDb
+  const rows = await db
     .update(desktopEditHandoffs)
     .set({ consumedAt: now })
     .where(
       and(
         eq(desktopEditHandoffs.tokenHash, tokenHash),
+        eq(desktopEditHandoffs.createdBy, identity.userId),
+        sql`exists (select 1 from ${workspaces}
+          where ${workspaces.id} = ${desktopEditHandoffs.workspaceId}
+            and ${workspaces.organizationId} = ${identity.organizationId})`,
         isNull(desktopEditHandoffs.consumedAt),
-        gte(desktopEditHandoffs.expiresAt, now),
+        gt(
+          desktopEditHandoffs.expiresAt,
+          sql`${now.toISOString()}::timestamptz`,
+        ),
       ),
     )
     .returning({
@@ -63,10 +84,12 @@ export const markDesktopEditHandoffOpened = async ({
   handoffId,
   handoffToken,
   sessionId,
+  identity,
 }: {
   handoffId: SafeId<"desktopEditHandoff">;
   handoffToken: string;
   sessionId: SafeId<"desktopEditSession">;
+  identity: DesktopHandoffIdentity;
 }): Promise<boolean> => {
   const tokenHash = hashDesktopEditHandoffToken(handoffToken);
   const rows = await rootDb
@@ -79,12 +102,19 @@ export const markDesktopEditHandoffOpened = async ({
       and(
         eq(desktopEditHandoffs.id, handoffId),
         eq(desktopEditHandoffs.tokenHash, tokenHash),
+        eq(desktopEditHandoffs.createdBy, identity.userId),
+        sql`exists (select 1 from ${workspaces}
+          where ${workspaces.id} = ${desktopEditHandoffs.workspaceId}
+            and ${workspaces.organizationId} = ${identity.organizationId})`,
         isNotNull(desktopEditHandoffs.consumedAt),
         sql`exists (
           select 1
           from ${desktopEditSessions}
           where ${desktopEditSessions.id} = ${sessionId}
             and ${desktopEditSessions.workspaceId} = ${desktopEditHandoffs.workspaceId}
+            and ${desktopEditSessions.createdBy} = ${desktopEditHandoffs.createdBy}
+            and ${desktopEditSessions.entityId} = ${desktopEditHandoffs.entityId}
+            and ${desktopEditSessions.propertyId} = ${desktopEditHandoffs.propertyId}
         )`,
       ),
     )

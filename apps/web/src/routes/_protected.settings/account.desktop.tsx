@@ -17,7 +17,7 @@ import { DesktopConnectionStatus } from "@/features/desktop/desktop-connection-s
 import { useDesktopAccountConnection } from "@/features/desktop/use-desktop-account-connection";
 import { useMountEffect } from "@/hooks/use-effect";
 import { useHydrationSafeDesktopPlatform } from "@/hooks/use-hydration-safe-desktop-platform";
-import { isDesktopAccountLink } from "@/lib/desktop-bridge";
+import { captureDesktopAccountLink } from "@/lib/desktop-bridge";
 import { detached } from "@/lib/detached";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 
@@ -37,6 +37,9 @@ function DesktopPage() {
 
   const handleConnectDesktop = async () => {
     const outcome = await connect();
+    if (outcome.status === "started") {
+      return;
+    }
     stellaToast.add(
       outcome.status === "connected"
         ? { title: t("common.done"), type: "success" }
@@ -46,12 +49,7 @@ function DesktopPage() {
   // The desktop app opens this page with an account-link marker; a
   // signed-in session completes the connection without another click.
   useMountEffect(() => {
-    if (isDesktopAccountLink(window.location.hash)) {
-      window.history.replaceState(
-        null,
-        "",
-        `${window.location.pathname}${window.location.search}`,
-      );
+    if (captureDesktopAccountLink()) {
       detached(handleConnectDesktop(), "settings-account-desktop.handoff");
     }
   });
