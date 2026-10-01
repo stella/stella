@@ -58,12 +58,9 @@ test("versioned writes and future sidecars read the same text states", () => {
             continue;
           }
           explicit.push({ field, reason: value.reason });
-          if (value.reason !== TEXT_ABSENCE_REASON.NOT_PUBLISHED) {
-            sparse.push({ field, reason: value.reason });
-          }
         }
-        if (sparse.length > 0) {
-          expected[DECISION_TEXT_ABSENCE_METADATA_KEY] = sparse;
+        if (explicit.length > 0) {
+          expected[DECISION_TEXT_ABSENCE_METADATA_KEY] = explicit;
         }
         expect(stored).toEqual(expected);
         expect(readDecisionTextMetadata(stored).textFields).toEqual(textFields);
