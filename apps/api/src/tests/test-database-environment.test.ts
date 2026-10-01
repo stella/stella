@@ -57,4 +57,19 @@ describe("test database environment", () => {
     expect(String(failure)).toContain(ROOT_POOL_SENTINEL_MESSAGE);
     expect(rootPoolConnectionCount()).toBe(before + 1);
   });
+
+  test("keeps counting after a garbage collection", async () => {
+    const url = rootPoolSentinelUrl();
+    Bun.gc(true);
+    const before = rootPoolConnectionCount() ?? 0;
+    const failure = await withGatedTestClients(url, async ({ openClient }) => {
+      const { sql } = openClient();
+      return await sql`select 1`.then(
+        () => null,
+        (error: unknown) => error,
+      );
+    });
+    expect(String(failure)).toContain(ROOT_POOL_SENTINEL_MESSAGE);
+    expect(rootPoolConnectionCount()).toBe(before + 1);
+  });
 });

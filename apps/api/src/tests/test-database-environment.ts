@@ -14,6 +14,9 @@ const ROOT_POOL_SENTINEL = Symbol.for("stella.tests.rootPoolSentinel");
  */
 type RootPoolSentinel = {
   connections: number;
+  /** Held here, on the process-wide sentinel, so the listener lives as long
+   *  as its URL: a collected listener would let queries fail uncounted. */
+  listener: Bun.TCPSocketListener<undefined> | null;
   url: string;
 };
 
@@ -41,8 +44,12 @@ const isRootPoolSentinel = (value: unknown): value is RootPoolSentinel =>
   typeof value.url === "string";
 
 const startRootPoolSentinel = (): RootPoolSentinel => {
-  const sentinel: RootPoolSentinel = { connections: 0, url: "" };
-  const listener = Bun.listen({
+  const sentinel: RootPoolSentinel = {
+    connections: 0,
+    listener: null,
+    url: "",
+  };
+  const listener = Bun.listen<undefined>({
     hostname: "127.0.0.1",
     port: 0,
     socket: {
@@ -55,6 +62,7 @@ const startRootPoolSentinel = (): RootPoolSentinel => {
   });
   // The sentinel never keeps a test process alive.
   listener.unref();
+  sentinel.listener = listener;
   sentinel.url = `postgres://postgres:postgres@127.0.0.1:${String(listener.port)}/stella`;
   return sentinel;
 };
