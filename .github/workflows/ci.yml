@@ -1409,7 +1409,7 @@ jobs:
       # publishable package.
       - name: Test published export artifact guard
         if: needs.ci-plan.outputs.package_checks_required == 'true'
-        run: bun test scripts/published-export-guards.test.ts
+        run: bun test scripts/published-export-guards.test.ts scripts/check-published-exports.test.ts
 
       - name: Test publish manifest transformation
         # scripts/publish-manifest.ts imports better-result, so this needs the
