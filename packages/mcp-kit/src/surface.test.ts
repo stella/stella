@@ -496,7 +496,7 @@ describe("capability tools", () => {
     const names = ["Z", "_", "a", "a-", "a_", "z", "ä", "č", "保存", "📄"];
     for (const registryNames of [names, names.toReversed()]) {
       const paginated = createToolSurface({
-        tools: registryNames.map((name) => ({ ...STATS, name})),
+        tools: registryNames.map((name) => ({ ...STATS, name })),
       });
       for (const limit of [1, 2, 3, names.length]) {
         let cursor: unknown;
