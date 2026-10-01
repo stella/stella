@@ -656,7 +656,7 @@
     }
   },
   "try-catch-outside-boundary": {
-    "count": 360,
+    "count": 359,
     "files": {
       "apps/api/src/handlers/ai-autocomplete/stream.ts": 1,
       "apps/api/src/handlers/case-law/analysis/generate.ts": 1,
@@ -745,7 +745,7 @@
       "apps/api/src/lib/scheduler/runner.ts": 2,
       "apps/api/src/lib/scheduler/tasks/desktop-edit-session-expiry-notifications.ts": 1,
       "apps/api/src/lib/scheduler/tasks/infosoud.ts": 1,
-      "apps/api/src/lib/search/extraction-worker.ts": 3,
+      "apps/api/src/lib/search/extraction-worker.ts": 2,
       "apps/api/src/lib/search/index-chat.ts": 1,
       "apps/api/src/lib/search/index-entity.ts": 1,
       "apps/api/src/lib/signals/scout.ts": 1,
