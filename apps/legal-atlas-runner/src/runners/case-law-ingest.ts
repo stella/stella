@@ -151,10 +151,10 @@ const logDocumentStageObservation = async (
   await observeDocumentStageSafely({
     observation,
     observer: "builtin",
-    observe: async ({ event, ...attributes }) => {
+    observe: ({ event, ...attributes }) => {
       logger.info(event, attributes);
     },
-    reportFailure: async ({ event, ...attributes }, signal) => {
+    reportFailure: ({ event, ...attributes }, signal) => {
       signal.throwIfAborted();
       logger.warn(event, attributes);
     },
