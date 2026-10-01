@@ -56,6 +56,7 @@ const apiSuite = (file: string): Suite => ({
 const SUITES: readonly Suite[] = [
   apiSuite("src/lib/tanstack-ai-provider-wire.test.ts"),
   apiSuite("src/handlers/chat/provider-wire-replay.integration.test.ts"),
+  apiSuite("src/handlers/chat/provider-request-schemas.integration.test.ts"),
   apiSuite("src/handlers/chat/approval-settlement.integration.test.ts"),
   apiSuite("src/handlers/chat/live-reload-parity.integration.test.ts"),
   ...Object.values(RECORDED_CONVERSATION_SUITES).map(apiSuite),

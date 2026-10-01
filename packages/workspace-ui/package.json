@@ -1,6 +1,6 @@
 {
   "name": "@stll/workspace-ui",
-  "version": "0.11.13",
+  "version": "0.11.15",
   "description": "Reusable workspace presentation components and view helpers for Stella.",
   "keywords": [
     "calculations",
@@ -68,7 +68,6 @@
     "@stll/money": "workspace:^",
     "@stll/ui": "workspace:^",
     "better-result": "catalog:",
-    "lucide-react": "catalog:",
     "temporal-polyfill": "catalog:",
     "use-intl": "catalog:"
   },

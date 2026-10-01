@@ -28,7 +28,11 @@ const config = {
     "appends another version.",
   permissions: { playbook: ["approve"] },
   access: "write",
-  mcp: { type: "capability", reason: "knowledge_library_admin" },
+  mcp: {
+    type: "capability",
+    reason: "knowledge_library_admin",
+    consumesServices: false,
+  },
   params: playbookDefinitionParamsSchema,
   body: approvePlaybookDefinitionBodySchema,
 } satisfies HandlerConfig;

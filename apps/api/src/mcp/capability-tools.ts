@@ -1,10 +1,14 @@
 import { KindGuard, type TSchema } from "@sinclair/typebox";
 import { ValueErrorType } from "@sinclair/typebox/errors";
 import { Value, type ValueError } from "@sinclair/typebox/value";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { ElysiaCustomStatusResponse } from "elysia";
 import * as v from "valibot";
 
+import {
+  ACTION_ADMISSION_REFUSALS,
+  isActionAdmissionCode,
+} from "@stll/api-contract/action-admission";
 import capabilityCatalogRaw from "@stll/cli/capability-catalog.json";
 import type { PermissionInput } from "@stll/permissions";
 
@@ -24,6 +28,11 @@ import {
   decodePaginationCursor,
   encodePaginationCursor,
 } from "@/api/lib/pagination";
+import {
+  VALIDATED_INPUT_SERVICE_CLASSIFICATION,
+  isServiceClassification,
+  type CatalogServiceClassification,
+} from "@/api/lib/rate-limit/service-classification";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { advertisedSchemas } from "@/api/mcp/advertised-schema";
@@ -44,6 +53,7 @@ import {
   findRemovedInputIssues,
   normalizeInputAtBoundary,
 } from "@/api/mcp/input-normalization";
+import { plainRecord } from "@/api/mcp/input-schemas";
 import {
   declaresInternalField,
   INTERNAL_FIELD_NAME,
@@ -103,6 +113,7 @@ type HandlerKind = (typeof HANDLER_KINDS)[number];
 
 type CatalogEntry = {
   id: string;
+  consumesServices: CatalogServiceClassification;
   /**
    * Authored prose describing what the capability does, sourced from the
    * handler config and carried here by the export script. Surfaced in
@@ -233,6 +244,8 @@ const isCapabilityTransport = (
 const isCatalogEntry = (value: unknown): value is CatalogEntry =>
   isRecord(value) &&
   typeof value["id"] === "string" &&
+  (typeof value["consumesServices"] === "boolean" ||
+    value["consumesServices"] === VALIDATED_INPUT_SERVICE_CLASSIFICATION) &&
   (value["description"] === undefined ||
     typeof value["description"] === "string") &&
   isHandlerKind(value["handlerKind"]) &&
@@ -265,10 +278,11 @@ const parseCatalog = (raw: unknown): readonly CatalogEntry[] => {
   );
 };
 
-const CATALOG = parseCatalog(capabilityCatalogRaw);
-
-const CATALOG_BY_ID = new Map(CATALOG.map((entry) => [entry.id, entry]));
-const CATALOG_IDS = CATALOG.map((entry) => entry.id);
+let catalog: readonly CatalogEntry[] | undefined;
+let catalogById: Map<string, CatalogEntry> | undefined;
+const getCatalog = () => (catalog ??= parseCatalog(capabilityCatalogRaw));
+const getCatalogById = () =>
+  (catalogById ??= new Map(getCatalog().map((entry) => [entry.id, entry])));
 const DISPATCH_BY_ID = new Map<string, CapabilityDispatchEntry>(
   Object.entries(CAPABILITY_DISPATCH),
 );
@@ -333,6 +347,7 @@ const renderTransport = (transport: CapabilityTransport): RenderedTransport => {
  * The guard below narrows to this shape at the module boundary.
  */
 type EndpointConfig = {
+  mcp?: unknown;
   body?: TSchema;
   params?: TSchema;
   query?: TSchema;
@@ -687,6 +702,23 @@ const mapStatusResponse = (
   statusCode: number,
   responseBody: unknown,
 ): InternalToolErrorResult => {
+  if (isRecord(responseBody) && isActionAdmissionCode(responseBody["code"])) {
+    const code = responseBody["code"];
+    const refusal = ACTION_ADMISSION_REFUSALS[code];
+    return structuredErrorResult({
+      code,
+      message: refusal.message,
+      hint:
+        typeof responseBody["hint"] === "string"
+          ? responseBody["hint"]
+          : refusal.hint,
+      retryable: refusal.retryable,
+      contactUrl:
+        typeof responseBody["contactUrl"] === "string"
+          ? responseBody["contactUrl"]
+          : undefined,
+    });
+  }
   const code = statusCodeToErrorCode(statusCode);
   const message = statusResponseMessage(responseBody);
   if (code === "internal_error") {
@@ -847,7 +879,8 @@ export const featureOmittedCapabilityIds = (
     feature: string | undefined,
   ) => boolean = isCapabilityFeatureEnabled,
 ): readonly string[] =>
-  CATALOG.filter((entry) => !isFeatureEnabled(entry.feature))
+  getCatalog()
+    .filter((entry) => !isFeatureEnabled(entry.feature))
     .map((entry) => entry.id)
     .toSorted();
 
@@ -882,7 +915,7 @@ const listCapabilitiesHandler: McpToolHandler<
   // invoke refuses them for it as well.
   const confirmable =
     context.toolConfirmation !== TOOL_CONFIRMATION.unavailable;
-  const filtered = CATALOG.filter(
+  const filtered = getCatalog().filter(
     (entry) =>
       contextFeatureEnabled(entry.feature, context) &&
       (confirmable || !entry.destructive) &&
@@ -952,7 +985,10 @@ const featureDisabledResult = (
   });
 
 const hintForUnknownId = (id: string): string => {
-  const suggestions = closestToolNames(id, CATALOG_IDS);
+  const suggestions = closestToolNames(
+    id,
+    getCatalog().map((entry) => entry.id),
+  );
   return suggestions.length > 0
     ? `${didYouMean(suggestions.map(quoteToolName))} Call list_capabilities to browse the full set.`
     : "Call list_capabilities to browse available capability ids.";
@@ -1022,7 +1058,7 @@ const describeCapabilityHandler: McpToolHandler<
     return validationErrorResult(parsed.issues);
   }
   const id = parsed.output.capability;
-  const entry = CATALOG_BY_ID.get(id);
+  const entry = getCatalogById().get(id);
   if (!entry) {
     return notFoundWithHint(id);
   }
@@ -1142,16 +1178,7 @@ const filelessFieldRefusal = (
 };
 
 const invokeInputPartSchema = (description: string) =>
-  v.optional(
-    v.pipe(
-      v.record(
-        v.string(),
-        v.unknown(),
-        (issue) => `Expected an object, got ${typeof issue.input}`,
-      ),
-      v.description(description),
-    ),
-  );
+  v.optional(v.pipe(plainRecord(v.unknown()), v.description(description)));
 
 const INVOKE_INPUT_PARTS = {
   body: invokeInputPartSchema(
@@ -1430,6 +1457,34 @@ const resolveCapabilityWorkspace = ({
   return { ok: true, workspaceId: branded };
 };
 
+export const invokedCapabilityConsumesServices = async (args: unknown) => {
+  const parsed = v.safeParse(invokeCapabilityArgsSchema, args);
+  if (!parsed.success || parsed.output.validate_only === true) {
+    // Invalid calls reach canonical validation without executing work.
+    return Result.ok(false);
+  }
+  const entry = getCatalogById().get(parsed.output.capability);
+  if (entry === undefined) {
+    return Result.ok(false);
+  }
+  if (typeof entry.consumesServices === "boolean") {
+    return Result.ok(entry.consumesServices);
+  }
+  const loaded = await loadEndpointGuarded(entry.id, "invoke_capability");
+  if (!loaded.ok) {
+    return Result.err(loaded.result);
+  }
+  return classifyValidatedCapabilityServiceInput({
+    config: loaded.endpoint.config,
+    entry,
+    publicInput: {
+      body: parsed.output.input?.body,
+      params: parsed.output.input?.params,
+      query: parsed.output.input?.query,
+    },
+  });
+};
+
 const invokeCapabilityHandler = async ({
   args,
   context,
@@ -1456,7 +1511,7 @@ const invokeCapabilityHandler = async ({
     confirm,
   } = parsed.output;
 
-  const entry = CATALOG_BY_ID.get(id);
+  const entry = getCatalogById().get(id);
 
   // 1. Unknown id -> not_found with a closest-id hint.
   if (!entry) {
@@ -1613,43 +1668,19 @@ const invokeCapabilityHandler = async ({
  *   per-(org, capability) rate limit (static tools hand-write their bridging
  *   and REST routes carry their own limits).
  */
-const executeInvoke = async ({
-  context,
-  entry,
-  id,
-  input: publicInput,
-  validateOnly,
-}: {
-  context: McpRequestContext;
-  entry: CatalogEntry;
-  id: string;
-  input: InvokeInput;
-  validateOnly: boolean;
-}): Promise<McpToolResponse> => {
-  const loaded = await loadEndpointGuarded(id, "invoke_capability");
-  if (!loaded.ok) {
-    return loaded.result;
-  }
-  const endpoint = loaded.endpoint;
+type ValidateInvokeInputOptions = {
+  config: EndpointConfig;
+  entry: Pick<CatalogEntry, "handlerKind" | "transport">;
+  publicInput: InvokeInput;
+};
 
+const validateInvokeInput = ({
+  config,
+  entry,
+  publicInput,
+}: ValidateInvokeInputOptions) => {
   const isWorkspace = entry.handlerKind === "workspace";
-  // 6. Input validation against the schemas describe_capability advertises
-  // (same `advertisedSchemas` projection of the live endpoint config, so a
-  // bound an agent read is a bound this gate enforces), run Default -> Convert
-  // -> Clean -> Check, with agent-only unknown-key rejection around Clean; see
-  // validatePart. A matter-scoped capability takes its matter as
-  // `input.params.matterId`; at
-  // REST that param belongs to the route macro's schema, not the handler
-  // config's, so it is resolved from the RAW params below (Clean would strip it
-  // from configs that do not declare it) and re-merged into the params the
-  // handler receives, exactly like the macro's merged schema.
-  // In fileless mode the withheld file field does not exist for this call, so
-  // it is removed from the schema before validation rather than merely left
-  // unset. `t.File()` carries `default: "File"`, and the Default step would
-  // otherwise inject that placeholder string into the absent optional field and
-  // then fail Check on it — a capability that is reachable in principle,
-  // un-callable in practice.
-  const advertised = advertisedSchemas(endpoint.config);
+  const advertised = advertisedSchemas(config);
   // The public field names go back to the internal ones here, before anything
   // reads the input, so the rest of this function is the REST boundary verbatim.
   // A refusal (the caller sent an internal spelling) is reported before
@@ -1676,12 +1707,15 @@ const executeInvoke = async ({
     projection.ok ? [] : projection.issues,
   );
   if (projectionIssues.length > 0) {
-    return structuredErrorResult({
-      code: "validation_error",
-      message: "Capability input failed validation",
-      issues: projectionIssues,
-      hint: "Fix the fields named in issues[] and retry.",
-    });
+    return {
+      status: "invalid" as const,
+      result: structuredErrorResult({
+        code: "validation_error",
+        message: "Capability input failed validation",
+        issues: projectionIssues,
+        hint: "Fix the fields named in issues[] and retry.",
+      }),
+    };
   }
   const [projectedBody, projectedParams, projectedQuery] = projections;
   const input: InvokeInput = {
@@ -1715,21 +1749,92 @@ const executeInvoke = async ({
     const clarificationHints = validations.flatMap((result) =>
       !result.ok && result.hint !== undefined ? [result.hint] : [],
     );
-    return structuredErrorResult({
-      code: "validation_error",
-      message: "Capability input failed validation",
-      issues,
-      hint:
-        clarificationHints.length > 0
-          ? clarificationHints.join(" ")
-          : "Fix the fields named in issues[] and retry.",
-    });
+    return {
+      status: "invalid" as const,
+      result: structuredErrorResult({
+        code: "validation_error",
+        message: "Capability input failed validation",
+        issues,
+        hint:
+          clarificationHints.length > 0
+            ? clarificationHints.join(" ")
+            : "Fix the fields named in issues[] and retry.",
+      }),
+    };
   }
 
   const [bodyResult, paramsResult, queryResult] = validations;
-  const validatedBody = bodyResult.ok ? bodyResult.value : undefined;
-  const validatedParams = paramsResult.ok ? paramsResult.value : undefined;
-  const validatedQuery = queryResult.ok ? queryResult.value : undefined;
+  return {
+    status: "valid" as const,
+    input,
+    body: bodyResult.ok ? bodyResult.value : undefined,
+    params: paramsResult.ok ? paramsResult.value : undefined,
+    query: queryResult.ok ? queryResult.value : undefined,
+  };
+};
+
+export const classifyValidatedCapabilityServiceInput = ({
+  config,
+  entry,
+  publicInput,
+}: ValidateInvokeInputOptions) => {
+  const validated = validateInvokeInput({ config, entry, publicInput });
+  if (validated.status === "invalid") {
+    return Result.err(validated.result);
+  }
+  const exposure = config.mcp;
+  if (
+    !isRecord(exposure) ||
+    exposure["type"] !== "capability" ||
+    !isServiceClassification(exposure["consumesServices"])
+  ) {
+    return panic("Capability has no service classification");
+  }
+  const classifier = exposure["consumesServices"];
+  if (typeof classifier !== "function") {
+    return panic("Capability classification differs from its catalog");
+  }
+  const consumesServices = classifier(validated);
+  if (typeof consumesServices !== "boolean") {
+    return panic("Capability service classification must return a boolean");
+  }
+  return Result.ok(consumesServices);
+};
+
+const executeInvoke = async ({
+  context,
+  entry,
+  id,
+  input: publicInput,
+  validateOnly,
+}: {
+  context: McpRequestContext;
+  entry: CatalogEntry;
+  id: string;
+  input: InvokeInput;
+  validateOnly: boolean;
+}): Promise<McpToolResponse> => {
+  const loaded = await loadEndpointGuarded(id, "invoke_capability");
+  if (!loaded.ok) {
+    return loaded.result;
+  }
+  const endpoint = loaded.endpoint;
+
+  const isWorkspace = entry.handlerKind === "workspace";
+  const validated = validateInvokeInput({
+    config: endpoint.config,
+    entry,
+    publicInput,
+  });
+  if (validated.status === "invalid") {
+    return validated.result;
+  }
+  const {
+    input,
+    body: validatedBody,
+    params: validatedParams,
+    query: validatedQuery,
+  } = validated;
 
   // 7. Workspace resolution (workspace kind only), from the RAW input params
   // (route-macro parity: REST validates the path param independently of the
@@ -1920,6 +2025,7 @@ export const mapHandlerResult = ({
 
 const CAPABILITY_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
+    consumesServices: false,
     annotations: {
       title: "List capabilities",
       destructiveHint: false,
@@ -1942,6 +2048,7 @@ const CAPABILITY_TOOL_DEFINITIONS = [
     inputSchema: listCapabilitiesArgsSchema,
   }),
   defineValibotMcpTool({
+    consumesServices: false,
     annotations: {
       title: "Describe capability",
       destructiveHint: false,
@@ -1962,6 +2069,7 @@ const CAPABILITY_TOOL_DEFINITIONS = [
     inputSchema: describeCapabilityArgsSchema,
   }),
   defineValibotMcpTool({
+    consumesServices: false,
     // openWorldHint: true because the target capability is selected at
     // runtime by id, and the catalog includes contacts.business-registries-
     // lookup, which reaches the shared business-registry dispatch (ARES,

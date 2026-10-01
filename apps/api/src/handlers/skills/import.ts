@@ -106,7 +106,11 @@ const config = {
     "scope. Each installed skill lists the package files it does not keep " +
     "(skippedFiles: path and reason).",
   permissions: { agentSkill: ["create"] },
-  mcp: { type: "capability", reason: "agent_tool_authoring" },
+  mcp: {
+    type: "capability",
+    reason: "agent_tool_authoring",
+    consumesServices: false,
+  },
   body: importSkillsBodySchema,
 } satisfies HandlerConfig;
 

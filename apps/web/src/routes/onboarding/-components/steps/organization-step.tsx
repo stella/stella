@@ -1,7 +1,6 @@
 import { useRef } from "react";
 
-import { useForm } from "@tanstack/react-form";
-import { useSelector } from "@tanstack/react-store";
+import { useForm, useSelector } from "@tanstack/react-form";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 

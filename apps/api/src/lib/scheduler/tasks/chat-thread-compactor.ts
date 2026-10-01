@@ -52,6 +52,7 @@ export const compactChatThreads: SchedulerTask = async ({
   let upToDate = 0;
   let superseded = 0;
   let noSummary = 0;
+  let anonymized = 0;
   let failed = 0;
 
   // Sequential recursion rather than a loop: one thread in flight at a time
@@ -107,6 +108,10 @@ export const compactChatThreads: SchedulerTask = async ({
         superseded += 1;
         break;
       }
+      case "anonymized": {
+        anonymized += 1;
+        break;
+      }
       default: {
         outcome.value satisfies never;
         return panic(`Unhandled value: ${String(outcome.value)}`);
@@ -135,6 +140,7 @@ export const compactChatThreads: SchedulerTask = async ({
 
   logger.info("scheduler.chat_compactor", {
     "thread.advanced": advanced,
+    "thread.anonymized": anonymized,
     "thread.claimed": claim.threads.length,
     "thread.failed": failed,
     "thread.no_summary": noSummary,
@@ -162,6 +168,8 @@ export const compactChatThreads: SchedulerTask = async ({
  *    invalidates the chain from inside a send that re-marks the thread due in
  *    the same request. Requeueing instead would spend a provider call per tick
  *    for as long as a user kept editing, to reach the same state.
+ *  - `anonymized` drains: the thread's content no longer leaves for this
+ *    request, and the claim never selects it again.
  */
 export const settlementForOutcome = (
   outcome: ChatCompactionOutcome,
@@ -179,6 +187,9 @@ export const settlementForOutcome = (
       return CHAT_COMPACTION_SETTLEMENT.FAILED;
     }
     case "superseded": {
+      return CHAT_COMPACTION_SETTLEMENT.DRAINED;
+    }
+    case "anonymized": {
       return CHAT_COMPACTION_SETTLEMENT.DRAINED;
     }
     default: {

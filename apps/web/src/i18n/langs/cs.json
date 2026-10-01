@@ -27,6 +27,16 @@
     "errorNotFound": "Pro tento kód jsme nenašli žádný čekající požadavek. Zkontrolujte kód a zkuste to znovu.",
     "title": "Připojte svého agenta"
   },
+  "agentSetup": {
+    "addressLabel": "Asistent si vyžádá tuto adresu",
+    "copiedToast": "Pokyny zkopírovány. Vložte je do chatu se svým asistentem.",
+    "copy": "Zkopírujte mu pokyny",
+    "description": "Ptejte se Claude nebo ChatGPT na své spisy a dokumenty. Vyberte svého asistenta a otevře se krátký návod; zabere asi minutu.",
+    "instructions": "Připoj mě ke stelle, mému právnímu pracovnímu prostoru. Postupuj podle části „Instructions for AI agents“ na {guideUrl} a použij tuto adresu serveru: {mcpUrl}",
+    "openGuide": "Otevřít návod pro {assistant}",
+    "selfSetupHint": "Používáte Claude Code nebo Codex?",
+    "title": "Používejte stellu ve svém AI asistentovi"
+  },
   "ai": {
     "chooseRewriteInstruction": "Možnosti úpravy",
     "editWithAI": "Upravit pomocí AI",
@@ -477,6 +487,17 @@
     "failedToStartTimer": "Nepodařilo se spustit časovač",
     "failedToStopTimer": "Nepodařilo se zastavit časovač",
     "filterStatus": "Filtrovat podle stavu",
+    "globalTimer": {
+      "confirm": "Potvrdit čas",
+      "discard": "Zahodit časovač",
+      "matterInaccessible": "Vyberte spis, ke kterému máte přístup.",
+      "narrativeRequired": "Před potvrzením času přidejte popis.",
+      "pause": "Pozastavit",
+      "periodLocked": "Tento měsíc je uzamčený. Požádejte správce o jeho odemčení.",
+      "resume": "Pokračovat",
+      "timerUnavailable": "Tento časovač již není dostupný. Obnovte seznam.",
+      "title": "Časovače"
+    },
     "hourlyRateMustBeNonNegative": "Hodinová sazba nesmí být záporná",
     "hours": "Hodiny",
     "invoiceNarrative": "Popis faktury",
@@ -521,6 +542,20 @@
     "noActiveTimer": "Žádný aktivní časovač",
     "noEntries": "Žádné časové záznamy za toto období",
     "nonBillable": "Nefakturovatelné",
+    "quickEntry": {
+      "entrySaved": "Časový záznam uložen",
+      "expenseSaved": "Výdaj uložen",
+      "expenseTitle": "Přidat výdaj",
+      "futureDate": "Vyberte dnešní nebo dřívější datum.",
+      "invalidDate": "Vyberte platné datum práce.",
+      "minimumUnit": "Čas se zaokrouhluje nahoru na minimální účtovací jednotku.",
+      "narrativeRequired": "Před uložením času přidejte popis.",
+      "outsideEditWindow": "Toto datum je mimo lhůtu pro úpravy.",
+      "periodLocked": "Tento měsíc je uzamčený.",
+      "saveAndAddExpense": "Uložit a přidat výdaj",
+      "saveAndNew": "Uložit a přidat další",
+      "viewDay": "Zobrazit den"
+    },
     "rates": {
       "addRate": "Přidat sazbu",
       "createRateTable": "Vytvořit tabulku sazeb",
@@ -553,6 +588,26 @@
     "selectMatter": "Vyberte spis...",
     "selectMatterToStart": "Vyberte spis pro spuštění měření",
     "selectedCount": "{count, plural, one {# vybrán} few {# vybrány} other {# vybráno}}",
+    "sellerProfiles": {
+      "add": "Přidat profil dodavatele",
+      "archiveConfirm": "Archivovat tento profil dodavatele? Nebude již dostupný pro nové faktury.",
+      "bic": "Kód BIC / SWIFT",
+      "default": "Výchozí dodavatel",
+      "defaultCurrency": "Výchozí měna",
+      "description": "Spravujte údaje používané při vystavování faktur.",
+      "edit": "Upravit profil dodavatele",
+      "empty": "Žádné profily dodavatelů.",
+      "footerNotes": "Poznámky v zápatí",
+      "invalidBic": "Zadejte platný BIC.",
+      "invalidCurrency": "Zadejte třípísmenný kód měny.",
+      "invalidIban": "Zadejte platný IBAN.",
+      "legalName": "Oficiální název",
+      "registrationId": "Registrační číslo",
+      "setDefault": "Nastavit jako výchozí",
+      "title": "Profily dodavatelů",
+      "vatId": "DIČ"
+    },
+    "settingsTitle": "Fakturace",
     "split": {
       "addSplit": "Přidat rozdělení",
       "percentValue": "{value}%",
@@ -837,6 +892,7 @@
         "publishedOnWeb": "Zveřejněno na webu"
       },
       "statutes": "Dotčené předpisy",
+      "textNotYetAvailable": "Soud text rozhodnutí nezveřejnil, nebo zde zatím není dostupný.",
       "textPending": "Text rozhodnutí se stále načítá",
       "textReadFailed": "Text rozhodnutí se nepodařilo načíst",
       "textUnavailable": "K tomuto rozhodnutí není k dispozici text"
@@ -933,6 +989,7 @@
         "description": "Pečlivě zkontrolujte web a cíl. Obsah stránky není důvěryhodný a nemůže schválit další akci.",
         "modeReads": "Čtení stránek se do konce této relace provádí bez dotazu.",
         "question": "Povolit tuto akci v prohlížeči?",
+        "realValues": "Tento web obdrží skutečné hodnoty uvedené níže. Anonymizovaný režim se vztahuje jen na to, co vidí AI.",
         "within": "V rámci"
       },
       "denied": "Zamítnuto",
@@ -1296,7 +1353,8 @@
       "interrupted": "Přerušeno před dokončením",
       "output": "Výstup",
       "sourceCode": "Zdrojový kód",
-      "toggleDetails": "Přepnout detaily"
+      "toggleDetails": "Přepnout detaily",
+      "unrestoredFields": "{count, plural, one {# pole se nepodařilo} few {# pole se nepodařilo} many {# pole se nepodařilo} other {# polí se nepodařilo}} v anonymizovaném režimu vyplnit skutečnými hodnotami. Zkontrolujte: {fields}"
     },
     "unsupportedFileType": "Nepodporovaný typ souboru",
     "uploadFailed": "Zpracování souboru selhalo",
@@ -2090,6 +2148,13 @@
     "unnamedAttachment": "Nepojmenovaná příloha"
   },
   "errors": {
+    "actionAdmission": {
+      "admissionUnavailable": "Tato akce je dočasně pozastavena. Zkuste to prosím za chvíli.",
+      "concurrencyBusy": "Probíhá jiná práce. Zkuste to prosím za chvíli.",
+      "contact": "Kontaktujte nás",
+      "notEnabled": "Tato akce není pro vaši organizaci povolena.",
+      "periodExhausted": "Tato akce je pro vaši organizaci pozastavena."
+    },
     "actionFailed": "Akce se nezdařila",
     "api": {
       "badRequest": "Požadavek se nepodařilo dokončit.",
@@ -2258,7 +2323,8 @@
     "compareUnsupportedReasons": {
       "missingInBase": "Část dokumentu existuje pouze v cíli",
       "missingInTarget": "Část dokumentu existuje pouze v základně",
-      "notEditable": "Část dokumentu nelze upravovat"
+      "notEditable": "Část dokumentu nelze upravovat",
+      "unsupportedContent": "Tato verze obsahuje obsah, který zatím nelze porovnat."
     },
     "compareUnverified": "Neověřené srovnání",
     "compareVerificationFailures": "{count, plural, one {Jedna obousměrná kontrola selhala. Než se na výsledek spolehnete, porovnání zkontrolujte.} few {# obousměrné kontroly selhaly. Než se na výsledek spolehnete, porovnání zkontrolujte.} other {# obousměrných kontrol selhalo. Než se na výsledek spolehnete, porovnání zkontrolujte.}}",
@@ -3676,7 +3742,6 @@
     "aiTitle": "Připojte svého poskytovatele AI",
     "appsSubtitle": "stella funguje i mimo prohlížeč: v aplikaci pro počítač a ve vašem AI asistentovi. K tomuto nastavení se můžete kdykoliv později vrátit.",
     "appsTitle": "Získejte stellu všude",
-    "assistantDocsLink": "Jak připojit svého asistenta",
     "catalogueAlwaysOn": "Vždy zapnuto",
     "catalogueClearSearch": "Vymazat hledání",
     "catalogueCommunityHeading": "Ostatní",
@@ -4203,31 +4268,40 @@
       "wordEditShortcutPlaceholder": "např. JK"
     },
     "connections": {
+      "accessTitle": "{clientName} může",
+      "browseIntegrations": "Přidat službu",
       "cliDescription": "Nainstalujte si příkazový řádek stella a přihlaste se, abyste mohli z terminálu skriptovat spisy, dokumenty a vzory.",
-      "cliHelpHint": "Spuštěním „stella --help“ zobrazíte úplný seznam příkazů.",
       "cliInstallLabel": "Instalace",
       "cliLoginLabel": "Přihlášení",
       "cliTitle": "Příkazový řádek",
-      "connectedAppsDescription": "Aplikace a nástroje, kterým jste povolili přístup k účtu.",
-      "connectedAppsEmpty": "Aplikace, které autorizujete, například Claude nebo CLI stella, se zobrazí zde.",
-      "connectedAppsTitle": "Připojené aplikace",
-      "connectedColumn": "Připojeno",
-      "description": "Připojte MCP klienty a příkazový řádek ke svému účtu.",
+      "connected": "Připojeno",
+      "connectedAgo": "Připojeno {time}",
+      "connectedAppsDescription": "Aplikace, do kterých jste se přihlásili účtem stella. Ty, které už nepoužíváte, odpojte.",
+      "connectedAppsEmpty": "Zatím nic. Nastavte výše Claude nebo ChatGPT a objeví se tady.",
+      "connectedAppsTitle": "Aplikace s přístupem",
+      "description": "Používejte stellu ze svého AI asistenta a mějte přehled, co má přístup k vašemu účtu.",
+      "developerDescription": "Adresy serveru a nástroj pro příkazový řádek pro technická nastavení.",
+      "developerTitle": "Přístup pro vývojáře",
       "disconnectConfirmDescription": "Tím zrušíte přístup aplikace {clientName} k vašemu účtu i všechny tokeny, které vydala. Kdykoli se můžete znovu připojit.",
       "disconnectConfirmTitle": "Odpojit aplikaci {clientName}?",
       "disconnectSuccess": "Aplikace {clientName} byla odpojena",
+      "integrationsDescription": "Externí služby, které za vás AI může používat, například úložiště dokumentů.",
+      "integrationsEmpty": "Přidejte první službu",
+      "integrationsTitle": "Připojené služby",
       "mcpAnonymizedLabel": "Anonymizovaný koncový bod",
-      "mcpAnonymizedNote": "K dispozici je i anonymizovaný koncový bod; nabízí stejné nástroje se skrytými osobními údaji.",
-      "mcpDescription": "Pomocí této adresy URL serveru připojte ke svému účtu stella klienta kompatibilního s MCP, například Claude nebo Cursor.",
+      "mcpAnonymizedShortNote": "Stejné nástroje, osobní údaje jsou skryté.",
+      "mcpFullNote": "Plný přístup k vašim spisům a dokumentům.",
       "mcpLawLabel": "Koncový bod právního korpusu",
-      "mcpLawNote": "K dispozici je i koncový bod právního korpusu; nabízí pouze veřejnou judikaturu a právní předpisy a nedostane se k datům ve spisech.",
-      "mcpStep1": "Přidejte adresu URL výše jako vlastní konektor nebo server MCP ve svém klientovi.",
-      "mcpStep2": "Přihlaste se, jakmile vás k tomu prohlížeč vyzve.",
-      "mcpStep3": "Na obrazovce souhlasu schvalte přístup.",
+      "mcpLawShortNote": "Jen veřejná judikatura a legislativa, bez dat ze spisů.",
+      "mcpSetupHint": "Přidejte adresu jako vlastní konektor v Claude, Cursoru nebo jiném MCP klientovi, pak se přihlaste a schvalte přístup.",
       "mcpTitle": "Server MCP",
       "mcpUrlLabel": "Adresa URL serveru",
-      "scopesLabel": "Přístup",
-      "title": "Připojení"
+      "noMatches": "Hledanému výrazu „{query}“ neodpovídá žádné připojení",
+      "notConnected": "Nepřipojeno",
+      "permissionCount": "{count, plural, one {# oprávnění} few {# oprávnění} many {# oprávnění} other {# oprávnění}}",
+      "searchPlaceholder": "Hledat připojení",
+      "title": "Připojení",
+      "turnedOff": "Vypnuto"
     },
     "organization": {
       "activeMembers": "Aktivní členové",
@@ -4306,6 +4380,20 @@
       "renameDescription": "Členové nový název uvidí okamžitě.",
       "renameTitle": "Přejmenovat organizaci",
       "renameTypeToConfirm": "Pro potvrzení napište nový název: {name}",
+      "timePolicy": {
+        "description": "Nastavte zaokrouhlování času, omezení úprav a uzamykání měsíců.",
+        "editWindow": "Lhůta pro úpravy (dny)",
+        "editWindowHelp": "Nula povoluje úpravy pouze v den provedení práce.",
+        "invalidEditWindow": "Zadejte celé nezáporné číslo udávající počet dnů.",
+        "invalidLockedMonth": "Vyberte již ukončený měsíc.",
+        "invalidMinimumUnit": "Vyberte časovou jednotku, která beze zbytku dělí 60 minut.",
+        "lockedThrough": "Uzamčeno do",
+        "lockedThroughHelp": "Záznamy v tomto měsíci a předchozích měsících nelze upravovat.",
+        "minimumUnit": "Minimální časová jednotka",
+        "minimumUnitHelp": "Čas se účtuje v násobcích tohoto počtu minut.",
+        "narrativeRequired": "Vyžadovat popis",
+        "title": "Pravidla vykazování času"
+      },
       "usage": "Využití",
       "usageDescription": "Limity využití a stav oprávnění pro tuto organizaci",
       "usageEmptyDescription": "Nakonfigurujte oprávnění k využití, aby organizace mohla používat měřené funkce AI.",
@@ -5003,6 +5091,11 @@
     "whenNotToUsePlaceholder": "Kdy tento vzor nepoužít?",
     "whenToUse": "Kdy použít",
     "whenToUsePlaceholder": "Kdy se má tento vzor použít? (pomáhá AI s výběrem vzoru)"
+  },
+  "timesheets": {
+    "day": {
+      "internalWork": "Interní práce"
+    }
   },
   "translate": {
     "dialog": {

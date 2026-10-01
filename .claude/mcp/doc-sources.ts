@@ -16,6 +16,22 @@ export type NoLlmsTxtExclusion = {
 };
 
 export const DOC_SOURCES = {
+  Anthropic: {
+    dependencies: ["@anthropic-ai/sdk"],
+    url: "https://platform.claude.com/llms.txt",
+  },
+  Mistral: {
+    dependencies: ["@mistralai/mistralai"],
+    url: "https://docs.mistral.ai/llms.txt",
+  },
+  OpenAI: {
+    dependencies: ["openai"],
+    url: "https://developers.openai.com/llms.txt",
+  },
+  OpenRouter: {
+    dependencies: ["@openrouter/sdk"],
+    url: "https://openrouter.ai/docs/llms.txt",
+  },
   Elysia: {
     dependencies: ["elysia", "@elysia/cors", "@elysia/eden"],
     url: "https://elysiajs.com/llms.txt",
@@ -47,7 +63,6 @@ export const DOC_SOURCES = {
       "@tanstack/react-hotkeys",
       "@tanstack/react-router",
       "@tanstack/react-router-devtools",
-      "@tanstack/react-store",
       "@tanstack/react-table",
       "@tanstack/react-table-devtools",
       "@tanstack/react-virtual",
@@ -93,10 +108,6 @@ export const DOC_SOURCES = {
     dependencies: ["@base-ui/react"],
     url: "https://base-ui.com/llms.txt",
   },
-  DndKit: {
-    dependencies: ["@dnd-kit/core", "@dnd-kit/sortable"],
-    url: "https://dndkit.com/llms.txt",
-  },
   Valibot: {
     dependencies: ["valibot", "@valibot/to-json-schema"],
     url: "https://valibot.dev/llms.txt",
@@ -108,25 +119,18 @@ export const DOC_SOURCES = {
       "@tiptap/extension-document",
       "@tiptap/extension-hard-break",
       "@tiptap/extension-heading",
-      "@tiptap/extension-history",
       "@tiptap/extension-italic",
       "@tiptap/extension-list",
       "@tiptap/extension-mention",
       "@tiptap/extension-paragraph",
-      "@tiptap/extension-placeholder",
       "@tiptap/extension-text",
+      "@tiptap/extensions",
       "@tiptap/pm",
       "@tiptap/react",
       "@tiptap/suggestion",
       "@hocuspocus/extension-redis",
       "@hocuspocus/provider",
       "@hocuspocus/server",
-      "prosemirror-commands",
-      "prosemirror-history",
-      "prosemirror-keymap",
-      "prosemirror-model",
-      "prosemirror-state",
-      "prosemirror-view",
       "y-prosemirror",
     ],
     url: "https://tiptap.dev/docs/llms.txt",
@@ -147,6 +151,7 @@ export const DOC_SOURCES = {
       "expo-router",
       "expo-status-bar",
       "expo-system-ui",
+      "expo-updates",
       "react-native-safe-area-context",
       "react-native-screens",
     ],
@@ -198,7 +203,7 @@ export const DOC_SOURCES = {
     url: "https://turborepo.dev/llms.txt",
   },
   PostHog: {
-    dependencies: ["posthog-js", "posthog-node", "@posthog/react"],
+    dependencies: ["posthog-js", "posthog-node"],
     url: "https://posthog.com/llms.txt",
   },
   Zustand: {
@@ -252,10 +257,6 @@ export const DOC_SOURCES = {
     dependencies: ["lucide-react"],
     url: "https://lucide.dev/llms.txt",
   },
-  ReactGrab: {
-    dependencies: ["react-grab"],
-    url: "https://react-grab.com/llms.txt",
-  },
   Tsdown: {
     dependencies: ["tsdown"],
     url: "https://tsdown.dev/llms.txt",
@@ -300,7 +301,6 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "@changesets/changelog-github",
   "@changesets/cli",
   "@electric-sql/pglite",
-  "@faker-js/faker",
   "@firecrawl/anydoc",
   "@formatjs/icu-messageformat-parser",
   "@google/genai",
@@ -333,7 +333,6 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "@vscode/markdown-editor",
   "@vscode/observables",
   "astro",
-  "buffer",
   "cheerio",
   "class-variance-authority",
   "client-zip",
@@ -345,13 +344,12 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "driver.js",
   "entities",
   "eslint",
-  "expect-type",
   "expo-doctor",
   "franc",
+  "happy-dom",
   "immer",
   "input-otp",
   "ioredis",
-  "ip-address",
   "jose",
   "jszip",
   "katex",
@@ -363,7 +361,6 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "pdfjs-dist",
   "postal-mime",
   "prism-react-renderer",
-  "quickjs-emscripten",
   "quickjs-emscripten-core",
   "re2-wasm",
   "react-native-web",
@@ -387,6 +384,14 @@ export const DOC_SOURCE_EXCLUSIONS = [
 ]
   .map(noLlmsTxt)
   .concat(
+    {
+      checkedAt: "2026-09-30T00:00:00.000Z",
+      dependency: "@standard-schema/spec",
+      explanation:
+        "https://standardschema.dev/llms.txt returns 404. Use the specification at https://standardschema.dev and the typed interfaces in @standard-schema/spec directly.",
+      expiresAt: "2026-10-30T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
     {
       checkedAt: "2026-09-27T00:00:00.000Z",
       dependency: "mailauth",
@@ -424,14 +429,6 @@ export const DOC_SOURCE_EXCLUSIONS = [
       dependency: "fast-xml-parser",
       explanation:
         "The project publishes no llms.txt (https://naturalintelligence.github.io/fast-xml-parser/llms.txt returns 404). Use the docs at https://github.com/NaturalIntelligence/fast-xml-parser/tree/master/docs and the typed API in its package (src/fxp.d.ts) directly.",
-      expiresAt: "2026-10-27T00:00:00.000Z",
-      reason: "no-llms-txt",
-    },
-    {
-      checkedAt: "2026-09-27T00:00:00.000Z",
-      dependency: "fast-xml-validator",
-      explanation:
-        "The project publishes no llms.txt. Use the README at https://github.com/NaturalIntelligence/fast-xml-validator and the typed API in its package (src/fxv.d.ts) directly.",
       expiresAt: "2026-10-27T00:00:00.000Z",
       reason: "no-llms-txt",
     },

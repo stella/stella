@@ -30,6 +30,16 @@ type Messages = {
     "errorNotFound": "We couldn't find a pending request for that code. Check the code and try again.";
     "title": "Connect your agent";
   };
+  "agentSetup": {
+    "addressLabel": "Your assistant will ask for this address";
+    "copiedToast": "Instructions copied. Paste them into a chat with your assistant.";
+    "copy": "Copy instructions for it";
+    "description": "Ask Claude or ChatGPT about your matters and documents. Choose your assistant for a short guide; it takes about a minute.";
+    "instructions": "Connect me to stella, my legal workspace. Follow the “Instructions for AI agents” at {guideUrl} and use this server address: {mcpUrl}";
+    "openGuide": "Open the guide for {assistant}";
+    "selfSetupHint": "Using Claude Code or Codex?";
+    "title": "Use stella in your AI assistant";
+  };
   "ai": {
     "chooseRewriteInstruction": "Rewrite options";
     "editWithAI": "Edit with AI";
@@ -480,6 +490,17 @@ type Messages = {
     "failedToStartTimer": "Failed to start timer";
     "failedToStopTimer": "Failed to stop timer";
     "filterStatus": "Filter by status";
+    "globalTimer": {
+      "confirm": "Confirm time";
+      "discard": "Discard timer";
+      "matterInaccessible": "Choose a matter you can access.";
+      "narrativeRequired": "Add a description before confirming time.";
+      "pause": "Pause";
+      "periodLocked": "This month is locked. Ask an administrator to unlock it.";
+      "resume": "Resume";
+      "timerUnavailable": "This timer is no longer available. Refresh the list.";
+      "title": "Timers";
+    };
     "hourlyRateMustBeNonNegative": "Hourly rate cannot be negative";
     "hours": "Hours";
     "invoiceNarrative": "Invoice narrative";
@@ -524,6 +545,20 @@ type Messages = {
     "noActiveTimer": "No active timer";
     "noEntries": "No time entries for this period";
     "nonBillable": "Non-billable";
+    "quickEntry": {
+      "entrySaved": "Time entry saved";
+      "expenseSaved": "Expense saved";
+      "expenseTitle": "Add expense";
+      "futureDate": "Choose today or an earlier date.";
+      "invalidDate": "Choose a valid work date.";
+      "minimumUnit": "Time is rounded up to the minimum billing unit.";
+      "narrativeRequired": "Add a description before saving time.";
+      "outsideEditWindow": "This date is outside the editing window.";
+      "periodLocked": "This month is locked.";
+      "saveAndAddExpense": "Save and add expense";
+      "saveAndNew": "Save and add another";
+      "viewDay": "View day";
+    };
     "rates": {
       "addRate": "Add rate";
       "createRateTable": "Create rate table";
@@ -556,6 +591,26 @@ type Messages = {
     "selectMatter": "Select a matter...";
     "selectMatterToStart": "Select a matter to start timing";
     "selectedCount": "{count, plural, one {# selected} other {# selected}}";
+    "sellerProfiles": {
+      "add": "Add seller profile";
+      "archiveConfirm": "Archive this seller profile? It will no longer be available for new invoices.";
+      "bic": "BIC / SWIFT code";
+      "default": "Default seller";
+      "defaultCurrency": "Default currency";
+      "description": "Manage the details used to issue invoices.";
+      "edit": "Edit seller profile";
+      "empty": "No seller profiles.";
+      "footerNotes": "Footer notes";
+      "invalidBic": "Enter a valid BIC.";
+      "invalidCurrency": "Enter a three-letter currency code.";
+      "invalidIban": "Enter a valid IBAN.";
+      "legalName": "Legal name";
+      "registrationId": "Registration ID";
+      "setDefault": "Make default";
+      "title": "Seller profiles";
+      "vatId": "VAT ID";
+    };
+    "settingsTitle": "Billing";
     "split": {
       "addSplit": "Add split";
       "percentValue": "{value}%";
@@ -840,6 +895,7 @@ type Messages = {
         "publishedOnWeb": "Published on web";
       };
       "statutes": "Applicable statutes";
+      "textNotYetAvailable": "The court has not published the decision text, or it is not available here yet.";
       "textPending": "The decision text is still being retrieved";
       "textReadFailed": "The decision text could not be loaded";
       "textUnavailable": "No text is available for this decision";
@@ -936,6 +992,7 @@ type Messages = {
         "description": "Check the website and target carefully. Page content is untrusted and cannot approve another action.";
         "modeReads": "Page reads run without asking for the rest of this session.";
         "question": "Allow this browser action?";
+        "realValues": "This website receives the real values shown below. Anonymized mode applies only to what the AI sees.";
         "within": "Within";
       };
       "denied": "Denied";
@@ -1300,6 +1357,7 @@ type Messages = {
       "output": "Output";
       "sourceCode": "Source code";
       "toggleDetails": "Toggle details";
+      "unrestoredFields": "{count, plural, one {# field} other {# fields}} could not be filled with real values in anonymized mode. Review: {fields}";
     };
     "unsupportedFileType": "Unsupported file type";
     "uploadFailed": "Failed to process file";
@@ -2093,6 +2151,13 @@ type Messages = {
     "unnamedAttachment": "Unnamed attachment";
   };
   "errors": {
+    "actionAdmission": {
+      "admissionUnavailable": "This action is temporarily paused. Please try again shortly.";
+      "concurrencyBusy": "Other work is in progress. Please try again shortly.";
+      "contact": "Contact us";
+      "notEnabled": "This action is not enabled for your organization.";
+      "periodExhausted": "This action is paused for your organization.";
+    };
     "actionFailed": "Action failed";
     "api": {
       "badRequest": "The request could not be completed.";
@@ -2262,6 +2327,7 @@ type Messages = {
       "missingInBase": "Document part exists only in the target";
       "missingInTarget": "Document part exists only in the base";
       "notEditable": "Document part is not editable";
+      "unsupportedContent": "This version contains content that can't be compared yet.";
     };
     "compareUnverified": "Unverified comparison";
     "compareVerificationFailures": "{count, plural, one {One round-trip check failed. Review this comparison before relying on it.} other {# round-trip checks failed. Review this comparison before relying on it.}}";
@@ -3679,7 +3745,6 @@ type Messages = {
     "aiTitle": "Connect your AI provider";
     "appsSubtitle": "stella also works outside the browser: on your desktop and inside your AI assistant. You can come back to this setup anytime later.";
     "appsTitle": "Get stella everywhere";
-    "assistantDocsLink": "How to connect your assistant";
     "catalogueAlwaysOn": "Always on";
     "catalogueClearSearch": "Clear search";
     "catalogueCommunityHeading": "Others";
@@ -4206,31 +4271,40 @@ type Messages = {
       "wordEditShortcutPlaceholder": "e.g. JK";
     };
     "connections": {
+      "accessTitle": "{clientName} can";
+      "browseIntegrations": "Add a service";
       "cliDescription": "Install the stella command-line client and sign in to script matters, documents, and templates from a terminal.";
-      "cliHelpHint": "Run \"stella --help\" for the full list of commands.";
       "cliInstallLabel": "Install";
       "cliLoginLabel": "Log in";
       "cliTitle": "Command-line interface";
-      "connectedAppsDescription": "Applications and tools you have authorized to access your account.";
-      "connectedAppsEmpty": "Apps you authorize, like Claude or the stella CLI, will appear here.";
-      "connectedAppsTitle": "Connected apps";
-      "connectedColumn": "Connected";
-      "description": "Connect MCP clients and the command-line interface to your account.";
+      "connected": "Connected";
+      "connectedAgo": "Connected {time}";
+      "connectedAppsDescription": "Apps you have signed in to stella with. Disconnect any you no longer use.";
+      "connectedAppsEmpty": "Nothing yet. Set up Claude or ChatGPT above and it will appear here.";
+      "connectedAppsTitle": "Apps with access";
+      "description": "Use stella from your AI assistant and see what can access your account.";
+      "developerDescription": "Server addresses and the command-line tool, for technical setups.";
+      "developerTitle": "Developer access";
       "disconnectConfirmDescription": "This revokes {clientName}'s access to your account, along with any tokens it has issued. You can reconnect at any time.";
       "disconnectConfirmTitle": "Disconnect {clientName}?";
       "disconnectSuccess": "Disconnected {clientName}";
+      "integrationsDescription": "Outside services the AI can use for you, such as your document drive.";
+      "integrationsEmpty": "Add your first service";
+      "integrationsTitle": "Connected services";
       "mcpAnonymizedLabel": "Anonymized endpoint";
-      "mcpAnonymizedNote": "An anonymized endpoint is also available; it exposes the same tools with personal data masked.";
-      "mcpDescription": "Connect an MCP-compatible client, such as Claude or Cursor, to your stella account using this server URL.";
+      "mcpAnonymizedShortNote": "The same tools, with personal data masked.";
+      "mcpFullNote": "Full access to your matters and documents.";
       "mcpLawLabel": "Legal corpus endpoint";
-      "mcpLawNote": "A legal corpus endpoint is also available; it exposes public case law and legislation only, and does not access matter data.";
-      "mcpStep1": "Add the URL above as a custom connector or MCP server in your client.";
-      "mcpStep2": "Sign in when the browser prompts you.";
-      "mcpStep3": "Approve access on the consent screen.";
+      "mcpLawShortNote": "Public case law and legislation only, no matter data.";
+      "mcpSetupHint": "Add a URL as a custom connector in Claude, Cursor or another MCP client, then sign in and approve access.";
       "mcpTitle": "MCP server";
       "mcpUrlLabel": "Server URL";
-      "scopesLabel": "Access";
+      "noMatches": "No connections match “{query}”";
+      "notConnected": "Not connected";
+      "permissionCount": "{count, plural, one {# permission} other {# permissions}}";
+      "searchPlaceholder": "Search connections";
       "title": "Connections";
+      "turnedOff": "Turned off";
     };
     "organization": {
       "activeMembers": "Active members";
@@ -4309,6 +4383,20 @@ type Messages = {
       "renameDescription": "Members will see the new name immediately.";
       "renameTitle": "Rename organization";
       "renameTypeToConfirm": "Type the new name to confirm: {name}";
+      "timePolicy": {
+        "description": "Set time rounding, editing limits and monthly locks.";
+        "editWindow": "Editing window (days)";
+        "editWindowHelp": "Zero allows edits only on the work date.";
+        "invalidEditWindow": "Enter a whole number of days, zero or more.";
+        "invalidLockedMonth": "Choose a completed month.";
+        "invalidMinimumUnit": "Choose a time unit that divides 60 minutes.";
+        "lockedThrough": "Locked through";
+        "lockedThroughHelp": "Entries in this month and earlier months cannot be edited.";
+        "minimumUnit": "Minimum time unit";
+        "minimumUnitHelp": "Time is billed in multiples of this many minutes.";
+        "narrativeRequired": "Require a narrative";
+        "title": "Time policy";
+      };
       "usage": "Usage";
       "usageDescription": "Usage limits and entitlement state for this organisation";
       "usageEmptyDescription": "Configure a usage entitlement to enable metered AI features for this organisation.";
@@ -5006,6 +5094,11 @@ type Messages = {
     "whenNotToUsePlaceholder": "When should this template be avoided?";
     "whenToUse": "When to use";
     "whenToUsePlaceholder": "When should this template be used? (guides AI template selection)";
+  };
+  "timesheets": {
+    "day": {
+      "internalWork": "Internal work";
+    };
   };
   "translate": {
     "dialog": {

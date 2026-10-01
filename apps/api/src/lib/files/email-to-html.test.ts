@@ -1,12 +1,17 @@
 import { Result } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import { load } from "cheerio";
+import PostalMime from "postal-mime";
 
 import { MAX_EMAIL_CITATION_BLOCKS } from "@stll/api-contract";
-import { resolveEmailMimeType } from "@stll/api-contract/email-mime-types";
+import {
+  EML_MIME_TYPE,
+  resolveEmailMimeType,
+} from "@stll/api-contract/email-mime-types";
 
 import {
   buildEmailPreview,
+  EmailParseError,
   emailToHtml,
   emailToPreview,
   parsedEmailToText,
@@ -32,6 +37,29 @@ const PNG_BASE64 =
 const SVG_BASE64 = Buffer.from(
   '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>',
 ).toString("base64");
+
+test("email parsing preserves typed failures and their cause", async () => {
+  const cause = new Error("Parser unavailable");
+  const parse = spyOn(PostalMime.prototype, "parse").mockRejectedValue(cause);
+  try {
+    const bytes = toArrayBuffer("Subject: Example\r\n\r\nExample body");
+    const results = [
+      await parseEmail(bytes, EML_MIME_TYPE),
+      await emailToHtml(bytes, EML_MIME_TYPE),
+      await emailToPreview(bytes, EML_MIME_TYPE),
+    ];
+    for (const result of results) {
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error).toBeInstanceOf(EmailParseError);
+        expect(result.error.mimeType).toBe(EML_MIME_TYPE);
+        expect(result.error.cause).toBe(cause);
+      }
+    }
+  } finally {
+    parse.mockRestore();
+  }
+});
 
 describe("resolveEmailMimeType", () => {
   test("keeps explicit email MIME types", () => {
@@ -1032,7 +1060,9 @@ describe("emailToHtml (.eml)", () => {
   });
 
   test("keeps ordinary attachment bytes for extraction", async () => {
-    const parsed = await parseEmail(toArrayBuffer(eml), "message/rfc822");
+    const parsed = (
+      await parseEmail(toArrayBuffer(eml), "message/rfc822")
+    ).unwrap();
     const attachment = parsed.attachments.find(
       (item) => item.fileName === "notes.txt",
     );
@@ -1058,15 +1088,17 @@ describe("emailToHtml (.eml)", () => {
       ["koi", "koi8-r"],
       ["utf-16", "utf-16"],
     ] as const) {
-      const parsed = await parseEmail(
-        toArrayBuffer(
-          eml.replace(
-            "Content-Type: text/plain; charset=utf-8",
-            () => `Content-Type: text/plain; charset=${declaredCharset}`,
+      const parsed = (
+        await parseEmail(
+          toArrayBuffer(
+            eml.replace(
+              "Content-Type: text/plain; charset=utf-8",
+              () => `Content-Type: text/plain; charset=${declaredCharset}`,
+            ),
           ),
-        ),
-        "message/rfc822",
-      );
+          "message/rfc822",
+        )
+      ).unwrap();
 
       expect(
         parsed.attachments.find(({ fileName }) => fileName === "notes.txt")
@@ -1116,7 +1148,7 @@ describe("emailToHtml (.eml)", () => {
     ].join("\r\n");
 
     const preview = buildEmailPreview(
-      await parseEmail(toArrayBuffer(unicodeEml), "message/rfc822"),
+      (await parseEmail(toArrayBuffer(unicodeEml), "message/rfc822")).unwrap(),
     );
 
     expect(preview.from).toBe("Žofie Nováková <zofie@example.cz>");

@@ -558,6 +558,15 @@ export const ROLE_GRANT_STATEMENTS = [
     GRANT UPDATE (provisioning_status, attested_at, updated_at)
       ON TABLE "corpus_index_group_enrollments" TO stella_ingestion
   `,
+  // The withdrawal trail is append-only: ingestion records, the app reads.
+  `
+    REVOKE INSERT, UPDATE, DELETE ON TABLE "corpus_index_group_withdrawals"
+    FROM stella
+  `,
+  `
+    GRANT SELECT, INSERT ON TABLE "corpus_index_group_withdrawals"
+    TO stella_ingestion
+  `,
   `
     GRANT INSERT, UPDATE ON TABLE
       ${CORPUS_PROJECTION_HISTORY_TABLES_SQL}
@@ -694,9 +703,16 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
 /**
  * Create a test PGlite: from the batching runner's snapshot when
  * PGLITE_TEST_SNAPSHOT is set, otherwise via the full in-process build so
- * solo `bun test <file>` runs keep working without the runner.
+ * solo `bun test <file>` runs keep working without the runner. A suite may
+ * supply its own snapshot with additional DDL and seed data baked in.
  */
-export const createTestPglite = async (): Promise<PGlite> => {
+export const createTestPglite = async (snapshot?: Blob): Promise<PGlite> => {
+  if (snapshot !== undefined) {
+    return await PGlite.create({
+      extensions: { pg_trgm },
+      loadDataDir: snapshot,
+    });
+  }
   const snapshotPath = process.env[PGLITE_TEST_SNAPSHOT_ENV];
   if (snapshotPath === undefined || snapshotPath.length === 0) {
     return await buildFullTestPglite();

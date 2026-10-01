@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
 import { getApiHealthUrl, parseHealthCommit } from "./api-health";
 import { advanceDeploymentStability } from "./check-api-deployment";
@@ -53,6 +54,65 @@ describe("API deployment health receipt", () => {
 
     expect(setupPin).toBeDefined();
     expect(releasePin).toBe(setupPin);
+  });
+
+  test("staging checks share their access configuration", async () => {
+    const workflowSchema = v.object({
+      jobs: v.record(
+        v.string(),
+        v.object({
+          steps: v.optional(
+            v.array(
+              v.object({
+                run: v.optional(v.string()),
+                env: v.optional(v.record(v.string(), v.unknown())),
+              }),
+            ),
+          ),
+        }),
+      ),
+    });
+    // Steps that reach staging through the viewer lock, found by what they
+    // run, so a step that drops its access entries is still checked.
+    const stagingTargets = [
+      "$STAGING_HEALTH_URL",
+      "test:e2e:staging",
+      "apps/api/src/scripts/post-deploy-smoke.ts",
+      "apps/api/src/scripts/post-deploy-response-policy.ts",
+    ];
+    const workflowsDir = new URL("../.github/workflows/", import.meta.url);
+    const consumers: { run: string; env: Record<string, unknown> }[] = [];
+    for await (const file of new Bun.Glob("*.yml").scan(
+      workflowsDir.pathname,
+    )) {
+      const parsed = v.parse(
+        workflowSchema,
+        Bun.YAML.parse(await Bun.file(new URL(file, workflowsDir)).text()),
+      );
+      for (const { steps } of Object.values(parsed.jobs)) {
+        for (const { run = "", env = {} } of steps ?? []) {
+          if (
+            stagingTargets.some((target) => run.includes(target)) ||
+            Object.keys(env).some((key) => key.endsWith("EDGE_HEADER_VALUE"))
+          ) {
+            consumers.push({ run, env });
+          }
+        }
+      }
+    }
+
+    // Every target is still found, so a renamed script cannot drop out.
+    for (const target of stagingTargets) {
+      expect(consumers.some(({ run }) => run.includes(target))).toBe(true);
+    }
+    // One source for the staging access value, so rotating it is one change.
+    for (const { run, env } of consumers) {
+      const prefix = run.includes("$STAGING_HEALTH_URL") ? "" : "E2E_";
+      expect(env[`${prefix}EDGE_HEADER_NAME`]).toBe("x-stella-edge-token");
+      expect(env[`${prefix}EDGE_HEADER_VALUE`]).toBe(
+        `\${{ secrets.STAGING_VIEWER_ACCESS_TOKEN }}`,
+      );
+    }
   });
 
   test("ties staging promotion to the current health gate", async () => {
@@ -157,6 +217,13 @@ describe("API deployment health receipt", () => {
       }
       expect(configuration).not.toMatch(/AWS_|DB_|ECR_|SECRET|TOKEN/gu);
     }
+
+    expect(staging).toContain('"VITE_PUBLIC_KNOWLEDGE_ENABLED": "true"');
+    expect(staging).toContain(
+      '"VITE_PUBLIC_KNOWLEDGE_INDEXING_ENABLED": "false"',
+    );
+    expect(staging).toContain('"VITE_SEO_INDEXABLE": "false"');
+    expect(production).not.toContain('"VITE_PUBLIC_KNOWLEDGE_ENABLED"');
   });
 
   test("release promotion preserves the full online-migration window", async () => {

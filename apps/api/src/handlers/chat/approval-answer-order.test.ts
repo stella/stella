@@ -392,8 +392,8 @@ const runAndStore = async ({
   for await (const _chunk of processServerChatStream({
     abortSignal: deadline.signal,
     deadlineSignal: deadline.signal,
-    existingMessageIds: new Set(initialMessages.map(({ id }) => id)),
     getResponseMessage: message,
+    initialMessages,
     mapMessageId: createTurnMessageIdMapper(STORED_ASSISTANT_ID),
     onFinish: ({ responseMessage }) => {
       finished.message = responseMessage;

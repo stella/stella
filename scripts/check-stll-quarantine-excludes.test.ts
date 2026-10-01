@@ -199,20 +199,40 @@ minimumReleaseAgeExcludes = [
     expect(result.warnings).toEqual([]);
   });
 
-  test("fails once an expired exclusion is ignored past the notice window", () => {
+  test("warns until the full 24-hour notice window ends", () => {
     const result = checkQuarantineExcludes({
       bunfig: createBunfig(
         '"better-result", # quarantine-expires: 2026-08-06T21:35:30.036Z',
       ),
       lockfile,
-      now: new Date("2026-08-07T21:35:30.036Z"),
+      now: new Date("2026-08-07T21:35:30.035Z"),
     });
 
-    expect(result.warnings).toEqual([]);
-    expect(result.errors.at(0)).toContain(
-      'temporary quarantine exclude "better-result" expired at 2026-08-06T21:35:30.036Z and is still here',
-    );
+    expect(result.errors).toEqual([]);
+    expect(result.warnings).toHaveLength(1);
+    expect(result.warnings.at(0)).toContain("--prune");
   });
+
+  test.each(["2026-08-07T21:35:30.036Z", "2026-08-07T21:35:30.037Z"])(
+    "fails at and after the notice window ends: %s",
+    (now) => {
+      const result = checkQuarantineExcludes({
+        bunfig: createBunfig(
+          '"better-result", # quarantine-expires: 2026-08-06T21:35:30.036Z',
+        ),
+        lockfile,
+        now: new Date(now),
+      });
+
+      expect(result.warnings).toEqual([]);
+      expect(result.errors.at(0)).toContain(
+        'temporary quarantine exclude "better-result" expired at 2026-08-06T21:35:30.036Z and is still here',
+      );
+      expect(result.errors.at(0)).toContain(
+        "bun scripts/check-stll-quarantine-excludes.ts --prune",
+      );
+    },
+  );
 
   test("rejects malformed expiry annotations", () => {
     const result = checkQuarantineExcludes({

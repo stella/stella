@@ -27,6 +27,16 @@
     "errorNotFound": "لم نتمكن من العثور على طلب معلّق بهذا الرمز. تحقق من الرمز وحاول مرة أخرى.",
     "title": "اربط وكيلك"
   },
+  "agentSetup": {
+    "addressLabel": "سيطلب مساعدك هذا العنوان",
+    "copiedToast": "تم نسخ التعليمات. الصقها في دردشة مع مساعدك.",
+    "copy": "انسخ له التعليمات",
+    "description": "اسأل Claude أو ChatGPT عن ملفاتك القانونية ومستنداتك. اختر مساعدك لفتح دليل قصير؛ يستغرق الأمر نحو دقيقة.",
+    "instructions": "اربطني بـ stella، مساحة عملي القانونية. اتّبع تعليمات وكلاء الذكاء الاصطناعي في {guideUrl} واستخدم عنوان الخادم هذا: {mcpUrl}",
+    "openGuide": "افتح دليل {assistant}",
+    "selfSetupHint": "هل تستخدم Claude Code أو Codex؟",
+    "title": "استخدم stella في مساعد الذكاء الاصطناعي"
+  },
   "ai": {
     "chooseRewriteInstruction": "خيارات إعادة الصياغة",
     "editWithAI": "التعديل بالذكاء الاصطناعي",
@@ -477,6 +487,17 @@
     "failedToStartTimer": "تعذّر بدء المؤقّت",
     "failedToStopTimer": "تعذّر إيقاف المؤقّت",
     "filterStatus": "التصفية حسب الحالة",
+    "globalTimer": {
+      "confirm": "تأكيد الوقت",
+      "discard": "إلغاء المؤقت",
+      "matterInaccessible": "اختر ملفًا قانونيًا يمكنك الوصول إليه.",
+      "narrativeRequired": "أضف وصفًا قبل تأكيد الوقت.",
+      "pause": "إيقاف مؤقت",
+      "periodLocked": "هذا الشهر مقفل. اطلب من مسؤول فتحه.",
+      "resume": "استئناف",
+      "timerUnavailable": "لم يعد هذا المؤقت متاحًا. حدّث القائمة.",
+      "title": "مؤقتات"
+    },
     "hourlyRateMustBeNonNegative": "لا يمكن أن يكون السعر بالساعة سالبًا",
     "hours": "الساعات",
     "invoiceNarrative": "بيان الفاتورة",
@@ -521,6 +542,20 @@
     "noActiveTimer": "لا يوجد مؤقّت نشط",
     "noEntries": "لا توجد إدخالات وقت لهذه الفترة",
     "nonBillable": "غير قابل للفوترة",
+    "quickEntry": {
+      "entrySaved": "تم حفظ إدخال الوقت",
+      "expenseSaved": "تم حفظ المصروف",
+      "expenseTitle": "إضافة مصروف",
+      "futureDate": "اختر اليوم أو تاريخًا سابقًا.",
+      "invalidDate": "اختر تاريخ عمل صالحًا.",
+      "minimumUnit": "يُقرَّب الوقت لأعلى إلى الحد الأدنى لوحدة الفوترة.",
+      "narrativeRequired": "أضف وصفًا قبل حفظ الوقت.",
+      "outsideEditWindow": "هذا التاريخ خارج مهلة التعديل.",
+      "periodLocked": "هذا الشهر مقفل.",
+      "saveAndAddExpense": "حفظ وإضافة مصروف",
+      "saveAndNew": "حفظ وإضافة إدخال آخر",
+      "viewDay": "عرض اليوم"
+    },
     "rates": {
       "addRate": "إضافة سعر",
       "createRateTable": "إنشاء جدول أسعار",
@@ -553,6 +588,26 @@
     "selectMatter": "اختر ملفًا قانونيًا...",
     "selectMatterToStart": "اختر ملفًا قانونيًا لبدء توقيت الوقت",
     "selectedCount": "{count, plural, zero {لا شيء محدد} one {محدد واحد} two {محددان} few {# محددة} many {# محددًا} other {# محدد}}",
+    "sellerProfiles": {
+      "add": "إضافة ملف بائع",
+      "archiveConfirm": "هل تريد أرشفة ملف البائع هذا؟ لن يعود متاحًا للفواتير الجديدة.",
+      "bic": "رمز BIC / SWIFT",
+      "default": "البائع الافتراضي",
+      "defaultCurrency": "العملة الافتراضية",
+      "description": "أدِر البيانات المستخدمة لإصدار الفواتير.",
+      "edit": "تعديل ملف البائع",
+      "empty": "لا توجد ملفات بائع.",
+      "footerNotes": "ملاحظات التذييل",
+      "invalidBic": "أدخل رمز BIC صالحًا.",
+      "invalidCurrency": "أدخل رمز عملة من ثلاثة أحرف.",
+      "invalidIban": "أدخل رقم IBAN صالحًا.",
+      "legalName": "الاسم القانوني",
+      "registrationId": "رقم التسجيل",
+      "setDefault": "تعيين كافتراضي",
+      "title": "ملفات البائع",
+      "vatId": "رقم ضريبة القيمة المضافة"
+    },
+    "settingsTitle": "الفوترة",
     "split": {
       "addSplit": "إضافة تقسيم",
       "percentValue": "{value}٪",
@@ -837,6 +892,7 @@
         "publishedOnWeb": "منشور على الويب"
       },
       "statutes": "النصوص التشريعية المطبَّقة",
+      "textNotYetAvailable": "لم تنشر المحكمة نص القرار، أو أنه غير متاح هنا بعد.",
       "textPending": "لا يزال جارٍ جلب نص الحكم",
       "textReadFailed": "تعذّر تحميل نص الحكم",
       "textUnavailable": "لا يتوفر نص لهذا الحكم"
@@ -933,6 +989,7 @@
         "description": "تحقق بعناية من الموقع والهدف. محتوى الصفحة غير موثوق ولا يمكنه الموافقة على إجراء آخر.",
         "modeReads": "تُنفَّذ قراءة الصفحات دون سؤال حتى نهاية هذه الجلسة.",
         "question": "هل تسمح بهذا الإجراء في المتصفح؟",
+        "realValues": "سيتلقى هذا الموقع القيم الحقيقية المعروضة أدناه. ينطبق وضع إخفاء الهوية فقط على ما يراه الذكاء الاصطناعي.",
         "within": "ضمن"
       },
       "denied": "تم الرفض",
@@ -1296,7 +1353,8 @@
       "interrupted": "توقّف قبل الاكتمال",
       "output": "المخرجات",
       "sourceCode": "الشيفرة المصدرية",
-      "toggleDetails": "إظهار/إخفاء التفاصيل"
+      "toggleDetails": "إظهار/إخفاء التفاصيل",
+      "unrestoredFields": "تعذّر ملء {count, plural, zero {# حقل} one {حقل واحد} two {حقلين} few {# حقول} many {# حقلًا} other {# حقل}} بالقيم الحقيقية في وضع إخفاء الهوية. راجِع: {fields}"
     },
     "unsupportedFileType": "نوع ملف غير مدعوم",
     "uploadFailed": "تعذّرت معالجة الملف",
@@ -2090,6 +2148,13 @@
     "unnamedAttachment": "مرفق بلا اسم"
   },
   "errors": {
+    "actionAdmission": {
+      "admissionUnavailable": "هذا الإجراء متوقف مؤقتًا. يُرجى المحاولة مجددًا بعد قليل.",
+      "concurrencyBusy": "هناك أعمال أخرى قيد التنفيذ. يُرجى المحاولة مجددًا بعد قليل.",
+      "contact": "تواصل معنا",
+      "notEnabled": "هذا الإجراء غير مفعّل لمؤسستك.",
+      "periodExhausted": "هذا الإجراء متوقف لمؤسستك."
+    },
     "actionFailed": "فشل الإجراء",
     "api": {
       "badRequest": "تعذر إكمال الطلب.",
@@ -2258,7 +2323,8 @@
     "compareUnsupportedReasons": {
       "missingInBase": "جزء المستند موجود فقط في الهدف",
       "missingInTarget": "جزء المستند موجود فقط في القاعدة",
-      "notEditable": "جزء الوثيقة غير قابل للتحرير"
+      "notEditable": "جزء الوثيقة غير قابل للتحرير",
+      "unsupportedContent": "يحتوي هذا الإصدار على محتوى يتعذر مقارنته حاليًا."
     },
     "compareUnverified": "مقارنة لم يتم التحقق منها",
     "compareVerificationFailures": "{count, plural, zero {لم تفشل أي عمليات تحقق.} one {فشل تحقق واحد ثنائي الاتجاه. راجع هذه المقارنة قبل الاعتماد عليها.} two {فشلا تحقق ثنائي الاتجاه. راجع هذه المقارنة قبل الاعتماد عليها.} few {فشلت # عمليات تحقق ثنائية الاتجاه. راجع هذه المقارنة قبل الاعتماد عليها.} many {فشلت # عملية تحقق ثنائية الاتجاه. راجع هذه المقارنة قبل الاعتماد عليها.} other {فشل # تحقق ثنائي الاتجاه. راجع هذه المقارنة قبل الاعتماد عليها.}}",
@@ -3676,7 +3742,6 @@
     "aiTitle": "اربط مزوّد الذكاء الاصطناعي الخاص بك",
     "appsSubtitle": "تعمل stella أيضًا خارج المتصفح: على سطح مكتبك وداخل مساعد الذكاء الاصطناعي الخاص بك. يمكنك العودة إلى هذا الإعداد في أي وقت لاحقًا.",
     "appsTitle": "احصل على stella في كل مكان",
-    "assistantDocsLink": "كيفية ربط مساعدك",
     "catalogueAlwaysOn": "مُفعَّل دائمًا",
     "catalogueClearSearch": "مسح البحث",
     "catalogueCommunityHeading": "أخرى",
@@ -4203,31 +4268,40 @@
       "wordEditShortcutPlaceholder": "مثل: ج.ك"
     },
     "connections": {
+      "accessTitle": "يمكن لـ {clientName}",
+      "browseIntegrations": "إضافة خدمة",
       "cliDescription": "ثبّت عميل سطر الأوامر الخاص بـ stella وسجّل الدخول لبرمجة الملفات القانونية والمستندات والقوالب من الطرفية.",
-      "cliHelpHint": "شغّل الأمر \"stella --help\" لعرض القائمة الكاملة للأوامر.",
       "cliInstallLabel": "التثبيت",
       "cliLoginLabel": "تسجيل الدخول",
       "cliTitle": "واجهة سطر الأوامر",
-      "connectedAppsDescription": "التطبيقات والأدوات التي منحتها إذن الوصول إلى حسابك.",
-      "connectedAppsEmpty": "ستظهر هنا التطبيقات التي تفوّضها، مثل Claude أو واجهة سطر أوامر stella.",
-      "connectedAppsTitle": "التطبيقات المتصلة",
-      "connectedColumn": "تاريخ الاتصال",
-      "description": "اربط عملاء MCP وواجهة سطر الأوامر بحسابك.",
+      "connected": "متصل",
+      "connectedAgo": "متصل {time}",
+      "connectedAppsDescription": "تطبيقات سجّلت الدخول إليها بحساب stella. افصل ما لم تعد تستخدمه.",
+      "connectedAppsEmpty": "لا شيء بعد. أعدّ Claude أو ChatGPT أعلاه وسيظهر هنا.",
+      "connectedAppsTitle": "تطبيقات لها وصول",
+      "description": "استخدم stella من مساعد الذكاء الاصطناعي واطّلع على ما يمكنه الوصول إلى حسابك.",
+      "developerDescription": "عناوين الخادم وأداة سطر الأوامر للإعدادات التقنية.",
+      "developerTitle": "وصول المطوّرين",
       "disconnectConfirmDescription": "سيؤدي هذا إلى إلغاء وصول {clientName} إلى حسابك، بالإضافة إلى أي رموز أصدرها. يمكنك إعادة الاتصال في أي وقت.",
       "disconnectConfirmTitle": "هل تريد قطع الاتصال بـ {clientName}؟",
       "disconnectSuccess": "تم قطع الاتصال بـ {clientName}",
+      "integrationsDescription": "خدمات خارجية يمكن للذكاء الاصطناعي استخدامها نيابةً عنك، مثل مستودع مستنداتك.",
+      "integrationsEmpty": "أضف أول خدمة",
+      "integrationsTitle": "الخدمات المتصلة",
       "mcpAnonymizedLabel": "نقطة نهاية مجهولة الهوية",
-      "mcpAnonymizedNote": "تتوفر أيضًا نقطة نهاية مجهولة الهوية؛ وهي تعرض الأدوات نفسها مع إخفاء البيانات الشخصية.",
-      "mcpDescription": "اربط عميلاً متوافقًا مع MCP، مثل Claude أو Cursor، بحساب stella الخاص بك باستخدام عنوان URL هذا للخادم.",
+      "mcpAnonymizedShortNote": "الأدوات نفسها مع إخفاء البيانات الشخصية.",
+      "mcpFullNote": "وصول كامل إلى ملفاتك القانونية ومستنداتك.",
       "mcpLawLabel": "نقطة نهاية للمصادر القانونية",
-      "mcpLawNote": "تتوفر أيضًا نقطة نهاية للمصادر القانونية؛ وهي تعرض الاجتهاد القضائي والتشريعات العامة فقط، ولا تصل إلى بيانات الملفات القانونية.",
-      "mcpStep1": "أضف عنوان URL أعلاه كموصل مخصص أو خادم MCP في عميلك.",
-      "mcpStep2": "سجّل الدخول عندما يطلب منك المتصفح ذلك.",
-      "mcpStep3": "وافق على الوصول في شاشة الموافقة.",
+      "mcpLawShortNote": "السوابق القضائية والتشريعات العامة فقط، دون بيانات الملفات القانونية.",
+      "mcpSetupHint": "أضف عنوان URL كموصل مخصص في Claude أو Cursor أو أي عميل MCP آخر، ثم سجّل الدخول ووافق على الوصول.",
       "mcpTitle": "خادم MCP",
       "mcpUrlLabel": "عنوان URL للخادم",
-      "scopesLabel": "الصلاحيات",
-      "title": "الاتصالات"
+      "noMatches": "لا يوجد اتصال يطابق «{query}»",
+      "notConnected": "غير متصل",
+      "permissionCount": "{count, plural, zero {لا أذونات} one {إذن واحد} two {إذنان} few {# أذونات} many {# إذنًا} other {# إذن}}",
+      "searchPlaceholder": "ابحث في الاتصالات",
+      "title": "الاتصالات",
+      "turnedOff": "متوقف"
     },
     "organization": {
       "activeMembers": "الأعضاء النشطون",
@@ -4306,6 +4380,20 @@
       "renameDescription": "سيرى الأعضاء الاسم الجديد فورًا.",
       "renameTitle": "إعادة تسمية المؤسسة",
       "renameTypeToConfirm": "اكتب الاسم الجديد للتأكيد: {name}",
+      "timePolicy": {
+        "description": "اضبط تقريب الوقت ومهل التعديل وإقفال الأشهر.",
+        "editWindow": "مهلة التعديل (بالأيام)",
+        "editWindowHelp": "يسمح الصفر بالتعديل في تاريخ إنجاز العمل فقط.",
+        "invalidEditWindow": "أدخل عددًا صحيحًا من الأيام، صفرًا أو أكثر.",
+        "invalidLockedMonth": "اختر شهرًا انتهى بالفعل.",
+        "invalidMinimumUnit": "اختر وحدة وقت تقسم 60 دقيقة دون باقٍ.",
+        "lockedThrough": "مقفل حتى",
+        "lockedThroughHelp": "لا يمكن تعديل إدخالات هذا الشهر والأشهر السابقة.",
+        "minimumUnit": "الحد الأدنى لوحدة الوقت",
+        "minimumUnitHelp": "تتم فوترة الوقت بمضاعفات هذا العدد من الدقائق.",
+        "narrativeRequired": "اشتراط بيان",
+        "title": "سياسة تسجيل الوقت"
+      },
       "usage": "الاستخدام",
       "usageDescription": "حدود الاستخدام وحالة الاستحقاق لهذه المؤسسة",
       "usageEmptyDescription": "اضبط استحقاق استخدام لتفعيل ميزات الذكاء الاصطناعي المُقاسة لهذه المؤسسة.",
@@ -5003,6 +5091,11 @@
     "whenNotToUsePlaceholder": "متى ينبغي تجنّب هذا القالب؟",
     "whenToUse": "متى يُستخدَم",
     "whenToUsePlaceholder": "متى ينبغي استخدام هذا القالب؟ (يوجّه اختيار القالب بالذكاء الاصطناعي)"
+  },
+  "timesheets": {
+    "day": {
+      "internalWork": "العمل الداخلي"
+    }
   },
   "translate": {
     "dialog": {

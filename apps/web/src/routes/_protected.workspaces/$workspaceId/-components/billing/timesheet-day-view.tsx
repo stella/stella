@@ -12,25 +12,25 @@ import { PlusIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
 import {
+  DEFAULT_CURRENCY,
+  formatCurrencyAmount,
+} from "@/components/billing/format-currency";
+import { GlobalTimer } from "@/features/time-timers/global-timer";
+import {
   formatDecimalHours,
   formatMinutes,
 } from "@/lib/workspaces/format-duration";
-import { timeEntriesOptions } from "@/lib/workspaces/queries/time-entries";
-import { BatchActionBar } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/batch-action-bar";
-import {
-  DEFAULT_CURRENCY,
-  formatCurrencyAmount,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
-import { useMatterNameMap } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/matter-name-map";
-import { TimeEntryForm } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-form";
-import type { TimeEntryFormValues } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-form";
-import { TimeEntryRow } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-row";
-import { TimerControls } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/timer-controls";
 import {
   useCreateTimeEntry,
   useDeleteTimeEntry,
   useUpdateTimeEntry,
-} from "@/routes/_protected.workspaces/$workspaceId/-mutations/time-entries";
+} from "@/lib/workspaces/mutations/time-entries";
+import { timeEntriesOptions } from "@/lib/workspaces/queries/time-entries";
+import { BatchActionBar } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/batch-action-bar";
+import { useMatterNameMap } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/matter-name-map";
+import { TimeEntryForm } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-form";
+import type { TimeEntryFormValues } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-form";
+import { TimeEntryRow } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-row";
 
 type TimesheetDayViewProps = {
   workspaceId: string;
@@ -184,7 +184,7 @@ export const TimesheetDayView = ({
   return (
     <div className="flex flex-col gap-3">
       {/* Timer */}
-      <TimerControls workspaceId={workspaceId} />
+      <GlobalTimer workspaceId={workspaceId} />
 
       {/* Summary bar */}
       <div className="flex items-center justify-between">

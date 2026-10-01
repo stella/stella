@@ -108,11 +108,7 @@ export type StandardOrgAIProviderConfig = {
   provider: Exclude<AIProvider, "azure_foundry" | "huggingface">;
   /** Decrypted API key. */
   apiKey: string;
-  /**
-   * Data sovereignty region. When set, AI calls are
-   * routed to region-specific endpoints (e.g. Vertex AI
-   * europe-west4 for EU).
-   */
+  /** Stored endpoint selection; validated against the provider on save. */
   region?: DataRegion | undefined;
 };
 

@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -5,6 +6,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  checkMergeHold,
+  MergeHoldReadError,
   evaluateMergeBar,
   evaluateQueuePlacement,
   formatQueuePlacementFailure,
@@ -51,6 +54,7 @@ const runMigrationGateway = (
     executable,
     `#!/bin/sh
 case "$*" in
+  'variable get STELLA_MERGE_HOLD --repo '*) printf '%s\\n' 'variable STELLA_MERGE_HOLD was not found' >&2; exit 1;;
   *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
   *'api graphql'*) printf '%s\\n' "$FIXTURE_PULL_REQUEST";;
   *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}}]';;
@@ -135,6 +139,7 @@ if [ "$1 $2" = 'pr merge' ]; then
 fi
 [ "$GH_TOKEN" = read-fixture ] || exit 93
 case "$*" in
+  'variable get STELLA_MERGE_HOLD --repo '*) printf '%s\\n' 'variable STELLA_MERGE_HOLD was not found' >&2; exit 1;;
   *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
   *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"Overlay check"}]}}]';;
   *check-runs*) printf '1\\tOverlay check\\tcompleted\\tsuccess\\n';;
@@ -173,71 +178,115 @@ esac
     }
   });
 
-  test("an already queued PR exits without another GitHub operation even when mergeability is unknown", () => {
-    const directory = mkdtempSync(path.join(tmpdir(), "merge-bar-queued-"));
-    const executable = path.join(directory, "gh");
-    const response = JSON.stringify({
-      data: {
-        repository: {
-          pullRequest: {
-            id: "PR_fixture",
-            number: 123,
-            title: "fix: something",
-            isCrossRepository: false,
-            state: "OPEN",
-            isDraft: false,
-            mergeable: "UNKNOWN",
-            headRefOid: HEAD_SHA,
-            baseRefName: "main",
-            autoMergeRequest: null,
-            mergeQueueEntry: { id: "entry" },
+  test.each(["fix: something", "chore: release v0.9.42"])(
+    "an already queued PR keeps its place without --jump: %s",
+    (title) => {
+      const directory = mkdtempSync(path.join(tmpdir(), "merge-bar-queued-"));
+      const executable = path.join(directory, "gh");
+      const response = JSON.stringify({
+        data: {
+          repository: {
+            pullRequest: {
+              id: "PR_fixture",
+              number: 123,
+              title,
+              isCrossRepository: false,
+              state: "OPEN",
+              isDraft: false,
+              mergeable: "UNKNOWN",
+              headRefOid: HEAD_SHA,
+              baseRefName: "main",
+              autoMergeRequest: null,
+              mergeQueueEntry: { id: "entry" },
+            },
           },
         },
-      },
-    });
-    writeFileSync(
-      executable,
-      `#!/bin/sh
+      });
+      writeFileSync(
+        executable,
+        `#!/bin/sh
 case "$*" in
+  'variable get STELLA_MERGE_HOLD --repo '*) printf '%s\\n' 'variable STELLA_MERGE_HOLD was not found' >&2; exit 1;;
   *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}},{"type":"merge_queue","parameters":{}}]';;
   *'api graphql'*) printf '%s\\n' '${response}';;
   *) exit 99;;
 esac
 `,
-    );
-    chmodSync(executable, 0o700);
-    try {
-      const result = Bun.spawnSync({
-        cmd: [
-          process.execPath,
-          fileURLToPath(new URL("merge-bar.ts", import.meta.url)),
-          "123",
-        ],
-        env: {
-          ...process.env,
-          PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
-        },
-        stdout: "pipe",
-        stderr: "pipe",
-      });
-      expect(result.exitCode).toBe(0);
-      expect(result.stdout.toString()).toContain(
-        "already in the merge queue; nothing changed",
       );
-    } finally {
-      rmSync(directory, { recursive: true, force: true });
-    }
-  });
+      chmodSync(executable, 0o700);
+      try {
+        const result = Bun.spawnSync({
+          cmd: [
+            process.execPath,
+            fileURLToPath(new URL("merge-bar.ts", import.meta.url)),
+            "123",
+          ],
+          env: {
+            ...process.env,
+            PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        });
+        expect(result.exitCode).toBe(0);
+        expect(result.stdout.toString()).toContain(
+          "already in the merge queue; nothing changed",
+        );
+      } finally {
+        rmSync(directory, { recursive: true, force: true });
+      }
+    },
+  );
 
-  // The enqueue mutation reported a front position while the release pull
-  // request actually sat behind other entries. Only the queue read after the
-  // enqueue decides, and anything but first fails the run.
+  // The mutation can report first place before the fresh queue read agrees.
   test.each([
-    { queuedAt: 3, exitCode: 1, output: "behind #4101, #4102" },
-    { queuedAt: 1, exitCode: 0, output: "verified first in the queue" },
+    {
+      queuedAt: 3,
+      jump: true,
+      absent: true,
+      mutationJump: true,
+      exitCode: 2,
+      output: "queue read did not list it yet",
+    },
+    {
+      queuedAt: 3,
+      jump: false,
+      absent: true,
+      mutationJump: false,
+      exitCode: 1,
+      output: "GitHub queued the PR without the jump (position 1)",
+    },
+    {
+      queuedAt: 3,
+      jump: true,
+      mutationJump: false,
+      exitCode: 2,
+      output: "JUMP PENDING (position 3, state QUEUED)",
+    },
+    { queuedAt: 3, jump: false, exitCode: 1, output: "JUMP DROPPED" },
+    { queuedAt: 3, jump: undefined, exitCode: 1, output: "JUMP DROPPED" },
+    {
+      queuedAt: 3,
+      jump: true,
+      exitCode: 2,
+      output: "JUMP PENDING (position 3, state QUEUED)",
+    },
+    {
+      queuedAt: 1,
+      jump: true,
+      exitCode: 0,
+      output: "verified first in the queue",
+    },
   ])(
-    "a release jump is verified against the queue read after enqueueing: position $queuedAt",
-    ({ queuedAt, exitCode, output }) => {
+    "an explicit release jump stays exempt from a hold and is verified after enqueueing: position $queuedAt, jump $jump, absent $absent, mutation jump $mutationJump",
+    ({
+      queuedAt,
+      jump,
+      absent = false,
+      mutationJump = true,
+      exitCode,
+      output,
+    }) => {
       const directory = mkdtempSync(path.join(tmpdir(), "merge-bar-jump-"));
       const executable = path.join(directory, "gh");
       const pullRequest = JSON.stringify({
@@ -261,6 +310,8 @@ esac
       });
       const others = [4101, 4102].map((number, index) => ({
         position: index < queuedAt - 1 ? index + 1 : index + 2,
+        jump: false,
+        state: "QUEUED",
         pullRequest: { number },
       }));
       const queue = JSON.stringify({
@@ -268,11 +319,18 @@ esac
           repository: {
             mergeQueue: {
               entries: {
-                totalCount: 3,
-                nodes: [
-                  ...others,
-                  { position: queuedAt, pullRequest: { number: 123 } },
-                ],
+                totalCount: absent ? 2 : 3,
+                nodes: absent
+                  ? others
+                  : [
+                      ...others,
+                      {
+                        position: queuedAt,
+                        jump,
+                        state: "QUEUED",
+                        pullRequest: { number: 123 },
+                      },
+                    ],
               },
             },
           },
@@ -282,8 +340,18 @@ esac
         executable,
         `#!/bin/sh
 case "$*" in
-  *enqueuePullRequest*) printf '%s\\n' '{"data":{"enqueuePullRequest":{"mergeQueueEntry":{"position":1}}}}';;
-  *'mergeQueue(branch'*) printf '%s\\n' '${queue}';;
+  'variable get STELLA_MERGE_HOLD --repo '*) printf '%s\\n' 'release pending';;
+  'pr list '*)
+    case "$*" in
+      *--jq*) printf '%s\\n' '123';;
+      *) printf '%s\\n' '[{"number":123,"title":"chore: release v0.9.42","isDraft":false,"isCrossRepository":false}]';;
+    esac;;
+  *enqueuePullRequest*)
+    case "$*" in *'mergeQueueEntry { id position jump state }'*) ;; *) exit 97;; esac
+    printf '%s\\n' '{"data":{"enqueuePullRequest":{"mergeQueueEntry":{"id":"entry","position":1,"jump":${mutationJump},"state":"QUEUED"}}}}';;
+  *'mergeQueue(branch'*)
+    case "$*" in *'position jump state pullRequest'*) ;; *) exit 98;; esac
+    printf '%s\\n' '${queue}';;
   *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
   *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}},{"type":"merge_queue","parameters":{}}]';;
   *check-runs*) printf '1\\tci-result\\tcompleted\\tsuccess\\n';;
@@ -303,6 +371,7 @@ esac
             "123",
             "--repo",
             PRIVATE_REPO,
+            "--jump",
           ],
           env: {
             ...process.env,
@@ -315,6 +384,18 @@ esac
         expect(
           `${result.stdout.toString()}${result.stderr.toString()}`,
         ).toContain(output);
+        if (absent) {
+          expect(result.stderr.toString()).toContain(
+            exitCode === 2
+              ? "JUMP PENDING (position 1, state QUEUED)"
+              : "JUMP DROPPED",
+          );
+        }
+        if (exitCode === 2) {
+          expect(result.stderr.toString()).toContain(
+            `pw sub pr ${PRIVATE_REPO}#123 --on merged,closed,checks-failed`,
+          );
+        }
       } finally {
         rmSync(directory, { recursive: true, force: true });
       }
@@ -325,7 +406,7 @@ esac
   // A real run refuses to jump while checks are running; a dry run of the same
   // state must report the same failure instead of a merge verdict.
   test.each([[], ["--dry-run"]])(
-    "a release jump with running checks exits non-zero without writing: %j",
+    "an explicit release jump with running checks exits non-zero without writing: %j",
     (...extraArguments) => {
       const directory = mkdtempSync(path.join(tmpdir(), "merge-bar-pending-"));
       const executable = path.join(directory, "gh");
@@ -352,6 +433,7 @@ esac
         executable,
         `#!/bin/sh
 case "$*" in
+  'variable get STELLA_MERGE_HOLD --repo '*) printf '%s\\n' 'variable STELLA_MERGE_HOLD was not found' >&2; exit 1;;
   *'pr merge'*|*enqueuePullRequest*) exit 98;;
   *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
   *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}},{"type":"merge_queue","parameters":{}}]';;
@@ -372,6 +454,7 @@ esac
             "123",
             "--repo",
             PRIVATE_REPO,
+            "--jump",
             ...extraArguments.flat(),
           ],
           env: {
@@ -1025,7 +1108,7 @@ describe("merge bar", () => {
   });
 });
 
-describe("release pull requests jump the merge queue", () => {
+describe("explicit merge queue jumps", () => {
   const release = {
     title: "chore: release v0.9.40",
     isDraft: false,
@@ -1124,49 +1207,37 @@ describe("release pull requests jump the merge queue", () => {
   });
 
   test.each([
-    { positions: [6, 1], exitCode: 0, sleeps: 1, seen: "6, 1" },
-    {
-      positions: [6, 6, 6, 6, 6],
-      exitCode: 1,
-      sleeps: 4,
-      seen: "6, 6, 6, 6, 6",
-    },
-    { positions: [1], exitCode: 0, sleeps: 0, seen: "1" },
+    { position: 6, jump: false, exitCode: 1, verdict: "JUMP DROPPED" },
+    { position: 6, jump: true, exitCode: 2, verdict: "JUMP PENDING" },
+    { position: 1, jump: true, exitCode: 0, verdict: "QUEUED AT THE FRONT" },
+    { position: 1, jump: false, exitCode: 0, verdict: "QUEUED AT THE FRONT" },
   ])(
-    "queue placement settles with reads $positions",
-    ({ positions, exitCode, sleeps, seen }) => {
-      const delays: number[] = [];
+    "a single queue read distinguishes position $position with jump $jump",
+    ({ position, jump, exitCode, verdict }) => {
       let reads = 0;
-      const verdict = verifyFrontOfQueue({
+      const result = verifyFrontOfQueue({
         gateway: {
           readMergeQueue: (branch) => {
             expect(branch).toBe("main");
-            const position = positions.at(reads);
-            expect(position).toBeDefined();
             reads += 1;
-            return position === undefined
-              ? []
-              : [{ pullNumber: 4112, position }];
-          },
-          sleep: (milliseconds) => {
-            delays.push(milliseconds);
+            return [{ pullNumber: 4112, position, jump, state: "QUEUED" }];
           },
         },
         pullNumber: 4112,
+        repo: PRIVATE_REPO,
         branch: "main",
         context: "jump accepted",
         release: false,
       });
-      expect(verdict.exitCode).toBe(exitCode);
-      expect(verdict.message).toContain(
-        exitCode === 0 ? "QUEUED AT THE FRONT" : "NOT AT THE FRONT",
-      );
-      expect(verdict.message).toContain(`positions seen: ${seen}`);
-      expect(reads).toBe(positions.length);
-      expect(delays).toHaveLength(sleeps);
-      expect(
-        delays.reduce((total, delay) => total + delay, 0),
-      ).toBeLessThanOrEqual(20_000);
+      expect(result.exitCode).toBe(exitCode);
+      expect(result.message).toContain(verdict);
+      expect(reads).toBe(1);
+      if (exitCode === 2) {
+        expect(result.message).toContain("position 6, state QUEUED");
+        expect(result.message).toContain(
+          `pw sub pr ${PRIVATE_REPO}#4112 --on merged,closed,checks-failed`,
+        );
+      }
     },
   );
 
@@ -1174,20 +1245,21 @@ describe("release pull requests jump the merge queue", () => {
     { entries: [] },
     {
       entries: [
-        { pullNumber: 4112, position: 1 },
-        { pullNumber: 4101, position: 0 },
+        { pullNumber: 4112, position: 1, jump: true, state: "QUEUED" },
+        { pullNumber: 4101, position: 0, jump: false, state: "QUEUED" },
       ],
     },
   ])("incomplete or conflicting queue reads fail closed: %j", ({ entries }) => {
     const verdict = verifyFrontOfQueue({
-      gateway: { readMergeQueue: () => entries, sleep: () => {} },
+      gateway: { readMergeQueue: () => entries },
       pullNumber: 4112,
+      repo: PRIVATE_REPO,
       branch: "main",
       context: "jump accepted",
       release: false,
     });
     expect(verdict.exitCode).toBe(1);
-    expect(verdict.message).toContain("NOT AT THE FRONT");
+    expect(verdict.message).toContain("JUMP DROPPED");
   });
 
   test("a pull request first in the queue is at the front", () => {
@@ -1275,4 +1347,146 @@ describe("release pull requests jump the merge queue", () => {
       }),
     ).toBe(false);
   });
+});
+
+describe("repository merge hold", () => {
+  test.each([
+    { checkedByWorkflow: "1", githubActions: "true", expectedReads: 0 },
+    { checkedByWorkflow: "1", githubActions: undefined, expectedReads: 1 },
+    { checkedByWorkflow: undefined, githubActions: "true", expectedReads: 1 },
+    { checkedByWorkflow: "0", githubActions: "true", expectedReads: 1 },
+    { checkedByWorkflow: "1", githubActions: "false", expectedReads: 1 },
+  ])(
+    "workflow hold checks require both flags: %j",
+    ({ checkedByWorkflow, githubActions, expectedReads }) => {
+      let variableReads = 0;
+      let releaseReads = 0;
+      const result = checkMergeHold({
+        checkedByWorkflow,
+        githubActions,
+        readVariable: () => {
+          variableReads += 1;
+          return Result.ok("release pending");
+        },
+        readIsRelease: () => {
+          releaseReads += 1;
+          return Result.ok(false);
+        },
+      });
+      expect(variableReads).toBe(expectedReads);
+      expect(releaseReads).toBe(expectedReads);
+      expect(result.isOk()).toBe(expectedReads === 0);
+      if (result.isOk()) {
+        expect(result.value).toEqual({ source: "workflow" });
+      } else {
+        expect(result.error.message).toBe("MERGE HOLD: release pending");
+      }
+    },
+  );
+
+  test.each([null, ""])(
+    "an absent or empty hold allows ordinary pull requests: %j",
+    (reason) => {
+      let releaseReads = 0;
+      const result = checkMergeHold({
+        readVariable: () => Result.ok(reason),
+        readIsRelease: () => {
+          releaseReads += 1;
+          return Result.ok(false);
+        },
+      });
+      expect(result.isOk()).toBe(true);
+      expect(releaseReads).toBe(0);
+    },
+  );
+
+  test.each(["release pending", " "])(
+    "a non-empty hold refuses ordinary pull requests: %j",
+    (reason) => {
+      const result = checkMergeHold({
+        readVariable: () => Result.ok(reason),
+        readIsRelease: () => Result.ok(false),
+      });
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error.message).toBe(`MERGE HOLD: ${reason}`);
+      }
+    },
+  );
+
+  test("a recognized release remains allowed during a hold", () => {
+    const result = checkMergeHold({
+      readVariable: () => Result.ok("release pending"),
+      readIsRelease: () => Result.ok(true),
+    });
+    expect(result.isOk()).toBe(true);
+  });
+
+  test("a variable read error refuses even a release", () => {
+    const error = new MergeHoldReadError({
+      message: "variable read unavailable",
+    });
+    const result = checkMergeHold({
+      readVariable: () => Result.err(error),
+      readIsRelease: () => Result.ok(true),
+    });
+    expect(result.isErr() && result.error).toBe(error);
+  });
+
+  test("a release recognition error refuses while a hold is active", () => {
+    const error = new MergeHoldReadError({ message: "listing unavailable" });
+    const result = checkMergeHold({
+      readVariable: () => Result.ok("release pending"),
+      readIsRelease: () => Result.err(error),
+    });
+    expect(result.isErr() && result.error).toBe(error);
+  });
+
+  test.each([{ arguments: [] }, { arguments: ["--jump"] }])(
+    "the CLI refuses a hold before merge writes: $arguments",
+    ({ arguments: extraArguments }) => {
+      const directory = mkdtempSync(path.join(tmpdir(), "merge-bar-hold-"));
+      const executable = path.join(directory, "gh");
+      writeFileSync(
+        executable,
+        `#!/bin/sh
+case "$*" in
+  'variable get STELLA_MERGE_HOLD --repo '*) printf '%s\\n' 'release pending';;
+  'pr list '*)
+    case "$*" in
+      *--jq*) printf '\\n';;
+      *) printf '%s\\n' '[]';;
+    esac;;
+  *) echo 'unexpected GitHub operation' >&2; exit 99;;
+esac
+`,
+      );
+      chmodSync(executable, 0o700);
+      try {
+        const result = Bun.spawnSync({
+          cmd: [
+            process.execPath,
+            fileURLToPath(new URL("merge-bar.ts", import.meta.url)),
+            "123",
+            ...extraArguments,
+          ],
+          env: {
+            ...process.env,
+            PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        });
+        expect(result.exitCode).toBe(1);
+        expect(result.stderr.toString()).toContain(
+          "MERGE HOLD: release pending",
+        );
+        expect(result.stderr.toString()).not.toContain(
+          "unexpected GitHub operation",
+        );
+      } finally {
+        rmSync(directory, { recursive: true, force: true });
+      }
+    },
+  );
 });

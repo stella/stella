@@ -1141,6 +1141,7 @@ export default defineConfig({
   jsPlugins: [
     ...SHADCN_LINT_JS_PLUGINS,
     stellaLowercasePluginSpecifier,
+    "./.oxlint-plugins/no-raw-cache-control.ts",
     "@tanstack/eslint-plugin-query",
     "@tanstack/eslint-plugin-router",
     "eslint-plugin-drizzle",
@@ -1210,6 +1211,7 @@ export default defineConfig({
     "./.oxlint-plugins/require-search-scope.ts",
     "./.oxlint-plugins/no-direct-ingestion-checkpoint-write.ts",
     "./.oxlint-plugins/no-literal-decision-court.ts",
+    "./.oxlint-plugins/no-parser-validator-calls.ts",
     "./.oxlint-plugins/no-raw-decision-text-fields.ts",
     "./.oxlint-plugins/no-unowned-file-version-write.ts",
     "./.oxlint-plugins/mcp-security.ts",
@@ -1689,7 +1691,6 @@ export default defineConfig({
               "apps/web/src/routes/_protected.settings/account.profile.tsx",
               "apps/web/src/routes/_protected.settings/organization.usage.tsx",
               "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-row.tsx",
-              "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/timer-controls.tsx",
               "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx",
               "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/extraction-run-progress.tsx",
               "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx",
@@ -3048,6 +3049,24 @@ export default defineConfig({
     },
     {
       files: [
+        "apps/api/src/handlers/case-law/ingestion/{parsers,adapters}/**/*.ts",
+        "apps/api/src/lib/legal-search/parsers/**/*.ts",
+        ".oxlint-plugins/__fixtures__/no-parser-validator-calls.fixture.ts",
+        ".oxlint-plugins/__fixtures__/no-parser-validator-calls.fixture.import.ts",
+        ".oxlint-plugins/__fixtures__/no-parser-validator-calls.fixture.call.ts",
+        ".oxlint-plugins/__fixtures__/no-parser-validator-calls.fixture.legacy.ts",
+        ".oxlint-plugins/__fixtures__/no-parser-validator-calls.fixture.stale.ts",
+      ],
+      excludeFiles: [
+        "**/*.test.ts",
+        "apps/api/src/lib/legal-search/parsers/validate-ast.ts",
+      ],
+      rules: {
+        "no-parser-validator-calls/no-parser-validator-calls": "error",
+      },
+    },
+    {
+      files: [
         ".oxlint-plugins/__fixtures__/no-literal-decision-court.fixture.ts",
       ],
       rules: {
@@ -3723,11 +3742,6 @@ export default defineConfig({
                   "single-account reads and writes keyed by the caller's own user id, or by the email a sign-in or OTP request names before any organization exists",
               },
               {
-                file: "apps/api/src/handlers/operator/query.ts",
-                reason:
-                  "operator registrations are instance-wide by design: the endpoint is token-gated at the deployment level, so there is no organization to scope by",
-              },
-              {
                 file: "apps/api/src/handlers/workspaces/read-overview-activity-actors.query.ts",
                 reason:
                   "actor ids come only from audit rows already scoped to the authorized organization and workspace; a membership join would erase retained attribution after membership ends",
@@ -4085,6 +4099,20 @@ export default defineConfig({
           "error",
           { entries: enforcedOwnershipEntries },
         ],
+      },
+    },
+    {
+      files: [
+        "apps/api/src/**/*.ts",
+        ".oxlint-plugins/__fixtures__/no-raw-cache-control.fixture.ts",
+      ],
+      excludeFiles: [
+        "apps/api/src/**/*.test.ts",
+        "apps/api/src/tests/**/*.ts",
+        "apps/api/src/**/__tests__/**",
+      ],
+      rules: {
+        "no-raw-cache-control/no-raw-cache-control": "error",
       },
     },
     {

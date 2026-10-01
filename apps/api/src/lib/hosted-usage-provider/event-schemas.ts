@@ -81,6 +81,7 @@ const providerEntitlementSchema = v.object({
    * out-of-order retries (see `usage_entitlements.hosted_last_event_at`).
    */
   occurred_at: v.optional(v.pipe(v.string(), v.isoTimestamp())),
+  created_at: v.optional(v.pipe(v.string(), v.isoTimestamp())),
 });
 
 const providerAllocationSchema = v.object({

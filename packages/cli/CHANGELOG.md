@@ -1,5 +1,33 @@
 # @stll/cli
 
+## 3.3.0
+
+### Minor Changes
+
+- [#4217](https://github.com/stella/stella/pull/4217) [`49409ef`](https://github.com/stella/stella/commit/49409ef4d4ae91076532d9059d58fe32f7384ca0) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add internal time entry creation and activity groups to time outputs and timer confirmation.
+
+- [#4290](https://github.com/stella/stella/pull/4290) [`16f945a`](https://github.com/stella/stella/commit/16f945aee4469512e1be499f21eb6d0dbc81a5fb) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add court-list, publisher-category, and legal-sentence filters to case-law search.
+
+### Patch Changes
+
+- [#4321](https://github.com/stella/stella/pull/4321) [`6f9e473`](https://github.com/stella/stella/commit/6f9e4730da006cf1d8797ccca105b1a6a9c52631) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Include service classification in the capability catalog.
+
+- [#4267](https://github.com/stella/stella/pull/4267) [`c9f5259`](https://github.com/stella/stella/commit/c9f52591ff905316cb3e816fb62559c27083b917) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add case-law decision field selection and first-phrasing facets for multi-query searches.
+
+- [#4269](https://github.com/stella/stella/pull/4269) [`e5e8872`](https://github.com/stella/stella/commit/e5e88721d412a2bc608904aeeb9888b6c604417d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Clarify Czech provision anchor examples and recommend confirming publisher anchors in the statute outline.
+
+## 3.2.0
+
+### Minor Changes
+
+- [#4202](https://github.com/stella/stella/pull/4202) [`56105aa`](https://github.com/stella/stella/commit/56105aa4b3d38771991adb7c18b4d796ec5a76a7) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add time entry approval queue, batch approval, and return capabilities.
+
+## 3.1.0
+
+### Minor Changes
+
+- [#4181](https://github.com/stella/stella/pull/4181) [`d70abfc`](https://github.com/stella/stella/commit/d70abfcc3ce7776d38a84d89b45a4574dc79d8f7) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Support invoice document types, original invoice links, and optional draft numbers.
+
 ## 3.0.0
 
 ### Major Changes

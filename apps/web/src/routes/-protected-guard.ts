@@ -3,6 +3,7 @@ import { redirect } from "@tanstack/react-router";
 import { panic } from "better-result";
 
 import { isInboxPreviewEnabled } from "@/hooks/use-inbox-preview";
+import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { roleOptions } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
@@ -14,6 +15,7 @@ import {
   prefetchRouteQuery,
 } from "@/lib/react-query";
 import { returnPathOf } from "@/lib/redirect";
+import { organizationSettingsOptions } from "@/queries/organization-settings";
 import { loadAuthContext } from "@/routes/-auth-context";
 
 // The signed-in routes' guard, apart from the signed-in frame so a route can
@@ -53,6 +55,19 @@ export const loadProtectedContext = async ({
   }
 
   const activeOrganizationId = authContext.session.activeOrganizationId;
+
+  if (
+    location.pathname === "/settings/organization/time-policy" &&
+    isTimeBillingRouteEnabled()
+  ) {
+    detached(
+      context.queryClient.query({
+        ...organizationSettingsOptions(activeOrganizationId),
+        staleTime: "static",
+      }),
+      "protected-layout.time-policy-prefetch",
+    );
+  }
 
   // Start optional shell data immediately. The loader settles the role before
   // chrome mounts, while child loaders fetch their independent data in parallel.

@@ -16,7 +16,11 @@ const config = {
   description:
     "Save a reusable company specification format for colleagues in the active organization.",
   permissions: { template: ["create"] },
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  mcp: {
+    type: "capability",
+    reason: "template_authoring_ui",
+    consumesServices: false,
+  },
   body: t.Object(
     {
       registry: t.UnionEnum(LOOKUP_REGISTRIES),

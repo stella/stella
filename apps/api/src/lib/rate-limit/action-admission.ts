@@ -1,10 +1,26 @@
 import { Result, TaggedError } from "better-result";
 import { AsyncLocalStorage } from "node:async_hooks";
 
+import {
+  ACTION_ADMISSION_CODES,
+  ACTION_ADMISSION_REFUSALS,
+  type ActionAdmissionCode,
+} from "@stll/api-contract/action-admission";
+import { Temporal } from "@stll/time";
+
 import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import type { AdmittedActionIdentity } from "@/api/lib/rate-limit/action-kinds";
+import {
+  ACTION_PERIOD_ACQUIRE_SCRIPT,
+  actionPeriodArguments,
+  staleActionPeriodTime,
+  resolveActionPeriodBudget,
+  type ActionPeriodBudget,
+  type ActionPeriodPolicy,
+} from "@/api/lib/rate-limit/action-period-budget";
 import { withCommandTimeout } from "@/api/lib/rate-limit/redis-command-timeout";
 import {
   createLazyRedisClient,
@@ -36,11 +52,43 @@ export const closeActionAdmissionRedis = () => admissionRedis.close();
 
 export class ActionAdmissionError extends TaggedError("ActionAdmissionError")<{
   message: string;
-  reason: "busy" | "unavailable";
+  reason: "busy" | "period_exhausted" | "not_enabled" | "unavailable";
   cause?: unknown;
-}> {}
+}> {
+  get code() {
+    return ADMISSION_REASON_CODES[this.reason];
+  }
+}
 
-export type ActionAdmissionPolicy = {
+const ADMISSION_REASON_CODES = {
+  busy: ACTION_ADMISSION_CODES.concurrencyBusy,
+  period_exhausted: ACTION_ADMISSION_CODES.periodExhausted,
+  not_enabled: ACTION_ADMISSION_CODES.notEnabled,
+  unavailable: ACTION_ADMISSION_CODES.admissionUnavailable,
+} as const satisfies Record<
+  ActionAdmissionError["reason"],
+  ActionAdmissionCode
+>;
+
+export const actionAdmissionRefusal = (error: ActionAdmissionError) => {
+  const refusal = ACTION_ADMISSION_REFUSALS[error.code];
+  const contactUrl =
+    error.code === ACTION_ADMISSION_CODES.periodExhausted ||
+    error.code === ACTION_ADMISSION_CODES.notEnabled
+      ? env.ACTION_LIMIT_CONTACT_URL
+      : undefined;
+  return {
+    ...refusal,
+    code: error.code,
+    hint:
+      contactUrl === undefined
+        ? refusal.hint
+        : `${refusal.hint} Contact: ${contactUrl}`,
+    ...(contactUrl === undefined ? {} : { contactUrl }),
+  };
+};
+
+type ActionAdmissionPolicy = {
   organizationConcurrency: number;
   userConcurrency: number;
   leaseMs: number;
@@ -58,6 +106,7 @@ redis.call("ZREMRANGEBYSCORE", KEYS[2], "-inf", now)
 if redis.call("ZCARD", KEYS[1]) >= tonumber(ARGV[2]) or redis.call("ZCARD", KEYS[2]) >= tonumber(ARGV[3]) then
   return 0
 end
+${ACTION_PERIOD_ACQUIRE_SCRIPT}
 redis.call("ZADD", KEYS[1], now + tonumber(ARGV[1]), ARGV[4])
 redis.call("ZADD", KEYS[2], now + tonumber(ARGV[1]), ARGV[4])
 redis.call("PEXPIRE", KEYS[1], ARGV[1])
@@ -137,7 +186,10 @@ type ActionAdmissionOptions = {
   userId: SafeId<"user">;
   run: (signal: AbortSignal) => Promise<unknown>;
   enabled?: boolean;
+  scope?: "inherit" | "independent";
   policy?: ActionAdmissionPolicy;
+  periodIdentity?: AdmittedActionIdentity;
+  periodPolicy?: ActionPeriodPolicy;
   redis?: RedisCommands;
   redisReady?: () => Promise<RedisCommands>;
   createId?: () => string;
@@ -166,6 +218,136 @@ const defaultTiming: AdmissionTiming = {
   },
 };
 
+type AdmissionExecutorOptions = {
+  keys: AdmissionKeys;
+  budget: ActionPeriodBudget | null;
+  organizationId: SafeId<"organization">;
+  periodIdentity: AdmittedActionIdentity | undefined;
+  redis: RedisCommands | undefined;
+  redisReady: () => Promise<RedisCommands>;
+};
+
+const createAdmissionExecutor = ({
+  keys,
+  budget,
+  organizationId,
+  periodIdentity,
+  redis,
+  redisReady,
+}: AdmissionExecutorOptions) => {
+  const retryIdentity =
+    periodIdentity === undefined
+      ? undefined
+      : {
+          actionKind: periodIdentity.actionKind,
+          logicalPhaseId: periodIdentity.logicalPhaseId,
+        };
+  const execute = async (script: string, args: string[]) => {
+    const outcome = await Result.tryPromise({
+      try: async () => {
+        const client: RedisCommands =
+          redis ??
+          (await withCommandTimeout({
+            command: redisReady(),
+            commandTimeoutMs: REDIS_COMMAND_TIMEOUT_MS,
+            label: "action-admission-redis-connect",
+          }));
+        const send = async (
+          window: ActionPeriodBudget | null,
+          commandArgs: string[],
+        ) => {
+          // Renewal and release touch concurrency keys alone.
+          const scriptKeys =
+            script === ACQUIRE_SCRIPT && window !== null
+              ? [keys.organization, keys.user, window.key]
+              : [keys.organization, keys.user];
+          return await withCommandTimeout({
+            command: client.send("EVAL", [
+              script,
+              String(scriptKeys.length),
+              ...scriptKeys,
+              ...commandArgs,
+            ]),
+            commandTimeoutMs: REDIS_COMMAND_TIMEOUT_MS,
+            label: "action-admission-redis-command",
+          });
+        };
+        const reply = await send(budget, args);
+        const storeNow =
+          script === ACQUIRE_SCRIPT ? staleActionPeriodTime(reply) : null;
+        if (budget === null || storeNow === null) {
+          return Result.ok(reply);
+        }
+
+        // A stale window has not reserved anything. Retry once using store time,
+        // with the original lease and logical phase, never after another failure.
+        const refreshed = resolveActionPeriodBudget({
+          organizationId,
+          identity: retryIdentity,
+          policy: {
+            periodMs: budget.endMs - budget.startMs,
+            limit: budget.limit,
+          },
+          nowMs: storeNow,
+        });
+        if (Result.isError(refreshed)) {
+          return Result.err(
+            new ActionAdmissionError({
+              message: "Action admission is unavailable",
+              reason: "unavailable",
+              cause: refreshed.error,
+            }),
+          );
+        }
+        if (refreshed.value === null) {
+          return Result.ok(-2);
+        }
+        return Result.ok(
+          await send(refreshed.value, [
+            ...args.slice(0, 4),
+            ...actionPeriodArguments(refreshed.value),
+          ]),
+        );
+      },
+      catch: (error: unknown) =>
+        new ActionAdmissionError({
+          message: "Action admission is unavailable",
+          reason: "unavailable",
+          cause: error,
+        }),
+    });
+
+    return Result.isError(outcome) ? outcome : outcome.value;
+  };
+
+  return execute;
+};
+
+const validateAdmissionReply = (
+  reply: unknown,
+): Result<void, ActionAdmissionError> => {
+  if (reply === 0 || reply === -1) {
+    return Result.err(
+      new ActionAdmissionError({
+        message:
+          reply === -1
+            ? "Action period limit reached"
+            : "Concurrent action limit reached",
+        reason: reply === -1 ? "period_exhausted" : "busy",
+      }),
+    );
+  }
+  if (reply !== 1) {
+    return Result.err(
+      new ActionAdmissionError({
+        message: "Action admission returned an invalid response",
+        reason: "unavailable",
+      }),
+    );
+  }
+  return Result.ok(undefined);
+};
+
 /**
  * The disabled branch never opens Valkey or reads admission configuration.
  * Nested admission must be awaited: same-caller work shares the parent's lease
@@ -176,7 +358,10 @@ export const withActionAdmission = async <T>({
   userId,
   run,
   enabled = env.FEATURE_ACTION_ADMISSION,
+  scope = "inherit",
   policy,
+  periodIdentity,
+  periodPolicy,
   redis,
   redisReady = admissionRedis.ready,
   createId = () => Bun.randomUUIDv7(),
@@ -191,8 +376,26 @@ export const withActionAdmission = async <T>({
     });
   }
 
+  const resolvedBudget = resolveActionPeriodBudget({
+    organizationId,
+    identity: periodIdentity,
+    policy: periodPolicy,
+    nowMs: Temporal.Now.instant().epochMilliseconds,
+  });
+  if (Result.isError(resolvedBudget)) {
+    return Result.err(
+      new ActionAdmissionError({
+        message: resolvedBudget.error.message,
+        reason: "unavailable",
+        cause: resolvedBudget.error,
+      }),
+    );
+  }
+  const budget = resolvedBudget.value;
+
   const inherited = admissionScope.getStore();
   if (
+    scope === "inherit" &&
     inherited?.status === "active" &&
     inherited.organizationId === organizationId &&
     inherited.userId === userId
@@ -201,7 +404,6 @@ export const withActionAdmission = async <T>({
       try: async () => {
         inherited.signal.throwIfAborted();
         const value = await run(inherited.signal);
-        inherited.signal.throwIfAborted();
         return value;
       },
       catch: (error: unknown) => error,
@@ -216,35 +418,15 @@ export const withActionAdmission = async <T>({
   const limits = resolvedPolicy.value;
   const keys = admissionKeys({ organizationId, userId });
   const leaseId = createId();
-  const execute = async (script: string, args: string[]) =>
-    await Result.tryPromise({
-      try: async () => {
-        const client: RedisCommands =
-          redis ??
-          (await withCommandTimeout({
-            command: redisReady(),
-            commandTimeoutMs: REDIS_COMMAND_TIMEOUT_MS,
-            label: "action-admission-redis-connect",
-          }));
-        return await withCommandTimeout({
-          command: client.send("EVAL", [
-            script,
-            "2",
-            keys.organization,
-            keys.user,
-            ...args,
-          ]),
-          commandTimeoutMs: REDIS_COMMAND_TIMEOUT_MS,
-          label: "action-admission-redis-command",
-        });
-      },
-      catch: (error: unknown) =>
-        new ActionAdmissionError({
-          message: "Action admission is unavailable",
-          reason: "unavailable",
-          cause: error,
-        }),
-    });
+  const periodArgs = actionPeriodArguments(budget);
+  const execute = createAdmissionExecutor({
+    keys,
+    budget,
+    organizationId,
+    periodIdentity,
+    redis,
+    redisReady,
+  });
 
   const initialAttemptAt = timing.now();
   const admitted = await execute(ACQUIRE_SCRIPT, [
@@ -252,25 +434,14 @@ export const withActionAdmission = async <T>({
     String(limits.organizationConcurrency),
     String(limits.userConcurrency),
     leaseId,
+    ...periodArgs,
   ]);
   if (Result.isError(admitted)) {
     return admitted;
   }
-  if (admitted.value === 0) {
-    return Result.err(
-      new ActionAdmissionError({
-        message: "Concurrent action limit reached",
-        reason: "busy",
-      }),
-    );
-  }
-  if (admitted.value !== 1) {
-    return Result.err(
-      new ActionAdmissionError({
-        message: "Action admission returned an invalid response",
-        reason: "unavailable",
-      }),
-    );
+  const validated = validateAdmissionReply(admitted.value);
+  if (Result.isError(validated)) {
+    return validated;
   }
 
   let leaseDeadline = initialAttemptAt + limits.leaseMs;
@@ -344,7 +515,7 @@ export const withActionAdmission = async <T>({
   }
 
   let outcome: Result<T, unknown>;
-  const scope: AdmissionScope = {
+  const executionScope: AdmissionScope = {
     organizationId,
     userId,
     signal: controller.signal,
@@ -353,14 +524,14 @@ export const withActionAdmission = async <T>({
   try {
     outcome = await Result.tryPromise({
       try: async () =>
-        await admissionScope.run(scope, async () => {
+        await admissionScope.run(executionScope, async () => {
           controller.signal.throwIfAborted();
           return await run(controller.signal);
         }),
       catch: (error: unknown) => error,
     });
   } finally {
-    scope.status = "settled";
+    executionScope.status = "settled";
     stopped = true;
     cancelScheduled();
     await Promise.resolve(renewal);
@@ -371,7 +542,14 @@ export const withActionAdmission = async <T>({
       observeFailure(released.error, { sink: RELEASE_FAILURE });
     }
   }
-  if (controller.signal.aborted) {
+  // A settled success may already have committed or charged. Losing the lease
+  // cannot replace it with an infrastructure error that invites duplicate work.
+  if (
+    Result.isError(outcome) &&
+    controller.signal.aborted &&
+    (outcome.error === controller.signal.reason ||
+      (outcome.error instanceof Error && outcome.error.name === "AbortError"))
+  ) {
     return Result.err(controller.signal.reason);
   }
   return outcome;

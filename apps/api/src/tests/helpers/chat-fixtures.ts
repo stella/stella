@@ -5,7 +5,7 @@ import {
   modelMessagesToUIMessages,
   uiMessagesToWire,
 } from "@tanstack/ai";
-import type { StreamChunk, UIMessage } from "@tanstack/ai";
+import type { ModelMessage, StreamChunk, UIMessage } from "@tanstack/ai";
 import { panic } from "better-result";
 
 import { streamChatChunks } from "@/api/lib/chat/tanstack-chat-runtime";
@@ -57,6 +57,17 @@ export const buildEngineSnapshot = (
       modelMessagesToUIMessages(convertMessagesToModelMessages([...history])),
       { includeSnapshotStructuredOutput: true },
     ),
+  });
+
+/** Native wire history uses the SDK serializer without interrupt-time splitting. */
+export const buildWireSnapshot = (
+  history: readonly (ModelMessage | UIMessage)[],
+): ValidChatFixture<MessagesSnapshotChunk> =>
+  brand({
+    type: EventType.MESSAGES_SNAPSHOT,
+    messages: uiMessagesToWire([...history], {
+      includeSnapshotStructuredOutput: true,
+    }),
   });
 
 /**
