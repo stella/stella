@@ -4,7 +4,7 @@ import { readdirSync, readFileSync } from "node:fs";
 
 /** Read shards in capability-id order; no CLI schema projection is applied. */
 export const readCapabilityCatalog = (
-  directory = new URL("../capabilities/", import.meta.url),
+  directory: URL = new URL("../capabilities/", import.meta.url),
 ): unknown[] => {
   const entries: unknown[] = [];
   for (const filename of readdirSync(directory).toSorted()) {
