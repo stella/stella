@@ -6,7 +6,7 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { ComposerStatusRow } from "@stll/ui/composer";
-import { MessageSquarePlusIcon } from "@stll/ui/icons";
+import { NewChatIcon } from "@stll/ui/icons";
 import { Popover, PopoverPanel } from "@stll/ui/popover";
 
 import {
@@ -171,7 +171,7 @@ export const ChatComposerDock = (props: ChatComposerDockProps) => {
                   tooltip={t("chat.newChat")}
                   variant="muted"
                 >
-                  <MessageSquarePlusIcon className="size-3.5" />
+                  <NewChatIcon className="size-3.5" />
                 </Button>
               </span>
               <Popover

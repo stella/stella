@@ -13,7 +13,7 @@ import { useTranslations } from "use-intl";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { Button, buttonVariants } from "@stll/ui/button";
-import { Minimize2Icon, PlusIcon } from "@stll/ui/icons";
+import { Minimize2Icon, NewChatIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
@@ -902,7 +902,7 @@ const NewChatButton = ({
   if (!hasMessages) {
     return (
       <Button disabled size="sm" variant="ghost">
-        <PlusIcon />
+        <NewChatIcon />
         {t("chat.newChat")}
       </Button>
     );
@@ -914,7 +914,7 @@ const NewChatButton = ({
         params={{ workspaceId: threadRef.workspaceId }}
         to="/chat/workspaces/$workspaceId/new"
       >
-        <PlusIcon />
+        <NewChatIcon />
         {t("chat.newChat")}
       </Link>
     );
@@ -924,7 +924,7 @@ const NewChatButton = ({
       className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
       to="/chat/new"
     >
-      <PlusIcon />
+      <NewChatIcon />
       {t("chat.newChat")}
     </Link>
   );

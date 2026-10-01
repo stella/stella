@@ -1,18 +1,15 @@
 import { Fragment, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ComponentProps, ReactNode, RefObject } from "react";
 
-import { Result } from "better-result";
 import type { PluggableList } from "unified";
 import { useTranslations } from "use-intl";
 
 import { isThirdPartyBoundaryRefusalError } from "@stll/anonymize-chat";
 import type { AIErrorKind } from "@stll/api-contract";
-import { copyToClipboard } from "@stll/clipboard";
 import { Button } from "@stll/ui/button";
 import {
   ChevronRightIcon,
   ClockIcon,
-  CopyIcon,
   FileTextIcon,
   Loader2Icon,
   PaperclipIcon,
@@ -85,6 +82,7 @@ import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link
 import { ToolApprovalCard } from "@/components/chat/tool-approval-card";
 import { ToolCallCard } from "@/components/chat/tool-call-card";
 import { WebSearchSources } from "@/components/chat/web-search-sources";
+import { CopyActionButton } from "@/components/copy-action-button";
 import type { QueuedChatMessage } from "@/features/chat/hooks/use-chat-session";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -1065,31 +1063,15 @@ const AssistantMessageActions = ({
     return null;
   }
 
-  const handleCopy = async () => {
-    const copied = await copyToClipboard(text);
-    if (Result.isError(copied)) {
-      getAnalytics().captureError(copied.error);
-      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
-      return;
-    }
-    stellaToast.add({ title: t("common.copied"), type: "success" });
-  };
-
   return (
     <div className="flex items-center gap-1">
       {text && (
-        <Button
-          aria-label={t("common.copy")}
+        <CopyActionButton
           className="text-muted-foreground h-6 px-1.5"
-          onClick={() => {
-            detached(handleCopy(), "chat-thread-messages.copy");
-          }}
           size="xs"
+          text={text}
           variant="ghost"
-        >
-          <CopyIcon className="size-3.5" />
-          {t("common.copy")}
-        </Button>
+        />
       )}
       {canRetry && (
         <Button
