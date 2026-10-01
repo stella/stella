@@ -481,6 +481,69 @@ type CompletedTurnFollowUps = {
   resolvedResponseMessage: ChatMessage;
 };
 
+/**
+ * A streamed turn's `onFinish` boundary. The response is already streaming,
+ * so no outer catch settles the turn: without this it stays `running` until
+ * its lease lapses and the thread is dead. One boundary for every failure,
+ * expected or thrown, so the turn row is settled exactly once before the
+ * stream reports the error. Returns what the row now holds, for the run to
+ * count.
+ */
+const settleStreamedAssistantTurn = async ({
+  persist,
+  run,
+  runFollowUps,
+  threadId,
+}: {
+  persist: () => Promise<
+    Result<
+      {
+        followUps: CompletedTurnFollowUps | null;
+        settlement: ChatTurnStoredSettlement;
+      },
+      AssistantTurnFailure
+    >
+  >;
+  run: ChatTurnRun;
+  runFollowUps: (followUps: CompletedTurnFollowUps) => Promise<void>;
+  threadId: SafeId<"chatThread">;
+}): Promise<ChatTurnStoredSettlement> => {
+  const settled = (
+    await Result.tryPromise({
+      try: persist,
+      catch: (cause): AssistantTurnFailure => ({
+        code: "internal",
+        error: new HandlerError({
+          status: 500,
+          message: "Failed to settle assistant turn",
+          cause,
+        }),
+      }),
+    })
+  ).andThen((result) => result);
+  if (Result.isError(settled)) {
+    const { code, error } = settled.error;
+    await run.fail(code, true);
+    throw error;
+  }
+  // The turn is stored from here, so a follow-up that throws is reported and
+  // never reaches the boundary above: a completed turn cannot then read as
+  // failed.
+  const { followUps, settlement } = settled.value;
+  if (followUps !== null) {
+    const followedUp = await Result.tryPromise(
+      async () => await runFollowUps(followUps),
+    );
+    if (Result.isError(followedUp)) {
+      observeFailure(followedUp.error, {
+        sink: COMPLETED_TURN_FOLLOW_UPS_FAILED,
+        ctx: { threadId },
+      });
+    }
+  }
+  return settlement;
+};
+
 const CHECKPOINT_RESTORATION_FAILED = failureSink({
   event: "chat.send.checkpoint_restoration_failed",
   expected: [],
@@ -2830,50 +2893,15 @@ export const createSendMessage = (
                   ...(owningAssistantMessage === undefined
                     ? {}
                     : { owningAssistantMessageId: owningAssistantMessage.id }),
-                  onFinish: async (event) => {
-                    // The response is already streaming, so no outer catch
-                    // settles the turn: without this it stays `running`
-                    // until its lease lapses and the thread is dead. One
-                    // boundary for every failure, expected or thrown, so the
-                    // turn row is settled exactly once before the stream
-                    // reports the error.
-                    const settled = (
-                      await Result.tryPromise({
-                        try: async () =>
-                          await persistStreamedAssistantTurn(event),
-                        catch: (cause): AssistantTurnFailure => ({
-                          code: "internal",
-                          error: new HandlerError({
-                            status: 500,
-                            message: "Failed to settle assistant turn",
-                            cause,
-                          }),
-                        }),
-                      })
-                    ).andThen((result) => result);
-                    if (Result.isError(settled)) {
-                      const { code, error } = settled.error;
-                      await run.fail(code, true);
-                      throw error;
-                    }
-                    // The turn is stored from here, so a follow-up that
-                    // throws is reported and never reaches the boundary
-                    // above: a completed turn cannot then read as failed.
-                    const { followUps, settlement } = settled.value;
-                    if (followUps !== null) {
-                      const followedUp = await Result.tryPromise(
-                        async () =>
-                          await runCompletedTurnFollowUps(run, followUps),
-                      );
-                      if (Result.isError(followedUp)) {
-                        observeFailure(followedUp.error, {
-                          sink: COMPLETED_TURN_FOLLOW_UPS_FAILED,
-                          ctx: { threadId: body.threadId },
-                        });
-                      }
-                    }
-                    return settlement;
-                  },
+                  onFinish: async (event) =>
+                    await settleStreamedAssistantTurn({
+                      persist: async () =>
+                        await persistStreamedAssistantTurn(event),
+                      run,
+                      runFollowUps: async (followUps) =>
+                        await runCompletedTurnFollowUps(run, followUps),
+                      threadId: body.threadId,
+                    }),
                   orgAIConfig,
                   organizationId: session.activeOrganizationId,
                   devModelId: chatModelOverride,
