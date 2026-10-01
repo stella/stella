@@ -38,7 +38,7 @@ try {
     sleep: Bun.sleep,
     step: () =>
       runtime.step(async ({ tx, size, cursor }) => {
-        const page = await backfillStatuteSlugsPage({
+        const outcome = await backfillStatuteSlugsPage({
           db: async (work) => await work(tx),
           after:
             cursor === null
@@ -46,6 +46,8 @@ try {
               : brandPersistedLegislationDocumentId(cursor),
           size,
         });
+        if (outcome.isErr()) {throw outcome.error.cause;}
+        const page = outcome.value;
         return { cursor: page.cursor, done: page.done, value: page };
       }),
     onBatch: ({ value }) => {

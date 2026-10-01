@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { expect, test } from "bun:test";
 import * as v from "valibot";
 
@@ -11,6 +12,7 @@ import {
 import { Temporal } from "@stll/time";
 
 import { envBaseServerSchema } from "../../env-base-schema";
+import { EbsBalanceReadError } from "./ebs-balance-reader";
 import {
   createEbsSignalReader,
   resolveEbsConfiguration,
@@ -104,11 +106,11 @@ for (const row of rows) {
         expect(maxStalenessMs).toBe(defaultConfig.maxStalenessMs);
         return async () => {
           metricReads++;
-          return {
+          return Result.ok({
             byteBalancePct: 80,
             ioBalancePct: 90,
             observedAt: Temporal.Instant.fromEpochMilliseconds(now).toString(),
-          };
+          });
         };
       },
     });
@@ -184,13 +186,27 @@ test("effective metric staleness reaches the CloudWatch factory", async () => {
     config: { ...defaultConfig, maxStalenessMs: customStalenessMs },
     createReader: ({ maxStalenessMs }) => {
       windows.push(maxStalenessMs);
-      return async () => ({
-        byteBalancePct: 90,
-        ioBalancePct: 90,
-        observedAt: Temporal.Instant.fromEpochMilliseconds(now).toString(),
-      });
+      return async () =>
+        Result.ok({
+          byteBalancePct: 90,
+          ioBalancePct: 90,
+          observedAt: Temporal.Instant.fromEpochMilliseconds(now).toString(),
+        });
     },
   });
   expect((await read()).kind).toBe("normal");
   expect(windows).toEqual([customStalenessMs]);
+});
+
+test("an adapter Err remains an unknown blocking signal", async () => {
+  const failure = new EbsBalanceReadError({ message: "provider unavailable" });
+  const read = createEbsSignalReader({
+    configuration: { type: "enabled", instanceIdentifier: "test-instance" },
+    clock,
+    config: defaultConfig,
+    createReader: () => async () => Result.err(failure),
+  });
+  const signal = await read();
+  expect(signal.kind).toBe("unknown");
+  expect(decideStart(combine([signal]), "index_build").decision).toBe("wait");
 });

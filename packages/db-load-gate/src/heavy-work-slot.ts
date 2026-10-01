@@ -1,4 +1,9 @@
-import { panic, Result } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
+
+export class HeavyWorkSlotError extends TaggedError("HeavyWorkSlotError")<{
+  message: string;
+  cause: unknown;
+}> {}
 
 export type HeavyWorkKind = "index_repair" | "index_build" | "backfill_batch";
 
@@ -103,7 +108,7 @@ export const createHeavyWorkSlot = ({
     }
     held = false;
   };
-  const tryAcquire = async () => {
+  const acquire = async () => {
     if (closed) {
       panic("Cannot acquire a closed heavy-work slot");
     }
@@ -131,24 +136,26 @@ export const createHeavyWorkSlot = ({
     if (!held) {
       return false;
     }
+    // Recheck under the work lock so newly registered higher priorities win.
+    if (!(await query(READ_HIGHER_PRIORITY_SQL, priority))) {
+      await release();
+      return false;
+    }
+    return true;
+  };
+  const tryAcquire = async () => {
     const acquisition = await Result.tryPromise({
-      try: async () => {
-        // Inspect shared intents without briefly taking an exclusive intent lock:
-        // that probe would prevent a higher-priority waiter from registering.
-        if (!(await query(READ_HIGHER_PRIORITY_SQL, priority))) {
-          await release();
-          return false;
-        }
-        return true;
-      },
-      catch: (error: unknown) => error,
+      try: acquire,
+      catch: (cause) =>
+        new HeavyWorkSlotError({
+          message: "Heavy-work slot acquisition failed",
+          cause,
+        }),
     });
     if (acquisition.isErr()) {
-      // This resource boundary propagates the original error after cleanup.
       await release();
-      throw acquisition.error;
     }
-    return acquisition.value;
+    return acquisition;
   };
   const close = async () => {
     if (closed) {

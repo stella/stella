@@ -47,7 +47,9 @@ test("a failed priority probe releases work and closing releases intent without 
     },
   });
 
-  await expect(slot.tryAcquire()).rejects.toBe(failure);
+  const acquisition = await slot.tryAcquire();
+  expect(acquisition.isErr()).toBe(true);
+  if (acquisition.isErr()) {expect(acquisition.error.cause).toBe(failure);}
   expect(priorityProbes).toBe(2);
   expect(workHeld).toBe(false);
   await slot.close();

@@ -57,7 +57,7 @@ type BatchWork<BatchTransaction, Value> = (options: {
 }) => Promise<{ cursor: string | null; done: boolean; value: Value }>;
 type DatabaseRuntimeOptions<BatchTransaction> = RuntimeOptions & {
   runInTransaction: IngestionTransactionRunner<BatchTransaction>;
-  transactionQuery: (tx: NoInfer<BatchTransaction>) => Query;
+  transactionQuery: (tx: BatchTransaction) => Query;
   slot: {
     tryAcquire: (tx: NoInfer<BatchTransaction>) => Promise<boolean>;
     release: () => Promise<void>;
@@ -311,7 +311,7 @@ export const createScriptBackfillRuntime = async ({
   };
   return createRuntime({
     ...options,
-    transactionQuery: drizzleQuery,
+    transactionQuery: (tx: Transaction) => drizzleQuery(tx),
     config: {
       ...(options.config ?? defaultConfig),
       minSize: Math.min(
@@ -365,8 +365,15 @@ export const createBackfillRuntime = (
   };
   return createRuntime({
     ...options,
-    slot,
-    transactionQuery: (tx) => tx.query,
+    slot: {
+      tryAcquire: async () => {
+        const acquisition = await slot.tryAcquire();
+        if (acquisition.isErr()) {throw acquisition.error.cause;}
+        return acquisition.value;
+      },
+      release: slot.release,
+    },
+    transactionQuery: (tx: OnlineMigrationConnection) => tx.query,
     config: {
       ...(options.config ?? defaultConfig),
       minSize: Math.min(

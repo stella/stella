@@ -1,3 +1,4 @@
+import type { Result } from "better-result";
 import { panic } from "better-result";
 
 import type { HealthConfig, Signal } from "@stll/db-load-gate/health";
@@ -6,7 +7,10 @@ import {
   type EbsBalanceReading,
 } from "@stll/db-load-gate/indicators";
 
-import { createEbsBalanceReader } from "./ebs-balance-reader";
+import {
+  createEbsBalanceReader,
+  type EbsBalanceReadError,
+} from "./ebs-balance-reader";
 
 type EbsEnvironment = {
   DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER?: string | undefined;
@@ -46,7 +50,7 @@ type EbsSignalReaderOptions = {
     clock: () => number;
     timeoutMs: number;
     maxStalenessMs: number;
-  }) => () => Promise<EbsBalanceReading | null>;
+  }) => () => Promise<Result<EbsBalanceReading, EbsBalanceReadError>>;
   log?: (event: EbsConfigurationEvent) => void;
 };
 
@@ -59,7 +63,9 @@ export const createEbsSignalReader = ({
   log = (event) => process.stderr.write(`${JSON.stringify(event)}\n`),
 }: EbsSignalReaderOptions): (() => Promise<Signal>) => {
   let loggedMissing = false;
-  let read: (() => Promise<EbsBalanceReading | null>) | undefined;
+  let read:
+    | (() => Promise<Result<EbsBalanceReading, EbsBalanceReadError>>)
+    | undefined;
   return async () => {
     switch (configuration.type) {
       case "enabled":
@@ -71,7 +77,8 @@ export const createEbsSignalReader = ({
               timeoutMs: config.readTimeoutMs,
               maxStalenessMs: config.maxStalenessMs,
             });
-            return await read();
+            const outcome = await read();
+            return outcome.isOk() ? outcome.value : null;
           },
           now: clock,
           config,

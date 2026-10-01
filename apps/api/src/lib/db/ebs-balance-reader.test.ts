@@ -41,7 +41,7 @@ describe("the shared RDS EBS reader", () => {
     let requestAborted = false;
     const started = Promise.withResolvers<undefined>();
     const timeoutMs = 123;
-    const read = createEbsBalanceReader({
+    const readResult = createEbsBalanceReader({
       instanceIdentifier: "test-instance",
       clock: () => NOW,
       timeoutMs,
@@ -66,6 +66,10 @@ describe("the shared RDS EBS reader", () => {
           }),
       },
     });
+    const read = async () => {
+      const outcome = await readResult();
+      return outcome.isOk() ? outcome.value : null;
+    };
     const reading = ebsBalance({ read, now: () => NOW, config: defaultConfig });
     await started.promise;
     expect(requestAborted).toBe(false);
@@ -81,7 +85,7 @@ describe("the shared RDS EBS reader", () => {
     const config = { ...defaultConfig, maxStalenessMs: 40 * 60_000 };
     const sourceTime = NOW - 30 * 60_000;
     const commands: GetMetricDataCommand[] = [];
-    const read = createEbsBalanceReader({
+    const readResult = createEbsBalanceReader({
       instanceIdentifier: "test-instance",
       clock: () => NOW,
       maxStalenessMs: config.maxStalenessMs,
@@ -98,6 +102,7 @@ describe("the shared RDS EBS reader", () => {
         },
       },
     });
+    const read = async () => (await readResult()).unwrapOr(null);
     const signal = await ebsBalance({ read, now: () => NOW, config });
     expect(sourceTime).toBeLessThan(
       NOW - defaultConfig.maxStalenessMs - 300_000,
@@ -121,7 +126,7 @@ describe("the shared RDS EBS reader", () => {
         },
       },
     });
-    expect(await reader()).toEqual({
+    expect((await reader()).unwrap()).toEqual({
       byteBalancePct: 75,
       ioBalancePct: 85,
       observedAt: new Date(NOW).toISOString(),
@@ -186,7 +191,7 @@ describe("the shared RDS EBS reader", () => {
         }),
       },
     });
-    expect(await reader()).toEqual({
+    expect((await reader()).unwrap()).toEqual({
       byteBalancePct: 75,
       ioBalancePct: 85,
       observedAt: new Date(NOW - 300_000).toISOString(),
@@ -234,12 +239,16 @@ describe("the shared RDS EBS reader", () => {
   ] satisfies GetMetricDataCommandOutput[])(
     "rejects absent or incomplete metric responses %#",
     async (output) => {
-      const read = createEbsBalanceReader({
+      const readResult = createEbsBalanceReader({
         instanceIdentifier: "test",
         clock: () => NOW,
         client: { send: async () => output },
       });
-      await expect(read()).rejects.toBeInstanceOf(EbsBalanceReadError);
+      const outcome = await readResult();
+      expect(outcome.isErr()).toBe(true);
+      if (outcome.isErr())
+        {expect(outcome.error).toBeInstanceOf(EbsBalanceReadError);}
+      const read = async () => (await readResult()).unwrapOr(null);
       expect(
         (await ebsBalance({ read, now: () => NOW, config: defaultConfig }))
           .kind,
@@ -248,14 +257,15 @@ describe("the shared RDS EBS reader", () => {
   );
 
   test("a stale partner blocks the gate even when the other metric is fresh", async () => {
-    const read = createEbsBalanceReader({
+    const readResult = createEbsBalanceReader({
       instanceIdentifier: "test",
       clock: () => NOW,
       client: {
         send: async () => response(NOW, NOW - defaultConfig.maxStalenessMs - 1),
       },
     });
-    expect((await read()).observedAt).toBe(
+    const read = async () => (await readResult()).unwrapOr(null);
+    expect((await readResult()).unwrap().observedAt).toBe(
       new Date(NOW - defaultConfig.maxStalenessMs - 1).toISOString(),
     );
     expect(
@@ -265,7 +275,7 @@ describe("the shared RDS EBS reader", () => {
 
   test("a failed SDK call propagates once and blocks the gate", async () => {
     let calls = 0;
-    const read = createEbsBalanceReader({
+    const readResult = createEbsBalanceReader({
       instanceIdentifier: "test",
       clock: () => NOW,
       client: {
@@ -277,9 +287,35 @@ describe("the shared RDS EBS reader", () => {
         },
       },
     });
+    const outcome = await readResult();
+    expect(outcome.isErr()).toBe(true);
+    if (outcome.isErr())
+      {expect(outcome.error.cause).toMatchObject({
+        message: "injected provider failure",
+      });}
+    expect(calls).toBe(1);
+    const read = async () => outcome.unwrapOr(null);
     expect(
       (await ebsBalance({ read, now: () => NOW, config: defaultConfig })).kind,
     ).toBe("unknown");
-    expect(calls).toBe(1);
   });
+});
+
+test("a missing instance returns Err before contacting the provider", async () => {
+  let calls = 0;
+  const read = createEbsBalanceReader({
+    instanceIdentifier: " ",
+    clock: () => NOW,
+    client: {
+      send: async () => {
+        calls++;
+        return response();
+      },
+    },
+  });
+  const outcome = await read();
+  expect(outcome.isErr()).toBe(true);
+  if (outcome.isErr())
+    {expect(outcome.error.message).toContain("instance identifier");}
+  expect(calls).toBe(0);
 });

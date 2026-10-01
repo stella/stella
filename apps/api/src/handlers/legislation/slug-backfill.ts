@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { Result, TaggedError } from "better-result";
 import { and, asc, gt, isNull, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
@@ -10,6 +10,11 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
+
+export class StatuteSlugPageError extends TaggedError("StatuteSlugPageError")<{
+  message: string;
+  cause: unknown;
+}> {}
 
 const BATCH_SIZE = 200;
 
@@ -139,7 +144,12 @@ export const backfillStatuteSlugsPage = async (
     if (Result.isError(write)) {
       // Statement cancellation shrinks and retries the page through the gate.
       if (isPgError(write.error, PG_ERROR.QUERY_CANCELED)) {
-        throw write.error;
+        return Result.err(
+          new StatuteSlugPageError({
+            message: "Statute slug page was canceled",
+            cause: write.error,
+          }),
+        );
       }
       (options.capture ?? captureError)(write.error, {
         after: options.after ?? "start",
@@ -151,30 +161,32 @@ export const backfillStatuteSlugsPage = async (
       written = write.value;
     }
   }
-  return {
+  return Result.ok({
     cursor: rows.at(-1)?.id ?? options.after,
     done: rows.length === 0,
     written,
     skipped,
     failed,
-  };
+  });
 };
 
 const backfillFrom = async (
   db: ScopedDb,
   progress: BackfillProgress,
-): Promise<StatuteSlugBackfillResult> => {
-  const page = await backfillStatuteSlugsPage({
+): Promise<Result<StatuteSlugBackfillResult, StatuteSlugPageError>> => {
+  const outcome = await backfillStatuteSlugsPage({
     db,
     after: progress.after,
     size: BATCH_SIZE,
   });
+  if (outcome.isErr()) {return outcome;}
+  const page = outcome.value;
   if (page.done) {
-    return {
+    return Result.ok({
       written: progress.written,
       skipped: progress.skipped,
       failed: progress.failed,
-    };
+    });
   }
 
   // A keyset walk is sequential by construction: the next page's cursor is
@@ -199,7 +211,5 @@ const backfillFrom = async (
  * Idempotent (only null-slug rows) and resumable (keyset by id): a page that
  * fails stays null and cannot stall the scan, so re-running retries it.
  */
-export const backfillStatuteSlugs = async (
-  db: ScopedDb,
-): Promise<StatuteSlugBackfillResult> =>
+export const backfillStatuteSlugs = async (db: ScopedDb) =>
   await backfillFrom(db, { after: null, written: 0, skipped: 0, failed: 0 });

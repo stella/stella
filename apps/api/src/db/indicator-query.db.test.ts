@@ -14,7 +14,7 @@ const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const BLOCKED_READ_QUERY = "SELECT pg_advisory_xact_lock($1::bigint)";
 
-describe.skipIf(!enabled || databaseUrl === undefined)(
+describe.skipIf(!enabled)(
   "bounded catalog reads on a reserved database session",
   () => {
     test("logical timeouts cancel every SQL read and leave the batch connection usable with its original budget", async () => {

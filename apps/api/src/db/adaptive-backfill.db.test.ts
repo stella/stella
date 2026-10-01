@@ -238,275 +238,273 @@ const withFixture = async (
   });
 };
 
-describe("adaptive backfill real Postgres fault recovery", () => {
-  if (!enabled || databaseUrl === undefined) {
-    test.skip("requires STELLA_RUN_POSTGRES_TESTS=true and DATABASE_URL", () => {});
-    return;
-  }
-
-  test("a committed batch resumes twice without duplicate transformations", async () => {
-    await withFixture(async ({ run, client, writer, invariant, restart }) => {
-      await run();
-      await invariant();
-      const [{ pid } = { pid: 0 }] = await client.unsafe<{ pid: number }[]>(
-        "SELECT pg_backend_pid() AS pid",
-      );
-      expect(pid).toBeGreaterThan(0);
-      const killed = await writer.unsafe<{ killed: boolean }[]>(
-        "SELECT pg_terminate_backend($1) AS killed",
-        [pid],
-      );
-      expect(killed.at(0)?.killed).toBe(true);
-      restart();
-      // Discard all application cursor state after the commit; new invocations
-      // read only the durable checkpoint, as a restarted process does.
-      for (let batch = 0; batch < 5; batch++) {
+describe.skipIf(!enabled)(
+  "adaptive backfill real Postgres fault recovery",
+  () => {
+    test("a committed batch resumes twice without duplicate transformations", async () => {
+      await withFixture(async ({ run, client, writer, invariant, restart }) => {
         await run();
-      }
-      await invariant(true);
-      await run();
-      await run();
-      await invariant(true);
-    });
-  });
-
-  test("backend death inside the open batch rolls back and resumes twice", async () => {
-    await withFixture(async ({ run, writer, schema, invariant, restart }) => {
-      await expect(run({ killHalfway: true })).rejects.toThrow(
-        /connection|closed|terminated|socket/iu,
-      );
-      expect(
-        (
-          await writer.unsafe<StateRow[]>(
-            `SELECT cursor, batch FROM ${schema}.checkpoint`,
-          )
-        ).at(0)?.cursor,
-      ).toBe(0);
-      expect(
-        await writer.unsafe(
-          `SELECT id FROM ${schema}.rows WHERE applications <> 0`,
-        ),
-      ).toHaveLength(0);
-      restart();
-      await invariant();
-      for (let batch = 0; batch < 5; batch++) {
-        await run();
-      }
-      await invariant(true);
-      restart();
-      await run();
-      await run();
-      await invariant(true);
-    });
-  });
-
-  test("a failure halfway rolls back both row counters and cursor", async () => {
-    await withFixture(async ({ run, client, schema, invariant }) => {
-      await expect(run({ failHalfway: true })).rejects.toThrow(
-        "division by zero",
-      );
-      expect(
-        (
-          await client.unsafe<StateRow[]>(
-            `SELECT cursor, batch FROM ${schema}.checkpoint`,
-          )
-        ).at(0)?.cursor,
-      ).toBe(0);
-      expect(
-        (
-          await client.unsafe<{ count: number }[]>(
-            `SELECT count(*)::int AS count FROM ${schema}.rows WHERE applications <> 0`,
-          )
-        ).at(0)?.count,
-      ).toBe(0);
-      await invariant();
-      for (let batch = 0; batch < 5; batch++) {
-        await run();
-      }
-      await invariant(true);
-    });
-  });
-
-  test("a hold preserves the committed cursor and resumes after its durable deadline", async () => {
-    await withFixture(
-      async ({ run, client, schema, invariant, advanceClock }) => {
-        await run();
-        const before = (
-          await client.unsafe<StateRow[]>(
-            `SELECT cursor, batch FROM ${schema}.checkpoint`,
-          )
-        ).at(0);
-        await run({ verdict: { ...healthy, kind: "unknown" } });
-        const after = (
-          await client.unsafe<StateRow[]>(
-            `SELECT cursor, batch FROM ${schema}.checkpoint`,
-          )
-        ).at(0);
-        expect(after?.cursor).toBe(before?.cursor);
-        expect(after?.batch.holdUntil).toBeGreaterThan(0);
-        expect(after?.batch.size).toBe(before?.batch.size);
         await invariant();
+        const [{ pid } = { pid: 0 }] = await client.unsafe<{ pid: number }[]>(
+          "SELECT pg_backend_pid() AS pid",
+        );
+        expect(pid).toBeGreaterThan(0);
+        const killed = await writer.unsafe<{ killed: boolean }[]>(
+          "SELECT pg_terminate_backend($1) AS killed",
+          [pid],
+        );
+        expect(killed.at(0)?.killed).toBe(true);
+        restart();
+        // Discard all application cursor state after the commit; new invocations
+        // read only the durable checkpoint, as a restarted process does.
+        for (let batch = 0; batch < 5; batch++) {
+          await run();
+        }
+        await invariant(true);
         await run();
+        await run();
+        await invariant(true);
+      });
+    });
+
+    test("backend death inside the open batch rolls back and resumes twice", async () => {
+      await withFixture(async ({ run, writer, schema, invariant, restart }) => {
+        await expect(run({ killHalfway: true })).rejects.toThrow(
+          /connection|closed|terminated|socket/iu,
+        );
+        expect(
+          (
+            await writer.unsafe<StateRow[]>(
+              `SELECT cursor, batch FROM ${schema}.checkpoint`,
+            )
+          ).at(0)?.cursor,
+        ).toBe(0);
+        expect(
+          await writer.unsafe(
+            `SELECT id FROM ${schema}.rows WHERE applications <> 0`,
+          ),
+        ).toHaveLength(0);
+        restart();
+        await invariant();
+        for (let batch = 0; batch < 5; batch++) {
+          await run();
+        }
+        await invariant(true);
+        restart();
+        await run();
+        await run();
+        await invariant(true);
+      });
+    });
+
+    test("a failure halfway rolls back both row counters and cursor", async () => {
+      await withFixture(async ({ run, client, schema, invariant }) => {
+        await expect(run({ failHalfway: true })).rejects.toThrow(
+          "division by zero",
+        );
         expect(
           (
             await client.unsafe<StateRow[]>(
               `SELECT cursor, batch FROM ${schema}.checkpoint`,
             )
           ).at(0)?.cursor,
-        ).toBe(before?.cursor);
-        advanceClock(config.holdBackoffMs);
+        ).toBe(0);
+        expect(
+          (
+            await client.unsafe<{ count: number }[]>(
+              `SELECT count(*)::int AS count FROM ${schema}.rows WHERE applications <> 0`,
+            )
+          ).at(0)?.count,
+        ).toBe(0);
+        await invariant();
+        for (let batch = 0; batch < 5; batch++) {
+          await run();
+        }
+        await invariant(true);
+      });
+    });
+
+    test("a hold preserves the committed cursor and resumes after its durable deadline", async () => {
+      await withFixture(
+        async ({ run, client, schema, invariant, advanceClock }) => {
+          await run();
+          const before = (
+            await client.unsafe<StateRow[]>(
+              `SELECT cursor, batch FROM ${schema}.checkpoint`,
+            )
+          ).at(0);
+          await run({ verdict: { ...healthy, kind: "unknown" } });
+          const after = (
+            await client.unsafe<StateRow[]>(
+              `SELECT cursor, batch FROM ${schema}.checkpoint`,
+            )
+          ).at(0);
+          expect(after?.cursor).toBe(before?.cursor);
+          expect(after?.batch.holdUntil).toBeGreaterThan(0);
+          expect(after?.batch.size).toBe(before?.batch.size);
+          await invariant();
+          await run();
+          expect(
+            (
+              await client.unsafe<StateRow[]>(
+                `SELECT cursor, batch FROM ${schema}.checkpoint`,
+              )
+            ).at(0)?.cursor,
+          ).toBe(before?.cursor);
+          advanceClock(config.holdBackoffMs);
+          for (let batch = 0; batch < 6; batch++) {
+            await run();
+          }
+          await invariant(true);
+        },
+      );
+    });
+
+    test("a database timeout rolls back and reduces the retry size without skipping the range", async () => {
+      await withFixture(async ({ run, client, schema, invariant }) => {
+        const result = await run({ timeoutHalfway: true });
+        expect(result).toMatchObject({
+          status: "retry",
+          checkpoint: { cursor: 0, batch: { size: 3 } },
+        });
+        expect(
+          (
+            await client.unsafe<{ count: number }[]>(
+              `SELECT count(*)::int AS count FROM ${schema}.rows WHERE applications <> 0`,
+            )
+          ).at(0)?.count,
+        ).toBe(0);
+        await invariant();
+        for (let batch = 0; batch < 8; batch++) {
+          await run();
+        }
+        await invariant(true);
+      });
+    });
+
+    test("concurrent application writes keep completed ranges equal to the oracle", async () => {
+      await withFixture(async ({ run, writer, schema, invariant }) => {
+        await run();
+        await writer.unsafe(
+          `INSERT INTO ${schema}.rows VALUES (0, 99, 198, 1), (20, 123, 246, 1)`,
+        );
+        await writer.unsafe(
+          `INSERT INTO ${schema}.oracle VALUES (0, 198), (20, 246)`,
+        );
+        await Promise.all([
+          run(),
+          writer.begin(async (tx) => {
+            await tx.unsafe(
+              `UPDATE ${schema}.rows SET source = 101, transformed = 202, applications = 1 WHERE id IN (1, 6)`,
+            );
+            await tx.unsafe(
+              `UPDATE ${schema}.oracle SET expected = 202 WHERE id IN (1, 6)`,
+            );
+          }),
+        ]);
         for (let batch = 0; batch < 6; batch++) {
           await run();
         }
         await invariant(true);
-      },
-    );
-  });
-
-  test("a database timeout rolls back and reduces the retry size without skipping the range", async () => {
-    await withFixture(async ({ run, client, schema, invariant }) => {
-      const result = await run({ timeoutHalfway: true });
-      expect(result).toMatchObject({
-        status: "retry",
-        checkpoint: { cursor: 0, batch: { size: 3 } },
       });
-      expect(
-        (
-          await client.unsafe<{ count: number }[]>(
-            `SELECT count(*)::int AS count FROM ${schema}.rows WHERE applications <> 0`,
+    });
+
+    test("the production runtime persists holds, resumes and resets completed pass cursors", async () => {
+      await withFixture(async ({ run, client, schema, invariant }) => {
+        await run();
+        await client.unsafe(`SET search_path TO ${schema}, public`);
+        const migration = await Bun.file(
+          new URL(
+            "../../drizzle/20261001123000_database_backfill_state/migration.sql",
+            import.meta.url,
+          ),
+        ).text();
+        for (const statement of migration
+          .replaceAll(
+            "public.database_backfill_states",
+            () => `${schema}.database_backfill_states`,
           )
-        ).at(0)?.count,
-      ).toBe(0);
-      await invariant();
-      for (let batch = 0; batch < 8; batch++) {
-        await run();
-      }
-      await invariant(true);
-    });
-  });
-
-  test("concurrent application writes keep completed ranges equal to the oracle", async () => {
-    await withFixture(async ({ run, writer, schema, invariant }) => {
-      await run();
-      await writer.unsafe(
-        `INSERT INTO ${schema}.rows VALUES (0, 99, 198, 1), (20, 123, 246, 1)`,
-      );
-      await writer.unsafe(
-        `INSERT INTO ${schema}.oracle VALUES (0, 198), (20, 246)`,
-      );
-      await Promise.all([
-        run(),
-        writer.begin(async (tx) => {
-          await tx.unsafe(
-            `UPDATE ${schema}.rows SET source = 101, transformed = 202, applications = 1 WHERE id IN (1, 6)`,
-          );
-          await tx.unsafe(
-            `UPDATE ${schema}.oracle SET expected = 202 WHERE id IN (1, 6)`,
-          );
-        }),
-      ]);
-      for (let batch = 0; batch < 6; batch++) {
-        await run();
-      }
-      await invariant(true);
-    });
-  });
-
-  test("the production runtime persists holds, resumes and resets completed pass cursors", async () => {
-    await withFixture(async ({ run, client, schema, invariant }) => {
-      await run();
-      await client.unsafe(`SET search_path TO ${schema}, public`);
-      const migration = await Bun.file(
-        new URL(
-          "../../drizzle/20261001123000_database_backfill_state/migration.sql",
-          import.meta.url,
-        ),
-      ).text();
-      for (const statement of migration
-        .replaceAll(
-          "public.database_backfill_states",
-          () => `${schema}.database_backfill_states`,
-        )
-        .split("--> statement-breakpoint")) {
-        await client.unsafe(statement);
-      }
-      let now = Date.parse("2026-10-01T12:00:00.000Z");
-      let verdict: Verdict = { ...healthy, kind: "unknown" };
-      const records: unknown[] = [];
-      const runtime = createBackfillRuntime({
-        name: "runtime-replay",
-        tableName: `${schema}.rows`,
-        initialSize: 4,
-        config,
-        clock: () => now,
-        readVerdict: async () => verdict,
-        log: (record) => records.push(record),
-        connection: {
-          query: async (statement, parameters = []) =>
-            await client.unsafe(statement, [...parameters]),
-          execute: async (statement, parameters = []) => {
-            await client.unsafe(statement, [...parameters]);
+          .split("--> statement-breakpoint")) {
+          await client.unsafe(statement);
+        }
+        let now = Date.parse("2026-10-01T12:00:00.000Z");
+        let verdict: Verdict = { ...healthy, kind: "unknown" };
+        const records: unknown[] = [];
+        const runtime = createBackfillRuntime({
+          name: "runtime-replay",
+          tableName: `${schema}.rows`,
+          initialSize: 4,
+          config,
+          clock: () => now,
+          readVerdict: async () => verdict,
+          log: (record) => records.push(record),
+          connection: {
+            query: async (statement, parameters = []) =>
+              await client.unsafe(statement, [...parameters]),
+            execute: async (statement, parameters = []) => {
+              await client.unsafe(statement, [...parameters]);
+            },
+            release: () => undefined,
           },
-          release: () => undefined,
-        },
-      });
-      const step = async () =>
-        await runtime.step(async ({ tx, cursor, size }) => {
-          const rows = await tx.query(
-            `SELECT id FROM ${schema}.rows WHERE id > $1 ORDER BY id LIMIT $2 FOR UPDATE`,
-            [Number(cursor ?? 0), size],
-          );
-          const ids = rows.flatMap((row) =>
-            typeof row === "object" &&
-            row !== null &&
-            "id" in row &&
-            typeof row.id === "number"
-              ? [row.id]
-              : [],
-          );
-          await tx.execute(
-            `UPDATE ${schema}.rows SET transformed = source * 2, applications = applications + 1 WHERE id = ANY(string_to_array($1, ',')::int[]) AND applications = 0`,
-            [ids.join(",")],
-          );
-          return {
-            cursor: ids.at(-1)?.toString() ?? cursor,
-            done: ids.length < size,
-            value: ids.length,
-          };
         });
-      try {
-        await expect(step()).rejects.toThrow(BackfillHeldError);
-        const held = (
-          await client.unsafe<{ cursor: string | null; batch: BatchState }[]>(
-            "SELECT cursor, batch FROM database_backfill_states",
-          )
-        ).at(0);
-        expect(held?.cursor).toBeNull();
-        expect(held?.batch.heldSince).toBe(now);
-        verdict = healthy;
-        await expect(step()).rejects.toThrow(BackfillHeldError);
-        now += config.holdBackoffMs;
-        let done = false;
-        for (let batch = 0; batch < 8 && !done; batch++) {
-          done = (await step()).done;
-        }
-        expect(done).toBe(true);
-        const finished = (
-          await client.unsafe<{ cursor: string | null }[]>(
-            "SELECT cursor FROM database_backfill_states",
-          )
-        ).at(0);
-        expect(finished?.cursor).toBeNull();
-        await invariant(true);
-        for (const record of records) {
-          expect(record).toMatchObject({
-            config: { hardFloor: config.hardFloor },
-            verdict: { signals: expect.any(Array) },
+        const step = async () =>
+          await runtime.step(async ({ tx, cursor, size }) => {
+            const rows = await tx.query(
+              `SELECT id FROM ${schema}.rows WHERE id > $1 ORDER BY id LIMIT $2 FOR UPDATE`,
+              [Number(cursor ?? 0), size],
+            );
+            const ids = rows.flatMap((row) =>
+              typeof row === "object" &&
+              row !== null &&
+              "id" in row &&
+              typeof row.id === "number"
+                ? [row.id]
+                : [],
+            );
+            await tx.execute(
+              `UPDATE ${schema}.rows SET transformed = source * 2, applications = applications + 1 WHERE id = ANY(string_to_array($1, ',')::int[]) AND applications = 0`,
+              [ids.join(",")],
+            );
+            return {
+              cursor: ids.at(-1)?.toString() ?? cursor,
+              done: ids.length < size,
+              value: ids.length,
+            };
           });
+        try {
+          await expect(step()).rejects.toThrow(BackfillHeldError);
+          const held = (
+            await client.unsafe<{ cursor: string | null; batch: BatchState }[]>(
+              "SELECT cursor, batch FROM database_backfill_states",
+            )
+          ).at(0);
+          expect(held?.cursor).toBeNull();
+          expect(held?.batch.heldSince).toBe(now);
+          verdict = healthy;
+          await expect(step()).rejects.toThrow(BackfillHeldError);
+          now += config.holdBackoffMs;
+          let done = false;
+          for (let batch = 0; batch < 8 && !done; batch++) {
+            done = (await step()).done;
+          }
+          expect(done).toBe(true);
+          const finished = (
+            await client.unsafe<{ cursor: string | null }[]>(
+              "SELECT cursor FROM database_backfill_states",
+            )
+          ).at(0);
+          expect(finished?.cursor).toBeNull();
+          await invariant(true);
+          for (const record of records) {
+            expect(record).toMatchObject({
+              config: { hardFloor: config.hardFloor },
+              verdict: { signals: expect.any(Array) },
+            });
+          }
+        } finally {
+          await runtime.close();
         }
-      } finally {
-        await runtime.close();
-      }
+      });
     });
-  });
-});
+  },
+);

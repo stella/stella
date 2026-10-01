@@ -4,13 +4,14 @@ import {
   type GetMetricDataCommandOutput,
   type MetricDataResult,
 } from "@aws-sdk/client-cloudwatch";
-import { TaggedError } from "better-result";
+import { Result, TaggedError } from "better-result";
 
 import { defaultConfig } from "@stll/db-load-gate/health";
 import { Temporal } from "@stll/time";
 
 export class EbsBalanceReadError extends TaggedError("EbsBalanceReadError")<{
   message: string;
+  cause?: unknown;
 }> {}
 
 type MetricClient = {
@@ -41,9 +42,11 @@ const newestPoint = (result: MetricDataResult | undefined) => {
     result.StatusCode !== "Complete" ||
     result.Timestamps === undefined
   ) {
-    throw new EbsBalanceReadError({
-      message: "EBS metric response is incomplete",
-    });
+    return Result.err(
+      new EbsBalanceReadError({
+        message: "EBS metric response is incomplete",
+      }),
+    );
   }
   let newest: { value: number; timestamp: number } | undefined;
   for (const [index, timestamp] of result.Timestamps.entries()) {
@@ -56,18 +59,22 @@ const newestPoint = (result: MetricDataResult | undefined) => {
       value > 100 ||
       !Number.isFinite(time)
     ) {
-      throw new EbsBalanceReadError({
-        message: "EBS metric datapoint is invalid",
-      });
+      return Result.err(
+        new EbsBalanceReadError({
+          message: "EBS metric datapoint is invalid",
+        }),
+      );
     }
     if (newest === undefined || time > newest.timestamp) {
       newest = { value, timestamp: time };
     }
   }
   if (newest === undefined) {
-    throw new EbsBalanceReadError({ message: "EBS metric has no datapoints" });
+    return Result.err(
+      new EbsBalanceReadError({ message: "EBS metric has no datapoints" }),
+    );
   }
-  return newest;
+  return Result.ok(newest);
 };
 
 /** Region and credentials use the SDK provider chain; freshness belongs to the gate. */
@@ -82,48 +89,68 @@ export const createEbsBalanceReader = ({
   let client = injectedClient;
   return async () => {
     if (instanceIdentifier.trim() === "") {
-      throw new EbsBalanceReadError({
-        message: "An RDS instance identifier is required for EBS metrics",
-      });
+      return Result.err(
+        new EbsBalanceReadError({
+          message: "An RDS instance identifier is required for EBS metrics",
+        }),
+      );
     }
-    client ??= new CloudWatchClient({});
-    const now = clock();
-    const response = await client.send(
-      new GetMetricDataCommand({
-        StartTime: new Date(now - maxStalenessMs - PERIOD_SECONDS * 1000),
-        EndTime: new Date(now),
-        ScanBy: "TimestampDescending",
-        MetricDataQueries: Object.entries(METRICS).map(([Id, MetricName]) => ({
-          Id,
-          ReturnData: true,
-          MetricStat: {
-            Metric: {
-              Namespace: "AWS/RDS",
-              MetricName,
-              Dimensions: [
-                { Name: "DBInstanceIdentifier", Value: instanceIdentifier },
-              ],
-            },
-            Period: PERIOD_SECONDS,
-            Stat: "Minimum",
-          },
-        })),
-      }),
-      { abortSignal: timeoutSignal(timeoutMs) },
-    );
+    const request = await Result.tryPromise({
+      try: async () => {
+        client ??= new CloudWatchClient({});
+        const now = clock();
+        return await client.send(
+          new GetMetricDataCommand({
+            StartTime: new Date(now - maxStalenessMs - PERIOD_SECONDS * 1000),
+            EndTime: new Date(now),
+            ScanBy: "TimestampDescending",
+            MetricDataQueries: Object.entries(METRICS).map(
+              ([Id, MetricName]) => ({
+                Id,
+                ReturnData: true,
+                MetricStat: {
+                  Metric: {
+                    Namespace: "AWS/RDS",
+                    MetricName,
+                    Dimensions: [
+                      {
+                        Name: "DBInstanceIdentifier",
+                        Value: instanceIdentifier,
+                      },
+                    ],
+                  },
+                  Period: PERIOD_SECONDS,
+                  Stat: "Minimum",
+                },
+              }),
+            ),
+          }),
+          { abortSignal: timeoutSignal(timeoutMs) },
+        );
+      },
+      catch: (cause) =>
+        new EbsBalanceReadError({
+          message: "EBS metric request failed",
+          cause,
+        }),
+    });
+    if (request.isErr()) {return request;}
+    const response = request.value;
     const byte = newestPoint(
       response.MetricDataResults?.find(({ Id }) => Id === "byte_balance"),
     );
+    if (byte.isErr()) {return byte;}
     const io = newestPoint(
       response.MetricDataResults?.find(({ Id }) => Id === "io_balance"),
     );
-    return {
-      byteBalancePct: byte.value,
-      ioBalancePct: io.value,
+    if (io.isErr()) {return io;}
+    return Result.ok({
+      byteBalancePct: byte.value.value,
+      ioBalancePct: io.value.value,
       // Using the older timestamp prevents one fresh metric from hiding a stale partner.
       observedAt: new Date(
-        Math.min(byte.timestamp, io.timestamp),
+        Math.min(byte.value.timestamp, io.value.timestamp),
       ).toISOString(),
-    };
+    });
   };
 };

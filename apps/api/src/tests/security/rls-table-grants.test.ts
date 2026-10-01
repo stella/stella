@@ -168,6 +168,8 @@ const POST_BOOTSTRAP_SCOPED_HANDOFF_TABLES = new Set([
 // deliberately grant stella nothing, so the grant requirement does not
 // apply. Their migration must REVOKE ALL from stella instead.
 const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
+  // Maintenance checkpoints belong to the database owner, never request roles.
+  "database_backfill_states",
   // Search backfill retries are ingestion control state, not request data.
   "case_law_search_backfill_failures",
   "agent_registration",

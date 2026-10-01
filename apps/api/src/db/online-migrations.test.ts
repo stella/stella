@@ -520,9 +520,16 @@ describe("online migrations", () => {
     expect(
       indexOfStatement(harness.statements, VALIDATE_DELETE_RECEIPT_FRAGMENT),
     ).toBeGreaterThan(-1);
+    // Completion reads may inspect a prior checkpoint; fresh empty tables
+    // validate without opening a batch or creating checkpoint state.
+    expect(indexOfStatement(harness.statements, "BEGIN")).toBe(-1);
     expect(
-      indexOfStatement(harness.statements, "database_backfill_states"),
-    ).toBe(-1);
+      harness.statements.filter(
+        (statement) =>
+          statement.includes("database_backfill_states") &&
+          !statement.startsWith("SELECT"),
+      ),
+    ).toEqual([]);
     expect(harness.released()).toBe(true);
   });
 
@@ -670,6 +677,9 @@ const createHarness = ({
         },
         query: async (query: string, params: readonly unknown[] = []) => {
           statements.push(`${query}\n-- params ${JSON.stringify(params)}`);
+          if (query.startsWith("SELECT set_config(")) {
+            return [];
+          }
           if (query.startsWith("SELECT 1 FROM public.")) {
             return emptyRepairTables ? [] : [{ present: 1 }];
           }

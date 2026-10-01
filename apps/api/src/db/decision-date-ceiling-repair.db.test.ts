@@ -172,13 +172,6 @@ const corruptCount = async (
   return rows.length;
 };
 
-const rejectionOf = async (run: Promise<void>): Promise<string> =>
-  await run.then(
-    () => "",
-    (error: unknown) =>
-      error instanceof Error ? error.message : String(error),
-  );
-
 test("the migration swaps the CHECK untouched, the repair clears and reopens, both converge", async () => {
   const client = await createTestPglite();
   const db = drizzle({ client });
@@ -390,7 +383,7 @@ test("an interrupted repair keeps its committed batches and resumes by running a
   const dropped = connectionOver(client, {
     failOn: (statement, count) => statement === "COMMIT" && count === 2,
   });
-  expect(await rejectionOf(DECISION_DATE_CEILING_REPAIR.repair(dropped))).toBe(
+  await expect(DECISION_DATE_CEILING_REPAIR.repair(dropped)).rejects.toThrow(
     "connection dropped at COMMIT",
   );
   expect(await corruptCount(db)).toBe(population - 50);

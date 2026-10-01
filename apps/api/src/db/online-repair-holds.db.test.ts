@@ -192,7 +192,7 @@ const createFixture = async (client: SQL, kind: "date" | "receipt") => {
   };
 };
 
-describe.skipIf(!enabled || databaseUrl === undefined)(
+describe.skipIf(!enabled)(
   "online repairs survive durable holds on PostgreSQL 18",
   () => {
     for (const kind of ["date", "receipt"] as const) {

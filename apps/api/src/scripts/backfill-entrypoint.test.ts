@@ -83,9 +83,12 @@ describe("converted backfill entrypoints wire operator input to the gated runtim
   }[];
 
   test("every converted entrypoint has an exercised smoke", () => {
-    expect(fixtures.map(({ entrypoint }) => entrypoint).toSorted()).toEqual(
-      Object.keys(backfillEntrypoints).toSorted(),
-    );
+    expect(
+      fixtures
+        .map(({ entrypoint }) => entrypoint)
+        .toSorted()
+        .join("\n"),
+    ).toBe(Object.keys(backfillEntrypoints).toSorted().join("\n"));
   });
 
   for (const { entrypoint, args, expected } of fixtures) {
@@ -109,7 +112,7 @@ describe("converted backfill entrypoints wire operator input to the gated runtim
       }
       if ("apply" in plan) {
         expect(plan.apply).toBe(true);
-        expect(plan.limit).toBe(456);
+        expect(plan).toHaveProperty("limit", 456);
       }
     });
   }
