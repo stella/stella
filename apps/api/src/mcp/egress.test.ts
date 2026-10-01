@@ -715,23 +715,23 @@ describe("an anonymizer failure at egress", () => {
   } as const satisfies Record<McpEgressPlan["egress"], () => McpEgressPlan>;
 
   for (const [egress, plan] of Object.entries(ANONYMIZED_PLANS)) {
-    test(`${egress} fails the call and counts one refusal`, async () => {
+    test(`${egress} is refused without its text and counts one refusal`, async () => {
       const lines: string[] = [];
       setMetricLineSinkForTesting((line) => {
         lines.push(line);
       });
 
-      // bun-types declares `.rejects.toThrow` as void; capture the rejection.
-      const failure = await finalizeMcpEgress({
+      const result = await finalizeMcpEgress({
         context: createContext(),
         mode: "anonymized",
         response: plan(),
-      }).then(
-        () => null,
-        (error: unknown) => error,
-      );
-      expect(failure).toEqual(new Error("anonymizer unavailable"));
+      });
       expect(anonymizeTextFieldsMock).toHaveBeenCalledTimes(1);
+      expect(result.isError).toBe(true);
+      expect(JSON.stringify(result)).toContain(
+        "Tool output could not be anonymized",
+      );
+      expect(JSON.stringify(result)).not.toContain("John Smith");
       expect(lines.map((line): unknown => JSON.parse(line))).toEqual([
         expect.objectContaining({
           AnonymizationRefusals: 1,
