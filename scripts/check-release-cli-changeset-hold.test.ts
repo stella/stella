@@ -21,6 +21,7 @@ describe("release CLI changeset hold", () => {
         event: "merge_group",
         isReleasePullRequest: false,
         openReleases: 1,
+        versionState: "tagged",
       }),
     ).toEqual({ status: "hold", changesets: [".changeset/add-command.md"] });
   });
@@ -32,6 +33,7 @@ describe("release CLI changeset hold", () => {
         event: "pull_request",
         isReleasePullRequest: false,
         openReleases: 1,
+        versionState: "tagged",
       }),
     ).toEqual({ status: "warn", changesets: [".changeset/add-command.md"] });
   });
@@ -43,6 +45,7 @@ describe("release CLI changeset hold", () => {
         event: "merge_group",
         isReleasePullRequest: true,
         openReleases: 1,
+        versionState: "tagged",
       }),
     ).toEqual({ status: "clear" });
   });
@@ -54,6 +57,7 @@ describe("release CLI changeset hold", () => {
         event: "merge_group",
         isReleasePullRequest: false,
         openReleases: 0,
+        versionState: "tagged",
       }),
     ).toEqual({ status: "clear" });
     expect(
@@ -62,9 +66,34 @@ describe("release CLI changeset hold", () => {
         event: "merge_group",
         isReleasePullRequest: false,
         openReleases: 1,
+        versionState: "tagged",
       }),
     ).toEqual({ status: "clear" });
   });
+
+  test.each([
+    { versionState: "pending", event: "merge_group", status: "hold" },
+    { versionState: "pending", event: "pull_request", status: "warn" },
+    { versionState: "tagged", event: "merge_group", status: "clear" },
+    { versionState: "tagged", event: "pull_request", status: "clear" },
+  ] as const)(
+    "CLI changesets after the release merges: $versionState, $event",
+    ({ versionState, event, status }) => {
+      expect(
+        decideReleaseHold({
+          addedCliChangesets: [".changeset/add-command.md"],
+          event,
+          isReleasePullRequest: false,
+          openReleases: 0,
+          versionState,
+        }),
+      ).toEqual(
+        status === "clear"
+          ? { status }
+          : { status, changesets: [".changeset/add-command.md"] },
+      );
+    },
+  );
 
   test("requires every flag in a known form", () => {
     expect(
@@ -73,6 +102,8 @@ describe("release CLI changeset hold", () => {
         "merge_group",
         "--open-releases",
         "2",
+        "--version-state",
+        "tagged",
         "--is-release",
         "false",
       ]),
@@ -81,6 +112,7 @@ describe("release CLI changeset hold", () => {
       event: "merge_group",
       isReleasePullRequest: false,
       openReleases: 2,
+      versionState: "tagged",
     });
     expect(() =>
       parseHoldArgs([
@@ -88,6 +120,30 @@ describe("release CLI changeset hold", () => {
         "push",
         "--open-releases",
         "0",
+        "--version-state",
+        "tagged",
+        "--is-release",
+        "false",
+      ]),
+    ).toThrow("usage:");
+    expect(() =>
+      parseHoldArgs([
+        "--event",
+        "merge_group",
+        "--open-releases",
+        "0",
+        "--is-release",
+        "false",
+      ]),
+    ).toThrow("usage:");
+    expect(() =>
+      parseHoldArgs([
+        "--event",
+        "merge_group",
+        "--open-releases",
+        "0",
+        "--version-state",
+        "unknown",
         "--is-release",
         "false",
       ]),
@@ -101,6 +157,8 @@ describe("release CLI changeset hold", () => {
         "merge_group",
         "--open-releases",
         "-1",
+        "--version-state",
+        "tagged",
         "--is-release",
         "false",
       ]),

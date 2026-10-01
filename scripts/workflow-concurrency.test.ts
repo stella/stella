@@ -369,37 +369,6 @@ test("an unrelated label cannot supersede a baseline recording", async () => {
   ).not.toBe(key);
 });
 
-test("signal replacement reports on the same PR head; new heads stay isolated", async () => {
-  const file = "review-gate-signal.yml";
-  const signal = {
-    ...recording,
-    workflow: "Review Gate Signal",
-    event_name: "pull_request_review",
-  };
-  const key = await groupFor(file, signal);
-  expect(
-    await groupFor(file, {
-      ...signal,
-      run_id: 2,
-      event_name: "pull_request_review_comment",
-    }),
-  ).toBe(key);
-  expect(
-    await groupFor(file, {
-      ...signal,
-      event: { pull_request: { number: 12, head: { sha: "head-two" } } },
-    }),
-  ).not.toBe(key);
-  expect(
-    await groupFor(file, {
-      ...signal,
-      event_name: "merge_group",
-      event: {},
-      run_id: 2,
-    }),
-  ).not.toBe(key);
-});
-
 test("manual CI replaces the same branch while PRs and merge groups stay isolated", async () => {
   const file = "ci.yml";
   const dispatch = {

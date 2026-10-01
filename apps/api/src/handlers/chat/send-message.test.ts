@@ -419,6 +419,7 @@ describe("send message disconnect handling", () => {
         return Result.ok("owned");
       });
       const lifecycle = new ChatSendLifecycle({
+        indexThread: upsertChatThreadSearchDocumentMock,
         externalMcpToolsLoader:
           externalMcpToolsModule.createLazyExternalMcpToolsLoader(async () => {
             throw new Error("Connector discovery was not expected");
