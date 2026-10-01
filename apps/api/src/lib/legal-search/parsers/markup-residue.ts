@@ -1,3 +1,5 @@
+import { decodeHTMLStrict } from "entities";
+
 /**
  * Source markup that survived into a decision's text.
  *
@@ -112,6 +114,9 @@ const MARKUP_RESIDUE_RULES: readonly MarkupResidueRule[] = [
     id: "entity",
     reason: "undecoded character entities",
     pattern: /&(?:[a-zA-Z]{2,12}|#\d{1,7});/gu,
+    // The SQL pattern is intentionally a candidate superset; unknown
+    // publisher literals have the same shape but are not character refs.
+    accept: (match) => decodeHTMLStrict(match) !== match,
     sqlPattern: "&([a-zA-Z]{2,12}|#[0-9]{1,7});",
   },
   {

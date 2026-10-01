@@ -9,6 +9,7 @@ import { PDF, StandardFonts } from "@libpdf/core";
 import { describe, expect, test } from "bun:test";
 
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import { markupResidueIn } from "@/api/lib/legal-search/parsers/markup-residue";
 import {
   buildSkDecisionPdfBlocks,
   isUnreadablePdfError,
@@ -179,6 +180,15 @@ describe("PDF byte fixture text retention", () => {
       const { fulltext } = await parseLines(texts);
       expect(fulltext).toBe(texts.join(" "));
     }
+  });
+
+  test("preserves literal names while retaining the shared entity guard", async () => {
+    const { fulltext } = await parseLines(["fe&ion; &amp;amp; &eacute;"]);
+
+    expect(fulltext).toContain("fe&ion;");
+    expect(fulltext).toContain("&amp;amp;");
+    expect(markupResidueIn(fulltext)?.rule).toBe("entity");
+    expect(markupResidueIn("fe&ion;")).toBeUndefined();
   });
 });
 

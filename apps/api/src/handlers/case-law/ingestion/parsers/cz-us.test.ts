@@ -872,6 +872,18 @@ describe("embedded RTF text destinations", () => {
     expect(fulltext).toBe("Before  After");
   });
 
+  test("preserves publisher literals while the shared guard retains references", () => {
+    const rtf = String.raw`{\rtf1 fe&ion; &amp;amp;amp; &amp;eacute;}`;
+    const { fulltext } = parseUsDecisionHtml(
+      baseInput(`<input id="docContentHidden" value="${rtf}" />`),
+    );
+
+    expect(fulltext).toContain("fe&ion;");
+    expect(fulltext).toContain("&amp;amp;");
+    expect(markupResidueIn(fulltext)?.rule).toBe("entity");
+    expect(markupResidueIn("fe&ion;")).toBeUndefined();
+  });
+
   test("skips binary object bytes without losing the visible result", () => {
     const rtf = String.raw`{\rtf1 Before {\object{\*\objdata\bin3 }{} }{\result Box}} After\par}`;
     const { documentAst } = parseUsDecisionHtml(

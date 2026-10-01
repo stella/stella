@@ -92,6 +92,22 @@ describe("markupResidueIn", () => {
     expect(residue?.excerpt.startsWith("\\pict")).toBe(true);
     expect(residue?.excerpt.length).toBeLessThanOrEqual(120);
   });
+
+  test("only recognized character references count as entity residue", () => {
+    for (const reference of ["&amp;", "&eacute;", "&#8211;", "&amp;amp;"]) {
+      expect(markupResidueIn(`before ${reference} after`)?.rule).toBe("entity");
+    }
+
+    for (const literal of [
+      "&ion;",
+      "fe&ion;",
+      "&notareal;",
+      "&ampere;",
+      "&eacuteXYZ;",
+    ]) {
+      expect(markupResidueIn(`before ${literal} after`)).toBeUndefined();
+    }
+  });
 });
 
 // ── One fixture per parser family ───────────────────────────
