@@ -38,6 +38,7 @@ import {
   classifyChatPartForPersistence,
   getChatAttachmentMimeType,
   getAwaitingUserInteraction,
+  getAwaitingUserInteractions,
   getUserFileIdFromAttachmentPart,
   isChatAttachmentPart,
   isChatDocumentPart,
@@ -160,6 +161,7 @@ import {
   type ChatStreamProcessor,
 } from "@/api/lib/chat/stream-message-capture";
 import {
+  finishReasonOf,
   streamChatChunks,
   toolCallEndInputOf,
   toolCallEndOutputOf,
@@ -176,6 +178,7 @@ import type { ChatTerminalError } from "@/api/lib/errors/tagged-errors";
 import { errorFingerprint } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { providerSafeJsonSchemaOptionsForTanStackProvider } from "@/api/lib/provider-safe-json-schema";
+import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
 import {
   chatTurnOutputTokens,
   mergeGenerationOptions,
@@ -531,9 +534,12 @@ export const streamChat = async ({
   const { abortController, deadlineSignal } = run.control;
   const restorationPairs: ChatAnonRestoration[] = [];
 
-  const stream = runChatAttempts({
-    abortController,
-    abortSignal: deadlineSignal,
+  const attemptStream = runChatAttempts({
+    abortController: run.control.providerAbortController,
+    abortSignal:
+      run.control.admissionSignal === undefined
+        ? deadlineSignal
+        : AbortSignal.any([deadlineSignal, run.control.admissionSignal]),
     devModelId,
     externalMcpToolSource,
     fallbackModel,
@@ -566,6 +572,15 @@ export const streamChat = async ({
     userId,
     workspaceId,
   });
+  const stream =
+    run.control.admissionSignal === undefined
+      ? attemptStream
+      : (async function* (): AsyncIterable<PublicStreamChunk> {
+          if (!run.startContinuationProduction()) {
+            return;
+          }
+          yield* attemptStream;
+        })();
 
   const shadow = shadowChatRun({
     enabled: env.CHAT_RUN_LOG_SHADOW ?? isLocalDevOpen(),
@@ -609,7 +624,19 @@ export const streamChat = async ({
     // The run's own signal, not the deadline's. Cancelling the response stream
     // aborts only this derived controller — that is the abort a client
     // disconnect delivers — while the deadline reaches both.
-    abortSignal: abortController.signal,
+    abortSignal:
+      run.control.admissionSignal === undefined
+        ? abortController.signal
+        : AbortSignal.any([
+            abortController.signal,
+            run.control.admissionSignal,
+          ]),
+    ...(run.control.admissionSignal === undefined
+      ? {}
+      : {
+          runSignal: abortController.signal,
+          getRestorableCheckpoint: () => run.restorableCheckpoint,
+        }),
     deadlineSignal,
     flushPendingSource: persistenceVisibleStream.flushPending,
     initialMessages: preparedMessageList,
@@ -1487,6 +1514,11 @@ type ProcessServerChatStreamProps = {
   /** The run's own signal: aborted by the provider deadline below *and* by the
    *  response stream's cancel, which is how a client disconnect arrives. */
   abortSignal: AbortSignal;
+  /** Original run control keeps user-stop and ownership-loss precedence. */
+  runSignal?: AbortSignal;
+  getRestorableCheckpoint?:
+    | (() => PersistableChatMessage | undefined)
+    | undefined;
   /** The metered provider deadline the caller set for this turn. It is the
    *  only one of the two causes that reaches this signal, so it is what tells
    *  a deadline apart from a disconnect. */
@@ -1756,32 +1788,129 @@ const drainedRunOutcome = ({
   return { type: "completed" };
 };
 
-export const processServerChatStream = async function* ({
+type AdmissionLossOutcomeOptions = Pick<
+  ProcessServerChatStreamProps,
+  "getRestorableCheckpoint" | "getResponseMessage" | "processor"
+> & {
+  deferredRunFinishedChunks: readonly PublicStreamChunk[];
+  /** Whether the run streamed an answer (see `processServerChatStream`). */
+  producedAnswer: boolean;
+  toolCallsWithCompleteInput: ReadonlySet<string>;
+};
+
+const resolveAdmissionLossOutcome = ({
+  deferredRunFinishedChunks,
+  getRestorableCheckpoint,
+  getResponseMessage,
+  processor,
+  producedAnswer,
+  toolCallsWithCompleteInput,
+}: AdmissionLossOutcomeOptions): ChatTurnOutcome => {
+  const originalInteraction = getAwaitingUserInteraction(
+    getRestorableCheckpoint?.() ?? null,
+  );
+  if (originalInteraction !== null) {
+    return { type: "awaiting-user", interaction: originalInteraction };
+  }
+  const handedOut = interruptToolCallIdsOf(deferredRunFinishedChunks);
+  for (const chunk of deferredRunFinishedChunks) {
+    processor.processChunk(chunk);
+  }
+  finalizeResponseProcessor(processor);
+  const interaction = getAwaitingUserInteractions(getResponseMessage()).find(
+    (candidate) =>
+      toolCallsWithCompleteInput.has(candidate.toolCallId) &&
+      (candidate.type === "approval" || handedOut.has(candidate.toolCallId)),
+  );
+  if (interaction !== undefined) {
+    return { type: "awaiting-user", interaction };
+  }
+  const lastFinish = deferredRunFinishedChunks.at(-1);
+  const response = getResponseMessage();
+  // Provider success can precede deferred consumption and connector cleanup.
+  // A tool-call finish still needs another iteration and cannot prove completion.
+  if (
+    lastFinish?.type === EventType.RUN_FINISHED &&
+    tanStackStreamEventLifecycle(lastFinish) === "completed" &&
+    finishReasonOf(lastFinish) !== "tool_calls" &&
+    getAwaitingUserInteraction(response) === null
+  ) {
+    return producedAnswer
+      ? { type: "completed" }
+      : { type: "failed", error: "empty_completion" };
+  }
+  return { type: "failed", error: "provider_unavailable" };
+};
+
+const streamControlSignal = (
+  abortSignal: AbortSignal,
+  runSignal: AbortSignal,
+) =>
+  runSignal.reason === RUN_CANCEL_REASON ||
+  runSignal.reason === CHAT_TURN_OWNER_LOST_REASON
+    ? runSignal
+    : abortSignal;
+
+type StreamSettlementOptions = Pick<
+  ProcessServerChatStreamProps,
+  | "abortSignal"
+  | "deadlineSignal"
+  | "flushPendingSource"
+  | "getRestorableCheckpoint"
+  | "getResponseMessage"
+  | "mapMessageId"
+  | "onFinish"
+  | "processor"
+> & {
+  runSignal: AbortSignal;
+  deferredRunFinishedChunks: PublicStreamChunk[];
+  rawArgumentsByIncompleteToolCallId: Map<string, string>;
+  toolCallsWithCompleteInput: Set<string>;
+  getUsage: () => TokenUsage | undefined;
+  /** Whether the run streamed an answer (see `processServerChatStream`). */
+  getProducedAnswer: () => boolean;
+  terminal: { state: "open" | "settled" };
+};
+
+const createStreamSettlement = ({
   abortSignal,
+  runSignal,
   deadlineSignal,
   flushPendingSource,
+  getRestorableCheckpoint,
   getResponseMessage,
-  initialMessages,
   mapMessageId,
   onFinish,
   processor,
-  source,
-}: ProcessServerChatStreamProps): AsyncIterable<PublicStreamChunk> {
-  const deferredRunFinishedChunks: PublicStreamChunk[] = [];
-  let runCancelled = false;
-  // Whether the run streamed an answer (`chunkCarriesAnswer`): the one
-  // measure of an empty run, read here from the chunks the persistence
-  // processor is fed and in the attempt middleware from the chunks the model
-  // sends. A continuation's message already holds the call the user
-  // answered; the chunks hold only what this run added.
-  let producedAnswer = false;
-  const rawArgumentsByIncompleteToolCallId = new Map<string, string>();
-  const toolCallsWithCompleteInput = new Set<string>();
-  let usage: TokenUsage | undefined;
-  // One accepted turn has exactly one terminal callback. Set before awaiting
-  // persistence so a callback failure cannot re-enter and double-write a
-  // different outcome from catch/finally.
-  const terminal: { state: "open" | "settled" } = { state: "open" };
+  deferredRunFinishedChunks,
+  rawArgumentsByIncompleteToolCallId,
+  toolCallsWithCompleteInput,
+  getUsage,
+  getProducedAnswer,
+  terminal,
+}: StreamSettlementOptions) => {
+  const admissionLost = () =>
+    ActionAdmissionError.is(abortSignal.reason) &&
+    runSignal.reason !== RUN_CANCEL_REASON &&
+    runSignal.reason !== CHAT_TURN_OWNER_LOST_REASON;
+  const admissionCutByControl = () =>
+    ActionAdmissionError.is(abortSignal.reason) &&
+    (runSignal.reason === RUN_CANCEL_REASON ||
+      runSignal.reason === CHAT_TURN_OWNER_LOST_REASON);
+  const cutShortOutcome = () =>
+    chatCutShortOutcome({
+      abortSignal: streamControlSignal(abortSignal, runSignal),
+      deadlineSignal,
+    });
+  const admissionLossOutcome = () =>
+    resolveAdmissionLossOutcome({
+      deferredRunFinishedChunks,
+      getRestorableCheckpoint,
+      getResponseMessage,
+      processor,
+      producedAnswer: getProducedAnswer(),
+      toolCallsWithCompleteInput,
+    });
   const terminalize = async ({
     flushProcessor = false,
     outcome,
@@ -1807,7 +1936,7 @@ export const processServerChatStream = async function* ({
     // pipeline, so it must not be graded as an anticipated provider state.
     if (
       (outcome.type === "completed" || outcome.type === "awaiting-user") &&
-      producedAnswer &&
+      getProducedAnswer() &&
       (getResponseMessage()?.parts.length ?? 0) === 0
     ) {
       panic(
@@ -1820,16 +1949,188 @@ export const processServerChatStream = async function* ({
           rawArgumentsByIncompleteToolCallId,
         )
       : getResponseMessage();
-    const terminalResponseMessage = createTerminalResponseMessage({
-      mapMessageId,
-      outcome,
-      producedAnswer,
-      responseMessage,
-      usage,
-    });
+    const checkpoint = admissionLost()
+      ? getRestorableCheckpoint?.()
+      : undefined;
+    const terminalResponseMessage =
+      checkpoint === undefined
+        ? createTerminalResponseMessage({
+            mapMessageId,
+            outcome,
+            producedAnswer: getProducedAnswer(),
+            responseMessage,
+            usage: getUsage(),
+          })
+        : attachTerminalTurnOutcome({
+            message: checkpoint,
+            turnOutcome: outcome,
+          });
     terminal.state = "settled";
     await onFinish({ outcome, responseMessage: terminalResponseMessage });
   };
+  return {
+    admissionLost,
+    admissionCutByControl,
+    cutShortOutcome,
+    admissionLossOutcome,
+    terminalize,
+  };
+};
+
+type ProcessPersistenceChunkOptions = {
+  sourceChunk: PublicStreamChunk;
+  deferredRunFinishedChunks: PublicStreamChunk[];
+  processor: ChatStreamProcessor;
+  runState: { cancelled: boolean };
+  recordUsage: (usage: TokenUsage | undefined) => void;
+};
+
+type PersistenceChunkResult =
+  | { type: "deferred" }
+  | { type: "iteration"; chunks: PublicStreamChunk[] }
+  | {
+      type: "chunk";
+      chunk: PublicStreamChunk;
+      lifecycle: ReturnType<typeof tanStackStreamEventLifecycle>;
+    };
+
+const processPersistenceChunk = ({
+  sourceChunk,
+  deferredRunFinishedChunks,
+  processor,
+  runState,
+  recordUsage,
+}: ProcessPersistenceChunkOptions): PersistenceChunkResult => {
+  if (
+    sourceChunk.type === EventType.RUN_STARTED &&
+    deferredRunFinishedChunks.length > 0
+  ) {
+    // A later run in the same turn. The client always receives the
+    // canonical FINISH(A), START(B) order; what the persistence processor
+    // sees depends on whether B is a new run or another iteration of A.
+    //
+    // TanStack reuses one runId across the model iterations of a request
+    // (server tool executed, model called again). An intermediate finish
+    // with that same id would empty the processor's active-run set,
+    // finalize the shared assistant message, and leave a tool-only B (no
+    // TEXT_MESSAGE_START to reactivate it) appended to an inactive message
+    // that `onStreamEnd` never reports: the client-tool call is visible
+    // live but missing from the persisted turn. An intermediate finish
+    // never carries an interrupt (an interrupt ends the run), so the
+    // processor loses nothing by seeing only the terminal finish.
+    //
+    // A run with a different id (a fallback model attempt) must close the
+    // prior run for the processor, but only after B is registered, so the
+    // shared assistant message stays active across the attempts.
+    const priorRunFinishedChunks = deferredRunFinishedChunks.splice(0);
+    const isSameRunIteration = priorRunFinishedChunks.every(
+      (chunk) =>
+        chunk.type === EventType.RUN_FINISHED &&
+        chunk.runId === sourceChunk.runId,
+    );
+    processor.processChunk(sourceChunk);
+    if (!isSameRunIteration) {
+      for (const chunk of priorRunFinishedChunks) {
+        processor.processChunk(chunk);
+      }
+    }
+    return {
+      type: "iteration",
+      chunks: [...priorRunFinishedChunks, sourceChunk],
+    };
+  }
+  const chunk =
+    sourceChunk.type === EventType.RUN_ERROR
+      ? normalizeRunErrorChunk(sourceChunk)
+      : sourceChunk;
+  const lifecycle = tanStackStreamEventLifecycle(chunk);
+  if (isRunFinishedOutcome(lifecycle)) {
+    runState.cancelled ||= lifecycle === "cancelled";
+    if (chunk.type !== EventType.RUN_FINISHED) {
+      panic("Unhandled TanStack completed stream event");
+    }
+    if (chunk.usage) {
+      recordUsage(tokenUsageFromTerminalChunk(chunk));
+    }
+    // TanStack's agent loop can emit continuation events after a model
+    // run finishes, notably `approval-requested` for a gated server tool.
+    // The client already receives RUN_FINISHED only after the source is
+    // drained; keep the server-side processor on that same ordering too.
+    // Processing this now would finalize `responseMessage` before the
+    // later approval event changes the tool call from `input-complete` to
+    // `approval-requested`, persisting a turn that hydration then treats
+    // as interrupted.
+    deferredRunFinishedChunks.push(chunk);
+    return { type: "deferred" };
+  }
+  // TanStack emits MESSAGES_SNAPSHOT before RUN_FINISHED at every
+  // interrupt boundary (client tool, approval) so the client can rehydrate.
+  // The persistence processor derives the assistant turn from the event
+  // stream itself; feeding it the snapshot resets its stream state, and the
+  // deferred RUN_FINISHED then finalizes with no active message, so
+  // `onStreamEnd` never fires and a turn that carries a complete tool call
+  // is persisted as an empty completion. Forward the snapshot; never
+  // process it.
+  if (chunk.type !== EventType.MESSAGES_SNAPSHOT) {
+    processor.processChunk(chunk);
+  }
+  return { type: "chunk", chunk, lifecycle };
+};
+
+export const processServerChatStream = async function* ({
+  abortSignal,
+  runSignal = abortSignal,
+  getRestorableCheckpoint,
+  deadlineSignal,
+  flushPendingSource,
+  getResponseMessage,
+  initialMessages,
+  mapMessageId,
+  onFinish,
+  processor,
+  source,
+}: ProcessServerChatStreamProps): AsyncIterable<PublicStreamChunk> {
+  const deferredRunFinishedChunks: PublicStreamChunk[] = [];
+  const runState = { cancelled: false };
+  // Whether the run streamed an answer (`chunkCarriesAnswer`): the one
+  // measure of an empty run, read here from the chunks the persistence
+  // processor is fed and in the attempt middleware from the chunks the model
+  // sends. A continuation's message already holds the call the user
+  // answered; the chunks hold only what this run added.
+  let producedAnswer = false;
+  const rawArgumentsByIncompleteToolCallId = new Map<string, string>();
+  const toolCallsWithCompleteInput = new Set<string>();
+  let usage: TokenUsage | undefined;
+  const recordUsage = (recorded: TokenUsage | undefined) => {
+    usage = recorded;
+  };
+  // One accepted turn has exactly one terminal callback. Set before awaiting
+  // persistence so a callback failure cannot re-enter and double-write a
+  // different outcome from catch/finally.
+  const terminal: { state: "open" | "settled" } = { state: "open" };
+  const {
+    admissionLost,
+    admissionCutByControl,
+    cutShortOutcome,
+    admissionLossOutcome,
+    terminalize,
+  } = createStreamSettlement({
+    abortSignal,
+    runSignal,
+    deadlineSignal,
+    flushPendingSource,
+    getRestorableCheckpoint,
+    getResponseMessage,
+    mapMessageId,
+    onFinish,
+    processor,
+    deferredRunFinishedChunks,
+    rawArgumentsByIncompleteToolCallId,
+    toolCallsWithCompleteInput,
+    getUsage: () => usage,
+    getProducedAnswer: () => producedAnswer,
+    terminal,
+  });
   // Whether the client has been told which message this turn writes.
   let announcedAssistantMessage = false;
   // A run that fails before its first chunk still writes the turn's message
@@ -1868,79 +2169,36 @@ export const processServerChatStream = async function* ({
         toolCallsWithCompleteInput.add(sourceChunk.toolCallId);
       }
       if (
-        sourceChunk.type === EventType.RUN_STARTED &&
-        deferredRunFinishedChunks.length > 0
+        sourceChunk.type === EventType.RUN_ERROR &&
+        (admissionLost() || admissionCutByControl())
       ) {
-        // A later run in the same turn. The client always receives the
-        // canonical FINISH(A), START(B) order; what the persistence processor
-        // sees depends on whether B is a new run or another iteration of A.
-        //
-        // TanStack reuses one runId across the model iterations of a request
-        // (server tool executed, model called again). An intermediate finish
-        // with that same id would empty the processor's active-run set,
-        // finalize the shared assistant message, and leave a tool-only B (no
-        // TEXT_MESSAGE_START to reactivate it) appended to an inactive message
-        // that `onStreamEnd` never reports: the client-tool call is visible
-        // live but missing from the persisted turn. An intermediate finish
-        // never carries an interrupt (an interrupt ends the run), so the
-        // processor loses nothing by seeing only the terminal finish.
-        //
-        // A run with a different id (a fallback model attempt) must close the
-        // prior run for the processor, but only after B is registered, so the
-        // shared assistant message stays active across the attempts.
-        const priorRunFinishedChunks = deferredRunFinishedChunks.splice(0);
-        const isSameRunIteration = priorRunFinishedChunks.every(
-          (chunk) =>
-            chunk.type === EventType.RUN_FINISHED &&
-            chunk.runId === sourceChunk.runId,
-        );
-        processor.processChunk(sourceChunk);
-        if (!isSameRunIteration) {
-          for (const chunk of priorRunFinishedChunks) {
-            processor.processChunk(chunk);
-          }
+        usage = tokenUsageFromTerminalChunk(sourceChunk) ?? usage;
+        await terminalize({
+          flushProcessor: admissionCutByControl(),
+          outcome: admissionCutByControl()
+            ? cutShortOutcome()
+            : admissionLossOutcome(),
+        });
+        for (const finish of deferredRunFinishedChunks.splice(0)) {
+          yield finish;
         }
-        for (const chunk of priorRunFinishedChunks) {
-          yield chunk;
-        }
-        yield sourceChunk;
+        return;
+      }
+      const processed = processPersistenceChunk({
+        sourceChunk,
+        deferredRunFinishedChunks,
+        processor,
+        runState,
+        recordUsage,
+      });
+      if (processed.type === "deferred") {
         continue;
       }
-      const chunk =
-        sourceChunk.type === EventType.RUN_ERROR
-          ? normalizeRunErrorChunk(sourceChunk)
-          : sourceChunk;
-      const lifecycle = tanStackStreamEventLifecycle(chunk);
-      if (isRunFinishedOutcome(lifecycle)) {
-        runCancelled ||= lifecycle === "cancelled";
-        if (chunk.type !== EventType.RUN_FINISHED) {
-          panic("Unhandled TanStack completed stream event");
-        }
-        if (chunk.usage) {
-          usage = tokenUsageFromTerminalChunk(chunk);
-        }
-        // TanStack's agent loop can emit continuation events after a model
-        // run finishes, notably `approval-requested` for a gated server tool.
-        // The client already receives RUN_FINISHED only after the source is
-        // drained; keep the server-side processor on that same ordering too.
-        // Processing this now would finalize `responseMessage` before the
-        // later approval event changes the tool call from `input-complete` to
-        // `approval-requested`, persisting a turn that hydration then treats
-        // as interrupted.
-        deferredRunFinishedChunks.push(chunk);
+      if (processed.type === "iteration") {
+        yield* processed.chunks;
         continue;
       }
-      // TanStack emits MESSAGES_SNAPSHOT before RUN_FINISHED at every
-      // interrupt boundary (client tool, approval) so the client can rehydrate.
-      // The persistence processor derives the assistant turn from the event
-      // stream itself; feeding it the snapshot resets its stream state, and the
-      // deferred RUN_FINISHED then finalizes with no active message, so
-      // `onStreamEnd` never fires and a turn that carries a complete tool call
-      // is persisted as an empty completion. Forward the snapshot; never
-      // process it.
-      if (chunk.type !== EventType.MESSAGES_SNAPSHOT) {
-        processor.processChunk(chunk);
-      }
+      const { chunk, lifecycle } = processed;
       if (lifecycle === "failed") {
         if (chunk.type !== EventType.RUN_ERROR) {
           panic("Unhandled TanStack failed stream event");
@@ -1957,6 +2215,18 @@ export const processServerChatStream = async function* ({
       yield chunk;
     }
 
+    if (admissionLost() || admissionCutByControl()) {
+      await terminalize({
+        flushProcessor: admissionCutByControl(),
+        outcome: admissionCutByControl()
+          ? cutShortOutcome()
+          : admissionLossOutcome(),
+      });
+      for (const chunk of deferredRunFinishedChunks.splice(0)) {
+        yield chunk;
+      }
+      return;
+    }
     const finalRunFinishedChunks = deferredRunFinishedChunks.splice(0);
     for (const chunk of finalRunFinishedChunks) {
       processor.processChunk(chunk);
@@ -1970,11 +2240,11 @@ export const processServerChatStream = async function* ({
     // drives the stream itself, and repeating it later is a no-op.
     processor.finalizeStream();
     const outcome = drainedRunOutcome({
-      abortSignal,
+      abortSignal: streamControlSignal(abortSignal, runSignal),
       deadlineSignal,
       finalRunFinishedChunks,
       responseMessage: getResponseMessage(),
-      runCancelled,
+      runCancelled: runState.cancelled,
       toolCallsWithCompleteInput,
     });
     await terminalize({
@@ -1987,6 +2257,13 @@ export const processServerChatStream = async function* ({
       yield chunk;
     }
   } catch (error) {
+    if (admissionLost()) {
+      await terminalize({ outcome: admissionLossOutcome() });
+      for (const finish of deferredRunFinishedChunks.splice(0)) {
+        yield finish;
+      }
+      return;
+    }
     const kind = classifyAIError(error);
     if (abortSignal.aborted) {
       // An aborted stream is an expected exit (metered cutoff, client
@@ -1995,7 +2272,7 @@ export const processServerChatStream = async function* ({
       captureError(error, { kind });
       await terminalize({
         flushProcessor: true,
-        outcome: chatCutShortOutcome({ abortSignal, deadlineSignal }),
+        outcome: cutShortOutcome(),
       });
     } else {
       reportStreamFailure(error, kind);
@@ -2026,7 +2303,7 @@ export const processServerChatStream = async function* ({
     if (terminal.state === "open") {
       await terminalize({
         flushProcessor: true,
-        outcome: chatCutShortOutcome({ abortSignal, deadlineSignal }),
+        outcome: admissionLost() ? admissionLossOutcome() : cutShortOutcome(),
       });
     }
   }

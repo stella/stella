@@ -65,7 +65,11 @@ const updateInvoiceLine = createSafeHandler(
       "expense line takes its amount from the entry. Omitted fields stay " +
       "unchanged. Only draft invoices can be edited.",
     permissions: { invoice: ["update"] },
-    mcp: { type: "capability", reason: "billing_admin" },
+    mcp: {
+      type: "capability",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
     params: lineParamsSchema,
     body: updateLineBodySchema,
   },

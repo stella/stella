@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useRef } from "react";
 
-import { useForm } from "@tanstack/react-form";
+import { useForm, useSelector } from "@tanstack/react-form";
 import {
   type QueryClient,
   useMutation,
@@ -14,7 +14,6 @@ import {
   redirect,
   useNavigate,
 } from "@tanstack/react-router";
-import { useSelector } from "@tanstack/react-store";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";

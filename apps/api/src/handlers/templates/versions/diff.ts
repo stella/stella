@@ -21,7 +21,11 @@ const config = {
     "Both texts are resolved server-side from the ids, and an empty segment " +
     "list means nothing changed.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  mcp: {
+    type: "capability",
+    reason: "template_authoring_ui",
+    consumesServices: false,
+  },
   access: "read",
   params: templateVersionDiffParamsSchema,
 } satisfies HandlerConfig;

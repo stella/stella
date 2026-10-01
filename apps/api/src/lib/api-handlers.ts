@@ -62,6 +62,8 @@ import {
   ActionAdmissionError,
   withActionAdmission,
 } from "@/api/lib/rate-limit/action-admission";
+import type { ActionKind } from "@/api/lib/rate-limit/action-kinds";
+import type { ServiceClassification } from "@/api/lib/rate-limit/service-classification";
 import {
   getTanStackTextModelInfoForRole,
   resolveEffectiveServiceTierForProvider,
@@ -242,7 +244,11 @@ export type McpInternalReason =
 export type McpExposure =
   | { type: "tool"; name: McpToolName }
   | { type: "covered"; by: McpToolName }
-  | { type: "capability"; reason: McpCapabilityReason }
+  | {
+      type: "capability";
+      reason: McpCapabilityReason;
+      consumesServices: ServiceClassification;
+    }
   | { type: "internal"; reason: McpInternalReason };
 
 /**
@@ -352,7 +358,7 @@ export type HandlerConfig = InputSchema &
     requestTimeoutMs?: number;
     requiresUsage?: UsageMeteringConfig;
     /** Finite synchronous work; streaming and queued execution need their own lifetimes. */
-    actionAdmission?: { type: "handler"; actionKind: string };
+    actionAdmission?: { type: "handler"; actionKind: ActionKind };
     mcp: McpExposure;
   };
 
@@ -799,7 +805,7 @@ type FiniteHandlerGuard<TResult> = [Extract<TResult, Response>] extends [never]
   : never;
 
 type ConfiguredFiniteHandlerGuard<TConfig, TResult> = TConfig extends {
-  actionAdmission: { type: "handler"; actionKind: string };
+  actionAdmission: { type: "handler"; actionKind: ActionKind };
 }
   ? NoInfer<FiniteHandlerGuard<TResult>>
   : unknown;
@@ -811,7 +817,7 @@ type FiniteActionContext = SafeHandlerLogContext & {
 };
 
 type FiniteActionOptions<TContext, TResult extends SafeHandlerPayload> = {
-  actionKind: string;
+  actionKind: ActionKind;
   ctx: TContext;
   handler: SafeHandlerFn<TContext, TResult>;
   admit?: typeof withActionAdmission;
@@ -840,7 +846,6 @@ const runAdmittedFiniteHandler = async function* <
         ctx.actionSignal = AbortSignal.any([ctx.request.signal, signal]);
         ctx.actionSignal.throwIfAborted();
         const outcome = await Result.gen(() => handler(ctx));
-        ctx.actionSignal.throwIfAborted();
         if (Result.isOk(outcome) && outcome.value instanceof Response) {
           // Cancel the producer too: a rejected stream must not keep running after release.
           await outcome.value.body?.cancel();

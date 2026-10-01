@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, expectTypeOf, test } from "bun:test";
 import { Elysia, t } from "elysia";
 
 import { PROPERTY_CONTENT_TYPES } from "@stll/api-contract";
@@ -82,43 +82,27 @@ test("an upper-case code passes through unchanged", async () => {
   ).toEqual({ version: 1, type: "money", amountCents: 1500, currency: "KWD" });
 });
 
-// A stale copy of the list would still typecheck if it were merely a subset,
-// so bind the two directions: the schema's members are exactly the contract's,
-// and the contract's type is exactly the schema's.
-type AssertEqual<A, B> = [A] extends [B]
-  ? [B] extends [A]
-    ? true
-    : never
-  : never;
-
-const contractTypeMatchesSchema: AssertEqual<
-  PropertyContentType,
-  (typeof PROPERTY_CONTENT_TYPES)[number]
-> = true;
-
-// The AI-extractable union is now its own schema rather than a type-level
-// `Exclude`, so bind the two: a member added to `propertyContentSchema` that
-// belongs in the extractable subset, or dropped from it, fails here.
-const extractableMatchesExclusion: AssertEqual<
-  AiExtractablePropertyContent,
-  Exclude<PropertyContent, { type: "file" | "money" | "person" }>
-> = true;
-
-// A case-law question column is a property asked of a decision, so the kinds a
-// question may take are exactly the kinds the extractor can produce.
-const answerTypesMatchExtractable: AssertEqual<
-  AiExtractablePropertyContent["type"],
-  CaseLawResearchAnswerType
-> = true;
-
 describe("property content types", () => {
   test("the extractable subset is the property union minus the hand-entered kinds", () => {
-    expect(extractableMatchesExclusion).toBe(true);
-    expect(answerTypesMatchExtractable).toBe(true);
+    // The AI-extractable union is now its own schema rather than a type-level
+    // `Exclude`, so bind the two: a member added to `propertyContentSchema`
+    // that belongs in the extractable subset, or dropped from it, fails here.
+    expectTypeOf<AiExtractablePropertyContent>().toEqualTypeOf<
+      Exclude<PropertyContent, { type: "file" | "money" | "person" }>
+    >();
+    // A case-law question column is a property asked of a decision, so the
+    // kinds a question may take are exactly the kinds the extractor can produce.
+    expectTypeOf<
+      AiExtractablePropertyContent["type"]
+    >().toEqualTypeOf<CaseLawResearchAnswerType>();
   });
 
   test("the wire schema accepts exactly the contract's list", () => {
-    expect(contractTypeMatchesSchema).toBe(true);
+    // A stale copy of the list would still typecheck if it were merely a
+    // subset, so the schema's members must be exactly the contract's.
+    expectTypeOf<PropertyContentType>().toEqualTypeOf<
+      (typeof PROPERTY_CONTENT_TYPES)[number]
+    >();
     expect(
       propertyContentTypeSchema.anyOf.map((member) => member.const),
     ).toEqual([...PROPERTY_CONTENT_TYPES]);

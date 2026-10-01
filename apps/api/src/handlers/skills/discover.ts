@@ -13,7 +13,11 @@ const config = {
   description:
     "Discover importable skills from a GitHub repository or SKILL.md URL.",
   permissions: { agentSkill: ["create"] },
-  mcp: { type: "capability", reason: "agent_tool_authoring" },
+  mcp: {
+    type: "capability",
+    reason: "agent_tool_authoring",
+    consumesServices: false,
+  },
   body: discoverSkillUrlBodySchema,
 } satisfies HandlerConfig;
 

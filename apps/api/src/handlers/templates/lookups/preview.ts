@@ -33,7 +33,11 @@ const config = {
     "a 404 when the company is not found. Outcomes are cached per register " +
     "and number, and no model is involved.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  mcp: {
+    type: "capability",
+    reason: "template_authoring_ui",
+    consumesServices: true,
+  },
   access: "read",
   body: lookupPreviewBodySchema,
 } satisfies HandlerConfig;

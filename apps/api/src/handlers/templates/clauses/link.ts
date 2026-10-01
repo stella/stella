@@ -22,7 +22,11 @@ const config = {
     "reach the template until it is synced. Refused once the template holds " +
     "its maximum number of clause links.",
   permissions: { template: ["update"] },
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  mcp: {
+    type: "capability",
+    reason: "template_authoring_ui",
+    consumesServices: false,
+  },
   params: linkTemplateClauseParamsSchema,
   body: linkClauseBodySchema,
 } satisfies HandlerConfig;

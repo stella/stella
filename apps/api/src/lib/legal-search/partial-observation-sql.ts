@@ -52,6 +52,10 @@ export const PARTIAL_OBSERVATION_FIELD = {
 export const storedObservationHasDetail = (metadata: Column): SQL =>
   sql`jsonb_extract_path_text(${metadata}, ${sql.raw(`'${PARTIAL_OBSERVATION_KEY}'`)}, ${sql.raw(`'${PARTIAL_OBSERVATION_FIELD.IS_LISTING_ONLY}'`)}) is distinct from 'true'`;
 
+/** Listing-only rows have no publisher detail, as stated by the pipeline marker. */
+export const storedObservationIsListingOnly = (metadata: Column): SQL =>
+  sql`jsonb_extract_path_text(${metadata}, ${sql.raw(`'${PARTIAL_OBSERVATION_KEY}'`)}, ${sql.raw(`'${PARTIAL_OBSERVATION_FIELD.IS_LISTING_ONLY}'`)}) = 'true'`;
+
 /**
  * The stored metadata with the listing-only marker set, as a SQL value.
  *

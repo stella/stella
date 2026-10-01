@@ -20,7 +20,7 @@ const config = {
     "stored code string, so past entries are not rewritten; the code just " +
     "stops being offered.",
   permissions: { billingCode: ["delete"] },
-  mcp: { type: "capability", reason: "billing_admin" },
+  mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   body: deleteBillingCodeBodySchema,
 } satisfies WorkspaceHandlerConfig;
 

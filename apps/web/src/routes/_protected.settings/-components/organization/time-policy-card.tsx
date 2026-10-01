@@ -1,8 +1,7 @@
 import { useId } from "react";
 
-import { useForm } from "@tanstack/react-form";
+import { useForm, useSelector } from "@tanstack/react-form";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useSelector } from "@tanstack/react-store";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";

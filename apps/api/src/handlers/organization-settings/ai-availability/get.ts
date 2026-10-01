@@ -20,7 +20,11 @@ const config = {
   // Any org member needs to know whether AI is usable; the answer
   // is just two booleans, so it does not require admin scope.
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "anonymization_admin" },
+  mcp: {
+    type: "capability",
+    reason: "anonymization_admin",
+    consumesServices: false,
+  },
   access: "read",
 } satisfies HandlerConfig;
 

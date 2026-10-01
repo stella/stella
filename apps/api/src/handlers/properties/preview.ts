@@ -60,7 +60,11 @@ const config = {
   // A model call runs even though nothing is persisted: an AI generation
   // kickoff is a write by the same rule as any other (see CapabilityAccess).
   access: "write",
-  mcp: { type: "capability", reason: "workspace_schema" },
+  mcp: {
+    type: "capability",
+    reason: "workspace_schema",
+    consumesServices: true,
+  },
   body: previewBodySchema,
   requiresUsage: { actionType: "chat", modelRole: "fast" },
 } satisfies WorkspaceHandlerConfig;

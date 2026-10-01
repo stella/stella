@@ -19,7 +19,11 @@ const paramsSchema = t.Object({
 const config = {
   description: "Remove one matter from a shared mailbox sender's filing scope.",
   permissions: { organizationSettings: ["update"] },
-  mcp: { type: "capability", reason: "correspondence" },
+  mcp: {
+    type: "capability",
+    reason: "correspondence",
+    consumesServices: false,
+  },
   params: paramsSchema,
   body: bodySchema,
 } satisfies HandlerConfig;

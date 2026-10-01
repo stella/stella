@@ -2,6 +2,8 @@ import { panic, Result } from "better-result";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { type Static, t } from "elysia";
 
+import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
+
 import type { SafeDb } from "@/api/db/safe-db";
 import { resultTx } from "@/api/db/safe-db";
 import {
@@ -86,6 +88,7 @@ const validateEntries = async (
           .where(
             and(
               eq(timeEntries.workspaceId, workspaceId),
+              eq(timeEntries.activityGroup, TIME_ENTRY_ACTIVITY_GROUP.CLIENT),
               inArray(timeEntries.id, body.timeEntryIds),
             ),
           ),
@@ -146,7 +149,11 @@ const createInvoice = createSafeHandler(
       "Pass empty timeEntryIds for a draft with manual lines. Expenses are added " +
       "afterwards with invoices.entries.add.",
     permissions: { invoice: ["create"] },
-    mcp: { type: "capability", reason: "billing_admin" },
+    mcp: {
+      type: "capability",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
     body: createInvoiceBodySchema,
   },
   async function* ({
@@ -241,6 +248,7 @@ const createInvoice = createSafeHandler(
           .where(
             and(
               eq(timeEntries.workspaceId, workspaceId),
+              eq(timeEntries.activityGroup, TIME_ENTRY_ACTIVITY_GROUP.CLIENT),
               inArray(timeEntries.id, body.timeEntryIds),
               eq(timeEntries.status, BILLING_STATUS.APPROVED),
               eq(timeEntries.billable, true),

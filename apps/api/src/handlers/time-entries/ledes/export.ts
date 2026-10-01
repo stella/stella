@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { and, eq, ne } from "drizzle-orm";
 
+import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { MoneyTotals, prorateHourlyCents } from "@stll/money";
 import type { CentsAmount } from "@stll/money";
 
@@ -64,6 +65,7 @@ export const exportLedesHandler = async ({
     tx
       .select({
         id: timeEntries.id,
+        activityGroup: timeEntries.activityGroup,
         userId: timeEntries.userId,
         dateWorked: timeEntries.dateWorked,
         durationMinutes: timeEntries.durationMinutes,
@@ -115,6 +117,7 @@ export const exportLedesHandler = async ({
 
   for (const row of rows) {
     if (
+      row.activityGroup !== TIME_ENTRY_ACTIVITY_GROUP.CLIENT ||
       !row.billable ||
       row.noCharge ||
       row.status === BILLING_STATUS.WRITTEN_OFF
@@ -243,13 +246,13 @@ export const exportLedesHandler = async ({
 
 const config = {
   description:
-    "Export a matter's time entries as a LEDES 1998B e-billing file. Only " +
+    "Export a matter's client time entries as a LEDES 1998B e-billing file. Only " +
     "billable, charged, not-written-off entries are included, so the " +
     "selection is narrower than the CSV export of the same filters. Refused " +
     "when an included entry has no effective rate, or when the selection " +
     "spans more than one currency, which the format cannot represent.",
   permissions: { timeEntry: ["approve"] },
-  mcp: { type: "capability", reason: "billing_admin" },
+  mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   access: "read",
   query: timeEntryExportQuerySchema,
 } satisfies WorkspaceHandlerConfig;
