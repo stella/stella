@@ -125,7 +125,7 @@ const runInstall = ({
       env: {
         ...process.env,
         HOME: home,
-        PATH: `${commands}${path.delimiter}${process.env.PATH}`,
+        PATH: `${commands}${path.delimiter}${process.env["PATH"] ?? ""}`,
         RUNNER_OS: "Linux",
         RUNNER_ARCH: "X64",
         GITHUB_ENV: githubEnv,
