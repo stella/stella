@@ -5987,7 +5987,8 @@
         "openReport": "Otwórz raport",
         "submit": "Eksportuj raport",
         "templateLabel": "Szablon raportu",
-        "title": "Eksportuj raport"
+        "title": "Eksportuj raport",
+        "withoutAiSummaries": "Eksportuj bez podsumowań AI"
       },
       "saveAsTemplate": "Zapisz jako ustawienie wstępne…",
       "selectProperty": "Wybierz właściwość",

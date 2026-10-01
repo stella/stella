@@ -5987,7 +5987,8 @@
         "openReport": "Jelentés megnyitása",
         "submit": "Jelentés exportálása",
         "templateLabel": "Jelentéssablon",
-        "title": "Jelentés exportálása"
+        "title": "Jelentés exportálása",
+        "withoutAiSummaries": "Exportálás AI-összefoglalók nélkül"
       },
       "saveAsTemplate": "Mentés előbeállításként…",
       "selectProperty": "Tulajdonság kiválasztása",

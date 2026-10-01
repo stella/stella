@@ -5987,7 +5987,8 @@
         "openReport": "Atvērt pārskatu",
         "submit": "Eksportēt pārskatu",
         "templateLabel": "Pārskata veidne",
-        "title": "Eksportēt pārskatu"
+        "title": "Eksportēt pārskatu",
+        "withoutAiSummaries": "Eksportēt bez AI kopsavilkumiem"
       },
       "saveAsTemplate": "Saglabāt kā iepriekšiestatījumu…",
       "selectProperty": "Izvēlieties rekvizītu",

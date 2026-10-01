@@ -5987,7 +5987,8 @@
         "openReport": "Ava aruanne",
         "submit": "Ekspordi aruanne",
         "templateLabel": "Aruandemall",
-        "title": "Ekspordi aruanne"
+        "title": "Ekspordi aruanne",
+        "withoutAiSummaries": "Ekspordi ilma AI kokkuvõteteta"
       },
       "saveAsTemplate": "Salvesta eelseadena…",
       "selectProperty": "Valige omadus",

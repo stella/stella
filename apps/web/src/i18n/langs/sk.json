@@ -5987,7 +5987,8 @@
         "openReport": "Otvoriť správu",
         "submit": "Exportovať správu",
         "templateLabel": "Vzor správy",
-        "title": "Exportovať správu"
+        "title": "Exportovať správu",
+        "withoutAiSummaries": "Exportovať bez zhrnutí pomocou AI"
       },
       "saveAsTemplate": "Uložiť ako predvoľbu…",
       "selectProperty": "Vybrať vlastnosť",
