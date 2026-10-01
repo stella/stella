@@ -51,7 +51,7 @@ let scanned = 0;
 let written = 0;
 let cited = 0;
 
-const runtime = await plan.open((options) =>
+const runtime = plan.open((options) =>
   createScriptBackfillRuntime({ ...options, db: rootDb }),
 );
 try {

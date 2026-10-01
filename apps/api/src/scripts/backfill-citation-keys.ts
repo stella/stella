@@ -73,7 +73,7 @@ const backfillTable = async (
   const totals: BackfillTotals = { seen: 0, keyed: 0 };
   const missingOnly = scope === "missing";
 
-  const runtime = await plan.open(
+  const runtime = plan.open(
     (options) => createScriptBackfillRuntime({ ...options, db: rootDb }),
     { name: `${plan.name}:${table}`, tableName: table },
   );

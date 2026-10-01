@@ -71,7 +71,7 @@ let insertedRows = 0;
 let deletedRows = 0;
 let reachedEnd = false;
 const runtime = apply
-  ? await plan.open((options) =>
+  ? plan.open((options) =>
       createScriptBackfillRuntime({ ...options, db: rootDb }),
     )
   : null;

@@ -294,7 +294,7 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER:
     "RDS instance whose EBS balances gate heavy maintenance. Region and credentials use the AWS SDK provider chain. A set identifier enables EBS reads and takes precedence over DB_LOAD_GATE_EBS_SIGNAL. Missing or failed metrics defer maintenance.",
   DB_LOAD_GATE_EBS_SIGNAL:
-    "Non-RDS, self-hosted and local databases must set DB_LOAD_GATE_EBS_SIGNAL=disabled to explicitly disable the EBS signal. The logged not_configured signal allows other health gates to govern maintenance. If neither setting is supplied, maintenance holds and an error event names the missing configuration.",
+    "Non-RDS, self-hosted and local databases must set `DB_LOAD_GATE_EBS_SIGNAL=disabled` to explicitly disable the EBS signal. The logged not_configured signal allows other health gates to govern maintenance. If neither setting is supplied, maintenance holds and an error event names the missing configuration.",
   DB_HOST:
     "Postgres hostname used with the component settings when DATABASE_URL is unset.",
   DB_NAME:

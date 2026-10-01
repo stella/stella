@@ -27,7 +27,7 @@ const { rootDb } = await enterCaseLawMaintenanceLane();
 
 console.log("=== BACKFILL STATUTE SLUGS ===");
 
-const runtime = await plan.open((options) =>
+const runtime = plan.open((options) =>
   createScriptBackfillRuntime({ ...options, db: rootDb }),
 );
 let written = 0;

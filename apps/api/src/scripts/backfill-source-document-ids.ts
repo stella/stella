@@ -65,7 +65,7 @@ const fillFrom = async (
   adapterKey: string,
   expression: string,
 ): Promise<number> => {
-  const runtime = await plan.open(
+  const runtime = plan.open(
     (options) => createScriptBackfillRuntime({ ...options, db: rootDb }),
     { name: `${plan.name}:${adapterKey}`, tableName: plan.tableName },
   );

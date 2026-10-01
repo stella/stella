@@ -99,7 +99,7 @@ describe("converted backfill entrypoints wire operator input to the gated runtim
       });
       const runtime = { step: async () => ({ status: "held" }) };
       let calls = 0;
-      const opened = await plan.open(async (options) => {
+      const opened = plan.open((options) => {
         calls++;
         expect(options).toEqual(expected);
         return runtime;

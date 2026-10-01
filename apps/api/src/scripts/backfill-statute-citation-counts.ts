@@ -17,7 +17,7 @@ const plan = backfillEntrypoints["statute-citation-counts"]({
 
 const { rootDb } = await enterCaseLawMaintenanceLane();
 
-const runtime = await plan.open((options) =>
+const runtime = plan.open((options) =>
   createScriptBackfillRuntime({ ...options, db: rootDb }),
 );
 let repairedDecisions = 0;

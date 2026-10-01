@@ -125,7 +125,7 @@ console.log(
 let totalScannedWorkspaces = 0;
 let totalUpdated = 0;
 let batchCount = 0;
-const runtime = await plan.open((options) =>
+const runtime = plan.open((options) =>
   createScriptBackfillRuntime({ ...options, db }),
 );
 

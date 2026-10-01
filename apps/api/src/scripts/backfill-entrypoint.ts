@@ -23,7 +23,7 @@ type BackfillPlan = { name: string; tableName: string; initialSize: number };
 const withRuntime = <Plan extends BackfillPlan>(plan: Plan) => ({
   ...plan,
   open: <Runtime>(
-    createRuntime: (options: BackfillPlan) => Promise<Runtime>,
+    createRuntime: (options: BackfillPlan) => Runtime,
     target?: { name: string; tableName: string },
   ) =>
     createRuntime({
