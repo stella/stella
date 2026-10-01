@@ -497,7 +497,7 @@ describe("capability tools", () => {
     for (const registryNames of [names, names.toReversed()]) {
       const paginated = createToolSurface({
         tools: registryNames.map((name) => {
-          const tool = { ...STATS};
+          const tool = { ...STATS };
           tool.name = name;
           return tool;
         }),
