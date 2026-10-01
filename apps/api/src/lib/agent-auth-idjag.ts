@@ -32,7 +32,7 @@ import {
 } from "@/api/lib/agent-auth";
 import type { ServiceAuthCeremony } from "@/api/lib/agent-auth";
 import { getAuth } from "@/api/lib/auth";
-import { getAuthIssuerUrl } from "@/api/lib/auth-paths";
+import { getAuthIssuerUrl } from "@/api/lib/auth/auth-paths";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { findAccountIdByEmail } from "@/api/lib/db/account-row";
 import { brandActorSessionIdentity } from "@/api/lib/safe-id-boundaries";

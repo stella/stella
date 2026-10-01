@@ -1,3 +1,4 @@
+import { AUTH_SESSION_STARTUP_HEADER } from "@stll/auth-model";
 import { Temporal } from "@stll/time";
 /**
  * Boot-time auth prefetch.
@@ -177,7 +178,7 @@ export const startBootPrefetch = ({
     ]);
   const sessionResponse = fetchImpl(`${base}/get-session`, {
     credentials: "include",
-    headers: { accept: "application/json" },
+    headers: { accept: "application/json", [AUTH_SESSION_STARTUP_HEADER]: "1" },
     signal: requestSignal(),
   }).catch(reportAndDrop);
   slots["/get-session"] = {

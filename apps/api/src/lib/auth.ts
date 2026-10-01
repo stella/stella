@@ -23,6 +23,7 @@ import {
 import { panic, Result } from "better-result";
 import { and, eq, exists, inArray, isNotNull, or } from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
+import type { Context } from "elysia";
 import Elysia, { t } from "elysia";
 
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
@@ -54,15 +55,21 @@ import {
   AUTH_VERIFICATION_STORAGE_OPTIONS,
 } from "@/api/lib/auth-adapter-options";
 import { revokeOrganizationMemberAuthArtifacts } from "@/api/lib/auth-artifacts";
-import { authCookiePolicy } from "@/api/lib/auth-cookie-name";
+import { AUTH_USER_ADDITIONAL_FIELDS } from "@/api/lib/auth-user-additional-fields";
+import { authCookiePolicy } from "@/api/lib/auth/auth-cookie-name";
 import {
   getAuthEndpointUrl,
   getAuthIssuerUrl,
   OAUTH_UI_CONSENT_PATH,
   OAUTH_UI_LOGIN_PATH,
   OAUTH_UI_ORGANIZATION_PATH,
-} from "@/api/lib/auth-paths";
-import { AUTH_USER_ADDITIONAL_FIELDS } from "@/api/lib/auth-user-additional-fields";
+} from "@/api/lib/auth/auth-paths";
+import { forwardAuthResponseCookies } from "@/api/lib/auth/auth-response-cookies";
+import {
+  createSessionLifetime,
+  SESSION_LIFETIME_FIELDS,
+} from "@/api/lib/auth/session-lifetime";
+import { createDatabaseSessionLifetimeStore } from "@/api/lib/auth/session-lifetime-store";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
@@ -521,12 +528,7 @@ const SESSION_LIFETIME_SECONDS = 60 * 60 * 24 * 7;
 /** How often the session expiry is refreshed, in seconds (1 day). */
 const SESSION_UPDATE_AGE_SECONDS = 60 * 60 * 24;
 
-/**
- * How long the signed session-cookie snapshot may satisfy `getSession`
- * without touching the database. Bounds revocation latency: a revoked
- * session's already-issued cookie stays valid for at most this long.
- * Exported for the pinning invariant in `auth.test.ts`.
- */
+/** Signed session snapshot lifetime; the live credential is checked separately. */
 export const SESSION_COOKIE_CACHE_MAX_AGE_SECONDS = 60;
 
 const { cookiePrefix, useSecureCookies } = authCookiePolicy();
@@ -846,6 +848,12 @@ const oauthUiFragmentBridgePlugin = {
 // first use prevents the TDZ error when the test runner
 // evaluates this module before db/index.ts finishes.
 const createAuth = () => {
+  const sessionLifetime = createSessionLifetime({
+    store: createDatabaseSessionLifetimeStore(rootDb, {
+      expiresIn: SESSION_LIFETIME_SECONDS,
+      updateAge: SESSION_UPDATE_AGE_SECONDS,
+    }),
+  });
   const oauthResources = getBetterAuthOAuthResources();
   const oauthResourceIdentifiers = oauthResources.map(
     ({ identifier }) => identifier,
@@ -941,28 +949,17 @@ const createAuth = () => {
       additionalFields: AUTH_USER_ADDITIONAL_FIELDS,
     },
     session: {
+      additionalFields: SESSION_LIFETIME_FIELDS,
       expiresIn: SESSION_LIFETIME_SECONDS,
       updateAge: SESSION_UPDATE_AGE_SECONDS,
       ...AUTH_SESSION_STORAGE_OPTIONS,
-      // Short-lived signed cookie cache for session resolution. Every API
-      // request runs `getSession` through `sessionAuthMacro` /
-      // `getSessionAndMemberAuthorization`, and without this cache each of
-      // those pays two session/user reads on the primary database — the
-      // single largest per-request DB cost in the network baseline's
-      // `x-db-queries` budgets. With the cache, a request whose signed
-      // cookie snapshot is younger than `maxAge` skips those reads
-      // entirely; the HMAC signature keeps the payload tamper-evident.
-      //
-      // Deliberate trade-off, kept narrow: a revoked session stays usable
-      // for up to SESSION_COOKIE_CACHE_MAX_AGE_SECONDS after revocation on
-      // clients that still hold the cached cookie. Authorization is NOT
-      // cached — member role and workspace access run live per request
-      // (`resolveMemberAuthorization`), so role demotion and workspace
-      // removal take effect immediately; only the identity snapshot rides
-      // the cache. Change the window deliberately: the `auth.test.ts`
-      // invariant pins it.
+      // The snapshot avoids repeated session/user reads. Its version check
+      // observes the live credential and last-seen clock in one atomic write;
+      // cached snapshots cannot extend a prior credential's grace period.
+      // Member and matter authorization remain live per request.
       cookieCache: {
         enabled: true,
+        version: sessionLifetime.cookieCacheVersion,
         maxAge: SESSION_COOKIE_CACHE_MAX_AGE_SECONDS,
       },
       // Disable Better Auth's session-freshness gate. It defaults to 1 day
@@ -1090,6 +1087,7 @@ const createAuth = () => {
         : {}),
     },
     plugins: [
+      sessionLifetime.plugin,
       bearer(),
       // The after-hook on /get-session signs a `set-auth-jwt` response
       // header on every session resolution by reading the jwks table.
@@ -1452,6 +1450,7 @@ const createAuth = () => {
     ],
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
+        sessionLifetime.prepare(ctx.context.internalAdapter);
         await assertSelfhostEmailOtpAllowed(ctx.path);
 
         const loopbackRegistration =
@@ -1592,16 +1591,25 @@ export const getAuth = () => {
 
 export type { MemberRole } from "@/api/lib/member-roles";
 
-const getSessionAndMemberAuthorization = async (
-  headers: Headers | Record<string, string>,
-  workspaceId?: SafeId<"workspace">,
-) => {
-  const sessionResult = await Result.tryPromise(
-    async () =>
-      await getAuth().api.getSession({
-        headers,
-      }),
-  );
+type GetSessionAndMemberAuthorizationOptions = {
+  headers: Headers | Record<string, string>;
+  responseHeaders: Context["set"]["headers"];
+  workspaceId?: SafeId<"workspace">;
+};
+
+const getSessionAndMemberAuthorization = async ({
+  headers,
+  responseHeaders,
+  workspaceId,
+}: GetSessionAndMemberAuthorizationOptions) => {
+  const sessionResult = await Result.tryPromise(async () => {
+    const resolved = await getAuth().api.getSession({
+      headers,
+      returnHeaders: true,
+    });
+    forwardAuthResponseCookies(responseHeaders, resolved.headers);
+    return resolved.response;
+  });
 
   const session = Result.isOk(sessionResult)
     ? sessionResult.value?.session
@@ -1640,13 +1648,15 @@ const getSessionAndMemberAuthorization = async (
 
 export const sessionAuthMacro = new Elysia({ name: "sessionAuthMacro" }).macro({
   validateSession: {
-    async resolve({ status, request }) {
-      const sessionResult = await Result.tryPromise(
-        async () =>
-          await getAuth().api.getSession({
-            headers: request.headers,
-          }),
-      );
+    async resolve({ status, request, set }) {
+      const sessionResult = await Result.tryPromise(async () => {
+        const resolved = await getAuth().api.getSession({
+          headers: request.headers,
+          returnHeaders: true,
+        });
+        forwardAuthResponseCookies(set.headers, resolved.headers);
+        return resolved.response;
+      });
 
       if (Result.isError(sessionResult)) {
         return status(500);
@@ -1801,14 +1811,20 @@ export const resolveCredentialMemberAuthorization = async (
  */
 export const isActiveOrganizationMember = async ({
   headers,
+  responseHeaders,
   userId,
 }: {
   headers: Headers;
+  responseHeaders: Context["set"]["headers"];
   userId: SafeId<"user">;
 }): Promise<boolean> => {
-  const resolved = await getAuth().api.getSession({ headers });
+  const resolved = await getAuth().api.getSession({
+    headers,
+    returnHeaders: true,
+  });
+  forwardAuthResponseCookies(responseHeaders, resolved.headers);
   const activeOrganizationId = getSessionActiveOrganizationId(
-    resolved?.session,
+    resolved.response?.session,
   );
   if (activeOrganizationId === undefined) {
     return true;
@@ -1941,16 +1957,25 @@ export const realtimeAuthorizers = {
  * Letting inference flow keeps the real (wide) transaction type, which is
  * what every handler's `ctx.scopedDb`/`ctx.safeDb` callback expects.
  */
-const resolveValidateAuth = async (
-  request: Request,
-  server: Parameters<typeof createAuditRecorder>[0]["server"],
-  initialWorkspaceId: SafeId<"workspace"> | null,
-) => {
+type ResolveValidateAuthOptions = {
+  request: Request;
+  server: Parameters<typeof createAuditRecorder>[0]["server"];
+  initialWorkspaceId: SafeId<"workspace"> | null;
+  responseHeaders: Context["set"]["headers"];
+};
+
+const resolveValidateAuth = async ({
+  request,
+  server,
+  initialWorkspaceId,
+  responseHeaders,
+}: ResolveValidateAuthOptions) => {
   const { sessionResult, memberAuthorizationResult } =
-    await getSessionAndMemberAuthorization(
-      request.headers,
-      initialWorkspaceId ?? undefined,
-    );
+    await getSessionAndMemberAuthorization({
+      headers: request.headers,
+      responseHeaders,
+      workspaceId: initialWorkspaceId ?? undefined,
+    });
 
   if (Result.isError(sessionResult)) {
     return { ok: false as const, statusCode: 500 as const };
@@ -2170,13 +2195,18 @@ const validateAuthResolutionCache = new WeakMap<
 
 export const authMacro = new Elysia({ name: "authMacro" }).macro({
   validateAuth: {
-    async resolve({ params, query, status, request, server }) {
+    async resolve({ params, query, status, request, server, set }) {
       const initialWorkspaceId = readInitialWorkspaceId(params, query);
       const result = await memoizePerRequest(
         validateAuthResolutionCache,
         request,
         async () =>
-          await resolveValidateAuth(request, server, initialWorkspaceId),
+          await resolveValidateAuth({
+            request,
+            server,
+            initialWorkspaceId,
+            responseHeaders: set.headers,
+          }),
       );
 
       if (!result.ok) {

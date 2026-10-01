@@ -1,5 +1,5 @@
 import { env } from "@/api/env";
-import { getAuthIssuerUrl } from "@/api/lib/auth-paths";
+import { getAuthIssuerUrl } from "@/api/lib/auth/auth-paths";
 import type { McpMode } from "@/api/mcp/constants";
 import {
   getMcpResourceScopes,

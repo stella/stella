@@ -107,12 +107,16 @@ export const session = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     activeOrganizationId: text("active_organization_id"),
+    lastSeenAt: timestamptz("last_seen_at"),
+    priorTokenHash: text("prior_token_hash"),
+    priorTokenExpiresAt: timestamptz("prior_token_expires_at"),
   },
   (table) => [
     index("session_userId_activeOrgId_idx").on(
       table.userId,
       table.activeOrganizationId,
     ),
+    uniqueIndex("session_priorTokenHash_idx").on(table.priorTokenHash),
     ...denyStellaAccessPolicies(),
   ],
 );

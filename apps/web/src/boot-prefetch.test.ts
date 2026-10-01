@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { AUTH_SESSION_STARTUP_HEADER } from "@stll/auth-model";
+
 import {
   discardBootPrefetch,
   resolveRequestMethod,
@@ -43,6 +45,30 @@ const failingFetch = () => async (): Promise<Response> =>
   await Promise.reject(new Error("network down"));
 
 describe("boot prefetch", () => {
+  test("marks only the boot session request", async () => {
+    const requests: { input: string; headers: Headers }[] = [];
+    startBootPrefetch({
+      fetchImpl: async (input, init) => {
+        requests.push({ input, headers: new Headers(init?.headers) });
+        return input.endsWith("/get-session")
+          ? jsonResponse(SIGNED_IN_SESSION)
+          : jsonResponse({ role: "member" });
+      },
+    });
+    await takeBootPrefetch("/api/auth/get-session");
+    await takeBootPrefetch("/api/auth/organization/get-active-member-role");
+    expect(
+      requests.map(({ input, headers }) => ({
+        path: new URL(input).pathname,
+        marker: headers.get(AUTH_SESSION_STARTUP_HEADER),
+      })),
+    ).toEqual([
+      { path: "/api/auth/get-session", marker: "1" },
+      { path: "/api/auth/organization/get-active-member-role", marker: null },
+    ]);
+    discardBootPrefetch();
+  });
+
   test("serves each prefetched response exactly once", async () => {
     startBootPrefetch({ fetchImpl: sessionFetch(SIGNED_IN_SESSION).fetchImpl });
 

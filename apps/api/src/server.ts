@@ -6,6 +6,7 @@ import {
   CHAT_TURN_ID_HEADER,
   STELLA_API_VERSION_PREFIX,
 } from "@stll/api-contract";
+import { AUTH_SESSION_STARTUP_HEADER } from "@stll/auth-model";
 import { observeRegistryRequests } from "@stll/business-registries/shared/request-observer";
 import { redisConnectionConfig } from "@stll/redis-config";
 
@@ -348,6 +349,7 @@ const api = new Elysia()
         "MCP-Protocol-Version",
         FORMATTING_LOCALE_HEADER,
         SESSION_ID_HEADER,
+        AUTH_SESSION_STARTUP_HEADER,
         TANSTACK_RUN_ID_HEADER,
       ],
       exposeHeaders: [
