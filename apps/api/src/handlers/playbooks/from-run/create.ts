@@ -39,7 +39,11 @@ const config = {
     "the draft status). Position ids are preserved, so decisions already " +
     "taken on those positions stay attached to them.",
   permissions: { playbook: ["create"] },
-  mcp: { type: "capability", reason: "knowledge_library_admin" },
+  mcp: {
+    type: "capability",
+    reason: "knowledge_library_admin",
+    consumesServices: false,
+  },
   body: fromRunBodySchema,
 } satisfies HandlerConfig;
 

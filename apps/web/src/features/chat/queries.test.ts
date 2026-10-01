@@ -1199,6 +1199,12 @@ describe("chat runtime", () => {
       },
       onFinish: () => {},
       reloadThread: () => {},
+      // Emit before the next chunk is read: this test observes the draft
+      // between two argument deltas.
+      scheduleEmit: (callback) => {
+        queueMicrotask(callback);
+        return () => {};
+      },
     });
     const observedSources: string[] = [];
     const unsubscribe = runtime.subscribe(() => {

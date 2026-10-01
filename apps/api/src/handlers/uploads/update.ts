@@ -82,7 +82,7 @@ const config = {
   // authorizeUploadPurpose (uploads/permissions.ts) checks in-handler.
   permissions: uploadRoutePermission,
   access: "write",
-  mcp: { type: "capability", reason: "file_transport" },
+  mcp: { type: "capability", reason: "file_transport", consumesServices: true },
   params: finalizeParamsSchema,
 } satisfies WorkspaceHandlerConfig;
 

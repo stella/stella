@@ -24,7 +24,11 @@ const config = {
     "for tuning the producer that emitted it.",
   permissions: { signal: ["resolve"] },
   access: "write",
-  mcp: { type: "capability", reason: "workflow_orchestration" },
+  mcp: {
+    type: "capability",
+    reason: "workflow_orchestration",
+    consumesServices: false,
+  },
   params: signalParamsSchema,
   body: dismissBodySchema,
 } satisfies HandlerConfig;

@@ -62,6 +62,12 @@ import {
   ActionAdmissionError,
   withActionAdmission,
 } from "@/api/lib/rate-limit/action-admission";
+import type { ActionKind } from "@/api/lib/rate-limit/action-kinds";
+import type { ServiceClassification } from "@/api/lib/rate-limit/service-classification";
+import {
+  applyResponseCachePolicy,
+  type CachePolicy,
+} from "@/api/lib/security-headers";
 import {
   getTanStackTextModelInfoForRole,
   resolveEffectiveServiceTierForProvider,
@@ -242,7 +248,11 @@ export type McpInternalReason =
 export type McpExposure =
   | { type: "tool"; name: McpToolName }
   | { type: "covered"; by: McpToolName }
-  | { type: "capability"; reason: McpCapabilityReason }
+  | {
+      type: "capability";
+      reason: McpCapabilityReason;
+      consumesServices: ServiceClassification;
+    }
   | { type: "internal"; reason: McpInternalReason };
 
 /**
@@ -352,7 +362,7 @@ export type HandlerConfig = InputSchema &
     requestTimeoutMs?: number;
     requiresUsage?: UsageMeteringConfig;
     /** Finite synchronous work; streaming and queued execution need their own lifetimes. */
-    actionAdmission?: { type: "handler"; actionKind: string };
+    actionAdmission?: { type: "handler"; actionKind: ActionKind };
     mcp: McpExposure;
   };
 
@@ -799,7 +809,7 @@ type FiniteHandlerGuard<TResult> = [Extract<TResult, Response>] extends [never]
   : never;
 
 type ConfiguredFiniteHandlerGuard<TConfig, TResult> = TConfig extends {
-  actionAdmission: { type: "handler"; actionKind: string };
+  actionAdmission: { type: "handler"; actionKind: ActionKind };
 }
   ? NoInfer<FiniteHandlerGuard<TResult>>
   : unknown;
@@ -811,7 +821,7 @@ type FiniteActionContext = SafeHandlerLogContext & {
 };
 
 type FiniteActionOptions<TContext, TResult extends SafeHandlerPayload> = {
-  actionKind: string;
+  actionKind: ActionKind;
   ctx: TContext;
   handler: SafeHandlerFn<TContext, TResult>;
   admit?: typeof withActionAdmission;
@@ -1448,6 +1458,7 @@ export const createSafeTokenHandler = <
 export type PublicHandlerConfig = InputSchema &
   CapabilityDescription &
   CapabilityAccess & {
+    cache: CachePolicy;
     mcp: McpExposure;
   };
 
@@ -1460,7 +1471,10 @@ export type PublicHandlerContext<
  * mounted handler is in here, which a naming convention cannot guarantee:
  * a raw function passed to `.get()` reads the same at the call site.
  */
-const safePublicHandlers = new WeakSet<object>();
+const safePublicHandlers = new WeakMap<object, CachePolicy>();
+
+export const getPublicHandlerCachePolicy = (handler: unknown) =>
+  typeof handler === "function" ? safePublicHandlers.get(handler) : undefined;
 
 /** Whether a mounted route handler came out of `createSafePublicHandler`. */
 export const isSafePublicHandler = (handler: unknown): boolean =>
@@ -1478,8 +1492,19 @@ export const createSafePublicHandler = <
   config: TConfig,
   handler: SafeHandlerFn<PublicHandlerContext<TConfig>, TResult>,
 ): SafeHandlerDefinition<TConfig, PublicHandlerContext<TConfig>, TResult> => {
-  const definition = createSafeDirectHandler(config, handler);
-  safePublicHandlers.add(definition.handler);
+  const definition = {
+    config,
+    handler: async (ctx: PublicHandlerContext<TConfig>) => {
+      const response = await runSafeHandler(ctx, handler);
+      applyResponseCachePolicy({
+        cache: config.cache,
+        response,
+        set: ctx.set,
+      });
+      return response;
+    },
+  };
+  safePublicHandlers.set(definition.handler, config.cache);
   return definition;
 };
 

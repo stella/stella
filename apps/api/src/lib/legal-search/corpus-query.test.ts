@@ -619,6 +619,27 @@ test("every word keeps its stem leaves while the stem pass fits", () => {
   );
 });
 
+test("court lists are exact OR terms intersected with a singular court", () => {
+  expect(
+    caseLawCorpusQuery({
+      text: "smlouva",
+      jurisdiction: undefined,
+      filters: {
+        courts: ["Nejvyšší soud", "Nejvyšší správní soud", "Ústavní soud"],
+      },
+    }),
+  ).toBe(
+    '("smlouva") AND (court:"Nejvyšší soud" OR court:"Nejvyšší správní soud" OR court:"Ústavní soud")',
+  );
+  expect(
+    caseLawCorpusQuery({
+      text: "smlouva",
+      jurisdiction: undefined,
+      filters: { court: "Ústavní soud", courts: ['A" OR court:*'] },
+    }),
+  ).toBe('("smlouva") AND court:"Ústavní soud" AND (court:"A\\" OR court:*")');
+});
+
 const SK_STEMMING = {
   language: "sk",
   fields: STEM_FIELDS,

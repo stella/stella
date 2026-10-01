@@ -16,7 +16,11 @@ const config = {
     "entities.versions.diff returns. Returns summary null for identical " +
     "versions, skipping the model call entirely. Consumes AI usage.",
   permissions: { workspace: ["read"], chat: ["create"] },
-  mcp: { type: "capability", reason: "document_processing" },
+  mcp: {
+    type: "capability",
+    reason: "document_processing",
+    consumesServices: true,
+  },
   access: "write",
   params: workspaceParams({
     entityId: tSafeId("entity"),

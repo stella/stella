@@ -6,6 +6,7 @@ import {
   CHAT_TURN_ID_HEADER,
   STELLA_API_VERSION_PREFIX,
 } from "@stll/api-contract";
+import { redisConnectionConfig } from "@stll/redis-config";
 
 import { initApiBackgroundWorkers } from "@/api/api-background-workers";
 import { env } from "@/api/env";
@@ -171,7 +172,10 @@ import { createSchedulerTaskRegistry } from "@/api/lib/scheduler/registry";
 import { startSchedulerLoop } from "@/api/lib/scheduler/runner";
 import { createReapOwnerlessChatTurnsTask } from "@/api/lib/scheduler/tasks/chat-turn-reaper";
 import { securityCanaryInterceptor } from "@/api/lib/security-canary";
-import { setSecurityHeaders } from "@/api/lib/security-headers";
+import {
+  finalizeResponseCachePolicy,
+  setSecurityHeaders,
+} from "@/api/lib/security-headers";
 import { startSse, stopSse } from "@/api/lib/sse";
 import { clearByokAdapterCache } from "@/api/lib/tanstack-ai-models";
 import { isUploadRateLimitedPath } from "@/api/lib/upload-rate-limit";
@@ -255,13 +259,17 @@ if (isLocalDevOpen()) {
 const CORS_PREFLIGHT_MAX_AGE_SECONDS = 60 * 60;
 
 const api = new Elysia()
+  .mapResponse(({ responseValue, set }) =>
+    finalizeResponseCachePolicy({ response: responseValue, set }),
+  )
   // Body parsing is decided before any route runs, so the multipart parser has
   // to sit ahead of every route registration.
   .use(multipartFormParser)
+  .onRequest(({ set }) => {
+    setSecurityHeaders(set);
+  })
   .onRequest(async (context) => {
     const { request, set } = context;
-
-    setSecurityHeaders(set);
 
     const rawSessionId = request.headers.get(SESSION_ID_HEADER);
     const sessionId =
@@ -604,6 +612,15 @@ const startS3RefreshLoop = () => {
 // schema mirror — must yield the fully constructed `api` without any of
 // these side effects (no DB, no Redis, no listen).
 const startServer = async (): Promise<void> => {
+  if (envBase.REDIS_URL !== undefined) {
+    const { mode } = redisConnectionConfig({
+      url: envBase.REDIS_URL,
+      settings: envBase,
+      rejectUnauthorized: envBase.REDIS_TLS_REJECT_UNAUTHORIZED,
+    }).unwrap("Redis connection configuration must be valid.");
+    logger.info("redis.connection.mode", { mode });
+  }
+
   startMemoryPressureHandler();
 
   // Start the SSE keep-alive heartbeat and cross-instance Redis subscriber

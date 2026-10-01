@@ -35,7 +35,11 @@ const config = {
     "the old one, a path already used by another file in the same skill, and " +
     "a bundled skill are all refused.",
   permissions: { agentSkill: ["update"] },
-  mcp: { type: "capability", reason: "agent_tool_authoring" },
+  mcp: {
+    type: "capability",
+    reason: "agent_tool_authoring",
+    consumesServices: false,
+  },
   params: renameSkillResourceParamsSchema,
   body: renameSkillResourceBodySchema,
 } satisfies HandlerConfig;

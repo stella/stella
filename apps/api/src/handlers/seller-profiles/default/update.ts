@@ -13,7 +13,7 @@ const config = {
     "Make one active issuer profile the organization's default. An archived " +
     "profile cannot be selected.",
   permissions: { organizationSettings: ["update"] },
-  mcp: { type: "capability", reason: "billing_admin" },
+  mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   params: sellerProfileParams,
 } satisfies HandlerConfig;
 

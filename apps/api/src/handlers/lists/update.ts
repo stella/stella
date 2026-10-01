@@ -25,7 +25,11 @@ const config = {
     "is refused, and a call that changes nothing is a no-op rather than an " +
     "error.",
   permissions: { view: ["update"] },
-  mcp: { type: "capability", reason: "workspace_schema" },
+  mcp: {
+    type: "capability",
+    reason: "workspace_schema",
+    consumesServices: false,
+  },
   body: bodySchema,
 } satisfies WorkspaceHandlerConfig;
 

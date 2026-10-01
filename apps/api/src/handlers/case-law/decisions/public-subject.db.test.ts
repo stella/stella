@@ -156,6 +156,7 @@ afterAll(async () => {
 const app = () => {
   const byId = createSafePublicSubjectHandler({
     config: {
+      cache: { kind: "none" },
       mcp: { type: "internal", reason: "public_indexing" },
       params: t.Object({ decisionId: tSafeId("caseLawDecision") }),
     } satisfies PublicHandlerConfig,
@@ -165,6 +166,7 @@ const app = () => {
   });
   const bySlug = createSafePublicSubjectHandler({
     config: {
+      cache: { kind: "none" },
       mcp: { type: "internal", reason: "public_indexing" },
       params: t.Object({ slug: t.String() }),
       query: t.Object({

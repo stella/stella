@@ -21,7 +21,11 @@ const config = {
     "instruction body as it stood at that point.",
   permissions: { chat: ["create"] },
   access: "read",
-  mcp: { type: "capability", reason: "agent_tool_authoring" },
+  mcp: {
+    type: "capability",
+    reason: "agent_tool_authoring",
+    consumesServices: false,
+  },
   params: getSkillRevisionParamsSchema,
 } satisfies HandlerConfig;
 

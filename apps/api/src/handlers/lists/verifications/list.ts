@@ -57,7 +57,11 @@ const config = {
     "in each verdict state. Read one run in full with lists.verifications.get.",
   permissions: { workspace: ["read"] },
   access: "read",
-  mcp: { type: "capability", reason: "document_processing" },
+  mcp: {
+    type: "capability",
+    reason: "document_processing",
+    consumesServices: false,
+  },
   params: workspaceParams({}),
   query: t.Object({
     entityId: tSafeId("entity"),
