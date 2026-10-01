@@ -1,5 +1,12 @@
 import { panic, Result } from "better-result";
-import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  expect,
+  spyOn,
+  test,
+} from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
@@ -111,6 +118,7 @@ const DRIZZLE_DIR = new URL("../../../drizzle/", import.meta.url);
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
+let seededSnapshot: Blob;
 
 const clearDecisionIntents = async (): Promise<void> => {
   await db.transaction(async (tx) => {
@@ -274,8 +282,7 @@ const installProjectionMigrationDdl = async (): Promise<void> => {
   await executeInOrder(0);
 };
 
-beforeEach(async () => {
-  client = await createTestPglite();
+const buildSeededSnapshot = async (): Promise<Blob> => {
   db = drizzle({ client });
   await installProjectionMigrationDdl();
   await db.insert(caseLawSources).values({
@@ -312,6 +319,21 @@ beforeEach(async () => {
     desiredIndexId: INDEX_ID,
     updatedAt: INITIAL_RUNNABLE_AT,
   });
+  return await client.dumpDataDir("none");
+};
+
+beforeAll(async () => {
+  client = await createTestPglite();
+  try {
+    seededSnapshot = await buildSeededSnapshot();
+  } finally {
+    await client.close();
+  }
+});
+
+beforeEach(async () => {
+  client = await createTestPglite(seededSnapshot);
+  db = drizzle({ client });
 });
 
 afterEach(async () => {
