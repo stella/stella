@@ -106,7 +106,7 @@ const itemBuildFailed = failureSink({
   expected: [],
 });
 
-const observeItemBuildFailure = (error: unknown, documentId?: string): void => {
+const observeItemBuildFailure = (error: object, documentId?: string): void => {
   observeFailure(classifyFailure(error, "upstream_unavailable"), {
     sink: itemBuildFailed,
     ctx: {
@@ -1883,6 +1883,31 @@ const CZ_REGIONAL_SOURCE_SURFACES = {
   >,
 } as const satisfies SourceSurfaceCensus;
 
+type NextCzRegionalListingCursorOptions = {
+  state: CursorState;
+  totalPages: number;
+  hasResults: boolean;
+};
+
+const nextCzRegionalListingCursor = ({
+  state,
+  totalPages,
+  hasResults,
+}: NextCzRegionalListingCursorOptions): string => {
+  // The requested page owns progress; a stale publisher echo cannot pin it.
+  if (state.page + 1 < totalPages) {
+    return makeCursor({ date: state.date, page: state.page + 1, emptyDays: 0 });
+  }
+  // Refused rows still make this a populated day, so they cannot trigger a gap skip.
+  const today = todayIso();
+  const empty = hasResults ? 0 : state.emptyDays + 1;
+  const skip = hasResults ? 1 : gapSkipDays(empty);
+  const next = advanceDate(state.date, skip);
+  return next <= today
+    ? makeCursor({ date: next, page: 0, emptyDays: empty })
+    : makeCursor({ date: today, page: 0, emptyDays: 0 });
+};
+
 export const czRegionalAdapter = defineSourceAdapter({
   key: ADAPTER_KEYS.CZ_REGIONAL,
   sourceSurfaces: CZ_REGIONAL_SOURCE_SURFACES,
@@ -2181,44 +2206,14 @@ export const czRegionalAdapter = defineSourceAdapter({
           totalMs: fetchMs,
         });
 
-        const totalPages = json.totalPages ?? 1;
-
-        // Use state.page (what we requested) instead of
-        // json.pageNumber (what the API echoed back) to
-        // avoid an infinite loop if the API ever returns
-        // a stale or incorrect pageNumber.
-        const currentPage = state.page;
-
-        // Found results: reset empty counter. A refused row is a listed
-        // decision, so a day of them is not an empty day to gap-skip past.
-        const hasResults = decisions.length > 0 || refused > 0;
-
-        // More pages for this day: advance page (0-indexed)
-        if (currentPage + 1 < totalPages) {
-          return {
-            decisions,
-            itemBuildFailures: { type: "item_build_failed", count: refused },
-            nextCursor: makeCursor({
-              date: state.date,
-              page: currentPage + 1,
-              emptyDays: 0,
-            }),
-          };
-        }
-
-        // Day exhausted: advance to next day
-        const today = todayIso();
-        const empty = hasResults ? 0 : state.emptyDays + 1;
-        const skip = hasResults ? 1 : gapSkipDays(empty);
-        const next = advanceDate(state.date, skip);
-
         return {
           decisions,
           itemBuildFailures: { type: "item_build_failed", count: refused },
-          nextCursor:
-            next <= today
-              ? makeCursor({ date: next, page: 0, emptyDays: empty })
-              : makeCursor({ date: today, page: 0, emptyDays: 0 }),
+          nextCursor: nextCzRegionalListingCursor({
+            state,
+            totalPages: json.totalPages ?? 1,
+            hasResults: decisions.length > 0 || refused > 0,
+          }),
         };
       },
       catch: adapterCatch(ADAPTER_KEYS.CZ_REGIONAL, cursor),
