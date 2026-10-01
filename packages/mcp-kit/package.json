@@ -1,6 +1,6 @@
 {
   "name": "@stll/mcp-kit",
-  "version": "0.1.0",
+  "version": "0.0.0",
   "description": "Framework-free MCP tool registry, compact schemas, and lazy capability discovery",
   "keywords": [
     "discovery",
