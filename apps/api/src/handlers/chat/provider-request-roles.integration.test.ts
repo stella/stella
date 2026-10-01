@@ -1,5 +1,5 @@
 import type { ModelMessage } from "@tanstack/ai";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { inArray } from "drizzle-orm";
 import { readdirSync, readFileSync } from "node:fs";
@@ -680,18 +680,25 @@ const requestsOf = async (
   replay.serve({ exchanges: [], model: "no-queued-model" });
   replay.answerSideCalls(answer);
   try {
-    await ROLE_REQUESTS[combination.request]
-      .run({
-        caching: combination.caching === "on",
-        effort: combination.effort,
-        orgAIConfig,
-        sendMode: combination.sendMode,
-      })
-      // The answer is a text stream whatever the request asked for; a
-      // builder that reads it as something else fails after its request
-      // was captured.
-      .catch(() => undefined);
-    return [...replay.requests()];
+    const outcome = await Result.tryPromise(
+      async () =>
+        await ROLE_REQUESTS[combination.request].run({
+          caching: combination.caching === "on",
+          effort: combination.effort,
+          orgAIConfig,
+          sendMode: combination.sendMode,
+        }),
+    );
+    const requests = [...replay.requests()];
+    // The answer is a text stream whatever the request asked for, so a
+    // builder that reads it as something else fails after its request was
+    // captured. One that fails before sending anything is the defect itself.
+    if (Result.isError(outcome) && requests.length === 0) {
+      return panic(
+        `${combination.request} built no request: ${String(outcome.error.cause)}`,
+      );
+    }
+    return requests;
   } finally {
     replay.answerSideCalls(undefined);
     replay.takeFindings();
