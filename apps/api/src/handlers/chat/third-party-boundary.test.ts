@@ -21,7 +21,13 @@ import {
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { toDataUrl } from "@/api/lib/data-url";
+import { anonymizeTextFieldsWithDependencies } from "@/api/mcp/anonymization-core";
+import { AnonymizedFieldBoundaryError } from "@/api/mcp/field-markers";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import {
+  createRewritingAnonymizeDependencies,
+  replaceFirstFieldDelimiterToken,
+} from "@/api/tests/helpers/anonymize-pipeline-fakes";
 import {
   asTestExecutable,
   asTestToolSet,
@@ -1840,5 +1846,59 @@ describe("the restorations a request's history holds", () => {
       { placeholder: "[PERSON_1]", original: "Alice" },
       { placeholder: "[PERSON_2]", original: "Bob" },
     ]);
+  });
+});
+
+describe("anonymization output that lost its field structure", () => {
+  const createBoundaryOverPipeline = (rewrite: (text: string) => string) => {
+    const { scopedDb } = createScopedDbMock({});
+    const dependencies = createRewritingAnonymizeDependencies(rewrite);
+    return createChatThirdPartyBoundary({
+      anonymizeFields: async (input) =>
+        await anonymizeTextFieldsWithDependencies({ ...input, dependencies }),
+      anonymizationScopeId: "workspace-A",
+      organizationId: toSafeId<"organization">(
+        "11111111-1111-4111-8111-111111111111",
+      ),
+      scopedDb,
+      sendMode: CHAT_SEND_MODE.anonymized,
+      threadRestorations: [{ placeholder: "[PERSON_1]", original: "Alice" }],
+    });
+  };
+
+  test("refuses the text and keeps the thread's placeholders unchanged", async () => {
+    const boundary = createBoundaryOverPipeline((text) =>
+      replaceFirstFieldDelimiterToken(text, "[ORGANIZATION_1]"),
+    );
+    if (boundary.type !== "anonymized") {
+      throw new TypeError("Expected anonymized boundary");
+    }
+    const placeholdersBefore = new Map(boundary.redactionMap);
+
+    const prepared = await prepareTextForThirdParty({
+      boundary,
+      text: "Bob briefed Alice.",
+    });
+
+    expect(Result.isError(prepared)).toBe(true);
+    if (Result.isOk(prepared)) {
+      return;
+    }
+    expect(prepared.error.status).toBe(500);
+    expect(prepared.error.cause).toBeInstanceOf(AnonymizedFieldBoundaryError);
+    expect(boundary.redactionMap).toEqual(placeholdersBefore);
+  });
+
+  test("passes the text through when the structure survives", async () => {
+    const boundary = createBoundaryOverPipeline((text) => text);
+
+    const prepared = await prepareTextForThirdParty({
+      boundary,
+      text: "Bob briefed Alice.",
+    });
+
+    expect(Result.isOk(prepared) ? prepared.value : prepared.error).toBe(
+      "Bob briefed Alice.",
+    );
   });
 });

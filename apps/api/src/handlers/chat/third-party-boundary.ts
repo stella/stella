@@ -41,6 +41,7 @@ import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 import { parseDataUrl, toDataUrl } from "@/api/lib/data-url";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { anonymizeTextFields } from "@/api/mcp/anonymization";
+import { protectValuesForAnonymization } from "@/api/mcp/field-markers";
 
 export type ChatThirdPartyBoundary =
   | { type: "raw" }
@@ -394,32 +395,11 @@ const rewritePlaceholders = (
 const protectBoundaryPlaceholders = (
   boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>,
   fields: string[],
-): {
-  fields: string[];
-  restore: (protectedFields: string[]) => string[];
-} => {
-  if (boundary.redactionMap.size === 0) {
-    return { fields, restore: (protectedFields) => protectedFields };
-  }
-
-  const replacements = new Map<string, string>();
-  const restoreReplacements = new Map<string, string>();
-  let index = 0;
-  for (const placeholder of boundary.redactionMap.keys()) {
-    const sentinel = `\uE000BOUNDARY_PLACEHOLDER_${index}\uE001`;
-    replacements.set(placeholder, sentinel);
-    restoreReplacements.set(sentinel, placeholder);
-    index += 1;
-  }
-
-  return {
-    fields: fields.map((field) => rewritePlaceholders(field, replacements)),
-    restore: (protectedFields) =>
-      protectedFields.map((field) =>
-        rewritePlaceholders(field, restoreReplacements),
-      ),
-  };
-};
+) =>
+  protectValuesForAnonymization({
+    fields,
+    values: [...boundary.redactionMap.keys()],
+  });
 
 const rewriteBoundaryPlaceholders = (
   boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>,
@@ -655,6 +635,14 @@ const walkLenient = (value: unknown, replacer: LenientReplacer): unknown => {
 
 type BoundaryRefusal = HandlerError<422 | 500>;
 
+/** Nothing reaches the provider when anonymization did not complete. */
+const anonymizationFailure = (cause: unknown): BoundaryRefusal =>
+  new HandlerError({
+    status: 500,
+    message: "Failed to anonymize content before sending it to the AI.",
+    cause,
+  });
+
 type TextReplacement =
   | {
       type: "replace";
@@ -683,11 +671,14 @@ export const prepareTextForThirdParty = async ({
   const protectedInput = protectBoundaryPlaceholders(boundary, [
     encodeLateLiteralPlaceholders(boundary, text),
   ]);
+  if (Result.isError(protectedInput)) {
+    return Result.err(anonymizationFailure(protectedInput.error));
+  }
   const anonymized = await Result.tryPromise({
     try: async () =>
       await anonymizeFields({
         context: boundary.pipelineContext,
-        fields: protectedInput.fields,
+        fields: protectedInput.value.fields,
         forcedSensitiveValues: forcedSensitiveValuesForFields(boundary, [text]),
         catalogs: {
           type: "preloaded",
@@ -697,12 +688,7 @@ export const prepareTextForThirdParty = async ({
         organizationId: boundary.organizationId,
         workspaceId: boundary.anonymizationScopeId,
       }),
-    catch: (cause) =>
-      new HandlerError({
-        status: 500,
-        message: "Failed to anonymize content before sending it to the AI.",
-        cause,
-      }),
+    catch: anonymizationFailure,
   });
 
   if (Result.isError(anonymized)) {
@@ -710,8 +696,12 @@ export const prepareTextForThirdParty = async ({
   }
 
   const rewritten = rewriteBoundaryPlaceholders(boundary, anonymized.value);
+  const restored = protectedInput.value.restore(rewritten.fields);
+  if (Result.isError(restored)) {
+    return Result.err(anonymizationFailure(restored.error));
+  }
   mergeRedactionMap(boundary.redactionMap, rewritten.redactionMap);
-  return Result.ok(protectedInput.restore(rewritten.fields).at(0) ?? "");
+  return Result.ok(restored.value.at(0) ?? "");
 };
 
 const prepareTextBatchForThirdParty = async ({
@@ -736,11 +726,14 @@ const prepareTextBatchForThirdParty = async ({
       ? fields
       : fields.map((field) => encodeLateLiteralPlaceholders(boundary, field)),
   );
+  if (Result.isError(protectedInput)) {
+    return Result.err(anonymizationFailure(protectedInput.error));
+  }
   const anonymized = await Result.tryPromise({
     try: async () =>
       await anonymizeFields({
         context: boundary.pipelineContext,
-        fields: protectedInput.fields,
+        fields: protectedInput.value.fields,
         forcedSensitiveValues: forcedSensitiveValuesForFields(boundary, fields),
         catalogs: {
           type: "preloaded",
@@ -750,12 +743,7 @@ const prepareTextBatchForThirdParty = async ({
         organizationId: boundary.organizationId,
         workspaceId: boundary.anonymizationScopeId,
       }),
-    catch: (cause) =>
-      new HandlerError({
-        status: 500,
-        message: "Failed to anonymize content before sending it to the AI.",
-        cause,
-      }),
+    catch: anonymizationFailure,
   });
 
   if (Result.isError(anonymized)) {
@@ -763,7 +751,11 @@ const prepareTextBatchForThirdParty = async ({
   }
 
   const rewritten = rewriteBoundaryPlaceholders(boundary, anonymized.value);
-  const restoredFields = protectedInput.restore(rewritten.fields);
+  const restored = protectedInput.value.restore(rewritten.fields);
+  if (Result.isError(restored)) {
+    return Result.err(anonymizationFailure(restored.error));
+  }
+  const restoredFields = restored.value;
 
   for (let index = 0; index < replacements.length; index += 1) {
     const replacement = replacements.at(index);

@@ -14,8 +14,15 @@ import {
   CHAT_TOOL_POLICY_KIND,
 } from "@/api/handlers/chat/tools/tool-policy";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { resolveTanStackTextModel } from "@/api/lib/tanstack-ai-generate";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
+import { anonymizeTextFieldsWithDependencies } from "@/api/mcp/anonymization-core";
+import { AnonymizedFieldBoundaryError } from "@/api/mcp/field-markers";
+import {
+  createRewritingAnonymizeDependencies,
+  replaceFirstFieldDelimiterToken,
+} from "@/api/tests/helpers/anonymize-pipeline-fakes";
 import { createScriptedTextAdapter } from "@/api/tests/helpers/chat-round-trip";
 import type { ScriptedTurn } from "@/api/tests/helpers/chat-round-trip";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -203,6 +210,57 @@ describe("a subagent run under an anonymizing boundary", () => {
     expect(receivedSystemPrompts).toEqual([
       [`${systemSafe}\n\nReturn output matching: [PERSON_1]`],
     ]);
+  });
+});
+
+describe("a subagent run whose anonymization output lost its field structure", () => {
+  test("fails before any provider request", async () => {
+    const dependencies = createRewritingAnonymizeDependencies((text) =>
+      replaceFirstFieldDelimiterToken(text, "[ORGANIZATION_1]"),
+    );
+    const boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }> = {
+      anonymizationScopeId: "workspace-A",
+      anonymizeFields: async (input) =>
+        await anonymizeTextFieldsWithDependencies({ ...input, dependencies }),
+      excludedCanonicals: Promise.resolve([]),
+      gazetteerEntries: Promise.resolve([]),
+      literalPlaceholderAliases: new Map<string, string>(),
+      historicalRedactionMap: new Map<string, string>(),
+      organizationId: ids.orgA,
+      pipelineContext: createPipelineContext(),
+      placeholderOffsets: new Map<string, number>(),
+      redactionMap: new Map<string, string>(),
+      sourcePlaceholders: new Set<string>(),
+      type: "anonymized",
+    };
+    let providerRequests = 0;
+
+    const run = runScriptedSubagent(
+      [{ finishReason: "stop", text: "done", type: "text" }],
+      {
+        systemUntrusted: "Return output matching: Jan Novak",
+        thirdPartyBoundary: boundary,
+        wrapAdapter: (adapter) => ({
+          ...adapter,
+          chatStream: (options) => {
+            providerRequests += 1;
+            return adapter.chatStream(options);
+          },
+        }),
+      },
+    );
+
+    const failure = await run.then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(failure).toBeInstanceOf(HandlerError);
+    if (!(failure instanceof HandlerError)) {
+      return;
+    }
+    expect(failure.status).toBe(500);
+    expect(failure.cause).toBeInstanceOf(AnonymizedFieldBoundaryError);
+    expect(providerRequests).toBe(0);
   });
 });
 
