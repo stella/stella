@@ -12,6 +12,7 @@ import {
   absentDecisionTextFields,
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
+import { toPlainText } from "@/api/lib/case-law/plain-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
@@ -59,10 +60,10 @@ describe("plain-text item rejection", () => {
     expect(rejected.decision.isListingOnly).toBe(true);
     expect(rejected.decision.fulltext).toBeUndefined();
     expect(rejected.decision.metadata["plainTextFailureReason"]).toBe(
-      "rtf-syntax",
+      toPlainText("rtf-syntax").unwrap(),
     );
     expect(rejected.decision.metadata["detailStatus"]).toBe(
-      "item_build_failed",
+      toPlainText("item_build_failed").unwrap(),
     );
     expect(rejected.decision.parserVersion).toBe(
       PARSER_VERSIONS[ADAPTER_KEYS.CZ_NSS],

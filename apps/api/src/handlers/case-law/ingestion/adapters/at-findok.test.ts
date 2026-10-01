@@ -9,6 +9,7 @@ import {
   createAtFindokAdapter,
   parseFindokManifest,
 } from "@/api/handlers/case-law/ingestion/adapters/at-findok";
+import { toPlainText } from "@/api/lib/case-law/plain-text";
 import { loadDocxArchive } from "@/api/lib/docx-archive";
 
 import { PublisherPageError } from "./publisher-page";
@@ -372,7 +373,9 @@ describe("Austrian Findok adapter", () => {
       );
       expect(quarantined?.sourceDocumentId).toStartWith("findok-quarantine:");
       expect(quarantined?.documentUrl).toBeUndefined();
-      expect(quarantined?.metadata["detailStatus"]).toBe("item_build_failed");
+      expect(quarantined?.metadata["detailStatus"]).toBe(
+        toPlainText("item_build_failed").unwrap(),
+      );
       expect(quarantined?.sourceRaw).toBeDefined();
       const parts = decodeSourceRawEnvelope(quarantined?.sourceRaw ?? "");
       expect(JSON.parse(parts?.["listing"] ?? "null")).toEqual(rejected);
