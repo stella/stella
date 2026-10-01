@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 import {
   charBeforeCaret,
   COMPOSER_MENU_SHORTCUT,
+  contextMentionSearchKey,
   resolveComposerMenuShortcut,
   shouldDrainSkillPages,
 } from "@/components/chat/composer-plus-menu.logic";
@@ -201,5 +202,36 @@ describe("shouldDrainSkillPages", () => {
         query: "  ",
       }),
     ).toBe(false);
+  });
+});
+
+describe("contextMentionSearchKey", () => {
+  const scope = {
+    organizationId: "org-a",
+    query: "lease",
+    registrationVersion: 3,
+    threadKey: "workspace:matter-a:thread-a",
+    userId: "user-a",
+  };
+
+  test("the same query in another scope never shares a cache entry", () => {
+    const key = JSON.stringify(contextMentionSearchKey(scope));
+    for (const other of [
+      { organizationId: "org-b" },
+      { userId: "user-b" },
+      { threadKey: "workspace:matter-b:thread-a" },
+      { threadKey: "global:thread-a" },
+      { registrationVersion: 4 },
+    ]) {
+      expect(
+        JSON.stringify(contextMentionSearchKey({ ...scope, ...other })),
+      ).not.toBe(key);
+    }
+  });
+
+  test("a repeated search in the same scope reuses its entry", () => {
+    expect(contextMentionSearchKey({ ...scope })).toEqual(
+      contextMentionSearchKey(scope),
+    );
   });
 });

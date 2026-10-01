@@ -8,6 +8,7 @@ import {
 
 import {
   isMenuNavigationKey,
+  isTabPick,
   isTriggerErase,
   scheduleSearchFocus,
 } from "@/components/chat/composer-submenu-search.logic";
@@ -69,6 +70,31 @@ export const ComposerSubmenuSearch = ({
     </InputGroup>
   </div>
 );
+
+/** Popup `onKeyDown` for the composer pickers: Tab picks the highlighted row
+ *  the way Enter does, so a keyboard user can accept a match with either. */
+export const pickHighlightedItemOnTab = (
+  event: React.KeyboardEvent<HTMLElement>,
+) => {
+  const { target } = event;
+  if (event.defaultPrevented || !(target instanceof HTMLElement)) {
+    return;
+  }
+  if (
+    !isTabPick({
+      altKey: event.altKey,
+      ctrlKey: event.ctrlKey,
+      key: event.key,
+      metaKey: event.metaKey,
+      shiftKey: event.shiftKey,
+      targetRole: target.getAttribute("role"),
+    })
+  ) {
+    return;
+  }
+  event.preventDefault();
+  target.click();
+};
 
 export const useFocusSearchOnOpen = (
   open: boolean,

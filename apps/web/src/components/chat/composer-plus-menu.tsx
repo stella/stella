@@ -41,7 +41,10 @@ import {
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
-import { useChatEditorManager } from "@/components/chat-editor-provider";
+import {
+  useChatEditorExtensionVersion,
+  useChatEditorManager,
+} from "@/components/chat-editor-provider";
 import {
   buildChatSlashItems,
   commandShortcutRowsFromSkillPages,
@@ -78,12 +81,14 @@ import {
 import {
   charBeforeCaret,
   COMPOSER_MENU_SHORTCUT_CHAR,
+  contextMentionSearchKey,
   resolveComposerMenuShortcut,
   shouldDrainSkillPages,
   type ComposerMenuShortcut,
 } from "@/components/chat/composer-plus-menu.logic";
 import {
   ComposerSubmenuSearch,
+  pickHighlightedItemOnTab,
   useFocusSearchOnOpen,
   type ComposerSearchTrigger,
 } from "@/components/chat/composer-submenu-search";
@@ -96,6 +101,7 @@ import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { getChatThreadKey } from "@/lib/chat-thread-ref";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
@@ -820,7 +826,9 @@ const ComposerSkillsMenu = ({
         <SkillIcon />
         {label}
       </MenuSubTrigger>
-      <MenuSubPopup className="w-72">{content}</MenuSubPopup>
+      <MenuSubPopup className="w-72" onKeyDown={pickHighlightedItemOnTab}>
+        {content}
+      </MenuSubPopup>
     </MenuSub>
   );
 };
@@ -847,6 +855,7 @@ const ComposerShortcutPopup = ({
       anchor={anchor}
       aria-label={label}
       className="w-72"
+      onKeyDown={pickHighlightedItemOnTab}
       side="top"
     >
       {children}
@@ -869,14 +878,34 @@ const isWorkspaceMention = (
  * matter's files, case law, and the local options merged in by the same
  * selector (`selectChatSuggestionItems`), so the Context list offers
  * everything a mention source registers. Settles over the same 150ms window
- * as the matter file search; an empty query searches nothing.
+ * as the matter file search; an empty query searches nothing. The key is
+ * scoped to the user, organization, thread and registration generation (see
+ * `contextMentionSearchKey`).
  */
-const useContextMentionSearch = (open: boolean, search: string) => {
+const useContextMentionSearch = ({
+  open,
+  organizationId,
+  search,
+  threadRef,
+}: {
+  open: boolean;
+  organizationId: string;
+  search: string;
+  threadRef: ChatThreadRef;
+}) => {
   const { getMentionItems, searchMentionItems } = useChatEditorManager();
+  const registrationVersion = useChatEditorExtensionVersion();
+  const { id: userId } = useAuthenticatedUser();
   const [query] = useDebounce(search.trim(), CHAT_MENTION_SEARCH_DEBOUNCE_MS);
   const enabled = open && query !== "";
   const { data, isFetching } = useQuery({
-    queryKey: ["chat-mention-search", query],
+    queryKey: contextMentionSearchKey({
+      organizationId,
+      query,
+      registrationVersion,
+      threadKey: getChatThreadKey(threadRef),
+      userId,
+    }),
     queryFn: async () => {
       const [localItems, searchedItems] = await Promise.all([
         getMentionItems(),
@@ -927,7 +956,12 @@ const ComposerContextMenu = ({
     enabled,
   });
   const matters: ContextMatter[] = data ? data.workspaces : [];
-  const mentionSearch = useContextMentionSearch(open, search);
+  const mentionSearch = useContextMentionSearch({
+    open,
+    organizationId: activeOrganizationId,
+    search,
+    threadRef,
+  });
 
   const query = search.trim().toLowerCase();
   const filteredMatters = query
@@ -990,7 +1024,9 @@ const ComposerContextMenu = ({
         <AtSignIcon />
         {label}
       </MenuSubTrigger>
-      <MenuSubPopup className="w-72">{content}</MenuSubPopup>
+      <MenuSubPopup className="w-72" onKeyDown={pickHighlightedItemOnTab}>
+        {content}
+      </MenuSubPopup>
     </MenuSub>
   );
 };

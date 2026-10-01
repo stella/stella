@@ -217,9 +217,9 @@ const ChatEditorManagerContext =
   createContext<ChatEditorManagerContextValue | null>(null);
 
 // Carries only the registration version counter. Bumped on every
-// register/unregister and consumed solely by the editor's plugin-sync effect
-// (via `useChatEditorExtensionVersion`), so a bump re-renders that one
-// subscriber instead of every holder of the manager API.
+// register/unregister and read via `useChatEditorExtensionVersion` (the
+// editor's plugin-sync effect, the Context picker's search key), so a bump
+// re-renders those subscribers instead of every holder of the manager API.
 const ChatEditorExtensionVersionContext = createContext<number>(0);
 
 const isSuggestionPluginState = (
@@ -475,7 +475,7 @@ export const useChatEditorManager = () => {
 // Subscribes only to the registration version, so the editor's plugin-sync
 // effect re-runs when extensions change without dragging the whole manager API
 // into the volatile-value subscription (see `ChatEditorExtensionVersionContext`).
-const useChatEditorExtensionVersion = () =>
+export const useChatEditorExtensionVersion = () =>
   use(ChatEditorExtensionVersionContext);
 
 type UseChatComposerWiringOptions = {

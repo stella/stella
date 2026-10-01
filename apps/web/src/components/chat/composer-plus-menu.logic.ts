@@ -15,6 +15,37 @@ export const COMPOSER_MENU_SHORTCUT_CHAR = {
   skills: "/",
 } as const satisfies Record<ComposerMenuShortcut, string>;
 
+type ContextMentionSearchKeyOptions = {
+  organizationId: string;
+  query: string;
+  registrationVersion: number;
+  threadKey: string;
+  userId: string;
+};
+
+/**
+ * Cache key of the Context picker's mention search. The results come from the
+ * mention sources registered for the open thread, so the key names the
+ * signed-in user, the organization, the thread (and with it the workspace) and
+ * the registration generation: a search repeated elsewhere never answers from
+ * another scope's rows.
+ */
+export const contextMentionSearchKey = ({
+  organizationId,
+  query,
+  registrationVersion,
+  threadKey,
+  userId,
+}: ContextMentionSearchKeyOptions) =>
+  [
+    "chat-mention-search",
+    organizationId,
+    userId,
+    threadKey,
+    registrationVersion,
+    query,
+  ] as const;
+
 // Stands in for an inline leaf (a mention or skill chip) before the caret: the
 // chip is a word of its own, so a trigger typed flush against it stays literal.
 const INLINE_LEAF_CHAR = "\ufffc";
