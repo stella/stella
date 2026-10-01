@@ -120,12 +120,13 @@ describe("compact/expand round trip over every catalog entry", () => {
       }
       // Deterministic down to the byte, in a different process than the one
       // that wrote the artifact.
+      const recompactedEntry = {
+        ...entry,
+        id,
+        inputSchema: recompacted.inputSchema,
+      };
       if (
-        serializeCapabilityShard({
-          ...entry,
-          id,
-          inputSchema: recompacted.inputSchema,
-        }) !==
+        serializeCapabilityShard(recompactedEntry) !==
         readFileSync(
           new URL(
             `../../../../packages/cli/capabilities/${id}.json`,
