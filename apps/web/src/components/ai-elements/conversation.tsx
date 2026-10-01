@@ -11,6 +11,7 @@ import { cn } from "@stll/ui/utils";
 
 import {
   StickToBottomContext,
+  useMaybeStickToBottomContext,
   useStickToBottom,
   useStickToBottomContext,
 } from "@/hooks/use-stick-to-bottom";
@@ -119,42 +120,38 @@ type ConversationScrollButtonProps = Omit<
 >;
 
 /**
- * The scroll-to-bottom action: one round button, always centered above
- * whatever sits at the bottom of the conversation. Callers only set its
- * vertical offset, so it never moves sideways between states.
+ * The scroll-to-bottom action. It lives in the middle of the composer's
+ * status row (`ChatComposerDock`), never floating over the transcript or the
+ * follow-up chips, so it adds no row and covers nothing. Renders nothing
+ * outside a conversation or while the latest message is in view.
  */
 export const ConversationScrollButton = ({
   className,
   ...props
 }: ConversationScrollButtonProps) => {
   const t = useTranslations();
-  const { isAtBottom, isScrollable, scrollToBottom } =
-    useStickToBottomContext();
+  const stickToBottom = useMaybeStickToBottomContext();
 
-  if (!isScrollable || isAtBottom) {
+  if (
+    stickToBottom === null ||
+    !stickToBottom.isScrollable ||
+    stickToBottom.isAtBottom
+  ) {
     return null;
   }
 
   return (
     <Button
       aria-label={t("common.scrollToBottom")}
-      className={cn(
-        "before:rounded-full",
-        // The outline variant is translucent in dark mode (content shows
-        // through the button). Pin an opaque surface in both themes;
-        // isolate/z-10 keep it above the scrolled content.
-        "bg-background dark:bg-background hover:bg-muted",
-        "isolate shadow-sm",
-        "absolute bottom-4 left-1/2 z-10 -translate-x-1/2 rounded-full",
-        className,
-      )}
+      className={cn("rounded-full before:rounded-full", className)}
       {...props}
-      onClick={() => scrollToBottom()}
-      size="icon"
+      onClick={() => stickToBottom.scrollToBottom()}
+      size="icon-xs"
+      tooltip={t("common.scrollToBottom")}
       type="button"
       variant="outline"
     >
-      <ArrowDownIcon className="size-4" />
+      <ArrowDownIcon className="size-3.5" />
     </Button>
   );
 };

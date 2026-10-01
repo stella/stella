@@ -2,12 +2,10 @@ import { useTranslations } from "use-intl";
 
 import { cn } from "@stll/ui/utils";
 
-import { ConversationScrollButton } from "@/components/ai-elements/conversation";
 import {
   SuggestedActions,
   type SuggestedActionSurfaceName,
 } from "@/components/suggested-actions";
-import { useMaybeStickToBottomContext } from "@/hooks/use-stick-to-bottom";
 
 type SuggestedFollowupChipsProps = {
   className?: string;
@@ -37,9 +35,8 @@ type SuggestedFollowupChipsProps = {
  * behind the row, or `surface="plain"` when rendered inside the thread card so
  * the chips sit within the chat window.
  *
- * The scroll action floats centered above the row, where it sits when no
- * chips show, and appears only where a stick-to-bottom context surrounds
- * the row.
+ * The scroll-to-bottom action is not part of this row: it sits in the
+ * composer's status row (`ChatComposerDock`).
  */
 export const SuggestedFollowupChips = ({
   className,
@@ -48,14 +45,13 @@ export const SuggestedFollowupChips = ({
   surface,
 }: SuggestedFollowupChipsProps) => {
   const t = useTranslations();
-  const stickToBottom = useMaybeStickToBottomContext();
 
   if (prompts.length === 0) {
     return null;
   }
 
   return (
-    <div className={cn("relative max-w-full pb-2", className)}>
+    <div className={cn("max-w-full pb-2", className)}>
       <SuggestedActions
         actions={prompts.map((prompt) => ({ id: prompt, label: prompt }))}
         label={t("chat.suggestedFollowupsLabel")}
@@ -63,12 +59,6 @@ export const SuggestedFollowupChips = ({
         orientation="horizontal"
         surface={surface ?? "overlay"}
       />
-      {/* The conversation's own scroll action is hidden while this row
-          shows, so the row carries it: centered just above the chips, where
-          it sits without them, never over a chip. */}
-      {stickToBottom !== null && (
-        <ConversationScrollButton className="bottom-full mb-2" />
-      )}
     </div>
   );
 };

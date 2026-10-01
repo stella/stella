@@ -36,7 +36,6 @@ import { cn } from "@stll/ui/utils";
 import {
   Conversation,
   ConversationContent,
-  ConversationScrollButton,
   ConversationScrollProvider,
 } from "@/components/ai-elements/conversation";
 import { PromptBar } from "@/components/ai-suggestions/host";
@@ -632,10 +631,6 @@ export const ChatTabPanel = ({
                 />
               )}
             </ConversationContent>
-            {/* Clear the floating composer block (veil + pill + row). */}
-            <ConversationScrollButton
-              className={cn("bottom-32", hasSuggestedFollowups && "hidden")}
-            />
           </Conversation>
 
           <ChatAnonymizationLayer

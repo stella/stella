@@ -9,6 +9,7 @@ import { ComposerStatusRow } from "@stll/ui/composer";
 import { NewChatIcon } from "@stll/ui/icons";
 import { Popover, PopoverPanel } from "@stll/ui/popover";
 
+import { ConversationScrollButton } from "@/components/ai-elements/conversation";
 import {
   ChatContextMeter,
   type ChatContextUsage,
@@ -146,6 +147,9 @@ export const ChatComposerDock = (props: ChatComposerDockProps) => {
   const newThreadAnchorRef = useRef<HTMLSpanElement>(null);
   return (
     <ComposerStatusRow
+      // The row's empty middle carries the scroll-to-bottom action, so the
+      // composer never grows a row for it and nothing floats over the chips.
+      center={<ConversationScrollButton />}
       className={className}
       end={
         <div

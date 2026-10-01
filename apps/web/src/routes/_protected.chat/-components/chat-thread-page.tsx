@@ -20,7 +20,6 @@ import { cn } from "@stll/ui/utils";
 import {
   Conversation,
   ConversationContent,
-  ConversationScrollButton,
   ConversationScrollProvider,
 } from "@/components/ai-elements/conversation";
 import {
@@ -268,7 +267,6 @@ export const ChatThreadPage = ({
     threadRef,
     turnAbandoned,
   });
-  const hasSuggestedFollowups = suggestedFollowupPrompts.length > 0;
 
   // Seed brand-new (empty) threads from the persisted web-search
   // preference so the user doesn't have to flip the toggle every time
@@ -682,18 +680,6 @@ export const ChatThreadPage = ({
                   className="from-background pointer-events-none absolute inset-x-0 bottom-0 mx-auto h-48 w-full max-w-5xl bg-linear-to-t to-transparent"
                 />
               )}
-              {/* Centred above the composer block, whose live height it
-                clears. A sibling of the fade rather than a child of the
-                isolated <Conversation>, so its z-10 wins against the fade
-                instead of being dimmed by it. Hidden while follow-up chips
-                show: the chip row then carries it, centered just
-                above the chips. */}
-              <ConversationScrollButton
-                className={cn(
-                  "bottom-[calc(var(--composer-block-h,7rem)+0.5rem)]",
-                  hasSuggestedFollowups && "hidden",
-                )}
-              />
               {/* Top of the page stacking order: must stack above the sticky
                 transcript headers and the fade gradient. `z-20` beats the
                 isolated <Conversation> context (which caps its sticky

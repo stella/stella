@@ -108,6 +108,12 @@ type ComposerStatusRowProps = {
   start?: ReactNode | undefined;
   /** End slot, pinned to the far edge (e.g. the context meter). */
   end?: ReactNode | undefined;
+  /**
+   * Middle slot, centered on the row (e.g. scroll to the latest message).
+   * With it the row becomes three columns whose sides share the remaining
+   * width equally, so the middle stays centered and never covers a control.
+   */
+  center?: ReactNode | undefined;
   className?: string | undefined;
 };
 
@@ -120,10 +126,26 @@ type ComposerStatusRowProps = {
 export const ComposerStatusRow = ({
   start,
   end,
+  center,
   className,
 }: ComposerStatusRowProps) => {
-  if (start === undefined && end === undefined) {
+  if (start === undefined && end === undefined && center === undefined) {
     return null;
+  }
+
+  if (center !== undefined) {
+    return (
+      <div
+        className={cn(
+          "text-muted-foreground mt-1.5 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 px-1 text-xs",
+          className,
+        )}
+      >
+        <div className="flex min-w-0 items-center">{start}</div>
+        <div className="flex items-center justify-center">{center}</div>
+        <div className="flex min-w-0 items-center justify-end">{end}</div>
+      </div>
+    );
   }
 
   return (
