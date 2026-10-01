@@ -330,18 +330,6 @@ const knownFindingOf = (combination: ChatCombination): string | undefined => {
   ) {
     return "a Bedrock turn with an image attachment fails before its request";
   }
-  // OpenAI's reasoning is stored as a thinking part whose signature packs
-  // its encrypted content, and the Anthropic adapter sends every signed
-  // thinking part back as a thinking block: Anthropic is handed a signature
-  // it did not issue. Minimal repro: an OpenAI turn that reasoned before a
-  // tool call, continued on an Anthropic model.
-  if (
-    combination.history === "reasoning" &&
-    combination.origin.provider === "openai" &&
-    combination.target.provider === "anthropic"
-  ) {
-    return "an Anthropic turn is sent the signed reasoning an OpenAI model wrote";
-  }
   return undefined;
 };
 
