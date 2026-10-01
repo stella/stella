@@ -1142,6 +1142,7 @@
       "viaProvider": "teenuse {provider} kaudu"
     },
     "newChat": "Uus vestlus",
+    "newChatInSidePanel": "Uus vestlus on külgpaneelis saadaval",
     "noPromptPresetOnly": "Sõnum puudub, ainult eelseadistus",
     "noThreads": "Vestlusi pole veel",
     "officeCitationUnavailable": "See viide pole enam saadaval.",

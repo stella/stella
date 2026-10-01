@@ -1145,6 +1145,7 @@ type Messages = {
       "viaProvider": "via {provider}";
     };
     "newChat": "New chat";
+    "newChatInSidePanel": "The new chat is available in the side panel";
     "noPromptPresetOnly": "No message, preset only";
     "noThreads": "No conversations yet";
     "officeCitationUnavailable": "This citation is no longer available.";

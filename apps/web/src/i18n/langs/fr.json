@@ -1142,6 +1142,7 @@
       "viaProvider": "par {provider}"
     },
     "newChat": "Nouvelle conversation",
+    "newChatInSidePanel": "La nouvelle conversation est disponible dans le panneau latéral",
     "noPromptPresetOnly": "Aucun message, préréglage uniquement",
     "noThreads": "Aucune conversation",
     "officeCitationUnavailable": "Cette citation n’est plus disponible.",

@@ -1142,6 +1142,7 @@
       "viaProvider": "عبر {provider}"
     },
     "newChat": "دردشة جديدة",
+    "newChatInSidePanel": "الدردشة الجديدة متاحة في اللوحة الجانبية",
     "noPromptPresetOnly": "لا توجد رسالة، الإعداد المُسبق فقط",
     "noThreads": "لا توجد محادثات بعد",
     "officeCitationUnavailable": "لم يعد هذا الاستشهاد متاحًا.",

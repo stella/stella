@@ -1,11 +1,19 @@
+import { useReducer, useRef } from "react";
+
 import { useChatEditorManager } from "@/components/chat-editor-provider";
 import type { ChatMentionOption } from "@/components/chat-mention-extension";
 import type { PastedTextAttrs } from "@/components/chat-pasted-text-extension";
+import {
+  nextSidePanelChatStatus,
+  SIDE_PANEL_CHAT_READY_MS,
+  SIDE_PANEL_CHAT_STATUS,
+} from "@/components/chat/side-panel-chat-status.logic";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { useMountEffect } from "@/hooks/use-effect";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
 import { createChatThreadId } from "@/lib/chat-thread-ref";
 
-type InspectorChatRequest = {
+export type InspectorChatRequest = {
   /** The matters the chat is scoped to. */
   contextMatterIds: readonly string[];
   /** Chips to start the composer with. */
@@ -28,12 +36,14 @@ type InspectorChatRequest = {
  * The composer is pre-filled through the draft store, so the chips are
  * already in place when the tab's editor attaches to the thread; nothing is
  * sent. An empty chat tab focuses its composer on mount, which puts the caret
- * after the pre-filled content.
+ * after the pre-filled content. The chat's rail tab flashes, so the eye finds
+ * where it opened even when the pane was already showing.
  */
 export const useOpenChatInInspector = () => {
   const { focusThread, insertMentionIntoThread, insertPastedTextIntoThread } =
     useChatEditorManager();
   const openChat = useInspectorTabsStore((s) => s.openChat);
+  const flashTab = useInspectorTabsStore((s) => s.flashTab);
 
   return ({
     contextMatterIds,
@@ -48,6 +58,7 @@ export const useOpenChatInInspector = () => {
       workspaceId,
       contextMatterIds: [...contextMatterIds],
     });
+    flashTab(threadId);
 
     const threadRef: ChatThreadRef =
       workspaceId === undefined
@@ -63,6 +74,55 @@ export const useOpenChatInInspector = () => {
 
     focusThread(threadRef);
     return threadRef;
+  };
+};
+
+/**
+ * A control that opens a chat in the side panel and says so where the user
+ * is looking: "creating" while a fork waits on the server, then "available
+ * in the side panel" for a moment, while the chat's rail tab flashes. The
+ * fork menu and the selection bar share it, so both read the same.
+ *
+ * `begin` marks the wait (skipped when the chat opens at once), `open` opens
+ * the chat and confirms, `fail` drops the wait; the caller reports the error
+ * as before.
+ */
+export const useSidePanelChat = () => {
+  const openChatInInspector = useOpenChatInInspector();
+  const [status, dispatch] = useReducer(
+    nextSidePanelChatStatus,
+    SIDE_PANEL_CHAT_STATUS.idle,
+  );
+  const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const cancelSettle = () => {
+    if (settleTimerRef.current !== null) {
+      clearTimeout(settleTimerRef.current);
+      settleTimerRef.current = null;
+    }
+  };
+
+  useMountEffect(() => cancelSettle);
+
+  return {
+    begin: () => {
+      cancelSettle();
+      dispatch("start");
+    },
+    fail: () => {
+      dispatch("failed");
+    },
+    open: (request: InspectorChatRequest): ChatThreadRef => {
+      const threadRef = openChatInInspector(request);
+      cancelSettle();
+      dispatch("opened");
+      settleTimerRef.current = setTimeout(() => {
+        settleTimerRef.current = null;
+        dispatch("settled");
+      }, SIDE_PANEL_CHAT_READY_MS);
+      return threadRef;
+    },
+    status,
   };
 };
 

@@ -1142,6 +1142,7 @@
       "viaProvider": "cez {provider}"
     },
     "newChat": "Nový chat",
+    "newChatInSidePanel": "Nový chat je dostupný v bočnom paneli",
     "noPromptPresetOnly": "Bez správy, iba predvoľba",
     "noThreads": "Zatiaľ žiadne konverzácie",
     "officeCitationUnavailable": "Táto citácia už nie je dostupná.",

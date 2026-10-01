@@ -1142,6 +1142,7 @@
       "viaProvider": "przez {provider}"
     },
     "newChat": "Nowy czat",
+    "newChatInSidePanel": "Nowy czat jest dostępny w panelu bocznym",
     "noPromptPresetOnly": "Brak wiadomości, tylko ustawienie wstępne",
     "noThreads": "Brak rozmów",
     "officeCitationUnavailable": "To cytowanie nie jest już dostępne.",

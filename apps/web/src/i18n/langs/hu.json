@@ -1142,6 +1142,7 @@
       "viaProvider": "a(z) {provider} szolgáltatáson keresztül"
     },
     "newChat": "Új csevegés",
+    "newChatInSidePanel": "Az új csevegés elérhető az oldalsó panelen",
     "noPromptPresetOnly": "Nincs üzenet, csak előbeállítás",
     "noThreads": "Még nincsenek beszélgetések",
     "officeCitationUnavailable": "Ez a hivatkozás már nem érhető el.",

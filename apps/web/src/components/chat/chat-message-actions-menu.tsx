@@ -26,7 +26,11 @@ import { stellaToast } from "@stll/ui/toast";
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import type { CreateDocumentDraft } from "@/components/chat/create-document-draft.logic";
 import { MessageExportMenu } from "@/components/chat/message-export-menu";
-import { useOpenChatInInspector } from "@/components/chat/use-request-chat-about";
+import {
+  SidePanelChatAnnouncer,
+  SidePanelChatNote,
+} from "@/components/chat/side-panel-chat-status";
+import { useSidePanelChat } from "@/components/chat/use-request-chat-about";
 import { invalidateChatThreadLists } from "@/features/chat/queries";
 import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
@@ -82,7 +86,9 @@ export const ChatMessageActionsMenu = ({
   const t = useTranslations();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const openChatInInspector = useOpenChatInInspector();
+  // A fork to the side panel confirms on this action row: the menu closes
+  // on click, so the row is where the eye still is.
+  const sidePanelChat = useSidePanelChat();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const pendingForkThreadId = useRef<ChatThreadId | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
@@ -109,10 +115,15 @@ export const ChatMessageActionsMenu = ({
         );
       return unwrapEden(response);
     },
+    onMutate: (destination) => {
+      if (destination === "inspector") {
+        sidePanelChat.begin();
+      }
+    },
     onSuccess: async ({ threadId }, destination) => {
       await invalidateChatThreadLists({ queryClient, workspaceId });
       if (destination === "inspector") {
-        openChatInInspector({
+        sidePanelChat.open({
           contextMatterIds: resolveChatContextMatterIds(
             threadRef,
             contextMatterIds ?? [],
@@ -126,6 +137,7 @@ export const ChatMessageActionsMenu = ({
       pendingForkThreadId.current = null;
     },
     onError: (error) => {
+      sidePanelChat.fail();
       getAnalytics().captureError(error);
       stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
     },
@@ -196,6 +208,8 @@ export const ChatMessageActionsMenu = ({
           )}
         </DropdownMenuContent>
       </DropdownMenu>
+      <SidePanelChatNote status={sidePanelChat.status} />
+      <SidePanelChatAnnouncer status={sidePanelChat.status} />
       {canExport && (
         <MessageExportMenu
           anchor={triggerRef}

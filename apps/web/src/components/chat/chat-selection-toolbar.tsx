@@ -23,7 +23,12 @@ import {
   normalizeChatSelectionText,
 } from "@/components/chat/chat-selection-branch.logic";
 import type { ChatBranchSource } from "@/components/chat/chat-selection-branch.logic";
-import { useOpenChatInInspector } from "@/components/chat/use-request-chat-about";
+import {
+  SidePanelChatAnnouncer,
+  SidePanelChatNote,
+} from "@/components/chat/side-panel-chat-status";
+import { SIDE_PANEL_CHAT_STATUS } from "@/components/chat/side-panel-chat-status.logic";
+import { useSidePanelChat } from "@/components/chat/use-request-chat-about";
 import { SelectionToolbar } from "@/components/selection-toolbar";
 import { useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -83,10 +88,13 @@ export const ChatSelectionToolbar = ({
 }: ChatSelectionToolbarProps) => {
   const t = useTranslations();
   const { insertPastedTextIntoThread } = useChatEditorManager();
-  const openChatInInspector = useOpenChatInInspector();
+  const sidePanelChat = useSidePanelChat();
   const [doc, setDoc] = useState<Document | null>(null);
   const [selected, setSelected] = useState<Selected | null>(null);
   const [copied, setCopied] = useState(false);
+  // Where the bar stood when its words went to a new chat: the confirmation
+  // stays there, where the reader is looking, after the selection is gone.
+  const [confirmAt, setConfirmAt] = useState<DOMRect | null>(null);
 
   const readSelection = useLatestCallback((ownerDoc: Document) => {
     const root = rootRef.current;
@@ -112,6 +120,8 @@ export const ChatSelectionToolbar = ({
     if (selected?.quote !== quote) {
       setCopied(false);
     }
+    // Nor may the last confirmation return once this selection goes.
+    setConfirmAt(null);
     setSelected({ quote, rect });
   });
 
@@ -128,8 +138,22 @@ export const ChatSelectionToolbar = ({
       signal: controller.signal,
     });
     // The transcript scrolls (and streams) under a selection; the bar
-    // follows the words, and hides once they leave the transcript.
-    ownerDoc.addEventListener("scroll", onChange, {
+    // follows the words, and hides once they leave the transcript. A
+    // confirmation has no words to follow, so it goes when the transcript
+    // moves; a scroll elsewhere (the new chat settling in) leaves it be.
+    const onScroll = (event: Event) => {
+      const root = rootRef.current;
+      const target = event.target;
+      if (
+        root !== null &&
+        target instanceof Node &&
+        (target.contains(root) || root.contains(target))
+      ) {
+        setConfirmAt(null);
+      }
+      onChange();
+    };
+    ownerDoc.addEventListener("scroll", onScroll, {
       capture: true,
       passive: true,
       signal: controller.signal,
@@ -140,8 +164,27 @@ export const ChatSelectionToolbar = ({
     };
   });
 
+  // Both returns keep the live region in the same slot, so it stays mounted
+  // as the bar turns into its confirmation and the change is announced.
+  const announcer = <SidePanelChatAnnouncer status={sidePanelChat.status} />;
+
   if (selected === null) {
-    return null;
+    const confirming =
+      confirmAt !== null &&
+      sidePanelChat.status !== SIDE_PANEL_CHAT_STATUS.idle;
+    return (
+      <>
+        {confirming ? (
+          <SelectionToolbar anchorRect={confirmAt} doc={doc} key="confirm">
+            <SidePanelChatNote
+              className="h-7 px-2"
+              status={sidePanelChat.status}
+            />
+          </SelectionToolbar>
+        ) : null}
+        {announcer}
+      </>
+    );
   }
 
   const quoteChip = () =>
@@ -157,10 +200,12 @@ export const ChatSelectionToolbar = ({
     setSelected(null);
   };
 
+  // Opens at once (nothing to wait on), so it goes straight to confirming.
   const askInNewChat = () => {
     const chip = quoteChip();
+    setConfirmAt(selected.rect);
     releaseSelection();
-    openChatInInspector({
+    sidePanelChat.open({
       contextMatterIds: source.contextMatterIds,
       quote: chip,
       workspaceId:
@@ -195,69 +240,73 @@ export const ChatSelectionToolbar = ({
   });
 
   return (
-    <SelectionToolbar
-      anchorRect={selected.rect}
-      ariaLabel={t("chat.selection.toolbarLabel")}
-      doc={doc}
-    >
-      <div className="flex items-center gap-1">
-        {actions.map((action) => {
-          switch (action) {
-            case CHAT_SELECTION_ACTION.askInNewChat: {
-              return (
-                <Button
-                  key={action}
-                  onClick={askInNewChat}
-                  onMouseDown={(event) => event.preventDefault()}
-                  size="sm"
-                  variant="ghost"
-                >
-                  <MessageSquarePlusIcon className="size-3.5" />
-                  {t("chat.selection.askInNewChat")}
-                </Button>
-              );
+    <>
+      <SelectionToolbar
+        anchorRect={selected.rect}
+        ariaLabel={t("chat.selection.toolbarLabel")}
+        doc={doc}
+        key="actions"
+      >
+        <div className="flex items-center gap-1">
+          {actions.map((action) => {
+            switch (action) {
+              case CHAT_SELECTION_ACTION.askInNewChat: {
+                return (
+                  <Button
+                    key={action}
+                    onClick={askInNewChat}
+                    onMouseDown={(event) => event.preventDefault()}
+                    size="sm"
+                    variant="ghost"
+                  >
+                    <MessageSquarePlusIcon className="size-3.5" />
+                    {t("chat.selection.askInNewChat")}
+                  </Button>
+                );
+              }
+              case CHAT_SELECTION_ACTION.quoteInReply: {
+                return (
+                  <Button
+                    key={action}
+                    onClick={quoteInReply}
+                    onMouseDown={(event) => event.preventDefault()}
+                    size="sm"
+                    variant="ghost"
+                  >
+                    <QuoteIcon className="size-3.5" />
+                    {t("chat.selection.quoteInReply")}
+                  </Button>
+                );
+              }
+              case CHAT_SELECTION_ACTION.copy: {
+                return (
+                  <Button
+                    key={action}
+                    onClick={() => {
+                      detached(copy(), "chat-selection-toolbar.copy");
+                    }}
+                    onMouseDown={(event) => event.preventDefault()}
+                    size="sm"
+                    variant="ghost"
+                  >
+                    {copied ? (
+                      <CheckIcon className="size-3.5" />
+                    ) : (
+                      <CopyIcon className="size-3.5" />
+                    )}
+                    {copied ? t("common.copied") : t("common.copy")}
+                  </Button>
+                );
+              }
+              default: {
+                action satisfies never;
+                return panic(`Unhandled selection action: ${String(action)}`);
+              }
             }
-            case CHAT_SELECTION_ACTION.quoteInReply: {
-              return (
-                <Button
-                  key={action}
-                  onClick={quoteInReply}
-                  onMouseDown={(event) => event.preventDefault()}
-                  size="sm"
-                  variant="ghost"
-                >
-                  <QuoteIcon className="size-3.5" />
-                  {t("chat.selection.quoteInReply")}
-                </Button>
-              );
-            }
-            case CHAT_SELECTION_ACTION.copy: {
-              return (
-                <Button
-                  key={action}
-                  onClick={() => {
-                    detached(copy(), "chat-selection-toolbar.copy");
-                  }}
-                  onMouseDown={(event) => event.preventDefault()}
-                  size="sm"
-                  variant="ghost"
-                >
-                  {copied ? (
-                    <CheckIcon className="size-3.5" />
-                  ) : (
-                    <CopyIcon className="size-3.5" />
-                  )}
-                  {copied ? t("common.copied") : t("common.copy")}
-                </Button>
-              );
-            }
-            default: {
-              action satisfies never;
-              return panic(`Unhandled selection action: ${String(action)}`);
-            }
-          }
-        })}
-      </div>
-    </SelectionToolbar>
+          })}
+        </div>
+      </SelectionToolbar>
+      {announcer}
+    </>
   );
 };

@@ -1142,6 +1142,7 @@
       "viaProvider": "über {provider}"
     },
     "newChat": "Neuer Chat",
+    "newChatInSidePanel": "Der neue Chat ist in der Seitenleiste verfügbar",
     "noPromptPresetOnly": "Keine Nachricht, nur Vorlage",
     "noThreads": "Noch keine Konversationen",
     "officeCitationUnavailable": "Diese Fundstelle ist nicht mehr verfügbar.",

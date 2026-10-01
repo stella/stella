@@ -1142,6 +1142,7 @@
       "viaProvider": "per {provider}"
     },
     "newChat": "Naujas pokalbis",
+    "newChatInSidePanel": "Naujas pokalbis pasiekiamas šoniniame skydelyje",
     "noPromptPresetOnly": "Pranešimo nėra, tik išankstinis nustatymas",
     "noThreads": "Pokalbių dar nėra",
     "officeCitationUnavailable": "Ši citata nebepasiekiama.",

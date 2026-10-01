@@ -1142,6 +1142,7 @@
       "viaProvider": "mediante {provider}"
     },
     "newChat": "Nuevo chat",
+    "newChatInSidePanel": "El chat nuevo está disponible en el panel lateral",
     "noPromptPresetOnly": "Sin mensaje, solo preajuste",
     "noThreads": "Aún no hay conversaciones",
     "officeCitationUnavailable": "Esta cita ya no está disponible.",
