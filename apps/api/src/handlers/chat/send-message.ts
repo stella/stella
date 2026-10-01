@@ -656,6 +656,7 @@ export class ChatSendLifecycle {
     const failureResult = await persistFailedChatTurn({
       code,
       execution: this.claimedTurn.execution,
+      indexThread: this.options.indexThread,
       recordAuditEvent: this.options.recordAuditEvent,
       retryable,
       owningAssistantMessage: this.claimedTurn.owningAssistantMessage,
@@ -678,6 +679,7 @@ export class ChatSendLifecycle {
     }
     const settlementResult = await persistStoppedChatTurn({
       execution: this.claimedTurn.execution,
+      indexThread: this.options.indexThread,
       owningAssistantMessage: this.claimedTurn.owningAssistantMessage,
       recordAuditEvent: this.options.recordAuditEvent,
       safeDb: this.options.safeDb,
@@ -700,6 +702,7 @@ export class ChatSendLifecycle {
     }
     const settlementResult = await persistInterruptedChatTurn({
       execution: this.claimedTurn.execution,
+      indexThread: this.options.indexThread,
       owningAssistantMessage: this.claimedTurn.owningAssistantMessage,
       recordAuditEvent: this.options.recordAuditEvent,
       safeDb: this.options.safeDb,
@@ -722,6 +725,7 @@ export class ChatSendLifecycle {
         const failureResult = await persistFailedChatTurn({
           code: "internal",
           execution: this.claimedTurn.execution,
+          indexThread: this.options.indexThread,
           owningAssistantMessage: this.claimedTurn.owningAssistantMessage,
           recordAuditEvent: this.options.recordAuditEvent,
           retryable: true,
@@ -2612,6 +2616,7 @@ export const createSendMessage = (
           ) {
             const title = async () =>
               await generateThreadTitle({
+                indexThread: dependencies.indexThread,
                 initialTitle: initialThreadTitle,
                 messages: [parsedMessage.message, resolvedResponseMessage],
                 organizationId: session.activeOrganizationId,

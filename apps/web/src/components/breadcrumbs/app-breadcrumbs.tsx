@@ -216,8 +216,8 @@ export const AppBreadcrumbs = () => {
   })();
 
   return (
-    <Breadcrumb className="min-w-0">
-      <BreadcrumbList className="flex-nowrap overflow-hidden">
+    <Breadcrumb className="min-w-0 has-[input]:flex-1">
+      <BreadcrumbList className="flex-nowrap overflow-hidden has-[input]:w-full">
         {breadcrumbs.map(([key, breadcrumb], index) => (
           <Fragment key={key}>
             {index !== 0 && <BreadcrumbSeparator className="shrink-0" />}

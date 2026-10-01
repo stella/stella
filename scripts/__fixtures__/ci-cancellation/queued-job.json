@@ -1,0 +1,7 @@
+{
+  "name": "e2e-production-shard",
+  "conclusion": "cancelled",
+  "check_run_url": "https://api.github.com/repos/stella/stella/check-runs/110501967462",
+  "steps": [],
+  "annotations": [[]]
+}
