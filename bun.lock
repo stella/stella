@@ -858,7 +858,7 @@
     },
     "packages/mcp-kit": {
       "name": "@stll/mcp-kit",
-      "version": "0.1.0",
+      "version": "0.0.0",
       "dependencies": {
         "@stll/agent-input": "workspace:^",
         "better-result": "catalog:",
