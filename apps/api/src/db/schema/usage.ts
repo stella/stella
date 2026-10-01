@@ -581,6 +581,8 @@ export const usageEvents = p.pgTable(
      * by the per-user lane counters instead.
      */
     lane: p.text({ enum: USAGE_EVENT_LANES }).notNull().default("pool"),
+    actionKind: p.text("action_kind"),
+    logicalPhaseId: p.text("logical_phase_id"),
     traceId: p.text("trace_id"),
     idempotencyKey: p.text("idempotency_key"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
@@ -599,6 +601,18 @@ export const usageEvents = p.pgTable(
     // BYOK rows land with units_consumed = 0: the work is attributed
     // to the org's configured provider account. Platform-backed rows
     // are floored at 1 in app code.
+    p
+      .index("usage_events_org_cost_period_idx")
+      .on(
+        table.organizationId,
+        table.createdAt,
+        table.actionKind,
+        table.logicalPhaseId,
+      ),
+    p.check(
+      "usage_events_action_identity_pair",
+      sql`(action_kind IS NULL) = (logical_phase_id IS NULL)`,
+    ),
     p.check("usage_events_units_nonneg", sql`units_consumed >= 0`),
     p.check("usage_events_period_order", sql`period_end > period_start`),
     p.check(

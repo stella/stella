@@ -198,3 +198,19 @@ export const emitChatRunLogMetric = (metric: ChatRunLogMetric): void => {
     ...payload.values,
   });
 };
+
+export const emitActionCostDropMetric = (dropped: number): void => {
+  writeMetricLine({
+    _aws: {
+      Timestamp: Temporal.Now.instant().epochMilliseconds,
+      CloudWatchMetrics: [
+        {
+          Namespace: METRIC_NAMESPACE,
+          Dimensions: [[]],
+          Metrics: [{ Name: "ActionCostObservationsDropped", Unit: "Count" }],
+        },
+      ],
+    },
+    ActionCostObservationsDropped: dropped,
+  });
+};
