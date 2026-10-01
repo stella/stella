@@ -19,6 +19,7 @@ import { AI_MEMBER_ASSIGNMENT_REQUIRED_ERROR_CODE } from "@/api/lib/ai-config-re
 import { toSafeId } from "@/api/lib/branded-types";
 import { toDataUrl } from "@/api/lib/data-url";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { MANAGED_PROVIDER_UNAVAILABLE_CODE } from "@/api/lib/provider-data-policy";
 import { StellaOpenRouterTextAdapter } from "@/api/lib/stella-openrouter-text-adapter";
 import type { TanStackModelOptions } from "@/api/lib/tanstack-ai-models";
 import { installScriptedProvider } from "@/api/tests/helpers/chat-scripted-provider";
@@ -565,27 +566,37 @@ describe("TanStack text model resolution", () => {
     expect(handlerError.message).toContain("document input");
   });
 
-  test("rejects unsupported instance providers in role availability preflight", () => {
-    const originalProvider = env.AI_PROVIDER;
-    try {
-      env.AI_PROVIDER = "mistral";
+  test.each(["customer", "public_corpus"] as const)(
+    "rejects unavailable instance requests for %s in role availability preflight",
+    (dataClass) => {
+      const originalProvider = env.AI_PROVIDER;
+      try {
+        env.AI_PROVIDER = "mistral";
 
-      const unavailable = requireTanStackAIAvailableForRole({
-        configStatus: ORG_AI_CONFIG_STATUS.ok,
-        dataClass: "customer",
-        orgConfig: null,
-        role: "pdf",
-      });
+        const unavailable = requireTanStackAIAvailableForRole({
+          configStatus: ORG_AI_CONFIG_STATUS.ok,
+          dataClass,
+          orgConfig: null,
+          role: "pdf",
+        });
 
-      expect(unavailable.isErr()).toBe(true);
-      if (unavailable.isErr()) {
-        expect(unavailable.error.status).toBe(400);
-        expect(unavailable.error.message).toContain("PDF flows");
+        expect(unavailable.isErr()).toBe(true);
+        if (unavailable.isErr()) {
+          if (dataClass === "customer") {
+            expect(unavailable.error.status).toBe(503);
+            expect(unavailable.error.code).toBe(
+              MANAGED_PROVIDER_UNAVAILABLE_CODE,
+            );
+          } else {
+            expect(unavailable.error.status).toBe(400);
+            expect(unavailable.error.message).toContain("PDF flows");
+          }
+        }
+      } finally {
+        env.AI_PROVIDER = originalProvider;
       }
-    } finally {
-      env.AI_PROVIDER = originalProvider;
-    }
-  });
+    },
+  );
 
   test("keeps streaming structured output for a Bedrock model with streaming tool use", () => {
     const orgConfig = orgConfigForProvider("bedrock");

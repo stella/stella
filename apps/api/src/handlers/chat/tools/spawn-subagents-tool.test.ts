@@ -73,6 +73,7 @@ describe("resolveValidatedSubagentModelId", () => {
     const modelId = resolveValidatedSubagentModelId({
       subModel: undefined,
       modelInfo: {
+        availability: "available",
         keySource: "instance",
         provider: "anthropic",
         modelId: "claude-sonnet-4-6",
@@ -86,6 +87,7 @@ describe("resolveValidatedSubagentModelId", () => {
     const modelId = resolveValidatedSubagentModelId({
       subModel: "openrouter::google/gemini-3.5-flash",
       modelInfo: {
+        availability: "available",
         keySource: "byok",
         provider: "anthropic",
         modelId: "claude-haiku-4-5-20251001",
@@ -99,6 +101,7 @@ describe("resolveValidatedSubagentModelId", () => {
     const modelId = resolveValidatedSubagentModelId({
       subModel: "claude-sonnet-4-6",
       modelInfo: {
+        availability: "available",
         keySource: "byok",
         provider: "anthropic",
         modelId: "claude-haiku-4-5-20251001",
@@ -113,6 +116,7 @@ describe("resolveValidatedSubagentModelId", () => {
       // A real model id, but from a different provider's catalog.
       subModel: "gpt-5.4-nano",
       modelInfo: {
+        availability: "available",
         keySource: "byok",
         provider: "anthropic",
         modelId: "claude-haiku-4-5-20251001",
@@ -126,6 +130,7 @@ describe("resolveValidatedSubagentModelId", () => {
     const modelId = resolveValidatedSubagentModelId({
       subModel: "claude-sonnet-4-6",
       modelInfo: {
+        availability: "available",
         keySource: "instance",
         provider: "anthropic",
         modelId: "claude-sonnet-4-6",
@@ -139,6 +144,7 @@ describe("resolveValidatedSubagentModelId", () => {
     const modelId = resolveValidatedSubagentModelId({
       subModel: "claude-opus-4-8",
       modelInfo: {
+        availability: "available",
         keySource: "instance",
         provider: "anthropic",
         modelId: "claude-sonnet-4-6",

@@ -76,6 +76,7 @@ const ORIGINAL_REQUESTS = {
     body: {
       contents: [{ parts: [{ text: REQUEST_TEXT }], role: "user" }],
       generationConfig: { maxOutputTokens: 64 },
+      tools: [],
     },
   }),
   bedrock: (model: string) => ({

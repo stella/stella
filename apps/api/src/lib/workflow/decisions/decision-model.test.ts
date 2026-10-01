@@ -46,15 +46,18 @@ const organization = {
 
 const createRequestSpy = () =>
   spyOn(globalThis, "fetch").mockImplementation(
-    async () =>
-      new Response(
-        JSON.stringify({
-          model: "jev-test",
-          answers: { eligible: { type: "noul", noul: 0.99 } },
-          usage: { input_tokens: 10, output_tokens: 1 },
-        }),
-        { headers: { "content-type": "application/json" } },
-      ),
+    Object.assign(
+      async () =>
+        new Response(
+          JSON.stringify({
+            model: "jev-test",
+            answers: { eligible: { type: "noul", noul: 0.99 } },
+            usage: { input_tokens: 10, output_tokens: 1 },
+          }),
+          { headers: { "content-type": "application/json" } },
+        ),
+      { preconnect: globalThis.fetch.preconnect },
+    ),
   );
 
 let fetch: ReturnType<typeof createRequestSpy>;
