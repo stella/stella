@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import Elysia from "elysia";
 
@@ -28,7 +29,9 @@ describe("response cookies prevent public caching", () => {
           if (source === "pending") {
             set.headers["set-cookie"] = "session=renewed; HttpOnly; Path=/";
           } else if (source === "cookie") {
-            cookie["session"].value = "renewed";
+            const sessionCookie =
+              cookie["session"] ?? panic("Session cookie fixture is missing");
+            sessionCookie.value = "renewed";
           } else if (responseValue instanceof Response) {
             responseValue.headers.append(
               "set-cookie",

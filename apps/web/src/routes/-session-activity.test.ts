@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { ClientUnknownError } from "@/lib/errors/client";
 import {
   createSessionActivity,
   isSessionActivityCancelled,
@@ -8,6 +9,29 @@ import {
 } from "@/routes/-session-activity";
 
 describe("session activity observation", () => {
+  test("turns unexpected non-Error rejections into a tagged client error", async () => {
+    let now = 0;
+    const unexpected = Promise.withResolvers<undefined>();
+    const activity = createSessionActivity({
+      page: { visibilityState: "visible", hasFocus: () => true },
+      now: () => now,
+      observe: async () => await unexpected.promise,
+    });
+    now = SESSION_ACTIVITY_INTERVAL_MS;
+    const pending = Result.tryPromise({
+      try: async () => await activity.tick(),
+      catch: (cause) => cause,
+    });
+    unexpected.reject("unexpected rejection");
+    const outcome = await pending;
+    expect(Result.isError(outcome)).toBe(true);
+    if (Result.isError(outcome)) {
+      expect(outcome.error).toBeInstanceOf(ClientUnknownError);
+      expect(outcome.error).toMatchObject({ message: "unexpected rejection" });
+    }
+    activity.dispose();
+  });
+
   test("ignores an SDK error result after disposal without classifying real errors as cancellation", () => {
     const controller = new AbortController();
     const error = { status: 500, message: "Request failed" };

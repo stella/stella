@@ -272,7 +272,15 @@ const HOST_USER_FIELDS = {
   }),
 };
 
-const HOST_SESSION_FIELDS = normalizeRuntimeFields(SESSION_LIFETIME_FIELDS);
+const HOST_SESSION_FIELDS = normalizeRuntimeFields(SESSION_LIFETIME_FIELDS, {
+  refreshMode: {
+    databaseDefault: {
+      kind: "literal",
+      value: SESSION_LIFETIME_FIELDS.refreshMode.defaultValue,
+    },
+    databaseNotNull: true,
+  },
+});
 
 const HOST_MEMBER_FIELDS = {
   lastActiveWorkspaceId: hostField("lastActiveWorkspaceId", "string", {

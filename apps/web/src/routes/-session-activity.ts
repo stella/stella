@@ -2,6 +2,8 @@ import { Result } from "better-result";
 
 import { Temporal } from "@stll/time";
 
+import { transformUnknownError } from "@/lib/errors/client";
+
 export const SESSION_ACTIVITY_INTERVAL_MS = 15 * 60 * 1000;
 
 export const isSessionActivityCancelled = (
@@ -50,7 +52,7 @@ export const createSessionActivity = ({
         Result.isError(observed) &&
         !isSessionActivityCancelled(observed.error, controller.signal)
       ) {
-        await Promise.reject(observed.error);
+        await Promise.reject(transformUnknownError(observed.error));
       }
     },
     dispose: () => controller.abort(),
