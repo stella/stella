@@ -34,35 +34,15 @@ globalThis.fetch = Object.assign(
   { preconnect: () => undefined },
 );
 
-const React = await import("react");
-const { QueryClient, QueryClientProvider, useSuspenseQuery } =
-  await import("@tanstack/react-query");
 const testing = await import("@testing-library/react");
-const { IntlProvider } = await import("use-intl");
-const { ChatApprovalContext } =
-  await import("@/components/chat/chat-approval-context");
-const { ChatMattersContext } =
-  await import("@/components/chat/chat-matters-context");
 const { getToolApprovalGrant, isApprovalToolName } =
   await import("@/components/chat/chat-ui-tools");
-const { ChatThreadMessages } =
-  await import("@/components/chat/chat-thread-messages");
 const { CHAT_USER_ACTIONS } =
   await import("@/components/chat/chat-user-actions");
-const { useChatSession } =
-  await import("@/features/chat/hooks/use-chat-session");
-const { useChatThreadRuntime } =
-  await import("@/features/chat/hooks/use-chat-thread-runtime");
-const { __resetChatRequestStateForTests, chatThreadOptions } =
+const { isThreadPageSuspended, openChatThreadDomPage } =
+  await import("@/components/chat/chat-thread-dom-page");
+const { __resetChatRequestStateForTests } =
   await import("@/features/chat/queries");
-const { ensureRouteQueryData } = await import("@/lib/react-query");
-const { AuthenticatedUserProvider } =
-  await import("@/lib/authenticated-user-context");
-const { ChatThreadTestRouter } = await import("@/lib/chat-thread-test-router");
-const { toChatThreadId } = await import("@/lib/chat-thread-ref");
-const { mcpConnectorsOptions } = await import("@/lib/knowledge/queries");
-const { workspacesNavigationOptions } =
-  await import("@/lib/workspaces/queries");
 const { toSafeId } = await import("@/lib/safe-id");
 const { default: messages } = await import("@/i18n/langs/en.json");
 
@@ -193,16 +173,7 @@ const isJsonObject = (value: unknown): value is Record<string, unknown> =>
 
 const ORGANIZATION_ID = "00000000-0000-7000-8000-00000000ffff";
 const API_ORIGIN = "http://localhost:3001";
-/** What the page shows while a part of it is still loading. */
-const SUSPENDED = "The page is loading";
-/**
- * Whether a part of the page is still loading. Checked as a boolean because a
- * `waitFor` callback fails on every poll until the page settles, and a failed
- * matcher formats what it received: for a DOM node that is its whole
- * document, which costs about a second per poll.
- */
-const isSuspended = (container: HTMLElement) =>
-  testing.within(container).queryByText(SUSPENDED) !== null;
+const isSuspended = isThreadPageSuspended;
 
 type Posted = { body: Record<string, unknown>; exchange: RecordedExchange };
 
@@ -395,157 +366,15 @@ const createRecordedServer = (recording: RecordedConversation) => {
 
 // --- The page ------------------------------------------------------------
 
-type Session = ReturnType<typeof useChatSession>;
-
-const CHAT_THREAD_CONTEXT = { allowMissingThread: true } as const;
-
-const threadRefOf = (threadId: string) =>
-  ({ scope: "global", threadId: toChatThreadId(threadId) }) as const;
-
-/** The thread query the page suspends on, keyed as `ChatThreadPage` keys it. */
-const threadQueryOptions = (organizationId: string, threadId: string) =>
-  chatThreadOptions({
-    activeOrganizationId: organizationId,
-    context: CHAT_THREAD_CONTEXT,
-    key: threadRefOf(threadId),
-  });
-
-/** The thread page's chat, wired as `ChatThreadPage` wires it. */
-const RecordedThreadPage = ({
-  onSession,
-  organizationId,
-  threadId,
-}: {
-  onSession: (session: Session) => void;
-  organizationId: string;
-  threadId: string;
-}) => {
-  const threadRef = threadRefOf(threadId);
-  const { data } = useSuspenseQuery(
-    threadQueryOptions(organizationId, threadId),
-  );
-  const chat = useChatThreadRuntime({
-    activeOrganizationId: organizationId,
-    context: CHAT_THREAD_CONTEXT,
-    data,
-    key: threadRef,
-  });
-  const session = useChatSession({
-    chat,
-    conversationId: threadId,
-    initialOlderCursor: data.olderCursor,
-    threadRef,
-  });
-  onSession(session);
-  return (
-    <ChatMattersContext
-      value={{
-        createDocumentMatters: session.createDocumentMatters,
-        isLoadingCreateDocumentMatters: session.isLoadingCreateDocumentMatters,
-      }}
-    >
-      <ChatApprovalContext
-        value={{
-          activeOrganizationId: organizationId,
-          alwaysApprovedTools: session.alwaysApprovedTools,
-          conversationApprovedTools: session.conversationApprovedTools,
-          handleAllowInConversation: session.handleAllowInConversation,
-          handleAlwaysAllow: session.handleAlwaysAllow,
-          handleApprove: session.handleApprove,
-          handleDeny: session.handleDeny,
-        }}
-      >
-        <ChatThreadMessages
-          approvalPendingMessageId={session.approvalPendingMessageId}
-          error={session.error}
-          hasOlderMessages={session.olderCursor !== null}
-          isGenerating={session.isGenerating}
-          isLoadingOlder={session.isLoadingOlder}
-          loadOlderError={session.loadOlderError}
-          messages={session.messages}
-          onAskUserEditAndRerun={session.handleAskUserEditAndRerun}
-          onAskUserSubmit={session.handleAskUserSubmit}
-          onCreateDocumentResolve={session.handleCreateDocumentResolve}
-          onLoadOlder={session.loadOlder}
-          onOpenCreateDocumentDraft={session.handleOpenCreateDocumentDraft}
-          onOpenCreatedDocument={session.handleOpenCreatedDocument}
-          onRemoveQueuedMessage={session.removeQueuedMessage}
-          onResend={session.resendLatestMessage}
-          queuedMessages={session.queuedMessages}
-          showThinkingIndicator
-          streamdownComponents={session.streamdownComponents}
-          threadRef={threadRef}
-        />
-      </ChatApprovalContext>
-    </ChatMattersContext>
-  );
-};
-
 /** A tab on the recorded thread, loaded the way the page loads it. */
 const openPage = async (
   recording: RecordedConversation,
   { organizationId = ORGANIZATION_ID }: { organizationId?: string } = {},
-) => {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
+) =>
+  await openChatThreadDomPage({
+    organizationId,
+    threadId: recording.threadId,
   });
-  // Lists the chat reads beside the thread, answered as empty.
-  queryClient.setQueryData(mcpConnectorsOptions(organizationId).queryKey, {
-    canManageCustomConnectors: false,
-    connectors: [],
-    nativeTools: [],
-  });
-  queryClient.setQueryData(
-    workspacesNavigationOptions(organizationId).queryKey,
-    { workspaces: [] },
-  );
-  // The thread route's loader fills a cold thread query before the page
-  // mounts, so the page renders its messages on first paint instead of
-  // suspending on them.
-  await ensureRouteQueryData(
-    queryClient,
-    threadQueryOptions(organizationId, recording.threadId),
-  );
-  let session: Session | undefined;
-  const view = testing.render(
-    <ChatThreadTestRouter>
-      <QueryClientProvider client={queryClient}>
-        <IntlProvider locale="en" messages={messages} timeZone="UTC">
-          <AuthenticatedUserProvider
-            user={{
-              activeOrganizationId: organizationId,
-              email: "user@example.com",
-              id: "00000000-0000-7000-8000-00000000fffe",
-              image: null,
-              name: "User",
-              preferredName: null,
-              timezoneId: "UTC",
-              wordEditShortcut: null,
-            }}
-          >
-            <React.Suspense fallback={<p>{SUSPENDED}</p>}>
-              <RecordedThreadPage
-                onSession={(next) => {
-                  session = next;
-                }}
-                organizationId={organizationId}
-                threadId={recording.threadId}
-              />
-            </React.Suspense>
-          </AuthenticatedUserProvider>
-        </IntlProvider>
-      </QueryClientProvider>
-    </ChatThreadTestRouter>,
-  );
-  await testing.waitFor(() => {
-    expect(session).toBeDefined();
-    expect(isSuspended(view.container)).toBe(false);
-  });
-  return {
-    session: () => session ?? expect.unreachable("The page is not rendered"),
-    view,
-  };
-};
 
 afterEach(() => {
   testing.cleanup();

@@ -12,6 +12,10 @@ import { panic } from "better-result";
 import { Temporal } from "@stll/time";
 
 import { isMockAI } from "@/api/consts";
+import {
+  mockAiStreamKindChunks,
+  mockAiStreamKindOf,
+} from "@/api/dev/mock-ai-stream-kinds";
 import { env } from "@/api/env";
 import { ASK_USER_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
 import { logger } from "@/api/lib/observability/logger";
@@ -384,6 +388,22 @@ const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
       model,
       timestamp,
     } satisfies AdapterYieldChunk;
+
+    // A marker of `MOCK_AI_STREAM_KIND_MARKERS`: stream that kind of chunk as
+    // tiny deltas (`mock-ai-stream-kinds.ts`).
+    const streamKind = mockAiStreamKindOf(latestUserText);
+    if (streamKind !== undefined) {
+      yield* mockAiStreamKindChunks(streamKind, {
+        messageId,
+        messages,
+        model,
+        runId: resolvedRunId,
+        threadId: resolvedThreadId,
+        timestamp,
+        usage: mockUsage,
+      });
+      return;
+    }
 
     if (createDocumentPhase === "call") {
       yield* createDocumentCallChunks({
