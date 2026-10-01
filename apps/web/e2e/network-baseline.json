@@ -14,6 +14,7 @@
       "GET /v1/organization-settings/ai-availability",
       "GET /v1/signals/count",
       "GET /v1/skills",
+      "GET /v1/workspaces/:id/members",
       "GET /v1/workspaces/navigation"
     ],
     "requestCounts": {
@@ -29,6 +30,7 @@
       "GET /v1/organization-settings/ai-availability": 1,
       "GET /v1/signals/count": 1,
       "GET /v1/skills": 1,
+      "GET /v1/workspaces/:id/members": 1,
       "GET /v1/workspaces/navigation": 1
     },
     "dbQueries": {
@@ -44,6 +46,7 @@
       "GET /v1/organization-settings/ai-availability": 4,
       "GET /v1/signals/count": 4,
       "GET /v1/skills": 6,
+      "GET /v1/workspaces/:id/members": 4,
       "GET /v1/workspaces/navigation": 6
     },
     "responseSizes": {
@@ -58,6 +61,7 @@
       "GET /v1/organization-settings/ai-availability": 1024,
       "GET /v1/signals/count": 1024,
       "GET /v1/skills": 4096,
+      "GET /v1/workspaces/:id/members": 1024,
       "GET /v1/workspaces/navigation": 20480
     }
   },
