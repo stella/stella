@@ -133,7 +133,9 @@ const writeOutputs = (repo: string) => {
   const rendered = render(repo);
   for (const [index, output] of outputs.entries()) {
     const bytes = rendered.at(index);
-    if (bytes === undefined) {panic("Missing rendered Markdown output");}
+    if (bytes === undefined) {
+      panic("Missing rendered Markdown output");
+    }
     mkdirSync(path.dirname(path.join(repo, output)), { recursive: true });
     writeFileSync(path.join(repo, output), bytes);
   }
@@ -176,8 +178,9 @@ const mergeScenario = ({ scratch, padding }: MergeScenarioOptions) => {
     );
     // The negative control changes only formatter ownership of these outputs.
     // Both patterns must exist, so this mutation cannot silently become a no-op.
-    for (const output of outputs)
-      {expect(config.ignorePatterns).toContain(output);}
+    for (const output of outputs) {
+      expect(config.ignorePatterns).toContain(output);
+    }
     config.ignorePatterns = config.ignorePatterns.filter(
       (pattern) => !outputs.some((output) => output === pattern),
     );
@@ -185,8 +188,9 @@ const mergeScenario = ({ scratch, padding }: MergeScenarioOptions) => {
   }
   writeFileSync(path.join(seed, ".gitignore"), "node_modules\n");
   mkdirSync(path.join(seed, "inputs"));
-  for (const name of baseNames)
-    {writeFileSync(path.join(seed, "inputs", `${name}.txt`), name);}
+  for (const name of baseNames) {
+    writeFileSync(path.join(seed, "inputs", `${name}.txt`), name);
+  }
   checkedGit(seed, ["add", "."]);
   checkedGit(seed, ["-c", "commit.gpgsign=false", "commit", "-m", "fixture"]);
   // Clone only this production-shaped fixture, never the active worktree.
@@ -211,7 +215,9 @@ const mergeScenario = ({ scratch, padding }: MergeScenarioOptions) => {
     writeOutputs(repo);
     for (const [index, output] of outputs.entries()) {
       const before = baseBytes.at(index);
-      if (before === undefined) {panic("Missing base Markdown output");}
+      if (before === undefined) {
+        panic("Missing base Markdown output");
+      }
       const after = readFileSync(path.join(repo, output), "utf-8");
       expect(after).not.toBe(before);
       expect(after).toContain(name);
@@ -220,15 +226,18 @@ const mergeScenario = ({ scratch, padding }: MergeScenarioOptions) => {
           "`stella merge-probe alpha`",
           "`merge-probe.alpha.list`",
         ].at(index);
-        if (marker === undefined) {panic("Missing unchanged-row marker");}
+        if (marker === undefined) {
+          panic("Missing unchanged-row marker");
+        }
         const beforeRow = before
           .split("\n")
           .find((line) => line.startsWith("|") && line.includes(marker));
         const afterRow = after
           .split("\n")
           .find((line) => line.startsWith("|") && line.includes(marker));
-        if (beforeRow === undefined || afterRow === undefined)
-          {panic("Fixture did not reach unchanged table row");}
+        if (beforeRow === undefined || afterRow === undefined) {
+          panic("Fixture did not reach unchanged table row");
+        }
         if (padding === "enabled") {
           expect(afterRow).not.toBe(beforeRow);
         } else {
@@ -262,7 +271,9 @@ const mergeScenario = ({ scratch, padding }: MergeScenarioOptions) => {
   if (padding === "enabled") {
     expect(result.exitCode).toBe(1);
     const conflicts = new TextDecoder().decode(result.stdout).split("\n");
-    for (const output of outputs) {expect(conflicts).toContain(output);}
+    for (const output of outputs) {
+      expect(conflicts).toContain(output);
+    }
     return;
   }
   expect(result.exitCode, new TextDecoder().decode(result.stderr)).toBe(0);
