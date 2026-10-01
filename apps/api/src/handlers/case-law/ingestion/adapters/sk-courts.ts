@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
 
+import type { SkCourtsSourceUrlStatus } from "@stll/api-contract/case-law-text-field";
 import { skCourtSuccessionReferences } from "@stll/api-contract/sk-court-succession";
 import { mapWithConcurrency } from "@stll/concurrency";
 import {
@@ -386,11 +387,21 @@ const fetchDetail = async (
     return null;
   }
 
-  const json: unknown = await response.json();
-  if (!isSkDetailItem(json)) {
+  const parsed = await Result.tryPromise({
+    try: async (): Promise<unknown> => await response.json(),
+    catch: (cause) => cause,
+  });
+  if (parsed.isErr()) {
+    logger.warn("case_law.ingestion.detail_parse_failed", {
+      adapterKey: ADAPTER_KEYS.SK_COURTS,
+      guid,
+    });
     return null;
   }
-  return json;
+  if (!isSkDetailItem(parsed.value)) {
+    return null;
+  }
+  return parsed.value;
 };
 
 /**
@@ -498,7 +509,7 @@ type SkCourtsMetadata = Record<string, unknown> & {
     | { type: "invalid-publisher-date"; value: string }
     | undefined;
   statedSourceUrl: string | undefined;
-  sourceUrlStatus: "published" | "not-published-by-source" | "rejected-url";
+  sourceUrlStatus: SkCourtsSourceUrlStatus;
 };
 
 type SkCourtsDecisionParts = {
@@ -609,6 +620,9 @@ export const assembleSkCourtsDecision = ({
   const statedSourceUrl = toOptionalValue(detail?.dokument?.url);
   const sourceUrl = sanitizeUrl(statedSourceUrl);
   const sourceUrlStatus = (() => {
+    if (detail === null) {
+      return "detail-unavailable";
+    }
     if (statedSourceUrl === undefined) {
       return "not-published-by-source";
     }

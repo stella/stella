@@ -21,6 +21,7 @@ import { describe, expect, test } from "bun:test";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
   decodeSourceRawEnvelope,
+  encodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type { StoredRawReparseOutcome } from "@/api/handlers/case-law/ingestion/adapter";
@@ -381,12 +382,10 @@ describe("derived general-court metadata", () => {
     sud: { nazov: "Okresný súd" },
   };
 
-  test("absent documents have no public API link and absent text is not published", () => {
+  test("unavailable detail has no public link or publisher URL absence assertion", () => {
     const decision = assembleSkCourtsDecision({ item, detail: null });
     expect(decision?.sourceUrl).toBeUndefined();
-    expect(decision?.metadata["sourceUrlStatus"]).toBe(
-      "not-published-by-source",
-    );
+    expect(decision?.metadata["sourceUrlStatus"]).toBe("detail-unavailable");
     expect(decision?.textFields.headnote).toEqual({
       type: "absent",
       reason: "not_published",
@@ -395,6 +394,27 @@ describe("derived general-court metadata", () => {
       type: "absent",
       reason: "not_published",
     });
+  });
+
+  test("stored listings without detail replay with unknown publisher URL availability", () => {
+    const outcome = reparse(
+      {
+        sourceRaw: encodeSourceRawEnvelope({
+          listing: JSON.stringify(item),
+        }),
+        sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+      },
+      item.spisovaZnacka,
+    );
+    expect(outcome.type).toBe("parsed");
+    if (outcome.type !== "parsed") {
+      panic("the stored listing must be reparsable without its detail");
+    }
+    expect(outcome.result.sourceUrl).toBeUndefined();
+    expect(outcome.result.metadata["sourceUrlStatus"]).toBe(
+      "detail-unavailable",
+    );
+    expect(outcome.result.metadata["statedSourceUrl"]).toBeUndefined();
   });
 
   test("published documents remain the public link, independently of a listing guid", () => {
@@ -433,4 +453,12 @@ test("rejected source links preserve the publisher-stated URL", () => {
     expect(decision?.metadata["sourceUrlStatus"]).toBe("rejected-url");
     expect(decision?.metadata["statedSourceUrl"]).toBe(url);
   }
+});
+
+test("a successful detail without a URL states publisher absence", () => {
+  const decision = assembleSkCourtsDecision({
+    item: { spisovaZnacka: "1C/1/2024", sud: { nazov: "Okresný súd" } },
+    detail: {},
+  });
+  expect(decision?.metadata["sourceUrlStatus"]).toBe("not-published-by-source");
 });
