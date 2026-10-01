@@ -1,5 +1,13 @@
 import { describe, expect, it } from "bun:test";
-import { readFileSync, readdirSync } from "node:fs";
+import {
+  readFileSync,
+  readdirSync,
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  rmSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { HIGH_VOLUME_TABLES } from "../apps/api/src/db/high-volume-tables";
@@ -245,13 +253,320 @@ describe("high-volume index-build migration rule", () => {
         ),
       ),
     ).toEqual([]);
+    expect(check(source("DO $$ BEGIN EXECUTE 'SELECT 1'; END $$;"))).toEqual(
+      [],
+    );
+  });
+
+  it.each([
+    ["literal SQL", "EXECUTE 'CREATE INDEX idx ON case_law_decisions (id)'"],
+    [
+      "escape literal SQL",
+      "EXECUTE E'CREATE INDEX idx ON case_law_decisions (id)'",
+    ],
+    [
+      "dollar literal SQL",
+      "EXECUTE $sql$CREATE INDEX idx ON case_law_decisions (id)$sql$",
+    ],
+    [
+      "format identifiers",
+      "EXECUTE format('CREATE INDEX %I ON %I (id)', 'idx', 'case_law_decisions')",
+    ],
+    [
+      "format variable",
+      "EXECUTE format('CREATE INDEX idx ON %I (id)', target)",
+    ],
+    [
+      "concatenated variable",
+      "EXECUTE 'CREATE INDEX idx ON ' || target || ' (id)'",
+    ],
+    [
+      "concatenated constants",
+      "EXECUTE 'CREATE INDEX idx ON ' || 'case_law_decisions' || ' (id)'",
+    ],
+    ["REINDEX variable", "EXECUTE 'REINDEX INDEX ' || target"],
+    [
+      "REINDEX table format variable",
+      "EXECUTE format('REINDEX TABLE %I', target)",
+    ],
+    [
+      "format followed by concatenation",
+      "EXECUTE format('CREATE INDEX %I ON documents (id)', index_name) || format('; CREATE INDEX idx ON %I (id)', target)",
+    ],
+  ])("flags dynamic %s in executable bodies", (_name, sql) => {
+    expect(check(source(`DO $$ BEGIN ${sql}; END $$;`))).toHaveLength(1);
     expect(
       check(
         source(
-          "DO $$ BEGIN EXECUTE 'CREATE INDEX idx ON case_law_decisions (id)'; END $$;",
+          `CREATE FUNCTION later() RETURNS void LANGUAGE plpgsql AS $$ BEGIN ${sql}; END $$;`,
         ),
       ),
     ).toEqual([]);
+  });
+
+  it.each([
+    "EXECUTE 'CREATE INDEX idx ON documents (id)'",
+    "EXECUTE format('CREATE INDEX %I ON %I (id)', 'idx', 'documents')",
+    "EXECUTE 'CREATE INDEX idx ON ' || 'documents' || ' (id)'",
+    "EXECUTE 'SELECT 1'",
+    "EXECUTE format('CREATE INDEX %I ON documents (id)', index_name)",
+  ])("allows resolved small-table or non-index dynamic SQL: %s", (sql) => {
+    expect(check(source(`DO $$ BEGIN ${sql}; END $$;`))).toEqual([]);
+  });
+
+  it.each(["'", "E'", "$$", "$body$"])(
+    "scans executable DO string form %s",
+    (quote) => {
+      const close = quote === "E'" ? "'" : quote;
+      expect(
+        check(
+          source(
+            `DO ${quote}BEGIN CREATE INDEX idx ON case_law_decisions (id); END${close};`,
+          ),
+        ),
+      ).toHaveLength(1);
+      expect(
+        check(
+          source(
+            `DO ${quote}BEGIN CREATE INDEX idx ON documents (id); END${close};`,
+          ),
+        ),
+      ).toEqual([]);
+    },
+  );
+
+  it("decodes numeric and character escapes in executable E strings", () => {
+    expect(
+      check(
+        source(
+          String.raw`DO E'BEGIN \x43REATE INDEX idx ON case_law_decisions (id); END';`,
+        ),
+      ),
+    ).toHaveLength(1);
+    expect(
+      check(
+        source(
+          String.raw`DO E'BEGIN \103REATE INDEX idx ON case_law_decisions (id); END';`,
+        ),
+      ),
+    ).toHaveLength(1);
+    expect(
+      check(
+        source(
+          String.raw`DO E'BEGIN \u0043REATE INDEX idx ON documents (id); END';`,
+        ),
+      ),
+    ).toEqual([]);
+  });
+
+  it("fails closed for variable EXECUTE with index SQL fragments in the body", () => {
+    expect(
+      check(
+        source(
+          "DO $$ DECLARE sql text := 'CREATE INDEX idx ON case_law_decisions (id)'; BEGIN EXECUTE sql; END $$;",
+        ),
+      ),
+    ).toHaveLength(1);
+    expect(
+      check(
+        source(
+          "DO $$ DECLARE sql text := 'CREATE INDEX idx ON case_law_decisions (id)'; BEGIN EXECUTE sql USING 'value'; END $$;",
+        ),
+      ),
+    ).toHaveLength(1);
+    expect(
+      check(
+        source(
+          "DO $$ DECLARE sql text := 'SELECT 1'; BEGIN EXECUTE sql; END $$;",
+        ),
+      ),
+    ).toEqual([]);
+  });
+
+  it("retains table identities through rename chains and vacated fresh names", () => {
+    expect(
+      check(
+        source(
+          "ALTER TABLE case_law_decisions RENAME TO archive; ALTER TABLE archive RENAME TO archive_again; CREATE INDEX idx ON archive_again (id);",
+        ),
+      ),
+    ).toHaveLength(1);
+    expect(
+      check(
+        source(
+          "CREATE TABLE case_law_decisions (id int); ALTER TABLE case_law_decisions RENAME TO fresh; ALTER TABLE case_law_citations RENAME TO case_law_decisions; CREATE INDEX idx ON case_law_decisions (id);",
+        ),
+      ),
+    ).toHaveLength(1);
+    expect(
+      check(
+        source(
+          "CREATE TABLE case_law_decisions (id int); ALTER TABLE case_law_decisions RENAME TO fresh; CREATE INDEX idx ON fresh (id);",
+        ),
+      ),
+    ).toEqual([]);
+    expect(
+      check(
+        source(
+          "ALTER TABLE documents RENAME TO archive; CREATE INDEX idx ON archive (id);",
+        ),
+      ),
+    ).toEqual([]);
+  });
+
+  it("refuses cross-schema ambiguity and resolves qualified index names exactly", () => {
+    const history = source(
+      "CREATE INDEX idx ON documents (id); CREATE INDEX idx ON other.case_law_decisions (id);",
+      "001.sql",
+    );
+    expect(
+      check(
+        history,
+        source(
+          "SET search_path TO other, public; REINDEX INDEX idx;",
+          "002.sql",
+        ),
+      ),
+    ).toHaveLength(2);
+    expect(
+      check(history, source("REINDEX INDEX public.idx;", "002.sql")),
+    ).toHaveLength(1);
+    expect(
+      check(history, source("REINDEX INDEX other.idx;", "002.sql")),
+    ).toHaveLength(2);
+  });
+
+  it.each(["documents", "case_law_decisions"])(
+    "transfers renamed index ownership for %s",
+    (table) => {
+      const findings = check(
+        source(
+          `CREATE INDEX old_idx ON ${table} (id); ALTER INDEX old_idx RENAME TO new_idx; REINDEX INDEX new_idx;`,
+        ),
+      );
+      expect(findings).toHaveLength(table === "documents" ? 0 : 2);
+      expect(
+        check(
+          source(
+            `CREATE INDEX old_idx ON ${table} (id); ALTER INDEX old_idx RENAME TO new_idx; REINDEX INDEX old_idx;`,
+          ),
+        ),
+      ).toHaveLength(table === "documents" ? 1 : 2);
+    },
+  );
+
+  it.each(["documents", "case_law_decisions"])(
+    "rebinds dropped index ownership to %s",
+    (table) => {
+      expect(
+        check(
+          source(
+            `CREATE INDEX idx ON case_law_decisions (id); DROP INDEX idx; CREATE INDEX idx ON ${table} (id); REINDEX INDEX idx;`,
+          ),
+        ),
+      ).toHaveLength(table === "documents" ? 1 : 3);
+      expect(
+        check(
+          source(
+            "CREATE INDEX idx ON documents (id); DROP INDEX idx; REINDEX INDEX idx;",
+          ),
+        ),
+      ).toHaveLength(1);
+    },
+  );
+
+  it("blocks the full index clause sequence", () => {
+    expect(
+      check(
+        source(
+          "CREATE INDEX idx ON case_law_decisions USING btree (id) INCLUDE (title) WITH (fillfactor = 90) TABLESPACE pg_default WHERE id > 0;",
+        ),
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("normalizes absolute and relative paths before CLI corpus ordering", () => {
+    const directory = mkdtempSync(path.join(tmpdir(), "stella-index-parity-"));
+    const file = "scripts/reindex.sql";
+    mkdirSync(path.join(directory, "scripts"), { recursive: true });
+    mkdirSync(path.join(directory, "apps/api/drizzle/001"), {
+      recursive: true,
+    });
+    writeFileSync(path.join(directory, "scripts/migration-baseline.txt"), "");
+    writeFileSync(
+      path.join(directory, "apps/api/drizzle/001/migration.sql"),
+      "CREATE INDEX idx ON documents (id);",
+    );
+    writeFileSync(
+      path.join(directory, file),
+      "SET lock_timeout = '1s'; SET statement_timeout = '30s'; REINDEX INDEX idx;",
+    );
+    try {
+      const relative = Bun.spawnSync(
+        ["bun", path.resolve("scripts/check-migration-safety.ts"), file],
+        { cwd: directory },
+      );
+      const absolute = Bun.spawnSync(
+        [
+          "bun",
+          path.resolve("scripts/check-migration-safety.ts"),
+          path.join(directory, file),
+        ],
+        { cwd: directory },
+      );
+      expect(relative.exitCode).toBe(0);
+      expect(absolute.exitCode).toBe(relative.exitCode);
+      expect(new TextDecoder().decode(absolute.stderr)).toBe(
+        new TextDecoder().decode(relative.stderr),
+      );
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("grandfathers only unchanged statements at the pinned path and line through the CLI", () => {
+    const file =
+      "apps/api/drizzle/20261003122700_case_law_textless_detail_recheck/migration.sql";
+    const original = readFileSync(file, "utf-8");
+    const directory = mkdtempSync(
+      path.join(tmpdir(), "stella-index-grandfather-"),
+    );
+    mkdirSync(path.join(directory, "scripts"), { recursive: true });
+    mkdirSync(path.dirname(path.join(directory, file)), { recursive: true });
+    writeFileSync(path.join(directory, "scripts/migration-baseline.txt"), "");
+    const run = (target: string, sql: string) => {
+      const fixture = path.join(directory, target);
+      mkdirSync(path.dirname(fixture), { recursive: true });
+      writeFileSync(fixture, sql);
+      return Bun.spawnSync(
+        ["bun", path.resolve("scripts/check-migration-safety.ts"), target],
+        { cwd: directory },
+      );
+    };
+    try {
+      const unchanged = run(file, original);
+      expect(new TextDecoder().decode(unchanged.stderr)).toBe("");
+      expect(unchanged.exitCode).toBe(0);
+      for (const [target, sql] of [
+        [
+          file,
+          original.replace(
+            "CREATE INDEX CONCURRENTLY",
+            "CREATE UNIQUE INDEX CONCURRENTLY",
+          ),
+        ],
+        [file, `\n${original}`],
+        ["apps/api/drizzle/20991001000000_copied/migration.sql", original],
+      ]) {
+        const result = run(target ?? "", sql ?? "");
+        expect(result.exitCode).toBe(1);
+        expect(new TextDecoder().decode(result.stderr)).toContain(
+          `[${RULE_ID}]`,
+        );
+      }
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 
   it("resolves REINDEX INDEX from an earlier CREATE INDEX definition", () => {
@@ -351,7 +666,7 @@ describe("high-volume index-build migration rule", () => {
     ] as const;
 
     for (const [_name, sources, expected] of cases) {
-      expect(check(...sources)).toEqual(expected);
+      expect(check(...sources)).toEqual([...expected]);
     }
   });
 
