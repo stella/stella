@@ -225,8 +225,12 @@ describe.skipIf(!enabled)(
           const options = {
             clock: () => now,
             readVerdict,
-            sleep: () => Promise.resolve(),
-            log: (record: unknown) => decisions.push(record),
+            sleep: async () => {
+              await Promise.resolve();
+            },
+            log: (record: unknown) => {
+              decisions.push(record);
+            },
           };
           const repair =
             kind === "date"

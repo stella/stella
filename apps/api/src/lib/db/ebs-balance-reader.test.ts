@@ -50,8 +50,8 @@ describe("the shared RDS EBS reader", () => {
         return deadline.signal;
       },
       client: {
-        send: (_command, { abortSignal }) =>
-          new Promise<GetMetricDataCommandOutput>((_resolve, reject) => {
+        send: async (_command, { abortSignal }) =>
+          await new Promise<GetMetricDataCommandOutput>((_resolve, reject) => {
             abortSignal.addEventListener(
               "abort",
               () => {

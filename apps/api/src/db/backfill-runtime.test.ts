@@ -46,7 +46,9 @@ test.each([
       config,
       clock: () => 0,
       readVerdict: async () => ({ kind: "normal", signals: [] }),
-      log: (record) => records.push(record),
+      log: (record) => {
+        records.push(record);
+      },
     });
     try {
       const result = await runtime.step(async (batch) => {

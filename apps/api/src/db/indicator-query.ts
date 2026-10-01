@@ -27,7 +27,7 @@ export const createBoundedIndicatorQuery = <Transaction>({
     panic("Indicator read timeout must be finite and positive");
   }
   let pending = Promise.resolve();
-  const query: IndicatorQuery = (statement, parameters) => {
+  const query: IndicatorQuery = async (statement, parameters) => {
     // The online repair session is reserved: its catalog reads cannot open
     // overlapping transactions even when indicators are evaluated together.
     const read = pending.then(
@@ -42,7 +42,7 @@ export const createBoundedIndicatorQuery = <Transaction>({
     );
     // Failure still rejects read; this tail only tracks when cleanup finished.
     pending = Result.tryPromise(async () => await read).then(() => undefined);
-    return read;
+    return await read;
   };
   return { query, settle: async () => await pending };
 };

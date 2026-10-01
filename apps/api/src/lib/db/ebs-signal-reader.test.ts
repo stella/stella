@@ -93,7 +93,9 @@ for (const row of rows) {
       configuration,
       clock,
       config: defaultConfig,
-      log: (event) => events.push(event),
+      log: (event) => {
+        events.push(event);
+      },
       createReader: ({
         instanceIdentifier,
         clock: readerClock,

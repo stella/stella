@@ -271,9 +271,14 @@ describe.skipIf(!enabled)(
 
     test("backend death inside the open batch rolls back and resumes twice", async () => {
       await withFixture(async ({ run, writer, schema, invariant, restart }) => {
-        await expect(run({ killHalfway: true })).rejects.toThrow(
-          /connection|closed|terminated|socket/iu,
+        const rejection: unknown = await run({ killHalfway: true }).then(
+          () => null,
+          (error: unknown) => error,
         );
+        expect(rejection).toBeInstanceOf(Error);
+        expect(
+          rejection instanceof Error ? rejection.message : String(rejection),
+        ).toMatch(/connection|closed|terminated|socket/iu);
         expect(
           (
             await writer.unsafe<StateRow[]>(
@@ -282,7 +287,7 @@ describe.skipIf(!enabled)(
           ).at(0)?.cursor,
         ).toBe(0);
         expect(
-          await writer.unsafe(
+          await writer.unsafe<{ id: number }[]>(
             `SELECT id FROM ${schema}.rows WHERE applications <> 0`,
           ),
         ).toHaveLength(0);
@@ -301,9 +306,14 @@ describe.skipIf(!enabled)(
 
     test("a failure halfway rolls back both row counters and cursor", async () => {
       await withFixture(async ({ run, client, schema, invariant }) => {
-        await expect(run({ failHalfway: true })).rejects.toThrow(
-          "division by zero",
+        const rejection: unknown = await run({ failHalfway: true }).then(
+          () => null,
+          (error: unknown) => error,
         );
+        expect(rejection).toBeInstanceOf(Error);
+        expect(
+          rejection instanceof Error ? rejection.message : String(rejection),
+        ).toContain("division by zero");
         expect(
           (
             await client.unsafe<StateRow[]>(
@@ -439,7 +449,9 @@ describe.skipIf(!enabled)(
           config,
           clock: () => now,
           readVerdict: async () => verdict,
-          log: (record) => records.push(record),
+          log: (record) => {
+            records.push(record);
+          },
           connection: {
             query: async (statement, parameters = []) =>
               await client.unsafe(statement, [...parameters]),
@@ -474,7 +486,11 @@ describe.skipIf(!enabled)(
             };
           });
         try {
-          await expect(step()).rejects.toThrow(BackfillHeldError);
+          const initialHoldRejection: unknown = await step().then(
+            () => null,
+            (error: unknown) => error,
+          );
+          expect(initialHoldRejection).toBeInstanceOf(BackfillHeldError);
           const held = (
             await client.unsafe<{ cursor: string | null; batch: BatchState }[]>(
               "SELECT cursor, batch FROM database_backfill_states",
@@ -483,7 +499,11 @@ describe.skipIf(!enabled)(
           expect(held?.cursor).toBeNull();
           expect(held?.batch.heldSince).toBe(now);
           verdict = healthy;
-          await expect(step()).rejects.toThrow(BackfillHeldError);
+          const continuedHoldRejection: unknown = await step().then(
+            () => null,
+            (error: unknown) => error,
+          );
+          expect(continuedHoldRejection).toBeInstanceOf(BackfillHeldError);
           now += config.holdBackoffMs;
           let done = false;
           for (let batch = 0; batch < 8 && !done; batch++) {

@@ -383,9 +383,16 @@ test("an interrupted repair keeps its committed batches and resumes by running a
   const dropped = connectionOver(client, {
     failOn: (statement, count) => statement === "COMMIT" && count === 2,
   });
-  await expect(DECISION_DATE_CEILING_REPAIR.repair(dropped)).rejects.toThrow(
-    "connection dropped at COMMIT",
+  const rejection: unknown = await DECISION_DATE_CEILING_REPAIR.repair(
+    dropped,
+  ).then(
+    () => null,
+    (error: unknown) => error,
   );
+  expect(rejection).toBeInstanceOf(Error);
+  expect(
+    rejection instanceof Error ? rejection.message : String(rejection),
+  ).toContain("connection dropped at COMMIT");
   expect(await corruptCount(db)).toBe(population - 50);
   expect((await constraintState(db))?.isValidated).toBe(false);
   expect(await DECISION_DATE_CEILING_REPAIR.readCompletion(dropped)).toEqual({

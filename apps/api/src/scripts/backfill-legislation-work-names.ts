@@ -69,7 +69,7 @@ let scanned = 0;
 let changedDocuments = 0;
 let insertedRows = 0;
 let deletedRows = 0;
-let reachedEnd = false;
+const progress = { reachedEnd: false };
 const runtime = apply
   ? plan.open((options) =>
       createScriptBackfillRuntime({ ...options, db: rootDb }),
@@ -120,7 +120,7 @@ try {
     },
     onBatch: ({ value: page }) => {
       if (page.cursor === null) {
-        reachedEnd = true;
+        progress.reachedEnd = true;
         return;
       }
       cursor = page.cursor;
@@ -144,7 +144,7 @@ console.info(
     `(${insertedRows.toLocaleString()} names ${apply ? "written" : "to write"}, ` +
     `${deletedRows.toLocaleString()} ${apply ? "removed" : "to remove"}).`,
 );
-if (!reachedEnd && cursor !== null) {
+if (!progress.reachedEnd && cursor !== null) {
   console.info(
     `Stopped at --limit ${String(limit)}; resume with --after ${cursor}.`,
   );

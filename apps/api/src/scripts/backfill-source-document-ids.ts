@@ -73,8 +73,8 @@ const fillFrom = async (
   try {
     const pass = await runBackfillPass({
       sleep: Bun.sleep,
-      step: () =>
-        runtime.step(async ({ tx, size, cursor }) => {
+      step: async () =>
+        await runtime.step(async ({ tx, size, cursor }) => {
           const result = await tx.execute(sql`
           WITH batch AS (
             SELECT d.id

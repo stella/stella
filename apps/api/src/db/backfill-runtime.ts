@@ -57,7 +57,7 @@ type DatabaseRuntimeOptions<BatchTransaction> = RuntimeOptions & {
   transactionQuery: (tx: BatchTransaction) => Query;
   slot: {
     tryAcquire: (tx: NoInfer<BatchTransaction>) => Promise<boolean>;
-    release: () => Promise<void>;
+    release: () => void | Promise<void>;
   };
   close: () => Promise<void>;
 };
@@ -274,7 +274,7 @@ const createRuntime = <BatchTransaction>({
         };
       },
       needsWork: () => false,
-      persistItems: () => Promise.resolve(),
+      persistItems: () => undefined,
       isStatementTimeout: (cause) => isPgError(cause, PG_ERROR.QUERY_CANCELED),
     });
     if (result.status === "held" || result.status === "retry") {
@@ -330,7 +330,7 @@ export const createScriptBackfillRuntime = ({
             return { acquired: row["acquired"] };
           }),
       }),
-    release: () => Promise.resolve(),
+    release: () => undefined,
   };
   return createRuntime({
     ...options,

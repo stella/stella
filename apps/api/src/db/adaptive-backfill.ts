@@ -35,11 +35,14 @@ type AdaptiveBackfillOptions<Transaction, Item, Cursor> = {
     size: number,
   ) => Promise<BackfillPage<Item, Cursor>>;
   needsWork: (item: Item) => boolean;
-  persistItems: (tx: Transaction, items: readonly Item[]) => Promise<void>;
+  persistItems: (
+    tx: Transaction,
+    items: readonly Item[],
+  ) => void | Promise<void>;
   readVerdict: () => Promise<Verdict>;
   slot: {
     tryAcquire: (tx: Transaction) => Promise<boolean>;
-    release: () => Promise<void>;
+    release: () => void | Promise<void>;
   };
   clock: () => number;
   log: (record: unknown) => void;
@@ -81,7 +84,7 @@ export const runAdaptiveBackfillBatch = async <Transaction, Item, Cursor>({
       };
   const start = decideStart(verdict, "backfill_batch", config);
   log(start);
-  let acquired = false;
+  const slotState = { acquired: false };
   try {
     const outcome = await Result.tryPromise(
       async () =>
@@ -99,9 +102,10 @@ export const runAdaptiveBackfillBatch = async <Transaction, Item, Cursor>({
               written: 0,
             };
           }
-          acquired = start.decision === "start" && (await slot.tryAcquire(tx));
+          slotState.acquired =
+            start.decision === "start" && (await slot.tryAcquire(tx));
           const effectiveVerdict: Verdict =
-            acquired || start.decision === "wait"
+            slotState.acquired || start.decision === "wait"
               ? verdict
               : {
                   kind: "unknown",
@@ -194,7 +198,7 @@ export const runAdaptiveBackfillBatch = async <Transaction, Item, Cursor>({
       };
     });
   } finally {
-    if (acquired) {
+    if (slotState.acquired) {
       await slot.release();
     }
   }

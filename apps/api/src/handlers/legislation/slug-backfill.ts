@@ -130,14 +130,15 @@ export const backfillStatuteSlugsPage = async (
   if (assignments.length > 0) {
     const write = await Result.tryPromise({
       try: async () =>
-        await options.db((tx) =>
-          tx.transaction(
-            async (savepoint) =>
-              await writePage(
-                async (work) => await work(savepoint),
-                assignments,
-              ),
-          ),
+        await options.db(
+          async (tx) =>
+            await tx.transaction(
+              async (savepoint) =>
+                await writePage(
+                  async (work) => await work(savepoint),
+                  assignments,
+                ),
+            ),
         ),
       catch: (cause: unknown) => cause,
     });

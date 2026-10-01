@@ -239,7 +239,7 @@ test("a failed checkpoint rolls back membership repair and can be replayed", asy
       FOR EACH ROW EXECUTE FUNCTION reject_test_citation_checkpoint()
     `);
     const outcome = await Result.tryPromise({
-      try: () => repairBatch(),
+      try: async () => await repairBatch(),
       catch: (cause: unknown) => cause,
     });
     expect(outcome.isErr()).toBe(true);

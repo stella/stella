@@ -37,11 +37,7 @@ const METRICS = {
 const PERIOD_SECONDS = 300;
 
 const newestPoint = (result: MetricDataResult | undefined) => {
-  if (
-    result === undefined ||
-    result.StatusCode !== "Complete" ||
-    result.Timestamps === undefined
-  ) {
+  if (result?.StatusCode !== "Complete" || result.Timestamps === undefined) {
     return Result.err(
       new EbsBalanceReadError({
         message: "EBS metric response is incomplete",
@@ -83,7 +79,7 @@ export const createEbsBalanceReader = ({
   client: injectedClient,
   clock = () => Temporal.Now.instant().epochMilliseconds,
   timeoutMs = defaultConfig.readTimeoutMs,
-  timeoutSignal = AbortSignal.timeout,
+  timeoutSignal = (duration) => AbortSignal.timeout(duration),
   maxStalenessMs = defaultConfig.maxStalenessMs,
 }: EbsBalanceReaderOptions) => {
   let client = injectedClient;

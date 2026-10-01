@@ -54,7 +54,7 @@ describe.skipIf(!enabled)("slug backfill poison-page recovery", () => {
         let now = Temporal.Instant.from(
           "2026-10-01T12:00:00Z",
         ).epochMilliseconds;
-        const runtime = await createScriptBackfillRuntime({
+        const runtime = createScriptBackfillRuntime({
           db: {
             transaction: db.transaction.bind(db),
             execute: rootClient.db.execute.bind(rootClient.db),
@@ -72,11 +72,13 @@ describe.skipIf(!enabled)("slug backfill poison-page recovery", () => {
           },
           clock: () => now,
           readVerdict: async () => ({ kind: "normal", signals: [] }),
-          log: (record) => records.push(record),
+          log: (record) => {
+            records.push(record);
+          },
         });
         const captured: unknown[] = [];
         const otherRoot = openClient();
-        const other = await createScriptBackfillRuntime({
+        const other = createScriptBackfillRuntime({
           db: {
             transaction: rootClient.db.transaction.bind(rootClient.db),
             execute: otherRoot.db.execute.bind(otherRoot.db),
@@ -94,7 +96,9 @@ describe.skipIf(!enabled)("slug backfill poison-page recovery", () => {
           },
           clock: () => now,
           readVerdict: async () => ({ kind: "normal", signals: [] }),
-          log: (record) => records.push(record),
+          log: (record) => {
+            records.push(record);
+          },
         });
         let otherWorked = false;
         const otherStep = async () =>
@@ -111,7 +115,11 @@ describe.skipIf(!enabled)("slug backfill poison-page recovery", () => {
             // Work has started on the adapter's transaction; an independent
             // physical index session must remain excluded until its boundary.
             if (fail) {
-              await expect(otherStep()).rejects.toThrow(BackfillHeldError);
+              const rejection: unknown = await otherStep().then(
+                () => null,
+                (error: unknown) => error,
+              );
+              expect(rejection).toBeInstanceOf(BackfillHeldError);
               expect(otherWorked).toBe(false);
               expect((await index.tryAcquire()).unwrap()).toBe(false);
             }
@@ -135,7 +143,9 @@ describe.skipIf(!enabled)("slug backfill poison-page recovery", () => {
                   ? null
                   : brandPersistedLegislationDocumentId(cursor),
               size,
-              capture: (error) => captured.push(error),
+              capture: (error) => {
+                captured.push(error);
+              },
             });
             if (outcome === "rollback" && fail) {
               await tx.execute(sql`SELECT 1 / 0`);
@@ -150,9 +160,20 @@ describe.skipIf(!enabled)("slug backfill poison-page recovery", () => {
           if (outcome === "commit") {
             await step();
           } else {
-            await expect(step()).rejects.toThrow(
-              outcome === "timeout" ? BackfillHeldError : /division by zero/u,
+            const rejection: unknown = await step().then(
+              () => null,
+              (error: unknown) => error,
             );
+            expect(rejection).toBeInstanceOf(Error);
+            if (outcome === "timeout") {
+              expect(rejection).toBeInstanceOf(BackfillHeldError);
+            } else {
+              expect(
+                rejection instanceof Error
+                  ? rejection.message
+                  : String(rejection),
+              ).toMatch(/division by zero/u);
+            }
           }
           expect((await index.tryAcquire()).unwrap()).toBe(true);
           await index.close();
@@ -170,7 +191,7 @@ describe.skipIf(!enabled)("slug backfill poison-page recovery", () => {
           expect(captured).toHaveLength(0);
           if (outcome === "timeout") {
             expect(
-              await observer.unsafe(
+              await observer.unsafe<{ id: string }[]>(
                 `SELECT id FROM ${schema}.legislation_documents WHERE title <> 'Law'`,
               ),
             ).toHaveLength(0);
@@ -179,7 +200,7 @@ describe.skipIf(!enabled)("slug backfill poison-page recovery", () => {
               batch: { size: 3 },
             });
             expect(
-              await observer.unsafe(
+              await observer.unsafe<{ id: string }[]>(
                 `SELECT id FROM ${schema}.legislation_documents WHERE slug IS NOT NULL`,
               ),
             ).toHaveLength(0);
@@ -187,7 +208,7 @@ describe.skipIf(!enabled)("slug backfill poison-page recovery", () => {
           if (outcome === "rollback") {
             expect(checkpoint).toBeUndefined();
             expect(
-              await observer.unsafe(
+              await observer.unsafe<{ id: string }[]>(
                 `SELECT id FROM ${schema}.legislation_documents WHERE slug IS NOT NULL`,
               ),
             ).toHaveLength(0);
@@ -201,7 +222,7 @@ describe.skipIf(!enabled)("slug backfill poison-page recovery", () => {
           await step();
           await step();
           expect(
-            await observer.unsafe(
+            await observer.unsafe<{ id: string; slug: string | null }[]>(
               `(SELECT id, slug FROM ${schema}.legislation_documents EXCEPT SELECT id, regexp_replace(eli, '^.*/', '') || '-2012-sb-law' FROM ${schema}.legislation_documents) UNION ALL (SELECT id, regexp_replace(eli, '^.*/', '') || '-2012-sb-law' FROM ${schema}.legislation_documents EXCEPT SELECT id, slug FROM ${schema}.legislation_documents)`,
             ),
           ).toHaveLength(0);
@@ -244,7 +265,7 @@ describe.skipIf(!enabled)("slug backfill poison-page recovery", () => {
         );
         const captured: unknown[] = [];
         const decisions: unknown[] = [];
-        const runtime = await createScriptBackfillRuntime({
+        const runtime = createScriptBackfillRuntime({
           db,
           name: "statute-slugs",
           tableName: "legislation_documents",
@@ -315,7 +336,7 @@ describe.skipIf(!enabled)("slug backfill poison-page recovery", () => {
           });
           expect(captured).toHaveLength(1);
           expect(
-            await client.unsafe(
+            await client.unsafe<{ id: string }[]>(
               "SELECT id FROM legislation_documents WHERE slug IS NOT NULL",
             ),
           ).toHaveLength(0);
@@ -336,7 +357,7 @@ describe.skipIf(!enabled)("slug backfill poison-page recovery", () => {
           });
           expect((await step()).done).toBe(true);
           expect(
-            await client.unsafe(
+            await client.unsafe<{ id: string }[]>(
               "SELECT id FROM legislation_documents WHERE slug IS NOT NULL",
             ),
           ).toHaveLength(2);
@@ -360,7 +381,7 @@ describe.skipIf(!enabled)("slug backfill poison-page recovery", () => {
             done: false,
           });
           expect((await step()).done).toBe(true);
-          const mismatch = await client.unsafe(
+          const mismatch = await client.unsafe<{ id: string }[]>(
             "SELECT id FROM legislation_documents WHERE slug IS DISTINCT FROM CASE WHEN eli = '/eli/cz/sb' THEN NULL WHEN id = '019dd47d-f507-7c84-b827-000000000001' THEN 'app-assigned' ELSE (regexp_replace(eli, '^.*/', '') || '-2012-sb-law') END",
           );
           expect(mismatch).toHaveLength(0);

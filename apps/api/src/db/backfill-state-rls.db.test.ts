@@ -70,10 +70,12 @@ describe.skipIf(!enabled)("maintenance checkpoint row security", () => {
         expect(updated).toEqual([{ cursor: "20" }]);
         await client.unsafe(`SET LOCAL ROLE ${reader}`);
         expect(
-          await client.unsafe("SELECT * FROM database_backfill_states"),
+          await client.unsafe<{ name: string }[]>(
+            "SELECT name FROM database_backfill_states",
+          ),
         ).toHaveLength(0);
         expect(
-          await client.unsafe(
+          await client.unsafe<{ name: string }[]>(
             "UPDATE database_backfill_states SET cursor = '30' RETURNING name",
           ),
         ).toHaveLength(0);
@@ -83,11 +85,18 @@ describe.skipIf(!enabled)("maintenance checkpoint row security", () => {
           ),
         ).toHaveLength(0);
         await client.unsafe("SAVEPOINT denied_insert");
-        await expect(
-          client.unsafe(
+        const rejection: unknown = await client
+          .unsafe(
             "INSERT INTO database_backfill_states (name, batch) VALUES ('intruder', '{}')",
-          ),
-        ).rejects.toThrow(/row-level security/u);
+          )
+          .then(
+            () => null,
+            (error: unknown) => error,
+          );
+        expect(rejection).toBeInstanceOf(Error);
+        expect(
+          rejection instanceof Error ? rejection.message : String(rejection),
+        ).toMatch(/row-level security/u);
         await client.unsafe("ROLLBACK TO SAVEPOINT denied_insert");
         await client.unsafe(`SET LOCAL ROLE ${owner}`);
         expect(

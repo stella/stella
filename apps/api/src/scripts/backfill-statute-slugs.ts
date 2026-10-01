@@ -36,8 +36,8 @@ let failed = 0;
 try {
   const pass = await runBackfillPass({
     sleep: Bun.sleep,
-    step: () =>
-      runtime.step(async ({ tx, size, cursor }) => {
+    step: async () =>
+      await runtime.step(async ({ tx, size, cursor }) => {
         const outcome = await backfillStatuteSlugsPage({
           db: async (work) => await work(tx),
           after:

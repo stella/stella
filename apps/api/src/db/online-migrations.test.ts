@@ -396,10 +396,14 @@ describe("online migrations", () => {
     });
     const pending: unknown[] = [];
     await runOnlineMigrations(harness.pool, {
-      log: (record) => pending.push(record),
+      log: (record) => {
+        pending.push(record);
+      },
     });
     await assertOnlineMigrationsApplied(harness.pool, {
-      log: (record) => pending.push(record),
+      log: (record) => {
+        pending.push(record);
+      },
     });
     expect(pending).toHaveLength(2);
     expect(pending).toEqual(
@@ -429,10 +433,14 @@ describe("online migrations", () => {
     });
     const pending: unknown[] = [];
     await runOnlineMigrations(harness.pool, {
-      log: (record) => pending.push(record),
+      log: (record) => {
+        pending.push(record);
+      },
     });
     await assertOnlineMigrationsApplied(harness.pool, {
-      log: (record) => pending.push(record),
+      log: (record) => {
+        pending.push(record);
+      },
     });
     expect(pending).toHaveLength(2);
     expect(pending).toEqual(
@@ -461,47 +469,57 @@ describe("online migrations", () => {
 
   test("a hold without a durable checkpoint remains a deployment failure", async () => {
     const harness = createHarness();
-    await expect(
-      runOnlineMigrations(harness.pool, {
-        repairs: [
-          {
-            name: "unpersisted-hold",
-            readCompletion: async () => ({
-              type: "incomplete",
-              reason: "not attempted",
-            }),
-            repair: async () => {
-              throw new BackfillHeldError({
-                message: "held",
-                holdUntil: 1,
-                heldSince: 0,
-              });
-            },
+    const rejection: unknown = await runOnlineMigrations(harness.pool, {
+      repairs: [
+        {
+          name: "unpersisted-hold",
+          readCompletion: async () => ({
+            type: "incomplete",
+            reason: "not attempted",
+          }),
+          repair: async () => {
+            throw new BackfillHeldError({
+              message: "held",
+              holdUntil: 1,
+              heldSince: 0,
+            });
           },
-        ],
-      }),
-    ).rejects.toThrow("hold has no durable pending checkpoint");
+        },
+      ],
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(rejection).toBeInstanceOf(Error);
+    expect(
+      rejection instanceof Error ? rejection.message : String(rejection),
+    ).toContain("hold has no durable pending checkpoint");
     expect(harness.released()).toBe(true);
   });
 
   test("an ordinary repair failure still fails the online phase", async () => {
     const harness = createHarness();
-    await expect(
-      runOnlineMigrations(harness.pool, {
-        repairs: [
-          {
-            name: "failed-repair",
-            readCompletion: async () => ({
-              type: "incomplete",
-              reason: "not attempted",
-            }),
-            repair: async () => {
-              throw new TypeError("repair write failed");
-            },
+    const rejection: unknown = await runOnlineMigrations(harness.pool, {
+      repairs: [
+        {
+          name: "failed-repair",
+          readCompletion: async () => ({
+            type: "incomplete",
+            reason: "not attempted",
+          }),
+          repair: async () => {
+            throw new TypeError("repair write failed");
           },
-        ],
-      }),
-    ).rejects.toThrow("repair write failed");
+        },
+      ],
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(rejection).toBeInstanceOf(Error);
+    expect(
+      rejection instanceof Error ? rejection.message : String(rejection),
+    ).toContain("repair write failed");
     expect(harness.released()).toBe(true);
   });
 
