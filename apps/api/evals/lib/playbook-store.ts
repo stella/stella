@@ -6,6 +6,9 @@
  * and the error envelope are all production code; only the rows live here.
  */
 
+import { panic } from "better-result";
+
+import { agentSkills, playbookDefinitions } from "@/api/db/schema";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -87,17 +90,29 @@ export const createPlaybookStore = (
       documentTypes: { findFirst: () => undefined },
     },
     select: () => ({
-      from: () => ({
-        where: () => ({
-          for: () => {
-            const row = lastRead();
-            return row === undefined ? [] : [{ updatedAt: row.updatedAt }];
-          },
-          orderBy: () => ({
-            limit: () => [...rows.values()],
+      from: (table: unknown) => {
+        if (table === agentSkills) {
+          // The organization's own skills (`findInstalledSkills`): it has
+          // none, so the shipped playbook-builder skill is the one a run loads.
+          return { where: () => ({ limit: () => [] }) };
+        }
+        if (table !== playbookDefinitions) {
+          return panic(
+            "the eval store answers selects on playbook definitions and agent skills only",
+          );
+        }
+        return {
+          where: () => ({
+            for: () => {
+              const row = lastRead();
+              return row === undefined ? [] : [{ updatedAt: row.updatedAt }];
+            },
+            orderBy: () => ({
+              limit: () => [...rows.values()],
+            }),
           }),
-        }),
-      }),
+        };
+      },
     }),
     insert: () => ({
       values: (values: {

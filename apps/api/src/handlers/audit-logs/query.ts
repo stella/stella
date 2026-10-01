@@ -1,10 +1,11 @@
 import { Result } from "better-result";
 import type { SQL } from "drizzle-orm";
-import { and, desc, eq, inArray, gte, lt, lte } from "drizzle-orm";
+import { and, desc, eq, inArray, gte, lt, lte, sql } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
 import { member, user } from "@/api/db/auth-schema";
+import { workspaceCheck } from "@/api/db/rls";
 import type { SafeDb } from "@/api/db/safe-db";
 import { auditLogs } from "@/api/db/schema";
 import {
@@ -13,6 +14,7 @@ import {
   ORGANIZATION_AUDIT_LOG_RESOURCE_ID,
 } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { auditDetailsForResource } from "@/api/lib/audit-log-details";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   tPaginationCursor,
@@ -85,7 +87,7 @@ export const readAuditLogsQuerySchema = t.Object({
 export type ReadAuditLogsQuery = Static<typeof readAuditLogsQuerySchema>;
 
 /**
- * The WHERE conditions of a compliance read: the session's organization, then
+ * The WHERE conditions of a compliance read: organization and matter access, then
  * the caller's filter narrowing inside it. The organization comes first and
  * from the server, so a filter can only narrow the rows a caller could already
  * read, never widen them.
@@ -97,7 +99,10 @@ export const toAuditLogConditions = ({
   organizationId: SafeId<"organization">;
   filter: AuditLogFilter;
 }): SQL[] => {
-  const conditions: SQL[] = [eq(auditLogs.organizationId, organizationId)];
+  const conditions: SQL[] = [
+    eq(auditLogs.organizationId, organizationId),
+    sql`(${auditLogs.workspaceId} IS NULL OR ${workspaceCheck})`,
+  ];
 
   if (filter.workspaceId) {
     conditions.push(eq(auditLogs.workspaceId, filter.workspaceId));
@@ -256,7 +261,7 @@ export const queryAuditLogPage = async function* ({
           action: row.action,
           resourceType: row.resourceType,
           resourceId: row.resourceId,
-          changes: row.changes,
+          changes: auditDetailsForResource(row.resourceType, row.changes),
           createdAtCursor: row.createdAtCursor,
           userId: row.userId,
           actor: userMap.get(row.userId) ?? row.userId,

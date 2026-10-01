@@ -28,6 +28,7 @@ import {
   readOutputFormat,
   RESERVED_FLAG_KEYS,
   writersFor,
+  renderClientError,
 } from "./run-leaf-command.js";
 
 type LeafFlags = Record<string, unknown>;
@@ -60,6 +61,10 @@ const runList = async ({
 }): Promise<void> => {
   const result = await listResources({ serverUrl, token });
   if (Result.isError(result)) {
+    if (result.error.admission !== undefined) {
+      renderClientError({ context, error: result.error, writers, format });
+      return;
+    }
     writers.stderr(`${result.error.message}\n`);
     context.process.exitCode = mapResourceErrorExit(result.error);
     return;
@@ -98,6 +103,10 @@ const runShow = async ({
 }): Promise<void> => {
   const result = await readResource({ serverUrl, token, uri: spec.uri });
   if (Result.isError(result)) {
+    if (result.error.admission !== undefined) {
+      renderClientError({ context, error: result.error, writers, format });
+      return;
+    }
     writers.stderr(`${result.error.message}\n`);
     context.process.exitCode = mapResourceErrorExit(result.error);
     return;

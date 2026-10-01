@@ -10,7 +10,7 @@ test("file snapshot clones retain their seed and isolate rows, DDL, and clocks",
         CREATE TABLE snapshot_seed (id integer PRIMARY KEY);
         INSERT INTO snapshot_seed VALUES (1);
       `);
-      return await template.dumpDataDir();
+      return await template.dumpDataDir("none");
     } finally {
       await template.close();
     }

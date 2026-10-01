@@ -8,6 +8,27 @@ import {
   withActionAdmission,
 } from "@/api/lib/rate-limit/action-admission";
 
+test("period exhaustion has its own non-transient code before execution", async () => {
+  let calls = 0;
+  const refusal = await failureOf(
+    withActionAdmission({
+      enabled: true,
+      organizationId,
+      userId: firstUser,
+      policy,
+      redis: { send: async () => -1 },
+      run: async () => {
+        calls += 1;
+      },
+    }),
+  );
+  expect(refusal).toMatchObject({
+    reason: "period_exhausted",
+    code: "action_period_exhausted",
+  });
+  expect(calls).toBe(0);
+});
+
 const policy = {
   organizationConcurrency: 2,
   userConcurrency: 1,

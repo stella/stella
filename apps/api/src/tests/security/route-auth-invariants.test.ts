@@ -1,5 +1,8 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import nodePath from "node:path";
+
+import { compareCodeUnit } from "@stll/collation";
 
 // These route files stack a top-level `.guard({ validateAuth: true })`
 // with per-route `permissions`. The guard is intentional: it is the
@@ -46,4 +49,49 @@ describe("every route declares permissions", () => {
       expect(missing).toEqual([]);
     },
   );
+});
+
+describe("root route registrations", () => {
+  test("root plugins match the reviewed census", async () => {
+    const source = await readSource("apps/api/src/server.ts");
+    const rootStart = source.indexOf("const api = new Elysia()");
+    const versionedStart = source.indexOf(
+      ".group(STELLA_API_VERSION_PREFIX",
+      rootStart,
+    );
+    expect(rootStart).toBeGreaterThanOrEqual(0);
+    expect(versionedStart).toBeGreaterThan(rootStart);
+
+    const rootSource = source.slice(rootStart, versionedStart);
+    const plugins = [...rootSource.matchAll(/\.use\(\s*(\w+)\s*\)/gu)].map(
+      (match) => {
+        const plugin = match.at(1);
+        if (plugin === undefined) {
+          panic("Expected route plugin capture");
+        }
+        return plugin;
+      },
+    );
+    expect(plugins.toSorted(compareCodeUnit)).toEqual([
+      "agentAuthConfirmRoute",
+      "agentAuthRoute",
+      "aiAutocompleteRoute",
+      "authMetadataRoute",
+      "authUiRoute",
+      "feedbackPublicRoute",
+      "healthRoute",
+      "hostedUsageWebhookRoute",
+      "internalTimeEntriesRoute",
+      "localDevPublicRoutes",
+      "mcpRoute",
+      "memoriesRoute",
+      "multipartFormParser",
+      "myTimeEntriesRoute",
+      "notificationsRoute",
+      "smokeRoute",
+      "timeApprovalQueueRoute",
+      "timeTimersRoute",
+      "wellKnownRoute",
+    ]);
+  });
 });
