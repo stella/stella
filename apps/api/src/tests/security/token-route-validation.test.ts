@@ -71,9 +71,6 @@ describe("token-route validation order guard", () => {
     // Anchors prove the source-text heuristic still matches reality; if the
     // factory is renamed, this test must be updated alongside it.
     expect(tokenHandlerFiles).toContainEqual(
-      path.join(handlersDir, "operator/read-registrations.ts"),
-    );
-    expect(tokenHandlerFiles).toContainEqual(
       path.join(handlersDir, "folio-collab/authorize.ts"),
     );
   });

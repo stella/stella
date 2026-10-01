@@ -22,6 +22,7 @@ import {
   createSafeRootHandler,
 } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { THREAD_STORED_CONTENT_SEND_MODE } from "@/api/lib/chat/thread-stored-content-send-mode";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
@@ -113,6 +114,17 @@ export const createSuggestThreadTitle = ({
     const messageWindow = yield* Result.await(
       loadRecapMessageWindow({ safeDb, threadId, userId: user.id }),
     );
+    // Re-read with the messages: the thread may have switched since the
+    // check above.
+    if (messageWindow.sendMode === THREAD_STORED_CONTENT_SEND_MODE.anonymized) {
+      return Result.err(
+        new HandlerError({
+          status: 403,
+          message:
+            "Title suggestion is unavailable for anonymized conversations",
+        }),
+      );
+    }
 
     if (messageWindow.messages.length === 0) {
       return Result.err(

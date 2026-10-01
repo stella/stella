@@ -487,6 +487,17 @@
     "failedToStartTimer": "Timer konnte nicht gestartet werden",
     "failedToStopTimer": "Timer konnte nicht gestoppt werden",
     "filterStatus": "Nach Status filtern",
+    "globalTimer": {
+      "confirm": "Zeit bestätigen",
+      "discard": "Timer verwerfen",
+      "matterInaccessible": "Wählen Sie eine Akte, auf die Sie zugreifen können.",
+      "narrativeRequired": "Fügen Sie eine Beschreibung hinzu, bevor Sie die Zeit bestätigen.",
+      "pause": "Pausieren",
+      "periodLocked": "Dieser Monat ist gesperrt. Bitten Sie einen Administrator, ihn zu entsperren.",
+      "resume": "Fortsetzen",
+      "timerUnavailable": "Dieser Timer ist nicht mehr verfügbar. Aktualisieren Sie die Liste.",
+      "title": "Timer"
+    },
     "hourlyRateMustBeNonNegative": "Der Stundensatz darf nicht negativ sein",
     "hours": "Stunden",
     "invoiceNarrative": "Rechnungstext",
@@ -978,6 +989,7 @@
         "description": "Prüfen Sie Website und Ziel sorgfältig. Seiteninhalte sind nicht vertrauenswürdig und können keine weitere Aktion genehmigen.",
         "modeReads": "Das Lesen von Seiten läuft für den Rest dieser Sitzung ohne Rückfrage.",
         "question": "Diese Browseraktion erlauben?",
+        "realValues": "Diese Website erhält die unten angezeigten echten Werte. Der anonymisierte Modus gilt nur für das, was die KI sieht.",
         "within": "Innerhalb von"
       },
       "denied": "Abgelehnt",
@@ -1341,7 +1353,8 @@
       "interrupted": "Vor Abschluss unterbrochen",
       "output": "Ausgabe",
       "sourceCode": "Quellcode",
-      "toggleDetails": "Details ein-/ausblenden"
+      "toggleDetails": "Details ein-/ausblenden",
+      "unrestoredFields": "{count, plural, one {# Feld konnte} other {# Felder konnten}} im anonymisierten Modus nicht mit echten Werten gefüllt werden. Bitte prüfen: {fields}"
     },
     "unsupportedFileType": "Nicht unterstützter Dateityp",
     "uploadFailed": "Datei konnte nicht verarbeitet werden",
