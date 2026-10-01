@@ -182,6 +182,7 @@ const buildRunScenarios = (): RunToolsProps[] => {
                           accessibleWorkspaceIds: [workspaceId],
                         }),
                         userId,
+                        userEmail: "standard@example.test",
                         webSearchEnabled,
                         webSearchProviders: { webSearchProvider, urlFetcher },
                         workspaceId,

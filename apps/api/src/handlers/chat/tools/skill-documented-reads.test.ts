@@ -101,6 +101,7 @@ const turnProps = (
     accessibleWorkspaceIds: [workspaceId],
   }),
   userId,
+  userEmail: "standard@example.test",
   webSearchEnabled: false,
   webSearchProviders: { webSearchProvider: null, urlFetcher: null },
   workspaceId,

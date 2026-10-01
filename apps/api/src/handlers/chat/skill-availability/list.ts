@@ -242,6 +242,7 @@ export const createListUnavailableChatSkills = ({
             safeDb,
             scopedDb,
             userId: user.id,
+            userEmail: user.email,
           },
           skills,
         }),

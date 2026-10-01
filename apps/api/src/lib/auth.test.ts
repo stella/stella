@@ -181,6 +181,7 @@ describe("resolveMemberAuthorization", () => {
 
     expect(authorization).toEqual({
       memberId: expect.any(String),
+      email: `${ownerInFull}@test.local`,
       role: "owner",
       workspace: null,
     });
@@ -193,6 +194,7 @@ describe("resolveMemberAuthorization", () => {
     );
     expect(authorization).toEqual({
       memberId: expect.any(String),
+      email: `${loneMemberInFull}@test.local`,
       role: "member",
       workspace: null,
     });

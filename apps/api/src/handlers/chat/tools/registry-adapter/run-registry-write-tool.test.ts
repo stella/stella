@@ -64,16 +64,14 @@ const buildContext = ({
       pinnedIds: [],
     }),
     userId: toSafeId<"user">("user_1"),
+    userEmail: "standard@example.test",
     workspaceStatusById: new Map([[WS_UUID, "active"]]),
   });
 
 describe("runRegistryWriteTool (orchestration)", () => {
   test("checks account eligibility before dispatching restricted operations", async () => {
     for (const toolName of [
-      "save_matter",
-      "delete_matter",
       "manage_organization",
-      "link_matter_contact",
       "set_practice_jurisdictions",
     ] as const) {
       for (const email of ["limited@example.test", "standard@example.test"]) {
@@ -82,13 +80,13 @@ describe("runRegistryWriteTool (orchestration)", () => {
           {
             toolName,
             args: {},
-            context: buildContext(),
+            context: { ...buildContext(), userEmail: email },
             refRegistry: createChatRefRegistry(),
           },
           {
             isMcpToolFeatureEnabled: featureGate,
-            checkAccountOperation: async (userId) => {
-              expect(userId).toBe("user_1");
+            checkAccountOperation: (resolvedEmail) => {
+              expect(resolvedEmail).toBe(email);
               return checkDemoAccountAccess({
                 email,
                 config: {
@@ -120,25 +118,33 @@ describe("runRegistryWriteTool (orchestration)", () => {
   });
 
   test("keeps sandbox operations independent of account growth checks", async () => {
-    const accountGate = mock(async () => Result.ok());
-    const result = await runRegistryWriteTool(
-      {
-        toolName: "delete_time_entry",
-        args: {},
-        context: buildContext(),
-        refRegistry: createChatRefRegistry(),
-      },
-      {
-        isMcpToolFeatureEnabled: () => false,
-        checkAccountOperation: accountGate,
-      },
-    );
-    expect(Result.isError(result)).toBe(true);
-    expect(accountGate).not.toHaveBeenCalled();
-    if (Result.isError(result))
-      {expect(result.error.message).toBe(
-        "This feature is not enabled on this deployment.",
-      );}
+    for (const toolName of [
+      "save_matter",
+      "delete_matter",
+      "link_matter_contact",
+      "delete_time_entry",
+    ] as const) {
+      const accountGate = mock(() => Result.ok());
+      const result = await runRegistryWriteTool(
+        {
+          toolName,
+          args: {},
+          context: { ...buildContext(), userEmail: "limited@example.test" },
+          refRegistry: createChatRefRegistry(),
+        },
+        {
+          isMcpToolFeatureEnabled: () => false,
+          checkAccountOperation: accountGate,
+        },
+      );
+      expect(Result.isError(result)).toBe(true);
+      expect(accountGate).not.toHaveBeenCalled();
+      if (Result.isError(result)) {
+        expect(result.error.message).toBe(
+          "This feature is not enabled on this deployment.",
+        );
+      }
+    }
   });
 
   test("refuses a write the ref map keeps off the chat surface", async () => {

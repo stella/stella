@@ -34,7 +34,7 @@ export type SynthesizedCapabilityContext = {
   request: Request;
   route: string;
   set: { headers: Record<string, string> };
-  user: { id: SafeId<"user"> };
+  user: { id: SafeId<"user">; email: string };
   session: { activeOrganizationId: SafeId<"organization"> };
   scopedDb: ScopedDb;
   safeDb: SafeDb;
@@ -121,7 +121,7 @@ export const synthesizeCapabilityContext = async ({
     request,
     route: capabilityRoute(capabilityId),
     set: { headers: {} },
-    user: { id: context.userId },
+    user: { id: context.userId, email: context.userEmail },
     session: { activeOrganizationId: context.organizationId },
     scopedDb: operationDatabaseScope.scopedDb,
     safeDb: operationDatabaseScope.safeDb,

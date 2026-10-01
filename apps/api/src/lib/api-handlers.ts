@@ -27,7 +27,7 @@ import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CapabilityTransport } from "@/api/lib/capability-transport";
 import type { WorkspaceParamsSchema } from "@/api/lib/custom-schema";
-import { checkDemoAccountOperationForUser } from "@/api/lib/demo-account";
+import { checkDemoAccountOperation } from "@/api/lib/demo-account";
 import { requiresStandardAccount } from "@/api/lib/demo-account-policy";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
 import {
@@ -399,6 +399,7 @@ type SessionHandlerContext<
 > = Context<SessionConfigRouteSchema<TConfig>> & {
   user: {
     id: SafeId<"user">;
+    email: string;
   };
 };
 
@@ -406,6 +407,7 @@ type BaseHandlerContext<TConfig extends HandlerConfig = HandlerConfig> =
   Context<ConfigRouteSchema<TConfig>> & {
     user: {
       id: SafeId<"user">;
+      email: string;
     };
     session: {
       activeOrganizationId: SafeId<"organization">;
@@ -921,7 +923,7 @@ export const admitFiniteAction = async function* <
 
 type HandlerAdmissionDependencies = {
   admit?: typeof withActionAdmission;
-  checkAccountOperation?: typeof checkDemoAccountOperationForUser;
+  checkAccountOperation?: typeof checkDemoAccountOperation;
 };
 
 const createSafeScopedHandler = <
@@ -933,7 +935,7 @@ const createSafeScopedHandler = <
   handler: SafeHandlerFn<TContext, TResult>,
   {
     admit = withActionAdmission,
-    checkAccountOperation = checkDemoAccountOperationForUser,
+    checkAccountOperation = checkDemoAccountOperation,
   }: HandlerAdmissionDependencies = {},
 ): SafeHandlerDefinition<TConfig, TContext, TResult> => ({
   config,
@@ -946,7 +948,7 @@ const createSafeScopedHandler = <
     }
 
     if (requiresStandardAccount(config.permissions)) {
-      const accountAccess = await checkAccountOperation(ctx.user.id);
+      const accountAccess = checkAccountOperation(ctx.user.email);
       if (Result.isError(accountAccess)) {
         return toSafeStatusResponse(403, {
           code: "account_access_unavailable",

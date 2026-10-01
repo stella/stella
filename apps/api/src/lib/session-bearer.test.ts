@@ -57,7 +57,9 @@ describe("session credentials", () => {
     ).toBeNull();
     expect(await auth.api.getSession({ headers: {} })).toBeNull();
     const token = credential.split(".").at(0);
-    if (!token) {throw new Error("Session credential is required");}
+    if (!token) {
+      throw new Error("Session credential is required");
+    }
     const context = await auth.$context;
     await context.internalAdapter.updateSession(token, {
       expiresAt: new Date(0),

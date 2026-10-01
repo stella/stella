@@ -2,7 +2,7 @@ import { panic, Result } from "better-result";
 
 import { projectForChat } from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
-import { checkDemoAccountOperationForUser } from "@/api/lib/demo-account";
+import { checkDemoAccountOperation } from "@/api/lib/demo-account";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { BILLING_TOOL_HANDLERS } from "@/api/mcp/billing-tools";
 import { CAPABILITY_TOOL_HANDLERS } from "@/api/mcp/capability-tools";
@@ -94,13 +94,13 @@ const REGISTRY_WRITE_TOOL_HANDLERS = {
 } satisfies Record<RegistryWriteToolName, McpToolHandler>;
 
 const REGISTRY_WRITE_ACCOUNT_POLICY = {
-  save_matter: "restricted",
-  delete_matter: "restricted",
+  save_matter: "sandbox",
+  delete_matter: "sandbox",
   save_contact: "sandbox",
   delete_contact: "sandbox",
   save_task: "sandbox",
   delete_task: "sandbox",
-  link_matter_contact: "restricted",
+  link_matter_contact: "sandbox",
   save_document: "sandbox",
   upload_document_version: "sandbox",
   open_document_version_upload: "sandbox",
@@ -166,7 +166,7 @@ export type RunRegistryWriteToolProps = {
 
 export type RunRegistryWriteToolDependencies = {
   isMcpToolFeatureEnabled: typeof isMcpToolFeatureEnabled;
-  checkAccountOperation?: typeof checkDemoAccountOperationForUser;
+  checkAccountOperation?: typeof checkDemoAccountOperation;
 };
 
 const defaultRunRegistryWriteToolDependencies = {
@@ -223,26 +223,14 @@ export const runRegistryWriteTool = async (
     );
   }
   if (REGISTRY_WRITE_ACCOUNT_POLICY[toolName] === "restricted") {
-    const accountOperation = await Result.tryPromise({
-      try: async () =>
-        await (
-          dependencies.checkAccountOperation ?? checkDemoAccountOperationForUser
-        )(context.userId),
-      catch: (cause) =>
-        new ChatToolError({
-          kind: "transient",
-          message: "Account policy is temporarily unavailable.",
-          cause,
-        }),
-    });
+    const accountOperation = (
+      dependencies.checkAccountOperation ?? checkDemoAccountOperation
+    )(context.userEmail);
     if (Result.isError(accountOperation)) {
-      return accountOperation;
-    }
-    if (Result.isError(accountOperation.value)) {
       return Result.err(
         new ChatToolError({
           kind: "unavailable",
-          message: accountOperation.value.error.message,
+          message: accountOperation.error.message,
         }),
       );
     }

@@ -24,6 +24,7 @@ import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tUserId, workspaceParams } from "@/api/lib/custom-schema";
+import { checkDemoAccountOperation } from "@/api/lib/demo-account";
 import { closeSessionConnections } from "@/api/lib/desktop-edit-session-notifications";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -368,6 +369,7 @@ export const createRemoveWorkspaceMember = (
       user,
       recordAuditEvent,
     }) {
+      yield* checkDemoAccountOperation(user.email);
       return yield* removeWorkspaceMemberHandler({
         safeDb,
         workspaceId,

@@ -1,5 +1,9 @@
 import type { BetterAuthPlugin } from "better-auth";
-import { APIError, createAuthMiddleware } from "better-auth/api";
+import {
+  APIError,
+  createAuthMiddleware,
+  getAuthoritativeSessionFromCtx,
+} from "better-auth/api";
 import { Result } from "better-result";
 
 import type { statements } from "@stll/permissions";
@@ -60,6 +64,63 @@ export const checkDemoAccountAccess = ({
     }),
   );
 };
+
+const CREDENTIAL_CLEANUP_PATHS = new Set([
+  "/sign-out",
+  "/revoke-session",
+  "/revoke-sessions",
+  "/revoke-other-sessions",
+]);
+
+export const createDemoAuthSessionGuard = (config: DemoAccountConfig) =>
+  createAuthMiddleware(async (ctx) => {
+    if (
+      !config.email ||
+      ctx.path === "/get-session" ||
+      CREDENTIAL_CLEANUP_PATHS.has(ctx.path)
+    ) {
+      return;
+    }
+    const resolved = await getAuthoritativeSessionFromCtx(ctx);
+    if (!resolved) {
+      return;
+    }
+    const sessionAccess = checkDemoAccountAccess({
+      config,
+      email: resolved.user.email,
+      operation: "session",
+      organizationId: resolved.session.activeOrganizationId,
+    });
+    if (Result.isError(sessionAccess)) {
+      throw new APIError("FORBIDDEN", {
+        code: sessionAccess.error.code,
+        message: sessionAccess.error.message,
+      });
+    }
+    if (
+      (ctx.method !== "GET" && ctx.path.startsWith("/organization/")) ||
+      ctx.path.startsWith("/api-key/") ||
+      ctx.path.startsWith("/oauth2/") ||
+      ctx.path.startsWith("/two-factor/") ||
+      ctx.path === "/link-social" ||
+      ctx.path === "/delete-user" ||
+      ctx.path === "/change-email" ||
+      ctx.path.startsWith("/email-otp/request-email-change") ||
+      ctx.path === "/email-otp/change-email"
+    ) {
+      const operationAccess = checkDemoAccountAccess({
+        config,
+        email: resolved.user.email,
+        operation: "growth",
+      });
+      if (Result.isError(operationAccess)) {
+        throw new APIError("FORBIDDEN", {
+          code: operationAccess.error.code,
+          message: operationAccess.error.message,
+        });
+      }
+    }
+  });
 
 type DemoSessionPolicyOptions = {
   config: DemoAccountConfig;
@@ -149,7 +210,7 @@ const ACCOUNT_PERMISSION_POLICY = {
   invitation: "restricted",
   team: "restricted",
   ac: "restricted",
-  workspace: "restricted",
+  workspace: "sandbox",
   organizationSettings: "restricted",
   integration: "restricted",
   contact: "sandbox",

@@ -280,6 +280,7 @@ const buildContext = ({
     safeDb,
     scopedDb,
     userId: toSafeId<"user">("user_1"),
+    userEmail: "standard@example.test",
   };
 };
 

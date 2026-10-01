@@ -11,6 +11,7 @@ import {
   getUserEmail,
   verifyAndDeleteUser,
 } from "@/api/lib/delete-account";
+import { checkDemoAccountOperation } from "@/api/lib/demo-account";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 export const deleteAccountVerifyBody = t.Object({
@@ -33,6 +34,7 @@ const config = {
 const deleteAccountVerify = createSafeSessionHandler(
   config,
   async function* (ctx) {
+    yield* checkDemoAccountOperation(ctx.user.email);
     const currentUserId = ctx.user.id;
     const { code, reassignments } = ctx.body;
 

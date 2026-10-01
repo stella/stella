@@ -89,6 +89,7 @@ const createContext = (): McpRequestContext => {
     scopedDb: emptyScopedDb,
     testDependencies: { loadOrgSettingsForAuth: loadOrgSettingsMock },
     userId: toSafeId<"user">("user_1"),
+    userEmail: "standard@example.test",
   };
 };
 

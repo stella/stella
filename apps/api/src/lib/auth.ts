@@ -70,12 +70,15 @@ import { tUuid } from "@/api/lib/custom-schema";
 import { findAccountIdByEmail } from "@/api/lib/db/account-row";
 import {
   assertDemoAccountAccess,
-  checkDemoAccountOperationForUser,
+  checkDemoAccountOperation,
   createConfiguredDemoSessionPolicy,
   getDemoAccountConfig,
 } from "@/api/lib/demo-account";
 import { getDemoAccountOtpOverride } from "@/api/lib/demo-account-otp";
-import { createDemoSessionFilter } from "@/api/lib/demo-account-policy";
+import {
+  createDemoAuthSessionGuard,
+  createDemoSessionFilter,
+} from "@/api/lib/demo-account-policy";
 import { detectedCountryFromRequestContext } from "@/api/lib/detected-country";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
 import { stashDevOtp } from "@/api/lib/dev-otp-store";
@@ -862,6 +865,7 @@ const oauthUiFragmentBridgePlugin = {
 // evaluates this module before db/index.ts finishes.
 const createAuth = () => {
   const demoConfig = getDemoAccountConfig();
+  const demoSessionGuard = createDemoAuthSessionGuard(demoConfig);
   const configuredDemoMode = demoConfig.organizationId
     ? "bound"
     : "unavailable";
@@ -1128,7 +1132,9 @@ const createAuth = () => {
       createDemoSessionFilter(demoConfig),
       createOtpAccountLimitPlugin({
         enabled: !env.E2E_DISABLE_AUTH_RATE_LIMIT,
-        context: new RedisRateLimitContext({ failurePolicy: "fail_closed" }),
+        context: new RedisRateLimitContext({
+          failurePolicy: "fail_open_local",
+        }),
       }),
       // The after-hook on /get-session signs a `set-auth-jwt` response
       // header on every session resolution by reading the jwks table.
@@ -1524,30 +1530,7 @@ const createAuth = () => {
             !isSessionCreatingAuthPath(ctx.path) &&
             ctx.path !== SEND_VERIFICATION_OTP_PATH
           ) {
-            const resolved = await getAuthoritativeSessionFromCtx(ctx);
-            if (resolved) {
-              assertDemoAccountAccess({
-                email: resolved.user.email,
-                operation: "session",
-                organizationId: resolved.session.activeOrganizationId,
-              });
-              if (
-                (ctx.method !== "GET" &&
-                  ctx.path.startsWith("/organization/")) ||
-                ctx.path.startsWith("/api-key/") ||
-                ctx.path.startsWith("/oauth2/") ||
-                ctx.path === "/link-social" ||
-                ctx.path === "/delete-user" ||
-                ctx.path === "/change-email" ||
-                ctx.path.startsWith("/email-otp/request-email-change") ||
-                ctx.path === "/email-otp/change-email"
-              ) {
-                assertDemoAccountAccess({
-                  email: resolved.user.email,
-                  operation: "growth",
-                });
-              }
-            }
+            await demoSessionGuard(ctx);
           }
           if (
             ctx.path === "/api-key/create" &&
@@ -1559,9 +1542,7 @@ const createAuth = () => {
             if (!account) {
               throw new APIError("UNAUTHORIZED", { message: "Unauthorized" });
             }
-            const access = await checkDemoAccountOperationForUser(
-              brandPersistedUserId(account.id),
-            );
+            const access = checkDemoAccountOperation(account.email);
             if (Result.isError(access)) {
               throw new APIError("FORBIDDEN", {
                 code: "account_access_unavailable",
@@ -1784,6 +1765,7 @@ export const sessionAuthMacro = new Elysia({ name: "sessionAuthMacro" }).macro({
       return {
         user: {
           id: userId,
+          email: user.email,
         },
       };
     },
@@ -1814,6 +1796,7 @@ type MemberAuthorizationLookup = {
 
 type MemberAuthorization = {
   memberId: string;
+  email: string;
   /** Raw DB value; callers validate it with isMemberRole. */
   role: string;
   workspace: AccessibleWorkspace | null;
@@ -1828,8 +1811,9 @@ export const resolveMemberAuthorization = async (
 ): Promise<MemberAuthorization | null> => {
   if (!workspaceId) {
     const row = await db
-      .select({ memberId: member.id, role: member.role })
+      .select({ memberId: member.id, role: member.role, email: user.email })
       .from(member)
+      .innerJoin(user, eq(user.id, member.userId))
       .where(
         and(
           eq(member.userId, userId),
@@ -1840,7 +1824,12 @@ export const resolveMemberAuthorization = async (
       .then((rows) => rows.at(0));
 
     return row
-      ? { memberId: row.memberId, role: row.role, workspace: null }
+      ? {
+          memberId: row.memberId,
+          email: row.email,
+          role: row.role,
+          workspace: null,
+        }
       : null;
   }
 
@@ -1858,11 +1847,13 @@ export const resolveMemberAuthorization = async (
   const row = await db
     .select({
       memberId: member.id,
+      email: user.email,
       role: member.role,
       workspaceId: workspaces.id,
       workspaceStatus: workspaces.status,
     })
     .from(member)
+    .innerJoin(user, eq(user.id, member.userId))
     .leftJoin(
       workspaces,
       and(
@@ -1889,11 +1880,17 @@ export const resolveMemberAuthorization = async (
   }
 
   if (row.workspaceId === null || row.workspaceStatus === null) {
-    return { memberId: row.memberId, role: row.role, workspace: null };
+    return {
+      memberId: row.memberId,
+      email: row.email,
+      role: row.role,
+      workspace: null,
+    };
   }
 
   return {
     memberId: row.memberId,
+    email: row.email,
     role: row.role,
     workspace: { id: row.workspaceId, status: row.workspaceStatus },
   };
@@ -2223,6 +2220,7 @@ const resolveValidateAuth = async (
     value: {
       user: {
         id: toSafeId<"user">(user.id),
+        email: user.email,
       },
       session: {
         activeOrganizationId,

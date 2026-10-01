@@ -13,34 +13,46 @@ export const isVerifiedMicrosoftIdentity = ({
   email,
   tenantId,
 }: MicrosoftIdentityOptions) => {
-  if (!profile || !email || !tenantId || typeof profile["tid"] !== "string")
-    {return false;}
+  if (!profile || !email || !tenantId || typeof profile["tid"] !== "string") {
+    return false;
+  }
   const tenant = profile["tid"].toLowerCase();
   if (
     profile["iss"] !==
     `https://login.microsoftonline.com/${profile["tid"]}/v2.0`
-  )
-    {return false;}
+  ) {
+    return false;
+  }
   switch (tenantId.toLowerCase()) {
     case "common":
       break;
     case "organizations":
-      if (tenant === MICROSOFT_CONSUMER_TENANT_ID) {return false;}
+      if (tenant === MICROSOFT_CONSUMER_TENANT_ID) {
+        return false;
+      }
       break;
     case "consumers":
-      if (tenant !== MICROSOFT_CONSUMER_TENANT_ID) {return false;}
+      if (tenant !== MICROSOFT_CONSUMER_TENANT_ID) {
+        return false;
+      }
       break;
     default:
-      if (tenant !== tenantId.toLowerCase()) {return false;}
+      if (tenant !== tenantId.toLowerCase()) {
+        return false;
+      }
   }
   if (
     typeof profile["email"] !== "string" ||
     profile["email"].toLowerCase() !== email.toLowerCase()
-  )
-    {return false;}
-  if (profile["email_verified"] === false) {return false;}
-  if (profile["email_verified"] === true || profile["xms_edov"] === true)
-    {return true;}
+  ) {
+    return false;
+  }
+  if (profile["email_verified"] === false) {
+    return false;
+  }
+  if (profile["email_verified"] === true || profile["xms_edov"] === true) {
+    return true;
+  }
   return [
     profile["verified_primary_email"],
     profile["verified_secondary_email"],
@@ -65,9 +77,11 @@ export const createSocialIdentityValidation =
     if (
       source.method !== "oauth" &&
       source.method !== "sso-oidc" &&
-      source.method !== "sso-saml"
-    )
-      {return;}
+      source.method !== "sso-saml" &&
+      source.method !== "agent-idjag"
+    ) {
+      return;
+    }
     const verified =
       source.oauth?.providerId === "microsoft"
         ? isVerifiedMicrosoftIdentity({
@@ -76,7 +90,9 @@ export const createSocialIdentityValidation =
             tenantId,
           })
         : user.emailVerified === true;
-    if (verified) {return;}
+    if (verified) {
+      return;
+    }
     return {
       error: "identity_not_allowed",
       errorDescription: "Sign-in is unavailable for this account.",

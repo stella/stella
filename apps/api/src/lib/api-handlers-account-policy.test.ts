@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -24,7 +24,8 @@ describe("handler account policy", () => {
           return yield* Result.ok({ success: true });
         },
         {
-          checkAccountOperation: async () => {
+          checkAccountOperation: (resolvedEmail) => {
+            expect(resolvedEmail).toBe(email);
             policyChecks += 1;
             return checkDemoAccountAccess({
               email,
@@ -39,7 +40,7 @@ describe("handler account policy", () => {
       );
       const context = createTestHandlerContext<
         Parameters<typeof definition.handler>[0]
-      >({});
+      >({ user: { email } });
       const result = await definition.handler(context);
       expect(policyChecks).toBe(1);
       expect(calls).toBe(email === "standard@example.test" ? 1 : 0);
@@ -53,4 +54,24 @@ describe("handler account policy", () => {
       }
     },
   );
+});
+
+test("allows sandbox matter mutations without an account growth check", async () => {
+  for (const operation of ["create", "update", "delete"] as const) {
+    const checkAccountOperation = mock(() => Result.ok());
+    const matterConfig = {
+      permissions: { workspace: [operation] },
+      mcp: { type: "internal", reason: "mcp_transport" },
+    } as const satisfies HandlerConfig;
+    const definition = createSafeRootHandler(
+      matterConfig,
+      async () => await Promise.resolve(Result.ok({ success: true })),
+      { checkAccountOperation },
+    );
+    const context = createTestHandlerContext<
+      Parameters<typeof definition.handler>[0]
+    >({ user: { email: "account@example.test" } });
+    expect(await definition.handler(context)).toEqual({ success: true });
+    expect(checkAccountOperation).not.toHaveBeenCalled();
+  }
 });

@@ -11,6 +11,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tUserId } from "@/api/lib/custom-schema";
+import { checkDemoAccountOperation } from "@/api/lib/demo-account";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { PG_ERROR } from "@/api/lib/pg-error";
@@ -165,7 +166,15 @@ export const addWorkspaceMemberHandler = async function* ({
 
 const addWorkspaceMember = createSafeHandler(
   config,
-  async function* ({ safeDb, session, workspaceId, body, recordAuditEvent }) {
+  async function* ({
+    safeDb,
+    session,
+    workspaceId,
+    body,
+    recordAuditEvent,
+    user,
+  }) {
+    yield* checkDemoAccountOperation(user.email);
     return yield* addWorkspaceMemberHandler({
       safeDb,
       organizationId: session.activeOrganizationId,

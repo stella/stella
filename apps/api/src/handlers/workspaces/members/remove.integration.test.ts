@@ -130,6 +130,7 @@ describe("removeWorkspaceMemberHandler RLS integration", () => {
             pinnedIds: [],
           }),
           userId: ids.userA1,
+          userEmail: "standard@example.test",
           workspaceStatusById: new Map([[ids.wsA2, "active"]]),
         });
         const workspaceId = ensureActiveWorkspace({

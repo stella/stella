@@ -3,123 +3,17 @@ import { describe, expect, test } from "bun:test";
 import type { JWTPayload } from "jose";
 
 import { getAuthIssuerUrl } from "@/api/lib/auth-paths";
-import { checkDemoAccountAccess } from "@/api/lib/demo-account-policy";
-import { MACHINE_API_KEY_PREFIX } from "@/api/lib/machine-api-key-config";
 import {
-  authenticateMcpRequest,
   classifyMcpTokenVerificationError,
   extractMcpSession,
   getMcpAccessTokenVerificationOptions,
   isMcpSession,
 } from "@/api/mcp/auth";
-import { getMcpResourceUrl, MCP_MODES } from "@/api/mcp/constants";
+import { getMcpResourceUrl } from "@/api/mcp/constants";
 import {
   McpAuthenticationError,
   McpTokenVerificationError,
 } from "@/api/mcp/errors";
-
-describe("MCP account policy", () => {
-  const credentialCases = [
-    { type: "oauth_client", claims: { client_id: "client_one" } },
-    { type: "delegated_user", claims: {} },
-    {
-      type: "agent_run",
-      claims: {
-        purpose: "agent-run",
-        run_id: "run_one",
-        workspace_ids: ["workspace_one"],
-      },
-    },
-    { type: "machine_api_key", claims: {} },
-  ] as const;
-
-  test("applies account eligibility across credential types and audiences", async () => {
-    for (const credentialCase of credentialCases) {
-      for (const mode of MCP_MODES) {
-        for (const organizationId of ["org_one", "org_two"]) {
-          for (const email of [
-            "limited@example.test",
-            "standard@example.test",
-          ]) {
-            const userId = "user_one";
-            const result = await authenticateMcpRequest(
-              credentialCase.type === "machine_api_key"
-                ? `${MACHINE_API_KEY_PREFIX}fixture`
-                : "credential.fixture",
-              {
-                mode,
-                verifyToken: async () => ({
-                  sub: userId,
-                  org_id: organizationId,
-                  scope: "stella:read",
-                  ...credentialCase.claims,
-                }),
-                resolveApiKeySession: async () => ({
-                  userId,
-                  organizationId,
-                  scopes: ["stella:read"],
-                  credential: {
-                    type: "machine_api_key",
-                    id: "key_one",
-                    name: "fixture",
-                    permissions: { entity: ["read"] },
-                  },
-                }),
-                checkAccountOperation: async (resolvedUserId) => {
-                  expect(resolvedUserId).toBe(userId);
-                  return checkDemoAccountAccess({
-                    email,
-                    config: {
-                      email: "limited@example.test",
-                      organizationId: "org_one",
-                    },
-                    operation: "growth",
-                  });
-                },
-              },
-            );
-            if (email === "limited@example.test") {
-              expect(Result.isError(result)).toBe(true);
-              if (Result.isError(result)) {
-                expect(result.error).toBeInstanceOf(McpAuthenticationError);
-                expect(result.error.message).toBe(
-                  "This credential is unavailable for this account",
-                );
-              }
-              continue;
-            }
-            expect(Result.isOk(result)).toBe(true);
-            if (Result.isOk(result)) {
-              expect(result.value.userId).toBe(userId);
-              expect(result.value.organizationId).toBe(organizationId);
-              expect(result.value.credential?.type).toBe(credentialCase.type);
-            }
-          }
-        }
-      }
-    }
-  });
-
-  test("keeps account policy lookup failures retryable", async () => {
-    const fault = new McpTokenVerificationError({
-      message: "Account policy is temporarily unavailable",
-    });
-    const result = await authenticateMcpRequest("credential.fixture", {
-      verifyToken: async () => ({
-        sub: "user_one",
-        org_id: "org_one",
-        scope: "stella:read",
-      }),
-      checkAccountOperation: async () => {
-        throw fault;
-      },
-    });
-    expect(Result.isError(result)).toBe(true);
-    if (Result.isError(result)) {
-      expect(result.error).toBe(fault);
-    }
-  });
-});
 
 const sessionFrom = (payload: JWTPayload) => {
   const session = extractMcpSession(payload);

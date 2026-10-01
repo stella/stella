@@ -65,6 +65,7 @@ const chatContext = (
     pinnedIds: [],
   }),
   userId,
+  userEmail: "standard@example.test",
   webSearchEnabled: false,
   webSearchProviders: { urlFetcher: null, webSearchProvider: null },
   workspaceId: null,

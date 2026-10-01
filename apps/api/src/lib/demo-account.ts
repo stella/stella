@@ -30,29 +30,12 @@ export const assertDemoAccountAccess = (
   }
 };
 
-export const checkDemoAccountOperationForUser = async (
-  userId: SafeId<"user">,
-) => {
-  const config = getDemoAccountConfig();
-  if (!config.email) {
-    return Result.ok();
-  }
-  // The caller identity is already authenticated; this read supplies its account policy.
-  const account = await rootDb.query.user.findFirst({
-    where: { id: userId },
-    columns: { email: true },
-  });
-  if (!account) {
-    return Result.err(
-      new APIError("UNAUTHORIZED", { message: "Unauthorized" }),
-    );
-  }
-  return checkDemoAccountAccess({
-    email: account.email,
-    config,
+export const checkDemoAccountOperation = (email: string) =>
+  checkDemoAccountAccess({
+    email,
+    config: getDemoAccountConfig(),
     operation: "growth",
   });
-};
 
 const resolveDemoAccountUser = async (userId: SafeId<"user">) =>
   await rootDb.query.user.findFirst({

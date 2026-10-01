@@ -84,7 +84,6 @@ describe("account access policy", () => {
       "invitation",
       "team",
       "ac",
-      "workspace",
       "organizationSettings",
       "integration",
     ];

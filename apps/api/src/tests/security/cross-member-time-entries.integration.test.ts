@@ -1331,6 +1331,7 @@ const mcpContextFor = (name: ActorName): McpRequestContext => {
       createScopedDb(testDb, workspaceIds, organizationId, actor.userId),
     ),
     userId: actor.userId,
+    userEmail: "standard@example.test",
   });
 };
 

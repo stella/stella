@@ -25,6 +25,7 @@ import {
   setAnalyticsForTesting,
 } from "@/api/lib/analytics/client";
 import type { ServerAnalyticsCaptureParams } from "@/api/lib/analytics/server-analytics";
+import { checkDemoAccountAccess } from "@/api/lib/demo-account-policy";
 import { runWithRequestId } from "@/api/lib/observability/request-context";
 import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
 import { recordMcpSessionInitialized } from "@/api/mcp/client-identity";
@@ -35,6 +36,7 @@ import {
   STELLA_CLI_MINIMUM_VERSION,
   STELLA_MCP_API_CONTRACT_VERSION,
 } from "@/api/mcp/constants";
+import { resolveMcpSessionContext } from "@/api/mcp/context";
 import {
   McpAuthenticationError,
   McpGatewayLoadError,
@@ -355,6 +357,53 @@ describe("handleMcpHttpRequest", () => {
       },
       { clientIp: null, request: mcpRequest },
     );
+    expect(captureErrorMock).not.toHaveBeenCalled();
+  });
+
+  test("returns a policy 403 for an authenticated account refusal", async () => {
+    authenticateMcpRequestMock.mockResolvedValue(
+      Result.ok({
+        userId: "user_one",
+        organizationId: "org_one",
+        scopes: ["stella:read"],
+      }),
+    );
+    resolveMcpSessionContextMock.mockImplementation(
+      async (session, options) =>
+        await resolveMcpSessionContext(session, {
+          ...options,
+          resolveAuthorization: async () => ({
+            memberId: "member_one",
+            email: "limited@example.test",
+            role: "owner",
+            workspace: null,
+          }),
+          checkAccountOperation: (email) =>
+            checkDemoAccountAccess({
+              email,
+              config: {
+                email: "limited@example.test",
+                organizationId: "org_one",
+              },
+              operation: "growth",
+            }),
+        }),
+    );
+    const response = await handleMcpHttpRequest(
+      createMcpRequest({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {},
+      }),
+    );
+    expect(response.status).toBe(403);
+    expect(response.headers.get("WWW-Authenticate")).not.toContain(
+      'error="invalid_token"',
+    );
+    expect(await readTestJson<McpJsonRpcError>(response)).toMatchObject({
+      error: { code: -32_001, message: "Forbidden" },
+    });
     expect(captureErrorMock).not.toHaveBeenCalled();
   });
 
