@@ -6,10 +6,12 @@ import * as v from "valibot";
 import { propertyConfig } from "@stll/property-testing";
 
 import type { PropertyContent } from "@/api/db/schema-validators";
+import { WRITE_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { dehydrateRefs } from "@/api/handlers/chat/tools/registry-adapter/ref-mediation";
 import { projectForChat } from "@/api/lib/chat/projection-schema";
 import { LIST_PLAYBOOKS_DETAIL_PROJECTION } from "@/api/lib/chat/projections";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import {
   POSITION_LIMITS,
@@ -53,6 +55,31 @@ const merge = (
     ...args,
     mintId: counterMintId(),
   });
+
+/** The documents a fixture position may cite, across two matters. */
+const SOURCE_POOL = [
+  {
+    workspaceId: "3a1f0a2e-8c5d-4e57-9a3b-0d2f6c1e7a01",
+    entityId: "4b1f0a2e-8c5d-4e57-9a3b-0d2f6c1e7a01",
+  },
+  {
+    workspaceId: "3a1f0a2e-8c5d-4e57-9a3b-0d2f6c1e7a01",
+    entityId: "4b1f0a2e-8c5d-4e57-9a3b-0d2f6c1e7a02",
+  },
+  {
+    workspaceId: "3a1f0a2e-8c5d-4e57-9a3b-0d2f6c1e7a02",
+    entityId: "4b1f0a2e-8c5d-4e57-9a3b-0d2f6c1e7a03",
+  },
+] as const;
+const ALL_SOURCES_READABLE = new Map(
+  SOURCE_POOL.map((source) => [source.entityId, source]),
+);
+
+const sourcesArbitrary = fc.uniqueArray(fc.constantFrom(...SOURCE_POOL), {
+  minLength: 1,
+  maxLength: SOURCE_POOL.length,
+  selector: (source) => source.entityId,
+});
 
 const text = (maxLength: number) =>
   fc
@@ -130,6 +157,7 @@ const gradedArbitrary = fc.record(
       },
       { requiredKeys: [] },
     ),
+    sources: sourcesArbitrary,
     enabled: fc.boolean(),
   },
   {
@@ -170,6 +198,7 @@ const extractArbitrary = fc.record(
       ),
     }),
     guidance: text(60),
+    sources: sourcesArbitrary,
     enabled: fc.boolean(),
   },
   { requiredKeys: ["mode", "sourceId", "issue", "ask", "enabled"] },
@@ -217,27 +246,61 @@ const toSnakeCase = (value: unknown): unknown => {
  * flatten the ladder (each tier a plain list, the ideal wording a string,
  * `tiers` lifted out of `standard`), and drop what `save_playbook` does not take
  * (the server-owned `ask` of a graded position and `check`, an extract
- * position's `content`, a clause-linked `ideal`). Anything else it left behind would fail the strict input parse, so
- * the parse below is what proves the read shape is a save shape.
+ * position's `content`, a clause-linked `ideal`), and name each source by the
+ * document ref the read showed. The call then crosses the chat boundary as a
+ * real one does: its declared refs are dehydrated to ids before the input is
+ * parsed. Anything else it left behind would fail the strict input parse, so
+ * the parse is what proves the read shape is a save shape.
  */
-const readBackToInput = (projected: unknown): PlaybookPositionInput => {
+const parseDehydrated = (
+  position: Record<string, unknown>,
+  refRegistry: ChatRefRegistry,
+): PlaybookPositionInput => {
+  const { args } = dehydrateRefs({
+    args: { positions: [position] },
+    inputRefs: WRITE_TOOL_REF_FIELD_MAP.save_playbook.inputRefs,
+    refRegistry,
+  }).unwrap();
+  return v.parse(
+    v.object({ positions: v.tuple([playbookPositionInputSchema]) }),
+    args,
+  ).positions[0];
+};
+
+const readBackToInput = (
+  projected: unknown,
+  refRegistry: ChatRefRegistry,
+): PlaybookPositionInput => {
   const snake = toSnakeCase(projected);
   if (!isRecord(snake)) {
     throw new TypeError("A projected position is an object");
   }
-  const { ask, check: _check, ...rest } = snake;
+  const { ask, check: _check, sources: readSources, ...withoutSources } = snake;
+  const rest: Record<string, unknown> = {
+    ...withoutSources,
+    ...(readSources === undefined
+      ? {}
+      : {
+          sources: v
+            .parse(v.array(v.object({ entity_id: v.string() })), readSources)
+            .map((source) => source.entity_id),
+        }),
+  };
   if (snake["mode"] === "extract" && isRecord(ask)) {
     const content = ask["content"];
     const type = isRecord(content) ? content["type"] : undefined;
-    return v.parse(playbookPositionInputSchema, {
-      ...rest,
-      ask: {
-        question: ask["question"],
-        ...(typeof type === "string" && isExpressibleAnswerType(type)
-          ? { answer_type: type }
-          : {}),
+    return parseDehydrated(
+      {
+        ...rest,
+        ask: {
+          question: ask["question"],
+          ...(typeof type === "string" && isExpressibleAnswerType(type)
+            ? { answer_type: type }
+            : {}),
+        },
       },
-    });
+      refRegistry,
+    );
   }
   const { standard, ...graded } = rest;
   const read = v.parse(
@@ -262,19 +325,24 @@ const readBackToInput = (projected: unknown): PlaybookPositionInput => {
     standard,
   ).tiers;
   const { ideal } = read.acceptable;
-  return v.parse(playbookPositionInputSchema, {
-    ...graded,
-    tiers: {
-      acceptable: read.acceptable.rules,
-      ...(ideal?.source === "inline" ? { ideal: ideal.text } : {}),
-      fallback: read.fallback.entries,
-      not_acceptable: read.not_acceptable.rules,
+  return parseDehydrated(
+    {
+      ...graded,
+      tiers: {
+        acceptable: read.acceptable.rules,
+        ...(ideal?.source === "inline" ? { ideal: ideal.text } : {}),
+        fallback: read.fallback.entries,
+        not_acceptable: read.not_acceptable.rules,
+      },
     },
-  });
+    refRegistry,
+  );
 };
 
-const readThroughChatProjection = (positions: readonly Position[]) => {
-  const refRegistry = createChatRefRegistry();
+const readThroughChatProjection = (
+  positions: readonly Position[],
+  refRegistry: ChatRefRegistry,
+) => {
   const projected = projectForChat({
     dehydration: dehydrateRefs({
       args: {},
@@ -901,10 +969,12 @@ describe("save_playbook position merge, over the input class", () => {
     fc.assert(
       fc.property(storedArbitrary, fc.nat(), (stored, pick) => {
         const index = pick % stored.length;
-        const projected = readThroughChatProjection(stored)[index];
+        const refRegistry = createChatRefRegistry();
+        const projected = readThroughChatProjection(stored, refRegistry)[index];
         const result = merge({
           stored,
-          positions: [readBackToInput(projected)],
+          positions: [readBackToInput(projected, refRegistry)],
+          readableSources: ALL_SOURCES_READABLE,
         });
 
         expect(result.issues).toEqual([]);
@@ -973,9 +1043,17 @@ describe("save_playbook position merge, over the input class", () => {
     fc.assert(
       fc.property(storedArbitrary, fc.nat(), (stored, pick) => {
         const index = pick % stored.length;
-        const projected = readThroughChatProjection(stored)[index];
-        const { enabled: _enabled, ...input } = readBackToInput(projected);
-        const result = merge({ stored, positions: [input] });
+        const refRegistry = createChatRefRegistry();
+        const projected = readThroughChatProjection(stored, refRegistry)[index];
+        const { enabled: _enabled, ...input } = readBackToInput(
+          projected,
+          refRegistry,
+        );
+        const result = merge({
+          stored,
+          positions: [input],
+          readableSources: ALL_SOURCES_READABLE,
+        });
 
         expect(result.issues).toEqual([]);
         expect(result.items).toEqual(stored);

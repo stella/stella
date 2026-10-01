@@ -4,6 +4,7 @@ import type { DehydratedInput } from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import type { ChatToolError } from "@/api/lib/errors/tagged-errors";
 
+import { mapInputRefLeaves } from "./input-ref-path";
 import type {
   InputRefParam,
   RefMediationEntry,
@@ -54,63 +55,67 @@ export const dehydrateRefs = ({
   args: Record<string, unknown>;
   refRegistry: ChatRefRegistry;
 }): Result<DehydratedInput, ChatToolError> => {
-  const nextArgs = { ...args };
   const resolvedMatterParams: DehydratedInput["resolvedMatterParams"] = {};
   const resolvedEntityParams: DehydratedInput["resolvedEntityParams"] = {};
   const dehydratedEntityRefs = new Map<string, string>();
 
-  for (const { kind, param } of inputRefs) {
-    const raw = args[param];
-    if (typeof raw !== "string") {
-      // The param is optional and absent (or already a non-ref value); nothing
-      // to resolve.
-      continue;
-    }
-
+  const resolveLeaf = (
+    kind: InputRefParam["kind"],
+    raw: string,
+    location: string,
+  ): Result<string, ChatToolError> => {
     if (kind === "matter") {
-      const resolved = refRegistry.resolveMatterRefs([raw]);
-      if (Result.isError(resolved)) {
-        return Result.err(resolved.error);
-      }
-      const workspaceId = takeSingle(resolved.value);
-      nextArgs[param] = workspaceId;
-      resolvedMatterParams[param] = workspaceId;
-      continue;
+      return refRegistry.resolveMatterRefs([raw]).map((resolved) => {
+        const workspaceId = takeSingle(resolved);
+        resolvedMatterParams[location] = workspaceId;
+        return workspaceId;
+      });
     }
     if (kind === "entity") {
-      const resolved = refRegistry.resolveEntityRefTargets([raw]);
-      if (Result.isError(resolved)) {
-        return Result.err(resolved.error);
-      }
-      const { entityId, workspaceId } = takeSingle(resolved.value);
-      nextArgs[param] = entityId;
-      resolvedEntityParams[param] = workspaceId;
-      dehydratedEntityRefs.set(entityId, raw);
-      continue;
+      return refRegistry.resolveEntityRefTargets([raw]).map((resolved) => {
+        const { entityId, workspaceId } = takeSingle(resolved);
+        resolvedEntityParams[location] = workspaceId;
+        dehydratedEntityRefs.set(entityId, raw);
+        return entityId;
+      });
     }
     if (kind === "property") {
       // Only the write tool set_field_value declares a `property` input ref;
       // no read tool does. Resolving it here keeps input dehydration uniform
       // across the read and write callers that share this core.
-      const resolved = refRegistry.resolvePropertyRefs([raw]);
-      if (Result.isError(resolved)) {
-        return Result.err(resolved.error);
-      }
-      nextArgs[param] = takeSingle(resolved.value);
-      continue;
+      return refRegistry.resolvePropertyRefs([raw]).map(takeSingle);
     }
     // `contact` is the only remaining ref kind; the exhaustiveness check makes
     // a newly added kind break here until its branch is written.
     kind satisfies "contact";
-    const resolved = refRegistry.resolveContactRefs([raw]);
-    if (Result.isError(resolved)) {
-      return Result.err(resolved.error);
+    return refRegistry.resolveContactRefs([raw]).map(takeSingle);
+  };
+
+  let nextArgs = args;
+  for (const { kind, param } of inputRefs) {
+    // The first unknown ref fails the call; the walk has no early exit, so
+    // the leaves after it are left as they are.
+    let failure: ChatToolError | undefined;
+    nextArgs = mapInputRefLeaves(nextArgs, param, (raw, location) => {
+      if (failure !== undefined || typeof raw !== "string") {
+        // The param is optional and absent (or already a non-ref value);
+        // nothing to resolve.
+        return raw;
+      }
+      const resolved = resolveLeaf(kind, raw, location);
+      if (Result.isError(resolved)) {
+        failure = resolved.error;
+        return raw;
+      }
+      return resolved.value;
+    });
+    if (failure !== undefined) {
+      return Result.err(failure);
     }
-    nextArgs[param] = takeSingle(resolved.value);
   }
 
   return Result.ok({
-    args: nextArgs,
+    args: { ...nextArgs },
     resolvedMatterParams,
     resolvedEntityParams,
     dehydratedEntityRefs,
