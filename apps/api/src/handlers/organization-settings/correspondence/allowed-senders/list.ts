@@ -94,7 +94,11 @@ const config = {
   description:
     "List approved and revoked shared mailbox senders for the active organization.",
   permissions: { organizationSettings: ["update"] },
-  mcp: { type: "capability", reason: "correspondence" },
+  mcp: {
+    type: "capability",
+    reason: "correspondence",
+    consumesServices: false,
+  },
   query: querySchema,
 } satisfies HandlerConfig;
 

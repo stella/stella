@@ -64,7 +64,11 @@ const config = {
     "is contested, and whether verifications may rely on it (`held` keeps it " +
     "out until confirmed). Only `fact` items carry detail.",
   permissions: { entity: ["update"] },
-  mcp: { type: "capability", reason: "workspace_schema" },
+  mcp: {
+    type: "capability",
+    reason: "workspace_schema",
+    consumesServices: false,
+  },
   body: bodySchema,
 } satisfies WorkspaceHandlerConfig;
 

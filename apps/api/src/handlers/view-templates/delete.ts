@@ -14,7 +14,11 @@ const config = {
     "call succeeds silently when the template does not exist or belongs to " +
     "someone else.",
   permissions: { view: ["delete"] },
-  mcp: { type: "capability", reason: "workspace_schema" },
+  mcp: {
+    type: "capability",
+    reason: "workspace_schema",
+    consumesServices: false,
+  },
   params: workspaceParams({
     templateId: tSafeId("workspaceViewTemplate"),
   }),

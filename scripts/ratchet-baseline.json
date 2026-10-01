@@ -179,7 +179,7 @@
     }
   },
   "audit-skip-directives": {
-    "count": 270,
+    "count": 271,
     "files": {
       "apps/api/src/handlers/bilingual-translations/create-run.ts": 1,
       "apps/api/src/handlers/case-law/analysis/generate.ts": 2,
@@ -199,6 +199,7 @@
       "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/pipeline/source-observation.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/pipeline/supplement-placement.ts": 4,
+      "apps/api/src/handlers/case-law/ingestion/replay.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/source-totals.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/supplement-absorption.ts": 4,
       "apps/api/src/handlers/case-law/ingestion/supplement-composition.ts": 3,
@@ -656,7 +657,7 @@
     }
   },
   "try-catch-outside-boundary": {
-    "count": 360,
+    "count": 359,
     "files": {
       "apps/api/src/handlers/ai-autocomplete/stream.ts": 1,
       "apps/api/src/handlers/case-law/analysis/generate.ts": 1,
@@ -745,7 +746,7 @@
       "apps/api/src/lib/scheduler/runner.ts": 2,
       "apps/api/src/lib/scheduler/tasks/desktop-edit-session-expiry-notifications.ts": 1,
       "apps/api/src/lib/scheduler/tasks/infosoud.ts": 1,
-      "apps/api/src/lib/search/extraction-worker.ts": 3,
+      "apps/api/src/lib/search/extraction-worker.ts": 2,
       "apps/api/src/lib/search/index-chat.ts": 1,
       "apps/api/src/lib/search/index-entity.ts": 1,
       "apps/api/src/lib/signals/scout.ts": 1,
@@ -974,7 +975,7 @@
     }
   },
   "no-db-await-in-loop-suppressions": {
-    "count": 114,
+    "count": 115,
     "files": {
       "apps/api/scripts/backfill-image-thumbnails.ts": 3,
       "apps/api/scripts/backfill-search-previews.ts": 2,
@@ -987,7 +988,7 @@
       "apps/api/src/handlers/case-law/ingestion/pipeline.ts": 3,
       "apps/api/src/handlers/case-law/ingestion/pipeline/batch.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/pipeline/decision-identity.ts": 1,
-      "apps/api/src/handlers/case-law/ingestion/reconciliation-engine.ts": 2,
+      "apps/api/src/handlers/case-law/ingestion/reconciliation-engine.ts": 3,
       "apps/api/src/handlers/case-law/ingestion/supplement-fold.ts": 2,
       "apps/api/src/handlers/case-law/provisions/previews-for-decision.ts": 1,
       "apps/api/src/handlers/chat/threads/delete.ts": 2,

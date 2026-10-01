@@ -7,7 +7,11 @@ const config = {
   description:
     "List flow definitions available to the organization, with optional status filtering and pagination.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "workflow_orchestration" },
+  mcp: {
+    type: "capability",
+    reason: "workflow_orchestration",
+    consumesServices: false,
+  },
   access: "read",
   query: listFlowDefinitionsQuerySchema,
 } satisfies HandlerConfig;

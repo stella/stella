@@ -26,7 +26,7 @@ const config = {
     "duplicate of the same type is refused, and the matter has a fixed cap " +
     "on how many codes it may hold.",
   permissions: { billingCode: ["create"] },
-  mcp: { type: "capability", reason: "billing_admin" },
+  mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   body: createBillingCodeBodySchema,
 } satisfies WorkspaceHandlerConfig;
 

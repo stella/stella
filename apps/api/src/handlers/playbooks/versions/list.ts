@@ -16,7 +16,11 @@ const config = {
     "by whom. A version is only written when a playbook is approved, so the " +
     "list is capped rather than cursor-paginated.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "knowledge_library_admin" },
+  mcp: {
+    type: "capability",
+    reason: "knowledge_library_admin",
+    consumesServices: false,
+  },
   access: "read",
   params: playbookDefinitionParamsSchema,
   query: t.Object({

@@ -89,7 +89,11 @@ const listApprovalQueue = createSafeRootHandler(
     description:
       "List draft time entries awaiting the signed-in user's approval, including internal work and accessible client matters. Owners/admins also see drafts without an assigned approver. Optionally filter work dates (from/to, YYYY-MM-DD), timekeeper (member), and matter. Returns logged durationMinutes separately from adjusted billedMinutes and the last return comment. Follow nextCursor for the next bounded page.",
     permissions: { timeEntry: ["read"] },
-    mcp: { type: "capability", reason: "billing_admin" },
+    mcp: {
+      type: "capability",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
     access: "read",
     query: t.Object({
       from: t.Optional(t.String({ format: "date" })),
