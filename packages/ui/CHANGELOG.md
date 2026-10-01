@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.39.0
+
+### Minor Changes
+
+- [#4339](https://github.com/stella/stella/pull/4339) [`8c81796`](https://github.com/stella/stella/commit/8c81796e512762094793acc16eb13f3e49c7cc61) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Remove the unused sortable Kanban layer: `KanbanSortableBoard`, `useKanbanSortable`, `KanbanDragHandle` and the `sortable` prop of `KanbanVirtualCell` are no longer exported.
+
 ## 0.38.0
 
 ### Minor Changes
