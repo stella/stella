@@ -9,6 +9,7 @@ import {
   PROCESS_DECISION_STATUS,
 } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import { rebuildStoredJudgment } from "@/api/handlers/case-law/ingestion/pipeline/stored-judgment";
+import { DECISION_SUPPLEMENT_DOCUMENT_ROLE } from "@/api/handlers/case-law/ingestion/pipeline/supplement-document-role";
 import {
   absorbSupplementIntoJudgment,
   judgmentOwnsSupplementRaw,
@@ -31,7 +32,6 @@ import { detachSupplement } from "@/api/handlers/case-law/ingestion/supplement-c
 import type { SupplementTargetKey } from "@/api/handlers/case-law/ingestion/supplement-composition";
 import type { SafeId } from "@/api/lib/branded-types";
 import { assertDocketKeyedSupplementAllowed } from "@/api/lib/legal-search/decision-language-identity";
-import { DECISION_SUPPLEMENT_DOCUMENT_ROLE } from "@/api/lib/legal-search/decision-supplement-kind";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import { openRawSourceWriteWindow } from "@/api/lib/legal-search/raw-source-storage";
 import { logger } from "@/api/lib/observability/logger";

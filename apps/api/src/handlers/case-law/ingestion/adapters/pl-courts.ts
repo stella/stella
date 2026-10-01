@@ -12,7 +12,6 @@ import {
   ADAPTER_KEYS,
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
-  DOCUMENT_ROLE_UNMAPPED,
 } from "@/api/handlers/case-law/consts";
 import {
   backlogSurface,
@@ -77,6 +76,7 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
+import { DOCUMENT_ROLE_UNMAPPED } from "@/api/lib/legal-search/document-role-diagnostics";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";

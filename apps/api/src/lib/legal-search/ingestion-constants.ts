@@ -73,11 +73,11 @@ export const PARSER_VERSIONS = {
   [ADAPTER_KEYS.AT_UMSE]: 4,
   [ADAPTER_KEYS.AT_BKS]: 4,
   [ADAPTER_KEYS.AT_FINDOK]: 4,
-  [ADAPTER_KEYS.EU_ECJ]: 9,
+  [ADAPTER_KEYS.EU_ECJ]: 8,
   [ADAPTER_KEYS.HU_BHGY]: 6,
   [ADAPTER_KEYS.PL_KIS]: 3,
-  [ADAPTER_KEYS.PL_UODO]: 6,
-  [ADAPTER_KEYS.PL_UOKIK]: 3,
+  [ADAPTER_KEYS.PL_UODO]: 5,
+  [ADAPTER_KEYS.PL_UOKIK]: 2,
 } as const satisfies Record<AdapterKey, number>;
 
 /**
@@ -119,7 +119,3 @@ export const ADAPTER_TIMEOUT = {
 
 /** Maximum time (ms) for a single adapter cycle. */
 export const MAX_CYCLE_MS = 10 * 60 * 1000;
-
-/** A publisher role enum contains a value outside its declared vocabulary. */
-export const DOCUMENT_ROLE_UNMAPPED =
-  "case_law.ingestion.document_role_unmapped";
