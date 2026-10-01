@@ -572,6 +572,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@stll/anonymize-chat": "workspace:*",
+        "@stll/legal-ast": "workspace:*",
         "@stll/template-conditions": "workspace:*",
         "@stll/text-normalize": "workspace:*",
         "@stll/time": "workspace:*",
