@@ -1234,11 +1234,17 @@ const createGhGateway = ({
         "ci-result check run",
       );
       const url = readString(check, "details_url");
-      const prefix = `https://github.com/${repo}/actions/runs/`;
-      const runId = url.startsWith(prefix)
-        ? url.slice(prefix.length).split("/").at(0)
-        : undefined;
-      if (runId === undefined || !PULL_NUMBER_PATTERN.test(runId)) {
+      const parsed = URL.canParse(url) ? new URL(url) : null;
+      const [, urlOwner, urlName, actions, runs, runId] =
+        parsed?.pathname.split("/") ?? [];
+      if (
+        parsed?.origin !== "https://github.com" ||
+        `${urlOwner}/${urlName}`.toLowerCase() !== repo.toLowerCase() ||
+        actions !== "actions" ||
+        runs !== "runs" ||
+        runId === undefined ||
+        !PULL_NUMBER_PATTERN.test(runId)
+      ) {
         panic(
           "ci-result check does not link to a workflow run in this repository",
         );

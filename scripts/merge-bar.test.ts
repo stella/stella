@@ -26,9 +26,19 @@ const OTHER_SHA = "9e5b4c2a8d6f0e1b3c5a7d9e5b4c2a8d6f0e1b3c";
 const BASE_MIGRATION = "apps/api/drizzle/20260801120000_original/migration.sql";
 const ALIAS_INVENTORY = "apps/api/src/lib/db/migration-alias-inventory.json";
 
+type MigrationGatewayOptions = {
+  changedFiles?: number;
+  repo?: string;
+  detailsUrl?: string;
+};
+
 const runMigrationGateway = (
   files: readonly Record<string, string>[],
-  changedFiles = files.length,
+  {
+    changedFiles = files.length,
+    repo = "stella/stella",
+    detailsUrl = "https://github.com/stella/stella/actions/runs/1",
+  }: MigrationGatewayOptions = {},
 ) => {
   const directory = mkdtempSync(path.join(tmpdir(), "merge-bar-files-"));
   const executable = path.join(directory, "gh");
@@ -59,7 +69,7 @@ case "$*" in
   *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
   *'api graphql'*) printf '%s\\n' "$FIXTURE_PULL_REQUEST";;
   *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}}]';;
-  *check-runs/1*) printf '%s\\n' '{"details_url":"https://github.com/stella/stella/actions/runs/1"}';;
+  *check-runs/1*) printf '%s\\n' "$FIXTURE_CHECK_RUN";;
   *actions/runs/1*) printf '%s\\n' '{"head_sha":"${HEAD_SHA}","pull_requests":[{"number":123,"head":{"sha":"${HEAD_SHA}"},"base":{"ref":"main","sha":"${OTHER_SHA}"}}]}';;
   *compare/*) printf '%s\\n' '{"status":"identical"}';;
   *check-runs*) printf '1\\tci-result\\tcompleted\\tsuccess\\n';;
@@ -78,11 +88,14 @@ esac
         fileURLToPath(new URL("merge-bar.ts", import.meta.url)),
         "123",
         "--dry-run",
+        "--repo",
+        repo,
       ],
       env: {
         ...process.env,
         PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
         FIXTURE_PULL_REQUEST: pullRequest,
+        FIXTURE_CHECK_RUN: JSON.stringify({ details_url: detailsUrl }),
         FIXTURE_FILES: files.map((file) => JSON.stringify(file)).join("\n"),
         FIXTURE_CHANGED_FILES: String(changedFiles),
       },
@@ -502,7 +515,7 @@ describe("migration file gateway", () => {
   );
 
   test("an incomplete changed-files response aborts", () => {
-    const result = runMigrationGateway([], 1);
+    const result = runMigrationGateway([], { changedFiles: 1 });
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr).toContain("changed files");
   });
@@ -1593,5 +1606,39 @@ describe("green result freshness", () => {
         true,
       );
     }
+  });
+});
+
+describe("workflow run URL repository identity", () => {
+  test.each(["stella/stella", "Stella/Stella", "STELLA/stella"])(
+    "accepts canonical run URLs for repository %s",
+    (repo) => {
+      const result = runMigrationGateway([], { repo });
+      expect(result.exitCode, result.stderr).toBe(0);
+    },
+  );
+
+  test.each([
+    "https://github.com/STELLA/Stella/actions/runs/1/job/2",
+    "https://github.com/stella/stella/actions/runs/1",
+  ])("accepts matching repository casing in %s", (detailsUrl) => {
+    const result = runMigrationGateway([], { detailsUrl });
+    expect(result.exitCode, result.stderr).toBe(0);
+  });
+
+  test.each([
+    "not a URL",
+    "https://github.com/other/stella/actions/runs/1",
+    "https://github.com/stella/other/actions/runs/1",
+    "https://github.com.evil.test/stella/stella/actions/runs/1",
+    "http://github.com/stella/stella/actions/runs/1",
+    "https://github.com/stella/stella/pulls/1",
+    "https://github.com/stella/stella/actions/runs/not-a-number",
+  ])("refuses a workflow link outside the repository: %s", (detailsUrl) => {
+    const result = runMigrationGateway([], { detailsUrl });
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr).toContain(
+      "ci-result check does not link to a workflow run in this repository",
+    );
   });
 });
