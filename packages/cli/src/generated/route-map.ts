@@ -54381,14 +54381,12 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "enum",
                     enum: [
-                      "overview",
                       "table",
                       "filesystem",
                       "kanban",
                       "calendar",
                       "timeline",
                       "avt",
-                      "correspondence",
                     ],
                     repeatable: false,
                     flag: "--target-type",
@@ -54411,17 +54409,15 @@ export const generatedRouteMap: RouteNode = {
                       required: ["targetType"],
                       properties: {
                         targetType: {
-                          default: "overview",
+                          default: "table",
                           type: "string",
                           enum: [
-                            "overview",
                             "table",
                             "filesystem",
                             "kanban",
                             "calendar",
                             "timeline",
                             "avt",
-                            "correspondence",
                           ],
                         },
                       },

@@ -3,10 +3,9 @@ import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import {
-  isSingleViewLayout,
+  CONVERTIBLE_VIEW_LAYOUTS,
   resourceRef,
   RESOURCE_TYPE,
-  VIEW_LAYOUT_TYPES,
 } from "@stll/api-contract";
 
 import { abortableTx } from "@/api/db/safe-db";
@@ -38,7 +37,7 @@ const config = {
   mcp: { type: "capability", reason: "workspace_schema" },
   params: workspaceParams({ viewId: tSafeId("workspaceView") }),
   body: t.Object({
-    targetType: t.UnionEnum([...VIEW_LAYOUT_TYPES]),
+    targetType: t.UnionEnum([...CONVERTIBLE_VIEW_LAYOUTS]),
   }),
 } satisfies WorkspaceHandlerConfig;
 
@@ -51,16 +50,6 @@ const convertView = createSafeHandler(
     body: { targetType },
     recordAuditEvent,
   }) {
-    // A matter holds at most one view of these layouts, so no view becomes one.
-    if (isSingleViewLayout(targetType)) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: `Cannot convert to ${targetType}`,
-        }),
-      );
-    }
-
     const existing = yield* Result.await(
       safeDb((tx) =>
         tx.query.workspaceViews.findFirst({

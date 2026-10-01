@@ -442,6 +442,7 @@ export type {
   ContactImportVocabularyId,
 } from "./contact-import-labeled";
 export {
+  CONVERTIBLE_VIEW_LAYOUTS,
   DIRECTLY_CREATABLE_VIEW_LAYOUTS,
   isRequiredViewLayout,
   isSingleViewLayout,
