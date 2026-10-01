@@ -65,7 +65,9 @@ test("membership is enforced for a resolved base commit", () => {
         remediation: "remove the entry",
         args: ["--base", "HEAD"],
         log: () => {},
-        error: (message) => errors.push(message),
+        error: (message) => {
+          errors.push(message);
+        },
       }),
     ).toBe(1);
     expect(errors.join("\n")).toContain("new-entry");
@@ -90,7 +92,9 @@ test("an unresolved base skips only the membership comparison", () => {
         label: "test",
         remediation: "remove the entry",
         args: ["--base", "missing-base"],
-        log: (message) => logs.push(message),
+        log: (message) => {
+          logs.push(message);
+        },
         error: () => {},
       }),
     ).toBe(0);
