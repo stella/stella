@@ -14,18 +14,32 @@
 // An acknowledgement that clears nothing, names an unknown rule, or carries a
 // reason shorter than MIN_ACKNOWLEDGEMENT_REASON_LENGTH is itself an error.
 
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { panic } from "better-result";
+import { createHash } from "node:crypto";
+import {
+  existsSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  statSync,
+} from "node:fs";
 import path from "node:path";
 
 import { HIGH_VOLUME_TABLES } from "../apps/api/src/db/high-volume-tables";
+// Statement hashes pin historical index work without exempting a whole file.
+// The corpus test requires exact findings and forbids additions to this snapshot.
+import indexFindingsSnapshot from "./migration-index-findings.json";
 
 type Statement = {
   line: number;
+  identifiers: { index: number; name: string }[];
+  literals: { index: number; end: number; value: string }[];
+  executableIndexHint?: boolean;
   // Comment, string, and identifier content masked to spaces so keyword scans
   // cannot be fooled by literals.
   text: string;
-  // Unmasked text from the first token of the statement. Used only to read
-  // object names out of DROP/CREATE statements; every rule runs on `text`.
+  // Unmasked text from the first token of the statement. Object-name readers
+  // pair this view with masked keyword offsets to exclude comments/literals.
   raw: string;
   // Surfaced from a stored-routine (CREATE FUNCTION/PROCEDURE) body: the body is
   // stored, not executed during the migration, so rules that judge migration
@@ -68,6 +82,7 @@ type Finding = {
   ruleId: string;
   description: string;
   guidance?: string;
+  statementHash?: string;
 };
 
 type Acknowledgement = {
@@ -561,6 +576,7 @@ const GUARDED_RULES: GuardedRule[] = [
 ];
 
 const HIGH_VOLUME_TABLE_NAMES = new Set<string>(HIGH_VOLUME_TABLES);
+const HIGH_VOLUME_INDEX_BUILD_RULE_ID = "high-volume-index-build";
 
 // A DML verb and the relation it targets, read from unmasked text so a quoted
 // or schema-qualified name is still a name; the qualifier may carry whitespace
@@ -636,9 +652,10 @@ const STATEMENT_INVARIANT_RULES: StatementInvariantRule[] = [
   },
 ];
 
-const STATEMENT_INVARIANT_RULE_IDS = new Set(
-  STATEMENT_INVARIANT_RULES.map((rule) => rule.id),
-);
+const STATEMENT_INVARIANT_RULE_IDS = new Set([
+  ...STATEMENT_INVARIANT_RULES.map((rule) => rule.id),
+  HIGH_VOLUME_INDEX_BUILD_RULE_ID,
+]);
 
 // Statements allowed before the timeouts are set: only other SET commands. The
 // timeouts must precede the first migration operation, or that operation runs
@@ -691,7 +708,13 @@ const usage = () => {
 };
 
 const toRepoPath = (file: string): string =>
-  path.relative(process.cwd(), path.resolve(file)).split(path.sep).join("/");
+  path
+    .relative(
+      process.cwd(),
+      existsSync(file) ? realpathSync(file) : path.resolve(file),
+    )
+    .split(path.sep)
+    .join("/");
 
 const readBaseline = (): Set<string> => {
   if (!existsSync(BASELINE_FILE)) {
@@ -813,22 +836,102 @@ const consumeSingleQuotedCharacter = ({
   };
 };
 
+// PostgreSQL E strings support escaped characters and numeric byte/codepoint forms.
+const decodeEscapeString = (value: string): string =>
+  value.replace(
+    /\\(U[0-9a-fA-F]{8}|u[0-9a-fA-F]{4}|x[0-9a-fA-F]{1,2}|[0-7]{1,3}|[\s\S])/gu,
+    (_match, escape: string) => {
+      if (/^[Uux]/u.test(escape)) {
+        return String.fromCodePoint(Number.parseInt(escape.slice(1), 16));
+      }
+      if (/^[0-7]/u.test(escape)) {
+        return String.fromCodePoint(Number.parseInt(escape, 8));
+      }
+      switch (escape) {
+        case "n":
+          return "\n";
+        case "r":
+          return "\r";
+        case "t":
+          return "\t";
+        case "b":
+          return "\b";
+        case "f":
+          return "\f";
+        default:
+          return escape;
+      }
+    },
+  );
+
+const decodeSingleQuotedLiteral = (value: string, escaped: boolean): string => {
+  const unquoted = value.replace(/''/gu, "'");
+  return escaped ? decodeEscapeString(unquoted) : unquoted;
+};
+
+type QuotedBodyOptions = {
+  prefix: string;
+  body: string;
+  startLine: number;
+  enclosingLine: number;
+};
+
+const INDEX_BUILD_HINT_PATTERN =
+  /\b(?:CREATE\s+(?:UNIQUE\s+)?INDEX|REINDEX|ALTER\s+TABLE[\s\S]*?\bADD\b[\s\S]*?\b(?:PRIMARY\s+KEY|UNIQUE|EXCLUDE))\b/iu;
+
+const surfaceQuotedBody = ({
+  prefix,
+  body,
+  startLine,
+  enclosingLine,
+}: QuotedBodyOptions): Statement[] => {
+  if (!shouldScanDollarQuoteBody(prefix)) {
+    return [];
+  }
+  // DO executes now; routine definitions are deferred, including nested bodies.
+  const deferred = !DO_BLOCK_DOLLAR_QUOTE_PREFIX_PATTERN.test(prefix);
+  const bodyStatements = parseStatements(body);
+  const literalFragments = bodyStatements.flatMap(({ literals }) =>
+    literals.map(({ value }) => value),
+  );
+  const executableIndexHint = INDEX_BUILD_HINT_PATTERN.test(
+    literalFragments.join(" "),
+  );
+  return bodyStatements.map((statement) => {
+    statement.line += startLine - 1;
+    statement.enclosingLine = enclosingLine;
+    if (executableIndexHint) {
+      statement.executableIndexHint = true;
+    }
+    if (deferred) {
+      statement.deferred = true;
+    }
+    return statement;
+  });
+};
+
 const parseStatements = (source: string): Statement[] => {
   const statements: Statement[] = [];
   let current = "";
+  let identifiers: Statement["identifiers"] = [];
+  let literals: Statement["literals"] = [];
+  let literalStart = 0;
+  let literalSourceStart = 0;
+  let literalEscaped = false;
+  let literalLine = 1;
+  let identifierStart = 0;
+  let identifierSourceStart = 0;
   let currentLine = 1;
   let currentStart = 0;
   let line = 1;
   let blockCommentDepth = 0;
-  let dollarQuoteTag: string | null = null;
   let singleQuoteAllowsBackslashEscapes = false;
   let state:
     | "normal"
     | "line-comment"
     | "block-comment"
     | "single-quote"
-    | "double-quote"
-    | "dollar-quote" = "normal";
+    | "double-quote" = "normal";
 
   const pushCurrent = (endIndex: number) => {
     if (isWhitespaceOnly(current)) {
@@ -841,8 +944,12 @@ const parseStatements = (source: string): Statement[] => {
       line: currentLine,
       text: current,
       raw: source.slice(currentStart, endIndex),
+      identifiers,
+      literals,
     });
     current = "";
+    identifiers = [];
+    literals = [];
     currentLine = line;
   };
 
@@ -906,6 +1013,21 @@ const parseStatements = (source: string): Statement[] => {
 
       line = result.line;
       state = result.state;
+      if (state === "normal") {
+        const value = decodeSingleQuotedLiteral(
+          source.slice(literalSourceStart, index),
+          literalEscaped,
+        );
+        literals.push({ index: literalStart, end: current.length, value });
+        statements.push(
+          ...surfaceQuotedBody({
+            prefix: current.slice(0, literalStart).replace(/E$/iu, ""),
+            body: value,
+            startLine: literalLine,
+            enclosingLine: currentLine,
+          }),
+        );
+      }
       singleQuoteAllowsBackslashEscapes =
         result.singleQuoteAllowsBackslashEscapes;
       continue;
@@ -925,28 +1047,13 @@ const parseStatements = (source: string): Statement[] => {
       }
 
       if (char === '"') {
+        identifiers.push({
+          index: identifierStart,
+          name: source.slice(identifierSourceStart, index).replace(/""/gu, '"'),
+        });
         state = "normal";
       }
 
-      continue;
-    }
-
-    if (state === "dollar-quote") {
-      const tag = dollarQuoteTag ?? "";
-
-      if (source.startsWith(tag, index)) {
-        current += " ".repeat(tag.length);
-        index += tag.length - 1;
-        dollarQuoteTag = null;
-        state = "normal";
-        continue;
-      }
-
-      if (char === "\n") {
-        line++;
-      }
-
-      current += appendMasked(char);
       continue;
     }
 
@@ -971,13 +1078,19 @@ const parseStatements = (source: string): Statement[] => {
     }
 
     if (char === "'") {
+      literalStart = current.length;
+      literalSourceStart = index + 1;
+      literalLine = line;
+      literalEscaped = hasEscapeStringPrefix(source, index);
       current += " ";
-      singleQuoteAllowsBackslashEscapes = hasEscapeStringPrefix(source, index);
+      singleQuoteAllowsBackslashEscapes = literalEscaped;
       state = "single-quote";
       continue;
     }
 
     if (char === '"') {
+      identifierStart = current.length;
+      identifierSourceStart = index + 1;
       current += " ";
       state = "double-quote";
       continue;
@@ -989,35 +1102,26 @@ const parseStatements = (source: string): Statement[] => {
       const closingIndex = source.indexOf(dollarTag, bodyStartIndex);
 
       if (closingIndex === -1) {
-        current += " ".repeat(dollarTag.length);
-        index += dollarTag.length - 1;
-        dollarQuoteTag = dollarTag;
-        state = "dollar-quote";
-        continue;
+        current += maskText(source.slice(index));
+        break;
       }
 
       const dollarQuote = source.slice(index, closingIndex + dollarTag.length);
 
-      if (shouldScanDollarQuoteBody(current)) {
-        const body = source.slice(bodyStartIndex, closingIndex);
-        const bodyStartLine = line + countNewlines(dollarTag);
-        // A DO block runs at migration time; a routine body is only stored, so
-        // its statements (and anything nested in them) are deferred.
-        const bodyIsDeferred =
-          !DO_BLOCK_DOLLAR_QUOTE_PREFIX_PATTERN.test(current);
+      statements.push(
+        ...surfaceQuotedBody({
+          prefix: current,
+          body: source.slice(bodyStartIndex, closingIndex),
+          startLine: line + countNewlines(dollarTag),
+          enclosingLine: currentLine,
+        }),
+      );
 
-        for (const statement of parseStatements(body)) {
-          statements.push({
-            line: bodyStartLine + statement.line - 1,
-            text: statement.text,
-            raw: statement.raw,
-            // The outermost parse runs last, so the outermost statement wins.
-            enclosingLine: currentLine,
-            ...(bodyIsDeferred || statement.deferred ? { deferred: true } : {}),
-          });
-        }
-      }
-
+      literals.push({
+        index: current.length,
+        end: current.length + dollarQuote.length,
+        value: source.slice(bodyStartIndex, closingIndex),
+      });
       current += maskText(dollarQuote);
       line += countNewlines(dollarQuote);
       index += dollarQuote.length - 1;
@@ -1039,6 +1143,678 @@ const parseStatements = (source: string): Statement[] => {
   pushCurrent(source.length);
 
   return statements;
+};
+
+// Keep quoted identifiers alongside the masked keyword view. Token offsets come
+// from the same scanner, so comments and string contents cannot supply names.
+type IndexToken = {
+  kind: "word" | "identifier" | "punctuation";
+  value: string;
+  index: number;
+};
+
+const indexTokens = (statement: Statement): IndexToken[] => {
+  const tokens: IndexToken[] = statement.identifiers.map(({ index, name }) => ({
+    kind: "identifier",
+    value: name,
+    index,
+  }));
+  for (const match of statement.text.matchAll(
+    /[A-Za-z_][A-Za-z0-9_$]*|[(),.]/gu,
+  )) {
+    tokens.push({
+      kind: /^[(),.]$/u.test(match[0]) ? "punctuation" : "word",
+      value: match[0].toLowerCase(),
+      index: match.index,
+    });
+  }
+  return tokens.toSorted((left, right) => left.index - right.index);
+};
+
+const isIndexKeyword = (
+  token: IndexToken | undefined,
+  value: string,
+): boolean => token?.kind === "word" && token.value === value;
+
+type IndexRelation = {
+  schema: string;
+  name: string;
+  key: string;
+  qualified: boolean;
+};
+
+const readIndexRelation = (tokens: IndexToken[], start: number) => {
+  const first = tokens[start];
+  if (!first || first.kind === "punctuation") {
+    return undefined;
+  }
+  const second = tokens[start + 2];
+  const qualified = tokens[start + 1]?.value === ".";
+  if (qualified && (!second || second.kind === "punctuation")) {
+    return undefined;
+  }
+  const schema = qualified ? first.value : "public";
+  const name = qualified ? second?.value : first.value;
+  if (name === undefined) {
+    return undefined;
+  }
+  return {
+    relation: { schema, name, key: JSON.stringify([schema, name]), qualified },
+    next: start + (qualified ? 3 : 1),
+  };
+};
+
+type MigrationIndexOperation =
+  | { type: "create-table"; table: IndexRelation; conditional: boolean }
+  | { type: "create-index"; table: IndexRelation; index?: IndexRelation }
+  | { type: "reindex"; target: "index" | "table"; relation?: IndexRelation }
+  | { type: "reindex-scope" }
+  | {
+      type: "rename-table" | "rename-index";
+      from: IndexRelation;
+      to: IndexRelation;
+    }
+  | { type: "drop-index"; index: IndexRelation };
+
+// The tail starts inside format(...); its outer close must end the expression.
+const isWholeFormatCallTail = (tail: string): boolean => {
+  let depth = 1;
+  for (let index = 0; index < tail.length; index++) {
+    const char = tail[index];
+    if (char === "(") {
+      depth++;
+    }
+    if (char !== ")") {
+      continue;
+    }
+    depth--;
+    if (depth === 0) {
+      return tail.slice(index + 1).trim() === "";
+    }
+  }
+  return false;
+};
+
+const migrationRelationLifecycle = (
+  tokens: IndexToken[],
+  position: number,
+): MigrationIndexOperation | undefined => {
+  let cursor = position + 1;
+  if (isIndexKeyword(tokens[position], "alter")) {
+    const table = isIndexKeyword(tokens[cursor], "table");
+    if (!table && !isIndexKeyword(tokens[cursor], "index")) {
+      return undefined;
+    }
+    cursor++;
+    if (isIndexKeyword(tokens[cursor], "if")) {
+      cursor += 2;
+    }
+    if (isIndexKeyword(tokens[cursor], "only")) {
+      cursor++;
+    }
+    const from = readIndexRelation(tokens, cursor);
+    if (
+      !from ||
+      !isIndexKeyword(tokens[from.next], "rename") ||
+      !isIndexKeyword(tokens[from.next + 1], "to")
+    ) {
+      return undefined;
+    }
+    const name = readIndexRelation(tokens, from.next + 2)?.relation.name;
+    if (name === undefined) {
+      return undefined;
+    }
+    return {
+      type: table ? "rename-table" : "rename-index",
+      from: from.relation,
+      to: {
+        ...from.relation,
+        name,
+        key: JSON.stringify([from.relation.schema, name]),
+      },
+    };
+  }
+  if (
+    isIndexKeyword(tokens[position], "drop") &&
+    isIndexKeyword(tokens[cursor], "index")
+  ) {
+    cursor++;
+    if (isIndexKeyword(tokens[cursor], "concurrently")) {
+      cursor++;
+    }
+    if (isIndexKeyword(tokens[cursor], "if")) {
+      cursor += 2;
+    }
+    const index = readIndexRelation(tokens, cursor)?.relation;
+    if (index) {
+      return { type: "drop-index", index };
+    }
+  }
+  return undefined;
+};
+
+const migrationReindexOperation = (
+  tokens: IndexToken[],
+  position: number,
+): MigrationIndexOperation | undefined => {
+  let cursor = position + 1;
+  if (!isIndexKeyword(tokens[position], "reindex")) {
+    return undefined;
+  }
+  // PostgreSQL also permits parenthesized options before the target kind.
+  if (tokens[cursor]?.value === "(") {
+    while (cursor < tokens.length && tokens[cursor]?.value !== ")") {
+      cursor++;
+    }
+    cursor++;
+  }
+  const kind = tokens[cursor];
+  if (
+    ["schema", "database", "system"].some((value) =>
+      isIndexKeyword(kind, value),
+    )
+  ) {
+    return { type: "reindex-scope" };
+  }
+  if (!isIndexKeyword(kind, "index") && !isIndexKeyword(kind, "table")) {
+    return undefined;
+  }
+  cursor++;
+  if (isIndexKeyword(tokens[cursor], "concurrently")) {
+    cursor++;
+  }
+  const relation = readIndexRelation(tokens, cursor)?.relation;
+  return {
+    type: "reindex",
+    target: isIndexKeyword(kind, "index") ? "index" : "table",
+    ...(relation ? { relation } : {}),
+  };
+};
+
+// Commas inside expressions or index options do not delimit ALTER actions.
+const splitAlterActions = (tokens: IndexToken[]): IndexToken[][] => {
+  const actions: IndexToken[][] = [];
+  let action: IndexToken[] = [];
+  let depth = 0;
+  for (const token of tokens) {
+    if (token.value === "(") {
+      depth++;
+    }
+    if (token.value === ")") {
+      depth--;
+    }
+    if (token.value === "," && depth === 0) {
+      actions.push(action);
+      action = [];
+      continue;
+    }
+    action.push(token);
+  }
+  actions.push(action);
+  return actions;
+};
+
+const topLevelAlterTokens = (tokens: IndexToken[]): IndexToken[] => {
+  let depth = 0;
+  return tokens.filter((token) => {
+    if (token.value === "(") {
+      depth++;
+      return false;
+    }
+    if (token.value === ")") {
+      depth--;
+      return false;
+    }
+    return depth === 0;
+  });
+};
+
+const namedConstraintIndex = (
+  name: string,
+  table: IndexRelation,
+): IndexRelation => ({
+  schema: table.schema,
+  name,
+  key: JSON.stringify([table.schema, name]),
+  qualified: true,
+});
+
+const isIndexConstraint = (tokens: IndexToken[], position: number): boolean =>
+  isIndexKeyword(tokens[position], "unique") ||
+  isIndexKeyword(tokens[position], "exclude") ||
+  (isIndexKeyword(tokens[position], "primary") &&
+    isIndexKeyword(tokens[position + 1], "key"));
+
+const addedConstraintIndexes = (
+  action: IndexToken[],
+  table: IndexRelation,
+): MigrationIndexOperation[] => {
+  if (!isIndexKeyword(action[0], "add")) {
+    return [];
+  }
+  const tokens = topLevelAlterTokens(action);
+  const operations: MigrationIndexOperation[] = [];
+  let constraint: IndexRelation | undefined;
+  for (let position = 1; position < tokens.length; position++) {
+    if (isIndexKeyword(tokens[position], "constraint")) {
+      const name = readIndexRelation(tokens, position + 1);
+      constraint = name
+        ? namedConstraintIndex(name.relation.name, table)
+        : undefined;
+      position = (name?.next ?? position + 2) - 1;
+      continue;
+    }
+    if (!isIndexConstraint(tokens, position)) {
+      continue;
+    }
+    // Attaching an existing online-built index does not build another one.
+    const attached = tokens
+      .slice(position + 1)
+      .some(
+        (candidate, offset, tail) =>
+          isIndexKeyword(candidate, "using") &&
+          isIndexKeyword(tail[offset + 1], "index"),
+      );
+    if (!attached) {
+      operations.push({
+        type: "create-index",
+        table,
+        ...(constraint ? { index: constraint } : {}),
+      });
+    }
+    constraint = undefined;
+  }
+  return operations;
+};
+
+const migrationAlterIndexOperations = (
+  tokens: IndexToken[],
+  position: number,
+): MigrationIndexOperation[] => {
+  if (
+    !isIndexKeyword(tokens[position], "alter") ||
+    !isIndexKeyword(tokens[position + 1], "table")
+  ) {
+    return [];
+  }
+  let cursor = position + 2;
+  if (isIndexKeyword(tokens[cursor], "if")) {
+    cursor += 2;
+  }
+  if (isIndexKeyword(tokens[cursor], "only")) {
+    cursor++;
+  }
+  const table = readIndexRelation(tokens, cursor);
+  if (!table) {
+    return [];
+  }
+  return splitAlterActions(tokens.slice(table.next)).flatMap((action) =>
+    addedConstraintIndexes(action, table.relation),
+  );
+};
+
+const migrationIndexOperations = (
+  statement: Statement,
+): MigrationIndexOperation[] => {
+  if (statement.deferred) {
+    return [];
+  }
+  const tokens = indexTokens(statement);
+  const operations: MigrationIndexOperation[] = [];
+  for (let position = 0; position < tokens.length; position++) {
+    let cursor = position + 1;
+    const lifecycle = migrationRelationLifecycle(tokens, position);
+    if (lifecycle) {
+      operations.push(lifecycle);
+      continue;
+    }
+    operations.push(...migrationAlterIndexOperations(tokens, position));
+    const reindex = migrationReindexOperation(tokens, position);
+    if (reindex) {
+      operations.push(reindex);
+      continue;
+    }
+    if (!isIndexKeyword(tokens[position], "create")) {
+      continue;
+    }
+    if (
+      ["unlogged", "temp", "temporary", "unique"].some((value) =>
+        isIndexKeyword(tokens[cursor], value),
+      )
+    ) {
+      cursor++;
+    }
+    const tableCreation = isIndexKeyword(tokens[cursor], "table");
+    if (!tableCreation && !isIndexKeyword(tokens[cursor], "index")) {
+      continue;
+    }
+    cursor++;
+    if (isIndexKeyword(tokens[cursor], "concurrently")) {
+      cursor++;
+    }
+    const conditional = isIndexKeyword(tokens[cursor], "if");
+    if (conditional) {
+      cursor += 3; // IF NOT EXISTS
+    }
+    if (tableCreation) {
+      const table = readIndexRelation(tokens, cursor)?.relation;
+      if (table) {
+        operations.push({ type: "create-table", table, conditional });
+      }
+      continue;
+    }
+    let index: IndexRelation | undefined;
+    if (!isIndexKeyword(tokens[cursor], "on")) {
+      const name = readIndexRelation(tokens, cursor);
+      index = name?.relation;
+      cursor = name?.next ?? cursor;
+    }
+    if (!isIndexKeyword(tokens[cursor], "on")) {
+      continue;
+    }
+    cursor++;
+    if (isIndexKeyword(tokens[cursor], "only")) {
+      cursor++;
+    }
+    const table = readIndexRelation(tokens, cursor)?.relation;
+    if (!table) {
+      continue;
+    }
+    // An unqualified index is created in its table's schema, not search_path.
+    if (index) {
+      index = {
+        schema: table.schema,
+        name: index.name,
+        key: JSON.stringify([table.schema, index.name]),
+        qualified: true,
+      };
+    }
+    operations.push({
+      type: "create-index",
+      table,
+      ...(index ? { index } : {}),
+    });
+  }
+  operations.push(...dynamicIndexOperations(statement, tokens));
+  return operations;
+};
+
+type ExecutedSqlOptions = {
+  statement: Statement;
+  token: IndexToken;
+  end: number;
+  literals: Statement["literals"];
+  first: Statement["literals"][number];
+};
+
+const resolveExecutedSql = ({
+  statement,
+  token,
+  end,
+  literals,
+  first,
+}: ExecutedSqlOptions): string | undefined => {
+  const before = statement.text
+    .slice(token.index + token.value.length, first.index)
+    .trim();
+  const after = statement.text.slice(first.end, end).trim();
+  let tail = statement.text.slice(first.end, end);
+  for (const literal of literals.slice(1).toReversed()) {
+    const start = literal.index - first.end;
+    tail = `${tail.slice(0, start)}'literal'${tail.slice(literal.end - first.end)}`;
+  }
+  let sql: string | undefined;
+  if (
+    (before === "" || before.toLowerCase() === "e") &&
+    /^(?:INTO|USING|$)/iu.test(after)
+  ) {
+    sql = first.value;
+  } else if (/^format\s*\($/iu.test(before)) {
+    // Only literal format arguments can prove the target. Variables and
+    // expressions must not masquerade as constant identifiers.
+    const argumentShape = tail;
+    if (/^\s*(?:,\s*(?:E?'(?:[^']|'')*')\s*)*\)\s*$/iu.test(argumentShape)) {
+      // Each %I/%s consumes the next literal argument; more placeholders than
+      // arguments leaves the target unknown.
+      const placeholders = [...first.value.matchAll(/%%|%[Is]/gu)].filter(
+        ([match]) => match !== "%%",
+      ).length;
+      const unresolvedArgument = placeholders > literals.length - 1;
+      let argument = 1;
+      sql = first.value.replace(
+        /%%|%([Is])/gu,
+        (match, kind: string | undefined) => {
+          if (match === "%%") {
+            return "%";
+          }
+          const value = literals[argument++]?.value;
+          if (value === undefined) {
+            return "%";
+          }
+          return kind === "I" ? `"${value.replaceAll('"', '""')}"` : value;
+        },
+      );
+      if (
+        unresolvedArgument ||
+        /%(?!%)/u.test(first.value.replace(/%%|%[Is]/gu, ""))
+      ) {
+        sql = undefined;
+      }
+    } else if (isWholeFormatCallTail(tail) && !/%(?!%|I)/u.test(first.value)) {
+      // Unknown %I arguments are quoted identifiers, so they cannot inject
+      // another SQL statement. A placeholder target still fails closed.
+      sql = first.value.replace(/%%|%I/gu, (match) =>
+        match === "%%" ? "%" : '"__migration_dynamic_identifier__"',
+      );
+    }
+  } else if (
+    /^(?:E)?$/iu.test(before) &&
+    /^\s*(?:\|\|\s*(?:E?'(?:[^']|'')*')\s*)+$/iu.test(tail)
+  ) {
+    sql = literals.map(({ value }) => value).join("");
+  }
+  return sql;
+};
+
+const dynamicIndexOperations = (
+  statement: Statement,
+  tokens: IndexToken[],
+): MigrationIndexOperation[] => {
+  const operations: MigrationIndexOperation[] = [];
+  if (statement.enclosingLine !== undefined) {
+    for (const [position, token] of tokens.entries()) {
+      if (!isIndexKeyword(token, "execute")) {
+        continue;
+      }
+      const nextExecute = tokens
+        .slice(position + 1)
+        .find((candidate) => isIndexKeyword(candidate, "execute"));
+      const end = nextExecute?.index ?? statement.text.length;
+      const literals = statement.literals.filter(
+        (literal) => literal.index > token.index && literal.index < end,
+      );
+      const first = literals.at(0);
+      if (!first) {
+        if (statement.executableIndexHint) {
+          operations.push({ type: "reindex-scope" });
+        }
+        continue;
+      }
+      const sql = resolveExecutedSql({
+        statement,
+        token,
+        end,
+        literals,
+        first,
+      });
+      if (sql !== undefined) {
+        for (const nested of parseStatements(sql)) {
+          for (const operation of migrationIndexOperations(nested)) {
+            let table: IndexRelation | undefined;
+            if (operation.type === "create-index") {
+              table = operation.table;
+            } else if (operation.type === "reindex") {
+              table = operation.relation;
+            }
+            if (
+              table &&
+              (table.name.includes("__migration_dynamic_identifier__") ||
+                table.schema.includes("__migration_dynamic_identifier__"))
+            ) {
+              operations.push({ type: "reindex-scope" });
+              continue;
+            }
+            if (
+              operation.type === "create-index" &&
+              operation.index?.name.includes("__migration_dynamic_identifier__")
+            ) {
+              operations.push({ type: "create-index", table: operation.table });
+              continue;
+            }
+            operations.push(operation);
+          }
+        }
+      } else if (
+        statement.executableIndexHint ||
+        INDEX_BUILD_HINT_PATTERN.test(
+          literals.map(({ value }) => value).join(" "),
+        )
+      ) {
+        operations.push({ type: "reindex-scope" });
+      }
+    }
+  }
+  return operations;
+};
+
+type MigrationIndexSource = { file: string; source: string };
+
+// Sources are supplied in migration order. Only prior executable definitions
+// resolve a REINDEX INDEX; missing or conflicting owners fail closed.
+export const checkMigrationIndexBuilds = (
+  sources: MigrationIndexSource[],
+): Finding[] => {
+  const findings: Finding[] = [];
+  const indexTables = new Map<string, Map<string, IndexRelation>>();
+  const renamedHighVolume = new Set<string>();
+  const isHeavy = (table: IndexRelation) =>
+    HIGH_VOLUME_TABLE_NAMES.has(table.name) || renamedHighVolume.has(table.key);
+  const resolveOwners = (relation: IndexRelation) => {
+    if (relation.qualified) {
+      return indexTables.get(relation.key);
+    }
+    const matches = [...indexTables.entries()].filter(([key]) =>
+      key.endsWith(`,${JSON.stringify(relation.name)}]`),
+    );
+    return matches.length === 1 ? matches[0]?.[1] : undefined;
+  };
+  const normalizedSources = sources.map(({ file, source }) => ({
+    file: toRepoPath(file),
+    source,
+  }));
+  for (const { file, source } of normalizedSources) {
+    const newTables = new Set<string>();
+    for (const statement of parseStatements(source)) {
+      for (const operation of migrationIndexOperations(statement)) {
+        let unsafe: boolean;
+        switch (operation.type) {
+          case "create-table":
+            // A procedural CREATE may sit behind a condition that never runs.
+            if (
+              !operation.conditional &&
+              statement.enclosingLine === undefined
+            ) {
+              newTables.add(operation.table.key);
+            }
+            continue;
+          case "rename-table": {
+            const fresh = newTables.delete(operation.from.key);
+            newTables.delete(operation.to.key);
+            if (fresh) {
+              newTables.add(operation.to.key);
+            }
+            if (!fresh && isHeavy(operation.from)) {
+              renamedHighVolume.add(operation.to.key);
+            }
+            for (const owners of indexTables.values()) {
+              if (owners.delete(operation.from.key)) {
+                owners.set(operation.to.key, operation.to);
+              }
+            }
+            continue;
+          }
+          case "rename-index": {
+            const owners = resolveOwners(operation.from);
+            if (owners) {
+              const ownerSchema =
+                owners.values().next().value?.schema ?? operation.from.schema;
+              indexTables.delete(
+                JSON.stringify([ownerSchema, operation.from.name]),
+              );
+              indexTables.set(
+                JSON.stringify([ownerSchema, operation.to.name]),
+                owners,
+              );
+            }
+            continue;
+          }
+          case "drop-index": {
+            const owners = resolveOwners(operation.index);
+            if (owners) {
+              const ownerSchema =
+                owners.values().next().value?.schema ?? operation.index.schema;
+              indexTables.delete(
+                JSON.stringify([ownerSchema, operation.index.name]),
+              );
+            }
+            continue;
+          }
+          case "create-index": {
+            const { table, index } = operation;
+            if (index) {
+              const owners =
+                indexTables.get(index.key) ?? new Map<string, IndexRelation>();
+              owners.set(table.key, table);
+              indexTables.set(index.key, owners);
+            }
+            unsafe = isHeavy(table) && !newTables.has(table.key);
+            break;
+          }
+          case "reindex": {
+            const { target, relation } = operation;
+            const owners = relation ? resolveOwners(relation) : undefined;
+            const knownOwner =
+              owners?.size === 1 ? owners.values().next().value : undefined;
+            const table = target === "table" ? relation : knownOwner;
+            unsafe = !table || (isHeavy(table) && !newTables.has(table.key));
+            break;
+          }
+          case "reindex-scope":
+            unsafe = true;
+            break;
+          default: {
+            operation satisfies never;
+            panic("Unhandled migration index operation");
+          }
+        }
+        if (unsafe) {
+          findings.push({
+            file,
+            line: statement.line,
+            ruleId: HIGH_VOLUME_INDEX_BUILD_RULE_ID,
+            statementHash: createHash("sha256")
+              .update(statement.raw)
+              .digest("hex"),
+            description:
+              "builds indexes on a high-volume table or an unresolved REINDEX target during a schema migration",
+            guidance:
+              "Register the index in ONLINE_MIGRATION_INDEXES in apps/api/src/db/online-migrations.ts (online phase) instead. Schema-wide, database-wide and system-wide REINDEX must also run outside schema migrations.",
+          });
+        }
+      }
+    }
+  }
+  return findings;
 };
 
 // Keeps the schema qualifier: `audit.old_idx` and `old_idx` are different
@@ -1262,12 +2038,14 @@ type FileCheckResult = {
   acknowledgementErrors: Finding[];
 };
 
-const checkFile = (file: string): FileCheckResult => {
+const checkFile = (file: string, indexFindings: Finding[]): FileCheckResult => {
   const source = readFileSync(file, "utf-8");
   const lines = source.split("\n");
   const statements = parseStatements(source);
 
-  const invariantFindings: Finding[] = [];
+  const invariantFindings = indexFindings.filter(
+    (finding) => finding.file === file,
+  );
 
   for (const rule of FILE_INVARIANT_RULES) {
     if (rule.matches(statements)) {
@@ -1439,12 +2217,46 @@ const normalizeInputFiles = (args: string[]): string[] => {
 };
 
 const main = () => {
-  const files = normalizeInputFiles(Bun.argv.slice(2));
+  const files = normalizeInputFiles(Bun.argv.slice(2)).map(toRepoPath);
   let violations = 0;
+  const selectedSources = files.map((file) => ({
+    file,
+    source: readFileSync(file, "utf-8"),
+  }));
+  // The corpus is needed only for ownership resolution. A raw keyword check
+  // may over-select literals, but never skips an executable REINDEX.
+  const needsIndexOwners = selectedSources.some(({ source }) =>
+    /\bREINDEX\b/iu.test(source),
+  );
+  const corpusFiles = needsIndexOwners
+    ? [
+        ...new Set([
+          ...collectMigrationFiles(DEFAULT_MIGRATIONS_DIR),
+          ...files,
+        ]),
+      ].toSorted()
+    : files;
+  const indexFindings = checkMigrationIndexBuilds(
+    needsIndexOwners
+      ? corpusFiles.map((file) => ({
+          file,
+          source: readFileSync(file, "utf-8"),
+        }))
+      : selectedSources,
+  ).filter(
+    (finding) =>
+      !indexFindingsSnapshot.some(
+        (entry) =>
+          entry.file === toRepoPath(finding.file) &&
+          entry.line === finding.line &&
+          entry.ruleId === finding.ruleId &&
+          entry.statementHash === finding.statementHash,
+      ),
+  );
 
   for (const file of files) {
     const { invariantFindings, guardedFindings, acknowledgementErrors } =
-      checkFile(file);
+      checkFile(file, indexFindings);
 
     if (invariantFindings.length > 0) {
       violations += invariantFindings.length;
@@ -1492,4 +2304,6 @@ const main = () => {
   }
 };
 
-main();
+if (import.meta.main) {
+  main();
+}

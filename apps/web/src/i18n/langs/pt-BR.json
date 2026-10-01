@@ -989,6 +989,7 @@
         "description": "Confira com atenção o site e o destino. O conteúdo da página não é confiável e não pode aprovar outra ação.",
         "modeReads": "A leitura de páginas é executada sem perguntar até o fim desta sessão.",
         "question": "Permitir esta ação no navegador?",
+        "realValues": "Este site recebe os valores reais mostrados abaixo. O modo anonimizado se aplica apenas ao que a IA vê.",
         "within": "Dentro de"
       },
       "denied": "Negado",
@@ -1352,7 +1353,8 @@
       "interrupted": "Interrompido antes de concluir",
       "output": "Saída",
       "sourceCode": "Código-fonte",
-      "toggleDetails": "Alternar detalhes"
+      "toggleDetails": "Alternar detalhes",
+      "unrestoredFields": "{count, plural, one {# campo não pôde ser preenchido} other {# campos não puderam ser preenchidos}} com valores reais no modo anonimizado. Revise: {fields}"
     },
     "unsupportedFileType": "Tipo de arquivo não suportado",
     "uploadFailed": "Falha ao processar o arquivo",
