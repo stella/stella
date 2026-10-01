@@ -133,7 +133,7 @@ test.skipIf(!process.env["CI"])(
     };
     const generate = async (cwd: string) =>
       succeed(
-        [process.execPath, "--cwd", "packages/cli", "run", "codegen:runtime"],
+        [process.execPath, "--cwd=packages/cli", "run", "codegen:runtime"],
         cwd,
       );
     const linkDependencies = (cwd: string) =>
