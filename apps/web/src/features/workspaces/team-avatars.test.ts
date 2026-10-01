@@ -6,6 +6,7 @@ import { IntlProvider } from "use-intl";
 
 import { getInitials } from "@stll/ui/initials";
 
+import en from "@/i18n/langs/en.json";
 import { getDisplayName } from "@/lib/get-display-name";
 
 import { TeamAvatars } from "./team-avatars";
@@ -29,10 +30,8 @@ const renderAvatars = (props: Parameters<typeof TeamAvatars>[0]) =>
   renderToStaticMarkup(
     createElement(IntlProvider, {
       locale: "en",
-      messages: {
-        common: { unknownUser: "Unknown user" },
-        workspaces: { lead: "Lead" },
-      },
+      messages: en,
+      timeZone: "UTC",
       children: createElement(TeamAvatars, props),
     }),
   );

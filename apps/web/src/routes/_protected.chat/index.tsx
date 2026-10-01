@@ -374,7 +374,11 @@ function ChatIndex() {
   const visibleMatters =
     pinnedMatters.length > 0 ? pinnedMatters : lastAccessedMatters;
   const { data: memberPreviews } = useQuery(
-    workspaceMemberPreviewsOptions(visibleMatters.map((matter) => matter.id)),
+    workspaceMemberPreviewsOptions({
+      organizationId: activeOrganizationId,
+      userId,
+      workspaceIds: visibleMatters.map((matter) => matter.id),
+    }),
   );
   const mattersHeading =
     pinnedMatters.length > 0

@@ -5,10 +5,28 @@ import { unwrapEden } from "@/lib/errors/api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 
+type WorkspaceMemberPreviewsScope = {
+  organizationId: string;
+  userId: string;
+};
+
+type WorkspaceMemberPreviewsKey = WorkspaceMemberPreviewsScope & {
+  workspaceIds: readonly string[];
+};
+
 export const workspaceMemberPreviewsKeys = {
-  all: () => ["workspace-member-previews"] as const,
-  batch: (workspaceIds: readonly string[]) =>
-    [...workspaceMemberPreviewsKeys.all(), workspaceIds.toSorted()] as const,
+  root: () => ["workspace-member-previews"] as const,
+  all: ({ organizationId, userId }: WorkspaceMemberPreviewsScope) =>
+    [...workspaceMemberPreviewsKeys.root(), organizationId, userId] as const,
+  batch: ({
+    organizationId,
+    userId,
+    workspaceIds,
+  }: WorkspaceMemberPreviewsKey) =>
+    [
+      ...workspaceMemberPreviewsKeys.all({ organizationId, userId }),
+      workspaceIds.toSorted(),
+    ] as const,
 };
 
 const readWorkspaceMemberPreviews = async (
@@ -30,11 +48,17 @@ export type WorkspaceMemberPreview = Awaited<
   ReturnType<typeof readWorkspaceMemberPreviews>
 >["previews"][number];
 
-export const workspaceMemberPreviewsOptions = (
-  workspaceIds: readonly string[],
-) =>
+export const workspaceMemberPreviewsOptions = ({
+  organizationId,
+  userId,
+  workspaceIds,
+}: WorkspaceMemberPreviewsKey) =>
   queryOptions({
-    queryKey: workspaceMemberPreviewsKeys.batch(workspaceIds),
+    queryKey: workspaceMemberPreviewsKeys.batch({
+      organizationId,
+      userId,
+      workspaceIds,
+    }),
     queryFn: ({ signal }) => readWorkspaceMemberPreviews(workspaceIds, signal),
     enabled: workspaceIds.length > 0,
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
