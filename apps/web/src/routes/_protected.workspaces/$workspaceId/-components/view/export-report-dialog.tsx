@@ -31,6 +31,7 @@ import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
+import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { knowledgeKeys } from "@/lib/knowledge/queries";
@@ -41,7 +42,12 @@ import {
   reportTemplatesKeys,
 } from "@/lib/workspaces/queries/report-exports";
 
+import type {
+  ReportExportRequest,
+  ReportExportSubmission,
+} from "./export-report-dialog.logic";
 import { ReportExportHistory } from "./report-export-history";
+import { ReportExportRefusal } from "./report-export-refusal";
 import {
   registerReportExportToast,
   useReportExportTrackingStore,
@@ -189,7 +195,10 @@ const ExportReportDialogBody = ({
   // AI-drafted narrative (executive + per-contract summaries) is on by default;
   // turning it off skips every model call for a fast, deterministic export.
   const [aiNarrative, setAiNarrative] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
+  const [submission, setSubmission] = useState<ReportExportSubmission>({
+    type: "ready",
+  });
+  const submitting = submission.type === "submitting";
   const [customizing, setCustomizing] = useState(false);
 
   const { data, isLoading, isError } = useQuery({
@@ -235,6 +244,50 @@ const ExportReportDialogBody = ({
     );
   })();
 
+  const submitRequest = async (request: ReportExportRequest) => {
+    setSubmission({ type: "submitting" });
+    const result = await Result.tryPromise(async () => {
+      const response = await api
+        .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .reports.export.post(request);
+      if (response.error) {
+        return { status: "error" as const, error: response.error };
+      }
+      return { status: "success" as const, data: unwrapEden(response) };
+    });
+    setSubmission({ type: "ready" });
+
+    if (Result.isError(result)) {
+      analytics.captureError(result.error);
+      stellaToast.add({
+        type: "error",
+        title: t("workspaces.views.reportExport.failed"),
+        description: t("common.unexpectedError"),
+      });
+      return;
+    }
+    if (result.value.status === "error") {
+      const error = toAPIError(result.value.error);
+      analytics.captureError(error);
+      if (actionAdmissionOutcome(error)) {
+        // Keep the refused request: fallback must change only its AI option.
+        setSubmission({ type: "refused", request, error });
+        return;
+      }
+      stellaToast.add({
+        type: "error",
+        title: t("workspaces.views.reportExport.failed"),
+        description: userErrorMessage(
+          result.value.error,
+          t("common.unexpectedError"),
+        ),
+      });
+      return;
+    }
+
+    onStarted(result.value.data.exportId, request.mode);
+  };
+
   const handleSubmit = async () => {
     if (!resolvedValue) {
       return;
@@ -250,48 +303,13 @@ const ExportReportDialogBody = ({
             resolvedValue.slice(STORED_PREFIX.length),
           ),
         };
-
-    setSubmitting(true);
-    const result = await Result.tryPromise(async () => {
-      const response = await api
-        .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .reports.export.post({
-          templateRef,
-          viewId: toSafeId<"workspaceView">(view.id),
-          mode,
-          format,
-          aiNarrative,
-        });
-      if (response.error) {
-        return { status: "error" as const, error: response.error };
-      }
-      return { status: "success" as const, data: unwrapEden(response) };
+    await submitRequest({
+      templateRef,
+      viewId: toSafeId<"workspaceView">(view.id),
+      mode,
+      format,
+      aiNarrative,
     });
-    setSubmitting(false);
-
-    if (Result.isError(result)) {
-      analytics.captureError(result.error);
-      stellaToast.add({
-        type: "error",
-        title: t("workspaces.views.reportExport.failed"),
-        description: t("common.unexpectedError"),
-      });
-      return;
-    }
-    if (result.value.status === "error") {
-      analytics.captureError(toAPIError(result.value.error));
-      stellaToast.add({
-        type: "error",
-        title: t("workspaces.views.reportExport.failed"),
-        description: userErrorMessage(
-          result.value.error,
-          t("common.unexpectedError"),
-        ),
-      });
-      return;
-    }
-
-    onStarted(result.value.data.exportId, mode);
   };
 
   // "Customize" is offered only for a cloneable built-in: cloning it into the
@@ -384,11 +402,15 @@ const ExportReportDialogBody = ({
             {t("workspaces.views.reportExport.templateLabel")}
           </span>
           <TemplateField
+            disabled={submitting}
             isError={isError}
             isLoading={isLoading}
             builtins={builtins}
             hasTemplates={hasTemplates}
-            onValueChange={setTemplateValue}
+            onValueChange={(value) => {
+              setTemplateValue(value);
+              setSubmission({ type: "ready" });
+            }}
             selectedName={selectedName}
             stored={stored}
             value={resolvedValue}
@@ -396,7 +418,7 @@ const ExportReportDialogBody = ({
           {selectedBuiltinKey !== null && (
             <Button
               className="self-start"
-              disabled={customizing}
+              disabled={customizing || submitting}
               onClick={() => {
                 detached(handleCustomize(), "export-report-dialog.customize");
               }}
@@ -410,62 +432,40 @@ const ExportReportDialogBody = ({
         </div>
 
         <label className="flex items-center gap-2 text-sm font-medium">
-          <Checkbox checked={aiNarrative} onCheckedChange={setAiNarrative} />
+          <Checkbox
+            checked={aiNarrative}
+            disabled={submitting}
+            onCheckedChange={(checked) => {
+              setAiNarrative(checked);
+              setSubmission({ type: "ready" });
+            }}
+          />
           {t("workspaces.views.reportExport.aiSummaries")}
         </label>
 
-        <fieldset className="flex flex-col gap-1.5">
-          <legend className="text-sm font-medium">
-            {t("workspaces.views.reportExport.deliveryLabel")}
-          </legend>
-          <div
-            aria-label={t("workspaces.views.reportExport.deliveryLabel")}
-            className="flex gap-1"
-            role="radiogroup"
-          >
-            {DELIVERY_MODES.map((option) => (
-              <Button
-                aria-checked={mode === option.mode}
-                key={option.mode}
-                onClick={() => setMode(option.mode)}
-                role="radio"
-                size="sm"
-                tabIndex={mode === option.mode ? 0 : -1}
-                type="button"
-                variant={mode === option.mode ? "secondary" : "outline"}
-              >
-                {t(option.labelKey)}
-              </Button>
-            ))}
-          </div>
-        </fieldset>
+        <ReportDeliveryAndFormatPicker
+          disabled={submitting}
+          format={format}
+          mode={mode}
+          onModeChange={(next) => {
+            setMode(next);
+            setSubmission({ type: "ready" });
+          }}
+          onChange={(next) => {
+            setFormat(next);
+            setSubmission({ type: "ready" });
+          }}
+        />
 
-        <fieldset className="flex flex-col gap-1.5">
-          <legend className="text-sm font-medium">
-            {t("workspaces.views.reportExport.formatLabel")}
-          </legend>
-          <div
-            aria-label={t("workspaces.views.reportExport.formatLabel")}
-            className="flex gap-1"
-            role="radiogroup"
-          >
-            {FORMATS.map((option) => (
-              <Button
-                aria-checked={format === option.format}
-                key={option.format}
-                onClick={() => setFormat(option.format)}
-                role="radio"
-                size="sm"
-                tabIndex={format === option.format ? 0 : -1}
-                type="button"
-                variant={format === option.format ? "secondary" : "outline"}
-              >
-                {t(option.labelKey)}
-              </Button>
-            ))}
-          </div>
-        </fieldset>
-
+        {submission.type === "refused" && (
+          <ReportExportRefusal
+            request={submission.request}
+            error={submission.error}
+            onSubmit={(request) => {
+              detached(submitRequest(request), "export-report-dialog.fallback");
+            }}
+          />
+        )}
         <ReportExportHistory workspaceId={workspaceId} />
       </DialogPanel>
       <DialogFooter>
@@ -486,7 +486,84 @@ const ExportReportDialogBody = ({
   );
 };
 
+const ReportDeliveryAndFormatPicker = ({
+  disabled,
+  format,
+  mode,
+  onModeChange,
+  onChange,
+}: {
+  disabled: boolean;
+  format: ReportFormat;
+  mode: ReportExportDeliveryMode;
+  onModeChange: (mode: ReportExportDeliveryMode) => void;
+  onChange: (format: ReportFormat) => void;
+}) => {
+  const t = useTranslations();
+  return (
+    <>
+      <fieldset className="flex flex-col gap-1.5">
+        <legend className="text-sm font-medium">
+          {t("workspaces.views.reportExport.deliveryLabel")}
+        </legend>
+        <div
+          aria-label={t("workspaces.views.reportExport.deliveryLabel")}
+          className="flex gap-1"
+          role="radiogroup"
+        >
+          {DELIVERY_MODES.map((option) => (
+            <Button
+              aria-checked={mode === option.mode}
+              key={option.mode}
+              disabled={disabled}
+              onClick={() => {
+                onModeChange(option.mode);
+              }}
+              role="radio"
+              size="sm"
+              tabIndex={mode === option.mode ? 0 : -1}
+              type="button"
+              variant={mode === option.mode ? "secondary" : "outline"}
+            >
+              {t(option.labelKey)}
+            </Button>
+          ))}
+        </div>
+      </fieldset>
+      <fieldset className="flex flex-col gap-1.5">
+        <legend className="text-sm font-medium">
+          {t("workspaces.views.reportExport.formatLabel")}
+        </legend>
+        <div
+          aria-label={t("workspaces.views.reportExport.formatLabel")}
+          className="flex gap-1"
+          role="radiogroup"
+        >
+          {FORMATS.map((option) => (
+            <Button
+              aria-checked={format === option.format}
+              key={option.format}
+              disabled={disabled}
+              onClick={() => {
+                onChange(option.format);
+              }}
+              role="radio"
+              size="sm"
+              tabIndex={format === option.format ? 0 : -1}
+              type="button"
+              variant={format === option.format ? "secondary" : "outline"}
+            >
+              {t(option.labelKey)}
+            </Button>
+          ))}
+        </div>
+      </fieldset>
+    </>
+  );
+};
+
 type TemplateFieldProps = {
+  disabled: boolean;
   isLoading: boolean;
   isError: boolean;
   hasTemplates: boolean;
@@ -498,6 +575,7 @@ type TemplateFieldProps = {
 };
 
 const TemplateField = ({
+  disabled,
   isLoading,
   isError,
   hasTemplates,
@@ -533,6 +611,7 @@ const TemplateField = ({
 
   return (
     <Select
+      disabled={disabled}
       onValueChange={(next) => {
         if (next !== null) {
           onValueChange(next);
