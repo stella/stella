@@ -116,9 +116,9 @@ describe("queued action admission", () => {
         signal.throwIfAborted();
       },
     });
-    const error = await operation.catch((error: unknown) => error);
-    expect(error).toBeInstanceOf(ActionAdmissionError);
-    expect(error).toBe(leaseLoss);
+    const failure = await operation.catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(ActionAdmissionError);
+    expect(failure).toBe(leaseLoss);
     expect(delayed).toBe(false);
   });
 
