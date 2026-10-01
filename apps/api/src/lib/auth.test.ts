@@ -821,6 +821,18 @@ describe("email OTP response schedule", () => {
 });
 
 describe("session freshness", () => {
+  test("organization leave is not served", async () => {
+    const response = await getAuth().handler(
+      new Request("http://localhost/api/auth/organization/leave", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ organizationId: orgFull }),
+      }),
+    );
+
+    expect(response.status).toBe(404);
+  });
+
   test("freshAge stays disabled so day-old sessions can read list-sessions", () => {
     // Better Auth defaults `freshAge` to 1 day and gates `list-sessions` (the
     // account page's active-sessions read) against `session.createdAt`, which

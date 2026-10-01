@@ -11,6 +11,7 @@ import { escapeLedesField, exportLedesHandler } from "./export";
 
 const timeEntryRow = (overrides: Record<string, unknown> = {}) => ({
   id: toSafeId<"timeEntry">("te_1"),
+  activityGroup: "client",
   userId: "user_1",
   matterId: toSafeId<"entity">("ent_1"),
   dateWorked: "2026-06-14",
@@ -60,6 +61,8 @@ describe("exportLedesHandler billing integrity", () => {
     const output = await runExport([
       timeEntryRow({ narrative: "Billable work" }),
       timeEntryRow({ billable: false, narrative: "Internal non-billable" }),
+      // The fake bypasses SQL and CHECKs: activity alone must refuse a charged row.
+      timeEntryRow({ activityGroup: "internal", narrative: "Internal work" }),
       timeEntryRow({ noCharge: true, narrative: "Written off" }),
       timeEntryRow({
         narrative: "Deleted approved time",
@@ -69,6 +72,7 @@ describe("exportLedesHandler billing integrity", () => {
 
     expect(output).toContain("Billable work");
     expect(output).not.toContain("Internal non-billable");
+    expect(output).not.toContain("Internal work");
     expect(output).not.toContain("Written off");
     expect(output).not.toContain("Deleted approved time");
   });

@@ -1,4 +1,4 @@
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { lookup } from "node:dns/promises";
 import { request as requestHttp } from "node:http";
 import type { ClientRequest, IncomingMessage } from "node:http";
@@ -857,72 +857,270 @@ const isBlockedIPv4 = (ip: IPv4): boolean => {
   return false;
 };
 
-const isBlockedIPv6 = (host: string): boolean => {
-  const compressed = host.toLowerCase();
+type IPv6 = readonly [
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+];
 
-  if (compressed === "::" || compressed === "::1") {
-    return true;
+const expandIPv6 = (host: string): IPv6 | undefined => {
+  let hexadecimal = host;
+  if (host.includes(".")) {
+    const separator = host.lastIndexOf(":");
+    const ipv4 = parseIPv4(host.slice(separator + 1));
+    if (ipv4 === undefined) {
+      return undefined;
+    }
+    const [a, b, c, d] = ipv4;
+    hexadecimal = `${host.slice(0, separator + 1)}${(a * 256 + b).toString(16)}:${(c * 256 + d).toString(16)}`;
   }
 
-  // The first hextet of fe80::/10, fc00::/7, and ff00::/8 is always
-  // ≥ 0x1000, so URL normalization keeps all four hex digits — no
-  // leading-zero forms like `fe8::` to worry about, and matching
-  // shorter prefixes here would over-block legitimate addresses.
-
-  if (/^fe[89ab][0-9a-f]:/u.test(compressed)) {
-    return true;
+  const [left = "", right, ...extra] = hexadecimal.split("::");
+  if (extra.length > 0) {
+    return undefined;
   }
-
-  if (/^f[cd][0-9a-f]{2}:/u.test(compressed)) {
-    return true;
+  const leading = left === "" ? [] : left.split(":");
+  const trailing = right === undefined || right === "" ? [] : right.split(":");
+  const missing = 8 - leading.length - trailing.length;
+  if (right === undefined ? missing !== 0 : missing < 1) {
+    return undefined;
   }
-
-  if (/^ff[0-9a-f]{2}:/u.test(compressed)) {
-    return true;
+  const parts = [
+    ...leading,
+    ...Array.from({ length: missing }, () => "0"),
+    ...trailing,
+  ];
+  if (parts.some((part) => !/^[0-9a-f]{1,4}$/iu.test(part))) {
+    return undefined;
   }
-
-  if (
-    compressed.startsWith("2001:db8:") ||
-    compressed.startsWith("2001:2:") ||
-    compressed.startsWith("100:")
-  ) {
-    return true;
-  }
-
-  const dotted = /^::(?:ffff:)?(?<dottedIp>\d{1,3}(?:\.\d{1,3}){3})$/u.exec(
-    compressed,
+  const [a, b, c, d, e, f, g, h] = parts.map((part) =>
+    Number.parseInt(part, 16),
   );
-  const dottedIp = dotted?.groups?.["dottedIp"];
-  if (dottedIp !== undefined) {
-    const ipv4 = parseIPv4(dottedIp);
-    if (ipv4 && isBlockedIPv4(ipv4)) {
-      return true;
-    }
+  if (
+    a === undefined ||
+    b === undefined ||
+    c === undefined ||
+    d === undefined ||
+    e === undefined ||
+    f === undefined ||
+    g === undefined ||
+    h === undefined
+  ) {
+    return undefined;
+  }
+  return [a, b, c, d, e, f, g, h];
+};
+
+const ipv4FromHextets = (high: number, low: number): IPv4 => [
+  Math.trunc(high / 256),
+  high % 256,
+  Math.trunc(low / 256),
+  low % 256,
+];
+
+const IPV6_POLICY_VERDICT = {
+  allow: "allow",
+  block: "block",
+  ipv4Tail: "ipv4-tail",
+  ipv4SixToFour: "ipv4-six-to-four",
+  ipv4Teredo: "ipv4-teredo",
+} as const;
+
+type IPv6Policy = {
+  prefix: bigint;
+  length: number;
+  verdict: (typeof IPV6_POLICY_VERDICT)[keyof typeof IPV6_POLICY_VERDICT];
+};
+
+// IANA IPv6 special-purpose registry, last updated 2025-10-09.
+// Globally reachable entries are allowed; non-global and deprecated entries
+// are blocked. Mapped, WKP NAT64, 6to4 and Teredo apply the IPv4 policy.
+// RFC 4291 also excludes deprecated IPv4-compatible space and multicast.
+// https://www.iana.org/assignments/iana-ipv6-special-registry/
+export const OUTBOUND_IPV6_POLICY = [
+  {
+    prefix: 0x00_00_00_00_00_00_00_00_00_00_00_00_00_00_00_01n,
+    length: 128,
+    verdict: IPV6_POLICY_VERDICT.block,
+  },
+  {
+    prefix: 0x00_00_00_00_00_00_00_00_00_00_00_00_00_00_00_00n,
+    length: 128,
+    verdict: IPV6_POLICY_VERDICT.block,
+  },
+  {
+    prefix: 0x00_00_00_00_00_00_00_00_00_00_ff_ff_00_00_00_00n,
+    length: 96,
+    verdict: IPV6_POLICY_VERDICT.ipv4Tail,
+  },
+  {
+    prefix: 0x00_64_ff_9b_00_00_00_00_00_00_00_00_00_00_00_00n,
+    length: 96,
+    verdict: IPV6_POLICY_VERDICT.ipv4Tail,
+  },
+  {
+    prefix: 0x00_64_ff_9b_00_01_00_00_00_00_00_00_00_00_00_00n,
+    length: 48,
+    verdict: IPV6_POLICY_VERDICT.block,
+  },
+  {
+    prefix: 0x01_00_00_00_00_00_00_00_00_00_00_00_00_00_00_00n,
+    length: 64,
+    verdict: IPV6_POLICY_VERDICT.block,
+  },
+  {
+    prefix: 0x01_00_00_00_00_00_00_01_00_00_00_00_00_00_00_00n,
+    length: 64,
+    verdict: IPV6_POLICY_VERDICT.block,
+  },
+  {
+    prefix: 0x20_01_00_00_00_00_00_00_00_00_00_00_00_00_00_00n,
+    length: 23,
+    verdict: IPV6_POLICY_VERDICT.block,
+  },
+  {
+    prefix: 0x20_01_00_00_00_00_00_00_00_00_00_00_00_00_00_00n,
+    length: 32,
+    verdict: IPV6_POLICY_VERDICT.ipv4Teredo,
+  },
+  {
+    prefix: 0x20_01_00_01_00_00_00_00_00_00_00_00_00_00_00_01n,
+    length: 128,
+    verdict: IPV6_POLICY_VERDICT.allow,
+  },
+  {
+    prefix: 0x20_01_00_01_00_00_00_00_00_00_00_00_00_00_00_02n,
+    length: 128,
+    verdict: IPV6_POLICY_VERDICT.allow,
+  },
+  {
+    prefix: 0x20_01_00_01_00_00_00_00_00_00_00_00_00_00_00_03n,
+    length: 128,
+    verdict: IPV6_POLICY_VERDICT.allow,
+  },
+  {
+    prefix: 0x20_01_00_02_00_00_00_00_00_00_00_00_00_00_00_00n,
+    length: 48,
+    verdict: IPV6_POLICY_VERDICT.block,
+  },
+  {
+    prefix: 0x20_01_00_03_00_00_00_00_00_00_00_00_00_00_00_00n,
+    length: 32,
+    verdict: IPV6_POLICY_VERDICT.allow,
+  },
+  {
+    prefix: 0x20_01_00_04_01_12_00_00_00_00_00_00_00_00_00_00n,
+    length: 48,
+    verdict: IPV6_POLICY_VERDICT.allow,
+  },
+  {
+    prefix: 0x20_01_00_10_00_00_00_00_00_00_00_00_00_00_00_00n,
+    length: 28,
+    verdict: IPV6_POLICY_VERDICT.block,
+  },
+  {
+    prefix: 0x20_01_00_20_00_00_00_00_00_00_00_00_00_00_00_00n,
+    length: 28,
+    verdict: IPV6_POLICY_VERDICT.allow,
+  },
+  {
+    prefix: 0x20_01_00_30_00_00_00_00_00_00_00_00_00_00_00_00n,
+    length: 28,
+    verdict: IPV6_POLICY_VERDICT.allow,
+  },
+  {
+    prefix: 0x20_01_0d_b8_00_00_00_00_00_00_00_00_00_00_00_00n,
+    length: 32,
+    verdict: IPV6_POLICY_VERDICT.block,
+  },
+  {
+    prefix: 0x20_02_00_00_00_00_00_00_00_00_00_00_00_00_00_00n,
+    length: 16,
+    verdict: IPV6_POLICY_VERDICT.ipv4SixToFour,
+  },
+  {
+    prefix: 0x26_20_00_4f_80_00_00_00_00_00_00_00_00_00_00_00n,
+    length: 48,
+    verdict: IPV6_POLICY_VERDICT.allow,
+  },
+  {
+    prefix: 0x3f_ff_00_00_00_00_00_00_00_00_00_00_00_00_00_00n,
+    length: 20,
+    verdict: IPV6_POLICY_VERDICT.block,
+  },
+  {
+    prefix: 0x5f_00_00_00_00_00_00_00_00_00_00_00_00_00_00_00n,
+    length: 16,
+    verdict: IPV6_POLICY_VERDICT.block,
+  },
+  {
+    prefix: 0xfc_00_00_00_00_00_00_00_00_00_00_00_00_00_00_00n,
+    length: 7,
+    verdict: IPV6_POLICY_VERDICT.block,
+  },
+  {
+    prefix: 0xfe_80_00_00_00_00_00_00_00_00_00_00_00_00_00_00n,
+    length: 10,
+    verdict: IPV6_POLICY_VERDICT.block,
+  },
+  {
+    prefix: 0x00_00_00_00_00_00_00_00_00_00_00_00_00_00_00_00n,
+    length: 96,
+    verdict: IPV6_POLICY_VERDICT.block,
+  },
+  {
+    prefix: 0xff_00_00_00_00_00_00_00_00_00_00_00_00_00_00_00n,
+    length: 8,
+    verdict: IPV6_POLICY_VERDICT.block,
+  },
+] as const satisfies readonly IPv6Policy[];
+
+const IPV6_POLICY_BY_SPECIFICITY = OUTBOUND_IPV6_POLICY.toSorted(
+  (left, right) => right.length - left.length,
+);
+
+const isBlockedIPv6 = (host: string): boolean => {
+  const expanded = expandIPv6(host);
+  if (expanded === undefined) {
+    return true;
+  }
+  const address = expanded.reduce(
+    (value, part) => value * 65_536n + BigInt(part),
+    0n,
+  );
+  const policy = IPV6_POLICY_BY_SPECIFICITY.find(({ prefix, length }) => {
+    const hostBits = 2n ** BigInt(128 - length);
+    return address / hostBits === prefix / hostBits;
+  });
+  if (policy === undefined) {
+    return false;
   }
 
-  // The URL parser normalizes ::ffff:127.0.0.1 → ::ffff:7f00:1.
-  // Decode the trailing two hextets back to four IPv4 octets.
-  const hex =
-    /^::(?:ffff:)?(?<high>[0-9a-f]{1,4}):(?<low>[0-9a-f]{1,4})$/u.exec(
-      compressed,
-    );
-  const hexHigh = hex?.groups?.["high"];
-  const hexLow = hex?.groups?.["low"];
-  if (hexHigh !== undefined && hexLow !== undefined) {
-    const high = Number.parseInt(hexHigh, 16);
-    const low = Number.parseInt(hexLow, 16);
-    const ipv4: IPv4 = [
-      Math.trunc(high / 256),
-      high % 256,
-      Math.trunc(low / 256),
-      low % 256,
-    ];
-    if (isBlockedIPv4(ipv4)) {
+  const tailHigh = expanded[6];
+  const tailLow = expanded[7];
+  const { verdict } = policy;
+  switch (verdict) {
+    case IPV6_POLICY_VERDICT.allow:
+      return false;
+    case IPV6_POLICY_VERDICT.block:
       return true;
-    }
+    case IPV6_POLICY_VERDICT.ipv4Tail:
+      return isBlockedIPv4(ipv4FromHextets(tailHigh, tailLow));
+    case IPV6_POLICY_VERDICT.ipv4SixToFour:
+      return isBlockedIPv4(ipv4FromHextets(expanded[1], expanded[2]));
+    case IPV6_POLICY_VERDICT.ipv4Teredo:
+      return isBlockedIPv4(
+        ipv4FromHextets(0xff_ff - tailHigh, 0xff_ff - tailLow),
+      );
+    default:
+      verdict satisfies never;
+      return panic(`Unhandled IPv6 policy verdict: ${String(verdict)}`);
   }
-
-  return false;
 };
 
 const resolvePublicAddresses = async (

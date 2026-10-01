@@ -418,6 +418,24 @@ describe("selectReconciliationWorkUnit", () => {
     ).toEqual({ type: "idle" });
   });
 
+  test("textless detail rechecks run only after ordinary source work is clear", () => {
+    const idleInput = baseInput({
+      tipSlices: ["2026-08-11"],
+      tipCheckedAt: new Map([["2026-08-11", FRESH]]),
+      unsettledShortSlices: [],
+      hasDueTextlessDetailRechecks: true,
+    });
+    expect(selectReconciliationWorkUnit(idleInput)).toEqual({
+      type: "textless-detail-rechecks",
+    });
+    expect(
+      selectReconciliationWorkUnit({
+        ...idleInput,
+        tipCheckedAt: new Map(),
+      }),
+    ).toMatchObject({ type: "slice", reason: SLICE_WALK_REASON.TIP });
+  });
+
   test("an otherwise idle source spends the turn re-proving a settled slice", () => {
     // The only unit that walks a slice nothing is known to owe. Idle turns
     // become slow verification, which is the whole of the argument for it: a

@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { XMLParser } from "fast-xml-parser";
-import { SyntaxValidator } from "fast-xml-validator";
+import { SaxesParser } from "saxes";
 
 import { isRecord } from "../shared/guards.js";
 import { performRegistryRequest } from "../shared/http.js";
@@ -83,8 +83,8 @@ const buildEnvelope = ({
 // The parser accepts truncated or mismatched markup and returns what it read,
 // so a cut-off answer must be refused before parsing. The validator throws on
 // the first error.
-const isWellFormedXml = (text: string): boolean =>
-  Result.try(() => SyntaxValidator.validate(text)).isOk();
+export const isWellFormedXml = (text: string): boolean =>
+  Result.try(() => new SaxesParser().write(text).close()).isOk();
 
 type SoapResponse = { status: number; contentType: string; text: string };
 

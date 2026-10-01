@@ -82,6 +82,7 @@ export type SliceWalkReason =
 export type ReconciliationWorkUnit =
   | { type: "parked-retries" }
   | { type: "slice"; slice: string; reason: SliceWalkReason }
+  | { type: "textless-detail-rechecks" }
   | { type: "idle" };
 
 /** A coverage-ledger row as the selection reads it. */
@@ -327,6 +328,8 @@ export type SelectReconciliationWorkUnitInput = {
   now: Date;
   /** Whether any parked item's next attempt has come due. */
   hasDueParkedItems: boolean;
+  /** Whether an opted-in source has an old textless held detail to re-read. */
+  hasDueTextlessDetailRechecks?: boolean | undefined;
   /** Tip-window slices, newest first. */
   tipSlices: readonly string[];
   /** When each tip slice was last walked; absent means never. */
@@ -405,6 +408,7 @@ export const selectReconciliationWorkUnit = ({
   failedCandidate,
   failedRetryAfterMs,
   hasDueParkedItems,
+  hasDueTextlessDetailRechecks,
   now,
   recheckAfterMs,
   recheckCandidate,
@@ -504,6 +508,10 @@ export const selectReconciliationWorkUnit = ({
       slice: recheckCandidate.slice,
       reason: SLICE_WALK_REASON.RECHECK,
     };
+  }
+
+  if (hasDueTextlessDetailRechecks === true) {
+    return { type: "textless-detail-rechecks" };
   }
 
   return { type: "idle" };

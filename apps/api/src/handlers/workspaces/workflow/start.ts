@@ -21,7 +21,11 @@ const config = {
     "refused when the configured provider does not offer it. Returns the " +
     "run's status, including already-running when one is in flight.",
   permissions: { workspace: ["update"] },
-  mcp: { type: "capability", reason: "workflow_orchestration" },
+  mcp: {
+    type: "capability",
+    reason: "workflow_orchestration",
+    consumesServices: true,
+  },
   body: t.Object({
     // A run targets documents of one matter, so the matter's own entity cap
     // is the most a caller can name. `matters.workflow.targets.count`

@@ -241,7 +241,7 @@ describe("agent-auth service_auth flow", () => {
     });
     expect(tokenRes.status).toBe(200);
     // OAuth §5.1: the bearer-token response must not be cached.
-    expect(tokenRes.headers.get("cache-control")).toBe("no-store");
+    expect(tokenRes.headers.get("cache-control")).toBe("private, no-store");
     const tokenBody = await readJson(tokenRes);
     expect(tokenBody["token_type"]).toBe("Bearer");
     expect(tokenBody["expires_in"]).toBeGreaterThan(0);

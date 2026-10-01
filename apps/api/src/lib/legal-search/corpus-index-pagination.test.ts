@@ -617,6 +617,91 @@ describe("a passage flood does not strand the reader", () => {
   });
 });
 
+describe("residual filters preserve progress past empty scan windows", () => {
+  const reachable =
+    LIMITS.corpusIndexSearchMaxRounds * LIMITS.corpusIndexSearchCandidateLimit;
+  const readFilteredPage = async (
+    parsedCursor: SearchCursor | null,
+    order: CorpusSearchOrder,
+  ) =>
+    await readCorpusIndexSearchPage({
+      cluster: "q09",
+      indexId: "case_law_v5_cs_sk",
+      query: "text:promlčení",
+      limit: 10,
+      order,
+      parsedCursor,
+      snippetFields: [],
+      extractId: (hit) =>
+        typeof hit["document_id"] === "string" ? hit["document_id"] : null,
+      extractSnippet: () => null,
+      unseenScoreUpperBound: (score) => score,
+      rankCandidates: async (candidates) => ({
+        context: null,
+        ranked: candidates
+          .filter((candidate) => candidate.id.startsWith("zz-match-"))
+          .map((candidate) => ({
+            id: candidate.id,
+            score: candidate.score,
+            lexicalScore: candidate.score,
+            citationAuthority: 0,
+          })),
+      }),
+    });
+
+  test.each([
+    ["relevance", RELEVANCE_ORDER],
+    ["newest", { type: "newest", timestampField: "decision_date_ts" }],
+  ] as const)(
+    "%s paging reaches every match after consecutive empty windows",
+    async (_sort, order) => {
+      for (const emptyWindows of [1, 2]) {
+        engineHits = [
+          ...Array.from({ length: reachable * emptyWindows }, (_, index) => ({
+            document_id: `filtered-${String(index)}`,
+          })),
+          { document_id: "zz-match-a" },
+          { document_id: "zz-match-b" },
+        ];
+        let cursor: SearchCursor | null = null;
+        for (let window = 0; window < emptyWindows; window += 1) {
+          requestBodies = [];
+          const page = await readFilteredPage(cursor, order);
+
+          expect(page.pageRanked).toEqual([]);
+          expect(page.scan.roundCapHit).toBe(true);
+          expect(page.scan.passagesScanned).toBe(reachable);
+          expect(scanRequestCount()).toBe(LIMITS.corpusIndexSearchMaxRounds);
+          expect(page.nextCursor?.windowStart).toBe(reachable * (window + 1));
+          expect(page.nextCursor?.sort).toBe(order.type);
+          cursor = page.nextCursor;
+        }
+        requestBodies = [];
+        const last = await readFilteredPage(cursor, order);
+
+        expect(last.pageRanked.map((hit) => hit.id)).toEqual([
+          "zz-match-a",
+          "zz-match-b",
+        ]);
+        expect(last.nextCursor).toBeNull();
+        expect(scanRequestCount()).toBe(1);
+      }
+    },
+  );
+
+  test("an empty window at engine exhaustion has no continuation", async () => {
+    engineHits = Array.from({ length: reachable }, (_, index) => ({
+      document_id: `filtered-${String(index)}`,
+    }));
+
+    const page = await readFilteredPage(null, RELEVANCE_ORDER);
+
+    expect(page.pageRanked).toEqual([]);
+    expect(page.scan.passagesScanned).toBe(reachable);
+    expect(page.nextCursor).toBeNull();
+  });
+});
+
 describe("document paging survives the passage fan-out", () => {
   test("a page holds `limit` documents even when each matched several passages", async () => {
     const documentIds = Array.from({ length: 8 }, (_, i) => `doc-${i}`);
@@ -1228,6 +1313,35 @@ describe("folded acts stay folded across capped windows", () => {
         (_, index) => `late-${String(index).padStart(2, "0")}`,
       ),
     );
+  });
+
+  test("an empty window preserves groups excluded by earlier windows", async () => {
+    engineHits = [
+      ...Array.from({ length: reachable }, () => ({
+        document_id: "act-a#2020",
+      })),
+      ...Array.from({ length: reachable }, () => ({
+        document_id: "act-a#2014",
+      })),
+      { document_id: "act-a#2010" },
+      { document_id: "act-b#2020" },
+    ];
+
+    const first = await readActPage(10, null);
+    const empty = await readActPage(10, first.nextCursor);
+
+    expect(first.pageRanked.map((hit) => actOf(hit.id))).toEqual(["act-a"]);
+    expect(first.nextCursor?.excludedGroups).toHaveLength(1);
+    expect(empty.pageRanked).toEqual([]);
+    expect(empty.nextCursor?.windowStart).toBe(reachable * 2);
+    expect(empty.nextCursor?.excludedGroups).toEqual(
+      first.nextCursor?.excludedGroups,
+    );
+
+    const last = await readActPage(10, empty.nextCursor);
+
+    expect(last.pageRanked.map((hit) => actOf(hit.id))).toEqual(["act-b"]);
+    expect(last.nextCursor).toBeNull();
   });
 
   test("a continuation that would carry too many acts is not offered", async () => {

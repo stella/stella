@@ -16,7 +16,11 @@ const config = {
     "definition snapshot; an enabled flow with runs in flight is deleted " +
     "without warning.",
   permissions: { flow: ["delete"] },
-  mcp: { type: "capability", reason: "workflow_orchestration" },
+  mcp: {
+    type: "capability",
+    reason: "workflow_orchestration",
+    consumesServices: false,
+  },
   params: flowDefinitionParamsSchema,
 } satisfies HandlerConfig;
 

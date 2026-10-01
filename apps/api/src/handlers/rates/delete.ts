@@ -20,7 +20,11 @@ const deleteRateTable = createSafeHandler(
       "until another table is made the default; time entries already recorded " +
       "keep the rate they were billed at.",
     permissions: { rate: ["delete"] },
-    mcp: { type: "capability", reason: "billing_admin" },
+    mcp: {
+      type: "capability",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
     body: deleteRateTableBodySchema,
   },
   async function* ({ safeDb, workspaceId, body, recordAuditEvent }) {

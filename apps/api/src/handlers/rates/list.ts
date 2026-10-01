@@ -32,7 +32,11 @@ const readRateTables = createSafeHandler(
       "and rates.resolve for the rate that actually applies to a user on a " +
       "date.",
     permissions: { rate: ["read"] },
-    mcp: { type: "capability", reason: "billing_admin" },
+    mcp: {
+      type: "capability",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
     access: "read",
     query: readRateTablesQuerySchema,
   },

@@ -27,6 +27,16 @@
     "errorNotFound": "Não encontramos uma solicitação pendente para esse código. Verifique o código e tente novamente.",
     "title": "Conecte seu agente"
   },
+  "agentSetup": {
+    "addressLabel": "Seu assistente vai pedir este endereço",
+    "copiedToast": "Instruções copiadas. Cole-as em uma conversa com seu assistente.",
+    "copy": "Copie as instruções para ele",
+    "description": "Pergunte ao Claude ou ao ChatGPT sobre seus casos e documentos. Escolha seu assistente para ver um guia curto; leva cerca de um minuto.",
+    "instructions": "Conecte-me ao stella, meu espaço de trabalho jurídico. Siga as instruções para agentes de IA em {guideUrl} e use este endereço de servidor: {mcpUrl}",
+    "openGuide": "Abrir o guia do {assistant}",
+    "selfSetupHint": "Usa o Claude Code ou o Codex?",
+    "title": "Use o stella no seu assistente de IA"
+  },
   "ai": {
     "chooseRewriteInstruction": "Opções de reescrita",
     "editWithAI": "Editar com IA",
@@ -567,6 +577,26 @@
     "selectMatter": "Selecione um caso...",
     "selectMatterToStart": "Selecione um caso para começar a cronometrar",
     "selectedCount": "{count, plural, one {# selecionado} many {# selecionados} other {# selecionados}}",
+    "sellerProfiles": {
+      "add": "Adicionar perfil de vendedor",
+      "archiveConfirm": "Arquivar este perfil de vendedor? Ele não estará mais disponível para novas faturas.",
+      "bic": "Código BIC / SWIFT",
+      "default": "Vendedor padrão",
+      "defaultCurrency": "Moeda padrão",
+      "description": "Gerencie os dados usados para emitir faturas.",
+      "edit": "Editar perfil de vendedor",
+      "empty": "Nenhum perfil de vendedor.",
+      "footerNotes": "Notas de rodapé",
+      "invalidBic": "Insira um BIC válido.",
+      "invalidCurrency": "Insira um código de moeda de três letras.",
+      "invalidIban": "Insira um IBAN válido.",
+      "legalName": "Nome legal",
+      "registrationId": "Número de registro",
+      "setDefault": "Definir como padrão",
+      "title": "Perfis de vendedor",
+      "vatId": "Número de IVA"
+    },
+    "settingsTitle": "Faturamento",
     "split": {
       "addSplit": "Adicionar divisão",
       "percentValue": "{value}%",
@@ -2273,7 +2303,8 @@
     "compareUnsupportedReasons": {
       "missingInBase": "A parte do documento existe apenas no destino",
       "missingInTarget": "A parte do documento existe apenas na base",
-      "notEditable": "Parte do documento não é editável"
+      "notEditable": "Parte do documento não é editável",
+      "unsupportedContent": "Esta versão contém conteúdo que ainda não pode ser comparado."
     },
     "compareUnverified": "Comparação não verificada",
     "compareVerificationFailures": "{count, plural, one {Uma verificação de ida e volta falhou. Revise esta comparação antes de confiar nela.} other {# verificações de ida e volta falharam. Revise esta comparação antes de confiar nela.}}",
@@ -3691,7 +3722,6 @@
     "aiTitle": "Conecte seu provedor de IA",
     "appsSubtitle": "A stella também funciona fora do navegador: no seu computador e no seu assistente de IA. Você pode voltar a esta configuração a qualquer momento.",
     "appsTitle": "Leve a stella para todo lugar",
-    "assistantDocsLink": "Como conectar seu assistente",
     "catalogueAlwaysOn": "Sempre ativo",
     "catalogueClearSearch": "Limpar busca",
     "catalogueCommunityHeading": "Outros",
@@ -4218,31 +4248,40 @@
       "wordEditShortcutPlaceholder": "por exemplo JK"
     },
     "connections": {
+      "accessTitle": "{clientName} pode",
+      "browseIntegrations": "Adicionar um serviço",
       "cliDescription": "Instale o cliente de linha de comando da stella e faça login para automatizar casos, documentos e modelos a partir de um terminal.",
-      "cliHelpHint": "Execute \"stella --help\" para ver a lista completa de comandos.",
       "cliInstallLabel": "Instalação",
       "cliLoginLabel": "Login",
       "cliTitle": "Interface de linha de comando",
-      "connectedAppsDescription": "Aplicativos e ferramentas que você autorizou a acessar sua conta.",
-      "connectedAppsEmpty": "Aplicativos que você autorizar, como Claude ou a CLI da stella, aparecerão aqui.",
-      "connectedAppsTitle": "Aplicativos conectados",
-      "connectedColumn": "Conectado",
-      "description": "Conecte clientes MCP e a interface de linha de comando à sua conta.",
+      "connected": "Conectada",
+      "connectedAgo": "Conectada {time}",
+      "connectedAppsDescription": "Aplicativos em que você entrou com o stella. Desconecte os que não usa mais.",
+      "connectedAppsEmpty": "Nada ainda. Configure o Claude ou o ChatGPT acima e ele aparecerá aqui.",
+      "connectedAppsTitle": "Aplicativos com acesso",
+      "description": "Use o stella pelo seu assistente de IA e veja o que tem acesso à sua conta.",
+      "developerDescription": "Endereços do servidor e a ferramenta de linha de comando, para configurações técnicas.",
+      "developerTitle": "Acesso para desenvolvedores",
       "disconnectConfirmDescription": "Isso revoga o acesso de {clientName} à sua conta, junto com quaisquer tokens emitidos. Você pode se reconectar a qualquer momento.",
       "disconnectConfirmTitle": "Desconectar {clientName}?",
       "disconnectSuccess": "{clientName} foi desconectado",
+      "integrationsDescription": "Serviços externos que a IA pode usar por você, como seu repositório de documentos.",
+      "integrationsEmpty": "Adicione seu primeiro serviço",
+      "integrationsTitle": "Serviços conectados",
       "mcpAnonymizedLabel": "Endpoint anonimizado",
-      "mcpAnonymizedNote": "Também há um endpoint anonimizado disponível; ele expõe as mesmas ferramentas com dados pessoais mascarados.",
-      "mcpDescription": "Conecte um cliente compatível com MCP, como Claude ou Cursor, à sua conta stella usando esta URL de servidor.",
+      "mcpAnonymizedShortNote": "As mesmas ferramentas, com dados pessoais mascarados.",
+      "mcpFullNote": "Acesso completo aos seus casos e documentos.",
       "mcpLawLabel": "Endpoint do corpus jurídico",
-      "mcpLawNote": "Também há um endpoint do corpus jurídico disponível; ele expõe apenas jurisprudência e legislação públicas e não acessa dados dos casos.",
-      "mcpStep1": "Adicione a URL acima como um conector personalizado ou servidor MCP no seu cliente.",
-      "mcpStep2": "Faça login quando o navegador solicitar.",
-      "mcpStep3": "Aprove o acesso na tela de consentimento.",
+      "mcpLawShortNote": "Somente jurisprudência e legislação públicas, sem dados de casos.",
+      "mcpSetupHint": "Adicione uma URL como conector personalizado no Claude, no Cursor ou em outro cliente MCP, depois faça login e aprove o acesso.",
       "mcpTitle": "Servidor MCP",
       "mcpUrlLabel": "URL do servidor",
-      "scopesLabel": "Acesso",
-      "title": "Conexões"
+      "noMatches": "Nenhuma conexão corresponde a “{query}”",
+      "notConnected": "Não conectada",
+      "permissionCount": "{count, plural, one {# permissão} other {# permissões}}",
+      "searchPlaceholder": "Buscar conexões",
+      "title": "Conexões",
+      "turnedOff": "Desativada"
     },
     "organization": {
       "activeMembers": "Membros ativos",
@@ -5032,6 +5071,11 @@
     "whenNotToUsePlaceholder": "Quando este modelo deve ser evitado?",
     "whenToUse": "Quando usar",
     "whenToUsePlaceholder": "Quando este modelo deve ser usado? (orienta a seleção de modelos pela IA)"
+  },
+  "timesheets": {
+    "day": {
+      "internalWork": "Trabalho interno"
+    }
   },
   "translate": {
     "dialog": {

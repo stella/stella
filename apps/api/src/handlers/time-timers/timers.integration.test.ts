@@ -13,6 +13,8 @@ import {
 } from "bun:test";
 import { and, eq } from "drizzle-orm";
 
+import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
+
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
@@ -402,6 +404,132 @@ describe("global timer lifecycle", () => {
       currency: "USD",
       billedMinutes: 15,
     });
+  });
+
+  test("explicit internal confirmation preserves actual time, zero billing, and replay identity", async () => {
+    const started = await startTimer.handler(
+      createTestHandlerContext<Parameters<typeof startTimer.handler>[0]>({
+        ...context(),
+        body: checkedBody(startTimer.config.body, {
+          description: "Internal training",
+        }),
+      }),
+    );
+    if ("code" in started) {
+      throw new Error(`Timer start failed: ${JSON.stringify(started)}`);
+    }
+    setSystemTime(new Date("2026-09-02T00:06:00.000Z"));
+    const request = createTestHandlerContext<
+      Parameters<typeof confirmTimer.handler>[0]
+    >({
+      ...context([]),
+      params: { id: started.id },
+      body: checkedBody(confirmTimer.config.body, {
+        timezoneId: "UTC",
+        activityGroup: TIME_ENTRY_ACTIVITY_GROUP.INTERNAL,
+      }),
+    });
+    const completed = await confirmTimer.handler(request);
+    if ("code" in completed) {
+      throw new Error(`Internal confirm failed: ${JSON.stringify(completed)}`);
+    }
+    expect(completed).toMatchObject({
+      activityGroup: TIME_ENTRY_ACTIVITY_GROUP.INTERNAL,
+      durationMinutes: 7,
+      billedMinutes: 0,
+    });
+    expect(
+      await db.query.timeEntries.findFirst({
+        where: { id: { eq: completed.id } },
+      }),
+    ).toMatchObject({
+      activityGroup: TIME_ENTRY_ACTIVITY_GROUP.INTERNAL,
+      workspaceId: null,
+      workItemId: null,
+      billable: false,
+      noCharge: false,
+      durationMinutes: 7,
+      billedMinutes: 0,
+      rateAtEntry: 0,
+      currency: "XXX",
+      invoiceId: null,
+      invoiceNarrative: null,
+      taskCode: null,
+      activityCode: null,
+      status: BILLING_STATUS.DRAFT,
+      source: TIME_ENTRY_SOURCE.TIMER,
+    });
+    expect(await readTimer(started.id)).toBeUndefined();
+    expect(await confirmTimer.handler(request)).toEqual(completed);
+  });
+
+  test("internal confirmation refuses an assigned matter or billable request without consuming the timer", async () => {
+    const assigned = await start();
+    expect(
+      await confirmTimer.handler(
+        createTestHandlerContext<Parameters<typeof confirmTimer.handler>[0]>({
+          ...context(),
+          params: { id: assigned.id },
+          body: checkedBody(confirmTimer.config.body, {
+            timezoneId: "UTC",
+            activityGroup: TIME_ENTRY_ACTIVITY_GROUP.INTERNAL,
+          }),
+        }),
+      ),
+    ).toMatchObject({ code: 400 });
+    expect(await readTimer(assigned.id)).toBeDefined();
+    await updateTimer.handler(
+      createTestHandlerContext<Parameters<typeof updateTimer.handler>[0]>({
+        ...context(),
+        params: { id: assigned.id },
+        body: checkedBody(updateTimer.config.body, { matterId: null }),
+      }),
+    );
+    expect(
+      await confirmTimer.handler(
+        createTestHandlerContext<Parameters<typeof confirmTimer.handler>[0]>({
+          ...context([]),
+          params: { id: assigned.id },
+          body: checkedBody(confirmTimer.config.body, {
+            timezoneId: "UTC",
+            activityGroup: TIME_ENTRY_ACTIVITY_GROUP.INTERNAL,
+            billable: true,
+          }),
+        }),
+      ),
+    ).toMatchObject({ code: 400 });
+    expect(await readTimer(assigned.id)).toBeDefined();
+  });
+
+  test("a locked month refuses internal timer confirmation and retains its timer", async () => {
+    const started = await startTimer.handler(
+      createTestHandlerContext<Parameters<typeof startTimer.handler>[0]>({
+        ...context(),
+        body: checkedBody(startTimer.config.body, {
+          description: "Internal work",
+        }),
+      }),
+    );
+    if ("code" in started) {
+      throw new Error(`Timer start failed: ${JSON.stringify(started)}`);
+    }
+    await db
+      .update(organizationSettings)
+      .set({ timeLockedThroughMonth: "2026-09-30" })
+      .where(eq(organizationSettings.organizationId, ids.orgA));
+    expect(
+      await confirmTimer.handler(
+        createTestHandlerContext<Parameters<typeof confirmTimer.handler>[0]>({
+          ...context([]),
+          params: { id: started.id },
+          body: checkedBody(confirmTimer.config.body, {
+            timezoneId: "UTC",
+            activityGroup: TIME_ENTRY_ACTIVITY_GROUP.INTERNAL,
+          }),
+        }),
+      ),
+    ).toMatchObject({ code: 400 });
+    expect(await readTimer(started.id)).toBeDefined();
   });
 
   test("confirm requires a matter and retains the timer on refusal", async () => {

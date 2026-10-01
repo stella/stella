@@ -13,6 +13,7 @@ const config = {
     email: t.String({ format: "email", maxLength: 320 }),
   }),
   mcp: { type: "internal", reason: "auth_plumbing" },
+  cache: { kind: "none" },
 } satisfies PublicHandlerConfig;
 
 const agentClaimHandler = createSafePublicHandler(

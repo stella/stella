@@ -28,6 +28,7 @@ export const exportCsvHandler = async ({
     tx
       .select({
         id: timeEntries.id,
+        activityGroup: timeEntries.activityGroup,
         userId: timeEntries.userId,
         workItemId: timeEntries.workItemId,
         dateWorked: timeEntries.dateWorked,
@@ -58,6 +59,7 @@ export const exportCsvHandler = async ({
     "Date",
     "User",
     "Matter ID",
+    "Activity Group",
     "Work Item ID",
     "Duration (min)",
     "Billed (min)",
@@ -84,6 +86,7 @@ export const exportCsvHandler = async ({
         escapeCSV(row.dateWorked),
         escapeCSV(row.userId ? (userMap.get(row.userId) ?? "") : ""),
         escapeCSV(workspaceId),
+        escapeCSV(row.activityGroup),
         escapeCSV(row.workItemId ?? ""),
         String(row.durationMinutes),
         String(row.billedMinutes),
@@ -105,13 +108,13 @@ export const exportCsvHandler = async ({
 
 const config = {
   description:
-    "Export a matter's time entries as CSV text, one row per entry with " +
-    "date, timekeeper name, work item, minutes, rate, amount, billable flag, " +
+    "Export a matter's client time entries as CSV text, one row per entry with " +
+    "date, timekeeper name, activity group, work item, minutes, rate, amount, billable flag, " +
     "status, task and activity codes, and narratives. Filter by date-worked " +
     "range, status, and work item. Unlike the LEDES export this includes " +
     "non-billable and written-off entries; the row count is capped.",
   permissions: { timeEntry: ["approve"] },
-  mcp: { type: "capability", reason: "billing_admin" },
+  mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   access: "read",
   query: timeEntryExportQuerySchema,
 } satisfies WorkspaceHandlerConfig;

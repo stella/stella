@@ -28,7 +28,11 @@ const config = {
   // org AI, so it takes the same `template: ["create"]` grant as its chat twin
   // `suggest_template_fields`; a fill-only or read-only role must not reach it.
   permissions: { template: ["create"] },
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  mcp: {
+    type: "capability",
+    reason: "template_authoring_ui",
+    consumesServices: true,
+  },
   body: suggestFieldsBodySchema,
   requiresUsage: { actionType: "chat", modelRole: "fast" },
 } satisfies HandlerConfig;

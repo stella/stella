@@ -1141,6 +1141,7 @@ export default defineConfig({
   jsPlugins: [
     ...SHADCN_LINT_JS_PLUGINS,
     stellaLowercasePluginSpecifier,
+    "./.oxlint-plugins/no-raw-cache-control.ts",
     "@tanstack/eslint-plugin-query",
     "@tanstack/eslint-plugin-router",
     "eslint-plugin-drizzle",
@@ -4100,6 +4101,20 @@ export default defineConfig({
           "error",
           { entries: enforcedOwnershipEntries },
         ],
+      },
+    },
+    {
+      files: [
+        "apps/api/src/**/*.ts",
+        ".oxlint-plugins/__fixtures__/no-raw-cache-control.fixture.ts",
+      ],
+      excludeFiles: [
+        "apps/api/src/**/*.test.ts",
+        "apps/api/src/tests/**/*.ts",
+        "apps/api/src/**/__tests__/**",
+      ],
+      rules: {
+        "no-raw-cache-control/no-raw-cache-control": "error",
       },
     },
     {

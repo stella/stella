@@ -7,7 +7,7 @@ on:
 
 concurrency:
   group: audit-branch-protection
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions: {}
 

@@ -163,6 +163,24 @@ export const sendThreadChatMessage = async (
 
 const getChatApiPath = () => apiUrl("/chat");
 
+/** Runs `callback` once, later; the returned function cancels it. */
+export type ChatEmitScheduler = (callback: () => void) => () => void;
+
+// Twenty emits a second: the rate the render-storm canary
+// (lib/render-storm-canary.ts) is calibrated against. One emit can commit
+// twice (the page, then a store it syncs, such as a streamed draft in the
+// inspector).
+const STREAM_EMIT_INTERVAL_MS = 50;
+
+// A timer, not an animation frame: a hidden tab pauses frames, and its
+// transcript must still advance.
+const scheduleStreamEmit: ChatEmitScheduler = (callback) => {
+  const timeout = setTimeout(callback, STREAM_EMIT_INTERVAL_MS);
+  return () => {
+    clearTimeout(timeout);
+  };
+};
+
 type CreateChatRuntimeProps = {
   /** The thread's turn not yet settled when the page loaded, which Stop
    *  cancels until a request names a newer one. */
@@ -175,6 +193,9 @@ type CreateChatRuntimeProps = {
   /** Reload the thread from what the server stored: once a stop has settled,
    *  or once the page has left a turn that was still running. */
   reloadThread: () => void;
+  /** When subscribers hear about messages that changed while a response
+   *  streams. Defaults to `STREAM_EMIT_INTERVAL_MS` later. */
+  scheduleEmit?: ChatEmitScheduler | undefined;
 };
 
 type ActiveToolResultOperation = {
@@ -275,6 +296,7 @@ export const createChatRuntime = ({
   onError,
   onFinish,
   reloadThread,
+  scheduleEmit = scheduleStreamEmit,
 }: CreateChatRuntimeProps): ChatRuntime => {
   const listeners = new Set<() => void>();
   let activeToolResultOperation: ActiveToolResultOperation | undefined;
@@ -306,10 +328,32 @@ export const createChatRuntime = ({
     }
   };
 
+  let cancelScheduledEmit: (() => void) | undefined;
+
   const emit = () => {
+    cancelScheduledEmit?.();
+    cancelScheduledEmit = undefined;
     for (const listener of listeners) {
       listener();
     }
+  };
+
+  // A streamed response changes `messages` once per chunk, hundreds of times
+  // a second for a large tool input. `snapshot` always holds the latest, so
+  // imperative readers never lag; subscribers hear about it once per
+  // `scheduleEmit` interval. Every other change emits at once and carries the
+  // latest messages with it, so no subscriber sees a status, error or stop
+  // ahead of the messages it describes, and a run's last messages arrive with
+  // its end.
+  const emitMessagesChange = () => {
+    if (!snapshot.isLoading && !snapshot.sessionGenerating) {
+      emit();
+      return;
+    }
+    cancelScheduledEmit ??= scheduleEmit(() => {
+      cancelScheduledEmit = undefined;
+      emit();
+    });
   };
 
   const setSnapshot = (patch: Partial<ChatRuntimeSnapshot>) => {
@@ -461,9 +505,7 @@ export const createChatRuntime = ({
         setSnapshot({ error });
       }
     },
-    onFinish: () => {
-      onFinish();
-    },
+    onFinish,
     onInterruptStateChange: observeInterruptSubmission,
     onLoadingChange: (isLoading) => {
       setSnapshot({
@@ -472,7 +514,8 @@ export const createChatRuntime = ({
       });
     },
     onMessagesChange: (messages) => {
-      setSnapshot({ messages: toPersistedChatMessages(messages) });
+      snapshot = { ...snapshot, messages: toPersistedChatMessages(messages) };
+      emitMessagesChange();
     },
     onSessionGeneratingChange: (sessionGenerating) =>
       setSnapshot({ sessionGenerating }),
