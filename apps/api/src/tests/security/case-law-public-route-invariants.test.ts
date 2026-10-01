@@ -221,7 +221,7 @@ const PUBLIC_DECISION_READ_GATES = {
   "apps/api/src/handlers/case-law/provisions/previews-for-decision.ts": {
     gate: PUBLIC_DECISION_READ_GATE.SUBJECT,
   },
-  "apps/api/src/handlers/case-law/stored-payload.ts": {
+  "apps/api/src/lib/case-law/stored-payload.ts": {
     gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
     reason: "SQL fragments for 'this row holds a document'; no query.",
   },

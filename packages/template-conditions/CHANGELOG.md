@@ -1,5 +1,11 @@
 # @stll/template-conditions
 
+## 0.6.3
+
+### Patch Changes
+
+- [#4260](https://github.com/stella/stella/pull/4260) [`2f18d44`](https://github.com/stella/stella/commit/2f18d4469fa23cc60ff1dcf98afed70f3748811d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Tighten condition input handling.
+
 ## 0.6.2
 
 ### Patch Changes

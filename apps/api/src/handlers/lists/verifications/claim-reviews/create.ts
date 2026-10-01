@@ -94,7 +94,11 @@ const config = {
     "naming the governing fact or escalating it. Reopening and resolving a " +
     "conflict withdraw an earlier status and override.",
   permissions: { entity: ["update"] },
-  mcp: { type: "capability", reason: "document_processing" },
+  mcp: {
+    type: "capability",
+    reason: "document_processing",
+    consumesServices: false,
+  },
   body: bodySchema,
 } satisfies WorkspaceHandlerConfig;
 

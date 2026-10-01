@@ -9,7 +9,7 @@ import {
 import { env } from "@/api/env";
 import { createPublicKnowledgeEndpoints } from "@/api/handlers/public-knowledge/endpoints";
 import type { PublicKnowledgeDependencies } from "@/api/handlers/public-knowledge/endpoints";
-import { resolveResponseStatus } from "@/api/lib/observability/response-status";
+import { setSecurityHeaders } from "@/api/lib/security-headers";
 
 let bundledCatalogue: TemplatePackCatalogue | null = null;
 
@@ -34,10 +34,8 @@ export const createPublicKnowledgeRoute = (
     readStarter,
   } = createPublicKnowledgeEndpoints(catalogue, dependencies);
   return new Elysia({ prefix: PUBLIC_KNOWLEDGE_PATH })
-    .onRequest(({ request, set }) => {
-      if (isPublicKnowledgePath(new URL(request.url).pathname)) {
-        set.headers["Cache-Control"] = "no-store";
-      }
+    .onRequest(({ set }) => {
+      setSecurityHeaders(set);
     })
     .onBeforeHandle(({ path, set }) => {
       if (isPublicKnowledgePath(path) && !env.FEATURE_PUBLIC_KNOWLEDGE) {
@@ -45,15 +43,6 @@ export const createPublicKnowledgeRoute = (
         return { error: "Not Found" } as const;
       }
       return undefined;
-    })
-    .onAfterHandle(({ path, responseValue, set }) => {
-      if (!isPublicKnowledgePath(path)) {
-        return;
-      }
-      const status = resolveResponseStatus({ response: responseValue, set });
-      if (status >= 200 && status < 300) {
-        set.headers["Cache-Control"] = "public, max-age=300";
-      }
     })
     .get("/template-packs", listPacks.handler)
     .get("/template-packs/:packId", readPack.handler, {
@@ -83,5 +72,6 @@ export const publicKnowledgeRoute = createPublicKnowledgeRoute(
   () =>
     (bundledCatalogue ??= createBundledTemplatePackCatalogue(
       env.TEMPLATE_PACKS_CONTENT_DIR,
+      { availability: "readable" },
     )),
 );

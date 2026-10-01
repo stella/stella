@@ -23,6 +23,7 @@ export type DocxValidationFailure =
  */
 const FAILURE_BY_ARCHIVE_REASON = {
   "load-failed": "unreadable-archive",
+  "invalid-entry-name": "archive-limit-exceeded",
   "too-many-entries": "archive-limit-exceeded",
   "entry-too-large": "archive-limit-exceeded",
   "total-too-large": "archive-limit-exceeded",

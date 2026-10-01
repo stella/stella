@@ -1,8 +1,8 @@
+import RELEASE_ASYNC from "@jitl/quickjs-wasmfile-release-asyncify";
 import {
   newQuickJSAsyncWASMModuleFromVariant,
   newVariant,
-  RELEASE_ASYNC,
-} from "quickjs-emscripten";
+} from "quickjs-emscripten-core";
 
 import wasmLocation from "#quickjs-release-asyncify.wasm" with { type: "file" };
 

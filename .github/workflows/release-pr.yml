@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   schedule:
-    - cron: '17 * * * *'
+    - cron: "17 * * * *"
   workflow_dispatch:
 
 concurrency:
@@ -16,14 +16,11 @@ concurrency:
 permissions: {}
 
 jobs:
-  # An open release pull request already carries the pending changesets:
-  # `bun run release:maintenance` applies them in the release commit, so a
-  # Version Packages pull request opened beside it would version the same
-  # entries a second time. The boundary: while a release is open, the release
-  # owns versioning; otherwise this workflow does. `workflow_dispatch` runs
-  # regardless, which is the manual path to a package-only publish.
+  # The current VERSION must be tagged before another versioning pass.
+  # Open release pull requests also own their pending changesets; a manual
+  # dispatch may bypass that ownership check, but never the pending tag.
   gate:
-    name: Check for an open release
+    name: Check release versioning state
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
@@ -36,10 +33,12 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          sparse-checkout: scripts/release-pull-requests.sh
+          sparse-checkout: |
+            scripts/release-pull-requests.sh
+            scripts/release-pending.sh
           sparse-checkout-cone-mode: false
 
-      - name: Look for an open release pull request
+      - name: Check pending tags and open release pull requests
         # The title alone is contributor-controlled text, which would make this
         # an unauthenticated switch for suppressing versioning. A release is
         # recognized only as a ready pull request into main whose head branch
@@ -51,6 +50,14 @@ jobs:
           REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
+          pending=$(bash scripts/release-pending.sh --repo "$REPOSITORY")
+          version_state=$(sed -n 's/^version_state=//p' <<<"$pending")
+          if [[ "$version_state" == "pending" ]]; then
+            version=$(sed -n 's/^version=//p' <<<"$pending")
+            echo "may-version=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Release v$version on main awaits its tag; skipping versioning."
+            exit 0
+          fi
           open=$(bash scripts/release-pull-requests.sh --repo "$REPOSITORY" \
             | sed -n 's/^open_other=//p')
           if [[ "$MANUAL" == "true" || "$open" == "0" ]]; then
@@ -62,7 +69,7 @@ jobs:
 
   version:
     needs: gate
-    if: needs.gate.outputs.may-version == 'true'
+    if: needs.gate.outputs.may-version == 'true' && vars.STELLA_MERGE_HOLD == ''
     name: Maintain Version Packages PR
     permissions:
       contents: read
@@ -72,7 +79,7 @@ jobs:
     uses: stella/.github/.github/workflows/changeset-release-pr.yml@aff5017c264acce5a2bcdf15876da08835e6de70
     with:
       bun-version-file: package.json
-      auto-merge-command: bun scripts/merge-bar.ts "$RELEASE_PR_NUMBER"
+      auto-merge-command: STELLA_MERGE_HOLD_CHECKED_BY_WORKFLOW=1 bun scripts/merge-bar.ts "$RELEASE_PR_NUMBER"
     secrets:
       CHANGELOG_APP_ID: ${{ secrets.CHANGELOG_APP_ID }}
       CHANGELOG_APP_PRIVATE_KEY: ${{ secrets.CHANGELOG_APP_PRIVATE_KEY }}

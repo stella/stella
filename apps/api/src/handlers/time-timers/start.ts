@@ -17,7 +17,11 @@ const startTimer = createSafeRootHandler(
     description:
       "Start your timer in the active organization, optionally assigning a matter and description. Automatically pauses your running timer. Returns its ID for pause, resume, update, confirm or discard.",
     permissions: { timeEntry: ["create"] },
-    mcp: { type: "capability", reason: "billing_admin" },
+    mcp: {
+      type: "capability",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
     body: timerDetails,
   },
   async function* ({ safeDb, session, user, body, recordAuditEvent }) {

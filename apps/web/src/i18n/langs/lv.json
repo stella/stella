@@ -27,6 +27,16 @@
     "errorNotFound": "Šim kodam neatradām nevienu gaidošu pieprasījumu. Pārbaudiet kodu un mēģiniet vēlreiz.",
     "title": "Savienojiet savu aģentu"
   },
+  "agentSetup": {
+    "addressLabel": "Asistents prasīs šo adresi",
+    "copiedToast": "Norādījumi nokopēti. Ielīmējiet tos tērzēšanā ar asistentu.",
+    "copy": "Nokopējiet tam norādījumus",
+    "description": "Jautājiet Claude vai ChatGPT par savām lietām un dokumentiem. Izvēlieties asistentu, lai atvērtu īsu ceļvedi; tas aizņem apmēram minūti.",
+    "instructions": "Pievieno mani stella, manai juridiskajai darbvietai. Izpildi sadaļu “Instructions for AI agents” vietnē {guideUrl} un izmanto šo servera adresi: {mcpUrl}",
+    "openGuide": "Atvērt ceļvedi: {assistant}",
+    "selfSetupHint": "Izmantojat Claude Code vai Codex?",
+    "title": "Izmantojiet stella savā AI asistentā"
+  },
   "ai": {
     "chooseRewriteInstruction": "Pārrakstīšanas iespējas",
     "editWithAI": "Rediģēt ar AI",
@@ -521,6 +531,20 @@
     "noActiveTimer": "Nav aktīva taimeris",
     "noEntries": "Šim periodam nav laika ierakstu",
     "nonBillable": "Neapmaksājams",
+    "quickEntry": {
+      "entrySaved": "Laika ieraksts saglabāts",
+      "expenseSaved": "Izdevums saglabāts",
+      "expenseTitle": "Pievienot izdevumu",
+      "futureDate": "Izvēlieties šodienu vai agrāku datumu.",
+      "invalidDate": "Izvēlieties derīgu darba datumu.",
+      "minimumUnit": "Laiks tiek noapaļots uz augšu līdz minimālajai norēķinu vienībai.",
+      "narrativeRequired": "Pirms laika saglabāšanas pievienojiet aprakstu.",
+      "outsideEditWindow": "Šis datums ir ārpus rediģēšanas termiņa.",
+      "periodLocked": "Šis mēnesis ir bloķēts.",
+      "saveAndAddExpense": "Saglabāt un pievienot izdevumu",
+      "saveAndNew": "Saglabāt un pievienot vēl vienu",
+      "viewDay": "Skatīt dienu"
+    },
     "rates": {
       "addRate": "Pievienot likmi",
       "createRateTable": "Izveidot likmju tabulu",
@@ -553,6 +577,26 @@
     "selectMatter": "Izvēlieties lietu...",
     "selectMatterToStart": "Atlasiet lietu, lai sāktu laika uzskaiti",
     "selectedCount": "{count, plural, zero {# atlasīti} one {# atlasīts} other {# atlasīti}}",
+    "sellerProfiles": {
+      "add": "Pievienot pārdevēja profilu",
+      "archiveConfirm": "Arhivēt šo pārdevēja profilu? Tas vairs nebūs pieejams jauniem rēķiniem.",
+      "bic": "BIC / SWIFT kods",
+      "default": "Noklusējuma pārdevējs",
+      "defaultCurrency": "Noklusējuma valūta",
+      "description": "Pārvaldiet rēķinu izrakstīšanai izmantotos datus.",
+      "edit": "Rediģēt pārdevēja profilu",
+      "empty": "Nav pārdevēja profilu.",
+      "footerNotes": "Piezīmes kājenē",
+      "invalidBic": "Ievadiet derīgu BIC.",
+      "invalidCurrency": "Ievadiet trīs burtu valūtas kodu.",
+      "invalidIban": "Ievadiet derīgu IBAN.",
+      "legalName": "Juridiskais nosaukums",
+      "registrationId": "Reģistrācijas numurs",
+      "setDefault": "Iestatīt kā noklusējumu",
+      "title": "Pārdevēja profili",
+      "vatId": "PVN numurs"
+    },
+    "settingsTitle": "Norēķini",
     "split": {
       "addSplit": "Pievienot sadalījumu",
       "percentValue": "{value}%",
@@ -837,6 +881,7 @@
         "publishedOnWeb": "Publicēts tīmeklī"
       },
       "statutes": "Piemērojamie tiesību akti",
+      "textNotYetAvailable": "Tiesa nav publicējusi nolēmuma tekstu, vai tas šeit vēl nav pieejams.",
       "textPending": "Nolēmuma teksts vēl tiek saņemts",
       "textReadFailed": "Nolēmuma tekstu neizdevās ielādēt",
       "textUnavailable": "Šim nolēmumam teksts nav pieejams"
@@ -2258,7 +2303,8 @@
     "compareUnsupportedReasons": {
       "missingInBase": "Dokumenta daļa pastāv tikai mērķī",
       "missingInTarget": "Dokumenta daļa pastāv tikai bāzē",
-      "notEditable": "Dokumenta daļa nav rediģējama"
+      "notEditable": "Dokumenta daļa nav rediģējama",
+      "unsupportedContent": "Šajā versijā ir saturs, ko pagaidām nevar salīdzināt."
     },
     "compareUnverified": "Nepārbaudīts salīdzinājums",
     "compareVerificationFailures": "{count, plural, zero {Neviena divvirzienu pārbaude neizdevās.} one {Viena divvirzienu pārbaude neizdevās. Pārskatiet salīdzinājumu, pirms uz to paļaujaties.} other {# divvirzienu pārbaudes neizdevās. Pārskatiet salīdzinājumu, pirms uz to paļaujaties.}}",
@@ -3676,7 +3722,6 @@
     "aiTitle": "Pievienojiet savu AI pakalpojumu sniedzēju",
     "appsSubtitle": "stella darbojas arī ārpus pārlūkprogrammas: jūsu datorā un jūsu AI asistentā. Pie šīs iestatīšanas varat atgriezties jebkurā laikā.",
     "appsTitle": "Iegūstiet stella visur",
-    "assistantDocsLink": "Kā pievienot savu asistentu",
     "catalogueAlwaysOn": "Vienmēr ieslēgts",
     "catalogueClearSearch": "Notīrīt meklēšanu",
     "catalogueCommunityHeading": "Citi",
@@ -4203,31 +4248,40 @@
       "wordEditShortcutPlaceholder": "piem., JK"
     },
     "connections": {
+      "accessTitle": "{clientName} var",
+      "browseIntegrations": "Pievienot pakalpojumu",
       "cliDescription": "Instalējiet stella komandrindas klientu un piesakieties, lai no termināļa varētu skriptot lietas, dokumentus un veidnes.",
-      "cliHelpHint": "Palaidiet „stella --help“, lai redzētu pilnu komandu sarakstu.",
       "cliInstallLabel": "Instalēšana",
       "cliLoginLabel": "Pieteikšanās",
       "cliTitle": "Komandrindas saskarne",
-      "connectedAppsDescription": "Lietotnes un rīki, kuriem esat atļāvis piekļuvi savam kontam.",
-      "connectedAppsEmpty": "Lietotnes, kurām piešķirat piekļuvi, piemēram, Claude vai stella CLI, parādīsies šeit.",
-      "connectedAppsTitle": "Savienotās lietotnes",
-      "connectedColumn": "Savienots",
-      "description": "Savienojiet MCP klientus un komandrindas saskarni ar savu kontu.",
+      "connected": "Pievienots",
+      "connectedAgo": "Pievienots {time}",
+      "connectedAppsDescription": "Lietotnes, kurās pierakstījāties ar stella kontu. Atvienojiet tās, kuras vairs neizmantojat.",
+      "connectedAppsEmpty": "Pagaidām nekā. Iestatiet augstāk Claude vai ChatGPT, un tas parādīsies šeit.",
+      "connectedAppsTitle": "Lietotnes ar piekļuvi",
+      "description": "Izmantojiet stella no sava AI asistenta un redziet, kam ir piekļuve jūsu kontam.",
+      "developerDescription": "Servera adreses un komandrindas rīks tehniskiem iestatījumiem.",
+      "developerTitle": "Izstrādātāju piekļuve",
       "disconnectConfirmDescription": "Tas atņems {clientName} piekļuvi jūsu kontam, kā arī atceļ visus tā izsniegtos marķierus. Jūs varat atkal pievienoties jebkurā laikā.",
       "disconnectConfirmTitle": "Atvienot {clientName}?",
       "disconnectSuccess": "{clientName} atvienots",
+      "integrationsDescription": "Ārējie pakalpojumi, ko AI var izmantot jūsu vietā, piemēram, dokumentu krātuve.",
+      "integrationsEmpty": "Pievienojiet pirmo pakalpojumu",
+      "integrationsTitle": "Pievienotie pakalpojumi",
       "mcpAnonymizedLabel": "Anonimizēts galapunkts",
-      "mcpAnonymizedNote": "Pieejams arī anonimizēts galapunkts; tas piedāvā tos pašus rīkus ar slēptiem personas datiem.",
-      "mcpDescription": "Savienojiet ar MCP saderīgu klientu, piemēram, Claude vai Cursor, ar savu stella kontu, izmantojot šo servera URL.",
+      "mcpAnonymizedShortNote": "Tie paši rīki, personas dati maskēti.",
+      "mcpFullNote": "Pilna piekļuve jūsu lietām un dokumentiem.",
       "mcpLawLabel": "Tiesību korpusa galapunkts",
-      "mcpLawNote": "Pieejams arī tiesību korpusa galapunkts; tas piedāvā tikai publisku tiesu praksi un tiesību aktus un nepiekļūst lietu datiem.",
-      "mcpStep1": "Pievienojiet iepriekš minēto URL kā pielāgotu konektoru vai MCP serveri savā klientā.",
-      "mcpStep2": "Piesakieties, kad pārlūkprogramma to pieprasa.",
-      "mcpStep3": "Apstipriniet piekļuvi piekrišanas ekrānā.",
+      "mcpLawShortNote": "Tikai publiskā tiesu prakse un tiesību akti, bez lietu datiem.",
+      "mcpSetupHint": "Pievienojiet URL kā pielāgotu savienotāju rīkā Claude, Cursor vai citā MCP klientā, pēc tam piesakieties un apstipriniet piekļuvi.",
       "mcpTitle": "MCP serveris",
       "mcpUrlLabel": "Servera URL",
-      "scopesLabel": "Piekļuve",
-      "title": "Savienojumi"
+      "noMatches": "Vaicājumam “{query}” neatbilst neviens savienojums",
+      "notConnected": "Nav pievienots",
+      "permissionCount": "{count, plural, zero {# atļauju} one {# atļauja} other {# atļaujas}}",
+      "searchPlaceholder": "Meklēt savienojumus",
+      "title": "Savienojumi",
+      "turnedOff": "Izslēgts"
     },
     "organization": {
       "activeMembers": "Aktīvie dalībnieki",
@@ -4306,6 +4360,20 @@
       "renameDescription": "Dalībnieki jauno nosaukumu redzēs uzreiz.",
       "renameTitle": "Pārdēvēt organizāciju",
       "renameTypeToConfirm": "Lai apstiprinātu, ievadiet jauno nosaukumu: {name}",
+      "timePolicy": {
+        "description": "Iestatiet laika noapaļošanu, rediģēšanas termiņus un mēnešu bloķēšanu.",
+        "editWindow": "Rediģēšanas termiņš (dienas)",
+        "editWindowHelp": "Nulle atļauj rediģēšanu tikai darba veikšanas datumā.",
+        "invalidEditWindow": "Ievadiet veselu dienu skaitu, kas ir nulle vai lielāks.",
+        "invalidLockedMonth": "Izvēlieties jau noslēgušos mēnesi.",
+        "invalidMinimumUnit": "Izvēlieties laika vienību, ar kuru 60 minūtes dalās bez atlikuma.",
+        "lockedThrough": "Bloķēts līdz",
+        "lockedThroughHelp": "Šī mēneša un iepriekšējo mēnešu ierakstus nevar rediģēt.",
+        "minimumUnit": "Minimālā laika vienība",
+        "minimumUnitHelp": "Laiku rēķinā iekļauj šī minūšu skaita daudzkārtņos.",
+        "narrativeRequired": "Pieprasīt aprakstu",
+        "title": "Laika uzskaites noteikumi"
+      },
       "usage": "Lietojums",
       "usageDescription": "Šīs organizācijas lietojuma limiti un tiesību statuss",
       "usageEmptyDescription": "Konfigurējiet lietojuma tiesības, lai šai organizācijai iespējotu mērītas AI funkcijas.",
@@ -5003,6 +5071,11 @@
     "whenNotToUsePlaceholder": "Kad no šīs veidnes izvairīties?",
     "whenToUse": "Kad izmantot",
     "whenToUsePlaceholder": "Kad šī veidne būtu jāizmanto? (palīdz AI izvēlēties veidni)"
+  },
+  "timesheets": {
+    "day": {
+      "internalWork": "Iekšējais darbs"
+    }
   },
   "translate": {
     "dialog": {

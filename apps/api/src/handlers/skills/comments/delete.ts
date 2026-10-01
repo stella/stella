@@ -25,7 +25,11 @@ const config = {
     "edit the skill can.",
   permissions: { agentSkill: ["comment"] },
   access: "write",
-  mcp: { type: "capability", reason: "agent_tool_authoring" },
+  mcp: {
+    type: "capability",
+    reason: "agent_tool_authoring",
+    consumesServices: false,
+  },
   params: deleteSkillCommentParamsSchema,
 } satisfies HandlerConfig;
 

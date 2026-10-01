@@ -24,7 +24,11 @@ const config = {
     "already created from the style set are unaffected, because they copied " +
     "its styles at creation time.",
   permissions: { styleSet: ["update"] },
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  mcp: {
+    type: "capability",
+    reason: "template_authoring_ui",
+    consumesServices: false,
+  },
   transport: {
     type: "file-input",
     input: {

@@ -1,8 +1,9 @@
 import { Result } from "better-result";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne } from "drizzle-orm";
 import { t } from "elysia";
 
-import { abortableTx } from "@/api/db/safe-db";
+import type { Transaction } from "@/api/db/root";
+import { resultTx } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
   expenses,
@@ -15,11 +16,18 @@ import type { InvoiceStatus } from "@/api/db/schema";
 import { lockInvoiceInStatus } from "@/api/handlers/invoices/lock-invoice";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import type { AuditEvent } from "@/api/lib/audit-log";
+import type { AuditRecorder, AuditEvent } from "@/api/lib/audit-log";
+import {
+  allocateNumber,
+  findDefaultNumberSeries,
+} from "@/api/lib/billing/number-series";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
+import { PG_ERROR } from "@/api/lib/pg-error";
+
+import { validateInvoiceDocument } from "./document-type";
 
 type TransitionAction =
   | "finalize"
@@ -113,18 +121,105 @@ const buildVoidEvents = (params: {
   return events;
 };
 
+type ReleaseInvoiceEntriesOptions = {
+  actorUserId: SafeId<"user">;
+  invoiceId: SafeId<"invoice">;
+  workspaceId: SafeId<"workspace">;
+  previousStatus: InvoiceStatus;
+  now: Date;
+  recordAuditEvent: AuditRecorder;
+};
+const releaseInvoiceEntries = async (
+  tx: Transaction,
+  {
+    invoiceId,
+    workspaceId,
+    previousStatus,
+    now,
+    recordAuditEvent,
+    actorUserId,
+  }: ReleaseInvoiceEntriesOptions,
+) => {
+  // The caller acquires these locks before the invoice; guard the release too.
+  const runningError = await guardRunningTimeEntries({
+    tx,
+    workspaceId,
+    actorUserId,
+    selection: { type: "invoice", invoiceId },
+  });
+  if (runningError) {
+    return Result.err(runningError);
+  }
+  const revertedTimeEntries = await tx
+    .update(timeEntries)
+    .set({
+      status: BILLING_STATUS.APPROVED,
+      invoiceId: null,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(timeEntries.invoiceId, invoiceId),
+        eq(timeEntries.workspaceId, workspaceId),
+      ),
+    )
+    .returning({ id: timeEntries.id });
+
+  const revertedExpenses = await tx
+    .update(expenses)
+    .set({
+      status: BILLING_STATUS.APPROVED,
+      invoiceId: null,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(expenses.invoiceId, invoiceId),
+        eq(expenses.workspaceId, workspaceId),
+      ),
+    )
+    .returning({ id: expenses.id });
+
+  // The voided document keeps its lines; releasing them lets the
+  // entries they billed go on another invoice.
+  await tx
+    .update(invoiceLines)
+    .set({ releasedAt: now, updatedAt: now })
+    .where(
+      and(
+        eq(invoiceLines.invoiceId, invoiceId),
+        eq(invoiceLines.workspaceId, workspaceId),
+        isNull(invoiceLines.releasedAt),
+      ),
+    );
+
+  await recordAuditEvent(
+    tx,
+    buildVoidEvents({
+      invoiceId,
+      previousStatus,
+      revertedTimeEntries,
+      revertedExpenses,
+    }),
+  );
+  return Result.ok(undefined);
+};
+
 const transitionInvoice = createSafeHandler(
   {
     description:
-      "Move an invoice through its lifecycle with one action: finalize " +
-      "(draft to finalized), send (finalized to sent), mark_paid (sent to " +
-      "paid), revert_to_draft (finalized back to draft), or void (from " +
-      "finalized, sent, or paid). Voiding also releases every attached time " +
-      "entry and expense back to approved, unbilled status and clears the " +
-      "paid timestamp. An action the invoice's current status does not allow " +
-      "is refused.",
+      "Move an invoice through finalize, send, mark_paid, void, or revert_to_draft. " +
+      "Finalize assigns an omitted number from the document type's default series, " +
+      "using the issue date; configure a default number series first. Manual numbers " +
+      "and numbers kept after reverting to draft are preserved. A credit note must " +
+      "reference an eligible original and cannot exceed its total. Voiding releases " +
+      "attached entries and clears the paid timestamp.",
     permissions: { invoice: ["update"] },
-    mcp: { type: "capability", reason: "billing_admin" },
+    mcp: {
+      type: "capability",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
     params: invoiceParamsSchema,
     body: transitionInvoiceBodySchema,
   },
@@ -138,21 +233,10 @@ const transitionInvoice = createSafeHandler(
   }) {
     const transition = TRANSITIONS[body.action];
     const now = new Date();
-
-    const set: Partial<typeof invoices.$inferInsert> = {
-      status: transition.to,
-      updatedAt: now,
-    };
-
-    if (body.action === "mark_paid") {
-      set.paidAt = now;
-    } else if (body.action === "void") {
-      set.paidAt = null;
-    }
-
-    if (body.action === "void") {
-      const txResult = yield* Result.await(
-        abortableTx(safeDb, async (tx) => {
+    const result = await resultTx(
+      safeDb,
+      async (tx): Promise<Result<{ id: SafeId<"invoice"> }, HandlerError>> => {
+        if (body.action === "void") {
           const runningError = await guardRunningTimeEntries({
             tx,
             workspaceId,
@@ -160,114 +244,96 @@ const transitionInvoice = createSafeHandler(
             selection: { type: "invoice", invoiceId: params.invoiceId },
           });
           if (runningError) {
-            return runningError;
+            return Result.err(runningError);
           }
-          const existing = await lockInvoiceInStatus(tx, {
-            invoiceId: params.invoiceId,
-            workspaceId,
-            status: transition.from,
-          });
-          if (!existing) {
-            throw new HandlerError({
-              status: 409,
-              message: "Invoice cannot be voided from its current status",
-            });
-          }
-
-          const updated = await tx
-            .update(invoices)
-            .set(set)
-            .where(
-              and(
-                eq(invoices.id, params.invoiceId),
-                eq(invoices.workspaceId, workspaceId),
-                inArray(invoices.status, transition.from),
-              ),
-            )
-            .returning({ id: invoices.id });
-
-          const voidedInvoice = updated.at(0);
-          if (!voidedInvoice) {
-            throw new HandlerError({
-              status: 409,
-              message: "Invoice cannot be voided from its current status",
-            });
-          }
-
-          const revertedTimeEntries = await tx
-            .update(timeEntries)
-            .set({
-              status: BILLING_STATUS.APPROVED,
-              invoiceId: null,
-              updatedAt: now,
-            })
-            .where(
-              and(
-                eq(timeEntries.invoiceId, params.invoiceId),
-                eq(timeEntries.workspaceId, workspaceId),
-              ),
-            )
-            .returning({ id: timeEntries.id });
-
-          const revertedExpenses = await tx
-            .update(expenses)
-            .set({
-              status: BILLING_STATUS.APPROVED,
-              invoiceId: null,
-              updatedAt: now,
-            })
-            .where(
-              and(
-                eq(expenses.invoiceId, params.invoiceId),
-                eq(expenses.workspaceId, workspaceId),
-              ),
-            )
-            .returning({ id: expenses.id });
-
-          // The voided document keeps its lines; releasing them lets the
-          // entries they billed go on another invoice.
-          await tx
-            .update(invoiceLines)
-            .set({ releasedAt: now, updatedAt: now })
-            .where(
-              and(
-                eq(invoiceLines.invoiceId, params.invoiceId),
-                eq(invoiceLines.workspaceId, workspaceId),
-                isNull(invoiceLines.releasedAt),
-              ),
-            );
-
-          await recordAuditEvent(
-            tx,
-            buildVoidEvents({
-              invoiceId: params.invoiceId,
-              previousStatus: existing.status,
-              revertedTimeEntries,
-              revertedExpenses,
-            }),
-          );
-
-          return { id: voidedInvoice.id };
-        }),
-      );
-
-      if (HandlerError.is(txResult)) {
-        return Result.err(txResult);
-      }
-      return Result.ok({ id: txResult.id });
-    }
-
-    const result = yield* Result.await(
-      safeDb(async (tx) => {
+        }
         const existing = await lockInvoiceInStatus(tx, {
           invoiceId: params.invoiceId,
           workspaceId,
           status: transition.from,
         });
         if (!existing) {
-          return [];
+          return Result.err(
+            new HandlerError({
+              status: 409,
+              message: `Cannot ${body.action} invoice from its current status`,
+            }),
+          );
         }
-
+        if (body.action === "void" || body.action === "revert_to_draft") {
+          const credit = await tx
+            .select({ id: invoices.id })
+            .from(invoices)
+            .where(
+              and(
+                eq(invoices.workspaceId, workspaceId),
+                eq(invoices.originalInvoiceId, existing.id),
+                ne(invoices.status, INVOICE_STATUS.VOID),
+              ),
+            )
+            .limit(1);
+          if (credit.at(0)) {
+            return Result.err(
+              new HandlerError({
+                status: 409,
+                message:
+                  "Void linked credit notes before changing their original invoice",
+              }),
+            );
+          }
+        }
+        const set: Partial<typeof invoices.$inferInsert> = {
+          status: transition.to,
+          updatedAt: now,
+        };
+        if (body.action === "mark_paid") {
+          set.paidAt = now;
+        }
+        if (body.action === "void") {
+          set.paidAt = null;
+        }
+        if (body.action === "revert_to_draft") {
+          set.finalizedAt = existing.finalizedAt ?? now;
+        }
+        if (body.action === "finalize") {
+          const valid = await validateInvoiceDocument(tx, {
+            invoiceId: existing.id,
+            workspaceId,
+            documentType: existing.documentType,
+            originalInvoiceId: existing.originalInvoiceId,
+            currency: existing.currency,
+            totalAmount: existing.totalAmount,
+          });
+          if (valid.isErr()) {
+            return Result.err(valid.error);
+          }
+          set.finalizedAt = existing.finalizedAt ?? now;
+          if (existing.invoiceNumber === null) {
+            const series = await findDefaultNumberSeries(
+              tx,
+              existing.documentType,
+            );
+            if (!series) {
+              return Result.err(
+                new HandlerError({
+                  status: 409,
+                  message:
+                    "No default number series configured for this document type",
+                  hint: "Create or update a number series with this documentType and isDefault=true, then finalize again.",
+                }),
+              );
+            }
+            const number = await allocateNumber(
+              tx,
+              series.id,
+              new Date(`${existing.invoiceDate}T00:00:00Z`),
+            );
+            if (number.isErr()) {
+              return Result.err(number.error);
+            }
+            set.invoiceNumber = number.value.number;
+          }
+        }
         const updated = await tx
           .update(invoices)
           .set(set)
@@ -279,9 +345,28 @@ const transitionInvoice = createSafeHandler(
             ),
           )
           .returning({ id: invoices.id });
-
         const row = updated.at(0);
-        if (row) {
+        if (!row) {
+          return Result.err(
+            new HandlerError({
+              status: 409,
+              message: `Cannot ${body.action} invoice from its current status`,
+            }),
+          );
+        }
+        if (body.action === "void") {
+          const release = await releaseInvoiceEntries(tx, {
+            actorUserId: user.id,
+            invoiceId: row.id,
+            workspaceId,
+            previousStatus: existing.status,
+            now,
+            recordAuditEvent,
+          });
+          if (release.isErr()) {
+            return Result.err(release.error);
+          }
+        } else {
           await recordAuditEvent(tx, {
             action: AUDIT_ACTION.UPDATE,
             resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
@@ -289,24 +374,34 @@ const transitionInvoice = createSafeHandler(
             changes: {
               status: { old: existing.status, new: transition.to },
               action: { old: null, new: body.action },
+              ...(set.invoiceNumber !== undefined
+                ? {
+                    invoiceNumber: {
+                      old: existing.invoiceNumber,
+                      new: set.invoiceNumber,
+                    },
+                  }
+                : {}),
             },
           });
         }
-        return updated;
-      }),
+        return Result.ok({ id: row.id });
+      },
     );
-
-    const transitioned = result.at(0);
-    if (!transitioned) {
+    if (
+      result.isErr() &&
+      DatabaseError.is(result.error) &&
+      result.error.code === PG_ERROR.UNIQUE_VIOLATION
+    ) {
       return Result.err(
         new HandlerError({
           status: 409,
-          message: `Cannot ${body.action} invoice from its current status`,
+          message: "An invoice with this number already exists",
         }),
       );
     }
-
-    return Result.ok({ id: transitioned.id });
+    const transitioned = yield* result;
+    return Result.ok(transitioned);
   },
 );
 

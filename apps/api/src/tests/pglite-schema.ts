@@ -631,7 +631,7 @@ export const installPgliteDecisionAliases = async (
   const statements = readMigrationStatements(
     nodePath.join(
       DRIZZLE_DIR,
-      "20261003122700_case_law_decision_aliases",
+      "20261003123000_case_law_decision_aliases",
       "migration.sql",
     ),
   ).filter((statement) => {

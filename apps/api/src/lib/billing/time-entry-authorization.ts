@@ -18,3 +18,13 @@ export const canManageTimeEntry = ({
   entryUserId,
 }: CanManageTimeEntryOptions): boolean =>
   entryUserId === currentUserId || canApproveTimeEntries(memberRole);
+
+export const canApproveAssignedTimeEntry = ({
+  memberRole,
+  currentUserId,
+  approverUserId,
+}: {
+  memberRole: AuthorizedMemberRole;
+  currentUserId: SafeId<"user">;
+  approverUserId: string | null;
+}) => canApproveTimeEntries(memberRole) || approverUserId === currentUserId;

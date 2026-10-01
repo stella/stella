@@ -19,7 +19,11 @@ const discardTimer = createSafeRootHandler(
     description:
       "Discard your timer and its unconfirmed time. This creates no time entry.",
     permissions: { timeEntry: ["delete"] },
-    mcp: { type: "capability", reason: "billing_admin" },
+    mcp: {
+      type: "capability",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
     params: timerParams,
   },
   async function* ({ safeDb, session, user, params, recordAuditEvent }) {

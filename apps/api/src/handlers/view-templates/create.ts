@@ -40,7 +40,11 @@ const config = {
     "recreated wherever the template is applied. Names are unique per user, " +
     "so a repeat name is a 409, and the per-user template limit applies.",
   permissions: { view: ["create"] },
-  mcp: { type: "capability", reason: "workspace_schema" },
+  mcp: {
+    type: "capability",
+    reason: "workspace_schema",
+    consumesServices: false,
+  },
   body: createViewTemplateBodySchema,
 } satisfies WorkspaceHandlerConfig;
 

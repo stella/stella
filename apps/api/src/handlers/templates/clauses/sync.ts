@@ -19,7 +19,11 @@ const config = {
     "variant stay as they are. Use templates.outdated-clauses.sync to do this for " +
     "every outdated link at once.",
   permissions: { template: ["update"] },
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  mcp: {
+    type: "capability",
+    reason: "template_authoring_ui",
+    consumesServices: false,
+  },
   params: syncTemplateClauseParamsSchema,
 } satisfies HandlerConfig;
 

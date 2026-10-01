@@ -185,7 +185,10 @@ if (!databaseUrl || !runPostgresTests) {
       };
       for (const observationOrder of [1n, 2n]) {
         await processDecision({
-          input,
+          input: {
+            ...input,
+            rawHash: `hash-alias-replay-${observationOrder}`,
+          },
           observationOrder,
           sourceId,
           scopedDb,
@@ -193,10 +196,15 @@ if (!databaseUrl || !runPostgresTests) {
         });
       }
       const rows = await db
-        .select({ id: caseLawDecisions.id })
+        .select({
+          id: caseLawDecisions.id,
+          sourceHash: caseLawDecisions.sourceHash,
+        })
         .from(caseLawDecisions)
         .where(inArray(caseLawDecisions.id, [retiredId, survivorId]));
-      expect(rows).toEqual([{ id: survivorId }]);
+      expect(rows).toEqual([
+        { id: survivorId, sourceHash: "hash-alias-replay-2" },
+      ]);
       const claims = await db
         .select({ decisionId: caseLawDecisionSourceIdentities.decisionId })
         .from(caseLawDecisionSourceIdentities)
@@ -1837,6 +1845,157 @@ if (!databaseUrl || !runPostgresTests) {
       expect(isRecord(row) ? row["source_hash"] : undefined).toBe(
         "hash-Okresný súd Reconciled",
       );
+    });
+
+    test("Postgres aliases preserve identity across replay, flattening and retirement", async () => {
+      const first = createSafeId<"caseLawDecision">();
+      const middle = createSafeId<"caseLawDecision">();
+      const terminal = createSafeId<"caseLawDecision">();
+      const later = createSafeId<"caseLawDecision">();
+      const missing = createSafeId<"caseLawDecision">();
+      await db.insert(caseLawDecisions).values(
+        [first, middle, terminal, later].map((id) => ({
+          id,
+          sourceId,
+          country: "SVK",
+          court: "Alias lifecycle court",
+          language: "sk",
+          caseNumber: id,
+        })),
+      );
+      const alias = {
+        retiredDecisionId: first,
+        canonicalDecisionId: middle,
+      };
+      await db.insert(caseLawDecisionAliases).values(alias);
+      const initial = await db
+        .select()
+        .from(caseLawDecisionAliases)
+        .where(eq(caseLawDecisionAliases.retiredDecisionId, first));
+      expect(initial).toMatchObject([alias]);
+      await db
+        .insert(caseLawDecisionAliases)
+        .values(alias)
+        .onConflictDoUpdate({
+          target: caseLawDecisionAliases.retiredDecisionId,
+          set: { canonicalDecisionId: middle },
+        });
+      expect(
+        await db
+          .select()
+          .from(caseLawDecisionAliases)
+          .where(eq(caseLawDecisionAliases.retiredDecisionId, first)),
+      ).toEqual(initial);
+
+      await expect(
+        db
+          .insert(caseLawDecisionAliases)
+          .values({ retiredDecisionId: middle, canonicalDecisionId: first }),
+      ).rejects.toMatchObject({
+        cause: { message: expect.stringContaining("Decision alias cycle") },
+      });
+      await expect(
+        db
+          .insert(caseLawDecisionAliases)
+          .values({ retiredDecisionId: later, canonicalDecisionId: missing }),
+      ).rejects.toMatchObject({
+        cause: {
+          message: expect.stringContaining("Decision alias target is not live"),
+        },
+      });
+      await expect(
+        db.insert(caseLawDecisionAliases).values({
+          retiredDecisionId: missing,
+          canonicalDecisionId: terminal,
+        }),
+      ).rejects.toMatchObject({
+        cause: {
+          message: expect.stringContaining(
+            "Register decision alias before retirement",
+          ),
+        },
+      });
+      for (const patch of [
+        { canonicalDecisionId: terminal },
+        { retiredDecisionId: later },
+        { createdAt: new Date("2000-01-01T00:00:00Z") },
+      ]) {
+        await expect(
+          db
+            .update(caseLawDecisionAliases)
+            .set(patch)
+            .where(eq(caseLawDecisionAliases.retiredDecisionId, first)),
+        ).rejects.toMatchObject({
+          cause: {
+            message: expect.stringContaining(
+              "canonicalDecisionId" in patch
+                ? "Conflicting decision alias target"
+                : "Decision alias identity is immutable",
+            ),
+          },
+        });
+      }
+      await expect(
+        db.delete(caseLawDecisions).where(eq(caseLawDecisions.id, middle)),
+      ).rejects.toMatchObject({ cause: { code: "23503" } });
+      await db.insert(caseLawDecisionAliases).values({
+        retiredDecisionId: middle,
+        canonicalDecisionId: terminal,
+      });
+      await db
+        .delete(caseLawDecisions)
+        .where(inArray(caseLawDecisions.id, [first, middle]));
+      await db
+        .insert(caseLawDecisionAliases)
+        .values(alias)
+        .onConflictDoUpdate({
+          target: caseLawDecisionAliases.retiredDecisionId,
+          set: { canonicalDecisionId: middle },
+        });
+      await db.insert(caseLawDecisionAliases).values({
+        retiredDecisionId: later,
+        canonicalDecisionId: first,
+      });
+      const rows = await db
+        .select({
+          retired: caseLawDecisionAliases.retiredDecisionId,
+          target: caseLawDecisionAliases.canonicalDecisionId,
+        })
+        .from(caseLawDecisionAliases)
+        .where(
+          inArray(caseLawDecisionAliases.retiredDecisionId, [
+            first,
+            middle,
+            later,
+          ]),
+        );
+      expect(rows).toHaveLength(3);
+      for (const retired of [first, middle, later]) {
+        expect(rows).toContainEqual({ retired, target: terminal });
+      }
+      await expect(
+        db.delete(caseLawDecisions).where(eq(caseLawDecisions.id, terminal)),
+      ).rejects.toMatchObject({ cause: { code: "23503" } });
+      await expect(
+        db.insert(caseLawDecisions).values({
+          id: first,
+          sourceId,
+          country: "SVK",
+          court: "Alias lifecycle court",
+          language: "sk",
+          caseNumber: first,
+        }),
+      ).rejects.toMatchObject({
+        cause: { message: expect.stringContaining("Decision UUID is retired") },
+      });
+      await expect(
+        db
+          .update(caseLawDecisions)
+          .set({ id: first })
+          .where(eq(caseLawDecisions.id, later)),
+      ).rejects.toMatchObject({
+        cause: { message: expect.stringContaining("Decision UUID is retired") },
+      });
     });
   });
 }
