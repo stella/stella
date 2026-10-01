@@ -16,7 +16,7 @@ const config = {
   description:
     "Save a personal named time narrative for reuse across matters in the active organization.",
   permissions: { timeEntry: ["create"] },
-  mcp: { type: "capability", reason: "billing_admin" },
+  mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   body: t.Object({
     name: t.String({ minLength: 1, maxLength: 128 }),
     narrative: t.String({ minLength: 1, maxLength: 10_000 }),

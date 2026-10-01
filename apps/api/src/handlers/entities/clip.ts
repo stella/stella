@@ -35,7 +35,11 @@ export default createSafeHandler(
       "Refused once the matter holds its maximum number of entities.",
     body: clipBodySchema,
     permissions: { entity: ["create"] },
-    mcp: { type: "capability", reason: "document_processing" },
+    mcp: {
+      type: "capability",
+      reason: "document_processing",
+      consumesServices: false,
+    },
   },
   async function* (ctx) {
     const {

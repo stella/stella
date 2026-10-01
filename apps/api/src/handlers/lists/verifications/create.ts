@@ -48,7 +48,11 @@ const config = {
     "at a time.",
   permissions: { workspace: ["read"], entity: ["update"] },
   access: "write",
-  mcp: { type: "capability", reason: "document_processing" },
+  mcp: {
+    type: "capability",
+    reason: "document_processing",
+    consumesServices: true,
+  },
   body: bodySchema,
 } satisfies WorkspaceHandlerConfig;
 

@@ -20,7 +20,7 @@ const config = {
     "excluded from billing). A billed expense is refused until its invoice is " +
     "reverted; the return value says which of the two happened.",
   permissions: { expense: ["delete"] },
-  mcp: { type: "capability", reason: "billing_admin" },
+  mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   body: deleteExpenseBodySchema,
 } satisfies WorkspaceHandlerConfig;
 

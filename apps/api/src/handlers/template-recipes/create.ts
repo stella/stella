@@ -16,7 +16,11 @@ const config = {
     "object that is structurally validated before it is stored. Refused once " +
     "the organization holds its maximum number of recipes.",
   permissions: { template: ["create"] },
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  mcp: {
+    type: "capability",
+    reason: "template_authoring_ui",
+    consumesServices: false,
+  },
   body: createTemplateRecipeBodySchema,
 } satisfies HandlerConfig;
 

@@ -96,7 +96,11 @@ const config = {
     "one that carries markers. A changed paragraph loses its inline " +
     "formatting. Consumes AI usage.",
   permissions: { clause: ["update"] },
-  mcp: { type: "capability", reason: "knowledge_library_admin" },
+  mcp: {
+    type: "capability",
+    reason: "knowledge_library_admin",
+    consumesServices: true,
+  },
   body: rewriteClauseBodySchema,
   requiresUsage: { actionType: "chat", modelRole: "fast" },
 } satisfies HandlerConfig;

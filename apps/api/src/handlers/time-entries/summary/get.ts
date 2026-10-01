@@ -34,7 +34,11 @@ const readTimeEntrySummary = createSafeHandler(
     description:
       "Summarize client time in the current matter for a bounded date range; team scope requires time-entry approval access.",
     permissions: { timeEntry: ["read"] },
-    mcp: { type: "capability", reason: "billing_admin" },
+    mcp: {
+      type: "capability",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
     access: "read",
     query: timeEntrySummaryQuerySchema,
   },

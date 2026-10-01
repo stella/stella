@@ -23,7 +23,11 @@ const config = {
     "name. The stored style package is untouched, so use style-sets.replace " +
     "or style-sets.from-editor.update to change the styles themselves.",
   permissions: { styleSet: ["update"] },
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  mcp: {
+    type: "capability",
+    reason: "template_authoring_ui",
+    consumesServices: false,
+  },
   params: paramsSchema,
   body: bodySchema,
 } satisfies HandlerConfig;

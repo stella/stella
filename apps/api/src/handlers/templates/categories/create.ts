@@ -14,7 +14,11 @@ const config = {
     "Create a category in the organization's template category tree, " +
     "optionally under a parent category.",
   permissions: { template: ["create"] },
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  mcp: {
+    type: "capability",
+    reason: "template_authoring_ui",
+    consumesServices: false,
+  },
   body: createTemplateCategoryBodySchema,
 } satisfies HandlerConfig;
 

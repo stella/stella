@@ -40634,6 +40634,7 @@ export const generatedRouteMap: RouteNode = {
                                 },
                                 key: {
                                   minLength: 1,
+                                  maxLength: 256,
                                   type: "string",
                                 },
                               },

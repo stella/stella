@@ -241,7 +241,11 @@ const config = {
     "of the supplied options. The dependency rows of a playbook-materialized " +
     "manual column are preserved rather than rewritten.",
   permissions: { property: ["update"] },
-  mcp: { type: "capability", reason: "workspace_schema" },
+  mcp: {
+    type: "capability",
+    reason: "workspace_schema",
+    consumesServices: false,
+  },
   params: workspaceParams({ propertyId: tSafeId("property") }),
   body: updatePropertyBodySchema,
 } satisfies WorkspaceHandlerConfig;

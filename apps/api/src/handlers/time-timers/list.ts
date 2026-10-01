@@ -22,7 +22,11 @@ const listMyTimeTimers = createSafeRootHandler(
       "List your running and paused timers in the active organization. Use each returned timer ID to update, pause, resume, confirm or discard it. Follow nextCursor to read the next page.",
     permissions: { timeEntry: ["read"] },
     access: "read",
-    mcp: { type: "capability", reason: "billing_admin" },
+    mcp: {
+      type: "capability",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
     query: t.Object({
       limit: t.Optional(tPaginationLimit(LIMITS.timeEntriesPageSizeMax)),
       cursor: t.Optional(tPaginationCursor()),

@@ -10,7 +10,11 @@ const config = {
     "point for a new style set. Takes no arguments and reads no stored data.",
   permissions: { styleSet: ["use"] },
   access: "read",
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  mcp: {
+    type: "capability",
+    reason: "template_authoring_ui",
+    consumesServices: false,
+  },
 } satisfies HandlerConfig;
 
 // oxlint-disable-next-line typescript/require-await -- safe handlers must remain async generators for Result.gen error capture.

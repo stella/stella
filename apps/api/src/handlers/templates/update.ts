@@ -183,7 +183,11 @@ const config = {
     "storing a new body with templates.document.update or by calling " +
     "configure_template_fields.",
   permissions: { template: ["update"] },
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  mcp: {
+    type: "capability",
+    reason: "template_authoring_ui",
+    consumesServices: false,
+  },
   params: updateTemplateParamsSchema,
   body: updateTemplateBodySchema,
 } satisfies HandlerConfig;

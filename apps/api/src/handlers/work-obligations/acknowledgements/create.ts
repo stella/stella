@@ -21,7 +21,11 @@ const acknowledgeWorkObligation = createSafeHandler(
     description:
       "Acknowledge ownership of governed work assigned to the signed-in user.",
     permissions: { entity: ["update"] },
-    mcp: { type: "capability", reason: "workflow_orchestration" },
+    mcp: {
+      type: "capability",
+      reason: "workflow_orchestration",
+      consumesServices: false,
+    },
     params: acknowledgeParams,
   },
   async function* ({ safeDb, workspaceId, user, params, recordAuditEvent }) {

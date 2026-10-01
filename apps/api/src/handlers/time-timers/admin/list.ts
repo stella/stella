@@ -78,7 +78,11 @@ const listRunningMemberTimers = createSafeRootHandler(
       "List running timers in the active organization as an organization owner or admin. Use the timer ID with time-timers.admin.stop to end it into its owner's draft entry. Follow nextCursor to read the next page.",
     permissions: { timeEntry: ["approve"] },
     access: "read",
-    mcp: { type: "capability", reason: "billing_admin" },
+    mcp: {
+      type: "capability",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
     query: t.Object({
       limit: t.Optional(tPaginationLimit(LIMITS.timeEntriesPageSizeMax)),
       cursor: t.Optional(tPaginationCursor()),

@@ -35,7 +35,11 @@ const config = {
     "recognition batch. Returns the durable run and reports when that source " +
     "was already processed.",
   permissions: { entity: ["update"] },
-  mcp: { type: "capability", reason: "document_processing" },
+  mcp: {
+    type: "capability",
+    reason: "document_processing",
+    consumesServices: true,
+  },
   access: "write",
   body: createOcrBody,
   params: createOcrParams,

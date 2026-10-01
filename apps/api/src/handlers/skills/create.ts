@@ -41,7 +41,11 @@ const config = {
     "the per-user or per-organization skill limit is reached. Use " +
     "skills.upload or skills.from-url.import for a packaged skill instead.",
   permissions: { agentSkill: ["create"] },
-  mcp: { type: "capability", reason: "agent_tool_authoring" },
+  mcp: {
+    type: "capability",
+    reason: "agent_tool_authoring",
+    consumesServices: false,
+  },
   body: createSkillBodySchema,
 } satisfies HandlerConfig;
 
