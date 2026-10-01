@@ -13,13 +13,16 @@ import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
 import { fileFieldQuery } from "@/api/lib/files/read-file";
 import { createFileKey } from "@/api/lib/files/utils";
+import {
+  CACHE_CONTROL_HEADER,
+  PRIVATE_CACHE_CONTROL,
+} from "@/api/lib/security-headers";
 
 /**
  * Each thumbnail redirect is authorized and audited against the current
  * session. Signed URLs stay short-lived, and redirects are never cached.
  */
 const FILE_THUMBNAIL_URL_EXPIRY_SECONDS = 15 * 60;
-const FILE_THUMBNAIL_REDIRECT_CACHE_CONTROL = "private, no-store";
 
 const config = {
   permissions: { workspace: ["read"] },
@@ -91,7 +94,7 @@ export default createSafeHandler(
         status: 302,
         headers: {
           Location: presignedUrl,
-          "Cache-Control": FILE_THUMBNAIL_REDIRECT_CACHE_CONTROL,
+          [CACHE_CONTROL_HEADER]: PRIVATE_CACHE_CONTROL,
         },
       }),
     );

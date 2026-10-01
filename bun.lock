@@ -107,6 +107,7 @@
         "@stll/mojibake": "workspace:*",
         "@stll/money": "workspace:*",
         "@stll/permissions": "workspace:*",
+        "@stll/redis-config": "workspace:*",
         "@stll/runtime-mode": "workspace:*",
         "@stll/sanctions": "workspace:*",
         "@stll/skills": "workspace:*",
@@ -182,6 +183,7 @@
         "@hocuspocus/server": "^4.6.0",
         "@stll/api-contract": "workspace:*",
         "@stll/errors": "workspace:*",
+        "@stll/redis-config": "workspace:*",
         "@stll/runtime-mode": "workspace:*",
         "@stll/time": "workspace:*",
         "@t3-oss/env-core": "catalog:",
@@ -897,6 +899,18 @@
       "version": "0.0.0",
       "dependencies": {
         "fast-check": "catalog:",
+      },
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "bun-types": "catalog:",
+      },
+    },
+    "packages/redis-config": {
+      "name": "@stll/redis-config",
+      "version": "0.0.0",
+      "dependencies": {
+        "better-result": "catalog:",
+        "valibot": "catalog:",
       },
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
@@ -2854,6 +2868,8 @@
     "@stll/playground": ["@stll/playground@workspace:apps/playground"],
 
     "@stll/property-testing": ["@stll/property-testing@workspace:packages/property-testing"],
+
+    "@stll/redis-config": ["@stll/redis-config@workspace:packages/redis-config"],
 
     "@stll/runtime-mode": ["@stll/runtime-mode@workspace:packages/runtime-mode"],
 

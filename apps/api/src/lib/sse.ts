@@ -20,6 +20,11 @@ import {
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
 import {
+  CACHE_CONTROL_HEADER,
+  SSE_CACHE_CONTROL,
+  SSE_MEDIA_TYPE,
+} from "@/api/lib/security-headers";
+import {
   INSTANCE_ID,
   parseRedisPayload,
   publishOrganizationEvent,
@@ -116,15 +121,11 @@ const HEARTBEAT_CHUNK = encoder.encode(SSE_HEARTBEAT_FRAME);
 // one a library produced. Both are the same writer, so an event stream cannot
 // be served without it.
 
-const SSE_MEDIA_TYPE = "text/event-stream";
-
 /**
- * `no-store` and `no-transform` together: an intermediary must neither keep a
- * copy of a per-request stream nor buffer or recode it, and `x-accel-buffering`
- * says the same to a reverse proxy that reads it.
+ * Streams forbid transformation; `x-accel-buffering` also prevents buffering.
  */
 const SSE_HEADERS = {
-  "cache-control": "no-cache, no-store, no-transform",
+  [CACHE_CONTROL_HEADER]: SSE_CACHE_CONTROL,
   connection: "keep-alive",
   "content-type": SSE_MEDIA_TYPE,
   "x-accel-buffering": "no",

@@ -8,11 +8,10 @@
  *   (apps/web/src/server.ts); the CDN reports no cache hit and `Age` is absent
  *   or zero, also on an immediate repeat.
  * - Public Knowledge JSON carries `public, max-age=300` on success and
- *   `no-store` otherwise, and sets no cookie
+ *   `private, no-store` otherwise, and sets no cookie
  *   (apps/api/src/handlers/public-knowledge/routes.ts).
- * - Member Knowledge JSON answers a JSON 401 without a session; the routes
- *   that declare `private, no-store` carry it on that answer too. The test
- *   file checks that list against the route modules.
+ * - Member Knowledge JSON answers a JSON 401 without a session and carries
+ *   the global `private, no-store` policy.
  * - Public Knowledge pages built with the shared public head carry a robots
  *   meta tag with one of its declared values (apps/web/src/lib/public-seo.ts).
  *
@@ -21,7 +20,7 @@
  * way. Pack, template and starter ids come from the public Knowledge JSON.
  * When the API and the web origin both report a build commit and the two
  * differ, the run stops before any check. Like post-deploy-smoke.ts it
- * imports nothing from the app, so it runs as a plain `bun` invocation.
+ * imports only environment-free policy helpers and runs as a plain `bun` invocation.
  *
  * Prints a JSON report (statuses and headers; never bodies or secrets) and
  * exits non-zero on any failed check.
@@ -35,6 +34,13 @@ import * as v from "valibot";
 
 import { loadCatalogue } from "@stll/catalogue";
 import { fetchWithTimeout } from "@stll/fetch";
+
+import {
+  CACHE_CONTROL_HEADER,
+  NO_STORE_DIRECTIVE,
+  PRIVATE_CACHE_CONTROL,
+  publicCacheControl,
+} from "../lib/security-headers";
 
 const REQUEST_TIMEOUT_MS = 20_000;
 
@@ -62,30 +68,25 @@ const SIGNED_IN_PAGE_PATHS = [
 ] as const;
 
 /** apps/web/src/server.ts: every Knowledge HTML response. */
-const KNOWLEDGE_HTML_CACHE_CONTROL = "private, no-store";
+const KNOWLEDGE_HTML_CACHE_CONTROL = PRIVATE_CACHE_CONTROL;
 /** apps/api/src/handlers/public-knowledge/routes.ts: success, then the rest. */
-const PUBLIC_JSON_CACHE_CONTROL = "public, max-age=300";
-const PUBLIC_JSON_OTHER_CACHE_CONTROL = "no-store";
-/** The member Knowledge routes' `onRequest` hook. */
-export const MEMBER_JSON_CACHE_CONTROL = "private, no-store";
+const PUBLIC_JSON_CACHE_CONTROL = publicCacheControl({
+  kind: "public",
+  maxAge: 300,
+});
+const PUBLIC_JSON_OTHER_CACHE_CONTROL = PRIVATE_CACHE_CONTROL;
+/** The global API response policy. */
+export const MEMBER_JSON_CACHE_CONTROL = PRIVATE_CACHE_CONTROL;
 
 /** Where the web origin serves the API's versioned routes. */
 export const MEMBER_JSON_BASE = "/api/v1";
 
-/**
- * Member Knowledge JSON whose route declares `private, no-store`: every
- * route module under apps/api/src/handlers that declares it, and no other
- * (the test file compares the two).
- */
+/** Representative member Knowledge routes checked against the global policy. */
 export const MEMBER_JSON_POLICY_PATHS = [
   `${MEMBER_JSON_BASE}/playbooks/`,
   `${MEMBER_JSON_BASE}/templates/`,
   `${MEMBER_JSON_BASE}/clauses/`,
   `${MEMBER_JSON_BASE}/catalogue/`,
-] as const;
-
-/** Member Knowledge JSON checked for its status only: no declared policy. */
-export const MEMBER_JSON_STATUS_ONLY_PATHS = [
   `${MEMBER_JSON_BASE}/skills/`,
 ] as const;
 
@@ -248,13 +249,13 @@ export const evaluateCachePolicy = (
   if (declared === null) {
     return failures;
   }
-  const actual = headers.get("cache-control");
+  const actual = headers.get(CACHE_CONTROL_HEADER);
   if (!matchesCacheControl(actual, declared)) {
     failures.push(
       `Cache-Control "${actual ?? "absent"}", declared "${declared}"`,
     );
   }
-  if (parseCacheControl(declared).has("no-store")) {
+  if (parseCacheControl(declared).has(NO_STORE_DIRECTIVE)) {
     if (isCdnCacheHit(headers.get("x-cache"))) {
       failures.push(`CDN cache hit (${headers.get("x-cache") ?? ""})`);
     }
@@ -502,11 +503,6 @@ export const buildTargets = ({
       path,
       responseClass: RESPONSE_CLASS.publicJson,
     })),
-    ...MEMBER_JSON_STATUS_ONLY_PATHS.map((path) => ({
-      path,
-      responseClass: RESPONSE_CLASS.memberJson,
-      cacheControl: null,
-    })),
     ...MEMBER_JSON_POLICY_PATHS.map((path) => ({
       path,
       responseClass: RESPONSE_CLASS.memberJson,
@@ -665,7 +661,7 @@ const createRun = (config: Config) => {
       responseClass: target.responseClass,
       attempt,
       status: snapshot.status,
-      cacheControl: snapshot.headers.get("cache-control"),
+      cacheControl: snapshot.headers.get(CACHE_CONTROL_HEADER),
       contentType: snapshot.headers.get("content-type"),
       xCache: snapshot.headers.get("x-cache"),
       age: snapshot.headers.get("age"),
