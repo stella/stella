@@ -319,7 +319,7 @@ const buildSeededSnapshot = async (): Promise<Blob> => {
     desiredIndexId: INDEX_ID,
     updatedAt: INITIAL_RUNNABLE_AT,
   });
-  return await client.dumpDataDir();
+  return await client.dumpDataDir("none");
 };
 
 beforeAll(async () => {
