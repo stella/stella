@@ -1,5 +1,5 @@
 // parser-output-unchanged: Validation rejects invalid publisher responses without transforming parsed decision content.
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import * as cheerio from "cheerio";
 import { parseXmlDocument } from "slimdom";
 
@@ -188,6 +188,9 @@ const readPublisherPageContent = ({
       }
       return Result.ok(body);
   }
+  // Every page kind returns above; a new kind fails here at compile time.
+  kind satisfies never;
+  return panic("Unhandled publisher page kind");
 };
 
 /** Validate the response before a listing parser can mistake refusal for absence. */

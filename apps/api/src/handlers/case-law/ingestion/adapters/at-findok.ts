@@ -349,7 +349,9 @@ export const parseFindokManifest = (
   }
   const items: FindokManifestItem[] = [];
   const identities = new Set<string>();
-  for (const raw of value["data"]) {
+  // The manifest's rows are publisher data: keep them unknown until checked.
+  const rows: unknown[] = value["data"];
+  for (const raw of rows) {
     // Rows the publisher explicitly marks invalid are outside its active
     // inventory, even when their optional document fields are incomplete.
     if (isRecord(raw) && raw["gueltig"] === false) {
@@ -643,7 +645,7 @@ const storedRaw = ({
   sourceRaw: encodeSourceRawEnvelope({
     // The manifest row verbatim, not the adapter's own wrapper around it: a
     // reader of a stored row can then tell which response it is holding.
-    [FINDOK_PART.LISTING]: JSON.stringify(item.raw) ?? "null",
+    [FINDOK_PART.LISTING]: JSON.stringify(item.raw ?? null),
     ...(documentXml === undefined
       ? {}
       : { [FINDOK_PART.DOCUMENT_XML]: documentXml }),
