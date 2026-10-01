@@ -1,7 +1,7 @@
 import type { Decoration } from "@tiptap/core";
 import { InlineDecoration } from "@tiptap/core";
+import { Schema } from "@tiptap/pm/model";
 import { describe, expect, test } from "bun:test";
-import { Schema } from "prosemirror-model";
 
 import type { ChatAnonPair } from "@stll/anonymize-chat";
 

@@ -76,6 +76,7 @@ const resolveLocalImport = (
   for (const suffix of CANDIDATE_SUFFIXES) {
     const candidate = base + suffix;
     if (
+      /\.[cm]?[jt]sx?$/u.test(candidate) &&
       candidate.startsWith(`${webSrc}${nodePath.sep}`) &&
       existsSync(candidate) &&
       statSync(candidate).isFile()
@@ -88,9 +89,21 @@ const resolveLocalImport = (
 
 // Follow the emitted static graph: type imports are erased, and client-only
 // dynamic imports remain outside the server module graph.
-const importScanner = new Bun.Transpiler({ loader: "tsx" });
-const collectStaticImportSpecifiers = (source: string): readonly string[] =>
-  importScanner
+const importScanners = {
+  ts: new Bun.Transpiler({ loader: "ts" }),
+  tsx: new Bun.Transpiler({ loader: "tsx" }),
+};
+
+type CollectStaticImportSpecifiersOptions = {
+  source: string;
+  file: string;
+};
+
+const collectStaticImportSpecifiers = ({
+  source,
+  file,
+}: CollectStaticImportSpecifiersOptions): readonly string[] =>
+  importScanners[file.endsWith("x") ? "tsx" : "ts"]
     .scanImports(source)
     .filter(({ kind }) => kind === "import-statement")
     .map(({ path }) => path);
@@ -118,7 +131,7 @@ const walkSsrGraph = (entries: readonly string[]): WalkResult => {
     visited.add(file);
 
     const source = readFileSync(file, "utf-8");
-    for (const specifier of collectStaticImportSpecifiers(source)) {
+    for (const specifier of collectStaticImportSpecifiers({ source, file })) {
       if (
         FORBIDDEN_IMPORT_PATTERNS.some((pattern) => pattern.test(specifier))
       ) {
@@ -144,7 +157,9 @@ const walkSsrGraph = (entries: readonly string[]): WalkResult => {
 describe("public tools security invariants", () => {
   test("follows static value imports and exports", () => {
     expect(
-      collectStaticImportSpecifiers(`
+      collectStaticImportSpecifiers({
+        file: "module.tsx",
+        source: `
         import type { TypeOnly } from "./types";
         import { type MixedType, value } from "./mixed";
         import { type InlineType } from "./inline-types";
@@ -155,9 +170,34 @@ describe("public tools security invariants", () => {
         const lazy = import("./lazy");
         // import commented from "./comment";
         const text = 'from "./text"';
-      `),
+      `,
+      }),
     ).toEqual(["./mixed", "./forwarded", "./all", "./side-effect"]);
   });
+
+  test("scans TypeScript generic arrows with the source loader", () => {
+    expect(
+      collectStaticImportSpecifiers({
+        file: "module.ts",
+        source:
+          'import { value } from "./value"; export const identity = <T>(value: T) => value;',
+      }),
+    ).toEqual(["./value"]);
+  });
+
+  test.each(["@/styles/app.css", "@/i18n/langs/en.json"])(
+    "treats %s as a non-script asset",
+    (specifier) => {
+      const file = nodePath.resolve(webSrc, "routes/tools/index.tsx");
+      expect(existsSync(nodePath.resolve(webSrc, specifier.slice(2)))).toBe(
+        true,
+      );
+      expect(resolveLocalImport(specifier, file)).toBeNull();
+      expect(resolveLocalImport("./route", file)).toBe(
+        nodePath.resolve(webSrc, "routes/tools/route.tsx"),
+      );
+    },
+  );
 
   test("no SSR-reachable tools module statically imports an authed query, the auth client, or the install path", () => {
     const entries = SSR_ENTRY_MODULES.map((path) =>
