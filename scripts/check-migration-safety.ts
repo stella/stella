@@ -1296,7 +1296,9 @@ const migrationReindexOperation = (
   position: number,
 ): MigrationIndexOperation | undefined => {
   let cursor = position + 1;
-  if (!isIndexKeyword(tokens[position], "reindex")) {return undefined;}
+  if (!isIndexKeyword(tokens[position], "reindex")) {
+    return undefined;
+  }
   // PostgreSQL also permits parenthesized options before the target kind.
   if (tokens[cursor]?.value === "(") {
     while (cursor < tokens.length && tokens[cursor]?.value !== ")") {
