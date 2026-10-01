@@ -348,7 +348,6 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "pdfjs-dist",
   "postal-mime",
   "prism-react-renderer",
-  "quickjs-emscripten",
   "quickjs-emscripten-core",
   "re2-wasm",
   "react-native-web",
