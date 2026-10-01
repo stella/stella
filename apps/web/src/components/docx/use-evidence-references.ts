@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 
-import type { Node as ProseMirrorNode } from "prosemirror-model";
+import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 

@@ -438,7 +438,11 @@ const config = {
     "capped, and clauses beyond the organization's remaining capacity are " +
     "reported as skipped instead of failing the import.",
   permissions: { clause: ["create"] },
-  mcp: { type: "capability", reason: "knowledge_library_admin" },
+  mcp: {
+    type: "capability",
+    reason: "knowledge_library_admin",
+    consumesServices: false,
+  },
   transport: {
     type: "file-input",
     // Any declared type: the handler reads the file as text and picks the

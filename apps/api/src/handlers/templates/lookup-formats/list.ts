@@ -29,7 +29,11 @@ const config = {
     "List shared company specification formats and the default for a business registry in the active organization.",
   permissions: { workspace: ["read"] },
   access: "read",
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  mcp: {
+    type: "capability",
+    reason: "template_authoring_ui",
+    consumesServices: false,
+  },
   query: t.Object({
     registry: t.UnionEnum(LOOKUP_REGISTRIES),
     limit: t.Optional(

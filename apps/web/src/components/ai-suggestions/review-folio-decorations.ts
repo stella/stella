@@ -1,5 +1,5 @@
+import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { panic } from "better-result";
-import type { Node as ProseMirrorNode } from "prosemirror-model";
 
 import {
   resolveFolioAIBlockRange,

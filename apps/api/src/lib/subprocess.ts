@@ -11,7 +11,6 @@ type SpawnWorkerOptions = {
   args?: string[];
   stdin: Blob;
   timeoutMs: number;
-  env?: Record<string, string>;
   /** Aborting kills the subprocess instead of letting it run to timeout. */
   signal?: AbortSignal;
   /** Receives what a worker that exited successfully wrote to stderr. */
@@ -121,7 +120,6 @@ type SpawnedWorker = {
 
 type SpawnWorkerProcessOptions = {
   args: string[];
-  env: Record<string, string> | undefined;
   stdin: Blob;
   workerPath: string;
 };
@@ -166,18 +164,14 @@ const watchWorkerTermination = ({
 
 const spawn = ({
   args,
-  env,
   stdin,
   workerPath,
 }: SpawnWorkerProcessOptions): SpawnedWorker =>
-  Bun.spawn(["bun", "run", workerPath, ...args], {
+  Bun.spawn(["bun", "run", "--no-env-file", workerPath, ...args], {
     stdin,
     stdout: "pipe",
     stderr: "pipe",
-    env: {
-      PATH: process.env["PATH"] ?? "",
-      ...env,
-    },
+    env: { PATH: process.env["PATH"] ?? "" },
   });
 
 export const spawnWorker = async ({
@@ -185,13 +179,12 @@ export const spawnWorker = async ({
   args = [],
   stdin,
   timeoutMs,
-  env,
   signal,
   onStderr,
 }: SpawnWorkerOptions): Promise<Result<string, SubprocessError>> => {
   signal?.throwIfAborted();
   const timeoutSignal = AbortSignal.timeout(timeoutMs);
-  const subprocess = spawn({ args, env, stdin, workerPath });
+  const subprocess = spawn({ args, stdin, workerPath });
   const getTermination = watchWorkerTermination({
     signal,
     subprocess,
@@ -243,13 +236,12 @@ export const spawnBinaryWorker = async ({
   args = [],
   stdin,
   timeoutMs,
-  env,
   signal,
   maxOutputBytes,
 }: SpawnBinaryWorkerOptions): Promise<Result<Uint8Array, SubprocessError>> => {
   signal?.throwIfAborted();
   const timeoutSignal = AbortSignal.timeout(timeoutMs);
-  const subprocess = spawn({ args, env, stdin, workerPath });
+  const subprocess = spawn({ args, stdin, workerPath });
   const getTermination = watchWorkerTermination({
     signal,
     subprocess,

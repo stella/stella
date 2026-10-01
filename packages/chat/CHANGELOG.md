@@ -1,5 +1,11 @@
 # @stll/chat
 
+## 0.1.30
+
+### Patch Changes
+
+- [#4203](https://github.com/stella/stella/pull/4203) [`a78e2c4`](https://github.com/stella/stella/commit/a78e2c4172bfb9b61d120cb635248dc70e4f0178) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Remove unused dependency declarations.
+
 ## 0.1.29
 
 ### Patch Changes

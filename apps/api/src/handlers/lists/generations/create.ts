@@ -36,7 +36,11 @@ const config = {
     "matter. Returns the run id with status running; the candidates it " +
     "produces are submitted separately and leave the run in review.",
   permissions: { entity: ["create"] },
-  mcp: { type: "capability", reason: "workflow_orchestration" },
+  mcp: {
+    type: "capability",
+    reason: "workflow_orchestration",
+    consumesServices: true,
+  },
   body: bodySchema,
 } satisfies WorkspaceHandlerConfig;
 

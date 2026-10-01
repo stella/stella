@@ -25,7 +25,11 @@ const config = {
     "flips to committed once nothing is left pending. Nothing is deleted: " +
     "the candidate stays in the run with status rejected.",
   permissions: { entity: ["create"] },
-  mcp: { type: "capability", reason: "workflow_orchestration" },
+  mcp: {
+    type: "capability",
+    reason: "workflow_orchestration",
+    consumesServices: false,
+  },
   body: bodySchema,
 } satisfies WorkspaceHandlerConfig;
 

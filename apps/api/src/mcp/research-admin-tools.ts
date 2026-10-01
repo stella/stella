@@ -195,6 +195,7 @@ const listAuditLogArgsSchema = nullAsAbsent(
 );
 
 const LIST_AUDIT_LOG_TOOL_DEFINITION = defineValibotMcpTool({
+  consumesServices: false,
   annotations: {
     title: "List audit log",
     destructiveHint: false,
@@ -455,6 +456,7 @@ const searchBoeLegislationArgsSchema = nullAsAbsent(
 );
 
 const SEARCH_BOE_LEGISLATION_TOOL_DEFINITION = defineValibotMcpTool({
+  consumesServices: true,
   annotations: {
     title: "Search BOE legislation",
     destructiveHint: false,
@@ -866,6 +868,7 @@ const manageOrganizationArgsSchema = nullAsAbsent(
 );
 
 const MANAGE_ORGANIZATION_TOOL_DEFINITION = defineValibotMcpTool({
+  consumesServices: false,
   description:
     "Manage organization members and non-secret settings. Member actions " +
     "require matter_id and user_id. update_org_settings controls matter " +

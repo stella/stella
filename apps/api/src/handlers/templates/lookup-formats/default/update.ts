@@ -17,7 +17,11 @@ const config = {
   description:
     "Choose or clear the default company specification format for a business registry in the active organization.",
   permissions: { template: ["update"] },
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  mcp: {
+    type: "capability",
+    reason: "template_authoring_ui",
+    consumesServices: false,
+  },
   body: t.Object(
     {
       registry: t.UnionEnum(LOOKUP_REGISTRIES),

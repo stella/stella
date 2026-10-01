@@ -18,7 +18,11 @@ const config = {
     "had been synced on its own. Links already on the current version are " +
     "left untouched.",
   permissions: { template: ["update"] },
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  mcp: {
+    type: "capability",
+    reason: "template_authoring_ui",
+    consumesServices: false,
+  },
   params: syncAllTemplateClausesParamsSchema,
 } satisfies HandlerConfig;
 

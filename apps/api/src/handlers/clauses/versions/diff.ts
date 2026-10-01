@@ -21,7 +21,11 @@ const config = {
     "identical. This is what backs the what-changed disclosure shown on a " +
     "template link pointing at an outdated version.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "knowledge_library_admin" },
+  mcp: {
+    type: "capability",
+    reason: "knowledge_library_admin",
+    consumesServices: false,
+  },
   access: "read",
   params: clauseVersionDiffParamsSchema,
 } satisfies HandlerConfig;

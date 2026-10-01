@@ -21,7 +21,11 @@ const config = {
     "changing or removing a schedule trigger, or disabling the flow, also " +
     "stops it from firing.",
   permissions: { flow: ["update"] },
-  mcp: { type: "capability", reason: "workflow_orchestration" },
+  mcp: {
+    type: "capability",
+    reason: "workflow_orchestration",
+    consumesServices: false,
+  },
   params: flowDefinitionParamsSchema,
   body: flowDefinitionBodySchema,
 } satisfies HandlerConfig;
