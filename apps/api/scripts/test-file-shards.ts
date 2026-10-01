@@ -45,9 +45,13 @@ export const partitionTestFiles = ({
     (a, b) => weight(b) - weight(a) || (a < b ? -1 : Number(a > b)),
   )) {
     let bin = bins.at(0);
-    if (bin === undefined) {panic("Test shard bins must exist");}
+    if (bin === undefined) {
+      panic("Test shard bins must exist");
+    }
     for (const candidate of bins) {
-      if (candidate.seconds < bin.seconds) {bin = candidate;}
+      if (candidate.seconds < bin.seconds) {
+        bin = candidate;
+      }
     }
     bin.files.add(file);
     bin.seconds += weight(file);

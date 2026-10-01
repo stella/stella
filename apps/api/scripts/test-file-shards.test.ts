@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { propertyConfig } from "@stll/property-testing";
+
 import { parseApiTestShard, partitionTestFiles } from "./test-file-shards";
 
 test("partitions are complete, deterministic and bounded for every measured workload", () => {
@@ -36,6 +38,7 @@ test("partitions are complete, deterministic and bounded for every measured work
         ]);
       },
     ),
+    propertyConfig(),
   );
 });
 
@@ -44,7 +47,9 @@ test("new files use the live median and stale measurements cannot change assignm
   const durations = { a: 2, b: 2 };
   const bins = partitionTestFiles({ files, durations, count: 2 });
   expect(bins.flat().toSorted()).toEqual(files.toSorted());
-  expect(bins.map((bin) => bin.length).toSorted()).toEqual([1, 2]);
+  expect(bins.map((bin) => bin.length).toSorted((a, b) => a - b)).toEqual([
+    1, 2,
+  ]);
   expect(
     partitionTestFiles({
       files,
