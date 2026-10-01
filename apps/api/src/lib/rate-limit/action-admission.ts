@@ -1,6 +1,11 @@
 import { Result, TaggedError } from "better-result";
 import { AsyncLocalStorage } from "node:async_hooks";
 
+import {
+  ACTION_ADMISSION_CODES,
+  ACTION_ADMISSION_REFUSALS,
+  type ActionAdmissionCode,
+} from "@stll/api-contract/action-admission";
 import { Temporal } from "@stll/time";
 
 import { env } from "@/api/env";
@@ -47,9 +52,41 @@ export const closeActionAdmissionRedis = () => admissionRedis.close();
 
 export class ActionAdmissionError extends TaggedError("ActionAdmissionError")<{
   message: string;
-  reason: "busy" | "unavailable";
+  reason: "busy" | "period_exhausted" | "not_enabled" | "unavailable";
   cause?: unknown;
-}> {}
+}> {
+  get code() {
+    return ADMISSION_REASON_CODES[this.reason];
+  }
+}
+
+const ADMISSION_REASON_CODES = {
+  busy: ACTION_ADMISSION_CODES.concurrencyBusy,
+  period_exhausted: ACTION_ADMISSION_CODES.periodExhausted,
+  not_enabled: ACTION_ADMISSION_CODES.notEnabled,
+  unavailable: ACTION_ADMISSION_CODES.admissionUnavailable,
+} as const satisfies Record<
+  ActionAdmissionError["reason"],
+  ActionAdmissionCode
+>;
+
+export const actionAdmissionRefusal = (error: ActionAdmissionError) => {
+  const refusal = ACTION_ADMISSION_REFUSALS[error.code];
+  const contactUrl =
+    error.code === ACTION_ADMISSION_CODES.periodExhausted ||
+    error.code === ACTION_ADMISSION_CODES.notEnabled
+      ? env.ACTION_LIMIT_CONTACT_URL
+      : undefined;
+  return {
+    ...refusal,
+    code: error.code,
+    hint:
+      contactUrl === undefined
+        ? refusal.hint
+        : `${refusal.hint} Contact: ${contactUrl}`,
+    ...(contactUrl === undefined ? {} : { contactUrl }),
+  };
+};
 
 type ActionAdmissionPolicy = {
   organizationConcurrency: number;
@@ -296,7 +333,7 @@ const validateAdmissionReply = (
           reply === -1
             ? "Action period limit reached"
             : "Concurrent action limit reached",
-        reason: "busy",
+        reason: reply === -1 ? "period_exhausted" : "busy",
       }),
     );
   }

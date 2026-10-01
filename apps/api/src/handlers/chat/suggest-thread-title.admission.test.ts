@@ -36,6 +36,7 @@ const runDeniedTitle = async ({
   let threadReads = 0;
   let messageReads = 0;
   let entitlementReads = 0;
+  let sendModeReads = 0;
   const db = createScopedDbMock({
     query: {
       chatThreads: {
@@ -79,7 +80,12 @@ const runDeniedTitle = async ({
         },
       },
     },
-    select: () => {
+    select: (fields: Record<string, unknown>) => {
+      // The message window reads the thread's send mode after its messages.
+      if ("usedAnonymization" in fields) {
+        sendModeReads += 1;
+        return createSelectQueryMock([{ usedAnonymization: false }]);
+      }
       entitlementReads += 1;
       return createSelectQueryMock([]);
     },
@@ -158,10 +164,12 @@ const runDeniedTitle = async ({
     if (denial === "workspace") {
       expect(threadReads).toBe(0);
       expect(messageReads).toBe(0);
+      expect(sendModeReads).toBe(0);
       expect(entitlementReads).toBe(0);
     } else {
       expect(threadReads).toBe(1);
       expect(messageReads).toBe(2);
+      expect(sendModeReads).toBe(1);
       expect(entitlementReads).toBe(1);
     }
     return result;

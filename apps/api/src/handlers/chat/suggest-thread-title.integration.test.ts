@@ -210,6 +210,35 @@ describe("suggest thread title", () => {
     expect(generateTextMock).not.toHaveBeenCalled();
   });
 
+  test("reads the send mode again with the messages it would send", async () => {
+    const threadId = await seedThread({
+      messageTexts: ["First ask", "First answer"],
+    });
+    // The thread switches after the handler's first read: an anonymized turn
+    // is stored before the message window loads.
+    let reads = 0;
+    const switchingSafeDb: SafeDb = async (run, retry) => {
+      reads += 1;
+      if (reads === 2) {
+        await testDb
+          .update(chatThreads)
+          .set({ usedAnonymization: true })
+          .where(eq(chatThreads.id, threadId));
+      }
+      return await safeDb(run, retry);
+    };
+
+    generateTextMock.mockClear();
+    const result = await suggestThreadTitle.handler({
+      ...createContext({ threadId }),
+      safeDb: switchingSafeDb,
+    });
+
+    expect(reads).toBeGreaterThanOrEqual(2);
+    expect(result).toMatchObject({ code: 403 });
+    expect(generateTextMock).not.toHaveBeenCalled();
+  });
+
   test("rejects a message-less thread with 409", async () => {
     const threadId = await seedThread({});
 

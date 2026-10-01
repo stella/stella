@@ -1,5 +1,11 @@
+import { panic } from "better-result";
+
 import type { SafeDb } from "@/api/db/safe-db";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  readThreadStoredContentSendModeOnTx,
+  THREAD_STORED_CONTENT_SEND_MODE,
+} from "@/api/lib/chat/thread-stored-content-send-mode";
 
 const RECAP_RECENT_MESSAGE_LIMIT = 24;
 
@@ -34,10 +40,16 @@ type LoadRecapMessageWindowProps = {
 };
 
 /**
- * Load the message window both the recap and suggested-prompt generators run
- * on: the thread's first user message plus its most recent messages, merged
- * into chronological order. `recentCount` is the pre-merge recent-message
- * count the recap uses for its staleness gate; suggested prompts ignore it.
+ * Load the message window the recap, suggested-prompt and title generators
+ * run on: the thread's first user message plus its most recent messages,
+ * merged into chronological order. `recentCount` is the pre-merge
+ * recent-message count the recap uses for its staleness gate; the others
+ * ignore it.
+ *
+ * The thread's send mode is read after the messages, so a window holding a
+ * turn stored in anonymized mode always comes back as `anonymized`, and its
+ * messages are not returned: these generators send without an anonymization
+ * step.
  */
 export const loadRecapMessageWindow = async ({
   safeDb,
@@ -77,11 +89,24 @@ export const loadRecapMessageWindow = async ({
       }),
     ]);
 
-    return {
-      recentCount: recentMessagesDesc.length,
-      messages: buildRecapMessageWindow({
-        firstUserMessage: firstUserMessages.at(0) ?? null,
-        recentMessagesDesc,
-      }),
-    };
+    const sendMode = await readThreadStoredContentSendModeOnTx({
+      threadId,
+      tx,
+    });
+    switch (sendMode) {
+      case THREAD_STORED_CONTENT_SEND_MODE.anonymized:
+        return { sendMode };
+      case THREAD_STORED_CONTENT_SEND_MODE.raw:
+        return {
+          sendMode,
+          recentCount: recentMessagesDesc.length,
+          messages: buildRecapMessageWindow({
+            firstUserMessage: firstUserMessages.at(0) ?? null,
+            recentMessagesDesc,
+          }),
+        };
+      default:
+        sendMode satisfies never;
+        return panic(`Unhandled thread send mode: ${String(sendMode)}`);
+    }
   });

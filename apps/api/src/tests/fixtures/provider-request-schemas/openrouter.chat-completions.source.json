@@ -1,0 +1,14 @@
+{
+  "extractedBy": "apps/api/scripts/provider-request-schemas.ts",
+  "label": "openrouter chat completions",
+  "selection": {
+    "format": "openapi",
+    "method": "post",
+    "path": "/chat/completions"
+  },
+  "source": {
+    "retrievedAt": "2026-09-30",
+    "sha256": "80ba515f0bf637b39411def07ad0ca0aea37c6b95fe1ad5a9d9d09f88e842185",
+    "url": "https://openrouter.ai/openapi.json"
+  }
+}

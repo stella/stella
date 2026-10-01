@@ -76,17 +76,17 @@ export const isExpectedPublishedExportResolution = ({
 type ResolvePublishedExportOptions = {
   specifier: string;
   repoRoot: string;
-  packageDir: string;
+  consumerDir: string;
 };
 
-/** Preserve workspace resolution; self-reference covers packages with no root link. */
+/** Preserve root resolution; isolated consumers avoid package source aliases. */
 export const resolvePublishedExport = ({
   specifier,
   repoRoot,
-  packageDir,
+  consumerDir,
 }: ResolvePublishedExportOptions): string => {
   const fromRoot = Result.try(() => Bun.resolveSync(specifier, repoRoot));
   return fromRoot.isOk()
     ? fromRoot.value
-    : Bun.resolveSync(specifier, packageDir);
+    : Bun.resolveSync(specifier, consumerDir);
 };

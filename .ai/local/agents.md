@@ -109,8 +109,18 @@ check. Run the bar once the PR is ready and the user has authorized merging;
 an authorization given earlier in the conversation stands, do not ask again.
 Raw `gh pr merge` asserts nothing and reads an empty check list as green.
 A jump needs every required check green first: while checks run, the bar arms
-nothing and exits non-zero, and after enqueueing it fails unless a fresh queue
-read shows the pull request first.
+nothing and exits non-zero (`NOT JUMPED`). After enqueueing, one fresh queue
+read determines the result: exit 0 verifies the pull request is first. When
+the queue lists the pull request, that entry takes precedence over the enqueue
+response. A recorded jump at position greater than 1 exits 2 with `JUMP PENDING`,
+the position and state, and the one-shot follow-up command
+`pw sub pr <repo>#<n> --on merged,closed,checks-failed`.
+If the queue does not list a newly enqueued pull request yet, a recorded jump
+in the enqueue response also exits 2 with the same follow-up command and says
+the queue read did not list it yet. If first place is not verified, exit 1
+reports `JUMP DROPPED` when the jump flag is false or missing, the queue entry
+conflicts, or the pull request is absent and there is no enqueue response
+(for an already queued pull request).
 
 ## Documentation Access
 

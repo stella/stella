@@ -129,68 +129,14 @@ describe("Node load failure attribution", () => {
   });
 });
 
-describe("published export guard without workspace consumers", () => {
-  test("resolves root, subpath, and alias exports through package self-reference", async () => {
-    const packageDir = realpathSync(
-      mkdtempSync(path.join(tmpdir(), "published-exports-")),
-    );
-    const manifest = JSON.stringify({
-      name: "@stll/export-guard-fixture",
-      version: "0.1.0",
-      type: "module",
-      exports: {
-        ".": "./src/index.ts",
-        "./feature": "./src/feature.ts",
-        "./legacy/feature": "./src/feature.ts",
-      },
-      files: ["dist", "src", "README.md"],
-      scripts: { build: "bun build.ts" },
-    });
-    try {
-      await Bun.write(path.join(packageDir, "package.json"), manifest);
-      await Bun.write(
-        path.join(packageDir, "build.ts"),
-        `
-        for (const name of ["index", "feature"]) {
-          await Bun.write("dist/" + name + ".js", "export const value = 1;");
-          await Bun.write("dist/" + name + ".d.ts", "export declare const value = 1;");
-        }
-      `,
-      );
-      const proc = Bun.spawn({
-        cmd: [
-          process.execPath,
-          path.join(import.meta.dir, "check-published-exports.ts"),
-          packageDir,
-        ],
-        stdout: "pipe",
-        stderr: "pipe",
-      });
-      const [stdout, stderr, exitCode] = await Promise.all([
-        new Response(proc.stdout).text(),
-        new Response(proc.stderr).text(),
-        proc.exited,
-      ]);
-      expect({ exitCode, stderr }).toMatchObject({ exitCode: 0 });
-      expect(stdout).toContain(
-        "3 exports resolve and ship; modules load from dist in Node",
-      );
-      expect(await Bun.file(path.join(packageDir, "package.json")).text()).toBe(
-        manifest,
-      );
-    } finally {
-      rmSync(packageDir, { recursive: true, force: true });
-    }
-  });
-});
-
 describe("published export resolution precedence", () => {
-  test("keeps the repoRoot result when package self-reference points elsewhere", async () => {
+  test("keeps the repoRoot result when the isolated consumer points elsewhere", async () => {
     const root = realpathSync(
       mkdtempSync(path.join(tmpdir(), "published-export-precedence-")),
     );
     const name = "@stll/export-precedence-fixture";
-    const packageDir = path.join(root, "package");
+    const consumerDir = path.join(root, "consumer");
+    const consumerPackageDir = path.join(consumerDir, "node_modules", name);
     const linkedDir = path.join(root, "node_modules", name);
     const manifest = JSON.stringify({
       name,
@@ -198,19 +144,23 @@ describe("published export resolution precedence", () => {
       exports: { ".": "./entry.js" },
     });
     try {
-      for (const directory of [packageDir, linkedDir]) {
+      for (const directory of [consumerPackageDir, linkedDir]) {
         await Bun.write(path.join(directory, "package.json"), manifest);
         await Bun.write(
           path.join(directory, "entry.js"),
           "export const value = 1;",
         );
       }
-      const selfReference = Bun.resolveSync(name, packageDir);
+      const fromConsumer = Bun.resolveSync(name, consumerDir);
       const fromRoot = Bun.resolveSync(name, root);
-      expect(selfReference).toBe(path.join(packageDir, "entry.js"));
+      expect(fromConsumer).toBe(path.join(consumerPackageDir, "entry.js"));
       expect(fromRoot).toBe(path.join(linkedDir, "entry.js"));
       expect(
-        resolvePublishedExport({ specifier: name, repoRoot: root, packageDir }),
+        resolvePublishedExport({
+          specifier: name,
+          repoRoot: root,
+          consumerDir,
+        }),
       ).toBe(fromRoot);
     } finally {
       rmSync(root, { recursive: true, force: true });
