@@ -1,5 +1,8 @@
+// parser-output-unchanged: Publisher availability uses the shared contract without changing parsed values.
 import { Result, panic } from "better-result";
 import * as v from "valibot";
+
+import type { SkUsEcliAvailability } from "@stll/api-contract/case-law-text-field";
 /**
  * Slovak Constitutional Court (Ústavný súd SR) adapter.
  *
@@ -33,7 +36,6 @@ import * as v from "valibot";
  * the crawl cursor ever reaching it. See `reconciliation`
  * at the bottom of this file.
  */
-
 import { classifyFailure } from "@stll/errors";
 import { decodeDeclared } from "@stll/mojibake/declared-charset";
 import { Temporal } from "@stll/time";
@@ -1103,10 +1105,6 @@ const skUsCollectionTextFields = (
       collection satisfies never;
       return panic("Unhandled ÚS collection identity state");
   }
-};
-
-type SkUsEcliAvailability = {
-  status: "published" | "not_published" | "not_stated";
 };
 
 const skUsEcliAvailability = (doc: SearchDocument): SkUsEcliAvailability => {

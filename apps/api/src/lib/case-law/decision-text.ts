@@ -3,6 +3,10 @@ import { panic } from "better-result";
 
 import {
   DECISION_HEADNOTE_KEYWORDS,
+  SK_US_ECLI_AVAILABILITY_STATUSES,
+  SK_COURTS_SOURCE_URL_STATUSES,
+  type SkUsEcliAvailability,
+  type SkCourtsSourceUrlStatus,
   DECISION_TEXT_ABSENCE_METADATA_KEY,
   DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY,
   DECISION_TEXT_ABSENCE_SCHEMA_VERSION,
@@ -28,6 +32,7 @@ import {
 } from "@/api/lib/case-law/decision-headnote";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
+import { isRecord } from "@/api/lib/type-guards";
 
 export { DECISION_TEXT_FIELD, TEXT_ABSENCE_REASON, TEXT_FIELD_TYPE };
 export type { DecisionHeadnotePreview, TextAbsenceReason, TextField };
@@ -148,6 +153,34 @@ export const storeTextField = (field: TextField): string | undefined => {
   }
 };
 
+const ECLI_ABSENCE_REASON_BY_STATUS = {
+  published: undefined,
+  not_published: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+  not_stated: undefined,
+} as const satisfies Record<
+  SkUsEcliAvailability["status"],
+  TextAbsenceReason | undefined
+>;
+
+const SOURCE_URL_ABSENCE_REASON_BY_STATUS = {
+  published: undefined,
+  "not-published-by-source": TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+  "rejected-url": TEXT_ABSENCE_REASON.PARSE_FAILED,
+} as const satisfies Record<
+  SkCourtsSourceUrlStatus,
+  TextAbsenceReason | undefined
+>;
+
+const isEcliAvailabilityStatus = (
+  status: unknown,
+): status is SkUsEcliAvailability["status"] =>
+  SK_US_ECLI_AVAILABILITY_STATUSES.some((candidate) => candidate === status);
+
+const isSourceUrlStatus = (
+  status: unknown,
+): status is SkCourtsSourceUrlStatus =>
+  SK_COURTS_SOURCE_URL_STATUSES.some((candidate) => candidate === status);
+
 type StoreDecisionTextFieldsOptions = {
   metadata: Record<string, unknown>;
   textFields: DecisionTextFields;
@@ -181,6 +214,36 @@ export const storeDecisionTextFields = ({
     }
     if (field.type === TEXT_FIELD_TYPE.ABSENT) {
       absent.push({ field: key, reason: field.reason });
+    }
+  }
+  const ecliAvailability = metadata["ecliAvailability"];
+  if (ecliAvailability !== undefined) {
+    if (
+      !isRecord(ecliAvailability) ||
+      !isEcliAvailabilityStatus(ecliAvailability["status"])
+    ) {
+      return panic("ECLI availability must carry a publisher status");
+    }
+    const reason = ECLI_ABSENCE_REASON_BY_STATUS[ecliAvailability["status"]];
+    if (reason !== undefined) {
+      absent.push({ field: "ecli", reason });
+    }
+  }
+  const sourceUrlStatus = metadata["sourceUrlStatus"];
+  if (sourceUrlStatus !== undefined) {
+    if (!isSourceUrlStatus(sourceUrlStatus)) {
+      return panic("Unhandled source URL publication status");
+    }
+    if (
+      sourceUrlStatus === "rejected-url" &&
+      (typeof metadata["statedSourceUrl"] !== "string" ||
+        metadata["statedSourceUrl"].length === 0)
+    ) {
+      return panic("Rejected publisher URLs must retain their stated value");
+    }
+    const reason = SOURCE_URL_ABSENCE_REASON_BY_STATUS[sourceUrlStatus];
+    if (reason !== undefined) {
+      absent.push({ field: "sourceUrl", reason });
     }
   }
   if (absent.length > 0) {

@@ -1,5 +1,7 @@
+// parser-output-unchanged: Source URL status uses the shared contract without changing parsed values.
 import { panic, Result } from "better-result";
 
+import type { SkCourtsSourceUrlStatus } from "@stll/api-contract/case-law-text-field";
 import { skCourtSuccessionReferences } from "@stll/api-contract/sk-court-succession";
 import { mapWithConcurrency } from "@stll/concurrency";
 import {
@@ -498,7 +500,7 @@ type SkCourtsMetadata = Record<string, unknown> & {
     | { type: "invalid-publisher-date"; value: string }
     | undefined;
   statedSourceUrl: string | undefined;
-  sourceUrlStatus: "published" | "not-published-by-source" | "rejected-url";
+  sourceUrlStatus: SkCourtsSourceUrlStatus;
 };
 
 type SkCourtsDecisionParts = {
