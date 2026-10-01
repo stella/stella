@@ -240,6 +240,29 @@ esac
 
   // The mutation can report first place before the fresh queue read agrees.
   test.each([
+    {
+      queuedAt: 3,
+      jump: true,
+      absent: true,
+      mutationJump: true,
+      exitCode: 2,
+      output: "queue read did not list it yet",
+    },
+    {
+      queuedAt: 3,
+      jump: false,
+      absent: true,
+      mutationJump: false,
+      exitCode: 1,
+      output: "GitHub queued the PR without the jump (position 1)",
+    },
+    {
+      queuedAt: 3,
+      jump: true,
+      mutationJump: false,
+      exitCode: 2,
+      output: "JUMP PENDING (position 3, state QUEUED)",
+    },
     { queuedAt: 3, jump: false, exitCode: 1, output: "JUMP DROPPED" },
     { queuedAt: 3, jump: undefined, exitCode: 1, output: "JUMP DROPPED" },
     {
@@ -255,8 +278,15 @@ esac
       output: "verified first in the queue",
     },
   ])(
-    "an explicit release jump stays exempt from a hold and is verified after enqueueing: position $queuedAt, jump $jump",
-    ({ queuedAt, jump, exitCode, output }) => {
+    "an explicit release jump stays exempt from a hold and is verified after enqueueing: position $queuedAt, jump $jump, absent $absent, mutation jump $mutationJump",
+    ({
+      queuedAt,
+      jump,
+      absent = false,
+      mutationJump = true,
+      exitCode,
+      output,
+    }) => {
       const directory = mkdtempSync(path.join(tmpdir(), "merge-bar-jump-"));
       const executable = path.join(directory, "gh");
       const pullRequest = JSON.stringify({
@@ -289,16 +319,18 @@ esac
           repository: {
             mergeQueue: {
               entries: {
-                totalCount: 3,
-                nodes: [
-                  ...others,
-                  {
-                    position: queuedAt,
-                    jump,
-                    state: "QUEUED",
-                    pullRequest: { number: 123 },
-                  },
-                ],
+                totalCount: absent ? 2 : 3,
+                nodes: absent
+                  ? others
+                  : [
+                      ...others,
+                      {
+                        position: queuedAt,
+                        jump,
+                        state: "QUEUED",
+                        pullRequest: { number: 123 },
+                      },
+                    ],
               },
             },
           },
@@ -316,7 +348,7 @@ case "$*" in
     esac;;
   *enqueuePullRequest*)
     case "$*" in *'mergeQueueEntry { id position jump state }'*) ;; *) exit 97;; esac
-    printf '%s\\n' '{"data":{"enqueuePullRequest":{"mergeQueueEntry":{"id":"entry","position":1,"jump":true,"state":"QUEUED"}}}}';;
+    printf '%s\\n' '{"data":{"enqueuePullRequest":{"mergeQueueEntry":{"id":"entry","position":1,"jump":${mutationJump},"state":"QUEUED"}}}}';;
   *'mergeQueue(branch'*)
     case "$*" in *'position jump state pullRequest'*) ;; *) exit 98;; esac
     printf '%s\\n' '${queue}';;
@@ -352,6 +384,13 @@ esac
         expect(
           `${result.stdout.toString()}${result.stderr.toString()}`,
         ).toContain(output);
+        if (absent) {
+          expect(result.stderr.toString()).toContain(
+            exitCode === 2
+              ? "JUMP PENDING (position 1, state QUEUED)"
+              : "JUMP DROPPED",
+          );
+        }
         if (exitCode === 2) {
           expect(result.stderr.toString()).toContain(
             `pw sub pr ${PRIVATE_REPO}#123 --on merged,closed,checks-failed`,

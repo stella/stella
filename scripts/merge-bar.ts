@@ -580,12 +580,12 @@ type GitHubGateway = {
   // GitHub did: enabled auto-merge, or added the pull request to the queue.
   merge: (input: { expectedHeadSha: string }) => string;
   armMergeWhenReady: (input: { expectedHeadSha: string }) => string;
-  // Asks GitHub to add the pull request at the front of the queue; returns
-  // the position the mutation reported, which `readMergeQueue` must confirm.
+  // Preserve the mutation's jump receipt while the fresh queue listing
+  // catches up. Only `readMergeQueue` can confirm first place.
   enqueueWithJump: (input: {
     pullRequestId: string;
     expectedHeadSha: string;
-  }) => number;
+  }) => EnqueuedMergeQueueEntry;
   readMergeQueue: (branch: string) => readonly MergeQueueEntrySnapshot[];
   sleep: (milliseconds: number) => void;
 };
@@ -706,6 +706,11 @@ export type MergeQueueEntrySnapshot = {
   state: string;
 };
 
+type EnqueuedMergeQueueEntry = Pick<
+  MergeQueueEntrySnapshot,
+  "position" | "jump" | "state"
+>;
+
 export type QueuePlacement =
   | { status: "front"; position: number }
   | { status: "absent"; queueLength: number }
@@ -759,6 +764,7 @@ type VerifyFrontOfQueueOptions = {
   branch: string;
   context: string;
   release: boolean;
+  enqueuedEntry?: EnqueuedMergeQueueEntry;
 };
 
 // A recorded jump can be pending while GitHub rebuilds merge groups. Read
@@ -770,6 +776,7 @@ export const verifyFrontOfQueue = ({
   branch,
   context,
   release,
+  enqueuedEntry,
 }: VerifyFrontOfQueueOptions): { exitCode: 0 | 1 | 2; message: string } => {
   const entries = gateway.readMergeQueue(branch);
   const placement = evaluateQueuePlacement({ entries, pullNumber });
@@ -779,19 +786,19 @@ export const verifyFrontOfQueue = ({
       message: `\nverdict: QUEUED AT THE FRONT — ${context}; verified first in the queue (position ${placement.position})${release ? " (release pull request)" : ""}`,
     };
   }
-  const entry = entries.find(
-    (candidate) => candidate.pullNumber === pullNumber,
-  );
+  const entry =
+    entries.find((candidate) => candidate.pullNumber === pullNumber) ??
+    enqueuedEntry;
   if (
-    placement.status === "behind" &&
-    placement.position > 1 &&
+    (placement.status === "absent" ||
+      (placement.status === "behind" && placement.position > 1)) &&
     entry?.jump === true
   ) {
     return {
       exitCode: 2,
       message:
         `\nverdict: JUMP PENDING (position ${entry.position}, state ${entry.state}) — ${context}. ` +
-        `GitHub recorded the jump; first place is not yet verified.\n` +
+        `GitHub recorded the jump; ${placement.status === "absent" ? "the queue read did not list it yet" : "first place is not yet verified"}.\n` +
         `pw sub pr ${repo}#${pullNumber} --on merged,closed,checks-failed`,
     };
   }
@@ -1323,7 +1330,14 @@ const createGhGateway = ({
       if (typeof position !== "number") {
         return panic("Expected numeric merge queue position");
       }
-      return position;
+      return {
+        position,
+        jump:
+          entry["jump"] === undefined || entry["jump"] === null
+            ? false
+            : readBoolean(entry, "jump"),
+        state: readString(entry, "state"),
+      };
     },
 
     readMergeQueue: (branch) => {
@@ -1518,7 +1532,10 @@ if (import.meta.main) {
     pullRequest.baseRefName,
   );
   const jump = options.jump;
-  const requireFrontOfQueue = (context: string): void => {
+  const requireFrontOfQueue = (
+    context: string,
+    enqueuedEntry?: EnqueuedMergeQueueEntry,
+  ): void => {
     const verdict = verifyFrontOfQueue({
       gateway,
       pullNumber: pullRequest.number,
@@ -1526,6 +1543,7 @@ if (import.meta.main) {
       branch: pullRequest.baseRefName,
       context,
       release: isReleasePullRequest(pullRequest),
+      enqueuedEntry,
     });
     if (verdict.exitCode === 0) {
       console.log(verdict.message);
@@ -1634,8 +1652,9 @@ if (import.meta.main) {
             expectedHeadSha: snapshot.headShaBeforeMerge,
           });
           requireFrontOfQueue(
-            `${snapshot.headShaBeforeMerge} was enqueued with a jump ` +
-              `(GitHub reported position ${reported})`,
+            `${snapshot.headShaBeforeMerge} was enqueued after requesting a jump ` +
+              `(GitHub reported position ${reported.position})`,
+            reported,
           );
           break;
         }
