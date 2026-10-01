@@ -43,7 +43,6 @@ const GRANTED_ROLES = ["owner", "admin", "member", "intern"] as const;
 
 const MUTATIONS = {
   "agent-auth/confirm.ts": confirmAgentClaim,
-  "desktop-registry/grant.ts": grantDesktopRegistryKey,
   "legal-reader/annotations/create.ts": createReaderAnnotation,
   "legal-reader/annotations/delete.ts": deleteReaderAnnotation,
   "legal-reader/annotations/update.ts": updateReaderAnnotation,
@@ -113,7 +112,6 @@ describe("own-work permissions", () => {
 
     expect(declared).toEqual({
       "agent-auth/confirm.ts": { integration: ["create"] },
-      "desktop-registry/grant.ts": { integration: ["create"] },
       "legal-reader/annotations/create.ts": {
         legalReaderAnnotation: ["create"],
       },
@@ -135,6 +133,20 @@ describe("own-work permissions", () => {
       "sharepoint/disconnect.ts": { integration: ["delete"] },
       "sharepoint/oauth-callback.ts": { integration: ["create"] },
     });
+  });
+
+  test("desktop account linking follows the baseline member grant", () => {
+    expect(grantDesktopRegistryKey.config.permissions).toEqual({
+      workspace: ["read"],
+    });
+    for (const role of [...GRANTED_ROLES, "external"] as const) {
+      expect(
+        hasMemberPermission(
+          { role },
+          grantDesktopRegistryKey.config.permissions,
+        ),
+      ).toBe(true);
+    }
   });
 
   test("the sibling reads stay on the baseline grant and affirm themselves reads", () => {

@@ -94,7 +94,7 @@ describe("authenticated account status", () => {
 
   test("accepts only fresh connection responses authenticated for this attempt", async () => {
     const timestamp = "1790851200";
-    for (const status of ["pending", "connected", "failed"]) {
+    for (const status of ["pending", "connected", "failed"] as const) {
       const payload = {
         correlationId: challenge.correlationId,
         status,
@@ -200,7 +200,7 @@ describe("authenticated account status", () => {
   const browserAccount = {
     identity: { userId: "user-1", organizationId: "org-1" },
     email: "existing@example.com",
-    name: null,
+    name: "Example",
     verifiedAt: "2026-09-12T20:00:00.000Z",
   };
   const linkedIdentity = browserAccount.identity;

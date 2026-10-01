@@ -2,13 +2,15 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { issueDesktopAccountGrant } from "@/api/lib/auth";
 import { DESKTOP_ACCOUNT_PERMISSION } from "@/api/lib/business-registries/desktop/config";
-import { createDesktopLinkGrant } from "@/api/lib/business-registries/desktop/link-grants";
 import {
   CACHE_CONTROL_HEADER,
   PRIVATE_CACHE_CONTROL,
 } from "@/api/lib/security-headers";
 
+// permissions-exempt: a connection grant binds only the caller's account;
+// document actions and registry operations keep their own resource permissions.
 export default createSafeRootHandler(
   {
     permissions: DESKTOP_ACCOUNT_PERMISSION,
@@ -29,7 +31,7 @@ export default createSafeRootHandler(
     set.headers[CACHE_CONTROL_HEADER] = PRIVATE_CACHE_CONTROL;
     return Result.ok(
       yield* Result.await(
-        createDesktopLinkGrant({
+        issueDesktopAccountGrant({
           ...body,
           userId: user.id,
           organizationId: session.activeOrganizationId,

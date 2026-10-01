@@ -86,7 +86,9 @@ export const ROOT_CONNECTION_DOORS = [
     id: "desktop-account-bootstrap",
     capability: "Claiming desktop connection and document handoff requests",
     owner: [
+      "apps/api/src/lib/auth.ts",
       "apps/api/src/lib/business-registries/desktop/link-grants.ts",
+      "apps/api/src/lib/business-registries/desktop/link-grant-store.ts",
       "apps/api/src/lib/desktop-edit-handoffs.ts",
     ],
     summary:
@@ -97,6 +99,7 @@ export const ROOT_CONNECTION_DOORS = [
       kind: "import",
       specifiers: [
         "@/api/lib/business-registries/desktop/link-grants",
+        "@/api/lib/business-registries/desktop/link-grant-store",
         "@/api/lib/desktop-edit-handoffs",
       ],
       allowed: [

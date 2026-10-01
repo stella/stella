@@ -13,7 +13,9 @@ const scriptedStore = () => {
       calls.push(calls.length);
       return await linked.promise;
     },
-    onError: (error) => errors.push(error),
+    onError: (error) => {
+      errors.push(error);
+    },
   });
   return { linked, calls, errors, store };
 };
@@ -70,7 +72,9 @@ describe("desktop account connection", () => {
       link: async () => {
         throw failure;
       },
-      onError: (error) => errors.push(error),
+      onError: (error) => {
+        errors.push(error);
+      },
     });
     expect(await store.connect()).toEqual({ status: "error" });
     expect(errors).toEqual([failure]);
@@ -81,7 +85,9 @@ describe("desktop account connection", () => {
     const errors: unknown[] = [];
     const store = createDesktopConnectionStore({
       link: async () => Result.ok({ status: "started" }),
-      onError: (error) => errors.push(error),
+      onError: (error) => {
+        errors.push(error);
+      },
     });
     expect(await store.connect()).toEqual({ status: "started" });
     expect(store.getState()).toEqual({ status: "idle" });

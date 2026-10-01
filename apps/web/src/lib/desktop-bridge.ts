@@ -496,7 +496,8 @@ export const linkDesktopAccount = async ({
           challenge.portSecret,
         );
         if (connection.isOk()) {
-          switch (connection.value) {
+          const status = connection.value;
+          switch (status) {
             case "connected":
               return {
                 status: "connected",
@@ -507,7 +508,7 @@ export const linkDesktopAccount = async ({
             case "pending":
               break;
             default:
-              connection.value satisfies never;
+              status satisfies never;
               return panic("Unknown desktop connection status");
           }
         }

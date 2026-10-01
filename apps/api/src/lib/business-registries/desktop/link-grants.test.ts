@@ -5,9 +5,11 @@ import { createHash } from "node:crypto";
 
 import { verification } from "@/api/db/auth-schema";
 import {
-  authorizeDesktopLinkGrant,
-  consumeDesktopLinkGrant,
   createDesktopLinkGrant,
+  consumeDesktopLinkGrant,
+} from "@/api/lib/business-registries/desktop/link-grant-store";
+import {
+  authorizeDesktopLinkGrant,
   parseDesktopLinkCredentials,
 } from "@/api/lib/business-registries/desktop/link-grants";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
