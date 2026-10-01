@@ -19,6 +19,118 @@
   // package, not one task's declared inputs.
   "globalDependencies": ["patches/**"],
   "tasks": {
+    // Outputs are ignored by Git, but restored by Turbo on a cache hit.
+    "@stll/web#generate:api-types": {
+      "inputs": [
+        "$TURBO_ROOT$/apps/api/**",
+        "$TURBO_ROOT$/apps/web/src/**",
+        "$TURBO_ROOT$/apps/web/package.json",
+        "$TURBO_ROOT$/apps/web/tsconfig*.json",
+        "$TURBO_ROOT$/packages/**",
+        "$TURBO_ROOT$/types/**",
+        "$TURBO_ROOT$/tsconfig*.json",
+        "$TURBO_ROOT$/package.json",
+        "$TURBO_ROOT$/bun.lock",
+        "$TURBO_ROOT$/bunfig.toml",
+        "$TURBO_ROOT$/.npmrc",
+        "!$TURBO_ROOT$/apps/**/node_modules/**",
+        "!$TURBO_ROOT$/apps/**/.cache/**",
+        "!$TURBO_ROOT$/apps/**/dist/**",
+        "!$TURBO_ROOT$/packages/**/node_modules/**",
+        "!$TURBO_ROOT$/packages/**/.cache/**",
+        "!$TURBO_ROOT$/packages/**/dist/**",
+        "!src/generated/api-routes.gen.ts",
+        "!src/routeTree.gen.ts"
+      ],
+      "outputs": ["src/generated/api-routes.gen.ts"]
+    },
+    "@stll/web#generate:route-tree": {
+      "inputs": [
+        "src/routes/**",
+        "scripts/generate-route-tree.ts",
+        "route-tree.config.ts",
+        "tsr.config.json",
+        "package.json",
+        "$TURBO_ROOT$/package.json",
+        "$TURBO_ROOT$/bun.lock",
+        "$TURBO_ROOT$/bunfig.toml",
+        "$TURBO_ROOT$/.npmrc"
+      ],
+      "outputs": ["src/routeTree.gen.ts"]
+    },
+    "@stll/web#typecheck": {
+      "dependsOn": ["transit", "generate:api-types", "generate:route-tree"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/.npmrc",
+        "$TURBO_ROOT$/bunfig.toml",
+        "$TURBO_ROOT$/package.json",
+        "$TURBO_ROOT$/bun.lock",
+        "$TURBO_ROOT$/packages/scripts/src/tsc-native.ts",
+        "$TURBO_ROOT$/packages/typescript-config/**",
+        "$TURBO_ROOT$/patches/**",
+        "$TURBO_ROOT$/types/**"
+      ],
+      "outputs": [".cache/tsbuildinfo*.json", "**/.cache/tsbuildinfo*.json"]
+    },
+    "@stll/web#lint": {
+      "dependsOn": ["transit", "generate:api-types", "generate:route-tree"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/.npmrc",
+        "$TURBO_ROOT$/bunfig.toml",
+        "$TURBO_ROOT$/package.json",
+        "$TURBO_ROOT$/bun.lock",
+        "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/oxlint.result-boundary.config.ts",
+        "$TURBO_ROOT$/.oxlint-plugins/**",
+        "$TURBO_ROOT$/scripts/ownership.ts",
+        "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
+        "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
+        "$TURBO_ROOT$/apps/api/src/db/high-volume-tables.ts",
+        "$TURBO_ROOT$/scripts/sql-perf-scope.ts",
+        "$TURBO_ROOT$/scripts/design-lint-policy.ts",
+        "$TURBO_ROOT$/scripts/design-lint-baseline.json",
+        "$TURBO_ROOT$/packages/typescript-config/**",
+        "$TURBO_ROOT$/patches/**",
+        "$TURBO_ROOT$/tsconfig.tooling.json",
+        "$TURBO_ROOT$/types/**"
+      ]
+    },
+    "@stll/web#lint:fix": {
+      "dependsOn": ["transit", "generate:api-types", "generate:route-tree"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/oxlint.result-boundary.config.ts",
+        "$TURBO_ROOT$/.oxlint-plugins/**",
+        "$TURBO_ROOT$/scripts/ownership.ts",
+        "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
+        "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
+        "$TURBO_ROOT$/apps/api/src/db/high-volume-tables.ts",
+        "$TURBO_ROOT$/scripts/sql-perf-scope.ts",
+        "$TURBO_ROOT$/scripts/design-lint-policy.ts",
+        "$TURBO_ROOT$/scripts/design-lint-baseline.json"
+      ],
+      "cache": false
+    },
+    // The runtime build erases API contract types; Docker's pruned web
+    // sources therefore only need the route tree, not the API compiler graph.
+    "@stll/web#build": {
+      "dependsOn": ["^build", "generate:route-tree"],
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
+      "outputs": ["dist/**"]
+    },
+    "@stll/web#dev": {
+      "dependsOn": ["generate:route-tree"],
+      "persistent": true,
+      "cache": false
+    },
+    "@stll/web#test:property": {
+      "dependsOn": ["generate:api-types", "generate:route-tree"],
+      "inputs": ["$TURBO_DEFAULT$"],
+      "cache": false
+    },
     "@stll/redis-config#test": {
       "inputs": [
         "$TURBO_DEFAULT$",
@@ -81,6 +193,7 @@
       "outputs": [".cache/tsbuildinfo*.json", "**/.cache/tsbuildinfo*.json"]
     },
     "//#typecheck:repo": {
+      "dependsOn": ["@stll/web#generate:api-types", "@stll/web#generate:route-tree"],
       // Root projects can import workspace source. The broad workspace inputs
       // trade some misses for correctness while still sharing exact results
       // and compiler state between linked worktrees and CI runners.
@@ -288,7 +401,7 @@
       ]
     },
     "@stll/web#test": {
-      "dependsOn": [],
+      "dependsOn": ["generate:api-types", "generate:route-tree"],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.oxlint-plugins/**",
@@ -333,6 +446,7 @@
       "dependsOn": [],
       "inputs": [
         "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/turbo.json",
         "$TURBO_ROOT$/.github/workflows/**",
         "$TURBO_ROOT$/apps/**",
         "$TURBO_ROOT$/packages/**",

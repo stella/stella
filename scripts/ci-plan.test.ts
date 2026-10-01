@@ -178,6 +178,7 @@ test("the generated-output guards run when their inputs change", () => {
     "bunfig.toml",
     "package.json",
     ".github/workflows/ci.yml",
+    ".npmrc",
   ]) {
     expect(generatedOutputGuardPlan([file]), file).toEqual(["true", "true"]);
   }
@@ -195,7 +196,6 @@ test("the generated-output guards run when their inputs change", () => {
     "scripts/prepare-publish.ts",
     "scripts/publish-manifest.ts",
     "scripts/published-export-guards.ts",
-    ".npmrc",
   ]) {
     expect(generatedOutputGuardPlan([file]), file).toEqual(["false", "true"]);
   }
@@ -216,7 +216,7 @@ test("the generated-output guards skip unrelated pull requests but never full de
   }
 });
 
-test("route tree freshness follows route inputs and full-depth runs", () => {
+test("route tree determinism follows route inputs and full-depth runs", () => {
   for (const file of [
     "apps/web/src/routes/index.tsx",
     "apps/web/src/routes/law/route.tsx",
@@ -859,8 +859,8 @@ test("ci-checks gates each generated-output guard on its planned scope", () => {
     ciJobs["ci-checks"],
   ).steps;
   for (const [name, scope] of [
-    ["Web API types drift guard", "web_api_types_required"],
-    ["Route tree drift guard", "route_tree_required"],
+    ["Web API types determinism guard", "web_api_types_required"],
+    ["Route tree determinism guard", "route_tree_required"],
     ["Published export map guard", "published_exports_required"],
   ] as const) {
     const condition = steps.find((step) => step.name === name)?.if ?? "";

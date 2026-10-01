@@ -411,6 +411,7 @@ describe("changed lint path selection", () => {
   test.each([
     "apps/api/src/server.ts",
     "apps/web/src/route.tsx",
+    "apps/web/src/routeTree.gen.ts",
     "scripts/guard.mjs",
     "scripts/worker.mts",
     "packages/ui/vite.config.js",
@@ -422,7 +423,6 @@ describe("changed lint path selection", () => {
 
   test.each([
     "README.md",
-    "apps/web/src/routeTree.gen.ts",
     "apps/api/src/mcp/generated/capability-dispatch.ts",
     "apps/api/src/not-real.mtsx",
     "packages/ui/node_modules/library/index.js",

@@ -3,11 +3,12 @@
 // type-checks against that snapshot instead of re-inferring the whole API
 // graph. The API implementation stays the source of truth: every run asserts,
 // through the compiler's identity relation, that each printed type is
-// identical to the inferred one, and `--check` also fails on a stale file.
+// identical to the inferred one. `--check` generates twice and fails if the
+// bytes differ; the output is local build input rather than committed state.
 //
 // Modes:
 //   bun --filter @stll/api gen:web-api-types           regenerate the file
-//   bun --filter @stll/api gen:web-api-types --check   CI drift guard
+//   bun --filter @stll/api gen:web-api-types --check   CI determinism guard
 //
 // Printing rules:
 // - Types owned by a package apps/web depends on are imported by name, never
@@ -30,7 +31,7 @@
 //   expanded). The identity check runs on the same printout with `Date` kept.
 
 import { panic } from "better-result";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
@@ -1196,15 +1197,7 @@ const verifyIdentity = ({
 
 // --- CLI --------------------------------------------------------------------------
 
-const readCommitted = (): string | undefined =>
-  existsSync(OUTPUT_PATH) ? readFileSync(OUTPUT_PATH, "utf-8") : undefined;
-
-const main = () => {
-  const args = process.argv.slice(2);
-  const checkOnly = args.includes("--check");
-  if (args.some((arg) => arg !== "--check")) {
-    panic(`generate-web-api-types: unknown arguments ${args.join(" ")}`);
-  }
+const generate = () => {
   const started = performance.now();
   const program = createApiProgram({ virtualFiles: new Map() });
   const contractSource =
@@ -1226,7 +1219,6 @@ const main = () => {
       responseDates: RESPONSE_DATES.declared,
     }),
   );
-  const outputRelative = path.relative(REPO_ROOT, OUTPUT_PATH);
 
   for (const [reason, occurrences] of result.fallbacks) {
     console.error(
@@ -1240,17 +1232,6 @@ const main = () => {
       .join(", ")}`,
   );
 
-  if (checkOnly && readCommitted() !== output) {
-    console.error(
-      `generate-web-api-types: ${outputRelative} is stale. Run \`${REGENERATE_COMMAND}\`.`,
-    );
-    process.exit(1);
-  }
-
-  if (!checkOnly) {
-    mkdirSync(path.dirname(OUTPUT_PATH), { recursive: true });
-    writeFileSync(OUTPUT_PATH, output);
-  }
   const printed = performance.now();
 
   const diagnostics = verifyIdentity({
@@ -1271,10 +1252,27 @@ const main = () => {
     `generate-web-api-types: printed in ${Math.round(printed - started)} ms, ` +
       `identity verified in ${Math.round(performance.now() - printed)} ms`,
   );
+  return output;
+};
+
+const main = () => {
+  const args = process.argv.slice(2);
+  const check = args.includes("--check");
+  if (args.some((arg) => arg !== "--check")) {
+    panic(`generate-web-api-types: unknown arguments ${args.join(" ")}`);
+  }
+  const started = performance.now();
+  const output = generate();
+  if (check && generate() !== output) {
+    panic(
+      "generate-web-api-types: output is not deterministic across two generations",
+    );
+  }
+  mkdirSync(path.dirname(OUTPUT_PATH), { recursive: true });
+  writeFileSync(OUTPUT_PATH, output);
   console.log(
-    `generate-web-api-types: ${checkOnly ? "verified" : "wrote"} ${outputRelative} ` +
-      `(${result.declarations.length} types, ${result.aliases.length} aliases, ` +
-      `${Buffer.byteLength(output)} bytes) in ${Math.round(performance.now() - started)} ms`,
+    `generate-web-api-types: ${check ? "verified deterministic" : "wrote"} ${path.relative(REPO_ROOT, OUTPUT_PATH)} ` +
+      `(${Buffer.byteLength(output)} bytes) in ${Math.round(performance.now() - started)} ms`,
   );
 };
 

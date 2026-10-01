@@ -162,7 +162,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$HEAD_SHA"
           git fetch --no-tags origin "$BASE_SHA"
           git show "$BASE_SHA:apps/web/e2e/network-baseline.json" > "$RUNNER_TEMP/base-baseline.json"
-          git show "$BASE_SHA:apps/web/src/routeTree.gen.ts" > "$RUNNER_TEMP/base-route-tree.gen.ts"
+          bun scripts/generate-revision-route-tree.ts "$BASE_SHA" "$RUNNER_TEMP/base-route-tree.gen.ts"
           git diff --name-only --no-renames "$BASE_SHA"..."$HEAD_SHA" -- apps/web/src/routes > "$RUNNER_TEMP/changed-routes"
           args=()
           if [[ "$ALL_ROUTES" == true ]]; then args+=(--all); fi
