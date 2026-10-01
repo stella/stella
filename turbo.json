@@ -89,7 +89,6 @@
         "$TURBO_ROOT$/.claude/mcp/**",
         "$TURBO_ROOT$/.npmrc",
         "$TURBO_ROOT$/.oxlint-plugins/**",
-        "$TURBO_ROOT$/scripts/oxlint-presets/**",
         "$TURBO_ROOT$/apps/**",
         "$TURBO_ROOT$/bunfig.toml",
         "$TURBO_ROOT$/package.json",
