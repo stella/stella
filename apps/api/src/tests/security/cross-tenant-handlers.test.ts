@@ -156,6 +156,7 @@ type TestHandlerContext = {
   memberRole: { role: "owner" };
   orgAIConfig: null;
   orgAIConfigStatus: "ok";
+  managedAIResidency: "eu";
   promptCachingEnabled: false;
   recordAuditEvent: AuditRecorder;
   request: Request;

@@ -1021,6 +1021,7 @@ export const resolveMeteringContext = ({
 }): ResolvedMeteringContext => {
   const modelRole = metering.modelRole ?? "chat";
   const modelInfo = getTanStackTextModelInfoForRole(modelRole, orgAIConfig, {
+    dataClass: "customer",
     organizationId,
   });
   const isByok = modelInfo.keySource === "byok";

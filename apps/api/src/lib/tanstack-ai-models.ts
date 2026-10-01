@@ -57,7 +57,7 @@ import { validateDataUrl } from "@/api/lib/data-url";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import {
-  assertManagedProviderAvailable,
+  checkManagedProviderAvailable,
   isManagedProviderAvailable,
   managedProviderUnavailable,
 } from "@/api/lib/provider-data-policy";
@@ -223,7 +223,7 @@ export type ResolvedTanStackTextModel = {
 export type ResolvedTanStackTextModelInfo = Pick<
   ResolvedTanStackTextModel,
   "keySource" | "modelId" | "provider" | "region"
->;
+> & { availability: "available" | "unavailable" };
 
 /**
  * The model identity as a run records it: provider and model in one string, so
@@ -821,7 +821,13 @@ export const createTanStackTextAdapterFactory = (
     };
   }
   if (options.apiKey === undefined) {
-    assertManagedProviderAvailable(options.provider, options.dataClass);
+    const availability = checkManagedProviderAvailable(
+      options.provider,
+      options.dataClass,
+    );
+    if (Result.isError(availability)) {
+      throw availability.error;
+    }
   }
   const factory = createProviderTextAdapterFactory(options);
   return (modelId) => withProviderStreamContract(factory(modelId), stopReasons);
@@ -1909,7 +1915,13 @@ const resolveInstanceTextModel = ({
   useRoleReasoningDefault?: boolean | undefined;
 } & AIRequestPolicy): ResolvedTanStackTextModel => {
   if (!isMockTextAdapterActive()) {
-    assertManagedProviderAvailable(provider, policy.dataClass);
+    const availability = checkManagedProviderAvailable(
+      provider,
+      policy.dataClass,
+    );
+    if (Result.isError(availability)) {
+      throw availability.error;
+    }
   }
   const supportedProvider = resolveTanStackTextProvider({ provider });
   assertTanStackProviderRoleSupport(supportedProvider, role);
@@ -1950,7 +1962,13 @@ export const getTanStackTextModelForRole = (
 
   const provider = getActiveProvider();
   if (!isMockTextAdapterActive()) {
-    assertManagedProviderAvailable(provider, options.dataClass);
+    const availability = checkManagedProviderAvailable(
+      provider,
+      options.dataClass,
+    );
+    if (Result.isError(availability)) {
+      throw availability.error;
+    }
   }
   const modelId = MODEL_OVERRIDES[role] ?? DEFAULT_MODELS[provider][role];
   return resolveInstanceTextModel({
@@ -1985,6 +2003,7 @@ export const getTanStackTextModelInfoForRole = (
     });
 
     return {
+      availability: "available",
       keySource: "byok",
       modelId: selection.modelId,
       provider,
@@ -1997,9 +2016,6 @@ export const getTanStackTextModelInfoForRole = (
   }
 
   const provider = getActiveProvider();
-  if (!isMockTextAdapterActive()) {
-    assertManagedProviderAvailable(provider, options.dataClass);
-  }
   const supportedProvider = resolveTanStackTextProvider({ provider });
   assertTanStackProviderRoleSupport(supportedProvider, role);
   const modelId = MODEL_OVERRIDES[role] ?? DEFAULT_MODELS[provider][role];
@@ -2007,6 +2023,11 @@ export const getTanStackTextModelInfoForRole = (
   // model that resolveInstanceTextModel would refuse as unrated.
   assertInstanceModelRated(modelId);
   return {
+    availability:
+      isMockTextAdapterActive() ||
+      isManagedProviderAvailable(provider, options.dataClass)
+        ? "available"
+        : "unavailable",
     keySource: "instance",
     modelId,
     provider: supportedProvider,
@@ -2057,6 +2078,7 @@ export const getTanStackTextModelInfoById = (
       region,
     });
     return {
+      availability: "available",
       keySource: "byok",
       modelId: override.modelId,
       provider,
@@ -2069,10 +2091,12 @@ export const getTanStackTextModelInfoById = (
   }
 
   const provider = override.provider ?? getActiveProvider();
-  if (!isMockTextAdapterActive()) {
-    assertManagedProviderAvailable(provider, dataClass);
-  }
   return {
+    availability:
+      isMockTextAdapterActive() ||
+      isManagedProviderAvailable(provider, dataClass)
+        ? "available"
+        : "unavailable",
     keySource: "instance",
     modelId: override.modelId,
     provider: resolveTanStackTextProvider({ provider }),
@@ -2110,7 +2134,13 @@ export const getTanStackTextModelById = (
 
   const provider = override.provider ?? getActiveProvider();
   if (!isMockTextAdapterActive()) {
-    assertManagedProviderAvailable(provider, options.dataClass);
+    const availability = checkManagedProviderAvailable(
+      provider,
+      options.dataClass,
+    );
+    if (Result.isError(availability)) {
+      throw availability.error;
+    }
   }
   const supportedProvider = resolveTanStackTextProvider({ provider });
   const resolvedModelId = override.modelId;

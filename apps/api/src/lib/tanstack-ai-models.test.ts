@@ -813,6 +813,7 @@ describe("TanStack text model resolution", () => {
     );
 
     expect(modelInfo).toEqual({
+      availability: "available",
       keySource: "byok",
       provider: "openrouter",
       region: "global",

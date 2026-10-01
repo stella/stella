@@ -2,10 +2,13 @@ import * as v from "valibot";
 
 import { SIGNAL_SEVERITY } from "@stll/api-contract/signals";
 import type { SignalSeverity } from "@stll/api-contract/signals";
-import { AI_ERROR_KIND_FAILURE_REASON, failureGradeOf } from "@stll/errors";
+import { failureGradeOf } from "@stll/errors";
 import { DAY_IN_MS, parsePlainDate, Temporal } from "@stll/time";
 
-import { classifyAIError } from "@/api/lib/ai-error";
+import {
+  AI_ERROR_KIND_FAILURE_REASON,
+  classifyAIError,
+} from "@/api/lib/ai-error";
 
 export const DEADLINE_SCOUT_MAX_ATTEMPTS = 5;
 
@@ -13,9 +16,11 @@ export const deadlineScoutFailureStatus = (
   attemptCount: number,
   error: unknown,
 ) => {
-  const grade = failureGradeOf(
-    AI_ERROR_KIND_FAILURE_REASON[classifyAIError(error)],
-  );
+  const kind = classifyAIError(error);
+  const grade =
+    kind === "unknown"
+      ? "unknown"
+      : failureGradeOf(AI_ERROR_KIND_FAILURE_REASON[kind]);
   if (
     grade === "anticipated" ||
     grade === "client" ||

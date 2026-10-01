@@ -860,6 +860,54 @@ export const streamTanStackObjectForRole = <TSchema extends v.GenericSchema>({
   });
 };
 
+// The SDK's non-streaming adapter fallback emits only the error message.
+// Preserve a configured refusal before its status and code are discarded.
+const streamChatObjectWithManagedErrors = async function* (
+  options: Parameters<typeof streamChatObject>[0],
+) {
+  if (options.adapter.structuredOutputStream) {
+    yield* streamChatObject(options);
+    return;
+  }
+
+  let failure: { error: unknown } | undefined;
+  const structuredOutput = async (
+    structuredOptions: Parameters<AnyTextAdapter["structuredOutput"]>[0],
+  ) => {
+    const result = await Result.tryPromise({
+      try: () => options.adapter.structuredOutput(structuredOptions),
+      catch: (error) => error,
+    });
+    if (Result.isOk(result)) {
+      return result.value;
+    }
+    if (hasManagedProviderUnavailableCode(result.error)) {
+      failure = { error: result.error };
+    }
+    throw result.error;
+  };
+  const adapter = new Proxy(options.adapter, {
+    get: (target, key) => {
+      if (key === "structuredOutput") {
+        return structuredOutput;
+      }
+      const value: unknown = Reflect.get(target, key, target);
+      if (typeof value !== "function") {
+        return value;
+      }
+      const bound: unknown = value.bind(target);
+      return bound;
+    },
+  });
+
+  for await (const chunk of streamChatObject({ ...options, adapter })) {
+    if (chunk.type === EventType.RUN_ERROR && failure !== undefined) {
+      throw failure.error;
+    }
+    yield chunk;
+  }
+};
+
 const streamTanStackStructuredOutput = async function* <
   TSchema extends v.GenericSchema,
 >({
@@ -900,7 +948,7 @@ const streamTanStackStructuredOutput = async function* <
     model,
     serviceTier,
     stream: (requestedServiceTier) =>
-      streamChatObject({
+      streamChatObjectWithManagedErrors({
         adapter: model.adapter,
         messages,
         outputSchema: tanStackOutputSchema,

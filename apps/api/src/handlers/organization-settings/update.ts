@@ -144,6 +144,75 @@ const timePolicyAuditChanges = (
     : {}),
 });
 
+type ExistingGeneralSettings = ExistingTimePolicy &
+  Pick<
+    InferSelectModel<typeof organizationSettings>,
+    | "managedAIResidency"
+    | "promptCachingEnabled"
+    | "documentProcessingMode"
+    | "memoryExtractionEnabled"
+  >;
+
+const organizationSettingsAuditChanges = (
+  body: UpdateBody,
+  existing: ExistingGeneralSettings | undefined,
+) => ({
+  ...(body.matterNumberPattern !== undefined ||
+  body.matterNumberPadding !== undefined
+    ? {
+        matterNumberPattern: {
+          old: null,
+          new: body.matterNumberPattern,
+        },
+        matterNumberPadding: {
+          old: null,
+          new: body.matterNumberPadding,
+        },
+      }
+    : {}),
+  ...(body.managedAIResidency !== undefined &&
+  body.managedAIResidency !==
+    (existing?.managedAIResidency ?? DEFAULT_MANAGED_AI_RESIDENCY)
+    ? {
+        managedAIResidency: {
+          old: existing?.managedAIResidency ?? DEFAULT_MANAGED_AI_RESIDENCY,
+          new: body.managedAIResidency,
+        },
+      }
+    : {}),
+  ...(body.promptCachingEnabled !== undefined &&
+  body.promptCachingEnabled !== (existing?.promptCachingEnabled ?? true)
+    ? {
+        promptCachingEnabled: {
+          old: existing?.promptCachingEnabled ?? true,
+          new: body.promptCachingEnabled,
+        },
+      }
+    : {}),
+  ...(body.documentProcessingMode !== undefined &&
+  body.documentProcessingMode !==
+    (existing?.documentProcessingMode ?? DEFAULT_DOCUMENT_PROCESSING_MODE)
+    ? {
+        documentProcessingMode: {
+          old:
+            existing?.documentProcessingMode ??
+            DEFAULT_DOCUMENT_PROCESSING_MODE,
+          new: body.documentProcessingMode,
+        },
+      }
+    : {}),
+  ...(body.memoryExtractionEnabled !== undefined &&
+  body.memoryExtractionEnabled !== (existing?.memoryExtractionEnabled ?? false)
+    ? {
+        memoryExtractionEnabled: {
+          old: existing?.memoryExtractionEnabled ?? false,
+          new: body.memoryExtractionEnabled,
+        },
+      }
+    : {}),
+  ...timePolicyAuditChanges(body, existing),
+});
+
 // Shared org-settings update logic reused by the HTTP handler and the
 // `manage_organization` MCP tool, so both emit the identical audit event and
 // enforce the matter-pattern/padding pairing and pattern validation. Only the
@@ -381,65 +450,7 @@ export const updateOrganizationSettingsHandler = async function* ({
         action: AUDIT_ACTION.UPDATE,
         resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
         resourceId: organizationId,
-        changes: {
-          ...(wantsMatterUpdate
-            ? {
-                matterNumberPattern: {
-                  old: null,
-                  new: body.matterNumberPattern,
-                },
-                matterNumberPadding: {
-                  old: null,
-                  new: body.matterNumberPadding,
-                },
-              }
-            : {}),
-          ...(wantsManagedAIResidencyUpdate &&
-          body.managedAIResidency !==
-            (existing?.managedAIResidency ?? DEFAULT_MANAGED_AI_RESIDENCY)
-            ? {
-                managedAIResidency: {
-                  old:
-                    existing?.managedAIResidency ??
-                    DEFAULT_MANAGED_AI_RESIDENCY,
-                  new: body.managedAIResidency,
-                },
-              }
-            : {}),
-          ...(wantsPromptCachingUpdate &&
-          body.promptCachingEnabled !== (existing?.promptCachingEnabled ?? true)
-            ? {
-                promptCachingEnabled: {
-                  old: existing?.promptCachingEnabled ?? true,
-                  new: body.promptCachingEnabled,
-                },
-              }
-            : {}),
-          ...(wantsDocumentProcessingUpdate &&
-          body.documentProcessingMode !==
-            (existing?.documentProcessingMode ??
-              DEFAULT_DOCUMENT_PROCESSING_MODE)
-            ? {
-                documentProcessingMode: {
-                  old:
-                    existing?.documentProcessingMode ??
-                    DEFAULT_DOCUMENT_PROCESSING_MODE,
-                  new: body.documentProcessingMode,
-                },
-              }
-            : {}),
-          ...(wantsMemoryExtractionUpdate &&
-          body.memoryExtractionEnabled !==
-            (existing?.memoryExtractionEnabled ?? false)
-            ? {
-                memoryExtractionEnabled: {
-                  old: existing?.memoryExtractionEnabled ?? false,
-                  new: body.memoryExtractionEnabled,
-                },
-              }
-            : {}),
-          ...timePolicyAuditChanges(body, existing),
-        },
+        changes: organizationSettingsAuditChanges(body, existing),
       });
       return { type: "updated" } as const;
     }),

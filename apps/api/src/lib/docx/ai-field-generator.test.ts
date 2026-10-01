@@ -16,6 +16,7 @@ import {
   buildAiOccurrenceAdapter,
 } from "@/api/lib/docx/ai-field-generator";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
+import { resolveDecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 import { createSystemOneClient } from "@/api/lib/workflow/decisions/system-one";
 
@@ -621,31 +622,36 @@ describe("buildAiConditionDecider decision tier", () => {
     expect(decided?.decidedBy).toBe("generative_model");
   });
 
-  test("an instance TypeSafe model keeps conditions available without org AI config", async () => {
+  test("keeps conditions unavailable without an eligible customer-content model", () => {
+    const previousMock = env.USE_MOCK_AI;
     const previousApiKey = env.TYPESAFE_API_KEY;
     const previousRequirePersonalKey = env.REQUIRE_PERSONAL_AI_KEY;
+    const previousProvider = env.AI_PROVIDER;
+    const previousAnthropicKey = env.ANTHROPIC_API_KEY;
+    env.USE_MOCK_AI = false;
     env.TYPESAFE_API_KEY = "key-test";
     env.REQUIRE_PERSONAL_AI_KEY = false;
+    env.AI_PROVIDER = "anthropic";
+    env.ANTHROPIC_API_KEY = "key-test";
     try {
+      const customerDecisionModel = resolveDecisionModel(null, "customer");
+      expect(customerDecisionModel).toBeNull();
       const decideCondition = buildAiConditionDecider({
-        decisionModel: decisionModel(0.94),
+        decisionModel: customerDecisionModel,
         orgAIConfig: null,
-        managedAIResidency: "eu" as const,
+        managedAIResidency: "eu",
         organizationId,
         resolveTextModel,
         tenantWorkspaceIds: [],
       });
-
-      expect(decideCondition).toBeDefined();
-      expect(await decideCondition?.(input)).toEqual({
-        decidedBy: "decision_model",
-        value: true,
-        probability: 0.94,
-      });
+      expect(decideCondition).toBeUndefined();
       expect(capturedRequests).toEqual([]);
     } finally {
+      env.USE_MOCK_AI = previousMock;
       env.TYPESAFE_API_KEY = previousApiKey;
       env.REQUIRE_PERSONAL_AI_KEY = previousRequirePersonalKey;
+      env.AI_PROVIDER = previousProvider;
+      env.ANTHROPIC_API_KEY = previousAnthropicKey;
     }
   });
 });

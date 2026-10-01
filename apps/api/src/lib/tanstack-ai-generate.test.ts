@@ -411,6 +411,7 @@ describe("TanStack AI structured output generation", () => {
       );
       const options = {
         caching: noCaching,
+        finishPolicy: "require-complete" as const,
         organizationId: null,
         dataClass: "customer" as const,
         managedAIResidency: "eu" as const,
@@ -424,12 +425,14 @@ describe("TanStack AI structured output generation", () => {
       const caught = await (async () => {
         switch (path) {
           case "text":
-            return await generateTextForTestModel(options);
+            await generateTextForTestModel(options);
+            return;
           case "object":
-            return await generateObjectForTestModel({
+            await generateObjectForTestModel({
               ...options,
               outputSchema,
             });
+            return;
           case "text-stream":
             for await (const _chunk of streamTextForTestModel(options)) {
               /* consume stream */
@@ -444,7 +447,7 @@ describe("TanStack AI structured output generation", () => {
             }
             return;
           default:
-            path satisfies never;
+            return path satisfies never;
         }
       })().then(
         () => undefined,
@@ -457,6 +460,9 @@ describe("TanStack AI structured output generation", () => {
       });
       expect(classifyAIError(caught)).toBe("model_unavailable");
       expect(providerRequests).toHaveLength(1);
+      if (path === "object-stream") {
+        expect(caught).toBe(refusal);
+      }
     });
   }
 

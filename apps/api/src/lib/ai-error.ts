@@ -383,7 +383,7 @@ type AIHandlerErrorFallback = {
 
 // The failure reason each named kind is observed as. Total over the named
 // kinds, so a new kind cannot ship without deciding how a sink grades it.
-const AI_ERROR_KIND_FAILURE_REASON = {
+export const AI_ERROR_KIND_FAILURE_REASON = {
   quota_exhausted: "quota_exhausted",
   provider_billing: "provider_billing",
   provider_credentials_rejected: "provider_credentials_rejected",

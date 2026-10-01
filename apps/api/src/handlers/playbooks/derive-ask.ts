@@ -109,8 +109,14 @@ export type DeriveAskGenerate = (input: {
 // Not destructured in the parameter: the ownership-id lint rule needs the
 // branded type visible on the binding, which the aliased object type hides.
 const defaultDeriveAskGenerate: DeriveAskGenerate = async (input) => {
-  const { system, prompt, organizationId, orgAIConfig, promptCachingEnabled } =
-    input;
+  const {
+    system,
+    prompt,
+    organizationId,
+    orgAIConfig,
+    managedAIResidency,
+    promptCachingEnabled,
+  } = input;
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     dataClass: "customer",
     feature: "playbook.derive-ask",

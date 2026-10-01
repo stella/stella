@@ -1,3 +1,5 @@
+import { Result } from "better-result";
+
 import type { StellaSandboxRunInput } from "@stll/agent-engine";
 
 import { env } from "@/api/env";
@@ -5,7 +7,7 @@ import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { logger } from "@/api/lib/observability/logger";
-import { assertManagedProviderAvailable } from "@/api/lib/provider-data-policy";
+import { checkManagedProviderAvailable } from "@/api/lib/provider-data-policy";
 import { mintAgentRunToken } from "@/api/mcp/agent-run-token";
 
 const MCP_SERVER_NAME = "stella";
@@ -41,7 +43,13 @@ export const resolveChatSandboxPlan = async (
     });
   }
 
-  assertManagedProviderAvailable("agent_sandbox", context.dataClass);
+  const availability = checkManagedProviderAvailable(
+    "agent_sandbox",
+    context.dataClass,
+  );
+  if (Result.isError(availability)) {
+    throw availability.error;
+  }
 
   const image = env.AGENT_SANDBOX_IMAGE;
   const harnessModel = env.AGENT_SANDBOX_HARNESS_MODEL;

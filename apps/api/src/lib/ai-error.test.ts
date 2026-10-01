@@ -88,7 +88,7 @@ describe("classifyAIError", () => {
       new Error(error.message, { cause: error }),
     ]) {
       expect(classifyAIError(input)).toBe("model_unavailable");
-      expect(isAnticipatedAIFailure(input)).toBe(true);
+      expect(isAnticipatedAIFailure(input, classifyAIError(input))).toBe(true);
       expect(classifyAIBoundaryFailure(input)).toBe("model_unavailable");
       expect(
         gradeFailure(

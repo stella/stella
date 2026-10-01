@@ -270,6 +270,7 @@ const createContext = (
     getWorkspaceAccess: async () => null,
     orgAIConfig,
     orgAIConfigStatus,
+    managedAIResidency: "eu",
     promptCachingEnabled: false,
     recordAuditEvent: noopAuditRecorder,
     createAuditRecorder: () => noopAuditRecorder,
@@ -314,7 +315,6 @@ describe("createSafeRootHandler member AI access", () => {
         createContext(endpoint, unreadableLedger, {
           orgAIConfig: createOrgAIConfig(),
           orgAIConfigStatus: ORG_AI_CONFIG_STATUS.memberAssignmentRequired,
-          managedAIResidency: "eu" as const,
         }),
       );
 
@@ -345,7 +345,6 @@ describe("createSafeRootHandler member AI access", () => {
     const result = await endpoint.handler(
       createContext(endpoint, unreadableLedger, {
         orgAIConfigStatus: ORG_AI_CONFIG_STATUS.memberAssignmentRequired,
-        managedAIResidency: "eu" as const,
       }),
     );
 

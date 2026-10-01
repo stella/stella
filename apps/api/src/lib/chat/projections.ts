@@ -44,6 +44,7 @@ import {
   DECISION_PRIMARY_REFERENCE_TYPES,
 } from "@stll/legal-ast/decision-identifier";
 
+import { MANAGED_AI_RESIDENCIES } from "@/api/lib/ai-data-policy";
 import { TIME_ENTRY_VISIBILITY } from "@/api/lib/billing-constants";
 import {
   CITATION_READ_DIRECTIONS,
@@ -2616,6 +2617,7 @@ export const MANAGE_ORGANIZATION_REMOVE_MEMBER_PROJECTION = v.strictObject({
 });
 
 export const MANAGE_ORGANIZATION_SETTINGS_PROJECTION = v.strictObject({
+  managedAIResidency: v.optional(v.picklist(MANAGED_AI_RESIDENCIES)),
   matterNumberPattern: v.optional(v.string()),
   matterNumberPadding: v.optional(v.number()),
   promptCachingEnabled: v.optional(v.boolean()),

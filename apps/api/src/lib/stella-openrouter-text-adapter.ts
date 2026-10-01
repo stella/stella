@@ -12,6 +12,7 @@ import { withOptionalsNullable } from "@/api/lib/json-schema/null-optionals";
 import { readProviderStatus } from "@/api/lib/observability/failure-evidence";
 import {
   managedProviderUnavailable,
+  MANAGED_PROVIDER_UNAVAILABLE_CODE,
   PROVIDER_DATA_POLICY,
 } from "@/api/lib/provider-data-policy";
 
@@ -137,8 +138,11 @@ const withManagedRoutingErrors = async function* (
     yield {
       ...event,
       message: error.message,
-      code: error.code,
-      error: { message: error.message, code: error.code },
+      code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
+      error: {
+        message: error.message,
+        code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
+      },
     };
   }
 };
@@ -155,15 +159,15 @@ class ManagedOpenRouterTextAdapter extends StellaOpenRouterTextAdapter {
   override async structuredOutput(options: OpenRouterStructuredOptions) {
     const result = await Result.tryPromise({
       try: () => super.structuredOutput(options),
-      catch: (error) => error,
+      catch: (error) =>
+        isManagedRoutingRefusal(error)
+          ? managedProviderUnavailable("openrouter")
+          : error,
     });
-    if (Result.isOk(result)) {
-      return result.value;
+    if (Result.isError(result)) {
+      throw result.error;
     }
-    if (isManagedRoutingRefusal(result.error)) {
-      throw managedProviderUnavailable("openrouter");
-    }
-    throw result.error;
+    return result.value;
   }
 
   protected override mapOptionsToRequest(options: OpenRouterTextOptions) {

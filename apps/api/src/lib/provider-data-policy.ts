@@ -2,6 +2,7 @@ import type {
   OpenRouterConfig,
   OpenRouterTextModelOptions,
 } from "@tanstack/ai-openrouter";
+import { Result } from "better-result";
 
 import type { AIProvider } from "@stll/ai-catalog";
 import { classifyFailure } from "@stll/errors";
@@ -73,12 +74,10 @@ export const isManagedProviderAvailable = (
   dataClass === "public_corpus" ||
   PROVIDER_DATA_POLICY.customer[provider].status === "supported";
 
-export const assertManagedProviderAvailable = (
+export const checkManagedProviderAvailable = (
   provider: ManagedProvider,
   dataClass: AIDataClass,
-): void => {
-  if (isManagedProviderAvailable(provider, dataClass)) {
-    return;
-  }
-  throw managedProviderUnavailable(provider);
-};
+): Result<void, HandlerError<503>> =>
+  isManagedProviderAvailable(provider, dataClass)
+    ? Result.ok(undefined)
+    : Result.err(managedProviderUnavailable(provider));

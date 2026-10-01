@@ -1,5 +1,14 @@
 import { panic, Result } from "better-result";
-import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  spyOn,
+  test,
+} from "bun:test";
 
 import { env } from "@/api/env";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
@@ -35,24 +44,39 @@ const organization = {
   },
 } as const satisfies OrgAIConfig;
 
+const createRequestSpy = () =>
+  spyOn(globalThis, "fetch").mockImplementation(
+    async () =>
+      new Response(
+        JSON.stringify({
+          model: "jev-test",
+          answers: { eligible: { type: "noul", noul: 0.99 } },
+          usage: { input_tokens: 10, output_tokens: 1 },
+        }),
+        { headers: { "content-type": "application/json" } },
+      ),
+  );
+
+let fetch: ReturnType<typeof createRequestSpy>;
+
 const setup = () => ({
   analytics: installRecordingAnalytics(),
   logger: installRecordingLogger(),
-  fetch: spyOn(globalThis, "fetch").mockResolvedValue(
-    new Response(
-      JSON.stringify({
-        model: "jev-test",
-        answers: { eligible: { type: "noul", noul: 0.99 } },
-        usage: { input_tokens: 10, output_tokens: 1 },
-      }),
-      { headers: { "content-type": "application/json" } },
-    ),
-  ),
+  fetch,
+});
+
+beforeAll(() => {
+  fetch = createRequestSpy();
+});
+
+afterAll(() => {
+  fetch.mockRestore();
 });
 
 let runtime: ReturnType<typeof setup>;
 
 beforeEach(() => {
+  fetch.mockClear();
   env.REQUIRE_PERSONAL_AI_KEY = false;
   env.TYPESAFE_API_KEY = "test-instance-key";
   env.TYPESAFE_MODEL = "jev-test";
@@ -60,7 +84,6 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  runtime.fetch.mockRestore();
   runtime.analytics.restore();
   runtime.logger.restore();
   env.REQUIRE_PERSONAL_AI_KEY = original.requirePersonalKey;

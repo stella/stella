@@ -1,9 +1,6 @@
 import { EventType } from "@tanstack/ai";
 import type { AdapterYieldChunk } from "@tanstack/ai";
-import {
-  isAbortShapedError,
-  resolveDebugOption,
-} from "@tanstack/ai/adapter-internals";
+import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
@@ -28,7 +25,14 @@ import {
   PROVIDER_DATA_POLICY,
   isManagedProviderAvailable,
 } from "@/api/lib/provider-data-policy";
-import { createTanStackTextAdapterFactory } from "@/api/lib/tanstack-ai-models";
+import {
+  createTanStackTextAdapterFactory,
+  getTanStackTextModelById,
+  getTanStackTextModelForRole,
+  getTanStackTextModelInfoById,
+  getTanStackTextModelInfoForRole,
+  resolveTanStackAIProviderSupport,
+} from "@/api/lib/tanstack-ai-models";
 
 const REQUEST_TEXT = "Reply with OK.";
 const REQUEST_API_KEY = "test-request-key";
@@ -178,6 +182,90 @@ describe("provider request policy", () => {
       expect(isManagedProviderAvailable(provider, "customer")).toBe(
         provider === "openrouter",
       );
+    }
+  });
+
+  test("resolves model metadata independently of request availability", () => {
+    const previous = {
+      USE_MOCK_AI: env.USE_MOCK_AI,
+      AI_PROVIDER: env.AI_PROVIDER,
+      ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY,
+      BEDROCK_API_KEY: env.BEDROCK_API_KEY,
+      GOOGLE_GENERATIVE_AI_API_KEY: env.GOOGLE_GENERATIVE_AI_API_KEY,
+      MISTRAL_API_KEY: env.MISTRAL_API_KEY,
+      OPENAI_API_KEY: env.OPENAI_API_KEY,
+      OPENROUTER_API_KEY: env.OPENROUTER_API_KEY,
+    };
+    Object.assign(env, {
+      USE_MOCK_AI: false,
+      ANTHROPIC_API_KEY: REQUEST_API_KEY,
+      BEDROCK_API_KEY: REQUEST_API_KEY,
+      GOOGLE_GENERATIVE_AI_API_KEY: REQUEST_API_KEY,
+      MISTRAL_API_KEY: REQUEST_API_KEY,
+      OPENAI_API_KEY: REQUEST_API_KEY,
+      OPENROUTER_API_KEY: REQUEST_API_KEY,
+    });
+    try {
+      for (const provider of AI_PROVIDERS) {
+        if (!resolveTanStackAIProviderSupport({ provider }).supported) {
+          continue;
+        }
+        env.AI_PROVIDER = provider;
+        for (const dataClass of ["customer", "public_corpus"] as const) {
+          const available = isManagedProviderAvailable(provider, dataClass);
+          const info = getTanStackTextModelInfoForRole("chat", null, {
+            organizationId: null,
+            dataClass,
+          });
+          expect(info).toMatchObject({
+            keySource: "instance",
+            provider,
+            availability: available ? "available" : "unavailable",
+          });
+          const selection = `${provider}::${info.modelId}`;
+          expect(
+            getTanStackTextModelInfoById(selection, null, "chat", dataClass),
+          ).toMatchObject(info);
+          for (const managedAIResidency of MANAGED_AI_RESIDENCIES) {
+            const policy =
+              dataClass === "customer"
+                ? { dataClass, managedAIResidency }
+                : { dataClass };
+            const options = { organizationId: null, ...policy };
+            if (!available) {
+              expect(() =>
+                getTanStackTextModelForRole("chat", null, options),
+              ).toThrow("Managed AI is not available");
+              expect(() =>
+                getTanStackTextModelById(selection, null, {
+                  role: "chat",
+                  ...options,
+                }),
+              ).toThrow("Managed AI is not available");
+              continue;
+            }
+            expect(
+              getTanStackTextModelForRole("chat", null, options),
+            ).toMatchObject({
+              keySource: info.keySource,
+              modelId: info.modelId,
+              provider: info.provider,
+            });
+            expect(
+              getTanStackTextModelById(selection, null, {
+                role: "chat",
+                ...options,
+              }),
+            ).toMatchObject({
+              keySource: info.keySource,
+              modelId: info.modelId,
+              provider: info.provider,
+            });
+          }
+        }
+      }
+    } finally {
+      Object.assign(env, previous);
     }
   });
 
@@ -491,7 +579,9 @@ describe("provider request policy", () => {
                     code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
                   });
                 } else if (status === "aborted") {
-                  expect(isAbortShapedError(result.error)).toBe(true);
+                  expect(result.error).toMatchObject({
+                    name: "RequestAbortedError",
+                  });
                 } else {
                   expect(HandlerError.is(result.error)).toBe(false);
                   expect(readProviderStatus(result.error)?.status).toBe(status);
