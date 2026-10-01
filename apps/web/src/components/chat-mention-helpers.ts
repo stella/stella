@@ -145,9 +145,9 @@ export const buildEntityMentionOption = ({
 
 /**
  * Inserts a mention chip at the current cursor, followed by a trailing
- * space. The single insertion path for every mention source (the "@"
- * suggestion popover via `useChatEditor`'s `insertMention`, and the
- * composer (+) menu's Context submenu) so chips stay byte-identical
+ * space. The single insertion path for every mention source (a mention
+ * sent to a thread via `useChatEditor`'s `insertMention`, and the composer
+ * (+) menu's Context list and "@" shortcut) so chips stay byte-identical
  * regardless of how they were picked.
  */
 export const insertChatMention = (

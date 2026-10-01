@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   buildRequestDurationRecord,
+  emitActionCostDropMetric,
   emitChatRunLogMetric,
   resetMetricLineSinkForTesting,
   setMetricLineSinkForTesting,
@@ -73,6 +74,30 @@ test("chat shadow metrics emit append latency and per-turn write volume without 
     expect(JSON.parse(lines.at(1) ?? "null")).toMatchObject({
       ChatRunLogRows: 3,
       ChatRunLogBytes: 512,
+    });
+  } finally {
+    resetMetricLineSinkForTesting();
+  }
+});
+
+test("cost drop metrics count observations rather than failed batches", () => {
+  const lines: string[] = [];
+  setMetricLineSinkForTesting((line) => {
+    lines.push(line);
+  });
+  try {
+    emitActionCostDropMetric(7);
+    expect(lines).toHaveLength(1);
+    expect(JSON.parse(lines.at(0) ?? "null")).toMatchObject({
+      ActionCostObservationsDropped: 7,
+      _aws: {
+        CloudWatchMetrics: [
+          {
+            Dimensions: [[]],
+            Metrics: [{ Name: "ActionCostObservationsDropped", Unit: "Count" }],
+          },
+        ],
+      },
     });
   } finally {
     resetMetricLineSinkForTesting();
