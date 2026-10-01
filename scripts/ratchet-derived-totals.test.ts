@@ -110,7 +110,7 @@ const casts = (count: number) =>
   `${Array.from(
     { length: count },
     (_, index) => `export const item${index} = value${index} as unknown;`,
-  ).join("\n")  }\n`;
+  ).join("\n")}\n`;
 
 const run = (cwd: string, command: readonly string[]) => {
   const result = Bun.spawnSync(command, {
@@ -220,10 +220,14 @@ test("CI rejects hand-raised budgets and accepts writer deltas and decreases", (
       JSON.parse(original),
     );
     expect(inspection.status).toBe("valid");
-    if (inspection.status !== "valid") {panic(inspection.errors.join("\n"));}
+    if (inspection.status !== "valid") {
+      panic(inspection.errors.join("\n"));
+    }
     const entry = inspection.baseline["as-casts"];
     expect(entry?.files[FIRST]).toBe(2);
-    if (entry === undefined) {panic("fixture as-casts metric missing");}
+    if (entry === undefined) {
+      panic("fixture as-casts metric missing");
+    }
     entry.files[FIRST] = 3;
     entry.count += 1;
     write({
@@ -243,6 +247,61 @@ test("CI rejects hand-raised budgets and accepts writer deltas and decreases", (
     expect(rejected.code, rejected.output).toBe(1);
     expect(rejected.output).toContain("as-casts");
     expect(rejected.output).toContain("unrecorded baseline increase");
+    for (const scenario of [
+      {
+        name: "baseline for an absent file",
+        file: "apps/api/src/absent.ts",
+        allowance: 1,
+        sources: [],
+      },
+      {
+        name: "baseline exceeds the source delta",
+        file: FIRST,
+        allowance: 4,
+        sources: [{ file: FIRST, count: 3 }],
+      },
+    ]) {
+      git(root, "reset", "--hard", "origin/main");
+      const candidate = inspectConfiguration(
+        Object.keys(JSON.parse(original)).map((id) => ({ id })),
+        JSON.parse(original),
+      );
+      if (candidate.status !== "valid") {
+        panic(candidate.errors.join("\n"));
+      }
+      const budget = candidate.baseline["as-casts"];
+      if (budget === undefined) {
+        panic("fixture as-casts metric missing");
+      }
+      if (scenario.sources.length === 0) {
+        expect(
+          run(root, ["git", "cat-file", "-e", `origin/main:${scenario.file}`])
+            .code,
+        ).not.toBe(0);
+      }
+      budget.count += scenario.allowance - (budget.files[scenario.file] ?? 0);
+      budget.files[scenario.file] = scenario.allowance;
+      for (const source of scenario.sources) {
+        write({ root, relative: source.file, contents: casts(source.count) });
+      }
+      write({
+        root,
+        relative: BASELINE,
+        contents: serializeBaseline(
+          candidate.baseline,
+          Object.keys(candidate.baseline),
+        ),
+      });
+      commit(root, scenario.name);
+      const excess = run(root, [
+        process.execPath,
+        "scripts/ratchet.ts",
+        "--check",
+      ]);
+      expect(excess.code, excess.output).toBe(1);
+      expect(excess.output).toContain("as-casts");
+      expect(excess.output).toContain("unrecorded baseline increase");
+    }
     git(root, "reset", "--hard", "origin/main");
     write({ root, relative: FIRST, contents: casts(3) });
     ratchet(root, "--write");

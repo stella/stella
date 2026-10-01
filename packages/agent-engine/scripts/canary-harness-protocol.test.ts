@@ -1,4 +1,4 @@
-import { EventType } from "@ag-ui/core";
+import { EventType } from "@tanstack/ai";
 import { describe, expect, test } from "bun:test";
 
 import {

@@ -1155,7 +1155,6 @@
       "apps/web/src/components/ai-suggestions/host.tsx": 1,
       "apps/web/src/components/ai-suggestions/review-redline-preview.tsx": 1,
       "apps/web/src/components/chat-editor-provider.tsx": 7,
-      "apps/web/src/components/chat-mention-list.tsx": 2,
       "apps/web/src/components/chat/chat-anon-decorations-extension.ts": 1,
       "apps/web/src/components/chat/chat-thread-messages.tsx": 4,
       "apps/web/src/components/chat/tool-approval-card.tsx": 1,

@@ -29,6 +29,13 @@ const createEmptyPhaseCounts = (): RenderStormPhaseCounts => ({
 // above real streaming traffic while staying well below the loop floor.
 export const RENDER_STORM_THRESHOLD_COMMITS_PER_SECOND = 80;
 
+/**
+ * The global the dev-only canary counts every commit of the app in, for e2e
+ * specs that hold a surface to a commit budget tighter than the storm
+ * threshold (`e2e/specs/chat-stream-commit-budget.spec.ts`).
+ */
+export const RENDER_COMMIT_COUNT_GLOBAL = "__stellaRenderCommitCount";
+
 // Window length the commit counter buckets into. Windows are commit-driven
 // (closed by the next commit once this much time has elapsed since the
 // window opened), not a timer, so a storm is detected without needing an
