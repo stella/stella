@@ -36,7 +36,7 @@ export const SidePanelChatNote = ({
       )}
     >
       {status === SIDE_PANEL_CHAT_STATUS.creating ? (
-        <Loader size="sm" />
+        <Loader label={t(SIDE_PANEL_CHAT_STATUS_LABELS.creating)} size="sm" />
       ) : (
         <CheckIcon className="size-3.5 shrink-0" />
       )}
