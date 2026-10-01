@@ -55,7 +55,7 @@ const coordination = ({
           }
           const phases = periods.get(key) ?? new Set<string>();
           if (!phases.has(phase) && phases.size >= Number(args.at(11))) {
-            return -2;
+            return -1;
           }
           phases.add(phase);
           periods.set(key, phases);
@@ -165,6 +165,11 @@ describe("chat execution admission owns settlement independently of transport re
       admit: store.admit,
     });
     expect(Result.isError(refused)).toBe(true);
+    if (Result.isError(refused)) {
+      expect(refused.error.status).toBe(429);
+      expect(refused.error.code).toBe("rate_limited");
+      expect(refused.error.message).toBe("Action period limit reached");
+    }
     expect(store.periodCount()).toBe(3);
     expect(store.counts().active).toBe(0);
   });
@@ -246,6 +251,11 @@ describe("chat execution admission owns settlement independently of transport re
         expect(acquired.error.status).toBe(mode === "busy" ? 429 : 503);
         expect(acquired.error.code).toBe(
           mode === "busy" ? "rate_limited" : "service_unavailable",
+        );
+        expect(acquired.error.message).toBe(
+          mode === "busy"
+            ? "Concurrent action limit reached"
+            : "Action admission is unavailable",
         );
       }
       expect(store.counts()).toEqual({

@@ -91,7 +91,7 @@ export const startChatExecutionAdmission = async ({
               status: busy ? 429 : 503,
               code: busy ? "rate_limited" : "service_unavailable",
               message: busy
-                ? "Concurrent action limit reached"
+                ? outcome.error.message
                 : "Action admission is unavailable",
               cause: outcome.error,
             }),
