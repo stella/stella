@@ -231,7 +231,7 @@ describe("period admission boundary", () => {
     expect(acquisitions).toBe(1);
   });
 
-  test("period exhaustion returns busy without executing the action", async () => {
+  test("period exhaustion refuses without executing the action", async () => {
     let ran = false;
     const result = await withActionAdmission({
       organizationId,
@@ -257,7 +257,8 @@ describe("period admission boundary", () => {
     }
     expect(ActionAdmissionError.is(result.error)).toBe(true);
     if (ActionAdmissionError.is(result.error)) {
-      expect(result.error.reason).toBe("busy");
+      expect(result.error.reason).toBe("period_exhausted");
+      expect(result.error.code).toBe("action_period_exhausted");
     }
     expect(ran).toBe(false);
   });

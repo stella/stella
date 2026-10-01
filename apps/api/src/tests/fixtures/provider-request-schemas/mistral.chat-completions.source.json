@@ -1,0 +1,14 @@
+{
+  "extractedBy": "apps/api/scripts/provider-request-schemas.ts",
+  "label": "mistral chat completions",
+  "selection": {
+    "format": "openapi",
+    "method": "post",
+    "path": "/v1/chat/completions"
+  },
+  "source": {
+    "retrievedAt": "2026-09-30",
+    "sha256": "07652463899cfca6d30671ceee47b0079ff2ede5c210ee8d5586c201e29c4d68",
+    "url": "https://docs.mistral.ai/openapi.yaml"
+  }
+}

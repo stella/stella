@@ -80,6 +80,10 @@ describe("policy coverage", () => {
     "usage_entitlements",
     "usage_allocations",
     "usage_events",
+    // Operator observations deny the request role entirely; their dedicated
+    // assertion below checks policies and privileges instead of tenant CRUD.
+    "action_cost_records",
+    "action_cost_calls",
     // Root-owned lifecycle history is tenant-readable but app-role immutable;
     // its dedicated assertion below covers the restrictive write policies.
     "extraction_runs",
@@ -406,6 +410,22 @@ describe("policy coverage", () => {
         )
         .toSorted(),
     ).toEqual([]);
+  });
+
+  test("operator observations deny every request-role operation", async () => {
+    const policies = await fetchStellaPolicies(testDb);
+    const privileges = await fetchStellaTablePrivileges(testDb);
+    for (const table of ["action_cost_records", "action_cost_calls"]) {
+      const tablePolicies = policies.filter(
+        (policy) => policy.table_name === table,
+      );
+      expect(tablePolicies).toHaveLength(1);
+      const policy = tablePolicies.at(0);
+      expect(policy?.command).toBe("*");
+      expect(policy?.using_expr).toBe("false");
+      expect(policy?.check_expr).toBe("false");
+      expect(privilegesForTable(privileges, table)).toEqual([]);
+    }
   });
 
   test("every table with organization_id (org-only) has org policies", async () => {

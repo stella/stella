@@ -18,10 +18,8 @@ import {
   headMetaContents,
   isCdnCacheHit,
   matchesCacheControl,
-  MEMBER_JSON_BASE,
   MEMBER_JSON_CACHE_CONTROL,
   MEMBER_JSON_POLICY_PATHS,
-  MEMBER_JSON_STATUS_ONLY_PATHS,
   parseCacheControl,
   resolvePublicKnowledgeState,
   RESPONSE_CLASS,
@@ -116,14 +114,14 @@ describe("declaredCacheControl", () => {
     ).toBeNull();
   });
 
-  test("declares the public policy on success and no-store otherwise", () => {
+  test("declares the public policy on success and the private policy otherwise", () => {
     const publicJson = { responseClass: RESPONSE_CLASS.publicJson };
     expect(
       declaredCacheControl(publicJson, { status: 200, headers: new Headers() }),
     ).toBe("public, max-age=300");
     expect(
       declaredCacheControl(publicJson, { status: 404, headers: new Headers() }),
-    ).toBe("no-store");
+    ).toBe("private, no-store");
   });
 
   test("uses the member route's own declaration", () => {
@@ -229,7 +227,7 @@ describe("evaluateCachePolicy", () => {
     expect(
       evaluateCachePolicy(publicJson, {
         status: 404,
-        headers: cdnHeaders({ "cache-control": "no-store" }),
+        headers: cdnHeaders({ "cache-control": "private, no-store" }),
       }),
     ).toEqual([]);
     expect(
@@ -505,183 +503,23 @@ describe("build commits", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Member route census
-// ---------------------------------------------------------------------------
-
-const API_SRC_DIR = nodePath.join(import.meta.dir, "..");
-const HANDLERS_DIR = nodePath.join(API_SRC_DIR, "handlers");
-
-const escapeRegExp = (value: string): string =>
-  value.replaceAll(/[$()*+.?[\\\]^{|}]/gu, (char) => `\\${char}`);
-
-type RouteInstance = {
-  /** Path under apps/api/src/handlers. */
-  file: string;
-  /** The Elysia instance's `prefix`, or null when it declares none. */
-  prefix: string | null;
-  /** Its `onRequest` hook sets the member Cache-Control policy. */
-  declaresPolicy: boolean;
-};
-
-type RouteModuleCensus = {
-  instances: RouteInstance[];
-  /** Files that mention the policy outside a prefixed `onRequest` hook. */
-  unattributed: string[];
-};
-
-/**
- * Reads one route module the way the member routes declare the policy:
- *
- *   const ROUTE_CACHE_CONTROL = "private, no-store";
- *   new Elysia({ prefix: "/playbooks" })
- *     .onRequest(({ set }) => {
- *       set.headers["Cache-Control"] = ROUTE_CACHE_CONTROL;
- *     })
- *
- * Any other mention of the policy (or of a constant holding it) is reported
- * as unattributed, so a new idiom fails here instead of going unnoticed.
- */
-const censusRouteModule = (file: string, source: string): RouteModuleCensus => {
-  const policyLiteral = escapeRegExp(`"${MEMBER_JSON_CACHE_CONTROL}"`);
-  const declaration = new RegExp(
-    String.raw`\bconst\s+(\w+)\s*=\s*${policyLiteral}\s*;`,
-    "gu",
-  );
-  const constants = [...source.matchAll(declaration)].flatMap(([, name]) =>
-    name ? [name] : [],
-  );
-  const value = [
-    policyLiteral,
-    ...constants.map((name) => String.raw`\b${name}\b`),
-  ].join("|");
-  const hook = new RegExp(
-    String.raw`\.onRequest\(\s*\(\s*\{\s*set\s*\}\s*\)\s*=>\s*\{\s*` +
-      String.raw`set\.headers\[\s*["']cache-control["']\s*\]\s*=\s*` +
-      String.raw`(?:${value})\s*;?\s*\}\s*\)`,
-    "giu",
-  );
-  const mention = new RegExp(value, "u");
-
-  const instances: RouteInstance[] = [];
-  let unattributed = false;
-  for (const chunk of source.split(/(?=\bnew Elysia\()/u)) {
-    const isInstance = chunk.startsWith("new Elysia(");
-    const prefix = isInstance
-      ? (/^new Elysia\(\s*\{[^}]*?\bprefix:\s*"([^"]+)"/u.exec(chunk)?.[1] ??
-        null)
-      : null;
-    const declaresPolicy = prefix !== null && hook.test(chunk);
-    hook.lastIndex = 0;
-    if (isInstance) {
-      instances.push({ file, prefix, declaresPolicy });
-    }
-    let rest = chunk.replaceAll(declaration, "");
-    if (prefix !== null) {
-      rest = rest.replaceAll(hook, "");
-    }
-    if (mention.test(rest)) {
-      unattributed = true;
-    }
-  }
-  return { instances, unattributed: unattributed ? [file] : [] };
-};
-
-const readRouteModules = async (): Promise<RouteModuleCensus> => {
-  const files = await Array.fromAsync(
-    new Bun.Glob("**/routes.ts").scan({ cwd: HANDLERS_DIR }),
-  );
-  const modules = await Promise.all(
-    files
-      .toSorted()
-      .map(async (file) =>
-        censusRouteModule(
-          file,
-          await Bun.file(nodePath.join(HANDLERS_DIR, file)).text(),
+describe("member response policy", () => {
+  test("every sampled member route carries the global policy", async () => {
+    const { default: api } = await import("@/api/server");
+    for (const path of MEMBER_JSON_POLICY_PATHS) {
+      const apiPath = path.slice("/api".length);
+      expect(
+        api.routes.some(
+          (route) => `${route.path}/`.replace(/\/\//gu, "/") === apiPath,
         ),
-      ),
-  );
-  return {
-    instances: modules.flatMap((module) => module.instances),
-    unattributed: modules.flatMap((module) => module.unattributed),
-  };
-};
-
-/** Every versioned route module is mounted under /v1 in server.ts. */
-const mountedPath = (prefix: string): string => `${MEMBER_JSON_BASE}${prefix}/`;
-
-const isImportedByServer = (serverSource: string, file: string): boolean =>
-  serverSource.includes(`"@/api/handlers/${file.replace(/\.ts$/u, "")}"`);
-
-describe("member route census", () => {
-  test("detects the declaration idiom and nothing looser", () => {
-    const hook = `.onRequest(({ set }) => {
-    set.headers["Cache-Control"] = ROUTE_CACHE_CONTROL;
-  })`;
-    const constant = 'const ROUTE_CACHE_CONTROL = "private, no-store";';
-    expect(
-      censusRouteModule(
-        "a/routes.ts",
-        `${constant}\nexport const a = new Elysia({ prefix: "/a" })\n  ${hook}\n  .get("/", h);\nexport const b = new Elysia({ prefix: "/b" }).get("/", h);`,
-      ),
-    ).toEqual({
-      instances: [
-        { file: "a/routes.ts", prefix: "/a", declaresPolicy: true },
-        { file: "a/routes.ts", prefix: "/b", declaresPolicy: false },
-      ],
-      unattributed: [],
-    });
-    // Set per handler, or on an instance without a prefix: not recognised.
-    for (const source of [
-      `${constant}\nnew Elysia({ prefix: "/a" }).get("/", ({ set }) => { set.headers["Cache-Control"] = ROUTE_CACHE_CONTROL; });`,
-      `new Elysia()\n  ${hook.replace("ROUTE_CACHE_CONTROL", '"private, no-store"')};`,
-    ]) {
-      expect(censusRouteModule("a/routes.ts", source).unattributed).toEqual([
-        "a/routes.ts",
-      ]);
-    }
-  });
-
-  test("the policy list matches every route module that declares it", async () => {
-    const census = await readRouteModules();
-    const serverSource = await Bun.file(
-      nodePath.join(API_SRC_DIR, "server.ts"),
-    ).text();
-
-    expect(census.unattributed).toEqual([]);
-    const declaring = census.instances.filter(
-      (instance) => instance.declaresPolicy,
-    );
-    expect(
-      [
-        ...new Set(
-          declaring.flatMap(({ prefix }) =>
-            prefix === null ? [] : [mountedPath(prefix)],
-          ),
-        ),
-      ].toSorted(),
-    ).toEqual([...MEMBER_JSON_POLICY_PATHS].toSorted());
-    for (const { file } of declaring) {
-      expect(isImportedByServer(serverSource, file)).toBe(true);
-    }
-  });
-
-  test("status-only member routes are mounted and declare no policy", async () => {
-    const census = await readRouteModules();
-    const serverSource = await Bun.file(
-      nodePath.join(API_SRC_DIR, "server.ts"),
-    ).text();
-
-    for (const path of MEMBER_JSON_STATUS_ONLY_PATHS) {
-      expect(new Set<string>(MEMBER_JSON_POLICY_PATHS).has(path)).toBe(false);
-      const matches = census.instances.filter(
-        ({ prefix }) => prefix !== null && mountedPath(prefix) === path,
+      ).toBe(true);
+      const response = await api.handle(
+        new Request(`http://localhost${apiPath}`),
       );
-      expect(matches.length).toBeGreaterThan(0);
-      for (const { file, declaresPolicy } of matches) {
-        expect(declaresPolicy).toBe(false);
-        expect(isImportedByServer(serverSource, file)).toBe(true);
-      }
+      expect(response.status, path).toBe(401);
+      expect(response.headers.get("Cache-Control"), path).toBe(
+        MEMBER_JSON_CACHE_CONTROL,
+      );
     }
   });
 });
@@ -731,7 +569,7 @@ describe("targets", () => {
     expect(member).toHaveLength(5);
     expect(
       member.find((target) => target.path === "/api/v1/skills/")?.cacheControl,
-    ).toBeNull();
+    ).toBe(MEMBER_JSON_CACHE_CONTROL);
   });
 
   test("keep every class and no robots check when disabled", () => {

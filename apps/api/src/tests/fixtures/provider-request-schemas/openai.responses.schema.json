@@ -1,0 +1,5168 @@
+{
+  "$defs": {
+    "AccessProgramsParam": {
+      "additionalProperties": false,
+      "properties": {
+        "cyber": {
+          "$ref": "#/$defs/CyberAccessProgramEnum"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "AdditionalToolsItemParam": {
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "role": {
+          "enum": ["developer"],
+          "type": "string"
+        },
+        "tools": {
+          "items": {
+            "$ref": "#/$defs/Tool"
+          },
+          "type": "array"
+        },
+        "type": {
+          "enum": ["additional_tools"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "role", "tools"],
+      "type": "object"
+    },
+    "Annotation": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FileCitationBody"
+        },
+        {
+          "$ref": "#/$defs/UrlCitationBody"
+        },
+        {
+          "$ref": "#/$defs/ContainerFileCitationBody"
+        },
+        {
+          "$ref": "#/$defs/FilePath"
+        }
+      ]
+    },
+    "ApplyPatchCallOutputStatusParam": {
+      "enum": ["completed", "failed"],
+      "type": "string"
+    },
+    "ApplyPatchCallStatusParam": {
+      "enum": ["in_progress", "completed"],
+      "type": "string"
+    },
+    "ApplyPatchCreateFileOperationParam": {
+      "properties": {
+        "diff": {
+          "maxLength": 10485760,
+          "type": "string"
+        },
+        "path": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "type": {
+          "enum": ["create_file"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "path", "diff"],
+      "type": "object"
+    },
+    "ApplyPatchDeleteFileOperationParam": {
+      "properties": {
+        "path": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "type": {
+          "enum": ["delete_file"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "path"],
+      "type": "object"
+    },
+    "ApplyPatchOperationParam": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ApplyPatchCreateFileOperationParam"
+        },
+        {
+          "$ref": "#/$defs/ApplyPatchDeleteFileOperationParam"
+        },
+        {
+          "$ref": "#/$defs/ApplyPatchUpdateFileOperationParam"
+        }
+      ]
+    },
+    "ApplyPatchToolCallItemParam": {
+      "properties": {
+        "call_id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        "caller": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ToolCallCallerParam"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "operation": {
+          "$ref": "#/$defs/ApplyPatchOperationParam"
+        },
+        "status": {
+          "$ref": "#/$defs/ApplyPatchCallStatusParam"
+        },
+        "type": {
+          "enum": ["apply_patch_call"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "call_id", "status", "operation"],
+      "type": "object"
+    },
+    "ApplyPatchToolCallOutputItemParam": {
+      "properties": {
+        "call_id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        "caller": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ToolCallCallerParam"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "output": {
+          "anyOf": [
+            {
+              "maxLength": 10485760,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "$ref": "#/$defs/ApplyPatchCallOutputStatusParam"
+        },
+        "type": {
+          "enum": ["apply_patch_call_output"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "call_id", "status"],
+      "type": "object"
+    },
+    "ApplyPatchToolParam": {
+      "properties": {
+        "allowed_callers": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/CallableToolAllowedCaller"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "enum": ["apply_patch"],
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "ApplyPatchUpdateFileOperationParam": {
+      "properties": {
+        "diff": {
+          "maxLength": 10485760,
+          "type": "string"
+        },
+        "path": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "type": {
+          "enum": ["update_file"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "path", "diff"],
+      "type": "object"
+    },
+    "ApproximateLocation": {
+      "properties": {
+        "city": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "country": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "region": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "timezone": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "enum": ["approximate"],
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "AutoCodeInterpreterToolParam": {
+      "properties": {
+        "file_ids": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 50,
+          "type": "array"
+        },
+        "memory_limit": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ContainerMemoryLimit"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "network_policy": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ContainerNetworkPolicyDisabledParam"
+            },
+            {
+              "$ref": "#/$defs/ContainerNetworkPolicyAllowlistParam"
+            }
+          ]
+        },
+        "type": {
+          "enum": ["auto"],
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "CallableToolAllowedCaller": {
+      "enum": ["direct", "programmatic"],
+      "type": "string"
+    },
+    "ClickButtonType": {
+      "enum": ["left", "right", "wheel", "back", "forward"],
+      "type": "string"
+    },
+    "ClickParam": {
+      "properties": {
+        "button": {
+          "$ref": "#/$defs/ClickButtonType"
+        },
+        "keys": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "enum": ["click"],
+          "type": "string"
+        },
+        "x": {
+          "type": "integer"
+        },
+        "y": {
+          "type": "integer"
+        }
+      },
+      "required": ["type", "button", "x", "y"],
+      "type": "object"
+    },
+    "CodeInterpreterOutputImage": {
+      "properties": {
+        "type": {
+          "enum": ["image"],
+          "type": "string"
+        },
+        "url": {
+          "format": "uri",
+          "type": "string"
+        }
+      },
+      "required": ["type", "url"],
+      "type": "object"
+    },
+    "CodeInterpreterOutputLogs": {
+      "properties": {
+        "logs": {
+          "type": "string"
+        },
+        "type": {
+          "enum": ["logs"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "logs"],
+      "type": "object"
+    },
+    "CodeInterpreterTool": {
+      "properties": {
+        "allowed_callers": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/CallableToolAllowedCaller"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "container": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/AutoCodeInterpreterToolParam"
+            }
+          ]
+        },
+        "type": {
+          "enum": ["code_interpreter"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "container"],
+      "type": "object"
+    },
+    "CodeInterpreterToolCall": {
+      "properties": {
+        "code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "container_id": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "outputs": {
+          "anyOf": [
+            {
+              "items": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/CodeInterpreterOutputLogs"
+                  },
+                  {
+                    "$ref": "#/$defs/CodeInterpreterOutputImage"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "enum": [
+            "in_progress",
+            "completed",
+            "incomplete",
+            "interpreting",
+            "failed"
+          ],
+          "type": "string"
+        },
+        "type": {
+          "enum": ["code_interpreter_call"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "id", "status", "container_id", "code", "outputs"],
+      "type": "object"
+    },
+    "CompactionSummaryItemParam": {
+      "properties": {
+        "encrypted_content": {
+          "maxLength": 104857600,
+          "type": "string"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "enum": ["compaction"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "encrypted_content"],
+      "type": "object"
+    },
+    "CompactionTriggerItemParam": {
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "enum": ["compaction_trigger"],
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "ComparisonFilter": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "type": {
+          "enum": ["eq", "ne", "gt", "gte", "lt", "lte", "in", "nin"],
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "type": "array"
+            }
+          ]
+        }
+      },
+      "required": ["type", "key", "value"],
+      "type": "object"
+    },
+    "CompoundFilter": {
+      "additionalProperties": false,
+      "properties": {
+        "filters": {
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ComparisonFilter"
+              },
+              {
+                "$ref": "#/$defs/CompoundFilter"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "type": {
+          "enum": ["and", "or"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "filters"],
+      "type": "object"
+    },
+    "ComputerAction": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ClickParam"
+        },
+        {
+          "$ref": "#/$defs/DoubleClickAction"
+        },
+        {
+          "$ref": "#/$defs/DragParam"
+        },
+        {
+          "$ref": "#/$defs/KeyPressAction"
+        },
+        {
+          "$ref": "#/$defs/MoveParam"
+        },
+        {
+          "$ref": "#/$defs/ScreenshotParam"
+        },
+        {
+          "$ref": "#/$defs/ScrollParam"
+        },
+        {
+          "$ref": "#/$defs/TypeParam"
+        },
+        {
+          "$ref": "#/$defs/WaitParam"
+        }
+      ]
+    },
+    "ComputerActionList": {
+      "items": {
+        "$ref": "#/$defs/ComputerAction"
+      },
+      "type": "array"
+    },
+    "ComputerCallOutputItemParam": {
+      "properties": {
+        "acknowledged_safety_checks": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ComputerCallSafetyCheckParam"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "call_id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "output": {
+          "$ref": "#/$defs/ComputerScreenshotImage"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FunctionCallItemStatus"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "enum": ["computer_call_output"],
+          "type": "string"
+        }
+      },
+      "required": ["call_id", "type", "output"],
+      "type": "object"
+    },
+    "ComputerCallSafetyCheckParam": {
+      "properties": {
+        "code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "message": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": ["id"],
+      "type": "object"
+    },
+    "ComputerEnvironment": {
+      "enum": ["windows", "mac", "linux", "ubuntu", "browser"],
+      "type": "string"
+    },
+    "ComputerScreenshotImage": {
+      "properties": {
+        "file_id": {
+          "type": "string"
+        },
+        "image_url": {
+          "format": "uri",
+          "type": "string"
+        },
+        "type": {
+          "enum": ["computer_screenshot"],
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "ComputerTool": {
+      "properties": {
+        "type": {
+          "enum": ["computer"],
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "ComputerToolCall": {
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/ComputerAction"
+        },
+        "actions": {
+          "$ref": "#/$defs/ComputerActionList"
+        },
+        "call_id": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "pending_safety_checks": {
+          "items": {
+            "$ref": "#/$defs/ComputerCallSafetyCheckParam"
+          },
+          "type": "array"
+        },
+        "status": {
+          "enum": ["in_progress", "completed", "incomplete"],
+          "type": "string"
+        },
+        "type": {
+          "enum": ["computer_call"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "id", "call_id", "pending_safety_checks", "status"],
+      "type": "object"
+    },
+    "ComputerUsePreviewTool": {
+      "properties": {
+        "display_height": {
+          "type": "integer"
+        },
+        "display_width": {
+          "type": "integer"
+        },
+        "environment": {
+          "$ref": "#/$defs/ComputerEnvironment"
+        },
+        "type": {
+          "enum": ["computer_use_preview"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "environment", "display_width", "display_height"],
+      "type": "object"
+    },
+    "ContainerAutoParam": {
+      "properties": {
+        "file_ids": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 50,
+          "type": "array"
+        },
+        "memory_limit": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ContainerMemoryLimit"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "network_policy": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ContainerNetworkPolicyDisabledParam"
+            },
+            {
+              "$ref": "#/$defs/ContainerNetworkPolicyAllowlistParam"
+            }
+          ]
+        },
+        "skills": {
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SkillReferenceParam"
+              },
+              {
+                "$ref": "#/$defs/InlineSkillParam"
+              }
+            ]
+          },
+          "maxItems": 200,
+          "type": "array"
+        },
+        "type": {
+          "enum": ["container_auto"],
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "ContainerFileCitationBody": {
+      "properties": {
+        "container_id": {
+          "type": "string"
+        },
+        "end_index": {
+          "type": "integer"
+        },
+        "file_id": {
+          "type": "string"
+        },
+        "filename": {
+          "type": "string"
+        },
+        "start_index": {
+          "type": "integer"
+        },
+        "type": {
+          "enum": ["container_file_citation"],
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "container_id",
+        "file_id",
+        "start_index",
+        "end_index",
+        "filename"
+      ],
+      "type": "object"
+    },
+    "ContainerMemoryLimit": {
+      "enum": ["1g", "4g", "16g", "64g"],
+      "type": "string"
+    },
+    "ContainerNetworkPolicyAllowlistParam": {
+      "properties": {
+        "allowed_domains": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "domain_secrets": {
+          "items": {
+            "$ref": "#/$defs/ContainerNetworkPolicyDomainSecretParam"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "type": {
+          "enum": ["allowlist"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "allowed_domains"],
+      "type": "object"
+    },
+    "ContainerNetworkPolicyDisabledParam": {
+      "properties": {
+        "type": {
+          "enum": ["disabled"],
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "ContainerNetworkPolicyDomainSecretParam": {
+      "properties": {
+        "domain": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "value": {
+          "maxLength": 10485760,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": ["domain", "name", "value"],
+      "type": "object"
+    },
+    "ContainerReferenceParam": {
+      "properties": {
+        "container_id": {
+          "type": "string"
+        },
+        "type": {
+          "enum": ["container_reference"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "container_id"],
+      "type": "object"
+    },
+    "ContextManagementParam": {
+      "properties": {
+        "compact_threshold": {
+          "anyOf": [
+            {
+              "minimum": 1000,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "ConversationParam": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "$ref": "#/$defs/ConversationParam-2"
+        }
+      ]
+    },
+    "ConversationParam-2": {
+      "properties": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": ["id"],
+      "type": "object"
+    },
+    "CoordParam": {
+      "properties": {
+        "x": {
+          "type": "integer"
+        },
+        "y": {
+          "type": "integer"
+        }
+      },
+      "required": ["x", "y"],
+      "type": "object"
+    },
+    "CreateModelResponseProperties": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/ModelResponseProperties"
+        },
+        {
+          "properties": {
+            "prompt_cache_options": {
+              "$ref": "#/$defs/PromptCacheOptionsParam"
+            },
+            "top_logprobs": {
+              "maximum": 20,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        }
+      ]
+    },
+    "CreateResponse": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/CreateModelResponseProperties"
+        },
+        {
+          "$ref": "#/$defs/ResponseProperties"
+        },
+        {
+          "properties": {
+            "access_programs": {
+              "$ref": "#/$defs/AccessProgramsParam"
+            },
+            "context_management": {
+              "anyOf": [
+                {
+                  "items": {
+                    "$ref": "#/$defs/ContextManagementParam"
+                  },
+                  "minItems": 1,
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "conversation": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ConversationParam"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "include": {
+              "anyOf": [
+                {
+                  "items": {
+                    "$ref": "#/$defs/IncludeEnum"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "input": {
+              "$ref": "#/$defs/InputParam"
+            },
+            "instructions": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "max_output_tokens": {
+              "anyOf": [
+                {
+                  "minimum": 16,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "moderation": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ModerationParam"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "parallel_tool_calls": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "prompt_cache_options": {
+              "$ref": "#/$defs/ResponsePromptCacheOptionsParam"
+            },
+            "reasoning": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Reasoning"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "service_tier": {
+              "$ref": "#/$defs/ServiceTierResponses"
+            },
+            "store": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "stream": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "stream_options": {
+              "$ref": "#/$defs/ResponseStreamOptions"
+            },
+            "truncation": {
+              "anyOf": [
+                {
+                  "enum": ["auto", "disabled"],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "type": "object"
+        }
+      ]
+    },
+    "CustomGrammarFormatParam": {
+      "properties": {
+        "definition": {
+          "type": "string"
+        },
+        "syntax": {
+          "$ref": "#/$defs/GrammarSyntax1"
+        },
+        "type": {
+          "enum": ["grammar"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "syntax", "definition"],
+      "type": "object"
+    },
+    "CustomTextFormatParam": {
+      "properties": {
+        "type": {
+          "enum": ["text"],
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "CustomToolCall": {
+      "properties": {
+        "async": {
+          "type": "boolean"
+        },
+        "call_id": {
+          "type": "string"
+        },
+        "caller": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ToolCallCaller"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "input": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": "string"
+        },
+        "type": {
+          "enum": ["custom_tool_call"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "call_id", "name", "input"],
+      "type": "object"
+    },
+    "CustomToolCallOutput": {
+      "properties": {
+        "call_id": {
+          "type": "string"
+        },
+        "caller": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ToolCallCallerParam"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "output": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "items": {
+                "$ref": "#/$defs/FunctionAndCustomToolCallOutput"
+              },
+              "type": "array"
+            }
+          ]
+        },
+        "type": {
+          "enum": ["custom_tool_call_output"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "call_id", "output"],
+      "type": "object"
+    },
+    "CustomToolParam": {
+      "properties": {
+        "allowed_callers": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/CallableToolAllowedCaller"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "async": {
+          "type": "boolean"
+        },
+        "defer_loading": {
+          "type": "boolean"
+        },
+        "description": {
+          "type": "string"
+        },
+        "format": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CustomTextFormatParam"
+            },
+            {
+              "$ref": "#/$defs/CustomGrammarFormatParam"
+            }
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "enum": ["custom"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "name"],
+      "type": "object"
+    },
+    "CyberAccessProgramEnum": {
+      "enum": ["standard", "daybreak_blue", "daybreak_red"],
+      "type": "string"
+    },
+    "DetailEnum": {
+      "enum": ["low", "high", "auto", "original"],
+      "type": "string"
+    },
+    "DirectToolCallCaller": {
+      "properties": {
+        "type": {
+          "enum": ["direct"],
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "DirectToolCallCallerParam": {
+      "properties": {
+        "type": {
+          "enum": ["direct"],
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "DoubleClickAction": {
+      "properties": {
+        "keys": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "enum": ["double_click"],
+          "type": "string"
+        },
+        "x": {
+          "type": "integer"
+        },
+        "y": {
+          "type": "integer"
+        }
+      },
+      "required": ["type", "x", "y", "keys"],
+      "type": "object"
+    },
+    "DragParam": {
+      "properties": {
+        "keys": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "path": {
+          "items": {
+            "$ref": "#/$defs/CoordParam"
+          },
+          "type": "array"
+        },
+        "type": {
+          "enum": ["drag"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "path"],
+      "type": "object"
+    },
+    "EasyInputMessage": {
+      "properties": {
+        "content": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/InputMessageContentList"
+            }
+          ]
+        },
+        "phase": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MessagePhase"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "role": {
+          "enum": ["user", "assistant", "system", "developer"],
+          "type": "string"
+        },
+        "type": {
+          "enum": ["message"],
+          "type": "string"
+        }
+      },
+      "required": ["role", "content"],
+      "type": "object"
+    },
+    "EmptyModelParam": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    },
+    "FileCitationBody": {
+      "properties": {
+        "file_id": {
+          "type": "string"
+        },
+        "filename": {
+          "type": "string"
+        },
+        "index": {
+          "type": "integer"
+        },
+        "type": {
+          "enum": ["file_citation"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "file_id", "index", "filename"],
+      "type": "object"
+    },
+    "FileDetailEnum": {
+      "enum": ["auto", "low", "high"],
+      "type": "string"
+    },
+    "FileInputDetail": {
+      "enum": ["auto", "low", "high"],
+      "type": "string"
+    },
+    "FilePath": {
+      "properties": {
+        "file_id": {
+          "type": "string"
+        },
+        "index": {
+          "type": "integer"
+        },
+        "type": {
+          "enum": ["file_path"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "file_id", "index"],
+      "type": "object"
+    },
+    "FileSearchTool": {
+      "properties": {
+        "filters": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Filters"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "max_num_results": {
+          "type": "integer"
+        },
+        "ranking_options": {
+          "$ref": "#/$defs/RankingOptions"
+        },
+        "type": {
+          "enum": ["file_search"],
+          "type": "string"
+        },
+        "vector_store_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": ["type", "vector_store_ids"],
+      "type": "object"
+    },
+    "FileSearchToolCall": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "queries": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "results": {
+          "anyOf": [
+            {
+              "items": {
+                "properties": {
+                  "attributes": {
+                    "$ref": "#/$defs/VectorStoreFileAttributes"
+                  },
+                  "file_id": {
+                    "type": "string"
+                  },
+                  "filename": {
+                    "type": "string"
+                  },
+                  "score": {
+                    "format": "float",
+                    "type": "number"
+                  },
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "enum": [
+            "in_progress",
+            "searching",
+            "completed",
+            "incomplete",
+            "failed"
+          ],
+          "type": "string"
+        },
+        "type": {
+          "enum": ["file_search_call"],
+          "type": "string"
+        }
+      },
+      "required": ["id", "type", "status", "queries"],
+      "type": "object"
+    },
+    "Filters": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ComparisonFilter"
+        },
+        {
+          "$ref": "#/$defs/CompoundFilter"
+        }
+      ]
+    },
+    "FunctionAndCustomToolCallOutput": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/InputTextContent"
+        },
+        {
+          "$ref": "#/$defs/InputImageContent"
+        },
+        {
+          "$ref": "#/$defs/InputFileContent"
+        }
+      ]
+    },
+    "FunctionCallItemStatus": {
+      "enum": ["in_progress", "completed", "incomplete"],
+      "type": "string"
+    },
+    "FunctionCallOutputItemParam": {
+      "properties": {
+        "call_id": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "caller": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ToolCallCallerParam"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "namespace": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9_-]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "output": {
+          "anyOf": [
+            {
+              "maxLength": 10485760,
+              "type": "string"
+            },
+            {
+              "items": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/InputTextContentParam"
+                  },
+                  {
+                    "$ref": "#/$defs/InputImageContentParamAutoParam"
+                  },
+                  {
+                    "$ref": "#/$defs/InputFileContentParam"
+                  }
+                ]
+              },
+              "type": "array"
+            }
+          ]
+        },
+        "status": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FunctionCallItemStatus"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "enum": ["function_call_output"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "output"],
+      "type": "object"
+    },
+    "FunctionShellActionParam": {
+      "properties": {
+        "commands": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "max_output_length": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "timeout_ms": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": ["commands"],
+      "type": "object"
+    },
+    "FunctionShellCallItemParam": {
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/FunctionShellActionParam"
+        },
+        "call_id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        "caller": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ToolCallCallerParam"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "environment": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/LocalEnvironmentParam"
+                },
+                {
+                  "$ref": "#/$defs/ContainerReferenceParam"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FunctionShellCallItemStatus"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "enum": ["shell_call"],
+          "type": "string"
+        }
+      },
+      "required": ["call_id", "type", "action"],
+      "type": "object"
+    },
+    "FunctionShellCallItemStatus": {
+      "enum": ["in_progress", "completed", "incomplete"],
+      "type": "string"
+    },
+    "FunctionShellCallOutputContentParam": {
+      "properties": {
+        "outcome": {
+          "$ref": "#/$defs/FunctionShellCallOutputOutcomeParam"
+        },
+        "stderr": {
+          "maxLength": 10485760,
+          "type": "string"
+        },
+        "stdout": {
+          "maxLength": 10485760,
+          "type": "string"
+        }
+      },
+      "required": ["stdout", "stderr", "outcome"],
+      "type": "object"
+    },
+    "FunctionShellCallOutputExitOutcomeParam": {
+      "properties": {
+        "exit_code": {
+          "type": "integer"
+        },
+        "type": {
+          "enum": ["exit"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "exit_code"],
+      "type": "object"
+    },
+    "FunctionShellCallOutputItemParam": {
+      "properties": {
+        "call_id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        "caller": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ToolCallCallerParam"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "max_output_length": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "output": {
+          "items": {
+            "$ref": "#/$defs/FunctionShellCallOutputContentParam"
+          },
+          "type": "array"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FunctionShellCallItemStatus"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "enum": ["shell_call_output"],
+          "type": "string"
+        }
+      },
+      "required": ["call_id", "type", "output"],
+      "type": "object"
+    },
+    "FunctionShellCallOutputOutcomeParam": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FunctionShellCallOutputTimeoutOutcomeParam"
+        },
+        {
+          "$ref": "#/$defs/FunctionShellCallOutputExitOutcomeParam"
+        }
+      ]
+    },
+    "FunctionShellCallOutputTimeoutOutcomeParam": {
+      "properties": {
+        "type": {
+          "enum": ["timeout"],
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "FunctionShellToolParam": {
+      "properties": {
+        "allowed_callers": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/CallableToolAllowedCaller"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "environment": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ContainerAutoParam"
+                },
+                {
+                  "$ref": "#/$defs/LocalEnvironmentParam"
+                },
+                {
+                  "$ref": "#/$defs/ContainerReferenceParam"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "enum": ["shell"],
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "FunctionTool": {
+      "properties": {
+        "allowed_callers": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/CallableToolAllowedCaller"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "async": {
+          "type": "boolean"
+        },
+        "defer_loading": {
+          "type": "boolean"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "output_schema": {
+          "anyOf": [
+            {
+              "additionalProperties": {},
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "parameters": {
+          "anyOf": [
+            {
+              "additionalProperties": {},
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "strict": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "enum": ["function"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "name", "strict", "parameters"],
+      "type": "object"
+    },
+    "FunctionToolCall": {
+      "properties": {
+        "arguments": {
+          "type": "string"
+        },
+        "async": {
+          "type": "boolean"
+        },
+        "call_id": {
+          "type": "string"
+        },
+        "caller": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ToolCallCaller"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": "string"
+        },
+        "status": {
+          "enum": ["in_progress", "completed", "incomplete"],
+          "type": "string"
+        },
+        "type": {
+          "enum": ["function_call"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "call_id", "name", "arguments"],
+      "type": "object"
+    },
+    "FunctionToolParam": {
+      "properties": {
+        "allowed_callers": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/CallableToolAllowedCaller"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "async": {
+          "type": "boolean"
+        },
+        "defer_loading": {
+          "type": "boolean"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_-]+$",
+          "type": "string"
+        },
+        "output_schema": {
+          "anyOf": [
+            {
+              "additionalProperties": {},
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "parameters": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EmptyModelParam"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "strict": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "enum": ["function"],
+          "type": "string"
+        }
+      },
+      "required": ["name", "type"],
+      "type": "object"
+    },
+    "GrammarSyntax1": {
+      "enum": ["lark", "regex"],
+      "type": "string"
+    },
+    "HTTPError": {
+      "properties": {
+        "code": {
+          "type": "integer"
+        },
+        "message": {
+          "type": "string"
+        },
+        "type": {
+          "enum": ["http_error"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "code", "message"],
+      "type": "object"
+    },
+    "HybridSearchOptions": {
+      "properties": {
+        "embedding_weight": {
+          "type": "number"
+        },
+        "text_weight": {
+          "type": "number"
+        }
+      },
+      "required": ["embedding_weight", "text_weight"],
+      "type": "object"
+    },
+    "ImageBackground": {
+      "enum": ["transparent", "opaque", "auto"],
+      "type": "string"
+    },
+    "ImageDetail": {
+      "enum": ["low", "high", "auto", "original"],
+      "type": "string"
+    },
+    "ImageGenActionEnum": {
+      "enum": ["generate", "edit", "auto"],
+      "type": "string"
+    },
+    "ImageGenTool": {
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/ImageGenActionEnum"
+        },
+        "background": {
+          "enum": ["transparent", "opaque", "auto"],
+          "type": "string"
+        },
+        "input_fidelity": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InputFidelity"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "input_image_mask": {
+          "additionalProperties": false,
+          "properties": {
+            "file_id": {
+              "type": "string"
+            },
+            "image_url": {
+              "type": "string"
+            }
+          },
+          "required": [],
+          "type": "object"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "enum": [
+                "gpt-image-1",
+                "gpt-image-1-mini",
+                "gpt-image-1.5",
+                "gpt-image-2",
+                "gpt-image-2-2026-04-21",
+                "gpt-image-2.5-sunburst",
+                "gpt-image-2.5-sunburst-2026-09-08",
+                "gpt-image-2.5-flare",
+                "gpt-image-2.5-flare-2026-09-08"
+              ],
+              "type": "string"
+            }
+          ]
+        },
+        "moderation": {
+          "enum": ["auto", "low"],
+          "type": "string"
+        },
+        "output_compression": {
+          "maximum": 100,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "output_format": {
+          "enum": ["png", "webp", "jpeg"],
+          "type": "string"
+        },
+        "partial_images": {
+          "maximum": 3,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "quality": {
+          "enum": ["low", "medium", "high", "xhigh", "max", "auto"],
+          "type": "string"
+        },
+        "size": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "enum": ["1024x1024", "1024x1536", "1536x1024", "auto"],
+              "type": "string"
+            }
+          ]
+        },
+        "type": {
+          "enum": ["image_generation"],
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "ImageGenToolCall": {
+      "properties": {
+        "action": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ImageGenActionEnum"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "background": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ImageBackground"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "output_format": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ImageOutputFormat"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "quality": {
+          "anyOf": [
+            {
+              "enum": ["low", "medium", "high", "xhigh", "max", "auto"],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "result": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "revised_prompt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "size": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "enum": ["1024x1024", "1024x1536", "1536x1024"],
+                  "type": "string"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "enum": ["in_progress", "completed", "generating", "failed"],
+          "type": "string"
+        },
+        "type": {
+          "enum": ["image_generation_call"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "id", "status", "result"],
+      "type": "object"
+    },
+    "ImageOutputFormat": {
+      "enum": ["png", "webp", "jpeg"],
+      "type": "string"
+    },
+    "IncludeEnum": {
+      "enum": [
+        "file_search_call.results",
+        "web_search_call.results",
+        "web_search_call.action.sources",
+        "message.input_image.image_url",
+        "computer_call_output.output.image_url",
+        "code_interpreter_call.outputs",
+        "reasoning.encrypted_content",
+        "message.output_text.logprobs"
+      ],
+      "type": "string"
+    },
+    "InlineSkillParam": {
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/InlineSkillSourceParam"
+        },
+        "type": {
+          "enum": ["inline"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "name", "description", "source"],
+      "type": "object"
+    },
+    "InlineSkillSourceParam": {
+      "properties": {
+        "data": {
+          "maxLength": 70254592,
+          "minLength": 1,
+          "type": "string"
+        },
+        "media_type": {
+          "enum": ["application/zip"],
+          "type": "string"
+        },
+        "type": {
+          "enum": ["base64"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "media_type", "data"],
+      "type": "object"
+    },
+    "InputContent": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/InputTextContent"
+        },
+        {
+          "$ref": "#/$defs/InputImageContent"
+        },
+        {
+          "$ref": "#/$defs/InputFileContent"
+        }
+      ]
+    },
+    "InputFidelity": {
+      "enum": ["high", "low"],
+      "type": "string"
+    },
+    "InputFileContent": {
+      "properties": {
+        "detail": {
+          "$ref": "#/$defs/FileInputDetail"
+        },
+        "file_data": {
+          "type": "string"
+        },
+        "file_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "file_url": {
+          "format": "uri",
+          "type": "string"
+        },
+        "filename": {
+          "type": "string"
+        },
+        "prompt_cache_breakpoint": {
+          "$ref": "#/$defs/PromptCacheBreakpointConfig"
+        },
+        "type": {
+          "enum": ["input_file"],
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "InputFileContentParam": {
+      "properties": {
+        "detail": {
+          "$ref": "#/$defs/FileDetailEnum"
+        },
+        "file_data": {
+          "anyOf": [
+            {
+              "maxLength": 73400320,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "file_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "file_url": {
+          "anyOf": [
+            {
+              "format": "uri",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "filename": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "prompt_cache_breakpoint": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PromptCacheBreakpointParam"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "enum": ["input_file"],
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "InputImageContent": {
+      "properties": {
+        "detail": {
+          "$ref": "#/$defs/ImageDetail"
+        },
+        "file_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "image_url": {
+          "anyOf": [
+            {
+              "format": "uri",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "prompt_cache_breakpoint": {
+          "$ref": "#/$defs/PromptCacheBreakpointConfig"
+        },
+        "type": {
+          "enum": ["input_image"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "detail"],
+      "type": "object"
+    },
+    "InputImageContentParamAutoParam": {
+      "properties": {
+        "detail": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DetailEnum"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "file_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "image_url": {
+          "anyOf": [
+            {
+              "format": "uri",
+              "maxLength": 20971520,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "prompt_cache_breakpoint": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PromptCacheBreakpointParam"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "enum": ["input_image"],
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "InputItem": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/EasyInputMessage"
+        },
+        {
+          "$ref": "#/$defs/Item",
+          "type": "object"
+        },
+        {
+          "$ref": "#/$defs/CompactionTriggerItemParam"
+        },
+        {
+          "$ref": "#/$defs/ItemReferenceParam"
+        },
+        {
+          "$ref": "#/$defs/ProgramItemParam"
+        },
+        {
+          "$ref": "#/$defs/ProgramOutputItemParam"
+        }
+      ]
+    },
+    "InputMessage": {
+      "properties": {
+        "content": {
+          "$ref": "#/$defs/InputMessageContentList"
+        },
+        "role": {
+          "enum": ["user", "system", "developer"],
+          "type": "string"
+        },
+        "status": {
+          "enum": ["in_progress", "completed", "incomplete"],
+          "type": "string"
+        },
+        "type": {
+          "enum": ["message"],
+          "type": "string"
+        }
+      },
+      "required": ["role", "content"],
+      "type": "object"
+    },
+    "InputMessageContentList": {
+      "items": {
+        "$ref": "#/$defs/InputContent"
+      },
+      "type": "array"
+    },
+    "InputParam": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "items": {
+            "$ref": "#/$defs/InputItem"
+          },
+          "type": "array"
+        }
+      ]
+    },
+    "InputTextContent": {
+      "properties": {
+        "prompt_cache_breakpoint": {
+          "$ref": "#/$defs/PromptCacheBreakpointConfig"
+        },
+        "text": {
+          "type": "string"
+        },
+        "type": {
+          "enum": ["input_text"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "text"],
+      "type": "object"
+    },
+    "InputTextContentParam": {
+      "properties": {
+        "prompt_cache_breakpoint": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PromptCacheBreakpointParam"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "text": {
+          "maxLength": 10485760,
+          "type": "string"
+        },
+        "type": {
+          "enum": ["input_text"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "text"],
+      "type": "object"
+    },
+    "Item": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/InputMessage"
+        },
+        {
+          "$ref": "#/$defs/OutputMessage"
+        },
+        {
+          "$ref": "#/$defs/FileSearchToolCall"
+        },
+        {
+          "$ref": "#/$defs/ComputerToolCall"
+        },
+        {
+          "$ref": "#/$defs/ComputerCallOutputItemParam"
+        },
+        {
+          "$ref": "#/$defs/WebSearchToolCall"
+        },
+        {
+          "$ref": "#/$defs/FunctionToolCall"
+        },
+        {
+          "$ref": "#/$defs/FunctionCallOutputItemParam"
+        },
+        {
+          "$ref": "#/$defs/ToolSearchCallItemParam"
+        },
+        {
+          "$ref": "#/$defs/ToolSearchOutputItemParam"
+        },
+        {
+          "$ref": "#/$defs/AdditionalToolsItemParam"
+        },
+        {
+          "$ref": "#/$defs/ResponseConfigurationUpdateItemParam"
+        },
+        {
+          "$ref": "#/$defs/ReasoningItem"
+        },
+        {
+          "$ref": "#/$defs/CompactionSummaryItemParam"
+        },
+        {
+          "$ref": "#/$defs/ImageGenToolCall"
+        },
+        {
+          "$ref": "#/$defs/CodeInterpreterToolCall"
+        },
+        {
+          "$ref": "#/$defs/LocalShellToolCall"
+        },
+        {
+          "$ref": "#/$defs/LocalShellToolCallOutput"
+        },
+        {
+          "$ref": "#/$defs/FunctionShellCallItemParam"
+        },
+        {
+          "$ref": "#/$defs/FunctionShellCallOutputItemParam"
+        },
+        {
+          "$ref": "#/$defs/ApplyPatchToolCallItemParam"
+        },
+        {
+          "$ref": "#/$defs/ApplyPatchToolCallOutputItemParam"
+        },
+        {
+          "$ref": "#/$defs/MCPListTools"
+        },
+        {
+          "$ref": "#/$defs/MCPApprovalRequest"
+        },
+        {
+          "$ref": "#/$defs/MCPApprovalResponse"
+        },
+        {
+          "$ref": "#/$defs/MCPToolCall"
+        },
+        {
+          "$ref": "#/$defs/CustomToolCallOutput"
+        },
+        {
+          "$ref": "#/$defs/CustomToolCall"
+        }
+      ],
+      "type": "object"
+    },
+    "ItemReferenceParam": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "type": {
+          "anyOf": [
+            {
+              "enum": ["item_reference"],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": ["id"],
+      "type": "object"
+    },
+    "KeyPressAction": {
+      "properties": {
+        "keys": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "type": {
+          "enum": ["keypress"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "keys"],
+      "type": "object"
+    },
+    "LocalEnvironmentParam": {
+      "properties": {
+        "skills": {
+          "items": {
+            "$ref": "#/$defs/LocalSkillParam"
+          },
+          "maxItems": 200,
+          "type": "array"
+        },
+        "type": {
+          "enum": ["local"],
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "LocalShellExecAction": {
+      "properties": {
+        "command": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "env": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "timeout_ms": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "enum": ["exec"],
+          "type": "string"
+        },
+        "user": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "working_directory": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": ["type", "command", "env"],
+      "type": "object"
+    },
+    "LocalShellToolCall": {
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/LocalShellExecAction"
+        },
+        "call_id": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "status": {
+          "enum": ["in_progress", "completed", "incomplete"],
+          "type": "string"
+        },
+        "type": {
+          "enum": ["local_shell_call"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "id", "call_id", "action", "status"],
+      "type": "object"
+    },
+    "LocalShellToolCallOutput": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "output": {
+          "type": "string"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "enum": ["in_progress", "completed", "incomplete"],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "enum": ["local_shell_call_output"],
+          "type": "string"
+        }
+      },
+      "required": ["id", "type", "call_id", "output"],
+      "type": "object"
+    },
+    "LocalShellToolParam": {
+      "properties": {
+        "type": {
+          "enum": ["local_shell"],
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "LocalSkillParam": {
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": ["name", "description", "path"],
+      "type": "object"
+    },
+    "LogProb": {
+      "properties": {
+        "bytes": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "logprob": {
+          "type": "number"
+        },
+        "token": {
+          "type": "string"
+        },
+        "top_logprobs": {
+          "items": {
+            "$ref": "#/$defs/TopLogProb"
+          },
+          "type": "array"
+        }
+      },
+      "required": ["token", "logprob", "bytes", "top_logprobs"],
+      "type": "object"
+    },
+    "MCPApprovalRequest": {
+      "properties": {
+        "arguments": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "server_label": {
+          "type": "string"
+        },
+        "type": {
+          "enum": ["mcp_approval_request"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "id", "server_label", "name", "arguments"],
+      "type": "object"
+    },
+    "MCPApprovalResponse": {
+      "properties": {
+        "approval_request_id": {
+          "type": "string"
+        },
+        "approve": {
+          "type": "boolean"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "enum": ["mcp_approval_response"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "request_id", "approve", "approval_request_id"],
+      "type": "object"
+    },
+    "MCPListTools": {
+      "properties": {
+        "error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "server_label": {
+          "type": "string"
+        },
+        "tools": {
+          "items": {
+            "$ref": "#/$defs/MCPListToolsTool"
+          },
+          "type": "array"
+        },
+        "type": {
+          "enum": ["mcp_list_tools"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "id", "server_label", "tools"],
+      "type": "object"
+    },
+    "MCPListToolsTool": {
+      "properties": {
+        "annotations": {
+          "anyOf": [
+            {
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "input_schema": {
+          "type": "object"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": ["name", "input_schema"],
+      "type": "object"
+    },
+    "MCPProtocolError": {
+      "properties": {
+        "code": {
+          "type": "integer"
+        },
+        "message": {
+          "type": "string"
+        },
+        "type": {
+          "enum": ["mcp_protocol_error"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "code", "message"],
+      "type": "object"
+    },
+    "MCPTool": {
+      "properties": {
+        "allowed_callers": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/CallableToolAllowedCaller"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "allowed_tools": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "$ref": "#/$defs/MCPToolFilter"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "authorization": {
+          "type": "string"
+        },
+        "connector_id": {
+          "enum": [
+            "connector_dropbox",
+            "connector_gmail",
+            "connector_googlecalendar",
+            "connector_googledrive",
+            "connector_microsoftteams",
+            "connector_outlookcalendar",
+            "connector_outlookemail",
+            "connector_sharepoint"
+          ],
+          "type": "string"
+        },
+        "defer_loading": {
+          "type": "boolean"
+        },
+        "headers": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "require_approval": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "always": {
+                      "$ref": "#/$defs/MCPToolFilter"
+                    },
+                    "never": {
+                      "$ref": "#/$defs/MCPToolFilter"
+                    }
+                  },
+                  "type": "object"
+                },
+                {
+                  "enum": ["always", "never"],
+                  "type": "string"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "server_description": {
+          "type": "string"
+        },
+        "server_label": {
+          "type": "string"
+        },
+        "server_url": {
+          "format": "uri",
+          "type": "string"
+        },
+        "tunnel_id": {
+          "pattern": "^tunnel_[a-z0-9]{32}$",
+          "type": "string"
+        },
+        "type": {
+          "enum": ["mcp"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "server_label"],
+      "type": "object"
+    },
+    "MCPToolCall": {
+      "properties": {
+        "approval_request_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "arguments": {
+          "type": "string"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MCPToolCallError"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "output": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "server_label": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/MCPToolCallStatus"
+        },
+        "type": {
+          "enum": ["mcp_call"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "id", "server_label", "name", "arguments"],
+      "type": "object"
+    },
+    "MCPToolCallError": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MCPProtocolError"
+        },
+        {
+          "$ref": "#/$defs/MCPToolExecutionError"
+        },
+        {
+          "$ref": "#/$defs/HTTPError"
+        }
+      ]
+    },
+    "MCPToolCallStatus": {
+      "enum": ["in_progress", "completed", "incomplete", "calling", "failed"],
+      "type": "string"
+    },
+    "MCPToolExecutionError": {
+      "properties": {
+        "content": {},
+        "type": {
+          "enum": ["mcp_tool_execution_error"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "content"],
+      "type": "object"
+    },
+    "MCPToolFilter": {
+      "additionalProperties": false,
+      "properties": {
+        "read_only": {
+          "type": "boolean"
+        },
+        "tool_names": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "MessagePhase": {
+      "enum": ["commentary", "final_answer"],
+      "type": "string"
+    },
+    "Metadata": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "ModelIdsResponses": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ModelIdsShared"
+        },
+        {
+          "enum": [
+            "o1-pro",
+            "o1-pro-2025-03-19",
+            "o3-pro",
+            "o3-pro-2025-06-10",
+            "o3-deep-research",
+            "o3-deep-research-2025-06-26",
+            "o4-mini-deep-research",
+            "o4-mini-deep-research-2025-06-26",
+            "computer-use-preview",
+            "computer-use-preview-2025-03-11",
+            "gpt-5.5-pro",
+            "gpt-5.5-pro-2026-04-23",
+            "gpt-5-codex",
+            "gpt-5-pro",
+            "gpt-5-pro-2025-10-06",
+            "gpt-5.1-codex-max",
+            "gpt-daybreak-blue-latest",
+            "gpt-daybreak-red-latest",
+            "gpt-5.6-cyber",
+            "gpt-rosalind-research"
+          ],
+          "type": "string"
+        }
+      ]
+    },
+    "ModelIdsShared": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "enum": [
+            "gpt-6-astra",
+            "gpt-6.1-sol",
+            "gpt-6-sol",
+            "gpt-6-luna",
+            "gpt-5.6-sol",
+            "gpt-5.6-terra",
+            "gpt-5.6-luna",
+            "gpt-5.5",
+            "gpt-5.5-2026-04-23",
+            "gpt-5.4",
+            "gpt-5.4-mini",
+            "gpt-5.4-nano",
+            "gpt-5.4-mini-2026-03-17",
+            "gpt-5.4-nano-2026-03-17",
+            "gpt-5.3-chat-latest",
+            "gpt-5.2",
+            "gpt-5.2-2025-12-11",
+            "gpt-5.2-chat-latest",
+            "gpt-5.2-pro",
+            "gpt-5.2-pro-2025-12-11",
+            "gpt-5.1",
+            "gpt-5.1-2025-11-13",
+            "gpt-5.1-codex",
+            "gpt-5.1-mini",
+            "gpt-5.1-chat-latest",
+            "gpt-5",
+            "gpt-5-mini",
+            "gpt-5-nano",
+            "gpt-5-2025-08-07",
+            "gpt-5-mini-2025-08-07",
+            "gpt-5-nano-2025-08-07",
+            "gpt-5-chat-latest",
+            "gpt-4.1",
+            "gpt-4.1-mini",
+            "gpt-4.1-nano",
+            "gpt-4.1-2025-04-14",
+            "gpt-4.1-mini-2025-04-14",
+            "gpt-4.1-nano-2025-04-14",
+            "o4-mini",
+            "o4-mini-2025-04-16",
+            "o3",
+            "o3-2025-04-16",
+            "o3-mini",
+            "o3-mini-2025-01-31",
+            "o1",
+            "o1-2024-12-17",
+            "o1-preview",
+            "o1-preview-2024-09-12",
+            "o1-mini",
+            "o1-mini-2024-09-12",
+            "gpt-4o",
+            "gpt-4o-2024-11-20",
+            "gpt-4o-2024-08-06",
+            "gpt-4o-2024-05-13",
+            "gpt-audio-mini",
+            "gpt-audio-mini-2025-12-15",
+            "gpt-4o-audio-preview",
+            "gpt-4o-audio-preview-2024-10-01",
+            "gpt-4o-audio-preview-2024-12-17",
+            "gpt-4o-audio-preview-2025-06-03",
+            "gpt-4o-mini-audio-preview",
+            "gpt-4o-mini-audio-preview-2024-12-17",
+            "gpt-4o-search-preview",
+            "gpt-4o-mini-search-preview",
+            "gpt-4o-search-preview-2025-03-11",
+            "gpt-4o-mini-search-preview-2025-03-11",
+            "chatgpt-4o-latest",
+            "codex-mini-latest",
+            "gpt-4o-mini",
+            "gpt-4o-mini-2024-07-18",
+            "gpt-4-turbo",
+            "gpt-4-turbo-2024-04-09",
+            "gpt-4-0125-preview",
+            "gpt-4-turbo-preview",
+            "gpt-4-1106-preview",
+            "gpt-4-vision-preview",
+            "gpt-4",
+            "gpt-4-0314",
+            "gpt-4-0613",
+            "gpt-4-32k",
+            "gpt-4-32k-0314",
+            "gpt-4-32k-0613",
+            "gpt-3.5-turbo",
+            "gpt-3.5-turbo-16k",
+            "gpt-3.5-turbo-0301",
+            "gpt-3.5-turbo-0613",
+            "gpt-3.5-turbo-1106",
+            "gpt-3.5-turbo-0125",
+            "gpt-3.5-turbo-16k-0613"
+          ],
+          "type": "string"
+        }
+      ]
+    },
+    "ModelResponseProperties": {
+      "properties": {
+        "metadata": {
+          "$ref": "#/$defs/Metadata"
+        },
+        "prompt_cache_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "prompt_cache_retention": {
+          "anyOf": [
+            {
+              "enum": ["in_memory", "24h"],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "safety_identifier": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "temperature": {
+          "anyOf": [
+            {
+              "maximum": 2,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "top_logprobs": {
+          "anyOf": [
+            {
+              "maximum": 20,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "top_p": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "user": {
+          "type": ["string", "null"]
+        }
+      },
+      "type": "object"
+    },
+    "ModerationConfigParam": {
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/ModerationMode"
+        }
+      },
+      "required": ["mode"],
+      "type": "object"
+    },
+    "ModerationMode": {
+      "enum": ["score", "block"],
+      "type": "string"
+    },
+    "ModerationParam": {
+      "properties": {
+        "model": {
+          "type": "string"
+        },
+        "policy": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModerationPolicyParam"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": ["model"],
+      "type": "object"
+    },
+    "ModerationPolicyParam": {
+      "properties": {
+        "input": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModerationConfigParam"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "output": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModerationConfigParam"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "MoveParam": {
+      "properties": {
+        "keys": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "enum": ["move"],
+          "type": "string"
+        },
+        "x": {
+          "type": "integer"
+        },
+        "y": {
+          "type": "integer"
+        }
+      },
+      "required": ["type", "x", "y"],
+      "type": "object"
+    },
+    "NamespaceToolParam": {
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "tools": {
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/FunctionToolParam"
+              },
+              {
+                "$ref": "#/$defs/CustomToolParam"
+              }
+            ]
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "type": {
+          "enum": ["namespace"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "name", "description", "tools"],
+      "type": "object"
+    },
+    "OutputMessage": {
+      "properties": {
+        "content": {
+          "items": {
+            "$ref": "#/$defs/OutputMessageContent"
+          },
+          "type": "array"
+        },
+        "id": {
+          "type": "string"
+        },
+        "phase": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MessagePhase"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "role": {
+          "enum": ["assistant"],
+          "type": "string"
+        },
+        "status": {
+          "enum": ["in_progress", "completed", "incomplete"],
+          "type": "string"
+        },
+        "type": {
+          "enum": ["message"],
+          "type": "string"
+        }
+      },
+      "required": ["id", "type", "role", "content", "status"],
+      "type": "object"
+    },
+    "OutputMessageContent": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/OutputTextContent"
+        },
+        {
+          "$ref": "#/$defs/RefusalContent"
+        }
+      ]
+    },
+    "OutputTextContent": {
+      "properties": {
+        "annotations": {
+          "items": {
+            "$ref": "#/$defs/Annotation"
+          },
+          "type": "array"
+        },
+        "logprobs": {
+          "items": {
+            "$ref": "#/$defs/LogProb"
+          },
+          "type": "array"
+        },
+        "text": {
+          "type": "string"
+        },
+        "type": {
+          "enum": ["output_text"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "text", "annotations", "logprobs"],
+      "type": "object"
+    },
+    "ProgramItemParam": {
+      "properties": {
+        "call_id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        "code": {
+          "maxLength": 10485760,
+          "type": "string"
+        },
+        "fingerprint": {
+          "maxLength": 10485760,
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "type": {
+          "enum": ["program"],
+          "type": "string"
+        }
+      },
+      "required": ["id", "type", "call_id", "code", "fingerprint"],
+      "type": "object"
+    },
+    "ProgramOutputItemParam": {
+      "properties": {
+        "call_id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "result": {
+          "maxLength": 10485760,
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/ProgramOutputItemStatus"
+        },
+        "type": {
+          "enum": ["program_output"],
+          "type": "string"
+        }
+      },
+      "required": ["id", "type", "call_id", "result", "status"],
+      "type": "object"
+    },
+    "ProgramOutputItemStatus": {
+      "enum": ["completed", "incomplete"],
+      "type": "string"
+    },
+    "ProgramToolCallCaller": {
+      "properties": {
+        "caller_id": {
+          "type": "string"
+        },
+        "type": {
+          "enum": ["program"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "caller_id"],
+      "type": "object"
+    },
+    "ProgramToolCallCallerParam": {
+      "properties": {
+        "caller_id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        "type": {
+          "enum": ["program"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "caller_id"],
+      "type": "object"
+    },
+    "ProgrammaticToolCallingParam": {
+      "properties": {
+        "type": {
+          "enum": ["programmatic_tool_calling"],
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "Prompt": {
+      "anyOf": [
+        {
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "variables": {
+              "$ref": "#/$defs/ResponsePromptVariables"
+            },
+            "version": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": ["id"],
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "PromptCacheBreakpointConfig": {
+      "properties": {
+        "mode": {
+          "enum": ["explicit"],
+          "type": "string"
+        }
+      },
+      "required": ["mode"],
+      "type": "object"
+    },
+    "PromptCacheBreakpointParam": {
+      "properties": {
+        "mode": {
+          "enum": ["explicit"],
+          "type": "string"
+        }
+      },
+      "required": ["mode"],
+      "type": "object"
+    },
+    "PromptCacheModeEnum": {
+      "enum": ["implicit", "explicit"],
+      "type": "string"
+    },
+    "PromptCacheOptionsParam": {
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/PromptCacheModeEnum"
+        },
+        "ttl": {
+          "$ref": "#/$defs/PromptCacheTTLEnum"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "PromptCacheTTLEnum": {
+      "enum": ["30m"],
+      "type": "string"
+    },
+    "RankerVersionType": {
+      "enum": ["auto", "default-2024-11-15"],
+      "type": "string"
+    },
+    "RankingOptions": {
+      "properties": {
+        "hybrid_search": {
+          "$ref": "#/$defs/HybridSearchOptions"
+        },
+        "ranker": {
+          "$ref": "#/$defs/RankerVersionType"
+        },
+        "score_threshold": {
+          "type": "number"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "Reasoning": {
+      "properties": {
+        "context": {
+          "anyOf": [
+            {
+              "enum": ["auto", "current_turn", "all_turns"],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "effort": {
+          "$ref": "#/$defs/ReasoningEffort"
+        },
+        "generate_summary": {
+          "anyOf": [
+            {
+              "enum": ["auto", "concise", "detailed"],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "mode": {
+          "$ref": "#/$defs/ReasoningModeEnum"
+        },
+        "summary": {
+          "anyOf": [
+            {
+              "enum": ["auto", "concise", "detailed"],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "ReasoningEffort": {
+      "anyOf": [
+        {
+          "enum": ["none", "minimal", "low", "medium", "high", "xhigh", "max"],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "ReasoningItem": {
+      "properties": {
+        "content": {
+          "items": {
+            "$ref": "#/$defs/ReasoningTextContent"
+          },
+          "type": "array"
+        },
+        "encrypted_content": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "status": {
+          "enum": ["in_progress", "completed", "incomplete"],
+          "type": "string"
+        },
+        "summary": {
+          "items": {
+            "$ref": "#/$defs/SummaryTextContent"
+          },
+          "type": "array"
+        },
+        "type": {
+          "enum": ["reasoning"],
+          "type": "string"
+        }
+      },
+      "required": ["id", "summary", "type"],
+      "type": "object"
+    },
+    "ReasoningModeEnum": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "enum": ["standard", "pro"],
+          "type": "string"
+        }
+      ]
+    },
+    "ReasoningTextContent": {
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "type": {
+          "enum": ["reasoning_text"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "text"],
+      "type": "object"
+    },
+    "RefusalContent": {
+      "properties": {
+        "refusal": {
+          "type": "string"
+        },
+        "type": {
+          "enum": ["refusal"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "refusal"],
+      "type": "object"
+    },
+    "ResponseConfigurationUpdateItemParam": {
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reasoning": {
+          "properties": {
+            "effort": {
+              "$ref": "#/$defs/ReasoningEffort"
+            }
+          },
+          "type": "object"
+        },
+        "type": {
+          "enum": ["configuration_update"],
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "ResponseFormatJsonObject": {
+      "properties": {
+        "type": {
+          "enum": ["json_object"],
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "ResponseFormatJsonSchemaSchema": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "ResponseFormatText": {
+      "properties": {
+        "type": {
+          "enum": ["text"],
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "ResponsePromptCacheOptionsParam": {
+      "properties": {
+        "comparison_response_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "mode": {
+          "$ref": "#/$defs/PromptCacheModeEnum"
+        },
+        "prewarm": {
+          "type": "boolean"
+        },
+        "ttl": {
+          "$ref": "#/$defs/PromptCacheTTLEnum"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "ResponsePromptVariables": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/InputTextContent"
+              },
+              {
+                "$ref": "#/$defs/InputImageContent"
+              },
+              {
+                "$ref": "#/$defs/InputFileContent"
+              }
+            ]
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "ResponseProperties": {
+      "properties": {
+        "background": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "max_tool_calls": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "model": {
+          "$ref": "#/$defs/ModelIdsResponses"
+        },
+        "previous_response_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "prompt": {
+          "$ref": "#/$defs/Prompt"
+        },
+        "text": {
+          "$ref": "#/$defs/ResponseTextParam"
+        },
+        "tool_choice": {
+          "$ref": "#/$defs/ToolChoiceParam"
+        },
+        "tools": {
+          "$ref": "#/$defs/ToolsArray"
+        }
+      },
+      "type": "object"
+    },
+    "ResponseStreamOptions": {
+      "anyOf": [
+        {
+          "properties": {
+            "include_obfuscation": {
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "ResponseTextParam": {
+      "properties": {
+        "format": {
+          "$ref": "#/$defs/TextResponseFormatConfiguration"
+        },
+        "verbosity": {
+          "$ref": "#/$defs/Verbosity"
+        }
+      },
+      "type": "object"
+    },
+    "ScreenshotParam": {
+      "properties": {
+        "type": {
+          "enum": ["screenshot"],
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "ScrollParam": {
+      "properties": {
+        "keys": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "scroll_x": {
+          "type": "integer"
+        },
+        "scroll_y": {
+          "type": "integer"
+        },
+        "type": {
+          "enum": ["scroll"],
+          "type": "string"
+        },
+        "x": {
+          "type": "integer"
+        },
+        "y": {
+          "type": "integer"
+        }
+      },
+      "required": ["type", "x", "y", "scroll_x", "scroll_y"],
+      "type": "object"
+    },
+    "SearchContentType": {
+      "enum": ["text", "image"],
+      "type": "string"
+    },
+    "SearchContextSize": {
+      "enum": ["low", "medium", "high"],
+      "type": "string"
+    },
+    "ServiceTierResponses": {
+      "anyOf": [
+        {
+          "enum": [
+            "auto",
+            "default",
+            "flex",
+            "scale",
+            "priority",
+            "fast",
+            "ultrafast"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "SkillReferenceParam": {
+      "properties": {
+        "skill_id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        "type": {
+          "enum": ["skill_reference"],
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": ["type", "skill_id"],
+      "type": "object"
+    },
+    "SpecificApplyPatchParam": {
+      "properties": {
+        "type": {
+          "enum": ["apply_patch"],
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "SpecificFunctionShellParam": {
+      "properties": {
+        "type": {
+          "enum": ["shell"],
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "SpecificProgrammaticToolCallingParam": {
+      "properties": {
+        "type": {
+          "enum": ["programmatic_tool_calling"],
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "SummaryTextContent": {
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "type": {
+          "enum": ["summary_text"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "text"],
+      "type": "object"
+    },
+    "TextResponseFormatConfiguration": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ResponseFormatText"
+        },
+        {
+          "$ref": "#/$defs/TextResponseFormatJsonSchema"
+        },
+        {
+          "$ref": "#/$defs/ResponseFormatJsonObject"
+        }
+      ]
+    },
+    "TextResponseFormatJsonSchema": {
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "schema": {
+          "$ref": "#/$defs/ResponseFormatJsonSchemaSchema"
+        },
+        "strict": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "enum": ["json_schema"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "schema", "name"],
+      "type": "object"
+    },
+    "Tool": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FunctionTool"
+        },
+        {
+          "$ref": "#/$defs/FileSearchTool"
+        },
+        {
+          "$ref": "#/$defs/ComputerTool"
+        },
+        {
+          "$ref": "#/$defs/ComputerUsePreviewTool"
+        },
+        {
+          "$ref": "#/$defs/WebSearchTool"
+        },
+        {
+          "$ref": "#/$defs/MCPTool"
+        },
+        {
+          "$ref": "#/$defs/CodeInterpreterTool"
+        },
+        {
+          "$ref": "#/$defs/ProgrammaticToolCallingParam"
+        },
+        {
+          "$ref": "#/$defs/ImageGenTool"
+        },
+        {
+          "$ref": "#/$defs/LocalShellToolParam"
+        },
+        {
+          "$ref": "#/$defs/FunctionShellToolParam"
+        },
+        {
+          "$ref": "#/$defs/CustomToolParam"
+        },
+        {
+          "$ref": "#/$defs/NamespaceToolParam"
+        },
+        {
+          "$ref": "#/$defs/ToolSearchToolParam"
+        },
+        {
+          "$ref": "#/$defs/WebSearchPreviewTool"
+        },
+        {
+          "$ref": "#/$defs/ApplyPatchToolParam"
+        }
+      ]
+    },
+    "ToolCallCaller": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DirectToolCallCaller"
+        },
+        {
+          "$ref": "#/$defs/ProgramToolCallCaller"
+        }
+      ]
+    },
+    "ToolCallCallerParam": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DirectToolCallCallerParam"
+        },
+        {
+          "$ref": "#/$defs/ProgramToolCallCallerParam"
+        }
+      ]
+    },
+    "ToolChoiceAllowed": {
+      "properties": {
+        "mode": {
+          "enum": ["auto", "required"],
+          "type": "string"
+        },
+        "tools": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "type": {
+          "enum": ["allowed_tools"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "mode", "tools"],
+      "type": "object"
+    },
+    "ToolChoiceCustom": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "enum": ["custom"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "name"],
+      "type": "object"
+    },
+    "ToolChoiceFunction": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "enum": ["function"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "name"],
+      "type": "object"
+    },
+    "ToolChoiceMCP": {
+      "properties": {
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "server_label": {
+          "type": "string"
+        },
+        "type": {
+          "enum": ["mcp"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "server_label"],
+      "type": "object"
+    },
+    "ToolChoiceOptions": {
+      "enum": ["none", "auto", "required"],
+      "type": "string"
+    },
+    "ToolChoiceParam": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ToolChoiceOptions"
+        },
+        {
+          "$ref": "#/$defs/ToolChoiceAllowed"
+        },
+        {
+          "$ref": "#/$defs/ToolChoiceTypes"
+        },
+        {
+          "$ref": "#/$defs/ToolChoiceFunction"
+        },
+        {
+          "$ref": "#/$defs/ToolChoiceMCP"
+        },
+        {
+          "$ref": "#/$defs/ToolChoiceCustom"
+        },
+        {
+          "$ref": "#/$defs/SpecificProgrammaticToolCallingParam"
+        },
+        {
+          "$ref": "#/$defs/SpecificApplyPatchParam"
+        },
+        {
+          "$ref": "#/$defs/SpecificFunctionShellParam"
+        }
+      ]
+    },
+    "ToolChoiceTypes": {
+      "properties": {
+        "type": {
+          "enum": [
+            "file_search",
+            "web_search_preview",
+            "computer",
+            "computer_use_preview",
+            "computer_use",
+            "web_search_preview_2025_03_11",
+            "image_generation",
+            "code_interpreter"
+          ],
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "ToolSearchCallItemParam": {
+      "properties": {
+        "arguments": {
+          "$ref": "#/$defs/EmptyModelParam"
+        },
+        "call_id": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "execution": {
+          "$ref": "#/$defs/ToolSearchExecutionType"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FunctionCallItemStatus"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "enum": ["tool_search_call"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "arguments"],
+      "type": "object"
+    },
+    "ToolSearchExecutionType": {
+      "enum": ["server", "client"],
+      "type": "string"
+    },
+    "ToolSearchOutputItemParam": {
+      "properties": {
+        "call_id": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "execution": {
+          "$ref": "#/$defs/ToolSearchExecutionType"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FunctionCallItemStatus"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tools": {
+          "items": {
+            "$ref": "#/$defs/Tool"
+          },
+          "type": "array"
+        },
+        "type": {
+          "enum": ["tool_search_output"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "tools"],
+      "type": "object"
+    },
+    "ToolSearchToolParam": {
+      "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "execution": {
+          "$ref": "#/$defs/ToolSearchExecutionType"
+        },
+        "parameters": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EmptyModelParam"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "enum": ["tool_search"],
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "ToolsArray": {
+      "items": {
+        "$ref": "#/$defs/Tool"
+      },
+      "type": "array"
+    },
+    "TopLogProb": {
+      "properties": {
+        "bytes": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "logprob": {
+          "type": "number"
+        },
+        "token": {
+          "type": "string"
+        }
+      },
+      "required": ["token", "logprob", "bytes"],
+      "type": "object"
+    },
+    "TypeParam": {
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "type": {
+          "enum": ["type"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "text"],
+      "type": "object"
+    },
+    "UrlCitationBody": {
+      "properties": {
+        "end_index": {
+          "type": "integer"
+        },
+        "start_index": {
+          "type": "integer"
+        },
+        "title": {
+          "type": "string"
+        },
+        "type": {
+          "enum": ["url_citation"],
+          "type": "string"
+        },
+        "url": {
+          "format": "uri",
+          "type": "string"
+        }
+      },
+      "required": ["type", "url", "start_index", "end_index", "title"],
+      "type": "object"
+    },
+    "VectorStoreFileAttributes": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "type": "string"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              }
+            ]
+          },
+          "maxProperties": 16,
+          "propertyNames": {
+            "maxLength": 64,
+            "type": "string"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "Verbosity": {
+      "anyOf": [
+        {
+          "enum": ["low", "medium", "high"],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "WaitParam": {
+      "properties": {
+        "type": {
+          "enum": ["wait"],
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "WebSearchActionFind": {
+      "properties": {
+        "pattern": {
+          "type": "string"
+        },
+        "type": {
+          "enum": ["find_in_page"],
+          "type": "string"
+        },
+        "url": {
+          "format": "uri",
+          "type": "string"
+        }
+      },
+      "required": ["type", "url", "pattern"],
+      "type": "object"
+    },
+    "WebSearchActionOpenPage": {
+      "properties": {
+        "type": {
+          "enum": ["open_page"],
+          "type": "string"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "format": "uri",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "WebSearchActionSearch": {
+      "properties": {
+        "queries": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "query": {
+          "type": "string"
+        },
+        "sources": {
+          "items": {
+            "properties": {
+              "type": {
+                "enum": ["url"],
+                "type": "string"
+              },
+              "url": {
+                "format": "uri",
+                "type": "string"
+              }
+            },
+            "required": ["type", "url"],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "type": {
+          "enum": ["search"],
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "WebSearchApproximateLocation": {
+      "anyOf": [
+        {
+          "properties": {
+            "city": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "country": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "region": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timezone": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": {
+              "enum": ["approximate"],
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "WebSearchCallStatus": {
+      "enum": ["in_progress", "searching", "completed", "failed", "incomplete"],
+      "type": "string"
+    },
+    "WebSearchPreviewTool": {
+      "properties": {
+        "search_content_types": {
+          "items": {
+            "$ref": "#/$defs/SearchContentType"
+          },
+          "type": "array"
+        },
+        "search_context_size": {
+          "$ref": "#/$defs/SearchContextSize"
+        },
+        "type": {
+          "enum": ["web_search_preview", "web_search_preview_2025_03_11"],
+          "type": "string"
+        },
+        "user_location": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ApproximateLocation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "WebSearchTool": {
+      "properties": {
+        "external_web_access": {
+          "type": "boolean"
+        },
+        "filters": {
+          "anyOf": [
+            {
+              "properties": {
+                "allowed_domains": {
+                  "anyOf": [
+                    {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "search_context_size": {
+          "enum": ["low", "medium", "high"],
+          "type": "string"
+        },
+        "type": {
+          "enum": ["web_search", "web_search_2025_08_26"],
+          "type": "string"
+        },
+        "user_location": {
+          "$ref": "#/$defs/WebSearchApproximateLocation"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "WebSearchToolCall": {
+      "properties": {
+        "action": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WebSearchActionSearch"
+            },
+            {
+              "$ref": "#/$defs/WebSearchActionOpenPage"
+            },
+            {
+              "$ref": "#/$defs/WebSearchActionFind"
+            }
+          ],
+          "type": "object"
+        },
+        "id": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/WebSearchCallStatus"
+        },
+        "type": {
+          "enum": ["web_search_call"],
+          "type": "string"
+        }
+      },
+      "required": ["id", "type", "status"],
+      "type": "object"
+    }
+  },
+  "$ref": "#/$defs/CreateResponse",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}
