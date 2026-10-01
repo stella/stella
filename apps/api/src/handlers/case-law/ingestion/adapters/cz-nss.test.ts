@@ -19,6 +19,11 @@ import {
   test,
 } from "bun:test";
 
+import {
+  DECISION_TEXT_ABSENCE_METADATA_KEY,
+  DECISION_TEXT_FIELD_KEYS,
+  TEXT_ABSENCE_REASONS,
+} from "@stll/api-contract/case-law-text-field";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import type { StoredRawReparseInput } from "@/api/handlers/case-law/ingestion/adapter";
@@ -37,11 +42,15 @@ import type { ParsedRow } from "@/api/handlers/case-law/ingestion/adapters/cz-ns
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { hashContent } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
+import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-policy";
 import {
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
   absentDecisionTextFields,
+  storeDecisionTextFields,
+  readDecisionTextMetadata,
 } from "@/api/lib/case-law/decision-text";
+import { toPlainText } from "@/api/lib/case-law/plain-text";
 import {
   decodeSourceRawEnvelope,
   listingIdentityKey,
@@ -1546,6 +1555,194 @@ describe("cz-nss buildDecision", () => {
       }),
     ).toBe(true);
     expect(decision.metadata).not.toHaveProperty("legalSentence");
+  });
+
+  test.each(["-", "–", "—", "−", "  --  ", "", " \n\t ", "\u00a0"])(
+    "crawl and replay retain a publisher placeholder (%j) as typed absence",
+    async (placeholder) => {
+      const decision = await crawledWithHeadnote(placeholder);
+      const expected = {
+        type: TEXT_FIELD_TYPE.ABSENT,
+        reason: TEXT_ABSENCE_REASON.PUBLISHER_PLACEHOLDER,
+      };
+      expect(decision.textFields.legalSentence).toEqual(expected);
+      const storedMetadata = storeDecisionTextFields(decision);
+      expect(storedMetadata).not.toHaveProperty("legalSentence");
+      expect(
+        readDecisionTextMetadata(storedMetadata).textFields.legalSentence,
+      ).toEqual(expected);
+
+      const reparse = czNssAdapter.reparseStoredRaw;
+      if (reparse === undefined) {
+        throw new TypeError("Expected cz-nss to implement stored-raw replay");
+      }
+      const replay = await reparse({
+        raw: new TextEncoder().encode(decision.sourceRaw ?? ""),
+        contentType: decision.sourceRawContentType ?? null,
+        metadata: { ...decision.metadata, legalSentence: HEADNOTE },
+        caseNumber: decision.caseNumber,
+        sourceDocumentId: decision.sourceDocumentId ?? null,
+        language: decision.language,
+        court: decision.court,
+        ecli: decision.ecli ?? null,
+        decisionDate: decision.decisionDate ?? null,
+        decisionType: decision.decisionType ?? null,
+        sourceUrl: decision.sourceUrl ?? null,
+        documentUrl: decision.documentUrl ?? null,
+      });
+      expect(replay.type).toBe("parsed");
+      if (replay.type !== "parsed") {
+        throw new TypeError("Expected the placeholder fixture to replay");
+      }
+      expect(replay.result.textFields.legalSentence).toEqual(expected);
+      expect(replay.result.rawHash).toBe(decision.rawHash);
+    },
+  );
+
+  test.each(DECISION_TEXT_FIELD_KEYS)(
+    "legacy replay classifies placeholders in %s without changing real text",
+    async (field) => {
+      for (const placeholder of ["-", "–", "—", "−", "", " \n\t ", "\u00a0"]) {
+        const { outcome } = await replayStored({
+          caseNumber: "1 Az 4/2026",
+          metadata: { [field]: placeholder },
+        });
+        expect(outcome.type).toBe("parsed");
+        if (outcome.type !== "parsed") {
+          throw new TypeError("Expected the placeholder fixture to replay");
+        }
+        expect(outcome.result.textFields[field]).toEqual({
+          type: TEXT_FIELD_TYPE.ABSENT,
+          reason: TEXT_ABSENCE_REASON.PUBLISHER_PLACEHOLDER,
+        });
+        expect(storeDecisionTextFields(outcome.result)).not.toHaveProperty(
+          field,
+        );
+      }
+
+      const real = await replayStored({
+        caseNumber: "1 Az 4/2026",
+        metadata: { [field]: HEADNOTE },
+      });
+      expect(real.outcome.type).toBe("parsed");
+      if (real.outcome.type !== "parsed") {
+        throw new TypeError("Expected the real-text fixture to replay");
+      }
+      expect(real.outcome.result.textFields[field]).toEqual({
+        type: TEXT_FIELD_TYPE.PRESENT,
+        text: toPlainText(HEADNOTE).unwrap(),
+      });
+    },
+  );
+
+  test.each(DECISION_TEXT_FIELD_KEYS)(
+    "replay preserves typed absence and malformed sidecars for %s",
+    async (field) => {
+      const sidecars = [
+        ...TEXT_ABSENCE_REASONS.filter(
+          (reason) => reason !== TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+        ).map((reason) => ({ value: [{ field, reason }], reason })),
+        { value: "malformed", reason: TEXT_ABSENCE_REASON.PARSE_FAILED },
+        {
+          value: [{ field, reason: "invalid" }],
+          reason: TEXT_ABSENCE_REASON.PARSE_FAILED,
+        },
+      ];
+      for (const { value, reason } of sidecars) {
+        for (const text of [HEADNOTE, "—", " \n\t "]) {
+          const metadata = {
+            [field]: text,
+            [DECISION_TEXT_ABSENCE_METADATA_KEY]: value,
+          };
+          const before = readDecisionTextMetadata(metadata).textFields[field];
+          expect(before).toEqual({ type: TEXT_FIELD_TYPE.ABSENT, reason });
+          if (before.type !== TEXT_FIELD_TYPE.ABSENT) {
+            throw new TypeError(
+              "Expected the sidecar fixture to classify absence",
+            );
+          }
+          const { outcome } = await replayStored({
+            caseNumber: "1 Az 4/2026",
+            metadata,
+          });
+          expect(outcome.type).toBe("parsed");
+          if (outcome.type !== "parsed") {
+            throw new TypeError("Expected the typed-absence fixture to replay");
+          }
+          expect(outcome.result.textFields[field]).toEqual(before);
+        }
+      }
+    },
+  );
+
+  test("captured publisher detail recovers a quarantined legacy sentence", async () => {
+    const decision = await crawledWithHeadnote(HEADNOTE);
+    const metadata = {
+      ...decision.metadata,
+      legalSentence: "Quarantined legacy text.",
+      [DECISION_TEXT_ABSENCE_METADATA_KEY]: [
+        {
+          field: "legalSentence",
+          reason: TEXT_ABSENCE_REASON.PARSE_FAILED,
+        },
+      ],
+    };
+    expect(readDecisionTextMetadata(metadata).textFields.legalSentence).toEqual(
+      {
+        type: TEXT_FIELD_TYPE.ABSENT,
+        reason: TEXT_ABSENCE_REASON.PARSE_FAILED,
+      },
+    );
+    const reparse = czNssAdapter.reparseStoredRaw;
+    if (reparse === undefined) {
+      throw new TypeError("Expected cz-nss to implement stored-raw replay");
+    }
+    const replay = await reparse({
+      raw: new TextEncoder().encode(decision.sourceRaw ?? ""),
+      contentType: decision.sourceRawContentType ?? null,
+      metadata,
+      caseNumber: decision.caseNumber,
+      sourceDocumentId: decision.sourceDocumentId ?? null,
+      language: decision.language,
+      court: decision.court,
+      ecli: decision.ecli ?? null,
+      decisionDate: decision.decisionDate ?? null,
+      decisionType: decision.decisionType ?? null,
+      sourceUrl: decision.sourceUrl ?? null,
+      documentUrl: decision.documentUrl ?? null,
+    });
+    expect(replay.type).toBe("parsed");
+    if (replay.type !== "parsed") {
+      throw new TypeError("Expected the captured detail fixture to replay");
+    }
+    expect(replay.result.textFields.legalSentence).toEqual(
+      decision.textFields.legalSentence,
+    );
+    expect(replay.result.rawHash).toBe(decision.rawHash);
+  });
+
+  test("placeholder and missing sentences refresh in both directions", async () => {
+    const missing = await crawledWithHeadnote();
+    for (const marker of ["", " \n\t ", "-", "—"]) {
+      const placeholder = await crawledWithHeadnote(marker);
+      expect(placeholder.textFields.legalSentence).not.toEqual(
+        missing.textFields.legalSentence,
+      );
+      expect(placeholder.rawHash).not.toBe(missing.rawHash);
+      for (const { existing, incoming } of [
+        { existing: missing, incoming: placeholder },
+        { existing: placeholder, incoming: missing },
+      ]) {
+        expect(
+          shouldSkipRefresh({
+            existingMetadata: storeDecisionTextFields(existing),
+            existingSourceHash: existing.rawHash,
+            incomingMetadata: storeDecisionTextFields(incoming),
+            incomingRawHash: incoming.rawHash,
+          }),
+        ).toBe(false);
+      }
+    }
   });
 
   test("the ano/ne flag beside the headnote is not the headnote", async () => {

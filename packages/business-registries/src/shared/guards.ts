@@ -19,3 +19,17 @@ export const hasOptionalNumber = (
   record: Record<string, unknown>,
   key: string,
 ): boolean => record[key] === undefined || typeof record[key] === "number";
+
+export const hasOptionalNullableString = (
+  record: Record<string, unknown>,
+  key: string,
+): boolean => record[key] === null || hasOptionalString(record, key);
+
+export const isOptionalRecord = (value: unknown): boolean =>
+  value === undefined || isRecord(value);
+
+export const isOptionalArrayOf = (
+  value: unknown,
+  isEntry: (entry: unknown) => boolean,
+): boolean =>
+  value === undefined || (Array.isArray(value) && value.every(isEntry));
