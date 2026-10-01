@@ -49,7 +49,7 @@ const startRootPoolSentinel = (): RootPoolSentinel => {
     listener: null,
     url: "",
   };
-  const listener = Bun.listen<undefined>({
+  const listener = Bun.listen({
     hostname: "127.0.0.1",
     port: 0,
     socket: {
