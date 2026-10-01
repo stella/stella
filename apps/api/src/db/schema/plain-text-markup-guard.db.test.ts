@@ -9,6 +9,7 @@ import { propertyConfig } from "@stll/property-testing";
 import {
   caseLawCitations,
   caseLawDecisionIdentifiers,
+  caseLawDecisionJudges,
   caseLawDecisions,
   caseLawDecisionSupplements,
   caseLawJudges,
@@ -34,6 +35,7 @@ const tables = [
   caseLawDecisions,
   caseLawDecisionSupplements,
   caseLawDecisionIdentifiers,
+  caseLawDecisionJudges,
   caseLawJudges,
   caseLawCitations,
   caseLawProvisionCitations,
@@ -41,7 +43,15 @@ const tables = [
   legislationWorkNames,
   caseLawSearchDocuments,
   legislationSearchDocuments,
-  caseLawSearchDocumentPreviewPassages,
+];
+const bodyColumns = [
+  caseLawDecisions.fulltext,
+  caseLawDecisionSupplements.fulltext,
+  legislationDocuments.fulltext,
+  caseLawSearchDocuments.searchableText,
+  legislationSearchDocuments.searchableText,
+  caseLawSearchDocumentPreviewPassages.content,
+  caseLawProvisionCitations.sentenceText,
 ];
 // Derive the test matrix from the migration's actual column-scoped triggers.
 // Bind every entry to the owning schema before constructing fixture tables.
@@ -68,6 +78,8 @@ const guards = [
 
 const BLOCK = [
   "<br/>",
+  '<span title="a > b">x</span>',
+  "<span title='a < b'>",
   "<p>x</p>",
   '<span class="a">',
   "<!-- c -->",
@@ -131,6 +143,17 @@ const withFixture = async (
         );
         await tx.unsafe(
           `INSERT INTO "${tableName}" (fixture_id, ${columns.map(({ name }) => `"${name}"`).join(", ")}) VALUES (1, ${values.join(", ")})`,
+        );
+      }
+      for (const column of bodyColumns) {
+        const tableName = getTableName(column.table);
+        if (!guards.some((guard) => guard.tableName === tableName)) {
+          await tx.unsafe(
+            `CREATE TABLE "${tableName}" (fixture_id integer PRIMARY KEY)`,
+          );
+        }
+        await tx.unsafe(
+          `ALTER TABLE "${tableName}" ADD COLUMN "${column.name}" ${column.getSQLType()}`,
         );
       }
       const fileNodesBefore =
@@ -362,6 +385,36 @@ if (!runPostgresTests || !databaseUrl) {
       });
     });
 
+    test("preserves literal angle-bracket prose in every body projection", async () => {
+      await withFixture(async (client) => {
+        for (const column of bodyColumns) {
+          const tableName = getTableName(column.table);
+          expect(
+            guards
+              .find((guard) => guard.tableName === tableName)
+              ?.columns.some((guarded) => guarded.name === column.name) ??
+              false,
+          ).toBe(false);
+          const value = "Before <quoted> after";
+          await client.unsafe(
+            `INSERT INTO "${tableName}" (fixture_id, "${column.name}") VALUES (2, $1)`,
+            [value],
+          );
+          await client.unsafe(
+            `UPDATE "${tableName}" SET "${column.name}" = $1 WHERE fixture_id = 2`,
+            [value],
+          );
+          const rows = await client.unsafe(
+            `SELECT "${column.name}" AS value FROM "${tableName}" WHERE fixture_id = 2`,
+          );
+          expect(rows.at(0)?.value).toBe(value);
+          await client.unsafe(
+            `DELETE FROM "${tableName}" WHERE fixture_id = 2`,
+          );
+        }
+      });
+    });
+
     test("SQL predicate and sanitizer agree on generated text, HTML whitespace, and long legal text", async () => {
       await withFixture(async (client) => {
         const assertParity = async (values: string[]) => {
@@ -418,6 +471,8 @@ if (!runPostgresTests || !databaseUrl) {
                 " ",
                 "\n",
                 "č",
+                '"',
+                "'",
               ),
               { maxLength: 150 },
             )

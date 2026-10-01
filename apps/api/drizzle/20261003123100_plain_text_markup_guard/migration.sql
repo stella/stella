@@ -11,7 +11,7 @@ SET statement_timeout = '30s';
 -- test binds it to the sanitizer's detector.
 CREATE FUNCTION plain_text_has_markup(value text) RETURNS boolean
 LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
-RETURN value ~ '<!--|<!\[CDATA\[|<\?[A-Za-z]|</?[A-Za-z][A-Za-z0-9:-]*([ \t\n\f\r][^<>]*)?/?>';
+RETURN value ~ $markup$<!--|<!\[CDATA\[|<\?[A-Za-z]|</?[A-Za-z][A-Za-z0-9:-]*([ \t\n\f\r]([^<>"']|"[^"]*"|'[^']*')*)?/?>$markup$;
 
 -- Metadata is structured data; inspect string values (including nested
 -- arrays/objects), never keys or serialized JSON escape sequences.
@@ -75,14 +75,6 @@ BEGIN
         SCHEMA = TG_TABLE_SCHEMA, TABLE = TG_TABLE_NAME, COLUMN = 'decision_type';
     END IF;
   END IF;
-  IF TG_OP = 'INSERT' OR NEW.fulltext IS DISTINCT FROM OLD.fulltext THEN
-    IF plain_text_has_markup(NEW.fulltext) THEN
-      RAISE EXCEPTION USING
-        ERRCODE = '23514', MESSAGE = 'plain_text_markup_rejected',
-        CONSTRAINT = 'plain_text_no_markup',
-        SCHEMA = TG_TABLE_SCHEMA, TABLE = TG_TABLE_NAME, COLUMN = 'fulltext';
-    END IF;
-  END IF;
   IF TG_OP = 'INSERT' OR NEW.metadata IS DISTINCT FROM OLD.metadata THEN
     IF plain_text_metadata_has_markup(NEW.metadata) THEN
       RAISE EXCEPTION USING
@@ -95,7 +87,7 @@ BEGIN
 END;
 $guard$;
 CREATE TRIGGER case_law_decisions_plain_text_guard
-BEFORE INSERT OR UPDATE OF case_number, citation_key, ecli, court, court_id, decision_type, fulltext, metadata ON case_law_decisions
+BEFORE INSERT OR UPDATE OF case_number, citation_key, ecli, court, court_id, decision_type, metadata ON case_law_decisions
 FOR EACH ROW EXECUTE FUNCTION case_law_decisions_plain_text_guard();
 
 CREATE FUNCTION case_law_decision_supplements_plain_text_guard() RETURNS trigger
@@ -119,14 +111,6 @@ BEGIN
         SCHEMA = TG_TABLE_SCHEMA, TABLE = TG_TABLE_NAME, COLUMN = 'court';
     END IF;
   END IF;
-  IF TG_OP = 'INSERT' OR NEW.fulltext IS DISTINCT FROM OLD.fulltext THEN
-    IF plain_text_has_markup(NEW.fulltext) THEN
-      RAISE EXCEPTION USING
-        ERRCODE = '23514', MESSAGE = 'plain_text_markup_rejected',
-        CONSTRAINT = 'plain_text_no_markup',
-        SCHEMA = TG_TABLE_SCHEMA, TABLE = TG_TABLE_NAME, COLUMN = 'fulltext';
-    END IF;
-  END IF;
   IF TG_OP = 'INSERT' OR NEW.metadata IS DISTINCT FROM OLD.metadata THEN
     IF plain_text_metadata_has_markup(NEW.metadata) THEN
       RAISE EXCEPTION USING
@@ -139,7 +123,7 @@ BEGIN
 END;
 $guard$;
 CREATE TRIGGER case_law_decision_supplements_plain_text_guard
-BEFORE INSERT OR UPDATE OF case_number, court, fulltext, metadata ON case_law_decision_supplements
+BEFORE INSERT OR UPDATE OF case_number, court, metadata ON case_law_decision_supplements
 FOR EACH ROW EXECUTE FUNCTION case_law_decision_supplements_plain_text_guard();
 
 CREATE FUNCTION case_law_decision_identifiers_plain_text_guard() RETURNS trigger
@@ -213,6 +197,34 @@ $guard$;
 CREATE TRIGGER case_law_judges_plain_text_guard
 BEFORE INSERT OR UPDATE OF court, full_name, name_key, portrait_attribution ON case_law_judges
 FOR EACH ROW EXECUTE FUNCTION case_law_judges_plain_text_guard();
+
+CREATE FUNCTION case_law_decision_judges_plain_text_guard() RETURNS trigger
+LANGUAGE plpgsql
+SET search_path FROM CURRENT
+AS $guard$
+BEGIN
+  IF TG_OP = 'INSERT' OR NEW.name_as_printed IS DISTINCT FROM OLD.name_as_printed THEN
+    IF plain_text_has_markup(NEW.name_as_printed) THEN
+      RAISE EXCEPTION USING
+        ERRCODE = '23514', MESSAGE = 'plain_text_markup_rejected',
+        CONSTRAINT = 'plain_text_no_markup',
+        SCHEMA = TG_TABLE_SCHEMA, TABLE = TG_TABLE_NAME, COLUMN = 'name_as_printed';
+    END IF;
+  END IF;
+  IF TG_OP = 'INSERT' OR NEW.name_key IS DISTINCT FROM OLD.name_key THEN
+    IF plain_text_has_markup(NEW.name_key) THEN
+      RAISE EXCEPTION USING
+        ERRCODE = '23514', MESSAGE = 'plain_text_markup_rejected',
+        CONSTRAINT = 'plain_text_no_markup',
+        SCHEMA = TG_TABLE_SCHEMA, TABLE = TG_TABLE_NAME, COLUMN = 'name_key';
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$guard$;
+CREATE TRIGGER case_law_decision_judges_plain_text_guard
+BEFORE INSERT OR UPDATE OF name_as_printed, name_key ON case_law_decision_judges
+FOR EACH ROW EXECUTE FUNCTION case_law_decision_judges_plain_text_guard();
 
 CREATE FUNCTION case_law_citations_plain_text_guard() RETURNS trigger
 LANGUAGE plpgsql
@@ -327,14 +339,6 @@ BEGIN
         SCHEMA = TG_TABLE_SCHEMA, TABLE = TG_TABLE_NAME, COLUMN = 'sentence';
     END IF;
   END IF;
-  IF TG_OP = 'INSERT' OR NEW.sentence_text IS DISTINCT FROM OLD.sentence_text THEN
-    IF plain_text_has_markup(NEW.sentence_text) THEN
-      RAISE EXCEPTION USING
-        ERRCODE = '23514', MESSAGE = 'plain_text_markup_rejected',
-        CONSTRAINT = 'plain_text_no_markup',
-        SCHEMA = TG_TABLE_SCHEMA, TABLE = TG_TABLE_NAME, COLUMN = 'sentence_text';
-    END IF;
-  END IF;
   IF TG_OP = 'INSERT' OR NEW.print_text IS DISTINCT FROM OLD.print_text THEN
     IF plain_text_has_markup(NEW.print_text) THEN
       RAISE EXCEPTION USING
@@ -363,7 +367,7 @@ BEGIN
 END;
 $guard$;
 CREATE TRIGGER case_law_provision_citations_plain_text_guard
-BEFORE INSERT OR UPDATE OF work_identifier, work_collection, section_suffix, subsection, letter, point, sentence, sentence_text, print_text, name_text, printed_work_identifier ON case_law_provision_citations
+BEFORE INSERT OR UPDATE OF work_identifier, work_collection, section_suffix, subsection, letter, point, sentence, print_text, name_text, printed_work_identifier ON case_law_provision_citations
 FOR EACH ROW EXECUTE FUNCTION case_law_provision_citations_plain_text_guard();
 
 CREATE FUNCTION legislation_documents_plain_text_guard() RETURNS trigger
@@ -387,14 +391,6 @@ BEGIN
         SCHEMA = TG_TABLE_SCHEMA, TABLE = TG_TABLE_NAME, COLUMN = 'document_type';
     END IF;
   END IF;
-  IF TG_OP = 'INSERT' OR NEW.fulltext IS DISTINCT FROM OLD.fulltext THEN
-    IF plain_text_has_markup(NEW.fulltext) THEN
-      RAISE EXCEPTION USING
-        ERRCODE = '23514', MESSAGE = 'plain_text_markup_rejected',
-        CONSTRAINT = 'plain_text_no_markup',
-        SCHEMA = TG_TABLE_SCHEMA, TABLE = TG_TABLE_NAME, COLUMN = 'fulltext';
-    END IF;
-  END IF;
   IF TG_OP = 'INSERT' OR NEW.metadata IS DISTINCT FROM OLD.metadata THEN
     IF plain_text_metadata_has_markup(NEW.metadata) THEN
       RAISE EXCEPTION USING
@@ -407,7 +403,7 @@ BEGIN
 END;
 $guard$;
 CREATE TRIGGER legislation_documents_plain_text_guard
-BEFORE INSERT OR UPDATE OF title, document_type, fulltext, metadata ON legislation_documents
+BEFORE INSERT OR UPDATE OF title, document_type, metadata ON legislation_documents
 FOR EACH ROW EXECUTE FUNCTION legislation_documents_plain_text_guard();
 
 CREATE FUNCTION legislation_work_names_plain_text_guard() RETURNS trigger
@@ -467,19 +463,11 @@ BEGIN
         SCHEMA = TG_TABLE_SCHEMA, TABLE = TG_TABLE_NAME, COLUMN = 'title';
     END IF;
   END IF;
-  IF TG_OP = 'INSERT' OR NEW.searchable_text IS DISTINCT FROM OLD.searchable_text THEN
-    IF plain_text_has_markup(NEW.searchable_text) THEN
-      RAISE EXCEPTION USING
-        ERRCODE = '23514', MESSAGE = 'plain_text_markup_rejected',
-        CONSTRAINT = 'plain_text_no_markup',
-        SCHEMA = TG_TABLE_SCHEMA, TABLE = TG_TABLE_NAME, COLUMN = 'searchable_text';
-    END IF;
-  END IF;
   RETURN NEW;
 END;
 $guard$;
 CREATE TRIGGER case_law_search_documents_plain_text_guard
-BEFORE INSERT OR UPDATE OF title, searchable_text ON case_law_search_documents
+BEFORE INSERT OR UPDATE OF title ON case_law_search_documents
 FOR EACH ROW EXECUTE FUNCTION case_law_search_documents_plain_text_guard();
 
 CREATE FUNCTION legislation_search_documents_plain_text_guard() RETURNS trigger
@@ -495,37 +483,9 @@ BEGIN
         SCHEMA = TG_TABLE_SCHEMA, TABLE = TG_TABLE_NAME, COLUMN = 'title';
     END IF;
   END IF;
-  IF TG_OP = 'INSERT' OR NEW.searchable_text IS DISTINCT FROM OLD.searchable_text THEN
-    IF plain_text_has_markup(NEW.searchable_text) THEN
-      RAISE EXCEPTION USING
-        ERRCODE = '23514', MESSAGE = 'plain_text_markup_rejected',
-        CONSTRAINT = 'plain_text_no_markup',
-        SCHEMA = TG_TABLE_SCHEMA, TABLE = TG_TABLE_NAME, COLUMN = 'searchable_text';
-    END IF;
-  END IF;
   RETURN NEW;
 END;
 $guard$;
 CREATE TRIGGER legislation_search_documents_plain_text_guard
-BEFORE INSERT OR UPDATE OF title, searchable_text ON legislation_search_documents
+BEFORE INSERT OR UPDATE OF title ON legislation_search_documents
 FOR EACH ROW EXECUTE FUNCTION legislation_search_documents_plain_text_guard();
-
-CREATE FUNCTION case_law_search_document_preview_passages_plain_text_guard() RETURNS trigger
-LANGUAGE plpgsql
-SET search_path FROM CURRENT
-AS $guard$
-BEGIN
-  IF TG_OP = 'INSERT' OR NEW.content IS DISTINCT FROM OLD.content THEN
-    IF plain_text_has_markup(NEW.content) THEN
-      RAISE EXCEPTION USING
-        ERRCODE = '23514', MESSAGE = 'plain_text_markup_rejected',
-        CONSTRAINT = 'plain_text_no_markup',
-        SCHEMA = TG_TABLE_SCHEMA, TABLE = TG_TABLE_NAME, COLUMN = 'content';
-    END IF;
-  END IF;
-  RETURN NEW;
-END;
-$guard$;
-CREATE TRIGGER case_law_search_document_preview_passages_plain_text_guard
-BEFORE INSERT OR UPDATE OF content ON case_law_search_document_preview_passages
-FOR EACH ROW EXECUTE FUNCTION case_law_search_document_preview_passages_plain_text_guard();
