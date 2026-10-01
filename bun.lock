@@ -856,6 +856,19 @@
         "bun-types": "catalog:",
       },
     },
+    "packages/mcp-kit": {
+      "name": "@stll/mcp-kit",
+      "version": "0.1.0",
+      "dependencies": {
+        "@stll/agent-input": "workspace:^",
+        "better-result": "catalog:",
+      },
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "bun-types": "catalog:",
+        "tsdown": "catalog:",
+      },
+    },
     "packages/mojibake": {
       "name": "@stll/mojibake",
       "version": "0.0.0",
@@ -2854,6 +2867,8 @@
     "@stll/legal-atlas-runner": ["@stll/legal-atlas-runner@workspace:apps/legal-atlas-runner"],
 
     "@stll/locales": ["@stll/locales@workspace:packages/locales"],
+
+    "@stll/mcp-kit": ["@stll/mcp-kit@workspace:packages/mcp-kit"],
 
     "@stll/mobile": ["@stll/mobile@workspace:apps/mobile"],
 

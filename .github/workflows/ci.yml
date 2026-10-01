@@ -1455,6 +1455,7 @@ jobs:
           bun scripts/check-published-exports.ts packages/time
           bun scripts/check-published-exports.ts packages/text-normalize
           bun scripts/check-published-exports.ts packages/agent-input
+          bun scripts/check-published-exports.ts packages/mcp-kit
 
       # Release ordering is a safety property. This test has no workspace
       # dependencies, so it remains runnable when a PR changes only workflows
