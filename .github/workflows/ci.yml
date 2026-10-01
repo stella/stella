@@ -2054,11 +2054,14 @@ jobs:
       && (needs.ci-plan.outputs.trusted == 'true'
           || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 1
     permissions:
       contents: read
 
     steps:
+      - name: Scratch cancellation proof
+        run: sleep 120
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
