@@ -52,7 +52,7 @@ import {
   validatePlNcourtDocument,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-ncourt";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
-import { DOCUMENT_ROLE_UNMAPPED } from "@/api/lib/legal-search/ingestion-constants";
+import { DOCUMENT_ROLE_UNMAPPED } from "@/api/lib/legal-search/document-role-diagnostics";
 import {
   AST_BOUNDARY_WHITESPACE,
   AST_CONTENT_LOST,
