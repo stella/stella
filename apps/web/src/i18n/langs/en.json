@@ -487,6 +487,17 @@
     "failedToStartTimer": "Failed to start timer",
     "failedToStopTimer": "Failed to stop timer",
     "filterStatus": "Filter by status",
+    "globalTimer": {
+      "confirm": "Confirm time",
+      "discard": "Discard timer",
+      "matterInaccessible": "Choose a matter you can access.",
+      "narrativeRequired": "Add a description before confirming time.",
+      "pause": "Pause",
+      "periodLocked": "This month is locked. Ask an administrator to unlock it.",
+      "resume": "Resume",
+      "timerUnavailable": "This timer is no longer available. Refresh the list.",
+      "title": "Timers"
+    },
     "hourlyRateMustBeNonNegative": "Hourly rate cannot be negative",
     "hours": "Hours",
     "invoiceNarrative": "Invoice narrative",
@@ -2135,6 +2146,13 @@
     "unnamedAttachment": "Unnamed attachment"
   },
   "errors": {
+    "actionAdmission": {
+      "admissionUnavailable": "This action is temporarily paused. Please try again shortly.",
+      "concurrencyBusy": "Other work is in progress. Please try again shortly.",
+      "contact": "Contact us",
+      "notEnabled": "This action is not enabled for your organization.",
+      "periodExhausted": "This action is paused for your organization."
+    },
     "actionFailed": "Action failed",
     "api": {
       "badRequest": "The request could not be completed.",

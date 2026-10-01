@@ -120,14 +120,41 @@ type StepShape = {
   reasoning: boolean;
   text: boolean;
 };
-/** How a provider call fails before any output: it throws, or it reports
- *  the error in the stream. */
-type FailureShape = "fail" | "report-error";
-/** A model run: its steps, or a provider call that fails before any output. */
+/** How a provider call ends with no answer: it throws, it reports the error
+ *  in the stream, or it stops normally having said nothing. */
+type FailureShape = "empty" | "fail" | "report-error";
+/** A model run: its steps, or a provider call that ends with no answer. */
 type RunShape = StepShape[] | FailureShape;
 
 const isFailure = (shape: RunShape): shape is FailureShape =>
-  shape === "fail" || shape === "report-error";
+  shape === "empty" || shape === "fail" || shape === "report-error";
+
+const scriptedFailure = (shape: FailureShape): ScriptedTurn => {
+  switch (shape) {
+    case "empty": {
+      // What a provider sends when the model stops without answering: an
+      // empty text message, and completion tokens spent all the same.
+      return {
+        finishReason: "stop",
+        text: "",
+        type: "text",
+        usage: { completionTokens: 4, promptTokens: 1, totalTokens: 5 },
+      };
+    }
+    case "fail": {
+      return {
+        message: "Scripted provider failure",
+        type: "fail-before-output",
+      };
+    }
+    case "report-error": {
+      return { message: "Scripted provider error", type: "error" };
+    }
+    default: {
+      return shape satisfies never;
+    }
+  }
+};
 /**
  * How the user answers an approval card. `approve-all` approves it and then
  * every approval card that appears later in the conversation, each one
@@ -236,26 +263,34 @@ const scriptedCall = (kind: CallKind, toolCallId: string) => {
   }
 };
 
+/** What a request runs on: a message the user sent, or the answer to the
+ *  cards a turn waited on. */
+type RequestOrigin = "continuation" | "message";
+
 /**
  * Scripts one model run and records it in the ledger: a step with only plain
  * calls runs them and calls the model again, a step with interactions ends the
  * run waiting on them, a step without calls answers in text, and a failing
- * run ends the turn failed.
+ * run ends the turn failed. An empty answer to a message is retried on the
+ * fallback model, which the scripted provider answers in text as a side call;
+ * a continuation has no fallback, so there it fails the turn.
  */
 const planRun = (
   ledger: Ledger,
   shape: RunShape,
   nextId: () => string,
+  origin: RequestOrigin,
 ): ScriptedTurn[] => {
+  if (shape === "empty" && origin === "message") {
+    ledger.pending = [];
+    ledger.latest = "text";
+    return [scriptedFailure(shape)];
+  }
   if (isFailure(shape)) {
     ledger.failures += 1;
     ledger.pending = [];
     ledger.latest = "failed";
-    return [
-      shape === "fail"
-        ? { message: "Scripted provider failure", type: "fail-before-output" }
-        : { message: "Scripted provider error", type: "error" },
-    ];
+    return [scriptedFailure(shape)];
   }
   const steps: ScriptedTurn[] = [];
   for (const step of shape) {
@@ -319,11 +354,19 @@ const planRequests = (
   ledger: Ledger,
   runs: readonly RunShape[],
   nextId: () => string,
+  origin: RequestOrigin,
 ): ScriptedTurn[][] => {
-  const planned = [planRun(ledger, runs[0] ?? TEXT_ANSWER, nextId)];
+  const planned = [planRun(ledger, runs[0] ?? TEXT_ANSWER, nextId, origin)];
   while (approvesAllOpen(ledger)) {
     ledger.effects.push(...ledger.pending);
-    planned.push(planRun(ledger, runs[planned.length] ?? TEXT_ANSWER, nextId));
+    planned.push(
+      planRun(
+        ledger,
+        runs[planned.length] ?? TEXT_ANSWER,
+        nextId,
+        "continuation",
+      ),
+    );
   }
   return planned;
 };
@@ -570,7 +613,7 @@ class SendUserMessage implements fc.AsyncCommand<Model, Real> {
     real.ledger.turn += 1;
     real.harness.script(
       real.threadId,
-      ...planRequests(real.ledger, this.runs, real.nextId),
+      ...planRequests(real.ledger, this.runs, real.nextId, "message"),
     );
     await real.client.sendUserMessage(Bun.randomUUIDv7(), this.text);
     await approveCardsOnScreen(real);
@@ -638,7 +681,7 @@ const resolveOnFirstTab = async (
   const batch = decideBatch(real.ledger, decisions);
   real.harness.script(
     real.threadId,
-    ...planRequests(real.ledger, continuations, real.nextId),
+    ...planRequests(real.ledger, continuations, real.nextId, "continuation"),
   );
   await answerBatch(real.client, batch);
   await approveCardsOnScreen(real);
@@ -697,7 +740,7 @@ class SupersedeCards implements fc.AsyncCommand<Model, Real> {
     real.ledger.turn += 1;
     real.harness.script(
       real.threadId,
-      ...planRequests(real.ledger, this.runs, real.nextId),
+      ...planRequests(real.ledger, this.runs, real.nextId, "message"),
     );
     await real.client.sendUserMessage(Bun.randomUUIDv7(), this.text);
     await approveCardsOnScreen(real);
@@ -919,7 +962,7 @@ class ResendLatest implements fc.AsyncCommand<Model, Real> {
     ledger.pending = [];
     real.harness.script(
       real.threadId,
-      ...planRequests(ledger, this.runs, real.nextId),
+      ...planRequests(ledger, this.runs, real.nextId, "message"),
     );
     await real.client.resend();
     await approveCardsOnScreen(real);
@@ -992,7 +1035,7 @@ class RaceApprovals implements fc.AsyncCommand<Model, Real> {
       ledger.effects.push(...cards);
       real.harness.script(
         real.threadId,
-        ...planRequests(ledger, [TEXT_ANSWER], real.nextId),
+        ...planRequests(ledger, [TEXT_ANSWER], real.nextId, "continuation"),
       );
       const approveAll = async (page: WebChatClient) => {
         for (const id of cards) {
@@ -1196,7 +1239,7 @@ const runsOf = (calls: fc.Arbitrary<CallKind[]>): fc.Arbitrary<RunShape[]> => {
   // it answers.
   const runArb: fc.Arbitrary<RunShape> = fc.oneof(
     { arbitrary: stepsArb, weight: 5 },
-    { arbitrary: fc.constant<RunShape>("fail"), weight: 1 },
+    { arbitrary: fc.constantFrom<RunShape>("empty", "fail"), weight: 1 },
   );
   return fc.array(runArb, { maxLength: 3, minLength: 1 });
 };
@@ -1622,6 +1665,9 @@ describe("a conversation's live view", () => {
       [[{ ...STEP, calls: ["ask-user"] }]],
       "approve",
     ],
+    ["an answer", "empty", [[{ ...STEP, calls: ["ask-user"] }]], "approve"],
+    ["an approval", "empty", [[{ ...STEP, calls: ["approval"] }]], "approve"],
+    ["a denial", "empty", [[{ ...STEP, calls: ["approval"] }]], "deny"],
     ["a denial", "fail", [[{ ...STEP, calls: ["approval"] }]], "deny"],
     ["a denial", "report-error", [[{ ...STEP, calls: ["approval"] }]], "deny"],
   ];
@@ -1647,6 +1693,67 @@ describe("a conversation's live view", () => {
       } finally {
         await closeConversation(conversation);
       }
+    },
+    propertyTestTimeout(30_000),
+  );
+
+  // The model stopped with an empty message after the user answered its
+  // question, and spent completion tokens doing it. The message it continued
+  // already held the question, so neither the token count nor the message's
+  // parts said the run had answered nothing.
+  test(
+    "fails the turn, retryably, when the model answers a question with nothing",
+    async () => {
+      await inConversation(async (model, real) => {
+        await new SendUserMessage(
+          [[{ ...STEP, calls: ["ask-user"] }]],
+          "Draft the NDA",
+        ).run(model, real);
+        await new ResolveCards(["approve"], ["empty"]).run(model, real);
+        expect(
+          await testDb.query.chatTurns.findMany({
+            columns: {
+              failureCode: true,
+              failureRetryable: true,
+              status: true,
+            },
+            where: { threadId: { eq: real.threadId } },
+          }),
+        ).toEqual([
+          {
+            failureCode: "empty-response",
+            failureRetryable: true,
+            status: "failed",
+          },
+        ]);
+        // The question and its answer are still the thread's.
+        const reload = await real.harness.reloadView(real.threadId);
+        expect(
+          reload.flatMap(({ parts }) =>
+            parts.flatMap((part) =>
+              part.type === "tool-call" ? [part.output] : [],
+            ),
+          ),
+        ).toEqual([ASK_USER_ANSWER]);
+      });
+    },
+    propertyTestTimeout(30_000),
+  );
+
+  test(
+    "answers a message on the fallback model when the first answer is empty",
+    async () => {
+      await inConversation(async (model, real) => {
+        await new SendUserMessage(["empty"], "Draft the NDA").run(model, real);
+        expect(real.ledger.latest).toBe("text");
+        expect(
+          await testDb.query.chatTurns.findMany({
+            columns: { failureCode: true, status: true },
+            where: { threadId: { eq: real.threadId } },
+          }),
+        ).toEqual([{ failureCode: null, status: "completed" }]);
+        await new ReloadPage().run(model, real);
+      });
     },
     propertyTestTimeout(30_000),
   );

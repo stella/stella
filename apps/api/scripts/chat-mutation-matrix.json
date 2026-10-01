@@ -507,6 +507,20 @@
       "oracle": "chat.provider-wire.request-shape"
     },
     {
+      "id": "wire-request-rules-run-metadata",
+      "fix": "#4273",
+      "behaviour": "The request options a chat attempt hands the engine put nothing on the provider wire that the provider refuses, such as a request metadata value that is not a string.",
+      "status": "active",
+      "file": "src/handlers/chat/stream-chat.ts",
+      "search": "  adapter: withRunToolCallIds(model.adapter, toolCallIds),\n",
+      "replace": "  adapter: withRunToolCallIds(model.adapter, toolCallIds),\n  metadata: { stellaToolCallIdLedger: toolCallIds },\n",
+      "scenario": {
+        "file": "src/lib/tanstack-ai-provider-wire.test.ts",
+        "test": "openai tool-call"
+      },
+      "oracle": "chat.provider-wire.request-rules"
+    },
+    {
       "id": "new-message-resets-interrupts",
       "fix": "#3885",
       "behaviour": "A message sent while cards wait resets the client's interrupt state first, so the send is posted.",
@@ -890,8 +904,8 @@
       "behaviour": "A request of a thread sends the system prompt the request before it sent, so an approval's continuation extends the cached prompt instead of rewriting it.",
       "status": "active",
       "file": "src/handlers/chat/stream-chat.ts",
-      "search": "    ...systemPromptsPatch({ caching, model, system: baseSystem }),",
-      "replace": "    ...systemPromptsPatch({ caching, model, system: `${baseSystem}\\nRequest time: ${String(performance.now())}` }),",
+      "search": "  ...systemPromptsPatch({ caching, model, system }),",
+      "replace": "  ...systemPromptsPatch({ caching, model, system: `${String(system)}\\nRequest time: ${String(performance.now())}` }),",
       "scenario": {
         "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
         "test": "keeps every card after an approval on a message that already holds a tool result"
@@ -904,8 +918,8 @@
       "behaviour": "A provider's SDK writes a thread's tools in the same order on every request of the thread.",
       "status": "active",
       "file": "src/handlers/chat/stream-chat.ts",
-      "search": "    tools: projectChatToolSchemasForProvider({\n      modelTools,\n      provider: model.provider,\n    }),",
-      "replace": "    tools: projectChatToolSchemasForProvider({\n      modelTools,\n      provider: model.provider,\n    }).toSorted(() => Math.random() - 0.5),",
+      "search": "  tools: projectChatToolSchemasForProvider({\n    modelTools,\n    provider: model.provider,\n  }),",
+      "replace": "  tools: projectChatToolSchemasForProvider({\n    modelTools,\n    provider: model.provider,\n  }).toSorted(() => Math.random() - 0.5),",
       "scenario": {
         "file": "src/handlers/chat/provider-wire-replay.integration.test.ts",
         "test": "anthropic: a tool call reaches its card, runs once approved, and the answer reloads"

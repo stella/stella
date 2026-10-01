@@ -1,5 +1,12 @@
 # @stll/workspace-ui
 
+## 0.11.15
+
+### Patch Changes
+
+- Updated dependencies [[`3f1bdaf`](https://github.com/stella/stella/commit/3f1bdafb817d599f49d21c5d853ea76720278236), [`f215762`](https://github.com/stella/stella/commit/f2157623605b1a08efbed05866773da8b8618d93)]:
+  - @stll/ui@0.38.0
+
 ## 0.11.14
 
 ### Patch Changes

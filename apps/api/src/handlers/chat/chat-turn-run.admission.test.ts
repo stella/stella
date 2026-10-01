@@ -96,6 +96,7 @@ describe("chat run admission follows owned settlement", () => {
         runSignal: run.control.abortController.signal,
         deadlineSignal: run.control.deadlineSignal,
         getResponseMessage: message,
+        initialMessages: [],
         mapMessageId: createChatMessageIdMapper(() =>
           toSafeId<"chatMessage">("11111111-1111-4111-8111-111111111111"),
         ),
@@ -270,6 +271,7 @@ describe("chat run admission follows owned settlement", () => {
       abortSignal: run.control.abortController.signal,
       deadlineSignal: run.control.deadlineSignal,
       getResponseMessage: () => null,
+      initialMessages: [],
       mapMessageId: createChatMessageIdMapper(() =>
         toSafeId<"chatMessage">("11111111-1111-4111-8111-111111111111"),
       ),
@@ -506,6 +508,7 @@ describe("chat run admission follows owned settlement", () => {
           deadlineSignal: run.control.deadlineSignal,
           getRestorableCheckpoint: () => run.restorableCheckpoint,
           getResponseMessage: () => null,
+          initialMessages: [],
           mapMessageId: createChatMessageIdMapper(() => checkpoint.id),
           onFinish: async ({ outcome, responseMessage }) => {
             expect(outcome.type).toBe("awaiting-user");

@@ -20,6 +20,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 
 type ChatPromptImproveButtonProps = {
   anonymized: boolean;
@@ -101,10 +102,7 @@ export const ChatPromptImproveButton = ({
 
     if (Result.isError(result)) {
       getAnalytics().captureError(result.error);
-      stellaToast.add({
-        title: t("common.somethingWentWrong"),
-        type: "error",
-      });
+      notifyUserError(result.error, t("common.somethingWentWrong"));
       return;
     }
     if (!isCurrentDraftUnchanged({ controller, editor, prompt })) {

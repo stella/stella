@@ -31,6 +31,7 @@ import type { UsageEventLane } from "@/api/db/schema";
 import { setSharedLockTimeout } from "@/api/db/shared-pool-timeouts";
 import { env } from "@/api/env";
 import { modelAcceptsDocumentAttachment } from "@/api/handlers/chat/attachment-modality";
+import { chunkCarriesAnswer } from "@/api/handlers/chat/attempt-answer";
 import {
   applyChatPartPersistenceBudget,
   attachTerminalTurnOutcome,
@@ -76,6 +77,7 @@ import {
 import { guardProviderHistory } from "@/api/handlers/chat/provider-history";
 import type { GuardedProviderHistory } from "@/api/handlers/chat/provider-history";
 import {
+  assistantMessageStartChunk,
   createTurnMessageIdMapper,
   ensureAssistantMessageStart,
   findDeniedApprovals,
@@ -719,11 +721,14 @@ export const chatTurnRejectsStreamingTools = ({
 type ChatAttemptState = {
   emptyCompletion: ChatEmptyCompletionError | null;
   finalLoopDetection: ChatLoopDetectedError | null;
+  /** Whether the attempt has streamed an answer (`chunkCarriesAnswer`). */
+  producedAnswer: boolean;
 };
 
 export const createChatAttemptState = (): ChatAttemptState => ({
   emptyCompletion: null,
   finalLoopDetection: null,
+  producedAnswer: false,
 });
 
 type ChatAttemptModelInfo = Pick<
@@ -738,7 +743,6 @@ type RecordChatAttemptFinishProps = {
   modelInfo: ChatAttemptModelInfo;
   state: ChatAttemptState;
   threadId: SafeId<"chatThread">;
-  usage: TokenUsage | undefined;
 };
 
 export const recordChatAttemptFinish = ({
@@ -748,7 +752,6 @@ export const recordChatAttemptFinish = ({
   modelInfo,
   state,
   threadId,
-  usage,
 }: RecordChatAttemptFinishProps): void => {
   const loopDetection = detectModelLoop(messages);
   if (shouldSurfaceFinalContentLoop(loopDetection)) {
@@ -757,7 +760,11 @@ export const recordChatAttemptFinish = ({
     });
   }
 
-  if (finishReason !== "stop" || usage?.completionTokens !== 0) {
+  // Emptiness is read from what the attempt streamed, never from the
+  // provider's token count: a model can spend completion tokens on an answer
+  // that holds nothing. Any other finish reason is left to the terminal
+  // guard, which settles the turn without trying the fallback model.
+  if (finishReason !== "stop" || state.producedAnswer) {
     return;
   }
 
@@ -1118,6 +1125,47 @@ const runChatAttempts = async function* ({
   }
 };
 
+/**
+ * What a chat attempt hands the engine that shapes the provider request: the
+ * adapter bound to the run's tool call ids, the tools as the provider reads
+ * them, the system prompt, and the generation options. The provider wire
+ * test builds its requests here too, so what it sends is what a chat turn
+ * sends. `maxOutputTokens` defaults to the chat turn's ceiling.
+ */
+export const chatAttemptRequestOptions = ({
+  caching,
+  maxOutputTokens,
+  model,
+  modelTools,
+  role,
+  system,
+  toolCallIds,
+}: {
+  caching: ReturnType<typeof resolveCaching>;
+  maxOutputTokens?: number | undefined;
+  model: ResolvedTanStackTextModel;
+  modelTools: Parameters<
+    typeof projectChatToolSchemasForProvider
+  >[0]["modelTools"];
+  role: ChatAttemptRole;
+  system: string | undefined;
+  toolCallIds: ToolCallIdLedger;
+}) => ({
+  adapter: withRunToolCallIds(model.adapter, toolCallIds),
+  tools: projectChatToolSchemasForProvider({
+    modelTools,
+    provider: model.provider,
+  }),
+  ...systemPromptsPatch({ caching, model, system }),
+  modelOptions: mergeGenerationOptions({
+    caching,
+    model,
+    maxOutputTokens: maxOutputTokens ?? chatTurnOutputTokens(model),
+    serviceTier: "standard",
+    temperature: getTemperatureForRole(role),
+  }),
+});
+
 type RunChatAttemptProps = {
   abortController: AbortController;
   abortSignal: AbortSignal;
@@ -1279,12 +1327,15 @@ const runChatAttempt = async function* ({
   }
 
   const stream = streamChatChunks({
-    adapter: withRunToolCallIds(model.adapter, toolCallIds),
-    messages: preparedMessages,
-    tools: projectChatToolSchemasForProvider({
+    ...chatAttemptRequestOptions({
+      caching,
+      model,
       modelTools,
-      provider: model.provider,
+      role,
+      system: baseSystem,
+      toolCallIds,
     }),
+    messages: preparedMessages,
     ...(externalMcpToolSource
       ? {
           mcp: {
@@ -1305,14 +1356,6 @@ const runChatAttempt = async function* ({
     ...(runId === undefined ? {} : { runId }),
     ...(parentRunId === undefined ? {} : { parentRunId }),
     ...(resume === undefined ? {} : { resume }),
-    ...systemPromptsPatch({ caching, model, system: baseSystem }),
-    modelOptions: mergeGenerationOptions({
-      caching,
-      model,
-      maxOutputTokens: chatTurnOutputTokens(model),
-      serviceTier: "standard",
-      temperature: getTemperatureForRole(role),
-    }),
     middleware: [
       analytics.middleware,
       createChatRuntimeMiddleware({
@@ -1420,7 +1463,6 @@ const createChatRuntimeMiddleware = ({
           modelInfo: model,
           state,
           threadId,
-          usage: event.info.usage,
         });
         return;
       case "aborted":
@@ -1434,6 +1476,9 @@ const createChatRuntimeMiddleware = ({
   return {
     name: "stella-chat-runtime",
     ...terminalHooks,
+    onChunk: (_ctx, chunk) => {
+      state.producedAnswer ||= chunkCarriesAnswer(chunk);
+    },
     onConfig: async (ctx, config) => {
       if (ctx.phase !== "beforeModel") {
         return undefined;
@@ -1514,9 +1559,10 @@ type ProcessServerChatStreamProps = {
    *  only one of the two causes that reaches this signal, so it is what tells
    *  a deadline apart from a disconnect. */
   deadlineSignal: AbortSignal;
-  existingMessageIds?: ReadonlySet<string> | undefined;
   flushPendingSource?: (() => PublicStreamChunk[]) | undefined;
   getResponseMessage: () => ChatMessage | null;
+  /** The history the run starts from: the messages it may continue. */
+  initialMessages: readonly ChatMessage[];
   mapMessageId: MessageIdMapper;
   onFinish: (event: StreamChatFinishEvent) => Promise<void> | void;
   processor: ChatStreamProcessor;
@@ -1783,6 +1829,8 @@ type AdmissionLossOutcomeOptions = Pick<
   "getRestorableCheckpoint" | "getResponseMessage" | "processor"
 > & {
   deferredRunFinishedChunks: readonly PublicStreamChunk[];
+  /** Whether the run streamed an answer (see `processServerChatStream`). */
+  producedAnswer: boolean;
   toolCallsWithCompleteInput: ReadonlySet<string>;
 };
 
@@ -1791,6 +1839,7 @@ const resolveAdmissionLossOutcome = ({
   getRestorableCheckpoint,
   getResponseMessage,
   processor,
+  producedAnswer,
   toolCallsWithCompleteInput,
 }: AdmissionLossOutcomeOptions): ChatTurnOutcome => {
   const originalInteraction = getAwaitingUserInteraction(
@@ -1822,9 +1871,9 @@ const resolveAdmissionLossOutcome = ({
     finishReasonOf(lastFinish) !== "tool_calls" &&
     getAwaitingUserInteraction(response) === null
   ) {
-    return response === null || response.parts.length === 0
-      ? { type: "failed", error: "empty_completion" }
-      : { type: "completed" };
+    return producedAnswer
+      ? { type: "completed" }
+      : { type: "failed", error: "empty_completion" };
   }
   return { type: "failed", error: "provider_unavailable" };
 };
@@ -1854,6 +1903,8 @@ type StreamSettlementOptions = Pick<
   rawArgumentsByIncompleteToolCallId: Map<string, string>;
   toolCallsWithCompleteInput: Set<string>;
   getUsage: () => TokenUsage | undefined;
+  /** Whether the run streamed an answer (see `processServerChatStream`). */
+  getProducedAnswer: () => boolean;
   terminal: { state: "open" | "settled" };
 };
 
@@ -1871,6 +1922,7 @@ const createStreamSettlement = ({
   rawArgumentsByIncompleteToolCallId,
   toolCallsWithCompleteInput,
   getUsage,
+  getProducedAnswer,
   terminal,
 }: StreamSettlementOptions) => {
   const admissionLost = () =>
@@ -1892,6 +1944,7 @@ const createStreamSettlement = ({
       getRestorableCheckpoint,
       getResponseMessage,
       processor,
+      producedAnswer: getProducedAnswer(),
       toolCallsWithCompleteInput,
     });
   const terminalize = async ({
@@ -1913,18 +1966,17 @@ const createStreamSettlement = ({
     if (flushProcessor) {
       finalizeResponseProcessor(processor);
     }
-    // An empty completion is a provider outcome: the model produced no
-    // persistable part. A run that carried a complete tool call cannot be
-    // one; losing that call between the stream and the persistence
-    // processor is a defect in this pipeline, so it must not be graded as
-    // an anticipated provider state.
+    // An empty completion is a provider outcome: the model streamed no
+    // answer. A run that streamed one cannot be one; losing that answer
+    // between the stream and the persistence processor is a defect in this
+    // pipeline, so it must not be graded as an anticipated provider state.
     if (
       (outcome.type === "completed" || outcome.type === "awaiting-user") &&
-      toolCallsWithCompleteInput.size > 0 &&
+      getProducedAnswer() &&
       (getResponseMessage()?.parts.length ?? 0) === 0
     ) {
       panic(
-        "Persistence processor dropped an assistant turn that carried a complete tool call",
+        "Persistence processor dropped an assistant turn that streamed an answer",
       );
     }
     const responseMessage = CUT_SHORT_OUTCOME[outcome.type]
@@ -1941,6 +1993,7 @@ const createStreamSettlement = ({
         ? createTerminalResponseMessage({
             mapMessageId,
             outcome,
+            producedAnswer: getProducedAnswer(),
             responseMessage,
             usage: getUsage(),
           })
@@ -2065,9 +2118,9 @@ export const processServerChatStream = async function* ({
   runSignal = abortSignal,
   getRestorableCheckpoint,
   deadlineSignal,
-  existingMessageIds = new Set(),
   flushPendingSource,
   getResponseMessage,
+  initialMessages,
   mapMessageId,
   onFinish,
   processor,
@@ -2075,6 +2128,12 @@ export const processServerChatStream = async function* ({
 }: ProcessServerChatStreamProps): AsyncIterable<PublicStreamChunk> {
   const deferredRunFinishedChunks: PublicStreamChunk[] = [];
   const runState = { cancelled: false };
+  // Whether the run streamed an answer (`chunkCarriesAnswer`): the one
+  // measure of an empty run, read here from the chunks the persistence
+  // processor is fed and in the attempt middleware from the chunks the model
+  // sends. A continuation's message already holds the call the user
+  // answered; the chunks hold only what this run added.
+  let producedAnswer = false;
   const rawArgumentsByIncompleteToolCallId = new Map<string, string>();
   const toolCallsWithCompleteInput = new Set<string>();
   let usage: TokenUsage | undefined;
@@ -2105,6 +2164,7 @@ export const processServerChatStream = async function* ({
     rawArgumentsByIncompleteToolCallId,
     toolCallsWithCompleteInput,
     getUsage: () => usage,
+    getProducedAnswer: () => producedAnswer,
     terminal,
   });
   // Whether the client has been told which message this turn writes.
@@ -2117,19 +2177,16 @@ export const processServerChatStream = async function* ({
     announcedAssistantMessage
       ? []
       : [
-          {
-            type: EventType.TEXT_MESSAGE_START,
-            messageId: mapMessageId(ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL),
-            role: "assistant",
-            timestamp: Temporal.Now.instant().epochMilliseconds,
-          },
+          assistantMessageStartChunk(
+            mapMessageId(ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL),
+          ),
         ];
   try {
     const normalizedSource = ensureAssistantMessageStart({
       getOrCreateMessageId: () =>
         mapMessageId(ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL),
       source: remapOutgoingMessageIds({
-        existingMessageIds,
+        existingMessageIds: new Set(initialMessages.map(({ id }) => id)),
         mapMessageId,
         source,
       }),
@@ -2143,6 +2200,7 @@ export const processServerChatStream = async function* ({
         sourceChunk,
         rawArgumentsByIncompleteToolCallId,
       );
+      producedAnswer ||= chunkCarriesAnswer(sourceChunk);
       if (sourceChunk.type === EventType.TOOL_CALL_END) {
         toolCallsWithCompleteInput.add(sourceChunk.toolCallId);
       }
@@ -2289,7 +2347,7 @@ export const processServerChatStream = async function* ({
 
 type ProcessTurnForPersistenceProps = Omit<
   ProcessServerChatStreamProps,
-  "existingMessageIds" | "getResponseMessage" | "mapMessageId" | "processor"
+  "getResponseMessage" | "initialMessages" | "mapMessageId" | "processor"
 > & {
   /** The history the run starts from: the messages it may continue. */
   initialMessages: ChatMessage[];
@@ -2326,8 +2384,8 @@ const processTurnForPersistence = ({
   });
   return processServerChatStream({
     ...stream,
-    existingMessageIds: new Set(initialMessages.map(({ id }) => id)),
     getResponseMessage: message,
+    initialMessages,
     mapMessageId: createTurnMessageIdMapper(owningAssistantMessageId),
     processor,
   });
@@ -2336,6 +2394,8 @@ const processTurnForPersistence = ({
 type FinishResponseMessageProps = {
   mapMessageId: MessageIdMapper;
   outcome: ChatTurnOutcome;
+  /** Whether the run streamed an answer (see `processServerChatStream`). */
+  producedAnswer: boolean;
   responseMessage: ChatMessage | null;
   usage: TokenUsage | undefined;
 };
@@ -2343,16 +2403,23 @@ type FinishResponseMessageProps = {
 const createTerminalResponseMessage = ({
   mapMessageId,
   outcome,
+  producedAnswer,
   responseMessage,
   usage,
 }: FinishResponseMessageProps): PersistableTerminalAssistantMessage => {
-  if (
-    (outcome.type === "completed" || outcome.type === "awaiting-user") &&
-    (!responseMessage || responseMessage.parts.length === 0)
-  ) {
+  if (outcome.type === "completed" && !producedAnswer) {
     throw new ChatEmptyCompletionError({
       message: CHAT_EMPTY_COMPLETION_MESSAGE,
     });
+  }
+  // A turn waits on the user only for a call its message holds
+  // (`drainedRunOutcome` reads the interaction off that message), so a
+  // waiting turn without a message is a defect here, not a provider outcome.
+  if (
+    outcome.type === "awaiting-user" &&
+    (responseMessage === null || responseMessage.parts.length === 0)
+  ) {
+    panic("A turn awaiting the user holds no message to wait on");
   }
 
   // A turn that failed before its first part still spent what the provider

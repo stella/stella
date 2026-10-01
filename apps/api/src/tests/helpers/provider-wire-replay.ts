@@ -201,6 +201,7 @@ export type ReplayedRequest = {
   body: string;
   exchange: number | "side" | null;
   headers: Headers;
+  method: string;
   model: string | null;
   path: string;
   url: string;
@@ -347,7 +348,13 @@ const responseFor = (
  * Installs the replay as `globalThis.fetch` until `restore`. Queue a
  * cassette with `serve`, run the adapter, then read `takeFindings`.
  */
-export const installProviderWireReplay = () => {
+export const installProviderWireReplay = ({
+  passThroughOrigins = [],
+}: {
+  /** In-process services (a fake object store) whose requests go through
+   *  untouched; nothing else leaves the replay. */
+  passThroughOrigins?: readonly string[];
+} = {}) => {
   const originalFetch = globalThis.fetch;
   let queue: { exchange: ProviderWireExchange; served: number }[] = [];
   let cursor = 0;
@@ -364,6 +371,13 @@ export const installProviderWireReplay = () => {
     input: string | URL | Request,
     init?: RequestInit,
   ): Promise<Response> => {
+    const target = new URL(input instanceof Request ? input.url : input);
+    if (
+      passThroughOrigins.includes(target.origin) &&
+      /^(?:127\.0\.0\.1|localhost)$/u.test(target.hostname)
+    ) {
+      return await originalFetch(input, init);
+    }
     const { bodyText, headers, method, signal, url } = await readRequest(
       input,
       init,
@@ -390,6 +404,7 @@ export const installProviderWireReplay = () => {
         body: bodyText,
         exchange: null,
         headers,
+        method,
         model: requestModel,
         path,
         url: url.toString(),
@@ -417,6 +432,7 @@ export const installProviderWireReplay = () => {
         body: bodyText,
         exchange: "side",
         headers,
+        method,
         model: requestModel,
         path,
         url: url.toString(),
@@ -457,6 +473,7 @@ export const installProviderWireReplay = () => {
       body: bodyText,
       exchange: current.index,
       headers,
+      method,
       model: requestModel,
       path,
       url: url.toString(),
@@ -498,6 +515,11 @@ export const installProviderWireReplay = () => {
      *  with `exchange`, outside the queue. */
     answerSideCalls: (exchange: ProviderWireExchange | undefined) => {
       sideAnswer = exchange;
+    },
+    /** Forgets the signed calls earlier conversations' answers made, for a
+     *  conversation that starts afresh. */
+    forgetSignedCalls: () => {
+      signedCalls.clear();
     },
     /** Every request since the last `takeFindings`. */
     requests: (): readonly ReplayedRequest[] => requests,
