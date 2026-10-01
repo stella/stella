@@ -1125,6 +1125,47 @@ const runChatAttempts = async function* ({
   }
 };
 
+/**
+ * What a chat attempt hands the engine that shapes the provider request: the
+ * adapter bound to the run's tool call ids, the tools as the provider reads
+ * them, the system prompt, and the generation options. The provider wire
+ * test builds its requests here too, so what it sends is what a chat turn
+ * sends. `maxOutputTokens` defaults to the chat turn's ceiling.
+ */
+export const chatAttemptRequestOptions = ({
+  caching,
+  maxOutputTokens,
+  model,
+  modelTools,
+  role,
+  system,
+  toolCallIds,
+}: {
+  caching: ReturnType<typeof resolveCaching>;
+  maxOutputTokens?: number | undefined;
+  model: ResolvedTanStackTextModel;
+  modelTools: Parameters<
+    typeof projectChatToolSchemasForProvider
+  >[0]["modelTools"];
+  role: ChatAttemptRole;
+  system: string | undefined;
+  toolCallIds: ToolCallIdLedger;
+}) => ({
+  adapter: withRunToolCallIds(model.adapter, toolCallIds),
+  tools: projectChatToolSchemasForProvider({
+    modelTools,
+    provider: model.provider,
+  }),
+  ...systemPromptsPatch({ caching, model, system }),
+  modelOptions: mergeGenerationOptions({
+    caching,
+    model,
+    maxOutputTokens: maxOutputTokens ?? chatTurnOutputTokens(model),
+    serviceTier: "standard",
+    temperature: getTemperatureForRole(role),
+  }),
+});
+
 type RunChatAttemptProps = {
   abortController: AbortController;
   abortSignal: AbortSignal;
@@ -1286,12 +1327,15 @@ const runChatAttempt = async function* ({
   }
 
   const stream = streamChatChunks({
-    adapter: withRunToolCallIds(model.adapter, toolCallIds),
-    messages: preparedMessages,
-    tools: projectChatToolSchemasForProvider({
+    ...chatAttemptRequestOptions({
+      caching,
+      model,
       modelTools,
-      provider: model.provider,
+      role,
+      system: baseSystem,
+      toolCallIds,
     }),
+    messages: preparedMessages,
     ...(externalMcpToolSource
       ? {
           mcp: {
@@ -1312,14 +1356,6 @@ const runChatAttempt = async function* ({
     ...(runId === undefined ? {} : { runId }),
     ...(parentRunId === undefined ? {} : { parentRunId }),
     ...(resume === undefined ? {} : { resume }),
-    ...systemPromptsPatch({ caching, model, system: baseSystem }),
-    modelOptions: mergeGenerationOptions({
-      caching,
-      model,
-      maxOutputTokens: chatTurnOutputTokens(model),
-      serviceTier: "standard",
-      temperature: getTemperatureForRole(role),
-    }),
     middleware: [
       analytics.middleware,
       createChatRuntimeMiddleware({
