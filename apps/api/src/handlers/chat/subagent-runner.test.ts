@@ -1,5 +1,6 @@
 import { toolDefinition } from "@tanstack/ai";
 import type { AnyTextAdapter } from "@tanstack/ai";
+import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
@@ -169,14 +170,15 @@ describe("a subagent run under an anonymizing boundary", () => {
     const systemUntrusted = "Return output matching: Jan Novak";
     const boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }> = {
       anonymizationScopeId: "workspace-A",
-      anonymizeFields: async ({ fields }) => ({
-        entityCount: fields.filter((field) => field.includes("Jan Novak"))
-          .length,
-        fields: fields.map((field) =>
-          field.replaceAll("Jan Novak", "[PERSON_1]"),
-        ),
-        redactionMap: new Map([["[PERSON_1]", "Jan Novak"]]),
-      }),
+      anonymizeFields: async ({ fields }) =>
+        Result.ok({
+          entityCount: fields.filter((field) => field.includes("Jan Novak"))
+            .length,
+          fields: fields.map((field) =>
+            field.replaceAll("Jan Novak", "[PERSON_1]"),
+          ),
+          redactionMap: new Map([["[PERSON_1]", "Jan Novak"]]),
+        }),
       excludedCanonicals: Promise.resolve([]),
       gazetteerEntries: Promise.resolve([]),
       literalPlaceholderAliases: new Map<string, string>(),

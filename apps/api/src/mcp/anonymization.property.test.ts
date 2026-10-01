@@ -170,7 +170,7 @@ describe("anonymizing several fields through the pipeline", () => {
       let redactedRuns = 0;
       await fc.assert(
         fc.asyncProperty(fields, async (input) => {
-          const result = await anonymizeTextFields({
+          const anonymized = await anonymizeTextFields({
             catalogs: {
               type: "preloaded",
               excludedCanonicals: [],
@@ -180,6 +180,10 @@ describe("anonymizing several fields through the pipeline", () => {
             organizationId: toSafeId<"organization">("org_test"),
             workspaceId: "00000000-0000-4000-8000-000000000001",
           });
+          if (Result.isError(anonymized)) {
+            throw anonymized.error;
+          }
+          const result = anonymized.value;
 
           expect(result.fields).toHaveLength(input.length);
           for (const [index, value] of result.fields.entries()) {

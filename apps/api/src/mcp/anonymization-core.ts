@@ -16,6 +16,7 @@ import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 import { joinFieldsForAnonymization } from "@/api/mcp/field-markers";
+import type { AnonymizedFieldBoundaryError } from "@/api/mcp/field-markers";
 
 /**
  * Where one call's deny-list and allowlist come from.
@@ -148,6 +149,19 @@ const resolveAnonymizationCatalogs = async ({
   }
 };
 
+export type AnonymizedTextFields = {
+  entityCount: number;
+  /** One entry per input field, in input order. */
+  fields: string[];
+  /** Placeholder → original. Empty for fully-redacted (non-reversible) operators. */
+  redactionMap: Map<string, string>;
+};
+
+/**
+ * Anonymize `fields` in one pipeline call. Output whose field structure did
+ * not survive the pipeline is an `AnonymizedFieldBoundaryError`; callers must
+ * refuse it and forward none of the fields.
+ */
 export const anonymizeTextFieldsWithDependencies = async ({
   catalogs,
   dependencies,
@@ -158,13 +172,13 @@ export const anonymizeTextFieldsWithDependencies = async ({
   context: providedContext,
 }: AnonymizeTextFieldsInput & {
   dependencies: AnonymizeTextFieldsDependencies;
-}) => {
+}): Promise<Result<AnonymizedTextFields, AnonymizedFieldBoundaryError>> => {
   if (fields.every((field) => field.length === 0)) {
-    return {
+    return Result.ok({
       entityCount: 0,
       fields,
       redactionMap: new Map<string, string>(),
-    };
+    });
   }
 
   const context = providedContext ?? dependencies.createPipelineContext();
@@ -186,7 +200,7 @@ export const anonymizeTextFieldsWithDependencies = async ({
     ],
   });
   if (Result.isError(joined)) {
-    throw joined.error;
+    return Result.err(joined.error);
   }
   const dictionaries = await dependencies.loadNameDictionaries();
 
@@ -205,13 +219,12 @@ export const anonymizeTextFieldsWithDependencies = async ({
   // is returned, so callers forward nothing.
   const redactedFields = joined.value.split(result.redactedText);
   if (Result.isError(redactedFields)) {
-    throw redactedFields.error;
+    return Result.err(redactedFields.error);
   }
 
-  return {
+  return Result.ok({
     entityCount: result.entityCount,
     fields: redactedFields.value,
-    /** Placeholder → original. Empty for fully-redacted (non-reversible) operators. */
     redactionMap: result.redactionMap,
-  };
+  });
 };

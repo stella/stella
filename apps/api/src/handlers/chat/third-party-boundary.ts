@@ -655,6 +655,63 @@ type TextReplacement =
       message: string;
     };
 
+/**
+ * Anonymize already-encoded fields in one call with the boundary's issued
+ * placeholders protected, then renumber and restore them. The caller merges
+ * the returned `redactionMap` once it accepts the fields. Any failure, a
+ * damaged field structure included, is a refusal: nothing is forwarded.
+ */
+const anonymizeBoundaryFields = async ({
+  boundary,
+  encodedFields,
+  sourceFields,
+}: {
+  boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>;
+  encodedFields: string[];
+  sourceFields: string[];
+}): Promise<Result<AnonymizedTextFieldsResult, BoundaryRefusal>> => {
+  const anonymizeFields = boundary.anonymizeFields ?? anonymizeTextFields;
+  const protectedInput = protectBoundaryPlaceholders(boundary, encodedFields);
+  if (Result.isError(protectedInput)) {
+    return Result.err(anonymizationFailure(protectedInput.error));
+  }
+  const anonymized = await Result.tryPromise({
+    try: async () =>
+      await anonymizeFields({
+        context: boundary.pipelineContext,
+        fields: protectedInput.value.fields,
+        forcedSensitiveValues: forcedSensitiveValuesForFields(
+          boundary,
+          sourceFields,
+        ),
+        catalogs: {
+          type: "preloaded",
+          excludedCanonicals: await boundary.excludedCanonicals,
+          gazetteerEntries: await boundary.gazetteerEntries,
+        },
+        organizationId: boundary.organizationId,
+        workspaceId: boundary.anonymizationScopeId,
+      }),
+    catch: anonymizationFailure,
+  });
+  if (Result.isError(anonymized)) {
+    return Result.err(anonymized.error);
+  }
+  if (Result.isError(anonymized.value)) {
+    return Result.err(anonymizationFailure(anonymized.value.error));
+  }
+
+  const rewritten = rewriteBoundaryPlaceholders(
+    boundary,
+    anonymized.value.value,
+  );
+  const restored = protectedInput.value.restore(rewritten.fields);
+  if (Result.isError(restored)) {
+    return Result.err(anonymizationFailure(restored.error));
+  }
+  return Result.ok({ ...rewritten, fields: restored.value });
+};
+
 export const prepareTextForThirdParty = async ({
   boundary,
   text,
@@ -666,42 +723,18 @@ export const prepareTextForThirdParty = async ({
     return Result.ok(text);
   }
 
-  const anonymizeFields = boundary.anonymizeFields ?? anonymizeTextFields;
   reserveSourcePlaceholders(boundary, [text]);
-  const protectedInput = protectBoundaryPlaceholders(boundary, [
-    encodeLateLiteralPlaceholders(boundary, text),
-  ]);
-  if (Result.isError(protectedInput)) {
-    return Result.err(anonymizationFailure(protectedInput.error));
-  }
-  const anonymized = await Result.tryPromise({
-    try: async () =>
-      await anonymizeFields({
-        context: boundary.pipelineContext,
-        fields: protectedInput.value.fields,
-        forcedSensitiveValues: forcedSensitiveValuesForFields(boundary, [text]),
-        catalogs: {
-          type: "preloaded",
-          excludedCanonicals: await boundary.excludedCanonicals,
-          gazetteerEntries: await boundary.gazetteerEntries,
-        },
-        organizationId: boundary.organizationId,
-        workspaceId: boundary.anonymizationScopeId,
-      }),
-    catch: anonymizationFailure,
+  const anonymized = await anonymizeBoundaryFields({
+    boundary,
+    encodedFields: [encodeLateLiteralPlaceholders(boundary, text)],
+    sourceFields: [text],
   });
-
   if (Result.isError(anonymized)) {
     return Result.err(anonymized.error);
   }
 
-  const rewritten = rewriteBoundaryPlaceholders(boundary, anonymized.value);
-  const restored = protectedInput.value.restore(rewritten.fields);
-  if (Result.isError(restored)) {
-    return Result.err(anonymizationFailure(restored.error));
-  }
-  mergeRedactionMap(boundary.redactionMap, rewritten.redactionMap);
-  return Result.ok(restored.value.at(0) ?? "");
+  mergeRedactionMap(boundary.redactionMap, anonymized.value.redactionMap);
+  return Result.ok(anonymized.value.fields.at(0) ?? "");
 };
 
 const prepareTextBatchForThirdParty = async ({
@@ -718,44 +751,19 @@ const prepareTextBatchForThirdParty = async ({
     return Result.ok(undefined);
   }
 
-  const anonymizeFields = boundary.anonymizeFields ?? anonymizeTextFields;
   reserveSourcePlaceholders(boundary, fields);
-  const protectedInput = protectBoundaryPlaceholders(
+  const anonymized = await anonymizeBoundaryFields({
     boundary,
-    sourceAlreadyEncoded
+    encodedFields: sourceAlreadyEncoded
       ? fields
       : fields.map((field) => encodeLateLiteralPlaceholders(boundary, field)),
-  );
-  if (Result.isError(protectedInput)) {
-    return Result.err(anonymizationFailure(protectedInput.error));
-  }
-  const anonymized = await Result.tryPromise({
-    try: async () =>
-      await anonymizeFields({
-        context: boundary.pipelineContext,
-        fields: protectedInput.value.fields,
-        forcedSensitiveValues: forcedSensitiveValuesForFields(boundary, fields),
-        catalogs: {
-          type: "preloaded",
-          excludedCanonicals: await boundary.excludedCanonicals,
-          gazetteerEntries: await boundary.gazetteerEntries,
-        },
-        organizationId: boundary.organizationId,
-        workspaceId: boundary.anonymizationScopeId,
-      }),
-    catch: anonymizationFailure,
+    sourceFields: fields,
   });
-
   if (Result.isError(anonymized)) {
     return Result.err(anonymized.error);
   }
-
-  const rewritten = rewriteBoundaryPlaceholders(boundary, anonymized.value);
-  const restored = protectedInput.value.restore(rewritten.fields);
-  if (Result.isError(restored)) {
-    return Result.err(anonymizationFailure(restored.error));
-  }
-  const restoredFields = restored.value;
+  const rewritten = anonymized.value;
+  const restoredFields = rewritten.fields;
 
   for (let index = 0; index < replacements.length; index += 1) {
     const replacement = replacements.at(index);

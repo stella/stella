@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
 import { createPipelineContext } from "@stll/anonymize";
@@ -41,12 +42,6 @@ const anonymizeWith = async (
     workspaceId: "00000000-0000-4000-8000-000000000001",
   });
 
-const failureOf = async (run: Promise<unknown>): Promise<unknown> =>
-  await run.then(
-    () => null,
-    (error: unknown) => error,
-  );
-
 describe("anonymizing several fields in one call", () => {
   test("returns every field unchanged when the pipeline keeps the text", async () => {
     const fields = [
@@ -62,35 +57,36 @@ describe("anonymizing several fields in one call", () => {
       fields,
     );
 
-    expect(result.fields).toEqual(fields);
+    expect(Result.isOk(result) ? result.value.fields : result.error).toEqual(
+      fields,
+    );
   });
 
   test("refuses output whose field delimiter was replaced by a placeholder", async () => {
-    // The error is the typed refusal callers already turn into a failed
-    // anonymization, not a panic.
-    const failure = await failureOf(
-      anonymizeWith(
-        createRewritingAnonymizeDependencies((text) =>
-          replaceFirstFieldDelimiterToken(text, "[ORGANIZATION_1]"),
-        ),
-        ["Title", "Body"],
+    // A typed error result the callers turn into a refusal, not a panic.
+    const result = await anonymizeWith(
+      createRewritingAnonymizeDependencies((text) =>
+        replaceFirstFieldDelimiterToken(text, "[ORGANIZATION_1]"),
       ),
+      ["Title", "Body"],
     );
 
-    expect(failure).toBeInstanceOf(AnonymizedFieldBoundaryError);
+    expect(Result.isError(result) ? result.error : result.value).toBeInstanceOf(
+      AnonymizedFieldBoundaryError,
+    );
   });
 
   test("refuses output that lost the line break around a field delimiter", async () => {
-    const failure = await failureOf(
-      anonymizeWith(
-        createRewritingAnonymizeDependencies((text) =>
-          text.replace("Title\n", "[ORGANIZATION_1]"),
-        ),
-        ["Title", "Body"],
+    const result = await anonymizeWith(
+      createRewritingAnonymizeDependencies((text) =>
+        text.replace("Title\n", "[ORGANIZATION_1]"),
       ),
+      ["Title", "Body"],
     );
 
-    expect(failure).toBeInstanceOf(AnonymizedFieldBoundaryError);
+    expect(Result.isError(result) ? result.error : result.value).toBeInstanceOf(
+      AnonymizedFieldBoundaryError,
+    );
   });
 });
 

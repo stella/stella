@@ -34,18 +34,18 @@ export const createRewritingAnonymizeDependencies = (
     }),
   };
   return {
-    getBinding: () => Promise.resolve(binding),
-    createNativePipelineFromConfig: () =>
-      Promise.resolve(
+    getBinding: async () => await Promise.resolve(binding),
+    createNativePipelineFromConfig: async () =>
+      await Promise.resolve(
         // SAFETY: the chat pipeline only calls `redactText`.
         // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- test double only implements `redactText`
         pipeline as unknown as NativePipeline,
       ),
     createPipelineContext,
     deanonymise: (text: string) => text,
-    loadAnonymizationGazetteerEntries: () => Promise.resolve([]),
-    loadAnonymizationAllowlistCanonicals: () => Promise.resolve([]),
-    loadNameDictionaries: () => Promise.resolve({}),
+    loadAnonymizationGazetteerEntries: async () => await Promise.resolve([]),
+    loadAnonymizationAllowlistCanonicals: async () => await Promise.resolve([]),
+    loadNameDictionaries: async () => await Promise.resolve({}),
   };
 };
 
