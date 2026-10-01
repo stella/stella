@@ -1094,6 +1094,7 @@
     "focusSuggestion": "Zaměřit návrh: {topic}",
     "folioCitationFallback": "str. {n}",
     "forkFromHere": "Vytvořit odsud nový chat",
+    "forkInSidePanel": "Vytvořit odsud nový chat v bočním panelu",
     "forkedFrom": "Vytvořeno z chatu: <bdi>{title}</bdi>",
     "forkedFromUnavailable": "Vytvořeno z chatu, který už není dostupný",
     "forkedThread": "Z jiného chatu",
@@ -1153,6 +1154,7 @@
       "viaProvider": "přes {provider}"
     },
     "newChat": "Nový chat",
+    "newChatInSidePanel": "Nový chat je dostupný v bočním panelu",
     "noPromptPresetOnly": "Bez zprávy, pouze předvolba",
     "noThreads": "Zatím žádné konverzace",
     "officeCitationUnavailable": "Tato citace už není dostupná.",
@@ -1200,6 +1202,12 @@
     "richContentLoading": "Načítání interaktivního obsahu…",
     "richContentTitle": "Interaktivní obsah",
     "richContentUnavailable": "Tento obsah nelze bezpečně zobrazit.",
+    "selection": {
+      "askInNewChat": "Zeptat se v novém chatu",
+      "quoteInReply": "Citovat v odpovědi",
+      "quotedText": "„{quote}“",
+      "toolbarLabel": "Vybraný text"
+    },
     "sendError": "Při odesílání zprávy došlo k problému. Pokud chyba přetrvává, kontaktujte podporu.",
     "sendErrorAnonymizationBlocked": "stella nedokázala anonymizovat jednu přílohu, takže se nic neodeslalo. Odeberte soubor, nebo odešlete zprávu bez anonymizace.",
     "sendErrorEmptyCompletion": "AI vrátila prázdnou odpověď. Zkuste to znovu, nebo zprávu přeformulujte.",
@@ -5987,7 +5995,8 @@
         "openReport": "Otevřít zprávu",
         "submit": "Uložit zprávu",
         "templateLabel": "Vzor zprávy",
-        "title": "Uložit zprávu"
+        "title": "Uložit zprávu",
+        "withoutAiSummaries": "Uložit bez shrnutí od AI"
       },
       "saveAsTemplate": "Uložit jako předvolbu…",
       "selectProperty": "Vybrat vlastnost",
