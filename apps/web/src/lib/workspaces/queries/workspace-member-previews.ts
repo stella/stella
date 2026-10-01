@@ -59,7 +59,8 @@ export const workspaceMemberPreviewsOptions = ({
       userId,
       workspaceIds,
     }),
-    queryFn: ({ signal }) => readWorkspaceMemberPreviews(workspaceIds, signal),
+    queryFn: async ({ signal }) =>
+      await readWorkspaceMemberPreviews(workspaceIds, signal),
     enabled: workspaceIds.length > 0,
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
