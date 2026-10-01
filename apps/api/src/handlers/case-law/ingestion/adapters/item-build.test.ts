@@ -8,13 +8,13 @@ import {
   decodeSourceRawEnvelope,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
-import { plainTextIngestionResult } from "@/api/handlers/case-law/ingestion/adapters/plain-text-assembly";
 import {
   absentDecisionTextFields,
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 
 const sourceDecision = (caseNumber: string, sourceDocumentId?: string) =>
   plainTextIngestionResult({
@@ -58,15 +58,17 @@ describe("plain-text item rejection", () => {
     expect(rejected.decision.caseNumberIsPlaceholder).toBe(true);
     expect(rejected.decision.isListingOnly).toBe(true);
     expect(rejected.decision.fulltext).toBeUndefined();
-    expect(rejected.decision.metadata.plainTextFailureReason).toBe(
+    expect(String(rejected.decision.metadata["plainTextFailureReason"])).toBe(
       "rtf-syntax",
     );
-    expect(rejected.decision.metadata.detailStatus).toBe("item_build_failed");
+    expect(String(rejected.decision.metadata["detailStatus"])).toBe(
+      "item_build_failed",
+    );
     expect(rejected.decision.parserVersion).toBe(
       PARSER_VERSIONS[ADAPTER_KEYS.CZ_NSS],
     );
     expect(
-      decodeSourceRawEnvelope(rejected.decision.sourceRaw ?? "")?.listing,
+      decodeSourceRawEnvelope(rejected.decision.sourceRaw ?? "")?.["listing"],
     ).toBe(rawListing);
   });
 
@@ -126,7 +128,7 @@ describe("plain-text item rejection", () => {
       throw new Error("Expected item rejection");
     }
     expect(item.decision.sourceRaw).toBe(sourceRaw);
-    expect(item.decision.sourceRawObjects?.document?.bytes).toBe(bytes);
+    expect(item.decision.sourceRawObjects?.["document"]?.bytes).toBe(bytes);
     expect(
       Object.keys(decodeSourceRawEnvelope(item.decision.sourceRaw ?? "") ?? {}),
     ).toEqual(["listing", "detail", "document"]);

@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 
-import { plainTextIngestionResult } from "@/api/handlers/case-law/ingestion/adapters/plain-text-assembly";
 import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
@@ -12,6 +11,7 @@ import {
   EMPTY_AST,
   type IngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 
 const rawDecision = {
   caseNumber: "A <br/> 1",

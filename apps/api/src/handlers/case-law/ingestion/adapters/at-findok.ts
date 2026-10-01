@@ -36,7 +36,6 @@ import {
   FINDOK_REQUEST_INTERVAL_MS,
 } from "@/api/handlers/case-law/ingestion/adapters/at-findok-throttle";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
-import { plainTextIngestionResult } from "@/api/handlers/case-law/ingestion/adapters/plain-text-assembly";
 import {
   PublisherPageError,
   validatePublisherPage,
@@ -65,6 +64,7 @@ import { DocxArchiveError, loadDocxArchive } from "@/api/lib/docx-archive";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isRecord } from "@/api/lib/type-guards";
@@ -791,6 +791,10 @@ const buildDecision = async ({
   if (item.sourceDocumentIdRepairAliases === undefined) {
     return buildListingOnly(payload, "publisher-id-unavailable");
   }
+  const listing = buildListingOnly(payload, "detail-not-fetched");
+  if (listing.plainTextOutcome.type === "item_build_failed") {
+    return listing;
+  }
   await dependencies.sleep(FINDOK_REQUEST_INTERVAL_MS);
   const response = await dependencies.request(
     artifactUrl(item.pathZip),
@@ -886,6 +890,15 @@ export const assembleAtFindokDecision = (
   if (item.type === "quarantine") {
     return buildListingOnly(payload, "item_build_failed");
   }
+  const raw = storedRaw({ item, documentXml, headnoteXml });
+  const listing = buildListingOnly(payload, "detail-not-fetched");
+  if (listing.plainTextOutcome.type === "item_build_failed") {
+    return plainTextIngestionResult({
+      ...listing,
+      ...raw,
+      rawHash: hashContent(raw.sourceRaw),
+    });
+  }
   const decisionDate = parseDate(item.appdat);
   if (decisionDate === undefined) {
     panic("validated Findok manifest date became invalid");
@@ -906,7 +919,6 @@ export const assembleAtFindokDecision = (
   const parsed = parseResult.value;
   const headnotes =
     headnoteXml === undefined ? undefined : parseFindokHeadnoteXml(headnoteXml);
-  const raw = storedRaw({ item, documentXml, headnoteXml });
   return plainTextIngestionResult({
     sourceDocumentId: item.dokumentId,
     sourceDocumentIdRepairAliases: item.sourceDocumentIdRepairAliases,

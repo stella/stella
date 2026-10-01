@@ -12,7 +12,6 @@ import {
 import { createCaseLawDecisionSlugCandidate } from "@/api/handlers/case-law/decisions/slug";
 import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
-import { plainTextIngestionResult } from "@/api/handlers/case-law/ingestion/adapters/plain-text-assembly";
 import { bareCitationKey } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -23,6 +22,7 @@ import {
   absentTextField,
   presentTextField,
 } from "@/api/lib/case-law/decision-text";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   openGatedTestDatabase,
@@ -184,10 +184,10 @@ if (!databaseUrl || !runPostgresTests) {
       await db
         .delete(caseLawDecisions)
         .where(eq(caseLawDecisions.id, retiredId));
-      const input = {
+      const input = plainTextIngestionResult({
         ...decisionAt("Najvyšší súd SR", "retired-publisher"),
         caseNumber: "1Cdo/1/2026",
-      };
+      });
       for (const observationOrder of [1n, 2n]) {
         await processDecision({
           input: {

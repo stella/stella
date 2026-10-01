@@ -56,20 +56,23 @@ const reconciliationOf = (adapter: ReturnType<typeof createAtFindokAdapter>) =>
 describe("Austrian Findok adapter", () => {
   it("quarantines a rejected title while storing later items and advancing the cursor", async () => {
     const poisonId = "b68202a0-55e4-4dea-9e93-971f0b71ae33";
-    const poison = { ...MANIFEST_ITEM, dokumentId: poisonId, titel: "<br/>" };
-    const responses = [
-      manifestResponse([poison, MANIFEST_ITEM]),
-      new Response(null, { status: 404 }),
-      await detailResponse(),
-    ];
+    const poison = {
+      ...MANIFEST_ITEM,
+      dokumentId: poisonId,
+      titel: "<br/>",
+    };
+    const detailBytes = await (await detailResponse()).arrayBuffer();
+    const documentRequests: string[] = [];
+    let listingRead = false;
     const adapter = createAtFindokAdapter({
       now: () => new Date("2026-08-12T00:00:00Z"),
-      request: async () => {
-        const response = responses.shift();
-        if (response === undefined) {
-          throw new TypeError("Unexpected Findok request");
+      request: async (url) => {
+        if (!listingRead) {
+          listingRead = true;
+          return manifestResponse([poison, MANIFEST_ITEM]);
         }
-        return response;
+        documentRequests.push(String(url));
+        return new Response(detailBytes);
       },
       sleep: async () => {},
     });
@@ -89,8 +92,35 @@ describe("Austrian Findok adapter", () => {
     expect(
       decodeSourceRawEnvelope(quarantine?.sourceRaw ?? "")?.["listing"],
     ).toContain('"titel":"<br/>"');
+    expect(documentRequests).toEqual([
+      `https://findok.bmf.gv.at/findok/iwg/${MANIFEST_ITEM.pathZip}`,
+    ]);
     expect(page.nextCursor).not.toBeNull();
     expect(page.nextCursor).toContain("verify");
+  });
+  it("replay rejects a manifest title even when the archive states a valid subject", async () => {
+    const manifest = parseFindokManifest(
+      "bfg",
+      JSON.stringify({
+        generierungsdatum: "07.08.2026 06:16",
+        data: [{ ...MANIFEST_ITEM, titel: "<br/>" }],
+      }),
+    );
+    const item = manifest.items.at(0);
+    if (item === undefined) {
+      throw new TypeError("The manifest fixture must contain a row");
+    }
+    const documentXml = await xmlFixture();
+    const decision = assembleAtFindokDecision(
+      { collection: "bfg", item },
+      { documentXml },
+    );
+    expect(decision.plainTextOutcome.type).toBe("item_build_failed");
+    expect(decision.isListingOnly).toBe(true);
+    expect(decision.sourceDocumentId).toBe(DOCUMENT_ID);
+    expect(
+      decodeSourceRawEnvelope(decision.sourceRaw ?? "")?.["document-xml"],
+    ).toBe(documentXml);
   });
   for (const fixture of [
     { name: "HTML challenge", body: "<html><form><input></form></html>" },
@@ -342,7 +372,9 @@ describe("Austrian Findok adapter", () => {
       );
       expect(quarantined?.sourceDocumentId).toStartWith("findok-quarantine:");
       expect(quarantined?.documentUrl).toBeUndefined();
-      expect(quarantined?.metadata["detailStatus"]).toBe("item_build_failed");
+      expect(String(quarantined?.metadata["detailStatus"])).toBe(
+        "item_build_failed",
+      );
       expect(quarantined?.sourceRaw).toBeDefined();
       const parts = decodeSourceRawEnvelope(quarantined?.sourceRaw ?? "");
       expect(JSON.parse(parts?.["listing"] ?? "null")).toEqual(rejected);

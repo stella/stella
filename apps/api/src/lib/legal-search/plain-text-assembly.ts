@@ -1,6 +1,5 @@
 import { stripDangerousChars } from "@stll/legal-ast/text-sanitize";
 
-import { hashContent } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import {
   absentDecisionTextFields,
   TEXT_ABSENCE_REASON,
@@ -24,9 +23,9 @@ export const plainTextIngestionResult = <T extends RawIngestionResult>(
     return result.value;
   }
   const error = result.error;
-  const quarantineId = `plaintext-quarantine:${hashContent(
-    JSON.stringify([raw.country, raw.rawHash, raw.sourceRaw]),
-  )}`;
+  const quarantineId = `plaintext-quarantine:${new Bun.CryptoHasher("sha256")
+    .update(JSON.stringify([raw.country, raw.rawHash, raw.sourceRaw]))
+    .digest("hex")}`;
   const sourceDocumentId =
     raw.sourceDocumentId !== undefined &&
     persistableIdentity(raw.sourceDocumentId)

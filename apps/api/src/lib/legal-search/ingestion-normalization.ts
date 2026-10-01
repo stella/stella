@@ -9,7 +9,6 @@ import {
 } from "@stll/legal-ast/decision-identifier";
 import { collapseSpacedLetters } from "@stll/text-normalize";
 
-import { plainTextIngestionResult } from "@/api/handlers/case-law/ingestion/adapters/plain-text-assembly";
 import {
   DECISION_TEXT_FIELD,
   TEXT_ABSENCE_REASON,
@@ -51,6 +50,7 @@ import {
   PARTIAL_OBSERVATION_KEY,
   type PartialObservation,
 } from "@/api/lib/legal-search/partial-observation-sql";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { isRecord } from "@/api/lib/type-guards";
 
 const sanitizeDecisionIdentifier = (

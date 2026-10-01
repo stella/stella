@@ -31,7 +31,6 @@ import {
 import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import type { SaosItem } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import { plCourtsAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
-import { plainTextIngestionResult } from "@/api/handlers/case-law/ingestion/adapters/plain-text-assembly";
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import {
@@ -56,6 +55,7 @@ import {
   PARTIAL_OBSERVATION_FIELD,
   PARTIAL_OBSERVATION_KEY,
 } from "@/api/lib/legal-search/partial-observation-sql";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { planLines } from "@/api/tests/helpers/explain-plan";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";

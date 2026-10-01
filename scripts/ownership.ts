@@ -1199,6 +1199,7 @@ export const OWNERSHIP = [
       "Sanitizing publisher labels and metadata into branded plain text",
     owner: [
       "apps/api/src/lib/case-law/plain-text.ts",
+      "apps/api/src/lib/legal-search/plain-text-assembly.ts",
       "apps/api/src/lib/case-law/plain-text-markup.ts",
     ],
     summary:

@@ -35,12 +35,7 @@
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
-import {
-  getPropertyName,
-  isAstNode,
-  unwrapExpression,
-  type AstNode,
-} from "./utils.ts";
+import { getPropertyName, isAstNode, unwrapExpression } from "./utils.ts";
 
 // `court` is the only court-valued key of `IngestionResult`
 // (apps/api/src/lib/legal-search/ingestion-types.ts); the row's court and the
@@ -59,7 +54,10 @@ const isLiteralCourtValue = (value: unknown): boolean => {
 };
 
 /** A quarantined identity deliberately makes no claim about its deciding court. */
-const isAbsentQuarantineCourt = (node: AstNode): boolean => {
+const isAbsentQuarantineCourt = (node: unknown): boolean => {
+  if (!isAstNode(node)) {
+    return false;
+  }
   const value = unwrapExpression(node.value);
   const parent = node.parent;
   if (
