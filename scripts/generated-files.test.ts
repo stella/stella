@@ -263,7 +263,7 @@ test("autofix selection closes over generated outputs and ordering dependencies"
   }
 });
 
-test("the planned allowlist is exactly the selected output union", () => {
+test("the planned allowlist is exactly the selected committed output union", () => {
   for (const paths of [
     ".oxfmtrc.json\n",
     "packages/api-contract/src/mcp-tool.ts\n",
@@ -301,11 +301,37 @@ test("manifest paths and named guards resolve against tracked files and CI", asy
     [...ci.matchAll(/^\s+- name: (.+)$/gmu)].map((match) => match[1]),
   );
   for (const entry of GENERATORS) {
-    for (const glob of [...entry.inputs, ...entry.outputs]) {
+    for (const glob of entry.inputs) {
       expect(
         tracked.some((file) => matchesGeneratedGlob(glob, file)),
         `${entry.id}: ${glob}`,
       ).toBe(true);
+    }
+    for (const glob of entry.outputs) {
+      const isTracked = tracked.some((file) =>
+        matchesGeneratedGlob(glob, file),
+      );
+      switch (entry.outputKind) {
+        case "committed":
+          expect(isTracked, `${entry.id}: ${glob}`).toBe(true);
+          break;
+        case "derived": {
+          expect(isTracked, `${entry.id}: ${glob} must stay untracked`).toBe(
+            false,
+          );
+          const ignored = Bun.spawnSync(
+            ["git", "check-ignore", "--no-index", "--", glob],
+            { stdout: "pipe", stderr: "pipe" },
+          );
+          expect(ignored.exitCode, `${entry.id}: ${glob} must be ignored`).toBe(
+            0,
+          );
+          expect(allowedOutputs([entry])).not.toContain(glob);
+          break;
+        }
+        default:
+          entry satisfies never;
+      }
     }
     if ("checkedBy" in entry) {
       expect(
@@ -437,10 +463,14 @@ test("CI diff path guards stay pinned to manifest outputs", () => {
   );
   const diff = cli.split("git diff --exit-code -- \\\n")[1];
   expect(diff).toBeDefined();
-  const paths = (diff ?? "")
-    .split("\n")
-    .slice(0, 4)
-    .map((line) => line.trim().replace(/ \\$/u, ""));
+  const paths: string[] = [];
+  for (const line of (diff ?? "").split("\n")) {
+    const argument = line.trim();
+    paths.push(argument.replace(/ \\$/u, ""));
+    if (!argument.endsWith("\\")) {
+      break;
+    }
+  }
   expect(paths.toSorted()).toEqual(
     generator("cli-registry")
       .outputs.map((glob) => glob.replace(/\/\*\*$/u, ""))
