@@ -81,6 +81,7 @@
       "outputs": [".cache/tsbuildinfo*.json", "**/.cache/tsbuildinfo*.json"]
     },
     "//#typecheck:repo": {
+      "dependsOn": ["@stll/cli#codegen:runtime"],
       // Root projects can import workspace source. The broad workspace inputs
       // trade some misses for correctness while still sharing exact results
       // and compiler state between linked worktrees and CI runners.
@@ -259,12 +260,52 @@
       "dependsOn": [],
       "inputs": ["$TURBO_DEFAULT$"]
     },
+    "@stll/cli#codegen:runtime": {
+      "inputs": [
+        "package.json",
+        "capability-catalog.json",
+        "src/codegen.ts",
+        "src/capability-catalog-load.ts",
+        "src/generate-capability-tree.ts",
+        "src/generate-route-map.ts",
+        "src/annotations.ts",
+        "src/expand-schema-defs.ts",
+        "src/flag-name.ts",
+        "src/route-types.ts",
+        "src/generated/registry-snapshot.json",
+        "src/generated/mcp-contract.ts",
+        "$TURBO_ROOT$/package.json",
+        "$TURBO_ROOT$/bunfig.toml",
+        "$TURBO_ROOT$/bun.lock",
+        "$TURBO_ROOT$/patches/**"
+      ],
+      "outputs": [
+        "src/generated/route-map.ts",
+        "src/generated/tool-annotations.ts"
+      ]
+    },
+    "@stll/cli#build": {
+      "dependsOn": ["^build", "codegen:runtime"]
+    },
+    "@stll/cli#typecheck": {
+      "dependsOn": ["transit", "codegen:runtime"]
+    },
+    "@stll/cli#lint": {
+      "dependsOn": ["transit", "codegen:runtime"]
+    },
+    "@stll/cli#lint:fix": {
+      "dependsOn": ["transit", "codegen:runtime"]
+    },
     // A package's tests are selected, and cached, on that package's own files.
     // The entries below declare the files each suite reads from outside its
     // workspace: scripts/test-scope.ts adds the package to the test filter when
     // one of them changed, and Turbo counts it in the cache key so a cached
     // pass cannot replay over it. scripts/check-test-input-coverage.ts holds
     // these lists and the tests in sync in both directions.
+    "@stll/cli#test": {
+      "dependsOn": ["codegen:runtime"],
+      "inputs": ["$TURBO_DEFAULT$"]
+    },
     "@stll/agent-engine#test": {
       "dependsOn": [],
       "inputs": [

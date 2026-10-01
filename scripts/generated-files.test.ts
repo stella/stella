@@ -73,6 +73,30 @@ test("Guard A rejects an unregistered generated source and ignores ordinary comm
   );
 });
 
+test("CLI runtime outputs have one owner and stay ignored when regenerated", () => {
+  const outputs = generator("cli-runtime").outputs;
+  for (const output of outputs) {
+    expect(
+      GENERATORS.filter(({ outputs: ownerOutputs }) =>
+        ownerOutputs.some((glob) => matchesGeneratedGlob(glob, output)),
+      ).map(({ id }) => id),
+    ).toEqual(["cli-runtime"]);
+  }
+  const ignored = Bun.spawnSync(
+    ["git", "check-ignore", "--no-index", "--stdin"],
+    {
+      cwd: new URL("..", import.meta.url).pathname,
+      stdin: new TextEncoder().encode(`${outputs.join("\n")}\n`),
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  );
+  expect(ignored.exitCode).toBe(0);
+  expect(
+    new TextDecoder().decode(ignored.stdout).trim().split("\n").toSorted(),
+  ).toEqual([...outputs].toSorted());
+});
+
 test("Guard A ignores hand-written certificate and error fixtures", async () => {
   for (const name of [
     "self-signed-certificate",
@@ -161,6 +185,7 @@ test("autofix selects only owners of changed inputs and preserves dependencies",
   const requiredIds = [
     "capability-catalog",
     "cli-registry",
+    "cli-runtime",
     "mcp-surface",
   ] satisfies readonly (typeof GENERATORS)[number]["id"][];
   expect(
@@ -186,6 +211,9 @@ test("autofix selects only owners of changed inputs and preserves dependencies",
   expect(
     ordered.findIndex(({ id }) => id === "capability-catalog"),
   ).toBeLessThan(ordered.findIndex(({ id }) => id === "cli-registry"));
+  expect(ordered.findIndex(({ id }) => id === "cli-registry")).toBeLessThan(
+    ordered.findIndex(({ id }) => id === "cli-runtime"),
+  );
 });
 
 test("autofix selection closes over generated outputs and ordering dependencies", () => {
@@ -194,7 +222,7 @@ test("autofix selection closes over generated outputs and ordering dependencies"
     .split("\0")
     .filter(Boolean);
   const changedPaths = [
-    [".oxfmtrc.json", "capability-catalog", "cli-registry"],
+    [".oxfmtrc.json", "capability-catalog", "cli-registry", "cli-runtime"],
     [
       "packages/api-contract/src/mcp-tool.ts",
       "mcp-app-bundles",

@@ -76,3 +76,7 @@ i18n.cache
 
 # Claude Code runtime artifacts
 .claude/scheduled_tasks.lock
+
+# CLI runtime projections are restored by codegen:runtime.
+packages/cli/src/generated/route-map.ts
+packages/cli/src/generated/tool-annotations.ts
