@@ -21,7 +21,7 @@ on:
 # PR runs supersede their predecessors. Manual runs supersede only older
 # manual runs on the same branch; merge-group runs remain isolated.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number || github.ref) || github.event_name == 'workflow_dispatch' && format('ci-dispatch-{0}', github.ref) || format('run-{0}', github.run_id) }}
+  group: &ci_concurrency_group ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number || github.ref) || github.event_name == 'workflow_dispatch' && format('ci-dispatch-{0}', github.ref) || format('run-{0}', github.run_id) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' }}
 
 permissions: {}
@@ -518,7 +518,7 @@ jobs:
   # hosted runner. Same-repository branches run immediately; forks wait for
   # the repository's Actions approval gate.
   agent-sandbox-docker:
-    name: Agent sandbox Docker isolation and lifecycle
+    name: &agent_sandbox_job_name Agent sandbox Docker isolation and lifecycle
     needs: ci-plan
     if: >-
       (needs.ci-plan.outputs.trusted == 'true'
@@ -3203,7 +3203,7 @@ jobs:
   # platforms: arm64 on a pull request, every released architecture at full
   # depth or on a version change.
   api-image-smoke:
-    name: API release image (${{ matrix.platform }})
+    name: &api_image_job_name API release image (${{ matrix.platform }})
     needs: ci-plan
     if: >-
       (needs.ci-plan.outputs.trusted == 'true'
@@ -3462,7 +3462,7 @@ jobs:
   # so Windows runs theirs. macOS executes the test suite.
   # Both are standard GitHub-hosted runners, free for public repositories.
   desktop-clippy:
-    name: Desktop Rust (${{ matrix.os }})
+    name: &desktop_job_name Desktop Rust (${{ matrix.os }})
     needs: ci-plan
     if: >-
       (needs.ci-plan.outputs.trusted == 'true'
@@ -3625,17 +3625,18 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      actions: read
+      checks: read
       # A skipped plan passes only while the pull request is still a draft.
       pull-requests: read
     steps:
-      - name: Capture workflow cancellation
-        if: cancelled()
-        run: echo "RUN_CANCELLED=true" >> "$GITHUB_ENV"
-
       - name: Evaluate CI outcome
         env:
           EVENT: ${{ github.event_name }}
-          RUN_CANCELLED: ${{ env.RUN_CANCELLED || 'false' }}
+          CONCURRENCY_GROUP: *ci_concurrency_group
+          CANCEL_JOB_NAME_agent_sandbox_docker: *agent_sandbox_job_name
+          CANCEL_JOB_NAME_api_image_smoke: *api_image_job_name
+          CANCEL_JOB_NAME_desktop_clippy: *desktop_job_name
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
@@ -3684,6 +3685,33 @@ jobs:
           FAST_REQUIRED: >-
             ["api-image-smoke", "parser-version-guard", "web-image-smoke"]
         run: |
+          # A matrix need covers several jobs. Every cancelled leg must carry
+          # this run's concurrency annotation; timeouts and unknown causes fail closed.
+          cancelled_dependencies_were_superseded() {
+            local jobs need name_key display urls url annotations expected
+            jobs=$(gh api --paginate --slurp "repos/$REPO/actions/runs/$GITHUB_RUN_ID/jobs?filter=latest&per_page=100") || return 1
+            expected="Canceling since a higher priority waiting request for $CONCURRENCY_GROUP exists"
+            while IFS= read -r need; do
+              name_key="CANCEL_JOB_NAME_${need//-/_}"
+              display="${!name_key:-$need}"
+              # Matrix expressions in a name alias are empty in ci-result.
+              display="${display% \(\)}"
+              urls=$(jq -er --arg name "$display" '
+                [.[].jobs[] | select(.name == $name or (.name | startswith($name + " (")))
+                  | select(.conclusion == "cancelled") | .check_run_url]
+                | if length > 0 then .[] else error("Cancelled dependency has no cancelled jobs") end' <<< "$jobs") || return 1
+              while IFS= read -r url; do
+                [[ "$url" == "https://api.github.com/repos/$REPO/check-runs/"* ]] || return 1
+                annotations=$(gh api --paginate --slurp "$url/annotations?per_page=100") || return 1
+                jq -e --arg expected "$expected" '
+                  flatten
+                  | any(.[]; .message == $expected)
+                    and (any(.[]; (.message // "") | contains("has exceeded the maximum execution time")) | not)
+                  ' <<< "$annotations" > /dev/null || return 1
+              done <<< "$urls"
+            done < <(jq -r 'to_entries[] | select(.value.result == "cancelled") | .key' <<< "$NEEDS")
+          }
+
           # The plan skips a draft pull request, and every job with it. The
           # event's draft flag can be stale: a push to a draft followed by
           # marking it ready queues the draft run after the ready one, which
@@ -3704,9 +3732,13 @@ jobs:
 
           # Only a pull request or a manual run is ever superseded by a newer
           # run; a cancelled merge group certifies nothing.
-          if [[ "$PLAN_RESULT" == "cancelled" && "$EVENT" != "merge_group" && "$RUN_CANCELLED" == "true" ]]; then
-            echo "CI run was superseded by a newer run (cancel-in-progress). Passing."
-            exit 0
+          if [[ "$PLAN_RESULT" == "cancelled" && "$EVENT" != "merge_group" ]]; then
+            if jq -e 'all(.[]; .result == "success" or .result == "skipped" or .result == "cancelled")' <<< "$NEEDS" > /dev/null && cancelled_dependencies_were_superseded; then
+              echo "CI run was superseded by a newer run (cancel-in-progress). Passing."
+              exit 0
+            fi
+            echo "::error::CI planning was cancelled without verified supersession."
+            exit 1
           fi
 
           if [[ "$PLAN_RESULT" != "success" ]]; then
@@ -3740,7 +3772,7 @@ jobs:
             fast)
               # Only an unlabelled pull request or a manual run plans `fast`:
               # its heavy suites skip by design. A cancelled dependency can
-              # also mean a timeout; only run-level cancellation is supersession.
+              # also mean a timeout; require per-job concurrency annotations.
               if [[ "$EVENT" == "merge_group" ]]; then
                 echo "::error::$EVENT run planned suite depth 'fast'; the heavy suites must run."
                 exit 1
@@ -3764,8 +3796,8 @@ jobs:
               fi
               cancelled=$(jq -r '[to_entries[] | select(.value.result == "cancelled") | .key] | join(", ")' <<< "$NEEDS")
               if [[ -n "$cancelled" ]]; then
-                if [[ "$RUN_CANCELLED" != "true" ]]; then
-                  echo "::error::CI jobs were cancelled without run-level cancellation: $cancelled"
+                if ! cancelled_dependencies_were_superseded; then
+                  echo "::error::CI jobs were cancelled without verified supersession: $cancelled"
                   exit 1
                 fi
                 echo "CI run was superseded by a newer run (cancel-in-progress): $cancelled. Passing."

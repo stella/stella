@@ -7,6 +7,9 @@ import * as v from "valibot";
 
 import { propertyConfig } from "@stll/property-testing";
 
+import supersessionAnnotations from "./__fixtures__/ci-cancellation/supersession.json";
+import timeoutAnnotations from "./__fixtures__/ci-cancellation/timeout.json";
+
 const workflow = readFileSync(
   new URL("../.github/workflows/ci.yml", import.meta.url),
   "utf-8",
@@ -384,21 +387,41 @@ type EvaluateResultOptions = {
   unplannedScopes?: readonly string[];
   /** The pull request's draft state as the API reports it now; unset fails the lookup. */
   liveDraft?: boolean;
-  runCancelled?: boolean;
+  cancellationEvidence?: "superseded" | "timeout" | "missing" | "wrong-group";
+  apiFailure?: "jobs" | "annotations";
+  missingJob?: boolean;
+  matrixTimeoutSibling?: boolean;
 };
 
 const PULL_REQUEST = { repo: "stella/stella", number: "7" } as const;
 
-// The step reads the live draft state through `gh`; this stand-in answers
-// only the pull request the run belongs to, and fails like the API when told
-// nothing.
+// Fake only the GitHub endpoints the extracted evaluator actually calls.
 const fakeGhDirectory = mkdtempSync(nodePath.join(tmpdir(), "ci-result-gh-"));
 writeFileSync(
   nodePath.join(fakeGhDirectory, "gh"),
   `#!/usr/bin/env bash
-[[ "$*" == "api repos/${PULL_REQUEST.repo}/pulls/${PULL_REQUEST.number} --jq .draft" ]] || exit 2
-[[ -n "\${FAKE_LIVE_DRAFT:-}" ]] || exit 1
-echo "$FAKE_LIVE_DRAFT"
+set -eu
+[[ "$1" == "api" ]] || exit 2
+shift
+while [[ "$1" == "--paginate" || "$1" == "--slurp" ]]; do shift; done
+endpoint="$1"
+case "$endpoint" in
+  "repos/${PULL_REQUEST.repo}/pulls/${PULL_REQUEST.number}")
+    [[ -n "\${FAKE_LIVE_DRAFT:-}" ]] || exit 1
+    echo "$FAKE_LIVE_DRAFT"
+    ;;
+  "repos/${PULL_REQUEST.repo}/actions/runs/123/jobs?filter=latest&per_page=100")
+    [[ "$FAKE_API_FAILURE" != "jobs" ]] || exit 1
+    echo "$FAKE_JOBS"
+    ;;
+  https://api.github.com/repos/${PULL_REQUEST.repo}/check-runs/*/annotations?per_page=100)
+    [[ "$FAKE_API_FAILURE" != "annotations" ]] || exit 1
+    check="\${endpoint%/annotations*}"
+    check="\${check##*/}"
+    jq -e --arg check "$check" '.[$check]' <<< "$FAKE_ANNOTATIONS"
+    ;;
+  *) exit 2 ;;
+esac
 `,
   { mode: 0o755 },
 );
@@ -416,7 +439,10 @@ const evaluateResult = ({
     : SUITE_DEPTH.full,
   unplannedScopes = [],
   liveDraft,
-  runCancelled = false,
+  cancellationEvidence = "timeout",
+  apiFailure,
+  missingJob = false,
+  matrixTimeoutSibling = false,
 }: EvaluateResultOptions) => {
   const plan = Object.fromEntries(
     Object.values(jobScopes).flatMap((scope) =>
@@ -431,11 +457,58 @@ const evaluateResult = ({
       { result: results[job] ?? "success", outputs: {} },
     ]),
   );
+  const group =
+    "CI Checks-ci-dispatch-refs/heads/ci/result-cancellation-signal-proof";
+  const annotations = {
+    superseded: supersessionAnnotations,
+    timeout: timeoutAnnotations,
+    missing: [],
+    "wrong-group": supersessionAnnotations.map(({ message }) => ({
+      message: message.replace(group, "a different concurrency group"),
+    })),
+  }[cancellationEvidence];
+  const jobs = [];
+  const checkAnnotations: Record<string, unknown> = {};
+  for (const [job, result] of Object.entries(needs)) {
+    if (result.result !== "cancelled") {
+      continue;
+    }
+    const name =
+      v.parse(v.object({ name: v.optional(v.string()) }), ciJobs[job]).name ??
+      job;
+    const checkId = String(jobs.length + 10);
+    jobs.push({
+      name:
+        name.replace(/\$\{\{[^}]+\}\}/gu, "fixture") +
+        (job === "ci-tests" ? " (api-1)" : ""),
+      conclusion: "cancelled",
+      check_run_url: `https://api.github.com/repos/${PULL_REQUEST.repo}/check-runs/${checkId}`,
+    });
+    checkAnnotations[checkId] = [annotations];
+  }
+  if (matrixTimeoutSibling) {
+    const checkId = "999";
+    jobs.push({
+      name: "ci-tests (api-2)",
+      conclusion: "cancelled",
+      check_run_url: `https://api.github.com/repos/${PULL_REQUEST.repo}/check-runs/${checkId}`,
+    });
+    checkAnnotations[checkId] = [timeoutAnnotations];
+  }
   const run = Bun.spawnSync({
     cmd: ["bash", "-eu", "-c", resultStep.run],
     env: {
       EVENT: event,
-      RUN_CANCELLED: String(runCancelled),
+      CONCURRENCY_GROUP: group,
+      GITHUB_RUN_ID: "123",
+      FAKE_API_FAILURE: apiFailure ?? "",
+      FAKE_JOBS: JSON.stringify([{ jobs: missingJob ? [] : jobs }]),
+      FAKE_ANNOTATIONS: JSON.stringify(checkAnnotations),
+      ...Object.fromEntries(
+        Object.entries(resultStep.env)
+          .filter(([key]) => key.startsWith("CANCEL_JOB_NAME_"))
+          .map(([key, value]) => [key, value.replace(/\$\{\{[^}]+\}\}/gu, "")]),
+      ),
       FAKE_LIVE_DRAFT: liveDraft === undefined ? "" : String(liveDraft),
       JOB_SCOPES: resultStep.env["JOB_SCOPES"] ?? "",
       NEEDS: JSON.stringify(needs),
@@ -582,53 +655,59 @@ test("a full-depth run passes jobs whose scope was not planned only when skipped
 // dispatched with. Both can be superseded by a newer run.
 const FAST_DEPTH_EVENTS = [EVENT.pullRequest, EVENT.workflowDispatch] as const;
 
-test("fast-depth cancelled dependencies pass only when the workflow run was cancelled", () => {
-  const cancellationStep = v.parse(
-    v.object({ if: v.string(), run: v.string() }),
-    resultJob.steps.find((step) =>
-      v.is(
-        v.object({ name: v.literal("Capture workflow cancellation") }),
-        step,
-      ),
-    ),
-  );
-  expect(cancellationStep.if).toBe("cancelled()");
-  expect(cancellationStep.run).toBe(
-    'echo "RUN_CANCELLED=true" >> "$GITHUB_ENV"',
-  );
-  expect(resultStep.env["RUN_CANCELLED"]).toBe(
-    ["$", "{{ env.RUN_CANCELLED || 'false' }}"].join(""),
-  );
-  fc.assert(
-    fc.property(
-      fc.constantFrom(...resultJob.needs),
-      fc.constantFrom(...FAST_DEPTH_EVENTS),
-      fc.boolean(),
-      (job, event, runCancelled) => {
+test.each(resultJob.needs)(
+  "cancelled %s passes only with this workflow group's recorded concurrency annotation",
+  (job) => {
+    const parsedWorkflow = v.parse(
+      v.object({ concurrency: v.object({ group: v.string() }) }),
+      Bun.YAML.parse(workflow),
+    );
+    expect(resultStep.env["CONCURRENCY_GROUP"]).toBe(
+      parsedWorkflow.concurrency.group,
+    );
+    for (const event of FAST_DEPTH_EVENTS) {
+      for (const cancellationEvidence of [
+        "superseded",
+        "timeout",
+        "missing",
+        "wrong-group",
+      ] as const) {
         expect(
           evaluateResult({
             event,
             results: { [job]: "cancelled" },
             suiteDepth: SUITE_DEPTH.fast,
-            runCancelled,
+            cancellationEvidence,
           }),
-          `${event} ${job}, run cancelled: ${String(runCancelled)}`,
-        ).toBe(runCancelled ? 0 : 1);
-      },
-    ),
-    propertyConfig({ numRuns: 100 }),
-  );
+          `${job} ${event} ${cancellationEvidence}`,
+        ).toBe(cancellationEvidence === "superseded" ? 0 : 1);
+      }
+    }
+  },
+);
+
+test("cancelled dependencies fail closed on API errors, missing jobs and mixed matrix causes", () => {
+  const cancelled = {
+    event: EVENT.pullRequest,
+    results: { "ci-tests": "cancelled" },
+    cancellationEvidence: "superseded",
+  } as const;
+  for (const apiFailure of ["jobs", "annotations"] as const) {
+    expect(evaluateResult({ ...cancelled, apiFailure })).toBe(1);
+  }
+  expect(evaluateResult({ ...cancelled, missingJob: true })).toBe(1);
+  expect(evaluateResult({ ...cancelled, matrixTimeoutSibling: true })).toBe(1);
 });
 
 test("a failed dependency stays red beside a cancelled sibling even during supersession", () => {
   for (const event of FAST_DEPTH_EVENTS) {
-    for (const runCancelled of [false, true]) {
+    for (const cancellationEvidence of ["timeout", "superseded"] as const) {
       expect(
         evaluateResult({
           event,
           results: { "ci-tests": "cancelled", "code-quality": "failure" },
           suiteDepth: SUITE_DEPTH.fast,
-          runCancelled,
+          cancellationEvidence,
         }),
       ).toBe(1);
     }
@@ -651,7 +730,7 @@ test("only a pull request or a manual run skips heavy suites or passes a superse
         event,
         results: { "ci-tests": "cancelled" },
         suiteDepth: fast,
-        runCancelled: true,
+        cancellationEvidence: "superseded",
       }),
       event,
     ).toBe(0);
@@ -669,7 +748,7 @@ test("only a pull request or a manual run skips heavy suites or passes a superse
         event,
         results: { "ci-plan": "cancelled" },
         suiteDepth: fast,
-        runCancelled: true,
+        cancellationEvidence: "superseded",
       }),
       event,
     ).toBe(0);
@@ -727,7 +806,7 @@ test("a skipped plan passes only while the pull request is still a draft", () =>
       event,
       results: cancelledReadyRun,
       liveDraft: false,
-      runCancelled: true,
+      cancellationEvidence: "superseded",
     }),
   ).toBe(0);
   expect(
@@ -781,7 +860,7 @@ test("a fast-depth run requires every selected fast-required job to run", () => 
       evaluateResult({
         event,
         results: { [job]: "cancelled" },
-        runCancelled: true,
+        cancellationEvidence: "superseded",
       }),
       job,
     ).toBe(0);
