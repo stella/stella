@@ -87,7 +87,7 @@ test("adding an unmapped CodeQL language or dropping an extension fails coverage
     expect(detect("codeql", ["source.mts"])).toBe("true");
     expect(detect("codeql", ["source.mts"], detector)).toBe("false");
     expect(() => expectLanguageCoverage("javascript", detector)).toThrow(
-      "toBe",
+      "nested/source.mts",
     );
   } finally {
     rmSync(directory, { recursive: true, force: true });
@@ -234,7 +234,9 @@ test("both workflows gate every expensive job and run on detector failure", () =
     expect(detector?.run).toContain("required=true");
     expect(detector?.run).toContain("skipped: no");
     for (const [id, value] of Object.entries(workflow.jobs)) {
-      if (id === "scope") {continue;}
+      if (id === "scope") {
+        continue;
+      }
       const job = v.parse(
         v.looseObject({ needs: v.literal("scope"), if: v.string() }),
         value,
