@@ -4,7 +4,7 @@ import fc from "fast-check";
 
 import { propertyConfig } from "@stll/property-testing";
 
-import type { Block } from "@/api/handlers/case-law/document-ast";
+import { type Block, plainTextOf } from "@/api/handlers/case-law/document-ast";
 import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";
 
 import { conservesText } from "./blocks";
@@ -27,10 +27,17 @@ describe("removed page labels preserve source word boundaries", () => {
     ["beside a newline", "the\n", "court"],
     ["beside a nonbreaking space", "the\u00a0", "court"],
   ] as const;
-  const labels = ["*12", "12", " * 12 "] as const;
+  const labels = [
+    ["*12", ""],
+    ["12", ""],
+    ["* 12", ""],
+    [" *12", " "],
+    ["*12 ", " "],
+    [" * 12 ", " "],
+  ] as const;
 
   for (const [name, left, right] of boundaries) {
-    for (const label of labels) {
+    for (const [label, separator] of labels) {
       test(`${name} with printed label ${JSON.stringify(label)}`, () => {
         const parsed = parse(
           `${left}<page-number label="12">${label}</page-number>${right}`,
@@ -40,11 +47,20 @@ describe("removed page labels preserve source word boundaries", () => {
           return;
         }
         expect(cheerio.load(parsed.text.validationHtml)("p").text()).toBe(
-          left + right,
+          left + separator + right,
         );
         const allBlocks = parsed.text.units.flatMap(({ blocks }) => [
           ...blocks,
         ]);
+        const astText = allBlocks
+          .map((block) => {
+            expect(block.type).toBe("paragraph");
+            return block.type === "paragraph" ? plainTextOf(block.inlines) : "";
+          })
+          .join(" ");
+        expect(astText.replace(/\s+/gu, " ").trim()).toBe(
+          `${left}${separator}${right}`.replace(/\s+/gu, " ").trim(),
+        );
         expect(
           validateAst(parsed.text.validationHtml, allBlocks).stats.missingWords,
         ).toEqual([]);
@@ -55,29 +71,49 @@ describe("removed page labels preserve source word boundaries", () => {
     }
   }
 
-  test("removing labels at arbitrary source positions changes no whitespace", () => {
+  test("source and AST words agree at arbitrary marker positions and boundary whitespace", () => {
     const source = fc
       .array(fc.constantFrom("a", "b", "č", "é", "-", " ", "\n", "\u00a0"), {
         minLength: 1,
         maxLength: 80,
       })
       .map((characters) => `start ${characters.join("")} end`);
+    const whitespace = fc
+      .array(fc.constantFrom(" ", "\t", "\n", "\r", "\u00a0"), {
+        maxLength: 4,
+      })
+      .map((characters) => characters.join(""));
     fc.assert(
       fc.property(
         source,
         fc.nat(),
-        fc.constantFrom(...labels),
-        (text, at, label) => {
+        whitespace,
+        fc.constantFrom("*12", "12", "* 12"),
+        whitespace,
+        (text, at, leading, label, trailing) => {
           const position = at % (text.length + 1);
           const parsed = parse(
-            `${text.slice(0, position)}<page-number label="12">${label}</page-number>${text.slice(position)}`,
+            `${text.slice(0, position)}<page-number label="12">${leading}${label}${trailing}</page-number>${text.slice(position)}`,
           );
           expect(parsed.status).toBe("parsed");
           if (parsed.status !== "parsed") {
             return;
           }
-          expect(cheerio.load(parsed.text.validationHtml)("p").text()).toBe(
-            text,
+          const sourceText = cheerio
+            .load(parsed.text.validationHtml)("p")
+            .text();
+          const astText = parsed.text.units
+            .flatMap(({ blocks }) =>
+              blocks.map((block) => {
+                expect(block.type).toBe("paragraph");
+                return block.type === "paragraph"
+                  ? plainTextOf(block.inlines)
+                  : "";
+              }),
+            )
+            .join(" ");
+          expect(sourceText.trim().split(/\s+/u)).toEqual(
+            astText.trim().split(/\s+/u),
           );
           expect(conservesText(text, parsed.text.units)).toBe(true);
         },

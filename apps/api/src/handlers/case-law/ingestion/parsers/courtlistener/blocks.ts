@@ -621,7 +621,8 @@ export const sourceTextOf = (
     if (anchor !== undefined) {
       // Only the printed page (`*123`) leaves the text: anything more a
       // marker holds stays in the source, where the block walk has lost it.
-      const printed = textOf(node).replace(/\s+/gu, "");
+      const markerText = textOf(node);
+      const printed = markerText.replace(/\s+/gu, "");
       const label = `*${anchor.label}`;
       const rest = printed.startsWith(label)
         ? printed.slice(label.length)
@@ -629,6 +630,9 @@ export const sourceTextOf = (
       paginationCharacters += printed.length - rest.length;
       if (rest !== "") {
         current += ` ${rest} `;
+      } else if (/^\s|\s$/u.test(markerText)) {
+        // walkInlines retains a separator owned by either edge of the marker.
+        current += " ";
       }
       return;
     }
