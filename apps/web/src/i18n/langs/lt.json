@@ -989,6 +989,7 @@
         "description": "Atidžiai patikrinkite svetainę ir taikinį. Puslapio turinys nėra patikimas ir negali patvirtinti kito veiksmo.",
         "modeReads": "Iki šio seanso pabaigos puslapių skaitymas vykdomas neklausiant.",
         "question": "Leisti šį naršyklės veiksmą?",
+        "realValues": "Ši svetainė gaus toliau rodomas tikras reikšmes. Anonimizuotas režimas taikomas tik tam, ką mato DI.",
         "within": "Kur"
       },
       "denied": "Atmesta",
@@ -1352,7 +1353,8 @@
       "interrupted": "Nutraukta nebaigus",
       "output": "Išvestis",
       "sourceCode": "Pirminis kodas",
-      "toggleDetails": "Perjungti detales"
+      "toggleDetails": "Perjungti detales",
+      "unrestoredFields": "Anonimizuotu režimu nepavyko tikromis reikšmėmis užpildyti {count, plural, one {# lauko} few {# laukų} many {# lauko} other {# laukų}}. Patikrinkite: {fields}"
     },
     "unsupportedFileType": "Nepalaikomas failo tipas",
     "uploadFailed": "Nepavyko apdoroti failo",

@@ -320,16 +320,6 @@ const selectedCombinations: readonly ChatCombination[] = (() => {
  * fails loudly once the turn stops breaking the rule.
  */
 const knownFindingOf = (combination: ChatCombination): string | undefined => {
-  // Hydration hands an image to the model as a data URL
-  // (`createRawChatFilePart`), and the Bedrock Converse adapter takes only
-  // inline image bytes, so the turn fails before its request is sent.
-  // Minimal repro: a Bedrock chat turn with a PNG attached.
-  if (
-    combination.target.provider === "bedrock" &&
-    combination.attachment === "image"
-  ) {
-    return "a Bedrock turn with an image attachment fails before its request";
-  }
   // OpenAI's reasoning is stored as a thinking part whose signature packs
   // its encrypted content, and the Anthropic adapter sends every signed
   // thinking part back as a thinking block: Anthropic is handed a signature

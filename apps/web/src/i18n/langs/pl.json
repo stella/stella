@@ -989,6 +989,7 @@
         "description": "Dokładnie sprawdź witrynę i cel. Zawartość strony jest niezaufana i nie może zatwierdzić kolejnego działania.",
         "modeReads": "Do końca tej sesji odczyt stron wykonuje się bez pytania.",
         "question": "Zezwolić na to działanie w przeglądarce?",
+        "realValues": "Ta witryna otrzyma prawdziwe wartości pokazane poniżej. Tryb anonimizacji dotyczy tylko tego, co widzi AI.",
         "within": "W obrębie"
       },
       "denied": "Odrzucono",
@@ -1352,7 +1353,8 @@
       "interrupted": "Przerwano przed ukończeniem",
       "output": "Wynik",
       "sourceCode": "Kod źródłowy",
-      "toggleDetails": "Przełącz szczegóły"
+      "toggleDetails": "Przełącz szczegóły",
+      "unrestoredFields": "W trybie anonimizacji nie udało się wypełnić prawdziwymi wartościami {count, plural, one {# pola} few {# pól} many {# pól} other {# pola}}. Sprawdź: {fields}"
     },
     "unsupportedFileType": "Nieobsługiwany typ pliku",
     "uploadFailed": "Przetwarzanie pliku nie powiodło się",
