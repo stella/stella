@@ -9,7 +9,6 @@ import ts from "typescript";
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const PLAYWRIGHT_CONFIG = /(?:^|\/)playwright[^/]*\.config\.(?:[cm]?[jt]s)$/u;
 const SOURCE_FILE = /\.(?:[cm]?[jt]s|tsx|jsx)$/u;
-const SHELL_FILE = /\.sh$/u;
 const PACKAGE_FILE = /(?:^|\/)package\.json$/u;
 const WORKFLOW_FILE = /^\.github\/(?:workflows|actions)\/.*\.ya?ml$/u;
 const PROCESS_CALL_NAMES = new Set([
@@ -110,7 +109,6 @@ const resolveDevicePreset = (
   if (
     !ts.isElementAccessExpression(expression) ||
     !ts.isIdentifier(expression.expression) ||
-    expression.argumentExpression === undefined ||
     !ts.isStringLiteral(expression.argumentExpression)
   ) {
     return undefined;
@@ -759,8 +757,11 @@ export const findTestRetryViolations = (
     if (isSourceFile(file) && hasRetryRelevantSyntax(source)) {
       findings.push(...scanTestSource(file, source));
     }
-    if (SHELL_FILE.test(file)) {
-      const commands = source.replace(/^\s*#.*$/gmu, "");
+    if (file.endsWith(".sh")) {
+      const commands = source
+        .split("\n")
+        .filter((line) => !line.trimStart().startsWith("#"))
+        .join("\n");
       findings.push(...scanCommand(file, commands, "shell launcher"));
     }
     if (PACKAGE_FILE.test(file)) {
@@ -783,7 +784,7 @@ const trackedSources = (): Map<string, string> => {
       (file) =>
         isPlaywrightConfig(file) ||
         isSourceFile(file) ||
-        SHELL_FILE.test(file) ||
+        file.endsWith(".sh") ||
         PACKAGE_FILE.test(file) ||
         WORKFLOW_FILE.test(file),
     );
