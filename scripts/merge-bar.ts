@@ -636,10 +636,8 @@ type MergeHandoff = ReturnType<typeof readMergeHandoff>;
 const RELEASE_TITLE_PREFIX = "chore: release v";
 
 /**
- * A release pull request goes to the front of the merge queue: every pull
- * request that lands between the cut and the release's merge can invalidate
- * the cut. Recognized as in release-pr.yml's gate: a ready pull request into
- * main from this repository whose title starts with "chore: release v".
+ * Recognized as in release-pr.yml's gate: a ready pull request into main
+ * from this repository whose title starts with "chore: release v".
  */
 export const isReleasePullRequest = (
   pullRequest: Pick<
@@ -1388,7 +1386,7 @@ type MergeBarOptions = {
   pullNumber: number;
   repo: string;
   dryRun: boolean;
-  // Enqueue at the front of the queue. Release pull requests always jump.
+  // Enqueue at the front of the queue only when explicitly requested.
   jump: boolean;
 };
 
@@ -1503,14 +1501,14 @@ if (import.meta.main) {
     options.repo,
     pullRequest.baseRefName,
   );
-  const jump = options.jump || isReleasePullRequest(pullRequest);
+  const jump = options.jump;
   const requireFrontOfQueue = (context: string): void => {
     const verdict = verifyFrontOfQueue({
       gateway,
       pullNumber: pullRequest.number,
       branch: pullRequest.baseRefName,
       context,
-      release: !options.jump,
+      release: isReleasePullRequest(pullRequest),
     });
     if (verdict.exitCode === 0) {
       console.log(verdict.message);

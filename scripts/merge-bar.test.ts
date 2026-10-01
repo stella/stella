@@ -178,31 +178,33 @@ esac
     }
   });
 
-  test("an already queued PR exits without another GitHub operation even when mergeability is unknown", () => {
-    const directory = mkdtempSync(path.join(tmpdir(), "merge-bar-queued-"));
-    const executable = path.join(directory, "gh");
-    const response = JSON.stringify({
-      data: {
-        repository: {
-          pullRequest: {
-            id: "PR_fixture",
-            number: 123,
-            title: "fix: something",
-            isCrossRepository: false,
-            state: "OPEN",
-            isDraft: false,
-            mergeable: "UNKNOWN",
-            headRefOid: HEAD_SHA,
-            baseRefName: "main",
-            autoMergeRequest: null,
-            mergeQueueEntry: { id: "entry" },
+  test.each(["fix: something", "chore: release v0.9.42"])(
+    "an already queued PR keeps its place without --jump: %s",
+    (title) => {
+      const directory = mkdtempSync(path.join(tmpdir(), "merge-bar-queued-"));
+      const executable = path.join(directory, "gh");
+      const response = JSON.stringify({
+        data: {
+          repository: {
+            pullRequest: {
+              id: "PR_fixture",
+              number: 123,
+              title,
+              isCrossRepository: false,
+              state: "OPEN",
+              isDraft: false,
+              mergeable: "UNKNOWN",
+              headRefOid: HEAD_SHA,
+              baseRefName: "main",
+              autoMergeRequest: null,
+              mergeQueueEntry: { id: "entry" },
+            },
           },
         },
-      },
-    });
-    writeFileSync(
-      executable,
-      `#!/bin/sh
+      });
+      writeFileSync(
+        executable,
+        `#!/bin/sh
 case "$*" in
   'variable get STELLA_MERGE_HOLD --repo '*) printf '%s\\n' 'variable STELLA_MERGE_HOLD was not found' >&2; exit 1;;
   *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}},{"type":"merge_queue","parameters":{}}]';;
@@ -210,30 +212,31 @@ case "$*" in
   *) exit 99;;
 esac
 `,
-    );
-    chmodSync(executable, 0o700);
-    try {
-      const result = Bun.spawnSync({
-        cmd: [
-          process.execPath,
-          fileURLToPath(new URL("merge-bar.ts", import.meta.url)),
-          "123",
-        ],
-        env: {
-          ...process.env,
-          PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
-        },
-        stdout: "pipe",
-        stderr: "pipe",
-      });
-      expect(result.exitCode).toBe(0);
-      expect(result.stdout.toString()).toContain(
-        "already in the merge queue; nothing changed",
       );
-    } finally {
-      rmSync(directory, { recursive: true, force: true });
-    }
-  });
+      chmodSync(executable, 0o700);
+      try {
+        const result = Bun.spawnSync({
+          cmd: [
+            process.execPath,
+            fileURLToPath(new URL("merge-bar.ts", import.meta.url)),
+            "123",
+          ],
+          env: {
+            ...process.env,
+            PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        });
+        expect(result.exitCode).toBe(0);
+        expect(result.stdout.toString()).toContain(
+          "already in the merge queue; nothing changed",
+        );
+      } finally {
+        rmSync(directory, { recursive: true, force: true });
+      }
+    },
+  );
 
   // The enqueue mutation reported a front position while the release pull
   // request actually sat behind other entries. Only the queue read after the
@@ -242,7 +245,7 @@ esac
     { queuedAt: 3, exitCode: 1, output: "behind #4101, #4102" },
     { queuedAt: 1, exitCode: 0, output: "verified first in the queue" },
   ])(
-    "a release jump stays exempt from a hold and is verified after enqueueing: position $queuedAt",
+    "an explicit release jump stays exempt from a hold and is verified after enqueueing: position $queuedAt",
     ({ queuedAt, exitCode, output }) => {
       const directory = mkdtempSync(path.join(tmpdir(), "merge-bar-jump-"));
       const executable = path.join(directory, "gh");
@@ -315,6 +318,7 @@ esac
             "123",
             "--repo",
             PRIVATE_REPO,
+            "--jump",
           ],
           env: {
             ...process.env,
@@ -337,7 +341,7 @@ esac
   // A real run refuses to jump while checks are running; a dry run of the same
   // state must report the same failure instead of a merge verdict.
   test.each([[], ["--dry-run"]])(
-    "a release jump with running checks exits non-zero without writing: %j",
+    "an explicit release jump with running checks exits non-zero without writing: %j",
     (...extraArguments) => {
       const directory = mkdtempSync(path.join(tmpdir(), "merge-bar-pending-"));
       const executable = path.join(directory, "gh");
@@ -385,6 +389,7 @@ esac
             "123",
             "--repo",
             PRIVATE_REPO,
+            "--jump",
             ...extraArguments.flat(),
           ],
           env: {
@@ -1038,7 +1043,7 @@ describe("merge bar", () => {
   });
 });
 
-describe("release pull requests jump the merge queue", () => {
+describe("explicit merge queue jumps", () => {
   const release = {
     title: "chore: release v0.9.40",
     isDraft: false,

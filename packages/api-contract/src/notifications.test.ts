@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, expectTypeOf, test } from "bun:test";
 
 import {
   NOTIFICATION_ENTITY_TYPE,
@@ -24,24 +24,6 @@ type BranchFor<K extends NotificationKind> = Extract<
   NotificationContent,
   { kind: K }
 >;
-type AssertEqual<A, B> = [A] extends [B]
-  ? [B] extends [A]
-    ? true
-    : never
-  : never;
-
-const metadataMatchesKind: AssertEqual<
-  BranchFor<"mention">["metadata"],
-  NotificationMetadataByKind["mention"]
-> = true;
-const announcementMetadataMatchesKind: AssertEqual<
-  BranchFor<"announcement">["metadata"],
-  NotificationMetadataByKind["announcement"]
-> = true;
-const unionCoversEveryKind: AssertEqual<
-  NotificationContent["kind"],
-  NotificationKind
-> = true;
 
 describe("notification kinds", () => {
   test("the kind list and the kind map name the same values", () => {
@@ -76,8 +58,14 @@ describe("notification kinds", () => {
   });
 
   test("the compile-time coherence assertions hold", () => {
-    expect(metadataMatchesKind).toBe(true);
-    expect(announcementMetadataMatchesKind).toBe(true);
-    expect(unionCoversEveryKind).toBe(true);
+    expectTypeOf<BranchFor<"mention">["metadata"]>().toEqualTypeOf<
+      NotificationMetadataByKind["mention"]
+    >();
+    expectTypeOf<BranchFor<"announcement">["metadata"]>().toEqualTypeOf<
+      NotificationMetadataByKind["announcement"]
+    >();
+    expectTypeOf<
+      NotificationContent["kind"]
+    >().toEqualTypeOf<NotificationKind>();
   });
 });

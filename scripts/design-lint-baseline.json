@@ -338,7 +338,6 @@
     "apps/web/src/routes/_protected.contacts/index.tsx": 5,
     "apps/web/src/routes/_protected.settings/account.profile.tsx": 1,
     "apps/web/src/routes/_protected.settings/organization.audit-logs.tsx": 1,
-    "apps/web/src/routes/_protected.settings/route.tsx": 2,
     "apps/web/src/routes/_protected.workspaces/-components/matters-table.tsx": 1,
     "apps/web/src/routes/_protected.workspaces/-filters/client-filter-popover.tsx": 1,
     "apps/web/src/routes/_protected.workspaces/-filters/team-filter-popover.tsx": 1,
