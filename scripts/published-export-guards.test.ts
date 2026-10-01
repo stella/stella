@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -7,6 +7,7 @@ import {
   isExpectedPublishedExportResolution,
   isOwnDistLoadFailure,
   isPublishedTestArtifact,
+  resolvePublishedExport,
 } from "./published-export-guards";
 
 describe("published export artifact guard", () => {
@@ -130,7 +131,9 @@ describe("Node load failure attribution", () => {
 
 describe("published export guard without workspace consumers", () => {
   test("resolves root, subpath, and alias exports through package self-reference", async () => {
-    const packageDir = mkdtempSync(path.join(tmpdir(), "published-exports-"));
+    const packageDir = realpathSync(
+      mkdtempSync(path.join(tmpdir(), "published-exports-")),
+    );
     const manifest = JSON.stringify({
       name: "@stll/export-guard-fixture",
       version: "0.1.0",
@@ -177,6 +180,40 @@ describe("published export guard without workspace consumers", () => {
       );
     } finally {
       rmSync(packageDir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("published export resolution precedence", () => {
+  test("keeps the repoRoot result when package self-reference points elsewhere", async () => {
+    const root = realpathSync(
+      mkdtempSync(path.join(tmpdir(), "published-export-precedence-")),
+    );
+    const name = "@stll/export-precedence-fixture";
+    const packageDir = path.join(root, "package");
+    const linkedDir = path.join(root, "node_modules", name);
+    const manifest = JSON.stringify({
+      name,
+      type: "module",
+      exports: { ".": "./entry.js" },
+    });
+    try {
+      for (const directory of [packageDir, linkedDir]) {
+        await Bun.write(path.join(directory, "package.json"), manifest);
+        await Bun.write(
+          path.join(directory, "entry.js"),
+          "export const value = 1;",
+        );
+      }
+      const selfReference = Bun.resolveSync(name, packageDir);
+      const fromRoot = Bun.resolveSync(name, root);
+      expect(selfReference).toBe(path.join(packageDir, "entry.js"));
+      expect(fromRoot).toBe(path.join(linkedDir, "entry.js"));
+      expect(
+        resolvePublishedExport({ specifier: name, repoRoot: root, packageDir }),
+      ).toBe(fromRoot);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
     }
   });
 });

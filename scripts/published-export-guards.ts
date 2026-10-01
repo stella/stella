@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import path from "node:path";
 
 const testArtifactPattern =
@@ -70,4 +71,22 @@ export const isExpectedPublishedExportResolution = ({
   }
 
   return isInsideDirectory(resolved, path.resolve(packageDir, "dist"));
+};
+
+type ResolvePublishedExportOptions = {
+  specifier: string;
+  repoRoot: string;
+  packageDir: string;
+};
+
+/** Preserve workspace resolution; self-reference covers packages with no root link. */
+export const resolvePublishedExport = ({
+  specifier,
+  repoRoot,
+  packageDir,
+}: ResolvePublishedExportOptions): string => {
+  const fromRoot = Result.try(() => Bun.resolveSync(specifier, repoRoot));
+  return fromRoot.isOk()
+    ? fromRoot.value
+    : Bun.resolveSync(specifier, packageDir);
 };
