@@ -354,6 +354,9 @@ export function assertProperty<Ts>(
     id,
     property,
     params,
-    pinned: readPinnedSeeds()[`${file}::${id}`] ?? [],
+    pinned:
+      readPinnedSeeds().unwrap("Pinned property seed registry must be valid")[
+        `${file}::${id}`
+      ] ?? [],
   });
 }

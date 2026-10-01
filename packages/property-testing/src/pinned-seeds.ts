@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -20,9 +21,11 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 export const parsePinnedSeeds = (
   value: unknown,
-): Record<string, PinnedSeed[]> => {
+): Result<Record<string, PinnedSeed[]>, PropertyTestConfigError> => {
   if (!isRecord(value)) {
-    throw new PropertyTestConfigError("Property seeds must be an object");
+    return Result.err(
+      new PropertyTestConfigError("Property seeds must be an object"),
+    );
   }
   const entries: Record<string, PinnedSeed[]> = {};
   for (const [key, seeds] of Object.entries(value)) {
@@ -30,11 +33,15 @@ export const parsePinnedSeeds = (
       continue;
     }
     if (!Array.isArray(seeds)) {
-      throw new PropertyTestConfigError(
-        `${key}: expected an array of pinned seeds`,
+      return Result.err(
+        new PropertyTestConfigError(
+          `${key}: expected an array of pinned seeds`,
+        ),
       );
     }
-    entries[key] = seeds.map((entry: unknown) => {
+    const seedEntries: readonly unknown[] = seeds;
+    const parsedSeeds: PinnedSeed[] = [];
+    for (const entry of seedEntries) {
       if (
         !isRecord(entry) ||
         typeof entry["seed"] !== "number" ||
@@ -47,8 +54,10 @@ export const parsePinnedSeeds = (
           (typeof entry["path"] !== "string" ||
             !REPLAY_PATH_PATTERN.test(entry["path"])))
       ) {
-        throw new PropertyTestConfigError(
-          `${key}: invalid seed, path, note or date`,
+        return Result.err(
+          new PropertyTestConfigError(
+            `${key}: invalid seed, path, note or date`,
+          ),
         );
       }
       const base = {
@@ -57,23 +66,35 @@ export const parsePinnedSeeds = (
         date: entry["date"],
       };
       if (typeof entry["path"] === "string") {
-        return Object.assign(base, { path: entry["path"] });
+        parsedSeeds.push({ ...base, path: entry["path"] });
+      } else {
+        parsedSeeds.push(base);
       }
-      return base;
-    });
+    }
+    entries[key] = parsedSeeds;
   }
-  return entries;
+  return Result.ok(entries);
 };
 
 let cachedSeeds: Record<string, PinnedSeed[]> | undefined;
 
-export const readPinnedSeeds = (): Record<string, PinnedSeed[]> => {
+export const readPinnedSeeds = (): Result<
+  Record<string, PinnedSeed[]>,
+  PropertyTestConfigError
+> => {
   if (cachedSeeds !== undefined) {
-    return cachedSeeds;
+    return Result.ok(cachedSeeds);
   }
-  const parsed: unknown = JSON.parse(
-    readFileSync(path.join(REPO_ROOT, PROPERTY_SEEDS_FILE), "utf-8"),
-  );
-  cachedSeeds = parsePinnedSeeds(parsed);
-  return cachedSeeds;
+  return Result.try({
+    try: (): unknown =>
+      JSON.parse(
+        readFileSync(path.join(REPO_ROOT, PROPERTY_SEEDS_FILE), "utf-8"),
+      ),
+    catch: (cause) =>
+      new PropertyTestConfigError("Unable to read property seeds", cause),
+  })
+    .andThen(parsePinnedSeeds)
+    .tap((seeds) => {
+      cachedSeeds = seeds;
+    });
 };

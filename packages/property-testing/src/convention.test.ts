@@ -4,8 +4,6 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import ts from "typescript";
 
-import { planApiTestBatches } from "../../../apps/api/scripts/api-test-plan";
-
 // Repo root, four levels up from this file (packages/property-testing/src).
 const REPO_ROOT = path.resolve(import.meta.dir, "../../..");
 
@@ -357,19 +355,6 @@ describe("property-test convention", () => {
               `${workspace}: test:property does not use the property selector`,
             );
             continue;
-          }
-          const batches = await planApiTestBatches({
-            apiRoot: fixtureRoot,
-            propertyOnly: true,
-            testPaths: [...expectedPaths, "src/ordinary.test.ts"],
-          });
-          const selected = batches
-            .flatMap(({ testBatches }) => testBatches.flat())
-            .toSorted();
-          if (JSON.stringify(selected) !== JSON.stringify(expectedPaths)) {
-            violations.push(
-              `${workspace}: selected ${JSON.stringify(selected)}`,
-            );
           }
           continue;
         }

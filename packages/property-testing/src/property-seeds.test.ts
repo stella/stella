@@ -142,7 +142,7 @@ test("every property id matches its enclosing test across workspaces", async () 
 });
 
 test("every pinned seed names an existing test using its explicit property id", () => {
-  for (const [key, entries] of Object.entries(readPinnedSeeds())) {
+  for (const [key, entries] of Object.entries(readPinnedSeeds().unwrap())) {
     const separator = key.lastIndexOf("::");
     expect(separator).toBeGreaterThan(0);
     const file = key.slice(0, separator);
@@ -164,7 +164,7 @@ test("rejects malformed paths and missing pin metadata while ignoring comment ke
     date: "2026-09-30",
   };
   expect(
-    parsePinnedSeeds({ $comment: "ignored", "file::id": [entry] }),
+    parsePinnedSeeds({ $comment: "ignored", "file::id": [entry] }).unwrap(),
   ).toEqual({ "file::id": [entry] });
   for (const invalid of [
     { ...entry, path: "" },
@@ -173,8 +173,28 @@ test("rejects malformed paths and missing pin metadata while ignoring comment ke
     { ...entry, date: undefined },
     { ...entry, seed: 1.5 },
   ]) {
-    expect(() => parsePinnedSeeds({ "file::id": [invalid] })).toThrow(
-      PropertyTestConfigError,
-    );
+    const result = parsePinnedSeeds({ "file::id": [invalid] });
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error).toBeInstanceOf(PropertyTestConfigError);
+      expect(result.error.message).toBe(
+        "file::id: invalid seed, path, note or date",
+      );
+    }
+  }
+});
+
+test("returns configuration errors for invalid registry and seed-list shapes", () => {
+  for (const [value, message] of [
+    [null, "Property seeds must be an object"],
+    [[], "Property seeds must be an object"],
+    [{ "file::id": {} }, "file::id: expected an array of pinned seeds"],
+  ] as const) {
+    const result = parsePinnedSeeds(value);
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error).toBeInstanceOf(PropertyTestConfigError);
+      expect(result.error.message).toBe(message);
+    }
   }
 });

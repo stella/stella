@@ -1,10 +1,12 @@
-// A malformed property-test environment variable. A local class keeps this
-// package free of runtime dependencies beyond fast-check.
-export class PropertyTestConfigError extends Error {
-  readonly _tag = "PropertyTestConfigError";
+import { TaggedError } from "better-result";
 
-  constructor(message: string) {
-    super(message);
-    this.name = "PropertyTestConfigError";
+export class PropertyTestConfigError extends TaggedError(
+  "PropertyTestConfigError",
+)<{
+  message: string;
+  cause?: unknown;
+}> {
+  constructor(message: string, cause?: unknown) {
+    super({ message, cause });
   }
 }
