@@ -233,9 +233,8 @@ describe("flow kickoff acceptance", () => {
           },
         );
         expect(inserted).toBe(abortAt === "commit");
-        expect(queuedRunIds).toEqual(
-          abortAt === "commit" ? [committedRunId] : [],
-        );
+        expect(queuedRunIds).toHaveLength(abortAt === "commit" ? 1 : 0);
+        expect(queuedRunIds.at(0)).toBe(committedRunId);
       }
     });
   });

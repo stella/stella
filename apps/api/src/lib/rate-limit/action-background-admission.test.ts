@@ -186,7 +186,7 @@ describe("background action admission", () => {
       if (Result.isError(nested)) {
         expect(nested.error).toBeInstanceOf(ActionAdmissionError);
         expect(nested.error).toMatchObject({
-          reason: reply === -1 ? "busy" : "unavailable",
+          reason: reply === -1 ? "period_exhausted" : "unavailable",
         });
       }
       expect(executions).toBe(0);
