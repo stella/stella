@@ -582,7 +582,9 @@ const tanStackRunError = (chunk: RunErrorEvent): HandlerError => {
  * the failure, so an engine-internal error keeps its own identity.
  */
 const withRecoveredProviderStatus = (error: unknown): unknown => {
-  if (!(error instanceof Error)) {return error;}
+  if (!(error instanceof Error)) {
+    return error;
+  }
   if (hasManagedProviderUnavailableCode(error)) {
     return new HandlerError({
       status: 503,
@@ -591,7 +593,9 @@ const withRecoveredProviderStatus = (error: unknown): unknown => {
       cause: error,
     });
   }
-  if (classifyAIError(error) !== "unknown") {return error;}
+  if (classifyAIError(error) !== "unknown") {
+    return error;
+  }
   const cause = providerErrorBody(error.message);
   if (cause === undefined) {
     return error;
@@ -632,8 +636,12 @@ const MAX_CAUSE_DEPTH = 8;
 const hasManagedProviderUnavailableCode = (error: unknown): boolean => {
   let current = error;
   for (let depth = 0; depth < MAX_CAUSE_DEPTH; depth += 1) {
-    if (!isRecord(current)) {return false;}
-    if (current["code"] === MANAGED_PROVIDER_UNAVAILABLE_CODE) {return true;}
+    if (!isRecord(current)) {
+      return false;
+    }
+    if (current["code"] === MANAGED_PROVIDER_UNAVAILABLE_CODE) {
+      return true;
+    }
     current = current["cause"];
   }
   return false;
