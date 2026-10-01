@@ -48,6 +48,7 @@ const withFixture = async (
       verdict?: Verdict;
       failHalfway?: boolean;
       timeoutHalfway?: boolean;
+      killHalfway?: boolean;
     }) => Promise<unknown>;
     client: SQL;
     writer: SQL;
@@ -127,6 +128,7 @@ const withFixture = async (
         verdict = healthy,
         failHalfway = false,
         timeoutHalfway = false,
+        killHalfway = false,
       } = {}) => {
         const runInTransaction: IngestionTransactionRunner<
           SQL.TransactionSQL
@@ -185,6 +187,25 @@ const withFixture = async (
                 `UPDATE ${schema}.rows SET transformed = source * 2, applications = applications + 1 WHERE id = $1 AND applications = 0`,
                 [row.id],
               );
+              if (killHalfway && index === 1) {
+                const backend = (
+                  await tx.unsafe<{ pid: number }[]>(
+                    "SELECT pg_backend_pid() AS pid",
+                  )
+                ).at(0);
+                if (backend === undefined) {
+                  throw new TypeError("Missing batch backend");
+                }
+                expect(
+                  (
+                    await writer.unsafe<{ killed: boolean }[]>(
+                      "SELECT pg_terminate_backend($1, 5000) AS killed",
+                      [backend.pid],
+                    )
+                  ).at(0)?.killed,
+                ).toBe(true);
+                await tx.unsafe("SELECT 1");
+              }
               if (failHalfway && index === 1) {
                 await tx.unsafe("SELECT 1 / 0");
               }
@@ -243,6 +264,36 @@ describe("adaptive backfill real Postgres fault recovery", () => {
         await run();
       }
       await invariant(true);
+      await run();
+      await run();
+      await invariant(true);
+    });
+  });
+
+  test("backend death inside the open batch rolls back and resumes twice", async () => {
+    await withFixture(async ({ run, writer, schema, invariant, restart }) => {
+      await expect(run({ killHalfway: true })).rejects.toThrow(
+        /connection|closed|terminated|socket/iu,
+      );
+      expect(
+        (
+          await writer.unsafe<StateRow[]>(
+            `SELECT cursor, batch FROM ${schema}.checkpoint`,
+          )
+        ).at(0)?.cursor,
+      ).toBe(0);
+      expect(
+        await writer.unsafe(
+          `SELECT id FROM ${schema}.rows WHERE applications <> 0`,
+        ),
+      ).toHaveLength(0);
+      restart();
+      await invariant();
+      for (let batch = 0; batch < 5; batch++) {
+        await run();
+      }
+      await invariant(true);
+      restart();
       await run();
       await run();
       await invariant(true);

@@ -7,15 +7,17 @@
 import { createScriptBackfillRuntime } from "@/api/db/backfill-runtime";
 import { createStatuteCitationCountRepair } from "@/api/handlers/case-law/provisions/citation-count-repair";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
+import { backfillEntrypoints } from "@/api/scripts/backfill-entrypoint";
+
+const plan = backfillEntrypoints["statute-citation-counts"]({
+  args: process.argv.slice(2),
+});
 
 const { rootDb } = await enterCaseLawMaintenanceLane();
 
-const runtime = await createScriptBackfillRuntime({
-  db: rootDb,
-  name: "statute-citation-counts",
-  tableName: "case_law_decisions",
-  initialSize: 500,
-});
+const runtime = await plan.open((options) =>
+  createScriptBackfillRuntime({ ...options, db: rootDb }),
+);
 let repairedDecisions = 0;
 
 try {

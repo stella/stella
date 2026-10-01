@@ -13,19 +13,21 @@ import { createScriptBackfillRuntime } from "@/api/db/backfill-runtime";
 import { backfillStatuteSlugsPage } from "@/api/handlers/legislation/slug-backfill";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
 import { brandPersistedLegislationDocumentId } from "@/api/lib/safe-id-boundaries";
+import { backfillEntrypoints } from "@/api/scripts/backfill-entrypoint";
 
 // Hold the maintenance lane before the first statement: operator passes over
 // the corpus tables serialize here instead of deadlocking on row locks.
+const plan = backfillEntrypoints["statute-slugs"]({
+  args: process.argv.slice(2),
+});
+
 const { rootDb } = await enterCaseLawMaintenanceLane();
 
 console.log("=== BACKFILL STATUTE SLUGS ===");
 
-const runtime = await createScriptBackfillRuntime({
-  db: rootDb,
-  name: "statute-slugs",
-  tableName: "legislation_documents",
-  initialSize: 200,
-});
+const runtime = await plan.open((options) =>
+  createScriptBackfillRuntime({ ...options, db: rootDb }),
+);
 let written = 0;
 let skipped = 0;
 let failed = 0;

@@ -35,6 +35,48 @@ const response = (
 });
 
 describe("the shared RDS EBS reader", () => {
+  test("the reader deadline aborts a pending SDK request and blocks the gate", async () => {
+    const deadline = new AbortController();
+    const requestedTimeouts: number[] = [];
+    let requestAborted = false;
+    const started = Promise.withResolvers<undefined>();
+    const timeoutMs = 123;
+    const read = createEbsBalanceReader({
+      instanceIdentifier: "test-instance",
+      clock: () => NOW,
+      timeoutMs,
+      timeoutSignal: (duration) => {
+        requestedTimeouts.push(duration);
+        return deadline.signal;
+      },
+      client: {
+        send: (_command, { abortSignal }) =>
+          new Promise<GetMetricDataCommandOutput>((_resolve, reject) => {
+            abortSignal.addEventListener(
+              "abort",
+              () => {
+                requestAborted = true;
+                reject(
+                  new EbsBalanceReadError({ message: "SDK request aborted" }),
+                );
+              },
+              { once: true },
+            );
+            started.resolve(undefined);
+          }),
+      },
+    });
+    const reading = ebsBalance({ read, now: () => NOW, config: defaultConfig });
+    await started.promise;
+    expect(requestAborted).toBe(false);
+    deadline.abort();
+    // Check transport cleanup before awaiting the gate's separate timeout;
+    // a logical unknown alone does not prove the SDK request was cancelled.
+    expect(requestAborted).toBe(true);
+    expect(requestedTimeouts).toEqual([timeoutMs]);
+    expect((await reading).kind).toBe("unknown");
+  });
+
   test("requests the configured freshness window and can return points older than the default window", async () => {
     const config = { ...defaultConfig, maxStalenessMs: 40 * 60_000 };
     const sourceTime = NOW - 30 * 60_000;

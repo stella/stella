@@ -14,10 +14,12 @@ import { createScriptBackfillRuntime } from "@/api/db/backfill-runtime";
 import type { Transaction } from "@/api/db/root";
 import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
+import { backfillEntrypoints } from "@/api/scripts/backfill-entrypoint";
 
-const WORKSPACE_BATCH_SIZE = Number(
-  process.env["PROPERTY_ROLE_BACKFILL_BATCH_SIZE"] ?? 100,
-);
+const plan = backfillEntrypoints["property-roles"]({
+  args: process.argv.slice(2),
+  environment: process.env,
+});
 const STATEMENT_TIMEOUT_MS = 60_000;
 
 const db = openMaintenanceDb({ readOnly: false });
@@ -115,18 +117,15 @@ const backfillBatch = async ({
 
 console.log("=== BACKFILL PROPERTY ROLES ===");
 console.log(
-  `Workspace batch size: ${WORKSPACE_BATCH_SIZE}, statement timeout: ${STATEMENT_TIMEOUT_MS}ms`,
+  `Workspace batch size: ${plan.initialSize}, statement timeout: ${STATEMENT_TIMEOUT_MS}ms`,
 );
 
 let totalScannedWorkspaces = 0;
 let totalUpdated = 0;
 let batchCount = 0;
-const runtime = await createScriptBackfillRuntime({
-  db,
-  name: "property-roles",
-  tableName: "properties",
-  initialSize: WORKSPACE_BATCH_SIZE,
-});
+const runtime = await plan.open((options) =>
+  createScriptBackfillRuntime({ ...options, db }),
+);
 
 try {
   while (true) {

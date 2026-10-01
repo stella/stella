@@ -25,6 +25,7 @@ type EbsBalanceReaderOptions = {
   client?: MetricClient;
   clock?: () => number;
   timeoutMs?: number;
+  timeoutSignal?: (timeoutMs: number) => AbortSignal;
   maxStalenessMs?: number;
 };
 
@@ -71,6 +72,7 @@ export const createEbsBalanceReader = ({
   client: injectedClient,
   clock = () => Temporal.Now.instant().epochMilliseconds,
   timeoutMs = defaultConfig.readTimeoutMs,
+  timeoutSignal = AbortSignal.timeout,
   maxStalenessMs = defaultConfig.maxStalenessMs,
 }: EbsBalanceReaderOptions) => {
   let client = injectedClient;
@@ -103,7 +105,7 @@ export const createEbsBalanceReader = ({
           },
         })),
       }),
-      { abortSignal: AbortSignal.timeout(timeoutMs) },
+      { abortSignal: timeoutSignal(timeoutMs) },
     );
     const byte = newestPoint(
       response.MetricDataResults?.find(({ Id }) => Id === "byte_balance"),

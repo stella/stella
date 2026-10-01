@@ -340,5 +340,43 @@ export const isHeldTooLong = (
   config: HealthConfig = defaultConfig,
 ) => {
   validateConfig(config);
-  return state.heldSince !== null && now - state.heldSince >= config.maxHeldMs;
+  if (state.heldSince === null || now <= state.heldSince) {
+    return false;
+  }
+  if (config.busyWindows.length === 0) {
+    return now - state.heldSince >= config.maxHeldMs;
+  }
+  const windows = config.busyWindows.map(({ start, end, timeZone }) => ({
+    start,
+    end,
+    formatter: new Intl.DateTimeFormat("en-GB", {
+      timeZone,
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    }),
+  }));
+  let eligibleMs = 0;
+  // Walk instant minutes: repeated and missing local minutes on DST days then
+  // retain their actual elapsed duration, and overlapping windows count once.
+  for (let cursor = state.heldSince; cursor < now;) {
+    const minuteEnd = Math.min(now, (Math.floor(cursor / 60_000) + 1) * 60_000);
+    const busy = windows.some(({ start, end, formatter }) => {
+      const parts = formatter.formatToParts(cursor);
+      const hour = parts.find(({ type }) => type === "hour")?.value;
+      const minute = parts.find(({ type }) => type === "minute")?.value;
+      const local = `${hour}:${minute}`;
+      return start < end
+        ? local >= start && local < end
+        : local >= start || local < end;
+    });
+    if (!busy) {
+      eligibleMs += minuteEnd - cursor;
+      if (eligibleMs >= config.maxHeldMs) {
+        return true;
+      }
+    }
+    cursor = minuteEnd;
+  }
+  return false;
 };

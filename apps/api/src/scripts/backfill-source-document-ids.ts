@@ -28,16 +28,16 @@ import { createScriptBackfillRuntime } from "@/api/db/backfill-runtime";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { isRecord } from "@/api/lib/type-guards";
+import { backfillEntrypoints } from "@/api/scripts/backfill-entrypoint";
 
 // Hold the maintenance lane before the first statement: operator passes over
 // the case-law tables serialize here instead of deadlocking on row locks.
 const { rootDb } = await enterCaseLawMaintenanceLane();
 
-const BATCH = 2000;
-
-const adapterArgIndex = process.argv.indexOf("--adapter");
-const ADAPTER_FILTER =
-  adapterArgIndex === -1 ? null : (process.argv[adapterArgIndex + 1] ?? null);
+const plan = backfillEntrypoints["source-document-ids"]({
+  args: process.argv.slice(2),
+});
+const ADAPTER_FILTER = plan.adapter;
 
 /**
  * How each source states its document id, as SQL over columns we already
@@ -63,12 +63,10 @@ const fillFrom = async (
   adapterKey: string,
   expression: string,
 ): Promise<number> => {
-  const runtime = await createScriptBackfillRuntime({
-    name: `source-document-ids:${adapterKey}`,
-    tableName: "case_law_decisions",
-    initialSize: BATCH,
-    db: rootDb,
-  });
+  const runtime = await plan.open(
+    (options) => createScriptBackfillRuntime({ ...options, db: rootDb }),
+    { name: `${plan.name}:${adapterKey}`, tableName: plan.tableName },
+  );
   let filled = 0;
   try {
     while (true) {

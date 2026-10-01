@@ -38,31 +38,15 @@ import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { primaryReferenceTypeFromStored } from "@/api/lib/legal-search/decision-primary-reference";
 import { isRecord } from "@/api/lib/type-guards";
+import { backfillEntrypoints } from "@/api/scripts/backfill-entrypoint";
 
-const RECANONICALIZE_FLAG = "--recanonicalize";
-
-/** Which rows a pass rewrites: those with no key, or every stale one. */
-const KEY_SCOPE = {
-  MISSING: "missing",
-  STALE: "stale",
-} as const;
-
-type KeyScope = (typeof KEY_SCOPE)[keyof typeof KEY_SCOPE];
-
-const args = process.argv.slice(2);
-const unsupported = args.filter((argument) => argument !== RECANONICALIZE_FLAG);
-if (unsupported.length > 0) {
-  panic(`Unsupported argument: ${unsupported.join(" ")}`);
-}
-const scope: KeyScope = args.includes(RECANONICALIZE_FLAG)
-  ? KEY_SCOPE.STALE
-  : KEY_SCOPE.MISSING;
-
+const plan = backfillEntrypoints["citation-keys"]({
+  args: process.argv.slice(2),
+});
+const scope = plan.scope;
 // Hold the maintenance lane before the first statement: operator passes over
 // the case-law tables serialize here instead of deadlocking on row locks.
 const { rootDb } = await enterCaseLawMaintenanceLane();
-
-const BATCH = 5000;
 
 type KeyedTable = "case_law_decisions" | "case_law_citations";
 
@@ -85,14 +69,12 @@ const backfillTable = async (
   sourceColumn: "case_number" | "citation_text",
 ): Promise<BackfillTotals> => {
   const totals: BackfillTotals = { seen: 0, keyed: 0 };
-  const missingOnly = scope === KEY_SCOPE.MISSING;
+  const missingOnly = scope === "missing";
 
-  const runtime = await createScriptBackfillRuntime({
-    name: `citation-keys:${scope}:${table}`,
-    tableName: table,
-    initialSize: BATCH,
-    db: rootDb,
-  });
+  const runtime = await plan.open(
+    (options) => createScriptBackfillRuntime({ ...options, db: rootDb }),
+    { name: `${plan.name}:${table}`, tableName: table },
+  );
   try {
     while (true) {
       // db-await-in-loop: one gated keyset transaction including its durable cursor

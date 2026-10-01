@@ -30,12 +30,8 @@ import {
   openCaseLawReadOnlySession,
 } from "@/api/lib/case-law/maintenance-lane";
 import { brandPersistedLegislationDocumentId } from "@/api/lib/safe-id-boundaries";
-import {
-  flagInteger,
-  flagUuid,
-  readApplyFlag,
-  rejectUnknownFlags,
-} from "@/api/scripts/repair-flags";
+import { backfillEntrypoints } from "@/api/scripts/backfill-entrypoint";
+import { rejectUnknownFlags } from "@/api/scripts/repair-flags";
 
 /** Versions one transaction examines. */
 const DEFAULT_PAGE_SIZE = 1000;
@@ -52,18 +48,12 @@ const USAGE = `Usage: bun run src/scripts/backfill-legislation-work-names.ts [op
 
 rejectUnknownFlags({ known: ["limit", "page", "after"], usage: USAGE });
 
-const apply = readApplyFlag(USAGE);
-const limit = flagInteger({
-  fallback: DEFAULT_LIMIT,
-  name: "limit",
-  usage: USAGE,
+const plan = backfillEntrypoints["legislation-work-names"]({
+  args: process.argv.slice(2),
 });
-const pageSize = flagInteger({
-  fallback: DEFAULT_PAGE_SIZE,
-  name: "page",
-  usage: USAGE,
-});
-const afterFlag = flagUuid({ name: "after", usage: USAGE });
+const apply = plan.apply;
+const limit = plan.limit;
+const afterFlag = plan.after;
 
 // A report only reads, so it takes no lane and cannot block a writer.
 const { rootDb } = apply
@@ -81,12 +71,9 @@ let insertedRows = 0;
 let deletedRows = 0;
 let reachedEnd = false;
 const runtime = apply
-  ? await createScriptBackfillRuntime({
-      db: rootDb,
-      name: `legislation-work-names:${afterFlag ?? "start"}`,
-      tableName: "legislation_documents",
-      initialSize: pageSize,
-    })
+  ? await plan.open((options) =>
+      createScriptBackfillRuntime({ ...options, db: rootDb }),
+    )
   : null;
 
 try {
@@ -119,7 +106,7 @@ try {
         ? await backfillLegislationWorkNamesPage({
             db,
             after: cursor,
-            pageSize: Math.min(pageSize, limit - scanned),
+            pageSize: Math.min(plan.initialSize, limit - scanned),
             apply,
           })
         : result.value;

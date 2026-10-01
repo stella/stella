@@ -323,3 +323,21 @@ test("staleness is inclusive at the configured boundary", async () => {
     ).toBe(kind);
   }
 });
+
+test("every configured busy window can stop work", () => {
+  const config = {
+    ...defaultConfig,
+    busyWindows: [
+      { start: "06:00", end: "07:00", timeZone: "UTC" },
+      { start: "12:00", end: "13:00", timeZone: "UTC" },
+    ],
+  };
+  for (const timestamp of ["2026-10-01T06:30:00Z", "2026-10-01T12:30:00Z"]) {
+    const signal = busyWindow({
+      now: () => Temporal.Instant.from(timestamp).epochMilliseconds,
+      config,
+    });
+    expect(signal.kind).toBe("stop");
+    expect(signal.value).toBe(1);
+  }
+});

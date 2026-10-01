@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { propertyConfig } from "@stll/property-testing";
+import { Temporal } from "@stll/time";
 
 import {
   combine,
@@ -395,33 +396,180 @@ describe("adaptive batch bounds and durable hold", () => {
       }).sleepMs,
     ).toBe(defaultConfig.maxSleepMs);
   });
-  test("alert age ignores busy windows and checks the exact configurable boundary", () => {
-    expect(isHeldTooLong({ heldSince: null }, 1_000_000)).toBe(false);
-    expect(
-      isHeldTooLong({ heldSince: 100 }, 1099, {
+  test("held budget excludes busy windows, overlaps, overnight and DST elapsed time", () => {
+    const cases = [
+      {
+        from: "2026-10-01T04:30:00Z",
+        to: "2026-10-01T10:30:00Z",
+        windows: defaultConfig.busyWindows,
+        eligible: 4.5 * 3_600_000,
+      },
+      {
+        from: "2026-10-01T05:00:00Z",
+        to: "2026-10-01T09:00:00Z",
+        windows: [
+          { start: "06:00", end: "08:00", timeZone: "UTC" },
+          { start: "07:00", end: "09:00", timeZone: "UTC" },
+        ],
+        eligible: 3_600_000,
+      },
+      {
+        from: "2026-10-01T21:00:00Z",
+        to: "2026-10-02T03:00:00Z",
+        windows: [{ start: "22:00", end: "02:00", timeZone: "UTC" }],
+        eligible: 2 * 3_600_000,
+      },
+      {
+        from: "2026-03-29T00:00:00Z",
+        to: "2026-03-29T03:00:00Z",
+        windows: [{ start: "01:30", end: "03:30", timeZone: "Europe/Prague" }],
+        eligible: 2 * 3_600_000,
+      },
+      {
+        from: "2026-10-25T00:00:00Z",
+        to: "2026-10-25T03:00:00Z",
+        windows: [{ start: "02:15", end: "02:30", timeZone: "Europe/Prague" }],
+        eligible: 2.5 * 3_600_000,
+      },
+    ];
+    for (const { from, to, windows, eligible } of cases) {
+      const heldSince = Temporal.Instant.from(from).epochMilliseconds;
+      const now = Temporal.Instant.from(to).epochMilliseconds;
+      const config = {
         ...defaultConfig,
-        maxHeldMs: 1000,
+        busyWindows: windows,
+        maxHeldMs: eligible,
+      };
+      expect(isHeldTooLong({ heldSince }, now, config)).toBe(true);
+      expect(
+        isHeldTooLong({ heldSince }, now, {
+          ...config,
+          maxHeldMs: eligible + 1,
+        }),
+      ).toBe(false);
+    }
+    expect(isHeldTooLong({ heldSince: null }, 1000)).toBe(false);
+    expect(isHeldTooLong({ heldSince: 1000 }, 999)).toBe(false);
+  });
+  test("busy-only extension and duplicated windows never consume held budget", () => {
+    fc.assert(
+      fc.property(fc.integer({ min: 1, max: 90 * 60_000 }), (extension) => {
+        const heldSince = Temporal.Instant.from(
+          "2026-10-01T04:30:00Z",
+        ).epochMilliseconds;
+        const config = {
+          ...defaultConfig,
+          maxHeldMs: 1,
+          busyWindows: [
+            ...defaultConfig.busyWindows,
+            ...defaultConfig.busyWindows,
+          ],
+        };
+        expect(
+          isHeldTooLong({ heldSince }, heldSince + extension, config),
+        ).toBe(false);
+        expect(
+          isHeldTooLong({ heldSince }, heldSince + 90 * 60_000 + 1, config),
+        ).toBe(true);
       }),
-    ).toBe(false);
-    expect(
-      isHeldTooLong({ heldSince: 100 }, 1100, {
-        ...defaultConfig,
-        maxHeldMs: 1000,
-      }),
-    ).toBe(true);
-    expect(
-      isHeldTooLong({ heldSince: 100 }, 1101, {
-        ...defaultConfig,
-        maxHeldMs: 1000,
-        busyWindows: [],
-      }),
-    ).toBe(true);
-    expect(
-      isHeldTooLong({ heldSince: 100 }, 99, {
-        ...defaultConfig,
-        maxHeldMs: 1000,
-      }),
-    ).toBe(false);
+      propertyConfig(),
+    );
+  });
+  test("held budget matches elapsed nonbusy minutes for arbitrary hold ranges", () => {
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 0, max: 1439 }),
+        fc.integer({ min: 1, max: 2880 }),
+        (startMinute, durationMinutes) => {
+          const epoch = Temporal.Instant.from(
+            "2026-10-01T00:00:00Z",
+          ).epochMilliseconds;
+          let eligibleMinutes = 0;
+          for (
+            let minute = startMinute;
+            minute < startMinute + durationMinutes;
+            minute++
+          ) {
+            const localMinute = minute % 1440;
+            if (localMinute < 360 || localMinute >= 480) {
+              eligibleMinutes++;
+            }
+          }
+          const heldSince = epoch + startMinute * 60_000;
+          const now = heldSince + durationMinutes * 60_000;
+          const config = {
+            ...defaultConfig,
+            busyWindows: [{ start: "06:00", end: "08:00", timeZone: "UTC" }],
+          };
+          expect(
+            isHeldTooLong({ heldSince }, now, {
+              ...config,
+              maxHeldMs: eligibleMinutes * 60_000 + 1,
+            }),
+          ).toBe(false);
+          if (eligibleMinutes > 0) {
+            expect(
+              isHeldTooLong({ heldSince }, now, {
+                ...config,
+                maxHeldMs: eligibleMinutes * 60_000,
+              }),
+            ).toBe(true);
+          }
+        },
+      ),
+      propertyConfig(),
+    );
+  });
+  test("effective growth streak and upper clamp apply to fast healthy batches", () => {
+    for (const [required, completed, expected] of [
+      [1, 0, 1200],
+      [5, 2, 1000],
+    ] as const) {
+      const result = nextBatch({
+        state: { ...state(), stableBatches: completed },
+        verdict: verdict("normal"),
+        lastDurationMs: 1,
+        clock,
+        config: { ...defaultConfig, stableBatchesBeforeGrow: required },
+      });
+      expect(result.size).toBe(expected);
+      expectLogged(result);
+    }
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 100, max: 20_000 }),
+        fc.integer({ min: 1, max: 8 }),
+        fc.integer({ min: 0, max: 10 }),
+        (maxSize, required, distance) => {
+          const config = {
+            ...defaultConfig,
+            maxSize,
+            stableBatchesBeforeGrow: required,
+          };
+          let current = {
+            ...initialBatchState(config),
+            size: Math.max(config.minSize, maxSize - distance),
+            stableBatches: required,
+          };
+          for (let index = 0; index < 12; index++) {
+            const result = nextBatch({
+              state: current,
+              verdict: verdict("normal"),
+              lastDurationMs: 1,
+              clock,
+              config,
+            });
+            expect(result.size).toBeLessThanOrEqual(maxSize);
+            expect(result.size).toBeGreaterThanOrEqual(current.size);
+            expect(result.size / current.size).toBeLessThanOrEqual(1.2);
+            expectLogged(result);
+            current = result.state;
+          }
+          expect(current.size).toBe(maxSize);
+        },
+      ),
+      propertyConfig(),
+    );
   });
 });
 

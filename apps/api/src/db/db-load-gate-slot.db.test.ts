@@ -17,6 +17,64 @@ const session = (connection: ReservedSQL) => ({
 describe.skipIf(!enabled || databaseUrl === undefined)(
   "database-wide heavy-work priorities",
   () => {
+    for (const kind of ["transaction", "session"] as const) {
+      test(`${kind} acquisition yields when index intent arrives after the precheck`, async () => {
+        if (databaseUrl === undefined) {
+          throw new TypeError("DATABASE_URL required");
+        }
+        await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+          const lowerConnection = await openClient().sql.reserve();
+          const indexConnection = await openClient().sql.reserve();
+          const index = createHeavyWorkSlot({
+            session: session(indexConnection),
+            kind: "index_build",
+          });
+          let raced = false;
+          const barrierSession = {
+            query: async (statement: string, parameters: readonly number[]) => {
+              const result = await session(lowerConnection).query(
+                statement,
+                parameters,
+              );
+              if (
+                statement.includes("pg_try_advisory") &&
+                !statement.includes("shared")
+              ) {
+                expect(result.at(0)?.acquired).toBe(true);
+                expect(await index.tryAcquire()).toBe(false);
+                raced = true;
+              }
+              return result;
+            },
+          };
+          const lower = createHeavyWorkSlot({
+            session: barrierSession,
+            kind: "backfill_batch",
+          });
+          try {
+            if (kind === "transaction") {
+              await lowerConnection`BEGIN`;
+            }
+            expect(
+              await (kind === "transaction"
+                ? tryAcquireBackfillTransactionSlot(barrierSession)
+                : lower.tryAcquire()),
+            ).toBe(false);
+            expect(raced).toBe(true);
+            if (kind === "transaction") {
+              await lowerConnection`COMMIT`;
+            }
+            expect(await index.tryAcquire()).toBe(true);
+          } finally {
+            await lowerConnection`ROLLBACK`;
+            await lower.close();
+            await index.close();
+            lowerConnection.release();
+            indexConnection.release();
+          }
+        });
+      });
+    }
     test("transactional batches serialize and yield to an index at their next commit", async () => {
       if (databaseUrl === undefined) {
         throw new TypeError("DATABASE_URL required");

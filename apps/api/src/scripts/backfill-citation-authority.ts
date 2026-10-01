@@ -19,63 +19,22 @@
  *   bun apps/api/src/scripts/backfill-citation-authority.ts --as-of 2026-08-16T12:00:00.000Z --after <decision id>
  *   bun apps/api/src/scripts/backfill-citation-authority.ts --batch 2000
  */
-import { panic } from "better-result";
-
 import { createScriptBackfillRuntime } from "@/api/db/backfill-runtime";
 import {
   loadCitationCourtWeightEntries,
   recomputeCitationAuthorityBatch,
 } from "@/api/handlers/case-law/citation-authority";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
+import { backfillEntrypoints } from "@/api/scripts/backfill-entrypoint";
 
 // Hold the maintenance lane before the first statement: operator passes over
 // the case-law tables serialize here instead of deadlocking on row locks.
 const { rootDb } = await enterCaseLawMaintenanceLane();
 
-/**
- * A flag's value, or undefined when the flag is absent.
- *
- * An absent flag and a flag whose value is missing are different mistakes: the
- * first means "use the default", the second means the operator typed something
- * they expect to take effect. Silently defaulting the second is the failure
- * mode worth refusing, because a `--batch` that reads 5000 when the operator
- * asked for 500 does not announce itself.
- */
-const flag = (name: string): string | undefined => {
-  const at = process.argv.indexOf(name);
-  if (at === -1) {
-    return undefined;
-  }
-  const value = process.argv[at + 1];
-  if (value === undefined || value.startsWith("--")) {
-    return panic(`${name} requires a value`);
-  }
-  return value;
-};
-
-const rawBatch = flag("--batch");
-const BATCH = rawBatch === undefined ? 5000 : Number(rawBatch);
-if (!Number.isInteger(BATCH) || BATCH < 1) {
-  panic("--batch requires a positive integer");
-}
-
-// One instant for the whole run, so the first decision and the last are ranked
-// on identical terms, and a resumed run can be handed the same one.
-const rawAsOf = flag("--as-of");
-const asOf = rawAsOf === undefined ? new Date() : new Date(rawAsOf);
-if (Number.isNaN(asOf.getTime())) {
-  panic("--as-of requires an ISO timestamp");
-}
-
-const rawAfter = flag("--after");
-if (
-  rawAfter !== undefined &&
-  !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(
-    rawAfter,
-  )
-) {
-  panic("--after requires a decision id");
-}
+const plan = backfillEntrypoints["citation-authority"]({
+  args: process.argv.slice(2),
+});
+const { asOf, after: rawAfter } = plan;
 
 console.log("=== BACKFILL CITATION AUTHORITY ===");
 console.log(
@@ -90,12 +49,9 @@ let scanned = 0;
 let written = 0;
 let cited = 0;
 
-const runtime = await createScriptBackfillRuntime({
-  name: `citation-authority:${asOf.toISOString()}:${rawAfter ?? "start"}`,
-  tableName: "case_law_decisions",
-  initialSize: BATCH,
-  db: rootDb,
-});
+const runtime = await plan.open((options) =>
+  createScriptBackfillRuntime({ ...options, db: rootDb }),
+);
 try {
   while (true) {
     // db-await-in-loop: one gated keyset transaction including its durable cursor
