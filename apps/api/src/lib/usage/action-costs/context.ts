@@ -62,7 +62,7 @@ export const currentActionCostIdentity = (
 
 class ActionCallObserverError extends TaggedError("ActionCallObserverError")<{
   message: string;
-  reason: "missing_scope" | "organization_mismatch" | "settled_scope";
+  reason: "organization_mismatch";
 }> {}
 
 export type ActionCallObserver = (kind: string) => void;
@@ -71,21 +71,14 @@ export const actionCallObserver = (
   organizationId: SafeId<"organization">,
 ): ActionCallObserver => {
   const scope = actionCostScope.getStore();
-  const reason =
-    scope?.status === "settled" ? "settled_scope" : "missing_scope";
-  if (
-    scope === undefined ||
-    scope.identity.organizationId !== organizationId ||
-    scope.status !== "active"
-  ) {
+  if (scope?.status !== "active") {
+    return () => undefined;
+  }
+  if (scope.identity.organizationId !== organizationId) {
     reportActionCostObservationFailure(
       new ActionCallObserverError({
-        message: "Action call observer could not capture an active scope",
-        reason:
-          scope !== undefined &&
-          scope.identity.organizationId !== organizationId
-            ? "organization_mismatch"
-            : reason,
+        message: "Action call observer scope does not match the caller",
+        reason: "organization_mismatch",
       }),
     );
     return () => undefined;

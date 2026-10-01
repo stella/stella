@@ -55,7 +55,7 @@ test("matching capture records each call and settled callbacks stop recording", 
   expect(new Set(calls(rows).map(({ record }) => record.callId)).size).toBe(2);
 });
 
-test("mismatched and missing captures report their reason and never record later", async () => {
+test("missing captures stay silent and mismatched captures report exactly once", async () => {
   const reported = spyOn(
     failure,
     "reportActionCostObservationFailure",
@@ -65,6 +65,8 @@ test("mismatched and missing captures report their reason and never record later
   const rows: ActionCostObservation[] = [];
   try {
     const missing = actionCallObserver(identity.organizationId);
+    missing("fixture_no_scope");
+    expect(reported).not.toHaveBeenCalled();
     await runObservedAction({
       identity,
       userId: null,
@@ -84,8 +86,8 @@ test("mismatched and missing captures report their reason and never record later
       },
     });
     expect(calls(rows)).toEqual([]);
+    expect(reported).toHaveBeenCalledTimes(1);
     expect(reported.mock.calls.map(([cause]) => cause)).toMatchObject([
-      { _tag: "ActionCallObserverError", reason: "missing_scope" },
       { _tag: "ActionCallObserverError", reason: "organization_mismatch" },
     ]);
   } finally {
@@ -93,7 +95,7 @@ test("mismatched and missing captures report their reason and never record later
   }
 });
 
-test("a settled scope cannot capture a fresh observer", async () => {
+test("settled captures stay silent even when the caller organization differs", async () => {
   const reported = spyOn(
     failure,
     "reportActionCostObservationFailure",
@@ -110,6 +112,9 @@ test("a settled scope cannot capture a fresh observer", async () => {
       run: async () => {
         late = release.promise.then(() => {
           actionCallObserver(identity.organizationId)("fixture_late");
+          actionCallObserver(identityFor("other-org").organizationId)(
+            "fixture_other_late",
+          );
           return undefined;
         });
       },
@@ -117,9 +122,7 @@ test("a settled scope cannot capture a fresh observer", async () => {
     release.resolve(undefined);
     await late;
     expect(calls(rows)).toEqual([]);
-    expect(reported.mock.calls.map(([cause]) => cause)).toMatchObject([
-      { reason: "settled_scope" },
-    ]);
+    expect(reported).not.toHaveBeenCalled();
   } finally {
     reported.mockRestore();
   }
