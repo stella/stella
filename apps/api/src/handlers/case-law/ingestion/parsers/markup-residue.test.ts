@@ -121,14 +121,8 @@ describe("markupResidueIn", () => {
   });
 
   test("unknown entity-shaped names stay ordinary text", () => {
-    const nameCharacters =
-      "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
     const unknownNames = fc
-      .array(fc.constantFrom(...nameCharacters), {
-        minLength: 2,
-        maxLength: 12,
-      })
-      .map((characters) => characters.join(""))
+      .stringMatching(/^[a-zA-Z]{2,12}$/u)
       .filter((name) => decodeHTMLStrict(`&${name};`) === `&${name};`);
 
     fc.assert(
