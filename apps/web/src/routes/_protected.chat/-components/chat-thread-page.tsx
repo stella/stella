@@ -625,6 +625,10 @@ export const ChatThreadPage = ({
                     <>
                       <ChatThreadMessages
                         approvalPendingMessageId={approvalPendingMessageId}
+                        branchSource={{
+                          contextMatterIds: selectedContextMatterIds,
+                          threadRef,
+                        }}
                         error={error}
                         hasOlderMessages={olderCursor !== null}
                         isGenerating={isGenerating}

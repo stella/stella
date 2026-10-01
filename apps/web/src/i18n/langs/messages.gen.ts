@@ -1085,6 +1085,7 @@ type Messages = {
     "focusSuggestion": "Focus suggestion: {topic}";
     "folioCitationFallback": "p. {n}";
     "forkFromHere": "Start a new chat from here";
+    "forkInSidePanel": "Start a new chat from here in the side panel";
     "forkedFrom": "Created from <bdi>{title}</bdi>";
     "forkedFromUnavailable": "Created from a chat that is no longer available";
     "forkedThread": "From another chat";
@@ -1191,6 +1192,12 @@ type Messages = {
     "richContentLoading": "Loading interactive content…";
     "richContentTitle": "Interactive content";
     "richContentUnavailable": "This content cannot be displayed safely.";
+    "selection": {
+      "askInNewChat": "Ask in new chat";
+      "quoteInReply": "Quote in reply";
+      "quotedText": "“{quote}”";
+      "toolbarLabel": "Selected text";
+    };
     "sendError": "There was an issue sending your message. Contact support if the error persists.";
     "sendErrorAnonymizationBlocked": "stella could not anonymize one attachment, so nothing was sent. Remove the file or send this message without anonymization.";
     "sendErrorEmptyCompletion": "The AI returned an empty reply. Try again or rephrase your message.";

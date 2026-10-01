@@ -1082,6 +1082,7 @@
     "focusSuggestion": "Vorschlag fokussieren: {topic}",
     "folioCitationFallback": "S. {n}",
     "forkFromHere": "Ab hier einen neuen Chat starten",
+    "forkInSidePanel": "Ab hier einen neuen Chat in der Seitenleiste starten",
     "forkedFrom": "Erstellt aus <bdi>{title}</bdi>",
     "forkedFromUnavailable": "Erstellt aus einem nicht mehr verfügbaren Chat",
     "forkedThread": "Aus einem anderen Chat",
@@ -1188,6 +1189,12 @@
     "richContentLoading": "Interaktiver Inhalt wird geladen…",
     "richContentTitle": "Interaktiver Inhalt",
     "richContentUnavailable": "Dieser Inhalt kann nicht sicher angezeigt werden.",
+    "selection": {
+      "askInNewChat": "In neuem Chat fragen",
+      "quoteInReply": "In Antwort zitieren",
+      "quotedText": "„{quote}“",
+      "toolbarLabel": "Markierter Text"
+    },
     "sendError": "Beim Senden Ihrer Nachricht ist ein Problem aufgetreten. Wenden Sie sich an den Support, wenn der Fehler weiterhin auftritt.",
     "sendErrorAnonymizationBlocked": "stella konnte einen Anhang nicht anonymisieren, daher wurde nichts gesendet. Entfernen Sie die Datei oder senden Sie diese Nachricht ohne Anonymisierung.",
     "sendErrorEmptyCompletion": "Die KI hat eine leere Antwort zurückgegeben. Versuchen Sie es erneut oder formulieren Sie Ihre Nachricht um.",

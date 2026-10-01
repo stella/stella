@@ -67,7 +67,9 @@ import { shouldChipPaste } from "@/components/chat-pasted-text";
 import {
   insertPastedTextChip,
   PastedText,
+  pastedTextChipContent,
 } from "@/components/chat-pasted-text-extension";
+import type { PastedTextAttrs } from "@/components/chat-pasted-text-extension";
 import { ChatAnonDecorations } from "@/components/chat/chat-anon-decorations-extension";
 import { createPromptEditorDocument } from "@/components/prompt-editor.logic";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -164,6 +166,7 @@ type RegisteredExtension = {
 type ActiveChatEditorHandle = {
   focus: () => void;
   insertMention: (mention: ChatMentionOption) => void;
+  insertPastedText: (attrs: PastedTextAttrs) => void;
   threadKey: string;
 };
 
@@ -223,6 +226,12 @@ type ChatEditorManagerContextValue = {
   insertMentionIntoThread: (
     threadRef: ChatThreadRef,
     mention: ChatMentionOption,
+  ) => void;
+  /** A pasted-text chip (a quote) at the caret of the thread's live
+   *  composer, or at the end of its stored draft when none is live. */
+  insertPastedTextIntoThread: (
+    threadRef: ChatThreadRef,
+    attrs: PastedTextAttrs,
   ) => void;
   registerActiveEditor: (handle: ActiveChatEditorHandle) => () => void;
   registerExtension: (
@@ -417,6 +426,23 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
     [],
   );
 
+  const insertPastedTextIntoThread = useCallback(
+    (threadRef: ChatThreadRef, attrs: PastedTextAttrs) => {
+      const threadKey = getChatThreadKey(threadRef);
+      const activeEditor = activeEditorRef.current;
+
+      if (activeEditor?.threadKey === threadKey) {
+        activeEditor.insertPastedText(attrs);
+        return;
+      }
+
+      useChatDraftStore
+        .getState()
+        .insertInlineContent(threadKey, pastedTextChipContent(attrs));
+    },
+    [],
+  );
+
   const focusThread = useCallback((threadRef: ChatThreadRef) => {
     const threadKey = getChatThreadKey(threadRef);
     const activeEditor = activeEditorRef.current;
@@ -434,6 +460,7 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
       getMentionItems,
       getPluginRegistrations,
       insertMentionIntoThread,
+      insertPastedTextIntoThread,
       registerActiveEditor,
       registerExtension,
       searchMentionItems,
@@ -443,6 +470,7 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
       getMentionItems,
       getPluginRegistrations,
       insertMentionIntoThread,
+      insertPastedTextIntoThread,
       registerActiveEditor,
       registerExtension,
       searchMentionItems,
@@ -1303,14 +1331,27 @@ export const useChatEditor = ({
     [editor, markDraftStarted],
   );
 
+  const insertPastedText = useCallback(
+    (attrs: PastedTextAttrs) => {
+      if (!isUsableEditor(editor)) {
+        return;
+      }
+
+      markDraftStarted();
+      insertPastedTextChip(editor, attrs);
+    },
+    [editor, markDraftStarted],
+  );
+
   useExternalSyncEffect(
     () =>
       registerActiveEditor({
         focus,
         insertMention,
+        insertPastedText,
         threadKey,
       }),
-    [focus, insertMention, registerActiveEditor, threadKey],
+    [focus, insertMention, insertPastedText, registerActiveEditor, threadKey],
   );
 
   const updateAttachments = useCallback(

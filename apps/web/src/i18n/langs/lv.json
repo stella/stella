@@ -1082,6 +1082,7 @@
     "focusSuggestion": "Fokusēt ieteikumu: {topic}",
     "folioCitationFallback": "lpp. {n}",
     "forkFromHere": "Sākt jaunu tērzēšanu no šejienes",
+    "forkInSidePanel": "Sākt jaunu tērzēšanu no šejienes sānu panelī",
     "forkedFrom": "Izveidota no <bdi>{title}</bdi>",
     "forkedFromUnavailable": "Izveidota no tērzēšanas, kas vairs nav pieejama",
     "forkedThread": "No citas tērzēšanas",
@@ -1188,6 +1189,12 @@
     "richContentLoading": "Notiek interaktīvā satura ielāde…",
     "richContentTitle": "Interaktīvs saturs",
     "richContentUnavailable": "Šo saturu nevar droši parādīt.",
+    "selection": {
+      "askInNewChat": "Jautāt jaunā tērzēšanā",
+      "quoteInReply": "Citēt atbildē",
+      "quotedText": "„{quote}”",
+      "toolbarLabel": "Atlasītais teksts"
+    },
     "sendError": "Nosūtot ziņu, radās problēma. Ja kļūda nepazūd, sazinieties ar atbalsta dienestu.",
     "sendErrorAnonymizationBlocked": "stella nevarēja anonimizēt vienu pielikumu, tāpēc nekas netika nosūtīts. Noņemiet failu vai nosūtiet šo ziņu bez anonimizācijas.",
     "sendErrorEmptyCompletion": "AI atgrieza tukšu atbildi. Mēģiniet vēlreiz vai pārfrāzējiet ziņu.",

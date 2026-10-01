@@ -45,6 +45,8 @@ const { ChatMattersContext } =
   await import("@/components/chat/chat-matters-context");
 const { getToolApprovalGrant, isApprovalToolName } =
   await import("@/components/chat/chat-ui-tools");
+const { ChatEditorProvider } =
+  await import("@/components/chat-editor-provider");
 const { ChatThreadMessages } =
   await import("@/components/chat/chat-thread-messages");
 const { CHAT_USER_ACTIONS } =
@@ -455,27 +457,29 @@ const RecordedThreadPage = ({
           handleDeny: session.handleDeny,
         }}
       >
-        <ChatThreadMessages
-          approvalPendingMessageId={session.approvalPendingMessageId}
-          error={session.error}
-          hasOlderMessages={session.olderCursor !== null}
-          isGenerating={session.isGenerating}
-          isLoadingOlder={session.isLoadingOlder}
-          loadOlderError={session.loadOlderError}
-          messages={session.messages}
-          onAskUserEditAndRerun={session.handleAskUserEditAndRerun}
-          onAskUserSubmit={session.handleAskUserSubmit}
-          onCreateDocumentResolve={session.handleCreateDocumentResolve}
-          onLoadOlder={session.loadOlder}
-          onOpenCreateDocumentDraft={session.handleOpenCreateDocumentDraft}
-          onOpenCreatedDocument={session.handleOpenCreatedDocument}
-          onRemoveQueuedMessage={session.removeQueuedMessage}
-          onResend={session.resendLatestMessage}
-          queuedMessages={session.queuedMessages}
-          showThinkingIndicator
-          streamdownComponents={session.streamdownComponents}
-          threadRef={threadRef}
-        />
+        <ChatEditorProvider>
+          <ChatThreadMessages
+            approvalPendingMessageId={session.approvalPendingMessageId}
+            error={session.error}
+            hasOlderMessages={session.olderCursor !== null}
+            isGenerating={session.isGenerating}
+            isLoadingOlder={session.isLoadingOlder}
+            loadOlderError={session.loadOlderError}
+            messages={session.messages}
+            onAskUserEditAndRerun={session.handleAskUserEditAndRerun}
+            onAskUserSubmit={session.handleAskUserSubmit}
+            onCreateDocumentResolve={session.handleCreateDocumentResolve}
+            onLoadOlder={session.loadOlder}
+            onOpenCreateDocumentDraft={session.handleOpenCreateDocumentDraft}
+            onOpenCreatedDocument={session.handleOpenCreatedDocument}
+            onRemoveQueuedMessage={session.removeQueuedMessage}
+            onResend={session.resendLatestMessage}
+            queuedMessages={session.queuedMessages}
+            showThinkingIndicator
+            streamdownComponents={session.streamdownComponents}
+            threadRef={threadRef}
+          />
+        </ChatEditorProvider>
       </ChatApprovalContext>
     </ChatMattersContext>
   );

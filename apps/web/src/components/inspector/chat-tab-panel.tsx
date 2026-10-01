@@ -609,6 +609,10 @@ export const ChatTabPanel = ({
               ) : (
                 <ChatThreadMessages
                   approvalPendingMessageId={approvalPendingMessageId}
+                  branchSource={{
+                    contextMatterIds: tab.contextMatterIds,
+                    threadRef,
+                  }}
                   error={error}
                   hasOlderMessages={olderCursor !== null}
                   isGenerating={isGenerating}

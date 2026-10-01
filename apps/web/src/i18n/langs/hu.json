@@ -1082,6 +1082,7 @@
     "focusSuggestion": "Javaslat fókuszálása: {topic}",
     "folioCitationFallback": "o. {n}",
     "forkFromHere": "Új csevegés indítása innen",
+    "forkInSidePanel": "Új csevegés indítása innen az oldalsó panelen",
     "forkedFrom": "Ebből a csevegésből létrehozva: <bdi>{title}</bdi>",
     "forkedFromUnavailable": "Egy már nem elérhető csevegésből létrehozva",
     "forkedThread": "Másik csevegésből",
@@ -1188,6 +1189,12 @@
     "richContentLoading": "Interaktív tartalom betöltése…",
     "richContentTitle": "Interaktív tartalom",
     "richContentUnavailable": "Ez a tartalom nem jeleníthető meg biztonságosan.",
+    "selection": {
+      "askInNewChat": "Kérdés új csevegésben",
+      "quoteInReply": "Idézés a válaszban",
+      "quotedText": "„{quote}”",
+      "toolbarLabel": "Kijelölt szöveg"
+    },
     "sendError": "Probléma történt az üzenet elküldésekor. Ha a hiba továbbra is fennáll, lépjen kapcsolatba az ügyfélszolgálattal.",
     "sendErrorAnonymizationBlocked": "A stella nem tudta anonimizálni az egyik mellékletet, ezért semmi sem lett elküldve. Távolítsa el a fájlt, vagy küldje el az üzenetet anonimizálás nélkül.",
     "sendErrorEmptyCompletion": "Az AI üres választ adott. Próbálja újra, vagy fogalmazza át az üzenetet.",
