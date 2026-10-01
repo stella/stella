@@ -5,6 +5,7 @@ import {
   describe,
   expect,
   setDefaultTimeout,
+  spyOn,
   test,
 } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
@@ -24,9 +25,13 @@ import { updateWorkspaceHandler } from "@/api/handlers/workspaces/update";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { allocateEntityStamps } from "@/api/lib/document-counter";
+import {
+  allocateEntityStamps,
+  recordEntityStamps,
+} from "@/api/lib/document-counter";
 import { toDocumentReference } from "@/api/lib/document-reference";
 import { insertEntityVersions } from "@/api/lib/entity-versions/insert-entity-version";
+import { logger } from "@/api/lib/observability/logger";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -44,19 +49,22 @@ const recordAuditEvent: AuditRecorder = async () => undefined;
 // Each test owns the matters it stamps, so the shared fixture's seeded rows
 // and their references stay untouched.
 const createdWorkspaceIds: SafeId<"workspace">[] = [];
+const createdReferences = new Set<string>();
 
 const createMatter = async (
   reference: string,
+  organizationId = ids.orgA,
 ): Promise<SafeId<"workspace">> => {
   const workspaceId = createSafeId<"workspace">();
   await testDb.insert(workspaces).values({
     id: workspaceId,
-    organizationId: ids.orgA,
+    organizationId,
     name: `Matter ${reference}`,
     reference,
     status: "active" as const,
   });
   createdWorkspaceIds.push(workspaceId);
+  createdReferences.add(reference);
   return workspaceId;
 };
 
@@ -64,6 +72,7 @@ const setReference = async (
   workspaceId: SafeId<"workspace">,
   reference: string,
 ) => {
+  createdReferences.add(reference);
   await testDb
     .update(workspaces)
     .set({ reference })
@@ -86,6 +95,22 @@ const allocate = async (workspaceId: SafeId<"workspace">, count: number) => {
   );
 };
 
+const readLedger = async (reference: string, organizationId = ids.orgA) =>
+  (
+    await testDb
+      .select({
+        workspaceId: documentReferenceCounters.workspaceId,
+        lastValue: documentReferenceCounters.lastValue,
+      })
+      .from(documentReferenceCounters)
+      .where(
+        and(
+          eq(documentReferenceCounters.organizationId, organizationId),
+          eq(documentReferenceCounters.reference, reference),
+        ),
+      )
+  ).at(0);
+
 beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
@@ -99,6 +124,19 @@ afterAll(async () => {
     await testDb
       .delete(workspaces)
       .where(inArray(workspaces.id, createdWorkspaceIds));
+  }
+  if (createdReferences.size > 0) {
+    await testDb
+      .delete(documentReferenceCounters)
+      .where(
+        and(
+          inArray(documentReferenceCounters.organizationId, [
+            ids.orgA,
+            ids.orgB,
+          ]),
+          inArray(documentReferenceCounters.reference, [...createdReferences]),
+        ),
+      );
   }
   await releaseRlsFixture();
 });
@@ -137,102 +175,110 @@ describe("document stamp allocation across a matter reference", () => {
     expect(ledger).toEqual({ workspaceId: matter, lastValue: 1 });
   });
 
-  test("a retired reference rejects a new matter before allocation", async () => {
-    const handoverReference = "HANDOVER/2026";
-    const matterA = await createMatter(handoverReference);
+  test("a live matter adopts a deleted owner's reference above its high-water mark", async () => {
+    const reference = "RETIRED-ALLOCATION/2026";
+    const previous = await createMatter(reference);
+    await allocate(previous, 3);
+    await testDb.delete(workspaces).where(eq(workspaces.id, previous));
+    const current = await createMatter(reference);
 
-    const first = await allocate(matterA, 3);
-    expect(first.map(({ stamp }) => stamp)).toEqual([
-      `${handoverReference}/001.v1`,
-      `${handoverReference}/002.v1`,
-      `${handoverReference}/003.v1`,
+    const issued = await allocate(current, 2);
+
+    expect(issued.map(({ stamp }) => stamp)).toEqual([
+      `${reference}/004.v1`,
+      `${reference}/005.v1`,
     ]);
-
-    // Bypass the reference-edit guard to verify allocation also preserves
-    // issued ownership when a different matter presents the same reference.
-    await setReference(matterA, "HANDOVER-RETIRED/2026");
-    const matterB = await createMatter(handoverReference);
-
-    const attempted = await Result.tryPromise({
-      try: async () => await allocate(matterB, 2),
-      catch: (cause) => cause,
+    expect(await readLedger(reference)).toEqual({
+      workspaceId: current,
+      lastValue: 5,
     });
-    expect(Result.isError(attempted)).toBe(true);
-    if (Result.isError(attempted)) {
-      expect(attempted.error).toMatchObject({
-        message: "Document stamp reference belongs to another workspace",
-      });
-    }
-    const [ledger] = await testDb
-      .select({
-        workspaceId: documentReferenceCounters.workspaceId,
-        lastValue: documentReferenceCounters.lastValue,
-      })
-      .from(documentReferenceCounters)
-      .where(
-        and(
-          eq(documentReferenceCounters.organizationId, ids.orgA),
-          eq(documentReferenceCounters.reference, handoverReference),
-        ),
-      );
-    expect(ledger).toEqual({ workspaceId: matterA, lastValue: 3 });
   });
 
-  test("a matter returning to its reference resumes after rejected borrowing", async () => {
-    const original = "ROUNDTRIP/2026";
-    const interim = "ROUNDTRIP-INTERIM/2026";
-    const borrower = "ROUNDTRIP-BORROWER/2026";
-    const matter = await createMatter(original);
-    const other = await createMatter(borrower);
-
-    const before = await allocate(matter, 2);
-
-    // Rejected borrowing must leave the original owner and counter intact.
-    await setReference(matter, interim);
-    await setReference(other, original);
-    const attempted = await Result.tryPromise({
-      try: async () => await allocate(other, 2),
-      catch: (cause) => cause,
-    });
-    expect(Result.isError(attempted)).toBe(true);
-    if (Result.isError(attempted)) {
-      expect(attempted.error).toMatchObject({
-        message: "Document stamp reference belongs to another workspace",
+  test("shared numbering preserves a live owner and every caller's high-water mark", async () => {
+    const reference = "SHARED-ALLOCATION/2026";
+    const owner = await createMatter(reference);
+    const before = await allocate(owner, 2);
+    await setReference(owner, "SHARED-OWNER-AWAY/2026");
+    const other = await createMatter(reference);
+    const warn = spyOn(logger, "warn").mockImplementation(() => undefined);
+    let borrowed: Awaited<ReturnType<typeof allocate>> = [];
+    try {
+      borrowed = await allocate(other, 2);
+      expect(warn).toHaveBeenCalledWith("document_reference.shared_numbering", {
+        "organization.id": ids.orgA,
+        "workspace.id": other,
+        "workspace.owner_id": owner,
       });
+    } finally {
+      warn.mockRestore();
     }
-    await setReference(other, borrower);
-    await setReference(matter, original);
-    const after = await allocate(matter, 1);
-
-    expect(before.map(({ stamp }) => stamp)).toEqual([
-      `${original}/001.v1`,
-      `${original}/002.v1`,
-    ]);
-    expect(after.map(({ stamp }) => stamp)).toEqual([`${original}/003.v1`]);
-
-    const stamps = [...before, ...after].map(({ stamp }) => stamp);
+    await setReference(other, "SHARED-OTHER-AWAY/2026");
+    await setReference(owner, reference);
+    const returned = await allocate(owner, 1);
+    const stamps = [...before, ...borrowed, ...returned].map(
+      ({ stamp }) => stamp,
+    );
+    expect(stamps).toEqual(
+      Array.from(
+        { length: 5 },
+        (_, index) => `${reference}/00${String(index + 1)}.v1`,
+      ),
+    );
     expect(new Set(stamps).size).toBe(stamps.length);
+    expect(await readLedger(reference)).toEqual({
+      workspaceId: owner,
+      lastValue: 5,
+    });
   });
 
-  test("a separate matter cannot allocate a claimed reference", async () => {
-    const shared = "SHARED/2026";
-    const matterA = await createMatter(shared);
-    const matterB = await createMatter("SHARED-OTHER/2026");
-
-    const blockA = await allocate(matterA, 2);
-    await setReference(matterA, "SHARED-RETIRED/2026");
-    await setReference(matterB, shared);
-    const attempted = await Result.tryPromise({
-      try: async () => await allocate(matterB, 2),
-      catch: (cause) => cause,
-    });
-    expect(Result.isError(attempted)).toBe(true);
-    if (Result.isError(attempted)) {
-      expect(attempted.error).toMatchObject({
-        message: "Document stamp reference belongs to another workspace",
+  test("later versions from multiple matters merge the greatest value without changing a live owner", async () => {
+    const reference = "SHARED-VERSIONS/2026";
+    const owner = await createMatter(reference);
+    await allocate(owner, 2);
+    const other = await createMatter("SHARED-VERSIONS-OTHER/2026");
+    const { scopedDb } = scopeFor([owner, other]);
+    await scopedDb(async (tx) => {
+      await recordEntityStamps({
+        tx,
+        stamps: [
+          { workspaceId: owner, stamp: `${reference}/003.v2` },
+          { workspaceId: other, stamp: `${reference}/009.v2` },
+          { workspaceId: owner, stamp: `${reference}/004.v3` },
+        ],
       });
-    }
-    expect(blockA.map(({ docSequence }) => docSequence)).toEqual([1, 2]);
+      await recordEntityStamps({
+        tx,
+        stamps: [{ workspaceId: other, stamp: `${reference}/006.v3` }],
+      });
+    });
+    expect(await readLedger(reference)).toEqual({
+      workspaceId: owner,
+      lastValue: 9,
+    });
+  });
+
+  test("the same reference numbers independently across organizations", async () => {
+    const reference = "TENANT-NUMBERING/2026";
+    const first = await createMatter(reference);
+    const second = await createMatter(reference, ids.orgB);
+    const a = await allocate(first, 2);
+    const dbB = asTestRaw<ScopedDb>(
+      createScopedDb(testDb, [second], ids.orgB, ids.userB1),
+    );
+    const b = await dbB(
+      async (tx) =>
+        await allocateEntityStamps({ tx, workspaceId: second, count: 1 }),
+    );
+    expect(a.map(({ docSequence }) => docSequence)).toEqual([1, 2]);
+    expect(b.map(({ docSequence }) => docSequence)).toEqual([1]);
+    expect(await readLedger(reference)).toEqual({
+      workspaceId: first,
+      lastValue: 2,
+    });
+    expect(await readLedger(reference, ids.orgB)).toEqual({
+      workspaceId: second,
+      lastValue: 1,
+    });
   });
 
   test("a matter with an empty reference gets sequence numbers and no stamp", async () => {
@@ -565,5 +611,5 @@ test("later issuance reserves its prefix while moved history keeps its original 
         eq(documentReferenceCounters.reference, zeroReference),
       ),
     );
-  expect(zeroLedger).toEqual({ workspaceId: zeroSource, lastValue: 4 });
+  expect(zeroLedger).toEqual({ workspaceId: staleOwner, lastValue: 4 });
 });

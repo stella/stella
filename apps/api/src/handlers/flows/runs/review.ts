@@ -15,7 +15,11 @@ const config = {
     "accordingly, and its id and new status come back.",
   permissions: { flow: ["review"] },
   access: "write",
-  mcp: { type: "capability", reason: "workflow_orchestration" },
+  mcp: {
+    type: "capability",
+    reason: "workflow_orchestration",
+    consumesServices: false,
+  },
   params: flowRunParamsSchema,
   body: reviewFlowRunBodySchema,
 } satisfies WorkspaceHandlerConfig;

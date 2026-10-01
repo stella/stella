@@ -154,10 +154,9 @@ describe("parseOutlookMsg", () => {
       mimeType: "application/octet-stream",
     });
 
-    const parsedEmail = await parseEmail(
-      toArrayBuffer(file),
-      "application/vnd.ms-outlook",
-    );
+    const parsedEmail = (
+      await parseEmail(toArrayBuffer(file), "application/vnd.ms-outlook")
+    ).unwrap();
     const text = parsedEmailToText(parsedEmail);
     expect(text).toContain("From: Jane Lawyer <jane@example.com>");
     expect(text).toContain("To: Client One <client@example.org>");

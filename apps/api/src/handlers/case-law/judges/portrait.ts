@@ -27,8 +27,6 @@ export const judgePortraitPath = (judgeId: SafeId<"caseLawJudge">): string =>
 /** A portrait is a head-and-shoulders image; nothing stored here is larger. */
 export const PORTRAIT_MAX_BYTES = 4 * 1024 * 1024;
 
-export const PORTRAIT_CACHE_CONTROL = "public, max-age=86400";
-
 export type JudgePortraitPointer = {
   key: string;
   contentType: string;

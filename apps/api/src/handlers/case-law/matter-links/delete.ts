@@ -60,7 +60,11 @@ const config = {
     "note recorded on it. The decision itself stays in the case-law corpus and " +
     "can be linked again.",
   permissions: { entity: ["delete"] },
-  mcp: { type: "capability", reason: "legal_corpus_admin" },
+  mcp: {
+    type: "capability",
+    reason: "legal_corpus_admin",
+    consumesServices: false,
+  },
   params: workspaceParams({
     linkId: tSafeId("caseLawMatterLink"),
   }),

@@ -18,7 +18,11 @@ const config = {
     "template is deleted: templates filed under the category become " +
     "uncategorized, and its child categories are promoted to its own parent.",
   permissions: { template: ["delete"] },
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  mcp: {
+    type: "capability",
+    reason: "template_authoring_ui",
+    consumesServices: false,
+  },
   params: deleteTemplateCategoryParamsSchema,
 } satisfies HandlerConfig;
 

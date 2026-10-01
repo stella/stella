@@ -1,6 +1,12 @@
 import { Result } from "better-result";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { expectTypeOf } from "expect-type";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  test,
+  expectTypeOf,
+} from "bun:test";
 import * as v from "valibot";
 
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";

@@ -71,7 +71,7 @@ describe("BYOK provider and model configuration", () => {
     expect(createDefaultRoleModels(["mistral"]).pdf).toBeNull();
   });
 
-  test("normalizes stored providers for editing without exposing keys", () => {
+  test("preserves stored provider settings for editing without exposing keys", () => {
     expect(
       providerDraftsFromStoredProviders([
         {
@@ -91,7 +91,7 @@ describe("BYOK provider and model configuration", () => {
         apiKey: "",
         apiKeyMasked: "AIza****",
         endpoint: "",
-        region: "global",
+        region: "eu",
         replacingKey: false,
       },
       {
@@ -99,7 +99,7 @@ describe("BYOK provider and model configuration", () => {
         apiKey: "",
         apiKeyMasked: "sk-proj****",
         endpoint: "",
-        region: "global",
+        region: "eu",
         replacingKey: false,
       },
     ]);

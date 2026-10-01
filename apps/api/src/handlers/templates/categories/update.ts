@@ -22,7 +22,11 @@ const config = {
     "the fields you pass are written, and a move that would make the tree " +
     "circular is refused.",
   permissions: { template: ["update"] },
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  mcp: {
+    type: "capability",
+    reason: "template_authoring_ui",
+    consumesServices: false,
+  },
   params: updateTemplateCategoryParamsSchema,
   body: updateTemplateCategoryBodySchema,
 } satisfies HandlerConfig;

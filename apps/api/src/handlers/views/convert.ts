@@ -34,7 +34,11 @@ const config = {
     "the layout the view already has, is refused. Use views.update to change " +
     "a view's name or the details of its current layout.",
   permissions: { view: ["update"] },
-  mcp: { type: "capability", reason: "workspace_schema" },
+  mcp: {
+    type: "capability",
+    reason: "workspace_schema",
+    consumesServices: false,
+  },
   params: workspaceParams({ viewId: tSafeId("workspaceView") }),
   body: t.Object({
     targetType: t.UnionEnum([...VIEW_LAYOUT_TYPES]),

@@ -17,7 +17,11 @@ const config = {
     "expectedUpdatedAt so a concurrent edit is not silently overwritten.",
   permissions: { styleSet: ["use"] },
   access: "read",
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  mcp: {
+    type: "capability",
+    reason: "template_authoring_ui",
+    consumesServices: false,
+  },
   params: paramsSchema,
 } satisfies HandlerConfig;
 

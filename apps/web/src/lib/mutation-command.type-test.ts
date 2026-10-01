@@ -1,3 +1,5 @@
+import { expectTypeOf } from "bun:test";
+
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 
 type ExamplePatchFields = {
@@ -14,8 +16,7 @@ export const multiFieldPatch: NonEmptyPatch<ExamplePatchFields> = {
   name: "Appeal",
 };
 
-type Expect<Condition extends true> = Condition;
-
-export type EmptyPatchIsRejected = Expect<
-  Record<never, never> extends NonEmptyPatch<ExamplePatchFields> ? false : true
->;
+// An empty patch is rejected.
+expectTypeOf<Record<never, never>>().not.toExtend<
+  NonEmptyPatch<ExamplePatchFields>
+>();

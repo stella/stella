@@ -356,7 +356,7 @@ describe("release workflows run the gate", () => {
     readFileSync(path.join(REPO_ROOT, file), "utf-8");
 
   test("the tag workflow refuses a stable tag before pushing it", () => {
-    const workflow = read(".github/workflows/tag-on-version-bump.yml");
+    const workflow = read(".github/workflows/release-tag.yml");
     const gate = workflow.indexOf(SCRIPT);
     const push = workflow.indexOf("- name: Push tag");
     expect(gate).toBeGreaterThan(0);

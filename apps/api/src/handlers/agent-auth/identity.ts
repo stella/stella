@@ -46,6 +46,7 @@ const config = {
     }),
   ]),
   mcp: { type: "internal", reason: "auth_plumbing" },
+  cache: { kind: "none" },
 } satisfies PublicHandlerConfig;
 
 type AgentIdentityResponse =

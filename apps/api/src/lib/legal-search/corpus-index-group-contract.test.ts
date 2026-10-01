@@ -289,6 +289,7 @@ test("a read that reaches any index without the partition field never names it",
         expect(courtPartitions).toBeUndefined();
         expect(
           caseLawCorpusQuery({
+            jurisdiction: undefined,
             text: "contract",
             filters: { court, courtPartitions, jurisdiction: "USA" },
           }),

@@ -9,6 +9,7 @@
  */
 import * as v from "valibot";
 
+import { redisSettingsSchema } from "@stll/redis-config";
 import { RUNTIME_MODE, type RuntimeMode } from "@stll/runtime-mode";
 
 import {
@@ -201,6 +202,7 @@ export const envBaseServerSchema = {
    * `documentProcessingEnvInvariantViolation` requires it of them.
    */
   REDIS_URL: v.optional(v.pipe(v.string(), v.url())),
+  ...redisSettingsSchema.entries,
   /**
    * Whether a `rediss://` connection verifies the server's certificate chain.
    * On by default. Set to false only where the endpoint presents a

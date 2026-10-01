@@ -30,7 +30,11 @@ const config = {
     "the author's name and image, which are blank for a version saved by " +
     "someone who has left the organization.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  mcp: {
+    type: "capability",
+    reason: "template_authoring_ui",
+    consumesServices: false,
+  },
   access: "read",
   params: listTemplateVersionsParamsSchema,
   query: listTemplateVersionsQuerySchema,
