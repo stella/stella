@@ -17,7 +17,7 @@ import {
   type SanitizedFileName,
 } from "@/api/lib/sanitize-filename";
 
-import { INBOUND_MAIL_LIMITS } from "./limits";
+import { findInboundHeaderEnd, INBOUND_MAIL_LIMITS } from "./limits";
 
 export type InboundAttachment = {
   fileName: SanitizedFileName;
@@ -263,33 +263,8 @@ const checkRaw = (raw: Uint8Array): Result<number, InboundMessageError> => {
   if (raw.byteLength > INBOUND_MAIL_LIMITS.rawBytes) {
     return fail("rawTooLarge");
   }
-  const searchEnd = Math.min(
-    raw.byteLength,
-    INBOUND_MAIL_LIMITS.headerBytes + 4,
-  );
-  let headerEnd = -1;
-  for (let index = 0; index < searchEnd - 1; index += 1) {
-    if (raw[index] === 10 && raw[index + 1] === 10) {
-      headerEnd = index;
-      break;
-    }
-    if (
-      raw[index] === 13 &&
-      raw[index + 1] === 10 &&
-      raw[index + 2] === 13 &&
-      raw[index + 3] === 10
-    ) {
-      headerEnd = index;
-      break;
-    }
-  }
-  if (headerEnd >= 0) {
-    return Result.ok(headerEnd);
-  }
-  // RFC 5322 allows a message with headers and no body, so no separator line.
-  return raw.byteLength <= INBOUND_MAIL_LIMITS.headerBytes
-    ? Result.ok(raw.byteLength)
-    : fail("headersTooLarge");
+  const headerEnd = findInboundHeaderEnd(raw);
+  return headerEnd === null ? fail("headersTooLarge") : Result.ok(headerEnd);
 };
 
 const rawDateHeader = (raw: Uint8Array, headerEnd: number): string | null => {

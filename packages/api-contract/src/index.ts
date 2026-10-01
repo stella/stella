@@ -49,6 +49,8 @@ export {
   INVOICE_STATUSES,
   NUMBER_SERIES_DOCUMENT_TYPES,
   TIME_ENTRY_SOURCE,
+  TIME_ENTRY_ACTIVITY_GROUP,
+  TIME_ENTRY_ACTIVITY_GROUPS,
   TIME_ENTRY_SOURCES,
   TIME_ENTRY_STATUSES,
   TIME_ENTRY_SUGGESTION_STATUS,
@@ -59,6 +61,7 @@ export type {
   InvoiceLineSource,
   InvoiceStatus,
   TimeEntrySource,
+  TimeEntryActivityGroup,
   TimeEntryStatus,
   TimeEntrySuggestionStatus,
 } from "./billing";

@@ -850,3 +850,40 @@ describe("parseEcjDecisionHtml", () => {
     expect(keywords.at(-1)?.endsWith("»")).toBe(false);
   });
 });
+
+describe("table caption retention", () => {
+  const parseCaption = (table: string) =>
+    parseEcjDecisionHtml({
+      caseNumber: "C-1/00",
+      ecli: undefined,
+      court: "Court of Justice",
+      decisionDate: undefined,
+      decisionType: undefined,
+      sourceUrl: undefined,
+      celex: "62000CJ0001",
+      html: `<html><body><div class="coj-normal"><p>Before.</p>${table}<p>After.</p></div></body></html>`,
+    });
+
+  test("keeps caption text once before its row in source order", () => {
+    const { documentAst } = parseCaption(
+      `<table><caption><b>Source caption</b> tail.</caption><tr><td>Row value.</td></tr></table>`,
+    );
+    expect(documentAst.blocks.map((block) => block.plainText)).toEqual([
+      "Before.",
+      "Source caption tail.",
+      "Row value.",
+      "After.",
+    ]);
+  });
+
+  test("keeps a caption even when its table has no rows", () => {
+    const { documentAst } = parseCaption(
+      `<table><caption>Caption without rows.</caption></table>`,
+    );
+    expect(documentAst.blocks.map((block) => block.plainText)).toEqual([
+      "Before.",
+      "Caption without rows.",
+      "After.",
+    ]);
+  });
+});

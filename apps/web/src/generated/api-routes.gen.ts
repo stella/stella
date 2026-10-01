@@ -6,6 +6,7 @@ import type { AgendaItemWireFields as stll_api_contract_AgendaItemWireFields, Ch
 import type { CompareNode as stll_conditions_CompareNode, ConditionNode as stll_conditions_ConditionNode, GroupNode as stll_conditions_GroupNode, PredicateNode as stll_conditions_PredicateNode } from "@stll/conditions";
 import type { FolioAgentApplyOperationsSummary as stll_folio_agents_FolioAgentApplyOperationsSummary, FolioAgentBlock as stll_folio_agents_FolioAgentBlock, FolioAgentChange as stll_folio_agents_FolioAgentChange, FolioAgentComment as stll_folio_agents_FolioAgentComment, FolioAgentDocumentOutline as stll_folio_agents_FolioAgentDocumentOutline, FolioAgentScopedFindTextResult as stll_folio_agents_FolioAgentScopedFindTextResult, FolioAgentSectionRead as stll_folio_agents_FolioAgentSectionRead } from "@stll/folio-agents";
 import type { CompareChange as stll_folio_core_CompareChange, CompareCompatibility as stll_folio_core_CompareCompatibility, CompareUnsupportedPart as stll_folio_core_CompareUnsupportedPart, CompareVerification as stll_folio_core_CompareVerification } from "@stll/folio-core";
+import type { InvoiceTotals as stll_invoicing_InvoiceTotals } from "@stll/invoicing";
 import type { CentsAmount as stll_money_CentsAmount } from "@stll/money";
 import type { FieldDateFormat as stll_template_conditions_FieldDateFormat, NamedCondition as stll_template_conditions_NamedCondition } from "@stll/template-conditions";
 import type { AudioPart as tanstack_ai_AudioPart, ContentPart as tanstack_ai_ContentPart, DocumentPart as tanstack_ai_DocumentPart, ImagePart as tanstack_ai_ImagePart, JSONSchema as tanstack_ai_JSONSchema, StructuredOutputPart as tanstack_ai_StructuredOutputPart, SubagentStatus as tanstack_ai_SubagentStatus, TextPart as tanstack_ai_TextPart, ThinkingPart as tanstack_ai_ThinkingPart, ToolCallPart as tanstack_ai_ToolCallPart, ToolExecutionContext as tanstack_ai_ToolExecutionContext, ToolResultState as tanstack_ai_ToolResultState, UIResourcePart as tanstack_ai_UIResourcePart, VideoPart as tanstack_ai_VideoPart } from "@tanstack/ai";
@@ -8473,7 +8474,7 @@ export type WebRoutes = {
                   description: string;
                   id: T74aae47c1a;
                   source: ("expense" | "manual" | "time_entry");
-                  timeEntryId: (Tdb05f01858 | null);
+                  timeEntryId: (T4e3529b6dc | null);
                   unit: Tbe0400fa4c;
                   expenseId: (T22259c97a4 | null);
                   position: number;
@@ -8485,7 +8486,7 @@ export type WebRoutes = {
                   vatAmount: stll_money_CentsAmount;
                   grossAmount: stll_money_CentsAmount;
                 }>;
-                totals: T5a0acd1281;
+                totals: stll_invoicing_InvoiceTotals;
                 paidAt: Tbe0400fa4c;
                 finalizedAt: Tbe0400fa4c;
                 createdAt: string;
@@ -8514,8 +8515,8 @@ export type WebRoutes = {
                 buyerCountry: Tbe0400fa4c;
                 organizationId: Tb1d68817ba;
                 timeEntries: Array<{
-                  status: Tef030b2402;
-                  id: Tdb05f01858;
+                  status: T96f3e623c3;
+                  id: T4e3529b6dc;
                   currency: string;
                   narrative: string;
                   dateWorked: string;
@@ -8531,13 +8532,13 @@ export type WebRoutes = {
                 expenses: Array<{
                   description: string;
                   id: T22259c97a4;
+                  category: Tcb19db2b80;
                   currency: string;
                   matterId: Tf742ada503;
                   billable: Tfddd645dc8;
                   invoiceDescription: Tbe0400fa4c;
                   dateIncurred: string;
                   amount: stll_money_CentsAmount;
-                  category: Tcb19db2b80;
                   markup: number;
                   matter: {
                     name: string;
@@ -8582,7 +8583,7 @@ export type WebRoutes = {
             originalInvoiceId?: Tb7bcf69f62;
             currency: string;
             invoiceDate: string;
-            timeEntryIds: Array<Tdb05f01858>;
+            timeEntryIds: Array<T4e3529b6dc>;
           };
           params: T4042d27c41;
           query: Record<never, never>;
@@ -8767,7 +8768,7 @@ export type WebRoutes = {
           entries: {
             post: {
               body: {
-                timeEntryIds?: Array<Tdb05f01858>;
+                timeEntryIds?: Array<T4e3529b6dc>;
                 expenseIds?: Array<T22259c97a4>;
               };
               params: {
@@ -8812,7 +8813,7 @@ export type WebRoutes = {
           entries: {
             delete: {
               body: {
-                timeEntryIds?: Array<Tdb05f01858>;
+                timeEntryIds?: Array<T4e3529b6dc>;
                 expenseIds?: Array<T22259c97a4>;
               };
               params: {
@@ -8866,7 +8867,7 @@ export type WebRoutes = {
                 } | {
                   description?: string;
                   type: "time_entry";
-                  timeEntryId: Tdb05f01858;
+                  timeEntryId: T4e3529b6dc;
                 } | {
                   description?: string;
                   type: "expense";
@@ -8884,7 +8885,7 @@ export type WebRoutes = {
               response: {
                 200: {
                   id: T74aae47c1a;
-                  totals: T5a0acd1281;
+                  totals: stll_invoicing_InvoiceTotals;
                 };
                 400: T9a51b7d2bc;
                 401: T9a51b7d2bc;
@@ -8936,7 +8937,7 @@ export type WebRoutes = {
                 response: {
                   200: {
                     id: T74aae47c1a;
-                    totals: T5a0acd1281;
+                    totals: stll_invoicing_InvoiceTotals;
                   };
                   400: T9a51b7d2bc;
                   401: T9a51b7d2bc;
@@ -8982,7 +8983,7 @@ export type WebRoutes = {
                 response: {
                   200: {
                     id: T74aae47c1a;
-                    totals: T5a0acd1281;
+                    totals: stll_invoicing_InvoiceTotals;
                   };
                   400: T9a51b7d2bc;
                   401: T9a51b7d2bc;
@@ -9021,10 +9022,10 @@ export type WebRoutes = {
             status?: "approved" | "billed" | "draft" | "written_off";
             cursor?: string;
             limit?: number;
+            category?: "courier" | "expert_witness" | "filing_fee" | "other" | "printing" | "travel";
             userId?: string;
             matterId?: Tf742ada503;
             billable?: false | true;
-            category?: "courier" | "expert_witness" | "filing_fee" | "other" | "printing" | "travel";
             dateFrom?: string;
             dateTo?: string;
           };
@@ -9043,7 +9044,7 @@ export type WebRoutes = {
                 invoiceDescription: Tbe0400fa4c;
                 billable: Tfddd645dc8;
                 markup: number;
-                status: Tef030b2402;
+                status: T96f3e623c3;
                 userName: Tbe0400fa4c;
                 createdAt: string;
                 updatedAt: Tbe0400fa4c;
@@ -9083,11 +9084,11 @@ export type WebRoutes = {
             invoiceDescription?: string | null;
             markup?: number;
             description: string;
+            category: Tcb19db2b80;
             currency: string;
             matterId: Tf742ada503;
             dateIncurred: string;
             amount: number;
-            category: Tcb19db2b80;
             timezoneId: string;
           };
           params: T3ba9545800;
@@ -9127,13 +9128,13 @@ export type WebRoutes = {
           body: {
             status?: "approved" | "draft";
             description?: string;
+            category?: "courier" | "expert_witness" | "filing_fee" | "other" | "printing" | "travel";
             currency?: string;
             matterId?: Tf742ada503;
             billable?: false | true;
             invoiceDescription?: string | null;
             dateIncurred?: string;
             amount?: number;
-            category?: "courier" | "expert_witness" | "filing_fee" | "other" | "printing" | "travel";
             markup?: number;
             id: T22259c97a4;
           };
@@ -10395,9 +10396,9 @@ export type WebRoutes = {
                   title: string;
                   language: string;
                   country: string;
+                  eli: string;
                   sourceUrl: Tbe0400fa4c;
                   headline: Tbe0400fa4c;
-                  eli: string;
                   documentType: Tbe0400fa4c;
                   effectiveDate: Tbe0400fa4c;
                   documentId: string;
@@ -13201,6 +13202,7 @@ export type WebRoutes = {
           post: {
             body: {
               billable?: false | true;
+              activityGroup?: "client" | "internal";
               timezoneId: string;
             };
             params: T32313cfbba;
@@ -18962,7 +18964,7 @@ export type WebRoutes = {
               reasoning: T8aea504e13;
             };
             providers: Array<{
-              region?: "global";
+              region?: "ch" | "eu" | "global";
               apiKey?: string;
               provider: T4b83723412;
             }>;
@@ -19398,7 +19400,7 @@ export type WebRoutes = {
       "validate-provider": {
         post: {
           body: {
-            region?: "global";
+            region?: "ch" | "eu" | "global";
             provider: T4b83723412;
             apiKey: string;
           };
@@ -21420,6 +21422,8 @@ export type WebRoutes = {
               cursor?: string;
               limit?: number;
               court?: string;
+              courts?: Array<string>;
+              category?: string;
               language?: string;
               sort?: "newest" | "relevance";
               strict?: false | true;
@@ -21428,6 +21432,7 @@ export type WebRoutes = {
               dateFrom?: string;
               dateTo?: string;
               excerpt?: "long" | "medium" | "short";
+              hasLegalSentence?: false | true;
               alternatives?: Array<{
                 term: string;
                 alternatives: Array<string>;
@@ -21444,8 +21449,8 @@ export type WebRoutes = {
                 facets: {
                   source: Array<T033348b898>;
                   court: Array<{
-                    tierLabel: Tc79049686d;
                     courts: Array<T033348b898>;
+                    tierLabel: Tc79049686d;
                   }>;
                   language: Array<T033348b898>;
                   decisionType: Array<T033348b898>;
@@ -28813,8 +28818,8 @@ export type WebRoutes = {
               query: {
                 cursor?: string;
                 limit?: number;
-                action?: "add" | "all" | "cancel" | "create" | "delete" | "execute" | "remove" | "review" | "update";
                 category?: "all" | "automation" | "correspondence" | "court" | "documents" | "matter" | "tasks" | "team";
+                action?: "add" | "all" | "cancel" | "create" | "delete" | "execute" | "remove" | "review" | "update";
                 from?: string;
                 actorId?: string;
                 toExclusive?: string;
@@ -28843,11 +28848,13 @@ export type WebRoutes = {
                       encrypted: T44e2cd4568;
                       entityId: Tbe0400fa4c;
                       fieldId: Tbe0400fa4c;
+                      hasThumbnail: Tfddd645dc8;
                       id: string;
                       kind: ("automation" | "correspondence" | "court" | "document" | "documentReviewRun" | "folder" | "link" | "matter" | "message" | "playbook" | "task" | "team" | "translationRun");
                       mimeType: Tbe0400fa4c;
                       name: Tbe0400fa4c;
                       pdfFileId: Tbe0400fa4c;
+                      placeholder: Tbe0400fa4c;
                       propertyId: Tbe0400fa4c;
                     };
                     trigger: {
@@ -28942,8 +28949,8 @@ export type WebRoutes = {
                   workspaceId: T8d02a37b3f;
                 };
                 query: {
-                  action?: "add" | "all" | "cancel" | "create" | "delete" | "execute" | "remove" | "review" | "update";
                   category?: "all" | "automation" | "correspondence" | "court" | "documents" | "matter" | "tasks" | "team";
+                  action?: "add" | "all" | "cancel" | "create" | "delete" | "execute" | "remove" | "review" | "update";
                   from?: string;
                   actorId?: string;
                   toExclusive?: string;
@@ -29473,7 +29480,9 @@ export type WebRoutes = {
                 items: Array<{
                   activityAt: string;
                   entityKind: T334757ea46;
+                  fieldId: Tbe0400fa4c;
                   fileName: Tbe0400fa4c;
+                  hasThumbnail: Tfddd645dc8;
                   id: string;
                   mimeType: Tbe0400fa4c;
                   status: Tbe0400fa4c;
@@ -32147,17 +32156,32 @@ export type MyTimeEntriesRoutes = {
           response: {
             200: {
               items: Array<{
-                id: Tdb05f01858;
+                activityGroup: "client";
                 workspaceId: T9e07a7d6cd;
                 workspaceName: string;
                 workspaceReference: string;
+                id: T4e3529b6dc;
                 dateWorked: string;
                 durationMinutes: number;
                 billedMinutes: number;
                 narrative: string;
                 billable: Tfddd645dc8;
-                status: Tef030b2402;
-                source: ("manual" | "suggested" | "timer");
+                status: T96f3e623c3;
+                source: Teaca50a829;
+                timerStartedAt: Tbe0400fa4c;
+              } | {
+                activityGroup: "internal";
+                workspaceId: null;
+                workspaceName: null;
+                workspaceReference: null;
+                id: T4e3529b6dc;
+                dateWorked: string;
+                durationMinutes: number;
+                billedMinutes: number;
+                narrative: string;
+                billable: Tfddd645dc8;
+                status: T96f3e623c3;
+                source: Teaca50a829;
                 timerStartedAt: Tbe0400fa4c;
               }>;
               nextCursor: Tbe0400fa4c;
@@ -36968,6 +36992,10 @@ type T4e21d0f768 = {
   url: Tbe0400fa4c;
 };
 
+type T4e3529b6dc = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "timeEntry";
+};
+
 type T4e595a8315 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "playbookDefinition";
 };
@@ -37314,19 +37342,6 @@ type T59c690454c = {
   }>;
 };
 
-type T5a0acd1281 = {
-  netAmountMinor: stll_money_CentsAmount;
-  vatAmountMinor: stll_money_CentsAmount;
-  grossAmountMinor: stll_money_CentsAmount;
-  vatBreakdown: Array<{
-    vatRateBps: number;
-    vatTreatment: ("domestic_vat" | "exempt" | "not_vat_payer" | "reverse_charge");
-    netAmountMinor: stll_money_CentsAmount;
-    vatAmountMinor: stll_money_CentsAmount;
-    grossAmountMinor: stll_money_CentsAmount;
-  }>;
-};
-
 type T5aeeefecac = {
   spf: Tccc654a7c7;
   dkim: Tccc654a7c7;
@@ -37528,7 +37543,8 @@ type T66e92cdab1 = string & valibot_Brand<"SafeId"> & {
 };
 
 type T6776d3555e = {
-  id: Tdb05f01858;
+  id: T4e3529b6dc;
+  activityGroup: ("client" | "internal");
   durationMinutes: number;
   billedMinutes: number;
 };
@@ -38614,6 +38630,8 @@ type T9676908f8c = {
   }>;
   registryUrl: string;
 };
+
+type T96f3e623c3 = "approved" | "billed" | "draft" | "written_off";
 
 type T9717780ffe = "contradicted" | "supported" | "tension";
 
@@ -40483,10 +40501,6 @@ type Tdadf537056 = {
 
 type Tdaf2e43033 = "a4" | "legal" | "letter" | "preserve";
 
-type Tdb05f01858 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "timeEntry";
-};
-
 type Tdb5805e6ca = {
   required?: false | true | undefined;
   minLength?: number | undefined;
@@ -40993,6 +41007,8 @@ type Teab768a417 = {
   }>;
 };
 
+type Teaca50a829 = "manual" | "suggested" | "timer";
+
 type Teaea18eeca = {
   workspaceId: string;
 };
@@ -41078,8 +41094,6 @@ type Teec166880c = {
   skillId?: T352ed14c79;
   skillName: string;
 };
-
-type Tef030b2402 = "approved" | "billed" | "draft" | "written_off";
 
 type Tefb102e423 = {
   "content-type": string;

@@ -73,6 +73,7 @@ import { Route as ProtectedSettingsOrganizationIndexRouteImport } from './routes
 import { Route as ProtectedSettingsOrganizationAiRouteImport } from './routes/_protected.settings/organization.ai'
 import { Route as ProtectedSettingsOrganizationAnonymizationRouteImport } from './routes/_protected.settings/organization.anonymization'
 import { Route as ProtectedSettingsOrganizationAuditLogsRouteImport } from './routes/_protected.settings/organization.audit-logs'
+import { Route as ProtectedSettingsOrganizationBillingRouteImport } from './routes/_protected.settings/organization.billing'
 import { Route as ProtectedSettingsOrganizationCatalogueRouteImport } from './routes/_protected.settings/organization.catalogue'
 import { Route as ProtectedSettingsOrganizationDocumentTypesRouteImport } from './routes/_protected.settings/organization.document-types'
 import { Route as ProtectedSettingsOrganizationMatterNumberingRouteImport } from './routes/_protected.settings/organization.matter-numbering'
@@ -89,6 +90,7 @@ import { Route as ProtectedWorkspacesWorkspaceIdListsRouteImport } from './route
 import { Route as ProtectedWorkspacesWorkspaceIdTimesheetsRouteImport } from './routes/_protected.workspaces/$workspaceId/timesheets'
 import { Route as ProtectedWorkspacesWorkspaceIdWorkflowsRouteImport } from './routes/_protected.workspaces/$workspaceId/workflows'
 import { Route as KnowledgeCompanyFormatsRegistryCompanyIdRouteImport } from './routes/knowledge/company-formats.$registry.$companyId'
+import { Route as KnowledgeTemplatesCatalogueIndexRouteImport } from './routes/knowledge/templates_.catalogue.index'
 import { Route as KnowledgeToolsEntryDownloadRouteImport } from './routes/knowledge/tools_.$entry_.download'
 import { Route as LawCountryStatutesIndexRouteImport } from './routes/law/$country/statutes/index'
 import { Route as LawCasesResearchIndexRouteImport } from './routes/law/cases/research/index'
@@ -446,6 +448,12 @@ const ProtectedSettingsOrganizationAuditLogsRoute =
     path: '/audit-logs',
     getParentRoute: () => ProtectedSettingsOrganizationRouteRoute,
   } as any)
+const ProtectedSettingsOrganizationBillingRoute =
+  ProtectedSettingsOrganizationBillingRouteImport.update({
+    id: '/billing',
+    path: '/billing',
+    getParentRoute: () => ProtectedSettingsOrganizationRouteRoute,
+  } as any)
 const ProtectedSettingsOrganizationCatalogueRoute =
   ProtectedSettingsOrganizationCatalogueRouteImport.update({
     id: '/catalogue',
@@ -541,6 +549,12 @@ const KnowledgeCompanyFormatsRegistryCompanyIdRoute =
     id: '/company-formats/$registry/$companyId',
     path: '/company-formats/$registry/$companyId',
     getParentRoute: () => KnowledgeRouteRoute,
+  } as any)
+const KnowledgeTemplatesCatalogueIndexRoute =
+  KnowledgeTemplatesCatalogueIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => KnowledgeTemplatesCatalogueRoute,
   } as any)
 const KnowledgeToolsEntryDownloadRoute =
   KnowledgeToolsEntryDownloadRouteImport.update({
@@ -720,6 +734,7 @@ export interface FileRoutesByFullPath {
   '/settings/organization/ai': typeof ProtectedSettingsOrganizationAiRoute
   '/settings/organization/anonymization': typeof ProtectedSettingsOrganizationAnonymizationRoute
   '/settings/organization/audit-logs': typeof ProtectedSettingsOrganizationAuditLogsRoute
+  '/settings/organization/billing': typeof ProtectedSettingsOrganizationBillingRoute
   '/settings/organization/catalogue': typeof ProtectedSettingsOrganizationCatalogueRoute
   '/settings/organization/document-types': typeof ProtectedSettingsOrganizationDocumentTypesRoute
   '/settings/organization/matter-numbering': typeof ProtectedSettingsOrganizationMatterNumberingRoute
@@ -739,6 +754,7 @@ export interface FileRoutesByFullPath {
   '/sitemaps/law-statutes/$country/{$bucket}.xml': typeof SitemapsLawStatutesCountryChar123bucketChar125DotxmlRoute
   '/settings/organization/': typeof ProtectedSettingsOrganizationIndexRoute
   '/workspaces/$workspaceId/': typeof ProtectedWorkspacesWorkspaceIdIndexRoute
+  '/knowledge/templates/catalogue/': typeof KnowledgeTemplatesCatalogueIndexRoute
   '/law/$country/statutes/': typeof LawCountryStatutesIndexRoute
   '/law/cases/research/': typeof LawCasesResearchIndexRoute
   '/chat/workspaces/$workspaceId/$threadId': typeof ProtectedChatWorkspacesWorkspaceIdThreadIdRoute
@@ -792,7 +808,6 @@ export interface FileRoutesByTo {
   '/dev/autocomplete': typeof ProtectedDevAutocompleteRoute
   '/verify/$code': typeof ProtectedVerifyCodeRoute
   '/auth/accept-invitation/$invitationId': typeof AuthAcceptInvitationInvitationIdRoute
-  '/knowledge/templates/catalogue': typeof KnowledgeTemplatesCatalogueRouteWithChildren
   '/knowledge/tools/$entry': typeof KnowledgeToolsEntryRoute
   '/knowledge/tools/contribute': typeof KnowledgeToolsContributeRoute
   '/sitemaps/law-statutes/{$country}.xml': typeof SitemapsLawStatutesChar123countryChar125DotxmlRoute
@@ -811,6 +826,7 @@ export interface FileRoutesByTo {
   '/settings/organization/ai': typeof ProtectedSettingsOrganizationAiRoute
   '/settings/organization/anonymization': typeof ProtectedSettingsOrganizationAnonymizationRoute
   '/settings/organization/audit-logs': typeof ProtectedSettingsOrganizationAuditLogsRoute
+  '/settings/organization/billing': typeof ProtectedSettingsOrganizationBillingRoute
   '/settings/organization/catalogue': typeof ProtectedSettingsOrganizationCatalogueRoute
   '/settings/organization/document-types': typeof ProtectedSettingsOrganizationDocumentTypesRoute
   '/settings/organization/matter-numbering': typeof ProtectedSettingsOrganizationMatterNumberingRoute
@@ -830,6 +846,7 @@ export interface FileRoutesByTo {
   '/sitemaps/law-statutes/$country/{$bucket}.xml': typeof SitemapsLawStatutesCountryChar123bucketChar125DotxmlRoute
   '/settings/organization': typeof ProtectedSettingsOrganizationIndexRoute
   '/workspaces/$workspaceId': typeof ProtectedWorkspacesWorkspaceIdIndexRoute
+  '/knowledge/templates/catalogue': typeof KnowledgeTemplatesCatalogueIndexRoute
   '/law/$country/statutes': typeof LawCountryStatutesIndexRoute
   '/law/cases/research': typeof LawCasesResearchIndexRoute
   '/chat/workspaces/$workspaceId/$threadId': typeof ProtectedChatWorkspacesWorkspaceIdThreadIdRoute
@@ -913,6 +930,7 @@ export interface FileRoutesById {
   '/_protected/settings/organization/ai': typeof ProtectedSettingsOrganizationAiRoute
   '/_protected/settings/organization/anonymization': typeof ProtectedSettingsOrganizationAnonymizationRoute
   '/_protected/settings/organization/audit-logs': typeof ProtectedSettingsOrganizationAuditLogsRoute
+  '/_protected/settings/organization/billing': typeof ProtectedSettingsOrganizationBillingRoute
   '/_protected/settings/organization/catalogue': typeof ProtectedSettingsOrganizationCatalogueRoute
   '/_protected/settings/organization/document-types': typeof ProtectedSettingsOrganizationDocumentTypesRoute
   '/_protected/settings/organization/matter-numbering': typeof ProtectedSettingsOrganizationMatterNumberingRoute
@@ -932,6 +950,7 @@ export interface FileRoutesById {
   '/sitemaps/law-statutes/$country/{$bucket}.xml': typeof SitemapsLawStatutesCountryChar123bucketChar125DotxmlRoute
   '/_protected/settings/organization/': typeof ProtectedSettingsOrganizationIndexRoute
   '/_protected/workspaces/$workspaceId/': typeof ProtectedWorkspacesWorkspaceIdIndexRoute
+  '/knowledge/templates_/catalogue/': typeof KnowledgeTemplatesCatalogueIndexRoute
   '/law/$country/statutes/': typeof LawCountryStatutesIndexRoute
   '/law/cases/research/': typeof LawCasesResearchIndexRoute
   '/_protected/chat/workspaces/$workspaceId/$threadId': typeof ProtectedChatWorkspacesWorkspaceIdThreadIdRoute
@@ -1015,6 +1034,7 @@ export interface FileRouteTypes {
     | '/settings/organization/ai'
     | '/settings/organization/anonymization'
     | '/settings/organization/audit-logs'
+    | '/settings/organization/billing'
     | '/settings/organization/catalogue'
     | '/settings/organization/document-types'
     | '/settings/organization/matter-numbering'
@@ -1034,6 +1054,7 @@ export interface FileRouteTypes {
     | '/sitemaps/law-statutes/$country/{$bucket}.xml'
     | '/settings/organization/'
     | '/workspaces/$workspaceId/'
+    | '/knowledge/templates/catalogue/'
     | '/law/$country/statutes/'
     | '/law/cases/research/'
     | '/chat/workspaces/$workspaceId/$threadId'
@@ -1087,7 +1108,6 @@ export interface FileRouteTypes {
     | '/dev/autocomplete'
     | '/verify/$code'
     | '/auth/accept-invitation/$invitationId'
-    | '/knowledge/templates/catalogue'
     | '/knowledge/tools/$entry'
     | '/knowledge/tools/contribute'
     | '/sitemaps/law-statutes/{$country}.xml'
@@ -1106,6 +1126,7 @@ export interface FileRouteTypes {
     | '/settings/organization/ai'
     | '/settings/organization/anonymization'
     | '/settings/organization/audit-logs'
+    | '/settings/organization/billing'
     | '/settings/organization/catalogue'
     | '/settings/organization/document-types'
     | '/settings/organization/matter-numbering'
@@ -1125,6 +1146,7 @@ export interface FileRouteTypes {
     | '/sitemaps/law-statutes/$country/{$bucket}.xml'
     | '/settings/organization'
     | '/workspaces/$workspaceId'
+    | '/knowledge/templates/catalogue'
     | '/law/$country/statutes'
     | '/law/cases/research'
     | '/chat/workspaces/$workspaceId/$threadId'
@@ -1207,6 +1229,7 @@ export interface FileRouteTypes {
     | '/_protected/settings/organization/ai'
     | '/_protected/settings/organization/anonymization'
     | '/_protected/settings/organization/audit-logs'
+    | '/_protected/settings/organization/billing'
     | '/_protected/settings/organization/catalogue'
     | '/_protected/settings/organization/document-types'
     | '/_protected/settings/organization/matter-numbering'
@@ -1226,6 +1249,7 @@ export interface FileRouteTypes {
     | '/sitemaps/law-statutes/$country/{$bucket}.xml'
     | '/_protected/settings/organization/'
     | '/_protected/workspaces/$workspaceId/'
+    | '/knowledge/templates_/catalogue/'
     | '/law/$country/statutes/'
     | '/law/cases/research/'
     | '/_protected/chat/workspaces/$workspaceId/$threadId'
@@ -1716,6 +1740,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProtectedSettingsOrganizationAuditLogsRouteImport
       parentRoute: typeof ProtectedSettingsOrganizationRouteRoute
     }
+    '/_protected/settings/organization/billing': {
+      id: '/_protected/settings/organization/billing'
+      path: '/billing'
+      fullPath: '/settings/organization/billing'
+      preLoaderRoute: typeof ProtectedSettingsOrganizationBillingRouteImport
+      parentRoute: typeof ProtectedSettingsOrganizationRouteRoute
+    }
     '/_protected/settings/organization/catalogue': {
       id: '/_protected/settings/organization/catalogue'
       path: '/catalogue'
@@ -1827,6 +1858,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/knowledge/company-formats/$registry/$companyId'
       preLoaderRoute: typeof KnowledgeCompanyFormatsRegistryCompanyIdRouteImport
       parentRoute: typeof KnowledgeRouteRoute
+    }
+    '/knowledge/templates_/catalogue/': {
+      id: '/knowledge/templates_/catalogue/'
+      path: '/'
+      fullPath: '/knowledge/templates/catalogue/'
+      preLoaderRoute: typeof KnowledgeTemplatesCatalogueIndexRouteImport
+      parentRoute: typeof KnowledgeTemplatesCatalogueRoute
     }
     '/knowledge/tools_/$entry_/download': {
       id: '/knowledge/tools_/$entry_/download'
@@ -1987,11 +2025,14 @@ const AuthRouteRouteWithChildren = AuthRouteRoute._addFileChildren(
 )
 
 interface KnowledgeTemplatesCatalogueRouteChildren {
+  KnowledgeTemplatesCatalogueIndexRoute: typeof KnowledgeTemplatesCatalogueIndexRoute
   KnowledgeTemplatesCataloguePackIdTemplateIdRoute: typeof KnowledgeTemplatesCataloguePackIdTemplateIdRoute
 }
 
 const KnowledgeTemplatesCatalogueRouteChildren: KnowledgeTemplatesCatalogueRouteChildren =
   {
+    KnowledgeTemplatesCatalogueIndexRoute:
+      KnowledgeTemplatesCatalogueIndexRoute,
     KnowledgeTemplatesCataloguePackIdTemplateIdRoute:
       KnowledgeTemplatesCataloguePackIdTemplateIdRoute,
   }
@@ -2108,6 +2149,7 @@ interface ProtectedSettingsOrganizationRouteRouteChildren {
   ProtectedSettingsOrganizationAiRoute: typeof ProtectedSettingsOrganizationAiRoute
   ProtectedSettingsOrganizationAnonymizationRoute: typeof ProtectedSettingsOrganizationAnonymizationRoute
   ProtectedSettingsOrganizationAuditLogsRoute: typeof ProtectedSettingsOrganizationAuditLogsRoute
+  ProtectedSettingsOrganizationBillingRoute: typeof ProtectedSettingsOrganizationBillingRoute
   ProtectedSettingsOrganizationCatalogueRoute: typeof ProtectedSettingsOrganizationCatalogueRoute
   ProtectedSettingsOrganizationDocumentTypesRoute: typeof ProtectedSettingsOrganizationDocumentTypesRoute
   ProtectedSettingsOrganizationMatterNumberingRoute: typeof ProtectedSettingsOrganizationMatterNumberingRoute
@@ -2125,6 +2167,8 @@ const ProtectedSettingsOrganizationRouteRouteChildren: ProtectedSettingsOrganiza
       ProtectedSettingsOrganizationAnonymizationRoute,
     ProtectedSettingsOrganizationAuditLogsRoute:
       ProtectedSettingsOrganizationAuditLogsRoute,
+    ProtectedSettingsOrganizationBillingRoute:
+      ProtectedSettingsOrganizationBillingRoute,
     ProtectedSettingsOrganizationCatalogueRoute:
       ProtectedSettingsOrganizationCatalogueRoute,
     ProtectedSettingsOrganizationDocumentTypesRoute:

@@ -25,7 +25,11 @@ const config = {
     "caching, memory extraction, and time policy. An organization that has never saved " +
     "settings gets the defaults rather than an error.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "anonymization_admin" },
+  mcp: {
+    type: "capability",
+    reason: "anonymization_admin",
+    consumesServices: false,
+  },
   access: "read",
 } satisfies HandlerConfig;
 

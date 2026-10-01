@@ -16,7 +16,11 @@ const config = {
     "Rename one document type. Only the label changes: the key is immutable, " +
     "and the display order is set through document-types.reorder.",
   permissions: { organizationSettings: ["update"] },
-  mcp: { type: "capability", reason: "workspace_schema" },
+  mcp: {
+    type: "capability",
+    reason: "workspace_schema",
+    consumesServices: false,
+  },
   params: documentTypeParamsSchema,
   body: updateDocumentTypeBodySchema,
 } satisfies HandlerConfig;

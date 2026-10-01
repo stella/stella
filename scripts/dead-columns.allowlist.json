@@ -113,5 +113,10 @@
     "table": "case_law_provision_extractions",
     "column": "unresolvedCounts",
     "reason": "not app-code dead: per-decision provision-citation state, written by the migration-owned functions in apps/api/drizzle/20260926160000_case_law_provision_extraction_state/migration.sql and by the provision extraction writer. Migrations are excluded by design."
+  },
+  {
+    "table": "corpus_index_group_withdrawals",
+    "column": "withdrawnAt",
+    "reason": "not app-code dead: append-only audit timestamp filled by its column default when a withdrawal is recorded; the trail is read by operators, and no app path reads it."
   }
 ]

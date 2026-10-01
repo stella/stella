@@ -24,6 +24,7 @@ import {
   ADAPTER_KEYS,
   type AdapterKey,
 } from "@/api/lib/legal-search/ingestion-constants";
+import type { SkCollectionConnector } from "@/api/lib/legal-search/sk-collection-enrichment";
 import { isRecord } from "@/api/lib/type-guards";
 
 export { EMPTY_AST };
@@ -1018,6 +1019,18 @@ type HeldRecheck = {
   readonly values: readonly [string, ...string[]];
 };
 
+/** A held listing-only row whose detail can become available without a new listing version. */
+type TextlessHeldRecheck = {
+  readonly metadataKey: string;
+  readonly values: readonly [string, ...string[]];
+  readonly minimumAgeDays: number;
+  readonly perWorkUnitLimit: number;
+  readonly buildDecisionFromStored: (
+    stored: StoredRawReparseInput,
+    signal?: AbortSignal,
+  ) => Promise<ReconciliationBuildOutcome>;
+};
+
 /** The row-level rules that decide whether a stored row counts as held. */
 export type HeldRowRules = {
   readonly withoutDocument?: HeldWithoutDocument | undefined;
@@ -1082,6 +1095,8 @@ export type SourceReconciliation = SourceSliceWalk & {
    * once its build no longer states it.
    */
   recheckHeld?: HeldRecheck | undefined;
+  /** Opt-in for bounded, durable re-reads of older textless listing-only rows. */
+  textlessHeldRecheck?: TextlessHeldRecheck | undefined;
   listSlicePage: (
     options: ReconciliationSlicePageOptions,
   ) => Promise<ReconciliationSlicePage>;
@@ -1089,6 +1104,10 @@ export type SourceReconciliation = SourceSliceWalk & {
     payload: unknown,
     signal?: AbortSignal,
   ) => Promise<ReconciliationBuildOutcome>;
+  /** Creates a reader owned by one slice walk or one slice's bounded retry batch. */
+  createSliceBuildDecision?:
+    | (() => SourceReconciliation["buildDecision"])
+    | undefined;
 };
 
 /**
@@ -1370,6 +1389,8 @@ export type SourceFieldInventory = {
  */
 export type SourceAdapter = {
   key: AdapterKey;
+  /** An opt-in annotation source; never a second decision-producing adapter. */
+  collectionEnrichment?: SkCollectionConnector | undefined;
   name: string;
   /**
    * The jurisdiction this source publishes for. Typed rather than free text:

@@ -24,7 +24,11 @@ const config = {
     "existing playbook instead of creating a copy. Browse the starters with " +
     "playbooks.starters.list.",
   permissions: { playbook: ["create"] },
-  mcp: { type: "capability", reason: "knowledge_library_admin" },
+  mcp: {
+    type: "capability",
+    reason: "knowledge_library_admin",
+    consumesServices: false,
+  },
   body: fromStarterBodySchema,
 } satisfies HandlerConfig;
 

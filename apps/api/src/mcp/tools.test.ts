@@ -1140,6 +1140,32 @@ describe("OpenAI-compatible MCP tools", () => {
           },
           FILTER_KIND,
         ),
+        courts: withKind(
+          {
+            type: "array",
+            items: { type: "string", minLength: 1, maxLength: 512 },
+            minItems: 1,
+            maxItems: 16,
+            description:
+              'Match any listed court. For Czech apex courts use ["NS", "NSS", "ÚS"]. Combined with court, both filters must match.',
+          },
+          { kind: AGENT_INPUT_NORMALIZATION_KIND.stringList },
+        ),
+        category: withKind(
+          {
+            type: "string",
+            minLength: 1,
+            maxLength: 128,
+            description:
+              'Exact publisher category from metadata.category, for example "A" or "B"; this does not imply Sbírka publication. Applied to live rows within the bounded candidate scan; corpus-index facets and total are unavailable.',
+          },
+          FILTER_KIND,
+        ),
+        has_legal_sentence: {
+          type: "boolean",
+          description:
+            "True requires a non-empty stored legal sentence (právní věta); false selects decisions without one. Applied to live rows within the bounded candidate scan; corpus-index facets and total are unavailable.",
+        },
         country: {
           type: "string",
           description: `Required corpus country. Admitted: ${PUBLIC_CASE_LAW_COUNTRIES.join(", ")}. ${COUNTRY_INPUT_GUIDANCE}`,
@@ -2439,7 +2465,13 @@ describe("OpenAI-compatible MCP tools", () => {
       async ({ query }: { query: string }) => ({
         facets: {
           court: [],
-          year: [],
+          year: [
+            {
+              value: query === "duty of care" ? "2024" : "2025",
+              count: 3,
+              label: null,
+            },
+          ],
           decisionType: [],
           source: [],
           language: [],
@@ -2492,8 +2524,14 @@ describe("OpenAI-compatible MCP tools", () => {
     ]);
     // The hit kept is the one from the query that ranked it highest.
     expect(payload.results.at(0)?.snippet).toBe("c from second");
-    // Facets and a count describe one query's result set, not a union.
-    expect(payload.facets).toBeNull();
+    // Facets describe the first phrasing; overlapping counts are not summed.
+    expect(payload.facets).toEqual({
+      court: [],
+      year: [{ value: "2024", count: 3, label: null }],
+      decisionType: [],
+      source: [],
+      language: [],
+    });
     expect(payload.total).toEqual({ type: SEARCH_TOTAL_TYPE.NOT_COUNTED });
     // `limit` bounds the merged page, so each phrasing was asked for half.
     expect(
@@ -3130,7 +3168,7 @@ describe("OpenAI-compatible MCP tools", () => {
                 minLength: 1,
                 maxLength: 256,
                 description:
-                  "Anchor of the provision in the publisher's own scheme. read_statute's outline lists a consolidation's provision anchors (par_1729); a subdivision of one of them is accepted too and narrows the answer to that subdivision (par_1729-odst_1, par_1729-odst_2-pism_a). Anchors are not derivable from a section number.",
+                  "Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision. Other publishers may use different schemes.",
               },
               as_of: {
                 type: "string",
@@ -3875,6 +3913,28 @@ describe("OpenAI-compatible MCP tools", () => {
       });
     });
 
+    test.each([true, false])(
+      "maps an apex court list, category and legal sentence presence (%s)",
+      async (hasLegalSentence) => {
+        await handleMcpToolCall({
+          args: {
+            queries: ["promlčení náhrady škody"],
+            country: "CZE",
+            courts: ["NS", "NSS", "ÚS", "NS"],
+            category: "A",
+            has_legal_sentence: hasLegalSentence,
+          },
+          context: createContext(),
+          toolName: "search_case_law",
+        });
+        expect(searchedBody()).toMatchObject({
+          courts: ["Nejvyšší soud", "Nejvyšší správní soud", "Ústavní soud"],
+          category: "A",
+          hasLegalSentence,
+        });
+      },
+    );
+
     test("placeholder filters, a zero id and open bounds narrow nothing", async () => {
       const result = await handleMcpToolCall({
         args: {
@@ -4415,6 +4475,153 @@ describe("OpenAI-compatible MCP tools", () => {
     });
     expect(anonymizeTextFieldsMock).not.toHaveBeenCalled();
   });
+
+  test.each([
+    {
+      cursor: undefined,
+      include: undefined,
+      fields: ["details", "metadata", "textFields", "source", "citations"],
+    },
+    {
+      cursor: encodePaginationCursor([1, null]),
+      include: undefined,
+      fields: [],
+    },
+    { cursor: undefined, include: [], fields: [] },
+    {
+      cursor: encodePaginationCursor([1, null]),
+      include: ["metadata", "textFields"],
+      fields: ["metadata", "textFields"],
+    },
+    {
+      cursor: encodePaginationCursor([1, null]),
+      include: "source",
+      fields: ["source"],
+    },
+    {
+      cursor: encodePaginationCursor([1, null]),
+      include: ["details", "citations"],
+      fields: ["details", "citations"],
+    },
+  ])(
+    "read_case_law_decision selects static fields per window (%j)",
+    async ({ cursor, include, fields }) => {
+      readDecisionHandlerMock.mockResolvedValue(createReadDecisionResult());
+      const payload = asTestRaw<{
+        items: { decision: Record<string, unknown> }[];
+      }>(
+        parseToolPayload(
+          await handleMcpToolCall({
+            args: {
+              decision_ids: [DECISION_ID],
+              ...(cursor === undefined ? {} : { cursor }),
+              ...(include === undefined ? {} : { include }),
+            },
+            context: createContext(),
+            toolName: "read_case_law_decision",
+          }),
+        ),
+      );
+      const decision =
+        payload.items.at(0)?.decision ?? panic("Missing decision");
+      expect(decision).toMatchObject({
+        decisionId: DECISION_ID,
+        caseNumber: "29 Cdo 123/2024",
+      });
+      expect(decision).toHaveProperty("text");
+      for (const [field, key] of [
+        ["details", "court"],
+        ["metadata", "metadata"],
+        ["textFields", "textFields"],
+        ["source", "source"],
+        ["citations", "citationsTo"],
+        ["citations", "citationsFrom"],
+      ] as const) {
+        expect(Object.hasOwn(decision, key)).toBe(
+          fields.some((expected) => expected === field),
+        );
+      }
+    },
+  );
+
+  test.each([{ include: [] }, { include: ["source"] }])(
+    "read_case_law_decision preserves omitted citation pages (%j)",
+    async ({ include }) => {
+      const base = createReadDecisionResult();
+      const firstCitation =
+        base.citationsTo.at(0) ?? panic("Missing citation fixture");
+      readDecisionHandlerMock.mockImplementation(
+        async ({ citationsCursor }: { citationsCursor?: string | null }) => ({
+          ...base,
+          documentAst: null,
+          fulltext: "Decision text. ".repeat(2000),
+          citationsFrom: [],
+          citationsTo:
+            citationsCursor === undefined
+              ? base.citationsTo
+              : [{ ...firstCitation, id: "c_page_2" }],
+          citationsNextCursor:
+            citationsCursor === undefined ? "citations-next" : null,
+        }),
+      );
+      type CitationSelectionPage = {
+        items: {
+          nextCursor: string | null;
+          decision: { text: string | null; citationsTo?: { id: string }[] };
+        }[];
+      };
+      const readWindow = async (args: Record<string, unknown>) => {
+        const payload = asTestRaw<CitationSelectionPage>(
+          parseToolPayload(
+            await handleMcpToolCall({
+              args: { decision_ids: [DECISION_ID], ...args },
+              context: createContext(),
+              toolName: "read_case_law_decision",
+            }),
+          ),
+        );
+        return payload.items.at(0) ?? panic("Missing decision window");
+      };
+      const first = await readWindow({ include });
+      expect(first.decision.citationsTo).toBeUndefined();
+      expect(first.nextCursor).not.toBeNull();
+      const second = await readWindow({
+        cursor: first.nextCursor,
+        include: ["citations"],
+      });
+      expect(second.decision.citationsTo).toEqual(base.citationsTo);
+      expect(second.nextCursor).not.toBeNull();
+      const omitted = await readWindow({ cursor: second.nextCursor, include });
+      expect(omitted.decision.citationsTo).toBeUndefined();
+      expect(omitted.nextCursor).not.toBeNull();
+      const resumed = await readWindow({
+        cursor: omitted.nextCursor,
+        include: ["citations"],
+      });
+      expect(resumed.decision.citationsTo?.at(0)?.id).toBe("c_page_2");
+      expect(resumed.nextCursor).toBeNull();
+    },
+  );
+
+  test.each([{ include: [] }, { include: ["source"] }])(
+    "read_case_law_decision ends when omitted citations are the only remaining data (%j)",
+    async ({ include }) => {
+      readDecisionHandlerMock.mockResolvedValue({
+        ...createReadDecisionResult(),
+        citationsNextCursor: "citations-next",
+      });
+      const payload = asTestRaw<{ items: { nextCursor: string | null }[] }>(
+        parseToolPayload(
+          await handleMcpToolCall({
+            args: { decision_ids: [DECISION_ID], include },
+            context: createContext(),
+            toolName: "read_case_law_decision",
+          }),
+        ),
+      );
+      expect(payload.items.at(0)?.nextCursor).toBeNull();
+    },
+  );
 
   test("read_case_law_decision pages citation lists via the compound cursor", async () => {
     const base = createReadDecisionResult();
@@ -7471,6 +7678,7 @@ describe("OpenAI-compatible MCP tools", () => {
         scopedDb: createSelectListScopedDb([
           {
             id: TIME_ENTRY_ID,
+            activityGroup: "client",
             entityId: "00000000-0000-4000-8000-0000000e0001",
             userId: null,
             dateWorked: "2026-02-01",
@@ -7502,6 +7710,7 @@ describe("OpenAI-compatible MCP tools", () => {
       entries: [
         {
           id: TIME_ENTRY_ID,
+          activityGroup: "client",
           entityId: "00000000-0000-4000-8000-0000000e0001",
           userId: null,
           userName: null,

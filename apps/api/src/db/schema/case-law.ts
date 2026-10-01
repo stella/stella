@@ -70,7 +70,10 @@ import {
 import { liveCaseLawLegacyReferenceSql } from "@/api/lib/legal-search/case-law-legacy-reference-sql";
 import { PACK_MEMBER_KINDS } from "@/api/lib/legal-search/corpus-pack";
 import { DECISION_SUPPLEMENT_KINDS } from "@/api/lib/legal-search/decision-supplement-kind";
-import { storedObservationHasDetail } from "@/api/lib/legal-search/partial-observation-sql";
+import {
+  storedObservationHasDetail,
+  storedObservationIsListingOnly,
+} from "@/api/lib/legal-search/partial-observation-sql";
 import { documentFetchParked } from "@/api/lib/legal-search/sk-document-parking-sql";
 
 import {
@@ -502,6 +505,8 @@ export const caseLawDecisions = p.pgTable(
     decisionDate: p.date("decision_date"),
     decisionType: p.varchar("decision_type", { length: 128 }),
     fulltext: p.text(),
+    /** Last reconciliation attempt to re-read a textless listing-only detail. */
+    textlessDetailRecheckedAt: timestamptz("textless_detail_rechecked_at"),
     sections: jsonb().$type<DecisionSection[]>(),
     documentAst: jsonb("document_ast").$type<DocumentAst | EmptyAst>(),
     /**
@@ -753,6 +758,18 @@ export const caseLawDecisions = p.pgTable(
       .index("case_law_decisions_source_generation_cursor_idx")
       .on(t.sourceId, t.createdAt, t.id),
     p.index("case_law_decisions_source_id_page_idx").on(t.sourceId, t.id),
+    p
+      .index("case_law_decisions_textless_detail_recheck_idx")
+      .on(
+        t.sourceId,
+        sql`coalesce(${t.textlessDetailRecheckedAt}, ${t.updatedAt})`,
+        t.id,
+      )
+      .where(
+        sql`${t.fulltext} IS NULL
+          AND ${storedObservationIsListingOnly(t.metadata)}
+          AND ${t.redactedAt} IS NULL`,
+      ),
     p
       .index("case_law_decisions_live_legacy_raw_source_idx")
       .on(t.sourceId, t.id)
@@ -2902,12 +2919,21 @@ export const caseLawIngestionFailures = p.pgTable(
     errorType: p.varchar("error_type", { length: 128 }).notNull(),
     errorMessage: p.varchar("error_message", { length: 2048 }).notNull(),
     cursor: p.text(),
+    /**
+     * The failing record's stable identity where its caller names one; a
+     * record written again with the same identity keeps its one row.
+     */
+    recordIdentity: p.varchar("record_identity", { length: 256 }),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
   },
   (t) => [
     p.index("case_law_ingestion_failures_source_idx").on(t.sourceId),
     p.index("case_law_ingestion_failures_error_type_idx").on(t.errorType),
     p.index("case_law_ingestion_failures_created_idx").on(t.createdAt),
+    p
+      .uniqueIndex("case_law_ingestion_failures_source_record_uidx")
+      .on(t.sourceId, t.recordIdentity)
+      .where(isNotNull(t.recordIdentity)),
     ...globalCaseLawPolicies(),
   ],
 );

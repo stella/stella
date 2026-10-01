@@ -285,7 +285,11 @@ const config = {
     "Generation runs in the background and a call made while one is already " +
     "running does not start a second.",
   permissions: { workspace: ["read"], chat: ["create"] },
-  mcp: { type: "capability", reason: "legal_corpus_admin" },
+  mcp: {
+    type: "capability",
+    reason: "legal_corpus_admin",
+    consumesServices: true,
+  },
   // Writes a "generating" sentinel and kicks off background AI generation
   // that updates the decision row.
   access: "write",
