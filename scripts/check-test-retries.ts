@@ -112,8 +112,9 @@ const resolveDevicePreset = (
     !ts.isIdentifier(expression.expression) ||
     expression.argumentExpression === undefined ||
     !ts.isStringLiteral(expression.argumentExpression)
-  )
-    {return undefined;}
+  ) {
+    return undefined;
+  }
   const binding = expression.expression.text;
   const imported = source.statements.some(
     (statement) =>
@@ -128,7 +129,9 @@ const resolveDevicePreset = (
           (entry.propertyName?.text ?? entry.name.text) === "devices",
       ),
   );
-  if (!imported) {return undefined;}
+  if (!imported) {
+    return undefined;
+  }
   // Dependency resolution and descriptor reads are filesystem boundaries.
   try {
     const requireConfig = createRequire(
@@ -146,9 +149,13 @@ const resolveDevicePreset = (
         "utf-8",
       ),
     );
-    if (!isRecord(descriptors)) {return undefined;}
+    if (!isRecord(descriptors)) {
+      return undefined;
+    }
     const descriptor = descriptors[expression.argumentExpression.text];
-    if (!isRecord(descriptor)) {return undefined;}
+    if (!isRecord(descriptor)) {
+      return undefined;
+    }
     const literal = parseSource(
       "device-preset.ts",
       `export default ${JSON.stringify(descriptor)};`,
@@ -177,7 +184,9 @@ const resolveObject = (
     return value;
   }
   const device = resolveDevicePreset(value, source);
-  if (device !== undefined) {return device;}
+  if (device !== undefined) {
+    return device;
+  }
   if (!ts.isIdentifier(value) || visited.has(value.text)) {
     return undefined;
   }
@@ -450,7 +459,9 @@ const nestedObjectLiterals = (
       visit(resolved, collect, projectElements);
       return;
     }
-    if (failClosed) {unknownConfig = true;}
+    if (failClosed) {
+      unknownConfig = true;
+    }
   };
   const visit = (
     node: ts.Node,
@@ -463,7 +474,9 @@ const nestedObjectLiterals = (
     }
     active.add(node);
     if (ts.isObjectLiteralExpression(node)) {
-      if (collect) {objects.push(node);}
+      if (collect) {
+        objects.push(node);
+      }
       for (const member of node.properties) {
         if (ts.isSpreadAssignment(member)) {
           // The containing object's effectiveRetries already evaluates this
@@ -480,7 +493,9 @@ const nestedObjectLiterals = (
           name = propertyName(member.name);
           initializer = member.initializer;
         }
-        if (initializer === undefined) {continue;}
+        if (initializer === undefined) {
+          continue;
+        }
         visitExpression(
           initializer,
           name === "projects" || name === "use",
@@ -490,9 +505,11 @@ const nestedObjectLiterals = (
       }
     } else if (ts.isArrayLiteralExpression(node)) {
       for (const element of node.elements) {
-        if (ts.isSpreadElement(element))
-          {visitExpression(element.expression, true, true, projectElements);}
-        else {visitExpression(element, projectElements, true, projectElements);}
+        if (ts.isSpreadElement(element)) {
+          visitExpression(element.expression, true, true, projectElements);
+        } else {
+          visitExpression(element, projectElements, true, projectElements);
+        }
       }
     }
     active.delete(node);
