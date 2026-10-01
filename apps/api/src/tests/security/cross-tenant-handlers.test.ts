@@ -1249,7 +1249,7 @@ const isolationCases: IsolationCase[] = [
     name: "governed work queue",
     runAAgainstB: async ({ ids: testIds, workspaceA }) =>
       await runHandler(listMyWork, workspaceA, {
-        user: { id: testIds.userB1 },
+        user: { id: testIds.userB1, email: "user-b@example.test" },
         query: { queue: "to_acknowledge", limit: 100, asOf: "2026-08-24" },
       }),
     runBPositive: async ({ workspaceB }) =>

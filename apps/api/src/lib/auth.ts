@@ -31,7 +31,7 @@ import { RUNTIME_MODE, type RuntimeMode } from "@stll/runtime-mode";
 import { parseUserAgent, type ParsedUserAgent } from "@stll/user-agent";
 import { isUuid } from "@stll/uuid-codec";
 
-import { member } from "@/api/db/auth-schema";
+import { member, user as authUser } from "@/api/db/auth-schema";
 import { rootDb, rlsDb } from "@/api/db/root";
 import { workspaceMembers, workspaces } from "@/api/db/schema";
 import {
@@ -53,33 +53,43 @@ import {
   AUTH_VERIFICATION_STORAGE_OPTIONS,
 } from "@/api/lib/auth-adapter-options";
 import { revokeOrganizationMemberAuthArtifacts } from "@/api/lib/auth-artifacts";
-import { authCookiePolicy } from "@/api/lib/auth-cookie-name";
+import { AUTH_USER_ADDITIONAL_FIELDS } from "@/api/lib/auth-user-additional-fields";
+import { createAgentUserPlugin } from "@/api/lib/auth/agent-auth-user";
+import { authCookiePolicy } from "@/api/lib/auth/auth-cookie-name";
 import {
   getAuthEndpointUrl,
   getAuthIssuerUrl,
   OAUTH_UI_CONSENT_PATH,
   OAUTH_UI_LOGIN_PATH,
   OAUTH_UI_ORGANIZATION_PATH,
-} from "@/api/lib/auth-paths";
-import { AUTH_USER_ADDITIONAL_FIELDS } from "@/api/lib/auth-user-additional-fields";
+} from "@/api/lib/auth/auth-paths";
+import {
+  checkConfiguredDemoAccountAccess,
+  checkDemoAccountOperation,
+  getDemoAccountConfig,
+} from "@/api/lib/auth/demo-account";
+import {
+  requireDemoAccountAccess,
+  createDemoAuthSessionGuard,
+  createDemoSessionPolicy,
+} from "@/api/lib/auth/demo-account-hooks";
+import {
+  createDemoSessionFilter,
+  warnDemoAccountConfiguration,
+} from "@/api/lib/auth/demo-account-policy";
+import { createSessionBearer } from "@/api/lib/auth/session-bearer";
+import {
+  createSocialIdentityValidation,
+  isVerifiedMicrosoftIdentity,
+  SOCIAL_ACCOUNT_LINKING_OPTIONS,
+} from "@/api/lib/auth/social-identity-policy";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
 import { verifyConfirmationOtp } from "@/api/lib/confirmation-otp";
 import { tUuid } from "@/api/lib/custom-schema";
 import { findAccountIdByEmail } from "@/api/lib/db/account-row";
-import {
-  assertDemoAccountAccess,
-  checkDemoAccountOperation,
-  createConfiguredDemoSessionPolicy,
-  getDemoAccountConfig,
-} from "@/api/lib/demo-account";
 import { getDemoAccountOtpOverride } from "@/api/lib/demo-account-otp";
-import {
-  createDemoAuthSessionGuard,
-  createDemoSessionFilter,
-  warnDemoAccountConfiguration,
-} from "@/api/lib/demo-account-policy";
 import { detectedCountryFromRequestContext } from "@/api/lib/detected-country";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
 import { stashDevOtp } from "@/api/lib/dev-otp-store";
@@ -133,16 +143,10 @@ import {
   isSelfhostLocalPasswordAuthEnabled,
   shouldHandleSelfhostBootstrapPath,
 } from "@/api/lib/selfhost-auth";
-import { createSessionBearer } from "@/api/lib/session-bearer";
 import {
   evaluateNewAccountOtpPolicy,
   isDisposableEmailAddress,
 } from "@/api/lib/signup-abuse";
-import {
-  createSocialIdentityValidation,
-  isVerifiedMicrosoftIdentity,
-  SOCIAL_ACCOUNT_LINKING_OPTIONS,
-} from "@/api/lib/social-identity-policy";
 import { revokeUserSseAccess } from "@/api/lib/sse";
 import { closeRemovedMemberActiveTimer } from "@/api/lib/time-entry-offboarding";
 import { includes, isRecord } from "@/api/lib/type-guards";
@@ -1061,7 +1065,31 @@ const createAuth = () => {
         }
       : undefined,
     databaseHooks: {
-      session: { create: { before: createConfiguredDemoSessionPolicy() } },
+      session: {
+        create: {
+          before: createDemoSessionPolicy({
+            config: demoConfig,
+            resolveUser: async (userId: SafeId<"user">) =>
+              await rootDb.query.user.findFirst({
+                where: { id: userId },
+                columns: { email: true },
+              }),
+            hasMembership: async ({
+              userId,
+              organizationId,
+            }: {
+              userId: SafeId<"user">;
+              organizationId: SafeId<"organization">;
+            }) =>
+              Boolean(
+                await rootDb.query.member.findFirst({
+                  where: { userId, organizationId },
+                  columns: { id: true },
+                }),
+              ),
+          }),
+        },
+      },
       user: {
         create: {
           before: async (user, ctx) => {
@@ -1136,6 +1164,7 @@ const createAuth = () => {
         : {}),
     },
     plugins: [
+      createAgentUserPlugin(),
       createSessionBearer(),
       createDemoSessionFilter(demoConfig),
       createOtpAccountLimitPlugin({
@@ -1239,7 +1268,12 @@ const createAuth = () => {
         organizationHooks: {
           ...organizationLifecycleHooks,
           async beforeCreateOrganization({ user }) {
-            assertDemoAccountAccess({ email: user.email, operation: "growth" });
+            requireDemoAccountAccess(
+              checkConfiguredDemoAccountAccess({
+                email: user.email,
+                operation: "growth",
+              }),
+            );
           },
           async beforeDeleteOrganization({ organization: org }) {
             // Complete the deletion here, before the plugin's adapter runs.
@@ -1308,28 +1342,42 @@ const createAuth = () => {
             invitation,
             inviter,
           }) {
-            assertDemoAccountAccess({
-              email: inviter.email,
-              operation: "growth",
-            });
-            assertDemoAccountAccess({
-              email: invitation.email,
-              operation: "growth",
-            });
+            requireDemoAccountAccess(
+              checkConfiguredDemoAccountAccess({
+                email: inviter.email,
+                operation: "growth",
+              }),
+            );
+            requireDemoAccountAccess(
+              checkConfiguredDemoAccountAccess({
+                email: invitation.email,
+                operation: "growth",
+              }),
+            );
             await refuseBeyondMemberCapacity(
               brandPersistedOrganizationId(org.id),
               "invitation",
             );
           },
           async beforeAcceptInvitation({ organization: org, user }) {
-            assertDemoAccountAccess({ email: user.email, operation: "growth" });
+            requireDemoAccountAccess(
+              checkConfiguredDemoAccountAccess({
+                email: user.email,
+                operation: "growth",
+              }),
+            );
             await refuseBeyondMemberCapacity(
               brandPersistedOrganizationId(org.id),
               "membership",
             );
           },
           async beforeAddMember({ organization: org, user }) {
-            assertDemoAccountAccess({ email: user.email, operation: "growth" });
+            requireDemoAccountAccess(
+              checkConfiguredDemoAccountAccess({
+                email: user.email,
+                operation: "growth",
+              }),
+            );
             await refuseBeyondMemberCapacity(
               brandPersistedOrganizationId(org.id),
               "membership",
@@ -1494,7 +1542,12 @@ const createAuth = () => {
         },
         customAccessTokenClaims: async ({ referenceId, user }) => {
           if (user) {
-            assertDemoAccountAccess({ email: user.email, operation: "growth" });
+            requireDemoAccountAccess(
+              checkConfiguredDemoAccountAccess({
+                email: user.email,
+                operation: "growth",
+              }),
+            );
           }
           if (!referenceId || !user) {
             return { org_id: referenceId };
@@ -1525,20 +1578,29 @@ const createAuth = () => {
     ],
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
+        if (!ctx.path) {
+          return undefined;
+        }
         if (demoConfig.email) {
           const email: unknown = ctx.body?.email;
           if (
             typeof email === "string" &&
             isSessionCreatingAuthPath(ctx.path)
           ) {
-            assertDemoAccountAccess({ email, operation: "sign-in" });
+            requireDemoAccountAccess(
+              checkConfiguredDemoAccountAccess({ email, operation: "sign-in" }),
+            );
           }
           if (
             ctx.path !== "/get-session" &&
             !isSessionCreatingAuthPath(ctx.path) &&
             ctx.path !== SEND_VERIFICATION_OTP_PATH
           ) {
-            await demoSessionGuard(ctx);
+            const { request, ...middlewareContext } = ctx;
+            await demoSessionGuard({
+              ...middlewareContext,
+              ...(request ? { request } : {}),
+            });
           }
           if (
             ctx.path === "/api-key/create" &&
@@ -1819,9 +1881,9 @@ export const resolveMemberAuthorization = async (
 ): Promise<MemberAuthorization | null> => {
   if (!workspaceId) {
     const row = await db
-      .select({ memberId: member.id, role: member.role, email: user.email })
+      .select({ memberId: member.id, role: member.role, email: authUser.email })
       .from(member)
-      .innerJoin(user, eq(user.id, member.userId))
+      .innerJoin(authUser, eq(authUser.id, member.userId))
       .where(
         and(
           eq(member.userId, userId),
@@ -1855,13 +1917,13 @@ export const resolveMemberAuthorization = async (
   const row = await db
     .select({
       memberId: member.id,
-      email: user.email,
+      email: authUser.email,
       role: member.role,
       workspaceId: workspaces.id,
       workspaceStatus: workspaces.status,
     })
     .from(member)
-    .innerJoin(user, eq(user.id, member.userId))
+    .innerJoin(authUser, eq(authUser.id, member.userId))
     .leftJoin(
       workspaces,
       and(

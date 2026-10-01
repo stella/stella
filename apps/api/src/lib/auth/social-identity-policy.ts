@@ -106,7 +106,7 @@ export const createSocialIdentityValidation =
       source.method !== "sso-saml" &&
       source.method !== "agent-idjag"
     ) {
-      return;
+      return undefined;
     }
     const denial = {
       error: "identity_not_allowed",
@@ -120,7 +120,7 @@ export const createSocialIdentityValidation =
       return denial;
     }
     if (isVerifiedMicrosoftIdentity({ profile, email: user.email, tenantId })) {
-      return;
+      return undefined;
     }
     if (requireMicrosoftVerifiedEmailClaim) {
       return denial;
@@ -151,6 +151,7 @@ export const createSocialIdentityValidation =
         .filter((claim) => profile?.[claim] === undefined)
         .join(","),
     });
+    return undefined;
   };
 
 export const SOCIAL_ACCOUNT_LINKING_OPTIONS = {

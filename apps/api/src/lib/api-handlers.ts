@@ -24,11 +24,11 @@ import {
 import { captureObservedError } from "@/api/lib/analytics/capture";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
+import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
+import { requiresStandardAccount } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CapabilityTransport } from "@/api/lib/capability-transport";
 import type { WorkspaceParamsSchema } from "@/api/lib/custom-schema";
-import { checkDemoAccountOperation } from "@/api/lib/demo-account";
-import { requiresStandardAccount } from "@/api/lib/demo-account-policy";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
 import {
   DatabaseError,

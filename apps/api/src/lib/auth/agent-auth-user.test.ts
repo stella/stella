@@ -2,8 +2,8 @@ import { memoryAdapter } from "@better-auth/memory-adapter";
 import { betterAuth } from "better-auth";
 import { describe, expect, test } from "bun:test";
 
-import { createAgentUser } from "@/api/lib/agent-auth-user";
-import { createSocialIdentityValidation } from "@/api/lib/social-identity-policy";
+import { createAgentUserPlugin } from "@/api/lib/auth/agent-auth-user";
+import { createSocialIdentityValidation } from "@/api/lib/auth/social-identity-policy";
 
 describe("agent identity user creation", () => {
   test.each([false, true])(
@@ -14,6 +14,7 @@ describe("agent identity user creation", () => {
         baseURL: "http://localhost:3001",
         secret: "test-secret-that-is-long-enough-for-better-auth",
         database: memoryAdapter(database),
+        plugins: [createAgentUserPlugin()],
         user: {
           validateUserInfo: createSocialIdentityValidation({
             tenantId: undefined,
@@ -22,11 +23,12 @@ describe("agent identity user creation", () => {
           }),
         },
       });
-      const created = createAgentUser({
-        context: await auth.$context,
-        email: "account@example.test",
-        name: "Account",
-        emailVerified,
+      const created = auth.api.createAgentUser({
+        body: {
+          email: "account@example.test",
+          name: "Account",
+          emailVerified,
+        },
       });
       if (!emailVerified) {
         await expect(created).rejects.toMatchObject({
@@ -43,4 +45,27 @@ describe("agent identity user creation", () => {
       expect(database.user).toHaveLength(1);
     },
   );
+
+  test("keeps identity provisioning available only through the server API", async () => {
+    const database = { user: [], session: [], account: [], verification: [] };
+    const auth = betterAuth({
+      baseURL: "http://localhost:3001",
+      secret: "test-secret-that-is-long-enough-for-better-auth",
+      database: memoryAdapter(database),
+      plugins: [createAgentUserPlugin()],
+    });
+    const response = await auth.handler(
+      new Request("http://localhost:3001/api/auth/create-agent-user", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          email: "account@example.test",
+          name: "Account",
+          emailVerified: true,
+        }),
+      }),
+    );
+    expect(response.status).toBe(404);
+    expect(database.user).toHaveLength(0);
+  });
 });

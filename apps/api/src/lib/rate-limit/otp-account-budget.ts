@@ -3,9 +3,9 @@ import {
   APIError,
   createAuthMiddleware,
   getAuthoritativeSessionFromCtx,
+  isAPIError,
 } from "better-auth/api";
-import { isAPIError } from "better-call";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { createHash } from "node:crypto";
 
 import { Temporal } from "@stll/time";
@@ -28,9 +28,9 @@ const OTP_VERIFICATION_TYPES = {
 } as const;
 
 const isOtpVerificationPath = (
-  path: string,
+  path: string | undefined,
 ): path is keyof typeof OTP_VERIFICATION_TYPES =>
-  Object.hasOwn(OTP_VERIFICATION_TYPES, path);
+  path !== undefined && Object.hasOwn(OTP_VERIFICATION_TYPES, path);
 
 export const createOtpAccountBudget = (
   context: Pick<RateLimitContext, "increment" | "decrement">,
@@ -48,24 +48,26 @@ export const createOtpAccountBudget = (
       OTP_ACCOUNT_BUDGET.durationMs,
     );
     if (count > OTP_ACCOUNT_BUDGET.max) {
-      throw new APIError(
-        "TOO_MANY_REQUESTS",
-        { code: "account_sign_in_limited", message: "Try again later." },
-        {
-          "Retry-After": String(
-            Math.max(
-              1,
-              Math.ceil(
-                (nextReset.getTime() -
-                  Temporal.Now.instant().epochMilliseconds) /
-                  1000,
+      return Result.err(
+        new APIError(
+          "TOO_MANY_REQUESTS",
+          { code: "account_sign_in_limited", message: "Try again later." },
+          {
+            "Retry-After": String(
+              Math.max(
+                1,
+                Math.ceil(
+                  (nextReset.getTime() -
+                    Temporal.Now.instant().epochMilliseconds) /
+                    1000,
+                ),
               ),
             ),
-          ),
-        },
+          },
+        ),
       );
     }
-    return key;
+    return Result.ok(key);
   },
   complete: async (key: string, success: boolean) => {
     if (success) {
@@ -157,9 +159,13 @@ export const createOtpAccountLimitPlugin = ({
             ) {
               return;
             }
+            const reservation = await budget.reserve(email);
+            if (Result.isError(reservation)) {
+              return await Promise.reject(reservation.error);
+            }
             return {
               context: {
-                context: { otpAccountBudgetKey: await budget.reserve(email) },
+                context: { otpAccountBudgetKey: reservation.value },
               },
             };
           }),

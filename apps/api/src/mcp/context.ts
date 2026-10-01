@@ -48,6 +48,7 @@ import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import { resolveCredentialMemberAuthorization } from "@/api/lib/auth";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
+import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
 import type { createTimeEntryHandler } from "@/api/lib/billing/time-entry-insert";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -58,7 +59,6 @@ import type {
   BusinessRegistrySlug,
   executeRegistryLookup,
 } from "@/api/lib/business-registries/dispatch";
-import { checkDemoAccountOperation } from "@/api/lib/demo-account";
 import type { loadLatestApprovedVersion } from "@/api/lib/document-review/approved-playbook-versions";
 import type { createPlaybookTableRuns } from "@/api/lib/document-review/table-run-create";
 import type { readVersionBlocks } from "@/api/lib/legal-search/legislation-version-blocks";

@@ -5,13 +5,13 @@ import { describe, expect, test } from "bun:test";
 
 import { statements } from "@stll/permissions";
 
+import { createDemoSessionPolicy } from "@/api/lib/auth/demo-account-hooks";
 import {
   checkDemoAccountAccess,
   createDemoSessionFilter,
-  createDemoSessionPolicy,
   requiresStandardAccount,
   warnDemoAccountConfiguration,
-} from "@/api/lib/demo-account-policy";
+} from "@/api/lib/auth/demo-account-policy";
 import {
   logger,
   resetLogSinkForTesting,

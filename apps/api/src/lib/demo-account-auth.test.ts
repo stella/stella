@@ -3,10 +3,8 @@ import { betterAuth } from "better-auth";
 import { twoFactor } from "better-auth/plugins";
 import { describe, expect, test } from "bun:test";
 
-import {
-  createDemoAuthSessionGuard,
-  createDemoSessionFilter,
-} from "@/api/lib/demo-account-policy";
+import { createDemoAuthSessionGuard } from "@/api/lib/auth/demo-account-hooks";
+import { createDemoSessionFilter } from "@/api/lib/auth/demo-account-policy";
 
 const organizationId = "org_account";
 const email = "account@example.test";

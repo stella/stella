@@ -31,9 +31,8 @@ import {
   startServiceAuthRegistration,
 } from "@/api/lib/agent-auth";
 import type { ServiceAuthCeremony } from "@/api/lib/agent-auth";
-import { createAgentUser } from "@/api/lib/agent-auth-user";
 import { getAuth } from "@/api/lib/auth";
-import { getAuthIssuerUrl } from "@/api/lib/auth-paths";
+import { getAuthIssuerUrl } from "@/api/lib/auth/auth-paths";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { findAccountIdByEmail } from "@/api/lib/db/account-row";
 import { brandActorSessionIdentity } from "@/api/lib/safe-id-boundaries";
@@ -143,11 +142,12 @@ const autoProvision = async (
   const provisioned = await Result.tryPromise(async () => {
     const ctx = await auth.$context;
     const localPart = email.split("@").at(0)?.trim() ?? "";
-    const createdUser = await createAgentUser({
-      context: ctx,
-      email,
-      name: localPart.length > 0 ? localPart : email,
-      emailVerified: true,
+    const createdUser = await auth.api.createAgentUser({
+      body: {
+        email,
+        name: localPart.length > 0 ? localPart : email,
+        emailVerified: true,
+      },
     });
 
     // If org bootstrap fails the user is already persisted; delete it so a

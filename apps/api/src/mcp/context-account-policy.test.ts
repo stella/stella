@@ -1,7 +1,8 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import { checkDemoAccountAccess } from "@/api/lib/demo-account-policy";
+import { checkDemoAccountAccess } from "@/api/lib/auth/demo-account-policy";
+import { toSafeId } from "@/api/lib/branded-types";
 import { MACHINE_API_KEY_PREFIX } from "@/api/lib/machine-api-key-config";
 import { authenticateMcpRequest } from "@/api/mcp/auth";
 import { MCP_MODES } from "@/api/mcp/constants";
@@ -47,7 +48,7 @@ describe("MCP account authorization", () => {
                   type: "machine_api_key",
                   id: "key_one",
                   name: "fixture",
-                  permissions: { entity: ["read"] },
+                  permissions: { workspace: ["read"] },
                 },
               }),
             },
@@ -66,8 +67,10 @@ describe("MCP account authorization", () => {
               request: new Request("https://example.test/mcp"),
               resolveAuthorization: async (identity) => {
                 membershipReads += 1;
-                expect(identity.userId).toBe("user_one");
-                expect(identity.organizationId).toBe(organizationId);
+                expect(identity.userId).toBe(toSafeId<"user">("user_one"));
+                expect(identity.organizationId).toBe(
+                  toSafeId<"organization">(organizationId),
+                );
                 return {
                   memberId: "member_one",
                   email: "limited@example.test",

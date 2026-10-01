@@ -25,7 +25,7 @@ import {
   setAnalyticsForTesting,
 } from "@/api/lib/analytics/client";
 import type { ServerAnalyticsCaptureParams } from "@/api/lib/analytics/server-analytics";
-import { checkDemoAccountAccess } from "@/api/lib/demo-account-policy";
+import { checkDemoAccountAccess } from "@/api/lib/auth/demo-account-policy";
 import { runWithRequestId } from "@/api/lib/observability/request-context";
 import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
 import { recordMcpSessionInitialized } from "@/api/mcp/client-identity";

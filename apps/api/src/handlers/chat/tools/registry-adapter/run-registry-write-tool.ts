@@ -1,8 +1,8 @@
 import { panic, Result } from "better-result";
 
+import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
 import { projectForChat } from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
-import { checkDemoAccountOperation } from "@/api/lib/demo-account";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { BILLING_TOOL_HANDLERS } from "@/api/mcp/billing-tools";
 import { CAPABILITY_TOOL_HANDLERS } from "@/api/mcp/capability-tools";

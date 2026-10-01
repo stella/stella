@@ -5,7 +5,10 @@ import * as v from "valibot";
 
 import type { PermissionInput } from "@stll/permissions";
 
-import { getAuthEndpointUrl, getAuthIssuerUrl } from "@/api/lib/auth-paths";
+import {
+  getAuthEndpointUrl,
+  getAuthIssuerUrl,
+} from "@/api/lib/auth/auth-paths";
 import {
   isMachineApiKeyCredential,
   machineApiKeyPermissionsSchema,

@@ -1,18 +1,23 @@
+import type {
+  GoogleProfile,
+  MicrosoftEntraIDProfile,
+} from "@better-auth/core/social-providers";
 import { memoryAdapter } from "@better-auth/memory-adapter";
 import { betterAuth } from "better-auth";
 import { describe, expect, test } from "bun:test";
 
+import {
+  createSocialIdentityValidation,
+  isVerifiedMicrosoftIdentity,
+  SOCIAL_ACCOUNT_LINKING_OPTIONS,
+} from "@/api/lib/auth/social-identity-policy";
 import {
   logger,
   resetLogSinkForTesting,
   setLogSinkForTesting,
 } from "@/api/lib/observability/logger";
 import type { LogRecord } from "@/api/lib/observability/logger";
-import {
-  createSocialIdentityValidation,
-  isVerifiedMicrosoftIdentity,
-  SOCIAL_ACCOUNT_LINKING_OPTIONS,
-} from "@/api/lib/social-identity-policy";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const tenantId = "00000000-0000-4000-8000-000000000001";
 const email = "account@example.test";
@@ -150,12 +155,15 @@ describe("social identity policy", () => {
                 verifyIdToken: async () => true,
                 getUserInfo: async () => ({
                   user: {
-                    id: "provider-account",
                     name: "Account",
                     email,
                     emailVerified: verified,
                   },
-                  data: { ...profile, ...(verified ? { xms_edov: true } : {}) },
+                  data: asTestRaw<MicrosoftEntraIDProfile>({
+                    ...profile,
+                    oid: "provider-account",
+                    ...(verified ? { xms_edov: true } : {}),
+                  }),
                 }),
               },
             },
@@ -230,12 +238,14 @@ describe("social identity policy", () => {
                 verifyIdToken: async () => true,
                 getUserInfo: async () => ({
                   user: {
-                    id: "provider-account",
                     name: "Account",
                     email,
                     emailVerified: true,
                   },
-                  data: identity,
+                  data: asTestRaw<MicrosoftEntraIDProfile>({
+                    ...identity,
+                    oid: "provider-account",
+                  }),
                 }),
               },
             },
@@ -287,16 +297,15 @@ describe("social identity policy", () => {
               verifyIdToken: async () => true,
               getUserInfo: async () => ({
                 user: {
-                  id: "provider-account",
                   name: "Account",
                   email,
                   emailVerified,
                 },
-                data: {
+                data: asTestRaw<GoogleProfile>({
                   sub: "provider-account",
                   email,
                   email_verified: emailVerified,
-                },
+                }),
               }),
             },
           },

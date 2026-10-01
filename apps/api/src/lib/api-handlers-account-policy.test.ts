@@ -3,7 +3,7 @@ import { describe, expect, mock, test } from "bun:test";
 
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { checkDemoAccountAccess } from "@/api/lib/demo-account-policy";
+import { checkDemoAccountAccess } from "@/api/lib/auth/demo-account-policy";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 
 const config = {
@@ -21,7 +21,7 @@ describe("handler account policy", () => {
         config,
         async function* () {
           calls += 1;
-          return yield* Result.ok({ success: true });
+          return Result.ok({ success: true });
         },
         {
           checkAccountOperation: (resolvedEmail) => {
@@ -65,7 +65,9 @@ test("allows sandbox matter mutations without an account growth check", async ()
     } as const satisfies HandlerConfig;
     const definition = createSafeRootHandler(
       matterConfig,
-      async () => await Promise.resolve(Result.ok({ success: true })),
+      async function* () {
+        return Result.ok({ success: true });
+      },
       { checkAccountOperation },
     );
     const context = createTestHandlerContext<

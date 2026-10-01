@@ -2,6 +2,7 @@ import { memoryAdapter } from "@better-auth/memory-adapter";
 import { betterAuth } from "better-auth";
 import { APIError } from "better-auth/api";
 import { emailOTP } from "better-auth/plugins";
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -48,6 +49,15 @@ const createCounter = () => {
   };
 };
 
+const reserveAllowed = async (
+  budget: ReturnType<typeof createOtpAccountBudget>,
+  email: string,
+) => {
+  const reservation = await budget.reserve(email);
+  expect(Result.isOk(reservation)).toBe(true);
+  return reservation.unwrap();
+};
+
 describe("account verification budget", () => {
   test("keeps a bounded local budget when the shared counter is unavailable", async () => {
     const context = new RedisRateLimitContext({
@@ -70,20 +80,23 @@ describe("account verification budget", () => {
         attempt += 1
       ) {
         await budget.complete(
-          await budget.reserve("account@example.test"),
+          await reserveAllowed(budget, "account@example.test"),
           true,
         );
       }
       for (let attempt = 0; attempt < OTP_ACCOUNT_BUDGET.max; attempt += 1) {
         await budget.complete(
-          await budget.reserve("account@example.test"),
+          await reserveAllowed(budget, "account@example.test"),
           false,
         );
       }
-      await expect(
-        budget.reserve("account@example.test"),
-      ).rejects.toMatchObject({ statusCode: 429 });
-      expect(await budget.reserve("other@example.test")).toBeTypeOf("string");
+      expect(await budget.reserve("account@example.test")).toMatchObject({
+        status: "error",
+        error: { statusCode: 429 },
+      });
+      expect(await reserveAllowed(budget, "other@example.test")).toBeTypeOf(
+        "string",
+      );
     } finally {
       context.kill();
     }
@@ -115,11 +128,14 @@ describe("account verification budget", () => {
       });
       await (
         await auth.$context
-      ).internalAdapter.createUser({
-        email: "account@example.test",
-        name: "Account",
-        emailVerified: true,
-      });
+      ).internalAdapter.createUser(
+        {
+          email: "account@example.test",
+          name: "Account",
+          emailVerified: true,
+        },
+        { method: "email-otp" },
+      );
       const verify = async (otp: string) => {
         const body = { email: "ACCOUNT@EXAMPLE.TEST", otp };
         switch (path) {
@@ -210,41 +226,50 @@ describe("account verification budget", () => {
     const counter = createCounter();
     const budget = createOtpAccountBudget(counter.context);
     for (let attempt = 0; attempt < OTP_ACCOUNT_BUDGET.max; attempt += 1) {
-      const key = await budget.reserve(
+      const key = await reserveAllowed(
+        budget,
         attempt % 2 === 0 ? "account@example.test" : " ACCOUNT@EXAMPLE.TEST ",
       );
       await budget.complete(key, false);
     }
-    await expect(budget.reserve("account@example.test")).rejects.toMatchObject({
-      statusCode: 429,
+    expect(await budget.reserve("account@example.test")).toMatchObject({
+      status: "error",
+      error: { statusCode: 429 },
     });
     counter.advance(OTP_ACCOUNT_BUDGET.durationMs);
-    expect(await budget.reserve("account@example.test")).toBeTypeOf("string");
-    expect(await budget.reserve("other@example.test")).toBeTypeOf("string");
+    expect(await reserveAllowed(budget, "account@example.test")).toBeTypeOf(
+      "string",
+    );
+    expect(await reserveAllowed(budget, "other@example.test")).toBeTypeOf(
+      "string",
+    );
   });
 
   test("successful verifications return their reservation", async () => {
     const budget = createOtpAccountBudget(createCounter().context);
     for (let attempt = 0; attempt < OTP_ACCOUNT_BUDGET.max * 2; attempt += 1) {
-      await budget.complete(await budget.reserve("account@example.test"), true);
+      await budget.complete(
+        await reserveAllowed(budget, "account@example.test"),
+        true,
+      );
     }
   });
 
   test("bounds simultaneous account reservations", async () => {
     const budget = createOtpAccountBudget(createCounter().context);
-    const outcomes = await Promise.allSettled(
+    const outcomes = await Promise.all(
       Array.from(
         { length: OTP_ACCOUNT_BUDGET.max * 2 },
         async () => await budget.reserve("account@example.test"),
       ),
     );
-    expect(
-      outcomes.filter(({ status }) => status === "fulfilled"),
-    ).toHaveLength(OTP_ACCOUNT_BUDGET.max);
+    expect(outcomes.filter((outcome) => Result.isOk(outcome))).toHaveLength(
+      OTP_ACCOUNT_BUDGET.max,
+    );
     for (const outcome of outcomes) {
-      if (outcome.status === "rejected") {
-        expect(outcome.reason).toBeInstanceOf(APIError);
-        expect(outcome.reason.statusCode).toBe(429);
+      if (Result.isError(outcome)) {
+        expect(outcome.error).toBeInstanceOf(APIError);
+        expect(outcome.error.statusCode).toBe(429);
       }
     }
   });

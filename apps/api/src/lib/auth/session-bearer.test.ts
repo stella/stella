@@ -2,7 +2,7 @@ import { memoryAdapter } from "@better-auth/memory-adapter";
 import { betterAuth } from "better-auth";
 import { describe, expect, test } from "bun:test";
 
-import { createSessionBearer } from "@/api/lib/session-bearer";
+import { createSessionBearer } from "@/api/lib/auth/session-bearer";
 
 describe("session credentials", () => {
   test("accepts only valid session credentials", async () => {

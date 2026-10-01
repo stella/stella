@@ -3,6 +3,7 @@ import { t } from "elysia";
 
 import { createSafeSessionHandler } from "@/api/lib/api-handlers";
 import type { SessionHandlerConfig } from "@/api/lib/api-handlers";
+import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
 import { tSafeId, tUserId } from "@/api/lib/custom-schema";
 import {
   ACCOUNT_DELETION_ERROR_CODE,
@@ -11,7 +12,6 @@ import {
   getUserEmail,
   verifyAndDeleteUser,
 } from "@/api/lib/delete-account";
-import { checkDemoAccountOperation } from "@/api/lib/demo-account";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 export const deleteAccountVerifyBody = t.Object({

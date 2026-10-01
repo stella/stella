@@ -5,6 +5,7 @@ import JSZip from "jszip";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { checkDemoAccountAccess } from "@/api/lib/auth/demo-account-policy";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   containsRawUuid,
@@ -12,7 +13,6 @@ import {
   REF_PROJECTION_FAILURE_MESSAGE,
 } from "@/api/lib/chat/projection-schema";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
-import { checkDemoAccountAccess } from "@/api/lib/demo-account-policy";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";

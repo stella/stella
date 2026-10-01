@@ -160,6 +160,9 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
 ] as const;
 
 export const RESULT_BOUNDARY_GLOBS = [
+  // Better Auth invokes these hooks and consumes rejected APIError values.
+  "apps/api/src/lib/auth/demo-account-hooks.ts",
+
   "apps/api/src/lib/api-handlers.ts",
   "apps/api/src/handlers/**/routes.ts",
   "apps/api/src/handlers/**/*route.ts",
