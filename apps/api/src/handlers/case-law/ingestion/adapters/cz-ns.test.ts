@@ -36,7 +36,7 @@ describe("Domino listings distinguish publisher refusal from an empty view", () 
     test(`isolates malformed member ${JSON.stringify(member)} from the listing envelope`, async () => {
       spyOn(globalThis, "fetch").mockImplementation(
         asFetchMock(
-          async (url) =>
+          async (url: string | URL | Request) =>
             new Response(
               String(url).includes("ReadViewEntries")
                 ? JSON.stringify({

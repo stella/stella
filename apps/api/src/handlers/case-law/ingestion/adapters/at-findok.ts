@@ -1,5 +1,6 @@
 import { panic, Result, TaggedError } from "better-result";
 
+import { classifyFailure } from "@stll/errors";
 import { Temporal, parsePlainDate } from "@stll/time";
 import { isUuid } from "@stll/uuid-codec";
 
@@ -60,8 +61,14 @@ import { DocxArchiveError, loadDocxArchive } from "@/api/lib/docx-archive";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
-import { logger } from "@/api/lib/observability/logger";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isRecord } from "@/api/lib/type-guards";
+
+const itemBuildFailed = failureSink({
+  event: "case_law.ingestion.item_build_failed",
+  expected: [],
+});
 
 const FINDOK_ORIGIN = "https://findok.bmf.gv.at";
 const IWG_ROOT = `${FINDOK_ORIGIN}/findok/iwg`;
@@ -447,7 +454,7 @@ const createManifestLoader = (
     if (mime === "application/gzip" || mime === "application/x-gzip") {
       pageHeaders.delete("content-type");
     }
-    validatePublisherPage({
+    const validatedPage = validatePublisherPage({
       body: text,
       headers: pageHeaders,
       adapterKey: ADAPTER_KEYS.AT_FINDOK,
@@ -461,6 +468,9 @@ const createManifestLoader = (
           optionalString(value["generierungsdatum"]) !== undefined,
       },
     });
+    if (validatedPage.isErr()) {
+      throw validatedPage.error;
+    }
     const manifest = parseFindokManifest(collection, text);
     cache.set(collection, {
       checkedAt: dependencies.now().getTime(),
@@ -786,13 +796,16 @@ const buildDecision = async ({
     });
   }
   const compressed = await readStreamBounded(response.body, MAX_ARCHIVE_BYTES);
-  validatePublisherPage({
+  const validatedPage = validatePublisherPage({
     body: compressed,
     headers: response.headers,
     adapterKey: ADAPTER_KEYS.AT_FINDOK,
     cursor,
     expectation: { kind: "zip", minBytes: 22 },
   });
+  if (validatedPage.isErr()) {
+    throw validatedPage.error;
+  }
   const archive = await loadDocxArchive(compressed, {
     maxEntries: 20,
     maxEntryBytes: MAX_XML_BYTES,
@@ -807,7 +820,7 @@ const buildDecision = async ({
       cursor,
     });
   }
-  validatePublisherPage({
+  const validatedXml = validatePublisherPage({
     body: xml,
     adapterKey: ADAPTER_KEYS.AT_FINDOK,
     cursor,
@@ -818,6 +831,9 @@ const buildDecision = async ({
         typeof value === "string" && /<Segmente(?:\s|>)/u.test(value),
     },
   });
+  if (validatedXml.isErr()) {
+    throw validatedXml.error;
+  }
   // The same archive carries the decision's headnotes as a second entry. It
   // is already paid for by the request above, and its element names are not
   // the ones the decision text uses, which is why reading it is a step of its
@@ -1292,10 +1308,12 @@ const buildFindokPageItems = async ({
         throw attempt.error;
       }
       refused += 1;
-      logger.warn("case_law.ingestion.item_build_failed", {
-        adapterKey: ADAPTER_KEYS.AT_FINDOK,
-        documentId: item.dokumentId,
-        "error.type": errorTag(attempt.error),
+      observeFailure(classifyFailure(attempt.error, "upstream_unavailable"), {
+        sink: itemBuildFailed,
+        ctx: {
+          adapterKey: ADAPTER_KEYS.AT_FINDOK,
+          documentId: item.dokumentId,
+        },
       });
       decisions.push(buildListingOnly(payload, "item_build_failed"));
       continue;

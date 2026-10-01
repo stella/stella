@@ -80,7 +80,7 @@ describe("Slovak court backfill rejects unreadable publisher listings", () => {
           datumVydania: "14.05.2020",
         };
         spyOn(globalThis, "fetch").mockImplementation(
-          asFetchMock(async (input) => {
+          asFetchMock(async (input: string | URL | Request) => {
             const url = new URL(
               input instanceof Request ? input.url : String(input),
             );
@@ -126,7 +126,7 @@ describe("Slovak court backfill rejects unreadable publisher listings", () => {
         };
         const bad = { ...good, guid: "bad-detail", spisovaZnacka: "1C/2/2020" };
         spyOn(globalThis, "fetch").mockImplementation(
-          asFetchMock(async (input) => {
+          asFetchMock(async (input: string | URL | Request) => {
             const url = new URL(
               input instanceof Request ? input.url : String(input),
             );

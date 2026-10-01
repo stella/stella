@@ -69,6 +69,11 @@ import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isRecord } from "@/api/lib/type-guards";
 
+const itemBuildFailed = failureSink({
+  event: "case_law.ingestion.item_build_failed",
+  expected: [],
+});
+
 const COMMON_HEADERS = {
   "User-Agent": INGESTION_USER_AGENT,
 } as const;
@@ -1385,7 +1390,7 @@ export const czNsAdapter = defineSourceAdapter({
           });
         }
 
-        const json = validatePublisherPage({
+        const validatedPage = validatePublisherPage({
           adapterKey: ADAPTER_KEYS.CZ_NS,
           cursor,
           headers: listResponse.headers,
@@ -1402,6 +1407,10 @@ export const czNsAdapter = defineSourceAdapter({
                 normalizeViewEntries(value.viewentry).length > 0),
           },
         });
+        if (validatedPage.isErr()) {
+          throw validatedPage.error;
+        }
+        const json = validatedPage.value;
         if (!isDominoViewResponse(json)) {
           throw new AdapterFetchError({
             message: "CZ Supreme Court list returned an invalid payload",
@@ -1418,11 +1427,23 @@ export const czNsAdapter = defineSourceAdapter({
           const entry = entries.at(i);
           if (!isDominoViewEntry(entry)) {
             refused += 1;
-            logger.warn("case_law.ingestion.item_build_failed", {
-              adapterKey: ADAPTER_KEYS.CZ_NS,
-              position: start + i,
-              "error.type": "invalid-listing-member",
-            });
+            observeFailure(
+              classifyFailure(
+                new AdapterFetchError({
+                  adapterKey: ADAPTER_KEYS.CZ_NS,
+                  cursor,
+                  message: "invalid-listing-member",
+                }),
+                "upstream_unavailable",
+              ),
+              {
+                sink: itemBuildFailed,
+                ctx: {
+                  adapterKey: ADAPTER_KEYS.CZ_NS,
+                  documentId: String(start + i),
+                },
+              },
+            );
             continue;
           }
           const unid = entry["@unid"] ?? "";
@@ -1446,11 +1467,23 @@ export const czNsAdapter = defineSourceAdapter({
               }
               case "unkeyable": {
                 refused += 1;
-                logger.warn("case_law.ingestion.item_build_failed", {
-                  adapterKey: ADAPTER_KEYS.CZ_NS,
-                  position: start + i,
-                  "error.type": "unkeyable-listing-member",
-                });
+                observeFailure(
+                  classifyFailure(
+                    new AdapterFetchError({
+                      adapterKey: ADAPTER_KEYS.CZ_NS,
+                      cursor,
+                      message: "unkeyable-listing-member",
+                    }),
+                    "upstream_unavailable",
+                  ),
+                  {
+                    sink: itemBuildFailed,
+                    ctx: {
+                      adapterKey: ADAPTER_KEYS.CZ_NS,
+                      documentId: String(start + i),
+                    },
+                  },
+                );
                 break;
               }
               default: {

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-import { addedEntries } from "./check-swallowed-item-error-ledger.ts";
+import { addedEntries } from "./ledger-membership.ts";
 
 test("handler ledger membership only shrinks after its introduction", () => {
   expect(addedEntries(["new::1"], null)).toEqual([]);
