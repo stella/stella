@@ -12753,7 +12753,23 @@ export type WebRoutes = {
           query: unknown;
           headers: unknown;
           response: {
-            200: T5e3ac29766;
+            200: {
+              status: "connected";
+              identity: {
+                userId: T56ed95d57c;
+                organizationId: Td3fe96409e;
+              };
+            } | {
+              status: "credential";
+              account: {
+                email: string;
+                name: string;
+                verifiedAt: string;
+              };
+              organizationName: string;
+              key: string;
+              expiresAt: string;
+            };
             400: T9a51b7d2bc;
             401: T9a51b7d2bc;
             402: T9a51b7d2bc;
@@ -15135,7 +15151,10 @@ export type WebRoutes = {
               remoteSession: T07b521aaca;
               workspaceId: T9e07a7d6cd;
             };
-            400: T4d5e4f5d1c;
+            400: {
+              readonly message: string;
+              readonly code?: string;
+            };
             401: T376625c3d0;
             403: {
               readonly message: "Desktop editing permission was revoked.";
@@ -15143,7 +15162,13 @@ export type WebRoutes = {
             404: {
               readonly message: "Workspace not found.";
             };
-            409: T4d5e4f5d1c;
+            409: {
+              readonly code: (string | undefined);
+              readonly message: string;
+            } | {
+              readonly message: string;
+              readonly code?: string;
+            };
             410: {
               readonly message: "Desktop edit handoff expired or has already been used.";
             };
@@ -37210,11 +37235,6 @@ type T4c80e82e5d = string & valibot_Brand<"SafeId"> & {
 
 type T4d118d2832 = {
   contactId: (string & valibot_Brand<"SafeId"> & T1c99d77bbc);
-};
-
-type T4d5e4f5d1c = {
-  readonly message: string;
-  readonly code?: string;
 };
 
 type T4d73965770 = {
