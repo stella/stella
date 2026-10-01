@@ -407,7 +407,7 @@ export const chatCombinationValues = (
  * most tuples not yet covered, or else the first combination holding the
  * first uncovered tuple, so it always ends and always yields the same set.
  */
-export const coveringArray = <Combination>(
+const coveringArray = <Combination>(
   combinations: readonly Combination[],
   valuesOf: (combination: Combination) => readonly string[],
   strength: number,
@@ -562,7 +562,7 @@ export const planCombinationRun = <Combination>({
 };
 
 /** The combinations a shard `index` of `count` runs: every `count`th. */
-export const shardOf = <Combination>(
+const shardOf = <Combination>(
   combinations: readonly Combination[],
   shard: { count: number; index: number },
 ): Combination[] =>

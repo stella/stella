@@ -22,7 +22,7 @@ export const REASONING_TEXT = "The user asked to delete the draft.";
 
 type Answer = (cassette: ProviderWireCassette) => ProviderWireCassette;
 
-export const mapTextBodies = (
+const mapTextBodies = (
   cassette: ProviderWireCassette,
   rewrite: (text: string) => string,
 ): ProviderWireCassette => ({

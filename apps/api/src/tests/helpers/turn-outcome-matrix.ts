@@ -49,7 +49,7 @@ import type {
 // --- Response shapes ----------------------------------------------------------
 
 /** Every shape of answer a provider can stream for one model call. */
-export const RESPONSE_SHAPES = {
+const RESPONSE_SHAPES = {
   text: "A plain text answer (the control).",
   empty: "A normal stop with an empty text message.",
   whitespace: "A normal stop whose text is only whitespace.",
@@ -214,7 +214,7 @@ export const SURFACES = {
   subagent: "A subagent's answer, as its parent's tool result shows it.",
 } as const satisfies Record<string, string>;
 
-export type Surface = keyof typeof SURFACES;
+type Surface = keyof typeof SURFACES;
 const SURFACE_NAMES = Object.keys(SURFACES).filter(
   (surface): surface is Surface => surface in SURFACES,
 );
@@ -382,7 +382,7 @@ const withAnswerText = (
 };
 
 /** The answer text `exchanges` stream, read from the same slots. */
-export const answerTextOf = (
+const answerTextOf = (
   provider: TanStackAIProvider,
   exchanges: readonly ProviderWireExchange[],
 ): string => {
