@@ -394,26 +394,14 @@ jobs:
         env:
           NPM_TOKEN: ""
 
-      # Playwright installs its pinned browser; the runner's Chrome channel is unrelated.
-      - name: Disable runner Chrome apt source
+      - name: Verify image-provided Chromium
         if: steps.current.outputs.promoted == 'true'
-        run: |
-          chrome_apt_source=/etc/apt/sources.list.d/google-chrome.list
-          if [[ -f "$chrome_apt_source" ]]; then
-            sudo mv "$chrome_apt_source" "$chrome_apt_source.disabled"
-          fi
-
-      - name: Install Playwright browser
-        if: steps.current.outputs.promoted == 'true'
-        run: |
-          cd apps/web
-          bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/install-deps.sh" chromium
-          bunx playwright install chromium
+        uses: ./.github/actions/setup-playwright
 
       - name: Run staging web smoke
         id: web-smoke
         if: steps.current.outputs.promoted == 'true'
-        run: bun --filter @stll/web test:e2e:staging
+        run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:staging
         env:
           STAGING_STATE: ${{ vars.STAGING_STATE }}
           E2E_WEB_URL: https://staging.stll.app
