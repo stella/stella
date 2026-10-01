@@ -79,7 +79,7 @@ test("listing fetching preserves stored replay results for complete and legacy f
       contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
       expectedType: "rejected",
     },
-  ];
+  ] as const;
   for (const { raw, contentType, expectedType } of fixtures) {
     const input = {
       raw,
