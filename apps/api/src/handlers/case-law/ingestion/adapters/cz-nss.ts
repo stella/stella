@@ -1496,7 +1496,7 @@ const statedDetailMetadataFields = (
 
 /** An explicitly blank NSS prose value is a publisher placeholder. */
 const czNssTextField = (raw: string | undefined) => {
-  if (raw !== undefined && raw.trim().length === 0) {
+  if (raw?.trim().length === 0) {
     return absentTextField(TEXT_ABSENCE_REASON.PUBLISHER_PLACEHOLDER);
   }
   return sourceTextField(ADAPTER_KEYS.CZ_NSS, raw);
