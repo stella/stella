@@ -364,8 +364,6 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Microsoft OAuth client secret; required when the matching web login flag is enabled.",
   MICROSOFT_AUTH_TENANT_ID:
     "Microsoft OAuth tenant selector accepted by the configured application registration.",
-  OPERATOR_METRICS_TOKEN:
-    "Bearer token for registration metrics. Unset disables the endpoint; use a long random value.",
   POSTHOG_KEY:
     'PostHog project key. The placeholder "phc_" disables capture for local development.',
   POSTHOG_LOCAL_DEBUG:
