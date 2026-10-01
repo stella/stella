@@ -32,6 +32,7 @@ import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
+import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import {
@@ -343,7 +344,7 @@ export const reconcileQueuedDocumentReviewRuns = async ({
   return await reconcileQueuedRuns({ queue, readPage, runJob });
 };
 
-export const initDocumentReviewRunWorker = () => {
+export const initDocumentReviewRunWorker = ({ db }: BullMqWorkerContext) => {
   const worker = new Worker<DocumentReviewRunWorkerJobData>(
     QUEUE_NAME,
     async (job) => {

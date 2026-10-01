@@ -10,6 +10,7 @@ import {
 import { eq } from "drizzle-orm";
 
 import { member } from "@/api/db/auth-schema";
+import type { ScopedDb } from "@/api/db/safe-db";
 import {
   documentReviewReferencePassages,
   fields,
@@ -19,6 +20,7 @@ import { createMembershipScopedDb } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import { resolveDocumentReviewRunInputs } from "@/api/lib/document-review/run-inputs";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
   releaseRlsFixture,
@@ -70,11 +72,13 @@ const inputs = {
   pins: [targetPin, referencePin],
   passageIds: [passageId],
 };
-const scopedDb = createMembershipScopedDb(testDb, {
-  organizationId: ids.orgA,
-  userId: ids.userA1,
-  serverValidatedWorkspaceIds: [],
-});
+const scopedDb = asTestRaw<ScopedDb>(
+  createMembershipScopedDb(testDb, {
+    organizationId: ids.orgA,
+    userId: ids.userA1,
+    serverValidatedWorkspaceIds: [],
+  }),
+);
 
 beforeAll(async () => {
   await testDb

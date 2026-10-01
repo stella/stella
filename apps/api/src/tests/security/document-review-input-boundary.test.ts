@@ -11,7 +11,7 @@ const readModule = (relativePath: string) =>
     ts.ScriptKind.TS,
   );
 
-const callsNamed = (source: ts.SourceFile, name: string) => {
+const callsNamed = (source: ts.Node, name: string) => {
   const calls: ts.CallExpression[] = [];
   const visit = (node: ts.Node) => {
     if (
@@ -42,15 +42,52 @@ describe("document review input boundary", () => {
 
   test("the current membership scope adds no stored workspace ids", () => {
     const source = readModule("../../lib/root-scoped-db.ts");
-    const calls = callsNamed(source, "createMembershipScopedDb");
+    const factory = source.statements.find(
+      (node) =>
+        ts.isVariableStatement(node) &&
+        node.declarationList.declarations.some(
+          (declaration) =>
+            declaration.name.getText(source) === "createRootMembershipScopedDb",
+        ),
+    );
+    expect(factory).toBeDefined();
+    if (!factory) {
+      return;
+    }
+    const calls = callsNamed(factory, "createRootScopedDb");
     expect(calls).toHaveLength(1);
     for (const call of calls) {
-      const options = call.arguments.at(1);
+      const options = call.arguments.at(0);
       expect(options && ts.isObjectLiteralExpression(options)).toBe(true);
       if (!options || !ts.isObjectLiteralExpression(options)) {
         continue;
       }
-      const property = options.properties.find(
+      const scope = options.properties.find(
+        (node) =>
+          ts.isPropertyAssignment(node) &&
+          node.name.getText(source) === "workspaceScope",
+      );
+      expect(scope && ts.isPropertyAssignment(scope)).toBe(true);
+      if (!scope || !ts.isPropertyAssignment(scope)) {
+        continue;
+      }
+      const scopeOptions = scope.initializer;
+      expect(ts.isObjectLiteralExpression(scopeOptions)).toBe(true);
+      if (!ts.isObjectLiteralExpression(scopeOptions)) {
+        continue;
+      }
+      const mode = scopeOptions.properties.find(
+        (node) =>
+          ts.isPropertyAssignment(node) && node.name.getText(source) === "type",
+      );
+      expect(mode && ts.isPropertyAssignment(mode)).toBe(true);
+      if (!mode || !ts.isPropertyAssignment(mode)) {
+        continue;
+      }
+      expect(mode.initializer.getText(source)).toBe(
+        "WORKSPACE_ACCESS_MODE.membership",
+      );
+      const property = scopeOptions.properties.find(
         (node) =>
           ts.isPropertyAssignment(node) &&
           node.name.getText(source) === "serverValidatedWorkspaceIds",

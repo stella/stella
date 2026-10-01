@@ -1,30 +1,36 @@
+import { WORKSPACE_ACCESS_MODE } from "@/api/db/rls";
 import { rlsDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
-  createMembershipScopedDb,
   createSafeDb,
   createScopedDb,
   createTenantlessDb,
 } from "@/api/db/scoped";
+import type { WorkspaceScope } from "@/api/db/scoped";
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import {
   brandPersistedUserId,
   brandValidatedWorkflowActorKey,
 } from "@/api/lib/safe-id-boundaries";
 
-export const createRootScopedDb = ({
-  organizationId,
-  userId,
-  workspaceIds,
-}: {
+type RootScopedDbOptions = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user"> | null;
-  workspaceIds: SafeId<"workspace">[];
-}) =>
+} & (
+  | { workspaceIds: SafeId<"workspace">[] }
+  | { workspaceScope: WorkspaceScope }
+);
+
+export const createRootScopedDb = (options: RootScopedDbOptions) =>
   // This helper exists only because some modules are not allowed
   // to import the RLS database handle directly.
-  createScopedDb(rlsDb, workspaceIds, organizationId, userId);
+  createScopedDb(
+    rlsDb,
+    "workspaceScope" in options ? options.workspaceScope : options.workspaceIds,
+    options.organizationId,
+    options.userId,
+  );
 
 /** A deferred read uses current membership without adding stored matter IDs. */
 export const createRootMembershipScopedDb = ({
@@ -34,10 +40,13 @@ export const createRootMembershipScopedDb = ({
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
 }) =>
-  createMembershipScopedDb(rlsDb, {
+  createRootScopedDb({
     organizationId,
     userId,
-    serverValidatedWorkspaceIds: [],
+    workspaceScope: {
+      type: WORKSPACE_ACCESS_MODE.membership,
+      serverValidatedWorkspaceIds: [],
+    },
   });
 
 export const createRootSafeDb = ({

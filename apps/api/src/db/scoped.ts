@@ -74,7 +74,7 @@ export type SafeDbRetryConfig<E = unknown> = {
 
 type SafeDbError = DatabaseError | DatabaseRlsError | UnhandledException;
 
-type WorkspaceScope =
+export type WorkspaceScope =
   | {
       type: typeof WORKSPACE_ACCESS_MODE.explicit;
       workspaceIds: SafeId<"workspace">[];
@@ -140,24 +140,22 @@ const runScopedTransaction = async <
 };
 
 /**
- * Create an explicitly narrowed database scope. Use for trusted jobs/tests
- * that already hold a bounded workspace set; request auth uses the membership
- * factory below so it never serializes a user's entire access set.
+ * Create a database scope from an explicit workspace set or a declared mode.
+ * Request auth uses the membership factory below.
  */
 export const createScopedDb =
   <TTransaction extends ScopedTransactionBase>(
     database: RlsDatabase<TTransaction>,
-    workspaceIds: SafeId<"workspace">[],
+    workspaceScope: SafeId<"workspace">[] | WorkspaceScope,
     organizationId: SafeId<"organization">,
     userId: SafeId<"user"> | null,
   ) =>
   async <T>(fn: (tx: TTransaction) => Promise<T>): Promise<T> =>
     await runScopedTransaction({
       database,
-      workspaceScope: {
-        type: WORKSPACE_ACCESS_MODE.explicit,
-        workspaceIds,
-      },
+      workspaceScope: Array.isArray(workspaceScope)
+        ? { type: WORKSPACE_ACCESS_MODE.explicit, workspaceIds: workspaceScope }
+        : workspaceScope,
       organizationId,
       userId,
       fn,
