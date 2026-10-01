@@ -296,10 +296,9 @@ const observeFailure = ({
   onError,
   cause,
   event,
-}: ObserveFailureOptions): undefined => 
+}: ObserveFailureOptions): undefined =>
   // A failing telemetry callback must not expose its own exception on the wire.
-  Result.try(() => onError?.(cause, event)).unwrapOr(undefined)
-;
+  Result.try(() => onError?.(cause, event)).unwrapOr(undefined);
 
 type RunToolOptions<Context> = {
   tool: ToolDefinition<Context>;
