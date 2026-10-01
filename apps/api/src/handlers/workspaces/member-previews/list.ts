@@ -8,10 +8,94 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
+import type {
+  UnbackedProjectionKeys,
+  UnprojectedColumns,
+} from "@/api/lib/projection-totality";
 import {
   brandPersistedUserId,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
+
+type WorkspaceMemberRow = typeof workspaceMembers.$inferSelect;
+type UserRow = typeof user.$inferSelect;
+
+const UNPROJECTED_WORKSPACE_MEMBER_COLUMNS = [
+  // Membership row identity is not needed to display the user's avatar.
+  "id",
+  // Used to rank previews, but not displayed to the client.
+  "createdAt",
+] as const satisfies readonly (keyof WorkspaceMemberRow)[];
+
+const WORKSPACE_MEMBER_PREVIEW_COLUMNS = {
+  workspaceId: workspaceMembers.workspaceId,
+  userId: workspaceMembers.userId,
+} as const;
+
+const UNPROJECTED_USER_PROFILE_COLUMNS = [
+  // Identity is projected from workspaceMembers.userId, joined to user.id.
+  "id",
+  // Authentication state is not part of an avatar preview.
+  "emailVerified",
+  // Time formatting preferences are not used by avatar labels.
+  "timezoneId",
+  // Avatar labels use the canonical name, matching other matter-team surfaces.
+  "preferredName",
+  // Editor shortcut preferences are unrelated to team previews.
+  "wordEditShortcut",
+  // Keyboard rebindings belong to the user's settings.
+  "userShortcuts",
+  // Onboarding progress belongs to the signed-in user's session.
+  "guideProgress",
+  // Signup geography is not needed to identify a colleague.
+  "detectedCountry",
+  // Two-factor configuration is private authentication state.
+  "twoFactorEnabled",
+  // Account lifecycle metadata is not part of the display profile.
+  "deletedAt",
+  // Registration time is not displayed in avatar previews.
+  "createdAt",
+  // Profile modification time is not displayed in avatar previews.
+  "updatedAt",
+] as const satisfies readonly (keyof UserRow)[];
+
+const USER_PROFILE_PREVIEW_COLUMNS = {
+  name: user.name,
+  email: user.email,
+  image: user.image,
+} as const;
+
+type MissingProjectedWorkspaceMemberColumn = UnprojectedColumns<
+  WorkspaceMemberRow,
+  typeof WORKSPACE_MEMBER_PREVIEW_COLUMNS,
+  (typeof UNPROJECTED_WORKSPACE_MEMBER_COLUMNS)[number]
+>;
+type UnexpectedProjectedWorkspaceMemberColumn = UnbackedProjectionKeys<
+  WorkspaceMemberRow,
+  typeof WORKSPACE_MEMBER_PREVIEW_COLUMNS,
+  (typeof UNPROJECTED_WORKSPACE_MEMBER_COLUMNS)[number]
+>;
+type MissingProjectedUserProfileColumn = UnprojectedColumns<
+  UserRow,
+  typeof USER_PROFILE_PREVIEW_COLUMNS,
+  (typeof UNPROJECTED_USER_PROFILE_COLUMNS)[number]
+>;
+type UnexpectedProjectedUserProfileColumn = UnbackedProjectionKeys<
+  UserRow,
+  typeof USER_PROFILE_PREVIEW_COLUMNS,
+  (typeof UNPROJECTED_USER_PROFILE_COLUMNS)[number]
+>;
+
+true satisfies MissingProjectedWorkspaceMemberColumn extends never
+  ? true
+  : never;
+true satisfies UnexpectedProjectedWorkspaceMemberColumn extends never
+  ? true
+  : never;
+true satisfies MissingProjectedUserProfileColumn extends never ? true : never;
+true satisfies UnexpectedProjectedUserProfileColumn extends never
+  ? true
+  : never;
 
 const config = {
   permissions: { workspace: ["read"] },
@@ -47,11 +131,8 @@ const listWorkspaceMemberPreviews = createSafeRootHandler(
         }
         const ranked = tx
           .select({
-            workspaceId: workspaceMembers.workspaceId,
-            userId: workspaceMembers.userId,
-            name: user.name,
-            email: user.email,
-            image: user.image,
+            ...WORKSPACE_MEMBER_PREVIEW_COLUMNS,
+            ...USER_PROFILE_PREVIEW_COLUMNS,
             // Counts drive avatar overflow; this fixed-size projection is not a member list page.
             total:
               sql<number>`count(*) over (partition by ${workspaceMembers.workspaceId})::int`.as(

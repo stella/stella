@@ -816,7 +816,9 @@ export default eslintCompatPlugin({
             readers.every(
               (reader) =>
                 isAstNode(reader) &&
-                isScopedChain(queryChainRoot(reader), seen),
+                // Type queries describe a selection; only value references consume it.
+                (isInTypePosition(reader) ||
+                  isScopedChain(queryChainRoot(reader), seen)),
             )
           );
         };
