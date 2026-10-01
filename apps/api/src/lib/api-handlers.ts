@@ -63,7 +63,7 @@ import {
   actionAdmissionRefusal,
   withActionAdmission,
 } from "@/api/lib/rate-limit/action-admission";
-import type { ActionKind } from "@/api/lib/rate-limit/action-kinds";
+import type { PeriodActionKind } from "@/api/lib/rate-limit/action-kinds";
 import type { ServiceClassification } from "@/api/lib/rate-limit/service-classification";
 import {
   applyResponseCachePolicy,
@@ -363,7 +363,7 @@ export type HandlerConfig = InputSchema &
     requestTimeoutMs?: number;
     requiresUsage?: UsageMeteringConfig;
     /** Finite synchronous work; streaming and queued execution need their own lifetimes. */
-    actionAdmission?: { type: "handler"; actionKind: ActionKind };
+    actionAdmission?: { type: "handler"; actionKind: PeriodActionKind };
     mcp: McpExposure;
   };
 
@@ -812,7 +812,7 @@ type FiniteHandlerGuard<TResult> = [Extract<TResult, Response>] extends [never]
   : never;
 
 type ConfiguredFiniteHandlerGuard<TConfig, TResult> = TConfig extends {
-  actionAdmission: { type: "handler"; actionKind: ActionKind };
+  actionAdmission: { type: "handler"; actionKind: PeriodActionKind };
 }
   ? NoInfer<FiniteHandlerGuard<TResult>>
   : unknown;
@@ -824,7 +824,7 @@ type FiniteActionContext = SafeHandlerLogContext & {
 };
 
 type FiniteActionOptions<TContext, TResult extends SafeHandlerPayload> = {
-  actionKind: ActionKind;
+  actionKind: PeriodActionKind;
   ctx: TContext;
   handler: SafeHandlerFn<TContext, TResult>;
   admit?: typeof withActionAdmission;

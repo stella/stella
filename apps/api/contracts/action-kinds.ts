@@ -1,3 +1,4 @@
+import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type {
   ActionKindDefinition,
   AdmittedActionIdentity,
@@ -43,3 +44,9 @@ import type {
 "workflow.start" satisfies ConcurrencyOnlyActionKind;
 // @ts-expect-error unregistered kinds cannot use background admission
 "unknown.action" satisfies ConcurrencyOnlyActionKind;
+
+({
+  type: "handler",
+  // @ts-expect-error finite handlers cannot declare a concurrency-only background kind
+  actionKind: "workflow.background",
+}) satisfies NonNullable<HandlerConfig["actionAdmission"]>;
