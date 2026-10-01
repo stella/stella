@@ -30,6 +30,7 @@ import {
   isDateOnlyPaginationCursorPart,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 
 /**
  * The two keys a work is asked about by, and never both at once.
@@ -146,7 +147,9 @@ export const listCitingDecisionsHandler = async (
     return status(400, { message: "Name exactly one of work or eli" });
   }
 
-  const limit = query.limit ?? LIMITS.caseLawSearchPageSizeDefault;
+  const limit = normalizeTenantPageLimit(
+    query.limit ?? LIMITS.caseLawSearchPageSizeDefault,
+  );
   const byAuthority = query.sort === "authority";
   if (byAuthority && query.cursor !== undefined) {
     return status(400, { message: "Authority order has no cursor" });

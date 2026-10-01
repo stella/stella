@@ -25,6 +25,7 @@ import {
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedAuditLogId } from "@/api/lib/safe-id-boundaries";
 
 const auditLogCursor = createTimestampIdCursorCodec({
@@ -204,7 +205,9 @@ export const queryAuditLogPage = async function* ({
   recordAuditEvent: AuditRecorder;
   query: AuditLogFilter;
 }) {
-  const limit = query.limit ?? LIMITS.auditLogPageSizeDefault;
+  const limit = normalizeTenantPageLimit(
+    query.limit ?? LIMITS.auditLogPageSizeDefault,
+  );
 
   const conditions = toAuditLogConditions({ organizationId, filter: query });
 

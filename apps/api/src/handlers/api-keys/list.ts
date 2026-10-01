@@ -12,6 +12,7 @@ import {
   machineApiKeyCursor,
 } from "@/api/lib/machine-api-key-queries";
 import { createCursorPage } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import type { McpMode } from "@/api/mcp/constants";
 
 const MACHINE_API_KEY_PAGE_SIZE_DEFAULT = 50;
@@ -72,7 +73,9 @@ export const createListMachineApiKeysHandler = (
   listMachineApiKeys: typeof listOrganizationMachineApiKeys = listOrganizationMachineApiKeys,
 ) =>
   createSafeRootHandler(config, async function* ({ session, query }) {
-    const limit = query.limit ?? MACHINE_API_KEY_PAGE_SIZE_DEFAULT;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? MACHINE_API_KEY_PAGE_SIZE_DEFAULT,
+    );
 
     // A malformed cursor is rejected rather than silently treated as "first
     // page", so a client bug surfaces instead of quietly re-reading page one.

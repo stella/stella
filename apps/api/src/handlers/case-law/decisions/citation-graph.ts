@@ -39,6 +39,7 @@ import {
   isUuidPaginationCursorPart,
   type Page,
 } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedCaseLawCitationId } from "@/api/lib/safe-id-boundaries";
 import { includes } from "@/api/lib/type-guards";
 
@@ -281,7 +282,9 @@ export const listDecisionCitationsHandler = async ({
   if (cursorId === null) {
     return status(400, { message: "Invalid cursor" });
   }
-  const pageSize = Math.min(limit, LIMITS.caseLawDecisionCitationPageSize);
+  const pageSize = normalizeTenantPageLimit(
+    Math.min(limit, LIMITS.caseLawDecisionCitationPageSize),
+  );
   const rows = await decisionCitationPageQuery({
     cursorId,
     decisionId,
