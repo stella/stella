@@ -1,3 +1,4 @@
+// parser-output-unchanged: NSS dash declarations already match the generic filler policy; parsed text is unchanged for every adapter.
 import {
   type CaseLawJurisdiction,
   isCaseLawJurisdiction,
