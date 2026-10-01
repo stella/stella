@@ -35,6 +35,19 @@ type DocumentWindowContext = {
 
 const documentWindow = new AsyncLocalStorage<DocumentWindowContext>();
 
+/**
+ * Settle `run` once and keep its promise: awaiting `attempt` again re-raises
+ * the original rejection reason unchanged, whatever value it is.
+ */
+const settle = async <T>(run: () => Promise<T>) => {
+  const attempt = (async () => await run())();
+  const result = await Result.tryPromise({
+    try: async () => await attempt,
+    catch: (error) => error,
+  });
+  return { attempt, result };
+};
+
 const reportDocumentStageObserverFailure = async (
   { event, ...attributes }: DocumentTelemetryObserverFailure,
   signal: AbortSignal,
@@ -81,10 +94,9 @@ export const withDocumentStageObserver = async <T>({
     failed: 0,
     observations: [],
   };
-  const result = await documentWindow.run(
+  const { attempt, result } = await documentWindow.run(
     context,
-    async () =>
-      await Result.tryPromise({ try: execute, catch: (error) => error }),
+    async () => await settle(execute),
   );
   if (Result.isError(result)) {
     recordTerminalFailure(
@@ -106,7 +118,7 @@ export const withDocumentStageObserver = async <T>({
   }
   await flushFetchOutcomes(context);
   if (Result.isError(result)) {
-    throw result.error;
+    return await attempt;
   }
   return result.value;
 };
@@ -221,13 +233,10 @@ export const observePublisherDocumentFetch = async ({
   expectedContentType,
   responseOutcome,
 }: ObserveDocumentFetchOptions): Promise<Response> => {
-  const result = await Result.tryPromise({
-    try: fetch,
-    catch: (error) => error,
-  });
+  const { attempt, result } = await settle(fetch);
   if (Result.isError(result)) {
     await emitFetchOutcome(documentFetchErrorOutcome(source, result.error));
-    throw result.error;
+    return await attempt;
   }
   const response = result.value;
   const observation =
@@ -287,10 +296,9 @@ export const withDocumentStageWindow = async ({
     observations: [],
   };
   const startedAt = now();
-  const fetched = await documentWindow.run(
+  const { attempt, result: fetched } = await documentWindow.run(
     context,
-    async () =>
-      await Result.tryPromise({ try: fetchPage, catch: (error) => error }),
+    async () => await settle(fetchPage),
   );
   let filled = 0;
   let unresolved = 0;
@@ -352,7 +360,7 @@ export const withDocumentStageWindow = async ({
   } as const;
   await flushFetchOutcomes(context, observation);
   if (Result.isError(fetched)) {
-    throw fetched.error;
+    return await attempt;
   }
   return fetched.value;
 };

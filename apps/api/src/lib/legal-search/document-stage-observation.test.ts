@@ -257,6 +257,36 @@ describe("document-stage observation windows", () => {
     });
   });
 
+  test("a rejected publisher fetch runs once and re-raises its exact reason", async () => {
+    const observations: DocumentStageObservation[] = [];
+    const refused = new TypeError("connection refused");
+    let fetches = 0;
+    const rejection: unknown = await withDocumentStageObserver({
+      source: ADAPTER_KEYS.CZ_NSS,
+      observe: (event) => {
+        observations.push(event);
+      },
+      execute: async () =>
+        await observePublisherDocumentFetch({
+          source: ADAPTER_KEYS.CZ_NSS,
+          fetch: async () => {
+            fetches += 1;
+            return await Promise.reject(refused);
+          },
+        }),
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(rejection).toBe(refused);
+    expect(fetches).toBe(1);
+    expect(
+      observations.filter(
+        (event) => event.event === DOCUMENT_FETCH_EVENT.fetchOutcome,
+      ),
+    ).toHaveLength(1);
+  });
+
   test("empty pages emit an observable zero window", async () => {
     const observations: DocumentStageObservation[] = [];
     await withDocumentStageWindow({
