@@ -12,7 +12,11 @@ APT
 # Bound the whole attempt: a mirror can keep transferring too slowly for an
 # inactivity timeout to fire. Allow the 300-second lock wait plus 180 seconds
 # for installation. A failed attempt may have installed some packages.
-if timeout --kill-after=10s 480s bunx playwright install-deps "$@"; then
+# Run the timeout as root, too: an unprivileged timeout cannot signal the apt
+# children Playwright elevates. GNU timeout manages the whole process group;
+# do not use --foreground, which would leave descendants outside that bound.
+bunx_bin=$(command -v bunx)
+if sudo timeout --kill-after=10s 480s "$bunx_bin" playwright install-deps "$@"; then
   exit 0
 fi
 
@@ -29,4 +33,4 @@ if ! sudo timeout --kill-after=10s 60s dpkg --configure -a; then
   echo "::warning::dpkg recovery did not complete; the final dependency install must repair or fail"
 fi
 
-timeout --kill-after=10s 480s bunx playwright install-deps "$@"
+sudo timeout --kill-after=10s 480s "$bunx_bin" playwright install-deps "$@"

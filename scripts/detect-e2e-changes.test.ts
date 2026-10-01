@@ -1,5 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import {
+  existsSync,
+  readdirSync,
+  readFileSync,
+  mkdtempSync,
+  writeFileSync,
+  rmSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { parseBunLockText } from "./bun-lock-text";
@@ -842,7 +850,7 @@ describe("detect-e2e-changes", () => {
     expect(aptConfig).toContain('DPkg::Lock::Timeout "300";');
     const deadlines = [
       ...installer.matchAll(
-        /timeout --kill-after=10s (\d+)s bunx playwright install-deps/gu,
+        /sudo timeout --kill-after=10s (\d+)s "\$bunx_bin" playwright install-deps/gu,
       ),
     ];
     expect(deadlines).toHaveLength(2);
@@ -857,6 +865,84 @@ describe("detect-e2e-changes", () => {
     ).toContain(
       'bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/install-deps.sh" firefox webkit',
     );
+  });
+
+  test("marketing uses the shared dependency installer and its timed-out fallback retains lock waiting", () => {
+    expect(marketingCapture).toContain(
+      "uses: ./.github/actions/setup-playwright",
+    );
+    expect(marketingWorkflow).toContain(
+      "uses: ./.github/actions/marketing-capture",
+    );
+    const directory = mkdtempSync(path.join(tmpdir(), "apt-lock-wait-"));
+    const capture = path.join(directory, "apt.conf");
+    const commands = path.join(directory, "commands");
+    const state = path.join(directory, "attempt");
+    writeFileSync(commands, "");
+    const stub = (name: string, lines: string[]) =>
+      writeFileSync(
+        path.join(directory, name),
+        ["#!/usr/bin/env bash", "set -euo pipefail", ...lines].join("\n"),
+        { mode: 0o755 },
+      );
+    stub("sudo", [
+      'case "$1" in',
+      '  tee) cat > "$APT_CONFIG_CAPTURE" ;;',
+      "  sed) exit 0 ;;",
+      '  timeout) printf "%s\\n" "$*" >> "$APT_COMMAND_CAPTURE"; shift; exec timeout "$@" ;;',
+      "  *) exit 3 ;;",
+      "esac",
+    ]);
+    stub("timeout", [
+      '[[ "$1" == --kill-after=10s ]]',
+      "shift 2",
+      '[[ "$1" != dpkg ]] || exit 0',
+      'exec "$@"',
+    ]);
+    stub("bunx", [
+      '[[ "$*" == "playwright install-deps firefox webkit" ]]',
+      `rg -q '^DPkg::Lock::Timeout "300";$' "$APT_CONFIG_CAPTURE"`,
+      'if [[ ! -f "$APT_ATTEMPT_STATE" ]]; then touch "$APT_ATTEMPT_STATE"; exit 124; fi',
+      "exit 0",
+    ]);
+    try {
+      const result = Bun.spawnSync(
+        [
+          "bash",
+          path.join(
+            import.meta.dirname,
+            "../.github/actions/setup-playwright/install-deps.sh",
+          ),
+          "firefox",
+          "webkit",
+        ],
+        {
+          env: {
+            ...process.env,
+            PATH: `${directory}:${process.env["PATH"] ?? ""}`,
+            APT_CONFIG_CAPTURE: capture,
+            APT_COMMAND_CAPTURE: commands,
+            APT_ATTEMPT_STATE: state,
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      expect(result.exitCode, new TextDecoder().decode(result.stderr)).toBe(0);
+      expect(new TextDecoder().decode(result.stdout)).toContain(
+        "retrying with the Ubuntu archive mirror",
+      );
+      expect(readFileSync(capture, "utf-8")).toContain(
+        'DPkg::Lock::Timeout "300";',
+      );
+      expect(readFileSync(commands, "utf-8").trim().split("\n")).toEqual([
+        `timeout --kill-after=10s 480s ${path.join(directory, "bunx")} playwright install-deps firefox webkit`,
+        "timeout --kill-after=10s 60s dpkg --configure -a",
+        `timeout --kill-after=10s 480s ${path.join(directory, "bunx")} playwright install-deps firefox webkit`,
+      ]);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 
   test("pins the browser container to the locked Playwright version", () => {
