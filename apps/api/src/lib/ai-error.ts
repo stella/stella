@@ -12,6 +12,7 @@ import { AI_ERROR_KINDS, type AIErrorKind } from "@stll/api-contract";
 import { classifyFailure } from "@stll/errors";
 import type { FailureReason } from "@stll/errors";
 
+import { MANAGED_PROVIDER_UNAVAILABLE_CODE } from "@/api/lib/chat/provider-data-policy";
 import { INCOMPLETE_STREAM_CODE } from "@/api/lib/chat/provider-stream-contract";
 import {
   AIGenerationCancelledError,
@@ -32,7 +33,6 @@ import {
   readEvidence,
   readProviderStatus,
 } from "@/api/lib/observability/failure-evidence";
-import { MANAGED_PROVIDER_UNAVAILABLE_CODE } from "@/api/lib/provider-data-policy";
 
 export { AI_ERROR_KINDS };
 export type { AIErrorKind };

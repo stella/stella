@@ -3,7 +3,6 @@ import type { AnthropicDocumentMetadata } from "@tanstack/ai-anthropic";
 import { Result } from "better-result";
 
 import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
-import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
   BBOX_SYSTEM_PROMPT,
@@ -12,6 +11,7 @@ import {
   type BBoxItem,
 } from "@/api/lib/bbox/ai-prompts";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import { markTanStackCacheBreakpoint } from "@/api/lib/tanstack-ai-caching";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";

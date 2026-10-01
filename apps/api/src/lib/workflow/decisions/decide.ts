@@ -24,10 +24,10 @@
 import { panic, Result } from "better-result";
 
 import type { OrgAIConfig } from "@/api/lib/ai-config";
-import type { AIDataClass } from "@/api/lib/ai-data-policy";
 import { captureError } from "@/api/lib/analytics/capture";
+import type { AIDataClass } from "@/api/lib/chat/ai-data-policy";
+import { isManagedProviderAvailable } from "@/api/lib/chat/provider-data-policy";
 import { logger } from "@/api/lib/observability/logger";
-import { isManagedProviderAvailable } from "@/api/lib/provider-data-policy";
 import { resolveDecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 import { recordDecisionUsage } from "@/api/lib/workflow/decisions/decision-usage";

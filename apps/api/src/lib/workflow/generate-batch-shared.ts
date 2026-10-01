@@ -6,9 +6,9 @@ import { fields } from "@/api/db/schema";
 import type { JustificationContent } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
-import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import {
   Unreachable,
   WorkflowValidationError,

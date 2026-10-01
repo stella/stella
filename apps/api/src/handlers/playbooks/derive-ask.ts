@@ -6,9 +6,9 @@ import { resolveCaching } from "@/api/lib/ai-config";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
-import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { logger } from "@/api/lib/observability/logger";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import type {

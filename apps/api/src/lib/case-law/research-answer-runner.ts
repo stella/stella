@@ -13,7 +13,6 @@ import {
 import type { FieldContent } from "@/api/db/schema-validators";
 import { resolveCaching } from "@/api/lib/ai-config";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
-import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
@@ -45,6 +44,7 @@ import {
   splitSystemOneQuestions,
   systemOneSourcesFromPassages,
 } from "@/api/lib/case-law/research-answers-system-one";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import type { CorpusIndexHit } from "@/api/lib/legal-search/corpus-index-client";
 import { readServingCorpusIndexTargetTx } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";

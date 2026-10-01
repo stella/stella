@@ -32,7 +32,6 @@ import { isAiExtractablePropertyContent } from "@/api/db/schema-validators";
 import type { FieldContent } from "@/api/db/schema-validators";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
-import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -40,6 +39,7 @@ import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import {
   buildDocumentReviewFindingRow,

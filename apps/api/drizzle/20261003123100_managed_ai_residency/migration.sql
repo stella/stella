@@ -5,6 +5,3 @@ ALTER TABLE "organization_settings"
 ALTER TABLE "organization_settings"
   ADD CONSTRAINT "organization_settings_managed_ai_residency_check"
     CHECK ("managed_ai_residency" IN ('eu', 'us')) NOT VALID;--> statement-breakpoint
--- squawk-ignore constraint-missing-not-valid -- one row per organization; the 5s timeout rolls back the additive transaction if validation cannot finish
-ALTER TABLE "organization_settings"
-  VALIDATE CONSTRAINT "organization_settings_managed_ai_residency_check";

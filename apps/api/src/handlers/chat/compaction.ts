@@ -13,9 +13,9 @@ import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-bou
 import { prepareTextForThirdParty } from "@/api/handlers/chat/third-party-boundary";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
-import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import type { TanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import {
   CHAT_COMPACTION_SYSTEM_PROMPT,
   COMPACTION_SYSTEM_PROMPT,

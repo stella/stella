@@ -32,13 +32,13 @@ import {
 } from "@/api/handlers/reports/spec/render-report-spec";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
-import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { assertUsageAvailableForHandler } from "@/api/lib/api-handlers";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import {
   buildAiConditionDecider,
   buildAiFieldGenerator,

@@ -50,17 +50,20 @@ import {
 } from "@/api/lib/ai-config";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { orgAIConfigStatusError } from "@/api/lib/ai-config-response";
-import type { AIDataClass, AIRequestPolicy } from "@/api/lib/ai-data-policy";
 import type { SafeId } from "@/api/lib/branded-types";
-import { withProviderStreamContract } from "@/api/lib/chat/provider-stream-contract";
-import { validateDataUrl } from "@/api/lib/data-url";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
+import type {
+  AIDataClass,
+  AIRequestPolicy,
+} from "@/api/lib/chat/ai-data-policy";
 import {
   checkManagedProviderAvailable,
   isManagedProviderAvailable,
   managedProviderUnavailable,
-} from "@/api/lib/provider-data-policy";
+} from "@/api/lib/chat/provider-data-policy";
+import { withProviderStreamContract } from "@/api/lib/chat/provider-stream-contract";
+import { validateDataUrl } from "@/api/lib/data-url";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import {
   createManagedOpenRouterText,
   createStellaOpenRouterText,
@@ -790,11 +793,7 @@ const createExtendedBedrockAdapter = (
 export const createTanStackTextAdapterFactory = (
   options: TanStackModelFactoryOptions,
 ): TanStackTextAdapterFactory => {
-  if (
-    options.provider === "bedrock" &&
-    options.apiKey !== undefined &&
-    options.apiKey.trim().length === 0
-  ) {
+  if (options.provider === "bedrock" && options.apiKey?.trim().length === 0) {
     throw missingProviderCredentialError(options.provider, "BEDROCK_API_KEY");
   }
 

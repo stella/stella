@@ -11,8 +11,8 @@ import type { AuthorizedToolWorkspaceIds } from "@/api/handlers/chat/tools/autho
 import type { RawModeOnlyChatToolName } from "@/api/handlers/chat/tools/raw-mode-only-tools";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
-import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import {
   extractAskContents,

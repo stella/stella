@@ -14,12 +14,12 @@ import type { CachingDecision } from "@/api/lib/ai-config";
 import { classifyAIError, isAnticipatedAIFailure } from "@/api/lib/ai-error";
 import type { AIErrorKind } from "@/api/lib/ai-error";
 import { toSafeId } from "@/api/lib/branded-types";
-import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
-import { readEvidence } from "@/api/lib/observability/failure-evidence";
 import {
   MANAGED_PROVIDER_UNAVAILABLE_CODE,
   managedProviderUnavailable,
-} from "@/api/lib/provider-data-policy";
+} from "@/api/lib/chat/provider-data-policy";
+import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
+import { readEvidence } from "@/api/lib/observability/failure-evidence";
 import { StructuredOutputBudgetError } from "@/api/lib/structured-output-budget";
 import {
   chatTurnOutputTokens,
@@ -447,7 +447,8 @@ describe("TanStack AI structured output generation", () => {
             }
             return;
           default:
-            return path satisfies never;
+            path satisfies never;
+            return;
         }
       })().then(
         () => undefined,

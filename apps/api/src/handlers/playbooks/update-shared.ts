@@ -7,11 +7,11 @@ import { assertPlaybookDocumentType } from "@/api/handlers/playbooks/assert-docu
 import { deriveAutoAsks } from "@/api/handlers/playbooks/derive-ask";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
-import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import type { SafeHandlerGenerator } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { assertUnchangedSince } from "@/api/lib/optimistic-concurrency";
 import type {

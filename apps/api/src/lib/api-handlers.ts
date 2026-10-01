@@ -21,12 +21,12 @@ import {
   memberAssignmentRequiredError,
   orgAIConfigStatusError,
 } from "@/api/lib/ai-config-response";
-import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import { captureObservedError } from "@/api/lib/analytics/capture";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CapabilityTransport } from "@/api/lib/capability-transport";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import type { WorkspaceParamsSchema } from "@/api/lib/custom-schema";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
 import {

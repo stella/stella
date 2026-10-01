@@ -3,9 +3,9 @@ import { Result } from "better-result";
 import type { SafeDb } from "@/api/db/safe-db";
 import { summarizeVersionDiff } from "@/api/lib/ai-change-summary";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
-import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { buildLineDiffSegments, diffSegmentsToText } from "@/api/lib/text-diff";
 

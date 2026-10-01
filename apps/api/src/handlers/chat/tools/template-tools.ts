@@ -12,11 +12,11 @@ import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-bou
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import { templateAiCollaboratorsForBoundary } from "@/api/handlers/chat/tools/template-ai-boundary";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
-import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import {
   buildAiConditionDecider,
   buildAiFieldGenerator,

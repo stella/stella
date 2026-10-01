@@ -11,11 +11,12 @@
 
 import { EventType, maxIterations, toolDefinition } from "@tanstack/ai";
 import type { AnyServerTool, TokenUsage } from "@tanstack/ai";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import { resolveCaching } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { streamChatChunks } from "@/api/lib/chat/tanstack-chat-runtime";
 import {
   mergeGenerationOptions,
@@ -298,10 +299,16 @@ const getBenchModel = async (): Promise<BenchModel | null> => {
     getTanStackTextModelById,
     getTanStackTextModelForRole,
     getTanStackTextModelInfoForRole,
-    hasConfiguredTanStackInstanceProvider,
+    requireTanStackAIAvailableForRole,
   } = await import("@/api/lib/tanstack-ai-models");
 
-  if (!hasConfiguredTanStackInstanceProvider()) {
+  const available = requireTanStackAIAvailableForRole({
+    configStatus: ORG_AI_CONFIG_STATUS.ok,
+    orgConfig: null,
+    role: "fast",
+    dataClass: "public_corpus",
+  });
+  if (Result.isError(available)) {
     return null;
   }
 

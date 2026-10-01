@@ -24,7 +24,6 @@ import { resolveSelectedWorkspaceIds } from "@/api/handlers/search/search";
 import { resolveCaching } from "@/api/lib/ai-config";
 import type { CachingDecision, OrgAIConfig } from "@/api/lib/ai-config";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
-import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import { aiErrorStatusBody } from "@/api/lib/ai-error";
 import { captureError } from "@/api/lib/analytics/capture";
 import {
@@ -35,6 +34,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { proveTextOnlyPersistedChatMessageContent } from "@/api/lib/chat/persisted-message-content";
 import { tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";

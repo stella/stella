@@ -46,12 +46,12 @@ import type {
 } from "@/api/handlers/document-reviews/reference-position-normalizer";
 import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
 import { resolveCaching } from "@/api/lib/ai-config";
-import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import {
   createTanStackAIAnalyticsCallbacks,
   type AIUsageMetering,
 } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { perspectivePartyPhrase } from "@/api/lib/document-review/contract";
 import type { ReviewPerspective } from "@/api/lib/document-review/contract";
 import {

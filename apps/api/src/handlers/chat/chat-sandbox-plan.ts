@@ -3,11 +3,11 @@ import { Result } from "better-result";
 import type { StellaSandboxRunInput } from "@stll/agent-engine";
 
 import { env } from "@/api/env";
-import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import { checkManagedProviderAvailable } from "@/api/lib/chat/provider-data-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { logger } from "@/api/lib/observability/logger";
-import { checkManagedProviderAvailable } from "@/api/lib/provider-data-policy";
 import { mintAgentRunToken } from "@/api/mcp/agent-run-token";
 
 const MCP_SERVER_NAME = "stella";

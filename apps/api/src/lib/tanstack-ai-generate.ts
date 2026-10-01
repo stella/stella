@@ -27,7 +27,6 @@ import type {
   CachingDecision,
   OrgAIConfig,
 } from "@/api/lib/ai-config";
-import type { AIRequestPolicy } from "@/api/lib/ai-data-policy";
 import {
   classifyAIError,
   providerErrorBody,
@@ -35,6 +34,7 @@ import {
 } from "@/api/lib/ai-error";
 import type { TanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { AIRequestPolicy } from "@/api/lib/chat/ai-data-policy";
 import {
   guardModelMessages,
   guardModelSystemPrompt,
@@ -44,6 +44,7 @@ import type {
   GuardedModelMessages,
   GuardedSystemPrompt,
 } from "@/api/lib/chat/model-ingress-guard";
+import { MANAGED_PROVIDER_UNAVAILABLE_CODE } from "@/api/lib/chat/provider-data-policy";
 import { readOutputCeilingStopAsLength } from "@/api/lib/chat/provider-stream-contract";
 import {
   finishReasonOf,
@@ -63,7 +64,6 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import { logger } from "@/api/lib/observability/logger";
 import { markAiRequest } from "@/api/lib/observability/request-context";
-import { MANAGED_PROVIDER_UNAVAILABLE_CODE } from "@/api/lib/provider-data-policy";
 import {
   providerSafeJsonSchemaOptionsForTanStackProvider,
   type ProviderSafeJsonSchemaProjectionOptions,
@@ -875,7 +875,8 @@ const streamChatObjectWithManagedErrors = async function* (
     structuredOptions: Parameters<AnyTextAdapter["structuredOutput"]>[0],
   ) => {
     const result = await Result.tryPromise({
-      try: () => options.adapter.structuredOutput(structuredOptions),
+      try: async () =>
+        await options.adapter.structuredOutput(structuredOptions),
       catch: (error) => error,
     });
     if (Result.isOk(result)) {

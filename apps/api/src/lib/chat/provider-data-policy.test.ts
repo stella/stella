@@ -13,18 +13,18 @@ import {
 
 import { env } from "@/api/env";
 import { DECISION_MODEL_PROVIDERS } from "@/api/lib/ai-config";
-import { MANAGED_AI_RESIDENCIES } from "@/api/lib/ai-data-policy";
+import { MANAGED_AI_RESIDENCIES } from "@/api/lib/chat/ai-data-policy";
+import {
+  MANAGED_PROVIDER_UNAVAILABLE_CODE,
+  PROVIDER_DATA_POLICY,
+  isManagedProviderAvailable,
+} from "@/api/lib/chat/provider-data-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
 import {
   readEvidence,
   readProviderStatus,
 } from "@/api/lib/observability/failure-evidence";
-import {
-  MANAGED_PROVIDER_UNAVAILABLE_CODE,
-  PROVIDER_DATA_POLICY,
-  isManagedProviderAvailable,
-} from "@/api/lib/provider-data-policy";
 import {
   createTanStackTextAdapterFactory,
   getTanStackTextModelById,
@@ -563,7 +563,8 @@ describe("provider request policy", () => {
                 break;
               case "structured": {
                 const result = await Result.tryPromise({
-                  try: () => adapter.structuredOutput(structuredOptions),
+                  try: async () =>
+                    await adapter.structuredOutput(structuredOptions),
                   catch: (error) => error,
                 });
                 expect(Result.isError(result)).toBe(true);

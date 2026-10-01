@@ -41,10 +41,10 @@ import {
 import type { ChatCompactionMemoryEligibility } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
-import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import type { TanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import {
   CHAT_COMPACTION_PROMPT_VERSION,
   CHAT_INCREMENTAL_COMPACTION_SYSTEM_PROMPT,

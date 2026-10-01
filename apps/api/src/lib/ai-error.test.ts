@@ -26,6 +26,10 @@ import {
 } from "@/api/lib/ai-error";
 import type { AIErrorKind } from "@/api/lib/ai-error";
 import {
+  MANAGED_PROVIDER_UNAVAILABLE_CODE,
+  managedProviderUnavailable,
+} from "@/api/lib/chat/provider-data-policy";
+import {
   AIGenerationCancelledError,
   ChatEmptyCompletionError,
   ChatLoopDetectedError,
@@ -37,10 +41,6 @@ import type {
 } from "@/api/lib/errors/tagged-errors";
 import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
-import {
-  MANAGED_PROVIDER_UNAVAILABLE_CODE,
-  managedProviderUnavailable,
-} from "@/api/lib/provider-data-policy";
 
 const apiCallError = (statusCode: number) =>
   ({

@@ -44,7 +44,6 @@ import {
   DECISION_PRIMARY_REFERENCE_TYPES,
 } from "@stll/legal-ast/decision-identifier";
 
-import { MANAGED_AI_RESIDENCIES } from "@/api/lib/ai-data-policy";
 import { TIME_ENTRY_VISIBILITY } from "@/api/lib/billing-constants";
 import {
   CITATION_READ_DIRECTIONS,
@@ -56,6 +55,7 @@ import {
   DECISION_READ_STATUS,
 } from "@/api/lib/case-law/decision-read-vocabulary";
 import { AGENT_CASE_LAW_SEARCH_WARNING_CODES } from "@/api/lib/case-law/search-warnings";
+import { MANAGED_AI_RESIDENCIES } from "@/api/lib/chat/ai-data-policy";
 import {
   DOCUMENT_PROCESSING_FAILURE_CODE,
   DOCUMENT_PROCESSING_KIND,

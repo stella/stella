@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { managedProviderUnavailable } from "@/api/lib/provider-data-policy";
+import { managedProviderUnavailable } from "@/api/lib/chat/provider-data-policy";
 import {
   DEADLINE_SCOUT_MAX_ATTEMPTS,
   deadlineScoutFailureStatus,

@@ -16,16 +16,16 @@ import {
   documentProcessingRuns,
   organizationSettings,
 } from "@/api/db/schema";
-import {
-  DEFAULT_MANAGED_AI_RESIDENCY,
-  MANAGED_AI_RESIDENCIES,
-} from "@/api/lib/ai-data-policy";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  DEFAULT_MANAGED_AI_RESIDENCY,
+  MANAGED_AI_RESIDENCIES,
+} from "@/api/lib/chat/ai-data-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { validatePattern } from "@/api/lib/matter-reference";
 

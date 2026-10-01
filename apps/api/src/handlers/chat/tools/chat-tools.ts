@@ -83,7 +83,6 @@ import {
 import { createWorkspaceTools } from "@/api/handlers/chat/tools/workspace-tools";
 import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
-import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -92,6 +91,7 @@ import type {
   BusinessRegistrySlug,
   RegistryHandler,
 } from "@/api/lib/business-registries/dispatch";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { CHAT_TOOL_SET_PURPOSE } from "@/api/lib/chat/chat-tool-types";
 import type {
   ChatToolMap,

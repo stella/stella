@@ -8,7 +8,10 @@ import type { AIProvider } from "@stll/ai-catalog";
 import { classifyFailure } from "@stll/errors";
 
 import type { DecisionModelProvider } from "@/api/lib/ai-config";
-import type { AIDataClass, ManagedAIResidency } from "@/api/lib/ai-data-policy";
+import type {
+  AIDataClass,
+  ManagedAIResidency,
+} from "@/api/lib/chat/ai-data-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 type ManagedProvider = AIProvider | DecisionModelProvider | "agent_sandbox";

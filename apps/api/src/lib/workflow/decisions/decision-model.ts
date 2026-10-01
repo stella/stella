@@ -16,8 +16,8 @@ import type {
   OrgAIConfig,
   OrgDecisionModelConfig,
 } from "@/api/lib/ai-config";
-import type { AIDataClass } from "@/api/lib/ai-data-policy";
-import { isManagedProviderAvailable } from "@/api/lib/provider-data-policy";
+import type { AIDataClass } from "@/api/lib/chat/ai-data-policy";
+import { isManagedProviderAvailable } from "@/api/lib/chat/provider-data-policy";
 import {
   createSystemOneClient,
   noul,

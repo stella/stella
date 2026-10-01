@@ -10,11 +10,11 @@ import {
   DEFAULT_TIME_MINIMUM_UNIT_MINUTES,
   DEFAULT_TIME_NARRATIVE_REQUIRED,
 } from "@/api/db/schema";
-import { DEFAULT_MANAGED_AI_RESIDENCY } from "@/api/lib/ai-data-policy";
-import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
+import { DEFAULT_MANAGED_AI_RESIDENCY } from "@/api/lib/chat/ai-data-policy";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import {
   DEFAULT_MATTER_NUMBER_PADDING,
   DEFAULT_MATTER_NUMBER_PATTERN,

@@ -9,9 +9,9 @@ import * as v from "valibot";
 
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { resolveCaching } from "@/api/lib/ai-config";
-import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import type { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 
 const SUMMARY_TIMEOUT_MS = 30_000;

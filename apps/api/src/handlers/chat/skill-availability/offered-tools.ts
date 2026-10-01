@@ -25,11 +25,11 @@ import {
   SKILL_TOOL_AVAILABILITY_STATUS,
 } from "@/api/lib/agent-skills/required-tools";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
-import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { getOrganizationRegistryDispatch } from "@/api/lib/business-registries/credentials";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";

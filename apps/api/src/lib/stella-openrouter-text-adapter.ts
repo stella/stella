@@ -7,14 +7,14 @@ import type {
 } from "@tanstack/ai-openrouter";
 import { Result } from "better-result";
 
-import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
-import { withOptionalsNullable } from "@/api/lib/json-schema/null-optionals";
-import { readProviderStatus } from "@/api/lib/observability/failure-evidence";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import {
   managedProviderUnavailable,
   MANAGED_PROVIDER_UNAVAILABLE_CODE,
   PROVIDER_DATA_POLICY,
-} from "@/api/lib/provider-data-policy";
+} from "@/api/lib/chat/provider-data-policy";
+import { withOptionalsNullable } from "@/api/lib/json-schema/null-optionals";
+import { readProviderStatus } from "@/api/lib/observability/failure-evidence";
 
 type OpenRouterModel = Parameters<typeof createOpenRouterText>[0];
 type OpenRouterTextOptions = Parameters<
@@ -134,7 +134,8 @@ const withManagedRoutingErrors = async function* (
       continue;
     }
     const error = managedProviderUnavailable("openrouter");
-    const { rawEvent: _providerEvent, ...event } = chunk;
+    const event = { ...chunk };
+    delete event.rawEvent;
     yield {
       ...event,
       message: error.message,
@@ -145,6 +146,11 @@ const withManagedRoutingErrors = async function* (
       },
     };
   }
+};
+
+const withoutModelVariant = (model: string): string => {
+  const variantStart = model.indexOf(":", model.lastIndexOf("/") + 1);
+  return variantStart === -1 ? model : model.slice(0, variantStart);
 };
 
 class ManagedOpenRouterTextAdapter extends StellaOpenRouterTextAdapter {
@@ -158,7 +164,7 @@ class ManagedOpenRouterTextAdapter extends StellaOpenRouterTextAdapter {
 
   override async structuredOutput(options: OpenRouterStructuredOptions) {
     const result = await Result.tryPromise({
-      try: () => super.structuredOutput(options),
+      try: async () => await super.structuredOutput(options),
       catch: (error) =>
         isManagedRoutingRefusal(error)
           ? managedProviderUnavailable("openrouter")
@@ -178,7 +184,7 @@ class ManagedOpenRouterTextAdapter extends StellaOpenRouterTextAdapter {
     } = options.modelOptions ?? {};
     const request = super.mapOptionsToRequest({
       ...options,
-      model: options.model.replace(/:[^/]*$/u, ""),
+      model: withoutModelVariant(options.model),
       modelOptions,
     });
     return {
@@ -186,9 +192,7 @@ class ManagedOpenRouterTextAdapter extends StellaOpenRouterTextAdapter {
       ...(request.models === undefined
         ? {}
         : {
-            models: request.models.map((model) =>
-              model.replace(/:[^/]*$/u, ""),
-            ),
+            models: request.models.map((model) => withoutModelVariant(model)),
           }),
       provider: {
         ...request.provider,

@@ -15,7 +15,6 @@ import type {
   UsageServiceTier,
 } from "@/api/db/schema";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
-import type { AIDataClass } from "@/api/lib/ai-data-policy";
 import {
   classifyAIBoundaryFailure,
   isAnticipatedAIFailure,
@@ -23,6 +22,7 @@ import {
 } from "@/api/lib/ai-error";
 import { captureError as captureTelemetryError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { AIDataClass } from "@/api/lib/chat/ai-data-policy";
 import {
   finishReasonOf,
   type TanStackTextFinishReason,

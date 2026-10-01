@@ -27,9 +27,9 @@ import {
   memberAssignmentRequiredError,
   ownAIKeyRequiredError,
 } from "@/api/lib/ai-config-response";
-import { DEFAULT_MANAGED_AI_RESIDENCY } from "@/api/lib/ai-data-policy";
-import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import type { SafeId } from "@/api/lib/branded-types";
+import { DEFAULT_MANAGED_AI_RESIDENCY } from "@/api/lib/chat/ai-data-policy";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { memberMayUseAI } from "@/api/lib/usage/member-capacity";
 import { mayUseInstanceModels } from "@/api/lib/usage/organization-access-state";

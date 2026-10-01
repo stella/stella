@@ -5,11 +5,11 @@ import {
   type RecapMessage,
 } from "@/api/handlers/chat/thread-recap-transcript";
 import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
-import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import { isUnanticipatedAIFailure } from "@/api/lib/ai-error";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 
 /**

@@ -3,7 +3,7 @@ import { BUSINESS_REGISTRY_CREDENTIAL_SLUGS } from "@stll/api-contract";
 import {
   DEFAULT_MANAGED_AI_RESIDENCY,
   MANAGED_AI_RESIDENCIES,
-} from "@/api/lib/ai-data-policy";
+} from "@/api/lib/chat/ai-data-policy";
 
 import {
   bytea,
