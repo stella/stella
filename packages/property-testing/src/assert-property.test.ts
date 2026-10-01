@@ -144,16 +144,22 @@ test("time boxes only exploratory generation and leaves interruption non-failing
   const withCallerPlugin = propertyConfig({ plugins: [callerPlugin] }).plugins;
   expect(withCallerPlugin).toHaveLength(2);
   expect(withCallerPlugin?.[0]).toBe(callerPlugin);
-  // 1000 runs of 20 ms would take 20 s; the 50 ms box stops them early.
-  const details = await fc.check(
-    fc.asyncProperty(fc.nat(), async () => {
+  // 1000 runs of 20 ms would take 20 s; the 50 ms box stops them after a few
+  // successes, and the interrupted run still passes.
+  let calls = 0;
+  await runProperty({
+    file: FILE,
+    id: "time boxed",
+    property: fc.asyncProperty(fc.nat(), async () => {
+      calls++;
       await Bun.sleep(20);
       return true;
     }),
-    propertyConfig({ numRuns: 100 }),
-  );
-  expect(details.interrupted).toBe(true);
-  expect(details.failed).toBe(false);
+    params: { numRuns: 100 },
+    pinned: [],
+  });
+  expect(calls).toBeGreaterThan(0);
+  expect(calls).toBeLessThan(100);
   process.env["PROPERTY_TEST_TIME_LIMIT_MS"] = "invalid";
   expect(() => propertyConfig()).toThrow(
     "PROPERTY_TEST_TIME_LIMIT_MS must be a positive integer",

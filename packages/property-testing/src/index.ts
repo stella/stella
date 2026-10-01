@@ -47,6 +47,13 @@ export const PROPERTY_TEST_TIMEOUT_BASE_MS_ENV =
 const FAST_CHECK_DEFAULT_NUM_RUNS = 100;
 const DEFAULT_PROPERTY_TEST_TIMEOUT_MS = 5000;
 
+// fast-check types its time-limit plugin as `Plugin<unknown>`, and its run
+// details are invariant in the value type, so it is not assignable to
+// `Plugin<Ts>`. The plugin never reads generated values: it times each run
+// and clears its timer when the runs complete.
+const timeLimitPlugin = <Ts>(timeLimit: number): fc.Plugin<Ts> =>
+  fc.interruptAfterTimeLimit(timeLimit) as fc.Plugin<Ts>;
+
 // Treat the common CI values as enabled, but honor an explicit opt-out
 // (`CI=false`/`0`) so verbose reporting can be silenced locally.
 const isCi = (): boolean => {
@@ -110,10 +117,7 @@ export const propertyConfig = <Ts>(
     ...(replayPath === undefined ? {} : { path: replayPath }),
     ...(factor > 1 && timeLimit !== undefined
       ? {
-          plugins: [
-            ...(params.plugins ?? []),
-            fc.interruptAfterTimeLimit(timeLimit),
-          ],
+          plugins: [...(params.plugins ?? []), timeLimitPlugin<Ts>(timeLimit)],
         }
       : {}),
     numRuns: Math.ceil(baseNumRuns * factor),
