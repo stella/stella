@@ -700,17 +700,17 @@ const fastRequired = v.parse(
   JSON.parse(resultStep.env["FAST_REQUIRED"] ?? ""),
 );
 
-test("a fast-depth run requires each fast-required job its plan selected", () => {
+test("a fast-depth run requires every selected fast-required job to run", () => {
   expect(fastRequired.length).toBeGreaterThan(0);
   for (const job of fastRequired) {
+    expect(jobScopes).toHaveProperty(job);
     const scope = jobScopes[job];
-    // A scope-less or depth-gated job would always skip at fast depth.
-    expect(typeof scope, job).toBe("string");
+    // A scope-less job always runs; a scoped job must be selected by the plan.
     expect(heavyJobs, job).not.toContain(job);
-    if (typeof scope !== "string") {
-      continue;
-    }
     const event = EVENT.pullRequest;
+    expect(evaluateResult({ event, results: { [job]: "success" } }), job).toBe(
+      0,
+    );
     expect(evaluateResult({ event, results: { [job]: "skipped" } }), job).toBe(
       1,
     );
@@ -718,14 +718,16 @@ test("a fast-depth run requires each fast-required job its plan selected", () =>
       evaluateResult({ event, results: { [job]: "cancelled" } }),
       job,
     ).toBe(0);
-    expect(
-      evaluateResult({
-        event,
-        results: { [job]: "skipped" },
-        unplannedScopes: [scope],
-      }),
-      job,
-    ).toBe(0);
+    if (typeof scope === "string") {
+      expect(
+        evaluateResult({
+          event,
+          results: { [job]: "skipped" },
+          unplannedScopes: [scope],
+        }),
+        job,
+      ).toBe(0);
+    }
   }
   // Any other planned job may still skip at fast depth.
   for (const job of gatedJobs.filter((name) => !fastRequired.includes(name))) {
