@@ -2,6 +2,7 @@ import { rlsDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
+  createMembershipScopedDb,
   createSafeDb,
   createScopedDb,
   createTenantlessDb,
@@ -24,6 +25,20 @@ export const createRootScopedDb = ({
   // This helper exists only because some modules are not allowed
   // to import the RLS database handle directly.
   createScopedDb(rlsDb, workspaceIds, organizationId, userId);
+
+/** A deferred read uses current membership without adding stored matter IDs. */
+export const createRootMembershipScopedDb = ({
+  organizationId,
+  userId,
+}: {
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+}) =>
+  createMembershipScopedDb(rlsDb, {
+    organizationId,
+    userId,
+    serverValidatedWorkspaceIds: [],
+  });
 
 export const createRootSafeDb = ({
   organizationId,

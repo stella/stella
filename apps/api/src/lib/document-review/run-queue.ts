@@ -23,13 +23,8 @@ import { Temporal, DAY_IN_MS } from "@stll/time";
 
 import type { rootDb, Transaction } from "@/api/db/root";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import {
-  documentReviewFindings,
-  documentReviewRuns,
-  fields,
-} from "@/api/db/schema";
+import { documentReviewFindings, documentReviewRuns } from "@/api/db/schema";
 import { isAiExtractablePropertyContent } from "@/api/db/schema-validators";
-import type { FieldContent } from "@/api/db/schema-validators";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -37,7 +32,6 @@ import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
-import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import {
@@ -47,12 +41,8 @@ import {
 } from "@/api/lib/document-review/finding-write";
 import type { DocumentReviewFindingRow } from "@/api/lib/document-review/finding-write";
 import { fetchAndPrepareReviewFiles } from "@/api/lib/document-review/prepare-review-files";
-import type { ReviewFile } from "@/api/lib/document-review/prepare-review-files";
 import { REFERENCE_GRADE_ROLE } from "@/api/lib/document-review/reference-grade";
-import {
-  readReferencePassageTexts,
-  referencePassageIds,
-} from "@/api/lib/document-review/reference-passages";
+import { referencePassageIds } from "@/api/lib/document-review/reference-passages";
 import { extractAskContents } from "@/api/lib/document-review/review-extract";
 import type { ReviewAsk } from "@/api/lib/document-review/review-extract";
 import { buildFindings } from "@/api/lib/document-review/review-grade";
@@ -64,6 +54,8 @@ import type {
   DocumentReviewRunErrorCode,
 } from "@/api/lib/document-review/run-contract";
 import { finalizeReviewRun } from "@/api/lib/document-review/run-finalize";
+import { resolveDocumentReviewRunInputs } from "@/api/lib/document-review/run-inputs";
+import type { PinnedDocument } from "@/api/lib/document-review/run-inputs";
 import { planReviewRun } from "@/api/lib/document-review/run-plan";
 import type { ReviewRunPlan } from "@/api/lib/document-review/run-plan";
 import { errorTag } from "@/api/lib/errors/utils";
@@ -77,7 +69,11 @@ import {
 import type { ReconcileScanResult } from "@/api/lib/queue-reconcile-scan";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import { createBullMqConnection } from "@/api/lib/redis-client";
-import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
+import {
+  createRootMembershipScopedDb,
+  createRootSafeDb,
+  createRootScopedDb,
+} from "@/api/lib/root-scoped-db";
 import {
   brandPersistedDocumentReviewRunId,
   brandPersistedUserId,
@@ -98,7 +94,6 @@ import {
   loadClauseSnapshots,
   resolveTiers,
 } from "@/api/lib/workflow/resolve-standards";
-import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const QUEUE_NAME = "document-review-runs-v2";
 const QUEUE_CONTRACT_VERSION = 2;
@@ -348,14 +343,14 @@ export const reconcileQueuedDocumentReviewRuns = async ({
   return await reconcileQueuedRuns({ queue, readPage, runJob });
 };
 
-export const initDocumentReviewRunWorker = ({ db }: BullMqWorkerContext) => {
+export const initDocumentReviewRunWorker = () => {
   const worker = new Worker<DocumentReviewRunWorkerJobData>(
     QUEUE_NAME,
     async (job) => {
       if (job.data.contractVersion !== QUEUE_CONTRACT_VERSION) {
         panic("Document review v2 queue received a non-v2 job");
       }
-      await processDocumentReviewRunJob(db, job.data);
+      await processDocumentReviewRunJob(job.data);
     },
     {
       connection: createBullMqConnection(),
@@ -521,7 +516,6 @@ export const recordDocumentReviewRunModel = async ({
 };
 
 const processDocumentReviewRunJob = async (
-  db: Pick<typeof rootDb, "select">,
   data: DocumentReviewRunJobDataV1,
 ): Promise<void> => {
   const actor = brandActor(data);
@@ -533,7 +527,7 @@ const processDocumentReviewRunJob = async (
   }
 
   const outcome = await Result.tryPromise({
-    try: async () => await executeRun(db, actor, claimed),
+    try: async () => await executeRun(actor, claimed),
     catch: (cause) => cause,
   });
   if (Result.isError(outcome)) {
@@ -547,96 +541,6 @@ const processDocumentReviewRunJob = async (
   if (outcome.value !== null) {
     await setRunFailed(actor, outcome.value);
   }
-};
-
-/** A pinned document, as recorded on the run. */
-type PinnedDocument = {
-  workspaceId: SafeId<"workspace">;
-  fileFieldId: SafeId<"field">;
-  entityVersionId: SafeId<"entityVersion">;
-  contentSha256: string;
-};
-
-type ResolvePinnedFilesResult =
-  | { type: "resolved"; files: ReviewFile[] }
-  | { type: "failed"; errorCode: DocumentReviewRunErrorCode };
-
-/**
- * Resolve every pinned document back to the file it named, refusing anything
- * that has moved. `pdfFileId` is forced to null exactly as the interactive
- * path does: reference comparison and playbook citations both need folio block
- * identities, which the PDF preparation path does not carry.
- *
- * References pinned from other matters are read under a scope widened to
- * exactly the pinned matters, each pin held to the matter it was pinned in.
- */
-const resolvePinnedFiles = async (
-  actor: RunActor,
-  pins: readonly PinnedDocument[],
-): Promise<ResolvePinnedFilesResult> => {
-  const pinnedWorkspaceIds = [...new Set(pins.map((pin) => pin.workspaceId))];
-  const pinScopedDb = createRootScopedDb({
-    organizationId: actor.organizationId,
-    userId: actor.userId,
-    workspaceIds: pinnedWorkspaceIds,
-  });
-  const rows = await pinScopedDb((tx) =>
-    tx
-      .select({
-        id: fields.id,
-        workspaceId: fields.workspaceId,
-        entityVersionId: fields.entityVersionId,
-        content: fields.content,
-      })
-      .from(fields)
-      .where(
-        and(
-          inArray(fields.workspaceId, pinnedWorkspaceIds),
-          inArray(
-            fields.id,
-            pins.map((pin) => pin.fileFieldId),
-          ),
-          inArray(
-            fields.entityVersionId,
-            pins.map((pin) => pin.entityVersionId),
-          ),
-        ),
-      ),
-  );
-
-  const contentByPin = new Map<string, FieldContent>();
-  for (const row of rows) {
-    contentByPin.set(
-      `${row.workspaceId}:${row.id}:${row.entityVersionId}`,
-      row.content,
-    );
-  }
-
-  const files: ReviewFile[] = [];
-  for (const pin of pins) {
-    const content = contentByPin.get(
-      `${pin.workspaceId}:${pin.fileFieldId}:${pin.entityVersionId}`,
-    );
-    if (content?.type !== "file") {
-      return { type: "failed", errorCode: "pin_unresolved" };
-    }
-    if (content.sha256Hex !== pin.contentSha256) {
-      return { type: "failed", errorCode: "pin_content_changed" };
-    }
-    if (content.mimeType !== DOCX_MIME_TYPE) {
-      return { type: "failed", errorCode: "unsupported_format" };
-    }
-    files.push({
-      workspaceId: pin.workspaceId,
-      fileFieldId: pin.fileFieldId,
-      fileId: content.id,
-      mimeType: content.mimeType,
-      sha256Hex: content.sha256Hex,
-      encrypted: content.encrypted,
-      pdfFileId: null,
-    });
-  }
-  return { type: "resolved", files };
 };
 
 /** Everything both passes need from the organization's AI configuration,
@@ -658,7 +562,6 @@ type PassDeps = {
  * identical whether this returned or threw.
  */
 const executeRun = async (
-  db: Pick<typeof rootDb, "select">,
   actor: RunActor,
   run: ClaimedRun,
 ): Promise<DocumentReviewRunErrorCode | null> => {
@@ -683,7 +586,15 @@ const executeRun = async (
     })),
   ];
 
-  const resolved = await resolvePinnedFiles(actor, pins);
+  const resolved = await resolveDocumentReviewRunInputs(
+    createRootMembershipScopedDb(actor),
+    {
+      pins,
+      passageIds: referencePassageIds(
+        plan.positions.map((planned) => planned.position),
+      ),
+    },
+  );
   if (resolved.type === "failed") {
     return resolved.errorCode;
   }
@@ -768,7 +679,7 @@ const executeRun = async (
 
   const gradingOutcome = await runGradingPass({
     actor,
-    db,
+    passageTextById: resolved.passageTextById,
     deps,
     plan,
     run,
@@ -805,7 +716,7 @@ const executeRun = async (
  */
 const runGradingPass = async ({
   actor,
-  db,
+  passageTextById,
   deps,
   plan,
   run,
@@ -813,7 +724,7 @@ const runGradingPass = async ({
   targetFile,
 }: {
   actor: RunActor;
-  db: Pick<typeof rootDb, "select">;
+  passageTextById: ReadonlyMap<string, string>;
   deps: PassDeps;
   plan: ReviewRunPlan;
   run: ClaimedRun;
@@ -825,12 +736,6 @@ const runGradingPass = async ({
   }
 
   const positions = plan.positions.map((planned) => planned.position);
-  // The words behind every pinned passage, read with service access: the
-  // author proved they could read these rows when the run was created.
-  const passageTextById = await readReferencePassageTexts(
-    db,
-    referencePassageIds(positions),
-  );
   const clauseSnapshots = await actor.scopedDb(
     async (tx) =>
       await loadClauseSnapshots(tx, actor.organizationId, positions),
