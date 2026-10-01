@@ -1,5 +1,11 @@
 # @stll/ai-catalog
 
+## 0.3.2
+
+### Patch Changes
+
+- [#4191](https://github.com/stella/stella/pull/4191) [`1715d35`](https://github.com/stella/stella/commit/1715d356f41f0c1d6e049a1d3ed18a5f5f4811c4) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Offer GPT-6.1 Sol.
+
 ## 0.3.1
 
 ### Patch Changes
