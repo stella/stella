@@ -77,7 +77,7 @@ const listMcpToolsMock = mock(
 const listMcpResourcesMock = mock((): Resource[] => []);
 const readMcpResourceMock = mock((): ReadResourceResult => ({ contents: [] }));
 
-const handleMcpHttpRequest = createMcpHttpRequestHandler({
+const mcpHandlerDependencies = {
   actionSizePolicy: actionSizePolicyMock,
   authenticateMcpRequest: authenticateMcpRequestMock,
   captureError: (error, context) => {
@@ -94,7 +94,11 @@ const handleMcpHttpRequest = createMcpHttpRequestHandler({
   // per test through the module's own seam.
   recordMcpSessionInitialized,
   resolveMcpSessionContext: resolveMcpSessionContextMock,
-});
+} satisfies Parameters<typeof createMcpHttpRequestHandler>[0];
+
+const handleMcpHttpRequest = createMcpHttpRequestHandler(
+  mcpHandlerDependencies,
+);
 
 const createMcpRequest = (body: unknown) =>
   new Request("http://localhost/mcp", {
@@ -246,19 +250,8 @@ describe("handleMcpHttpRequest", () => {
           inputSchema: { type: "object", properties: {} },
         });
         const handler = createMcpHttpRequestHandler({
+          ...mcpHandlerDependencies,
           admitAction: async () => Result.err(refusalError),
-          authenticateMcpRequest: authenticateMcpRequestMock,
-          captureError: (error, context) => {
-            captureErrorMock(error, context);
-          },
-          getMcpToolDefinition: getMcpToolDefinitionMock,
-          getMcpToolRequiredScopesHint: getMcpToolRequiredScopesHintMock,
-          handleMcpToolCall: handleMcpToolCallMock,
-          listMcpResources: listMcpResourcesMock,
-          listMcpTools: listMcpToolsMock,
-          readMcpResource: readMcpResourceMock,
-          recordMcpSessionInitialized,
-          resolveMcpSessionContext: resolveMcpSessionContextMock,
         });
         const response = await runWithRequestId(
           "req_admission",
