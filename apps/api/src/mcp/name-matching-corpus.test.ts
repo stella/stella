@@ -41,6 +41,7 @@ const RECALL_FLOORS = {
   "inflected-diacritics-dropped": { held: 7, attributed: 4 },
   "legal-form-variant": { held: 11, attributed: 2 },
   split: { held: 9, attributed: 4 },
+  "common-word-person": { held: 5, attributed: 3 },
   "forced-exact": { held: 2, attributed: 2 },
   "forced-case": { held: 1, attributed: 1 },
   "forced-embedded": { held: 2, attributed: 2 },

@@ -22,6 +22,7 @@ export const NAME_MATCHING_REDACT_CLASSES = [
   "inflected-diacritics-dropped",
   "legal-form-variant",
   "split",
+  "common-word-person",
 ] as const;
 
 export const NAME_MATCHING_KEEP_CLASSES = [
@@ -97,6 +98,11 @@ export const NAME_MATCHING_ENTRIES: readonly GazetteerEntry[] = [
   entry(12, "Zuzana Kováčová", "person"),
   entry(13, "Harriet Wellbourne", "person"),
   entry(14, "Novák", "person"),
+  // Single-word person names that are also ordinary words.
+  entry(15, "Mark", "person"),
+  entry(16, "Will", "person"),
+  entry(17, "Grant", "person"),
+  entry(18, "Malý", "person"),
 ];
 
 const redact = (
@@ -383,6 +389,20 @@ export const NAME_MATCHING_CASES: readonly NameMatchingCase[] = [
   redact("split", "Witnessed by Harriet\tWellbourne.", "Harriet\tWellbourne"),
   redact("split", "Partner Acme A potvrdil.", "Acme A"),
   redact("split", "Jednatel Tomáš\r\nKubíček podepsal.", "Tomáš\r\nKubíček"),
+  // single-word person names that are also ordinary words
+  redact(
+    "common-word-person",
+    "Signed by Mark on behalf of the buyer.",
+    "Mark",
+  ),
+  redact(
+    "common-word-person",
+    "The notice was sent to Will yesterday.",
+    "Will",
+  ),
+  redact("common-word-person", "Approved by Grant on Monday.", "Grant"),
+  redact("common-word-person", "Za kupujícího jednal pan Malý.", "Malý"),
+  redact("common-word-person", "Jednali jsme s panem Malým.", "Malým"),
 
   // hex runs
   keep(
@@ -455,6 +475,7 @@ export const NAME_MATCHING_CASES: readonly NameMatchingCase[] = [
   keep("ordinary-word", "They came early.", "came"),
   keep("ordinary-word", "Treatment for acne is covered.", "acne"),
   keep("ordinary-word", "Use a marker on page two.", "marker"),
+  keep("ordinary-word", "Both parties are willing to settle.", "willing"),
   keep("ordinary-word", "A stable orbit was reached.", "orbit"),
   keep("ordinary-word", "The zebra crossing is closed.", "zebra"),
   keep("ordinary-word", "Meta fields are optional.", "Meta"),
