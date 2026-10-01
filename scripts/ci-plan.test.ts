@@ -1127,7 +1127,7 @@ test("direct web compiler checks materialize ignored API contracts before checki
             ).toContain("bun --filter @stll/api gen:web-api-types");
           }
         }
-        precedingCommands += `${commands  }\n`;
+        precedingCommands += `${commands}\n`;
       }
     }
   }
@@ -1158,7 +1158,9 @@ test("direct web compiler package scripts generate before inspecting types", () 
     );
     for (const [name, command] of Object.entries(scripts)) {
       const consumer = directCompiler.exec(command);
-      if (consumer === null) {continue;}
+      if (consumer === null) {
+        continue;
+      }
       consumers += 1;
       expect(
         command.slice(0, consumer.index),
