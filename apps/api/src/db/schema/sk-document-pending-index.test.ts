@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { getTableConfig, PgDialect } from "drizzle-orm/pg-core";
 
 import { caseLawDecisions } from "@/api/db/schema";
+import { DOCUMENT_OUTSTANDING_INDEX } from "@/api/lib/legal-search/sk-document-outstanding-index";
 import { pendingDeferredDocumentSql } from "@/api/lib/legal-search/sk-document-pending-sql";
 
 const OUTSTANDING_INDEX = "case_law_decisions_document_outstanding_idx";
@@ -19,19 +20,11 @@ test("the outstanding-document index uses the queue's exact pending predicate", 
   );
 });
 
-// The committed DDL must stay aligned with the predicate used by Drizzle.
-test("the concurrent migration preserves the shared outstanding predicate", async () => {
-  const migration = await Bun.file(
-    new URL(
-      "../../../drizzle/20261003123100_case_law_document_outstanding_idx/migration.sql",
-      import.meta.url,
-    ),
-  ).text();
-  const predicate = migration.match(/WHERE ([\s\S]*?);/u)?.at(1);
-  expect(predicate).toBeDefined();
+test("online repair creates the index with the shared outstanding predicate", () => {
   const expected = new PgDialect()
     .sqlToQuery(pendingDeferredDocumentSql(caseLawDecisions))
     .sql.replaceAll('"case_law_decisions".', "");
-  const normalized = (value: string) => value.replace(/\s+/gu, " ").trim();
-  expect(predicate && normalized(`(${predicate})`)).toBe(normalized(expected));
+  expect(DOCUMENT_OUTSTANDING_INDEX.createSql).toBe(
+    `CREATE INDEX CONCURRENTLY "case_law_decisions_document_outstanding_idx" ON public."case_law_decisions" USING btree ("source_id", "id") WHERE ${expected}`,
+  );
 });

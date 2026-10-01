@@ -34,7 +34,7 @@ describe("source-generic document fetch diagnostics", () => {
       const observation = documentFetchErrorOutcome("fixture-source", error);
       expect(observation.source).toBe("fixture-source");
       expect(observation.event).toBe(DOCUMENT_FETCH_EVENT.fetchOutcome);
-      expect(observation.outcome).toBe(outcome);
+      expect(outcome).toBe(observation.outcome);
       expect(JSON.stringify(observation)).not.toContain("private");
       expect(Object.keys(observation).toSorted()).toEqual(
         ("httpStatus" in error
@@ -78,10 +78,10 @@ describe("source-generic document fetch diagnostics", () => {
 
   test("wrapped transport failures retain their cause, with bounded cycle handling", () => {
     for (const [outcome, cause] of Object.entries(ERROR_FIXTURES)) {
-      expect(
+      expect(outcome).toBe(
         documentFetchErrorOutcome("source", new Error("wrapper", { cause }))
           .outcome,
-      ).toBe(outcome);
+      );
     }
     const circular = new Error("private");
     circular.cause = circular;

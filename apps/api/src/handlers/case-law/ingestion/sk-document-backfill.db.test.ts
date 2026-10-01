@@ -660,7 +660,7 @@ if (!databaseUrl || !runPostgresTests) {
         documentFetchAttempts: 1,
       });
       // Same decision date range, but attempted long enough ago.
-      await insertDecision({
+      const cooled = await insertDecision({
         caseNumber: `cooled-${suffix}`,
         fulltext: null,
         documentUrl: "https://example.test/cooled.pdf",

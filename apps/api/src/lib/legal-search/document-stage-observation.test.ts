@@ -86,9 +86,9 @@ describe("document-stage observation windows", () => {
               : undefined,
           ),
       ).toEqual([
-        ...Array.from({ length: transientFailures }, () => "http_5xx"),
+        ...Array.from({ length: transientFailures }, () => "http_5xx" as const),
         "ok",
-      ]);
+      ] as const);
     }
   });
 

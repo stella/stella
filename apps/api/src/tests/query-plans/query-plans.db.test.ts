@@ -46,6 +46,7 @@ import {
 import type { ScaleProfile } from "@/api/tests/query-plans/scale-profile";
 import {
   QUERY_PLAN_ROW_COUNT,
+  QUERY_PLAN_SAMPLE,
   seedQueryPlanData,
 } from "@/api/tests/query-plans/seed";
 
@@ -268,7 +269,11 @@ test("outstanding-document probe is an index-only LIMIT 1 lookup", async () => {
     QUERY_PLAN_REGISTRY.find(
       ({ id }) => id === "case-law.outstanding-document-probe",
     ) ?? panic("Outstanding-document probe is absent from the plan registry");
-  const scans = await explainPhysical(entry.role, entry.build, entry.planMode);
+  const scans = await explainPhysical(
+    entry.role,
+    entry.build,
+    "planMode" in entry ? entry.planMode : undefined,
+  );
   expect(scans.some(({ nodeType }) => nodeType === "Seq Scan")).toBe(false);
   expect(scans).toHaveLength(1);
   expect(scans[0]).toMatchObject({
