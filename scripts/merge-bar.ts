@@ -795,13 +795,13 @@ export const verifyFrontOfQueue = ({
         `pw sub pr ${repo}#${pullNumber} --on merged,closed,checks-failed`,
     };
   }
+  const reason =
+    entry !== undefined && !entry.jump
+      ? `GitHub queued the PR without the jump (position ${entry.position}).`
+      : "GitHub did not confirm the jump at the front of the queue.";
   return {
     exitCode: 1,
-    message:
-      `\nverdict: JUMP DROPPED — ${context}; ${formatQueuePlacementFailure(placement)}. ${ 
-      entry !== undefined && !entry.jump
-        ? `GitHub queued the PR without the jump (position ${entry.position}).`
-        : "GitHub did not confirm the jump at the front of the queue."}`,
+    message: `\nverdict: JUMP DROPPED — ${context}; ${formatQueuePlacementFailure(placement)}. ${reason}`,
   };
 };
 
