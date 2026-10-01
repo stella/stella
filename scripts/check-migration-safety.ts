@@ -1160,10 +1160,10 @@ const indexTokens = (statement: Statement): IndexToken[] => {
     index,
   }));
   for (const match of statement.text.matchAll(
-    /[A-Za-z_][A-Za-z0-9_$]*|[(),]/gu,
+    /[A-Za-z_][A-Za-z0-9_$]*|[(),.]/gu,
   )) {
     tokens.push({
-      kind: /^[(),]$/u.test(match[0]) ? "punctuation" : "word",
+      kind: /^[(),.]$/u.test(match[0]) ? "punctuation" : "word",
       value: match[0].toLowerCase(),
       index: match.index,
     });
