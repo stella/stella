@@ -2,7 +2,7 @@ import type { ReactElement } from "react";
 
 import {
   HelpCircleIcon,
-  MessageSquarePlusIcon,
+  NewChatIcon,
   PanelLeftIcon,
   PanelRightIcon,
 } from "@stll/ui/icons";
@@ -152,7 +152,7 @@ export function ProtectedPendingSkeleton({
             TOOLBAR_ROW_HEIGHT,
           )}
         >
-          <MessageSquarePlusIcon className="size-4" />
+          <NewChatIcon className="size-4" />
         </div>
       </div>
     </div>

@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
 import { createPipelineContext } from "@stll/anonymize";
@@ -7,7 +8,14 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { AnonymizeTextFieldsDependencies } from "@/api/mcp/anonymization-core";
 import { anonymizeTextFieldsWithDependencies } from "@/api/mcp/anonymization-core";
-import { buildFieldMarkers } from "@/api/mcp/field-markers";
+import {
+  AnonymizedFieldBoundaryError,
+  RESERVED_TOKEN_PLANE,
+} from "@/api/mcp/field-markers";
+import {
+  createRewritingAnonymizeDependencies,
+  replaceFirstFieldDelimiterToken,
+} from "@/api/tests/helpers/anonymize-pipeline-fakes";
 
 const dictionaries = {
   firstNames: {
@@ -18,37 +26,71 @@ const dictionaries = {
   },
 };
 
-describe("anonymizeTextFields", () => {
-  test("regenerates markers when crafted content contains a candidate delimiter", async () => {
-    const collidingMarker =
-      "[[[__stella_mcp_anonymized_field_00000000-0000-4000-8000-000000000001_1__]]]";
-    const uuidSequence = [
-      "00000000-0000-4000-8000-000000000001",
-      "00000000-0000-4000-8000-000000000002",
-    ];
-    let randomUUIDCallCount = 0;
-
-    const markers = buildFieldMarkers({
-      fieldCount: 2,
-      fields: ["Title", `Body ${collidingMarker} tail`],
-      randomUUID: () => {
-        randomUUIDCallCount += 1;
-        const next = uuidSequence.shift();
-        if (next === undefined) {
-          throw new Error("Expected another UUID");
-        }
-
-        return next;
-      },
-    });
-
-    expect(randomUUIDCallCount).toBe(2);
-    expect(markers).toEqual([
-      "[[[__stella_mcp_anonymized_field_00000000-0000-4000-8000-000000000002_0__]]]",
-      "[[[__stella_mcp_anonymized_field_00000000-0000-4000-8000-000000000002_1__]]]",
-    ]);
+const anonymizeWith = async (
+  dependencies: AnonymizeTextFieldsDependencies,
+  fields: string[],
+) =>
+  await anonymizeTextFieldsWithDependencies({
+    catalogs: {
+      type: "preloaded",
+      excludedCanonicals: [],
+      gazetteerEntries: [],
+    },
+    dependencies,
+    fields,
+    organizationId: toSafeId<"organization">("org_test"),
+    workspaceId: "00000000-0000-4000-8000-000000000001",
   });
 
+describe("anonymizing several fields in one call", () => {
+  test("returns every field unchanged when the pipeline keeps the text", async () => {
+    const fields = [
+      "Title",
+      "",
+      "  ",
+      "Body [[[__stella_mcp_anonymized_field_00000000-0000-7000-8000-000000000000_1__]]] tail",
+      `Private use ${String.fromCodePoint(RESERVED_TOKEN_PLANE.fieldDelimiter.start)} inside`,
+    ];
+
+    const result = await anonymizeWith(
+      createRewritingAnonymizeDependencies((text) => text),
+      fields,
+    );
+
+    expect(Result.isOk(result) ? result.value.fields : result.error).toEqual(
+      fields,
+    );
+  });
+
+  test("refuses output whose field delimiter was replaced by a placeholder", async () => {
+    // A typed error result the callers turn into a refusal, not a panic.
+    const result = await anonymizeWith(
+      createRewritingAnonymizeDependencies((text) =>
+        replaceFirstFieldDelimiterToken(text, "[ORGANIZATION_1]"),
+      ),
+      ["Title", "Body"],
+    );
+
+    expect(Result.isError(result) ? result.error : result.value).toBeInstanceOf(
+      AnonymizedFieldBoundaryError,
+    );
+  });
+
+  test("refuses output that lost the line break around a field delimiter", async () => {
+    const result = await anonymizeWith(
+      createRewritingAnonymizeDependencies((text) =>
+        text.replace("Title\n", "[ORGANIZATION_1]"),
+      ),
+      ["Title", "Body"],
+    );
+
+    expect(Result.isError(result) ? result.error : result.value).toBeInstanceOf(
+      AnonymizedFieldBoundaryError,
+    );
+  });
+});
+
+describe("anonymizeTextFields", () => {
   test("injects name dictionaries into the API anonymization pipeline", async () => {
     let capturedDictionaries: unknown;
     let gazetteerScope: unknown;

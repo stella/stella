@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
@@ -20,7 +21,11 @@ const anonymizeFields = async ({ fields }: { fields: string[] }) => {
     redactionMap.set("[PERSON_1]", NAME);
     return field.replaceAll(NAME, "[PERSON_1]");
   });
-  return { entityCount: redactionMap.size, fields: anonymized, redactionMap };
+  return Result.ok({
+    entityCount: redactionMap.size,
+    fields: anonymized,
+    redactionMap,
+  });
 };
 
 const boundaryFor = (sendMode: ChatSendMode) =>

@@ -1,6 +1,6 @@
 import { useTranslations } from "use-intl";
 
-import { MessageSquarePlusIcon } from "@stll/ui/icons";
+import { NewChatIcon } from "@stll/ui/icons";
 import { MenuItem } from "@stll/ui/menu";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
@@ -38,7 +38,7 @@ export const useRailContextMenu = ({
           )
         }
       >
-        <MessageSquarePlusIcon />
+        <NewChatIcon />
         {t("chat.newChat")}
       </MenuItem>
     ),

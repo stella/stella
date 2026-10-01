@@ -1,11 +1,20 @@
 import { describe, expect, test } from "bun:test";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
+import * as v from "valibot";
 
 import { parseBunLockText } from "./bun-lock-text";
 
 const script = path.join(import.meta.dirname, "detect-e2e-changes.sh");
-const runnerChromeAptSource = "/etc/apt/sources.list.d/google-chrome.list";
 const githubExpression = (value: string) => ["$", "{{ ", value, " }}"].join("");
 // Built, not written literally: a `${...}` in a plain string reads as a
 // broken template literal to the linter.
@@ -237,7 +246,10 @@ describe("detect-e2e-changes", () => {
     expect(plan).toContain("persist-credentials: false");
     expect(
       plan.match(/steps\.check\.outputs\.trusted == 'true'/gu),
-    ).toHaveLength(2);
+    ).toHaveLength(3);
+    expect(workflowStep(plan, "Resolve browser image")).toContain(
+      "if: steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch'",
+    );
     expect(workflow).not.toContain("needs.trust-check");
     expect(workflow).not.toContain("needs.ci-changes");
   });
@@ -280,7 +292,7 @@ describe("detect-e2e-changes", () => {
     expect(canaryRun).toBe(
       [
         ">-",
-        "          bun --filter @stll/web test:e2e --",
+        '          bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e --',
         "          e2e/specs/vite-dependency-canary.spec.ts",
         "          --project chromium",
       ].join("\n"),
@@ -752,130 +764,65 @@ describe("detect-e2e-changes", () => {
     expect(workflowStep(job, scope)).not.toContain("bun ");
   });
 
-  test("shares and launch-verifies a version-keyed browser cache", () => {
-    expect(
-      workflow.match(/uses: \.\/\.github\/actions\/setup-playwright/gu),
-    ).toHaveLength(3);
-    expect(productionE2eSetup).toContain(
-      "uses: ./.github/actions/setup-playwright",
-    );
+  test("browser setup verifies image executables without a host cache or installs", () => {
     const ciBrowser = workflowJob("ci-browser");
-    expect(ciBrowser).toContain("Check UI browser test scope");
-    expect(ciBrowser).toContain("apps/web/src/routes/dev");
-    expect(ciBrowser).toContain("Test UI browser interactions");
-    expect(ciBrowser).toContain("Test UI playground visuals");
-    expect(ciBrowser).toContain(
-      "bun --filter @stll/web test:e2e:ui-playground",
-    );
-    const uiRuntime = workflowStep(
-      ciBrowser,
-      "Install UI browser test runtime",
-    );
-    expect(uiRuntime).toContain("dependency-mode: preinstalled");
-    // Both desktop engines come from the pinned image.
-    expect(uiRuntime).toContain("browsers: chromium webkit");
-    expect(
-      workflowStep(ciBrowser, "Test desktop browser interactions"),
-    ).not.toContain("playwright install");
-    expect(marketingCapture).toContain(
-      [
-        "uses: ./.github/actions/setup-playwright",
-        "      with:",
-        "        dependency-mode: full",
-      ].join("\n"),
-    );
-    // The nightly and PR checks share that one definition instead of
-    // re-declaring the capture job.
+    const runtime = workflowStep(ciBrowser, "Install UI browser test runtime");
+    expect(runtime).toContain("dependency-mode: preinstalled");
+    expect(runtime).toContain("browsers: chromium webkit");
+    expect(marketingCapture).toContain("dependency-mode: container");
+    expect(playwrightSetup).not.toContain("actions/cache@");
+    expect(playwrightSetup).not.toContain("playwright install");
+    expect(playwrightSetup).not.toContain("install-deps.sh");
+    expect(playwrightSetup).toContain("--offline");
+    expect(playwrightSetup).toContain("verify-browsers.sh");
     expect(nightlyWorkflow).toContain(
       "uses: ./.github/workflows/marketing-screenshots.yml",
     );
-    expect(nightlyWorkflow).not.toContain("test:e2e:marketing");
-    expect(playwrightSetup).toContain(
-      'import metadata from "@playwright/test/package.json"',
-    );
-    expect(playwrightSetup).not.toContain("bunx playwright --version");
-    expect(playwrightSetup).toContain("~/.cache/ms-playwright");
-    // The browser set joins the key: a narrower entry must not report a hit
-    // for a run that needs more engines.
-    expect(playwrightSetup).toContain(
-      [
-        "playwright",
-        githubExpression("runner.os"),
-        githubExpression("runner.arch"),
-        githubExpression("steps.version.outputs.version"),
-        githubExpression("inputs.browsers"),
-      ].join("-"),
-    );
-    expect(playwrightSetup).toContain(
-      "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
-    );
-    expect(playwrightSetup).toContain("id: browser-cache");
-    expect(playwrightSetup).toContain("full|launch-verified|preinstalled");
-    expect(playwrightSetup).toContain(
-      "if: inputs.dependency-mode != 'preinstalled' && steps.browser-cache.outputs.cache-hit != 'true'",
-    );
-    expect(playwrightSetup).toContain(
-      "if: steps.browser-cache.outputs.cache-hit == 'true' && inputs.dependency-mode == 'full'",
-    );
-    expect(playwrightSetup).toContain(
-      `PLAYWRIGHT_CACHE_HIT: ${githubExpression("steps.browser-cache.outputs.cache-hit")}`,
-    );
-    expect(playwrightSetup).toContain("if verify_browsers; then");
-    expect(playwrightSetup).toContain(
-      `bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/install-deps.sh" "${shellExpansion("browsers[@]")}"`,
-    );
-    expect(
-      actionStep(playwrightSetup, "Disable runner Chrome apt source"),
-    ).toContain(runnerChromeAptSource);
-    expect(
-      playwrightSetup.indexOf("Disable runner Chrome apt source"),
-    ).toBeLessThan(playwrightSetup.indexOf("Install browsers on cache miss"));
   });
 
-  test("pins the browser container to the locked Playwright version", () => {
+  test("pins all browser commands to one image matching the locked Playwright version", () => {
     const lock = parseBunLockText(
       readFileSync(path.join(import.meta.dirname, "../bun.lock"), "utf-8"),
     );
-    if (typeof lock !== "object" || lock === null || !("packages" in lock)) {
-      throw new Error("Lockfile must contain packages");
-    }
-    const { packages } = lock;
     if (
-      typeof packages !== "object" ||
-      packages === null ||
-      !("@playwright/test" in packages)
+      typeof lock !== "object" ||
+      lock === null ||
+      !("packages" in lock) ||
+      typeof lock.packages !== "object" ||
+      lock.packages === null ||
+      !("@playwright/test" in lock.packages)
     ) {
       throw new Error("Lockfile must resolve Playwright");
     }
-    const entry = packages["@playwright/test"];
+    const entry = lock.packages["@playwright/test"];
     if (!Array.isArray(entry) || typeof entry.at(0) !== "string") {
       throw new TypeError("Playwright resolution must contain a version");
     }
     const resolution = String(entry.at(0));
     expect(resolution).toStartWith("@playwright/test@");
     const version = resolution.slice("@playwright/test@".length);
-    const job = workflowJob("ci-browser");
-    expect(job).toContain(
-      `image: mcr.microsoft.com/playwright:v${version}-noble@sha256:`,
+    const image = readFileSync(
+      path.join(
+        import.meta.dirname,
+        "../.github/actions/setup-playwright/image.txt",
+      ),
+      "utf-8",
+    ).trim();
+    expect(image).toMatch(
+      /^mcr\.microsoft\.com\/playwright:v[\d.]+-noble@sha256:[a-f0-9]{64}$/u,
     );
-    expect(job).toMatch(/playwright:v[\d.]+-noble@sha256:[a-f0-9]{64}\n/u);
-    expect(job).toContain("shell: bash");
-    const bunSetup = workflowStep(job, "Setup Bun");
+    expect(image).toStartWith(
+      `mcr.microsoft.com/playwright:v${version}-noble@sha256:`,
+    );
+    expect(workflowJob("ci-browser")).toContain(
+      `image: ${githubExpression("needs.ci-plan.outputs.playwright_image")}`,
+    );
+    expect(workflowJob("ci-plan")).toContain(
+      "cat .github/actions/setup-playwright/image.txt",
+    );
+    const bunSetup = workflowStep(workflowJob("ci-browser"), "Setup Bun");
     expect(bunSetup).toContain("@oven/bun-linux-x64@$version");
     expect(bunSetup).toContain("--ignore-scripts");
-    expect(bunSetup).toContain('require("./package.json").packageManager');
-    expect(bunSetup).not.toContain("oven-sh/setup-bun");
-    expect(bunSetup).not.toContain("apt-get");
-    expect(job).not.toContain("playwright install");
-    expect(actionStep(playwrightSetup, "Restore Playwright browser")).toContain(
-      "if: inputs.dependency-mode != 'preinstalled'",
-    );
-    expect(
-      actionStep(playwrightSetup, "Disable runner Chrome apt source"),
-    ).toContain("if: inputs.dependency-mode != 'preinstalled'");
-    expect(
-      actionStep(playwrightSetup, "Verify browser host dependencies"),
-    ).toContain('"$DEPENDENCY_MODE" == "preinstalled"');
   });
 
   test("isolates cross-engine stack redaction from Chromium E2E", () => {
@@ -917,19 +864,17 @@ describe("detect-e2e-changes", () => {
     expect(stackRedaction).toContain(
       "needs.ci-plan.outputs.stack_redaction_browsers_required == 'true'",
     );
-    expect(stackRedaction).toContain("bunx playwright install firefox webkit");
     expect(
-      workflowStep(stackRedaction, "Disable runner Chrome apt source"),
-    ).toContain(runnerChromeAptSource);
-    expect(
-      stackRedaction.indexOf("Disable runner Chrome apt source"),
-    ).toBeLessThan(stackRedaction.indexOf("Install Firefox and WebKit"));
+      workflowStep(
+        stackRedaction,
+        "Verify Firefox and WebKit in the pinned image",
+      ),
+    ).toContain("browsers: firefox webkit");
+    expect(stackRedaction).toContain("run-in-image.sh");
     expect(stackRedaction).toContain(
       "bun --filter @stll/web test:e2e:stack-redaction",
     );
-    expect(stackRedaction).not.toContain(
-      "uses: ./.github/actions/setup-playwright",
-    );
+    expect(stackRedaction).not.toContain("playwright install");
     expect(result).toContain("stack-redaction-browsers");
   });
 
@@ -1022,4 +967,196 @@ describe("detect-e2e-changes", () => {
     );
     expect(workflow).not.toContain("path: apps/web/test-results/blob-report/");
   });
+});
+
+test("every workflow browser command uses the pinned image and no reachable browser action installs system packages", () => {
+  const root = path.resolve(import.meta.dirname, "..");
+  const stepSchema = v.object({
+    run: v.optional(v.string()),
+    uses: v.optional(v.string()),
+  });
+  const actionSteps = new Map<string, v.InferOutput<typeof stepSchema>[]>();
+  const forbidden =
+    /\b(?:apt-get|apt|dpkg)\b|playwright\s+install(?:-deps)?\b/u;
+  const browserCommand = (run: string) =>
+    run.split("\n").some((line) => {
+      const command = line.trimStart();
+      if (command.startsWith("echo ") || command.startsWith("#")) {
+        return false;
+      }
+      return (
+        command.includes("bun ") &&
+        (command.includes("test:e2e") || command.includes("test:browser"))
+      );
+    });
+  const reachableSteps = (
+    steps: v.InferOutput<typeof stepSchema>[],
+  ): v.InferOutput<typeof stepSchema>[] =>
+    steps.flatMap((step) => {
+      if (!step.uses?.startsWith("./.github/actions/")) {
+        return [step];
+      }
+      const cached = actionSteps.get(step.uses);
+      if (cached !== undefined) {
+        return [step, ...cached];
+      }
+      const action = v.parse(
+        v.object({ runs: v.object({ steps: v.array(stepSchema) }) }),
+        Bun.YAML.parse(
+          readFileSync(path.join(root, step.uses, "action.yml"), "utf-8"),
+        ),
+      );
+      const reached = reachableSteps(action.runs.steps);
+      actionSteps.set(step.uses, reached);
+      return [step, ...reached];
+    });
+  for (const file of readdirSync(path.join(root, ".github/workflows")).filter(
+    (name) => name.endsWith(".yml"),
+  )) {
+    const jobs = v.parse(
+      v.object({
+        jobs: v.record(
+          v.string(),
+          v.object({
+            steps: v.optional(v.array(stepSchema)),
+            container: v.optional(v.object({ image: v.string() })),
+          }),
+        ),
+      }),
+      Bun.YAML.parse(
+        readFileSync(path.join(root, ".github/workflows", file), "utf-8"),
+      ),
+    ).jobs;
+    for (const [job, body] of Object.entries(jobs)) {
+      const steps = reachableSteps(body.steps ?? []);
+      const imageJob = file === "ci.yml" && job === "ci-browser";
+      const browserSteps = steps.filter((step) =>
+        browserCommand(step.run ?? ""),
+      );
+      if (!imageJob && browserSteps.length === 0) {
+        continue;
+      }
+      if (imageJob) {
+        expect(body.container?.image).toBe(
+          githubExpression("needs.ci-plan.outputs.playwright_image"),
+        );
+      }
+      for (const step of steps) {
+        expect(step.run ?? "", `${file}:${job}`).not.toMatch(forbidden);
+      }
+      if (!imageJob) {
+        for (const step of browserSteps) {
+          expect(step.run, `${file}:${job}`).toContain(
+            ".github/actions/setup-playwright/run-in-image.sh",
+          );
+        }
+      }
+    }
+  }
+  for (const file of readdirSync(
+    path.join(root, ".github/actions/setup-playwright"),
+  ).filter((name) => name.endsWith(".sh"))) {
+    expect(
+      readFileSync(
+        path.join(root, ".github/actions/setup-playwright", file),
+        "utf-8",
+      ),
+      file,
+    ).not.toMatch(forbidden);
+  }
+  const verify = readFileSync(
+    path.join(root, ".github/actions/setup-playwright/verify-browsers.sh"),
+    "utf-8",
+  );
+  expect(verify).toContain('executable.startsWith("/ms-playwright/")');
+  expect(verify).toContain("existsSync(executable)");
+  expect(verify).toContain("playwright[name].launch()");
+});
+
+test("browser image runner preserves argv, cwd, verdict and only browser inputs, including offline verification", () => {
+  const directory = mkdtempSync(
+    path.join(tmpdir(), "playwright-image-runner-"),
+  );
+  const runner = path.resolve(
+    import.meta.dirname,
+    "../.github/actions/setup-playwright/run-in-image.sh",
+  );
+  const root = path.resolve(import.meta.dirname, "..");
+  const cache = path.join(directory, ".bun/install/cache");
+  mkdirSync(cache, { recursive: true });
+  writeFileSync(
+    path.join(directory, "bun"),
+    '#!/usr/bin/env bash\ncase "$*" in\n  "-p process.execPath") echo /native/bun ;;\n  "pm cache") printf "%s\\n" "$BUN_INSTALL_CACHE_DIR" ;;\n  *) exit 4 ;;\nesac\n',
+    { mode: 0o755 },
+  );
+  writeFileSync(
+    path.join(directory, "docker"),
+    '#!/usr/bin/env bash\nprintf "%s\\n" "$@"\nexit 17\n',
+    { mode: 0o755 },
+  );
+  try {
+    for (const offline of [false, true]) {
+      const result = Bun.spawnSync(
+        [
+          "bash",
+          runner,
+          ...(offline ? ["--offline"] : []),
+          "bun",
+          "--filter",
+          "@stll/web",
+          "test:e2e",
+          "--",
+          "--grep=spaces and $literal",
+        ],
+        {
+          cwd: path.join(root, "apps/web"),
+          env: {
+            PATH: `${directory}:${process.env["PATH"] ?? ""}`,
+            GITHUB_WORKSPACE: root,
+            BUN_INSTALL_CACHE_DIR: cache,
+            CI: "true",
+            E2E_EXECUTION_PROFILE: "network-baseline",
+            E2E_EDGE_HEADER_VALUE: "fixture",
+            GH_TOKEN: "must-not-forward",
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      expect(result.exitCode, new TextDecoder().decode(result.stderr)).toBe(17);
+      const args = new TextDecoder().decode(result.stdout).trim().split("\n");
+      expect(args.at(args.indexOf("--network") + 1)).toBe(
+        offline ? "none" : "host",
+      );
+      expect(args.at(args.indexOf("--workdir") + 1)).toBe(
+        path.join(root, "apps/web"),
+      );
+      expect(args).toContain(`${root}:${root}`);
+      expect(args).toContain(`${cache}:${cache}:ro`);
+      expect(args).toContain(`BUN_INSTALL_CACHE_DIR=${cache}`);
+      const hostHome = process.env["HOME"];
+      if (hostHome !== undefined) {
+        expect(args).not.toContain(`${hostHome}:${hostHome}`);
+      }
+      expect(args).toContain("/native/bun:/usr/local/bin/bun:ro");
+      expect(args).toContain("/native/bun:/usr/local/bin/bunx:ro");
+      expect(args).toContain("PLAYWRIGHT_BROWSERS_PATH=/ms-playwright");
+      expect(args).toContain("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1");
+      expect(args).toContain("E2E_EXECUTION_PROFILE");
+      expect(args).toContain("E2E_EDGE_HEADER_VALUE");
+      expect(args).not.toContain("GH_TOKEN");
+      expect(args).not.toContain("must-not-forward");
+      expect(args).not.toContain("/var/run/docker.sock");
+      expect(args.slice(-6)).toEqual([
+        "bun",
+        "--filter",
+        "@stll/web",
+        "test:e2e",
+        "--",
+        "--grep=spaces and $literal",
+      ]);
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });

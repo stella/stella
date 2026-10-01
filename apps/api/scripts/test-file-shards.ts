@@ -1,0 +1,105 @@
+import { panic } from "better-result";
+
+export const API_TEST_SHARD_ENV = "API_TEST_SHARD";
+
+type PartitionTestFilesOptions = {
+  files: readonly string[];
+  durations: Readonly<Record<string, number>>;
+  count: number;
+};
+
+/** Longest-first scheduling; missing measurements use the live files' median. */
+export const partitionTestFiles = ({
+  files,
+  durations,
+  count,
+}: PartitionTestFilesOptions): string[][] => {
+  if (!Number.isSafeInteger(count) || count < 1) {
+    panic("Test shard count must be a positive integer");
+  }
+  if (new Set(files).size !== files.length) {
+    panic("Test paths must be unique");
+  }
+  const measured = files
+    .flatMap((file) => {
+      const duration = durations[file];
+      if (duration === undefined) {
+        return [];
+      }
+      if (!Number.isFinite(duration) || duration < 0) {
+        panic(`Invalid duration for ${file}`);
+      }
+      return [duration];
+    })
+    .toSorted((a, b) => a - b);
+  const fallback = measured.at(Math.floor(measured.length / 2)) ?? 1;
+  if (count === 1) {
+    return [[...files]];
+  }
+  const weight = (file: string) => durations[file] ?? fallback;
+  const bins = Array.from({ length: count }, () => ({
+    files: new Set<string>(),
+    seconds: 0,
+  }));
+  for (const file of files.toSorted(
+    (a, b) => weight(b) - weight(a) || (a < b ? -1 : Number(a > b)),
+  )) {
+    let bin = bins.at(0);
+    if (bin === undefined) {
+      panic("Test shard bins must exist");
+    }
+    for (const candidate of bins) {
+      if (candidate.seconds < bin.seconds) {
+        bin = candidate;
+      }
+    }
+    bin.files.add(file);
+    bin.seconds += weight(file);
+  }
+  return bins.map((bin) => files.filter((file) => bin.files.has(file)));
+};
+
+export const parseApiTestShard = (value: string | undefined) => {
+  if (value === undefined || value === "") {
+    return null;
+  }
+  const match = /^(?<index>[1-9]\d*)\/(?<count>[1-9]\d*)$/u.exec(value);
+  const index = Number(match?.groups?.["index"]);
+  const count = Number(match?.groups?.["count"]);
+  if (
+    !Number.isSafeInteger(index) ||
+    !Number.isSafeInteger(count) ||
+    index > count
+  ) {
+    panic(`Invalid ${API_TEST_SHARD_ENV}: expected i/n with 1 <= i <= n`);
+  }
+  return { index, count };
+};
+
+type SelectApiTestFilesOptions = {
+  files: readonly string[];
+  durations: Readonly<Record<string, number>>;
+  shardValue: string | undefined;
+};
+
+export const selectApiTestFiles = ({
+  files,
+  durations,
+  shardValue,
+}: SelectApiTestFilesOptions) => {
+  const shard = parseApiTestShard(shardValue);
+  if (shard === null) {
+    return { testPaths: files, shard };
+  }
+  const testPaths = partitionTestFiles({
+    files,
+    durations,
+    count: shard.count,
+  }).at(shard.index - 1);
+  if (testPaths === undefined || testPaths.length === 0) {
+    panic(
+      `API test shard ${shard.index}/${shard.count} selected zero test files`,
+    );
+  }
+  return { testPaths, shard };
+};
