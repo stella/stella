@@ -1,7 +1,7 @@
-import { and, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import { fields } from "@/api/db/schema";
+import { entityVersions, fields } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ReviewFile } from "@/api/lib/document-review/prepare-review-files";
@@ -45,6 +45,14 @@ export const resolveDocumentReviewRunInputs = async (
         content: fields.content,
       })
       .from(fields)
+      .innerJoin(
+        entityVersions,
+        and(
+          eq(entityVersions.id, fields.entityVersionId),
+          eq(entityVersions.workspaceId, fields.workspaceId),
+          isNull(entityVersions.deletedAt),
+        ),
+      )
       .where(
         and(
           inArray(fields.workspaceId, pinnedWorkspaceIds),

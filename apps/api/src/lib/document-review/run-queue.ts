@@ -351,7 +351,7 @@ export const initDocumentReviewRunWorker = ({ db }: BullMqWorkerContext) => {
       if (job.data.contractVersion !== QUEUE_CONTRACT_VERSION) {
         panic("Document review v2 queue received a non-v2 job");
       }
-      await processDocumentReviewRunJob(job.data);
+      await processDocumentReviewRun(brandActor(job.data));
     },
     {
       connection: createBullMqConnection(),
@@ -419,6 +419,7 @@ export const initDocumentReviewRunWorker = ({ db }: BullMqWorkerContext) => {
 
 type RunActor = {
   scopedDb: ScopedDb;
+  inputDb: ScopedDb;
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
@@ -443,6 +444,10 @@ const brandActor = (data: DocumentReviewRunJobDataV1): RunActor => {
     userId,
     runId: brandPersistedDocumentReviewRunId(data.runId),
     scopedDb: createRootScopedDb(tenant),
+    inputDb: createRootMembershipScopedDb({
+      organizationId: branded.organizationId,
+      userId,
+    }),
     safeDb: createRootSafeDb(tenant),
   };
 };
@@ -516,10 +521,9 @@ export const recordDocumentReviewRunModel = async ({
     );
 };
 
-const processDocumentReviewRunJob = async (
-  data: DocumentReviewRunJobDataV1,
+export const processDocumentReviewRun = async (
+  actor: RunActor,
 ): Promise<void> => {
-  const actor = brandActor(data);
   const claimed = await claimRun(actor);
   // A re-delivered job, an already-terminal run, or a deleted row: nothing to
   // do, and nothing to fail.
@@ -587,15 +591,12 @@ const executeRun = async (
     })),
   ];
 
-  const resolved = await resolveDocumentReviewRunInputs(
-    createRootMembershipScopedDb(actor),
-    {
-      pins,
-      passageIds: referencePassageIds(
-        plan.positions.map((planned) => planned.position),
-      ),
-    },
-  );
+  const resolved = await resolveDocumentReviewRunInputs(actor.inputDb, {
+    pins,
+    passageIds: referencePassageIds(
+      plan.positions.map((planned) => planned.position),
+    ),
+  });
   if (resolved.type === "failed") {
     return resolved.errorCode;
   }

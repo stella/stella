@@ -7,7 +7,7 @@ import {
   createScopedDb,
   createTenantlessDb,
 } from "@/api/db/scoped";
-import type { WorkspaceScope } from "@/api/db/scoped";
+import type { CurrentMembershipScope, RlsDatabase } from "@/api/db/scoped";
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import {
   brandPersistedUserId,
@@ -16,38 +16,55 @@ import {
 
 type RootScopedDbOptions = {
   organizationId: SafeId<"organization">;
-  userId: SafeId<"user"> | null;
 } & (
-  | { workspaceIds: SafeId<"workspace">[] }
-  | { workspaceScope: WorkspaceScope }
+  | { workspaceIds: SafeId<"workspace">[]; userId: SafeId<"user"> | null }
+  | { workspaceScope: CurrentMembershipScope; userId: SafeId<"user"> }
 );
 
-export const createRootScopedDb = (options: RootScopedDbOptions) =>
+export const createRootScopedDb = (
+  options: RootScopedDbOptions,
+  database: RlsDatabase<Transaction> = rlsDb,
+) => {
   // This helper exists only because some modules are not allowed
   // to import the RLS database handle directly.
-  createScopedDb(
-    rlsDb,
-    "workspaceScope" in options ? options.workspaceScope : options.workspaceIds,
+  if ("workspaceScope" in options) {
+    return createScopedDb(
+      database,
+      options.workspaceScope,
+      options.organizationId,
+      options.userId,
+    );
+  }
+  return createScopedDb(
+    database,
+    options.workspaceIds,
     options.organizationId,
     options.userId,
   );
+};
 
 /** A deferred read uses current membership without adding stored matter IDs. */
-export const createRootMembershipScopedDb = ({
-  organizationId,
-  userId,
-}: {
-  organizationId: SafeId<"organization">;
-  userId: SafeId<"user">;
-}) =>
-  createRootScopedDb({
+export const createRootMembershipScopedDb = (
+  {
     organizationId,
     userId,
-    workspaceScope: {
-      type: WORKSPACE_ACCESS_MODE.membership,
-      serverValidatedWorkspaceIds: [],
+  }: {
+    organizationId: SafeId<"organization">;
+    userId: SafeId<"user">;
+  },
+  database?: RlsDatabase<Transaction>,
+) =>
+  createRootScopedDb(
+    {
+      organizationId,
+      userId,
+      workspaceScope: {
+        type: WORKSPACE_ACCESS_MODE.membership,
+        serverValidatedWorkspaceIds: [],
+      },
     },
-  });
+    database,
+  );
 
 export const createRootSafeDb = ({
   organizationId,

@@ -10,15 +10,17 @@ import {
 import { eq } from "drizzle-orm";
 
 import { member } from "@/api/db/auth-schema";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { Transaction } from "@/api/db/root";
 import {
   documentReviewReferencePassages,
+  entityVersions,
   fields,
   workspaceMembers,
 } from "@/api/db/schema";
-import { createMembershipScopedDb } from "@/api/db/scoped";
+import type { RlsDatabase } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import { resolveDocumentReviewRunInputs } from "@/api/lib/document-review/run-inputs";
+import { createRootMembershipScopedDb } from "@/api/lib/root-scoped-db";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -72,12 +74,12 @@ const inputs = {
   pins: [targetPin, referencePin],
   passageIds: [passageId],
 };
-const scopedDb = asTestRaw<ScopedDb>(
-  createMembershipScopedDb(testDb, {
+const scopedDb = createRootMembershipScopedDb(
+  {
     organizationId: ids.orgA,
     userId: ids.userA1,
-    serverValidatedWorkspaceIds: [],
-  }),
+  },
+  asTestRaw<RlsDatabase<Transaction>>(testDb),
 );
 
 beforeAll(async () => {
@@ -107,6 +109,10 @@ afterEach(async () => {
     .update(fields)
     .set({ content: referenceContent })
     .where(eq(fields.id, ids.fieldA2));
+  await testDb
+    .update(entityVersions)
+    .set({ deletedAt: null })
+    .where(eq(entityVersions.id, ids.entityVersionA1));
 });
 
 afterAll(async () => {
@@ -174,6 +180,54 @@ describe("document review run inputs", () => {
       type: "failed",
       errorCode: "pin_unresolved",
     });
+  });
+
+  test("resolves pins only within the current organization", async () => {
+    const otherOrganizationScope = createRootMembershipScopedDb(
+      {
+        organizationId: ids.orgB,
+        userId: ids.userB1,
+      },
+      asTestRaw<RlsDatabase<Transaction>>(testDb),
+    );
+    const otherOrganizationInputs = {
+      pins: [
+        {
+          workspaceId: ids.wsB1,
+          fileFieldId: ids.fileFieldB1,
+          entityVersionId: ids.entityVersionB1,
+          contentSha256: "b".repeat(64),
+        },
+      ],
+      passageIds: [],
+    };
+    expect(
+      (
+        await resolveDocumentReviewRunInputs(
+          otherOrganizationScope,
+          otherOrganizationInputs,
+        )
+      ).type,
+    ).toBe("resolved");
+    expect(
+      await resolveDocumentReviewRunInputs(scopedDb, otherOrganizationInputs),
+    ).toEqual({ type: "failed", errorCode: "pin_unresolved" });
+  });
+
+  test("does not resolve pins for deleted versions", async () => {
+    expect((await resolveDocumentReviewRunInputs(scopedDb, inputs)).type).toBe(
+      "resolved",
+    );
+    await testDb
+      .update(entityVersions)
+      .set({ deletedAt: new Date() })
+      .where(eq(entityVersions.id, ids.entityVersionA1));
+    expect(
+      await resolveDocumentReviewRunInputs(scopedDb, {
+        pins: [targetPin],
+        passageIds: [],
+      }),
+    ).toEqual({ type: "failed", errorCode: "pin_unresolved" });
   });
 
   test("reports an unavailable file field", async () => {

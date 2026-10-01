@@ -74,7 +74,7 @@ export type SafeDbRetryConfig<E = unknown> = {
 
 type SafeDbError = DatabaseError | DatabaseRlsError | UnhandledException;
 
-export type WorkspaceScope =
+type WorkspaceScope =
   | {
       type: typeof WORKSPACE_ACCESS_MODE.explicit;
       workspaceIds: SafeId<"workspace">[];
@@ -94,6 +94,23 @@ type RunScopedTransactionOptions<
   userId: SafeId<"user"> | null;
   workspaceScope: WorkspaceScope;
 };
+
+export type CurrentMembershipScope = {
+  type: typeof WORKSPACE_ACCESS_MODE.membership;
+  serverValidatedWorkspaceIds: readonly [];
+};
+
+type ScopedDbArgs =
+  | [
+      workspaceIds: SafeId<"workspace">[],
+      organizationId: SafeId<"organization">,
+      userId: SafeId<"user"> | null,
+    ]
+  | [
+      workspaceScope: CurrentMembershipScope,
+      organizationId: SafeId<"organization">,
+      userId: SafeId<"user">,
+    ];
 
 const runScopedTransaction = async <
   TTransaction extends ScopedTransactionBase,
@@ -146,9 +163,7 @@ const runScopedTransaction = async <
 export const createScopedDb =
   <TTransaction extends ScopedTransactionBase>(
     database: RlsDatabase<TTransaction>,
-    workspaceScope: SafeId<"workspace">[] | WorkspaceScope,
-    organizationId: SafeId<"organization">,
-    userId: SafeId<"user"> | null,
+    ...[workspaceScope, organizationId, userId]: ScopedDbArgs
   ) =>
   async <T>(fn: (tx: TTransaction) => Promise<T>): Promise<T> =>
     await runScopedTransaction({
