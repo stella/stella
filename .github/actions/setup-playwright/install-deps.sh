@@ -3,14 +3,16 @@ set -euo pipefail
 
 # Playwright invokes apt itself; configure its child processes, too.
 sudo tee /etc/apt/apt.conf.d/80-playwright-retries >/dev/null <<'APT'
+DPkg::Lock::Timeout "300";
 Acquire::Retries "3";
 Acquire::http::Timeout "20";
 Acquire::https::Timeout "20";
 APT
 
 # Bound the whole attempt: a mirror can keep transferring too slowly for an
-# inactivity timeout to fire. A failed attempt may have installed some packages.
-if timeout --kill-after=10s 180s bunx playwright install-deps "$@"; then
+# inactivity timeout to fire. Allow the 300-second lock wait plus 180 seconds
+# for installation. A failed attempt may have installed some packages.
+if timeout --kill-after=10s 480s bunx playwright install-deps "$@"; then
   exit 0
 fi
 
@@ -27,4 +29,4 @@ if ! sudo timeout --kill-after=10s 60s dpkg --configure -a; then
   echo "::warning::dpkg recovery did not complete; the final dependency install must repair or fail"
 fi
 
-timeout --kill-after=10s 180s bunx playwright install-deps "$@"
+timeout --kill-after=10s 480s bunx playwright install-deps "$@"

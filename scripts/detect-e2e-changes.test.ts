@@ -830,6 +830,35 @@ describe("detect-e2e-changes", () => {
     ).toBeLessThan(playwrightSetup.indexOf("Install browsers on cache miss"));
   });
 
+  test("browser dependency installs wait for the apt lock within their deadline", () => {
+    const installer = readFileSync(
+      path.join(
+        import.meta.dirname,
+        "../.github/actions/setup-playwright/install-deps.sh",
+      ),
+      "utf-8",
+    );
+    const aptConfig = installer.match(/<<'APT'\n([\s\S]*?)\nAPT/u)?.at(1);
+    expect(aptConfig).toContain('DPkg::Lock::Timeout "300";');
+    const deadlines = [
+      ...installer.matchAll(
+        /timeout --kill-after=10s (\d+)s bunx playwright install-deps/gu,
+      ),
+    ];
+    expect(deadlines).toHaveLength(2);
+    for (const deadline of deadlines) {
+      expect(Number(deadline.at(1))).toBeGreaterThan(300);
+    }
+    expect(
+      workflowStep(
+        workflowJob("stack-redaction-browsers"),
+        "Install Firefox and WebKit",
+      ),
+    ).toContain(
+      'bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/install-deps.sh" firefox webkit',
+    );
+  });
+
   test("pins the browser container to the locked Playwright version", () => {
     const lock = parseBunLockText(
       readFileSync(path.join(import.meta.dirname, "../bun.lock"), "utf-8"),
