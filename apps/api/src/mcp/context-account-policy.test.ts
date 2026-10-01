@@ -91,9 +91,14 @@ describe("MCP account authorization", () => {
                 });
               },
             });
-            await expect(context).rejects.toBeInstanceOf(
-              McpOrganizationAccessError,
-            );
+            const refused = await Result.tryPromise({
+              try: async () => await context,
+              catch: (cause) => cause,
+            });
+            expect(Result.isError(refused)).toBe(true);
+            if (Result.isError(refused)) {
+              expect(refused.error).toBeInstanceOf(McpOrganizationAccessError);
+            }
             expect(membershipReads).toBe(1);
             expect(accountChecks).toBe(1);
           }
@@ -132,8 +137,13 @@ describe("MCP account authorization", () => {
         },
       },
     );
-    await expect(context).rejects.toMatchObject({
-      message: "Token was issued for a previous membership",
+    const refused = await Result.tryPromise({
+      try: async () => await context,
+      catch: (cause) => cause,
+    });
+    expect(refused).toMatchObject({
+      status: "error",
+      error: { message: "Token was issued for a previous membership" },
     });
     expect(accountChecks).toBe(1);
   });

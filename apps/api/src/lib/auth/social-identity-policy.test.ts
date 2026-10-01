@@ -127,7 +127,9 @@ describe("social identity policy", () => {
     async (required) => {
       for (const verified of [false, true]) {
         const warnings: LogRecord[] = [];
-        setLogSinkForTesting((record) => warnings.push(record));
+        setLogSinkForTesting((record) => {
+          warnings.push(record);
+        });
         try {
           const auth = betterAuth({
             baseURL: "http://localhost:3001",
@@ -227,7 +229,9 @@ describe("social identity policy", () => {
               validateUserInfo: createSocialIdentityValidation({
                 tenantId: configured,
                 requireMicrosoftVerifiedEmailClaim: required,
-                warn: (attributes) => warnings.push(attributes),
+                warn: (attributes) => {
+                  warnings.push(attributes);
+                },
               }),
             },
             socialProviders: {

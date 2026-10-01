@@ -29,7 +29,9 @@ describe("account access policy", () => {
       for (const accountEmail of [undefined, email]) {
         for (const binding of [undefined, organizationId]) {
           const records: LogRecord[] = [];
-          setLogSinkForTesting((record) => records.push(record));
+          setLogSinkForTesting((record) => {
+            records.push(record);
+          });
           warnDemoAccountConfiguration(
             { email: accountEmail, organizationId: binding },
             (attributes) =>

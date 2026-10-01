@@ -198,6 +198,7 @@ const buildChatToolsForScenario = ({
       accessibleWorkspaceIds: [workspaceId],
       pinnedIds: [],
     }),
+    userEmail: "provider-schema-canary@example.test",
     userId,
     webSearchEnabled: true,
     webSearchProviders: {

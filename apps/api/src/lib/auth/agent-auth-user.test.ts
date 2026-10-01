@@ -1,5 +1,6 @@
 import { memoryAdapter } from "@better-auth/memory-adapter";
 import { betterAuth } from "better-auth";
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { createAgentUserPlugin } from "@/api/lib/auth/agent-auth-user";
@@ -31,9 +32,16 @@ describe("agent identity user creation", () => {
         },
       });
       if (!emailVerified) {
-        await expect(created).rejects.toMatchObject({
-          statusCode: 403,
-          body: { code: "identity_not_allowed" },
+        const rejected = await Result.tryPromise({
+          try: async () => await created,
+          catch: (cause) => cause,
+        });
+        expect(rejected).toMatchObject({
+          status: "error",
+          error: {
+            statusCode: 403,
+            body: { code: "identity_not_allowed" },
+          },
         });
         expect(database.user).toHaveLength(0);
         return;

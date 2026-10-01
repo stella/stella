@@ -158,7 +158,6 @@ export const SOCIAL_ACCOUNT_LINKING_OPTIONS = {
   enabled: true,
   trustedProviders: [],
   allowDifferentEmails: false,
-  requireLocalEmailVerified: true,
 } satisfies NonNullable<
   NonNullable<BetterAuthOptions["account"]>["accountLinking"]
 >;

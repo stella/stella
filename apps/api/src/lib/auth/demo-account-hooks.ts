@@ -86,7 +86,7 @@ export const createDemoSessionPolicy =
   ({ config, resolveUser, hasMembership }: DemoSessionPolicyOptions) =>
   async <T extends { userId: string }>(session: T) => {
     if (!config.email || !config.organizationId) {
-      return;
+      return undefined;
     }
     const userId = brandPersistedUserId(session.userId);
     const account = await resolveUser(userId);
@@ -95,7 +95,7 @@ export const createDemoSessionPolicy =
     }
     const { email } = account;
     if (email.trim().toLowerCase() !== config.email.toLowerCase()) {
-      return;
+      return undefined;
     }
     const organizationId = config.organizationId;
     if (

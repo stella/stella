@@ -179,6 +179,7 @@ export const createPlaybookStore = (
       },
       safeDb: toSafeDbMock(scopedDb),
       scopedDb,
+      userEmail: "playbook-eval@example.test",
       userId: toSafeId<"user">("user_eval"),
     },
     playbooks: () => [...rows.values()],

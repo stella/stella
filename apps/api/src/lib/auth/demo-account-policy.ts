@@ -80,10 +80,10 @@ export const createDemoSessionFilter = (config: DemoAccountConfig) =>
       after: [
         {
           matcher: ({ path }) => path === "/get-session",
-          handler: createAuthMiddleware(async (ctx) => {
+          handler: createAuthMiddleware((ctx) => {
             const resolved = ctx.context.session;
             if (!resolved) {
-              return;
+              return undefined;
             }
             const access = checkDemoAccountAccess({
               config,
@@ -92,7 +92,7 @@ export const createDemoSessionFilter = (config: DemoAccountConfig) =>
               organizationId: resolved.session["activeOrganizationId"],
             });
             if (Result.isOk(access)) {
-              return;
+              return undefined;
             }
             ctx.context.session = null;
             return ctx.json(null);
@@ -143,8 +143,6 @@ export const requiresStandardAccount = (
       policy === "restricted" &&
       Object.entries(permissions).some(
         ([name, actions]) =>
-          name === resource &&
-          actions !== undefined &&
-          actions.some((action) => action !== "read"),
+          name === resource && actions.some((action) => action !== "read"),
       ),
   );

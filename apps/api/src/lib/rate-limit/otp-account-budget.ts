@@ -94,17 +94,19 @@ export const createOtpAccountLimitPlugin = ({
           matcher: ({ path }) => enabled && isOtpVerificationPath(path),
           handler: createAuthMiddleware(async (ctx) => {
             if (!isOtpVerificationPath(ctx.path)) {
-              return;
+              return undefined;
             }
+            const body: unknown = ctx.body;
             const verificationType = OTP_VERIFICATION_TYPES[ctx.path];
             const usesSessionEmail =
               verificationType === "change-email" ||
               verificationType === "current-email";
+            const emailFromBody = isRecord(body) ? body["email"] : undefined;
             const email: unknown = usesSessionEmail
               ? (await getAuthoritativeSessionFromCtx(ctx))?.user.email
-              : ctx.body?.email;
+              : emailFromBody;
             if (typeof email !== "string") {
-              return;
+              return undefined;
             }
             const accountEmail = email.toLowerCase();
             let identifier: string;
@@ -115,17 +117,17 @@ export const createOtpAccountLimitPlugin = ({
                 identifier = `${verificationType}-otp-${accountEmail}`;
                 break;
               case "body": {
-                const type: unknown = ctx.body?.type;
+                const type = isRecord(body) ? body["type"] : undefined;
                 if (typeof type !== "string") {
-                  return;
+                  return undefined;
                 }
                 identifier = `${type}-otp-${accountEmail}`;
                 break;
               }
               case "change-email": {
-                const newEmail: unknown = ctx.body?.newEmail;
+                const newEmail = isRecord(body) ? body["newEmail"] : undefined;
                 if (typeof newEmail !== "string") {
-                  return;
+                  return undefined;
                 }
                 identifier = `change-email-otp-${accountEmail}-${newEmail.toLowerCase()}`;
                 break;
@@ -138,7 +140,7 @@ export const createOtpAccountLimitPlugin = ({
                   !isRecord(changeEmail) ||
                   changeEmail["verifyCurrentEmail"] !== true
                 ) {
-                  return;
+                  return undefined;
                 }
                 identifier = `email-verification-otp-${accountEmail}`;
                 break;
@@ -157,7 +159,7 @@ export const createOtpAccountLimitPlugin = ({
               new Date(verification.expiresAt).getTime() <=
                 Temporal.Now.instant().epochMilliseconds
             ) {
-              return;
+              return undefined;
             }
             const reservation = await budget.reserve(email);
             if (Result.isError(reservation)) {
@@ -180,9 +182,10 @@ export const createOtpAccountLimitPlugin = ({
               "otpAccountBudgetKey",
             );
             if (typeof key !== "string") {
-              return;
+              return undefined;
             }
             await budget.complete(key, !isAPIError(ctx.context.returned));
+            return undefined;
           }),
         },
       ],

@@ -1,5 +1,6 @@
 import { memoryAdapter } from "@better-auth/memory-adapter";
 import { betterAuth } from "better-auth";
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { createSessionBearer } from "@/api/lib/auth/session-bearer";
@@ -45,9 +46,14 @@ describe("session credentials", () => {
         headers: { authorization: `Bearer ${credential}` },
       }),
     ).not.toBeNull();
+    const token = credential.split(".").at(0);
+    expect(token).toBeDefined();
+    if (!token) {
+      panic("Session credential is required");
+    }
     expect(
       await auth.api.getSession({
-        headers: { authorization: `Bearer ${credential.split(".").at(0)}` },
+        headers: { authorization: `Bearer ${token}` },
       }),
     ).toBeNull();
     expect(
@@ -56,10 +62,6 @@ describe("session credentials", () => {
       }),
     ).toBeNull();
     expect(await auth.api.getSession({ headers: {} })).toBeNull();
-    const token = credential.split(".").at(0);
-    if (!token) {
-      throw new Error("Session credential is required");
-    }
     const context = await auth.$context;
     await context.internalAdapter.updateSession(token, {
       expiresAt: new Date(0),

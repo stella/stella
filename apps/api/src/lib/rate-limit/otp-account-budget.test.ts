@@ -2,7 +2,7 @@ import { memoryAdapter } from "@better-auth/memory-adapter";
 import { betterAuth } from "better-auth";
 import { APIError } from "better-auth/api";
 import { emailOTP } from "better-auth/plugins";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -251,6 +251,9 @@ describe("account verification budget", () => {
               path: "/email-otp/reset-password",
               body: { ...body, password: "fixture-password" },
             });
+          default:
+            path satisfies never;
+            return panic("Unknown verification path");
         }
       };
       for (let attempt = 0; attempt < 20; attempt += 1) {

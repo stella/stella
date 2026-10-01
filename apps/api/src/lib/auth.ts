@@ -1267,7 +1267,7 @@ const createAuth = () => {
         roles,
         organizationHooks: {
           ...organizationLifecycleHooks,
-          async beforeCreateOrganization({ user }) {
+          beforeCreateOrganization({ user }) {
             requireDemoAccountAccess(
               checkConfiguredDemoAccountAccess({
                 email: user.email,
@@ -1582,7 +1582,8 @@ const createAuth = () => {
           return undefined;
         }
         if (demoConfig.email) {
-          const email: unknown = ctx.body?.email;
+          const body: unknown = ctx.body;
+          const email = isRecord(body) ? body["email"] : undefined;
           if (
             typeof email === "string" &&
             isSessionCreatingAuthPath(ctx.path)
@@ -1602,13 +1603,13 @@ const createAuth = () => {
               ...(request ? { request } : {}),
             });
           }
+          const requestedUserId = isRecord(body) ? body["userId"] : undefined;
           if (
             ctx.path === "/api-key/create" &&
-            typeof ctx.body?.userId === "string"
+            typeof requestedUserId === "string"
           ) {
-            const account = await ctx.context.internalAdapter.findUserById(
-              ctx.body.userId,
-            );
+            const account =
+              await ctx.context.internalAdapter.findUserById(requestedUserId);
             if (!account) {
               throw new APIError("UNAUTHORIZED", { message: "Unauthorized" });
             }
