@@ -583,8 +583,21 @@ test("a full-depth run passes jobs whose scope was not planned only when skipped
 const FAST_DEPTH_EVENTS = [EVENT.pullRequest, EVENT.workflowDispatch] as const;
 
 test("fast-depth cancelled dependencies pass only when the workflow run was cancelled", () => {
+  const cancellationStep = v.parse(
+    v.object({ if: v.string(), run: v.string() }),
+    resultJob.steps.find((step) =>
+      v.is(
+        v.object({ name: v.literal("Capture workflow cancellation") }),
+        step,
+      ),
+    ),
+  );
+  expect(cancellationStep.if).toBe("cancelled()");
+  expect(cancellationStep.run).toBe(
+    'echo "RUN_CANCELLED=true" >> "$GITHUB_ENV"',
+  );
   expect(resultStep.env["RUN_CANCELLED"]).toBe(
-    ["$", "{{ cancelled() }}"].join(""),
+    ["$", "{{ env.RUN_CANCELLED || 'false' }}"].join(""),
   );
   fc.assert(
     fc.property(
