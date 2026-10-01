@@ -251,7 +251,9 @@ describe("compactSchemaDefs", () => {
     const expected = serializeCapabilityJson(baseline.inputSchema);
     const defs = baseline.inputSchema.$defs;
     expect(Object.keys(defs ?? {})).toHaveLength(1);
-    if (defs === undefined) {throw new TypeError("Missing baseline definition");}
+    if (defs === undefined) {
+      throw new TypeError("Missing baseline definition");
+    }
     for (const first of fragments) {
       for (const second of fragments) {
         const source = {
@@ -293,8 +295,9 @@ describe("compactSchemaDefs", () => {
     });
     expect(original.status).toBe("compacted");
     expect(reordered.status).toBe("compacted");
-    if (original.status !== "compacted" || reordered.status !== "compacted")
-      {return;}
+    if (original.status !== "compacted" || reordered.status !== "compacted") {
+      return;
+    }
     expect(Object.keys(original.inputSchema.$defs ?? {})).toHaveLength(1);
     expect(Object.keys(reordered.inputSchema.$defs ?? {})).toHaveLength(1);
     expect(Object.keys(original.inputSchema.$defs ?? {})).not.toEqual(
