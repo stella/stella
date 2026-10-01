@@ -1111,3 +1111,28 @@ test("preserves inline spacing around unknown wrappers and every heading", () =>
     expect(fulltext.split(text)).toHaveLength(2);
   }
 });
+
+describe("table caption retention", () => {
+  test("keeps caption text once before its row in source order", () => {
+    const { documentAst } = parseNssDecisionHtml(
+      baseInput(
+        `<html><body><p>Before.</p><table><caption><b>Source caption</b> tail.</caption><tr><td>Row value.</td></tr></table><p>After.</p></body></html>`,
+      ),
+    );
+    expect(documentAst.blocks.map((block) => block.plainText)).toEqual([
+      "Before.",
+      "Source caption tail.",
+      "Row value.",
+      "After.",
+    ]);
+  });
+
+  test("keeps a caption even when its table has no rows", () => {
+    const { documentAst } = parseNssDecisionHtml(
+      baseInput(`<table><caption>Caption without rows.</caption></table>`),
+    );
+    expect(documentAst.blocks.map((block) => block.plainText)).toEqual([
+      "Caption without rows.",
+    ]);
+  });
+});

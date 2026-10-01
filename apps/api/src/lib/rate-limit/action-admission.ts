@@ -149,6 +149,7 @@ type ActionAdmissionOptions = {
   userId: SafeId<"user">;
   run: (signal: AbortSignal) => Promise<unknown>;
   enabled?: boolean;
+  scope?: "inherit" | "independent";
   policy?: ActionAdmissionPolicy;
   periodIdentity?: ActionPeriodIdentity;
   periodPolicy?: ActionPeriodPolicy;
@@ -285,6 +286,31 @@ const createAdmissionExecutor = ({
   return execute;
 };
 
+const validateAdmissionReply = (
+  reply: unknown,
+): Result<void, ActionAdmissionError> => {
+  if (reply === 0 || reply === -1) {
+    return Result.err(
+      new ActionAdmissionError({
+        message:
+          reply === -1
+            ? "Action period limit reached"
+            : "Concurrent action limit reached",
+        reason: "busy",
+      }),
+    );
+  }
+  if (reply !== 1) {
+    return Result.err(
+      new ActionAdmissionError({
+        message: "Action admission returned an invalid response",
+        reason: "unavailable",
+      }),
+    );
+  }
+  return Result.ok(undefined);
+};
+
 /**
  * The disabled branch never opens Valkey or reads admission configuration.
  * Nested admission must be awaited: same-caller work shares the parent's lease
@@ -295,6 +321,7 @@ export const withActionAdmission = async <T>({
   userId,
   run,
   enabled = env.FEATURE_ACTION_ADMISSION,
+  scope = "inherit",
   policy,
   periodIdentity,
   periodPolicy,
@@ -331,6 +358,7 @@ export const withActionAdmission = async <T>({
 
   const inherited = admissionScope.getStore();
   if (
+    scope === "inherit" &&
     inherited?.status === "active" &&
     inherited.organizationId === organizationId &&
     inherited.userId === userId
@@ -339,7 +367,6 @@ export const withActionAdmission = async <T>({
       try: async () => {
         inherited.signal.throwIfAborted();
         const value = await run(inherited.signal);
-        inherited.signal.throwIfAborted();
         return value;
       },
       catch: (error: unknown) => error,
@@ -375,24 +402,9 @@ export const withActionAdmission = async <T>({
   if (Result.isError(admitted)) {
     return admitted;
   }
-  if (admitted.value === 0 || admitted.value === -1) {
-    return Result.err(
-      new ActionAdmissionError({
-        message:
-          admitted.value === -1
-            ? "Action period limit reached"
-            : "Concurrent action limit reached",
-        reason: "busy",
-      }),
-    );
-  }
-  if (admitted.value !== 1) {
-    return Result.err(
-      new ActionAdmissionError({
-        message: "Action admission returned an invalid response",
-        reason: "unavailable",
-      }),
-    );
+  const validated = validateAdmissionReply(admitted.value);
+  if (Result.isError(validated)) {
+    return validated;
   }
 
   let leaseDeadline = initialAttemptAt + limits.leaseMs;
@@ -466,7 +478,7 @@ export const withActionAdmission = async <T>({
   }
 
   let outcome: Result<T, unknown>;
-  const scope: AdmissionScope = {
+  const executionScope: AdmissionScope = {
     organizationId,
     userId,
     signal: controller.signal,
@@ -475,14 +487,14 @@ export const withActionAdmission = async <T>({
   try {
     outcome = await Result.tryPromise({
       try: async () =>
-        await admissionScope.run(scope, async () => {
+        await admissionScope.run(executionScope, async () => {
           controller.signal.throwIfAborted();
           return await run(controller.signal);
         }),
       catch: (error: unknown) => error,
     });
   } finally {
-    scope.status = "settled";
+    executionScope.status = "settled";
     stopped = true;
     cancelScheduled();
     await Promise.resolve(renewal);
@@ -493,7 +505,14 @@ export const withActionAdmission = async <T>({
       observeFailure(released.error, { sink: RELEASE_FAILURE });
     }
   }
-  if (controller.signal.aborted) {
+  // A settled success may already have committed or charged. Losing the lease
+  // cannot replace it with an infrastructure error that invites duplicate work.
+  if (
+    Result.isError(outcome) &&
+    controller.signal.aborted &&
+    (outcome.error === controller.signal.reason ||
+      (outcome.error instanceof Error && outcome.error.name === "AbortError"))
+  ) {
     return Result.err(controller.signal.reason);
   }
   return outcome;
