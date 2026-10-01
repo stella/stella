@@ -336,7 +336,6 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "immer",
   "input-otp",
   "ioredis",
-  "ip-address",
   "jose",
   "jszip",
   "katex",
