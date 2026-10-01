@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeAll, beforeEach, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
@@ -64,6 +64,7 @@ const CZE_DECISION_ID = toSafeId<"caseLawDecision">(
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
+let seededSnapshot: Blob;
 
 const inTx = async <T>(run: (tx: Transaction) => Promise<T>): Promise<T> =>
   await db.transaction(async (tx) => await run(asTestRaw<Transaction>(tx)));
@@ -83,16 +84,22 @@ const rejectionOf = async (promise: Promise<unknown>): Promise<unknown> =>
     (error: unknown) => error,
   );
 
-beforeEach(async () => {
-  client = await createTestPglite();
-  db = drizzle({ client });
-  await db.insert(corpusIndexGenerations).values({
+beforeAll(async () => {
+  await using template = await createTestPglite();
+  const templateDb = drizzle({ client: template });
+  await templateDb.insert(corpusIndexGenerations).values({
     family: "case_law",
     generation: MANIFEST.generation,
     cluster: "q09",
     manifestDigest: corpusIndexManifestDigest(MANIFEST),
     status: "serving",
   });
+  seededSnapshot = await template.dumpDataDir();
+});
+
+beforeEach(async () => {
+  client = await createTestPglite(seededSnapshot);
+  db = drizzle({ client });
 });
 
 afterEach(async () => {
