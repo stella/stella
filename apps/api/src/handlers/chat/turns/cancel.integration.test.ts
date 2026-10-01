@@ -345,21 +345,22 @@ const produceUntilCut = ({
         signal.addEventListener("abort", resolve, { once: true });
       });
     }
-    await run.settle(
-      { reason: "client-disconnected", type: "interrupted" },
-      async () => {
-        unwrap(
-          await persistInterruptedChatTurn({
-            execution,
-            recordAuditEvent: noAudit,
-            safeDb,
-            threadId,
-            userId: ids.userA1,
-            workspaceId: ids.wsA1,
-          }),
-        );
-      },
-    );
+    await run.settle(async () => {
+      unwrap(
+        await persistInterruptedChatTurn({
+          execution,
+          recordAuditEvent: noAudit,
+          safeDb,
+          threadId,
+          userId: ids.userA1,
+          workspaceId: ids.wsA1,
+        }),
+      );
+      return {
+        type: "stored",
+        outcome: { reason: "client-disconnected", type: "interrupted" },
+      };
+    });
   };
   const response = run.produce(output());
   return { response, run };

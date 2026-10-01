@@ -59,7 +59,10 @@ import {
   USER_STOP_OUTCOME,
 } from "@/api/handlers/chat/chat-turn-persistence";
 import { CHAT_TURN_OWNER_LOST_REASON } from "@/api/handlers/chat/chat-turn-run";
-import type { ChatTurnRun } from "@/api/handlers/chat/chat-turn-run";
+import type {
+  ChatTurnRun,
+  ChatTurnStoredSettlement,
+} from "@/api/handlers/chat/chat-turn-run";
 import {
   CUT_SHORT_OUTCOME,
   findHandedOutInteraction,
@@ -245,7 +248,11 @@ type StreamChatProps = {
   resume?: RunAgentResumeItem[] | undefined;
   messages: ChatMessage[];
   owningAssistantMessageId?: SafeId<"chatMessage"> | undefined;
-  onFinish: (event: StreamChatFinishEvent) => Promise<void> | void;
+  /**
+   * Store the finished turn, and say what its row now holds: the run counts
+   * that, not the outcome it proposed.
+   */
+  onFinish: (event: StreamChatFinishEvent) => Promise<ChatTurnStoredSettlement>;
   /** What the client is shown of the history `messages` came from. */
   storedHistory: StoredHistory;
   organizationId: SafeId<"organization">;
@@ -645,9 +652,7 @@ export const streamChat = async ({
     initialMessages: preparedMessageList,
     onFinish: async (event) => {
       await shadow.flush();
-      await run.settle(event.outcome, async () => {
-        await onFinish(event);
-      });
+      await run.settle(async () => await onFinish(event));
     },
     owningAssistantMessageId,
     restorationPairs,

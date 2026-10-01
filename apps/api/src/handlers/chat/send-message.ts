@@ -98,7 +98,10 @@ import {
   countChatTurnSettlement,
   processChatTurnOwnership,
 } from "@/api/handlers/chat/chat-turn-run";
-import type { ChatTurnObservation } from "@/api/handlers/chat/chat-turn-run";
+import type {
+  ChatTurnObservation,
+  ChatTurnStoredSettlement,
+} from "@/api/handlers/chat/chat-turn-run";
 import {
   CUT_SHORT_OUTCOME,
   settleHistoryForRun,
@@ -507,15 +510,17 @@ export class ChatSendLifecycle {
   }
 
   /**
-   * Count a turn settled before its run started. No model is resolved yet,
-   * and a turn another owner settled first is not this send's to count.
+   * Count a turn settled before its run started, once its row holds the
+   * outcome. No model is resolved yet. A turn another owner settled first is
+   * not this send's to count, and a settlement that failed leaves the turn
+   * claimed, for `cleanup` to store and count once.
    */
   private countPreflightSettlement(
     outcome: "cancelled" | "failed" | "interrupted",
     failureCode: ChatTurnFailureCode | null,
-    settlement: Result<unknown, { cause?: unknown }>,
+    settlement: Result<unknown, unknown>,
   ): void {
-    if (Result.isError(settlement) && isChatTurnNotOwned(settlement.error)) {
+    if (Result.isError(settlement)) {
       return;
     }
     countChatTurnSettlement(
@@ -2679,13 +2684,19 @@ export const createSendMessage = (
                 // The streamed turn's persistence: every expected failure
                 // comes back as a `Result` naming the turn row's failure code,
                 // and nothing here settles the turn, which is the `onFinish`
-                // boundary's job. A completed turn returns what its
-                // follow-ups need.
+                // boundary's job. It returns what the turn row now holds, and
+                // for a completed turn what its follow-ups need.
                 const persistStreamedAssistantTurn = async ({
                   outcome,
                   responseMessage,
                 }: StreamChatFinishEvent): Promise<
-                  Result<CompletedTurnFollowUps | null, AssistantTurnFailure>
+                  Result<
+                    {
+                      followUps: CompletedTurnFollowUps | null;
+                      settlement: ChatTurnStoredSettlement;
+                    },
+                    AssistantTurnFailure
+                  >
                 > => {
                   const validatedToolParts = validateToolCallParts({
                     allowPartialInput: CUT_SHORT_OUTCOME[outcome.type],
@@ -2767,8 +2778,11 @@ export const createSendMessage = (
                   ) {
                     // Another execution or the reaper settled the turn
                     // first: its outcome stands, and this run has nothing
-                    // left to store.
-                    return Result.ok(null);
+                    // left to store or count.
+                    return Result.ok({
+                      followUps: null,
+                      settlement: { type: "not-owned" },
+                    });
                   }
                   if (Result.isError(persistResult)) {
                     captureError(persistResult.error, {
@@ -2791,14 +2805,18 @@ export const createSendMessage = (
                       messages: latestMessagePlan.messages,
                       persistencePlan,
                     });
-                  return Result.ok(
-                    storedOutcome.type === "completed"
-                      ? {
-                          messagesAfterAssistantPersist,
-                          resolvedResponseMessage,
-                        }
-                      : null,
-                  );
+                  return Result.ok({
+                    // A stop that won the race stored `cancelled`, whatever
+                    // the run proposed.
+                    followUps:
+                      storedOutcome.type === "completed"
+                        ? {
+                            messagesAfterAssistantPersist,
+                            resolvedResponseMessage,
+                          }
+                        : null,
+                    settlement: { type: "stored", outcome: storedOutcome },
+                  });
                 };
 
                 const chatResponse = await dependencies.streamResponse({
@@ -2841,8 +2859,8 @@ export const createSendMessage = (
                     // The turn is stored from here, so a follow-up that
                     // throws is reported and never reaches the boundary
                     // above: a completed turn cannot then read as failed.
-                    if (settled.value !== null) {
-                      const followUps = settled.value;
+                    const { followUps, settlement } = settled.value;
+                    if (followUps !== null) {
                       const followedUp = await Result.tryPromise(
                         async () =>
                           await runCompletedTurnFollowUps(run, followUps),
@@ -2854,6 +2872,7 @@ export const createSendMessage = (
                         });
                       }
                     }
+                    return settlement;
                   },
                   orgAIConfig,
                   organizationId: session.activeOrganizationId,

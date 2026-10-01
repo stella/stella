@@ -112,9 +112,10 @@ describe("chat run admission follows owned settlement", () => {
             type: "text",
             content: "Partial answer",
           });
-          await run.settle({ type: "completed" }, async () => {
+          await run.settle(async () => {
             persisted += 1;
             await Promise.resolve();
+            return { type: "stored", outcome: { type: "completed" } };
           });
         },
       });
@@ -179,10 +180,11 @@ describe("chat run admission follows owned settlement", () => {
     });
     const output = async function* (): AsyncIterable<StreamChunk> {
       await providerMayFinish.promise;
-      await run.settle({ type: "completed" }, async () => {
+      await run.settle(async () => {
         persistenceStarted.resolve(undefined);
         await persistenceMayFinish.promise;
         persisted += 1;
+        return { type: "stored", outcome: { type: "completed" } };
       });
       yield* [];
     };
@@ -286,9 +288,10 @@ describe("chat run admission follows owned settlement", () => {
           followUpStarted = true;
           await Promise.resolve();
         });
-        await run.settle({ type: "completed" }, async () => {
+        await run.settle(async () => {
           persisted += 1;
           persistenceFinished.resolve(undefined);
+          return { type: "stored", outcome: { type: "completed" } };
         });
       },
       processor: new StreamProcessor(),
@@ -518,9 +521,10 @@ describe("chat run admission follows owned settlement", () => {
           onFinish: async ({ outcome, responseMessage }) => {
             expect(outcome.type).toBe("awaiting-user");
             expect(responseMessage.parts).toEqual(checkpoint.parts);
-            await run.settle({ type: "completed" }, async () => {
+            await run.settle(async () => {
               discardedPersistence += 1;
               await Promise.resolve();
+              return { type: "stored", outcome: { type: "completed" } };
             });
           },
           processor: new StreamProcessor(),
@@ -668,9 +672,10 @@ describe("chat run admission follows owned settlement", () => {
     });
     const output = async function* (): AsyncIterable<StreamChunk> {
       try {
-        await run.settle({ type: "completed" }, async () => {
+        await run.settle(async () => {
           persisted += 1;
           await Promise.resolve();
+          return { type: "stored", outcome: { type: "completed" } };
         });
         yield* [];
       } finally {

@@ -115,6 +115,16 @@ export const countChatTurnSettlement = (
   });
 };
 
+/**
+ * What a run's persistence left on the turn row: the outcome it stored, which
+ * a stop that won the race may have turned into `cancelled`, or nothing,
+ * because another execution or the reaper settled the turn first. Only a
+ * stored outcome is counted, so the count matches the durable row.
+ */
+export type ChatTurnStoredSettlement =
+  | { type: "stored"; outcome: ChatTurnOutcome }
+  | { type: "not-owned" };
+
 /** The turn a run produces for, and what storing its failure needs. */
 type ChatTurnRunOwner = {
   indexThread?: PersistMessageProps["indexThread"];
@@ -472,13 +482,14 @@ export class ChatTurnRun {
   }
 
   /**
-   * Store the run's `outcome` through `persist`. A run settles once. A
-   * `persist` that cannot store fails the run itself before it throws, and
-   * that failure is what is counted.
+   * Store the run's outcome through `persist`, which reports what the turn row
+   * now holds. A run settles once, and counts the outcome `persist` stored,
+   * never the one it proposed, and nothing when another owner settled the turn.
+   * A `persist` that cannot store fails the run itself before it throws, and
+   * that failure, once stored, is what is counted.
    */
   async settle(
-    outcome: ChatTurnOutcome,
-    persist: () => Promise<void>,
+    persist: () => Promise<ChatTurnStoredSettlement>,
   ): Promise<void> {
     if (this.state.status !== "producing") {
       return panic(`A chat turn run cannot settle once ${this.state.status}`);
@@ -489,14 +500,17 @@ export class ChatTurnRun {
     try {
       const checkpoint = this.restorableCheckpoint;
       if (checkpoint === undefined) {
-        await persist();
+        const settlement = await persist();
         this.stored = true;
-        this.countSettlement(
-          outcome.type,
-          outcome.type === "failed"
-            ? AI_ERROR_FAILURE_CODE[outcome.error]
-            : null,
-        );
+        if (settlement.type === "stored") {
+          const { outcome } = settlement;
+          this.countSettlement(
+            outcome.type,
+            outcome.type === "failed"
+              ? AI_ERROR_FAILURE_CODE[outcome.error]
+              : null,
+          );
+        }
       } else {
         const restored = await this.restoreCheckpoint(checkpoint);
         this.stored =
@@ -558,9 +572,10 @@ export class ChatTurnRun {
         : await this.restoreCheckpoint(checkpoint);
     const settledElsewhere =
       Result.isError(failure) && isChatTurnNotOwned(failure.error);
-    if (checkpoint === undefined && !settledElsewhere) {
-      // Counted even when the failure cannot be stored: the turn still
-      // failed for the user, and its lease ends it later.
+    if (checkpoint === undefined && Result.isOk(failure)) {
+      // Counted only once stored, so the count matches the turn row: a turn
+      // another owner settled keeps (and counts) that outcome, and one whose
+      // failure cannot be stored is left to its lease.
       this.countSettlement("failed", code);
     }
     if (Result.isOk(failure) || settledElsewhere) {

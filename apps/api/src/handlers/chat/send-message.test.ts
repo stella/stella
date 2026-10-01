@@ -1610,7 +1610,7 @@ describe("assistant turn settlement", () => {
 
   /** The rejection `onFinish` reports to the stream, captured as a value. */
   const settlementFailure = async (
-    settle: Promise<void> | void,
+    settle: Promise<unknown>,
   ): Promise<unknown> => {
     const settled = await Result.tryPromise({
       try: async () => await settle,
