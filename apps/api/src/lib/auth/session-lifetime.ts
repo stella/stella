@@ -1,15 +1,34 @@
-import { tryGetCurrentAuthEndpointContext } from "@better-auth/core/context";
+import {
+  getCurrentAdapter,
+  tryGetCurrentAuthEndpointContext,
+} from "@better-auth/core/context";
 import type { AuthContext, BetterAuthPlugin, Session } from "better-auth";
-import { createAuthMiddleware } from "better-auth/api";
+import {
+  createAuthMiddleware,
+  createAuthEndpoint,
+  sensitiveSessionMiddleware,
+} from "better-auth/api";
+import * as v from "valibot";
 
 import { AUTH_SESSION_STARTUP_HEADER } from "@stll/auth-model";
 import { DAY_IN_MS } from "@stll/time";
+
+import { hashSessionToken } from "@/api/lib/auth/session-token";
+import type { SafeId } from "@/api/lib/branded-types";
+import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 export const SESSION_ABSOLUTE_AGE_MS = 90 * DAY_IN_MS;
 export const SESSION_IDLE_AGE_MS = 60 * 60 * 1000;
 export const SESSION_PRIOR_TOKEN_GRACE_MS = 60 * 1000;
 
 export const SESSION_LIFETIME_FIELDS = {
+  refreshMode: {
+    type: "string",
+    required: false,
+    input: false,
+    returned: false,
+    defaultValue: "automatic",
+  },
   lastSeenAt: {
     type: "date",
     required: false,
@@ -38,6 +57,7 @@ type SessionObservation = {
 
 type SessionRefresh = {
   token: string;
+  credentialMode: "cookie" | "bearer";
   now: Date;
   expiresAt: Date;
 };
@@ -45,6 +65,10 @@ type SessionRefresh = {
 export type SessionLifetimeStore = {
   observe: (options: SessionObservation) => Promise<Session | null>;
   refresh: (options: SessionRefresh) => Promise<Session | null>;
+  revokeById: (options: {
+    sessionId: string;
+    userId: SafeId<"user">;
+  }) => Promise<void>;
 };
 
 type SessionLifetimeOptions = {
@@ -113,7 +137,14 @@ export const createSessionLifetime = ({
       }
       if (resolved && resolved.session.token !== token) {
         const ctx = await tryGetCurrentAuthEndpointContext();
-        if (ctx) {
+        if (!ctx?.getSignedCookie || !ctx.setSignedCookie) {
+          return resolved;
+        }
+        const ownToken = await ctx.getSignedCookie(
+          ctx.context.authCookies.sessionToken.name,
+          ctx.context.secret,
+        );
+        if (ownToken === token) {
           const dontRemember = await ctx.getSignedCookie(
             ctx.context.authCookies.dontRememberToken.name,
             ctx.context.secret,
@@ -145,12 +176,17 @@ export const createSessionLifetime = ({
     adapter.updateSession = async (token, data) => {
       if (data.expiresAt) {
         await forgetObservations();
+        const ctx = await tryGetCurrentAuthEndpointContext();
+        const authorization = ctx?.headers?.get("authorization");
         const refreshed = await store.refresh({
           token,
+          credentialMode:
+            authorization && /^bearer\s/iu.test(authorization)
+              ? "bearer"
+              : "cookie",
           expiresAt: data.expiresAt,
           now: now(),
         });
-        const ctx = await tryGetCurrentAuthEndpointContext();
         if (refreshed && ctx) {
           observations.set(
             ctx,
@@ -165,17 +201,31 @@ export const createSessionLifetime = ({
         }
         return refreshed;
       }
-      const current = await observe(token);
-      if (!current) {
-        return null;
-      }
-      const updated = await updateSession(current.token, data);
+      // Native mutations may run inside an SDK transaction; resolve aliases there.
+      const updated = await updateSession(token, data);
       if (updated) {
         return updated;
       }
-      await forgetObservations();
-      const latest = await observe(token);
-      return latest ? await updateSession(latest.token, data) : null;
+      const ctx = await tryGetCurrentAuthEndpointContext();
+      if (!ctx) {
+        const current = await observe(token);
+        return current ? await updateSession(current.token, data) : null;
+      }
+      const transactionAdapter = await getCurrentAdapter(ctx.context.adapter);
+      const current = await transactionAdapter.findOne({
+        model: "session",
+        where: [
+          { field: "priorTokenHash", value: hashSessionToken(token) },
+          { field: "priorTokenExpiresAt", operator: "gt", value: now() },
+          { field: "expiresAt", operator: "gt", value: now() },
+        ],
+        select: ["token"],
+      });
+      if (!current) {
+        return null;
+      }
+      const canonical = v.parse(v.object({ token: v.string() }), current);
+      return await updateSession(canonical.token, data);
     };
     adapter.deleteSession = async (token) => {
       const current = await observe(token);
@@ -191,6 +241,27 @@ export const createSessionLifetime = ({
 
   const plugin = {
     id: "session-lifetime",
+    endpoints: {
+      revokeSessionById: createAuthEndpoint(
+        "/revoke-session-by-id",
+        {
+          method: "POST",
+          body: v.strictObject({
+            sessionId: v.pipe(v.string(), v.minLength(1)),
+          }),
+          use: [sensitiveSessionMiddleware],
+          requireHeaders: true,
+        },
+        async (ctx) => {
+          await store.revokeById({
+            sessionId: ctx.body.sessionId,
+            userId: brandPersistedUserId(ctx.context.session.user.id),
+          });
+          await forgetObservations();
+          return ctx.json({ status: true });
+        },
+      ),
+    },
     hooks: {
       before: [
         {
@@ -205,10 +276,7 @@ export const createSessionLifetime = ({
     },
   } satisfies BetterAuthPlugin;
 
-  const cookieCacheVersion = async (session: { token: string }) => {
-    const current = await observe(session.token);
-    return current?.token === session.token ? "1" : "resolve";
-  };
+  const cookieCacheVersion = "session-lifetime-v2";
 
   return { plugin, cookieCacheVersion, prepare: decorate };
 };

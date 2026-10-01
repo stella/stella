@@ -33,7 +33,7 @@ const sessionFetch = (sessionBody: unknown) => {
   const fetchImpl = async (input: string): Promise<Response> => {
     requested.push(input);
     return await Promise.resolve(
-      input.endsWith("/get-session")
+      new URL(input).pathname.endsWith("/get-session")
         ? jsonResponse(sessionBody)
         : jsonResponse({ role: "member" }),
     );
@@ -50,7 +50,7 @@ describe("boot prefetch", () => {
     startBootPrefetch({
       fetchImpl: async (input, init) => {
         requests.push({ input, headers: new Headers(init?.headers) });
-        return input.endsWith("/get-session")
+        return new URL(input).pathname.endsWith("/get-session")
           ? jsonResponse(SIGNED_IN_SESSION)
           : jsonResponse({ role: "member" });
       },
@@ -68,6 +68,31 @@ describe("boot prefetch", () => {
     ]);
     discardBootPrefetch();
   });
+
+  test.each([false, true])(
+    "bypasses cookie cache and suppresses startup expiry after discard: %s",
+    async (wasDiscarded) => {
+      const requests: { url: URL; headers: Headers }[] = [];
+      startBootPrefetch({
+        wasDiscarded,
+        fetchImpl: async (input, init) => {
+          requests.push({
+            url: new URL(input),
+            headers: new Headers(init?.headers),
+          });
+          return jsonResponse(null);
+        },
+      });
+      await takeBootPrefetch("/api/auth/get-session");
+      expect(requests).toHaveLength(1);
+      const request = requests.at(0);
+      expect(request?.url.searchParams.get("disableCookieCache")).toBe("true");
+      expect(request?.headers.get(AUTH_SESSION_STARTUP_HEADER)).toBe(
+        wasDiscarded ? null : "1",
+      );
+      discardBootPrefetch();
+    },
+  );
 
   test("serves each prefetched response exactly once", async () => {
     startBootPrefetch({ fetchImpl: sessionFetch(SIGNED_IN_SESSION).fetchImpl });
@@ -167,7 +192,7 @@ describe("boot prefetch", () => {
       if (init?.signal) {
         signals.push(init.signal);
       }
-      if (input.endsWith("/get-session")) {
+      if (new URL(input).pathname.endsWith("/get-session")) {
         return await new Promise<Response>((resolve) => {
           resolveSession = resolve;
         });
@@ -221,7 +246,7 @@ describe("boot prefetch", () => {
     ): Promise<Response> => {
       signals.push(init?.signal);
       return await Promise.resolve(
-        input.endsWith("/get-session")
+        new URL(input).pathname.endsWith("/get-session")
           ? jsonResponse(SIGNED_IN_SESSION)
           : jsonResponse({ role: "member" }),
       );

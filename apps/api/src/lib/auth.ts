@@ -13,7 +13,6 @@ import {
   getAuthoritativeSessionFromCtx,
 } from "better-auth/api";
 import {
-  bearer,
   emailOTP,
   jwt,
   lastLoginMethod,
@@ -65,6 +64,7 @@ import {
   OAUTH_UI_ORGANIZATION_PATH,
 } from "@/api/lib/auth/auth-paths";
 import { forwardAuthResponseCookies } from "@/api/lib/auth/auth-response-cookies";
+import { createSessionBearer } from "@/api/lib/auth/session-bearer";
 import {
   createSessionLifetime,
   SESSION_LIFETIME_FIELDS,
@@ -528,7 +528,7 @@ const SESSION_LIFETIME_SECONDS = 60 * 60 * 24 * 7;
 /** How often the session expiry is refreshed, in seconds (1 day). */
 const SESSION_UPDATE_AGE_SECONDS = 60 * 60 * 24;
 
-/** Signed session snapshot lifetime; the live credential is checked separately. */
+/** Signed session snapshots bound credential acceptance without storage reads. */
 export const SESSION_COOKIE_CACHE_MAX_AGE_SECONDS = 60;
 
 const { cookiePrefix, useSecureCookies } = authCookiePolicy();
@@ -852,6 +852,8 @@ const createAuth = () => {
     store: createDatabaseSessionLifetimeStore(rootDb, {
       expiresIn: SESSION_LIFETIME_SECONDS,
       updateAge: SESSION_UPDATE_AGE_SECONDS,
+      rotationEnabled: env.SESSION_TOKEN_ROTATION_ENABLED,
+      capEnabled: env.SESSION_LIFETIME_CAP_ENABLED,
     }),
   });
   const oauthResources = getBetterAuthOAuthResources();
@@ -953,9 +955,8 @@ const createAuth = () => {
       expiresIn: SESSION_LIFETIME_SECONDS,
       updateAge: SESSION_UPDATE_AGE_SECONDS,
       ...AUTH_SESSION_STORAGE_OPTIONS,
-      // The snapshot avoids repeated session/user reads. Its version check
-      // observes the live credential and last-seen clock in one atomic write;
-      // cached snapshots cannot extend a prior credential's grace period.
+      // Cached snapshots perform no database work. Their lifetime bounds
+      // prior-credential acceptance; startup reads bypass this snapshot.
       // Member and matter authorization remain live per request.
       cookieCache: {
         enabled: true,
@@ -1088,7 +1089,7 @@ const createAuth = () => {
     },
     plugins: [
       sessionLifetime.plugin,
-      bearer(),
+      createSessionBearer(),
       // The after-hook on /get-session signs a `set-auth-jwt` response
       // header on every session resolution by reading the jwks table.
       // Nothing in the repo consumes that header: JWT issuance already
@@ -1594,7 +1595,7 @@ export type { MemberRole } from "@/api/lib/member-roles";
 type GetSessionAndMemberAuthorizationOptions = {
   headers: Headers | Record<string, string>;
   responseHeaders: Context["set"]["headers"];
-  workspaceId?: SafeId<"workspace">;
+  workspaceId?: SafeId<"workspace"> | undefined;
 };
 
 const getSessionAndMemberAuthorization = async ({

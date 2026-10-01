@@ -127,6 +127,7 @@ import { workspaceEventsRoute } from "@/api/handlers/workspaces/events";
 import { workspacesRoute } from "@/api/handlers/workspaces/routes";
 import { detached } from "@/api/lib/analytics/capture";
 import { getAuth, realtimeAuthorizers } from "@/api/lib/auth";
+import { createAuthResponseCookiesPlugin } from "@/api/lib/auth/auth-response-cookies";
 import { shouldRejectBrowserMutation } from "@/api/lib/browser-origin-guard";
 import {
   resolveClientAddress,
@@ -268,6 +269,7 @@ if (isLocalDevOpen()) {
 const CORS_PREFLIGHT_MAX_AGE_SECONDS = 60 * 60;
 
 const api = new Elysia()
+  .use(createAuthResponseCookiesPlugin())
   .mapResponse(({ responseValue, set }) =>
     finalizeResponseCachePolicy({ response: responseValue, set }),
   )

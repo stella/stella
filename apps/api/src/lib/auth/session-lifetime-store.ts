@@ -1,20 +1,24 @@
 import { and, eq, isNull, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
-import { createHash, randomBytes } from "node:crypto";
+import { randomBytes } from "node:crypto";
 
 import { session } from "@/api/db/auth-schema";
+import { revokeUserSessionById } from "@/api/lib/auth-artifacts";
 import {
   SESSION_ABSOLUTE_AGE_MS,
   SESSION_IDLE_AGE_MS,
   SESSION_PRIOR_TOKEN_GRACE_MS,
 } from "@/api/lib/auth/session-lifetime";
 import type { SessionLifetimeStore } from "@/api/lib/auth/session-lifetime";
+import { hashSessionToken } from "@/api/lib/auth/session-token";
 
-export const hashSessionToken = (token: string) =>
-  createHash("sha256").update(token).digest("hex");
+const SESSION_ACTIVITY_WRITE_INTERVAL_MS = 5 * 60 * 1000;
 
 type SessionLifetimeDatabase = {
+  delete: (table: typeof session) => {
+    where: (condition: SQL | undefined) => PromiseLike<unknown>;
+  };
   update: (table: typeof session) => {
     set: (values: PgUpdateSetSource<typeof session>) => {
       where: (condition: SQL | undefined) => {
@@ -25,7 +29,7 @@ type SessionLifetimeDatabase = {
   query: {
     session: {
       findFirst: (options: {
-        where: SQL | undefined;
+        where: { RAW: (table: typeof session) => SQL };
       }) => PromiseLike<typeof session.$inferSelect | undefined>;
     };
   };
@@ -34,39 +38,77 @@ type SessionLifetimeDatabase = {
 type DatabaseSessionLifetimeOptions = {
   expiresIn: number;
   updateAge: number;
+  rotationEnabled?: boolean;
+  capEnabled?: boolean;
 };
 
 export const createDatabaseSessionLifetimeStore = (
   db: SessionLifetimeDatabase,
-  { expiresIn, updateAge }: DatabaseSessionLifetimeOptions,
+  {
+    expiresIn,
+    updateAge,
+    rotationEnabled = false,
+    capEnabled = false,
+  }: DatabaseSessionLifetimeOptions,
 ): SessionLifetimeStore => {
-  const credentialPredicate = (token: string, now: Date) =>
+  type CredentialPredicateOptions = {
+    token: string;
+    now: Date;
+    table?: typeof session;
+  };
+  const credentialPredicate = ({
+    token,
+    now,
+    table = session,
+  }: CredentialPredicateOptions) =>
     or(
-      eq(session.token, token),
+      eq(table.token, token),
       and(
-        eq(session.priorTokenHash, hashSessionToken(token)),
-        sql`${session.priorTokenExpiresAt} > ${now}::timestamptz`,
+        eq(table.priorTokenHash, hashSessionToken(token)),
+        sql`${table.priorTokenExpiresAt} > ${now}::timestamptz`,
       ),
     );
 
   // A startup expiration ends at lastSeenAt; earlier requests cannot reopen it.
-  const liveSessionPredicate = (now: Date) =>
+  const liveSessionPredicate = (now: Date, table = session) =>
     and(
-      sql`${session.expiresAt} > ${now}::timestamptz`,
+      sql`${table.expiresAt} > ${now}::timestamptz`,
       or(
-        isNull(session.lastSeenAt),
-        sql`${session.expiresAt} > ${session.lastSeenAt}::timestamptz`,
+        isNull(table.lastSeenAt),
+        sql`${table.expiresAt} > ${table.lastSeenAt}::timestamptz`,
       ),
     );
 
+  const findCurrentSession = async (token: string, now: Date) =>
+    (await db.query.session.findFirst({
+      where: {
+        RAW: (table) =>
+          sql`${credentialPredicate({ token, now, table })} AND ${liveSessionPredicate(now, table)}`,
+      },
+    })) ?? null;
+
   return {
     observe: async ({ token, now, boundary }) => {
+      const current = await findCurrentSession(token, now);
+      if (!current) {
+        return null;
+      }
+      const staleBefore = new Date(
+        now.getTime() - SESSION_ACTIVITY_WRITE_INTERVAL_MS,
+      );
+      if (current.lastSeenAt !== null && current.lastSeenAt > staleBefore) {
+        return current;
+      }
+      const staleActivity = or(
+        isNull(session.lastSeenAt),
+        sql`${session.lastSeenAt} <= ${staleBefore}::timestamptz`,
+      );
       const expiredAtBoundary =
-        boundary === "startup"
+        capEnabled && boundary === "startup"
           ? sql<boolean>`${session.createdAt} <= ${new Date(now.getTime() - SESSION_ABSOLUTE_AGE_MS)}::timestamptz
               AND ${session.lastSeenAt} <= ${new Date(now.getTime() - SESSION_IDLE_AGE_MS)}::timestamptz`
           : sql<boolean>`false`;
-      // The activity observation and startup decision share the row's atomic write.
+      // Recheck activity under the row lock so concurrent requests write once.
       const rows = await db
         .update(session)
         .set({
@@ -74,20 +116,33 @@ export const createDatabaseSessionLifetimeStore = (
           expiresAt: sql`CASE WHEN ${expiredAtBoundary} THEN ${now}::timestamptz ELSE ${session.expiresAt} END`,
           updatedAt: session.updatedAt,
         })
-        .where(and(credentialPredicate(token, now), liveSessionPredicate(now)))
+        .where(
+          and(
+            credentialPredicate({ token, now }),
+            liveSessionPredicate(now),
+            staleActivity,
+          ),
+        )
         .returning();
-      const current = rows.at(0);
-      return current && current.expiresAt > now ? current : null;
+      const observed = rows.at(0);
+      if (observed) {
+        return observed.expiresAt > now ? observed : null;
+      }
+      return await findCurrentSession(token, now);
     },
-    refresh: async ({ token, now, expiresAt }) => {
+    refresh: async ({ token, now, expiresAt, credentialMode }) => {
       const rows = await db
         .update(session)
         .set({
-          token: randomBytes(32).toString("hex"),
-          priorTokenHash: hashSessionToken(token),
-          priorTokenExpiresAt: new Date(
-            now.getTime() + SESSION_PRIOR_TOKEN_GRACE_MS,
-          ),
+          ...(rotationEnabled && credentialMode === "cookie"
+            ? {
+                token: randomBytes(32).toString("hex"),
+                priorTokenHash: hashSessionToken(token),
+                priorTokenExpiresAt: new Date(
+                  now.getTime() + SESSION_PRIOR_TOKEN_GRACE_MS,
+                ),
+              }
+            : {}),
           expiresAt,
           updatedAt: now,
           lastSeenAt: sql`GREATEST(${session.lastSeenAt}, ${now}::timestamptz)`,
@@ -95,6 +150,7 @@ export const createDatabaseSessionLifetimeStore = (
         .where(
           and(
             eq(session.token, token),
+            eq(session.refreshMode, "automatic"),
             liveSessionPredicate(now),
             sql`${session.expiresAt} <= ${new Date(now.getTime() + (expiresIn - updateAge) * 1000)}::timestamptz`,
           ),
@@ -104,15 +160,9 @@ export const createDatabaseSessionLifetimeStore = (
       if (updated) {
         return updated;
       }
-      // A concurrent refresh converges to the credential already installed.
-      return (
-        (await db.query.session.findFirst({
-          where: and(
-            credentialPredicate(token, now),
-            liveSessionPredicate(now),
-          ),
-        })) ?? null
-      );
+      // A concurrent refresh converges; fixed credentials retain their expiry.
+      return await findCurrentSession(token, now);
     },
+    revokeById: async (options) => await revokeUserSessionById(db, options),
   };
 };

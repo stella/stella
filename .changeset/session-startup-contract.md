@@ -1,5 +1,4 @@
 ---
-"@stll/auth-model": patch
 ---
 
-Add the shared session startup header.
+Add the shared session startup header without a package release.

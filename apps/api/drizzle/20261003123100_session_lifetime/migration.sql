@@ -2,10 +2,23 @@ SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 
 ALTER TABLE "session"
+  ADD COLUMN IF NOT EXISTS "refresh_mode" text DEFAULT 'automatic' NOT NULL
+    CONSTRAINT "session_refreshMode_check" CHECK ("refresh_mode" IN ('automatic', 'fixed')),
   ADD COLUMN IF NOT EXISTS "last_seen_at" timestamptz,
   ADD COLUMN IF NOT EXISTS "prior_token_hash" text,
   ADD COLUMN IF NOT EXISTS "prior_token_expires_at" timestamptz;
 --> statement-breakpoint
+UPDATE "session"
+SET "refresh_mode" = 'fixed',
+  "expires_at" = LEAST("expires_at", "created_at" + CASE
+    WHEN "user_agent" = 'stella-dev-firm-knowledge-seed' THEN interval '2 hours'
+    ELSE interval '15 minutes'
+  END)
+WHERE "refresh_mode" = 'automatic' AND (
+  ("user_agent" = 'stella-smoke/deploy-verify' AND "id" LIKE 'smoke-session-%') OR
+  ("user_agent" = 'stella-dev-firm-knowledge-seed' AND "id" LIKE 'dev-seed-session-%') OR
+  ("user_agent" = 'stella-agent-auth/id-jag' AND "id" LIKE 'agent-idjag-%')
+);--> statement-breakpoint
 SELECT set_config(
   'stella.migration_statement_timeout',
   current_setting('statement_timeout'),
