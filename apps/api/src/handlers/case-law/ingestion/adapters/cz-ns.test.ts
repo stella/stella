@@ -38,7 +38,9 @@ describe("Domino listings distinguish publisher refusal from an empty view", () 
         asFetchMock(
           async (url: string | URL | Request) =>
             new Response(
-              String(url).includes("ReadViewEntries")
+              (url instanceof Request ? url.url : url.toString()).includes(
+                "ReadViewEntries",
+              )
                 ? JSON.stringify({
                     "@toplevelentries": "2",
                     viewentry: [
