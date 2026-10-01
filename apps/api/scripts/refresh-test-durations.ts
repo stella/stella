@@ -10,7 +10,7 @@ export const readTestDurations = (log: string) => {
   for (const raw of log.split("\n")) {
     const line = stripVTControlCharacters(raw);
     const header =
-      /(?:^|Z |##\[group\])(?<file>(?:src|scripts|evals)\/[^\r\n]+\.test\.tsx?):\s*$/u.exec(
+      /(?:^|Z |##\[group\])(?:[^\s:]+:[^\s:]+: )?(?:##\[group\])?(?<file>(?:src|scripts|evals)\/[^\r\n]+\.test\.tsx?):\s*$/u.exec(
         line,
       )?.groups?.["file"];
     if (header !== undefined) {
