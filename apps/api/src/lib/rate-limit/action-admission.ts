@@ -113,6 +113,18 @@ redis.call("PEXPIRE", KEYS[2], ARGV[2])
 return 1
 `;
 
+const RESERVE_PERIOD_SCRIPT = `
+local clock = redis.call("TIME")
+local now = clock[1] * 1000 + math.floor(clock[2] / 1000)
+local orgExpiry = redis.call("ZSCORE", KEYS[1], ARGV[4])
+local userExpiry = redis.call("ZSCORE", KEYS[2], ARGV[4])
+if orgExpiry == false or userExpiry == false or tonumber(orgExpiry) <= now or tonumber(userExpiry) <= now then
+  return -2
+end
+${ACTION_PERIOD_ACQUIRE_SCRIPT}
+return 1
+`;
+
 const RELEASE_SCRIPT = `
 redis.call("ZREM", KEYS[1], ARGV[1])
 redis.call("ZREM", KEYS[2], ARGV[1])
@@ -173,11 +185,10 @@ type OrganizationStateReader = (scope: {
 type ActionAdmissionOptions<T = unknown> = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
-  run: (signal: AbortSignal) => Promise<T>;
+  run: (signal: AbortSignal, control: ActionAdmissionControl) => Promise<T>;
   enabled?: boolean;
   scope?: "inherit" | "independent";
   policy?: ActionAdmissionPolicy;
-  periodIdentity?: AdmittedActionIdentity;
   periodPolicy?: ActionPeriodPolicy;
   serviceBudgetsEnabled?: boolean;
   serviceBudgetConfig?: OrganizationActionBudgetConfig;
@@ -189,7 +200,27 @@ type ActionAdmissionOptions<T = unknown> = {
   createId?: () => string;
   timing?: AdmissionTiming;
   costRecorder?: ActionCostRecorder | null;
+} & ActionAdmissionReservation;
+
+type ActionAdmissionControl = {
+  reservePeriod: (
+    identity: AdmittedActionIdentity,
+  ) => Promise<Result<void, ActionAdmissionError>>;
 };
+
+const disabledControl: ActionAdmissionControl = {
+  reservePeriod: async () => await Promise.resolve(Result.ok(undefined)),
+};
+
+type ActionAdmissionReservation =
+  | {
+      mode?: "action";
+      periodIdentity?: AdmittedActionIdentity;
+    }
+  | {
+      mode: "concurrency-only";
+      periodIdentity?: never;
+    };
 
 type AdmissionTiming = {
   now: () => number;
@@ -200,6 +231,7 @@ type AdmissionScope = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   signal: AbortSignal;
+  control: ActionAdmissionControl;
   status: "active" | "settled";
 };
 
@@ -255,7 +287,8 @@ const createAdmissionExecutor = ({
         ) => {
           // Renewal and release touch concurrency keys alone.
           const scriptKeys =
-            script === ACQUIRE_SCRIPT && window !== null
+            (script === ACQUIRE_SCRIPT || script === RESERVE_PERIOD_SCRIPT) &&
+            window !== null
               ? [keys.organization, keys.user, window.key]
               : [keys.organization, keys.user];
           return await withCommandTimeout({
@@ -274,7 +307,9 @@ const createAdmissionExecutor = ({
         };
         const reply = await send(budget, args);
         const storeNow =
-          script === ACQUIRE_SCRIPT ? staleActionPeriodTime(reply) : null;
+          script === ACQUIRE_SCRIPT || script === RESERVE_PERIOD_SCRIPT
+            ? staleActionPeriodTime(reply)
+            : null;
         if (budget === null || storeNow === null) {
           return Result.ok(reply);
         }
@@ -327,9 +362,9 @@ type ObservedAdmissionRunOptions<T> = Pick<
   ActionAdmissionOptions,
   "organizationId" | "userId"
 > & {
-  periodIdentity: ActionAdmissionOptions["periodIdentity"];
+  periodIdentity: AdmittedActionIdentity | undefined;
   costRecorder: ActionAdmissionOptions["costRecorder"];
-  run: (signal: AbortSignal) => Promise<T>;
+  run: (signal: AbortSignal, control: ActionAdmissionControl) => Promise<T>;
 };
 
 const createObservedAdmissionRun = <T>({
@@ -343,10 +378,13 @@ const createObservedAdmissionRun = <T>({
     costRecorder === null
       ? undefined
       : (costRecorder ?? getActionCostRecorder());
-  return async (signal: AbortSignal): Promise<T> => {
+  return async (
+    signal: AbortSignal,
+    control: ActionAdmissionControl,
+  ): Promise<T> => {
     const executeRun = async () => {
       signal.throwIfAborted();
-      return await run(signal);
+      return await run(signal, control);
     };
     if (recorder === undefined) {
       return await executeRun();
@@ -527,6 +565,7 @@ type ReuseAdmissionOptions = Pick<ActionAdmissionOptions, "organizationId"> & {
   periodPolicy: ActionPeriodPolicy | undefined;
   scope: AdmissionScope;
   serviceBudgetsEnabled: boolean;
+  mode: "action" | "concurrency-only";
   budgetNow: () => number;
 };
 
@@ -536,12 +575,17 @@ const reuseAdmissionScope = async <T>({
   periodIdentity,
   periodPolicy,
   serviceBudgetsEnabled,
+  mode,
   budgetNow,
   run,
 }: ReuseAdmissionOptions & {
   run: (signal: AbortSignal) => Promise<T>;
 }): Promise<Result<T, unknown>> => {
-  if (serviceBudgetsEnabled && !periodIdentity?.logicalPhaseId.trim()) {
+  if (
+    mode === "action" &&
+    serviceBudgetsEnabled &&
+    !periodIdentity?.logicalPhaseId.trim()
+  ) {
     return Result.err(
       new ActionAdmissionError({
         message: "Action service identity is incomplete",
@@ -549,7 +593,7 @@ const reuseAdmissionScope = async <T>({
       }),
     );
   }
-  if (!serviceBudgetsEnabled) {
+  if (mode === "action" && !serviceBudgetsEnabled) {
     const budget = resolveActionPeriodBudget({
       organizationId,
       identity: periodIdentity,
@@ -577,13 +621,128 @@ const reuseAdmissionScope = async <T>({
   });
 };
 
-export const withActionAdmission = async <T>({
+type PeriodReservationScopeOptions = AdmissionExecutorOptions & {
+  userId: SafeId<"user">;
+  signal: AbortSignal;
+  periodPolicy: ActionPeriodPolicy | undefined;
+  limits: ActionAdmissionPolicy;
+  leaseId: string;
+};
+
+const createPeriodReservationScope = ({
+  keys,
+  budget,
+  organizationId,
+  userId,
+  periodIdentity,
+  redis,
+  redisReady,
+  signal,
+  periodPolicy,
+  limits,
+  leaseId,
+}: PeriodReservationScopeOptions): AdmissionScope => {
+  const reservePhase = async (
+    identity: AdmittedActionIdentity,
+  ): Promise<Result<void, ActionAdmissionError>> => {
+    if (signal.aborted || executionScope.status !== "active") {
+      return Result.err(
+        new ActionAdmissionError({
+          message: "Action admission is unavailable",
+          reason: "unavailable",
+          cause: signal.reason,
+        }),
+      );
+    }
+    const resolved = resolveActionPeriodBudget({
+      organizationId,
+      identity,
+      policy: periodPolicy,
+      nowMs: Temporal.Now.instant().epochMilliseconds,
+    });
+    if (Result.isError(resolved)) {
+      return Result.err(
+        new ActionAdmissionError({
+          message: resolved.error.message,
+          reason: "unavailable",
+          cause: resolved.error,
+        }),
+      );
+    }
+    if (resolved.value === null) {
+      return Result.ok(undefined);
+    }
+    const reserve = createAdmissionExecutor({
+      keys,
+      budget: resolved.value,
+      serviceDeadlineMs: null,
+      organizationId,
+      periodIdentity: identity,
+      redis,
+      redisReady,
+    });
+    const reply = await reserve(RESERVE_PERIOD_SCRIPT, [
+      String(limits.leaseMs),
+      String(limits.organizationConcurrency),
+      String(limits.userConcurrency),
+      leaseId,
+      ...actionPeriodArguments(resolved.value),
+    ]);
+    if (Result.isError(reply)) {
+      return reply;
+    }
+    const refusal = acquisitionRefusal(reply.value);
+    return refusal === null ? Result.ok(undefined) : Result.err(refusal);
+  };
+  let reservation:
+    | {
+        identity: AdmittedActionIdentity;
+        result: Promise<Result<void, ActionAdmissionError>>;
+      }
+    | undefined =
+    budget !== null && periodIdentity !== undefined
+      ? {
+          identity: periodIdentity,
+          result: Promise.resolve(Result.ok(undefined)),
+        }
+      : undefined;
+  const control: ActionAdmissionControl = {
+    reservePeriod: async (identity) => {
+      if (reservation !== undefined) {
+        if (
+          reservation.identity.actionKind !== identity.actionKind ||
+          reservation.identity.logicalPhaseId !== identity.logicalPhaseId
+        ) {
+          panic("An admission cannot reserve two logical phases");
+        }
+        return await reservation.result;
+      }
+      const stableIdentity = {
+        actionKind: identity.actionKind,
+        logicalPhaseId: identity.logicalPhaseId,
+      };
+      const result = reservePhase(stableIdentity);
+      reservation = { identity: stableIdentity, result };
+      return await result;
+    },
+  };
+  const executionScope: AdmissionScope = {
+    organizationId,
+    userId,
+    signal,
+    control,
+    status: "active",
+  };
+  return executionScope;
+};
+
+const withEnabledActionAdmission = async <T>({
   organizationId,
   userId,
   run,
-  enabled = env.FEATURE_ACTION_ADMISSION,
   scope = "inherit",
   policy,
+  mode = "action",
   periodIdentity,
   periodPolicy,
   serviceBudgetsEnabled = env.FEATURE_ORG_SERVICE_BUDGETS,
@@ -595,22 +754,7 @@ export const withActionAdmission = async <T>({
   redisReady = admissionRedis.ready,
   createId = () => Bun.randomUUIDv7(),
   timing = defaultTiming,
-  costRecorder,
 }: ActionAdmissionOptions<T>): Promise<Result<T, unknown>> => {
-  const observedRun = createObservedAdmissionRun({
-    organizationId,
-    userId,
-    periodIdentity,
-    costRecorder,
-    run,
-  });
-  if (!enabled) {
-    return await Result.tryPromise({
-      try: async () => await observedRun(new AbortController().signal),
-      catch: (error: unknown) => error,
-    });
-  }
-
   const inherited = admissionScope.getStore();
   if (
     scope === "inherit" &&
@@ -624,22 +768,26 @@ export const withActionAdmission = async <T>({
       periodIdentity,
       periodPolicy,
       serviceBudgetsEnabled,
+      mode,
       budgetNow,
-      run: observedRun,
+      run: async (signal) => await run(signal, inherited.control),
     });
   }
 
-  const resolvedBudget = await resolveAdmissionBudget({
-    organizationId,
-    userId,
-    periodIdentity,
-    periodPolicy,
-    serviceBudgetsEnabled,
-    serviceBudgetConfig,
-    readOrganizationState,
-    organizationStateDb,
-    budgetNow,
-  });
+  const resolvedBudget =
+    mode === "concurrency-only"
+      ? Result.ok({ budget: null, serviceDeadlineMs: null })
+      : await resolveAdmissionBudget({
+          organizationId,
+          userId,
+          periodIdentity,
+          periodPolicy,
+          serviceBudgetsEnabled,
+          serviceBudgetConfig,
+          readOrganizationState,
+          organizationStateDb,
+          budgetNow,
+        });
   if (Result.isError(resolvedBudget)) {
     return resolvedBudget;
   }
@@ -751,18 +899,26 @@ export const withActionAdmission = async <T>({
   }
 
   let outcome: Result<T, unknown>;
-  const executionScope: AdmissionScope = {
+  const executionScope = createPeriodReservationScope({
+    keys,
+    budget,
+    serviceDeadlineMs,
     organizationId,
     userId,
+    periodIdentity,
+    redis,
+    redisReady,
     signal: controller.signal,
-    status: "active",
-  };
+    periodPolicy,
+    limits,
+    leaseId,
+  });
   try {
     outcome = await Result.tryPromise({
       try: async () =>
         await admissionScope.run(
           executionScope,
-          async () => await observedRun(controller.signal),
+          async () => await run(controller.signal, executionScope.control),
         ),
       catch: (error: unknown) => error,
     });
@@ -789,4 +945,18 @@ export const withActionAdmission = async <T>({
     return Result.err(controller.signal.reason);
   }
   return outcome;
+};
+
+export const withActionAdmission = async <T>(
+  options: ActionAdmissionOptions<T>,
+): Promise<Result<T, unknown>> => {
+  const observedRun = createObservedAdmissionRun(options);
+  if (!(options.enabled ?? env.FEATURE_ACTION_ADMISSION)) {
+    return await Result.tryPromise({
+      try: async () =>
+        await observedRun(new AbortController().signal, disabledControl),
+      catch: (error: unknown) => error,
+    });
+  }
+  return await withEnabledActionAdmission({ ...options, run: observedRun });
 };

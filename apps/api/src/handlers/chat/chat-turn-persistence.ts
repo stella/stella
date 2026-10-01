@@ -1141,38 +1141,83 @@ export const withClaimedChatTurnExecution = async <T>({
     return { execution, value: await mutate({ execution, tx }) };
   });
 
+type WriteChatTurnRunOwnershipOptions = {
+  execution: ChatTurnExecution;
+  safeDb: SafeDb;
+} & ({ mode: "bind"; runId: string } | { mode: "renew"; runId?: string });
+
+const writeChatTurnRunOwnership = async ({
+  execution,
+  runId,
+  safeDb,
+  mode,
+}: WriteChatTurnRunOwnershipOptions): Promise<
+  Result<ChatTurnExecutionStanding, SafeDbError>
+> =>
+  await safeDb(async (tx) => {
+    // audit: skip — execution ownership; durable turn outcomes are audited at settlement
+    const written = await tx
+      .update(chatTurns)
+      .set(
+        mode === "bind"
+          ? { runId }
+          : {
+              leaseExpiresAt: nextChatTurnRunLeaseExpiry(),
+              ...(runId === undefined ? {} : { runId }),
+            },
+      )
+      .where(ownedByExecution(execution))
+      .returning({ cancelRequestedAt: chatTurns.cancelRequestedAt });
+    return standingOf(written.at(0));
+  });
+
 /**
  * Extend a producing run's lease by `CHAT_TURN_RUN_LEASE_MS`. This conditional
  * write makes the renewed lease a proof that the caller still owns the turn:
  * an owner that finds it lost no longer owns any effect of the turn.
  */
-export const renewChatTurnExecutionLease = async ({
-  execution,
-  runId,
-  safeDb,
-}: {
+export const renewChatTurnExecutionLease = async (options: {
   execution: ChatTurnExecution;
   runId?: string;
   safeDb: SafeDb;
 }): Promise<Result<ChatTurnExecutionStanding, SafeDbError>> =>
-  await safeDb(async (tx) => {
-    // audit: skip — ephemeral execution ownership; terminal state is audited at settlement
-    const renewed = await tx
-      .update(chatTurns)
-      .set({
-        leaseExpiresAt: nextChatTurnRunLeaseExpiry(),
-        ...(runId === undefined ? {} : { runId }),
-      })
-      .where(ownedByExecution(execution))
-      .returning({ cancelRequestedAt: chatTurns.cancelRequestedAt });
-    return standingOf(renewed.at(0));
-  });
+  await writeChatTurnRunOwnership({ ...options, mode: "renew" });
 
 /** How starting a run went: its standing, or its id already names a turn. */
 type ChatTurnRunStart = ChatTurnExecutionStanding | "run-taken";
 
 /** The index that makes a run id name one turn in its organization. */
 const CHAT_TURN_RUN_ID_INDEX = "chat_turns_org_run_id_uidx";
+
+const classifyRunIdWrite = (
+  written: Result<ChatTurnExecutionStanding, SafeDbError>,
+): Result<ChatTurnRunStart, SafeDbError> => {
+  if (
+    Result.isError(written) &&
+    isPgConstraintError(
+      written.error,
+      PG_ERROR.UNIQUE_VIOLATION,
+      CHAT_TURN_RUN_ID_INDEX,
+    )
+  ) {
+    return Result.ok("run-taken");
+  }
+  return written;
+};
+
+/** Bind the owned turn before pre-dispatch work without changing its expiry. */
+export const bindChatTurnRunId = async ({
+  execution,
+  runId,
+  safeDb,
+}: {
+  execution: ChatTurnExecution;
+  runId: string;
+  safeDb: SafeDb;
+}): Promise<Result<ChatTurnRunStart, SafeDbError>> =>
+  classifyRunIdWrite(
+    await writeChatTurnRunOwnership({ execution, runId, safeDb, mode: "bind" }),
+  );
 
 /**
  * Start the run `runId` for a claimed execution, immediately before provider
@@ -1196,17 +1241,7 @@ export const startChatTurnRun = async ({
     runId,
     safeDb,
   });
-  if (
-    Result.isError(started) &&
-    isPgConstraintError(
-      started.error,
-      PG_ERROR.UNIQUE_VIOLATION,
-      CHAT_TURN_RUN_ID_INDEX,
-    )
-  ) {
-    return Result.ok("run-taken");
-  }
-  return started;
+  return classifyRunIdWrite(started);
 };
 
 /** Advisory preflight check; startChatTurnRun remains the atomic run-id fence. */
