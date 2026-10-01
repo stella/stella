@@ -5,8 +5,9 @@ import * as v from "valibot";
 const jobSchema = v.looseObject({
   steps: v.array(v.looseObject({ name: v.string() })),
 });
+const workflowSchema = v.object({ jobs: v.record(v.string(), v.unknown()) });
 const jobs = v.parse(
-  v.object({ jobs: v.record(v.string(), jobSchema) }),
+  workflowSchema,
   Bun.YAML.parse(
     readFileSync(
       new URL("../.github/workflows/ci.yml", import.meta.url),
@@ -101,4 +102,15 @@ test("CI check coverage detects missing, duplicate, modified and newly required 
       { name: "Additional required guard", run: "exit 1" },
     ]),
   );
+});
+
+test("unrelated jobs may use unnamed steps or reusable workflows", () => {
+  const parsed = v.parse(workflowSchema, {
+    jobs: {
+      unrelated: { steps: [{ run: "exit 0" }] },
+      reusable: { uses: "./.github/workflows/other.yml" },
+      checks: original,
+    },
+  });
+  expect(v.parse(jobSchema, parsed.jobs["checks"])).toEqual(original);
 });

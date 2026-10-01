@@ -410,7 +410,7 @@ const parseArgs = (args: readonly string[]): Options => {
     panic("--all checks every tracked file and takes no --base");
   }
   return {
-    leg,
+    ...(leg === undefined ? {} : { leg }),
     scope: all
       ? { type: "all" }
       : { type: "affected", base: base ?? DEFAULT_BASE },
