@@ -1,6 +1,5 @@
 import { Result } from "better-result";
 
-import { skCourtSuccessionReferences } from "@stll/api-contract/sk-court-succession";
 import {
   SK_COURT_REGISTRY_TIERS,
   SK_COURT_TIERS,
@@ -105,7 +104,6 @@ export const skCourtDirectoryMetadata = (
     });
   }
   return {
-    courtSuccession: skCourtSuccessionReferences(statedName, record.nazov),
     courtRegistry: {
       status: "available" as const,
       registreGuid: record.registreGuid,

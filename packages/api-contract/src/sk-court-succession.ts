@@ -516,7 +516,7 @@ const courtReferenceIndex = () => {
 /** Store references to the canonical graph rather than duplicate statute text per decision. */
 export const skCourtSuccessionReferences = (
   statedName: string,
-  registryName: string,
+  registryName?: string,
 ) => {
   const index = courtReferenceIndex();
   return {
@@ -525,7 +525,7 @@ export const skCourtSuccessionReferences = (
     edgeIds: [
       ...new Set([
         ...(index.get(statedName) ?? []),
-        ...(index.get(registryName) ?? []),
+        ...(registryName === undefined ? [] : (index.get(registryName) ?? [])),
       ]),
     ],
   } as const;
