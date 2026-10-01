@@ -47,5 +47,5 @@ jobs:
         env:
           E2E_WEB_URL: https://staging.stll.app
           E2E_API_URL: https://api-staging.stll.app
-          E2E_EDGE_HEADER_NAME: ${{ secrets.E2E_EDGE_HEADER_NAME }}
-          E2E_EDGE_HEADER_VALUE: ${{ secrets.E2E_EDGE_HEADER_VALUE }}
+          E2E_EDGE_HEADER_NAME: x-stella-edge-token
+          E2E_EDGE_HEADER_VALUE: ${{ secrets.STAGING_VIEWER_ACCESS_TOKEN }}
