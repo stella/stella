@@ -1,3 +1,4 @@
+// parser-output-unchanged: SyncPage adds optional failure telemetry; decision parsing and stored output are unchanged.
 import { panic, Result, TaggedError } from "better-result";
 
 import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";

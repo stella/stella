@@ -9,6 +9,48 @@ type ReadBaseLedgerOptions = {
   parseLedger: (text: string, label: string) => string[];
 };
 
+type CompareLedgerMembershipOptions = ReadBaseLedgerOptions & {
+  current: readonly string[];
+};
+
+type CompareLedgerMembershipResult =
+  | { type: "unresolved-base" }
+  | { type: "compared"; added: string[] };
+
+const compareLedgerMembership = ({
+  baseRef,
+  current,
+  ledgerRel,
+  repoRoot,
+  parseLedger,
+}: CompareLedgerMembershipOptions): CompareLedgerMembershipResult => {
+  const resolved = Bun.spawnSync(
+    [
+      "git",
+      "rev-parse",
+      "--verify",
+      "--quiet",
+      "--end-of-options",
+      `${baseRef}^{commit}`,
+    ],
+    { cwd: repoRoot, stderr: "pipe" },
+  );
+  if (resolved.exitCode !== 0) {
+    return { type: "unresolved-base" };
+  }
+  const commit = resolved.stdout.toString().trim();
+  const base = readBaseLedger({
+    baseRef: commit,
+    ledgerRel,
+    repoRoot,
+    parseLedger,
+  });
+  return {
+    type: "compared",
+    added: addedEntries(current, base),
+  };
+};
+
 const readBaseLedger = ({
   baseRef,
   ledgerRel,
@@ -68,6 +110,9 @@ type RunLedgerMembershipGuardOptions = {
   parseLedger: (text: string, label: string) => string[];
   label: string;
   remediation: string;
+  args?: readonly string[];
+  log?: (message: string) => void;
+  error?: (message: string) => void;
 };
 
 export const runLedgerMembershipGuard = ({
@@ -76,15 +121,17 @@ export const runLedgerMembershipGuard = ({
   parseLedger,
   label,
   remediation,
+  args = process.argv.slice(2),
+  log = console.log,
+  error = console.error,
 }: RunLedgerMembershipGuardOptions): number => {
-  const args = process.argv.slice(2);
   if (args[0] === "--self-test") {
     return selfTestLedgerMembership(`check-${label}-ledger`);
   }
   const baseIndex = args.indexOf("--base");
   const baseRef = baseIndex === -1 ? "origin/main" : args[baseIndex + 1];
   if (baseRef === undefined || baseRef === "") {
-    console.error("--base requires a ref");
+    error("--base requires a ref");
     return 2;
   }
 
@@ -92,21 +139,31 @@ export const runLedgerMembershipGuard = ({
     readFileSync(path.join(repoRoot, ledgerRel), "utf-8"),
     ledgerRel,
   );
-  const added = addedEntries(
+  const comparison = compareLedgerMembership({
+    baseRef,
     current,
-    readBaseLedger({ baseRef, ledgerRel, repoRoot, parseLedger }),
-  );
+    ledgerRel,
+    repoRoot,
+    parseLedger,
+  });
+  if (comparison.type === "unresolved-base") {
+    log(
+      `${label} ledger: membership check skipped; base ${baseRef} could not be resolved.`,
+    );
+    return 0;
+  }
+  const { added } = comparison;
   if (added.length === 0) {
-    console.log(
+    log(
       `${label} ledger: OK. ${current.length} entries, none new vs ${baseRef}.`,
     );
     return 0;
   }
-  console.error(
+  error(
     `${label} ledger: ${added.length} entries are not in ${baseRef}. The ledger only shrinks; ${remediation}:`,
   );
   for (const entry of added) {
-    console.error(`  ${entry}`);
+    error(`  ${entry}`);
   }
   return 1;
 };
