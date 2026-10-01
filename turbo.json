@@ -157,6 +157,7 @@
         "$TURBO_ROOT$/oxlint.config.ts",
         "$TURBO_ROOT$/oxlint.result-boundary.config.ts",
         "$TURBO_ROOT$/.oxlint-plugins/**",
+        "$TURBO_ROOT$/scripts/oxlint-presets/**",
         "$TURBO_ROOT$/scripts/ownership.ts",
         "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
         "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
@@ -183,6 +184,7 @@
         "$TURBO_ROOT$/oxlint.config.ts",
         "$TURBO_ROOT$/oxlint.result-boundary.config.ts",
         "$TURBO_ROOT$/.oxlint-plugins/**",
+        "$TURBO_ROOT$/scripts/oxlint-presets/**",
         "$TURBO_ROOT$/scripts/ownership.ts",
         "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
         "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
@@ -208,6 +210,7 @@
         "$TURBO_ROOT$/oxlint.config.ts",
         "$TURBO_ROOT$/oxlint.result-boundary.config.ts",
         "$TURBO_ROOT$/.oxlint-plugins/**",
+        "$TURBO_ROOT$/scripts/oxlint-presets/**",
         "$TURBO_ROOT$/scripts/ownership.ts",
         "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
         "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
@@ -228,6 +231,7 @@
         "$TURBO_ROOT$/oxlint.config.ts",
         "$TURBO_ROOT$/oxlint.result-boundary.config.ts",
         "$TURBO_ROOT$/.oxlint-plugins/**",
+        "$TURBO_ROOT$/scripts/oxlint-presets/**",
         "$TURBO_ROOT$/scripts/ownership.ts",
         "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
         "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
@@ -275,6 +279,7 @@
     },
     "@stll/api#test": {
       "dependsOn": [],
+      "env": ["API_TEST_SHARD"],
       // How many test batches run at once; it never changes results, so it
       // passes through without entering the cache key.
       "passThroughEnv": ["API_TEST_LANES"],

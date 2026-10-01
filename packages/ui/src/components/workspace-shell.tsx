@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import type { ReactElement, ReactNode } from "react";
 
 import { useIsMobile } from "../hooks/use-mobile";
-import { MessageSquarePlusIcon } from "../icons";
+import { NewChatIcon } from "../icons";
 import {
   InspectorRail,
   InspectorRailCell,
@@ -218,7 +218,7 @@ export const WorkspaceEndRail = ({
           onClick={chatAction.onActivate}
           title={chatAction.label}
         >
-          <MessageSquarePlusIcon aria-hidden="true" className="size-4" />
+          <NewChatIcon aria-hidden="true" className="size-4" />
         </InspectorRailIconButton>
       ) : (
         <InspectorRailIconButton
@@ -226,7 +226,7 @@ export const WorkspaceEndRail = ({
           disabled
           title={chatAction.reason}
         >
-          <MessageSquarePlusIcon aria-hidden="true" className="size-4" />
+          <NewChatIcon aria-hidden="true" className="size-4" />
         </InspectorRailIconButton>
       )}
     </InspectorRailFooter>

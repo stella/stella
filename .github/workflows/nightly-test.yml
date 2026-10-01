@@ -88,7 +88,7 @@ jobs:
         env:
           E2E_SOAK_SEED: ${{ github.run_id }}
           E2E_SOAK_STEPS: "200"
-        run: bun --filter @stll/web test:e2e:soak
+        run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:soak
 
       - name: Add replay instructions
         if: failure() && steps.e2e-stack.outputs.status == 'ready'
@@ -436,7 +436,9 @@ jobs:
           echo "candidate=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@aff5017c264acce5a2bcdf15876da08835e6de70
+        uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install candidate dependencies
         run: bash scripts/retry.sh bun ci --ignore-scripts

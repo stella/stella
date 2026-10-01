@@ -25,7 +25,7 @@ import {
 } from "@/api/lib/chat/thread-stored-content-send-mode";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
-import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
+import type { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 
 const TITLE_GENERATION_TIMEOUT_MS = 10_000;
@@ -41,6 +41,9 @@ const TITLE_ADMISSION_FAILED = failureSink({
 });
 
 type GenerateThreadTitleProps = {
+  /** Refreshes the thread's search document once the title changed; the
+   *  caller supplies it so the title's database access stays with its own. */
+  indexThread: typeof upsertChatThreadSearchDocument;
   initialTitle: string;
   messages: [ChatMessage, ChatMessage]; // [userMessage, AIMessage]
   organizationId: SafeId<"organization">;
@@ -55,6 +58,7 @@ type GenerateThreadTitleProps = {
 
 const generateAdmittedThreadTitle = async ({
   admissionSignal,
+  indexThread,
   initialTitle,
   messages,
   organizationId,
@@ -197,10 +201,11 @@ const generateAdmittedThreadTitle = async ({
       return;
     }
 
-    // Re-index so the new AI-generated title is searchable. Fire-and-
-    // forget: title generation is already a best-effort side path.
+    // Re-index so the new AI-generated title is searchable. Best effort:
+    // a failure is reported, never thrown. Awaited, so whoever waits for
+    // this title (the turn's follow-ups) waits for its indexing too.
     if (updateResult.value) {
-      upsertChatThreadSearchDocument(threadId).catch(captureError);
+      await indexThread(threadId).catch(captureError);
     }
   } catch (error) {
     aiAnalytics.captureError(error);

@@ -414,7 +414,6 @@ const createWorkspaceRoot = ({
       "@typescript/native": "npm:typescript@7.0.2",
       "oxlint-tsgolint": "7.0.2002",
       typescript: "catalog:",
-      ultracite: "catalog:",
       ...rootDevDependencies,
     },
   };

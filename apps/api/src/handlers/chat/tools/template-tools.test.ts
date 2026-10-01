@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
@@ -134,11 +135,11 @@ describe("createTemplateAuthoringTools", () => {
         redactionMap.set("[PERSON_1]", "Dana Novotná");
         return field.replaceAll("Dana Novotná", "[PERSON_1]");
       });
-      return {
+      return Result.ok({
         entityCount: redactionMap.size,
         fields: anonymized,
         redactionMap,
-      };
+      });
     };
     const thirdPartyBoundary = createChatThirdPartyBoundary({
       anonymizeFields,
