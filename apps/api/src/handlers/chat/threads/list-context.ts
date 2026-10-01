@@ -4,6 +4,7 @@ import type { SQL } from "drizzle-orm";
 
 import { isEntityKind } from "@stll/api-contract";
 import type { EntityKind } from "@stll/api-contract";
+import { USER_FILE_URL_PREFIX } from "@stll/api-contract/user-file-url";
 
 import type { Transaction } from "@/api/db/root";
 import { executedRows } from "@/api/lib/db/executed-rows";
@@ -14,10 +15,8 @@ import { isRecord } from "@/api/lib/type-guards";
  * Counts beyond it are still reported, so the history can say "+N".
  */
 export const CHAT_THREAD_CONTEXT_PREVIEW_LIMIT = 8;
-/** Most recent user messages per thread read for mentions. */
+/** Most recent user messages per thread read for mentions and uploads. */
 export const CHAT_THREAD_CONTEXT_MESSAGE_SCAN_LIMIT = 25;
-/** Most recent uploaded attachments per thread read. */
-export const CHAT_THREAD_CONTEXT_ATTACHMENT_SCAN_LIMIT = 25;
 /** Most pinned and most data matter ids per thread read from its arrays. */
 export const CHAT_THREAD_CONTEXT_MATTER_SCAN_LIMIT = 50;
 
@@ -97,6 +96,19 @@ const chatThreadContextsQuery = (threadIds: readonly string[]): SQL => sql`
         FROM jsonb_array_elements_text(${JSON.stringify(threadIds)}::text::jsonb)
       )
     ),
+    recent_user_messages AS (
+      SELECT pt.thread_id, m.content, m.created_at
+      FROM page_threads pt
+      CROSS JOIN LATERAL (
+        SELECT content, created_at
+        FROM chat_messages
+        WHERE thread_id = pt.thread_id AND role = 'user'
+        ORDER BY created_at DESC
+        LIMIT ${CHAT_THREAD_CONTEXT_MESSAGE_SCAN_LIMIT}
+      ) m
+    ),
+    -- Every persisted version: version 2 and 3 keep mentions in metadata;
+    -- version 1 kept them as data-stella-mentions parts.
     mention_refs AS (
       SELECT
         recent.thread_id,
@@ -110,21 +122,45 @@ const chatThreadContextsQuery = (threadIds: readonly string[]): SQL => sql`
           PARTITION BY recent.thread_id
           ORDER BY recent.created_at DESC, mention.ordinality
         ) AS ord
-      FROM (
-        SELECT pt.thread_id, m.content, m.created_at
-        FROM page_threads pt
-        CROSS JOIN LATERAL (
-          SELECT content, created_at
-          FROM chat_messages
-          WHERE thread_id = pt.thread_id AND role = 'user'
-          ORDER BY created_at DESC
-          LIMIT ${CHAT_THREAD_CONTEXT_MESSAGE_SCAN_LIMIT}
-        ) m
-      ) recent
-      CROSS JOIN LATERAL jsonb_path_query(
-        recent.content,
-        '$.metadata.mentions.mentions[*]'
+      FROM recent_user_messages recent
+      CROSS JOIN LATERAL jsonb_array_elements(
+        jsonb_path_query_array(
+          recent.content,
+          '$.metadata.mentions.mentions[*]'
+        ) || jsonb_path_query_array(
+          recent.content,
+          '$.data[*] ? (@.type == "data-stella-mentions").data.mentions[*]'
+        )
       ) WITH ORDINALITY AS mention(value, ordinality)
+    ),
+    -- Uploads the surviving messages still reference: image and document
+    -- parts (versions 2 and 3) and legacy file parts (version 1). An upload
+    -- whose message was edited away or truncated is not context any more.
+    attachment_refs AS (
+      SELECT
+        recent.thread_id,
+        recent.created_at,
+        CASE
+          WHEN starts_with(ref.url, ${USER_FILE_URL_PREFIX})
+            AND substring(ref.url FROM ${USER_FILE_URL_PREFIX.length + 1}::int) ~* ${UUID_PATTERN}
+          THEN substring(ref.url FROM ${USER_FILE_URL_PREFIX.length + 1}::int)::uuid
+        END AS file_id
+      FROM recent_user_messages recent
+      CROSS JOIN LATERAL jsonb_array_elements_text(
+        jsonb_path_query_array(
+          recent.content,
+          '$.data[*] ? (@.type == "image" || @.type == "document").source.value ? (@.type() == "string")'
+        ) || jsonb_path_query_array(
+          recent.content,
+          '$.data[*] ? (@.type == "file").url ? (@.type() == "string")'
+        )
+      ) AS ref(url)
+    ),
+    thread_attachments AS (
+      SELECT DISTINCT ON (thread_id, file_id) thread_id, file_id, created_at
+      FROM attachment_refs
+      WHERE file_id IS NOT NULL
+      ORDER BY thread_id, file_id, created_at DESC
     ),
     matter_candidates AS (
       SELECT thread_id, workspace_id AS matter_id, 0 AS priority, 0::bigint AS ord
@@ -192,20 +228,14 @@ const chatThreadContextsQuery = (threadIds: readonly string[]): SQL => sql`
       JOIN entities e ON e.id = te.entity_id
       UNION ALL
       SELECT
-        pt.thread_id,
+        ta.thread_id,
         uf.id::text,
         uf.file_name,
         'document',
         uf.mime_type,
-        uf.created_at
-      FROM page_threads pt
-      CROSS JOIN LATERAL (
-        SELECT id, file_name, mime_type, created_at
-        FROM user_files
-        WHERE thread_id = pt.thread_id
-        ORDER BY created_at DESC
-        LIMIT ${CHAT_THREAD_CONTEXT_ATTACHMENT_SCAN_LIMIT}
-      ) uf
+        ta.created_at
+      FROM thread_attachments ta
+      JOIN user_files uf ON uf.id = ta.file_id AND uf.thread_id = ta.thread_id
     ),
     ranked_files AS (
       SELECT
@@ -256,8 +286,9 @@ const chatThreadContextsQuery = (threadIds: readonly string[]): SQL => sql`
  * matters whose data it embedded (`data_workspace_ids`).
  *
  * Files, in order: the document a file chat is bound to, then documents
- * mentioned in recent user messages and files uploaded into the thread,
- * newest first.
+ * mentioned in recent user messages and uploads those messages still attach,
+ * newest first. Mentions and uploads are read from every persisted message
+ * version.
  *
  * Every read is bounded per thread (see the scan limits above). Matters and
  * documents resolve through the caller's RLS-scoped transaction, so a matter

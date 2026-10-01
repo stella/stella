@@ -6,7 +6,6 @@ import { BidiText } from "@stll/ui/bidi-text";
 
 import { InlinePill } from "@/components/inline-pill";
 import { MatterIcon } from "@/components/matter-icon";
-import Tooltip from "@/components/tooltip";
 import { EntityIcon } from "@/components/workspaces/entity-kind-icon";
 import type { ChatHistoryItem } from "@/features/chat/queries";
 import { useFormatter } from "@/i18n/formatting-context";
@@ -44,8 +43,8 @@ const FileGlyph = ({ file }: { file: ThreadContextFile }) => (
 /**
  * The quiet context line under a chat history title: the matters and files
  * the chat drew on, as mention-style chips. At most two of each show inline;
- * the rest fold into one "+N" badge, and hovering the line lists everything
- * the server named. The line never wraps: chips truncate instead.
+ * the rest fold into one "+N" badge whose hidden names screen readers still
+ * hear. The line never wraps: chips truncate instead.
  */
 export const ThreadContextLine = ({ context }: { context: ThreadContext }) => {
   const t = useTranslations();
@@ -64,7 +63,7 @@ export const ThreadContextLine = ({ context }: { context: ThreadContext }) => {
       : []),
   ];
 
-  const line = (
+  return (
     <span className="flex min-w-0 shrink items-center gap-1 overflow-hidden">
       {layout.inline.matters.map((matter) => (
         <InlinePill
@@ -98,16 +97,17 @@ export const ThreadContextLine = ({ context }: { context: ThreadContext }) => {
       ) : null}
     </span>
   );
-
-  return (
-    <Tooltip
-      content={<ThreadContextTooltip context={context} />}
-      render={line}
-    />
-  );
 };
 
-const ThreadContextTooltip = ({ context }: { context: ThreadContext }) => {
+/**
+ * Everything the server named for a thread's context, for the tooltip the
+ * history row's link owns (so keyboard focus opens it as hover does).
+ */
+export const ThreadContextTooltip = ({
+  context,
+}: {
+  context: ThreadContext;
+}) => {
   const t = useTranslations();
   const layout = layoutThreadContext(context);
 

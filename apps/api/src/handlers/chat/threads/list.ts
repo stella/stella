@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import type { SQL } from "drizzle-orm";
-import { and, arrayOverlaps, desc, eq, ilike, or, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { t } from "elysia";
 
 import {
@@ -18,6 +19,7 @@ import {
   encodeChatThreadListCursor,
 } from "@/api/handlers/chat/thread-list-pagination";
 import {
+  CHAT_THREAD_CONTEXT_MATTER_SCAN_LIMIT,
   EMPTY_CHAT_THREAD_CONTEXT,
   readChatThreadContexts,
 } from "@/api/handlers/chat/threads/list-context";
@@ -29,8 +31,11 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
 
-/** Most matching matters a search widens to (pinned or embedded matters). */
-const CHAT_THREAD_SEARCH_MATTER_LIMIT = 50;
+/** The matters a thread's pinned or embedded matter ids name, for search. */
+const contextMatterWorkspaces = alias(
+  workspacesTable,
+  "context_matter_workspaces",
+);
 
 type ChatThreadListItem = {
   context: ChatThreadContext;
@@ -116,46 +121,42 @@ const getThreads = createSafeRootHandler(
     const { contexts, rows } = yield* Result.await(
       safeDb(async (tx) => {
         const listConditions = [...conditions];
-        if (searchPattern !== null) {
-          // A matter pinned to a thread, or whose data it embedded, matches
-          // by name too. One lookup of the organization's matching matters
-          // (RLS keeps it to matters the user can open), not one per thread.
-          const matchingMatters = await tx
-            .select({ id: workspacesTable.id })
-            .from(workspacesTable)
-            .where(
-              and(
-                eq(
-                  workspacesTable.organizationId,
-                  session.activeOrganizationId,
-                ),
-                ilike(workspacesTable.name, searchPattern),
-              ),
-            )
-            .limit(CHAT_THREAD_SEARCH_MATTER_LIMIT);
-          const matchingMatterIds = matchingMatters.map((matter) => matter.id);
+        // A matter pinned to a thread, or whose data it embedded, matches by
+        // name too. The lateral probe looks up that thread's own matter ids
+        // (bounded like its context preview) by primary key, so no matching
+        // matter is dropped and the result never depends on how many matters
+        // match the term. RLS keeps it to matters the user can open.
+        const contextMatterMatch =
+          searchPattern === null
+            ? null
+            : tx
+                .select({
+                  matched: sql<boolean>`true`.as("context_matter_matched"),
+                })
+                .from(contextMatterWorkspaces)
+                .where(
+                  and(
+                    sql`${contextMatterWorkspaces.id} = ANY(
+                      ${chatThreads.contextMatterIds}[1:${CHAT_THREAD_CONTEXT_MATTER_SCAN_LIMIT}::int]
+                      || ${chatThreads.dataWorkspaceIds}[1:${CHAT_THREAD_CONTEXT_MATTER_SCAN_LIMIT}::int]
+                    )`,
+                    ilike(contextMatterWorkspaces.name, searchPattern),
+                  ),
+                )
+                .limit(1)
+                .as("context_matter_match");
+        if (searchPattern !== null && contextMatterMatch !== null) {
           const searchCondition = or(
             ilike(chatThreads.title, searchPattern),
             ilike(workspacesTable.name, searchPattern),
-            ...(matchingMatterIds.length > 0
-              ? [
-                  arrayOverlaps(
-                    chatThreads.contextMatterIds,
-                    matchingMatterIds,
-                  ),
-                  arrayOverlaps(
-                    chatThreads.dataWorkspaceIds,
-                    matchingMatterIds,
-                  ),
-                ]
-              : []),
+            sql`${contextMatterMatch.matched} IS TRUE`,
           );
           if (searchCondition) {
             listConditions.push(searchCondition);
           }
         }
 
-        const listedRows = await tx
+        let listQuery = tx
           .select({
             createdAt: chatThreads.createdAt,
             forkedFromMessageId: chatThreads.forkedFromMessageId,
@@ -173,6 +174,11 @@ const getThreads = createSafeRootHandler(
             workspacesTable,
             eq(workspacesTable.id, chatThreads.workspaceId),
           )
+          .$dynamic();
+        if (contextMatterMatch !== null) {
+          listQuery = listQuery.leftJoinLateral(contextMatterMatch, sql`true`);
+        }
+        const listedRows = await listQuery
           .where(and(...listConditions))
           .orderBy(desc(chatThreads.updatedAt), desc(chatThreads.id))
           .limit(limit + 1);

@@ -31,6 +31,7 @@ import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { ChatThreadOriginPrefix } from "@/components/chat/chat-thread-origin-prefix";
+import Tooltip from "@/components/tooltip";
 import {
   ChatTitleRename,
   ChatTitleSuggestButton,
@@ -52,7 +53,8 @@ import { toAPIError } from "@/lib/errors/api";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
 
-import { ThreadContextLine } from "./thread-context-line";
+import { ThreadContextLine, ThreadContextTooltip } from "./thread-context-line";
+import { layoutThreadContext } from "./thread-context-line.logic";
 
 type ThreadsSheetProps = {
   icon?: ReactNode;
@@ -387,6 +389,7 @@ const ThreadRow = ({
           scope: thread.scope,
           threadId: toChatThreadId(thread.id),
         };
+  const hasContext = layoutThreadContext(thread.context).hasContext;
   const committedTitle = isPlaceholderThreadTitle(thread.title)
     ? ""
     : thread.title;
@@ -413,21 +416,32 @@ const ThreadRow = ({
           startEditingWithSuggestion,
         }) => (
           <>
-            <Link
-              className="flex flex-1 flex-col gap-0.5 overflow-hidden px-3 py-2 text-start"
-              onClick={() => onOpenChange(false)}
-              {...(threadRef.scope === "global"
-                ? {
-                    to: "/chat/$threadId",
-                    params: { threadId: threadRef.threadId },
-                  }
-                : {
-                    to: "/chat/workspaces/$workspaceId/$threadId",
-                    params: {
-                      threadId: threadRef.threadId,
-                      workspaceId: threadRef.workspaceId,
-                    },
-                  })}
+            {/* The link owns the context tooltip, so hovering the row and
+                focusing it with the keyboard both reveal the full list. */}
+            <Tooltip
+              content={
+                hasContext ? (
+                  <ThreadContextTooltip context={thread.context} />
+                ) : null
+              }
+              render={
+                <Link
+                  className="flex flex-1 flex-col gap-0.5 overflow-hidden px-3 py-2 text-start"
+                  onClick={() => onOpenChange(false)}
+                  {...(threadRef.scope === "global"
+                    ? {
+                        to: "/chat/$threadId",
+                        params: { threadId: threadRef.threadId },
+                      }
+                    : {
+                        to: "/chat/workspaces/$workspaceId/$threadId",
+                        params: {
+                          threadId: threadRef.threadId,
+                          workspaceId: threadRef.workspaceId,
+                        },
+                      })}
+                />
+              }
             >
               <BidiText as="span" className="truncate text-sm font-medium">
                 {displayTitle}
@@ -443,7 +457,7 @@ const ThreadRow = ({
                   {format.dateTime(new Date(thread.updatedAt).getTime())}
                 </span>
               </span>
-            </Link>
+            </Tooltip>
             <ChatTitleSuggestButton
               className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
               hasMessages
