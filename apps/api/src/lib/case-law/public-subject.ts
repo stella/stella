@@ -46,6 +46,7 @@ import {
   readDecisionAbsorption,
   supplementAnchorPrefix,
 } from "@/api/lib/case-law/decision-absorption";
+import { canonicalDecisionIdSql } from "@/api/lib/case-law/decision-alias";
 import { normalizePublicDecisionLanguage } from "@/api/lib/case-law/decision-language";
 import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { isRedistributable } from "@/api/lib/legal-search/corpus-source";
@@ -102,7 +103,7 @@ export type DecisionSubjectLocator =
 const locatorCondition = (locator: DecisionSubjectLocator) => {
   switch (locator.kind) {
     case "id":
-      return eq(caseLawDecisions.id, locator.id);
+      return eq(caseLawDecisions.id, canonicalDecisionIdSql(locator.id));
     case "slug": {
       const country = publicCaseLawCountry(locator.country);
       const language = normalizePublicDecisionLanguage(locator.language);
@@ -140,6 +141,7 @@ const selectLocatedRow = async (
       .select({
         id: caseLawDecisions.id,
         country: caseLawDecisions.country,
+        redactedAt: caseLawDecisions.redactedAt,
         descriptor: caseLawSources.descriptor,
         published: sql<boolean>`${publishedCaseLawDecision}`,
         absorption: decisionAbsorptionSql(caseLawDecisions.metadata),
@@ -186,6 +188,15 @@ const resolveSubjectIn = async (
   if (row === undefined) {
     return null;
   }
+  // Direct reads keep their established redaction response. Retired links
+  // cannot introduce a second address for a redacted survivor.
+  if (
+    locator.kind === "id" &&
+    row.id !== locator.id &&
+    row.redactedAt !== null
+  ) {
+    return null;
+  }
   if (row.published) {
     return isPublic(row)
       ? subjectOf({
@@ -201,9 +212,13 @@ const resolveSubjectIn = async (
   }
   const target = await selectLocatedRow(
     tx,
-    eq(caseLawDecisions.id, absorption.decisionId),
+    eq(caseLawDecisions.id, canonicalDecisionIdSql(absorption.decisionId)),
   );
-  if (target === undefined || !isPublic(target)) {
+  if (
+    target === undefined ||
+    !isPublic(target) ||
+    (target.id !== absorption.decisionId && target.redactedAt !== null)
+  ) {
     return null;
   }
   return subjectOf({
