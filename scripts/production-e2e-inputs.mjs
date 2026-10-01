@@ -9,7 +9,7 @@ const SOURCE_EXTENSION = /\.[cm]?[jt]sx?$/u;
 
 // ci-plan runs with Node before dependency installation; report configuration
 // failures through the CLI's stderr/exit contract without importing packages.
-/** @param {string} message Configuration failure to report to CI. */
+/** @type {(message: string) => never} */
 const fail = (message) => {
   process.stderr.write(`${message}\n`);
   process.exit(1);
@@ -36,7 +36,10 @@ export const productionE2eInputs = (configPath) => {
   if (!testDirectory.startsWith(`${String(root)}${String(path.sep)}`)) {
     fail("Production E2E testDir must stay inside its E2E tree");
   }
-  for (const file of readdirSync(testDirectory, { recursive: true })) {
+  for (const file of readdirSync(testDirectory, {
+    recursive: true,
+    encoding: "utf8",
+  })) {
     if (
       SOURCE_EXTENSION.test(file) &&
       statSync(path.join(testDirectory, file)).isFile()
