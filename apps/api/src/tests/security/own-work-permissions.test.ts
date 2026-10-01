@@ -149,6 +149,24 @@ describe("own-work permissions", () => {
     }
   });
 
+  test("desktop account linking requires a member grant before connection work", async () => {
+    for (const memberRole of [undefined, null, {}, { role: "unrecognized" }]) {
+      const context = {
+        memberRole,
+        get body() {
+          throw new DatabaseError({
+            message: "Connection work must not start",
+          });
+        },
+      };
+      const result = await grantDesktopRegistryKey.handler(asTestRaw(context));
+      expect(result).toMatchObject({
+        code: 403,
+        response: { code: "forbidden", message: "Forbidden" },
+      });
+    }
+  });
+
   test("the sibling reads stay on the baseline grant and affirm themselves reads", () => {
     const declared = Object.fromEntries(
       Object.entries(READS).map(([file, endpoint]) => [

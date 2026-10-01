@@ -157,14 +157,13 @@
     }
   },
   "implicit-root-connection-shapes": {
-    "count": 18,
+    "count": 17,
     "files": {
       "apps/api/src/lib/agent-audit-principal.ts": 1,
       "apps/api/src/lib/business-registries/desktop/revocation.ts": 1,
       "apps/api/src/lib/case-law-ingestion-db.ts": 1,
       "apps/api/src/lib/case-law/local-case-law-config.ts": 1,
       "apps/api/src/lib/delete-account.ts": 1,
-      "apps/api/src/lib/desktop-edit-handoffs.ts": 1,
       "apps/api/src/lib/email/inbound/runtime.ts": 1,
       "apps/api/src/lib/folio-collab-rooms.ts": 1,
       "apps/api/src/lib/folio-collab-service-room.ts": 1,

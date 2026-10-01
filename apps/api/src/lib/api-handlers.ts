@@ -56,7 +56,10 @@ import {
 } from "@/api/lib/observability/failure-shadow";
 import { logger } from "@/api/lib/observability/logger";
 import { getRequestContext } from "@/api/lib/observability/request-context";
-import { hasMemberPermission } from "@/api/lib/permission-authorization";
+import {
+  hasMemberPermission,
+  readAuthorizedMemberRole,
+} from "@/api/lib/permission-authorization";
 import type { AnyPermissiveRouteSchema } from "@/api/lib/permissive-route-schema";
 import {
   ActionAdmissionError,
@@ -932,7 +935,8 @@ const createSafeScopedHandler = <
 ): SafeHandlerDefinition<TConfig, TContext, TResult> => ({
   config,
   handler: async (ctx): Promise<SafeHandlerResult<TResult>> => {
-    if (!hasMemberPermission(ctx.memberRole, config.permissions)) {
+    const memberRole = readAuthorizedMemberRole(ctx);
+    if (!memberRole || !hasMemberPermission(memberRole, config.permissions)) {
       return toSafeStatusResponse(403, {
         code: API_ERROR_CODE.forbidden,
         message: "Forbidden",
