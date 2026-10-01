@@ -173,15 +173,38 @@ afterAll(async () => {
 });
 
 test("a lease inside the start margin appends once and stops", async () => {
+  const revisionCounts = new Map<string, number>();
   const result = await executeCorpusProjectionAppendCycle({
     runInTransaction,
     client: {
-      ingestCommittedBatch: async () =>
-        panic("A queued cycle must not use the committed path"),
-      ingestQueuedBatch: async (_indexId: string, ndjson: string) => {
-        ingested.push(ndjson.split("\n").length);
+      ingestCommittedBatch: async (_indexId: string, ndjson: string) => {
+        const lines = ndjson.split("\n");
+        ingested.push(lines.length);
+        for (const line of lines) {
+          const { projection_revision } = JSON.parse(line);
+          if (typeof projection_revision !== "string") {
+            panic("Accepted document has no projection revision");
+          }
+          revisionCounts.set(
+            projection_revision,
+            (revisionCounts.get(projection_revision) ?? 0) + 1,
+          );
+        }
         return await Promise.resolve(Result.ok());
       },
+      ingestQueuedBatch: async () =>
+        panic("Projection append must wait for publication"),
+      aggregate: async ({ query }) =>
+        Result.ok({
+          projection_revisions: {
+            buckets: Array.from(revisionCounts, ([key, doc_count]) => ({
+              key,
+              doc_count,
+            })).filter(({ key }) => query.includes(`"${key}"`)),
+            doc_count_error_upper_bound: 0,
+            sum_other_doc_count: 0,
+          },
+        }),
     },
     commitMode: CORPUS_PROJECTION_APPEND_COMMIT_MODE.queued,
     family: TARGET.family,

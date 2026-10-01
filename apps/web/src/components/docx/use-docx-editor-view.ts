@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import type { EditorView } from "prosemirror-view";
+import type { EditorView } from "@tiptap/pm/view";
 
 import { useAutocompleteStream } from "@/components/autocomplete/use-autocomplete-stream";
 

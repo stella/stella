@@ -877,6 +877,7 @@ const buildCorpusIndexQuery = ({
   legalAlternatives,
 }: CorpusIndexQueryOptions): string | null =>
   caseLawCorpusQuery({
+    jurisdiction: body.country,
     text: body.query,
     functionWords,
     legalAlternatives,

@@ -1,5 +1,4 @@
-import { expect, test } from "bun:test";
-import { expectTypeOf } from "expect-type";
+import { expect, test, expectTypeOf } from "bun:test";
 
 import type { AuthorizedToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import type { SafeId } from "@/api/lib/branded-types";
