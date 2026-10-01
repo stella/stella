@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
+import type { AdmittedActionIdentity } from "@/api/lib/rate-limit/action-kinds";
 import type { ActionPeriodPolicy } from "@/api/lib/rate-limit/action-period-budget";
 
 import { startChatExecutionAdmission } from "./chat-execution-admission";
@@ -133,6 +134,7 @@ describe("chat execution admission owns settlement independently of transport re
       const execution = await executionOf(
         startChatExecutionAdmission({
           mode: "concurrency-only",
+          actionKind: "chat.send",
           enabled: true,
           organizationId,
           userId,
@@ -143,7 +145,7 @@ describe("chat execution admission owns settlement independently of transport re
         const identity = {
           actionKind: "chat.send",
           logicalPhaseId: JSON.stringify([turn, "old-run"]),
-        };
+        } as const satisfies AdmittedActionIdentity;
         const first = await execution.reservePeriod(identity);
         if (index < 2) {
           expect(Result.isOk(first)).toBe(true);
@@ -198,6 +200,7 @@ describe("chat execution admission owns settlement independently of transport re
             organizationId,
             userId,
             mode: "concurrency-only",
+            actionKind: "chat.generate-thread-title",
             admit: store.admit,
           }),
         );
@@ -234,6 +237,7 @@ describe("chat execution admission owns settlement independently of transport re
         organizationId,
         userId,
         mode: "concurrency-only",
+        actionKind: "chat.send",
         admit: store.admit,
       });
       expect(Result.isError(acquired)).toBe(true);

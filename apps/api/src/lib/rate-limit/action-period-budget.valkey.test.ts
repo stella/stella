@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 
 import { startChatExecutionAdmission } from "@/api/handlers/chat/chat-execution-admission";
 import { toSafeId } from "@/api/lib/branded-types";
+import type { AdmittedActionIdentity } from "@/api/lib/rate-limit/action-kinds";
 import { createRedisClient } from "@/api/lib/redis-client";
 
 import { withActionAdmission } from "./action-admission";
@@ -70,6 +71,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
         ].entries()) {
           const phase = await startChatExecutionAdmission({
             mode: "concurrency-only",
+            actionKind: "chat.send",
             enabled: true,
             organizationId,
             userId,
@@ -106,7 +108,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
         const firstMessageIdentity = {
           actionKind: "chat.send",
           logicalPhaseId: "first-message-phase",
-        };
+        } as const satisfies AdmittedActionIdentity;
         const singleActionPeriod = { periodMs: 86_400_000, limit: 1 };
         let budgetKey: string | undefined;
         let acquisitions = 0;
@@ -132,6 +134,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
           userId,
           enabled: true,
           mode: "concurrency-only",
+          actionKind: "chat.send",
           admit,
         });
         if (Result.isError(phase) || phase.value === undefined) {
@@ -149,6 +152,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
             userId,
             enabled: true,
             mode: "concurrency-only",
+            actionKind: "chat.generate-thread-title",
             admit,
           });
           if (Result.isError(title) || title.value === undefined) {
@@ -395,6 +399,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
           userId,
           enabled: true,
           mode: "concurrency-only",
+          actionKind: "chat.send",
           admit: async (options) =>
             await withActionAdmission({
               ...options,

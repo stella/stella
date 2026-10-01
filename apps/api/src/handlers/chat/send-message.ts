@@ -549,6 +549,7 @@ export class ChatSendLifecycle {
       organizationId,
       userId: this.options.userId,
       mode: "concurrency-only",
+      actionKind: "chat.send",
     });
     if (Result.isError(acquired)) {
       return acquired;

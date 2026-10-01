@@ -218,7 +218,7 @@ type ActionAdmissionOptions<T = unknown> = {
 
 type ActionAdmissionControl = {
   reservePeriod: (
-    identity: ActionPeriodIdentity,
+    identity: AdmittedActionIdentity,
   ) => Promise<Result<void, ActionAdmissionError>>;
 };
 
@@ -440,7 +440,7 @@ const createObservedAdmissionRun = <T>({
  */
 type ResolveAdmissionPeriodOptions = {
   organizationId: SafeId<"organization">;
-  identity: ActionPeriodIdentity | undefined;
+  identity: AdmittedActionIdentity | undefined;
   policy: ActionPeriodPolicy | undefined;
 };
 
@@ -491,7 +491,7 @@ const createPeriodReservationControl = ({
   leaseId,
 }: PeriodReservationControlOptions): ActionAdmissionControl => {
   const reservePhase = async (
-    identity: ActionPeriodIdentity,
+    identity: AdmittedActionIdentity,
   ): Promise<Result<void, ActionAdmissionError>> => {
     if (signal.aborted || !isActive()) {
       return Result.err(
@@ -542,7 +542,7 @@ const createPeriodReservationControl = ({
   };
   let reservation:
     | {
-        identity: ActionPeriodIdentity;
+        identity: AdmittedActionIdentity;
         result: Promise<Result<void, ActionAdmissionError>>;
       }
     | undefined =

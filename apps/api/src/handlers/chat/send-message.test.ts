@@ -32,6 +32,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { CHAT_THREAD_NAME_KIND } from "@/api/lib/chat/thread-name-kinds";
 import { HandlerError, DatabaseError } from "@/api/lib/errors/tagged-errors";
+import type { AdmittedActionIdentity } from "@/api/lib/rate-limit/action-kinds";
 import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
 import { testFileKey } from "@/api/tests/helpers/file-key";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
@@ -1296,7 +1297,7 @@ describe("send message disconnect handling", () => {
           release: async () => {
             releases += 1;
           },
-          reservePeriod: async (identity) => {
+          reservePeriod: async (identity: AdmittedActionIdentity) => {
             expect(turnUpdates).toContainEqual({ runId: "run-test" });
             expect(identity).toEqual({
               actionKind: "chat.send",

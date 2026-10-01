@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -9,7 +9,10 @@ import {
   ActionAdmissionError,
   withActionAdmission,
 } from "@/api/lib/rate-limit/action-admission";
-import type { ActionPeriodIdentity } from "@/api/lib/rate-limit/action-period-budget";
+import type {
+  ActionKind,
+  AdmittedActionIdentity,
+} from "@/api/lib/rate-limit/action-kinds";
 
 const EXECUTION_ADMISSION_FAILURE = failureSink({
   event: "chat.execution.admission_lost",
@@ -19,7 +22,7 @@ const EXECUTION_ADMISSION_FAILURE = failureSink({
 export type ChatExecutionAdmission = {
   signal: AbortSignal;
   reservePeriod: (
-    identity: ActionPeriodIdentity,
+    identity: AdmittedActionIdentity,
   ) => Promise<Result<void, HandlerError>>;
   /** Release only after provider, fenced persistence and heartbeat work settle. */
   release: () => Promise<void>;
@@ -41,8 +44,12 @@ type StartChatExecutionAdmissionOptions = {
   enabled?: boolean;
   admit?: typeof withActionAdmission;
 } & (
-  | { mode: "action"; periodIdentity: ActionPeriodIdentity }
-  | { mode: "concurrency-only"; periodIdentity?: never }
+  | {
+      mode: "action";
+      periodIdentity: AdmittedActionIdentity;
+      actionKind?: never;
+    }
+  | { mode: "concurrency-only"; actionKind: ActionKind; periodIdentity?: never }
 );
 
 // Transport readiness and execution settlement are separate: returning a
@@ -53,6 +60,7 @@ export const startChatExecutionAdmission = async ({
   enabled = env.FEATURE_ACTION_ADMISSION,
   admit = withActionAdmission,
   mode,
+  actionKind,
   periodIdentity,
 }: StartChatExecutionAdmissionOptions): Promise<
   Result<ChatExecutionAdmission | undefined, HandlerError>
@@ -81,6 +89,10 @@ export const startChatExecutionAdmission = async ({
         Result.ok({
           signal,
           reservePeriod: async (identity) => {
+            const expectedKind =
+              mode === "action" ? periodIdentity.actionKind : actionKind;
+            if (identity.actionKind !== expectedKind)
+              {panic("Chat reservation changed its action kind");}
             const reserved = await control.reservePeriod(identity);
             return Result.isError(reserved)
               ? Result.err(chatAdmissionError(reserved.error))

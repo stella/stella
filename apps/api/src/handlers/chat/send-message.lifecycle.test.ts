@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 import { chatMessages, chatTurns } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
+import type { AdmittedActionIdentity } from "@/api/lib/rate-limit/action-kinds";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import {
@@ -25,7 +26,7 @@ describe("send lifecycle checkpoint indexing", () => {
           return Result.ok({
             signal: new AbortController().signal,
             release: async () => undefined,
-            reservePeriod: async (identity) => {
+            reservePeriod: async (identity: AdmittedActionIdentity) => {
               expect(identity.actionKind).toBe("chat.send");
               identities.push(identity.logicalPhaseId);
               return Result.ok(undefined);
@@ -143,10 +144,11 @@ describe("send lifecycle checkpoint indexing", () => {
         startAdmission: async (options) => {
           expect(options).toMatchObject({
             mode: "concurrency-only",
+            actionKind: "chat.send",
           });
           return Result.ok({
             signal: admission.signal,
-            reservePeriod: async (identity) => {
+            reservePeriod: async (identity: AdmittedActionIdentity) => {
               expect(identity).toEqual({
                 actionKind: "chat.send",
                 logicalPhaseId: JSON.stringify([

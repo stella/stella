@@ -216,6 +216,7 @@ export const generateThreadTitle = async (
 ): Promise<void> => {
   const admitted = await startChatExecutionAdmission({
     mode: "concurrency-only",
+    actionKind: "chat.generate-thread-title",
     organizationId: props.organizationId,
     userId: props.userId,
   });
