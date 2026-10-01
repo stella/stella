@@ -1,6 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ActionKind } from "@/api/lib/rate-limit/action-kinds";
 
 export const ACTION_COST_CALL_KIND = {
   registryRequest: "registry_request",
@@ -9,7 +10,7 @@ export const ACTION_COST_CALL_KIND = {
 
 export type ActionCostIdentity = {
   organizationId: SafeId<"organization">;
-  actionKind: string;
+  actionKind: ActionKind;
   logicalPhaseId: string;
 };
 
@@ -33,7 +34,7 @@ export type ActionCostObservation =
 
 export type ActionCostRecorder = {
   enqueue: (observation: ActionCostObservation) => void;
-  estimate: (kind: string) => number | null;
+  estimate: (kind: ActionKind) => number | null;
   callRate: (kind: string) => number | null;
 };
 

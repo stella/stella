@@ -25,7 +25,7 @@ const migration = readFileSync(
 const organizationId = toSafeId<"organization">("fixture-org");
 const record = {
   organizationId,
-  actionKind: "fixture",
+  actionKind: "chat.improve-prompt" as const,
   logicalPhaseId: "fixture-phase",
   userId: toSafeId<"user">("fixture-user"),
   admittedAt: new Date("2021-03-04T10:00:00Z"),

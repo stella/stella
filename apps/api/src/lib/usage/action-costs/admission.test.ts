@@ -3,6 +3,7 @@ import { expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
+import type { ActionKind } from "@/api/lib/rate-limit/action-kinds";
 
 import { createObservationBuffer } from "./buffer";
 import {
@@ -33,8 +34,15 @@ const admissionOptions = {
   redis: { send: async () => 1 },
 };
 
+const registeredKinds = {
+  "chat.improve-prompt": "chat.improve-prompt",
+  "chat.suggest-thread-title": "chat.suggest-thread-title",
+  "mcp.services/call": "mcp.services/call",
+  "mcp.data/call": "mcp.data/call",
+} as const satisfies { [Kind in ActionKind]: Kind };
+
 for (const enabled of [true, false]) {
-  for (const actionKind of ["fixture_http", "fixture_chat", "fixture_mcp"]) {
+  for (const actionKind of Object.values(registeredKinds)) {
     test(`${actionKind} captures one identity with admission enabled=${enabled}`, async () => {
       const observations: ActionCostObservation[] = [];
       const periodIdentity = { actionKind, logicalPhaseId: "fixture-phase" };
@@ -92,7 +100,10 @@ test("refused actions produce no observations and disabled recording produces no
   };
   const denied = await withActionAdmission({
     ...admissionOptions,
-    periodIdentity: { actionKind: "fixture", logicalPhaseId: "refusal" },
+    periodIdentity: {
+      actionKind: "chat.improve-prompt",
+      logicalPhaseId: "refusal",
+    },
     costRecorder: recorderFor(rows),
     redis: { send: async () => 0 },
     run,
@@ -102,7 +113,10 @@ test("refused actions produce no observations and disabled recording produces no
   expect(rows).toEqual([]);
   const allowed = await withActionAdmission({
     ...admissionOptions,
-    periodIdentity: { actionKind: "fixture", logicalPhaseId: "disabled" },
+    periodIdentity: {
+      actionKind: "chat.improve-prompt",
+      logicalPhaseId: "disabled",
+    },
     costRecorder: null,
     run: async () => {
       recordExternalActionCall("fixture_provider");
@@ -132,7 +146,10 @@ test("a failing write remains detached from successful work and records the drop
   });
   const outcome = await withActionAdmission({
     ...admissionOptions,
-    periodIdentity: { actionKind: "fixture", logicalPhaseId: "write-failure" },
+    periodIdentity: {
+      actionKind: "chat.improve-prompt",
+      logicalPhaseId: "write-failure",
+    },
     costRecorder: { ...recorderFor([]), enqueue: buffer.enqueue },
     run: async () => "completed-result",
   });
@@ -144,7 +161,10 @@ test("a failing write remains detached from successful work and records the drop
 test("nested same-identity work shares its observation scope, distinct phases remain separate", async () => {
   const rows: ActionCostObservation[] = [];
   const recorder = recorderFor(rows);
-  const periodIdentity = { actionKind: "fixture", logicalPhaseId: "outer" };
+  const periodIdentity = {
+    actionKind: "chat.improve-prompt",
+    logicalPhaseId: "outer",
+  } as const;
   await withActionAdmission({
     ...admissionOptions,
     periodIdentity,
@@ -160,7 +180,10 @@ test("nested same-identity work shares its observation scope, distinct phases re
       });
       await withActionAdmission({
         ...admissionOptions,
-        periodIdentity: { actionKind: "fixture", logicalPhaseId: "inner" },
+        periodIdentity: {
+          actionKind: "chat.improve-prompt",
+          logicalPhaseId: "inner",
+        },
         costRecorder: recorder,
         run: async () => {
           recordExternalActionCall("fixture_provider");
@@ -182,7 +205,10 @@ test("failed execution still settles its admitted record", async () => {
   const rows: ActionCostObservation[] = [];
   const outcome = await withActionAdmission({
     ...admissionOptions,
-    periodIdentity: { actionKind: "fixture", logicalPhaseId: "failed" },
+    periodIdentity: {
+      actionKind: "chat.improve-prompt",
+      logicalPhaseId: "failed",
+    },
     costRecorder: recorderFor(rows),
     run: async () => {
       throw new TypeError("fixture execution failure");
@@ -199,7 +225,7 @@ test("accepted work aborted before execution still has an admitted and settled o
   const outcome = await withActionAdmission({
     ...admissionOptions,
     periodIdentity: {
-      actionKind: "fixture",
+      actionKind: "chat.improve-prompt",
       logicalPhaseId: "expired-before-start",
     },
     costRecorder: recorderFor(rows),
