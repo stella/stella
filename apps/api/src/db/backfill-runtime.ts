@@ -34,6 +34,7 @@ import { createBoundedIndicatorQuery } from "./indicator-query";
 import type { IndicatorQuery } from "./indicator-query";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
 import type { Transaction } from "./root";
+import { setSharedQueryTimeouts } from "./shared-pool-timeouts";
 
 export { BackfillHeldError } from "@stll/db-load-gate/backfill-pass";
 
@@ -206,12 +207,10 @@ const createRuntime = <BatchTransaction>({
       slot,
       readCheckpoint: async (tx) => {
         const q = transactionQuery(tx);
-        await q("SELECT set_config('statement_timeout', $1, true)", [
-          `${config.batchStatementTimeoutMs}ms`,
-        ]);
-        await q("SELECT set_config('lock_timeout', $1, true)", [
-          `${config.batchLockTimeoutMs}ms`,
-        ]);
+        await setSharedQueryTimeouts(q, {
+          statementTimeoutMs: config.batchStatementTimeoutMs,
+          lockTimeoutMs: config.batchLockTimeoutMs,
+        });
         await q(
           "INSERT INTO database_backfill_states (name, batch) VALUES ($1, $2::text::jsonb) ON CONFLICT (name) DO NOTHING",
           [

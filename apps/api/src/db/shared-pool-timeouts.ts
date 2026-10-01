@@ -39,6 +39,31 @@ export const sharedPoolConnectionSettings = (pool: SharedPoolName) => {
     : { connection: { statement_timeout: policy.effectiveStatementTimeoutMs } };
 };
 
+type SharedQueryTimeouts = {
+  statementTimeoutMs: number;
+  lockTimeoutMs?: number;
+};
+
+export const setSharedQueryTimeouts = async (
+  query: (
+    statement: string,
+    parameters?: readonly (string | number | null)[],
+  ) => Promise<unknown>,
+  { statementTimeoutMs, lockTimeoutMs }: SharedQueryTimeouts,
+): Promise<void> => {
+  const statementTimeout = `${effectiveTimeout(statementTimeoutMs)}ms`;
+  if (lockTimeoutMs === undefined) {
+    await query("SELECT set_config('statement_timeout', $1, true)", [
+      statementTimeout,
+    ]);
+    return;
+  }
+  await query(
+    "SELECT set_config('statement_timeout', $1, true), set_config('lock_timeout', $2, true)",
+    [statementTimeout, `${effectiveTimeout(lockTimeoutMs)}ms`],
+  );
+};
+
 export const setSharedStatementTimeout = async (
   tx: TimeoutTransaction,
   requestedMs: number,

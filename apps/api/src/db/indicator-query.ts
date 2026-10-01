@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 
 import type { IngestionTransactionRunner } from "../lib/replay-safe-ingestion";
+import { setSharedQueryTimeouts } from "./shared-pool-timeouts";
 
 export type IndicatorQuery = (
   statement: string,
@@ -34,9 +35,9 @@ export const createBoundedIndicatorQuery = <Transaction>({
       async () =>
         await runInTransaction(async (tx) => {
           const execute = transactionQuery(tx);
-          await execute("SELECT set_config('statement_timeout', $1, true)", [
-            `${Math.ceil(readTimeoutMs)}ms`,
-          ]);
+          await setSharedQueryTimeouts(execute, {
+            statementTimeoutMs: Math.ceil(readTimeoutMs),
+          });
           return await execute(statement, parameters);
         }),
     );
