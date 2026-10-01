@@ -6,6 +6,7 @@ import { IntlProvider } from "use-intl";
 
 import type {
   AskUserInput,
+  ChatAnonRestoration,
   RegisteredChatUIToolCallPart,
 } from "@/components/chat/chat-ui-tools";
 import messages from "@/i18n/langs/en.json";
@@ -35,9 +36,10 @@ const renderWithIntl = (children: ReactNode) =>
 
 const createAskUserPart = (
   questions: AskUserInput["questions"],
+  analysis = "Need a clarification before continuing.",
 ): AskUserPart => {
   const input: AskUserInput = {
-    analysis: "Need a clarification before continuing.",
+    analysis,
     questions,
   };
 
@@ -52,6 +54,57 @@ const createAskUserPart = (
 };
 
 describe("ask-user clarification card", () => {
+  const imageFormats = [
+    {
+      format: "Markdown",
+      analysis: "![Referenced diagram](https://example.test/diagram.png)",
+    },
+    {
+      format: "HTML",
+      analysis:
+        '<img src="https://example.test/diagram.png" alt="Referenced diagram">',
+    },
+  ];
+  const restorationModes = [
+    { mode: "plain", restorationPairs: [] },
+    {
+      mode: "restored",
+      restorationPairs: [{ original: "Sample name", placeholder: "Person_1" }],
+    },
+  ] satisfies { mode: string; restorationPairs: ChatAnonRestoration[] }[];
+
+  for (const { format, analysis } of imageFormats) {
+    for (const { mode, restorationPairs } of restorationModes) {
+      test(`renders ${format} image labels in ${mode} analysis`, () => {
+        const html = renderWithIntl(
+          <AskUserCard
+            isAwaitingUser
+            onSubmit={() => {}}
+            part={createAskUserPart(
+              [
+                {
+                  question: "Which option should I use?",
+                  reason: "The answer determines the next step.",
+                },
+              ],
+              `Sample name\n\n${analysis}`,
+            )}
+            restorationPairs={restorationPairs}
+          />,
+        );
+
+        expect(html).toContain("Referenced diagram");
+        expect(html).toContain("Sample name");
+        expect(html).not.toContain("<img");
+        expect(html).not.toContain('as="image"');
+        expect(html).not.toMatch(
+          /<(?:iframe|object|embed|source|video|audio)\b/iu,
+        );
+        expect(html).not.toContain("https://example.test/diagram.png");
+      });
+    }
+  }
+
   // A user who types instead of answering supersedes the turn. The server
   // stores the call as an error without its questions when it accepts that
   // message; until that lands, the live card shows the same heading-only
