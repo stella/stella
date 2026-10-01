@@ -45,6 +45,7 @@ import type {
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
 import { createPagePaginatedFetch } from "@/api/handlers/case-law/ingestion/adapters/pagination";
+import { validatePublisherPage } from "@/api/handlers/case-law/ingestion/adapters/publisher-page";
 import { publisherTarget } from "@/api/handlers/case-law/ingestion/adapters/publisher-target";
 import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { createSkCollectionConnector } from "@/api/handlers/case-law/ingestion/adapters/sk-collections";
@@ -1741,9 +1742,24 @@ const createBackfillPage = (readCourt: SkCourtRegistryReader) =>
     ],
 
     parseResponse: async (response) => {
-      const json: unknown = await response.json();
+      const json = validatePublisherPage({
+        adapterKey: ADAPTER_KEYS.SK_COURTS,
+        cursor: null,
+        headers: response.headers,
+        body: await response.text(),
+        expectation: {
+          kind: "json",
+          minBytes: 2,
+          shape: (value) =>
+            isSkApiResponse(value) &&
+            Array.isArray(value.rozhodnutieList) &&
+            typeof value.numFound === "number" &&
+            Number.isSafeInteger(value.numFound) &&
+            value.numFound >= 0,
+        },
+      });
       if (!isSkApiResponse(json)) {
-        return Result.ok({});
+        return panic("Validated Slovak court listing has an invalid envelope");
       }
       const courtIds = new Set(
         arrayOrEmpty(json.rozhodnutieList).flatMap((item) => {

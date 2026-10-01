@@ -16,7 +16,7 @@
  */
 
 import { panic } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
@@ -24,6 +24,7 @@ import {
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type { StoredRawReparseOutcome } from "@/api/handlers/case-law/ingestion/adapter";
+import { PublisherPageError } from "@/api/handlers/case-law/ingestion/adapters/publisher-page";
 import {
   assembleSkCourtsDecision,
   skCourtsAdapter,
@@ -31,6 +32,44 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 import { readGzipJson } from "@/api/lib/gzip-json";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
+import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+describe("Slovak court backfill rejects unreadable publisher listings", () => {
+  afterEach(() => mock.restore());
+
+  for (const body of [
+    "<html><script src='/challenge.js'></script></html>",
+    "{}",
+    '{"rozhodnutieList":[]}',
+    '{"numFound":0}',
+    '{"rozhodnutieList":',
+    "",
+  ]) {
+    test(`holds the page on ${JSON.stringify(body)}`, async () => {
+      spyOn(globalThis, "fetch").mockImplementation(
+        asFetchMock(async () => new Response(body)),
+      );
+      const page = await skCourtsAdapter.fetchPage(null, {});
+      expect(page.isErr()).toBe(true);
+      if (page.isErr()) {
+        expect(page.error).toBeInstanceOf(PublisherPageError);
+      }
+    });
+  }
+
+  test("accepts an explicit small empty collection", async () => {
+    spyOn(globalThis, "fetch").mockImplementation(
+      asFetchMock(
+        async () => new Response('{"rozhodnutieList":[],"numFound":0}'),
+      ),
+    );
+    const page = await skCourtsAdapter.fetchPage(null, {});
+    expect(page.isOk()).toBe(true);
+    if (page.isOk()) {
+      expect(page.value.decisions).toEqual([]);
+    }
+  });
+});
 
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
 

@@ -12,6 +12,9 @@
 # in turbo's affected-packages graph.
 set -euo pipefail
 
+bun scripts/check-swallowed-item-error-ledger.ts --self-test
+bun scripts/check-swallowed-item-error-ledger.ts --base "${RATCHET_BASE_REF:-origin/main}"
+
 # Plugin sources have to load under Node's ESM resolver, not only Bun's.
 #
 # The lint below runs them through `bun --bun`, which infers a missing file

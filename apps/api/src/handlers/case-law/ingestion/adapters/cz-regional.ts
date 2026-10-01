@@ -41,6 +41,7 @@ import type {
   StoredRawReparseOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
+import { validatePublisherPage } from "@/api/handlers/case-law/ingestion/adapters/publisher-page";
 import {
   fetchPublisher,
   fetchWithRetry,
@@ -404,7 +405,7 @@ const isCzRegionalPageResponse = (
   value: unknown,
 ): value is CzRegionalPageResponse =>
   isRecord(value) &&
-  isNullishArrayOf(value["items"], isCzRegionalApiItem) &&
+  isArrayOf(value["items"], isCzRegionalApiItem) &&
   isNullishNumber(value["totalPages"]) &&
   isNullishNumber(value["pageNumber"]);
 
@@ -465,11 +466,8 @@ const documentReadFailed = failureSink({
 /**
  * Fetch the document payload from /api/finaldoc/{uuid}.
  *
- * Returns the bytes and the validated shape separately, so the caller stores
- * the response it was served rather than whatever the validator could make of
- * it. `null` means nothing came back at all, which is the one case the caller
- * has to tell apart: a listed decision whose document was never read must not
- * be stored as held.
+ * Keeps a valid response's original bytes. A missing document is listing-only;
+ * an invalid page fails the crawl instead of being stored as a document.
  */
 const fetchFinaldoc = async (
   docUrl: string,
@@ -500,26 +498,36 @@ const fetchFinaldoc = async (
     );
 
     if (!response.ok) {
-      return null;
-    }
-
-    const payload = readCzRegionalDocument(
-      JSON.stringify(await response.json()),
-    );
-    if (payload.parsed === null) {
-      // Per-document publisher-side shape drift is operational: the raw
-      // response is preserved for re-parsing, so the miss is logged rather
-      // than captured per document.
-      logger.warn("case_law.ingestion.finaldoc_validation_failed", {
+      if (response.status === 404 || response.status === 410) {
+        return null;
+      }
+      throw new AdapterFetchError({
+        message: `CZ Regional document request failed: ${response.status}`,
         adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
-        caseNumber,
-        docUrl: target.toString(),
+        cursor: null,
+        httpStatus: response.status,
       });
     }
-    return payload;
+
+    const raw = await response.text();
+    validatePublisherPage({
+      body: raw,
+      headers: response.headers,
+      adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+      cursor: null,
+      expectation: {
+        kind: "json",
+        minBytes: 2,
+        shape: (value) =>
+          isCzRegionalFinaldoc(value) &&
+          typeof value.uuid === "string" &&
+          value.uuid.trim() !== "",
+      },
+    });
+    return readCzRegionalDocument(raw);
   } catch (error) {
     // The caller's cancellation ends the page.
-    if (signal?.aborted) {
+    if (signal?.aborted || error instanceof AdapterFetchError) {
       throw error;
     }
     // The row is held listing-only for a later read, and the failed read is
@@ -1295,7 +1303,13 @@ export const listCzRegionalDayPage = async ({
     });
   }
 
-  const json = await response.json();
+  const json = validatePublisherPage({
+    body: await response.text(),
+    headers: response.headers,
+    adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+    cursor,
+    expectation: { kind: "json", minBytes: 2, shape: isCzRegionalPageResponse },
+  });
   if (!isCzRegionalPageResponse(json)) {
     throw new AdapterFetchError({
       message: "CZ Regional API returned an invalid payload",
@@ -1975,7 +1989,17 @@ export const czRegionalAdapter = defineSourceAdapter({
           });
         }
 
-        const json = await response.json();
+        const json = validatePublisherPage({
+          body: await response.text(),
+          headers: response.headers,
+          adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+          cursor,
+          expectation: {
+            kind: "json",
+            minBytes: 2,
+            shape: isCzRegionalPageResponse,
+          },
+        });
         if (!isCzRegionalPageResponse(json)) {
           throw new AdapterFetchError({
             message: "CZ Regional API returned an invalid payload",
@@ -2027,7 +2051,10 @@ export const czRegionalAdapter = defineSourceAdapter({
                 // the page as a cancelled listing request does, and any other
                 // failure halts the page.
                 catch: (cause) => {
-                  if (cause instanceof UnpersistableDecisionFieldError) {
+                  if (
+                    cause instanceof UnpersistableDecisionFieldError ||
+                    cause instanceof AdapterFetchError
+                  ) {
                     return cause;
                   }
                   if (effectiveSignal.aborted) {
@@ -2049,6 +2076,9 @@ export const czRegionalAdapter = defineSourceAdapter({
               continue;
             }
             if (Result.isError(attempt)) {
+              if (attempt.error instanceof AdapterFetchError) {
+                throw attempt.error;
+              }
               // One row the adapter refuses must not fail the page and pin the
               // cursor on it. The listing is stored as a listing-only row, so
               // the identity is held and the reconciliation asks for the
@@ -2107,6 +2137,7 @@ export const czRegionalAdapter = defineSourceAdapter({
         if (currentPage + 1 < totalPages) {
           return {
             decisions,
+            itemBuildFailures: { type: "item_build_failed", count: refused },
             nextCursor: makeCursor({
               date: state.date,
               page: currentPage + 1,
@@ -2123,6 +2154,7 @@ export const czRegionalAdapter = defineSourceAdapter({
 
         return {
           decisions,
+          itemBuildFailures: { type: "item_build_failed", count: refused },
           nextCursor:
             next <= today
               ? makeCursor({ date: next, page: 0, emptyDays: empty })
