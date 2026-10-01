@@ -367,7 +367,9 @@ describe("capability tools", () => {
       new TextEncoder().encode(JSON.stringify(schema)).length,
     ).toBeGreaterThan(33_000);
     const large = createToolSurface({
-      tools: [{ ...ARCHIVE, inputSchema: schema }],
+      tools: [
+        { ...ARCHIVE, inputSchema: schema, exampleInput: { mode: "soft" } },
+      ],
     });
     const compact = await large.callTool(
       CAPABILITY_TOOL_NAMES.describe,
@@ -399,11 +401,41 @@ describe("capability tools", () => {
         },
         { name: "document", type: "object", required: false },
       ]),
-      example: { capability: ARCHIVE.name, input: { id: "a" } },
+      example: { capability: ARCHIVE.name, input: { mode: "soft" } },
     });
     expect(payload(compact)["omittedParameters"]).toBeGreaterThan(0);
     expect(payload(compact)["inputSchema"]).toBeUndefined();
     expect(payload(full)["inputSchema"]).toEqual(schema);
+  });
+
+  test("bounds compact descriptions with escaped Unicode metadata and oversized examples", async () => {
+    for (const name of ["\u0000".repeat(128), "📄".repeat(32)]) {
+      const tool = {
+        ...ARCHIVE,
+        name,
+        summary: "\u0000".repeat(1000),
+        exampleInput: { id: "é".repeat(4000) },
+        inputSchema: {
+          type: "object",
+          properties: {
+            ["é".repeat(4000)]: { type: "string", enum: ["📄".repeat(4000)] },
+          },
+        },
+      };
+      const bounded = createToolSurface({ tools: [tool] });
+      const result = await bounded.callTool(
+        CAPABILITY_TOOL_NAMES.describe,
+        { capability: name },
+        { calls: [] },
+      );
+      expect(
+        new TextEncoder().encode(result.content.at(0)?.text).length,
+      ).toBeLessThan(3000);
+      expect(payload(result)).toMatchObject({
+        example: { capability: name, input: {} },
+        omittedParameters: 1,
+      });
+    }
   });
 
   test("advertised discovery stays constant as the hidden registry grows", () => {
