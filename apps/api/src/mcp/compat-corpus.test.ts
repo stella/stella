@@ -1,4 +1,5 @@
 import type { CallToolResult } from "@modelcontextprotocol/server";
+import { Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 import fc from "fast-check";
 
@@ -274,10 +275,12 @@ beforeEach(() => {
   anonymizeTextFieldsMock.mockReset();
   anonymizeTextFieldsMock.mockImplementation(
     async ({ fields }: { fields: readonly string[] }) =>
-      await Promise.resolve({
-        entityCount: fields.length,
-        fields: fields.map(() => "[REDACTED]"),
-      }),
+      await Promise.resolve(
+        Result.ok({
+          entityCount: fields.length,
+          fields: fields.map(() => "[REDACTED]"),
+        }),
+      ),
   );
 });
 

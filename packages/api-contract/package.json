@@ -24,6 +24,7 @@
     "./case-law-judges": "./src/case-law-judges.ts",
     "./case-law-jurisdictions": "./src/case-law-jurisdictions.ts",
     "./case-law-text-field": "./src/case-law-text-field.ts",
+    "./decision-ruling-identity": "./src/decision-ruling-identity.ts",
     "./decision-docket-grammar": "./src/decision-docket-grammar.ts",
     "./decision-query-intent": "./src/decision-query-intent.ts",
     "./desktop-registry": "./src/desktop-registry.ts",
@@ -65,6 +66,7 @@
   },
   "dependencies": {
     "@stll/anonymize-chat": "workspace:*",
+    "@stll/legal-ast": "workspace:*",
     "@stll/template-conditions": "workspace:*",
     "@stll/text-normalize": "workspace:*",
     "@stll/time": "workspace:*",

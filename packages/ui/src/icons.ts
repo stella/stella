@@ -31,6 +31,12 @@ export { WandSparklesIcon as AiActionIcon } from "lucide-react";
 // The case-law section: its sidebar entry, landing page and research tool.
 // sharedOnPurpose: SkillIcon, the law section's book predates the skill icon; giving it its own glyph is a separate product call.
 export { BookOpenIcon as CaseLawIcon } from "lucide-react";
+// Starting a new AI chat: a chat bubble with a plus, the same glyph on every
+// new-chat button, menu item and rail action.
+export { MessageSquarePlusIcon as NewChatIcon } from "lucide-react";
+// Commenting on a document passage: a quoted bubble, so it never reads as
+// starting a new AI chat.
+export { MessageSquareQuoteIcon as AddCommentIcon } from "lucide-react";
 
 // --- Plain re-exports ------------------------------------------------------
 // @generated-start by scripts/codemod-icons.ts: edit by importing a lucide name and rerunning it
@@ -194,7 +200,6 @@ export {
   MegaphoneIcon,
   MessageCircleQuestionIcon,
   MessageSquareIcon,
-  MessageSquarePlusIcon,
   MessageSquareTextIcon,
   MessageSquareWarningIcon,
   MessagesSquareIcon,
