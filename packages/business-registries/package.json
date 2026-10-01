@@ -84,6 +84,7 @@
     "./vies": "./src/vies/index.ts",
     "./vies/validation": "./src/vies/validation.ts",
     "./shared": "./src/shared/index.ts",
+    "./shared/request-observer": "./src/shared/request-observer.ts",
     "./sudreg": "./src/sudreg/index.ts",
     "./zefix": "./src/zefix/index.ts"
   },

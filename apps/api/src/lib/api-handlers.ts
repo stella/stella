@@ -906,7 +906,7 @@ export const admitFiniteAction = async function* <
   handler: SafeHandlerFn<TContext, TResult> &
     NoInfer<FiniteHandlerGuard<TResult>>;
 }): SafeHandlerGenerator<TResult> {
-  if (!env.FEATURE_ACTION_ADMISSION) {
+  if (!env.FEATURE_ACTION_ADMISSION && !env.FEATURE_ACTION_COST_RECORDS) {
     return yield* handler(ctx);
   }
   return yield* runAdmittedFiniteHandler({
@@ -975,7 +975,10 @@ const createSafeScopedHandler = <
     }
 
     const admission = config.actionAdmission;
-    if (admission === undefined || !env.FEATURE_ACTION_ADMISSION) {
+    if (
+      admission === undefined ||
+      (!env.FEATURE_ACTION_ADMISSION && !env.FEATURE_ACTION_COST_RECORDS)
+    ) {
       return await runSafeHandler(ctx, handler);
     }
 
