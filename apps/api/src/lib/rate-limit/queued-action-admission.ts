@@ -101,21 +101,24 @@ export const runBackgroundJob = async <T>({
   now = () => Temporal.Now.instant().epochMilliseconds,
   random = Math.random,
 }: BackgroundJobOptions<T>): Promise<T> => {
+  let workStarted = false;
   const result = await admission({
     organizationId,
     userId,
     execution: "background-job",
     actionKind,
-    run: async (leaseSignal) =>
-      await run(AbortSignal.any([signal, leaseSignal])),
+    run: async (leaseSignal) => {
+      workStarted = true;
+      return await run(AbortSignal.any([signal, leaseSignal]));
+    },
   });
   if (Result.isOk(result)) {
     return result.value;
   }
-  if (!ActionAdmissionError.is(result.error)) {
+  if (workStarted || !ActionAdmissionError.is(result.error)) {
     throw result.error;
   }
-  // Busy capacity and coordination loss leave durable work queued for a fresh lease.
+  // Refusals before execution wait for a fresh lease without consuming retries.
   await job.moveToDelayed(
     now() + admissionRetryDelayMs(job.attemptsStarted ?? 1, random),
     job.token,

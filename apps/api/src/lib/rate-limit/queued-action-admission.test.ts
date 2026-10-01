@@ -26,45 +26,100 @@ const admissionPolicy = {
 const periodPolicy = { periodMs: 86_400_000, limit: 10 };
 
 describe("queued action admission", () => {
-  test("defers a busy or unavailable background job without running it", async () => {
+  test("defers a busy or unavailable background job without running it even after repeated starts", async () => {
     for (const reason of ["busy", "unavailable"] as const) {
-      let ran = false;
-      const delays: { timestamp: number; token: string | undefined }[] = [];
-      const admission: typeof withActionAdmission = async () =>
-        Result.err(
-          new ActionAdmissionError({
-            message: `admission ${reason}`,
-            reason,
-          }),
-        );
-      const controller = new AbortController();
+      for (const attemptsStarted of [1, 7, 21]) {
+        let ran = false;
+        const delays: { timestamp: number; token: string | undefined }[] = [];
+        const admission: typeof withActionAdmission = async () =>
+          Result.err(
+            new ActionAdmissionError({
+              message: `admission ${reason}`,
+              reason,
+            }),
+          );
+        const controller = new AbortController();
 
-      const operation = runBackgroundJob({
-        actionKind: BACKGROUND_ACTION_KIND.flow,
-        organizationId,
-        userId,
-        job: {
-          token: "bull-lock-token",
-          moveToDelayed: async (timestamp, token) => {
-            delays.push({ timestamp, token });
+        const operation = runBackgroundJob({
+          actionKind: BACKGROUND_ACTION_KIND.flow,
+          organizationId,
+          userId,
+          job: {
+            token: "bull-lock-token",
+            attemptsStarted,
+            moveToDelayed: async (timestamp, token) => {
+              delays.push({ timestamp, token });
+            },
+          },
+          signal: controller.signal,
+          now: () => 1234,
+          admission,
+          run: async () => {
+            ran = true;
+          },
+        });
+
+        expect(await operation.catch((error: unknown) => error)).toBeInstanceOf(
+          DelayedError,
+        );
+        expect(ran).toBe(false);
+        expect(delays).toHaveLength(1);
+        expect(delays.at(0)?.timestamp).toBeGreaterThan(1234);
+        expect(delays.at(0)?.token).toBe("bull-lock-token");
+      }
+    }
+  });
+
+  test("propagates lease loss after execution starts without delaying the job", async () => {
+    let renew = () => {
+      throw new Error("Expected lease renewal to be scheduled");
+    };
+    let delayed = false;
+    let leaseLoss: unknown;
+    const admission: typeof withActionAdmission = async (options) =>
+      await withActionAdmission({
+        ...options,
+        enabled: true,
+        policy: admissionPolicy,
+        redis: {
+          send: async (_command, args) => {
+            const script = args.at(0) ?? "";
+            return script.includes("ZSCORE") ? 0 : 1;
           },
         },
-        signal: controller.signal,
-        now: () => 1234,
-        admission,
-        run: async () => {
-          ran = true;
+        timing: {
+          now: () => 0,
+          schedule: (callback) => {
+            renew = callback;
+            return () => undefined;
+          },
         },
       });
-
-      expect(await operation.catch((error: unknown) => error)).toBeInstanceOf(
-        DelayedError,
-      );
-      expect(ran).toBe(false);
-      expect(delays).toHaveLength(1);
-      expect(delays.at(0)?.timestamp).toBeGreaterThan(1234);
-      expect(delays.at(0)?.token).toBe("bull-lock-token");
-    }
+    const operation = runBackgroundJob({
+      actionKind: BACKGROUND_ACTION_KIND.flow,
+      organizationId,
+      userId,
+      job: {
+        moveToDelayed: async () => {
+          delayed = true;
+        },
+      },
+      signal: new AbortController().signal,
+      admission,
+      run: async (signal) => {
+        const aborted = new Promise<void>((resolve) => {
+          signal.addEventListener("abort", () => resolve(), { once: true });
+        });
+        renew();
+        await aborted;
+        leaseLoss = signal.reason;
+        signal.throwIfAborted();
+      },
+    });
+    const error = await operation.catch((error: unknown) => error);
+    expect(error).toBeInstanceOf(ActionAdmissionError);
+    expect(error).toBe(leaseLoss);
+    expect(delayed).toBe(false);
   });
 
   test("combines caller timeout and admission lease loss signals", async () => {
