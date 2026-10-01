@@ -160,7 +160,6 @@ describe("chat thread messages", () => {
 
     expect(html).toContain("Draft answer");
     expect(html).toContain('aria-label="Copy"');
-    expect(html).toContain(">Copy</button>");
   });
 
   test("renders persisted audio, video, and sandboxed app output", () => {
@@ -297,7 +296,7 @@ describe("chat thread messages", () => {
     expect(html).toContain("12 reasoning tokens");
     expect(html).toContain("Checked the contract timeline.");
     expect(html).toContain("The deadline is Friday.");
-    expect(html.match(/>Copy<\/button>/gu)?.length).toBe(1);
+    expect(html.match(/aria-label="Copy"/gu)?.length).toBe(1);
   });
 
   test("shows provider-reported reasoning tokens without a thinking part", () => {
@@ -844,7 +843,7 @@ describe("chat thread messages", () => {
 
     expect(html).toContain("First answer");
     expect(html).toContain("Second answer");
-    expect(html.match(/>Copy<\/button>/gu)?.length).toBe(2);
+    expect(html.match(/aria-label="Copy"/gu)?.length).toBe(2);
     expect(html.match(/>Retry<\/button>/gu)?.length).toBe(1);
   });
 
@@ -878,7 +877,7 @@ describe("chat thread messages", () => {
 
     expect(html).toContain("Answer before retry");
     expect(html).toContain("Follow-up prompt");
-    expect(html.match(/>Copy<\/button>/gu)?.length).toBe(1);
+    expect(html.match(/aria-label="Copy"/gu)?.length).toBe(1);
     expect(html).not.toContain(">Retry</button>");
   });
 
@@ -907,7 +906,7 @@ describe("chat thread messages", () => {
     );
 
     expect(html).toContain("Streaming answer");
-    expect(html).toContain(">Copy</button>");
+    expect(html).toContain('aria-label="Copy"');
     expect(html).not.toContain(">Retry</button>");
   });
 

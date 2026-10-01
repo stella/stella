@@ -12,7 +12,7 @@ import {
   CopyIcon,
   HighlighterIcon,
   LockIcon,
-  MessageSquarePlusIcon,
+  AddCommentIcon,
   SparklesIcon,
   StrikethroughIcon,
   Trash2Icon,
@@ -604,7 +604,7 @@ export const AnnotationToolbar = ({
                 size="sm"
                 variant="ghost"
               >
-                <MessageSquarePlusIcon className="size-3.5" />
+                <AddCommentIcon className="size-3.5" />
                 {t("folio.comment")}
               </Button>
               <span className="bg-border mx-1 h-4 w-px" />
@@ -775,7 +775,7 @@ export const AnnotationToolbar = ({
                   size="sm"
                   variant="ghost"
                 >
-                  <MessageSquarePlusIcon className="size-3.5" />
+                  <AddCommentIcon className="size-3.5" />
                   {t("folio.comment")}
                 </Button>
               </>
