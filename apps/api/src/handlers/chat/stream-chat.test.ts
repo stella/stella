@@ -3936,14 +3936,15 @@ describe("native continuation third-party boundary", () => {
   test("anonymizes resolved payload text while preserving protocol fields", async () => {
     const boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }> = {
       ...createBoundary([]),
-      anonymizeFields: async ({ fields }) => ({
-        entityCount: fields.filter((field) => field.includes("Jan Novak"))
-          .length,
-        fields: fields.map((field) =>
-          field.replaceAll("Jan Novak", "[PERSON_1]"),
-        ),
-        redactionMap: new Map([["[PERSON_1]", "Jan Novak"]]),
-      }),
+      anonymizeFields: async ({ fields }) =>
+        Result.ok({
+          entityCount: fields.filter((field) => field.includes("Jan Novak"))
+            .length,
+          fields: fields.map((field) =>
+            field.replaceAll("Jan Novak", "[PERSON_1]"),
+          ),
+          redactionMap: new Map([["[PERSON_1]", "Jan Novak"]]),
+        }),
     };
 
     const prepared = await prepareResumeForThirdParty({

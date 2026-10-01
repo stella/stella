@@ -1,10 +1,11 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import { loadAnonymizationAllowlistCanonicalsByWorkspace } from "@/api/lib/anonymization-allowlist";
 import { loadAnonymizationGazetteerEntriesByWorkspace } from "@/api/lib/anonymization-blacklist";
 import { anonymizeTextFields } from "@/api/mcp/anonymization";
 import type { McpMode } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
+import type { AnonymizedFieldBoundaryError } from "@/api/mcp/field-markers";
 import type {
   InternalToolResult,
   McpCompatFetchSubject,
@@ -16,7 +17,9 @@ import type {
 import { isMcpEgressPlan } from "@/api/mcp/tool-types";
 import {
   isToolErrorResult,
+  MCP_INTERNAL_ERROR_HINT,
   normalizeTextField,
+  structuredErrorResult,
   toolDataResult,
   windowTextByCursor,
 } from "@/api/mcp/tool-utils";
@@ -158,9 +161,9 @@ const anonymizeTextFieldsByWorkspace = async ({
   anonymizer: EgressAnonymizer;
   context: McpRequestContext;
   fields: readonly McpStructuredTextField[];
-}): Promise<void> => {
+}): Promise<Result<void, AnonymizedFieldBoundaryError>> => {
   if (fields.length === 0) {
-    return;
+    return Result.ok(undefined);
   }
 
   const byWorkspace = new Map<string, McpStructuredTextField[]>();
@@ -205,6 +208,11 @@ const anonymizeTextFieldsByWorkspace = async ({
       organizationId: context.organizationId,
       workspaceId,
     });
+    // Fail closed: the caller discards the whole payload, so no field of this
+    // or any other group leaves unanonymized.
+    if (Result.isError(anonymized)) {
+      return Result.err(anonymized.error);
+    }
 
     for (const [index, field] of group.entries()) {
       field.apply(
@@ -212,12 +220,24 @@ const anonymizeTextFieldsByWorkspace = async ({
           allowEmptyFallback: false,
           fallback: field.value,
           missingFallback: ANONYMIZED_FIELD_MISSING_FALLBACK,
-          value: anonymized.fields[index],
+          value: anonymized.value.fields[index],
         }),
       );
     }
   }
+  return Result.ok(undefined);
 };
+
+/**
+ * The refusal returned in place of a payload whose anonymization did not
+ * complete. It carries no field text.
+ */
+const anonymizationFailedResult = (): InternalToolResult =>
+  structuredErrorResult({
+    code: "internal_error",
+    message: "Tool output could not be anonymized",
+    hint: MCP_INTERNAL_ERROR_HINT,
+  });
 
 const finalizeStructured = async ({
   anonymizer,
@@ -234,11 +254,14 @@ const finalizeStructured = async ({
   // mode only), THEN window, so an entity name can never straddle a window edge
   // and placeholders stay stable across windows of one field.
   if (mode === "anonymized") {
-    await anonymizeTextFieldsByWorkspace({
+    const anonymized = await anonymizeTextFieldsByWorkspace({
       anonymizer,
       context,
       fields: plan.textFields,
     });
+    if (Result.isError(anonymized)) {
+      return anonymizationFailedResult();
+    }
     plan.redactInAnonymized?.();
   }
 
@@ -283,7 +306,7 @@ const finalizeCompatSearch = async ({
   // tenant attribution to group by, so it leaves as written: the per-hit
   // `kind`, not the request mode alone, decides.
   if (mode === "anonymized") {
-    await anonymizeTextFieldsByWorkspace({
+    const anonymized = await anonymizeTextFieldsByWorkspace({
       anonymizer,
       context,
       fields: plan.results.flatMap((hit, index) =>
@@ -303,6 +326,9 @@ const finalizeCompatSearch = async ({
             ],
       ),
     });
+    if (Result.isError(anonymized)) {
+      return anonymizationFailedResult();
+    }
   }
 
   return toolDataResult({ nextCursor: plan.nextCursor, results });
@@ -328,13 +354,17 @@ const finalizeCompatFetch = async ({
     // internally, but the AI client receives only the anonymized title/body.
     // Anonymize the whole document first, then window the redacted text so no
     // entity name is split across a window edge.
-    const anonymized = await anonymizeCompatFetchPayload({
+    const anonymizedPayload = await anonymizeCompatFetchPayload({
       anonymize: anonymizer.anonymize,
       context,
       text: plan.text,
       title: plan.title,
       workspaceId,
     });
+    if (Result.isError(anonymizedPayload)) {
+      return anonymizationFailedResult();
+    }
+    const anonymized = anonymizedPayload.value;
 
     const textWindow = windowTextByCursor({
       cursor: plan.cursor,
@@ -425,20 +455,23 @@ const anonymizeCompatFetchPayload = async ({
     organizationId: context.organizationId,
     workspaceId,
   });
+  if (Result.isError(anonymized)) {
+    return Result.err(anonymized.error);
+  }
 
-  return {
-    anonymizedEntityCount: anonymized.entityCount,
+  return Result.ok({
+    anonymizedEntityCount: anonymized.value.entityCount,
     text: normalizeTextField({
       allowEmptyFallback: false,
       fallback: text,
       missingFallback: ANONYMIZED_FIELD_MISSING_FALLBACK,
-      value: anonymized.fields[1],
+      value: anonymized.value.fields[1],
     }),
     title: normalizeTextField({
       allowEmptyFallback: false,
       fallback: title,
       missingFallback: ANONYMIZED_FIELD_MISSING_FALLBACK,
-      value: anonymized.fields[0],
+      value: anonymized.value.fields[0],
     }),
-  };
+  });
 };
