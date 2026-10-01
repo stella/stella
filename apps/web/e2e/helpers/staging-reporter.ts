@@ -29,7 +29,7 @@ export default class StagingReporter implements Reporter {
   private gatingFailures = 0;
   private fatalError = false;
 
-  private state: StagingState;
+  private readonly state: StagingState;
 
   constructor({ state }: { state?: StagingState } = {}) {
     this.state =
@@ -75,7 +75,7 @@ export default class StagingReporter implements Reporter {
     this.fatalError = true;
   }
 
-  async onEnd(
+  onEnd(
     result: Pick<FullResult, "status">,
   ): Promise<Pick<FullResult, "status">> {
     if (
@@ -84,11 +84,11 @@ export default class StagingReporter implements Reporter {
       this.gatingFailures > 0 ||
       this.reportOnlyFailures === 0
     ) {
-      return { status: result.status };
+      return Promise.resolve({ status: result.status });
     }
     report(
       "Staging gating checks passed; declared report-only failures do not block verification.",
     );
-    return { status: "passed" };
+    return Promise.resolve({ status: "passed" });
   }
 }

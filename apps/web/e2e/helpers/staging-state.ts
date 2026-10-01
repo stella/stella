@@ -33,7 +33,7 @@ export const parseStagingState = (raw: string | undefined): StagingState => {
     return {};
   }
 
-  const parsed = Result.try(() => JSON.parse(raw));
+  const parsed = Result.try((): unknown => JSON.parse(raw));
   if (parsed.isErr()) {
     throw new StagingStateError({
       message: "STAGING_STATE must contain valid JSON",
