@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
 
+import { DECISION_TEXT_FIELD_KEYS } from "@stll/api-contract/case-law-text-field";
+
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
   SOURCE_ABSENT_TEXT,
@@ -7,8 +9,17 @@ import {
   TEXT_FIELD_TYPE,
   absentTextComparison,
   sourceTextField,
+  readDecisionTextMetadata,
 } from "@/api/lib/case-law/decision-text";
 import { readGzipJson } from "@/api/lib/gzip-json";
+
+const hasProse = (text: string) => /[\p{L}\p{N}]/u.test(text);
+const declaredSentences = SOURCE_ABSENT_TEXT.filter(({ text }) =>
+  hasProse(text),
+);
+const declaredPunctuation = SOURCE_ABSENT_TEXT.filter(
+  ({ text }) => !hasProse(text),
+);
 
 test("a declared marker reads as no text at all, for the source that prints it", () => {
   for (const { adapter, text } of SOURCE_ABSENT_TEXT) {
@@ -24,12 +35,47 @@ test("another source's rows keep the same words", () => {
   // absence everywhere, it would strip a field another publisher means, and
   // the repair over stored rows would undo what that publisher's own adapter
   // writes back on the next crawl.
-  for (const { adapter, text } of SOURCE_ABSENT_TEXT) {
+  for (const { adapter, text } of declaredSentences) {
     expect(adapter).not.toBe(ADAPTER_KEYS.CZ_NS);
     expect(sourceTextField(ADAPTER_KEYS.CZ_NS, text)).toEqual({
       type: TEXT_FIELD_TYPE.PRESENT,
       text,
     });
+  }
+});
+
+test("punctuation-only markers follow the existing filler policy for every adapter", () => {
+  for (const { text } of declaredPunctuation) {
+    for (const adapter of Object.values(ADAPTER_KEYS)) {
+      expect(sourceTextField(adapter, text)).toEqual({
+        type: TEXT_FIELD_TYPE.ABSENT,
+        reason: TEXT_ABSENCE_REASON.PUBLISHER_PLACEHOLDER,
+      });
+    }
+  }
+});
+
+test("stored punctuation text is preserved by the adapter-independent reader", () => {
+  for (const { text } of declaredPunctuation) {
+    for (const field of DECISION_TEXT_FIELD_KEYS) {
+      expect(
+        readDecisionTextMetadata({ [field]: text }).textFields[field],
+      ).toEqual({
+        type: TEXT_FIELD_TYPE.PRESENT,
+        text,
+      });
+    }
+  }
+});
+
+test("shared empty values remain not published for every adapter", () => {
+  for (const adapter of Object.values(ADAPTER_KEYS)) {
+    for (const value of [undefined, null, "", " \n\t ", "\u00a0"]) {
+      expect(sourceTextField(adapter, value)).toEqual({
+        type: TEXT_FIELD_TYPE.ABSENT,
+        reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+      });
+    }
   }
 });
 
@@ -80,8 +126,9 @@ test("a sentence that only starts like a marker is text", () => {
   });
 });
 
-test("every declared marker is a sentence its source is recorded printing", async () => {
-  // The declarations are only worth anything while they match the page. This
+test("every declared sentence is one its source is recorded printing", async () => {
+  // Symbol-only filler is source-independent and tested for every adapter
+  // above. Source-specific sentences must match the captured page. This
   // reads them back out of the committed capture of that page, so a source
   // that rewords its sentence fails here on the next fixture refresh instead
   // of silently storing the new wording as a headnote.
@@ -100,7 +147,7 @@ test("every declared marker is a sentence its source is recorded printing", asyn
     return capture;
   };
 
-  for (const { adapter, text } of SOURCE_ABSENT_TEXT) {
+  for (const { adapter, text } of declaredSentences) {
     const capture = await captureOf(adapter);
     expect(capture).toContain(absentTextComparison(text));
   }
