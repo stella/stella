@@ -28764,6 +28764,51 @@ export type WebRoutes = {
           503: T9a51b7d2bc;
         };
       };
+      "member-previews": {
+        get: {
+          body: Record<never, never>;
+          params: T5e3ac29766;
+          query: {
+            workspaceIds: Array<T9e07a7d6cd>;
+          };
+          headers: Record<never, never>;
+          response: {
+            200: {
+              previews: Array<{
+                workspaceId: T9e07a7d6cd;
+                total: number;
+                members: Array<{
+                  userId: T56ed95d57c;
+                  name: string;
+                  email: string;
+                  image: Tbe0400fa4c;
+                }>;
+              }>;
+            };
+            400: T9a51b7d2bc;
+            401: T9a51b7d2bc;
+            402: T9a51b7d2bc;
+            403: Tddfcdef857;
+            404: T9a51b7d2bc;
+            409: T9a51b7d2bc;
+            413: T9a51b7d2bc;
+            422: (T9a51b7d2bc | {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            });
+            428: T9a51b7d2bc;
+            429: T9a51b7d2bc;
+            500: T9a51b7d2bc;
+            502: T9a51b7d2bc;
+            503: T9a51b7d2bc;
+          };
+        };
+      };
       navigation: {
         get: {
           body: Record<never, never>;
