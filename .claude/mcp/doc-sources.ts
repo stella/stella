@@ -37,7 +37,7 @@ export const DOC_SOURCES = {
     url: "https://elysiajs.com/llms.txt",
   },
   Drizzle: {
-    dependencies: ["drizzle-orm", "drizzle-kit", "eslint-plugin-drizzle"],
+    dependencies: ["drizzle-orm", "drizzle-kit"],
     url: "https://orm.drizzle.team/llms.txt",
   },
   TanStack: {
@@ -107,10 +107,6 @@ export const DOC_SOURCES = {
   BaseUI: {
     dependencies: ["@base-ui/react"],
     url: "https://base-ui.com/llms.txt",
-  },
-  DndKit: {
-    dependencies: ["@dnd-kit/core", "@dnd-kit/sortable"],
-    url: "https://dndkit.com/llms.txt",
   },
   Valibot: {
     dependencies: ["valibot", "@valibot/to-json-schema"],
@@ -183,10 +179,6 @@ export const DOC_SOURCES = {
       "@smithy/fetch-http-handler",
     ],
     url: "https://docs.aws.amazon.com/sdk-for-javascript/v3/developer-guide/llms.txt",
-  },
-  AGUI: {
-    dependencies: ["@ag-ui/core"],
-    url: "https://docs.ag-ui.com/llms.txt",
   },
   Bun: {
     dependencies: ["bun-types"],
@@ -265,10 +257,6 @@ export const DOC_SOURCES = {
     dependencies: ["tsdown"],
     url: "https://tsdown.dev/llms.txt",
   },
-  Ultracite: {
-    dependencies: ["ultracite"],
-    url: "https://www.ultracite.ai/llms.txt",
-  },
   WXT: {
     dependencies: ["wxt"],
     url: "https://wxt.dev/llms.txt",
@@ -332,7 +320,6 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "@types/chrome",
   "@types/hast",
   "@types/node",
-  "@typescript-eslint/utils",
   "@typescript/native",
   "@vscode/markdown-editor",
   "@vscode/observables",
@@ -354,7 +341,6 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "immer",
   "input-otp",
   "ioredis",
-  "ip-address",
   "jose",
   "jszip",
   "katex",

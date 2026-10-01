@@ -5513,10 +5513,12 @@ describe("OpenAI-compatible MCP tools", () => {
         },
       ],
     });
-    anonymizeTextFieldsMock.mockResolvedValue({
-      entityCount: 1,
-      fields: ["[PERSON_1] SPA"],
-    });
+    anonymizeTextFieldsMock.mockResolvedValue(
+      Result.ok({
+        entityCount: 1,
+        fields: ["[PERSON_1] SPA"],
+      }),
+    );
 
     const result = await handleMcpToolCall({
       args: { query: "john smith" },
@@ -5578,10 +5580,12 @@ describe("OpenAI-compatible MCP tools", () => {
         },
       ],
     });
-    anonymizeTextFieldsMock.mockResolvedValue({
-      entityCount: 2,
-      fields: ["[PERSON_1] SPA", "[PERSON_2] NDA"],
-    });
+    anonymizeTextFieldsMock.mockResolvedValue(
+      Result.ok({
+        entityCount: 2,
+        fields: ["[PERSON_1] SPA", "[PERSON_2] NDA"],
+      }),
+    );
 
     const result = await handleMcpToolCall({
       args: { query: "agreement" },
@@ -5635,10 +5639,12 @@ describe("OpenAI-compatible MCP tools", () => {
         },
       ],
     });
-    anonymizeTextFieldsMock.mockResolvedValue({
-      entityCount: 1,
-      fields: [""],
-    });
+    anonymizeTextFieldsMock.mockResolvedValue(
+      Result.ok({
+        entityCount: 1,
+        fields: [""],
+      }),
+    );
 
     const result = await handleMcpToolCall({
       args: { query: "john smith" },
@@ -5677,10 +5683,12 @@ describe("OpenAI-compatible MCP tools", () => {
         },
       ],
     });
-    anonymizeTextFieldsMock.mockResolvedValue({
-      entityCount: 1,
-      fields: [],
-    });
+    anonymizeTextFieldsMock.mockResolvedValue(
+      Result.ok({
+        entityCount: 1,
+        fields: [],
+      }),
+    );
 
     const result = await handleMcpToolCall({
       args: { query: "john smith" },
@@ -5710,10 +5718,12 @@ describe("OpenAI-compatible MCP tools", () => {
   });
 
   test("fetch anonymizes title and text in anonymized mode", async () => {
-    anonymizeTextFieldsMock.mockResolvedValue({
-      entityCount: 2,
-      fields: ["[PERSON_1] SPA", "[PERSON_1] signed the agreement"],
-    });
+    anonymizeTextFieldsMock.mockResolvedValue(
+      Result.ok({
+        entityCount: 2,
+        fields: ["[PERSON_1] SPA", "[PERSON_1] signed the agreement"],
+      }),
+    );
 
     const result = await handleMcpToolCall({
       args: { id: "00000000-0000-4000-8000-0000000e0001" },
@@ -5752,10 +5762,12 @@ describe("OpenAI-compatible MCP tools", () => {
   });
 
   test("fetch preserves empty anonymized output instead of leaking original content", async () => {
-    anonymizeTextFieldsMock.mockResolvedValue({
-      entityCount: 1,
-      fields: ["", ""],
-    });
+    anonymizeTextFieldsMock.mockResolvedValue(
+      Result.ok({
+        entityCount: 1,
+        fields: ["", ""],
+      }),
+    );
 
     const result = await handleMcpToolCall({
       args: { id: "00000000-0000-4000-8000-0000000e0001" },
@@ -5792,10 +5804,12 @@ describe("OpenAI-compatible MCP tools", () => {
   });
 
   test("fetch uses generic placeholders when anonymized fields are unexpectedly missing", async () => {
-    anonymizeTextFieldsMock.mockResolvedValue({
-      entityCount: 1,
-      fields: [],
-    });
+    anonymizeTextFieldsMock.mockResolvedValue(
+      Result.ok({
+        entityCount: 1,
+        fields: [],
+      }),
+    );
 
     const result = await handleMcpToolCall({
       args: { id: "00000000-0000-4000-8000-0000000e0001" },
@@ -6950,10 +6964,12 @@ describe("OpenAI-compatible MCP tools", () => {
     );
 
   test("read_document anonymizes version-history labels and descriptions", async () => {
-    anonymizeTextFieldsMock.mockResolvedValue({
-      entityCount: 1,
-      fields: ["[DOC]", "[PERSON_1] draft", "Redacted note"],
-    });
+    anonymizeTextFieldsMock.mockResolvedValue(
+      Result.ok({
+        entityCount: 1,
+        fields: ["[DOC]", "[PERSON_1] draft", "Redacted note"],
+      }),
+    );
 
     const result = await handleMcpToolCall({
       args: {
@@ -7612,10 +7628,12 @@ describe("OpenAI-compatible MCP tools", () => {
     );
 
   test("list_tasks anonymizes task and matter names in anonymized mode", async () => {
-    anonymizeTextFieldsMock.mockResolvedValue({
-      entityCount: 1,
-      fields: ["[PERSON_1] deposition", "[PERSON_1] estate", "2026-014"],
-    });
+    anonymizeTextFieldsMock.mockResolvedValue(
+      Result.ok({
+        entityCount: 1,
+        fields: ["[PERSON_1] deposition", "[PERSON_1] estate", "2026-014"],
+      }),
+    );
 
     const result = await handleMcpToolCall({
       args: { matter_id: WORKSPACE_ID },
@@ -7667,10 +7685,12 @@ describe("OpenAI-compatible MCP tools", () => {
   // workspace scope before it leaves Stella. A null userId keeps the user-name
   // lookup from running, so only the narrative is pushed.
   test("list_time_entries anonymizes narratives in anonymized mode", async () => {
-    anonymizeTextFieldsMock.mockResolvedValue({
-      entityCount: 1,
-      fields: ["Call with [PERSON_1]"],
-    });
+    anonymizeTextFieldsMock.mockResolvedValue(
+      Result.ok({
+        entityCount: 1,
+        fields: ["Call with [PERSON_1]"],
+      }),
+    );
 
     const result = await handleMcpToolCall({
       args: { matter_id: WORKSPACE_ID },

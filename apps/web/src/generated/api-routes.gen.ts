@@ -33247,23 +33247,23 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
-  name: "counterparty_check";
+  name: "boe_find_related_laws";
   description: string;
   inputSchema?: {
     readonly "~standard": {
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: T119167339e | undefined;
+      readonly types?: T5de736febe | undefined;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Td536646f91 | Promise<(Tfc86db9c4b | Td536646f91)>);
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Te1486aaecd | Promise<(Tfc86db9c4b | Te1486aaecd)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: T119167339e | undefined;
+      readonly types?: T5de736febe | undefined;
     };
   };
   outputSchema?: undefined;
@@ -33272,37 +33272,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   lazy?: false | true;
   metadata?: T631856df6b;
   execute?: {
-    (args: Tf1ef3fc0b0, context?: Tc88149628d): unknown;
-  };
-  readonly [__symbol0]?: T350a170d52;
-} | {
-  __toolSide: "client";
-  name: "boe_search_legislation";
-  description: string;
-  inputSchema?: {
-    readonly "~standard": {
-      readonly jsonSchema: Tc49e8b2305;
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T4fa3ad8093 | undefined;
-    };
-  } & {
-    readonly "~standard": {
-      readonly validate: {
-        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T641b83000f | Promise<(Tfc86db9c4b | T641b83000f)>);
-      };
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T4fa3ad8093 | undefined;
-    };
-  };
-  outputSchema?: undefined;
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: T631856df6b;
-  execute?: {
-    (args: T2f5bcad84c, context?: Tc88149628d): unknown;
+    (args: T8136384b1e, context?: Tc88149628d): unknown;
   };
   readonly [__symbol0]?: T350a170d52;
 } | {
@@ -33337,36 +33307,6 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
-  name: "boe_get_law_structure";
-  description: string;
-  inputSchema?: {
-    readonly "~standard": {
-      readonly jsonSchema: Tc49e8b2305;
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T7165758c88 | undefined;
-    };
-  } & {
-    readonly "~standard": {
-      readonly validate: {
-        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Tb44e1703bb | Promise<(Tfc86db9c4b | Tb44e1703bb)>);
-      };
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T7165758c88 | undefined;
-    };
-  };
-  outputSchema?: undefined;
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: T631856df6b;
-  execute?: {
-    (args: T73467fd01f, context?: Tc88149628d): unknown;
-  };
-  readonly [__symbol0]?: T350a170d52;
-} | {
-  __toolSide: "client";
   name: "boe_get_law_block";
   description: string;
   inputSchema?: {
@@ -33397,23 +33337,23 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
-  name: "boe_find_related_laws";
+  name: "boe_get_law_structure";
   description: string;
   inputSchema?: {
     readonly "~standard": {
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: T5de736febe | undefined;
+      readonly types?: T7165758c88 | undefined;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Te1486aaecd | Promise<(Tfc86db9c4b | Te1486aaecd)>);
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Tb44e1703bb | Promise<(Tfc86db9c4b | Tb44e1703bb)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: T5de736febe | undefined;
+      readonly types?: T7165758c88 | undefined;
     };
   };
   outputSchema?: undefined;
@@ -33422,7 +33362,37 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   lazy?: false | true;
   metadata?: T631856df6b;
   execute?: {
-    (args: T8136384b1e, context?: Tc88149628d): unknown;
+    (args: T73467fd01f, context?: Tc88149628d): unknown;
+  };
+  readonly [__symbol0]?: T350a170d52;
+} | {
+  __toolSide: "client";
+  name: "boe_search_legislation";
+  description: string;
+  inputSchema?: {
+    readonly "~standard": {
+      readonly jsonSchema: Tc49e8b2305;
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T4fa3ad8093 | undefined;
+    };
+  } & {
+    readonly "~standard": {
+      readonly validate: {
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T641b83000f | Promise<(Tfc86db9c4b | T641b83000f)>);
+      };
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T4fa3ad8093 | undefined;
+    };
+  };
+  outputSchema?: undefined;
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T631856df6b;
+  execute?: {
+    (args: T2f5bcad84c, context?: Tc88149628d): unknown;
   };
   readonly [__symbol0]?: T350a170d52;
 } | {
@@ -33457,69 +33427,23 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
-  name: "use-browser";
+  name: "counterparty_check";
   description: string;
   inputSchema?: {
     readonly "~standard": {
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: Tda018e6666 | undefined;
+      readonly types?: T119167339e | undefined;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T9899c62a18 | Promise<(Tfc86db9c4b | T9899c62a18)>);
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Td536646f91 | Promise<(Tfc86db9c4b | Td536646f91)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: Tda018e6666 | undefined;
-    };
-  };
-  outputSchema?: {
-    readonly "~standard": {
-      readonly jsonSchema: Tc49e8b2305;
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T8d5e2ac251 | undefined;
-    };
-  } & {
-    readonly "~standard": {
-      readonly validate: {
-        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T17f9c80581 | Promise<(Tfc86db9c4b | T17f9c80581)>);
-      };
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T8d5e2ac251 | undefined;
-    };
-  };
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: T631856df6b;
-  execute?: {
-    (args: Tb33a71380a, context?: Tc88149628d): (Td617134437 | Tc38488b75b | Promise<Taa699009ad>);
-  };
-  readonly [__symbol0]?: T350a170d52;
-} | {
-  __toolSide: "client";
-  name: "infosoud_lookup_case";
-  description: string;
-  inputSchema?: {
-    readonly "~standard": {
-      readonly jsonSchema: Tc49e8b2305;
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T367a10cc51 | undefined;
-    };
-  } & {
-    readonly "~standard": {
-      readonly validate: {
-        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Td0c9b180ad | Promise<(Tfc86db9c4b | Td0c9b180ad)>);
-      };
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T367a10cc51 | undefined;
+      readonly types?: T119167339e | undefined;
     };
   };
   outputSchema?: undefined;
@@ -33528,529 +33452,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   lazy?: false | true;
   metadata?: T631856df6b;
   execute?: {
-    (args: T466db84340, context?: Tc88149628d): unknown;
-  };
-  readonly [__symbol0]?: T350a170d52;
-} | {
-  __toolSide: "client";
-  name: "update-entity-fields";
-  description: string;
-  inputSchema?: {
-    readonly "~standard": {
-      readonly jsonSchema: Tc49e8b2305;
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T4c7ffc5c98 | undefined;
-    };
-  } & {
-    readonly "~standard": {
-      readonly validate: {
-        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T6a8b8e209a | Promise<(Tfc86db9c4b | T6a8b8e209a)>);
-      };
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T4c7ffc5c98 | undefined;
-    };
-  };
-  outputSchema?: {
-    readonly "~standard": {
-      readonly jsonSchema: Tc49e8b2305;
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: Ta94982c099 | undefined;
-    };
-  } & {
-    readonly "~standard": {
-      readonly validate: {
-        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T9a8daf49a9 | Promise<(Tfc86db9c4b | T9a8daf49a9)>);
-      };
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: Ta94982c099 | undefined;
-    };
-  };
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: T631856df6b;
-  execute?: {
-    (args: T09610a4d6a, context?: Tc88149628d): (T3a8e541c8b | Promise<T3a8e541c8b>);
-  };
-  readonly [__symbol0]?: T350a170d52;
-} | {
-  __toolSide: "client";
-  name: "suggest_changes";
-  description: string;
-  inputSchema?: T631856df6b | {
-    readonly "~standard": {
-      readonly jsonSchema: Tc49e8b2305;
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T699c14b14c | undefined;
-    };
-  } & {
-    readonly "~standard": {
-      readonly validate: {
-        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Tdc2a8db8cb | Promise<(Tfc86db9c4b | Tdc2a8db8cb)>);
-      };
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T699c14b14c | undefined;
-    };
-  };
-  outputSchema?: undefined;
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: T631856df6b;
-  execute?: {
-    (args: unknown, context?: Tc88149628d): unknown;
-  };
-  readonly [__symbol0]?: T350a170d52;
-} | {
-  __toolSide: "client";
-  name: "get_document_outline";
-  description: string;
-  inputSchema?: T631856df6b;
-  outputSchema?: undefined;
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: T631856df6b;
-  execute?: T114ef593c6;
-  readonly [__symbol0]?: T350a170d52;
-} | {
-  __toolSide: "client";
-  name: "read_section";
-  description: string;
-  inputSchema?: T631856df6b;
-  outputSchema?: undefined;
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: T631856df6b;
-  execute?: T114ef593c6;
-  readonly [__symbol0]?: T350a170d52;
-} | {
-  __toolSide: "client";
-  name: "list_stories";
-  description: string;
-  inputSchema?: T631856df6b;
-  outputSchema?: undefined;
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: T631856df6b;
-  execute?: T114ef593c6;
-  readonly [__symbol0]?: T350a170d52;
-} | {
-  __toolSide: "client";
-  name: "read_story";
-  description: string;
-  inputSchema?: T631856df6b;
-  outputSchema?: undefined;
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: T631856df6b;
-  execute?: T114ef593c6;
-  readonly [__symbol0]?: T350a170d52;
-} | {
-  __toolSide: "client";
-  name: "find_text";
-  description: string;
-  inputSchema?: T631856df6b;
-  outputSchema?: undefined;
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: T631856df6b;
-  execute?: T114ef593c6;
-  readonly [__symbol0]?: T350a170d52;
-} | {
-  __toolSide: "client";
-  name: "read_comments";
-  description: string;
-  inputSchema?: T631856df6b;
-  outputSchema?: undefined;
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: T631856df6b;
-  execute?: T114ef593c6;
-  readonly [__symbol0]?: T350a170d52;
-} | {
-  __toolSide: "client";
-  name: "read_changes";
-  description: string;
-  inputSchema?: T631856df6b;
-  outputSchema?: undefined;
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: T631856df6b;
-  execute?: T114ef593c6;
-  readonly [__symbol0]?: T350a170d52;
-} | {
-  __toolSide: "client";
-  name: "add_comment";
-  description: string;
-  inputSchema?: T631856df6b;
-  outputSchema?: undefined;
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: T631856df6b;
-  execute?: T114ef593c6;
-  readonly [__symbol0]?: T350a170d52;
-} | {
-  __toolSide: "client";
-  name: "reply_comment";
-  description: string;
-  inputSchema?: T631856df6b;
-  outputSchema?: undefined;
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: T631856df6b;
-  execute?: T114ef593c6;
-  readonly [__symbol0]?: T350a170d52;
-} | {
-  __toolSide: "client";
-  name: "resolve_comment";
-  description: string;
-  inputSchema?: T631856df6b;
-  outputSchema?: undefined;
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: T631856df6b;
-  execute?: T114ef593c6;
-  readonly [__symbol0]?: T350a170d52;
-} | {
-  __toolSide: "client";
-  name: "show_in_document";
-  description: string;
-  inputSchema?: T631856df6b;
-  outputSchema?: undefined;
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: T631856df6b;
-  execute?: T114ef593c6;
-  readonly [__symbol0]?: T350a170d52;
-} | {
-  __toolSide: "client";
-  name: "create_matter_document";
-  description: string;
-  inputSchema?: {
-    readonly "~standard": {
-      readonly jsonSchema: Tc49e8b2305;
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T2e2021adee | undefined;
-    };
-  } & {
-    readonly "~standard": {
-      readonly validate: {
-        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T51f6ece09d | Promise<(Tfc86db9c4b | T51f6ece09d)>);
-      };
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T2e2021adee | undefined;
-    };
-  };
-  outputSchema?: {
-    readonly "~standard": {
-      readonly jsonSchema: Tc49e8b2305;
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: Tde7fb406e1 | undefined;
-    };
-  } & {
-    readonly "~standard": {
-      readonly validate: {
-        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T3012ed5aad | Promise<(Tfc86db9c4b | T3012ed5aad)>);
-      };
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: Tde7fb406e1 | undefined;
-    };
-  };
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: T631856df6b;
-  execute?: {
-    (args: Taeaa3ad44e, context?: Tc88149628d): (T6c9afce89f | Promise<T6c9afce89f>);
-  };
-  readonly [__symbol0]?: T350a170d52;
-} | {
-  __toolSide: "client";
-  name: "web_search";
-  description: string;
-  inputSchema?: {
-    readonly "~standard": {
-      readonly jsonSchema: Tc49e8b2305;
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T43c61826c6 | undefined;
-    };
-  } & {
-    readonly "~standard": {
-      readonly validate: {
-        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Ta1f9b4de71 | Promise<(Tfc86db9c4b | Ta1f9b4de71)>);
-      };
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T43c61826c6 | undefined;
-    };
-  };
-  outputSchema?: {
-    readonly "~standard": {
-      readonly jsonSchema: Tc49e8b2305;
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T921fd22a21 | undefined;
-    };
-  } & {
-    readonly "~standard": {
-      readonly validate: {
-        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Ta43e2dcaa2 | Promise<(Tfc86db9c4b | Ta43e2dcaa2)>);
-      };
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T921fd22a21 | undefined;
-    };
-  };
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: T631856df6b;
-  execute?: {
-    (args: Tbbfb0e2dc0, context?: Tc88149628d): (Tddb0458281 | Promise<Tddb0458281>);
-  };
-  readonly [__symbol0]?: T350a170d52;
-} | {
-  __toolSide: "client";
-  name: "fetch_url";
-  description: string;
-  inputSchema?: {
-    readonly "~standard": {
-      readonly jsonSchema: Tc49e8b2305;
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: Tf273198011 | undefined;
-    };
-  } & {
-    readonly "~standard": {
-      readonly validate: {
-        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T984d9f8701 | Promise<(Tfc86db9c4b | T984d9f8701)>);
-      };
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: Tf273198011 | undefined;
-    };
-  };
-  outputSchema?: {
-    readonly "~standard": {
-      readonly jsonSchema: Tc49e8b2305;
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T5728aceaa2 | undefined;
-    };
-  } & {
-    readonly "~standard": {
-      readonly validate: {
-        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Tf2f09f50cf | Promise<(Tfc86db9c4b | Tf2f09f50cf)>);
-      };
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T5728aceaa2 | undefined;
-    };
-  };
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: T631856df6b;
-  execute?: {
-    (args: T1ea5eea592, context?: Tc88149628d): (T8161ebccd4 | Promise<T8161ebccd4>);
-  };
-  readonly [__symbol0]?: T350a170d52;
-} | {
-  __toolSide: "client";
-  name: "search-chat-history";
-  description: string;
-  inputSchema?: {
-    readonly "~standard": {
-      readonly jsonSchema: Tc49e8b2305;
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T692b04920e | undefined;
-    };
-  } & {
-    readonly "~standard": {
-      readonly validate: {
-        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T39bd2e99da | Promise<(Tfc86db9c4b | T39bd2e99da)>);
-      };
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T692b04920e | undefined;
-    };
-  };
-  outputSchema?: {
-    readonly "~standard": {
-      readonly jsonSchema: Tc49e8b2305;
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T71cf339d21 | undefined;
-    };
-  } & {
-    readonly "~standard": {
-      readonly validate: {
-        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T2a09c7df07 | Promise<(Tfc86db9c4b | T2a09c7df07)>);
-      };
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T71cf339d21 | undefined;
-    };
-  };
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: T631856df6b;
-  execute?: {
-    (args: Tfe8087360e, context?: Tc88149628d): (T51cc6664d5 | Promise<T51cc6664d5>);
-  };
-  readonly [__symbol0]?: T350a170d52;
-} | {
-  __toolSide: "client";
-  name: "expand-chat-history";
-  description: string;
-  inputSchema?: {
-    readonly "~standard": {
-      readonly jsonSchema: Tc49e8b2305;
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: Tc601a26749 | undefined;
-    };
-  } & {
-    readonly "~standard": {
-      readonly validate: {
-        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T239c95b432 | Promise<(Tfc86db9c4b | T239c95b432)>);
-      };
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: Tc601a26749 | undefined;
-    };
-  };
-  outputSchema?: {
-    readonly "~standard": {
-      readonly jsonSchema: Tc49e8b2305;
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: Td7a8af8a91 | undefined;
-    };
-  } & {
-    readonly "~standard": {
-      readonly validate: {
-        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Te846513736 | Promise<(Tfc86db9c4b | Te846513736)>);
-      };
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: Td7a8af8a91 | undefined;
-    };
-  };
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: T631856df6b;
-  execute?: {
-    (args: Ta1379e699e, context?: Tc88149628d): (Tdefb828a83 | Promise<Tdefb828a83>);
-  };
-  readonly [__symbol0]?: T350a170d52;
-} | {
-  __toolSide: "client";
-  name: "search-past-chats";
-  description: string;
-  inputSchema?: Tc7057093bd;
-  outputSchema?: Taec8e40e3e;
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: T631856df6b;
-  execute?: Tcaa4ce6922;
-  readonly [__symbol0]?: T350a170d52;
-} | {
-  __toolSide: "client";
-  name: "search-all-past-chats";
-  description: string;
-  inputSchema?: Tc7057093bd;
-  outputSchema?: Taec8e40e3e;
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: T631856df6b;
-  execute?: Tcaa4ce6922;
-  readonly [__symbol0]?: T350a170d52;
-} | {
-  __toolSide: "client";
-  name: "describe_template";
-  description: string;
-  inputSchema?: {
-    readonly "~standard": {
-      readonly jsonSchema: Tc49e8b2305;
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T4deb005d6d | undefined;
-    };
-  } & {
-    readonly "~standard": {
-      readonly validate: {
-        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Tcfcb60a90e | Promise<(Tfc86db9c4b | Tcfcb60a90e)>);
-      };
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T4deb005d6d | undefined;
-    };
-  };
-  outputSchema?: undefined;
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: T631856df6b;
-  execute?: {
-    (args: Ta297fc92a3, context?: Tc88149628d): unknown;
-  };
-  readonly [__symbol0]?: T350a170d52;
-} | {
-  __toolSide: "client";
-  name: "suggest_template_fields";
-  description: string;
-  inputSchema?: {
-    readonly "~standard": {
-      readonly jsonSchema: Tc49e8b2305;
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T25fd06afe1 | undefined;
-    };
-  } & {
-    readonly "~standard": {
-      readonly validate: {
-        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Tb13124e7c6 | Promise<(Tfc86db9c4b | Tb13124e7c6)>);
-      };
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T25fd06afe1 | undefined;
-    };
-  };
-  outputSchema?: undefined;
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: T631856df6b;
-  execute?: {
-    (args: T81f0fdb1b7, context?: Tc88149628d): unknown;
+    (args: Tf1ef3fc0b0, context?: Tc88149628d): unknown;
   };
   readonly [__symbol0]?: T350a170d52;
 } | {
@@ -34101,23 +33503,23 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
-  name: "spawn_subagents";
+  name: "create_matter_document";
   description: string;
   inputSchema?: {
     readonly "~standard": {
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: T6bd5a18bc8 | undefined;
+      readonly types?: T2e2021adee | undefined;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T1e5e71d2be | Promise<(Tfc86db9c4b | T1e5e71d2be)>);
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T51f6ece09d | Promise<(Tfc86db9c4b | T51f6ece09d)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: T6bd5a18bc8 | undefined;
+      readonly types?: T2e2021adee | undefined;
     };
   };
   outputSchema?: {
@@ -34125,16 +33527,16 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: T6da17dcfb9 | undefined;
+      readonly types?: Tde7fb406e1 | undefined;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T0e694e7f35 | Promise<(Tfc86db9c4b | T0e694e7f35)>);
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T3012ed5aad | Promise<(Tfc86db9c4b | T3012ed5aad)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: T6da17dcfb9 | undefined;
+      readonly types?: Tde7fb406e1 | undefined;
     };
   };
   needsApproval?: true;
@@ -34142,7 +33544,345 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   lazy?: false | true;
   metadata?: T631856df6b;
   execute?: {
-    (args: T4a592a8301, context?: Tc88149628d): (T0e2086ec76 | Promise<T0e2086ec76>);
+    (args: Taeaa3ad44e, context?: Tc88149628d): (T6c9afce89f | Promise<T6c9afce89f>);
+  };
+  readonly [__symbol0]?: T350a170d52;
+} | {
+  __toolSide: "client";
+  name: "describe_template";
+  description: string;
+  inputSchema?: {
+    readonly "~standard": {
+      readonly jsonSchema: Tc49e8b2305;
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T4deb005d6d | undefined;
+    };
+  } & {
+    readonly "~standard": {
+      readonly validate: {
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Tcfcb60a90e | Promise<(Tfc86db9c4b | Tcfcb60a90e)>);
+      };
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T4deb005d6d | undefined;
+    };
+  };
+  outputSchema?: undefined;
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T631856df6b;
+  execute?: {
+    (args: Ta297fc92a3, context?: Tc88149628d): unknown;
+  };
+  readonly [__symbol0]?: T350a170d52;
+} | {
+  __toolSide: "client";
+  name: "discover_tools";
+  description: string;
+  inputSchema?: undefined;
+  outputSchema?: undefined;
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T631856df6b;
+  execute?: T114ef593c6;
+  readonly [__symbol0]?: T350a170d52;
+} | {
+  __toolSide: "client";
+  name: "execute_typescript";
+  description: string;
+  inputSchema?: undefined;
+  outputSchema?: undefined;
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T631856df6b;
+  execute?: T114ef593c6;
+  readonly [__symbol0]?: T350a170d52;
+} | {
+  __toolSide: "client";
+  name: "expand-chat-history";
+  description: string;
+  inputSchema?: {
+    readonly "~standard": {
+      readonly jsonSchema: Tc49e8b2305;
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: Tc601a26749 | undefined;
+    };
+  } & {
+    readonly "~standard": {
+      readonly validate: {
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T239c95b432 | Promise<(Tfc86db9c4b | T239c95b432)>);
+      };
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: Tc601a26749 | undefined;
+    };
+  };
+  outputSchema?: {
+    readonly "~standard": {
+      readonly jsonSchema: Tc49e8b2305;
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: Td7a8af8a91 | undefined;
+    };
+  } & {
+    readonly "~standard": {
+      readonly validate: {
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Te846513736 | Promise<(Tfc86db9c4b | Te846513736)>);
+      };
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: Td7a8af8a91 | undefined;
+    };
+  };
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T631856df6b;
+  execute?: {
+    (args: Ta1379e699e, context?: Tc88149628d): (Tdefb828a83 | Promise<Tdefb828a83>);
+  };
+  readonly [__symbol0]?: T350a170d52;
+} | {
+  __toolSide: "client";
+  name: "fetch_url";
+  description: string;
+  inputSchema?: {
+    readonly "~standard": {
+      readonly jsonSchema: Tc49e8b2305;
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: Tf273198011 | undefined;
+    };
+  } & {
+    readonly "~standard": {
+      readonly validate: {
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T984d9f8701 | Promise<(Tfc86db9c4b | T984d9f8701)>);
+      };
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: Tf273198011 | undefined;
+    };
+  };
+  outputSchema?: {
+    readonly "~standard": {
+      readonly jsonSchema: Tc49e8b2305;
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T5728aceaa2 | undefined;
+    };
+  } & {
+    readonly "~standard": {
+      readonly validate: {
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Tf2f09f50cf | Promise<(Tfc86db9c4b | Tf2f09f50cf)>);
+      };
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T5728aceaa2 | undefined;
+    };
+  };
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T631856df6b;
+  execute?: {
+    (args: T1ea5eea592, context?: Tc88149628d): (T8161ebccd4 | Promise<T8161ebccd4>);
+  };
+  readonly [__symbol0]?: T350a170d52;
+} | {
+  __toolSide: "client";
+  name: "find_text";
+  description: string;
+  inputSchema?: T631856df6b;
+  outputSchema?: undefined;
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T631856df6b;
+  execute?: T114ef593c6;
+  readonly [__symbol0]?: T350a170d52;
+} | {
+  __toolSide: "client";
+  name: "get_document_outline";
+  description: string;
+  inputSchema?: T631856df6b;
+  outputSchema?: undefined;
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T631856df6b;
+  execute?: T114ef593c6;
+  readonly [__symbol0]?: T350a170d52;
+} | {
+  __toolSide: "client";
+  name: "list_stories";
+  description: string;
+  inputSchema?: T631856df6b;
+  outputSchema?: undefined;
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T631856df6b;
+  execute?: T114ef593c6;
+  readonly [__symbol0]?: T350a170d52;
+} | {
+  __toolSide: "client";
+  name: "read_changes";
+  description: string;
+  inputSchema?: T631856df6b;
+  outputSchema?: undefined;
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T631856df6b;
+  execute?: T114ef593c6;
+  readonly [__symbol0]?: T350a170d52;
+} | {
+  __toolSide: "client";
+  name: "read_comments";
+  description: string;
+  inputSchema?: T631856df6b;
+  outputSchema?: undefined;
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T631856df6b;
+  execute?: T114ef593c6;
+  readonly [__symbol0]?: T350a170d52;
+} | {
+  __toolSide: "client";
+  name: "read_section";
+  description: string;
+  inputSchema?: T631856df6b;
+  outputSchema?: undefined;
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T631856df6b;
+  execute?: T114ef593c6;
+  readonly [__symbol0]?: T350a170d52;
+} | {
+  __toolSide: "client";
+  name: "read_story";
+  description: string;
+  inputSchema?: T631856df6b;
+  outputSchema?: undefined;
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T631856df6b;
+  execute?: T114ef593c6;
+  readonly [__symbol0]?: T350a170d52;
+} | {
+  __toolSide: "client";
+  name: "show_in_document";
+  description: string;
+  inputSchema?: T631856df6b;
+  outputSchema?: undefined;
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T631856df6b;
+  execute?: T114ef593c6;
+  readonly [__symbol0]?: T350a170d52;
+} | {
+  __toolSide: "client";
+  name: "suggest_changes";
+  description: string;
+  inputSchema?: T631856df6b | {
+    readonly "~standard": {
+      readonly jsonSchema: Tc49e8b2305;
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T699c14b14c | undefined;
+    };
+  } & {
+    readonly "~standard": {
+      readonly validate: {
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Tdc2a8db8cb | Promise<(Tfc86db9c4b | Tdc2a8db8cb)>);
+      };
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T699c14b14c | undefined;
+    };
+  };
+  outputSchema?: undefined;
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T631856df6b;
+  execute?: {
+    (args: unknown, context?: Tc88149628d): unknown;
+  };
+  readonly [__symbol0]?: T350a170d52;
+} | {
+  __toolSide: "client";
+  name: "add_comment";
+  description: string;
+  inputSchema?: T631856df6b;
+  outputSchema?: undefined;
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T631856df6b;
+  execute?: T114ef593c6;
+  readonly [__symbol0]?: T350a170d52;
+} | {
+  __toolSide: "client";
+  name: "reply_comment";
+  description: string;
+  inputSchema?: T631856df6b;
+  outputSchema?: undefined;
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T631856df6b;
+  execute?: T114ef593c6;
+  readonly [__symbol0]?: T350a170d52;
+} | {
+  __toolSide: "client";
+  name: "resolve_comment";
+  description: string;
+  inputSchema?: T631856df6b;
+  outputSchema?: undefined;
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T631856df6b;
+  execute?: T114ef593c6;
+  readonly [__symbol0]?: T350a170d52;
+} | {
+  __toolSide: "client";
+  name: "infosoud_lookup_case";
+  description: string;
+  inputSchema?: {
+    readonly "~standard": {
+      readonly jsonSchema: Tc49e8b2305;
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T367a10cc51 | undefined;
+    };
+  } & {
+    readonly "~standard": {
+      readonly validate: {
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Td0c9b180ad | Promise<(Tfc86db9c4b | Td0c9b180ad)>);
+      };
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T367a10cc51 | undefined;
+    };
+  };
+  outputSchema?: undefined;
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T631856df6b;
+  execute?: {
+    (args: T466db84340, context?: Tc88149628d): unknown;
   };
   readonly [__symbol0]?: T350a170d52;
 } | {
@@ -34193,33 +33933,293 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
-  name: "execute_typescript";
+  name: "search-chat-history";
   description: string;
-  inputSchema?: undefined;
-  outputSchema?: undefined;
+  inputSchema?: {
+    readonly "~standard": {
+      readonly jsonSchema: Tc49e8b2305;
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T692b04920e | undefined;
+    };
+  } & {
+    readonly "~standard": {
+      readonly validate: {
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T39bd2e99da | Promise<(Tfc86db9c4b | T39bd2e99da)>);
+      };
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T692b04920e | undefined;
+    };
+  };
+  outputSchema?: {
+    readonly "~standard": {
+      readonly jsonSchema: Tc49e8b2305;
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T71cf339d21 | undefined;
+    };
+  } & {
+    readonly "~standard": {
+      readonly validate: {
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T2a09c7df07 | Promise<(Tfc86db9c4b | T2a09c7df07)>);
+      };
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T71cf339d21 | undefined;
+    };
+  };
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
   metadata?: T631856df6b;
-  execute?: T114ef593c6;
+  execute?: {
+    (args: Tfe8087360e, context?: Tc88149628d): (T51cc6664d5 | Promise<T51cc6664d5>);
+  };
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
-  name: "discover_tools";
+  name: "search-past-chats";
   description: string;
-  inputSchema?: undefined;
+  inputSchema?: Tc7057093bd;
+  outputSchema?: Taec8e40e3e;
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T631856df6b;
+  execute?: Tcaa4ce6922;
+  readonly [__symbol0]?: T350a170d52;
+} | {
+  __toolSide: "client";
+  name: "search-all-past-chats";
+  description: string;
+  inputSchema?: Tc7057093bd;
+  outputSchema?: Taec8e40e3e;
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T631856df6b;
+  execute?: Tcaa4ce6922;
+  readonly [__symbol0]?: T350a170d52;
+} | {
+  __toolSide: "client";
+  name: "suggest_template_fields";
+  description: string;
+  inputSchema?: {
+    readonly "~standard": {
+      readonly jsonSchema: Tc49e8b2305;
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T25fd06afe1 | undefined;
+    };
+  } & {
+    readonly "~standard": {
+      readonly validate: {
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Tb13124e7c6 | Promise<(Tfc86db9c4b | Tb13124e7c6)>);
+      };
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T25fd06afe1 | undefined;
+    };
+  };
   outputSchema?: undefined;
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
   metadata?: T631856df6b;
-  execute?: T114ef593c6;
+  execute?: {
+    (args: T81f0fdb1b7, context?: Tc88149628d): unknown;
+  };
+  readonly [__symbol0]?: T350a170d52;
+} | {
+  __toolSide: "client";
+  name: "update-entity-fields";
+  description: string;
+  inputSchema?: {
+    readonly "~standard": {
+      readonly jsonSchema: Tc49e8b2305;
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T4c7ffc5c98 | undefined;
+    };
+  } & {
+    readonly "~standard": {
+      readonly validate: {
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T6a8b8e209a | Promise<(Tfc86db9c4b | T6a8b8e209a)>);
+      };
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T4c7ffc5c98 | undefined;
+    };
+  };
+  outputSchema?: {
+    readonly "~standard": {
+      readonly jsonSchema: Tc49e8b2305;
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: Ta94982c099 | undefined;
+    };
+  } & {
+    readonly "~standard": {
+      readonly validate: {
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T9a8daf49a9 | Promise<(Tfc86db9c4b | T9a8daf49a9)>);
+      };
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: Ta94982c099 | undefined;
+    };
+  };
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T631856df6b;
+  execute?: {
+    (args: T09610a4d6a, context?: Tc88149628d): (T3a8e541c8b | Promise<T3a8e541c8b>);
+  };
+  readonly [__symbol0]?: T350a170d52;
+} | {
+  __toolSide: "client";
+  name: "use-browser";
+  description: string;
+  inputSchema?: {
+    readonly "~standard": {
+      readonly jsonSchema: Tc49e8b2305;
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: Tda018e6666 | undefined;
+    };
+  } & {
+    readonly "~standard": {
+      readonly validate: {
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T9899c62a18 | Promise<(Tfc86db9c4b | T9899c62a18)>);
+      };
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: Tda018e6666 | undefined;
+    };
+  };
+  outputSchema?: {
+    readonly "~standard": {
+      readonly jsonSchema: Tc49e8b2305;
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T8d5e2ac251 | undefined;
+    };
+  } & {
+    readonly "~standard": {
+      readonly validate: {
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T17f9c80581 | Promise<(Tfc86db9c4b | T17f9c80581)>);
+      };
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T8d5e2ac251 | undefined;
+    };
+  };
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T631856df6b;
+  execute?: {
+    (args: Tb33a71380a, context?: Tc88149628d): (Td617134437 | Tc38488b75b | Promise<Taa699009ad>);
+  };
+  readonly [__symbol0]?: T350a170d52;
+} | {
+  __toolSide: "client";
+  name: "web_search";
+  description: string;
+  inputSchema?: {
+    readonly "~standard": {
+      readonly jsonSchema: Tc49e8b2305;
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T43c61826c6 | undefined;
+    };
+  } & {
+    readonly "~standard": {
+      readonly validate: {
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Ta1f9b4de71 | Promise<(Tfc86db9c4b | Ta1f9b4de71)>);
+      };
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T43c61826c6 | undefined;
+    };
+  };
+  outputSchema?: {
+    readonly "~standard": {
+      readonly jsonSchema: Tc49e8b2305;
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T921fd22a21 | undefined;
+    };
+  } & {
+    readonly "~standard": {
+      readonly validate: {
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Ta43e2dcaa2 | Promise<(Tfc86db9c4b | Ta43e2dcaa2)>);
+      };
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T921fd22a21 | undefined;
+    };
+  };
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T631856df6b;
+  execute?: {
+    (args: Tbbfb0e2dc0, context?: Tc88149628d): (Tddb0458281 | Promise<Tddb0458281>);
+  };
+  readonly [__symbol0]?: T350a170d52;
+} | {
+  __toolSide: "client";
+  name: "spawn_subagents";
+  description: string;
+  inputSchema?: {
+    readonly "~standard": {
+      readonly jsonSchema: Tc49e8b2305;
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T6bd5a18bc8 | undefined;
+    };
+  } & {
+    readonly "~standard": {
+      readonly validate: {
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T1e5e71d2be | Promise<(Tfc86db9c4b | T1e5e71d2be)>);
+      };
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T6bd5a18bc8 | undefined;
+    };
+  };
+  outputSchema?: {
+    readonly "~standard": {
+      readonly jsonSchema: Tc49e8b2305;
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T6da17dcfb9 | undefined;
+    };
+  } & {
+    readonly "~standard": {
+      readonly validate: {
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T0e694e7f35 | Promise<(Tfc86db9c4b | T0e694e7f35)>);
+      };
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: T6da17dcfb9 | undefined;
+    };
+  };
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T631856df6b;
+  execute?: {
+    (args: T4a592a8301, context?: Tc88149628d): (T0e2086ec76 | Promise<T0e2086ec76>);
+  };
   readonly [__symbol0]?: T350a170d52;
 }>, unknown, undefined> & {
   metadata?: T0afdf1a25a;
 });
 
-export type ChatPart = (tanstack_ai_AudioPart<unknown> | tanstack_ai_DocumentPart<unknown> | tanstack_ai_ImagePart<unknown> | tanstack_ai_StructuredOutputPart<unknown> | tanstack_ai_UIResourcePart | tanstack_ai_VideoPart<unknown> | tanstack_ai_client_SubagentPart | tanstack_ai_client_TextPart | tanstack_ai_client_ThinkingPart | tanstack_ai_client_ToolResultPart | Te2c1a8a498 | Tda8f0f96e8 | T61d4286dcb | T7382bd77d4 | Tba6edcbeb9 | T14ae4bed9b | Td9a96e07c3 | T0548b5740f | T5922ccec9f | T953b8b828f | Tb5c31df0ee | T0cb52bc3d9 | Tbd752f6459 | Tf666d2dda4 | T2f1eb9f087 | T41e8180893 | Td8bd350a0d | T396413b1f2 | T0f5b7a8f75 | Tcfc2bcdf0c | Tbec7099b68 | Te7bcf4f8cd | Tf580acfc9a | T43a95a3581 | T2f4d996387 | T708cb204fe | T61e931b9a3 | Td00a89251b | Tb89b7edf1b | T3958c3b3af | Tddeee5f72e | T832cfa2544 | T54ad5c389f | Tf540c7cacc | Tf7089f7953 | Te0862af907 | Te2f4644948 | T7177f7c683 | Ta85ccee7af | T7e246539c7 | T5fcbd957c4 | T3f7112bc47 | Tdd40b6002f | T63213f6a66 | T37645f97e3 | Tb675330ce6 | Teff0fd014f | T291799859b | Tfd761de317 | Ta9703ec17d | Td43d5a192e | T7f8a36b7e8 | T1906714431 | Tac064ee8a2 | Taee4ff1ecc | T22503d92e1 | T87debc7a12 | Tda26afd3a5 | Ta70c642bca | Tebb9fbb4f8 | Ta5b5eca36c | Tbcccb22aed | Tb33e966012 | T580bd0de31 | Td55da643d6 | Td15a61239d | T4b08c72cf3 | Td8667c9636 | T9f7b063dac | Tb23918f1b2 | T3dd22338ec);
+export type ChatPart = (tanstack_ai_AudioPart<unknown> | tanstack_ai_DocumentPart<unknown> | tanstack_ai_ImagePart<unknown> | tanstack_ai_StructuredOutputPart<unknown> | tanstack_ai_UIResourcePart | tanstack_ai_VideoPart<unknown> | tanstack_ai_client_SubagentPart | tanstack_ai_client_TextPart | tanstack_ai_client_ThinkingPart | tanstack_ai_client_ToolResultPart | Te2c1a8a498 | Tda8f0f96e8 | T61d4286dcb | T7382bd77d4 | Tba6edcbeb9 | T14ae4bed9b | Td9a96e07c3 | T0548b5740f | T5922ccec9f | T953b8b828f | Tb5c31df0ee | T0cb52bc3d9 | Tbd752f6459 | Tf666d2dda4 | T2f1eb9f087 | T41e8180893 | Td8bd350a0d | T396413b1f2 | T0f5b7a8f75 | Tcfc2bcdf0c | Tbec7099b68 | Te7bcf4f8cd | Tf580acfc9a | T43a95a3581 | T2f4d996387 | T708cb204fe | T61e931b9a3 | Td00a89251b | Tb89b7edf1b | T3958c3b3af | Tddeee5f72e | T832cfa2544 | T54ad5c389f | Tf540c7cacc | Tf7089f7953 | T5fcbd957c4 | T7177f7c683 | T7e246539c7 | Ta85ccee7af | Te2f4644948 | T3f7112bc47 | Te0862af907 | T4b08c72cf3 | Tda26afd3a5 | Td55da643d6 | T3dd22338ec | Tb23918f1b2 | Tbcccb22aed | Tebb9fbb4f8 | Td43d5a192e | Teff0fd014f | Tfd761de317 | T1906714431 | T7f8a36b7e8 | T291799859b | Ta9703ec17d | T87debc7a12 | Tb675330ce6 | Tac064ee8a2 | Taee4ff1ecc | T22503d92e1 | T63213f6a66 | T9f7b063dac | Ta5b5eca36c | Tb33e966012 | T580bd0de31 | Td15a61239d | T37645f97e3 | Tdd40b6002f | Ta70c642bca | Td8667c9636);
 
 export type ChatSourceDocument = Tcde02c03e1;
 
@@ -34356,65 +34356,73 @@ export type ChatUITools = {
     input: Tee258ffbbe;
     output: unknown;
   };
-  counterparty_check: {
-    input: Tf1ef3fc0b0;
-    output: unknown;
-  };
-  boe_search_legislation: {
-    input: T2f5bcad84c;
+  boe_find_related_laws: {
+    input: T8136384b1e;
     output: unknown;
   };
   boe_get_law: {
     input: T1cd5f6c01f;
     output: unknown;
   };
-  boe_get_law_structure: {
-    input: T73467fd01f;
-    output: unknown;
-  };
   boe_get_law_block: {
     input: T3913e4550c;
     output: unknown;
   };
-  boe_find_related_laws: {
-    input: T8136384b1e;
+  boe_get_law_structure: {
+    input: T73467fd01f;
+    output: unknown;
+  };
+  boe_search_legislation: {
+    input: T2f5bcad84c;
     output: unknown;
   };
   borme_get_summary: {
     input: T4c60d2e7ad;
     output: unknown;
   };
-  "use-browser": {
-    input: Tb33a71380a;
-    output: T1bc07bd9cb;
-  };
-  infosoud_lookup_case: {
-    input: T466db84340;
+  counterparty_check: {
+    input: Tf1ef3fc0b0;
     output: unknown;
   };
-  "update-entity-fields": {
-    input: T09610a4d6a;
-    output: T6f9e2e6853;
+  review_folder_consistency: {
+    input: Tbb0cc35d34;
+    output: T88a38d2a60;
   };
   create_matter_document: {
     input: Taeaa3ad44e;
     output: Tccd7994462;
   };
-  web_search: {
-    input: Tbbfb0e2dc0;
-    output: Td5ded8ed3b;
+  describe_template: {
+    input: Ta297fc92a3;
+    output: unknown;
+  };
+  discover_tools: {
+    input: unknown;
+    output: unknown;
+  };
+  execute_typescript: {
+    input: unknown;
+    output: unknown;
+  };
+  "expand-chat-history": {
+    input: Ta1379e699e;
+    output: Tf40440a0f9;
   };
   fetch_url: {
     input: T1ea5eea592;
     output: T116d4a6834;
   };
+  infosoud_lookup_case: {
+    input: T466db84340;
+    output: unknown;
+  };
+  remember: {
+    input: T74837627f5;
+    output: T9b129e6597;
+  };
   "search-chat-history": {
     input: Tfe8087360e;
     output: T0800a1cff9;
-  };
-  "expand-chat-history": {
-    input: Ta1379e699e;
-    output: Tf40440a0f9;
   };
   "search-past-chats": {
     input: Tfe8087360e;
@@ -34424,33 +34432,25 @@ export type ChatUITools = {
     input: Tfe8087360e;
     output: T59c690454c;
   };
-  describe_template: {
-    input: Ta297fc92a3;
-    output: unknown;
-  };
   suggest_template_fields: {
     input: T81f0fdb1b7;
     output: unknown;
   };
-  review_folder_consistency: {
-    input: Tbb0cc35d34;
-    output: T88a38d2a60;
+  "update-entity-fields": {
+    input: T09610a4d6a;
+    output: T6f9e2e6853;
+  };
+  "use-browser": {
+    input: Tb33a71380a;
+    output: T1bc07bd9cb;
+  };
+  web_search: {
+    input: Tbbfb0e2dc0;
+    output: Td5ded8ed3b;
   };
   spawn_subagents: {
     input: T4a592a8301;
     output: Tb2b1f765a2;
-  };
-  remember: {
-    input: T74837627f5;
-    output: T9b129e6597;
-  };
-  execute_typescript: {
-    input: unknown;
-    output: unknown;
-  };
-  discover_tools: {
-    input: unknown;
-    output: unknown;
   };
 } & {
   read_document: {
@@ -34458,6 +34458,103 @@ export type ChatUITools = {
     output: (T42b0ce8576 | {
       ok: true;
       result: Array<stll_folio_agents_FolioAgentBlock>;
+    });
+  };
+  find_text: {
+    input: {
+      query: string;
+      matchCase?: false | true;
+      wholeWord?: false | true;
+      scope?: {
+        type: "document";
+      } | {
+        type: "section";
+        handle: Td615a955de;
+      } | {
+        type: "page";
+        page: number;
+      } | {
+        type: "story";
+        handle: T8ee3aa7cc6;
+      };
+    };
+    output: (T42b0ce8576 | {
+      ok: true;
+      result: stll_folio_agents_FolioAgentScopedFindTextResult;
+    });
+  };
+  get_document_outline: {
+    input: {
+      maxDepth?: number;
+    };
+    output: (T42b0ce8576 | {
+      ok: true;
+      result: stll_folio_agents_FolioAgentDocumentOutline;
+    });
+  };
+  list_stories: {
+    input: Tba428f02e1;
+    output: (T42b0ce8576 | {
+      ok: true;
+      result: Array<T0ca223e5b8>;
+    });
+  };
+  read_changes: {
+    input: Tba428f02e1;
+    output: (T42b0ce8576 | {
+      ok: true;
+      result: Array<stll_folio_agents_FolioAgentChange>;
+    });
+  };
+  read_comments: {
+    input: {
+      filter?: "all" | "open" | "resolved";
+    };
+    output: (T42b0ce8576 | {
+      ok: true;
+      result: Array<stll_folio_agents_FolioAgentComment>;
+    });
+  };
+  read_section: {
+    input: {
+      handle: Td615a955de;
+      maxBlocks?: number;
+      afterBlockId?: string;
+    };
+    output: (T42b0ce8576 | {
+      ok: true;
+      result: stll_folio_agents_FolioAgentSectionRead;
+    });
+  };
+  read_story: {
+    input: {
+      handle: T8ee3aa7cc6;
+    };
+    output: (T42b0ce8576 | {
+      ok: true;
+      result: T0ca223e5b8;
+    });
+  };
+  show_in_document: {
+    input: {
+      blockId: string;
+      range?: never;
+    } | {
+      blockId?: never;
+      range: {
+        type: "textRange";
+        story: "main";
+        blockId: string;
+        startOffset: number;
+        endOffset: number;
+        selectedTextHash: string;
+      };
+    };
+    output: (T42b0ce8576 | {
+      ok: true;
+      result: {
+        shown: Tfddd645dc8;
+      };
     });
   };
   suggest_changes: {
@@ -34486,81 +34583,6 @@ export type ChatUITools = {
       message: string;
       retryable: true;
     } | T42b0ce8576 | Tfe2faf9844;
-  };
-  get_document_outline: {
-    input: {
-      maxDepth?: number;
-    };
-    output: (T42b0ce8576 | {
-      ok: true;
-      result: stll_folio_agents_FolioAgentDocumentOutline;
-    });
-  };
-  read_section: {
-    input: {
-      handle: Td615a955de;
-      maxBlocks?: number;
-      afterBlockId?: string;
-    };
-    output: (T42b0ce8576 | {
-      ok: true;
-      result: stll_folio_agents_FolioAgentSectionRead;
-    });
-  };
-  list_stories: {
-    input: Tba428f02e1;
-    output: (T42b0ce8576 | {
-      ok: true;
-      result: Array<T0ca223e5b8>;
-    });
-  };
-  read_story: {
-    input: {
-      handle: T8ee3aa7cc6;
-    };
-    output: (T42b0ce8576 | {
-      ok: true;
-      result: T0ca223e5b8;
-    });
-  };
-  find_text: {
-    input: {
-      query: string;
-      matchCase?: false | true;
-      wholeWord?: false | true;
-      scope?: {
-        type: "document";
-      } | {
-        type: "section";
-        handle: Td615a955de;
-      } | {
-        type: "page";
-        page: number;
-      } | {
-        type: "story";
-        handle: T8ee3aa7cc6;
-      };
-    };
-    output: (T42b0ce8576 | {
-      ok: true;
-      result: stll_folio_agents_FolioAgentScopedFindTextResult;
-    });
-  };
-  read_comments: {
-    input: {
-      filter?: "all" | "open" | "resolved";
-    };
-    output: (T42b0ce8576 | {
-      ok: true;
-      result: Array<stll_folio_agents_FolioAgentComment>;
-    });
-  };
-  read_changes: {
-    input: Tba428f02e1;
-    output: (T42b0ce8576 | {
-      ok: true;
-      result: Array<stll_folio_agents_FolioAgentChange>;
-    });
   };
   add_comment: {
     input: {
@@ -34594,28 +34616,6 @@ export type ChatUITools = {
       ok: true;
       result: {
         resolved: Tfddd645dc8;
-      };
-    });
-  };
-  show_in_document: {
-    input: {
-      blockId: string;
-      range?: never;
-    } | {
-      blockId?: never;
-      range: {
-        type: "textRange";
-        story: "main";
-        blockId: string;
-        startOffset: number;
-        endOffset: number;
-        selectedTextHash: string;
-      };
-    };
-    output: (T42b0ce8576 | {
-      ok: true;
-      result: {
-        shown: Tfddd645dc8;
       };
     });
   };
@@ -37909,7 +37909,7 @@ type T6b718d91dc = {
     error?: string;
     metadata?: T631856df6b;
     createdAt?: string;
-  } | Te2c1a8a498 | Tda8f0f96e8 | T61d4286dcb | T7382bd77d4 | Tba6edcbeb9 | T14ae4bed9b | Td9a96e07c3 | T0548b5740f | T5922ccec9f | T953b8b828f | Tb5c31df0ee | T0cb52bc3d9 | Tbd752f6459 | Tf666d2dda4 | T2f1eb9f087 | T41e8180893 | Td8bd350a0d | T396413b1f2 | T0f5b7a8f75 | Tcfc2bcdf0c | Tbec7099b68 | Te7bcf4f8cd | Tf580acfc9a | T43a95a3581 | T2f4d996387 | T708cb204fe | T61e931b9a3 | Td00a89251b | Tb89b7edf1b | T3958c3b3af | Tddeee5f72e | T832cfa2544 | T54ad5c389f | Tf540c7cacc | Tf7089f7953 | Te0862af907 | Te2f4644948 | T7177f7c683 | Ta85ccee7af | T7e246539c7 | T5fcbd957c4 | T3f7112bc47 | Tdd40b6002f | T63213f6a66 | T37645f97e3 | Tb675330ce6 | Teff0fd014f | T291799859b | Tfd761de317 | Ta9703ec17d | Td43d5a192e | T7f8a36b7e8 | T1906714431 | Tac064ee8a2 | Taee4ff1ecc | T22503d92e1 | T87debc7a12 | Tda26afd3a5 | Ta70c642bca | Tebb9fbb4f8 | Ta5b5eca36c | Tbcccb22aed | Tb33e966012 | T580bd0de31 | Td55da643d6 | Td15a61239d | T4b08c72cf3 | Td8667c9636 | T9f7b063dac | Tb23918f1b2 | T3dd22338ec | {
+  } | Te2c1a8a498 | Tda8f0f96e8 | T61d4286dcb | T7382bd77d4 | Tba6edcbeb9 | T14ae4bed9b | Td9a96e07c3 | T0548b5740f | T5922ccec9f | T953b8b828f | Tb5c31df0ee | T0cb52bc3d9 | Tbd752f6459 | Tf666d2dda4 | T2f1eb9f087 | T41e8180893 | Td8bd350a0d | T396413b1f2 | T0f5b7a8f75 | Tcfc2bcdf0c | Tbec7099b68 | Te7bcf4f8cd | Tf580acfc9a | T43a95a3581 | T2f4d996387 | T708cb204fe | T61e931b9a3 | Td00a89251b | Tb89b7edf1b | T3958c3b3af | Tddeee5f72e | T832cfa2544 | T54ad5c389f | Tf540c7cacc | Tf7089f7953 | T5fcbd957c4 | T7177f7c683 | T7e246539c7 | Ta85ccee7af | Te2f4644948 | T3f7112bc47 | Te0862af907 | T4b08c72cf3 | Tda26afd3a5 | Td55da643d6 | T3dd22338ec | Tb23918f1b2 | Tbcccb22aed | Tebb9fbb4f8 | Td43d5a192e | Teff0fd014f | Tfd761de317 | T1906714431 | T7f8a36b7e8 | T291799859b | Ta9703ec17d | T87debc7a12 | Tb675330ce6 | Tac064ee8a2 | Taee4ff1ecc | T22503d92e1 | T63213f6a66 | T9f7b063dac | Ta5b5eca36c | Tb33e966012 | T580bd0de31 | Td15a61239d | T37645f97e3 | Tdd40b6002f | Ta70c642bca | Td8667c9636 | {
     type: "subagent";
     subagent: {
       stop?: {
