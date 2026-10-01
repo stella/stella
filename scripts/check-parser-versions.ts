@@ -289,11 +289,21 @@ class StaticTree {
           this.versionDeclarations.set(value.file, declarations);
         }
         if (index === undefined && value?.type === "number") {
+          // A bare constant in an imported module versions that module's own
+          // records (e.g. collection enrichment), not this source's decisions.
+          if (file !== module) {
+            continue;
+          }
           version = value.value;
         } else if (index !== undefined && value?.type === "map") {
           const key = index.endsWith(".key")
             ? sourceKey
             : this.key(file, index);
+          // An imported adapter declares its own source's version; that one
+          // versions another source, not this one.
+          if (key !== undefined && key !== sourceKey) {
+            continue;
+          }
           for (const [entryKey, entryValue] of value.entries) {
             if (
               this.key(value.file, entryKey) === key &&

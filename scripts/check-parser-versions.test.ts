@@ -252,6 +252,44 @@ test("version-only edits do not force unrelated bumps through a shared constants
   expect(changed(base, head)).toEqual([]);
 });
 
+test("versions an imported module declares for its own records do not count as the source's", () => {
+  // Adapter A imports adapter B and a collection helper; each stamps its own
+  // records with a version that differs from A's.
+  const withImports = (tree: Map<string, string>) => {
+    const adapterA = `${ADAPTERS}adapter-a.ts`;
+    tree.set(
+      adapterA,
+      [
+        'import { AdapterB } from "./adapter-b";',
+        'import { enrich } from "./collections";',
+        tree.get(adapterA),
+      ].join("\n"),
+    );
+    tree.set(
+      `${ADAPTERS}collections.ts`,
+      [
+        "export const COLLECTION_PARSER_VERSION = 9;",
+        "export const enrich = () => ({ parserVersion: COLLECTION_PARSER_VERSION });",
+      ].join("\n"),
+    );
+    return tree;
+  };
+  const parserSources = { A: "export const parseA = () => 'changed';\n" };
+  const base = withImports(fixture({ versions: { B: 5 } }));
+
+  expect(
+    changed(
+      base,
+      withImports(fixture({ versions: { A: 2, B: 5 }, parserSources })),
+    ),
+  ).toEqual([]);
+  expect(
+    changed(base, withImports(fixture({ versions: { B: 5 }, parserSources }))),
+  ).toEqual([
+    expect.stringContaining("test-a: parser version 1 must exceed base 1"),
+  ]);
+});
+
 test("the queue compares against its exact base while pull requests use the merge-base", () => {
   const commands: string[][] = [];
   const runGit = (args: string[]) => {
