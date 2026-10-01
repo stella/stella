@@ -641,7 +641,11 @@ export const streamChat = async ({
     flushPendingSource: persistenceVisibleStream.flushPending,
     initialMessages: preparedMessageList,
     onFinish: async (event) => {
+      const shadowStartedAt = performance.now();
       await shadow.flush();
+      process.stderr.write(
+        `SHADOW_FLUSH_PROFILE_MS ${performance.now() - shadowStartedAt}\n`,
+      );
       await run.settle(async () => {
         await onFinish(event);
       });

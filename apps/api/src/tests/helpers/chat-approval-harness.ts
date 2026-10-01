@@ -7,7 +7,8 @@ import * as v from "valibot";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { CHAT_TURN_ID_HEADER, CHAT_TURN_INTENT } from "@stll/api-contract";
 
-import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import type { Transaction } from "@/api/db/root";
+import type { SafeDb, SafeDbRetryConfig, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatTurns } from "@/api/db/schema";
 import { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts";
 import { agUiSendMessageBodySchema } from "@/api/handlers/chat/chat-schema";
@@ -221,8 +222,8 @@ export const createApprovalHarness = ({
   model,
   organizationAIConfig = orgAIConfig,
   promptCachingEnabled = false,
-  safeDb,
-  scopedDb,
+  safeDb: baseSafeDb,
+  scopedDb: baseScopedDb,
   sources = {},
   testDb,
   withDirectRefTool = false,
@@ -255,6 +256,33 @@ export const createApprovalHarness = ({
   scopedDb: ScopedDb;
   testDb: TestDatabase;
 }) => {
+  const profileStartedAt = performance.now();
+  const phaseTimes: Record<string, { calls: number; ms: number }> = {};
+  const recordPhase = (phase: string, startedAt: number) => {
+    const entry = phaseTimes[phase] ?? { calls: 0, ms: 0 };
+    entry.calls += 1;
+    entry.ms += performance.now() - startedAt;
+    phaseTimes[phase] = entry;
+  };
+  const scopedDb = async <T>(run: (tx: Transaction) => Promise<T>) => {
+    const startedAt = performance.now();
+    try {
+      return await baseScopedDb(run);
+    } finally {
+      recordPhase("scopedDb", startedAt);
+    }
+  };
+  const safeDb = async <T>(
+    run: (tx: Transaction) => Promise<T>,
+    retry?: SafeDbRetryConfig,
+  ) => {
+    const startedAt = performance.now();
+    try {
+      return await baseSafeDb(run, retry);
+    } finally {
+      recordPhase("safeDb", startedAt);
+    }
+  };
   const provider = model ?? installScriptedProvider();
   const executions: string[] = [];
   const approvalTool = toolDefinition({
@@ -329,6 +357,7 @@ export const createApprovalHarness = ({
     if (known !== undefined) {
       return known;
     }
+    const factoryStartedAt = performance.now();
     const created = createSendMessage({
       ...sendMessageDependencies,
       createRefRegistry: (bindings, retired) => {
@@ -336,6 +365,7 @@ export const createApprovalHarness = ({
         return refLedger.track(threadId, requestRegistry);
       },
     });
+    recordPhase("handlerFactory", factoryStartedAt);
     handlers.set(threadId, created);
     return created;
   };
@@ -404,12 +434,17 @@ export const createApprovalHarness = ({
    * the request is over: it is torn down before anything reads the response.
    */
   const handle = async (ctx: SendMessageCtx) => {
-    const body =
-      bodyByContext.get(ctx) ??
-      panic("Send contexts come from this harness's contextFromBody");
-    const result = await sendMessageOf(body.threadId).handler(ctx);
-    requestOf(ctx).tearDown();
-    return result;
+    const phaseStartedAt = performance.now();
+    try {
+      const body =
+        bodyByContext.get(ctx) ??
+        panic("Send contexts come from this harness's contextFromBody");
+      const result = await sendMessageOf(body.threadId).handler(ctx);
+      requestOf(ctx).tearDown();
+      return result;
+    } finally {
+      recordPhase("handle", phaseStartedAt);
+    }
   };
 
   /**
@@ -512,24 +547,29 @@ export const createApprovalHarness = ({
   const awaitSettledTurns = async (
     threadId: SafeId<"chatThread">,
   ): Promise<OracleViolation[]> => {
-    let live: { id: string; status: string }[] = [];
-    for (let poll = 0; poll < MAX_BARRIER_POLLS; poll += 1) {
-      live = await testDb
-        .select({ id: chatTurns.id, status: chatTurns.status })
-        .from(chatTurns)
-        .where(
-          and(
-            eq(chatTurns.threadId, threadId),
-            inArray(chatTurns.status, [...LIVE_TURN_STATUSES]),
-          ),
-        );
-      if (live.length === 0) {
-        return [];
+    const phaseStartedAt = performance.now();
+    try {
+      let live: { id: string; status: string }[] = [];
+      for (let poll = 0; poll < MAX_BARRIER_POLLS; poll += 1) {
+        live = await testDb
+          .select({ id: chatTurns.id, status: chatTurns.status })
+          .from(chatTurns)
+          .where(
+            and(
+              eq(chatTurns.threadId, threadId),
+              inArray(chatTurns.status, [...LIVE_TURN_STATUSES]),
+            ),
+          );
+        if (live.length === 0) {
+          return [];
+        }
+        // Yield to the work settling the turn before looking again.
+        await Bun.sleep(1);
       }
-      // Yield to the work settling the turn before looking again.
-      await Bun.sleep(1);
+      return violationsOf(CHAT_ORACLE.persistedTurnSettles, live);
+    } finally {
+      recordPhase("awaitSettledTurns", phaseStartedAt);
     }
-    return violationsOf(CHAT_ORACLE.persistedTurnSettles, live);
   };
 
   const reloadView = async (threadId: SafeId<"chatThread">) =>
@@ -577,19 +617,27 @@ export const createApprovalHarness = ({
   const findPersistedViolations = async (
     threadId: SafeId<"chatThread">,
   ): Promise<OracleViolation[]> => {
-    const {
-      turnOutcomeMismatches,
-      unownedPendingInteractions,
-      unsettledToolCalls,
-    } = await findThreadInvariantViolations({ db: testDb, threadId });
-    return [
-      ...violationsOf(
-        CHAT_ORACLE.persistedPendingOwned,
+    const phaseStartedAt = performance.now();
+    try {
+      const {
+        turnOutcomeMismatches,
         unownedPendingInteractions,
-      ),
-      ...violationsOf(CHAT_ORACLE.persistedCallsSettled, unsettledToolCalls),
-      ...violationsOf(CHAT_ORACLE.persistedTurnOutcome, turnOutcomeMismatches),
-    ];
+        unsettledToolCalls,
+      } = await findThreadInvariantViolations({ db: testDb, threadId });
+      return [
+        ...violationsOf(
+          CHAT_ORACLE.persistedPendingOwned,
+          unownedPendingInteractions,
+        ),
+        ...violationsOf(CHAT_ORACLE.persistedCallsSettled, unsettledToolCalls),
+        ...violationsOf(
+          CHAT_ORACLE.persistedTurnOutcome,
+          turnOutcomeMismatches,
+        ),
+      ];
+    } finally {
+      recordPhase("findPersistedViolations", phaseStartedAt);
+    }
   };
 
   const readThreadMessages = async (threadId: SafeId<"chatThread">) =>
@@ -609,22 +657,27 @@ export const createApprovalHarness = ({
   const findUnstableRefs = async (
     threadId: SafeId<"chatThread">,
   ): Promise<OracleViolation[]> => {
-    // As the next request reads them: under the thread owner's row scope.
-    const names = await safeDb(
-      async (tx) => await readChatThreadNames({ threadId, tx }),
-    );
-    if (Result.isError(names)) {
-      return panic("The thread's names failed to load", names.error);
+    const phaseStartedAt = performance.now();
+    try {
+      // As the next request reads them: under the thread owner's row scope.
+      const names = await safeDb(
+        async (tx) => await readChatThreadNames({ threadId, tx }),
+      );
+      if (Result.isError(names)) {
+        return panic("The thread's names failed to load", names.error);
+      }
+      const held = names.value.source === "ledger" ? names.value : null;
+      return refLedger.check({
+        ledger: {
+          refs: new Set(held?.refBindings.map(({ ref }) => ref)),
+          toolCallIds: new Set(held?.toolCallIds),
+        },
+        stored: await readThreadMessages(threadId),
+        threadId,
+      });
+    } finally {
+      recordPhase("findUnstableRefs", phaseStartedAt);
     }
-    const held = names.value.source === "ledger" ? names.value : null;
-    return refLedger.check({
-      ledger: {
-        refs: new Set(held?.refBindings.map(({ ref }) => ref)),
-        toolCallIds: new Set(held?.toolCallIds),
-      },
-      stored: await readThreadMessages(threadId),
-      threadId,
-    });
   };
 
   /**
@@ -636,52 +689,57 @@ export const createApprovalHarness = ({
     ctx: SendMessageCtx,
     { readAfterSettling = false }: { readAfterSettling?: boolean } = {},
   ) => {
-    const body =
-      bodyByContext.get(ctx) ??
-      panic("Send contexts come from this harness's sendContext");
-    const threadId = body.threadId;
-    const result = await handle(ctx);
-    if (!(result instanceof Response && result.ok)) {
-      return { rejection: result, status: "rejected" } as const;
+    const phaseStartedAt = performance.now();
+    try {
+      const body =
+        bodyByContext.get(ctx) ??
+        panic("Send contexts come from this harness's sendContext");
+      const threadId = body.threadId;
+      const result = await handle(ctx);
+      if (!(result instanceof Response && result.ok)) {
+        return { rejection: result, status: "rejected" } as const;
+      }
+      // Unread, the run still ends on its own: nothing it does waits on the page.
+      const settledUnread = readAfterSettling
+        ? await awaitSettledTurns(threadId)
+        : [];
+      const text = await drainResponse(result);
+      const chunks = await readClientStreamChunks({
+        response: new Response(text, { headers: result.headers }),
+        runId: body.runId,
+        threadId,
+      });
+      const unsettled = await awaitSettledTurns(threadId);
+      return {
+        chunks,
+        headers: result.headers,
+        status: "streamed",
+        text,
+        violations: [
+          ...settledUnread,
+          ...unsettled,
+          ...(await findRunViolations({
+            ctx,
+            ended: "complete",
+            turnId: result.headers.get(CHAT_TURN_ID_HEADER),
+          })),
+          ...findWireIdentityViolations(chunks),
+          ...findUnstoredWireResults({
+            chunks,
+            stored: await reloadView(threadId),
+          }),
+          ...findUnservedSnapshotMessages({
+            chunks,
+            served: await readAllMessages(threadId),
+          }),
+          ...(await findPersistedViolations(threadId)),
+          ...(await findUnstableRefs(threadId)),
+          ...findTranscriptViolations(provider.takeRequests(threadId)),
+        ],
+      } as const;
+    } finally {
+      recordPhase("sendAndCheck", phaseStartedAt);
     }
-    // Unread, the run still ends on its own: nothing it does waits on the page.
-    const settledUnread = readAfterSettling
-      ? await awaitSettledTurns(threadId)
-      : [];
-    const text = await drainResponse(result);
-    const chunks = await readClientStreamChunks({
-      response: new Response(text, { headers: result.headers }),
-      runId: body.runId,
-      threadId,
-    });
-    const unsettled = await awaitSettledTurns(threadId);
-    return {
-      chunks,
-      headers: result.headers,
-      status: "streamed",
-      text,
-      violations: [
-        ...settledUnread,
-        ...unsettled,
-        ...(await findRunViolations({
-          ctx,
-          ended: "complete",
-          turnId: result.headers.get(CHAT_TURN_ID_HEADER),
-        })),
-        ...findWireIdentityViolations(chunks),
-        ...findUnstoredWireResults({
-          chunks,
-          stored: await reloadView(threadId),
-        }),
-        ...findUnservedSnapshotMessages({
-          chunks,
-          served: await readAllMessages(threadId),
-        }),
-        ...(await findPersistedViolations(threadId)),
-        ...(await findUnstableRefs(threadId)),
-        ...findTranscriptViolations(provider.takeRequests(threadId)),
-      ],
-    } as const;
   };
 
   /**
@@ -772,32 +830,42 @@ export const createApprovalHarness = ({
     threadId: SafeId<"chatThread">,
     before?: SafeId<"chatMessage">,
   ): Promise<RecordedPage> => {
-    const page = await loadChatMessagePage({
-      safeDb,
-      threadId,
-      userId: ids.userA1,
-      before,
-    });
-    if (Result.isError(page)) {
-      return panic("The thread's message page failed to load", page.error);
+    const phaseStartedAt = performance.now();
+    try {
+      const page = await loadChatMessagePage({
+        safeDb,
+        threadId,
+        userId: ids.userA1,
+        before,
+      });
+      if (Result.isError(page)) {
+        return panic("The thread's message page failed to load", page.error);
+      }
+      // The page as the browser receives it: a JSON body.
+      return asTestRaw<RecordedPage>(await Response.json(page.value).json());
+    } finally {
+      recordPhase("readPage", phaseStartedAt);
     }
-    // The page as the browser receives it: a JSON body.
-    return asTestRaw<RecordedPage>(await Response.json(page.value).json());
   };
 
   const readAllMessages = async (threadId: SafeId<"chatThread">) => {
-    const messages: unknown[] = [];
-    let page = await readPage(threadId);
-    messages.push(...page.messages);
-    while (page.olderCursor !== null) {
-      const before = decodeMessagePageCursor(page.olderCursor);
-      if (before === null) {
-        return panic("The thread's message page returned an invalid cursor");
-      }
-      page = await readPage(threadId, before);
+    const phaseStartedAt = performance.now();
+    try {
+      const messages: unknown[] = [];
+      let page = await readPage(threadId);
       messages.push(...page.messages);
+      while (page.olderCursor !== null) {
+        const before = decodeMessagePageCursor(page.olderCursor);
+        if (before === null) {
+          return panic("The thread's message page returned an invalid cursor");
+        }
+        page = await readPage(threadId, before);
+        messages.push(...page.messages);
+      }
+      return messages;
+    } finally {
+      recordPhase("readAllMessages", phaseStartedAt);
     }
-    return messages;
   };
 
   type RecordEnd = (
@@ -838,28 +906,33 @@ export const createApprovalHarness = ({
     text: string;
     turnId: string | null;
   }) => {
-    const chunks = await readClientStreamChunks({
-      response: new Response(text),
-      runId: raw.runId,
-      threadId: raw.threadId,
-    });
-    clientFindings.push(
-      ...(await awaitSettledTurns(raw.threadId)),
-      ...(await findRunViolations({ ctx, ended, turnId })),
-      ...findWireIdentityViolations(chunks),
-      ...findUnstoredWireResults({
-        chunks,
-        stored: await reloadView(raw.threadId),
-      }),
-      ...findUnservedSnapshotMessages({
-        chunks,
-        served: await readAllMessages(raw.threadId),
-      }),
-      ...(await findPersistedViolations(raw.threadId)),
-      ...(await findUnstableRefs(raw.threadId)),
-    );
-    delivered.set(raw.threadId, deliveredInterrupts(chunks));
-    await endRecord({ ended, response: { body: text, status: 200 } });
+    const phaseStartedAt = performance.now();
+    try {
+      const chunks = await readClientStreamChunks({
+        response: new Response(text),
+        runId: raw.runId,
+        threadId: raw.threadId,
+      });
+      clientFindings.push(
+        ...(await awaitSettledTurns(raw.threadId)),
+        ...(await findRunViolations({ ctx, ended, turnId })),
+        ...findWireIdentityViolations(chunks),
+        ...findUnstoredWireResults({
+          chunks,
+          stored: await reloadView(raw.threadId),
+        }),
+        ...findUnservedSnapshotMessages({
+          chunks,
+          served: await readAllMessages(raw.threadId),
+        }),
+        ...(await findPersistedViolations(raw.threadId)),
+        ...(await findUnstableRefs(raw.threadId)),
+      );
+      delivered.set(raw.threadId, deliveredInterrupts(chunks));
+      await endRecord({ ended, response: { body: text, status: 200 } });
+    } finally {
+      recordPhase("afterResponse", phaseStartedAt);
+    }
   };
 
   /**
@@ -941,74 +1014,79 @@ export const createApprovalHarness = ({
     raw: unknown,
     signal: AbortSignal | undefined,
   ): Promise<{ done: Promise<void>; response: Response }> => {
-    if (!Value.Check(agUiSendMessageBodySchema, raw)) {
-      const errors = [...Value.Errors(agUiSendMessageBodySchema, raw)]
-        .slice(0, 3)
-        .map(({ message, path }) => `${path}: ${message}`);
-      clientFindings.push(
-        ...violationsOf(CHAT_ORACLE.clientRequestsAccepted, [
-          { invalidBody: errors },
-        ]),
-      );
-      return {
-        done: Promise.resolve(),
-        response: new Response(JSON.stringify({ message: "Invalid body" }), {
-          status: 422,
-        }),
-      };
-    }
-    const endRecord = beginRecord(raw);
-    if (raw.forwardedProps.turnIntent === CHAT_TURN_INTENT.regenerate) {
-      provider.promptLedgerOf(raw.threadId).replacesTail();
-    }
-    if (crashingThreads.delete(raw.threadId)) {
-      try {
-        const refused = await crashDuring(raw);
-        await endRecord({
-          ended: "complete",
-          response: {
-            body: await refused.clone().text(),
-            status: refused.status,
-          },
-        });
-        return { done: Promise.resolve(), response: refused };
-      } catch (error) {
-        // The page reads no response: its request fails as a lost connection.
-        await endRecord({
-          ended: "connection-lost",
-          response: { body: "", status: 0 },
-        });
-        throw error;
+    const phaseStartedAt = performance.now();
+    try {
+      if (!Value.Check(agUiSendMessageBodySchema, raw)) {
+        const errors = [...Value.Errors(agUiSendMessageBodySchema, raw)]
+          .slice(0, 3)
+          .map(({ message, path }) => `${path}: ${message}`);
+        clientFindings.push(
+          ...violationsOf(CHAT_ORACLE.clientRequestsAccepted, [
+            { invalidBody: errors },
+          ]),
+        );
+        return {
+          done: Promise.resolve(),
+          response: new Response(JSON.stringify({ message: "Invalid body" }), {
+            status: 422,
+          }),
+        };
       }
-    }
-    if (liveThreads.has(raw.threadId)) {
-      const ctx = contextFromBody(raw, signal);
-      const result = await handle(ctx);
-      if (result instanceof Response && result.ok) {
-        return streamLive({ ctx, endRecord, raw, response: result, signal });
+      const endRecord = beginRecord(raw);
+      if (raw.forwardedProps.turnIntent === CHAT_TURN_INTENT.regenerate) {
+        provider.promptLedgerOf(raw.threadId).replacesTail();
       }
+      if (crashingThreads.delete(raw.threadId)) {
+        try {
+          const refused = await crashDuring(raw);
+          await endRecord({
+            ended: "complete",
+            response: {
+              body: await refused.clone().text(),
+              status: refused.status,
+            },
+          });
+          return { done: Promise.resolve(), response: refused };
+        } catch (error) {
+          // The page reads no response: its request fails as a lost connection.
+          await endRecord({
+            ended: "connection-lost",
+            response: { body: "", status: 0 },
+          });
+          throw error;
+        }
+      }
+      if (liveThreads.has(raw.threadId)) {
+        const ctx = contextFromBody(raw, signal);
+        const result = await handle(ctx);
+        if (result instanceof Response && result.ok) {
+          return streamLive({ ctx, endRecord, raw, response: result, signal });
+        }
+        return {
+          done: Promise.resolve(),
+          response: await refuse(endRecord, result),
+        };
+      }
+      const outcome = await sendAndCheck(contextFromBody(raw, signal));
+      if (outcome.status === "rejected") {
+        return {
+          done: Promise.resolve(),
+          response: await refuse(endRecord, outcome.rejection),
+        };
+      }
+      clientFindings.push(...outcome.violations);
+      delivered.set(raw.threadId, deliveredInterrupts(outcome.chunks));
+      await endRecord({
+        ended: "complete",
+        response: { body: outcome.text, status: 200 },
+      });
       return {
         done: Promise.resolve(),
-        response: await refuse(endRecord, result),
+        response: new Response(outcome.text, { headers: outcome.headers }),
       };
+    } finally {
+      recordPhase("postChatBody", phaseStartedAt);
     }
-    const outcome = await sendAndCheck(contextFromBody(raw, signal));
-    if (outcome.status === "rejected") {
-      return {
-        done: Promise.resolve(),
-        response: await refuse(endRecord, outcome.rejection),
-      };
-    }
-    clientFindings.push(...outcome.violations);
-    delivered.set(raw.threadId, deliveredInterrupts(outcome.chunks));
-    await endRecord({
-      ended: "complete",
-      response: { body: outcome.text, status: 200 },
-    });
-    return {
-      done: Promise.resolve(),
-      response: new Response(outcome.text, { headers: outcome.headers }),
-    };
   };
 
   const originalFetch = globalThis.fetch;
@@ -1071,14 +1149,19 @@ export const createApprovalHarness = ({
   const openWebClient = async (
     threadId: SafeId<"chatThread">,
   ): Promise<WebChatClient> => {
-    provider.script(threadId);
-    delivered.delete(threadId);
-    return await createWebChatClient({
-      inFlight: () => inFlight,
-      page: await reloadPage(threadId),
-      reload: async () => await reloadPage(threadId),
-      threadId,
-    });
+    const phaseStartedAt = performance.now();
+    try {
+      provider.script(threadId);
+      delivered.delete(threadId);
+      return await createWebChatClient({
+        inFlight: () => inFlight,
+        page: await reloadPage(threadId),
+        reload: async () => await reloadPage(threadId),
+        threadId,
+      });
+    } finally {
+      recordPhase("openWebClient", phaseStartedAt);
+    }
   };
 
   /**
@@ -1100,55 +1183,60 @@ export const createApprovalHarness = ({
     expected?: { refusal?: boolean; runFailure?: boolean };
     threadId: SafeId<"chatThread">;
   }): Promise<OracleViolation[]> => {
-    const unsettled = await awaitSettledTurns(threadId);
-    const [offered, reload, persisted] = await Promise.all([
-      findOfferedInteractions({ db: testDb, threadId }),
-      reloadView(threadId),
-      findPersistedViolations(threadId),
-    ]);
-    const { changedToolResults, unconsumedScripts, unscriptedCalls } =
-      provider.takeFindings(threadId);
-    const requests = clientFindings.splice(0);
-    const refusals = requests.filter(
-      ({ oracle }) => oracle === CHAT_ORACLE.clientRequestsAccepted,
-    );
-    const errors = client.takeErrors().map((error) => Bun.inspect(error));
-    const expectsError =
-      expected.runFailure === true || expected.refusal === true;
-    return [
-      ...(expected.refusal === true
-        ? requests.filter((finding) => !refusals.includes(finding))
-        : requests),
-      ...(expected.refusal === true && refusals.length === 0
-        ? violationsOf(CHAT_ORACLE.clientRequestsAccepted, [
-            { expectedRefusal: "the route accepted every request" },
-          ])
-        : []),
-      ...unsettled,
-      ...persisted,
-      ...violationsOf(CHAT_ORACLE.providerScriptsConsumed, [
-        ...unconsumedScripts.map((script) => ({ unconsumed: script })),
-        ...unscriptedCalls.map((call) => ({ unscripted: call })),
-      ]),
-      ...violationsOf(
-        CHAT_ORACLE.providerPrefixStable,
-        provider.promptLedgerOf(threadId).takeBreaks(),
-      ),
-      ...findTranscriptViolations(provider.takeRequests(threadId)),
-      ...violationsOf(CHAT_ORACLE.providerResultsStable, changedToolResults),
-      ...violationsOf(CHAT_ORACLE.clientNoErrors, [
-        ...(expectsError ? [] : errors),
-        ...(expectsError && errors.length === 0
-          ? [{ expectedError: "the runtime reported none" }]
+    const phaseStartedAt = performance.now();
+    try {
+      const unsettled = await awaitSettledTurns(threadId);
+      const [offered, reload, persisted] = await Promise.all([
+        findOfferedInteractions({ db: testDb, threadId }),
+        reloadView(threadId),
+        findPersistedViolations(threadId),
+      ]);
+      const { changedToolResults, unconsumedScripts, unscriptedCalls } =
+        provider.takeFindings(threadId);
+      const requests = clientFindings.splice(0);
+      const refusals = requests.filter(
+        ({ oracle }) => oracle === CHAT_ORACLE.clientRequestsAccepted,
+      );
+      const errors = client.takeErrors().map((error) => Bun.inspect(error));
+      const expectsError =
+        expected.runFailure === true || expected.refusal === true;
+      return [
+        ...(expected.refusal === true
+          ? requests.filter((finding) => !refusals.includes(finding))
+          : requests),
+        ...(expected.refusal === true && refusals.length === 0
+          ? violationsOf(CHAT_ORACLE.clientRequestsAccepted, [
+              { expectedRefusal: "the route accepted every request" },
+            ])
           : []),
-      ]),
-      ...findLiveViewViolations({
-        delivered: delivered.get(threadId) ?? null,
-        live: client.messages(),
-        offered,
-        reload,
-      }),
-    ];
+        ...unsettled,
+        ...persisted,
+        ...violationsOf(CHAT_ORACLE.providerScriptsConsumed, [
+          ...unconsumedScripts.map((script) => ({ unconsumed: script })),
+          ...unscriptedCalls.map((call) => ({ unscripted: call })),
+        ]),
+        ...violationsOf(
+          CHAT_ORACLE.providerPrefixStable,
+          provider.promptLedgerOf(threadId).takeBreaks(),
+        ),
+        ...findTranscriptViolations(provider.takeRequests(threadId)),
+        ...violationsOf(CHAT_ORACLE.providerResultsStable, changedToolResults),
+        ...violationsOf(CHAT_ORACLE.clientNoErrors, [
+          ...(expectsError ? [] : errors),
+          ...(expectsError && errors.length === 0
+            ? [{ expectedError: "the runtime reported none" }]
+            : []),
+        ]),
+        ...findLiveViewViolations({
+          delivered: delivered.get(threadId) ?? null,
+          live: client.messages(),
+          offered,
+          reload,
+        }),
+      ];
+    } finally {
+      recordPhase("checkWebClient", phaseStartedAt);
+    }
   };
 
   /** Fails on any violation `checkWebClient` finds. */
@@ -1234,6 +1322,7 @@ export const createApprovalHarness = ({
       threadId,
     });
 
+  recordPhase("harnessSetup", profileStartedAt);
   return {
     approveContext,
     checkWebClient,
@@ -1262,12 +1351,22 @@ export const createApprovalHarness = ({
      * turn after that database is gone.
      */
     close: async () => {
+      const closeStartedAt = performance.now();
       try {
+        const relinquishStartedAt = performance.now();
         await relinquishChatTurnRuns();
+        recordPhase("relinquish", relinquishStartedAt);
         await Promise.all(abandonedReads);
       } finally {
         globalThis.fetch = originalFetch;
         provider.restore();
+        recordPhase("close", closeStartedAt);
+        process.stderr.write(
+          `HARNESS_PROFILE_MS ${JSON.stringify({
+            totalMs: performance.now() - profileStartedAt,
+            phases: phaseTimes,
+          })}\n`,
+        );
       }
     },
     /** Drops the connection of `threadId`'s response still streaming. */
