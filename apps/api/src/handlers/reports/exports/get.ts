@@ -41,7 +41,11 @@ const config = {
   description:
     "Read a report export's status. Completed downloads include a short-lived URL; workspace exports include the created document ID.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "reporting_export" },
+  mcp: {
+    type: "capability",
+    reason: "reporting_export",
+    consumesServices: false,
+  },
   access: "write",
   params: workspaceParams({ exportId: tSafeId("reportExport") }),
 } satisfies WorkspaceHandlerConfig;

@@ -80,6 +80,8 @@ const handledEntitlement = (
       // subscriptions carry a positive integer.
       quantity: typeof data["seats"] === "number" ? data["seats"] : undefined,
       occurred_at: occurredAtOf(data),
+      created_at:
+        typeof data["created_at"] === "string" ? data["created_at"] : undefined,
     },
   },
   handled: true,

@@ -153,9 +153,7 @@ export const devRoute = new Elysia({ prefix: "/dev" })
           ? ctx.session.activeOrganizationId
           : await resolveMemberDevOrganization(ctx.body.organizationId, userId);
       if (organizationId === null) {
-        return new Response("Organization membership not found", {
-          status: 403,
-        });
+        return ctx.status(403, "Organization membership not found");
       }
 
       const parameters = {
@@ -180,9 +178,7 @@ export const devRoute = new Elysia({ prefix: "/dev" })
             userId,
           })
         ) {
-          return new Response("A firm-knowledge seed is already running", {
-            status: 409,
-          });
+          return ctx.status(409, "A firm-knowledge seed is already running");
         }
 
         return getFirmKnowledgeJobResponse(job);

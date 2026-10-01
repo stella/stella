@@ -63,7 +63,7 @@ const config = {
     "List active issuer profiles for the active organization, newest first, " +
     "with cursor pagination. Bank details are included for billing setup.",
   permissions: { organizationSettings: ["update"] },
-  mcp: { type: "capability", reason: "billing_admin" },
+  mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   access: "read",
   query: t.Object({
     limit: t.Optional(

@@ -122,6 +122,8 @@ const runLegislationCycle = async ({
   entityIds,
   text,
   ingest,
+  presence = "complete",
+  commitMode = CORPUS_PROJECTION_APPEND_COMMIT_MODE.published,
 }: {
   entityIds: readonly SafeId<"legislationDocument">[];
   text: string;
@@ -129,14 +131,57 @@ const runLegislationCycle = async ({
     indexId: string,
     ndjson: string,
   ) => Promise<Result<void, CorpusIndexError>>;
-}) =>
-  await executeCorpusProjectionAppendCycle({
+  presence?: "complete" | "missing" | "partial" | "unavailable";
+  commitMode?: (typeof CORPUS_PROJECTION_APPEND_COMMIT_MODE)[keyof typeof CORPUS_PROJECTION_APPEND_COMMIT_MODE];
+}) => {
+  const publishedCounts = new Map<string, number>();
+  return await executeCorpusProjectionAppendCycle({
     runInTransaction,
     client: {
-      ingestCommittedBatch: ingest,
-      ingestQueuedBatch: unusedIngest,
+      ingestCommittedBatch: async (indexId, ndjson) => {
+        const result = await ingest(indexId, ndjson);
+        if (result.isErr() || presence === "missing") {
+          return result;
+        }
+        for (const line of ndjson.split("\n")) {
+          const { projection_revision } = JSON.parse(line);
+          if (typeof projection_revision !== "string") {
+            panic("Published document has no revision");
+          }
+          publishedCounts.set(
+            projection_revision,
+            (publishedCounts.get(projection_revision) ?? 0) + 1,
+          );
+        }
+        return result;
+      },
+      ingestQueuedBatch: async () =>
+        panic("Projection append must wait for publication"),
+      aggregate: async ({ query }) => {
+        if (presence === "unavailable") {
+          return Result.err(
+            new CorpusIndexError({
+              message: "search unavailable",
+              status: 503,
+            }),
+          );
+        }
+        return Result.ok({
+          projection_revisions: {
+            buckets: Array.from(publishedCounts, ([key, count]) => ({
+              key,
+              doc_count: presence === "partial" ? count - 1 : count,
+            })).filter(
+              ({ key, doc_count }) =>
+                query.includes(`"${key}"`) && doc_count > 0,
+            ),
+            doc_count_error_upper_bound: 0,
+            sum_other_doc_count: 0,
+          },
+        });
+      },
     },
-    commitMode: CORPUS_PROJECTION_APPEND_COMMIT_MODE.published,
+    commitMode,
     ...LEGISLATION_TARGET,
     scope: { type: "subjects", entityIds },
     limit: entityIds.length,
@@ -146,6 +191,7 @@ const runLegislationCycle = async ({
     payloadRetryLimit: 3,
     payloadReader: async () => ({ text, ast: null }),
   });
+};
 
 const makeRetryDue = async (entityIds: readonly string[]) => {
   await db.transaction(async (tx) => {
@@ -193,6 +239,7 @@ const runCycle = async (
     client: {
       ingestCommittedBatch: unusedIngest,
       ingestQueuedBatch: unusedIngest,
+      aggregate: unusedIngest,
     },
     commitMode,
     family: TARGET.family,
@@ -542,3 +589,88 @@ test("an act above the absolute ceiling parks with a counted outcome and an even
     warn.mockRestore();
   }
 }, 120_000);
+
+test.each([
+  ["missing", 80],
+  ["partial", 82],
+  ["unavailable", 84],
+] as const)(
+  "ingest OK with %s publication never records applied progress",
+  async (presence, index) => {
+    const entityIds = await seedLegislation([index, index + 1]);
+    let accepted = 0;
+    const result = await runLegislationCycle({
+      entityIds,
+      text: "An act with searchable passages.\n\n".repeat(200),
+      ingest: async () => {
+        accepted += 1;
+        return Result.ok(undefined);
+      },
+      presence,
+      commitMode: CORPUS_PROJECTION_APPEND_COMMIT_MODE.queued,
+    });
+    expect(accepted).toBeGreaterThan(0);
+    expect(result.status).toBe("engine_unavailable");
+    expect(result.applied).toBe(0);
+    expect(result.unknownCleanupPending).toBe(2);
+    const states = await db
+      .select()
+      .from(corpusIndexProjectionStates)
+      .where(inArray(corpusIndexProjectionStates.entityId, entityIds));
+    expect(states).toHaveLength(2);
+    for (const state of states) {
+      expect(state.appliedAction).toBeNull();
+      expect(state.appliedEpoch).toBeNull();
+      expect(state.appliedRevision).toBeNull();
+      expect(state.appliedFingerprint).toBeNull();
+      expect(state.appliedIndexId).toBeNull();
+      expect(state.appliedAt).toBeNull();
+    }
+    const intents = await db
+      .select()
+      .from(corpusIndexProjectionIntents)
+      .where(inArray(corpusIndexProjectionIntents.entityId, entityIds));
+    expect(intents).toHaveLength(2);
+    expect(intents.every(({ status }) => status === "cleanup_pending")).toBe(
+      true,
+    );
+  },
+);
+
+test("a serving generation waits for publication and confirms the whole batch even in queued catch-up", async () => {
+  const entityIds = await seedLegislation([90, 91]);
+  await db
+    .update(corpusIndexGenerations)
+    .set({ status: "serving" })
+    .where(
+      eq(corpusIndexGenerations.generation, LEGISLATION_TARGET.generation),
+    );
+  try {
+    const result = await runLegislationCycle({
+      entityIds,
+      text: "A published act.",
+      ingest: async () => Result.ok(undefined),
+      commitMode: CORPUS_PROJECTION_APPEND_COMMIT_MODE.queued,
+    });
+    expect(result.status).toBe("completed");
+    expect(result.applied).toBe(2);
+    const states = await db
+      .select()
+      .from(corpusIndexProjectionStates)
+      .where(inArray(corpusIndexProjectionStates.entityId, entityIds));
+    expect(states).toHaveLength(2);
+    expect(
+      states.every(
+        ({ appliedAction, appliedRevision }) =>
+          appliedAction === "upsert" && appliedRevision !== null,
+      ),
+    ).toBe(true);
+  } finally {
+    await db
+      .update(corpusIndexGenerations)
+      .set({ status: "building" })
+      .where(
+        eq(corpusIndexGenerations.generation, LEGISLATION_TARGET.generation),
+      );
+  }
+});

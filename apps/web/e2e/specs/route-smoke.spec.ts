@@ -15,6 +15,7 @@ import {
 } from "../execution-profile";
 import { apiDelete, apiPut } from "../helpers/api";
 import { ROUTE_ERROR_HEADING } from "../helpers/app-shell";
+import { findChromeDividerProblems } from "../helpers/chrome-divider";
 import {
   CORRESPONDENCE_SMOKE_SUBJECT,
   createTestCorrespondence,
@@ -35,6 +36,10 @@ import {
   mergeResampledMetrics,
   summarizeCapture,
 } from "../helpers/network";
+import {
+  declarePublicKnowledgeSmoke,
+  PUBLIC_VISITOR_ROUTE_DEFS,
+} from "../helpers/public-knowledge-smoke";
 import { createBrowserErrorCollector } from "../helpers/test";
 import {
   type TestWorkspace,
@@ -151,6 +156,9 @@ const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
   }),
   staticRoute("/settings/organization/document-types"),
   staticRoute("/settings/organization/matter-numbering"),
+  staticRoute("/settings/organization/billing", {
+    expectation: { kind: "settles" },
+  }),
   staticRoute("/settings/organization/members"),
   staticRoute("/settings/organization/usage"),
   staticRoute("/inbox"),
@@ -222,6 +230,7 @@ const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
       `/workspaces/${world.workspace.id}/correspondence/${world.correspondenceId}`,
   },
   staticRoute("/time"),
+  staticRoute("/settings/organization/time-policy"),
 ];
 
 // Redirect targets for workspace-scoped aliases depend on the runtime view id,
@@ -258,14 +267,8 @@ const resolveRoute = (def: SmokeRouteDef, world: SmokeWorld): SmokeRoute => {
 const INTENTIONALLY_NOT_SMOKED = new Set([
   // Requires a connected desktop registry account and a real company record.
   "/knowledge/company-formats/$registry/$companyId",
-  // Visitor knowledge pages behind their flag; smoked once the flag is permanent.
-  "/knowledge/templates/catalogue",
-  "/knowledge/templates/catalogue/$packId/$templateId",
-  "/knowledge/tools/$entry",
   // A file download handler, not a page.
   "/knowledge/tools/$entry/download",
-  // Visitor knowledge pages behind their flag; smoked once the flag is permanent.
-  "/knowledge/tools/contribute",
   "/workspaces/$workspaceId/invoices/$invoiceId",
   "/workspaces/$workspaceId/reports/$exportId",
 ]);
@@ -394,6 +397,7 @@ const declareRouteSmokeGroup = ({
 };
 
 const baselineMode = process.env["E2E_NETWORK_BASELINE"];
+declarePublicKnowledgeSmoke({ mode: "disabled" });
 
 test("route coverage matches the authenticated route tree", async () => {
   await expectAuthenticatedRouteCoverage(SMOKE_ROUTE_DEFS);
@@ -542,6 +546,12 @@ const measureRouteTarget = async ({
     await assertNoRouteBoundary(page, route.template);
     assertFinalDestination(page, route);
     await assertRouteContentVisible(page, route.template);
+    // The chrome draws the one divider under the breadcrumb bar; a page row
+    // with its own top border on that line doubles it into a 2px rule.
+    expect(
+      await findChromeDividerProblems(page),
+      `${route.template} must show exactly one divider under the app chrome`,
+    ).toEqual([]);
     browserErrors.assertEmpty(`unexpected browser errors on ${route.template}`);
     // Captured after the route shell and tracked API work are ready, so the
     // manifest reflects the fully-rendered route.
@@ -733,6 +743,7 @@ const expectAuthenticatedRouteCoverage = async (
   const actual = await readAuthenticatedRouteTemplates();
   const expected = [
     ...routeDefs.map((def) => def.template),
+    ...PUBLIC_VISITOR_ROUTE_DEFS.map((def) => def.template),
     ...INTENTIONALLY_NOT_SMOKED,
   ].toSorted();
 

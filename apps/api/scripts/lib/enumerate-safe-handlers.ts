@@ -1,3 +1,4 @@
+import path from "node:path";
 // Shared safe-handler enumeration.
 //
 // The MCP coverage guard (`apps/api/scripts/mcp-coverage-guard.ts`) and the
@@ -14,7 +15,10 @@
 // it. An endpoint's identifier is its repo-relative module path for the default
 // export, or `path#exportName` for a named export.
 
-import path from "node:path";
+import {
+  isServiceClassification,
+  type ServiceClassification,
+} from "../../src/lib/rate-limit/service-classification";
 
 // Repo root resolved from this file's location so identifiers are stable
 // regardless of the process working directory. This file sits at
@@ -81,7 +85,11 @@ export const detectHandlerKinds = (source: string): HandlerKind[] => {
 export type ParsedExposure =
   | { type: "tool"; name: string }
   | { type: "covered"; by: string }
-  | { type: "capability"; reason: string }
+  | {
+      type: "capability";
+      reason: string;
+      consumesServices: ServiceClassification;
+    }
   | { type: "internal"; reason: string }
   | { type: "pending" }
   | { type: "invalid"; raw: unknown };
@@ -128,8 +136,13 @@ export const parseExposure = (mcp: unknown): ParsedExposure => {
     return { type: "covered", by };
   }
   const reason = mcp["reason"];
-  if (type === "capability" && typeof reason === "string") {
-    return { type: "capability", reason };
+  const consumesServices = mcp["consumesServices"];
+  if (
+    type === "capability" &&
+    typeof reason === "string" &&
+    isServiceClassification(consumesServices)
+  ) {
+    return { type: "capability", reason, consumesServices };
   }
   if (type === "internal" && typeof reason === "string") {
     return { type: "internal", reason };

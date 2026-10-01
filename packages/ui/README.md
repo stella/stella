@@ -202,6 +202,42 @@ renderCollapsedBandCell={({ band, cells, count }) => (
 )}
 ```
 
+## Grouped lists and search
+
+`@stll/ui/list` renders inventories of named things (connections, sessions,
+keys) as titled groups of hairline-divided rows. Rows truncate their content
+column and keep their trailing column, so they never scroll sideways.
+
+```tsx
+<ListGroup aria-labelledby="apps">
+  <ListGroupHeader>
+    <ListGroupHeading>
+      <ListGroupTitle id="apps">
+        Apps with access<ListGroupCount>3</ListGroupCount>
+      </ListGroupTitle>
+      <ListGroupDescription>Apps you authorized.</ListGroupDescription>
+    </ListGroupHeading>
+  </ListGroupHeader>
+  <List>
+    <ListItem>
+      <ListItemMedia>C</ListItemMedia>
+      <ListItemContent>
+        <ListItemTitle>Claude</ListItemTitle>
+        <ListItemDescription>Connected 3 days ago</ListItemDescription>
+      </ListItemContent>
+      <ListItemActions>
+        <ListItemStatus tone="success">Connected</ListItemStatus>
+      </ListItemActions>
+    </ListItem>
+  </List>
+</ListGroup>
+```
+
+Pass `render={<a href="…" />}` to `ListItem` to make the whole row a link.
+`@stll/ui/search-field` is the matching filter box: leading magnifier, clear
+button, and Escape clears the query. The caller owns the query and the
+matching.
+
 ## Styles
 
 No compiled CSS ships. The components carry Tailwind class names, so the

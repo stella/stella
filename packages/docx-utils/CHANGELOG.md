@@ -1,5 +1,11 @@
 # @stll/docx-utils
 
+## 0.1.3
+
+### Patch Changes
+
+- [#4259](https://github.com/stella/stella/pull/4259) [`7c7ead9`](https://github.com/stella/stella/commit/7c7ead9d1486972a050bbb85a8afeb54d0b7a3d2) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Tighten input handling.
+
 ## 0.1.2
 
 ### Patch Changes

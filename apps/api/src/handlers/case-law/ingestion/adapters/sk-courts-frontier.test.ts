@@ -40,6 +40,17 @@ const stubPublisher = (dayHoldings: Record<string, number>): Recorded => {
 
   globalThis.fetch = asFetchMock((input: string | URL | Request) => {
     const url = new URL(input instanceof Request ? input.url : String(input));
+    if (url.pathname.includes("/v1/sud/")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            registreGuid: "court-guid",
+            nazov: "Mestský súd Bratislava I",
+            typSudu: "Mestský súd",
+          }),
+        ),
+      );
+    }
     const page = url.searchParams.get("page");
     if (page === null) {
       recorded.details.push(url);

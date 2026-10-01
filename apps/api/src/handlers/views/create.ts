@@ -37,7 +37,11 @@ const config = {
     "columns that do not exist are dropped. A matter may hold only one " +
     "overview view, and a fixed maximum of views in total.",
   permissions: { view: ["create"] },
-  mcp: { type: "capability", reason: "workspace_schema" },
+  mcp: {
+    type: "capability",
+    reason: "workspace_schema",
+    consumesServices: false,
+  },
   body: tCreateViewInputSchema,
 } satisfies WorkspaceHandlerConfig;
 

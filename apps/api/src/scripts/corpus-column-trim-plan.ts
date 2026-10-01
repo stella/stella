@@ -3,7 +3,7 @@ import * as v from "valibot";
 import {
   namesEmptyCorpusPayload,
   payloadCarriesDocument,
-} from "@/api/handlers/case-law/stored-payload";
+} from "@/api/lib/case-law/stored-payload";
 import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
 import type { CorpusPayload } from "@/api/lib/legal-search/corpus-storage";
 

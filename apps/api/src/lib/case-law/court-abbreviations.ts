@@ -28,7 +28,7 @@
  * so a malformed identifier is a miss rather than an unbounded string.
  */
 const ECLI_COURT_SEGMENT =
-  /^ECLI:(?<jurisdiction>[A-Z]{2}):(?<code>[A-Z0-9]{1,10}):/u;
+  /^ECLI:(?<jurisdiction>[A-Z]{2}):(?<code>[A-Za-z0-9]{1,10}):/u;
 
 /**
  * One jurisdiction's reading of its ECLI court codes.
@@ -77,10 +77,12 @@ const ECLI_COURT_CODES = {
     ],
   },
   SK: {
-    exact: { NSSR: "NS", NSSSR: "NSS", USSR: "ÚS" },
+    exact: { NSSR: "NS", NSSSR: "NSS", USSR: "ÚS", SSPK: "ŠTS" },
     families: [
       ["KS", "KS"],
       ["OS", "OS"],
+      ["MS", "MS"],
+      ["SpS", "SpS"],
     ],
   },
 } as const satisfies Readonly<Record<string, EcliCourtCodes>>;
@@ -120,8 +122,8 @@ const APEX_COURT_PATTERNS = {
   ],
   SVK: [
     [/ústavný\s+súd/iu, "ÚS"],
-    [/najvyšší\s+správny\s+súd/iu, "NSS"],
-    [/najvyšší\s+súd/iu, "NS"],
+    [/najvyšš(?:í|ieho)\s+správn(?:y|eho)\s+súd(?:u)?/iu, "NSS"],
+    [/najvyšš(?:í|ieho)\s+súd(?:u)?/iu, "NS"],
   ],
   // Anchored to the court directory's canonical name, the one spelling a
   // decision of that court is stored under.

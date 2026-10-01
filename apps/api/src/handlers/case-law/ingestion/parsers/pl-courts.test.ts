@@ -228,3 +228,31 @@ describe("parsePlDecisionContent", () => {
     expect(intro?.plainText).toBe("Przewodniczący SSA Tomasz Nowicki");
   });
 });
+
+describe("table caption retention", () => {
+  test("keeps caption text once before its row in source order", () => {
+    const { documentAst } = parsePlDecisionContent(
+      baseInput(
+        `<p>Before.</p><table><caption><b>Source caption</b> tail.</caption><tr><td>Row value.</td></tr></table><p>After.</p>`,
+        { decisionType: undefined },
+      ),
+    );
+    expect(documentAst.blocks.map((block) => block.plainText)).toEqual([
+      "Before.",
+      "Source caption tail.",
+      "Row value.",
+      "After.",
+    ]);
+  });
+
+  test("keeps a caption even when its table has no rows", () => {
+    const { documentAst } = parsePlDecisionContent(
+      baseInput(`<table><caption>Caption without rows.</caption></table>`, {
+        decisionType: undefined,
+      }),
+    );
+    expect(documentAst.blocks.map((block) => block.plainText)).toEqual([
+      "Caption without rows.",
+    ]);
+  });
+});

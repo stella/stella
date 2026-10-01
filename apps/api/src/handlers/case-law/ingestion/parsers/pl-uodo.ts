@@ -331,8 +331,20 @@ const walkUnit = (
   // its opening mark, which sits against the text it opens.
   const opening = type === "cite" ? marker : `${marker} `;
   let pendingMarker = title === "" && marker !== "" ? opening : "";
+  const flushPendingMarker = (): void => {
+    if (pendingMarker === "") {
+      return;
+    }
+    const inlines: Inline[] = [];
+    appendTextInline(inlines, pendingMarker);
+    pendingMarker = "";
+    pushParagraph(state, inlines, unitContext);
+  };
   for (const child of unit.children) {
     if (!isTag(child)) {
+      if (inlinesToPlainText(inlinesOf(state, child)).trim() !== "") {
+        flushPendingMarker();
+      }
       walkBlock({ state, node: child, context: unitContext, depth: depth + 1 });
       continue;
     }
@@ -363,11 +375,16 @@ const walkUnit = (
     }
     // Nested units keep their structure; unknown elements become paragraphs.
     if (child.tagName === "xUnit") {
+      flushPendingMarker();
       walkUnit(state, child, depth + 1, unitContext);
     } else {
+      if ($(child).text().trim() !== "") {
+        flushPendingMarker();
+      }
       walkBlock({ state, node: child, context: unitContext, depth: depth + 1 });
     }
   }
+  flushPendingMarker();
 };
 
 /**

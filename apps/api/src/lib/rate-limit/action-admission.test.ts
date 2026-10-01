@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   ActionAdmissionError,
   withActionAdmission,
@@ -148,6 +149,198 @@ const manualTiming = (redis: ReturnType<typeof sharedRedis>) => {
 };
 
 describe("shared action admission", () => {
+  test("nested calls for the same caller share one lease and signal", async () => {
+    const redis = sharedRedis();
+    let acquisitions = 0;
+    let releases = 0;
+    const countedRedis = {
+      send: async (command: string, args: string[]) => {
+        if (args.at(0)?.includes("ZREMRANGEBYSCORE")) {
+          acquisitions += 1;
+        }
+        if (args.at(0)?.includes('redis.call("ZREM",')) {
+          releases += 1;
+        }
+        return await redis.send(command, args);
+      },
+    };
+    const result = await valueOf(
+      withActionAdmission({
+        enabled: true,
+        organizationId,
+        userId: firstUser,
+        policy,
+        redis: countedRedis,
+        run: async (outerSignal) =>
+          await valueOf(
+            withActionAdmission({
+              enabled: true,
+              organizationId,
+              userId: firstUser,
+              redisReady: async () => {
+                throw new Error("Nested call opened coordination");
+              },
+              run: async (signal) => {
+                expect(signal).toBe(outerSignal);
+                return "served";
+              },
+            }),
+          ),
+      }),
+    );
+    expect(result).toBe("served");
+    expect(acquisitions).toBe(1);
+    expect(releases).toBe(1);
+  });
+
+  test("nested calls with a different user or organization acquire their own lease", async () => {
+    const redis = sharedRedis();
+    const otherOrg = toSafeId<"organization">("org_b");
+    const common = { enabled: true, policy, redis };
+    const outcome = await valueOf(
+      withActionAdmission({
+        ...common,
+        organizationId,
+        userId: firstUser,
+        run: async (outerSignal) => {
+          for (const identity of [
+            { organizationId, userId: secondUser },
+            { organizationId: otherOrg, userId: firstUser },
+          ]) {
+            expect(
+              await valueOf(
+                withActionAdmission({
+                  ...common,
+                  ...identity,
+                  run: async (signal) => {
+                    expect(signal).not.toBe(outerSignal);
+                    return await failureOf(
+                      withActionAdmission({
+                        ...common,
+                        ...identity,
+                        userId: firstUser,
+                        organizationId,
+                        run: async () => "unexpected",
+                      }),
+                    );
+                  },
+                }),
+              ),
+            ).toMatchObject({ reason: "busy" });
+          }
+          return "served";
+        },
+      }),
+    );
+    expect(outcome).toBe("served");
+  });
+
+  test("disabled nested admission ignores coordination and the inherited signal", async () => {
+    const redis = sharedRedis();
+    await valueOf(
+      withActionAdmission({
+        enabled: true,
+        organizationId,
+        userId: firstUser,
+        policy,
+        redis,
+        run: async (outerSignal) =>
+          await valueOf(
+            withActionAdmission({
+              enabled: false,
+              organizationId,
+              userId: firstUser,
+              redisReady: async () => {
+                throw new Error("Disabled call opened coordination");
+              },
+              run: async (signal) => {
+                expect(signal).not.toBe(outerSignal);
+                return "served";
+              },
+            }),
+          ),
+      }),
+    );
+  });
+
+  test("lease loss aborts the inherited signal without replacing a settled and charged result", async () => {
+    const redis = sharedRedis({ onRenew: async () => 0 });
+    const timing = manualTiming(redis);
+    const started = deferred();
+    const pending = deferred();
+    let charges = 0;
+    const admitted = withActionAdmission({
+      enabled: true,
+      organizationId,
+      userId: firstUser,
+      policy: { ...policy, leaseMs: 100 },
+      redis,
+      timing,
+      run: async (outerSignal) =>
+        await valueOf(
+          withActionAdmission({
+            enabled: true,
+            organizationId,
+            userId: firstUser,
+            run: async (signal) => {
+              expect(signal).toBe(outerSignal);
+              charges += 1;
+              started.finish();
+              await pending.promise;
+              expect(signal.aborted).toBe(true);
+              return "completed";
+            },
+          }),
+        ),
+    });
+    await started.promise;
+    await timing.fireNext();
+    pending.finish();
+    expect(await valueOf(admitted)).toBe("completed");
+    expect(charges).toBe(1);
+  });
+
+  test("work continuing after its enclosing call finishes cannot reuse a released lease", async () => {
+    const redis = sharedRedis();
+    const proceed = deferred();
+    const detached = Promise.withResolvers<Result<string, unknown>>();
+    let acquisitions = 0;
+    const common = {
+      enabled: true,
+      organizationId,
+      userId: firstUser,
+      policy,
+      redis: {
+        send: async (command: string, args: string[]) => {
+          if (args.at(0)?.includes("ZREMRANGEBYSCORE")) {
+            acquisitions += 1;
+          }
+          return await redis.send(command, args);
+        },
+      },
+    };
+    await valueOf(
+      withActionAdmission({
+        ...common,
+        run: async () => {
+          detached.resolve(
+            (async () => {
+              await proceed.promise;
+              return await withActionAdmission({
+                ...common,
+                run: async () => "served",
+              });
+            })(),
+          );
+        },
+      }),
+    );
+    expect(acquisitions).toBe(1);
+    proceed.finish();
+    expect(await valueOf(detached.promise)).toBe("served");
+    expect(acquisitions).toBe(2);
+  });
+
   test("waits for the shared connection before sending a command", async () => {
     const redis = sharedRedis();
     const connected = Promise.withResolvers<typeof redis>();
@@ -389,7 +582,7 @@ describe("shared action admission", () => {
             "abort",
             () => {
               observedAbort = true;
-              reject(new Error("Action aborted", { cause: signal.reason }));
+              reject(new DOMException("Action aborted", "AbortError"));
             },
             { once: true },
           );
@@ -402,4 +595,53 @@ describe("shared action admission", () => {
     expect(await failure).toMatchObject({ reason: "unavailable" });
     expect(observedAbort).toBe(true);
   });
+  for (const failureKind of [
+    "signal-reason",
+    "abort-error",
+    "handler-error",
+  ] as const) {
+    test(`lease loss preserves error identity for ${failureKind}`, async () => {
+      const redis = sharedRedis({ onRenew: async () => 0 });
+      const timing = manualTiming(redis);
+      const started = deferred();
+      const pending = deferred();
+      const conflict = new HandlerError({
+        status: 409,
+        message: "The resource changed",
+      });
+      const admitted = withActionAdmission({
+        enabled: true,
+        organizationId,
+        userId: firstUser,
+        policy: { ...policy, leaseMs: 100 },
+        redis,
+        timing,
+        run: async (signal) => {
+          started.finish();
+          await pending.promise;
+          expect(signal.aborted).toBe(true);
+          switch (failureKind) {
+            case "signal-reason":
+              throw signal.reason;
+            case "abort-error":
+              throw new DOMException("Action aborted", "AbortError");
+            case "handler-error":
+              throw conflict;
+          }
+        },
+      });
+      const failure = failureOf(admitted);
+      await started.promise;
+      await timing.fireNext();
+      pending.finish();
+      const error = await failure;
+      if (failureKind === "handler-error") {
+        expect(error).toBe(conflict);
+        expect(error).toMatchObject({ status: 409 });
+      } else {
+        expect(ActionAdmissionError.is(error)).toBe(true);
+        expect(error).toMatchObject({ reason: "unavailable" });
+      }
+    });
+  }
 });

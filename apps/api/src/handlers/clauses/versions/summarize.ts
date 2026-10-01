@@ -21,7 +21,11 @@ const config = {
     "returns. Returns summary null when the two are identical, skipping the " +
     "model call. Consumes AI usage.",
   permissions: { workspace: ["read"], chat: ["create"] },
-  mcp: { type: "capability", reason: "knowledge_library_admin" },
+  mcp: {
+    type: "capability",
+    reason: "knowledge_library_admin",
+    consumesServices: true,
+  },
   access: "write",
   params: clauseVersionSummarizeParamsSchema,
   requiresUsage: { actionType: "chat", modelRole: "fast" },
