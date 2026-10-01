@@ -2,6 +2,7 @@ import { EventType } from "@tanstack/ai";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import type { ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatTurns } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
@@ -27,7 +28,11 @@ describe("send lifecycle checkpoint indexing", () => {
           return Result.ok({
             signal: new AbortController().signal,
             release: async () => undefined,
-            reservePeriod: async (identity: AdmittedActionIdentity) => {
+            reservePeriod: async (
+              identity: AdmittedActionIdentity,
+              organizationStateDb?: ScopedDb,
+            ) => {
+              expect(organizationStateDb).toBe(db.scopedDb);
               expect(identity.actionKind).toBe("chat.send");
               identities.push(identity.logicalPhaseId);
               return Result.ok(undefined);
@@ -43,6 +48,7 @@ describe("send lifecycle checkpoint indexing", () => {
         recordAuditEvent: async () => undefined,
         rollbackSideEffects: async () => Result.ok(undefined),
         safeDb: db.safeDb,
+        scopedDb: db.scopedDb,
         threadId: toSafeId<"chatThread">("same-thread"),
         userId: toSafeId<"user">("phase_user"),
         workspaceId: null,
@@ -149,7 +155,11 @@ describe("send lifecycle checkpoint indexing", () => {
           });
           return Result.ok({
             signal: admission.signal,
-            reservePeriod: async (identity: AdmittedActionIdentity) => {
+            reservePeriod: async (
+              identity: AdmittedActionIdentity,
+              organizationStateDb?: ScopedDb,
+            ) => {
+              expect(organizationStateDb).toBe(db.scopedDb);
               expect(identity).toEqual({
                 actionKind: "chat.send",
                 logicalPhaseId: JSON.stringify([
@@ -171,6 +181,7 @@ describe("send lifecycle checkpoint indexing", () => {
         recordAuditEvent: async () => undefined,
         rollbackSideEffects: async () => Result.ok(undefined),
         safeDb: db.safeDb,
+        scopedDb: db.scopedDb,
         threadId,
         userId: toSafeId<"user">("user_lifecycle"),
         workspaceId: null,

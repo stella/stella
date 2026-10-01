@@ -436,6 +436,7 @@ describe("send message disconnect handling", () => {
           return Result.ok(undefined);
         },
         safeDb,
+        scopedDb: createScopedDbMock({}).scopedDb,
         threadId,
         userId,
         workspaceId: activeWorkspaceId,

@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
 
+import type { ScopedDb } from "@/api/db/safe-db";
 import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -24,6 +25,7 @@ export type ChatExecutionAdmission = {
   signal: AbortSignal;
   reservePeriod: (
     identity: AdmittedActionIdentity,
+    organizationStateDb?: ScopedDb,
   ) => Promise<Result<void, HandlerError>>;
   /** Release only after provider, fenced persistence and heartbeat work settle. */
   release: () => Promise<void>;
@@ -91,13 +93,16 @@ export const startChatExecutionAdmission = async ({
       ready.resolve(
         Result.ok({
           signal,
-          reservePeriod: async (identity) => {
+          reservePeriod: async (identity, organizationStateDb) => {
             const expectedKind =
               mode === "action" ? periodIdentity.actionKind : actionKind;
             if (identity.actionKind !== expectedKind) {
               panic("Chat reservation changed its action kind");
             }
-            const reserved = await control.reservePeriod(identity);
+            const reserved = await control.reservePeriod(
+              identity,
+              organizationStateDb,
+            );
             return Result.isError(reserved)
               ? Result.err(chatAdmissionError(reserved.error))
               : Result.ok(reserved.value);

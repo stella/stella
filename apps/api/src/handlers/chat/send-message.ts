@@ -15,7 +15,7 @@ import {
 import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
 import type { SkillMetadata } from "@stll/skills";
 
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
 import {
   getActiveFileModelBinding,
@@ -452,6 +452,7 @@ type ChatSendLifecycleOptions = {
   externalMcpToolsLoader: LazyExternalMcpToolsLoader;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
+  scopedDb: ScopedDb;
   threadId: SafeId<"chatThread">;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
@@ -569,10 +570,13 @@ export class ChatSendLifecycle {
     if (this.admission === undefined) {
       return Result.ok(undefined);
     }
-    return await this.admission.reservePeriod({
-      actionKind: CHAT_SEND_ACTION_KIND,
-      logicalPhaseId: JSON.stringify([this.claimedTurn.execution.id, runId]),
-    });
+    return await this.admission.reservePeriod(
+      {
+        actionKind: CHAT_SEND_ACTION_KIND,
+        logicalPhaseId: JSON.stringify([this.claimedTurn.execution.id, runId]),
+      },
+      this.options.scopedDb,
+    );
   }
 
   get admissionSignal(): AbortSignal | undefined {
@@ -2133,6 +2137,7 @@ export const createSendMessage = (
         externalMcpToolsLoader,
         recordAuditEvent,
         safeDb,
+        scopedDb,
         threadId: body.threadId,
         userId: user.id,
         workspaceId,

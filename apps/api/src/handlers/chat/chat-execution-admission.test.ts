@@ -6,6 +6,7 @@ import {
   ACTION_ADMISSION_REFUSALS,
 } from "@stll/api-contract/action-admission";
 
+import { ORGANIZATION_ACCESS_STATE } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -15,6 +16,10 @@ import {
 } from "@/api/lib/rate-limit/action-admission";
 import type { AdmittedActionIdentity } from "@/api/lib/rate-limit/action-kinds";
 import type { ActionPeriodPolicy } from "@/api/lib/rate-limit/action-period-budget";
+import {
+  createScopedDbMock,
+  createSelectQueryMock,
+} from "@/api/tests/scoped-db-mock";
 
 import { startChatExecutionAdmission } from "./chat-execution-admission";
 
@@ -36,6 +41,7 @@ const coordination = ({
 } = {}) => {
   const active = new Set<string>();
   const periods = new Map<string, Set<string>>();
+  const periodLimits: number[] = [];
   let acquisitions = 0;
   let releases = 0;
   const redis = {
@@ -59,6 +65,7 @@ const coordination = ({
         }
         const counted = args.at(1) === "3";
         if (counted) {
+          periodLimits.push(Number(args.at(11)));
           const key = args.at(4);
           const phase = args.at(12);
           if (key === undefined || phase === undefined) {
@@ -110,6 +117,7 @@ const coordination = ({
   return {
     admit,
     counts: () => ({ acquisitions, releases, active: active.size }),
+    periodLimits: () => periodLimits,
     periodCount: () =>
       Array.from(periods.values()).reduce(
         (count, phases) => count + phases.size,
@@ -178,6 +186,82 @@ describe("chat execution admission owns settlement independently of transport re
     } finally {
       env.ACTION_LIMIT_CONTACT_URL = previousContactUrl;
     }
+  });
+
+  test("organization policy resolves only when the claimed chat phase reserves", async () => {
+    const store = coordination({
+      userConcurrency: 2,
+      periodPolicy: { periodMs: 86_400_000, limit: 11 },
+    });
+    let stateReads = 0;
+    const db = createScopedDbMock({
+      select: () => {
+        stateReads += 1;
+        return createSelectQueryMock([
+          {
+            state: ORGANIZATION_ACCESS_STATE.selfManagedKeys,
+            evaluationEndsAt: null,
+          },
+        ]);
+      },
+    });
+    const admit: typeof withActionAdmission = async (options) =>
+      await store.admit({
+        ...options,
+        serviceBudgetsEnabled: true,
+        serviceBudgetConfig: {
+          periodMs: 86_400_000,
+          evaluationActions: 5,
+          selfManagedActions: 7,
+        },
+      });
+    const execution = await executionOf(
+      startChatExecutionAdmission({
+        organizationId,
+        userId,
+        enabled: true,
+        mode: "concurrency-only",
+        actionKind: "chat.send",
+        admit,
+      }),
+    );
+    try {
+      expect(stateReads).toBe(0);
+      expect(store.periodCount()).toBe(0);
+      const identity = {
+        actionKind: "chat.send",
+        logicalPhaseId: JSON.stringify(["owned-turn", "run"]),
+      } as const;
+      expect(
+        Result.isOk(await execution.reservePeriod(identity, db.scopedDb)),
+      ).toBe(true);
+      expect(stateReads).toBe(1);
+      expect(store.periodLimits()).toEqual([7]);
+      expect(store.periodCount()).toBe(1);
+      expect(
+        Result.isOk(await execution.reservePeriod(identity, db.scopedDb)),
+      ).toBe(true);
+      expect(stateReads).toBe(1);
+      const title = await executionOf(
+        startChatExecutionAdmission({
+          organizationId,
+          userId,
+          enabled: true,
+          mode: "concurrency-only",
+          actionKind: "chat.generate-thread-title",
+          admit,
+        }),
+      );
+      try {
+        expect(stateReads).toBe(1);
+        expect(store.periodCount()).toBe(1);
+      } finally {
+        await title.release();
+      }
+    } finally {
+      await execution.release();
+    }
+    expect(store.counts().active).toBe(0);
   });
 
   test("claimed phases reserve once on the existing slot and fresh turns count an old run id anew", async () => {
