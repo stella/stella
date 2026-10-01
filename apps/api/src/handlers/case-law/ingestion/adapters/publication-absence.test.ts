@@ -79,7 +79,7 @@ for (const reason of TEXT_ABSENCE_REASONS) {
 }
 
 test("a rejected URL cannot acquire a defect marker without retaining the publisher value", () => {
-  for (const statedSourceUrl of [undefined, null, "", 2]) {
+  for (const statedSourceUrl of [undefined, null, 2]) {
     expect(() =>
       storeDecisionTextFields({
         metadata: { sourceUrlStatus: "rejected-url", statedSourceUrl },
@@ -129,6 +129,13 @@ for (const { key } of listSourceRegistrations()) {
         expect(debt?.condition).not.toBe("always");
         continue;
       }
+      if (
+        field === "sourceUrl" &&
+        decision.metadata["sourceUrlStatus"] === "detail-unavailable"
+      ) {
+        expect(marker).toBeUndefined();
+        continue;
+      }
       expect(debt).toBeDefined();
       if (debt?.condition === "not_stated") {
         expect(decision.metadata["ecliAvailability"]).toEqual({
@@ -138,3 +145,23 @@ for (const { key } of listSourceRegistrations()) {
     }
   });
 }
+
+test("empty rejected publisher URLs retain their stated value and defect marker", () => {
+  for (const statedSourceUrl of ["", "   "]) {
+    const stored = storeDecisionTextFields({
+      metadata: { statedSourceUrl, sourceUrlStatus: "rejected-url" },
+      textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+    });
+    const sidecar = parseDecisionTextAbsence(
+      stored[DECISION_TEXT_ABSENCE_METADATA_KEY],
+    );
+    expect(stored["statedSourceUrl"]).toBe(statedSourceUrl);
+    if (sidecar.type !== "valid") {
+      throw new TypeError("Expected valid sidecar");
+    }
+    expect(sidecar.entries.find(({ field }) => field === "sourceUrl")).toEqual({
+      field: "sourceUrl",
+      reason: TEXT_ABSENCE_REASON.PARSE_FAILED,
+    });
+  }
+});

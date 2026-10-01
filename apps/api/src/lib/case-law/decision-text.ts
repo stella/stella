@@ -166,6 +166,7 @@ const SOURCE_URL_ABSENCE_REASON_BY_STATUS = {
   published: undefined,
   "not-published-by-source": TEXT_ABSENCE_REASON.NOT_PUBLISHED,
   "rejected-url": TEXT_ABSENCE_REASON.PARSE_FAILED,
+  "detail-unavailable": undefined,
 } as const satisfies Record<
   SkCourtsSourceUrlStatus,
   TextAbsenceReason | undefined
@@ -236,8 +237,7 @@ export const storeDecisionTextFields = ({
     }
     if (
       sourceUrlStatus === "rejected-url" &&
-      (typeof metadata["statedSourceUrl"] !== "string" ||
-        metadata["statedSourceUrl"].length === 0)
+      typeof metadata["statedSourceUrl"] !== "string"
     ) {
       return panic("Rejected publisher URLs must retain their stated value");
     }

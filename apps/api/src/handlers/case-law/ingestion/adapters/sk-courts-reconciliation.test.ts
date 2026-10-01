@@ -17,6 +17,11 @@
 
 import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
 
+import {
+  DECISION_TEXT_ABSENCE_METADATA_KEY,
+  parseDecisionTextAbsence,
+} from "@stll/api-contract/case-law-text-field";
+
 import type { SkApiItem } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 import {
   buildSkCourtsDecision,
@@ -27,6 +32,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
+import { storeDecisionTextFields } from "@/api/lib/case-law/decision-text";
 import { toUtcDateString } from "@/api/lib/dates";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -523,4 +529,39 @@ describe("sk-courts buildDecision", () => {
     // Nothing was asked of the publisher for any of these.
     expect(requestedUrls).toEqual([]);
   });
+});
+
+test("failed detail fetches remain retryable and never assert publisher URL absence", async () => {
+  for (const detail of [
+    { body: "Not found", status: 404 },
+    { body: "Unavailable", status: 503 },
+    { body: "{malformed-json" },
+    { body: JSON.stringify({ ecli: 42 }) },
+  ]) {
+    mockJustice({ detail });
+    const built = await buildSkCourtsDecision(GALANTA_ITEM);
+    expect(built.type).toBe("detail-unavailable");
+    if (built.type !== "detail-unavailable") {
+      throw new TypeError("Expected a retryable detail observation");
+    }
+    expect(built.decision.metadata["sourceUrlStatus"]).toBe(
+      "detail-unavailable",
+    );
+    const stored = storeDecisionTextFields({
+      metadata: built.decision.metadata,
+      textFields: built.decision.textFields,
+    });
+    const absence = parseDecisionTextAbsence(
+      stored[DECISION_TEXT_ABSENCE_METADATA_KEY],
+    );
+    if (absence.type !== "valid") {
+      throw new TypeError("Expected valid sidecar");
+    }
+    expect(
+      absence.entries.find(({ field }) => field === "sourceUrl"),
+    ).toBeUndefined();
+    expect(await reconciliation.buildDecision(GALANTA_ITEM)).toEqual({
+      type: "detail-unavailable",
+    });
+  }
 });

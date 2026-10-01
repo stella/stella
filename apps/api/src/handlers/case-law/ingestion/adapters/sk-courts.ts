@@ -1,4 +1,4 @@
-// parser-output-unchanged: Source URL status uses the shared contract without changing parsed values.
+// parser-output-unchanged: Source URL retrieval status changes metadata only, not canonical documents or replay comparison.
 import { panic, Result } from "better-result";
 
 import type { SkCourtsSourceUrlStatus } from "@stll/api-contract/case-law-text-field";
@@ -611,6 +611,9 @@ export const assembleSkCourtsDecision = ({
   const statedSourceUrl = toOptionalValue(detail?.dokument?.url);
   const sourceUrl = sanitizeUrl(statedSourceUrl);
   const sourceUrlStatus = (() => {
+    if (detail === null) {
+      return "detail-unavailable";
+    }
     if (statedSourceUrl === undefined) {
       return "not-published-by-source";
     }

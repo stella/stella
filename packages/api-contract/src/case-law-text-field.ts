@@ -148,6 +148,7 @@ export const SK_COURTS_SOURCE_URL_STATUSES = [
   "published",
   "not-published-by-source",
   "rejected-url",
+  "detail-unavailable",
 ] as const;
 
 export type SkCourtsSourceUrlStatus =
