@@ -2,6 +2,7 @@
 
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 import ts from "typescript";
 
@@ -100,6 +101,65 @@ const configObject = (
   return ts.isObjectLiteralExpression(expression) ? expression : undefined;
 };
 
+// Resolve imported device presets from the pinned package's literal data,
+// rather than exempting spreads by identifier or trusting arbitrary imports.
+const resolveDevicePreset = (
+  expression: ts.Expression,
+  source: ts.SourceFile,
+): ts.ObjectLiteralExpression | undefined => {
+  if (
+    !ts.isElementAccessExpression(expression) ||
+    !ts.isIdentifier(expression.expression) ||
+    expression.argumentExpression === undefined ||
+    !ts.isStringLiteral(expression.argumentExpression)
+  )
+    {return undefined;}
+  const binding = expression.expression.text;
+  const imported = source.statements.some(
+    (statement) =>
+      ts.isImportDeclaration(statement) &&
+      ts.isStringLiteral(statement.moduleSpecifier) &&
+      statement.moduleSpecifier.text === "@playwright/test" &&
+      statement.importClause?.namedBindings !== undefined &&
+      ts.isNamedImports(statement.importClause.namedBindings) &&
+      statement.importClause.namedBindings.elements.some(
+        (entry) =>
+          entry.name.text === binding &&
+          (entry.propertyName?.text ?? entry.name.text) === "devices",
+      ),
+  );
+  if (!imported) {return undefined;}
+  // Dependency resolution and descriptor reads are filesystem boundaries.
+  try {
+    const requireConfig = createRequire(
+      path.resolve(REPO_ROOT, source.fileName),
+    );
+    const testEntry = requireConfig.resolve("@playwright/test");
+    const playwrightEntry = createRequire(testEntry).resolve("playwright");
+    const coreEntry = createRequire(playwrightEntry).resolve("playwright-core");
+    const descriptors: unknown = JSON.parse(
+      readFileSync(
+        path.join(
+          path.dirname(coreEntry),
+          "lib/server/deviceDescriptorsSource.json",
+        ),
+        "utf-8",
+      ),
+    );
+    if (!isRecord(descriptors)) {return undefined;}
+    const descriptor = descriptors[expression.argumentExpression.text];
+    if (!isRecord(descriptor)) {return undefined;}
+    const literal = parseSource(
+      "device-preset.ts",
+      `export default ${JSON.stringify(descriptor)};`,
+    );
+    const statement = literal.statements.at(0);
+    return statement === undefined ? undefined : configObject(statement);
+  } catch {
+    return undefined;
+  }
+};
+
 const resolveObject = (
   expression: ts.Expression,
   source: ts.SourceFile,
@@ -116,6 +176,8 @@ const resolveObject = (
   if (ts.isObjectLiteralExpression(value)) {
     return value;
   }
+  const device = resolveDevicePreset(value, source);
+  if (device !== undefined) {return device;}
   if (!ts.isIdentifier(value) || visited.has(value.text)) {
     return undefined;
   }
@@ -374,27 +436,39 @@ const nestedObjectLiterals = (
   source: ts.SourceFile,
 ): { objects: ts.ObjectLiteralExpression[]; unknownConfig: boolean } => {
   const objects: ts.ObjectLiteralExpression[] = [];
+  const active = new Set<ts.Node>();
   let unknownConfig = false;
-  const visitExpression = (expressionToVisit: ts.Expression): void => {
-    const array = resolveArray(expressionToVisit, source);
-    if (array !== undefined) {
-      for (const element of array.elements) {
-        if (!ts.isSpreadElement(element)) {
-          visit(element);
-        }
-      }
+  const visitExpression = (
+    value: ts.Expression,
+    failClosed = false,
+    collect = true,
+    projectElements = false,
+  ): void => {
+    const resolved =
+      resolveArray(value, source) ?? resolveObject(value, source);
+    if (resolved !== undefined) {
+      visit(resolved, collect, projectElements);
       return;
     }
-    const object = resolveObject(expressionToVisit, source);
-    if (object !== undefined) {
-      visit(object);
-    }
+    if (failClosed) {unknownConfig = true;}
   };
-  const visit = (node: ts.Node): void => {
+  const visit = (
+    node: ts.Node,
+    collect = true,
+    projectElements = false,
+  ): void => {
+    if (active.has(node)) {
+      unknownConfig = true;
+      return;
+    }
+    active.add(node);
     if (ts.isObjectLiteralExpression(node)) {
-      objects.push(node);
+      if (collect) {objects.push(node);}
       for (const member of node.properties) {
         if (ts.isSpreadAssignment(member)) {
+          // The containing object's effectiveRetries already evaluates this
+          // spread in order; inspect its children without judging overridden values.
+          visitExpression(member.expression, true, false);
           continue;
         }
         let name: string | undefined;
@@ -406,30 +480,22 @@ const nestedObjectLiterals = (
           name = propertyName(member.name);
           initializer = member.initializer;
         }
-        if (initializer === undefined) {
-          continue;
-        }
-        if (
-          (name === "projects" || name === "use") &&
-          resolveArray(initializer, source) === undefined &&
-          resolveObject(initializer, source) === undefined
-        ) {
-          unknownConfig = true;
-          continue;
-        }
-        visitExpression(initializer);
+        if (initializer === undefined) {continue;}
+        visitExpression(
+          initializer,
+          name === "projects" || name === "use",
+          true,
+          name === "projects",
+        );
       }
-      return;
-    }
-    if (ts.isArrayLiteralExpression(node)) {
+    } else if (ts.isArrayLiteralExpression(node)) {
       for (const element of node.elements) {
-        if (ts.isSpreadElement(element)) {
-          continue;
-        }
-        visitExpression(element);
+        if (ts.isSpreadElement(element))
+          {visitExpression(element.expression, true, true, projectElements);}
+        else {visitExpression(element, projectElements, true, projectElements);}
       }
-      return;
     }
+    active.delete(node);
   };
   visit(expression);
   return { objects, unknownConfig };

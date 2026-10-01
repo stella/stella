@@ -266,3 +266,43 @@ test("scans shell launchers while allowing install and download retries", () => 
     "shell launcher passes a test retry option",
   ]);
 });
+
+test.each([
+  "projects: [...devices.map(d => ({ retries: 2 }))]",
+  "projects: [...[getProject()]]",
+  "projects: [...projects]",
+  "projects: [{ ...getProject() }]",
+  "projects: [{ use: { ...getUse() } }]",
+  "use: { ...getUse() }",
+  "projects: [{ ...defaults }]",
+])("fails closed on unresolved project/use spreads: %s", (settings) => {
+  expect(
+    config(`export default defineConfig({ retries: 0, ${settings} });`).some(
+      ({ message }) =>
+        message ===
+        "Playwright project/use configuration is not statically inspectable",
+    ),
+  ).toBe(true);
+});
+
+test("resolves literal array/object spreads and inspects their retry policies", () => {
+  const source = `
+    const use = { viewport: { width: 100, height: 100 } };
+    const project = { name: "chromium", retries: 0, use: { ...use } };
+    const projects = [project];
+    export default defineConfig({ retries: 0, projects: [...projects, ...[{ ...project }]] });
+  `;
+  expect(config(source)).toEqual([]);
+  expect(
+    config(
+      source.replace(
+        'name: "chromium", retries: 0',
+        'name: "chromium", retries: 2',
+      ),
+    ).some(
+      ({ message }) =>
+        message ===
+        "Playwright project/use retries must be statically set to 0",
+    ),
+  ).toBe(true);
+});
