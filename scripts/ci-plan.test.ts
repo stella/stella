@@ -7,6 +7,7 @@ import * as v from "valibot";
 
 import { propertyConfig } from "@stll/property-testing";
 
+import queuedJob from "./__fixtures__/ci-cancellation/queued-job.json";
 import supersessionAnnotations from "./__fixtures__/ci-cancellation/supersession.json";
 import timeoutAnnotations from "./__fixtures__/ci-cancellation/timeout.json";
 
@@ -388,7 +389,17 @@ type EvaluateResultOptions = {
   /** The pull request's draft state as the API reports it now; unset fails the lookup. */
   liveDraft?: boolean;
   cancellationEvidence?: "superseded" | "timeout" | "missing" | "wrong-group";
-  apiFailure?: "jobs" | "annotations";
+  apiFailure?: "current-run" | "runs" | "jobs" | "annotations";
+  newerRun?:
+    | "same-group"
+    | "none"
+    | "other-ref"
+    | "other-pr"
+    | "other-workflow"
+    | "other-event"
+    | "older"
+    | "same-time";
+  queuedCancellation?: "with-check" | "without-check";
   missingJob?: boolean;
   matrixTimeoutSibling?: boolean;
 };
@@ -409,6 +420,14 @@ case "$endpoint" in
   "repos/${PULL_REQUEST.repo}/pulls/${PULL_REQUEST.number}")
     [[ -n "\${FAKE_LIVE_DRAFT:-}" ]] || exit 1
     echo "$FAKE_LIVE_DRAFT"
+    ;;
+  "repos/${PULL_REQUEST.repo}/actions/runs/123")
+    [[ "$FAKE_API_FAILURE" != "current-run" ]] || exit 1
+    echo "$FAKE_CURRENT_RUN"
+    ;;
+  "repos/${PULL_REQUEST.repo}/actions/workflows/42/runs?event="*)
+    [[ "$FAKE_API_FAILURE" != "runs" ]] || exit 1
+    echo "$FAKE_RUNS"
     ;;
   "repos/${PULL_REQUEST.repo}/actions/runs/123/jobs?filter=latest&per_page=100")
     [[ "$FAKE_API_FAILURE" != "jobs" ]] || exit 1
@@ -443,6 +462,8 @@ const evaluateResult = ({
   apiFailure,
   missingJob = false,
   matrixTimeoutSibling = false,
+  newerRun = "same-group",
+  queuedCancellation,
 }: EvaluateResultOptions) => {
   const plan = Object.fromEntries(
     Object.values(jobScopes).flatMap((scope) =>
@@ -495,20 +516,62 @@ const evaluateResult = ({
     });
     checkAnnotations[checkId] = [timeoutAnnotations];
   }
+  if (queuedCancellation !== undefined) {
+    const checkId = queuedJob.check_run_url.split("/").at(-1);
+    if (checkId === undefined) {
+      throw new TypeError("Recorded queued job has no check run ID");
+    }
+    jobs.push({
+      name: queuedJob.name,
+      conclusion: queuedJob.conclusion,
+      check_run_url:
+        queuedCancellation === "with-check" ? queuedJob.check_run_url : null,
+    });
+    checkAnnotations[checkId] = queuedJob.annotations;
+  }
+  const currentRun = {
+    id: 123,
+    name: "CI Checks",
+    workflow_id: 42,
+    run_number: 100,
+    created_at: "2026-10-01T17:42:59Z",
+    head_branch: "ci/result-job-annotation-proof",
+    event,
+    pull_requests:
+      event === EVENT.pullRequest
+        ? [{ number: Number(PULL_REQUEST.number) }]
+        : [],
+  };
+  let createdAt = "2026-10-01T17:43:00Z";
+  if (newerRun === "older") {
+    createdAt = "2026-10-01T17:42:58Z";
+  } else if (newerRun === "same-time") {
+    createdAt = currentRun.created_at;
+  }
+  const successor = {
+    ...currentRun,
+    id: newerRun === "older" ? 122 : 124,
+    workflow_id: newerRun === "other-workflow" ? 43 : 42,
+    run_number: newerRun === "older" ? 99 : 101,
+    created_at: createdAt,
+    head_branch:
+      newerRun === "other-ref" ? "other-branch" : currentRun.head_branch,
+    event: newerRun === "other-event" ? "push" : event,
+    pull_requests:
+      newerRun === "other-pr" ? [{ number: 8 }] : currentRun.pull_requests,
+  };
   const run = Bun.spawnSync({
     cmd: ["bash", "-eu", "-c", resultStep.run],
     env: {
       EVENT: event,
-      CONCURRENCY_GROUP: group,
       GITHUB_RUN_ID: "123",
       FAKE_API_FAILURE: apiFailure ?? "",
+      FAKE_CURRENT_RUN: JSON.stringify(currentRun),
+      FAKE_RUNS: JSON.stringify([
+        { workflow_runs: newerRun === "none" ? [] : [successor] },
+      ]),
       FAKE_JOBS: JSON.stringify([{ jobs: missingJob ? [] : jobs }]),
       FAKE_ANNOTATIONS: JSON.stringify(checkAnnotations),
-      ...Object.fromEntries(
-        Object.entries(resultStep.env)
-          .filter(([key]) => key.startsWith("CANCEL_JOB_NAME_"))
-          .map(([key, value]) => [key, value.replace(/\$\{\{[^}]+\}\}/gu, "")]),
-      ),
       FAKE_LIVE_DRAFT: liveDraft === undefined ? "" : String(liveDraft),
       JOB_SCOPES: resultStep.env["JOB_SCOPES"] ?? "",
       NEEDS: JSON.stringify(needs),
@@ -656,15 +719,8 @@ test("a full-depth run passes jobs whose scope was not planned only when skipped
 const FAST_DEPTH_EVENTS = [EVENT.pullRequest, EVENT.workflowDispatch] as const;
 
 test.each(resultJob.needs)(
-  "cancelled %s passes only with this workflow group's recorded concurrency annotation",
+  "cancelled %s passes only with a newer run in the same group and no timeout",
   (job) => {
-    const parsedWorkflow = v.parse(
-      v.object({ concurrency: v.object({ group: v.string() }) }),
-      Bun.YAML.parse(workflow),
-    );
-    expect(resultStep.env["CONCURRENCY_GROUP"]).toBe(
-      parsedWorkflow.concurrency.group,
-    );
     for (const event of FAST_DEPTH_EVENTS) {
       for (const cancellationEvidence of [
         "superseded",
@@ -680,7 +736,7 @@ test.each(resultJob.needs)(
             cancellationEvidence,
           }),
           `${job} ${event} ${cancellationEvidence}`,
-        ).toBe(cancellationEvidence === "superseded" ? 0 : 1);
+        ).toBe(cancellationEvidence === "timeout" ? 1 : 0);
       }
     }
   },
@@ -692,11 +748,93 @@ test("cancelled dependencies fail closed on API errors, missing jobs and mixed m
     results: { "ci-tests": "cancelled" },
     cancellationEvidence: "superseded",
   } as const;
-  for (const apiFailure of ["jobs", "annotations"] as const) {
+  for (const apiFailure of [
+    "current-run",
+    "runs",
+    "jobs",
+    "annotations",
+  ] as const) {
     expect(evaluateResult({ ...cancelled, apiFailure })).toBe(1);
   }
   expect(evaluateResult({ ...cancelled, missingJob: true })).toBe(1);
   expect(evaluateResult({ ...cancelled, matrixTimeoutSibling: true })).toBe(1);
+});
+
+test("supersession needs a newer run of the same workflow and concurrency group", () => {
+  for (const event of FAST_DEPTH_EVENTS) {
+    for (const newerRun of [
+      "none",
+      "other-workflow",
+      "other-event",
+      "older",
+    ] as const) {
+      expect(
+        evaluateResult({
+          event,
+          suiteDepth: SUITE_DEPTH.fast,
+          results: { "ci-tests": "cancelled" },
+          cancellationEvidence: "missing",
+          newerRun,
+        }),
+      ).toBe(1);
+    }
+    const otherGroup = event === EVENT.pullRequest ? "other-pr" : "other-ref";
+    expect(
+      evaluateResult({
+        event,
+        suiteDepth: SUITE_DEPTH.fast,
+        results: { "ci-tests": "cancelled" },
+        newerRun: otherGroup,
+      }),
+    ).toBe(1);
+    expect(
+      evaluateResult({
+        event,
+        suiteDepth: SUITE_DEPTH.fast,
+        results: { "ci-tests": "cancelled" },
+        cancellationEvidence: "missing",
+        newerRun: "same-time",
+      }),
+    ).toBe(0);
+  }
+});
+
+test("queued cancelled jobs need no annotations or check run when supersession is proved", () => {
+  expect(queuedJob.steps).toHaveLength(0);
+  expect(queuedJob.annotations.flat()).toHaveLength(0);
+  for (const queuedCancellation of ["with-check", "without-check"] as const) {
+    expect(
+      evaluateResult({
+        event: EVENT.workflowDispatch,
+        suiteDepth: SUITE_DEPTH.fast,
+        results: { "e2e-production-shard": "cancelled" },
+        cancellationEvidence: "missing",
+        queuedCancellation,
+      }),
+    ).toBe(0);
+    expect(
+      evaluateResult({
+        event: EVENT.workflowDispatch,
+        suiteDepth: SUITE_DEPTH.fast,
+        results: { "e2e-production-shard": "cancelled" },
+        cancellationEvidence: "missing",
+        queuedCancellation,
+        newerRun: "none",
+      }),
+    ).toBe(1);
+    expect(
+      evaluateResult({
+        event: EVENT.workflowDispatch,
+        suiteDepth: SUITE_DEPTH.fast,
+        results: {
+          "ci-tests": "cancelled",
+          "e2e-production-shard": "cancelled",
+        },
+        queuedCancellation,
+        matrixTimeoutSibling: true,
+      }),
+    ).toBe(1);
+  }
 });
 
 test("a failed dependency stays red beside a cancelled sibling even during supersession", () => {
