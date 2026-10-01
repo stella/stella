@@ -442,6 +442,33 @@ export const generatedRouteMap: RouteNode = {
                 required: false,
               },
               {
+                flag: "--courts",
+                prop: "courts",
+                kind: "string-array",
+                repeatable: true,
+                description:
+                  'Match any listed court. For Czech apex courts use ["NS", "NSS", "ÚS"]. Combined with court, both filters must match. Use a JSON array of strings; a single string is read as a one-item list.',
+                required: false,
+              },
+              {
+                flag: "--category",
+                prop: "category",
+                kind: "string",
+                repeatable: false,
+                description:
+                  'Exact publisher category from metadata.category, for example "A" or "B"; this does not imply Sbírka publication. Applied to live rows within the bounded candidate scan; corpus-index facets and total are unavailable. Omit it to search without this filter; a placeholder such as "all" or "-" reads as no filter.',
+                required: false,
+              },
+              {
+                flag: "--has-legal-sentence",
+                prop: "has_legal_sentence",
+                kind: "boolean",
+                repeatable: false,
+                description:
+                  "True requires a non-empty stored legal sentence (právní věta); false selects decisions without one. Applied to live rows within the bounded candidate scan; corpus-index facets and total are unavailable.",
+                required: false,
+              },
+              {
                 flag: "--country",
                 prop: "country",
                 kind: "string",
@@ -565,6 +592,36 @@ export const generatedRouteMap: RouteNode = {
                   "x-stella-agent-input": {
                     kind: "filter",
                   },
+                },
+                courts: {
+                  type: "array",
+                  items: {
+                    type: "string",
+                    minLength: 1,
+                    maxLength: 512,
+                  },
+                  minItems: 1,
+                  maxItems: 16,
+                  description:
+                    'Match any listed court. For Czech apex courts use ["NS", "NSS", "ÚS"]. Combined with court, both filters must match. Use a JSON array of strings; a single string is read as a one-item list.',
+                  "x-stella-agent-input": {
+                    kind: "string-list",
+                  },
+                },
+                category: {
+                  type: "string",
+                  minLength: 1,
+                  maxLength: 128,
+                  description:
+                    'Exact publisher category from metadata.category, for example "A" or "B"; this does not imply Sbírka publication. Applied to live rows within the bounded candidate scan; corpus-index facets and total are unavailable. Omit it to search without this filter; a placeholder such as "all" or "-" reads as no filter.',
+                  "x-stella-agent-input": {
+                    kind: "filter",
+                  },
+                },
+                has_legal_sentence: {
+                  type: "boolean",
+                  description:
+                    "True requires a non-empty stored legal sentence (právní věta); false selects decisions without one. Applied to live rows within the bounded candidate scan; corpus-index facets and total are unavailable.",
                 },
                 country: {
                   type: "string",
@@ -3653,7 +3710,7 @@ export const generatedRouteMap: RouteNode = {
                         minLength: 1,
                         maxLength: 256,
                         description:
-                          "Anchor of the provision in the publisher's own scheme. read_statute's outline lists a consolidation's provision anchors (par_1729); a subdivision of one of them is accepted too and narrows the answer to that subdivision (par_1729-odst_1, par_1729-odst_2-pism_a). Anchors are not derivable from a section number.",
+                          "Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision. Other publishers may use different schemes.",
                       },
                       as_of: {
                         type: "string",
@@ -3705,7 +3762,7 @@ export const generatedRouteMap: RouteNode = {
                 kind: "string",
                 repeatable: false,
                 description:
-                  "Anchor of the provision in the publisher's own scheme. read_statute's outline lists a consolidation's provision anchors (par_1729); a subdivision of one of them is accepted too and narrows the answer to that subdivision (par_1729-odst_1, par_1729-odst_2-pism_a). Anchors are not derivable from a section number.",
+                  "Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision. Other publishers may use different schemes.",
                 required: true,
               },
               {
@@ -3745,7 +3802,7 @@ export const generatedRouteMap: RouteNode = {
                   minLength: 1,
                   maxLength: 256,
                   description:
-                    "Anchor of the provision in the publisher's own scheme. read_statute's outline lists a consolidation's provision anchors (par_1729); a subdivision of one of them is accepted too and narrows the answer to that subdivision (par_1729-odst_1, par_1729-odst_2-pism_a). Anchors are not derivable from a section number.",
+                    "Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision. Other publishers may use different schemes.",
                 },
                 language: {
                   type: "string",

@@ -49,6 +49,9 @@ const SEARCH_OPTION_EFFECT = {
   // Alternatives only widen: an empty page is never theirs to blame.
   alternatives: "shapes",
   court: "narrows",
+  courts: "narrows",
+  category: "narrows",
+  hasLegalSentence: "narrows",
   cursor: "shapes",
   dateFrom: "narrows",
   dateTo: "narrows",
@@ -76,6 +79,9 @@ type NarrowingOption = {
  */
 const NARROWING_FILTERS = {
   court: ({ court }) => court !== undefined,
+  courts: ({ courts }) => courts !== undefined,
+  category: ({ category }) => category !== undefined,
+  hasLegalSentence: ({ hasLegalSentence }) => hasLegalSentence !== undefined,
   dateFrom: ({ dateFrom }) => dateFrom !== undefined,
   dateTo: ({ dateTo }) => dateTo !== undefined,
   decisionType: ({ decisionType }) => decisionType !== undefined,
