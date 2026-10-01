@@ -112,6 +112,8 @@ type ComposerStatusRowProps = {
    * Middle slot, centered on the row (e.g. scroll to the latest message).
    * With it the row becomes three columns whose sides share the remaining
    * width equally, so the middle stays centered and never covers a control.
+   * The row is a size container, so the middle can drop its label when the
+   * row is narrow (`@md:` variants).
    */
   center?: ReactNode | undefined;
   className?: string | undefined;
@@ -137,7 +139,7 @@ export const ComposerStatusRow = ({
     return (
       <div
         className={cn(
-          "text-muted-foreground mt-1.5 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 px-1 text-xs",
+          "text-muted-foreground @container mt-1.5 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 px-1 text-xs",
           className,
         )}
       >

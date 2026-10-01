@@ -140,18 +140,22 @@ export const ConversationScrollButton = ({
     return null;
   }
 
+  // The label names the action for people who don't read a bare arrow; a
+  // status row narrower than `@md` (a slim side panel) keeps only the arrow.
   return (
     <Button
       aria-label={t("common.scrollToBottom")}
       className={cn("rounded-full before:rounded-full", className)}
       {...props}
       onClick={() => stickToBottom.scrollToBottom()}
-      size="icon-xs"
-      tooltip={t("common.scrollToBottom")}
+      size="xs"
       type="button"
       variant="outline"
     >
       <ArrowDownIcon className="size-3.5" />
+      <span aria-hidden="true" className="hidden @md:inline">
+        {t("common.scrollToBottom")}
+      </span>
     </Button>
   );
 };
