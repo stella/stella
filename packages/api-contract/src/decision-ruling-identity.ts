@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import {
   DECISION_IDENTIFIER_TYPES,
   normalizeStructuredDecisionIdentifier,
@@ -45,26 +47,28 @@ export type RulingIdentityKeys = {
 };
 
 /**
- * Language-independent comparison fold: NFKC, lowercase, NFKD, remove marks,
- * map Unicode dash punctuation and minus to hyphen, remove whitespace and Cf.
- * Stated values remain untouched; this fold applies only to derived keys.
+ * Language-independent comparison fold: NFKC, remove whitespace and Cf,
+ * lowercase, fold final sigma to sigma, NFKD, remove marks, then map Unicode
+ * dash punctuation and minus to hyphen. Remove whitespace after NFKC because
+ * compatibility spaces become ordinary spaces. Removing gaps before lowercase
+ * avoids contextual sigma changes; the Unicode CaseFolding final-sigma mapping
+ * also makes terminal and internal sigma agree. Stated values stay untouched.
  */
 export const foldRulingIdentity = (value: string): string =>
   value
     .normalize("NFKC")
+    .replace(/[\p{White_Space}\p{Cf}]/gu, "")
     .toLowerCase()
+    .replace(/\u03c2/gu, "\u03c3")
     .normalize("NFKD")
     .replace(/\p{M}/gu, "")
-    .replace(/[\p{Pd}\u2212]/gu, "-")
-    .replace(/[\p{White_Space}\p{Cf}]/gu, "");
+    .replace(/[\p{Pd}\u2212]/gu, "-");
 
 // Decimal blocks contain ten digits; adjacent blocks (mathematical styles)
 // repeat that sequence. Derive values from Unicode structure, not a script list.
 const decimalDigit = (digit: string): string => {
-  const code = digit.codePointAt(0);
-  if (code === undefined) {
-    return "";
-  }
+  const code =
+    digit.codePointAt(0) ?? panic("Decimal run contains an empty digit");
   let start = code;
   while (/\p{Nd}/u.test(String.fromCodePoint(start - 1))) {
     start -= 1;
@@ -73,26 +77,32 @@ const decimalDigit = (digit: string): string => {
 };
 
 const docketKey = (stated: string): string => {
-  const folded = foldRulingIdentity(stated);
+  // Preserve every gap between decimal digits before the shared fold removes
+  // invisible characters. Other gaps have no role in the docket key.
+  const folded = foldRulingIdentity(
+    stated
+      .normalize("NFKC")
+      .replace(/(\p{Nd})[^\p{L}\p{Nd}]+(?=\p{Nd})/gu, "$1/"),
+  );
   const runs = folded.match(/\p{L}+|\p{Nd}+|[^\p{L}\p{Nd}]+/gu) ?? [];
   let key = "";
-  let previousKind = "absent";
+  let previousWasDigits = false;
   let separated = false;
   for (const run of runs) {
     if (/^\p{Nd}/u.test(run)) {
-      if (previousKind === "digits" && separated) {
+      if (previousWasDigits && separated) {
         key += "/";
       }
       key += Array.from(run, decimalDigit)
         .join("")
         .replace(/^0+(?=\d)/u, "");
-      previousKind = "digits";
+      previousWasDigits = true;
       separated = false;
       continue;
     }
     if (/^\p{L}/u.test(run)) {
       key += run;
-      previousKind = "letters";
+      previousWasDigits = false;
       separated = false;
       continue;
     }
@@ -191,6 +201,8 @@ export const rulingGroupKeys = ({
   return dockets
     .filter(({ key }) => /\d/u.test(key))
     .map(({ key }) =>
-      [country, courtKey, date.value, key].map(encodeURIComponent).join("|"),
+      [country, courtKey, date.value, key]
+        .map((part) => part.replaceAll("%", "%25").replaceAll("|", "%7C"))
+        .join("|"),
     );
 };
