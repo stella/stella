@@ -33,6 +33,8 @@ describe("PostgreSQL metadata filter admission", () => {
     const result = await searchDecisionsHandler(
       { query: "náhrada škody", country: "CZE", ...filters },
       unreadableDb,
+      "unobserved",
+      "unobserved",
     );
     expect(result).toBeInstanceOf(ElysiaCustomStatusResponse);
     if (!(result instanceof ElysiaCustomStatusResponse)) {

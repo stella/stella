@@ -65,7 +65,9 @@ describe("lookupByIco", () => {
       return jsonResponse(isEntityRequest(url) ? entity : search);
     });
 
-    const result = (await lookupByIco("31 333 532")).unwrap();
+    const result = (
+      await lookupByIco("31 333 532", { observer: "unobserved" })
+    ).unwrap();
 
     expect(requests.map((url) => url.pathname)).toEqual([
       "/rpo/v1/search",
@@ -95,7 +97,10 @@ describe("lookupByIco", () => {
     });
 
     const result = (
-      await lookupByIco("31333532", { view: "historical" })
+      await lookupByIco("31333532", {
+        observer: "unobserved",
+        view: "historical",
+      })
     ).unwrap();
 
     expect(
@@ -116,7 +121,9 @@ describe("lookupByIco", () => {
       jsonResponse(isEntityRequest(url) ? entity : search),
     );
 
-    const result = (await lookupByIco("35681039")).unwrap();
+    const result = (
+      await lookupByIco("35681039", { observer: "unobserved" })
+    ).unwrap();
 
     expect(result).toMatchObject({
       name: "Slovnaft Retail, s.r.o.",
@@ -144,7 +151,9 @@ describe("lookupByIco", () => {
       jsonResponse(isEntityRequest(url) ? entity : { results: [bare] }),
     );
 
-    const result = (await lookupByIco("31333532")).unwrap();
+    const result = (
+      await lookupByIco("31333532", { observer: "unobserved" })
+    ).unwrap();
 
     expect(result?.name).toBe("ESET, spol. s r.o.");
     expect(result?.address?.street).toBe("Einsteinova 24");
@@ -169,7 +178,7 @@ describe("lookupByIco", () => {
       return jsonResponse({ results: [ended, live] });
     });
 
-    (await lookupByIco("31333532")).unwrap();
+    (await lookupByIco("31333532", { observer: "unobserved" })).unwrap();
 
     expect(entityPath).toBe(`/rpo/v1/entity/${live.id}`);
   });
@@ -184,7 +193,9 @@ describe("lookupByIco", () => {
       return jsonResponse(university);
     });
 
-    expect((await lookupByIco("31333532")).unwrap()).toBeNull();
+    expect(
+      (await lookupByIco("31333532", { observer: "unobserved" })).unwrap(),
+    ).toBeNull();
     expect(requests.some(isEntityRequest)).toBe(false);
   });
 
@@ -195,7 +206,9 @@ describe("lookupByIco", () => {
       isEntityRequest(url) ? jsonResponse(notFound, 404) : jsonResponse(search),
     );
 
-    expect((await lookupByIco("31333532")).unwrap()).toBeNull();
+    expect(
+      (await lookupByIco("31333532", { observer: "unobserved" })).unwrap(),
+    ).toBeNull();
   });
 
   test("accepts IČOs that predate the check digit", async () => {
@@ -206,7 +219,9 @@ describe("lookupByIco", () => {
     });
 
     // 11111111 fails MOD-11 yet is a registered 1992 state enterprise.
-    expect((await lookupByIco("11111111")).unwrap()).toBeNull();
+    expect(
+      (await lookupByIco("11111111", { observer: "unobserved" })).unwrap(),
+    ).toBeNull();
     expect(searched).toBe("11111111");
   });
 
@@ -218,9 +233,9 @@ describe("lookupByIco", () => {
     });
 
     for (const input of ["3133353", "313335322", "ESET"]) {
-      expect(await errorOf(lookupByIco(input))).toBeInstanceOf(
-        RpoValidationError,
-      );
+      expect(
+        await errorOf(lookupByIco(input, { observer: "unobserved" })),
+      ).toBeInstanceOf(RpoValidationError);
     }
     expect(called).toBe(false);
   });
@@ -236,16 +251,19 @@ describe("upstream failures", () => {
         }),
     );
 
-    expect((await errorOf(lookupByIco("31333532")))?.message).toBe(
-      "RPO 200: invalid JSON payload",
-    );
+    expect(
+      (await errorOf(lookupByIco("31333532", { observer: "unobserved" })))
+        ?.message,
+    ).toBe("RPO 200: invalid JSON payload");
   });
 
   test("a rejected request carries the register's message", async () => {
     const body = await readFixture<unknown>("search-no-parameters.json");
     restore = installFetchStub(async () => jsonResponse(body, 400));
 
-    const rejection = await errorOf(searchByName("ESET"));
+    const rejection = await errorOf(
+      searchByName("ESET", { observer: "unobserved" }),
+    );
 
     expect(rejection).toBeInstanceOf(RpoAPIError);
     expect(rejection).toMatchObject({
@@ -259,7 +277,9 @@ describe("upstream failures", () => {
       async () => new Response("<html>Bad Gateway</html>", { status: 502 }),
     );
 
-    expect(await errorOf(searchByName("ESET"))).toMatchObject({
+    expect(
+      await errorOf(searchByName("ESET", { observer: "unobserved" })),
+    ).toMatchObject({
       name: "RpoAPIError",
       httpStatus: 502,
       upstreamMessage: null,
@@ -271,17 +291,18 @@ describe("upstream failures", () => {
       throw new TypeError("fetch failed");
     });
 
-    expect(await errorOf(lookupByIco("31333532"))).toBeInstanceOf(
-      RpoRequestError,
-    );
+    expect(
+      await errorOf(lookupByIco("31333532", { observer: "unobserved" })),
+    ).toBeInstanceOf(RpoRequestError);
   });
 
   test("an unexpected JSON shape is an API error", async () => {
     restore = installFetchStub(async () => jsonResponse({ data: [] }));
 
-    expect((await errorOf(searchByName("ESET")))?.message).toContain(
-      "unexpected JSON payload shape",
-    );
+    expect(
+      (await errorOf(searchByName("ESET", { observer: "unobserved" })))
+        ?.message,
+    ).toContain("unexpected JSON payload shape");
   });
 
   test("a null nested entry is an API error", async () => {
@@ -289,7 +310,9 @@ describe("upstream failures", () => {
       jsonResponse({ results: [{ id: 1, identifiers: [null] }] }),
     );
 
-    expect(await errorOf(lookupByIco("31333532"))).toBeInstanceOf(RpoAPIError);
+    expect(
+      await errorOf(lookupByIco("31333532", { observer: "unobserved" })),
+    ).toBeInstanceOf(RpoAPIError);
   });
 
   test("a malformed leaf field is an API error", async () => {
@@ -305,9 +328,10 @@ describe("upstream failures", () => {
       }),
     );
 
-    expect((await errorOf(searchByName("ESET")))?.message).toContain(
-      "unexpected JSON payload shape",
-    );
+    expect(
+      (await errorOf(searchByName("ESET", { observer: "unobserved" })))
+        ?.message,
+    ).toContain("unexpected JSON payload shape");
   });
 });
 
@@ -322,7 +346,9 @@ describe("searchByName", () => {
       return jsonResponse(fixture);
     });
 
-    const results = (await searchByName(" slovnaft ", { limit: 100 })).unwrap();
+    const results = (
+      await searchByName(" slovnaft ", { observer: "unobserved", limit: 100 })
+    ).unwrap();
 
     expect(fullName).toBe("slovnaft");
     // Every upstream row survives the ranking.
@@ -352,15 +378,19 @@ describe("searchByName", () => {
     );
     restore = installFetchStub(async () => jsonResponse(fixture));
 
-    const all = (await searchByName("slovnaft", { limit: 100 })).unwrap();
-    const top = (await searchByName("slovnaft", { limit: 3 })).unwrap();
+    const all = (
+      await searchByName("slovnaft", { observer: "unobserved", limit: 100 })
+    ).unwrap();
+    const top = (
+      await searchByName("slovnaft", { observer: "unobserved", limit: 3 })
+    ).unwrap();
 
     expect(top).toEqual(all.slice(0, 3));
   });
 
   test("rejects an empty name", async () => {
-    expect(await errorOf(searchByName("   "))).toBeInstanceOf(
-      RpoValidationError,
-    );
+    expect(
+      await errorOf(searchByName("   ", { observer: "unobserved" })),
+    ).toBeInstanceOf(RpoValidationError);
   });
 });

@@ -196,6 +196,7 @@ const PAGE_SIZE = 50;
 /** Every hit, page by page, through the native endpoint as the scan asks. */
 const readNative = async (query: string, from: number, size: number) => {
   const result = await client.search({
+    observer: "unobserved",
     indexId: INDEX_ID,
     query,
     maxHits: size,
@@ -211,6 +212,7 @@ const readNative = async (query: string, from: number, size: number) => {
 /** The same page through the scored endpoint, with the scan's projection. */
 const readScored = async (query: string, from: number, size: number) => {
   const result = await client.scoredSearch({
+    observer: "unobserved",
     indexId: INDEX_ID,
     query,
     from,
@@ -230,6 +232,7 @@ const readScanPage = async (
   scanTransport: CorpusIndexScanTransport,
 ) =>
   await readCorpusIndexSearchPage({
+    observer: "unobserved",
     cluster: "q09",
     indexId: INDEX_ID,
     query,
@@ -261,6 +264,7 @@ describe.skipIf(!runEngineTests)(
     beforeAll(async () => {
       const created = await client.createIndex(
         corpusIndexConfigFromManifest(MANIFEST, INDEX_ID),
+        "unobserved",
       );
       if (created.isErr()) {
         throw created.error;
@@ -293,7 +297,7 @@ describe.skipIf(!runEngineTests)(
     }, ENGINE_TIMEOUT_MS);
 
     afterAll(async () => {
-      await client.deleteIndex(INDEX_ID);
+      await client.deleteIndex(INDEX_ID, "unobserved");
     }, ENGINE_TIMEOUT_MS);
 
     test("the corpus spans several splits", async () => {

@@ -639,6 +639,7 @@ const retrievePassages = async (
     const { serving, manifest } = target.value;
     const { indexId } = corpusIndexRoute(manifest, decision.country);
     const response = await getCorpusIndexClient(serving.cluster).search({
+      observer: "unobserved",
       indexId,
       query: `document_id:${quoteCorpusValue(decision.id)} AND ${freeText}`,
       maxHits: LIMITS.caseLawResearchAnswerPassagesMax,

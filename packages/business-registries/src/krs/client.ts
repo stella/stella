@@ -261,13 +261,14 @@ const krsFetchOptions = (): Omit<RequestInit, "signal"> => {
 
 const krsGet = async (
   url: string,
-  signal?: AbortSignal,
+  { signal, observer }: RegistryClientOptions,
 ): Promise<{ status: number; body: KrsLookupResponse | null }> => {
   // KRS pins Certum CA certs via Bun's non-standard `tls` fetch option
   // (see krsFetchOptions); it is passed straight through the shared
   // request layer's `init` escape hatch.
   const response = await performRegistryRequest({
     url,
+    observer,
     init: krsFetchOptions(),
     signal,
     wrapRequestError: (error) => {
@@ -364,7 +365,7 @@ export type LookupOptions = RegistryClientOptions & {
  */
 export const lookupByKrsNumber = async (
   krsNumber: string,
-  options?: LookupOptions,
+  options: LookupOptions,
 ): Promise<KrsEntity | null> => {
   const normalized = normalizeKrsNumber(krsNumber);
   if (!validateKrsNumber(normalized)) {
@@ -373,11 +374,11 @@ export const lookupByKrsNumber = async (
     );
   }
   const registers =
-    options?.register === undefined ? REGISTER_PROBE_ORDER : [options.register];
+    options.register === undefined ? REGISTER_PROBE_ORDER : [options.register];
   for (const register of registers) {
     const { status, body } = await krsGet(
       buildLookupUrl(normalized, register),
-      options?.signal,
+      options,
     );
     if (status === 404 || !body?.odpis) {
       continue;

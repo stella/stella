@@ -1,7 +1,12 @@
+import { Result, TaggedError } from "better-result";
 import { AsyncLocalStorage } from "node:async_hooks";
+
+import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
 
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ActionKind } from "@/api/lib/rate-limit/action-kinds";
+
+import { reportActionCostObservationFailure } from "./observation-failure";
 
 export const ACTION_COST_CALL_KIND = {
   registryRequest: "registry_request",
@@ -55,21 +60,69 @@ export const currentActionCostIdentity = (
   return undefined;
 };
 
-export const recordExternalActionCall = (kind: string): void => {
+class ActionCallObserverError extends TaggedError("ActionCallObserverError")<{
+  message: string;
+  reason: "missing_scope" | "organization_mismatch" | "settled_scope";
+}> {}
+
+export type ActionCallObserver = (kind: string) => void;
+
+export const actionCallObserver = (
+  organizationId: SafeId<"organization">,
+): ActionCallObserver => {
   const scope = actionCostScope.getStore();
-  if (scope?.status !== "active") {
-    return;
+  const reason =
+    scope?.status === "settled" ? "settled_scope" : "missing_scope";
+  if (
+    scope === undefined ||
+    scope.identity.organizationId !== organizationId ||
+    scope.status !== "active"
+  ) {
+    reportActionCostObservationFailure(
+      new ActionCallObserverError({
+        message: "Action call observer could not capture an active scope",
+        reason:
+          scope !== undefined &&
+          scope.identity.organizationId !== organizationId
+            ? "organization_mismatch"
+            : reason,
+      }),
+    );
+    return () => undefined;
   }
-  scope.recorder.enqueue({
-    type: "call",
-    record: {
-      ...scope.identity,
-      callId: Bun.randomUUIDv7(),
-      kind,
-      occurredAt: new Date(),
-      measuredMicroUnits: scope.recorder.callRate(kind),
-    },
-  });
+  return (kind) => {
+    if (scope.status !== "active") {
+      return;
+    }
+    const observed = Result.try({
+      try: () =>
+        scope.recorder.enqueue({
+          type: "call",
+          record: {
+            ...scope.identity,
+            callId: Bun.randomUUIDv7(),
+            kind,
+            occurredAt: new Date(),
+            measuredMicroUnits: scope.recorder.callRate(kind),
+          },
+        }),
+      catch: (cause: unknown) => cause,
+    });
+    if (Result.isError(observed)) {
+      reportActionCostObservationFailure(observed.error);
+    }
+  };
+};
+
+export const actionRequestObserver = (
+  organizationId: SafeId<"organization">,
+  kind: string,
+) => {
+  const captured = actionCallObserver(organizationId);
+  return {
+    onRequest: () => captured(kind),
+    onError: reportActionCostObservationFailure,
+  } satisfies RegistryRequestObservation;
 };
 
 type RunObservedActionOptions<T> = {

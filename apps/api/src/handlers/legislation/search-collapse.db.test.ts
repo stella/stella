@@ -423,6 +423,7 @@ describe("the Postgres search path", () => {
           ...(cursor === undefined ? {} : { cursor }),
         },
         legislationDb,
+        "unobserved",
         searchDependencies,
       );
       if (!("items" in response)) {

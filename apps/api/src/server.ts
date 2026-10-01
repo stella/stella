@@ -6,7 +6,6 @@ import {
   CHAT_TURN_ID_HEADER,
   STELLA_API_VERSION_PREFIX,
 } from "@stll/api-contract";
-import { observeRegistryRequests } from "@stll/business-registries/shared/request-observer";
 import { redisConnectionConfig } from "@stll/redis-config";
 
 import { initApiBackgroundWorkers } from "@/api/api-background-workers";
@@ -179,14 +178,7 @@ import {
 import { startSse, stopSse } from "@/api/lib/sse";
 import { clearByokAdapterCache } from "@/api/lib/tanstack-ai-models";
 import { isUploadRateLimitedPath } from "@/api/lib/upload-rate-limit";
-import {
-  ACTION_COST_CALL_KIND,
-  recordExternalActionCall,
-} from "@/api/lib/usage/action-costs/context";
-import {
-  flushActionCostRecords,
-  reportActionCostObservationFailure,
-} from "@/api/lib/usage/action-costs/recorder";
+import { flushActionCostRecords } from "@/api/lib/usage/action-costs/recorder";
 import { isLocalDevOpen, runtimeMode } from "@/api/runtime-mode";
 import {
   API_SHUTDOWN_OUTCOME,
@@ -628,11 +620,6 @@ const startServer = async (): Promise<void> => {
     logger.info("redis.connection.mode", { mode });
   }
 
-  const stopRegistryObservation = observeRegistryRequests({
-    onRequest: () =>
-      recordExternalActionCall(ACTION_COST_CALL_KIND.registryRequest),
-    onError: reportActionCostObservationFailure,
-  });
   startMemoryPressureHandler();
 
   // Start the SSE keep-alive heartbeat and cross-instance Redis subscriber
@@ -730,7 +717,6 @@ const startServer = async (): Promise<void> => {
       flushActionCostRecords(),
       Bun.sleep(WORKER_SHUTDOWN_TIMEOUT_MS),
     ]);
-    stopRegistryObservation();
     closeActionAdmissionRedis();
     switch (outcome) {
       case API_SHUTDOWN_OUTCOME.drained:

@@ -1,3 +1,4 @@
+import { validateIco as validateAresIco } from "@stll/business-registries/ares";
 /**
  * Registry lookup fields.
  *
@@ -17,8 +18,6 @@
  * boundary with a message naming the field — silently passing the raw number
  * into the document would be worse than an actionable error.
  */
-
-import { validateIco as validateAresIco } from "@stll/business-registries/ares";
 import {
   ARES_COURT_GENITIVE_TOKEN,
   ARES_COURT_INSTRUMENTAL_TOKEN,
@@ -84,6 +83,7 @@ import {
   SIRET_SPACED_TOKEN,
 } from "@stll/business-registries/recherche-entreprises/identifier-format";
 import { isIcoShape as isRpoIcoShape } from "@stll/business-registries/rpo";
+import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
 import { validateVatFormat } from "@stll/business-registries/vies";
 import { assertNever, resolvePath } from "@stll/template-conditions";
 import { parseIsoDateLocal } from "@stll/time";
@@ -167,6 +167,7 @@ export type LookupResolver = (input: {
 }) => Promise<LookupOutcome>;
 
 type CreateDispatchLookupResolverOptions = {
+  observer: RegistryRequestObservation;
   dispatch?: Record<LookupRegistry, RegistryHandler>;
 };
 
@@ -179,7 +180,8 @@ type CreateDispatchLookupResolverOptions = {
 export const createDispatchLookupResolver =
   ({
     dispatch = BUSINESS_REGISTRY_DISPATCH,
-  }: CreateDispatchLookupResolverOptions = {}): LookupResolver =>
+    observer,
+  }: CreateDispatchLookupResolverOptions): LookupResolver =>
   async ({ registry, query }) => {
     const handler = dispatch[registry];
     // Mirror the contacts lookup route: never call a registry whose deployment
@@ -193,7 +195,7 @@ export const createDispatchLookupResolver =
         message: `The ${registry} registry is not available in this deployment.`,
       };
     }
-    const response = await executeRegistryLookup({ handler, query });
+    const response = await executeRegistryLookup({ handler, query, observer });
     if (response instanceof Error) {
       return { type: "error", message: response.message };
     }

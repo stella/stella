@@ -100,6 +100,7 @@ const search = async (query: string, limit: number, cursor?: string) => {
   const response = await searchLegislationHandler(
     { query, limit, ...(cursor === undefined ? {} : { cursor }) },
     legislationDb,
+    "unobserved",
     searchDependencies,
   );
   if (!("items" in response)) {

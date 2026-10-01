@@ -182,8 +182,11 @@ test.each(["search", "entity"] as const)(
           : searchPayload,
       async () =>
         kind === "search"
-          ? await searchByName("ESET")
-          : await lookupByIco("31333532", { view: "historical" }),
+          ? await searchByName("ESET", { observer: "unobserved" })
+          : await lookupByIco("31333532", {
+              observer: "unobserved",
+              view: "historical",
+            }),
     );
     expect(baseline?.isOk()).toBe(true);
     if (baseline?.isOk()) {
@@ -202,8 +205,11 @@ test.each(["search", "entity"] as const)(
         },
         async () =>
           kind === "search"
-            ? await searchByName("ESET")
-            : await lookupByIco("31333532", { view: "historical" }),
+            ? await searchByName("ESET", { observer: "unobserved" })
+            : await lookupByIco("31333532", {
+                observer: "unobserved",
+                view: "historical",
+              }),
       );
       if (result === undefined) {
         return;

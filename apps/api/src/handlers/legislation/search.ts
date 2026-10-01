@@ -9,6 +9,7 @@ import {
   isPublicLegislationCountry,
 } from "@stll/api-contract/legislation-publication";
 import { SEARCH_TOTAL_NOT_COUNTED } from "@stll/api-contract/search";
+import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
 import { isUuid } from "@stll/uuid-codec";
 
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
@@ -882,6 +883,7 @@ const corpusIndexSearch = async (
   body: SearchLegislationBody,
   parsedCursor: SearchCursor | null,
   legislationDb: LegislationReadDb,
+  observer: RegistryRequestObservation,
 ): Promise<{ hits: LegislationHit[]; nextCursor: string | null }> => {
   const limit = body.limit ?? LIMITS.caseLawSearchPageSizeDefault;
   const serving = await legislationDb(
@@ -908,6 +910,7 @@ const corpusIndexSearch = async (
   );
 
   const searchPage = await readCorpusIndexSearchPage({
+    observer,
     cluster: serving.cluster,
     indexId,
     query,
@@ -984,6 +987,7 @@ const corpusIndexSearch = async (
 export const searchLegislationHandler = async (
   body: SearchLegislationBody,
   legislationDb: LegislationReadDb,
+  observer: RegistryRequestObservation,
   dependencies = defaultSearchLegislationDependencies,
 ) => {
   // source_id and the cursor id reach Postgres as UUID comparisons in the
@@ -1027,7 +1031,7 @@ export const searchLegislationHandler = async (
 
   const { hits: items, nextCursor } =
     envBase.LEGAL_SEARCH_PROVIDER === "corpus-index"
-      ? await corpusIndexSearch(body, parsedCursor, legislationDb)
+      ? await corpusIndexSearch(body, parsedCursor, legislationDb, observer)
       : await pgSearch(body, parsedCursor, legislationDb, dependencies);
 
   const response: Static<typeof searchLegislationSuccessResponseSchema> = {
@@ -1061,7 +1065,11 @@ const searchLegislation = createSafeRootHandler(
     const response = yield* Result.await(
       Result.tryPromise(
         async () =>
-          await searchLegislationHandler(body, legislationPublicReadDb),
+          await searchLegislationHandler(
+            body,
+            legislationPublicReadDb,
+            "unobserved",
+          ),
       ),
     );
     return Result.ok(response);

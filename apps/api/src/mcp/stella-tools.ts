@@ -103,6 +103,10 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import { decodeCursor } from "@/api/lib/search/cursor";
 import { getSearchReader } from "@/api/lib/search/provider";
+import {
+  ACTION_COST_CALL_KIND,
+  actionRequestObserver,
+} from "@/api/lib/usage/action-costs/context";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { resolveCourtFilter } from "@/api/mcp/case-law-court-filter";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -2020,6 +2024,10 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
   if (!parsed.success) {
     return validationErrorResult(parsed.issues);
   }
+  const observer = actionRequestObserver(
+    context.organizationId,
+    ACTION_COST_CALL_KIND.corpusRequest,
+  );
   const {
     country,
     court,
@@ -2125,7 +2133,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
       }
       return {
         exhausted: false as const,
-        result: await search(body, caseLawPublicReadDb),
+        result: await search(body, caseLawPublicReadDb, observer),
       };
     },
   });
