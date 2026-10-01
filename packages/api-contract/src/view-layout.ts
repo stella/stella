@@ -97,9 +97,25 @@ export const isSingleViewLayout = (
   type: ViewLayoutType,
 ): type is SingleViewLayoutType => VIEW_LAYOUT_POLICY[type].perMatter === "one";
 
-export const CONVERTIBLE_VIEW_LAYOUTS = VIEW_LAYOUT_TYPES.filter(
-  (type) => !isSingleViewLayout(type),
-);
+export type ConvertibleViewLayoutType = Exclude<
+  ViewLayoutType,
+  SingleViewLayoutType
+>;
+
+const isConvertibleViewLayout = (
+  type: ViewLayoutType,
+): type is ConvertibleViewLayoutType => !isSingleViewLayout(type);
+
+// Non-empty by construction so it can back a schema enum.
+export const CONVERTIBLE_VIEW_LAYOUTS: readonly [
+  ConvertibleViewLayoutType,
+  ...ConvertibleViewLayoutType[],
+] = [
+  "table",
+  ...VIEW_LAYOUT_TYPES.filter(isConvertibleViewLayout).filter(
+    (type) => type !== "table",
+  ),
+];
 
 export const REQUIRED_VIEW_LAYOUTS =
   VIEW_LAYOUT_TYPES.filter(isRequiredViewLayout);
