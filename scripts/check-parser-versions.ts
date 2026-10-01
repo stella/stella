@@ -125,8 +125,11 @@ class StaticTree {
           (specifier.startsWith(".") ||
             specifier.startsWith("@/api/") ||
             (specifier.startsWith("@stll/") &&
-              this.files.has(
-                `packages/${specifier.slice("@stll/".length).split("/").at(0) ?? ""}/package.json`,
+              // Only packages/ is resolved; an app-hosted package fails closed.
+              ["packages", "apps"].some((workspace) =>
+                this.files.has(
+                  `${workspace}/${specifier.slice("@stll/".length).split("/").at(0) ?? ""}/package.json`,
+                ),
               )))
         ) {
           this.importErrors.add(
@@ -542,6 +545,8 @@ type ComparisonBaseOptions = {
   event: string;
   base: string;
   head: string;
+  /** The pull request's own head; identifies GitHub's test merge commit. */
+  pullRequestHead?: string;
   runGit?: typeof git;
 };
 
@@ -549,6 +554,7 @@ export const comparisonBase = ({
   event,
   base,
   head,
+  pullRequestHead = "",
   runGit = git,
 }: ComparisonBaseOptions): GitResult => {
   if (event === "merge_group") {
@@ -570,14 +576,20 @@ export const comparisonBase = ({
   if (event === "pull_request" && base === "") {
     return { type: "failed", detail: "pull_request requires its base SHA" };
   }
-  // A pull request is tested on its merge commit, whose first parent is the
-  // base it merged onto; the event's base SHA can lag behind that, which would
-  // attribute later base commits to the pull request.
-  if (
-    event === "pull_request" &&
-    runGit(["rev-parse", "--verify", "--quiet", `${head}^2`]).type === "ok"
-  ) {
-    return runGit(["rev-parse", "--verify", `${head}^1^{commit}`]);
+  // A pull request is tested on GitHub's test merge commit, whose first parent
+  // is the base it merged onto; the event's base SHA can lag behind that, which
+  // would attribute later base commits to the pull request. Only a merge whose
+  // second parent is the pull request head is that test merge: a branch head
+  // can itself be a merge commit.
+  if (event === "pull_request" && pullRequestHead !== "") {
+    const second = runGit(["rev-parse", "--verify", "--quiet", `${head}^2`]);
+    if (
+      second.type === "ok" &&
+      new TextDecoder().decode(second.output).trim() === pullRequestHead &&
+      runGit(["merge-base", "--is-ancestor", base, `${head}^1`]).type === "ok"
+    ) {
+      return runGit(["rev-parse", "--verify", `${head}^1^{commit}`]);
+    }
   }
   return runGit(["merge-base", base === "" ? "origin/main" : base, head]);
 };
@@ -588,6 +600,7 @@ const main = (): number => {
     event: process.env["EVENT_NAME"] ?? "workflow_dispatch",
     base: process.env["BASE_SHA"] ?? "",
     head,
+    pullRequestHead: process.env["PR_HEAD_SHA"] ?? "",
   });
   if (base.type === "failed") {
     console.error(base.detail);

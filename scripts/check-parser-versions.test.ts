@@ -364,16 +364,20 @@ test("the queue compares against its exact base while pull requests use the merg
   const commands: string[][] = [];
   const runGit = (args: string[]) => {
     commands.push(args);
-    // Only "pr-merge" is a merge commit.
+    const ok = (output: string) =>
+      ({ type: "ok", output: new TextEncoder().encode(output) }) as const;
+    // "pr-merge" is GitHub's test merge of "pr-head"; "branch-merge" is a
+    // branch head that merged main into itself; "pr-head" is no merge.
     if (args.includes("pr-head^2")) {
       return { type: "failed", detail: "not a merge" } as const;
     }
-    return {
-      type: "ok",
-      output: new TextEncoder().encode(
-        args.at(0) === "rev-parse" ? "queue-base" : "fork-base",
-      ),
-    } as const;
+    if (args.includes("pr-merge^2")) {
+      return ok("pr-head");
+    }
+    if (args.includes("branch-merge^2")) {
+      return ok("main-tip");
+    }
+    return ok(args.at(0) === "rev-parse" ? "queue-base" : "fork-base");
   };
   const queue = comparisonBase({
     event: "merge_group",
@@ -385,6 +389,7 @@ test("the queue compares against its exact base while pull requests use the merg
     event: "pull_request",
     base: "main-head",
     head: "pr-head",
+    pullRequestHead: "pr-head",
     runGit,
   });
   // A stale event base must not pull later base commits into the comparison.
@@ -392,6 +397,14 @@ test("the queue compares against its exact base while pull requests use the merg
     event: "pull_request",
     base: "stale-main",
     head: "pr-merge",
+    pullRequestHead: "pr-head",
+    runGit,
+  });
+  const branchMerge = comparisonBase({
+    event: "pull_request",
+    base: "main-head",
+    head: "branch-merge",
+    pullRequestHead: "branch-merge",
     runGit,
   });
   expect(commands).toEqual([
@@ -399,11 +412,15 @@ test("the queue compares against its exact base while pull requests use the merg
     ["rev-parse", "--verify", "--quiet", "pr-head^2"],
     ["merge-base", "main-head", "pr-head"],
     ["rev-parse", "--verify", "--quiet", "pr-merge^2"],
+    ["merge-base", "--is-ancestor", "stale-main", "pr-merge^1"],
     ["rev-parse", "--verify", "pr-merge^1^{commit}"],
+    ["rev-parse", "--verify", "--quiet", "branch-merge^2"],
+    ["merge-base", "main-head", "branch-merge"],
   ]);
   expect(queue.type).toBe("ok");
   expect(pullRequest.type).toBe("ok");
   expect(mergedPullRequest.type).toBe("ok");
+  expect(branchMerge.type).toBe("ok");
   // Both PRs pass at their fork point; the second fails after the first bump
   // becomes the queue base, so it cannot publish another change at version 2.
   const second = fixture({
@@ -424,7 +441,7 @@ test("the queue compares against its exact base while pull requests use the merg
       runGit,
     }).type,
   ).toBe("failed");
-  expect(commands).toHaveLength(5);
+  expect(commands).toHaveLength(8);
 });
 
 test("published packages are external while unresolved workspace exports fail closed", () => {
