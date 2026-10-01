@@ -6,8 +6,8 @@
  * - `list_capabilities` pages the unlisted tools: id, summary, access.
  * - `describe_capability` returns a bounded outline, or the full input schema on request
  *   (listed tools included, whose listed schema is the compact one).
- * - `invoke_capability` runs one by id with `input` checked against that
- *   full schema; `validate_only` checks without running.
+ * - `invoke_capability` reads arguments using the canonical schema;
+ *   `validate_only` checks argument reading without running the handler.
  *
  * Every tool is also callable by its own name. Calls are read through
  * `readToolInput` and answered with `toCallResult`'s one envelope.
@@ -283,7 +283,13 @@ const runTool = async <Context>({
   }
   if (validateOnly) {
     return toCallResult(
-      success({ result: { valid: true, capability: tool.name } }),
+      success({
+        result: {
+          valid: true,
+          capability: tool.name,
+          validation: "argument_reading",
+        },
+      }),
       read.notes,
     );
   }
@@ -308,6 +314,7 @@ const buildRegistry = <Context>(tools: readonly ToolDefinition<Context>[]) => {
   const byName = new Map<string, ToolDefinition<Context>>();
   const reserved = new Set<string>(Object.values(CAPABILITY_TOOL_NAMES));
   for (const tool of tools) {
+    if (tool.name.length === 0) {panic("Tool names must not be empty.");}
     if (new TextEncoder().encode(tool.name).length > 128) {
       panic("Tool names must fit in 128 UTF-8 bytes.");
     }
@@ -378,7 +385,7 @@ export const createToolSurface = <Context>({
         id: tool.name,
         summary: tool.summary,
         access: tool.access,
-        description: tool.guide ?? null,
+        description: null,
         destructive: destructiveOf(tool),
       })),
       nextCursor:

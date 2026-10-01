@@ -38,7 +38,7 @@ Nested schemas and long guidance stay out of that response. Parameters that exce
 the budget are counted in `omittedParameters`; request
 `{ capability: "items.list", detail: "full" }` for the complete `inputSchema` and
 guidance. The skeleton's empty `input` must be filled using the parameter outline
-or full schema before invoking tools with required arguments. Names must fit in
+or full schema before invoking tools with required arguments. Names must be nonempty and fit in
 128 UTF-8 bytes so compact descriptions remain bounded.
 
 Only tools with a `direct` schema appear individually in `listTools()`; the other
@@ -51,7 +51,8 @@ Argument reading normalizes supported spellings through `@stll/agent-input`,
 rejects missing/unknown parameters, and appends normalization notes to successes.
 `exactProperties` bypasses normalization for explicit switches. Handlers own strict
 schema validation, including exact switches and cross-field constraints;
-`validate_only` checks argument reading without executing the handler.
+`validate_only` checks argument reading without executing the handler and labels
+its result with `validation: "argument_reading"`.
 
 ## What does not
 

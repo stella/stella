@@ -140,6 +140,14 @@ describe("listing", () => {
     ).toThrow("taken");
   });
 
+  test("rejects names that cannot be paginated within the discovery budget", () => {
+    for (const name of ["", "é".repeat(65)]) {
+      expect(() => createToolSurface({ tools: [{ ...STATS, name }] })).toThrow(
+        "Tool names must",
+      );
+    }
+  });
+
   test("compactSchema strips annotations at every depth but keeps property names", () => {
     expect(
       compactSchema({
@@ -245,7 +253,7 @@ describe("capability tools", () => {
         {
           id: "archive_item",
           summary: "Archive an item.",
-          description: ARCHIVE.guide,
+          description: null,
           access: "write",
           destructive: true,
         },
@@ -270,7 +278,7 @@ describe("capability tools", () => {
       {
         id: "archive_item",
         summary: "Archive an item.",
-        description: ARCHIVE.guide,
+        description: null,
         access: "write",
         destructive: true,
       },
@@ -498,7 +506,11 @@ describe("capability tools", () => {
       'Input read: Read "HARD" as "hard".',
     );
     expect(checked.body).toEqual({
-      result: { valid: true, capability: "archive_item" },
+      result: {
+        valid: true,
+        capability: "archive_item",
+        validation: "argument_reading",
+      },
     });
     expect(ran.body).toEqual({
       result: { tool: "archive_item", args: { id: "a", mode: "hard" } },
