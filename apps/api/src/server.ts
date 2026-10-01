@@ -6,8 +6,8 @@ import {
   CHAT_TURN_ID_HEADER,
   STELLA_API_VERSION_PREFIX,
 } from "@stll/api-contract";
-import { redisConnectionConfig } from "@stll/redis-config";
 import { observeRegistryRequests } from "@stll/business-registries/shared/request-observer";
+import { redisConnectionConfig } from "@stll/redis-config";
 
 import { initApiBackgroundWorkers } from "@/api/api-background-workers";
 import { env } from "@/api/env";
