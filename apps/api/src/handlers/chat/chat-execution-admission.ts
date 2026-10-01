@@ -9,6 +9,7 @@ import {
   ActionAdmissionError,
   withActionAdmission,
 } from "@/api/lib/rate-limit/action-admission";
+import type { ActionPeriodIdentity } from "@/api/lib/rate-limit/action-period-budget";
 
 const EXECUTION_ADMISSION_FAILURE = failureSink({
   event: "chat.execution.admission_lost",
@@ -26,7 +27,10 @@ type StartChatExecutionAdmissionOptions = {
   userId: SafeId<"user">;
   enabled?: boolean;
   admit?: typeof withActionAdmission;
-};
+} & (
+  | { mode: "action"; periodIdentity: ActionPeriodIdentity }
+  | { mode: "concurrency-only"; periodIdentity?: never }
+);
 
 // Transport readiness and execution settlement are separate: returning a
 // response cannot release the execution's lease. Continuations acquire anew.
@@ -35,6 +39,8 @@ export const startChatExecutionAdmission = async ({
   userId,
   enabled = env.FEATURE_ACTION_ADMISSION,
   admit = withActionAdmission,
+  mode,
+  periodIdentity,
 }: StartChatExecutionAdmissionOptions): Promise<
   Result<ChatExecutionAdmission | undefined, HandlerError>
 > => {
@@ -52,6 +58,7 @@ export const startChatExecutionAdmission = async ({
     scope: "independent",
     organizationId,
     userId,
+    ...(mode === "action" ? { mode, periodIdentity } : { mode }),
     run: async (signal) => {
       state.status = "executing";
       const loss = () =>

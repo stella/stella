@@ -14,6 +14,53 @@ import { ChatSendLifecycle } from "./send-message";
 import { createLazyExternalMcpToolsLoader } from "./tools/external-mcp-tools";
 
 describe("send lifecycle checkpoint indexing", () => {
+  test("replays retain their thread/run identity while new phases have distinct identities", async () => {
+    const identities: string[] = [];
+    for (const thread of ["thread-a", "thread-b"]) {
+      const db = createScopedDbMock({});
+      const lifecycle = new ChatSendLifecycle({
+        indexThread: async () => undefined,
+        startAdmission: async (options) => {
+          expect(options.mode).toBe("action");
+          if (options.mode === "action") {
+            expect(options.periodIdentity.actionKind).toBe("chat.send");
+            identities.push(options.periodIdentity.logicalPhaseId);
+          }
+          return Result.ok(undefined);
+        },
+        externalMcpToolsLoader: createLazyExternalMcpToolsLoader(async () => {
+          throw new ActionAdmissionError({
+            message: "Connector discovery was not expected",
+            reason: "unavailable",
+          });
+        }),
+        recordAuditEvent: async () => undefined,
+        rollbackSideEffects: async () => Result.ok(undefined),
+        safeDb: db.safeDb,
+        threadId: toSafeId<"chatThread">(thread),
+        userId: toSafeId<"user">("phase_user"),
+        workspaceId: null,
+      });
+      for (const runId of [
+        "initial",
+        "initial",
+        "regeneration",
+        "approved-child",
+      ]) {
+        const outcome = await lifecycle.admitExecution({
+          organizationId: toSafeId<"organization">("phase_org"),
+          checkpoint: undefined,
+          runId,
+        });
+        expect(Result.isOk(outcome)).toBe(true);
+      }
+      await lifecycle.cleanup();
+    }
+    expect(identities.at(0)).toBe(identities.at(1));
+    expect(identities.at(4)).toBe(identities.at(5));
+    expect(new Set(identities).size).toBe(6);
+  });
+
   test("uses the injected indexer when admission loss restores before and after run handoff", async () => {
     for (const phase of ["preflight", "handed-over"] as const) {
       const checkpoint = toPersistableChatMessage({
@@ -68,11 +115,19 @@ describe("send lifecycle checkpoint indexing", () => {
         indexThread: async (indexedThreadId) => {
           indexedThreads.push(indexedThreadId);
         },
-        startAdmission: async () =>
-          Result.ok({
+        startAdmission: async (options) => {
+          expect(options).toMatchObject({
+            mode: "action",
+            periodIdentity: {
+              actionKind: "chat.send",
+              logicalPhaseId: JSON.stringify([threadId, "run_lifecycle"]),
+            },
+          });
+          return Result.ok({
             signal: admission.signal,
             release: async () => undefined,
-          }),
+          });
+        },
         externalMcpToolsLoader: createLazyExternalMcpToolsLoader(async () => {
           throw new ActionAdmissionError({
             message: "Connector discovery was not expected",
@@ -94,6 +149,7 @@ describe("send lifecycle checkpoint indexing", () => {
         checkpoint,
       );
       const acquired = await lifecycle.admitExecution({
+        runId: "run_lifecycle",
         organizationId: toSafeId<"organization">("organization_lifecycle"),
         checkpoint,
       });

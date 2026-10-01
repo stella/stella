@@ -1,6 +1,7 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { startChatExecutionAdmission } from "@/api/handlers/chat/chat-execution-admission";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createRedisClient } from "@/api/lib/redis-client";
 
@@ -40,6 +41,70 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
   });
 } else {
   describe("periodic action admission (valkey)", () => {
+    test("a first-message phase and its detached title consume one period action", async () => {
+      await withStore(async ({ client, organizationId }) => {
+        const firstMessageIdentity = {
+          actionKind: "chat.send",
+          logicalPhaseId: "first-message-phase",
+        };
+        const singleActionPeriod = { periodMs: 86_400_000, limit: 1 };
+        let budgetKey: string | undefined;
+        let acquisitions = 0;
+        const admit: typeof withActionAdmission = async (options) =>
+          await withActionAdmission({
+            ...options,
+            policy,
+            periodPolicy: singleActionPeriod,
+            redis: {
+              send: async (command, args) => {
+                if (args.at(0)?.includes("ZREMRANGEBYSCORE")) {
+                  acquisitions += 1;
+                  budgetKey ??= args.at(4);
+                }
+                return await client.send(command, args);
+              },
+            },
+          });
+        const phase = await startChatExecutionAdmission({
+          organizationId,
+          userId,
+          enabled: true,
+          mode: "action",
+          periodIdentity: firstMessageIdentity,
+          admit,
+        });
+        if (Result.isError(phase) || phase.value === undefined) {
+          panic("Expected chat phase admission");
+        }
+        try {
+          const title = await startChatExecutionAdmission({
+            organizationId,
+            userId,
+            enabled: true,
+            mode: "concurrency-only",
+            admit,
+          });
+          if (Result.isError(title) || title.value === undefined) {
+            panic("Expected detached title admission");
+          }
+          try {
+            expect(acquisitions).toBe(2);
+            expect(phase.value.signal.aborted).toBe(false);
+            expect(title.value.signal.aborted).toBe(false);
+            if (!budgetKey) {
+              panic("Missing period key");
+            }
+            expect(await client.send("HGET", [budgetKey, "count"])).toBe("1");
+            expect(await client.send("HLEN", [budgetKey])).toBe(2);
+          } finally {
+            await title.value.release();
+          }
+        } finally {
+          await phase.value.release();
+        }
+      });
+    });
+
     test("atomically caps concurrent distinct phases and lets replays count once", async () => {
       await withStore(async ({ client, organizationId }) => {
         let ran = 0;
@@ -251,59 +316,67 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
       });
     });
 
-    test("an admitted action continues across its period boundary without recounting", async () => {
+    test("an admitted chat phase continues across its period boundary without recounting", async () => {
       await withStore(async ({ client, organizationId }) => {
         const { promise: renewed, resolve: finishRenewal } =
           Promise.withResolvers<undefined>();
         let trigger: (() => void) | undefined;
         let endMs = 0;
         let budgetKey: string | undefined;
-        const result = await withActionAdmission({
+        const result = await startChatExecutionAdmission({
           organizationId,
           userId,
           enabled: true,
-          policy,
-          periodPolicy: { periodMs: 2000, limit: 1 },
+          mode: "action",
           periodIdentity: {
             actionKind: "chat.improve-prompt",
             logicalPhaseId: "cross-boundary-phase",
           },
-          timing: {
-            now: () => performance.now(),
-            schedule: (callback) => {
-              trigger = callback;
-              return () => {
-                trigger = undefined;
-              };
-            },
-          },
-          redis: {
-            send: async (command, args) => {
-              if (args.at(0)?.includes("ZREMRANGEBYSCORE")) {
-                endMs = Number(args.at(10));
-                budgetKey = args.at(4);
-              }
-              const response = await client.send(command, args);
-              if (args.at(0)?.includes("ZSCORE")) {
-                finishRenewal(undefined);
-              }
-              return response;
-            },
-          },
-          run: async (signal) => {
-            await Bun.sleep(Math.max(0, endMs - Date.now()) + 20);
-            if (!trigger) {
-              throw new Error("Renewal not scheduled");
-            }
-            trigger();
-            await renewed;
-            signal.throwIfAborted();
-            return "completed across rollover";
-          },
+          admit: async (options) =>
+            await withActionAdmission({
+              ...options,
+              policy,
+              periodPolicy: { periodMs: 2000, limit: 1 },
+              timing: {
+                now: () => performance.now(),
+                schedule: (callback) => {
+                  trigger = callback;
+                  return () => {
+                    trigger = undefined;
+                  };
+                },
+              },
+              redis: {
+                send: async (command, args) => {
+                  if (args.at(0)?.includes("ZREMRANGEBYSCORE")) {
+                    endMs = Number(args.at(10));
+                    budgetKey = args.at(4);
+                  }
+                  const response = await client.send(command, args);
+                  if (args.at(0)?.includes("ZSCORE")) {
+                    finishRenewal(undefined);
+                  }
+                  return response;
+                },
+              },
+            }),
         });
-        expect(result).toEqual(Result.ok("completed across rollover"));
+        if (Result.isError(result) || result.value === undefined) {
+          panic("Expected chat phase admission");
+        }
+        try {
+          await Bun.sleep(Math.max(0, endMs - Date.now()) + 20);
+          if (!trigger) {
+            panic("Renewal not scheduled");
+          }
+          trigger();
+          await renewed;
+          expect(result.value.signal.aborted).toBe(false);
+        } finally {
+          await result.value.release();
+        }
         if (!budgetKey) {
-          throw new Error("Missing period key");
+          panic("Missing period key");
         }
         // Expiry is final: renewal must neither extend the TTL nor recreate the hash.
         expect(await client.send("EXISTS", [budgetKey])).toBe(0);

@@ -196,7 +196,6 @@ type ActionAdmissionOptions<T = unknown> = {
   enabled?: boolean;
   scope?: "inherit" | "independent";
   policy?: ActionAdmissionPolicy;
-  periodIdentity?: AdmittedActionIdentity;
   periodPolicy?: ActionPeriodPolicy;
   redis?: RedisCommands;
   redisReady?: () => Promise<RedisCommands>;
@@ -204,6 +203,16 @@ type ActionAdmissionOptions<T = unknown> = {
   timing?: AdmissionTiming;
   costRecorder?: ActionCostRecorder | null;
 };
+
+type ActionAdmissionReservation =
+  | {
+      mode?: "action";
+      periodIdentity?: AdmittedActionIdentity;
+    }
+  | {
+      mode: "concurrency-only";
+      periodIdentity?: never;
+    };
 
 type AdmissionTiming = {
   now: () => number;
@@ -410,6 +419,7 @@ export const withActionAdmission = async <T>({
   enabled = env.FEATURE_ACTION_ADMISSION,
   scope = "inherit",
   policy,
+  mode = "action",
   periodIdentity,
   periodPolicy,
   redis,
@@ -417,7 +427,7 @@ export const withActionAdmission = async <T>({
   createId = () => Bun.randomUUIDv7(),
   timing = defaultTiming,
   costRecorder,
-}: ActionAdmissionOptions<T>): Promise<Result<T, unknown>> => {
+}: ActionAdmissionOptions<T> & ActionAdmissionReservation): Promise<Result<T, unknown>> => {
   const observedRun = createObservedAdmissionRun({
     organizationId,
     userId,
@@ -432,12 +442,15 @@ export const withActionAdmission = async <T>({
     });
   }
 
-  const resolvedBudget = resolveActionPeriodBudget({
-    organizationId,
-    identity: periodIdentity,
-    policy: periodPolicy,
-    nowMs: Temporal.Now.instant().epochMilliseconds,
-  });
+  const resolvedBudget =
+    mode === "concurrency-only"
+      ? Result.ok(null)
+      : resolveActionPeriodBudget({
+          organizationId,
+          identity: periodIdentity,
+          policy: periodPolicy,
+          nowMs: Temporal.Now.instant().epochMilliseconds,
+        });
   if (Result.isError(resolvedBudget)) {
     return Result.err(
       new ActionAdmissionError({

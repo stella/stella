@@ -4,20 +4,28 @@ import { describe, expect, test } from "bun:test";
 import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
+import type { ActionPeriodPolicy } from "@/api/lib/rate-limit/action-period-budget";
 
 import { startChatExecutionAdmission } from "./chat-execution-admission";
 
 const organizationId = toSafeId<"organization">("org_execution");
 const userId = toSafeId<"user">("user_execution");
+const action = {
+  mode: "action",
+  periodIdentity: { actionKind: "chat.send", logicalPhaseId: "thread:run" },
+} as const;
 
 const coordination = ({
   mode = "ready",
   userConcurrency = 1,
+  periodPolicy,
 }: {
   mode?: "ready" | "busy" | "offline";
   userConcurrency?: number;
+  periodPolicy?: ActionPeriodPolicy;
 } = {}) => {
   const active = new Set<string>();
+  const periods = new Map<string, Set<string>>();
   let acquisitions = 0;
   let releases = 0;
   const redis = {
@@ -35,7 +43,24 @@ const coordination = ({
         if (mode === "busy" || active.size >= userConcurrency) {
           return 0;
         }
-        const id = args.at(7);
+        const counted = args.at(1) === "3";
+        if (counted) {
+          const key = args.at(4);
+          const phase = args.at(12);
+          if (key === undefined || phase === undefined) {
+            throw new HandlerError({
+              status: 500,
+              message: "Missing period identity",
+            });
+          }
+          const phases = periods.get(key) ?? new Set<string>();
+          if (!phases.has(phase) && phases.size >= Number(args.at(11))) {
+            return -2;
+          }
+          phases.add(phase);
+          periods.set(key, phases);
+        }
+        const id = args.at(counted ? 8 : 7);
         if (id === undefined) {
           throw new HandlerError({
             status: 500,
@@ -60,11 +85,17 @@ const coordination = ({
     await withActionAdmission({
       ...options,
       policy: { organizationConcurrency: 3, userConcurrency, leaseMs: 120_000 },
+      ...(periodPolicy === undefined ? {} : { periodPolicy }),
       redis,
     });
   return {
     admit,
     counts: () => ({ acquisitions, releases, active: active.size }),
+    periodCount: () =>
+      Array.from(periods.values()).reduce(
+        (count, phases) => count + phases.size,
+        0,
+      ),
   };
 };
 
@@ -85,9 +116,86 @@ const executionOf = async (
 };
 
 describe("chat execution admission owns settlement independently of transport readiness", () => {
+  test("each chat phase counts once across retries and detached titles count no period action", async () => {
+    const store = coordination({
+      periodPolicy: { periodMs: 86_400_000, limit: 3 },
+    });
+    for (const [index, phase] of [
+      "initial",
+      "regeneration",
+      "approved-continuation",
+    ].entries()) {
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const execution = await executionOf(
+          startChatExecutionAdmission({
+            enabled: true,
+            organizationId,
+            userId,
+            mode: "action",
+            periodIdentity: {
+              actionKind: "chat.send",
+              logicalPhaseId: JSON.stringify(["thread", phase]),
+            },
+            admit: store.admit,
+          }),
+        );
+        await execution.release();
+        expect(store.periodCount()).toBe(index + 1);
+      }
+      if (phase === "initial") {
+        const title = await executionOf(
+          startChatExecutionAdmission({
+            enabled: true,
+            organizationId,
+            userId,
+            mode: "concurrency-only",
+            admit: store.admit,
+          }),
+        );
+        expect(store.counts().active).toBe(1);
+        expect(store.periodCount()).toBe(1);
+        await title.release();
+      }
+    }
+    const refused = await startChatExecutionAdmission({
+      ...action,
+      enabled: true,
+      organizationId,
+      userId,
+      admit: store.admit,
+    });
+    expect(Result.isError(refused)).toBe(true);
+    expect(store.periodCount()).toBe(3);
+    expect(store.counts().active).toBe(0);
+  });
+
+  test("concurrency-only titles still refuse busy or unavailable coordination", async () => {
+    for (const mode of ["busy", "offline"] as const) {
+      const store = coordination({
+        mode,
+        periodPolicy: { periodMs: 86_400_000, limit: 1 },
+      });
+      const acquired = await startChatExecutionAdmission({
+        enabled: true,
+        organizationId,
+        userId,
+        mode: "concurrency-only",
+        admit: store.admit,
+      });
+      expect(Result.isError(acquired)).toBe(true);
+      if (Result.isError(acquired)) {
+        expect(acquired.error.status).toBe(mode === "busy" ? 429 : 503);
+      }
+      expect(store.counts().acquisitions).toBe(1);
+      expect(store.counts().active).toBe(0);
+      expect(store.periodCount()).toBe(0);
+    }
+  });
+
   test("a ready transport keeps its slot until close and repeated close releases only once", async () => {
     const store = coordination();
     const options = {
+      ...action,
       enabled: true,
       organizationId,
       userId,
@@ -107,6 +215,7 @@ describe("chat execution admission owns settlement independently of transport re
   test("disabled execution admission never calls coordination or resolves its configuration", async () => {
     let calls = 0;
     const acquired = await startChatExecutionAdmission({
+      ...action,
       enabled: false,
       organizationId,
       userId,
@@ -126,6 +235,7 @@ describe("chat execution admission owns settlement independently of transport re
     test(`${mode} coordination returns a typed refusal without an execution handle`, async () => {
       const store = coordination({ mode });
       const acquired = await startChatExecutionAdmission({
+        ...action,
         enabled: true,
         organizationId,
         userId,
@@ -155,6 +265,7 @@ describe("chat execution admission owns settlement independently of transport re
       run: async (parentSignal) => {
         const execution = await executionOf(
           startChatExecutionAdmission({
+            ...action,
             enabled: true,
             organizationId,
             userId,
@@ -183,6 +294,7 @@ describe("chat execution admission owns settlement independently of transport re
   test("successive continuation attempts acquire fresh slots after prior settlement", async () => {
     const store = coordination();
     const options = {
+      ...action,
       enabled: true,
       organizationId,
       userId,

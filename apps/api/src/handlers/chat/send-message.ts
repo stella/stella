@@ -478,6 +478,8 @@ const CHECKPOINT_RESTORATION_FAILED = failureSink({
   expected: [],
 });
 
+const CHAT_SEND_ACTION_KIND = "chat.send";
+
 /**
  * Owns every resource that must be settled when a send stops before its run
  * starts. Starting the run hands the claimed turn over for good.
@@ -536,15 +538,22 @@ export class ChatSendLifecycle {
   async admitExecution({
     organizationId,
     checkpoint,
+    runId,
   }: {
     organizationId: SafeId<"organization">;
     checkpoint: PersistableChatMessage | undefined;
+    runId: string;
   }): Promise<Result<void, HandlerError>> {
     const acquired = await (
       this.options.startAdmission ?? startChatExecutionAdmission
     )({
       organizationId,
       userId: this.options.userId,
+      mode: "action",
+      periodIdentity: {
+        actionKind: CHAT_SEND_ACTION_KIND,
+        logicalPhaseId: JSON.stringify([this.options.threadId, runId]),
+      },
     });
     if (Result.isError(acquired)) {
       return acquired;
@@ -2144,6 +2153,7 @@ export const createSendMessage = (
         yield* Result.await(
           lifecycle.admitExecution({
             organizationId: session.activeOrganizationId,
+            runId: body.runId,
             checkpoint:
               body.message.role === "assistant" &&
               validationThreadState.persistedMessage !== null
