@@ -55,7 +55,9 @@ test("only a refused AI export offers an explicit fallback preserving request fi
                     status: refusal.status,
                     value: { code, message: "Hidden details" },
                   })}
-                  onSubmit={(value) => submitted.push(value)}
+                  onSubmit={(value) => {
+                    submitted.push(value);
+                  }}
                 />
               </IntlProvider>,
             );
