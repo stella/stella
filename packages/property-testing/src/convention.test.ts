@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import ts from "typescript";
+
+import { planApiTestBatches } from "../../../apps/api/scripts/api-test-plan";
 
 // Repo root, four levels up from this file (packages/property-testing/src).
 const REPO_ROOT = path.resolve(import.meta.dir, "../../..");
@@ -320,6 +324,87 @@ describe("property-test convention", () => {
     );
 
     expect(violations).toEqual([]);
+  });
+
+  test("every workspace property selector includes both assertion APIs", async () => {
+    const fixtureRoot = mkdtempSync(path.join(tmpdir(), "property-selectors-"));
+    const legacyPath = "src/legacy.test.ts";
+    const sharedPath = "src/shared.test.ts";
+    const expectedPaths = [legacyPath, sharedPath];
+    try {
+      mkdirSync(path.join(fixtureRoot, "src"));
+      await Promise.all([
+        Bun.write(path.join(fixtureRoot, legacyPath), "fc.assert(property);"),
+        Bun.write(
+          path.join(fixtureRoot, sharedPath),
+          'assertProperty("shared", property);',
+        ),
+        Bun.write(
+          path.join(fixtureRoot, "src/ordinary.test.ts"),
+          'test("ordinary", () => {});',
+        ),
+      ]);
+      const violations: string[] = [];
+      for (const [
+        workspace,
+        command,
+      ] of await collectPropertyScriptCommands()) {
+        if (workspace === "apps/api") {
+          if (
+            !/^bun scripts\/run-tests\.ts\s+--property(?:\s|$)/u.test(command)
+          ) {
+            violations.push(
+              `${workspace}: test:property does not use the property selector`,
+            );
+            continue;
+          }
+          const batches = await planApiTestBatches({
+            apiRoot: fixtureRoot,
+            propertyOnly: true,
+            testPaths: [...expectedPaths, "src/ordinary.test.ts"],
+          });
+          const selected = batches
+            .flatMap(({ testBatches }) => testBatches.flat())
+            .toSorted();
+          if (JSON.stringify(selected) !== JSON.stringify(expectedPaths)) {
+            violations.push(
+              `${workspace}: selected ${JSON.stringify(selected)}`,
+            );
+          }
+          continue;
+        }
+        // Exercise the manifest's selector without starting the test runner.
+        const selector = /\$\((grep\s[^)]+)\)/u.exec(command)?.at(1);
+        if (selector === undefined) {
+          violations.push(
+            `${workspace}: test:property has no recognized property selector`,
+          );
+          continue;
+        }
+        const selectionProcess = Bun.spawn(["sh", "-c", selector], {
+          cwd: fixtureRoot,
+          stdout: "pipe",
+          stderr: "pipe",
+        });
+        const [output, error, exitCode] = await Promise.all([
+          new Response(selectionProcess.stdout).text(),
+          new Response(selectionProcess.stderr).text(),
+          selectionProcess.exited,
+        ]);
+        const selected = output.trim().split("\n").filter(Boolean).toSorted();
+        if (
+          exitCode !== 0 ||
+          JSON.stringify(selected) !== JSON.stringify(expectedPaths)
+        ) {
+          violations.push(
+            `${workspace}: selected ${JSON.stringify(selected)} (exit ${exitCode}, ${error.trim()})`,
+          );
+        }
+      }
+      expect(violations).toEqual([]);
+    } finally {
+      rmSync(fixtureRoot, { recursive: true, force: true });
+    }
   });
 
   /**

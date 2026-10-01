@@ -252,7 +252,9 @@ export const runProperty = <Ts>({
     );
     const factorEnv =
       factor === 1 ? "" : ` PROPERTY_TEST_NUM_RUNS_FACTOR=${factor}`;
-    const replay = `PROPERTY_TEST_SEED=${details.seed} PROPERTY_TEST_PATH=${shellQuote(details.counterexamplePath ?? "")}${factorEnv} bun test ${shellQuote(file)} -t ${shellQuote(regexEscape(id))}`;
+    const workspace = file.split("/").slice(0, 2).join("/");
+    const testFile = `./${path.posix.relative(workspace, file)}`;
+    const replay = `PROPERTY_TEST_SEED=${details.seed} PROPERTY_TEST_PATH=${shellQuote(details.counterexamplePath ?? "")}${factorEnv} bun run --cwd ${shellQuote(workspace)} test --preload @stll/property-testing/preload ${shellQuote(testFile)} -t ${shellQuote(regexEscape(id))}`;
     const error =
       details.errorInstance instanceof Error
         ? details.errorInstance.message

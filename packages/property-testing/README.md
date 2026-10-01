@@ -58,7 +58,7 @@ Failures throw fast-check's report followed by a shell-quoted `Replay:` command
 (run it from the repository root) and a `Pin:` JSON hint (fill its date after the fix merges). For example:
 
 ```sh
-PROPERTY_TEST_SEED=1234 PROPERTY_TEST_PATH='0:1' bun test packages/example/src/normalize.property.test.ts -t 'normalization is idempotent'
+PROPERTY_TEST_SEED=1234 PROPERTY_TEST_PATH='0:1' bun run --cwd 'packages/example' test --preload @stll/property-testing/preload './src/normalize.property.test.ts' -t 'normalization is idempotent'
 ```
 
 `PROPERTY_TEST_PATH` applies only when the selected seed equals the explicitly

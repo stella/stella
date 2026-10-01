@@ -86,8 +86,28 @@ test("a failing pin stops generation and carries a reproducible report", () => {
       params: { numRuns: 1, examples: [[99]] },
       pinned: [PIN],
     }),
-  ).toThrow(/Replay: PROPERTY_TEST_SEED=123 PROPERTY_TEST_PATH='0' bun test/u);
+  ).toThrow(
+    /Replay: PROPERTY_TEST_SEED=123 PROPERTY_TEST_PATH='0' bun run --cwd/u,
+  );
   expect(calls).toBe(1);
+});
+
+test("replay commands retain the owning runner and property preload", () => {
+  neutralEnv();
+  process.env["PROPERTY_TEST_NUM_RUNS_FACTOR"] = "10";
+  for (const workspace of ["apps/api", "packages/conditions"]) {
+    expect(() =>
+      runProperty({
+        file: `${workspace}/src/example.property.test.ts`,
+        id: "replay [id]",
+        property: fc.property(fc.constant(1), () => false),
+        params: { numRuns: 1 },
+        pinned: [PIN],
+      }),
+    ).toThrow(
+      `Replay: PROPERTY_TEST_SEED=123 PROPERTY_TEST_PATH='0' PROPERTY_TEST_NUM_RUNS_FACTOR=10 bun run --cwd '${workspace}' test --preload @stll/property-testing/preload './src/example.property.test.ts' -t 'replay \\[id\\]'`,
+    );
+  }
 });
 
 test("honors an environment replay path only for its matching explicit seed", () => {
@@ -149,7 +169,7 @@ test("emits one CI marker per failure and omits redacted counterexamples", () =>
         id: "marker",
         factor: 1.1,
         fingerprint: expect.stringMatching(/^[a-f\d]{16}$/u),
-        replay: expect.stringContaining("bun test"),
+        replay: expect.stringContaining("bun run --cwd"),
       });
       expect(line.includes('"counterexample"')).toBe(!redacted);
     }
@@ -231,6 +251,7 @@ test("nightly time limits cannot truncate pinned replays", async () => {
   neutralEnv();
   process.env["PROPERTY_TEST_NUM_RUNS_FACTOR"] = "10";
   process.env["PROPERTY_TEST_TIME_LIMIT_MS"] = "1";
+  process.env["PROPERTY_TEST_SEED"] = "456";
   let calls = 0;
   const property = fc.asyncProperty(fc.constant(1), async () => {
     calls++;
@@ -239,13 +260,16 @@ test("nightly time limits cannot truncate pinned replays", async () => {
     });
     return true;
   });
-  await runProperty({
-    file: FILE,
-    id: "untruncated pins",
-    property,
-    params: { numRuns: 1 },
-    pinned: [PIN],
-  });
+  // The generated run interrupts before its first result; the pin must finish first.
+  await expect(
+    runProperty({
+      file: FILE,
+      id: "untruncated pins",
+      property,
+      params: { numRuns: 1 },
+      pinned: [PIN],
+    }),
+  ).rejects.toThrow("Replay: PROPERTY_TEST_SEED=456");
   expect(calls).toBeGreaterThanOrEqual(10);
-  expect(calls).toBeLessThan(20);
+  expect(calls).toBeLessThan(12);
 });
