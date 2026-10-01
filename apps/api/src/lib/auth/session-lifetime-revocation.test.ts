@@ -1,7 +1,7 @@
 import { runWithTransaction } from "@better-auth/core/context";
-import { memoryAdapter } from "@better-auth/memory-adapter";
 import { betterAuth } from "better-auth";
 import type { Session } from "better-auth";
+import { memoryAdapter } from "better-auth/adapters/memory";
 import { createAuthEndpoint, sessionMiddleware } from "better-auth/api";
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";

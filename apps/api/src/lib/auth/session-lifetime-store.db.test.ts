@@ -352,13 +352,15 @@ describe("session refresh credentials", () => {
   test("serialized refresh requests converge without changing the session identity or age", async () => {
     const fixture = await insertSession();
     const refreshed = await Promise.all(
-      Array.from({ length: 8 }, () =>
-        store.refresh({
-          credentialMode: "cookie",
-          token: fixture.token,
-          now: NOW,
-          expiresAt: REFRESH_EXPIRES_AT,
-        }),
+      Array.from(
+        { length: 8 },
+        async () =>
+          await store.refresh({
+            credentialMode: "cookie",
+            token: fixture.token,
+            now: NOW,
+            expiresAt: REFRESH_EXPIRES_AT,
+          }),
       ),
     );
     const current = refreshed.at(0);

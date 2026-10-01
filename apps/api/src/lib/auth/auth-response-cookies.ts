@@ -12,7 +12,7 @@ export const createAuthResponseCookiesPlugin = () =>
         set.headers instanceof Headers
           ? set.headers.getSetCookie()
           : set.headers["set-cookie"];
-      if (!pending || pending.length === 0) {
+      if (pending === undefined || pending.length === 0) {
         return undefined;
       }
       const cookies = Array.isArray(pending) ? pending : [pending];

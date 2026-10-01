@@ -1,6 +1,6 @@
-import { memoryAdapter } from "@better-auth/memory-adapter";
 import { betterAuth } from "better-auth";
 import type { Session } from "better-auth";
+import { memoryAdapter } from "better-auth/adapters/memory";
 import { createAuthMiddleware } from "better-auth/api";
 import { getSessionCookie } from "better-auth/cookies";
 import { panic } from "better-result";
@@ -63,9 +63,9 @@ describe("session cookie forwarding", () => {
           session: { expiresIn: 30 * 24 * 60 * 60, updateAge: 24 * 60 * 60 },
           plugins: [createSessionBearer(), lifetime.plugin],
           hooks: {
-            before: createAuthMiddleware((ctx) => {
+            before: createAuthMiddleware(async (ctx) => {
               lifetime.prepare(ctx.context.internalAdapter);
-              return Promise.resolve();
+              await Promise.resolve();
             }),
           },
         });

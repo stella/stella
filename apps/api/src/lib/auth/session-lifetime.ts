@@ -87,7 +87,7 @@ export const createSessionLifetime = ({
     Map<string, Promise<Session | null>>
   >();
   const observe = async (token: string) => {
-    const ctx = await tryGetCurrentAuthEndpointContext();
+    const ctx = tryGetCurrentAuthEndpointContext();
     let memo = ctx ? observations.get(ctx) : undefined;
     const existing = memo?.get(token);
     if (existing) {
@@ -102,7 +102,7 @@ export const createSessionLifetime = ({
       now: now(),
       boundary:
         ctx?.path === "/get-session" &&
-        ctx.headers?.get(AUTH_SESSION_STARTUP_HEADER) === "1"
+        ctx.getHeader?.(AUTH_SESSION_STARTUP_HEADER) === "1"
           ? "startup"
           : "activity",
     });
@@ -110,8 +110,8 @@ export const createSessionLifetime = ({
     return await result;
   };
 
-  const forgetObservations = async () => {
-    const ctx = await tryGetCurrentAuthEndpointContext();
+  const forgetObservations = () => {
+    const ctx = tryGetCurrentAuthEndpointContext();
     if (ctx) {
       observations.delete(ctx);
     }
@@ -136,12 +136,12 @@ export const createSessionLifetime = ({
       }
       let resolved = await findSession(current.token);
       if (!resolved) {
-        await forgetObservations();
+        forgetObservations();
         current = await observe(token);
         resolved = current ? await findSession(current.token) : null;
       }
       if (resolved && resolved.session.token !== token) {
-        const ctx = await tryGetCurrentAuthEndpointContext();
+        const ctx = tryGetCurrentAuthEndpointContext();
         if (!ctx?.getSignedCookie || !ctx.setSignedCookie) {
           return resolved;
         }
@@ -160,7 +160,7 @@ export const createSessionLifetime = ({
             ctx.context.secret,
             {
               ...ctx.context.authCookies.sessionToken.attributes,
-              ...(dontRemember
+              ...(typeof dontRemember === "string" && dontRemember.length > 0
                 ? {}
                 : {
                     maxAge: Math.max(
@@ -180,15 +180,14 @@ export const createSessionLifetime = ({
     };
     adapter.updateSession = async (token, data) => {
       if (data.expiresAt) {
-        await forgetObservations();
-        const ctx = await tryGetCurrentAuthEndpointContext();
-        const authorization = ctx?.headers?.get("authorization");
+        forgetObservations();
+        const ctx = tryGetCurrentAuthEndpointContext();
+        const authorization = ctx?.getHeader?.("authorization") ?? "";
         const refreshed = await store.refresh({
           token,
-          credentialMode:
-            authorization && /^bearer\s/iu.test(authorization)
-              ? "bearer"
-              : "cookie",
+          credentialMode: /^bearer\s/iu.test(authorization)
+            ? "bearer"
+            : "cookie",
           expiresAt: data.expiresAt,
           now: now(),
         });
@@ -211,13 +210,13 @@ export const createSessionLifetime = ({
       if (updated) {
         return updated;
       }
-      const ctx = await tryGetCurrentAuthEndpointContext();
+      const ctx = tryGetCurrentAuthEndpointContext();
       if (!ctx) {
         const current = await observe(token);
         return current ? await updateSession(current.token, data) : null;
       }
       const transactionAdapter = await getCurrentAdapter(ctx.context.adapter);
-      const current = await transactionAdapter.findOne({
+      const current: unknown = await transactionAdapter.findOne({
         model: "session",
         where: [
           { field: "priorTokenHash", value: hashSessionToken(token) },
@@ -226,7 +225,7 @@ export const createSessionLifetime = ({
         ],
         select: ["token"],
       });
-      if (!current) {
+      if (current === null) {
         return null;
       }
       const canonical = v.parse(v.object({ token: v.string() }), current);
@@ -235,11 +234,11 @@ export const createSessionLifetime = ({
     adapter.deleteSession = async (token) => {
       const current = await observe(token);
       await deleteSession(current?.token ?? token);
-      await forgetObservations();
+      forgetObservations();
       const remaining = await observe(token);
       if (remaining) {
         await deleteSession(remaining.token);
-        await forgetObservations();
+        forgetObservations();
       }
     };
   };
@@ -262,7 +261,7 @@ export const createSessionLifetime = ({
             sessionId: ctx.body.sessionId,
             userId: brandPersistedUserId(ctx.context.session.user.id),
           });
-          await forgetObservations();
+          forgetObservations();
           return ctx.json({ status: true });
         },
       ),
@@ -271,10 +270,10 @@ export const createSessionLifetime = ({
       before: [
         {
           matcher: () => true,
-          handler: createAuthMiddleware((ctx) => {
+          handler: createAuthMiddleware(async (ctx) => {
             // Plugin initialization rebuilds the adapter; decorate its final instance.
             decorate(ctx.context.internalAdapter);
-            return Promise.resolve();
+            await Promise.resolve();
           }),
         },
       ],
