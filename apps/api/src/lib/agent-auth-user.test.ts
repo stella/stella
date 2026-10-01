@@ -14,7 +14,13 @@ describe("agent identity user creation", () => {
         baseURL: "http://localhost:3001",
         secret: "test-secret-that-is-long-enough-for-better-auth",
         database: memoryAdapter(database),
-        user: { validateUserInfo: createSocialIdentityValidation(undefined) },
+        user: {
+          validateUserInfo: createSocialIdentityValidation({
+            tenantId: undefined,
+            requireMicrosoftVerifiedEmailClaim: false,
+            warn: () => {},
+          }),
+        },
       });
       const created = createAgentUser({
         context: await auth.$context,

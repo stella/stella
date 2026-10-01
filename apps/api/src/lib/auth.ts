@@ -78,6 +78,7 @@ import { getDemoAccountOtpOverride } from "@/api/lib/demo-account-otp";
 import {
   createDemoAuthSessionGuard,
   createDemoSessionFilter,
+  warnDemoAccountConfiguration,
 } from "@/api/lib/demo-account-policy";
 import { detectedCountryFromRequestContext } from "@/api/lib/detected-country";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
@@ -866,9 +867,10 @@ const oauthUiFragmentBridgePlugin = {
 const createAuth = () => {
   const demoConfig = getDemoAccountConfig();
   const demoSessionGuard = createDemoAuthSessionGuard(demoConfig);
-  const configuredDemoMode = demoConfig.organizationId
-    ? "bound"
-    : "unavailable";
+  warnDemoAccountConfiguration(demoConfig, (attributes) =>
+    logger.warn("auth.account_binding_unset", attributes),
+  );
+  const configuredDemoMode = demoConfig.organizationId ? "bound" : "unbound";
   logger.info("auth.account_policy", {
     mode: demoConfig.email ? configuredDemoMode : "disabled",
   });
@@ -965,9 +967,13 @@ const createAuth = () => {
     ],
     user: {
       additionalFields: AUTH_USER_ADDITIONAL_FIELDS,
-      validateUserInfo: createSocialIdentityValidation(
-        env.MICROSOFT_AUTH_TENANT_ID,
-      ),
+      validateUserInfo: createSocialIdentityValidation({
+        tenantId: env.MICROSOFT_AUTH_TENANT_ID,
+        requireMicrosoftVerifiedEmailClaim:
+          env.MICROSOFT_REQUIRE_VERIFIED_EMAIL_CLAIM,
+        warn: (attributes) =>
+          logger.warn("auth.provider_claims_unavailable", attributes),
+      }),
     },
     account: { accountLinking: SOCIAL_ACCOUNT_LINKING_OPTIONS },
     session: {
@@ -1116,13 +1122,15 @@ const createAuth = () => {
               clientId: env.MICROSOFT_AUTH_CLIENT_ID,
               clientSecret: env.MICROSOFT_AUTH_CLIENT_SECRET,
               tenantId: env.MICROSOFT_AUTH_TENANT_ID,
-              mapProfileToUser: (profile) => ({
-                emailVerified: isVerifiedMicrosoftIdentity({
-                  profile,
-                  email: profile.email,
-                  tenantId: env.MICROSOFT_AUTH_TENANT_ID,
-                }),
-              }),
+              mapProfileToUser: env.MICROSOFT_REQUIRE_VERIFIED_EMAIL_CLAIM
+                ? (profile) => ({
+                    emailVerified: isVerifiedMicrosoftIdentity({
+                      profile,
+                      email: profile.email,
+                      tenantId: env.MICROSOFT_AUTH_TENANT_ID,
+                    }),
+                  })
+                : undefined,
             },
           }
         : {}),

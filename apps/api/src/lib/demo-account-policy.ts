@@ -20,6 +20,20 @@ type DemoAccountConfig = {
   organizationId: string | undefined;
 };
 
+type DemoAccountConfigurationWarning = {
+  mode: "unbound";
+  missingConfig: "DEMO_ACCOUNT_ORGANIZATION_ID";
+};
+
+export const warnDemoAccountConfiguration = (
+  config: DemoAccountConfig,
+  warn: (attributes: DemoAccountConfigurationWarning) => void,
+) => {
+  if (config.email && !config.organizationId) {
+    warn({ mode: "unbound", missingConfig: "DEMO_ACCOUNT_ORGANIZATION_ID" });
+  }
+};
+
 const isDemoAccount = ({
   email,
   config,
@@ -44,6 +58,9 @@ export const checkDemoAccountAccess = ({
   organizationId,
 }: DemoAccountAccessOptions) => {
   if (!isDemoAccount({ email, config })) {
+    return Result.ok();
+  }
+  if (!config.organizationId && operation !== "growth") {
     return Result.ok();
   }
   if (config.organizationId && operation === "sign-in") {
@@ -136,7 +153,7 @@ type DemoSessionPolicyOptions = {
 export const createDemoSessionPolicy =
   ({ config, resolveUser, hasMembership }: DemoSessionPolicyOptions) =>
   async <T extends { userId: string }>(session: T) => {
-    if (!config.email) {
+    if (!config.email || !config.organizationId) {
       return;
     }
     const userId = brandPersistedUserId(session.userId);
@@ -148,20 +165,8 @@ export const createDemoSessionPolicy =
     if (!isDemoAccount({ email, config })) {
       return;
     }
-    const access = checkDemoAccountAccess({
-      email,
-      config,
-      operation: "sign-in",
-    });
-    if (Result.isError(access)) {
-      throw new APIError("FORBIDDEN", {
-        code: access.error.code,
-        message: access.error.message,
-      });
-    }
     const organizationId = config.organizationId;
     if (
-      !organizationId ||
       !(await hasMembership({
         userId,
         organizationId: brandPersistedOrganizationId(organizationId),

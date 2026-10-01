@@ -3,6 +3,12 @@ import { betterAuth } from "better-auth";
 import { describe, expect, test } from "bun:test";
 
 import {
+  logger,
+  resetLogSinkForTesting,
+  setLogSinkForTesting,
+} from "@/api/lib/observability/logger";
+import type { LogRecord } from "@/api/lib/observability/logger";
+import {
   createSocialIdentityValidation,
   isVerifiedMicrosoftIdentity,
   SOCIAL_ACCOUNT_LINKING_OPTIONS,
@@ -111,6 +117,143 @@ describe("social identity policy", () => {
     }
   });
 
+  test.each([false, true])(
+    "applies Microsoft claim mode: %s",
+    async (required) => {
+      for (const verified of [false, true]) {
+        const warnings: LogRecord[] = [];
+        setLogSinkForTesting((record) => warnings.push(record));
+        try {
+          const auth = betterAuth({
+            baseURL: "http://localhost:3001",
+            secret: "test-secret-that-is-long-enough-for-better-auth",
+            database: memoryAdapter({
+              user: [],
+              session: [],
+              account: [],
+              verification: [],
+            }),
+            user: {
+              validateUserInfo: createSocialIdentityValidation({
+                tenantId: "common",
+                requireMicrosoftVerifiedEmailClaim: required,
+                warn: (attributes) =>
+                  logger.warn("auth.provider_claims_unavailable", attributes),
+              }),
+            },
+            account: { accountLinking: SOCIAL_ACCOUNT_LINKING_OPTIONS },
+            socialProviders: {
+              microsoft: {
+                clientId: "test-client",
+                clientSecret: "test-secret",
+                tenantId: "common",
+                verifyIdToken: async () => true,
+                getUserInfo: async () => ({
+                  user: {
+                    id: "provider-account",
+                    name: "Account",
+                    email,
+                    emailVerified: verified,
+                  },
+                  data: { ...profile, ...(verified ? { xms_edov: true } : {}) },
+                }),
+              },
+            },
+          });
+          const response = await auth.api.signInSocial({
+            body: {
+              provider: "microsoft",
+              idToken: { token: "test-credential" },
+            },
+            asResponse: true,
+          });
+          expect(response.ok).toBe(!required || verified);
+          if (!required && !verified) {
+            expect(warnings.length).toBeGreaterThan(0);
+            for (const warning of warnings) {
+              expect(warning).toEqual({
+                severityText: "WARN",
+                message: "auth.provider_claims_unavailable",
+                attributes: {
+                  provider: "microsoft",
+                  tenantMode: "common",
+                  missingClaims:
+                    "xms_edov,email_verified,verified_primary_email,verified_secondary_email",
+                },
+              });
+            }
+          } else {
+            expect(warnings).toEqual([]);
+          }
+        } finally {
+          resetLogSinkForTesting();
+        }
+      }
+    },
+  );
+
+  test.each([false, true])(
+    "retains Microsoft tenant validation in claim mode: %s",
+    async (required) => {
+      for (const configured of [
+        "common",
+        "organizations",
+        "consumers",
+        tenantId,
+      ]) {
+        for (const identity of [
+          { ...profile, xms_edov: true, iss: undefined },
+          { ...profile, xms_edov: true, tid: undefined },
+        ]) {
+          const warnings: unknown[] = [];
+          const auth = betterAuth({
+            baseURL: "http://localhost:3001",
+            secret: "test-secret-that-is-long-enough-for-better-auth",
+            database: memoryAdapter({
+              user: [],
+              session: [],
+              account: [],
+              verification: [],
+            }),
+            user: {
+              validateUserInfo: createSocialIdentityValidation({
+                tenantId: configured,
+                requireMicrosoftVerifiedEmailClaim: required,
+                warn: (attributes) => warnings.push(attributes),
+              }),
+            },
+            socialProviders: {
+              microsoft: {
+                clientId: "test-client",
+                clientSecret: "test-secret",
+                tenantId: configured,
+                verifyIdToken: async () => true,
+                getUserInfo: async () => ({
+                  user: {
+                    id: "provider-account",
+                    name: "Account",
+                    email,
+                    emailVerified: true,
+                  },
+                  data: identity,
+                }),
+              },
+            },
+          });
+          const response = await auth.api.signInSocial({
+            body: {
+              provider: "microsoft",
+              idToken: { token: "test-credential" },
+            },
+            asResponse: true,
+          });
+          expect(response.status).toBe(403);
+          expect(warnings).toEqual([]);
+        }
+      }
+    },
+  );
+
   test.each([
     { existing: false, localEmailVerified: false },
     { existing: true, localEmailVerified: false },
@@ -129,7 +272,13 @@ describe("social identity policy", () => {
             verification: [],
           }),
           emailAndPassword: { enabled: true },
-          user: { validateUserInfo: createSocialIdentityValidation(tenantId) },
+          user: {
+            validateUserInfo: createSocialIdentityValidation({
+              tenantId,
+              requireMicrosoftVerifiedEmailClaim: false,
+              warn: () => {},
+            }),
+          },
           account: { accountLinking: SOCIAL_ACCOUNT_LINKING_OPTIONS },
           socialProviders: {
             google: {

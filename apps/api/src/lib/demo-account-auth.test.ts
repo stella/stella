@@ -81,7 +81,9 @@ describe("account authentication operations", () => {
           binding,
           activeOrganizationId: "org_other",
         });
-        expect(await auth.api.getSession({ headers })).toBeNull();
+        expect((await auth.api.getSession({ headers })) !== null).toBe(
+          binding === undefined,
+        );
         const context = await auth.$context;
         const sessions = await context.internalAdapter.listSessions(userId);
         const session = sessions.at(0);
@@ -118,40 +120,42 @@ describe("account authentication operations", () => {
   test.each([email, "standard@example.test"])(
     "checks eligibility before two-factor changes: %s",
     async (accountEmail) => {
-      for (const path of [
-        "/two-factor/enable",
-        "/two-factor/disable",
-        "/two-factor/get-totp-uri",
-        "/two-factor/verify-totp",
-      ]) {
-        const { auth, headers } = await createAccount({
-          accountEmail,
-          binding: organizationId,
-          activeOrganizationId: organizationId,
-        });
-        const response = await auth.handler(
-          new Request(`http://localhost:3001/api/auth${path}`, {
-            method: "POST",
-            headers: {
-              ...headers,
-              "content-type": "application/json",
-              origin: "http://localhost:3001",
-            },
-            body: JSON.stringify({
-              password: "A secure password 123!",
-              code: "123456",
+      for (const binding of [undefined, organizationId]) {
+        for (const path of [
+          "/two-factor/enable",
+          "/two-factor/disable",
+          "/two-factor/get-totp-uri",
+          "/two-factor/verify-totp",
+        ]) {
+          const { auth, headers } = await createAccount({
+            accountEmail,
+            binding,
+            activeOrganizationId: organizationId,
+          });
+          const response = await auth.handler(
+            new Request(`http://localhost:3001/api/auth${path}`, {
+              method: "POST",
+              headers: {
+                ...headers,
+                "content-type": "application/json",
+                origin: "http://localhost:3001",
+              },
+              body: JSON.stringify({
+                password: "A secure password 123!",
+                code: "123456",
+              }),
             }),
-          }),
-        );
-        if (accountEmail === email) {
-          expect(response.status).toBe(403);
-          expect(await response.json()).toMatchObject({
-            code: "account_access_unavailable",
-          });
-        } else {
-          expect(await response.json()).not.toMatchObject({
-            code: "account_access_unavailable",
-          });
+          );
+          if (accountEmail === email) {
+            expect(response.status).toBe(403);
+            expect(await response.json()).toMatchObject({
+              code: "account_access_unavailable",
+            });
+          } else {
+            expect(await response.json()).not.toMatchObject({
+              code: "account_access_unavailable",
+            });
+          }
         }
       }
     },

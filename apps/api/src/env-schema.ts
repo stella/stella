@@ -325,6 +325,7 @@ export const envApiServerSchema = {
   MICROSOFT_AUTH_CLIENT_ID: v.optional(v.string()),
   MICROSOFT_AUTH_CLIENT_SECRET: v.optional(v.string()),
   MICROSOFT_AUTH_TENANT_ID: v.optional(v.string()),
+  MICROSOFT_REQUIRE_VERIFIED_EMAIL_CLAIM: featureFlagSchema,
 
   // Launch feature flags. Keep default-off; deployment must opt in.
   FEATURE_CHAT: featureFlagSchema,

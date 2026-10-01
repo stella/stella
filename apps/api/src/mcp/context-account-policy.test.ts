@@ -59,39 +59,41 @@ describe("MCP account authorization", () => {
           expect(authenticated.value.credential?.type).toBe(
             credentialCase.type,
           );
-          let membershipReads = 0;
-          let accountChecks = 0;
-          const context = resolveMcpSessionContext(authenticated.value, {
-            request: new Request("https://example.test/mcp"),
-            resolveAuthorization: async (identity) => {
-              membershipReads += 1;
-              expect(identity.userId).toBe("user_one");
-              expect(identity.organizationId).toBe(organizationId);
-              return {
-                memberId: "member_one",
-                email: "limited@example.test",
-                role: "owner",
-                workspace: null,
-              };
-            },
-            checkAccountOperation: (email) => {
-              accountChecks += 1;
-              expect(email).toBe("limited@example.test");
-              return checkDemoAccountAccess({
-                email,
-                config: {
+          for (const binding of [undefined, "org_one"]) {
+            let membershipReads = 0;
+            let accountChecks = 0;
+            const context = resolveMcpSessionContext(authenticated.value, {
+              request: new Request("https://example.test/mcp"),
+              resolveAuthorization: async (identity) => {
+                membershipReads += 1;
+                expect(identity.userId).toBe("user_one");
+                expect(identity.organizationId).toBe(organizationId);
+                return {
+                  memberId: "member_one",
                   email: "limited@example.test",
-                  organizationId: "org_one",
-                },
-                operation: "growth",
-              });
-            },
-          });
-          await expect(context).rejects.toBeInstanceOf(
-            McpOrganizationAccessError,
-          );
-          expect(membershipReads).toBe(1);
-          expect(accountChecks).toBe(1);
+                  role: "owner",
+                  workspace: null,
+                };
+              },
+              checkAccountOperation: (email) => {
+                accountChecks += 1;
+                expect(email).toBe("limited@example.test");
+                return checkDemoAccountAccess({
+                  email,
+                  config: {
+                    email: "limited@example.test",
+                    organizationId: binding,
+                  },
+                  operation: "growth",
+                });
+              },
+            });
+            await expect(context).rejects.toBeInstanceOf(
+              McpOrganizationAccessError,
+            );
+            expect(membershipReads).toBe(1);
+            expect(accountChecks).toBe(1);
+          }
         }
       }
     }
