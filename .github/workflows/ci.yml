@@ -3628,10 +3628,14 @@ jobs:
       # A skipped plan passes only while the pull request is still a draft.
       pull-requests: read
     steps:
+      - name: Capture workflow cancellation
+        if: cancelled()
+        run: echo "RUN_CANCELLED=true" >> "$GITHUB_ENV"
+
       - name: Evaluate CI outcome
         env:
           EVENT: ${{ github.event_name }}
-          RUN_CANCELLED: ${{ cancelled() }}
+          RUN_CANCELLED: ${{ env.RUN_CANCELLED || 'false' }}
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
