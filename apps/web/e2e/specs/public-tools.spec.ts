@@ -1,3 +1,4 @@
+import type { Page } from "@playwright/test";
 import { panic } from "better-result";
 import * as v from "valibot";
 
@@ -21,6 +22,15 @@ const organizationSchema = v.object({
   id: identityValue,
   name: identityValue,
 });
+
+// A streamed Suspense segment arrives hidden and React reveals it in place
+// later, batching reveals for up to a few seconds. Compare a document only
+// once nothing is still waiting and a page heading is shown.
+async function expectDocumentSettled(page: Page) {
+  await expect(page.locator('[id^="S:"]')).toHaveCount(0);
+  const main = page.locator("main:not(:has(main))");
+  await expect(main.getByRole("heading", { level: 1 }).first()).toBeVisible();
+}
 
 test("public tools render the same document content for both session states", async ({
   context,
@@ -73,7 +83,7 @@ test("public tools render the same document content for both session states", as
     });
     const main = page.locator("main:not(:has(main))");
     await expect(main).toHaveCount(1);
-    await expect(main.getByRole("heading", { level: 1 })).toBeVisible();
+    await expectDocumentSettled(page);
     const [signedInContent] = v.parse(
       v.tuple([identityValue]),
       await main.allInnerTexts(),
@@ -101,7 +111,7 @@ test("public tools render the same document content for both session states", as
       requiredContent: ["<main", "Contract Review"],
       status: anonymous.status(),
     });
-    await expect(main.getByRole("heading", { level: 1 })).toBeVisible();
+    await expectDocumentSettled(page);
     await expect(main).toHaveText(signedInContent, { useInnerText: true });
     expect(signedIn.headers()["cache-control"]).toBe("private, no-store");
     expect(anonymous.headers()["cache-control"]).toBe("private, no-store");
