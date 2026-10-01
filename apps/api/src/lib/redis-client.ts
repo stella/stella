@@ -178,8 +178,13 @@ export const createRedisClient = (
 // reaches BullMQ's own (unchanged) error handling loudly.
 const COLD_START_CONNECT_RETRY_DELAYS_MS = [200, 500, 1000, 2000];
 
+type ColdStartRetryOptions = {
+  sleep?: (delayMs: number) => Promise<void>;
+};
+
 export const connectWithColdStartRetries = async (
   connectOnce: () => Promise<void>,
+  { sleep: wait = sleep }: ColdStartRetryOptions = {},
 ): Promise<void> => {
   for (const delayMs of COLD_START_CONNECT_RETRY_DELAYS_MS) {
     // catch returns the raw cause unchanged so the warning below reports the
@@ -195,7 +200,7 @@ export const connectWithColdStartRetries = async (
       "redis.cold_start_reconnect",
       connectionErrorFields(result.error),
     );
-    await sleep(delayMs);
+    await wait(delayMs);
   }
   // One attempt per delay, then a final unguarded one: its rejection is the
   // caller's, with the original error identity intact for whichever
@@ -247,6 +252,7 @@ type ClientAttempt<Client> = {
  */
 export const createLazyRedisClient = <Client extends ManagedRedisClient>(
   createClient: () => Client,
+  retryOptions: ColdStartRetryOptions = {},
 ): LazyRedisClient<Client> => {
   let current: ClientAttempt<Client> | null = null;
 
@@ -255,7 +261,7 @@ export const createLazyRedisClient = <Client extends ManagedRedisClient>(
     const abandoned = Promise.withResolvers<never>();
     const connected = connectWithColdStartRetries(async () => {
       await client.connect();
-    }).then(() => client);
+    }, retryOptions).then(() => client);
     const attempt: ClientAttempt<Client> = {
       abandon: abandoned.reject,
       client,

@@ -10,6 +10,10 @@ on:
       - "apps/api/drizzle/**"
       - "apps/api/drizzle.config.ts"
       - "scripts/check-migration-safety.ts"
+      - "scripts/check-migration-safety.test.ts"
+      - "scripts/check-migration-index-builds.test.ts"
+      - "scripts/migration-index-findings.json"
+      - "scripts/fixtures/migration-index-builds/**"
       - "scripts/check-migrations.sh"
       - "scripts/rehearse-better-auth-constraint-retry.sh"
       - ".squawk.toml"
@@ -47,6 +51,9 @@ jobs:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
+
+      - name: Test migration safety rules and historical findings
+        run: bun test scripts/check-migration-safety.test.ts scripts/check-migration-index-builds.test.ts
 
       - name: Check migration coverage
         env:

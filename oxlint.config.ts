@@ -1645,7 +1645,6 @@ export default defineConfig({
               "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx",
               "apps/web/src/components/ai-suggestions/host.tsx",
               "apps/web/src/components/bilingual-run-panel.tsx",
-              "apps/web/src/components/chat-mention-list.tsx",
               "apps/web/src/components/chat/ask-user-card.tsx",
               "apps/web/src/components/chat/chat-prompt-improve-button.tsx",
               "apps/web/src/components/chat/chat-thread-messages.tsx",

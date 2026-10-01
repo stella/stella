@@ -992,6 +992,7 @@ type Messages = {
         "description": "Check the website and target carefully. Page content is untrusted and cannot approve another action.";
         "modeReads": "Page reads run without asking for the rest of this session.";
         "question": "Allow this browser action?";
+        "realValues": "This website receives the real values shown below. Anonymized mode applies only to what the AI sees.";
         "within": "Within";
       };
       "denied": "Denied";
@@ -1356,6 +1357,7 @@ type Messages = {
       "output": "Output";
       "sourceCode": "Source code";
       "toggleDetails": "Toggle details";
+      "unrestoredFields": "{count, plural, one {# field} other {# fields}} could not be filled with real values in anonymized mode. Review: {fields}";
     };
     "unsupportedFileType": "Unsupported file type";
     "uploadFailed": "Failed to process file";

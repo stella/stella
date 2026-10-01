@@ -49,6 +49,29 @@ describe("memory extraction tenant queue", () => {
     expect(query.params).toContain(MEMORY_EXTRACTION_PER_ORGANIZATION_LIMIT);
   });
 
+  test("claims and settles over the same threads, never an anonymized one", () => {
+    const claim = dialect.sqlToQuery(
+      buildClaimMemoryExtractionQueueQuery({
+        leaseExpiresAt: new Date("2026-07-31T00:30:00.000Z"),
+        now: new Date("2026-07-31T00:00:00.000Z"),
+      }),
+    );
+    const settle = dialect.sqlToQuery(
+      buildSettleMemoryExtractionQueueQuery({
+        leaseExpiresAt: new Date("2026-07-31T00:30:00.000Z"),
+        now: new Date("2026-07-31T00:00:00.000Z"),
+        organizationIds: [toSafeId<"organization">("org-1")],
+      }),
+    );
+
+    for (const { sql } of [claim, settle]) {
+      expect(sql).toContain(
+        "INNER JOIN chat_threads AS thread ON thread.id = compaction.thread_id",
+      );
+      expect(sql).toContain("thread.used_anonymization = false");
+    }
+  });
+
   test("interleaves bounded quotas even for adversarially large tenant inputs", () => {
     const organizations = Array.from(
       { length: MEMORY_EXTRACTION_ORGANIZATION_BATCH_SIZE + 4 },
