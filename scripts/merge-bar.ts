@@ -790,8 +790,7 @@ export const verifyFrontOfQueue = ({
     entries.find((candidate) => candidate.pullNumber === pullNumber) ??
     enqueuedEntry;
   if (
-    (placement.status === "absent" ||
-      (placement.status === "behind" && placement.position > 1)) &&
+    (placement.status === "absent" || placement.position > 1) &&
     entry?.jump === true
   ) {
     return {
@@ -1543,7 +1542,7 @@ if (import.meta.main) {
       branch: pullRequest.baseRefName,
       context,
       release: isReleasePullRequest(pullRequest),
-      enqueuedEntry,
+      ...(enqueuedEntry === undefined ? {} : { enqueuedEntry }),
     });
     if (verdict.exitCode === 0) {
       console.log(verdict.message);
