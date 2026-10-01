@@ -101,7 +101,7 @@ const createApiProgram = ({
   const getSourceFile = host.getSourceFile.bind(host);
   const fileExists = host.fileExists.bind(host);
   const readFile = host.readFile.bind(host);
-  const directoryExists = ts.sys.directoryExists;
+  const directoryExists = ts.sys.directoryExists.bind(ts.sys);
   const virtualDirectories = new Set<string>();
   for (const fileName of virtualFiles.keys()) {
     let directory = path.dirname(fileName);
