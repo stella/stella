@@ -870,8 +870,12 @@ const resolveReadClassification = ({
   exposure,
   toolReadClassesByName,
 }: ResolveReadClassificationOptions) => {
-  if (access === "write") {return undefined;}
-  if (exposure.readClass !== undefined) {return exposure.readClass;}
+  if (access === "write") {
+    return undefined;
+  }
+  if (exposure.readClass !== undefined) {
+    return exposure.readClass;
+  }
   if (exposure.type === "capability") {
     return panic(`Missing read classification for capability ${id}`);
   }

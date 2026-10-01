@@ -134,7 +134,8 @@ export const parseExposure = (mcp: unknown): ParsedExposure => {
   ) {
     return { type: "invalid", raw: mcp };
   }
-  const readClassification = readClass === undefined ? {} : { readClass };
+  const readClassification =
+    readClass === undefined ? {} : ({ readClass } as const);
   const type = mcp["type"];
   if (type === "pending") {
     return { type: "pending" };

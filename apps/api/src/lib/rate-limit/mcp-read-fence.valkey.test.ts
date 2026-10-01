@@ -17,10 +17,8 @@ const policy = {
   public: { organizationBytes: 157, userBytes: 113 },
 } satisfies McpReadFencePolicy;
 
-if (
-  process.env["STELLA_RUN_VALKEY_TESTS"] !== "true" ||
-  !process.env["REDIS_URL"]
-) {
+const runValkeyTests = process.env["STELLA_RUN_VALKEY_TESTS"] === "true";
+if (!runValkeyTests || !process.env["REDIS_URL"]) {
   describe.skip("shared read windows (Valkey)", () => {
     test("requires Valkey", () => {});
   });
@@ -48,8 +46,8 @@ if (
         client,
         organizationId,
         userId,
-        charge: (options = {}) =>
-          chargeMcpReadBytes({
+        charge: async (options = {}) =>
+          await chargeMcpReadBytes({
             organizationId,
             userId,
             bytes: 17,
@@ -77,7 +75,7 @@ if (
     test("concurrent extraction never emits more than either byte bound", async () =>
       fixture(async ({ charge }) => {
         const outcomes = await Promise.all(
-          Array.from({ length: 19 }, () => charge()),
+          Array.from({ length: 19 }, async () => await charge()),
         );
         expect(outcomes.filter(Result.isOk)).toHaveLength(3);
         expect(outcomes.filter(Result.isError)).toHaveLength(16);
@@ -118,17 +116,29 @@ if (
           `public:user:${userId}`,
         ].map((suffix) => key(organizationId, suffix));
         const before = await Promise.all(
-          keys.map((counter) =>
-            client.send("ZRANGE", [counter, "0", "-1", "WITHSCORES"]),
-          ),
+          keys.map(async (counter) => {
+            const reply: unknown = await client.send("ZRANGE", [
+              counter,
+              "0",
+              "-1",
+              "WITHSCORES",
+            ]);
+            return reply;
+          }),
         );
         expect(
           Result.isError(await charge({ bytes: 1, readClass: "both" })),
         ).toBe(true);
         const after = await Promise.all(
-          keys.map((counter) =>
-            client.send("ZRANGE", [counter, "0", "-1", "WITHSCORES"]),
-          ),
+          keys.map(async (counter) => {
+            const reply: unknown = await client.send("ZRANGE", [
+              counter,
+              "0",
+              "-1",
+              "WITHSCORES",
+            ]);
+            return reply;
+          }),
         );
         expect(after).toEqual(before);
         expect(
@@ -214,7 +224,7 @@ if (
       for (const bytes of [1, 3, 11, 17, 53, 54]) {
         await fixture(async ({ charge }) => {
           const outcomes = await Promise.all(
-            Array.from({ length: 17 }, () => charge({ bytes })),
+            Array.from({ length: 17 }, async () => await charge({ bytes })),
           );
           const accepted = outcomes.filter(Result.isOk).length;
           expect(accepted).toBe(

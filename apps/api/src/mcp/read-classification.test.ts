@@ -1,7 +1,13 @@
+import { panic } from "better-result";
 import { describe, expect, expectTypeOf, test } from "bun:test";
 
 import catalog from "@stll/cli/capability-catalog.json";
 
+import type {
+  HandlerConfig,
+  WorkspaceHandlerConfig,
+  McpExposure,
+} from "@/api/lib/api-handlers";
 import { resolveCapabilityReadClass } from "@/api/mcp/capability-tools";
 import { encodeCompatId } from "@/api/mcp/compat-ids";
 import { resolveCompatFetchReadClass } from "@/api/mcp/compat-tools";
@@ -16,17 +22,37 @@ describe("MCP reads retain their canonical source classification", () => {
     expectTypeOf<
       Extract<McpToolAccessBranch, { access: "read" }>
     >().toHaveProperty("readClass");
-    expectTypeOf<{ access: "read" }>().not.toMatchTypeOf<
+    expectTypeOf<{ access: "read" }>().not.toExtend<
       Pick<Extract<McpToolAccessBranch, { access: "read" }>, "readClass">
     >();
   });
 
+  test("workspace configurations preserve required read metadata", () => {
+    expectTypeOf<WorkspaceHandlerConfig>().toExtend<HandlerConfig>();
+    type ReadCapabilityConfig = Extract<
+      WorkspaceHandlerConfig,
+      { access: "read" }
+    > & {
+      mcp: Extract<McpExposure, { type: "capability" }>;
+    };
+    expectTypeOf<ReadCapabilityConfig>().toExtend<WorkspaceHandlerConfig>();
+    expectTypeOf<
+      Omit<ReadCapabilityConfig, "mcp"> & {
+        mcp: Omit<ReadCapabilityConfig["mcp"], "readClass">;
+      }
+    >().not.toExtend<WorkspaceHandlerConfig>();
+  });
+
   test("every generated read target carries its declared classification", () => {
     for (const entry of catalog) {
-      expect(resolveCapabilityReadClass({ capability: entry.id })).toBe(
-        entry.access === "read" ? entry.readClass : undefined,
+      const resolved = resolveCapabilityReadClass({ capability: entry.id });
+      expect(entry.access === "read" ? entry.readClass : undefined).toBe(
+        resolved,
       );
       if (entry.access === "read") {
+        if (entry.readClass === undefined) {
+          panic("Missing catalog read class");
+        }
         expect(["tenant", "public", "both"]).toContain(entry.readClass);
       }
     }
@@ -64,6 +90,9 @@ describe("MCP reads retain their canonical source classification", () => {
         continue;
       }
       const name = entry.mcp.type === "tool" ? entry.mcp.name : entry.mcp.by;
+      if (name === undefined) {
+        panic("Missing canonical tool name");
+      }
       const definition = native.get(name);
       if (definition?.access !== "read") {
         continue;

@@ -167,11 +167,11 @@ export const chargeMcpReadBytes = async ({
     },
   ]);
   const charged = await Result.tryPromise({
-    try: () =>
-      withCommandTimeout({
+    try: async () =>
+      await withCommandTimeout({
         command: (async () => {
           const client = redis ?? (await fenceRedis.ready());
-          return await client.send("EVAL", [
+          const reply: unknown = await client.send("EVAL", [
             CHARGE_SCRIPT,
             String(counters.length),
             ...counters.map((counter) => counter.key),
@@ -181,6 +181,7 @@ export const chargeMcpReadBytes = async ({
             Bun.randomUUIDv7(),
             ...counters.map((counter) => String(counter.limit)),
           ]);
+          return reply;
         })(),
         commandTimeoutMs: COMMAND_TIMEOUT_MS,
         label: "mcp-read-fence",

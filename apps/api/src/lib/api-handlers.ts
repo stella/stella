@@ -380,9 +380,11 @@ export type HandlerConfig = InputSchema &
  * route-level schema cannot shadow the segment the workspace macro resolves the
  * tenant from. `workspaceParams()` produces the shape.
  */
-export type WorkspaceHandlerConfig = Omit<HandlerConfig, "params"> & {
-  params?: WorkspaceParamsSchema;
-};
+type WorkspaceHandlerConfigOf<TConfig> = TConfig extends HandlerConfig
+  ? Omit<TConfig, "params"> & { params?: WorkspaceParamsSchema }
+  : never;
+
+export type WorkspaceHandlerConfig = WorkspaceHandlerConfigOf<HandlerConfig>;
 
 export type SessionHandlerConfig = InputSchema &
   CapabilityDescription &

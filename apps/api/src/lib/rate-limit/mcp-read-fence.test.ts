@@ -123,7 +123,9 @@ describe("shared read windows", () => {
       bytes: 7,
       policy,
       enabled: true,
-      redis: { send: () => Promise.reject(new Error("store unavailable")) },
+      redis: {
+        send: async () => await Promise.reject(new Error("store unavailable")),
+      },
     });
     if (!Result.isError(failure)) {
       throw new TypeError("Expected closed read");

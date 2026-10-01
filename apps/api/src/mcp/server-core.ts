@@ -794,7 +794,9 @@ export const createMcpHttpRequestHandler = ({
             (block) => block.type !== "text" || block.text.length > 0,
           ) ||
           (result.structuredContent !== undefined &&
-            Object.keys(result.structuredContent).length > 0);
+            result.structuredContent !== null &&
+            (typeof result.structuredContent !== "object" ||
+              Object.keys(result.structuredContent).length > 0));
         const fenced =
           env.FEATURE_MCP_READ_FENCE &&
           (readClass !== undefined || definition.access === "read") &&

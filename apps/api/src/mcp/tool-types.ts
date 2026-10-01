@@ -159,7 +159,7 @@ export type McpReadClassResolver = (
 ) => McpReadClass | undefined | Promise<McpReadClass | undefined>;
 
 /** Reads declare their source; the generic gateway resolves its target instead. */
-export const resolveMcpReadClass = (
+export const resolveMcpReadClass = async (
   definition: McpToolDefinition,
   args: unknown,
 ) =>
