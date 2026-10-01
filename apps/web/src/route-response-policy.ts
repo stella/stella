@@ -74,6 +74,7 @@ export const ROUTE_CACHE_CLASSES = {
   "/settings/account/memory": "private-no-store",
   "/settings/account/profile": "private-no-store",
   "/settings/organization/ai": "private-no-store",
+  "/settings/organization/billing": "private-no-store",
   "/settings/organization/anonymization": "private-no-store",
   "/settings/organization/audit-logs": "private-no-store",
   "/settings/organization/catalogue": "private-no-store",
