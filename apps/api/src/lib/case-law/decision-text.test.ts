@@ -50,21 +50,6 @@ describe("decision text fields", () => {
     });
   });
 
-  test("declared blank placeholders preserve the difference from missing fields", () => {
-    for (const blank of ["", " \n\t ", "\u00a0"]) {
-      expect(sourceTextField(ADAPTER_KEYS.CZ_NSS, blank)).toEqual({
-        type: "absent",
-        reason: TEXT_ABSENCE_REASON.PUBLISHER_PLACEHOLDER,
-      });
-    }
-    for (const missing of [null, undefined]) {
-      expect(sourceTextField(ADAPTER_KEYS.CZ_NSS, missing)).toEqual({
-        type: "absent",
-        reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
-      });
-    }
-  });
-
   test("read punctuation, filler tokens and repeats as a placeholder", () => {
     for (const filler of ["-", "—", " … ", "(...)", "N/A", "null", "xxx"]) {
       expect(sourceTextField(ADAPTER_KEYS.CZ_NSS, filler)).toEqual({

@@ -61,6 +61,7 @@ import { czDecisionCourt } from "@/api/lib/case-law/cz-ecli-courts";
 import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  absentTextField,
   checkedDecisionMetadata,
   sourceTextField,
   splitStoredDecisionTextMetadata,
@@ -1493,6 +1494,14 @@ const statedDetailMetadataFields = (
     ),
   );
 
+/** An explicitly blank NSS prose value is a publisher placeholder. */
+const czNssTextField = (raw: string | undefined) => {
+  if (raw !== undefined && raw.trim().length === 0) {
+    return absentTextField(TEXT_ABSENCE_REASON.PUBLISHER_PLACEHOLDER);
+  }
+  return sourceTextField(ADAPTER_KEYS.CZ_NSS, raw);
+};
+
 /** Convert a parsed row into an IngestionResult. */
 const rowToResult = ({
   content,
@@ -1501,10 +1510,7 @@ const rowToResult = ({
   row,
 }: RowToResultOptions): IngestionResult => {
   const sourceDocumentId = czNssSourceDocumentId(row);
-  const legalSentenceField = sourceTextField(
-    ADAPTER_KEYS.CZ_NSS,
-    detail.legalSentence,
-  );
+  const legalSentenceField = czNssTextField(detail.legalSentence);
   const court = czNssCourt(detail.ecli, sourceDocumentId);
   const decisionDate = (() => {
     if (detail.decisionDate) {
@@ -1804,14 +1810,14 @@ const reparseStoredRaw = (
       (field.type === TEXT_FIELD_TYPE.PRESENT ||
         stored.metadata[DECISION_TEXT_ABSENCE_METADATA_KEY] === undefined)
     ) {
-      textFields[key] = sourceTextField(ADAPTER_KEYS.CZ_NSS, storedText);
+      textFields[key] = czNssTextField(storedText);
     }
   }
   const statedLegalSentence = storedDetail?.legalSentence;
   const legalSentenceField =
     statedLegalSentence === undefined
       ? textFields.legalSentence
-      : sourceTextField(ADAPTER_KEYS.CZ_NSS, statedLegalSentence);
+      : czNssTextField(statedLegalSentence);
 
   return {
     type: "parsed",

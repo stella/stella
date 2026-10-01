@@ -182,7 +182,6 @@ export const ADAPTER_MANIFESTS = {
       { type: "exact", text: "–" },
       { type: "exact", text: "—" },
       { type: "exact", text: "−" },
-      { type: "exact", text: "" },
     ],
     dateRange: {
       type: "decision-date",
