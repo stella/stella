@@ -1,6 +1,5 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
 const CONFIG_PATH = path.resolve(
   import.meta.dirname,
@@ -8,15 +7,23 @@ const CONFIG_PATH = path.resolve(
 );
 const SOURCE_EXTENSION = /\.[cm]?[jt]sx?$/u;
 
+// ci-plan runs with Node before dependency installation; report configuration
+// failures through the CLI's stderr/exit contract without importing packages.
+/** @param {string} message Configuration failure to report to CI. */
+const fail = (message) => {
+  process.stderr.write(`${message}\n`);
+  process.exit(1);
+};
+
 // Read inputs without executing Playwright or installing dependencies: ci-plan
 // runs before installation. Runtime source outside E2E stays in full-depth CI.
-/** @param {string} configPath */
+/** @param {string} configPath Absolute path to the production Playwright config. */
 export const productionE2eInputs = (configPath) => {
   const root = path.dirname(configPath);
   const config = readFileSync(configPath, "utf-8");
   const testDir = /\btestDir:\s*["']([^"']+)["']/u.exec(config)?.[1];
   if (testDir === undefined) {
-    throw new TypeError("Production E2E config must declare a literal testDir");
+    fail("Production E2E config must declare a literal testDir");
   }
   const testDirectory = path.resolve(root, testDir);
   /** @type {Set<string>} */
@@ -27,10 +34,10 @@ export const productionE2eInputs = (configPath) => {
     pending.push(tsconfig);
   }
   if (!testDirectory.startsWith(`${root}${path.sep}`)) {
-    throw new TypeError("Production E2E testDir must stay inside its E2E tree");
+    fail("Production E2E testDir must stay inside its E2E tree");
   }
   for (const file of readdirSync(testDirectory, { recursive: true })) {
-    if (SOURCE_EXTENSION.test(file)) {
+    if (SOURCE_EXTENSION.test(file) && statSync(path.join(testDirectory, file)).isFile()) {
       pending.push(path.join(testDirectory, file));
     }
   }
@@ -76,9 +83,7 @@ export const productionE2eInputs = (configPath) => {
         (candidate) => existsSync(candidate) && statSync(candidate).isFile(),
       );
       if (input === undefined) {
-        throw new TypeError(
-          `Unresolved production E2E input: ${reference} in ${file}`,
-        );
+        fail(`Unresolved production E2E input: ${reference} in ${file}`);
       }
       pending.push(input);
     }

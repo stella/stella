@@ -8,6 +8,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { productionE2eInputs } from "./production-e2e-inputs.mjs";
 
@@ -62,6 +63,8 @@ test("input derivation follows a different testDir, transitive imports and setup
   for (const [file, content] of Object.entries(fixtureFiles)) {
     writeFileSync(path.join(directory, file), content);
   }
+  // Playwright snapshot folders can have source-looking names.
+  mkdirSync(path.join(directory, "suite", "snapshot.spec.ts"));
   const { testDirectory, files } = productionE2eInputs(
     path.join(directory, "playwright.config.ts"),
   );
@@ -78,3 +81,34 @@ test("input derivation follows a different testDir, transitive imports and setup
       .toSorted(),
   );
 });
+
+for (const [config, message] of [
+  ["export default {};", "must declare a literal testDir"],
+  [
+    'export default { testDir: "../outside" };',
+    "must stay inside its E2E tree",
+  ],
+  [
+    'import "./missing.ts"; export default { testDir: "./suite" };',
+    "Unresolved production E2E input",
+  ],
+] as const) {
+  test(`invalid config fails through the dependency-free CLI: ${message}`, () => {
+    const fixture = mkdtempSync(path.join(directory, "invalid-"));
+    mkdirSync(path.join(fixture, "suite"));
+    const configPath = path.join(fixture, "playwright.config.ts");
+    writeFileSync(configPath, config);
+    const moduleUrl = pathToFileURL(
+      path.join(import.meta.dirname, "production-e2e-inputs.mjs"),
+    ).href;
+    const result = Bun.spawnSync([
+      "node",
+      "--input-type=module",
+      "--eval",
+      `import { productionE2eInputs } from ${JSON.stringify(moduleUrl)}; productionE2eInputs(${JSON.stringify(configPath)});`,
+    ]);
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr.toString()).toContain(message);
+    expect(result.stdout.toString()).toBe("");
+  });
+}
