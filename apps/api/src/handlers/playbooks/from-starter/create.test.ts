@@ -201,6 +201,7 @@ describe("starter playbook content", () => {
         safeDb: createScopedDbMock(noDbTx).safeDb,
         organizationId: ids.orgA,
         positions: starter.positions,
+        storedPositions: null,
       });
       expect(Result.isError(result)).toBe(false);
     }

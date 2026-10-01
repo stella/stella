@@ -50,6 +50,7 @@ export const POSITION_LIMITS = {
   talkingPointsMaxItems: 20,
   escalationMaxLength: 500,
   positionsMaxItems: 200,
+  sourcesMaxItems: 20,
 } as const;
 
 // ── Tier lines: identified plain-language rules and fallback entries ──
@@ -209,6 +210,31 @@ export const askConfigSchema = t.Union([
 ]);
 export type AskConfig = Static<typeof askConfigSchema>;
 
+// ── Source: one document a position was taken or revised from ──
+// Provenance only, ids only. A playbook is visible to the whole organization
+// and its text feeds reviews in other matters, so a document's name (and the
+// matter's) never enters the stored position: a reader resolves these ids
+// through their own scoped transaction and sees a source exactly when they
+// can open it. The pair, like `referencePassageSchema`'s, because every
+// consumer needs the matter to address the document. Closed, so no writer can
+// store a name beside the ids.
+export const positionSourceSchema = t.Object(
+  {
+    workspaceId: t.String({ format: "uuid" }),
+    entityId: t.String({ format: "uuid" }),
+  },
+  { additionalProperties: false },
+);
+export type PositionSource = Static<typeof positionSourceSchema>;
+
+// Absent means none; an empty list is not stored.
+const positionSourcesSchema = t.Optional(
+  t.Array(positionSourceSchema, {
+    minItems: 1,
+    maxItems: POSITION_LIMITS.sourcesMaxItems,
+  }),
+);
+
 // ── Position: a discriminated union on `mode` ─────────
 // `sourceId` is a stable, client-supplied id that survives edits so re-running a
 // playbook maps a position back to the same materialized column/finding instead
@@ -225,6 +251,7 @@ const extractPositionSchema = t.Object({
   guidance: t.Optional(
     t.String({ maxLength: POSITION_LIMITS.guidanceMaxLength }),
   ),
+  sources: positionSourcesSchema,
   enabled: t.Boolean(),
 });
 
@@ -284,6 +311,7 @@ const gradedPositionSchema = t.Object({
     t.String({ maxLength: POSITION_LIMITS.guidanceMaxLength }),
   ),
   negotiation: t.Optional(negotiationSchema),
+  sources: positionSourcesSchema,
   enabled: t.Boolean(),
 });
 

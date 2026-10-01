@@ -12,6 +12,7 @@ import { LIST_PLAYBOOKS_DETAIL_PROJECTION } from "@/api/lib/chat/projections";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import {
+  POSITION_LIMITS,
   POSITION_SEVERITIES,
   positionSchema,
 } from "@/api/lib/workflow/playbook-positions";
@@ -40,14 +41,15 @@ const counterMintId = () => {
   };
 };
 
+type MergeArgs = Parameters<typeof mergePlaybookPositions>[0];
+
 const merge = (
-  args: Omit<
-    Parameters<typeof mergePlaybookPositions>[0],
-    "mintId" | "removeSourceIds"
-  > & { removeSourceIds?: readonly string[] },
+  args: Pick<MergeArgs, "stored" | "positions"> &
+    Partial<Pick<MergeArgs, "removeSourceIds" | "readableSources">>,
 ) =>
   mergePlaybookPositions({
     removeSourceIds: [],
+    readableSources: new Map(),
     ...args,
     mintId: counterMintId(),
   });
@@ -592,6 +594,175 @@ describe("save_playbook position merge", () => {
 
     expect(result.items).toEqual(stored);
     expect(result.issues[0]?.code).toBe("mode_change");
+  });
+});
+
+describe("save_playbook position sources", () => {
+  const WORKSPACE_ID = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+  const source = (suffix: number) => ({
+    workspaceId: WORKSPACE_ID,
+    entityId: `dddddddd-dddd-4ddd-8ddd-${String(suffix).padStart(12, "0")}`,
+  });
+  const READABLE = source(1);
+  const ALSO_READABLE = source(2);
+  const HIDDEN = source(3);
+  const readableSources = new Map(
+    [READABLE, ALSO_READABLE].map((entry) => [entry.entityId, entry]),
+  );
+  const replace = (sources: string[] | undefined) =>
+    gradedInput({
+      source_id: storedGraded().sourceId,
+      ...(sources === undefined ? {} : { sources }),
+    });
+
+  test("a new position stores each named document with the matter the lookup resolved", () => {
+    const { items, issues } = merge({
+      stored: [],
+      positions: [
+        gradedInput({ sources: [READABLE.entityId, ALSO_READABLE.entityId] }),
+      ],
+      readableSources,
+    });
+    expect(issues).toEqual([]);
+    expect(items.at(0)?.sources).toEqual([READABLE, ALSO_READABLE]);
+  });
+
+  test("a document named twice is stored once", () => {
+    const { items } = merge({
+      stored: [],
+      positions: [
+        gradedInput({ sources: [READABLE.entityId, READABLE.entityId] }),
+      ],
+      readableSources,
+    });
+    expect(items.at(0)?.sources).toEqual([READABLE]);
+  });
+
+  test("a position without sources stores no sources key", () => {
+    const { items } = merge({
+      stored: [],
+      positions: [gradedInput(), gradedInput({ issue: "Other", sources: [] })],
+      readableSources,
+    });
+    expect(items.map((item) => "sources" in item)).toEqual([false, false]);
+  });
+
+  test("a replace that omits sources keeps the stored list, hidden sources included", () => {
+    const stored = [storedGraded({ sources: [HIDDEN, READABLE] })];
+    const { items, issues } = merge({
+      stored,
+      positions: [replace(undefined)],
+      readableSources,
+    });
+    expect(issues).toEqual([]);
+    expect(items).toEqual(stored);
+  });
+
+  test("a replace with sources replaces the readable ones and carries the hidden ones", () => {
+    const { items, issues } = merge({
+      stored: [storedGraded({ sources: [HIDDEN, READABLE] })],
+      positions: [replace([ALSO_READABLE.entityId])],
+      readableSources,
+    });
+    expect(issues).toEqual([]);
+    expect(items.at(0)?.sources).toEqual([ALSO_READABLE, HIDDEN]);
+  });
+
+  test("an empty list removes the readable sources only", () => {
+    const hiddenKept = merge({
+      stored: [storedGraded({ sources: [HIDDEN, READABLE] })],
+      positions: [replace([])],
+      readableSources,
+    });
+    expect(hiddenKept.items.at(0)?.sources).toEqual([HIDDEN]);
+
+    const noneLeft = merge({
+      stored: [storedGraded({ sources: [READABLE] })],
+      positions: [replace([])],
+      readableSources,
+    });
+    expect(noneLeft.items.at(0)).not.toHaveProperty("sources");
+  });
+
+  test("resending the sources a read showed leaves the position equal to the stored one", () => {
+    // Stored order interleaves a hidden source; the caller saw only READABLE.
+    const stored = [storedGraded({ sources: [HIDDEN, READABLE] })];
+    const { items } = merge({
+      stored,
+      positions: [replace([READABLE.entityId])],
+      readableSources,
+    });
+    expect(items).toEqual(stored);
+  });
+
+  test("a document the caller cannot read refuses that entry by path and not the one beside it", () => {
+    const { items, written, issues } = merge({
+      stored: [],
+      positions: [
+        gradedInput({ sources: [READABLE.entityId, HIDDEN.entityId] }),
+        gradedInput({ issue: "Governing law", sources: [READABLE.entityId] }),
+      ],
+      readableSources,
+    });
+    expect(issues).toEqual([
+      expect.objectContaining({
+        code: "unreadable_source",
+        path: "positions.0.sources.1",
+      }),
+    ]);
+    expect(written.map(({ issue }) => issue)).toEqual(["Governing law"]);
+    expect(items).toHaveLength(1);
+  });
+
+  test("a stored hidden source cannot be re-added by naming it", () => {
+    const { issues, items } = merge({
+      stored: [storedGraded({ sources: [HIDDEN] })],
+      positions: [
+        gradedInput({ issue: "Governing law", sources: [HIDDEN.entityId] }),
+      ],
+      readableSources,
+    });
+    expect(issues.map(({ code }) => code)).toEqual(["unreadable_source"]);
+    expect(items).toHaveLength(1);
+  });
+
+  test("a refusal names no document", () => {
+    const { issues } = merge({
+      stored: [],
+      positions: [gradedInput({ sources: [HIDDEN.entityId] })],
+      readableSources,
+    });
+    expect(JSON.stringify(issues)).not.toContain(HIDDEN.entityId);
+  });
+
+  test("readable and carried sources together cannot exceed the limit", () => {
+    const hidden = Array.from(
+      { length: POSITION_LIMITS.sourcesMaxItems },
+      (_, index) => source(100 + index),
+    );
+    const { issues, items } = merge({
+      stored: [storedGraded({ sources: hidden })],
+      positions: [replace([READABLE.entityId])],
+      readableSources,
+    });
+    expect(issues).toEqual([
+      expect.objectContaining({
+        code: "too_many_sources",
+        path: "positions.0.sources",
+      }),
+    ]);
+    expect(items.at(0)?.sources).toEqual(hidden);
+  });
+
+  test("the input refuses more sources than the limit", () => {
+    const sources = Array.from(
+      { length: POSITION_LIMITS.sourcesMaxItems + 1 },
+      (_, index) => source(index).entityId,
+    );
+    expect(
+      v.safeParse(playbookPositionInputSchema, gradedInput({ sources }))
+        .success,
+    ).toBe(false);
   });
 });
 

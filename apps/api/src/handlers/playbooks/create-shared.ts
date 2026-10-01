@@ -89,6 +89,7 @@ export const createPlaybookDefinitionHandler = async function* ({
       safeDb,
       organizationId,
       positions: body.positions,
+      storedPositions: null,
     }),
   );
 

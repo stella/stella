@@ -231,6 +231,7 @@ describe("reference passage isolation", () => {
           safeDb: scopedSafeDb,
           organizationId: ids.orgA,
           positions: positionsPinning(PASSAGE_A_ID),
+          storedPositions: null,
         }),
       );
 
@@ -254,6 +255,7 @@ describe("reference passage isolation", () => {
           safeDb: scopedSafeDb,
           organizationId: ids.orgA,
           positions: positionsPinning(PASSAGE_B_ID),
+          storedPositions: null,
         }),
       );
 

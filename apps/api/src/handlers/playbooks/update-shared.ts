@@ -57,11 +57,34 @@ export const updatePlaybookDefinitionHandler = async function* ({
   recordAuditEvent,
   body,
 }: UpdatePlaybookDefinitionArgs): SafeHandlerGenerator<{ updatedAt: string }> {
+  // The stored positions decide which sources this save carries rather than
+  // introduces. Read before the row lock below: both writers send
+  // `expectedUpdatedAt`, so a definition changed in between fails the save
+  // instead of being validated against a stale list. A caller that omits the
+  // token can at worst carry a source the playbook stored a moment ago.
+  const stored = yield* Result.await(
+    safeDb((tx) =>
+      tx.query.playbookDefinitions.findFirst({
+        where: {
+          id: { eq: playbookId },
+          organizationId: { eq: organizationId },
+        },
+        columns: { positions: true },
+      }),
+    ),
+  );
+  if (!stored) {
+    return Result.err(
+      new HandlerError({ status: 404, message: "Playbook not found" }),
+    );
+  }
+
   yield* Result.await(
     assertPositionsValid({
       safeDb,
       organizationId,
       positions: body.positions,
+      storedPositions: stored.positions,
     }),
   );
 

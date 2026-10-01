@@ -23,6 +23,7 @@ import {
 import { updatePlaybookDefinitionHandler } from "@/api/handlers/playbooks/update-shared";
 import { loadOrgSettingsForAuth } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
+import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   type AssertNoExtraFields,
@@ -58,13 +59,21 @@ import {
   brandPersistedClauseCategoryId,
   brandPersistedClauseId,
   brandPersistedClauseVersionId,
+  brandPersistedEntityId,
   brandPersistedPlaybookDefinitionId,
 } from "@/api/lib/safe-id-boundaries";
 import { startWorkflow } from "@/api/lib/workflow-queue";
+import {
+  positionSourceEntityIds,
+  positionSources,
+  readablePositionSources,
+  withReadableSources,
+} from "@/api/lib/workflow/playbook-position-sources";
 import { POSITION_LIMITS } from "@/api/lib/workflow/playbook-positions";
 import type {
   PlaybookScope,
   Position,
+  PositionSource,
   PositionStandard,
   Tiers,
 } from "@/api/lib/workflow/playbook-positions";
@@ -1367,7 +1376,26 @@ const readPlaybookDetail = async ({
   if (Result.isError(result)) {
     return internalFailureResult(result.error);
   }
-  const playbook = result.value;
+  // Sources are narrowed to the caller's own before anything else sees the
+  // payload: chat mints a ref per source, and a ref puts the source's matter
+  // in the thread's observed scope.
+  const readableSources = await readablePositionSources(
+    context.safeDb,
+    positionSourceEntityIds(positionSources(result.value.positions.items)),
+  );
+  if (Result.isError(readableSources)) {
+    return internalFailureResult(readableSources.error);
+  }
+  const playbook = {
+    ...result.value,
+    positions: {
+      version: result.value.positions.version,
+      items: withReadableSources(
+        result.value.positions.items,
+        readableSources.value,
+      ),
+    },
+  };
 
   const textFields = runTextFieldSpecs(
     playbookDetailTextFieldSpecs(organizationId),
@@ -1632,6 +1660,10 @@ const PLAYBOOK_MERGE_ISSUE_HINTS = {
     "Resend this entry with at least one acceptable or not_acceptable rule, " +
     "a fallback entry, or ideal wording; a position that only captures a " +
     "value takes mode extract.",
+  unreadable_source:
+    "Resend this entry with sources holding only document ids returned by " +
+    "list_documents or a search in this conversation, or without sources.",
+  too_many_sources: "Resend this entry with fewer sources.",
 } as const satisfies Record<PlaybookMergeIssueCode, string>;
 
 const toSavePlaybookIssues = (issues: readonly PlaybookMergeIssue[]) =>
@@ -1681,6 +1713,40 @@ const savePlaybookFailureResult = (error: unknown) => {
   return internalFailureResult(error);
 };
 
+/**
+ * Every document a save's merge needs resolved, in one scoped lookup: the ids
+ * the call names and the sources already stored. Keyed by document id; an id
+ * the caller cannot read is absent.
+ */
+const readSavePlaybookSources = async ({
+  context,
+  positions,
+  stored,
+}: {
+  context: McpRequestContext;
+  positions: readonly PlaybookPositionInput[];
+  stored: readonly Position[];
+}) => {
+  const entityIds = new Set(positionSourceEntityIds(positionSources(stored)));
+  for (const position of positions) {
+    for (const entityId of arrayOrEmpty(position.sources)) {
+      entityIds.add(brandPersistedEntityId(entityId));
+    }
+  }
+  const readable = await readablePositionSources(context.safeDb, [
+    ...entityIds,
+  ]);
+  return readable.map(
+    (sources) =>
+      new Map<string, PositionSource>(
+        sources.map(({ entityId, workspaceId }) => [
+          entityId,
+          { entityId, workspaceId },
+        ]),
+      ),
+  );
+};
+
 const handleSavePlaybookTool: TypedMcpToolHandler<
   v.InferInput<typeof SAVE_PLAYBOOK_PROJECTION>
 > = async ({ args, context }) => {
@@ -1715,10 +1781,19 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
         hint: "Provide 'name' when playbook_id is omitted (create mode).",
       });
     }
+    const readableSources = await readSavePlaybookSources({
+      context,
+      positions,
+      stored: [],
+    });
+    if (Result.isError(readableSources)) {
+      return internalFailureResult(readableSources.error);
+    }
     const merged = mergePlaybookPositions({
       stored: [],
       positions,
       removeSourceIds: NO_SOURCE_IDS,
+      readableSources: readableSources.value,
       mintId,
     });
     if (merged.issues.length > 0 && merged.written.length === 0) {
@@ -1791,10 +1866,19 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
   if (Result.isError(stored)) {
     return internalFailureResult(stored.error);
   }
+  const readableSources = await readSavePlaybookSources({
+    context,
+    positions,
+    stored: stored.value.positions.items,
+  });
+  if (Result.isError(readableSources)) {
+    return internalFailureResult(readableSources.error);
+  }
   const merged = mergePlaybookPositions({
     stored: stored.value.positions.items,
     positions,
     removeSourceIds: input.remove_source_ids ?? NO_SOURCE_IDS,
+    readableSources: readableSources.value,
     mintId,
   });
   const changesDefinition =

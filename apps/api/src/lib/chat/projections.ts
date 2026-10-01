@@ -1033,6 +1033,21 @@ const playbookAskManualProjection = v.strictObject({
   content: unenumeratedJson(),
 });
 
+/**
+ * A position's sources (`positionSourceSchema`): the documents it was taken
+ * or revised from, already narrowed to the ones this reader can open
+ * (`withReadableSources`), so a ref is only ever minted for a readable
+ * document. `entityId` is the id `save_playbook` takes back in `sources`.
+ */
+const playbookPositionSourcesProjection = v.optional(
+  v.array(
+    v.strictObject({
+      workspaceId: chatRef("matter"),
+      entityId: chatEntityRef({ from: "sibling", key: "workspaceId" }),
+    }),
+  ),
+);
+
 const playbookAskConfigProjection = v.variant("mode", [
   projectionBranch(
     v.strictObject({
@@ -1072,6 +1087,7 @@ const playbookPositionProjection = v.variant("mode", [
       issue: v.string(),
       ask: playbookAskManualProjection,
       guidance: v.optional(v.string()),
+      sources: playbookPositionSourcesProjection,
       enabled: v.boolean(),
     }),
   ),
@@ -1093,6 +1109,7 @@ const playbookPositionProjection = v.variant("mode", [
           escalation: v.optional(v.string()),
         }),
       ),
+      sources: playbookPositionSourcesProjection,
       enabled: v.boolean(),
     }),
   ),
