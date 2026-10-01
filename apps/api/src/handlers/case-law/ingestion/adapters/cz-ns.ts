@@ -47,7 +47,6 @@ import {
   adapterCatch,
   hashContent,
   isNullishArrayOf,
-  isNullishOneOrArrayOf,
   isNullishString,
   isNullishValue,
   parseCeDate,
@@ -149,7 +148,7 @@ type DominoViewEntry = {
 
 type DominoViewResponse = {
   "@toplevelentries"?: string | null;
-  viewentry?: DominoViewEntry | DominoViewEntry[] | null;
+  viewentry?: unknown;
 };
 
 const isDominoText = (
@@ -176,11 +175,14 @@ const isDominoViewEntry = (value: unknown): value is DominoViewEntry =>
 const isDominoViewResponse = (value: unknown): value is DominoViewResponse =>
   isRecord(value) &&
   isNullishString(value["@toplevelentries"]) &&
-  isNullishOneOrArrayOf(value["viewentry"], isDominoViewEntry);
+  (value["viewentry"] === undefined ||
+    value["viewentry"] === null ||
+    Array.isArray(value["viewentry"]) ||
+    isRecord(value["viewentry"]));
 
 const normalizeViewEntries = (
   viewentry: DominoViewResponse["viewentry"],
-): DominoViewEntry[] =>
+): unknown[] =>
   (() => {
     if (viewentry === undefined || viewentry === null) {
       return [];
@@ -1410,10 +1412,17 @@ export const czNsAdapter = defineSourceAdapter({
         const entries = normalizeViewEntries(json.viewentry);
 
         const decisions: IngestionResult[] = [];
+        let refused = 0;
 
         for (let i = 0; i < entries.length; i++) {
           const entry = entries.at(i);
-          if (!entry) {
+          if (!isDominoViewEntry(entry)) {
+            refused += 1;
+            logger.warn("case_law.ingestion.item_build_failed", {
+              adapterKey: ADAPTER_KEYS.CZ_NS,
+              position: start + i,
+              "error.type": "invalid-listing-member",
+            });
             continue;
           }
           const unid = entry["@unid"] ?? "";
@@ -1436,8 +1445,12 @@ export const czNsAdapter = defineSourceAdapter({
                 break;
               }
               case "unkeyable": {
-                // The view entry names no document or no docket: there is
-                // nothing to fetch and nothing the pipeline could key.
+                refused += 1;
+                logger.warn("case_law.ingestion.item_build_failed", {
+                  adapterKey: ADAPTER_KEYS.CZ_NS,
+                  position: start + i,
+                  "error.type": "unkeyable-listing-member",
+                });
                 break;
               }
               default: {
@@ -1452,6 +1465,10 @@ export const czNsAdapter = defineSourceAdapter({
             if (error instanceof DOMException && error.name === "AbortError") {
               return {
                 decisions,
+                itemBuildFailures: {
+                  type: "item_build_failed",
+                  count: refused,
+                },
                 nextCursor: String(start + i),
                 sourceUrl: listUrl,
               };
@@ -1465,6 +1482,10 @@ export const czNsAdapter = defineSourceAdapter({
               if (signal?.aborted) {
                 return {
                   decisions,
+                  itemBuildFailures: {
+                    type: "item_build_failed",
+                    count: refused,
+                  },
                   nextCursor: String(start + i),
                   sourceUrl: listUrl,
                 };
@@ -1494,7 +1515,12 @@ export const czNsAdapter = defineSourceAdapter({
         // Never null — that restarts the full scan from position 1.
         const nextCursor = String(start + entries.length);
 
-        return { decisions, nextCursor, sourceUrl: listUrl };
+        return {
+          decisions,
+          nextCursor,
+          sourceUrl: listUrl,
+          itemBuildFailures: { type: "item_build_failed", count: refused },
+        };
       },
       catch: adapterCatch(ADAPTER_KEYS.CZ_NS, cursor),
     });
