@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const CONFIG_PATH = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
+  import.meta.dirname,
   "../apps/web/e2e/playwright.config.ts",
 );
 const SOURCE_EXTENSION = /\.[cm]?[jt]sx?$/u;
@@ -43,15 +43,21 @@ export const productionE2eInputs = (configPath) => {
       continue;
     }
     const source = readFileSync(file, "utf-8");
-    const imports = [...source.matchAll(/\b(?:from\s*|import\s*\(\s*|require\s*\(\s*|import\s*)["']([^"']+)["']/gu)]
-      .flatMap((match) => match[1] === undefined ? [] : [match[1]]);
+    const imports = [
+      ...source.matchAll(
+        /\b(?:from\s*|import\s*\(\s*|require\s*\(\s*|import\s*)["']([^"']+)["']/gu,
+      ),
+    ].flatMap((match) => (match[1] === undefined ? [] : [match[1]]));
     // Assets and setup hooks are file references rather than module imports
     // (globalTeardown, DOCX_PATH, the route network baseline).
-    const references = [...source.matchAll(/["'](\.{1,2}\/[^"'\n]+)["']/gu)]
-      .flatMap((match) => {
-        const reference = match[1];
-        return reference !== undefined && path.extname(reference) !== "" ? [reference] : [];
-      });
+    const references = [
+      ...source.matchAll(/["'](\.{1,2}\/[^"'\n]+)["']/gu),
+    ].flatMap((match) => {
+      const reference = match[1];
+      return reference !== undefined && path.extname(reference) !== ""
+        ? [reference]
+        : [];
+    });
     for (const reference of [...imports, ...references]) {
       if (!reference.startsWith(".")) {
         continue;
@@ -60,10 +66,19 @@ export const productionE2eInputs = (configPath) => {
       if (!resolved.startsWith(`${root}${path.sep}`)) {
         continue;
       }
-      const candidates = [resolved, `${resolved}.ts`, `${resolved}.tsx`, path.join(resolved, "index.ts")];
-      const input = candidates.find((candidate) => existsSync(candidate) && statSync(candidate).isFile());
+      const candidates = [
+        resolved,
+        `${resolved}.ts`,
+        `${resolved}.tsx`,
+        path.join(resolved, "index.ts"),
+      ];
+      const input = candidates.find(
+        (candidate) => existsSync(candidate) && statSync(candidate).isFile(),
+      );
       if (input === undefined) {
-        throw new TypeError(`Unresolved production E2E input: ${reference} in ${file}`);
+        throw new TypeError(
+          `Unresolved production E2E input: ${reference} in ${file}`,
+        );
       }
       pending.push(input);
     }
@@ -71,7 +86,10 @@ export const productionE2eInputs = (configPath) => {
   return { testDirectory, files };
 };
 
-if (process.argv[1] !== undefined && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+if (
+  process.argv[1] !== undefined &&
+  import.meta.filename === path.resolve(process.argv[1])
+) {
   const changedFiles = process.argv.slice(2);
   const root = path.dirname(CONFIG_PATH);
   const absoluteFiles = changedFiles.map((file) => path.resolve(file));
@@ -79,8 +97,11 @@ if (process.argv[1] !== undefined && fileURLToPath(import.meta.url) === path.res
     console.log(false);
   } else {
     const { testDirectory, files } = productionE2eInputs(CONFIG_PATH);
-    console.log(absoluteFiles.some((file) =>
-      file.startsWith(`${testDirectory}${path.sep}`) || files.has(file),
-    ));
+    console.log(
+      absoluteFiles.some(
+        (file) =>
+          file.startsWith(`${testDirectory}${path.sep}`) || files.has(file),
+      ),
+    );
   }
 }
