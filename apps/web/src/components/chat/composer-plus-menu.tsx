@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import type { RefObject } from "react";
+import type { ComponentProps, RefObject } from "react";
 
 import {
   useInfiniteQuery,
@@ -28,6 +28,8 @@ import {
 import {
   Menu,
   MenuCheckboxItem,
+  MenuGroup,
+  MenuGroupLabel,
   MenuItem,
   MenuPopup,
   MenuSeparator,
@@ -39,11 +41,22 @@ import {
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
+import { useChatEditorManager } from "@/components/chat-editor-provider";
 import {
   buildChatSlashItems,
   commandShortcutRowsFromSkillPages,
 } from "@/components/chat-editor-slash-items";
-import type { ChatMentionOption } from "@/components/chat-mention-extension";
+import {
+  MENTION_CATEGORY_ORDER,
+  MentionIcon,
+  useMentionCategoryLabel,
+} from "@/components/chat-mention-category";
+import { selectChatSuggestionItems } from "@/components/chat-mention-extension";
+import type {
+  ChatMentionOption,
+  ChatReferenceCategory,
+  ChatWorkspaceMentionOption,
+} from "@/components/chat-mention-extension";
 import {
   buildEntityMentionOption,
   buildWorkspaceMentionOptions,
@@ -52,7 +65,6 @@ import {
   getMentionViewScope,
   insertChatMention,
 } from "@/components/chat-mention-helpers";
-import { MentionIcon } from "@/components/chat-mention-list";
 import { insertPastedTextChip } from "@/components/chat-pasted-text-extension";
 import {
   ComposerEditModeSubmenu,
@@ -64,6 +76,8 @@ import {
   type ComposerModelsMenuProps,
 } from "@/components/chat/chat-model-options-menu";
 import {
+  charBeforeCaret,
+  COMPOSER_MENU_SHORTCUT_CHAR,
   resolveComposerMenuShortcut,
   shouldDrainSkillPages,
   type ComposerMenuShortcut,
@@ -71,6 +85,7 @@ import {
 import {
   ComposerSubmenuSearch,
   useFocusSearchOnOpen,
+  type ComposerSearchTrigger,
 } from "@/components/chat/composer-submenu-search";
 import { slashItemChipAttrs } from "@/components/chat/prompt-slash-extension";
 import type { SlashItem } from "@/components/chat/prompt-slash-extension";
@@ -104,8 +119,8 @@ import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { useEntitiesOptions } from "@/lib/workspaces/queries/entities";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 
-/** Enables and drives the Skills submenu. Reuses the same data source and
- *  chip content as the composer's `/` slash menu. */
+/** Enables and drives the Skills submenu and the "/" shortcut. Reuses the
+ *  same data source and chip content as the AI prompt input's `/` menu. */
 export type ComposerSkillsMenuProps = {
   activeOrganizationId: string;
   /** The chat this composer sends in. With it, a skill that chat cannot
@@ -116,15 +131,14 @@ export type ComposerSkillsMenuProps = {
   reservedCommands?: ReservedChatCommandContext | null | undefined;
 };
 
-/** Enables and drives the Context submenu: reference a matter, or a file
- *  inside one, as a mention chip. Reuses the same matter/entity data
- *  sources and the same mention-chip shape as the "@" suggestion popover. */
+/** Enables and drives the Context submenu and the "@" shortcut: reference a
+ *  matter, a file inside one, or anything a registered mention source finds,
+ *  as a mention chip. */
 export type ComposerContextMenuProps = {
   activeOrganizationId: string;
   editor: Editor | null;
   /** Scopes an inserted file/matter mention's `sourceWorkspaceId`: omitted
-   *  when the referenced matter is already the thread's own workspace,
-   *  mirroring the "@" popover's cross-matter bookkeeping. */
+   *  when the referenced matter is already the thread's own workspace. */
   threadRef: ChatThreadRef;
 };
 
@@ -163,11 +177,12 @@ type ComposerPlusMenuProps = {
 // composer — is what triggers the fetches.
 //
 // The "/" and "@" editor shortcuts open the Skills or Context list as a
-// standalone popup anchored to the same button, never as the root menu with a
+// standalone popup anchored at the caret, never as the root menu with a
 // submenu forced open: a shortcut leaves the pointer wherever the caret was,
 // typically on top of a sibling root item, and Base UI closes an open submenu
 // as soon as the pointer moves over a sibling (`itemhover`), so the popup
-// gets no siblings to lose to.
+// gets no siblings to lose to. These popups are the composer's only "/" and
+// "@" pickers; the editor itself installs no inline suggestion popover.
 export const ComposerPlusMenu = ({
   disabled,
   guideAnchorsEnabled = false,
@@ -188,15 +203,21 @@ export const ComposerPlusMenu = ({
   const [shortcutMenu, setShortcutMenu] = useState<ComposerMenuShortcut | null>(
     null,
   );
+  // Set together with `shortcutMenu` but never cleared, so a closing popup
+  // animates out where it opened instead of jumping to the (+) button.
+  const [shortcutAnchor, setShortcutAnchor] = useState<ShortcutAnchor | null>(
+    null,
+  );
   const triggerRef = useRef<HTMLButtonElement>(null);
   const shortcutEditor = skills?.editor ?? context?.editor ?? null;
   const hasSkillsShortcut = skills !== undefined;
   const hasContextShortcut = context !== undefined;
 
   // The menu owns its editor shortcuts. Any composer that renders a Skills
-  // submenu therefore gets the same "/" behavior at any cursor position
-  // without a second surface-level key handler that can drift. The slash is
-  // consumed here and the Skills list owns filtering.
+  // or Context submenu therefore gets the same "/" and "@" behavior wherever
+  // a word starts, without a second surface-level key handler that can
+  // drift. The trigger is consumed here (the search field shows it instead)
+  // and the list owns filtering.
   useExternalSyncEffect(() => {
     if (!shortcutEditor || shortcutEditor.isDestroyed) {
       return undefined;
@@ -210,12 +231,12 @@ export const ComposerPlusMenu = ({
 
       const shortcut = resolveComposerMenuShortcut({
         altKey: event.altKey,
+        charBeforeCaret: charBeforeCaret(shortcutEditor.state.selection.$from),
         ctrlKey: event.ctrlKey,
         hasContext: hasContextShortcut,
         hasSkills: hasSkillsShortcut,
         isAltGraph: event.getModifierState("AltGraph"),
         isComposing: event.isComposing,
-        isEditorEmpty: shortcutEditor.isEmpty,
         key: event.key,
         metaKey: event.metaKey,
       });
@@ -225,6 +246,7 @@ export const ComposerPlusMenu = ({
 
       event.preventDefault();
       event.stopImmediatePropagation();
+      setShortcutAnchor(createCaretAnchor(shortcutEditor, triggerRef));
       setShortcutMenu(shortcut);
     };
 
@@ -236,12 +258,15 @@ export const ComposerPlusMenu = ({
     };
   }, [disabled, hasContextShortcut, hasSkillsShortcut, shortcutEditor]);
 
+  // Focusing without a position keeps the editor's own selection: the caret
+  // the trigger was typed at, or wherever an outside click just put it.
   const closeShortcutMenu = () => {
     setShortcutMenu(null);
     if (shortcutEditor && !shortcutEditor.isDestroyed) {
       shortcutEditor.commands.focus();
     }
   };
+  const popupAnchor = shortcutAnchor ?? triggerRef;
   const submenuHost = { kind: "submenu", guideAnchorsEnabled } as const;
 
   return (
@@ -327,7 +352,7 @@ export const ComposerPlusMenu = ({
           enabled={shortcutMenu === "skills"}
           host={{
             kind: "shortcut",
-            anchor: triggerRef,
+            anchor: popupAnchor,
             open: shortcutMenu === "skills",
             onClose: closeShortcutMenu,
           }}
@@ -340,7 +365,7 @@ export const ComposerPlusMenu = ({
           enabled={shortcutMenu === "context"}
           host={{
             kind: "shortcut",
-            anchor: triggerRef,
+            anchor: popupAnchor,
             open: shortcutMenu === "context",
             onClose: closeShortcutMenu,
           }}
@@ -350,19 +375,57 @@ export const ComposerPlusMenu = ({
   );
 };
 
+type ShortcutAnchor = NonNullable<ComponentProps<typeof MenuPopup>["anchor"]>;
+
+/**
+ * A virtual anchor at the caret a shortcut was typed at. The position is read
+ * once, so the anchor keeps one identity while its popup is open; the rect is
+ * re-measured on each layout so it follows scrolling, falling back to the (+)
+ * button once the caret can no longer be measured.
+ */
+const createCaretAnchor = (
+  editor: Editor,
+  fallback: RefObject<HTMLButtonElement | null>,
+): ShortcutAnchor => {
+  const caret = editor.state.selection.from;
+  return {
+    contextElement: editor.view.dom,
+    getBoundingClientRect: () => {
+      if (!editor.isDestroyed) {
+        const coords = Result.try(() => editor.view.coordsAtPos(caret));
+        if (!Result.isError(coords)) {
+          const { bottom, left, top } = coords.value;
+          return new DOMRect(left, top, 0, bottom - top);
+        }
+      }
+      return fallback.current?.getBoundingClientRect() ?? new DOMRect();
+    },
+  };
+};
+
 /**
  * Where a Skills or Context list renders: as a hover-opening submenu of the
  * (+) root menu, or as the standalone popup an editor shortcut opens, anchored
- * to the same button and owned by the shortcut's open state.
+ * at the caret and owned by the shortcut's open state.
  */
 type ComposerListHost =
   | { kind: "submenu"; guideAnchorsEnabled: boolean }
   | {
       kind: "shortcut";
-      anchor: RefObject<HTMLButtonElement | null>;
+      anchor: ShortcutAnchor;
       open: boolean;
       onClose: () => void;
     };
+
+/** The shortcut popup's search leads with the trigger the user typed; the
+ *  (+) submenus keep the magnifier. */
+const searchTrigger = (
+  host: ComposerListHost,
+  shortcut: ComposerMenuShortcut,
+): ComposerSearchTrigger | undefined =>
+  host.kind === "shortcut"
+    ? { char: COMPOSER_MENU_SHORTCUT_CHAR[shortcut], onErase: host.onClose }
+    : undefined;
 
 const ComposerSubmenuEmpty = ({ children }: { children: React.ReactNode }) => (
   <p className="text-muted-foreground px-2.5 py-2 text-xs">{children}</p>
@@ -706,6 +769,7 @@ const ComposerSkillsMenu = ({
         onChange={setSearch}
         placeholder={t("chat.composerMenu.searchSkills")}
         ref={searchRef}
+        trigger={searchTrigger(host, "skills")}
         value={search}
       />
       {skillItemsContent}
@@ -761,7 +825,7 @@ const ComposerSkillsMenu = ({
   );
 };
 
-// The trigger-less Menu a shortcut opens beside the (+) button, following the
+// The trigger-less Menu a shortcut opens at the caret, following the
 // sr-only-trigger shape of the shell's anchored menus (`useAnchoredMenu`).
 const ComposerShortcutPopup = ({
   anchor,
@@ -770,7 +834,7 @@ const ComposerShortcutPopup = ({
   onOpenChange,
   open,
 }: {
-  anchor: RefObject<HTMLButtonElement | null>;
+  anchor: ShortcutAnchor;
   children: React.ReactNode;
   label: string;
   onOpenChange: (open: boolean) => void;
@@ -796,14 +860,50 @@ type ContextMatter = {
   color: string | null;
 };
 
-// Top level of the Context submenu: search-filtered matters, each a nested
-// hover-opening submenu (see `ComposerContextMatterSub`) rather than a
-// selectable leaf — picking a matter row's own mention happens one level
-// down, alongside its files, so the same click target isn't overloaded with
-// "open the submenu" and "insert a mention" at once. Kept to one kind
-// (files) for now; other referenceable kinds (tasks, etc.) would slot in
-// next to `ComposerContextMatterSub`'s file list without changing this
-// level's shape.
+const isWorkspaceMention = (
+  option: ChatMentionOption,
+): option is ChatWorkspaceMentionOption => option.category === "workspace";
+
+/**
+ * The provider's mention sources searched with the typed query: the open
+ * matter's files, case law, and the local options merged in by the same
+ * selector (`selectChatSuggestionItems`), so the Context list offers
+ * everything a mention source registers. Settles over the same 150ms window
+ * as the matter file search; an empty query searches nothing.
+ */
+const useContextMentionSearch = (open: boolean, search: string) => {
+  const { getMentionItems, searchMentionItems } = useChatEditorManager();
+  const [query] = useDebounce(search.trim(), CHAT_MENTION_SEARCH_DEBOUNCE_MS);
+  const enabled = open && query !== "";
+  const { data, isFetching } = useQuery({
+    queryKey: ["chat-mention-search", query],
+    queryFn: async () => {
+      const [localItems, searchedItems] = await Promise.all([
+        getMentionItems(),
+        searchMentionItems(query),
+      ]);
+      return selectChatSuggestionItems({ localItems, query, searchedItems });
+    },
+    enabled,
+    staleTime: 0,
+    refetchOnWindowFocus: false,
+  });
+  return {
+    results: enabled && data ? data : [],
+    // Still settling: the debounce has not caught up with the field, or the
+    // sources are answering.
+    isSearching:
+      search.trim() !== "" && (query !== search.trim() || isFetching),
+  };
+};
+
+// Top level of the Context list: matters, each a nested hover-opening
+// submenu (see `ComposerContextMatterSub`) rather than a selectable leaf —
+// picking a matter row's own mention happens one level down, alongside its
+// files, so the same click target isn't overloaded with "open the submenu"
+// and "insert a mention" at once. A non-empty search also lists the mention
+// sources' matches (files, case law) grouped by category, so a word typed
+// after "@" finds what it names wherever it lives.
 const ComposerContextMenu = ({
   context,
   enabled,
@@ -820,13 +920,14 @@ const ComposerContextMenu = ({
   const [search, setSearch] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
   useFocusSearchOnOpen(open, searchRef);
-  // Same navigation list `ChatMatterPicker` and the "@" popover's workspace
-  // mentions read from — no dedicated endpoint for this submenu.
+  // Same navigation list `ChatMatterPicker` and the mention sources' matter
+  // options read from — no dedicated endpoint for this submenu.
   const { data } = useQuery({
     ...workspacesNavigationOptions(activeOrganizationId),
     enabled,
   });
   const matters: ContextMatter[] = data ? data.workspaces : [];
+  const mentionSearch = useContextMentionSearch(open, search);
 
   const query = search.trim().toLowerCase();
   const filteredMatters = query
@@ -852,22 +953,17 @@ const ComposerContextMenu = ({
         onChange={setSearch}
         placeholder={t("chat.composerMenu.searchMatters")}
         ref={searchRef}
+        trigger={searchTrigger(host, "context")}
         value={search}
       />
-      {filteredMatters.length === 0 ? (
-        <ComposerSubmenuEmpty>
-          {t("chat.composerMenu.noMatters")}
-        </ComposerSubmenuEmpty>
-      ) : (
-        filteredMatters.map((matter) => (
-          <ComposerContextMatterSub
-            editor={editor}
-            key={matter.id}
-            matter={matter}
-            threadRef={threadRef}
-          />
-        ))
-      )}
+      <ComposerContextResults
+        editor={editor}
+        hasQuery={query !== ""}
+        isSearching={mentionSearch.isSearching}
+        matters={filteredMatters}
+        mentions={mentionSearch.results}
+        threadRef={threadRef}
+      />
     </>
   );
 
@@ -899,12 +995,119 @@ const ComposerContextMenu = ({
   );
 };
 
+// The Context list's rows, grouped in the shared mention order. Matters come
+// from the navigation list (every match, with its drill-down), plus any matter
+// option a mention source adds that the list lacks; the other categories come
+// from the mention search. Group labels appear once more than one group does.
+const ComposerContextResults = ({
+  editor,
+  hasQuery,
+  isSearching,
+  matters,
+  mentions,
+  threadRef,
+}: {
+  editor: Editor | null;
+  hasQuery: boolean;
+  isSearching: boolean;
+  matters: ContextMatter[];
+  mentions: ChatMentionOption[];
+  threadRef: ChatThreadRef;
+}) => {
+  const t = useTranslations();
+  const categoryLabel = useMentionCategoryLabel();
+  const matterIds = new Set(matters.map((matter) => matter.id));
+  const sourcedMatters = mentions
+    .filter(isWorkspaceMention)
+    .filter((option) => !matterIds.has(option.resource.id))
+    .map((option): ContextMatter => ({
+      id: option.resource.id,
+      name: option.label,
+      color: null,
+    }));
+
+  const renderRows = (category: ChatReferenceCategory): React.ReactNode[] => {
+    if (category === "workspace") {
+      return [...matters, ...sourcedMatters].map((matter) => (
+        <ComposerContextMatterSub
+          editor={editor}
+          key={matter.id}
+          matter={matter}
+          threadRef={threadRef}
+        />
+      ));
+    }
+    return mentions
+      .filter((option) => option.category === category)
+      .map((option) => (
+        <ComposerMentionItem
+          editor={editor}
+          key={option.resource.id}
+          option={option}
+        />
+      ));
+  };
+  const groups = MENTION_CATEGORY_ORDER.map((category) => ({
+    category,
+    rows: renderRows(category),
+  })).filter((group) => group.rows.length > 0);
+
+  if (groups.length === 0) {
+    if (isSearching) {
+      return <ComposerSubmenuEmpty>{t("common.loading")}</ComposerSubmenuEmpty>;
+    }
+    return (
+      <ComposerSubmenuEmpty>
+        {hasQuery ? t("common.noResults") : t("chat.composerMenu.noMatters")}
+      </ComposerSubmenuEmpty>
+    );
+  }
+  return (
+    <>
+      {groups.map((group) => (
+        <MenuGroup key={group.category}>
+          {groups.length > 1 && (
+            <MenuGroupLabel>{categoryLabel(group.category)}</MenuGroupLabel>
+          )}
+          {group.rows}
+        </MenuGroup>
+      ))}
+      {isSearching && (
+        <ComposerSubmenuEmpty>{t("common.loading")}</ComposerSubmenuEmpty>
+      )}
+    </>
+  );
+};
+
+// One mention option (a file or a decision) as a menu row: the same glyph and
+// the same chip (`insertChatMention`) wherever the option was found.
+const ComposerMentionItem = ({
+  editor,
+  option,
+}: {
+  editor: Editor | null;
+  option: ChatMentionOption;
+}) => (
+  <MenuItem
+    onClick={() => {
+      if (!editor || editor.isDestroyed) {
+        return;
+      }
+      insertChatMention(editor, option);
+    }}
+  >
+    <MentionIcon mention={option} />
+    <BidiText as="span" className="min-w-0 flex-1 truncate">
+      {option.label}
+    </BidiText>
+  </MenuItem>
+);
+
 // One matter's nested submenu: a leading row to mention the matter itself
 // (selecting the parent row only opens this submenu, so the matter-level
 // mention needs its own target), then the matter's files — fetched lazily,
 // only once this specific submenu opens, and scoped to the matter's first
-// view exactly like the "@" popover's workspace drill-down
-// (`loadWorkspaceEntities` in chat-editor-provider.tsx).
+// view like the workspace mention source (`getMentionViewScope`).
 const ComposerContextMatterSub = ({
   editor,
   matter,
@@ -920,7 +1123,11 @@ const ComposerContextMatterSub = ({
   const searchRef = useRef<HTMLInputElement>(null);
   useFocusSearchOnOpen(open, searchRef);
 
-  const { data: views, isPending: isLoadingViews } = useQuery({
+  const {
+    data: views,
+    isError: viewsFailed,
+    isPending: isLoadingViews,
+  } = useQuery({
     ...viewsOptions(matter.id),
     enabled: open,
   });
@@ -929,9 +1136,9 @@ const ComposerContextMatterSub = ({
     () => getMentionViewScope(activeView?.layout),
     [activeView?.layout],
   );
-  // Same 150ms settle window as the "@" popover's entity search
-  // (`debouncedSearchEntities` in chat-editor-provider.tsx), so typing here
-  // produces the same request cadence instead of a query per keystroke.
+  // Same 150ms settle window as the workspace mention source's entity search
+  // (`use-workspace-chat-mention-registration.ts`), so typing here produces
+  // the same request cadence instead of a query per keystroke.
   const [debouncedSearch] = useDebounce(
     search.trim(),
     CHAT_MENTION_SEARCH_DEBOUNCE_MS,
@@ -946,15 +1153,14 @@ const ComposerContextMatterSub = ({
     }),
     [debouncedSearch, filters, matter.id, sorts],
   );
-  const { data: entitiesData } = useQuery({
+  const { data: entitiesData, isError: entitiesFailed } = useQuery({
     ...useEntitiesOptions(entitiesKey),
     enabled: open && views !== undefined,
   });
 
-  // Cross-matter bookkeeping mirrors `fetchWorkspaceEntities`: only stamp a
-  // `sourceWorkspaceId` when the file's matter differs from the thread's own
-  // workspace, so a same-matter mention stays byte-identical to one typed
-  // via "@" in that matter's own chat.
+  // Only stamp a `sourceWorkspaceId` when the file's matter differs from the
+  // thread's own workspace, so a same-matter mention stays byte-identical to
+  // one picked in that matter's own chat.
   const sourceWorkspaceId =
     threadRef.scope === "workspace" && threadRef.workspaceId === matter.id
       ? undefined
@@ -976,14 +1182,14 @@ const ComposerContextMatterSub = ({
     [matter.id, matter.name],
   );
 
-  const handleSelect = (option: ChatMentionOption) => {
-    if (!editor || editor.isDestroyed) {
-      return;
-    }
-    insertChatMention(editor, option);
-  };
-
   const renderFileOptions = () => {
+    if (viewsFailed || entitiesFailed) {
+      return (
+        <ComposerSubmenuEmpty>
+          {t("chat.mention.loadError")}
+        </ComposerSubmenuEmpty>
+      );
+    }
     if (isLoadingViews || !entitiesData) {
       return <ComposerSubmenuEmpty>{t("common.loading")}</ComposerSubmenuEmpty>;
     }
@@ -995,17 +1201,11 @@ const ComposerContextMatterSub = ({
       );
     }
     return fileOptions.map((option) => (
-      <MenuItem
+      <ComposerMentionItem
+        editor={editor}
         key={option.resource.id}
-        onClick={() => {
-          handleSelect(option);
-        }}
-      >
-        <MentionIcon mention={option} />
-        <BidiText as="span" className="min-w-0 flex-1 truncate">
-          {option.label}
-        </BidiText>
-      </MenuItem>
+        option={option}
+      />
     ));
   };
 
@@ -1037,7 +1237,9 @@ const ComposerContextMatterSub = ({
         {matterMentionOption && (
           <MenuItem
             onClick={() => {
-              handleSelect(matterMentionOption);
+              if (editor && !editor.isDestroyed) {
+                insertChatMention(editor, matterMentionOption);
+              }
             }}
           >
             <MatterIcon

@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   isMenuNavigationKey,
+  isTriggerErase,
   scheduleSearchFocus,
 } from "./composer-submenu-search.logic";
 
@@ -13,6 +14,13 @@ describe("composer submenu search interactions", () => {
     for (const key of ["a", " ", "Backspace", "Tab"]) {
       expect(isMenuNavigationKey(key)).toBe(false);
     }
+  });
+
+  test("erases the trigger only on Backspace in an empty field", () => {
+    expect(isTriggerErase("Backspace", "")).toBe(true);
+    expect(isTriggerErase("Backspace", "c")).toBe(false);
+    expect(isTriggerErase("Delete", "")).toBe(false);
+    expect(isTriggerErase("a", "")).toBe(false);
   });
 
   test("focuses through the scheduled callback", () => {
