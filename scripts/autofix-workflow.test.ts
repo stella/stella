@@ -260,11 +260,15 @@ describe("changed-file autofix boundary", () => {
     );
     expect(
       ordered.findIndex(({ id }) => id === "capability-catalog"),
+    ).toBeLessThan(ordered.findIndex(({ id }) => id === "capability-runtime"));
+    expect(
+      ordered.findIndex(({ id }) => id === "capability-runtime"),
     ).toBeLessThan(ordered.findIndex(({ id }) => id === "cli-registry"));
     expect(ordered.map(({ id }) => id).toSorted()).toEqual(
       [
         "ratchet-improvements",
         "capability-catalog",
+        "capability-runtime",
         "cli-registry",
         "mcp-app-bundles",
         "web-api-types",

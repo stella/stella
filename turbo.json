@@ -81,6 +81,7 @@
       "outputs": [".cache/tsbuildinfo*.json", "**/.cache/tsbuildinfo*.json"]
     },
     "//#typecheck:repo": {
+      "dependsOn": ["@stll/api#generate:capability-runtime"],
       // Root projects can import workspace source. The broad workspace inputs
       // trade some misses for correctness while still sharing exact results
       // and compiler state between linked worktrees and CI runners.
@@ -273,8 +274,29 @@
         "$TURBO_ROOT$/.github/workflows/scheduled-run-alerts.yml"
       ]
     },
+    "@stll/api#generate:capability-runtime": {
+      "inputs": [
+        "scripts/generate-capability-runtime.ts",
+        "src/mcp/generated/capability-dispatch/**",
+        "$TURBO_ROOT$/packages/cli/capabilities/**",
+        "$TURBO_ROOT$/packages/cli/src/capability-catalog-data.ts"
+      ],
+      "outputs": [
+        "src/mcp/generated/capability-dispatch.ts",
+        "src/mcp/generated/capability-catalog.ts"
+      ]
+    },
+    "@stll/api#build": {
+      "dependsOn": ["^build", "generate:capability-runtime"]
+    },
+    "@stll/api#typecheck": {
+      "dependsOn": ["transit", "generate:capability-runtime"]
+    },
+    "@stll/api#lint": {
+      "dependsOn": ["transit", "generate:capability-runtime"]
+    },
     "@stll/api#test": {
-      "dependsOn": [],
+      "dependsOn": ["generate:capability-runtime"],
       // How many test batches run at once; it never changes results, so it
       // passes through without entering the cache key.
       "passThroughEnv": ["API_TEST_LANES"],

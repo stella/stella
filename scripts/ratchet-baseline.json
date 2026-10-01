@@ -1336,7 +1336,26 @@
   "capability-file-transport-suppressed": {
     "count": 20,
     "files": {
-      "packages/cli/capability-catalog.json": 20
+      "packages/cli/capabilities/clauses.export.json": 1,
+      "packages/cli/capabilities/clauses.import.json": 1,
+      "packages/cli/capabilities/contacts.export.json": 1,
+      "packages/cli/capabilities/entities.stamps.check.json": 1,
+      "packages/cli/capabilities/entities.upload.json": 1,
+      "packages/cli/capabilities/entities.versions.upload.json": 1,
+      "packages/cli/capabilities/entities.zip.download.json": 1,
+      "packages/cli/capabilities/skills.resources.upload.json": 1,
+      "packages/cli/capabilities/skills.upload.json": 1,
+      "packages/cli/capabilities/style-sets.create.json": 1,
+      "packages/cli/capabilities/style-sets.replace.json": 1,
+      "packages/cli/capabilities/templates.create.json": 1,
+      "packages/cli/capabilities/templates.discover.json": 1,
+      "packages/cli/capabilities/templates.document.update.json": 1,
+      "packages/cli/capabilities/templates.fill.json": 1,
+      "packages/cli/capabilities/templates.fills.download.json": 1,
+      "packages/cli/capabilities/templates.from-styles.create.json": 1,
+      "packages/cli/capabilities/templates.prepare.json": 1,
+      "packages/cli/capabilities/time-entries.pdf.export.json": 1,
+      "packages/cli/capabilities/views.table.export.json": 1
     }
   },
   "read-capabilities-with-write-scope": {

@@ -1,9 +1,17 @@
 import { describe, expect, test } from "bun:test";
 
-import capabilityCatalog from "@stll/cli/capability-catalog.json";
+import { readCapabilityCatalog } from "@stll/cli/capability-catalog-data";
 
+import { isRecord } from "@/api/lib/type-guards";
 import { DEFAULT_MCP_CLI_ANNOTATIONS } from "@/api/mcp/static-cli-metadata";
 import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
+
+const capabilityCatalog = readCapabilityCatalog().map((entry) => {
+  if (!isRecord(entry)) {
+    throw new TypeError("Invalid capability catalog entry");
+  }
+  return entry;
+});
 
 describe("template persistence capability scope parity", () => {
   test("fill-to-workspace requires the same document-write consent as its covering tool", () => {

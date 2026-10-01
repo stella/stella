@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { TOOL_ANNOTATIONS } from "./annotations.js";
+import { readCapabilityCatalog } from "./capability-catalog-data.js";
 import { parseCapabilityCatalog } from "./capability-catalog-load.js";
 import {
   type CapabilityCatalogEntry,
@@ -614,12 +615,14 @@ describe("insertCapabilities: namespaced merge", () => {
 
 describe("insertCapabilities: against the real curated tree + catalog", () => {
   test("merges the committed catalog with the expected shape", async () => {
-    const catalogUrl = new URL("../capability-catalog.json", import.meta.url);
     const snapshotUrl = new URL(
       "generated/registry-snapshot.json",
       import.meta.url,
     );
-    const catalog: CapabilityCatalogEntry[] = await Bun.file(catalogUrl).json();
+    const catalog = parseCapabilityCatalog(readCapabilityCatalog());
+    if (catalog === null) {
+      throw new TypeError("Invalid capability catalog");
+    }
     const listings = await Bun.file(snapshotUrl).json();
     const curated = generateRouteMap(listings, TOOL_ANNOTATIONS);
     const { stats } = insertCapabilities({
@@ -639,9 +642,10 @@ describe("insertCapabilities: against the real curated tree + catalog", () => {
     // projection, which flattens that to the scalar; a union surviving here
     // would give the generated command an opaque `--input` where the MCP
     // surface advertises a bounded flag.
-    const catalog: { id: string; inputSchema: unknown }[] = await Bun.file(
-      new URL("../capability-catalog.json", import.meta.url),
-    ).json();
+    const catalog = parseCapabilityCatalog(readCapabilityCatalog());
+    if (catalog === null) {
+      throw new TypeError("Invalid capability catalog");
+    }
     const coercionFormats = new Set(["integer", "numeric", "boolean"]);
     const offenders: string[] = [];
     const walk = (node: unknown, path: string): void => {
@@ -686,9 +690,10 @@ describe("insertCapabilities: against the real curated tree + catalog", () => {
     // read as a plain JSON capability by anything less strict than
     // `parseCapabilityCatalog`, which is exactly the silent default this
     // field replaced.
-    const catalog: { transport?: unknown }[] = await Bun.file(
-      new URL("../capability-catalog.json", import.meta.url),
-    ).json();
+    const catalog = parseCapabilityCatalog(readCapabilityCatalog());
+    if (catalog === null) {
+      throw new TypeError("Invalid capability catalog");
+    }
     expect(catalog.filter((e) => e.transport === undefined)).toEqual([]);
   });
 });
@@ -727,9 +732,10 @@ describe("curated commands must not shadow capability commands", () => {
   };
 
   test("every generated capability stays at one fixed-depth namespace", async () => {
-    const catalog: CapabilityCatalogEntry[] = await Bun.file(
-      new URL("../capability-catalog.json", import.meta.url),
-    ).json();
+    const catalog = parseCapabilityCatalog(readCapabilityCatalog());
+    if (catalog === null) {
+      throw new TypeError("Invalid capability catalog");
+    }
     const listings = await Bun.file(
       new URL("generated/registry-snapshot.json", import.meta.url),
     ).json();
@@ -793,9 +799,7 @@ describe("every capability flag maps to a real path in its wrapper schema", () =
   };
 
   test("no flag targets a path absent from the wrapper schema", async () => {
-    const raw: unknown = await Bun.file(
-      new URL("../capability-catalog.json", import.meta.url),
-    ).json();
+    const raw = readCapabilityCatalog();
     const entries = parseCapabilityCatalog(raw);
     expect(entries).not.toBeNull();
 

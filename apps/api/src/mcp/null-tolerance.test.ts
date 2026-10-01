@@ -98,8 +98,14 @@ const loadOrgSettingsMock = mock(async () => ({
   promptCachingEnabled: false,
 }));
 const { handleMcpToolCall } = await import("@/api/mcp/tools");
-const capabilityCatalog = (await import("@stll/cli/capability-catalog.json"))
-  .default;
+const { readCapabilityCatalog } =
+  await import("@stll/cli/capability-catalog-data");
+const { parseCapabilityCatalog } =
+  await import("../../../../packages/cli/src/capability-catalog-load");
+const capabilityCatalog = parseCapabilityCatalog(readCapabilityCatalog());
+if (capabilityCatalog === null) {
+  throw new TypeError("Invalid capability catalog");
+}
 
 type ToolResult = Awaited<ReturnType<typeof handleMcpToolCall>>;
 

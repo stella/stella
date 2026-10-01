@@ -1,20 +1,18 @@
 // Loader/validator for the committed capability-catalog snapshot
-// (`../capability-catalog.json`, written by the api-side exporter).
+// (`../capabilities/`, written by the api-side exporter).
 // Shared by build-time codegen (strict: a malformed snapshot panics) and the
 // runtime registry-refresh path (tolerant: `null` falls back to the baked-in
 // tree), so both consume the identical projection of the catalog entries.
 
 import { panic, Result } from "better-result";
-import { readFile } from "node:fs/promises";
 import * as v from "valibot";
 
+import { readCapabilityCatalog } from "./capability-catalog-data.js";
 import type {
   CapabilityCatalogEntry,
   CatalogTransport,
 } from "./generate-capability-tree.js";
 import { MAX_REQUEST_TIMEOUT_MS } from "./route-types.js";
-
-const CATALOG_URL = new URL("../capability-catalog.json", import.meta.url);
 
 const jsonSchemaSchema = v.record(v.string(), v.unknown());
 
@@ -150,16 +148,14 @@ export const parseCapabilityCatalog = (
 
 /**
  * Load the baked-in catalog snapshot beside this module (works from `src` at
- * codegen time and from `dist` in the published package, where the build copies
- * the JSON). Returns `null` on a missing/corrupt file so the runtime caller can
- * fall back to the baked-in route tree instead of crashing.
+ * codegen time and from `dist` in the published package). Returns `null` on
+ * missing/corrupt shards so runtime can fall back to the baked-in route tree.
  */
 export const loadBakedCapabilityCatalog = async (): Promise<
   CapabilityCatalogEntry[] | null
 > => {
   const parsed = await Result.tryPromise({
-    try: async (): Promise<unknown> =>
-      JSON.parse(await readFile(CATALOG_URL, "utf-8")),
+    try: async () => readCapabilityCatalog(),
     catch: (cause) => cause,
   });
   if (Result.isError(parsed)) {

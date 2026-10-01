@@ -41,7 +41,9 @@
 
 import { panic } from "better-result";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
+import { readCapabilityCatalog } from "../../../packages/cli/src/capability-catalog-data";
 import { parseCapabilityCatalog } from "../../../packages/cli/src/capability-catalog-load";
 import { REPO_ROOT } from "./lib/enumerate-safe-handlers";
 
@@ -50,7 +52,7 @@ const LEDGER_PATH = path.resolve(
   "apps/api/capability-description-ledger.json",
 );
 
-const CATALOG_PATH = "packages/cli/capability-catalog.json";
+const CATALOG_PATH = "packages/cli/capabilities/";
 
 type CatalogEntry = { id: string; description?: string };
 
@@ -120,7 +122,7 @@ export const computeLedgerDiff = ({
 
 const readCatalog = async (relativePath: string): Promise<CatalogEntry[]> => {
   const absolute = path.resolve(REPO_ROOT, relativePath);
-  const raw: unknown = await Bun.file(absolute).json();
+  const raw = readCapabilityCatalog(pathToFileURL(`${absolute}/`));
   const parsed = parseCapabilityCatalog(raw);
   if (parsed === null) {
     return panic(

@@ -73,6 +73,37 @@ test("Guard A rejects an unregistered generated source and ignores ordinary comm
   );
 });
 
+test("capability shard additions are registered and feed CLI generation", () => {
+  const catalogShard = "packages/cli/capabilities/matters.list.json";
+  const dispatchShard =
+    "apps/api/src/mcp/generated/capability-dispatch/matters.list.ts";
+  expect(isRegisteredGeneratedFile(catalogShard)).toBe(true);
+  expect(isRegisteredGeneratedFile(dispatchShard)).toBe(true);
+  expect(generatorsForFiles([catalogShard]).map(({ id }) => id)).toContain(
+    "cli-registry",
+  );
+  expect(generator("capability-catalog").outputs).not.toContain(
+    "apps/api/src/mcp/generated/capability-dispatch.ts",
+  );
+});
+
+test("runtime aggregate outputs stay ignored when generators write them", () => {
+  const outputs = generator("capability-runtime").outputs;
+  const ignored = Bun.spawnSync(
+    ["git", "check-ignore", "--no-index", "--stdin"],
+    {
+      cwd: new URL("..", import.meta.url).pathname,
+      stdin: new TextEncoder().encode(`${outputs.join("\n")}\n`),
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  );
+  expect(ignored.exitCode).toBe(0);
+  expect(
+    new TextDecoder().decode(ignored.stdout).trim().split("\n").toSorted(),
+  ).toEqual([...outputs].toSorted());
+});
+
 test("Guard A ignores hand-written certificate and error fixtures", async () => {
   for (const name of [
     "self-signed-certificate",
@@ -160,6 +191,7 @@ test("the route generator guard rejects missing script and direct pin", async ()
 test("autofix selects only owners of changed inputs and preserves dependencies", () => {
   const requiredIds = [
     "capability-catalog",
+    "capability-runtime",
     "cli-registry",
     "mcp-surface",
   ] satisfies readonly (typeof GENERATORS)[number]["id"][];
@@ -185,6 +217,9 @@ test("autofix selects only owners of changed inputs and preserves dependencies",
   );
   expect(
     ordered.findIndex(({ id }) => id === "capability-catalog"),
+  ).toBeLessThan(ordered.findIndex(({ id }) => id === "capability-runtime"));
+  expect(
+    ordered.findIndex(({ id }) => id === "capability-runtime"),
   ).toBeLessThan(ordered.findIndex(({ id }) => id === "cli-registry"));
 });
 
@@ -194,7 +229,12 @@ test("autofix selection closes over generated outputs and ordering dependencies"
     .split("\0")
     .filter(Boolean);
   const changedPaths = [
-    [".oxfmtrc.json", "capability-catalog", "cli-registry"],
+    [
+      ".oxfmtrc.json",
+      "capability-catalog",
+      "capability-runtime",
+      "cli-registry",
+    ],
     [
       "packages/api-contract/src/mcp-tool.ts",
       "mcp-app-bundles",

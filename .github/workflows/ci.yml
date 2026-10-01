@@ -1201,6 +1201,7 @@ jobs:
         # change cannot silently ship stale CLI, web approval, or skill behavior.
         # Regenerate: `bun run codegen` in packages/cli.
         run: |
+          bun apps/api/scripts/generate-capability-runtime.ts
           (cd packages/cli && bun run codegen)
           git diff --exit-code -- \
             chatgpt-app-submission.json \
@@ -1244,8 +1245,9 @@ jobs:
         # The committed capability catalog (every `tool`/`covered` safe handler,
         # projected to id + input schema + permissions + scope + access +
         # destructive) must match the live handler graph. `--check` regenerates
-        # it in-memory and byte-compares against the committed JSON, so a handler
-        # or mapping-table change cannot silently ship a stale catalog.
+        # each shard in-memory and byte-compares against the committed JSON,
+        # rejecting stale shards, so a handler or mapping-table change cannot
+        # silently ship a stale catalog.
         # Regenerate: `bun --env-file=apps/api/.env
         # apps/api/scripts/export-capability-catalog.ts`.
         run: |
@@ -1543,6 +1545,10 @@ jobs:
       - name: Test CLI release coupling gate
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: bun test scripts/check-cli-release-coupling.test.ts
+
+      - name: Test capability shard merge and package parity
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: bun test scripts/capability-shard-merge.test.ts scripts/capability-shard-pack.test.ts
 
       - name: Test CLI contract changeset guard
         if: needs.ci-plan.outputs.package_checks_required == 'true'

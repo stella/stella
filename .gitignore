@@ -76,3 +76,7 @@ i18n.cache
 
 # Claude Code runtime artifacts
 .claude/scheduled_tasks.lock
+
+# API runtime aggregates embed the committed per-capability shards.
+apps/api/src/mcp/generated/capability-dispatch.ts
+apps/api/src/mcp/generated/capability-catalog.ts

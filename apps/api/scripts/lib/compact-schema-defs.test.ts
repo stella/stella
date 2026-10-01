@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { readCapabilityCatalog } from "../../../../packages/cli/src/capability-catalog-data";
 import { expandSchemaDefs } from "../../../../packages/cli/src/expand-schema-defs";
 import {
   inputSchemaByteSize,
@@ -20,20 +21,15 @@ import { compactSchemaDefs } from "./compact-schema-defs";
 // committed artifact, where it holds with no handler graph, no env, and no
 // database, and where it also catches a hand-edit of the generated JSON.
 
-// Read rather than `import`: a 300KB JSON literal in a module graph is a large
-// bill for the type checker to pay on every build, for a value only this file
-// reads once.
-const catalogEntries: readonly Record<string, unknown>[] = JSON.parse(
-  await Bun.file(
-    new URL(
-      "../../../../packages/cli/capability-catalog.json",
-      import.meta.url,
-    ),
-  ).text(),
-);
-
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
+
+const catalogEntries = readCapabilityCatalog().map((entry) => {
+  if (!isRecord(entry)) {
+    throw new TypeError("Expected capability catalog object");
+  }
+  return entry;
+});
 
 /** Narrow a schema node for assertions; anything else is a test failure. */
 const recordOf = (value: unknown): Record<string, unknown> => {

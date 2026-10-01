@@ -253,7 +253,7 @@ export const mcpOmittedToolNamesByReason = ({
   return { feature: feature.toSorted(), scope: scope.toSorted() };
 };
 
-const withMcpCors = (
+const withMcpCors = async (
   response: Response,
   session?: McpSession,
   mode: McpMode = "default",
@@ -282,7 +282,7 @@ const withMcpCors = (
     }
     headers.set(
       STELLA_MCP_FEATURE_OMITTED_CAPABILITIES_HEADER,
-      featureOmittedCapabilityIds().join(" "),
+      (await featureOmittedCapabilityIds()).join(" "),
     );
   }
   const answer = new Response(response.body, {

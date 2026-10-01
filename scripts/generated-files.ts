@@ -53,8 +53,8 @@ export const GENERATORS = [
   {
     id: "capability-catalog",
     outputs: [
-      "packages/cli/capability-catalog.json",
-      "apps/api/src/mcp/generated/capability-dispatch.ts",
+      "packages/cli/capabilities/**",
+      "apps/api/src/mcp/generated/capability-dispatch/*.ts",
       "docs/capability-coverage.md",
     ],
     inputs: [
@@ -75,6 +75,24 @@ export const GENERATORS = [
     after: [],
   },
   {
+    id: "capability-runtime",
+    outputs: [
+      "apps/api/src/mcp/generated/capability-catalog.ts",
+      "apps/api/src/mcp/generated/capability-dispatch.ts",
+    ],
+    inputs: [
+      "packages/cli/capabilities/**",
+      "apps/api/src/mcp/generated/capability-dispatch/*.ts",
+      "apps/api/scripts/generate-capability-runtime.ts",
+      "packages/cli/src/capability-catalog-data.ts",
+    ],
+    write: ["bun", "apps/api/scripts/generate-capability-runtime.ts"],
+    check: null,
+    checkedBy: "CLI registry snapshot guard",
+    autofix: true,
+    after: ["capability-catalog"],
+  },
+  {
     id: "cli-registry",
     outputs: [
       "packages/cli/src/generated/**",
@@ -89,13 +107,13 @@ export const GENERATORS = [
       ".oxfmtrc.json",
       "packages/cli/src/**",
       "packages/cli/package.json",
-      "packages/cli/capability-catalog.json",
+      "packages/cli/capabilities/**",
     ],
     write: ["bun", "--cwd=packages/cli", "run", "codegen"],
     check: null,
     checkedBy: "CLI registry snapshot guard",
     autofix: true,
-    after: ["capability-catalog"],
+    after: ["capability-runtime"],
   },
   {
     id: "mcp-app-bundles",

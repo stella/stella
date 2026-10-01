@@ -1,2 +1,6 @@
 # Patch payloads preserve upstream whitespace in their diff context.
 patches/*.patch -whitespace
+
+# Capability contracts and dispatch shards are generated from handlers.
+packages/cli/capabilities/*.json linguist-generated=true
+apps/api/src/mcp/generated/capability-dispatch/*.ts linguist-generated=true
