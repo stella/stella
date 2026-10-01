@@ -316,8 +316,8 @@ export const createCollabServer = async (
             new RedisClient(
               collabRedisConnectionOptions({
                 redisUrl: options.redisUrl,
-                rejectUnauthorized: options.redisTlsRejectUnauthorized,
-                settings: options.redisSettings,
+                rejectUnauthorized: options.redisTlsRejectUnauthorized ?? true,
+                settings: options.redisSettings ?? {},
               }),
             ),
           lockTimeout: REDIS_LOCK_TIMEOUT_MS,
