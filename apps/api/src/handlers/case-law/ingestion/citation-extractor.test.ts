@@ -2090,6 +2090,25 @@ describe("extractCitations", () => {
     );
   });
 
+  test("reads a KIO docket list too long for one key docket by docket", () => {
+    const dockets = Array.from(
+      { length: 12 },
+      (_, index) => `KIO ${1000 + index}/21`,
+    );
+    const citations = extractCitations([
+      { index: 0, text: `por. wyroki ${dockets.join(", ")} oraz KIO 7/22.` },
+    ]);
+    expect(citations.map((c) => c.citationText)).toEqual([
+      ...dockets,
+      "KIO 7/22",
+    ]);
+    for (const citation of citations) {
+      expect(bareCitationKey(citation.citationText).length).toBeLessThanOrEqual(
+        128,
+      );
+    }
+  });
+
   test("never reads the tail of a divided docket as a Tribunal one", () => {
     // Every whitespace run between a Roman division and a Tribunal-shaped
     // symbol, including the ones too wide for the docket to read whole.
