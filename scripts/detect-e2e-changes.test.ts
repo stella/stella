@@ -1039,10 +1039,11 @@ test("every workflow browser command uses the pinned image and no reachable brow
         expect(step.run ?? "", `${file}:${job}`).not.toMatch(forbidden);
       }
       if (!imageJob) {
-        for (const step of browserSteps)
-          {expect(step.run, `${file}:${job}`).toContain(
+        for (const step of browserSteps) {
+          expect(step.run, `${file}:${job}`).toContain(
             ".github/actions/setup-playwright/run-in-image.sh",
-          );}
+          );
+        }
       }
     }
   }
