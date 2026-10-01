@@ -40,6 +40,10 @@ const CHAT_MESSAGE_ATTRIBUTE = "data-chat-message-id";
 
 const COPIED_RESET_MS = 2000;
 
+/** Below `sm` a full row of localized labels outgrows the screen, so the
+ *  labels become the buttons' accessible names and the glyphs stay. */
+const ACTION_LABEL_CLASS = "max-sm:sr-only";
+
 type Selected = {
   quote: string;
   rect: DOMRect;
@@ -177,7 +181,7 @@ export const ChatSelectionToolbar = ({
         {confirming ? (
           <SelectionToolbar anchorRect={confirmAt} doc={doc} key="confirm">
             <SidePanelChatNote
-              className="h-7 px-2"
+              className="min-h-7 px-2 py-1"
               status={sidePanelChat.status}
             />
           </SelectionToolbar>
@@ -247,7 +251,9 @@ export const ChatSelectionToolbar = ({
         doc={doc}
         key="actions"
       >
-        <div className="flex items-center gap-1">
+        {/* Wraps rather than run off a narrow screen; on a phone the
+            actions go icon-only and keep their labels as accessible names. */}
+        <div className="flex flex-wrap items-center gap-1">
           {actions.map((action) => {
             switch (action) {
               case CHAT_SELECTION_ACTION.askInNewChat: {
@@ -260,7 +266,9 @@ export const ChatSelectionToolbar = ({
                     variant="ghost"
                   >
                     <MessageSquarePlusIcon className="size-3.5" />
-                    {t("chat.selection.askInNewChat")}
+                    <span className={ACTION_LABEL_CLASS}>
+                      {t("chat.selection.askInNewChat")}
+                    </span>
                   </Button>
                 );
               }
@@ -274,7 +282,9 @@ export const ChatSelectionToolbar = ({
                     variant="ghost"
                   >
                     <QuoteIcon className="size-3.5" />
-                    {t("chat.selection.quoteInReply")}
+                    <span className={ACTION_LABEL_CLASS}>
+                      {t("chat.selection.quoteInReply")}
+                    </span>
                   </Button>
                 );
               }
@@ -294,7 +304,9 @@ export const ChatSelectionToolbar = ({
                     ) : (
                       <CopyIcon className="size-3.5" />
                     )}
-                    {copied ? t("common.copied") : t("common.copy")}
+                    <span className={ACTION_LABEL_CLASS}>
+                      {copied ? t("common.copied") : t("common.copy")}
+                    </span>
                   </Button>
                 );
               }

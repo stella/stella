@@ -40,7 +40,9 @@ export const SidePanelChatNote = ({
       ) : (
         <CheckIcon className="size-3.5 shrink-0" />
       )}
-      <span className="truncate">
+      {/* Wraps rather than truncates: on a phone the whole sentence is
+          the point. */}
+      <span className="text-pretty">
         {t(SIDE_PANEL_CHAT_STATUS_LABELS[status])}
       </span>
     </span>
