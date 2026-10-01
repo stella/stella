@@ -1,11 +1,14 @@
 import { expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, symlinkSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
   canonicalJson,
+  CLI_CONTRACT_SURFACE_PATHS,
+  type CliContractSurface,
+  type CliContractSurfacePart,
   findSurfaceDrift,
   readHeadSurface,
   readPublishedPackageSurface,
@@ -127,6 +130,24 @@ test.skipIf(!process.env["CI"] || !legacyCatalogAtBase())(
         ["git", "rev-parse", "origin/main"],
         REPO_ROOT,
       ).trim();
+      // Pin the reference to committed main bytes before any lifecycle script runs.
+      const committedBase = (part: CliContractSurfacePart) =>
+        run(
+          ["git", "show", `${baseRevision}:${CLI_DIRECTORY}/${part}`],
+          REPO_ROOT,
+        );
+      const baseSurface = {
+        "capability-catalog.json": committedBase("capability-catalog.json"),
+        "src/generated/registry-snapshot.json": committedBase(
+          "src/generated/registry-snapshot.json",
+        ),
+        "src/generated/api-contract.ts": committedBase(
+          "src/generated/api-contract.ts",
+        ),
+        "src/generated/mcp-contract.ts": committedBase(
+          "src/generated/mcp-contract.ts",
+        ),
+      } as const satisfies CliContractSurface;
       const headRevision = run(["git", "rev-parse", "HEAD"], REPO_ROOT).trim();
       cloneRevision({ directory: base, revision: baseRevision });
       cloneRevision({ directory: head, revision: headRevision });
@@ -146,6 +167,17 @@ test.skipIf(!process.env["CI"] || !legacyCatalogAtBase())(
       ).toBe("");
       const baseFiles = packedFiles(base);
       const headFiles = packedFiles(head);
+      for (const part of CLI_CONTRACT_SURFACE_PATHS) {
+        expect(
+          readFileSync(path.join(base, CLI_DIRECTORY, part), "utf-8"),
+        ).toBe(baseSurface[part]);
+      }
+      expect(
+        findSurfaceDrift({
+          head: readPublishedPackageSurface(path.join(base, CLI_DIRECTORY)),
+          published: baseSurface,
+        }),
+      ).toEqual([]);
       const unchangedFiles = (files: readonly string[]): string[] =>
         files.filter((file) => !isCatalogPath(file) && !READER_PATHS.has(file));
       expect(unchangedFiles(headFiles)).toEqual(unchangedFiles(baseFiles));
@@ -175,9 +207,6 @@ test.skipIf(!process.env["CI"] || !legacyCatalogAtBase())(
 
       // The published reader handles the old monolith and the new shard layout.
       // Compare every raw catalog field as well as the other negotiated contracts.
-      const baseSurface = readPublishedPackageSurface(
-        path.join(base, CLI_DIRECTORY),
-      );
       const headSurface = readHeadSurface(head);
       expect(
         findSurfaceDrift({ head: headSurface, published: baseSurface }),

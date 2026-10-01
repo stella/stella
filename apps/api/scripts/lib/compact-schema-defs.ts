@@ -10,18 +10,20 @@
 // This pass hoists every repeated subschema into the entry's own `$defs` and
 // replaces each occurrence with `{"$ref": "#/$defs/<name>"}`. Nothing is
 // simplified, widened, or dropped: `expandSchemaDefs` inlines the
-// refs back to the byte-identical canonical source document. The exporter
+// refs back to the byte-identical source document. The exporter
 // asserts that round trip for every capability before it writes anything.
 //
-// Determinism: def names hash the canonical subschema serialization,
-// so the same input always produces the same artifact, and an unrelated schema
-// change cannot renumber every other def.
+// Def names hash the original insertion-order serialization. These names are
+// published contract values and must not change when shards sort object keys.
+// The same input produces the same artifact, and an unrelated schema change
+// cannot renumber every other def.
 
 import { createHash } from "node:crypto";
 
 import {
   DEFS_KEY,
   DEFS_REF_PREFIX,
+  expandSchemaDefs,
 } from "../../../../packages/cli/src/expand-schema-defs";
 import { serializeCapabilityJson } from "./capability-shards";
 
@@ -262,20 +264,21 @@ const savingOf = (body: unknown, refCount: number): number =>
 /**
  * Hoist every profitably repeated subschema of one capability's input schema
  * into `$defs`. Entries with nothing worth hoisting (the large majority) come
- * back byte-identical to their canonical JSON input, with no `$defs` key added.
+ * back byte-identical to their JSON input, with no `$defs` key added.
  *
- * The input is JSON round-tripped with sorted object keys before hashing:
- * the shard serializer uses this same canonical source format. Handler configs
- * are TypeBox schemas with non-enumerable symbol metadata that JSON drops. The
+ * The input is JSON round-tripped before hashing, preserving insertion order
+ * and dropping TypeBox symbol metadata. Artifact recompaction supplies existing
+ * names separately; normal generation must retain the published hash format. The
  * round trip makes the value compacted here exactly the value that would have
  * been serialized, so the exporter's round-trip gate compares like with like.
  */
 export const compactSchemaDefs = (
   inputSchema: CapabilityInputSchemaParts,
+  artifactDefNames?: ReadonlyMap<string, string>,
 ): CompactionResult => {
   // oxlint-disable-next-line unicorn/prefer-structured-clone -- NOT a deep clone: the JSON projection is the point. `structuredClone` would carry through TypeBox's metadata and values JSON drops, so what gets compacted would stop matching what gets written.
   const document: CapabilityInputSchemaParts = JSON.parse(
-    serializeCapabilityJson(inputSchema),
+    JSON.stringify(inputSchema),
   );
   const reserved = findReservedKeyword(document);
   if (reserved !== null) {
@@ -315,7 +318,12 @@ export const compactSchemaDefs = (
   let chosen = new Map<string, ChosenDef>(
     candidates.map(([serialized, { node }]) => [
       serialized,
-      { name: defNameFor(serialized), node },
+      {
+        name:
+          artifactDefNames?.get(serializeCapabilityJson(node)) ??
+          defNameFor(serialized),
+        node,
+      },
     ]),
   );
   // Two distinct subschemas hashing to the same name would silently alias one
@@ -369,6 +377,20 @@ export const compactSchemaDefs = (
       continue;
     }
 
+    // Candidates pruned above need no persisted name. Every retained def does:
+    // artifact recompaction may never introduce a newly hashed public name.
+    if (artifactDefNames !== undefined) {
+      for (const { node } of chosen.values()) {
+        if (!artifactDefNames.has(serializeCapabilityJson(node))) {
+          return {
+            status: "unsupported",
+            reason:
+              "recompaction needs a definition absent from the committed artifact",
+          };
+        }
+      }
+    }
+
     // Name-sorted defs; the shard serializer canonicalizes the complete output.
     const defs: JsonRecord = {};
     for (const name of [...bodies.keys()].toSorted()) {
@@ -377,4 +399,45 @@ export const compactSchemaDefs = (
     compacted[DEFS_KEY] = defs;
     return { inputSchema: compacted, status: "compacted" };
   }
+};
+
+/**
+ * Recompact a sorted shard using its authoritative published definition names.
+ * Fingerprints use fully expanded canonical bodies, never their stored refs or
+ * insertion order. This does not change the generator's original hash format.
+ */
+export const recompactSchemaDefs = (
+  artifact: CompactedCapabilityInputSchema,
+): CompactionResult => {
+  const expanded = expandSchemaDefs(artifact);
+  if (expanded === null) {
+    return {
+      status: "unsupported",
+      reason: "artifact definitions do not resolve",
+    };
+  }
+  const names = new Map<string, string>();
+  for (const [name, body] of Object.entries(artifact.$defs ?? {})) {
+    const definition = expandSchemaDefs({ body, $defs: artifact.$defs });
+    if (definition === null) {
+      return {
+        status: "unsupported",
+        reason: `artifact definition "${name}" does not resolve`,
+      };
+    }
+    const fingerprint = serializeCapabilityJson(definition["body"]);
+    const existing = names.get(fingerprint);
+    if (existing !== undefined && existing !== name) {
+      return {
+        status: "unsupported",
+        reason: `artifact definitions "${existing}" and "${name}" alias the same canonical body`,
+      };
+    }
+    names.set(fingerprint, name);
+  }
+  // Project through the shard serializer before comparing artifact bodies.
+  const canonical: CapabilityInputSchemaParts = JSON.parse(
+    serializeCapabilityJson(expanded),
+  );
+  return compactSchemaDefs(canonical, names);
 };

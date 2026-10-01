@@ -19,8 +19,8 @@ import { KindGuard } from "@sinclair/typebox";
 // entry's input schema goes through `$defs` compaction (repeated subschemas
 // hoisted, occurrences replaced by same-document `$ref`s), then must fit
 // MAX_CAPABILITY_SCHEMA_BYTES. Compaction is asserted lossless per capability:
-// re-expanding must reproduce the source JSON with sorted object keys byte
-// for byte (array order is preserved), or the export fails. An entry still over the cap after
+// re-expanding must reproduce the source serialization byte for byte, including
+// its original key and array order, or the export fails. An entry over the cap after
 // compaction also fails the export — no capability ships without a describable
 // input shape.
 //
@@ -101,7 +101,6 @@ import {
   writePrimitivesImportedBy,
 } from "./lib/capability-catalog";
 import {
-  serializeCapabilityJson,
   serializeCapabilityShard,
   syncCapabilityShards,
 } from "./lib/capability-shards";
@@ -932,8 +931,8 @@ const buildCatalogEntry = ({
  * make the compacted artifact trustworthy checked on the spot:
  *
  *  1. LOSSLESS: re-expanding the compacted schema must reproduce the source
- *     canonical JSON serialization byte for byte: sorted object keys, unchanged
- *     array order, and the same JSON projection. This stops a compacted
+ *     original JSON serialization byte for byte, preserving key and array
+ *     order. This stops a compacted
  *     schema from ever describing a different input set than the handler
  *     validates — a widened schema would accept input the handler rejects, a
  *     narrowed one would make the CLI reject input the handler accepts.
@@ -965,7 +964,7 @@ const compactInputSchemaGuarded = ({
   const expanded = expandSchemaDefs(compacted);
   if (
     expanded === null ||
-    serializeCapabilityJson(expanded) !== serializeCapabilityJson(inputSchema)
+    JSON.stringify(expanded) !== JSON.stringify(inputSchema)
   ) {
     errors.push(
       `capability "${id}": expanding the $defs-compacted input schema did not reproduce the source schema. The compacted snapshot would describe a different input set than the handler validates; fix compact-schema-defs.ts / expand-schema-defs.ts, never ship the mismatch`,
