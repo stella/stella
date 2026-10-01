@@ -1628,7 +1628,11 @@ jobs:
 
       - name: Test release image CI gate
         if: needs.ci-plan.outputs.package_checks_required == 'true'
-        run: bun test scripts/ci-plan.test.ts scripts/osv-scanner-install.test.ts scripts/scan-dependency-malware.test.ts scripts/report-dependency-malware-failure.test.ts
+        run: bun test scripts/ci-plan.test.ts
+
+      - name: Test dependency malware scanners
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: bun test scripts/osv-scanner-install.test.ts scripts/scan-dependency-malware.test.ts scripts/report-dependency-malware-failure.test.ts
 
       - name: Test maintenance release preparation
         if: needs.ci-plan.outputs.package_checks_required == 'true'

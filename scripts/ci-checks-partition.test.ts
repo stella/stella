@@ -92,7 +92,10 @@ const expectCoverage = ({ current, base, removed }: CoverageOptions) => {
     expect(expected.map((step) => step.name)).toContain(name);
     expect(actual.map((step) => step.name)).not.toContain(name);
   }
-  expect(actual).toEqual(
+  // Every merge-base check survives unchanged unless its removal is listed;
+  // a new check is an addition, which needs no ledger entry.
+  const expectedNames = new Set(expected.map(({ name }) => name));
+  expect(actual.filter(({ name }) => expectedNames.has(name))).toEqual(
     expected.filter(({ name }) => !removedNames.has(name)),
   );
 };
@@ -172,7 +175,7 @@ test("each CI check leg preserves merge-base setup, supply-chain protection and 
       expect(steps.findIndex(({ name }) => name === "Setup Bun")).toBeLessThan(
         installIndex,
       );
-      expect(steps.at(installIndex)?.run).toBe(
+      expect(steps.at(installIndex)?.["run"]).toBe(
         "bash scripts/retry.sh bun ci --ignore-scripts",
       );
     }
@@ -190,6 +193,27 @@ test("CI coverage rejects a dropped check and accepts only an explicitly listed 
     expectCoverage({ current: dropped, base: baseSteps, removed: [] }),
   ).toThrow("toEqual");
   expectCoverage({ current: dropped, base: baseSteps, removed: [step.name] });
+});
+
+test("CI coverage accepts a new check alongside every merge-base check", () => {
+  const added = { name: "A newly added check", run: "bun test new.test.ts" };
+  expectCoverage({
+    current: [...baseSteps, added],
+    base: baseSteps,
+    removed: [],
+  });
+  const step = ownedSteps(baseSteps).at(0);
+  if (!step) {
+    panic("Merge-base CI checks contain no checks");
+  }
+  const renamed = baseSteps.map((current) =>
+    current.name === step.name
+      ? { ...current, name: `${step.name} (renamed)` }
+      : current,
+  );
+  expect(() =>
+    expectCoverage({ current: renamed, base: baseSteps, removed: [] }),
+  ).toThrow("toEqual");
 });
 
 test("CI coverage rejects duplicate and modified checks", () => {
