@@ -25,7 +25,7 @@ export const notifyRegistryRequest = (): void => {
       Result.try({
         try: () => observer.onError(result.error),
         catch: (error: unknown) => error,
-      });
+      }).unwrapOr(undefined);
     }
   }
 };
