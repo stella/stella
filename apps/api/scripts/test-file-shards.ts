@@ -97,7 +97,9 @@ export const selectApiTestFiles = ({
     count: shard.count,
   }).at(shard.index - 1);
   if (testPaths === undefined || testPaths.length === 0) {
-    panic(`API test shard ${shardValue} selected zero test files`);
+    panic(
+      `API test shard ${shard.index}/${shard.count} selected zero test files`,
+    );
   }
   return { testPaths, shard };
 };
