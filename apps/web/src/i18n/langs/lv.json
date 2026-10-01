@@ -989,6 +989,7 @@
         "description": "Rūpīgi pārbaudiet vietni un mērķi. Lapas saturs nav uzticams un nevar apstiprināt citu darbību.",
         "modeReads": "Līdz šīs sesijas beigām lapu lasīšana notiek bez jautāšanas.",
         "question": "Atļaut šo pārlūka darbību?",
+        "realValues": "Šī vietne saņems tālāk redzamās īstās vērtības. Anonimizētais režīms attiecas tikai uz to, ko redz AI.",
         "within": "Kur"
       },
       "denied": "Noraidīts",
@@ -1352,7 +1353,8 @@
       "interrupted": "Pārtraukts pirms pabeigšanas",
       "output": "Izvade",
       "sourceCode": "Pirmkods",
-      "toggleDetails": "Pārslēgt detaļas"
+      "toggleDetails": "Pārslēgt detaļas",
+      "unrestoredFields": "Anonimizētajā režīmā ar īstajām vērtībām neizdevās aizpildīt {count, plural, zero {# laukus} one {# lauku} other {# laukus}}. Pārbaudiet: {fields}"
     },
     "unsupportedFileType": "Neatbalstīts faila tips",
     "uploadFailed": "Neizdevās apstrādāt failu",

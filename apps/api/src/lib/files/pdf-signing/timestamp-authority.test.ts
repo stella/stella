@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 
 import {
   createFallbackTimestampAuthority,
@@ -14,12 +14,16 @@ import {
   PdfSigningTimestampInvalidError,
   validateTimestampToken,
 } from "@/api/lib/files/pdf-signing/timestamp-token";
+import { createTestRsaKeyPool } from "@/api/tests/helpers/test-pki";
 import {
   createTestTimestampAuthority,
   createTestTimestampCertificate,
   createTestTimestampResponder,
   issueTestTimestampToken,
 } from "@/api/tests/helpers/timestamp-token";
+
+const keyPool = createTestRsaKeyPool();
+beforeEach(() => keyPool.reset());
 
 const failing = (url: string) => ({
   authority: {
@@ -87,7 +91,7 @@ describe("configured timestamp authorities", () => {
 describe("falling back across timestamp authorities", () => {
   test("uses the first authority that answers with a valid token and names it", async () => {
     const digest = crypto.getRandomValues(new Uint8Array(32));
-    const valid = await createTestTimestampAuthority();
+    const valid = await createTestTimestampAuthority({ keyPool });
     const authority = createFallbackTimestampAuthority([
       failing("https://a.example/"),
       // Answers, but with a token that is not a timestamp at all.
@@ -105,6 +109,7 @@ describe("falling back across timestamp authorities", () => {
   test("refuses a token about another signature and moves on", async () => {
     const digest = crypto.getRandomValues(new Uint8Array(32));
     const wrongImprint = await createTestTimestampAuthority({
+      keyPool,
       misbehaviour: { imprint: new Uint8Array(32).fill(7) },
     });
     const authority = createFallbackTimestampAuthority([
@@ -148,7 +153,7 @@ describe("checking a timestamp token", () => {
     );
 
   test("accepts a token about this signature from a timestamping key", async () => {
-    const signer = await createTestTimestampCertificate();
+    const signer = await createTestTimestampCertificate({ keyPool });
     const token = await issueTestTimestampToken({ digest, serial: 1, signer });
 
     const validated = (
@@ -164,7 +169,7 @@ describe("checking a timestamp token", () => {
   });
 
   test("refuses a token whose imprint is not this signature's", async () => {
-    const signer = await createTestTimestampCertificate();
+    const signer = await createTestTimestampCertificate({ keyPool });
     const token = await issueTestTimestampToken({
       digest,
       misbehaviour: { imprint: new Uint8Array(32).fill(1) },
@@ -178,7 +183,7 @@ describe("checking a timestamp token", () => {
   });
 
   test("refuses a token whose time is not current", async () => {
-    const signer = await createTestTimestampCertificate();
+    const signer = await createTestTimestampCertificate({ keyPool });
     const token = await issueTestTimestampToken({
       digest,
       misbehaviour: { genTime: new Date("2020-01-01T00:00:00Z") },
@@ -193,6 +198,7 @@ describe("checking a timestamp token", () => {
 
   test("refuses a token signed by a key not meant for timestamping", async () => {
     const signer = await createTestTimestampCertificate({
+      keyPool,
       extendedKeyUsages: ["1.3.6.1.5.5.7.3.1"],
     });
     const token = await issueTestTimestampToken({ digest, serial: 1, signer });
@@ -203,7 +209,10 @@ describe("checking a timestamp token", () => {
   });
 
   test("refuses a timestamping usage that is not marked critical", async () => {
-    const signer = await createTestTimestampCertificate({ critical: false });
+    const signer = await createTestTimestampCertificate({
+      keyPool,
+      critical: false,
+    });
     const token = await issueTestTimestampToken({ digest, serial: 1, signer });
 
     expect(await refused(token)).toBeInstanceOf(
@@ -213,6 +222,7 @@ describe("checking a timestamp token", () => {
 
   test("refuses a key that may also do something other than timestamping", async () => {
     const signer = await createTestTimestampCertificate({
+      keyPool,
       extendedKeyUsages: ["1.3.6.1.5.5.7.3.8", "1.3.6.1.5.5.7.3.1"],
     });
     const token = await issueTestTimestampToken({ digest, serial: 1, signer });
@@ -225,6 +235,7 @@ describe("checking a timestamp token", () => {
   test("refuses a token from a certificate that had expired by its time", async () => {
     const day = 86_400_000;
     const signer = await createTestTimestampCertificate({
+      keyPool,
       notAfter: new Date(Date.now() - day),
       notBefore: new Date(Date.now() - 30 * day),
     });
@@ -236,8 +247,8 @@ describe("checking a timestamp token", () => {
   });
 
   test("refuses a token whose signature does not verify", async () => {
-    const signer = await createTestTimestampCertificate();
-    const other = await createTestTimestampCertificate();
+    const signer = await createTestTimestampCertificate({ keyPool });
+    const other = await createTestTimestampCertificate({ keyPool });
     // Signed by one key, presenting another key's certificate.
     const token = await issueTestTimestampToken({
       digest,
@@ -255,7 +266,7 @@ describe("requesting a timestamp over the guarded fetcher", () => {
   const digest = crypto.getRandomValues(new Uint8Array(32));
 
   test("posts an RFC 3161 query and accepts the token that answers it", async () => {
-    const responder = await createTestTimestampResponder();
+    const responder = await createTestTimestampResponder({ keyPool });
     const authority = createHttpTimestampAuthority(
       "https://tsa.example/",
       responder.fetcher,
@@ -273,6 +284,7 @@ describe("requesting a timestamp over the guarded fetcher", () => {
 
   test("refuses a token that does not echo the request's nonce", async () => {
     const responder = await createTestTimestampResponder({
+      keyPool,
       misbehaviour: { dropNonce: true },
     });
     const authority = createHttpTimestampAuthority(

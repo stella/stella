@@ -280,6 +280,8 @@ implies a hazard that is gone.
 - Record the retirement in the ownership row that replaced it, naming the rule:
   the row is then the only place a reader has to look.
 
+- [`drizzle`](./drizzle.ts) (`enforce-delete-with-where`, `enforce-update-with-where`): requires `.where(...)` on each configured Drizzle mutation chain; unrelated preceding or enclosing chains cannot supply its filter. Receiver aliases and separately stored builders are outside this check.
+
 ## Adding or changing a rule
 
 1. Put one cohesive detector in `<plugin-name>.ts`; use multiple rule IDs only when

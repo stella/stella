@@ -778,6 +778,11 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
 ]);
 
 export const TOOLING_ENV_KEYS = new Set([
+  // Preserve Bun global-store links inside browser containers.
+  "BUN_INSTALL_CACHE_DIR",
+  // Browser commands use only executables baked into the pinned image.
+  "PLAYWRIGHT_BROWSERS_PATH",
+  "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD",
   "AGENT_ENGINE_DOCKER_CANARY_URL",
   "AGENT_ENGINE_DOCKER_IMAGE",
   "AGENT_ENGINE_DOCKER_NETWORK",
@@ -903,6 +908,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_UPDATE_PLAN_CONTRACTS",
   "TANSTACK_DRIFT_INSTALL_OUTCOME",
   "TURBO_SCM_BASE",
+  "TURN_OUTCOME_COMBINATIONS",
+  "TURN_OUTCOME_SHARD",
   "UPDATE_PROVIDER_REQUEST_PATHS",
   "WXT_STELLA_ORIGINS",
 ]);

@@ -43,6 +43,8 @@ type SemanticRewrite = {
 // Lucide glyph (without the `Icon` suffix) -> semantic entry in the module.
 const SEMANTIC_REWRITES: Readonly<Record<string, SemanticRewrite>> = {
   WandSparkles: { default: "AiActionIcon" },
+  MessageSquarePlus: { default: "NewChatIcon" },
+  MessageSquareQuote: { default: "AddCommentIcon" },
   BookOpen: {
     default: null,
     byFile: {

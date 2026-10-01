@@ -9,6 +9,8 @@
 import * as asn1js from "asn1js";
 import * as pkijs from "pkijs";
 
+import type { TestRsaKeyPool } from "@/api/tests/helpers/test-pki";
+
 export const KEY_USAGE = {
   digitalSignature: 0x80,
   nonRepudiation: 0x40,
@@ -19,6 +21,7 @@ const KEY_USAGE_OID = "2.5.29.15";
 const COMMON_NAME_OID = "2.5.4.3";
 
 export type SelfSignedCertificateOptions = {
+  keyPool?: TestRsaKeyPool;
   commonName?: string;
   /** Bitmask of {@link KEY_USAGE}, or "none" to omit the extension. */
   keyUsage?: number | "none";
@@ -47,13 +50,17 @@ export const createSelfSignedCertificate = async ({
   commonName = "stella signing test",
   keyUsage = KEY_USAGE.digitalSignature,
   keyType = "RSA",
+  keyPool,
   notBefore = new Date(Date.now() - 60_000),
   notAfter = new Date(Date.now() + 3_600_000),
 }: SelfSignedCertificateOptions = {}): Promise<SelfSignedCertificate> => {
-  const keys = await crypto.subtle.generateKey(algorithmFor(keyType), true, [
-    "sign",
-    "verify",
-  ]);
+  const keys =
+    keyType === "RSA" && keyPool !== undefined
+      ? await keyPool.take()
+      : await crypto.subtle.generateKey(algorithmFor(keyType), true, [
+          "sign",
+          "verify",
+        ]);
 
   const certificate = new pkijs.Certificate();
   certificate.version = 2;

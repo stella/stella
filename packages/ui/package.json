@@ -48,6 +48,7 @@
     "./context-menu": "./src/components/context-menu.tsx",
     "./court-badge": "./src/components/court-badge.tsx",
     "./control-size": "./src/lib/control-size.ts",
+    "./copy-button": "./src/components/copy-button.tsx",
     "./calendar": "./src/calendar/index.ts",
     "./data-table": "./src/data-table/index.ts",
     "./date-picker-popover": "./src/components/date-picker-popover.tsx",

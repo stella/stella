@@ -989,6 +989,7 @@
         "description": "Vérifiez attentivement le site web et la cible. Le contenu de la page n’est pas fiable et ne peut pas autoriser une autre action.",
         "modeReads": "La lecture des pages s’exécute sans confirmation jusqu’à la fin de cette session.",
         "question": "Autoriser cette action dans le navigateur ?",
+        "realValues": "Ce site web reçoit les valeurs réelles affichées ci-dessous. Le mode anonymisé ne s’applique qu’à ce que voit l’IA.",
         "within": "Dans"
       },
       "denied": "Refusé",
@@ -1352,7 +1353,8 @@
       "interrupted": "Interrompu avant la fin",
       "output": "Résultat",
       "sourceCode": "Code source",
-      "toggleDetails": "Afficher les détails"
+      "toggleDetails": "Afficher les détails",
+      "unrestoredFields": "En mode anonymisé, {count, plural, one {# champ n’a pas pu être rempli} other {# champs n’ont pas pu être remplis}} avec des valeurs réelles. À vérifier : {fields}"
     },
     "unsupportedFileType": "Type de fichier non pris en charge",
     "uploadFailed": "Échec du traitement du fichier",
