@@ -1486,3 +1486,96 @@ test("property-testing guards run only when dependencies are installed", () => {
     expect(guard.if, guard.name).toBe(installCondition);
   }
 });
+
+test("dependency inputs plan a malware scan and unrelated paths do not", () => {
+  for (const depth of ["fast", "full"]) {
+    for (const file of [
+      "bun.lock",
+      ".claude/mcp/bun.lock",
+      "package.json",
+      "apps/web/package.json",
+      "tools/docs/yarn.lock",
+    ]) {
+      expect(
+        runSelector([file], ["dependency_malware_required"], depth),
+      ).toEqual(["true"]);
+    }
+    expect(
+      runSelector(
+        ["apps/web/src/page.tsx"],
+        ["dependency_malware_required"],
+        depth,
+      ),
+    ).toEqual(["false"]);
+  }
+});
+
+test("planned malware scan gates fast PRs and full merge groups", () => {
+  expect(jobScopes["dependency-malware"]).toBe("dependency_malware_required");
+  expect(fastRequired).toContain("dependency-malware");
+  for (const event of [EVENT.pullRequest, EVENT.mergeGroup]) {
+    for (const verdict of ["failure", "cancelled", "skipped"]) {
+      expect(
+        evaluateResult({ event, results: { "dependency-malware": verdict } }),
+      ).toBe(1);
+    }
+    expect(
+      evaluateResult({ event, results: { "dependency-malware": "success" } }),
+    ).toBe(0);
+    expect(
+      evaluateResult({
+        event,
+        results: { "dependency-malware": "skipped" },
+        unplannedScopes: ["dependency_malware_required"],
+      }),
+    ).toBe(0);
+  }
+});
+
+test("only the dedicated malware gate activates Safe Chain and keeps Bun packages cold", () => {
+  const users = Object.entries(ciJobs)
+    .filter(([, job]) => {
+      const parsed = v.parse(
+        v.object({
+          steps: v.optional(
+            v.array(v.object({ uses: v.optional(v.string()) })),
+            [],
+          ),
+        }),
+        job,
+      );
+      return parsed.steps.some(
+        ({ uses }) => uses === "./.github/actions/safe-chain",
+      );
+    })
+    .map(([name]) => name);
+  expect(users).toEqual(["dependency-malware"]);
+  const job = v.parse(
+    v.object({
+      steps: v.array(
+        v.object({ uses: v.optional(v.string()), run: v.optional(v.string()) }),
+      ),
+    }),
+    ciJobs["dependency-malware"],
+  );
+  expect(
+    job.steps.some(
+      ({ uses }) =>
+        uses?.includes("setup-bun-cached") ||
+        uses?.startsWith("actions/cache@"),
+    ),
+  ).toBe(false);
+  expect(
+    job.steps.some(({ uses }) => uses === "./.github/actions/osv-scanner"),
+  ).toBe(true);
+  expect(
+    job.steps.some(
+      ({ run }) => run === "bash scripts/scan-dependency-malware.sh",
+    ),
+  ).toBe(true);
+  expect(
+    job.steps.some(
+      ({ run }) => run === "bash scripts/test-malware-scanners.sh",
+    ),
+  ).toBe(true);
+});

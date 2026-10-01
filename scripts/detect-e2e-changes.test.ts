@@ -758,7 +758,6 @@ describe("detect-e2e-changes", () => {
     const scope = "Check UI browser test scope";
     const setupSteps = [
       "Setup Bun",
-      "Install Safe Chain",
       "Turbo remote cache",
       "Install dependencies",
       "Prepare environment",
