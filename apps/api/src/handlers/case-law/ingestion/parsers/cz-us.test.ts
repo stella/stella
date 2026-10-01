@@ -872,16 +872,45 @@ describe("embedded RTF text destinations", () => {
     expect(fulltext).toBe("Before  After");
   });
 
-  test("preserves publisher literals while the shared guard retains references", () => {
-    const rtf = String.raw`{\rtf1 fe&ion; &amp;amp;amp; &amp;eacute;}`;
+  test("keeps an unknown publisher literal as ordinary text", () => {
+    const rtf = String.raw`{\rtf1 fe&ion;}`;
     const { fulltext } = parseUsDecisionHtml(
       baseInput(`<input id="docContentHidden" value="${rtf}" />`),
     );
 
     expect(fulltext).toContain("fe&ion;");
-    expect(fulltext).toContain("&amp;amp;");
-    expect(markupResidueIn(fulltext)?.rule).toBe("entity");
-    expect(markupResidueIn("fe&ion;")).toBeUndefined();
+    expect(markupResidueIn(fulltext)).toBeUndefined();
+  });
+
+  test("still reports recognized references left in RTF text", () => {
+    for (const [encoded, reference] of [
+      ["&amp;amp;", "&amp;"],
+      ["&amp;eacute;", "&eacute;"],
+    ]) {
+      const rtf = String.raw`{\rtf1 ${encoded}}`;
+      const { fulltext } = parseUsDecisionHtml(
+        baseInput(`<input id="docContentHidden" value="${rtf}" />`),
+      );
+
+      expect(fulltext).toContain(reference);
+      expect(markupResidueIn(fulltext)).toMatchObject({
+        rule: "entity",
+        excerpt: reference,
+      });
+    }
+  });
+
+  test("keeps the parser's existing HTML character decoding", () => {
+    const { fulltext } = parseUsDecisionHtml(
+      baseInput(`<html><body>
+        <span id="lblDecisionForm">USNESENÍ</span>
+        <input id="docContentHidden" value="" />
+        <div class="DocContent">Text A &amp; B, &eacute;.</div>
+      </body></html>`),
+    );
+
+    expect(fulltext).toContain("A & B, é.");
+    expect(fulltext).not.toContain("&amp;");
   });
 
   test("skips binary object bytes without losing the visible result", () => {

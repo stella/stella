@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
+import { decodeHTMLStrict } from "entities";
+import fc from "fast-check";
 import path from "node:path";
+
+import { propertyConfig } from "@stll/property-testing";
 
 import { parseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
 import { parseRegionalDecision } from "@/api/handlers/case-law/ingestion/parsers/cz-regional";
@@ -107,6 +111,36 @@ describe("markupResidueIn", () => {
     ]) {
       expect(markupResidueIn(`before ${literal} after`)).toBeUndefined();
     }
+  });
+
+  test("ignores unknown matches before reporting a recognized reference", () => {
+    expect(markupResidueIn("fe&ion; &amp;amp;")).toMatchObject({
+      rule: "entity",
+      excerpt: "&amp;amp;",
+    });
+  });
+
+  test("unknown entity-shaped names stay ordinary text", () => {
+    const nameCharacters =
+      "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const unknownNames = fc
+      .array(fc.constantFrom(...nameCharacters), {
+        minLength: 2,
+        maxLength: 12,
+      })
+      .map((characters) => characters.join(""))
+      .filter((name) => decodeHTMLStrict(`&${name};`) === `&${name};`);
+
+    fc.assert(
+      fc.property(unknownNames, (name) => {
+        const token = `&${name};`;
+        expect(token).toMatch(/^&[a-zA-Z]{2,12};$/u);
+        expect(
+          markupResidueIn(`literal ${token} remains text`),
+        ).toBeUndefined();
+      }),
+      propertyConfig({ numRuns: 100 }),
+    );
   });
 });
 

@@ -182,13 +182,23 @@ describe("PDF byte fixture text retention", () => {
     }
   });
 
-  test("preserves literal names while retaining the shared entity guard", async () => {
-    const { fulltext } = await parseLines(["fe&ion; &amp;amp; &eacute;"]);
+  test("keeps an unknown publisher literal as ordinary text", async () => {
+    const { fulltext } = await parseLines(["fe&ion;"]);
 
-    expect(fulltext).toContain("fe&ion;");
-    expect(fulltext).toContain("&amp;amp;");
-    expect(markupResidueIn(fulltext)?.rule).toBe("entity");
-    expect(markupResidueIn("fe&ion;")).toBeUndefined();
+    expect(fulltext).toBe("fe&ion;");
+    expect(markupResidueIn(fulltext)).toBeUndefined();
+  });
+
+  test("still reports recognized references left in PDF text", async () => {
+    for (const reference of ["&amp;amp;", "&eacute;"]) {
+      const { fulltext } = await parseLines([reference]);
+
+      expect(fulltext).toContain(reference);
+      expect(markupResidueIn(fulltext)).toMatchObject({
+        rule: "entity",
+        excerpt: reference,
+      });
+    }
   });
 });
 
