@@ -2682,6 +2682,28 @@ type DecisionLookupOutcome =
       resolution: DecisionIdentityResolution<DecisionIdentityRow>;
     };
 
+/** Why a lookup lists candidates instead of naming one, in the agent's terms. */
+const ambiguityReasonText = (
+  reason: Extract<
+    DecisionIdentityResolution<DecisionIdentityRow>,
+    { status: "ambiguous" }
+  >["reason"],
+  { count, single }: { count: string; single: boolean },
+): string => {
+  switch (reason) {
+    case "several":
+      return `${count} carry this identifier: decisions of one file, or the same number at different courts or in different languages.`;
+    case "selector_unmatched":
+      return `No decision here is known to carry the sheet or part this reference names; ${count} of its file ${single ? "is" : "are"} listed instead.`;
+    case "file_incomplete":
+      return `${count} of this file ${single ? "is" : "are"} listed rather than chosen: the corpus may hold other decisions of the same file under their sheet number.`;
+    default: {
+      reason satisfies never;
+      return panic(`Unhandled ambiguity: ${String(reason)}`);
+    }
+  }
+};
+
 const lookupItemResult = ({
   identifier,
   outcome,
@@ -2731,10 +2753,10 @@ const lookupItemResult = ({
         candidates.length > LIMITS.caseLawLookupCandidatesMax
           ? `More than ${String(LIMITS.caseLawLookupCandidatesMax)} decisions`
           : `${String(candidates.length)} ${candidates.length === 1 ? "decision" : "decisions"}`;
-      const why =
-        resolution.reason === "selector_unmatched"
-          ? `No decision here is known to carry the sheet or part this reference names; ${count} of its file ${candidates.length === 1 ? "is" : "are"} listed instead.`
-          : `${count} carry this identifier: decisions of one file, or the same number at different courts or in different languages.`;
+      const why = ambiguityReasonText(resolution.reason, {
+        count,
+        single: candidates.length === 1,
+      });
       return {
         identifier,
         candidates: listed.map(decisionIdentityOf),

@@ -40,6 +40,10 @@ import {
   readDecisionIdentityHits,
 } from "@/api/handlers/case-law/decisions/lookup-by-identity";
 import {
+  searchIdentityRole,
+  withPinnedDecisions,
+} from "@/api/handlers/case-law/decisions/search-identity-role";
+import {
   interpretDecisionQuery,
   searchAnswer,
 } from "@/api/handlers/case-law/decisions/search-interpretation";
@@ -1913,10 +1917,18 @@ export const searchCorpusIndexDecisions = async (
     return rows;
   };
 
-  // An entry that names a decision is answered by identity, and only falls
-  // through to the text index when nothing answers to it. A cursor means the
-  // reader is already paging a text search, which identity never returns.
-  if (intent.type === "identifier" && parsedCursor === null) {
+  // An entry that is a reference and nothing else is answered by identity,
+  // and only falls through to the text index when nothing answers to it. A
+  // cursor means the reader is already paging a text search, which identity
+  // never returns. A reference among other words leaves those words a text
+  // search; the decisions it names are pinned above that search's results,
+  // never in place of them (`searchIdentityRole`).
+  const identityRole = searchIdentityRole(intent, {
+    paging: parsedCursor !== null,
+  });
+  let pinned: readonly RankedHit[] = [];
+  let pinnedIds: ReadonlySet<string> = new Set();
+  if (intent.type === "identifier" && identityRole !== "none") {
     const ids = await findDecisionIdsByIdentity({
       caseLawDb,
       country: body.country,
@@ -1924,7 +1936,15 @@ export const searchCorpusIndexDecisions = async (
       timeDbRead: async (run) =>
         await dbTimer.time(CASE_LAW_SEARCH_DB_READ.identity, run),
     });
-    if (ids.length > 0) {
+    if (identityRole === "pin") {
+      // Every page drops them from the text ranking, so a pinned decision
+      // never shows twice.
+      pinnedIds = new Set(ids.map(String));
+    }
+    if (
+      ids.length > 0 &&
+      (identityRole === "answer" || parsedCursor === null)
+    ) {
       const identityRanking = await rehydrateCaseLawCandidates({
         // Always the blended order here, whatever the request asked for: the
         // identity read has no order of its own to preserve, so the unblended
@@ -1941,7 +1961,9 @@ export const searchCorpusIndexDecisions = async (
       // A docket can name decisions at several courts; the page still honours
       // the requested size, and identity never pages past it.
       const identityPage = identityRanking.ranked.slice(0, limit);
-      if (identityPage.length > 0) {
+      if (identityRole === "pin") {
+        pinned = identityPage;
+      } else if (identityPage.length > 0) {
         const byId = await readPageRows(identityPage);
         // Timed around the call rather than through the timer's thunk: the
         // alternates read must stay a direct call in this function, which a
@@ -2111,8 +2133,12 @@ export const searchCorpusIndexDecisions = async (
   const [searchPage, facetsAndTotal] = await Promise.all([pageRead, facetRead]);
   scanAndFacetsMs = performance.now() - concurrentStartedAt;
 
-  const { anchorIdById, pageRanked, passageCountById, scan, snippetById } =
-    searchPage;
+  const { anchorIdById, passageCountById, scan, snippetById } = searchPage;
+  const pageRanked = withPinnedDecisions({
+    pinned,
+    pinnedIds,
+    ranked: searchPage.pageRanked,
+  });
 
   const nextCursor =
     searchPage.nextCursor === null

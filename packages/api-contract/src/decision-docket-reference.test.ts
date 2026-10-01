@@ -6,11 +6,13 @@ import { propertyConfig } from "@stll/property-testing";
 
 import {
   DECISION_DOCKET_GRAMMARS,
-  decisionDocketTailSpellings,
-  readDecisionDocketReference,
   storedDecisionDocketOf,
 } from "./decision-docket-grammar";
-import type { DecisionDocketSelector } from "./decision-docket-grammar";
+import {
+  decisionDocketTailSpellings,
+  readDecisionDocketReference,
+} from "./decision-docket-reference";
+import type { DecisionDocketSelector } from "./decision-docket-reference";
 import {
   type DecisionIdentifierIntent,
   ecliSheetOf,
@@ -226,8 +228,9 @@ describe("reading a docket reference however it is spelled", () => {
       fc.property(
         referenceArbitrary,
         fc.array(proseWord, { minLength: 0, maxLength: 4 }),
-        fc.array(proseWord, { minLength: 1, maxLength: 4 }),
+        fc.array(proseWord, { minLength: 0, maxLength: 4 }),
         ({ docket, entry: reference, tail }, before, after) => {
+          fc.pre(before.length + after.length > 0);
           const entry = [...before, reference, ...after].join(" ");
           const intent = docketIntentOf(entry);
           // The family keeps the reader's case and gaps the grammar allows, and
@@ -235,7 +238,14 @@ describe("reading a docket reference however it is spelled", () => {
           expect(familyKeyOf(intent.family), entry).toBe(
             familyKeyOf(filed(docket)),
           );
-          expect(intent.selector, entry).toEqual(expectedSelector(tail));
+          // A lower-case word after a part numeral may be what the numeral
+          // was (`- v němž`), so in running text a part is read only where
+          // the entry ends on it.
+          expect(intent.selector, entry).toEqual(
+            tail.kind === "part" && after.length > 0
+              ? { kind: "none" }
+              : expectedSelector(tail),
+          );
           expect(intent.embeddedIn).toBe(entry);
         },
       ),
@@ -281,6 +291,59 @@ describe("reading a docket reference however it is spelled", () => {
     });
   });
 
+  test("a dash and a short word in running text are not a part numeral", () => {
+    // A window stops at a word boundary, so the word after `v` or `i` never
+    // reaches the tail grammar; the guard reads the next word instead.
+    for (const entry of [
+      "rozsudek 30 Cdo 1/2020 – v němž soud uvedl",
+      "rozsudek 30 Cdo 1/2020 - i když",
+      "viz 30 Cdo 1/2020, i když",
+      "viz 30 Cdo 1/2020 - I. senát",
+    ]) {
+      const intent = docketIntentOf(entry);
+      expect(intent.selector, entry).toEqual({ kind: "none" });
+      expect(intent.family, entry).toBe("30 Cdo 1/2020");
+    }
+    // A numeral closing on its dot before a capital, or ending the entry, is
+    // the reference's own part.
+    for (const [entry, value] of [
+      ["viz 30 Cdo 1/2020 - II. Soud uvedl", "II"],
+      ["rozsudek 30 Cdo 1/2020 - IV", "IV"],
+      ["30 Cdo 1/2020 - v", "V"],
+    ] as const) {
+      expect(docketIntentOf(entry).selector, entry).toEqual({
+        kind: "part",
+        value,
+      });
+    }
+  });
+
+  test("a word after the reference never selects a sibling", () => {
+    const siblings = [
+      {
+        id: "plain",
+        caseNumber: "30 Cdo 1/2020",
+        ecli: null,
+        decisionDate: "2020-01-01",
+      },
+      {
+        id: "part-five",
+        caseNumber: "30 Cdo 1/2020 - V.",
+        ecli: null,
+        decisionDate: "2020-01-01",
+      },
+    ];
+    for (const entry of [
+      "rozsudek 30 Cdo 1/2020 – v němž soud uvedl",
+      "rozsudek 30 Cdo 1/2020 - v tom",
+    ]) {
+      expect(
+        resolveDecisionIdentity(docketIntentOf(entry), siblings),
+        entry,
+      ).toMatchObject({ status: "ambiguous", reason: "several" });
+    }
+  });
+
   test("a grammar whose trailing digits are the docket keeps them", () => {
     // A United States docket's number after the term is the case, not a
     // sheet; neither is a Polish tax signature's last group.
@@ -322,6 +385,28 @@ describe("reading a docket reference however it is spelled", () => {
 });
 
 describe("the stored spellings a file's members carry", () => {
+  test("each tail spelling reads back as the file and the part it carries", () => {
+    // One separator set drives both the stored spellings the file is read
+    // under and the reader: a spelling the index is read under that the
+    // reader would not take as its part would split the two.
+    fc.assert(
+      fc.property(docketArbitrary, (docket) => {
+        const family = filed(docket);
+        for (const spelling of decisionDocketTailSpellings(family)) {
+          const reference = readDecisionDocketReference(spelling, CZE);
+          expect(reference?.family.formatted, spelling).toBe(family);
+          const numeral = /([IVX]+)\.$/u.exec(spelling)?.[1];
+          expect(reference?.selector, spelling).toEqual(
+            numeral === undefined
+              ? { kind: "none" }
+              : { kind: "part", value: numeral },
+          );
+        }
+      }),
+      propertyConfig({ numRuns: 40 }),
+    );
+  });
+
   test("each tail spelling trims back to the file it belongs to", () => {
     fc.assert(
       fc.property(docketArbitrary, (docket) => {
@@ -344,10 +429,17 @@ describe("the sheet an ECLI carries", () => {
     expect(
       ecliSheetOf("ECLI:CZ:NSS:2010:3.AFS.41.2008.98", "3afs41/2008"),
     ).toBe("98");
+    // A scheme that ends on the decision's sequence number in its file, not
+    // on a sheet, declares nothing: its last segment is never read as one.
     expect(
       ecliSheetOf("ECLI:CZ:NS:2019:6.TDO.512.2019.2", "6tdo512/2019"),
-    ).toBe("2");
-    expect(ecliSheetOf("ECLI:CZ:US:2005:4.US.23.05.1", "iv.ús23/05")).toBe("1");
+    ).toBeNull();
+    expect(
+      ecliSheetOf("ECLI:CZ:US:2005:4.US.23.05.1", "iv.ús23/05"),
+    ).toBeNull();
+    expect(
+      ecliSheetOf("ECLI:SK:NSSR:2010:3.AFS.41.2008.98", "3afs41/2008"),
+    ).toBeNull();
     // The last number is the docket's own year: no sheet.
     expect(ecliSheetOf("ECLI:CZ:US:2020:1.US.123.20", "i.ús123/20")).toBeNull();
     // Another file's ECLI carries no sheet of this one.
@@ -364,6 +456,8 @@ type Hit = {
   ecli: string | null;
   decisionDate: string;
   identifiers?: { type: string; value: string }[];
+  publishedCaseNumber?: string | null;
+  sheetNumber?: string | null;
 };
 
 const resolve = (entry: string, hits: readonly Hit[]) =>
@@ -417,6 +511,18 @@ describe("resolving a reference to one decision or to its candidates", () => {
     }
   });
 
+  test("a general court's ECLI sequence number is not a printed sheet", () => {
+    // `.2` and `.4` count the file's decisions; `-4` printed after the docket
+    // names a sheet neither is known to carry.
+    for (const entry of ["7 Tdo 100/2020-4", "7 Tdo 100/2020 – 2"]) {
+      expect(resolve(entry, sameDay), entry).toMatchObject({
+        status: "ambiguous",
+        reason: "selector_unmatched",
+      });
+      expect(idsOf(resolve(entry, sameDay))).toEqual(["part-one", "plain"]);
+    }
+  });
+
   test("an ECLI, a sheet or a part names exactly its decision", () => {
     const ecli = resolveDecisionIdentity(
       {
@@ -428,8 +534,6 @@ describe("resolving a reference to one decision or to its candidates", () => {
     );
     expect(ecli).toMatchObject({ status: "unique", basis: "identifier" });
     expect(idsOf(ecli)).toEqual(["part-one"]);
-    expect(idsOf(resolve("7 Tdo 100/2020-4", sameDay))).toEqual(["plain"]);
-    expect(idsOf(resolve("7 Tdo 100/2020 – 2", sameDay))).toEqual(["part-one"]);
     expect(resolve("7 Tdo 100/2020 - I.", sameDay)).toMatchObject({
       status: "unique",
       basis: "selector",
@@ -505,7 +609,9 @@ describe("resolving a reference to one decision or to its candidates", () => {
     });
   });
 
-  test("a lone decision that carries no sheet stands for its file", () => {
+  test("a sheet no candidate is known to carry never names the file's one decision", () => {
+    // The file shows one decision, with no sheet known: it may be a sibling
+    // of the one named, so it is listed, never chosen.
     const lone: readonly Hit[] = [
       {
         id: "lone",
@@ -514,10 +620,71 @@ describe("resolving a reference to one decision or to its candidates", () => {
         decisionDate: "2008-07-22",
       },
     ];
-    expect(resolve("3 Afs 41/2008-86", lone)).toMatchObject({
-      status: "unique",
-      basis: "docket",
+    for (const entry of ["3 Afs 41/2008-86", "3 Afs 41/2008 - II."]) {
+      expect(resolve(entry, lone), entry).toMatchObject({
+        status: "ambiguous",
+        reason: "selector_unmatched",
+      });
+    }
+  });
+
+  test("the sheet a source recorded, alone or in its published reference, selects", () => {
+    const recorded: readonly Hit[] = [
+      {
+        id: "by-sheet",
+        caseNumber: "3 Afs 41/2008",
+        ecli: null,
+        decisionDate: "2010-05-03",
+        sheetNumber: "120",
+      },
+      {
+        id: "by-reference",
+        caseNumber: "3 Afs 41/2008",
+        ecli: null,
+        decisionDate: "2010-06-14",
+        publishedCaseNumber: "3 Afs 41/2008 - 131",
+      },
+    ];
+    expect(idsOf(resolve("3 Afs 41/2008-120", recorded))).toEqual(["by-sheet"]);
+    expect(idsOf(resolve("3 Afs 41/2008 – 131", recorded))).toEqual([
+      "by-reference",
+    ]);
+    // A different recorded sheet is never accepted for the one named.
+    expect(resolve("3 Afs 41/2008-12", recorded.slice(0, 1))).toMatchObject({
+      status: "ambiguous",
+      reason: "selector_unmatched",
     });
+  });
+
+  test("a bare docket's lone decision is not claimed where siblings can hide under a sheet", () => {
+    const lone = [
+      {
+        id: "lone",
+        caseNumber: "3 Afs 41/2008",
+        ecli: null,
+        decisionDate: "2008-07-22",
+      },
+    ];
+    expect(resolve("3 Afs 41/2008", lone)).toMatchObject({
+      status: "ambiguous",
+      reason: "file_incomplete",
+    });
+    // A jurisdiction whose stored dockets never carry a sheet names it.
+    const read = parseDecisionQuery("II CSK 123/19", {
+      grammar: DECISION_DOCKET_GRAMMARS.POL,
+    });
+    const polish =
+      read.type === "identifier" ? read : panic("Not an identifier");
+    expect(
+      resolveDecisionIdentity(polish, [
+        {
+          id: "pl",
+          caseNumber: "II CSK 123/19",
+          ecli: null,
+          decisionDate: "2019-01-01",
+        },
+      ]),
+    ).toMatchObject({ status: "unique", basis: "docket" });
   });
 
   test("decisions of one file on different dates are never collapsed", () => {
@@ -549,8 +716,7 @@ describe("resolving a reference to one decision or to its candidates", () => {
 
   test("a resolution only ever names hits of the file, and one only when it can tell", () => {
     // Any mix of siblings, sheets and an unrelated docket: a unique answer is
-    // always a decision of the file that carries the sheet asked for, or the
-    // file's only decision with no sheet at all.
+    // always the one decision of the file that carries the sheet asked for.
     const sheetOrNull = fc.option(fc.integer({ min: 1, max: 200 }), {
       nil: null,
     });
@@ -591,17 +757,14 @@ describe("resolving a reference to one decision or to its candidates", () => {
           if (resolution.status !== "unique") {
             return;
           }
+          // Only a printed sheet exactly one candidate carries names one: a
+          // bare docket never does here, and no other sheet is accepted.
           const chosen = resolution.decision;
-          if (asked === null) {
-            expect(family).toHaveLength(1);
-          } else if (sheetOf(chosen) === String(asked)) {
-            expect(
-              family.filter((hit) => sheetOf(hit) === String(asked)),
-            ).toHaveLength(1);
-          } else {
-            expect(family).toHaveLength(1);
-            expect(sheetOf(chosen)).toBeNull();
-          }
+          expect(asked).not.toBeNull();
+          expect(sheetOf(chosen)).toBe(String(asked));
+          expect(
+            family.filter((hit) => sheetOf(hit) === String(asked)),
+          ).toHaveLength(1);
         },
       ),
       propertyConfig(),

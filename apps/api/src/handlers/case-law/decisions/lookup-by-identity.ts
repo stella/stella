@@ -25,13 +25,13 @@
  */
 
 import { panic } from "better-result";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { unionAll } from "drizzle-orm/pg-core";
 
 import {
   decisionDocketTailSpellings,
   type DecisionDocketSelector,
-} from "@stll/api-contract/decision-docket-grammar";
+} from "@stll/api-contract/decision-docket-reference";
 import type { DecisionIdentifierIntent } from "@stll/api-contract/decision-query-intent";
 import {
   DECISION_IDENTIFIER_TYPES,
@@ -119,7 +119,11 @@ const docketSpellingsOf = ({
 >): string[] => [
   family,
   ...decisionDocketTailSpellings(family),
-  ...(selector.kind === "sheet" ? [`${family}-${selector.value}`] : []),
+  // Tight and spaced, as legacy rows and parallel identifiers print it; the
+  // stored key is whatever the ingest key function makes of each.
+  ...(selector.kind === "sheet"
+    ? [`${family}-${selector.value}`, `${family} - ${selector.value}`]
+    : []),
 ];
 
 /**
@@ -134,7 +138,7 @@ export const docketFamilyCitationKeys = (
 ): string[] => [
   ...new Set(
     docketSpellingsOf(locator)
-      .map(bareCitationKey)
+      .map((spelling) => bareCitationKey(spelling))
       .filter((key) => key.length > 0),
   ),
 ];
@@ -166,6 +170,10 @@ export type DecisionIdentityRow = {
   ecli: string | null;
   id: SafeId<"caseLawDecision">;
   identifiers: readonly { type: DecisionIdentifierType; value: string }[];
+  /** The reference as the court published it, sheet included, if recorded. */
+  publishedCaseNumber?: string | null;
+  /** The sheet the court published the decision on, if recorded. */
+  sheetNumber?: string | null;
   language: string;
   /** Every language version, which decides whether its route names one. */
   languageAlternates: readonly PublicDecisionLanguageAlternate[];
@@ -330,18 +338,37 @@ const readIdentifiersByDecision = async (
   return identifiersByDecision;
 };
 
+/**
+ * The sheet a decision sits on, as the source's adapter recorded it when it
+ * split the court's published reference (`3 Afs 41/2008 - 98`) into the
+ * docket and the sheet. Read from the row's metadata, which the public reader
+ * holds, so a sibling with no ECLI and no parallel file number is still told
+ * apart by its sheet. Absent for a source that publishes none.
+ */
+const publishedSheetColumns = {
+  publishedCaseNumber: sql<
+    string | null
+  >`${caseLawDecisions.metadata} ->> 'publishedCaseNumber'`,
+  sheetNumber: sql<
+    string | null
+  >`${caseLawDecisions.metadata} ->> 'sheetNumber'`,
+};
+
 /** What a decision answers to, enough to resolve a reference among several. */
 export type DecisionIdentityHit = {
   caseNumber: string;
   ecli: string | null;
   id: SafeId<"caseLawDecision">;
   identifiers: readonly { type: DecisionIdentifierType; value: string }[];
+  publishedCaseNumber: string | null;
+  sheetNumber: string | null;
 };
 
 /**
  * The identity columns of decisions an identity read already named, by
- * primary key: the docket, the ECLI and the parallel references, which are
- * what tell a file's siblings apart. In the read's own order.
+ * primary key: the docket, the ECLI, the published reference and sheet, and
+ * the parallel references, which are what tell a file's siblings apart. In
+ * the read's own order.
  */
 export const readDecisionIdentityHits = async (
   tx: CaseLawPublicReadTransaction,
@@ -355,6 +382,7 @@ export const readDecisionIdentityHits = async (
       caseNumber: caseLawDecisions.caseNumber,
       ecli: caseLawDecisions.ecli,
       id: caseLawDecisions.id,
+      ...publishedSheetColumns,
     })
     .from(caseLawDecisions)
     .where(inArray(caseLawDecisions.id, [...decisionIds]));
@@ -395,6 +423,7 @@ export const lookupDecisionsByIdentity = async ({
         id: caseLawDecisions.id,
         language: caseLawDecisions.language,
         languageGroupKey: caseLawDecisions.languageGroupKey,
+        ...publishedSheetColumns,
         slug: caseLawDecisions.slug,
       })
       .from(caseLawDecisions)

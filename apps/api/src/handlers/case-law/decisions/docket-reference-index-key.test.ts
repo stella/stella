@@ -102,7 +102,7 @@ describe("the docket a query reads is keyed as the stored docket", () => {
     fc.assert(
       fc.property(
         docketArbitrary,
-        fc.constantFrom("- ", "-", " - ", " – ", "– "),
+        fc.constantFrom("- ", "-", " - ", " – ", "– ", "/", " / ", ", ", " ,"),
         fc.constantFrom("I", "II", "III", "IV", "IX", "XIV", "XXXIX"),
         fc.constantFrom("", "."),
         (docket, separator, numeral, dot) => {
@@ -113,6 +113,27 @@ describe("the docket a query reads is keyed as the stored docket", () => {
           expect(docketFamilyCitationKeys(bare), stored).toContain(key);
           // The stored spelling itself reads back as the same file.
           expect(familyOf(stored).family).toBe(filed(docket));
+        },
+      ),
+      propertyConfig(),
+    );
+  });
+
+  test("a member stored with its sheet is read under the key ingestion gave it", () => {
+    // However the stored docket spaces the dash, its key is whatever the
+    // ingest key function makes of it; the lookup's spellings for the same
+    // printed sheet are keyed by that same function.
+    fc.assert(
+      fc.property(
+        docketArbitrary,
+        fc.integer({ min: 1, max: 9999 }),
+        fc.constantFrom("-", " - ", " -", "- ", " – ", "–"),
+        (docket, sheet, dash) => {
+          const stored = `${filed(docket)}${dash}${String(sheet)}`;
+          const intent = familyOf(`${filed(docket)}-${String(sheet)}`);
+          expect(docketFamilyCitationKeys(intent), stored).toContain(
+            keyOf(stored),
+          );
         },
       ),
       propertyConfig(),

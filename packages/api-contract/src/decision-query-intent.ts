@@ -4,16 +4,21 @@ import {
   canonicalDecisionIdentifierKey,
   DECISION_DOCKET_GRAMMARS,
   foldDecisionIdentifierInput,
-  formatDecisionDocketReference,
-  readDecisionDocketReference,
-  trimDecisionReferenceEdges,
 } from "./decision-docket-grammar";
 import type {
   DecisionDocketGrammar,
   DecisionDocketJurisdiction,
+} from "./decision-docket-grammar";
+import {
+  DECISION_DOCKETS_STORED_WITH_SHEETS,
+  formatDecisionDocketReference,
+  readDecisionDocketReference,
+  trimDecisionReferenceEdges,
+} from "./decision-docket-reference";
+import type {
   DecisionDocketReference,
   DecisionDocketSelector,
-} from "./decision-docket-grammar";
+} from "./decision-docket-reference";
 
 /**
  * Where an identifier sat in the entry. Absent when the entry was the
@@ -138,12 +143,36 @@ type WindowReading = {
   readonly intent: WindowIntent;
 };
 
-const readingOfWindow = (
-  window: string,
-  start: number,
-  end: number,
-  grammar: DecisionDocketGrammar | null | undefined,
-): WindowReading | null => {
+/**
+ * Whether a part numeral a window ends on is the reference's own, given the
+ * word after the window. A window stops at a word boundary, so the word that
+ * follows never reaches the tail grammar: `30 Cdo 1/2020 – v němž` reads as
+ * part V and `… - i když` as part I. Inside running text a part is therefore
+ * read only when the numeral closes on its dot and no lower-case word runs
+ * on from it, or when it is the entry's last word.
+ */
+const partStandsAlone = (
+  lastWord: string | undefined,
+  nextWord: string | undefined,
+): boolean =>
+  nextWord === undefined ||
+  (lastWord?.endsWith(".") === true && !/^\p{Ll}/u.test(nextWord));
+
+type WindowOptions = {
+  /** The entry's words; the window is `tokens[start, end)`. */
+  readonly tokens: readonly string[];
+  readonly start: number;
+  readonly end: number;
+  readonly grammar: DecisionDocketGrammar | null | undefined;
+};
+
+const readingOfWindow = ({
+  end,
+  grammar,
+  start,
+  tokens,
+}: WindowOptions): WindowReading | null => {
+  const window = tokens.slice(start, end).join(" ");
   const ecli = end - start === 1 ? ecliIntentOf(window) : null;
   if (ecli !== null) {
     return {
@@ -154,20 +183,26 @@ const readingOfWindow = (
       intent: ecli,
     };
   }
-  const docket = readDecisionDocketReference(window, { grammar });
-  return docket === null
-    ? null
-    : {
-        start,
-        end,
-        familyKey: JSON.stringify([
-          "docket",
-          docket.family.jurisdiction,
-          docket.family.canonical,
-        ]),
-        selector: docket.selector,
-        intent: docketIntentOf(docket),
-      };
+  const read = readDecisionDocketReference(window, { grammar });
+  if (read === null) {
+    return null;
+  }
+  const docket =
+    read.selector.kind === "part" &&
+    !partStandsAlone(tokens[end - 1], tokens[end])
+      ? { ...read, selector: { kind: "none" } as const }
+      : read;
+  return {
+    start,
+    end,
+    familyKey: JSON.stringify([
+      "docket",
+      docket.family.jurisdiction,
+      docket.family.canonical,
+    ]),
+    selector: docket.selector,
+    intent: docketIntentOf(docket),
+  };
 };
 
 /**
@@ -221,7 +256,7 @@ const identifierWithin = (
       if (!window.includes("/") && !/ecli:/iu.test(window)) {
         continue;
       }
-      const reading = readingOfWindow(window, start, end, grammar);
+      const reading = readingOfWindow({ end, grammar, start, tokens });
       if (reading !== null) {
         readings.push(reading);
       }
@@ -416,6 +451,10 @@ type DecisionHitIdentity = {
   ecli: string | null;
   /** Every identifier the publisher supplied, parallel case numbers included. */
   identifiers?: readonly { type: string; value: string }[] | undefined;
+  /** The reference as the court published it, sheet included, if recorded. */
+  publishedCaseNumber?: string | null | undefined;
+  /** The sheet the court published the decision on, if recorded. */
+  sheetNumber?: string | null | undefined;
 };
 
 /**
@@ -483,13 +522,17 @@ export const exactDecisionMatches = <THit extends DecisionHitIdentity>(
  *
  * - `unique`: one decision is the one named. `basis` says by what: an
  *   identifier that names a decision outright (an ECLI, a reporter
- *   citation), the sheet or part the reference printed, or a docket whose
- *   file holds one decision here.
+ *   citation), the sheet or part the reference printed and exactly one
+ *   candidate is known to carry, or a bare docket whose file the read holds
+ *   whole and finds one decision in.
  * - `ambiguous`: the reference cannot tell its candidates apart. `several`
  *   is siblings in one file, or one number at several courts;
  *   `selector_unmatched` is a sheet or part that no candidate is known to
- *   carry, while some carry another, so the file's decisions come back
- *   rather than one of them.
+ *   carry, so the file's decisions come back rather than one of them, even
+ *   when the file shows one; `file_incomplete` is a bare docket finding one
+ *   decision where stored dockets can still carry their sheet
+ *   (`DECISION_DOCKETS_STORED_WITH_SHEETS`), so the file may hold members the
+ *   read did not reach.
  * - `none`: nothing answers to it.
  *
  * A docket, a court and a date together are still not a decision: two
@@ -506,25 +549,43 @@ export type DecisionIdentityResolution<THit> =
   | {
       readonly status: "ambiguous";
       readonly candidates: readonly THit[];
-      readonly reason: "several" | "selector_unmatched";
+      readonly reason: "several" | "selector_unmatched" | "file_incomplete";
     };
 
 /** A digit run as a number would read it, so `05` and `5` compare equal. */
 const numeral = (digits: string): string => digits.replace(/^0+(?=\d)/u, "");
 
 /**
- * The sheet an ECLI names after the file's own numbers, or null. A Czech or
- * Slovak ECLI spells the docket's numbers in order and appends the sheet
- * (`…:3.AFS.41.2008.98` for sheet 98 of `3 Afs 41/2008`), so the sheet is
- * read only where the ordinal's numbers end in the file's numbers followed by
- * exactly one more. An ECLI whose last number is the docket's own year
- * (`…:1.US.123.20`) carries no sheet, and one of another file carries none
- * of this one.
+ * What the segment after a file's numbers means in a court's ECLI scheme, for
+ * the schemes where it is the sheet the document sits on in its file
+ * (`ECLI:CZ:NSS:2010:3.AFS.41.2008.98` is sheet 98 of `3 Afs 41/2008`). Keyed
+ * by the ECLI's own country and court codes. A scheme absent here appends
+ * something else there (a decision's sequence number in its file, as the
+ * general and constitutional courts do), which no printed sheet answers to.
+ */
+export const DECISION_ECLI_SHEET_SCHEMES: Readonly<Record<string, "sheet">> = {
+  "CZ:NSS": "sheet",
+};
+
+/**
+ * The sheet an ECLI names after the file's own numbers, or null. Read only
+ * in a scheme declared to carry it (`DECISION_ECLI_SHEET_SCHEMES`), and only
+ * where the ordinal's numbers end in the file's numbers followed by exactly
+ * one more: an ECLI whose last number is the docket's own year carries no
+ * sheet, and one of another file carries none of this one.
  */
 export const ecliSheetOf = (
   ecli: string,
   familyCanonical: string,
 ): string | null => {
+  const [, country, court] = ecli.toUpperCase().split(":");
+  if (
+    country === undefined ||
+    court === undefined ||
+    !Object.hasOwn(DECISION_ECLI_SHEET_SCHEMES, `${country}:${court}`)
+  ) {
+    return null;
+  }
   const ordinal = ecli.split(":").slice(4).join(":");
   const segments = ordinal.split(".");
   const last = segments.at(-1);
@@ -557,9 +618,10 @@ type CarriedSelectors = { sheets: Set<string>; parts: Set<string> };
 
 /**
  * Every selector a hit is known to carry within the file: from each docket
- * spelling of the file it stores (its own, and a full file number a publisher
- * supplied beside it) and from each ECLI it carries, the two places a court's
- * sheet is published.
+ * spelling of the file it stores (its own, the reference as the court
+ * published it, and a full file number a publisher supplied beside it), from
+ * the sheet its source recorded, and from each ECLI whose scheme ends on the
+ * sheet.
  */
 const selectorsOfHit = (
   hit: DecisionHitIdentity,
@@ -570,6 +632,7 @@ const selectorsOfHit = (
   const parts = new Set<string>();
   const dockets = [
     hit.caseNumber,
+    ...(hit.publishedCaseNumber ? [hit.publishedCaseNumber] : []),
     ...(hit.identifiers ?? [])
       .filter(({ type }) => type === CASE_NUMBER_IDENTIFIER)
       .map(({ value }) => value),
@@ -596,6 +659,10 @@ const selectorsOfHit = (
     if (sheet !== null) {
       sheets.add(sheet);
     }
+  }
+  const stated = hit.sheetNumber?.trim();
+  if (stated !== undefined && /^\d{1,8}$/u.test(stated)) {
+    sheets.add(numeral(stated));
   }
   return { sheets, parts };
 };
@@ -629,7 +696,24 @@ export const resolveDecisionIdentity = <THit extends DecisionHitIdentity>(
     return resolvedAmong(family, "identifier");
   }
   const { selector } = identifier;
-  if (selector.kind === "none" || family.length === 0) {
+  if (family.length === 0) {
+    return { status: "none" };
+  }
+  if (selector.kind === "none") {
+    const [only, ...rest] = family;
+    // Where a sibling can be stored under its sheet, the read may not have
+    // reached it: one decision found is not one decision in the file.
+    if (
+      only !== undefined &&
+      rest.length === 0 &&
+      DECISION_DOCKETS_STORED_WITH_SHEETS[identifier.jurisdiction]
+    ) {
+      return {
+        status: "ambiguous",
+        candidates: family,
+        reason: "file_incomplete",
+      };
+    }
     return resolvedAmong(family, "docket");
   }
   const grammar = DECISION_DOCKET_GRAMMARS[identifier.jurisdiction];
@@ -647,12 +731,8 @@ export const resolveDecisionIdentity = <THit extends DecisionHitIdentity>(
   if (selected.length > 0) {
     return resolvedAmong(selected, "selector");
   }
-  // One decision in the file, carrying no selector of this kind: nothing
-  // contradicts the reference, and there is no sibling to confuse it with.
-  const [only, ...rest] = known;
-  if (only !== undefined && rest.length === 0 && only.carried.size === 0) {
-    return { status: "unique", decision: only.hit, basis: "docket" };
-  }
+  // Nothing known to carry what the reference printed: the file comes back,
+  // even when it shows one decision, which may be a sibling of the one named.
   return {
     status: "ambiguous",
     candidates: family,
