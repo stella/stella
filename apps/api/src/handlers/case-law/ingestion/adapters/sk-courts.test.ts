@@ -21,6 +21,7 @@ import { describe, expect, test } from "bun:test";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
   decodeSourceRawEnvelope,
+  encodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type { StoredRawReparseOutcome } from "@/api/handlers/case-law/ingestion/adapter";
@@ -393,6 +394,27 @@ describe("derived general-court metadata", () => {
       type: "absent",
       reason: "not_published",
     });
+  });
+
+  test("stored listings without detail replay with unknown publisher URL availability", () => {
+    const outcome = reparse(
+      {
+        sourceRaw: encodeSourceRawEnvelope({
+          listing: JSON.stringify(item),
+        }),
+        sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+      },
+      item.spisovaZnacka,
+    );
+    expect(outcome.type).toBe("parsed");
+    if (outcome.type !== "parsed") {
+      return panic("the stored listing must be reparsable without its detail");
+    }
+    expect(outcome.result.sourceUrl).toBeUndefined();
+    expect(outcome.result.metadata["sourceUrlStatus"]).toBe(
+      "detail-unavailable",
+    );
+    expect(outcome.result.metadata["statedSourceUrl"]).toBeUndefined();
   });
 
   test("published documents remain the public link, independently of a listing guid", () => {

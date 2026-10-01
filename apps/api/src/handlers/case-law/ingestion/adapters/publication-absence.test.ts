@@ -121,7 +121,7 @@ for (const { key } of listSourceRegistrations()) {
       const debt = TYPED_ABSENCE_DEBT[key].find(
         (entry) => entry.field === field,
       );
-      if (decision[field] !== undefined && decision[field] !== null) {
+      if (decision[field] !== undefined) {
         expect(marker).toBeUndefined();
         continue;
       }

@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-// parser-output-unchanged: Absence provenance changes metadata only; canonical documents and replay comparison inputs are unchanged.
+// parser-output-unchanged: Text and publication absence sidecars change metadata only; canonical documents and replay comparison inputs are unchanged.
 
 import {
   DECISION_HEADNOTE_KEYWORDS,

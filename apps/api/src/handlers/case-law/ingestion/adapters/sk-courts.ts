@@ -1,4 +1,3 @@
-// parser-output-unchanged: Source URL retrieval status changes metadata only, not canonical documents or replay comparison.
 import { panic, Result } from "better-result";
 
 import type { SkCourtsSourceUrlStatus } from "@stll/api-contract/case-law-text-field";
