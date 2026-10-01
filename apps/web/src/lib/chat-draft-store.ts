@@ -20,6 +20,11 @@ type ChatDraftStore = {
   clearDraft: (threadKey: string) => void;
   draftsByThreadKey: Record<string, ChatDraftState>;
   getDraft: (threadKey: string) => ChatDraftState | null;
+  /** Appends inline nodes (a chip and the space after it) to the draft. */
+  insertInlineContent: (
+    threadKey: string,
+    content: readonly JSONContent[],
+  ) => void;
   insertMention: (threadKey: string, mention: ChatMentionOption) => void;
   setDraft: (threadKey: string, draft: ChatDraftState) => void;
 };
@@ -43,30 +48,25 @@ const createTextNode = (text: string): JSONContent => ({
   text,
 });
 
-const appendMentionToParagraph = (
+const appendInlineToParagraph = (
   paragraph: JSONContent,
-  mention: ChatMentionOption,
-): JSONContent => {
-  const existingContent = normalizeOptionalArray(paragraph.content);
-  return {
-    ...paragraph,
-    content: [
-      ...existingContent,
-      createMentionNode(mention),
-      createTextNode(" "),
-    ],
-  };
-};
+  inline: readonly JSONContent[],
+): JSONContent => ({
+  ...paragraph,
+  content: [...normalizeOptionalArray(paragraph.content), ...inline],
+});
 
-export const appendMentionToDraftDoc = (
+/** Appends inline nodes to the draft's last paragraph, opening a paragraph
+ *  when the draft ends in anything else. */
+export const appendInlineContentToDraftDoc = (
   doc: JSONContent,
-  mention: ChatMentionOption,
+  inline: readonly JSONContent[],
 ): JSONContent => {
   const content = [...normalizeOptionalArray(doc.content)];
   const lastNode = content.at(-1);
 
   if (lastNode?.type === "paragraph") {
-    content[content.length - 1] = appendMentionToParagraph(lastNode, mention);
+    content[content.length - 1] = appendInlineToParagraph(lastNode, inline);
     return {
       ...doc,
       content,
@@ -77,10 +77,20 @@ export const appendMentionToDraftDoc = (
     ...doc,
     content: [
       ...content,
-      appendMentionToParagraph({ type: "paragraph" }, mention),
+      appendInlineToParagraph({ type: "paragraph" }, inline),
     ],
   };
 };
+
+const mentionContent = (mention: ChatMentionOption): JSONContent[] => [
+  createMentionNode(mention),
+  createTextNode(" "),
+];
+
+export const appendMentionToDraftDoc = (
+  doc: JSONContent,
+  mention: ChatMentionOption,
+): JSONContent => appendInlineContentToDraftDoc(doc, mentionContent(mention));
 
 export const createChatDraftState = (
   overrides?: Partial<ChatDraftState>,
@@ -172,7 +182,7 @@ export const useChatDraftStore = create<ChatDraftStore>((set, get) => ({
     }),
   draftsByThreadKey: {},
   getDraft: (threadKey) => get().draftsByThreadKey[threadKey] ?? null,
-  insertMention: (threadKey, mention) =>
+  insertInlineContent: (threadKey, content) =>
     set((state) => {
       const currentDraft =
         state.draftsByThreadKey[threadKey] ?? createChatDraftState();
@@ -182,12 +192,14 @@ export const useChatDraftStore = create<ChatDraftStore>((set, get) => ({
           ...state.draftsByThreadKey,
           [threadKey]: {
             ...currentDraft,
-            doc: appendMentionToDraftDoc(currentDraft.doc, mention),
+            doc: appendInlineContentToDraftDoc(currentDraft.doc, content),
             updatedAt: Temporal.Now.instant().epochMilliseconds,
           },
         },
       };
     }),
+  insertMention: (threadKey, mention) =>
+    get().insertInlineContent(threadKey, mentionContent(mention)),
   setDraft: (threadKey, draft) =>
     set((state) => ({
       draftsByThreadKey: {

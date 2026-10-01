@@ -1,8 +1,5 @@
 import { defineConfig } from "oxlint";
 import type { OxlintOverride } from "oxlint";
-import core from "ultracite/oxlint/core";
-import react from "ultracite/oxlint/react";
-import shadcn from "ultracite/oxlint/shadcn";
 
 import {
   libraryIgnorePatterns,
@@ -22,6 +19,9 @@ import {
   designLintBacklogOverrides,
 } from "./scripts/design-lint-policy.ts";
 import { OWNERSHIP } from "./scripts/ownership.ts";
+import core from "./scripts/oxlint-presets/core.mjs";
+import react from "./scripts/oxlint-presets/react.mjs";
+import shadcn from "./scripts/oxlint-presets/shadcn.mjs";
 import {
   DECLARATION_FILE_GLOB,
   RESULT_CONVENTION_ENABLED_GLOBS,
@@ -135,6 +135,10 @@ const publicSsrAmbientStateRules = {
 } satisfies NonNullable<OxlintOverride["rules"]>;
 
 const fixtureRuleOverrides = [
+  fixtureRuleOverride("drizzle.fixture.ts", [
+    "drizzle/enforce-delete-with-where",
+    "drizzle/enforce-update-with-where",
+  ]),
   {
     files: [".oxlint-plugins/__fixtures__/public-ssr-ambient-state.fixture.ts"],
     rules: publicSsrAmbientStateRules,
@@ -1144,7 +1148,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-raw-cache-control.ts",
     "@tanstack/eslint-plugin-query",
     "@tanstack/eslint-plugin-router",
-    "eslint-plugin-drizzle",
+    "./.oxlint-plugins/drizzle.ts",
     "oxlint-tailwindcss",
     "@stll/oxlint-config/no-raw-colors",
     "./.oxlint-plugins/no-raw-date-input.ts",
@@ -4597,6 +4601,28 @@ export default defineConfig({
             name: "Bun",
             message:
               "@stll/cli is published to npm and must run under plain Node; use node:* APIs (node:fs/promises, node:crypto, node:http, node:child_process) instead of the Bun global.",
+          },
+        ],
+      },
+    },
+    {
+      files: ["packages/business-registries/src/**/*.ts"],
+      excludeFiles: [
+        "packages/business-registries/src/**/*.test.ts",
+        "packages/business-registries/src/shared/encode-registry-component.ts",
+      ],
+      rules: {
+        "no-restricted-globals": [
+          "error",
+          {
+            globals: [
+              {
+                name: "encodeURIComponent",
+                message:
+                  "Use encodeRegistryComponent from shared/encode-registry-component.js for registry URL components.",
+              },
+            ],
+            checkGlobalObject: true,
           },
         ],
       },
