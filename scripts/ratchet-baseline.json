@@ -974,7 +974,7 @@
     }
   },
   "no-db-await-in-loop-suppressions": {
-    "count": 115,
+    "count": 109,
     "files": {
       "apps/api/scripts/backfill-image-thumbnails.ts": 3,
       "apps/api/scripts/backfill-search-previews.ts": 2,
@@ -1028,14 +1028,9 @@
       "apps/api/src/lib/workflow/orphan-cells.ts": 1,
       "apps/api/src/lib/workflow/route-playbooks.ts": 1,
       "apps/api/src/mcp/gateway/external-tools.ts": 1,
-      "apps/api/src/scripts/backfill-citation-authority.ts": 1,
-      "apps/api/src/scripts/backfill-citation-keys.ts": 2,
       "apps/api/src/scripts/backfill-corpus-storage.ts": 1,
-      "apps/api/src/scripts/backfill-legislation-work-names.ts": 1,
       "apps/api/src/scripts/backfill-organization-file-usage.helpers.ts": 1,
       "apps/api/src/scripts/backfill-organization-file-usage.ts": 4,
-      "apps/api/src/scripts/backfill-property-roles.ts": 1,
-      "apps/api/src/scripts/backfill-statute-citation-counts.ts": 1,
       "apps/api/src/scripts/corpus-column-trim.ts": 1,
       "apps/api/src/scripts/cz-regional-repair.ts": 3,
       "apps/api/src/scripts/decision-analysis-candidates.ts": 1,
@@ -1370,7 +1365,7 @@
     "files": {}
   },
   "direct-failure-sinks": {
-    "count": 539,
+    "count": 538,
     "files": {
       "apps/api/src/handlers/bilingual-translations/create-run.ts": 1,
       "apps/api/src/handlers/bilingual-translations/prepare.ts": 2,
@@ -1457,7 +1452,6 @@
       "apps/api/src/handlers/legislation/ingestion.ts": 2,
       "apps/api/src/handlers/legislation/search-index.ts": 3,
       "apps/api/src/handlers/legislation/shelf.ts": 2,
-      "apps/api/src/handlers/legislation/slug-backfill.ts": 1,
       "apps/api/src/handlers/organization-settings/read-ai-config.ts": 1,
       "apps/api/src/handlers/organization-settings/update-ai-config.ts": 1,
       "apps/api/src/handlers/organization-settings/update-deepl-key.ts": 1,
@@ -2120,9 +2114,9 @@
     }
   },
   "direct-third-party-declarations": {
-    "count": 515,
+    "count": 519,
     "files": {
-      "apps/api/package.json": 84,
+      "apps/api/package.json": 85,
       "apps/collab/package.json": 10,
       "apps/desktop/package.json": 15,
       "apps/extension/package.json": 7,
@@ -2152,6 +2146,7 @@
       "packages/concurrency/package.json": 2,
       "packages/conditions/package.json": 5,
       "packages/country-codes/package.json": 1,
+      "packages/db-load-gate/package.json": 3,
       "packages/docx-utils/package.json": 6,
       "packages/errors/package.json": 2,
       "packages/fetch/package.json": 1,

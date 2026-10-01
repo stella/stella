@@ -20,6 +20,7 @@ type BackfillPassOptions<Value> = {
   sleep: (milliseconds: number) => Promise<void>;
   clock?: () => number;
   maxWaitMs?: number;
+  holdPolicy?: "wait" | "propagate";
   log?: (record: BackfillWaitRecord) => void;
 };
 
@@ -37,13 +38,14 @@ type BackfillWaitRecord = {
 
 const RETRY_BACKOFF_MS = 1000;
 
-/** Operator passes wait for durable holds; online repairs invoke individual steps. */
+/** Operator passes wait for durable holds; online repairs propagate them. */
 export const runBackfillPass = async <Value>({
   step,
   onBatch,
   sleep,
   clock = () => Temporal.Now.instant().epochMilliseconds,
   maxWaitMs,
+  holdPolicy = "wait",
   log = (record) => process.stderr.write(`${JSON.stringify(record)}\n`),
 }: BackfillPassOptions<Value>) => {
   if (
@@ -59,7 +61,10 @@ export const runBackfillPass = async <Value>({
       catch: (cause: unknown) => cause,
     });
     if (outcome.isErr()) {
-      if (!(outcome.error instanceof BackfillHeldError)) {
+      if (
+        !(outcome.error instanceof BackfillHeldError) ||
+        holdPolicy === "propagate"
+      ) {
         return Result.err(outcome.error);
       }
       const now = clock();

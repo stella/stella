@@ -243,3 +243,33 @@ test("a hold beyond the caller's wait budget exits before sleeping or stepping a
     expect.objectContaining({ action: "paused", reason: "hold", sleepMs: 100 }),
   ]);
 });
+
+for (const reason of ["hold", "retry"] as const) {
+  test(`online ${reason} propagates without waiting or advancing another batch`, async () => {
+    const failure = new BackfillHeldError({
+      message: "repair pending",
+      holdUntil: reason === "hold" ? 5100 : null,
+      heldSince: reason === "hold" ? 100 : null,
+    });
+    let attempts = 0;
+    let sleeps = 0;
+    const result = await runBackfillPass({
+      holdPolicy: "propagate",
+      clock: () => 100,
+      step: async () => {
+        attempts++;
+        throw failure;
+      },
+      sleep: async () => {
+        sleeps++;
+        throw new DeferredPassError({ message: "online repair must defer" });
+      },
+    });
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error).toBe(failure);
+    }
+    expect(attempts).toBe(1);
+    expect(sleeps).toBe(0);
+  });
+}

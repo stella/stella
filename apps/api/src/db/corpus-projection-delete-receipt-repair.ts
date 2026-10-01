@@ -110,7 +110,7 @@ const readBatchBoundary = async (
 const repairFrom = async (
   connection: OnlineMigrationConnection,
   { readVerdict, sleep = Bun.sleep, clock, log }: RepairRuntimeOptions,
-): Promise<void> => {
+) => {
   const runtime = createBackfillRuntime({
     name: REPAIR_NAME,
     tableName: TABLE_NAME,
@@ -126,7 +126,8 @@ const repairFrom = async (
     log,
   });
   try {
-    await runBackfillPass({
+    return await runBackfillPass({
+      holdPolicy: "propagate",
       sleep,
       step: () =>
         runtime.step(async ({ tx, cursor, size }) => {
@@ -188,7 +189,10 @@ export const createCorpusProjectionDeleteReceiptRepair = (
       await validateConstraint(connection);
       return;
     }
-    await repairFrom(connection, options);
+    const pass = await repairFrom(connection, options);
+    if (pass.isErr()) {
+      throw pass.error;
+    }
     await validateConstraint(connection);
   },
 });

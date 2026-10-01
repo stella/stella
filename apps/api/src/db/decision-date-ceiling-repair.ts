@@ -110,7 +110,7 @@ const reportUnreconciled = (rows: number): void => {
 const repairUntilEmpty = async (
   connection: OnlineMigrationConnection,
   { readVerdict, sleep = Bun.sleep, clock, log }: RepairRuntimeOptions,
-): Promise<void> => {
+) => {
   const runtime = createBackfillRuntime({
     name: REPAIR_NAME,
     tableName: TABLE_NAME,
@@ -126,7 +126,8 @@ const repairUntilEmpty = async (
     log,
   });
   try {
-    await runBackfillPass({
+    return await runBackfillPass({
+      holdPolicy: "propagate",
       sleep,
       step: () =>
         runtime.step(async ({ tx, size, cursor }) => {
@@ -192,7 +193,10 @@ export const createDecisionDateCeilingRepair = (
       await validateConstraint(connection);
       return;
     }
-    await repairUntilEmpty(connection, options);
+    const pass = await repairUntilEmpty(connection, options);
+    if (pass.isErr()) {
+      throw pass.error;
+    }
     await validateConstraint(connection);
   },
 });
