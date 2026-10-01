@@ -843,7 +843,7 @@ test("a failed dependency stays red beside a cancelled sibling even during super
       expect(
         evaluateResult({
           event,
-          results: { "ci-tests": "cancelled", "code-quality": "failure" },
+          results: { "ci-tests": "cancelled", "code-quality-api": "failure" },
           suiteDepth: SUITE_DEPTH.fast,
           cancellationEvidence,
         }),
@@ -1519,7 +1519,7 @@ test("property-testing guards run only when dependencies are installed", () => {
       expect(installCondition, job).toBeDefined();
     }
     for (const guard of guards) {
-      expect(guard.if, `${job}: ${guard.name}`).toBe(installCondition);
+      expect(guard.if, `${job}: ${String(guard.name)}`).toBe(installCondition);
     }
   }
   expect(guardCount).toBeGreaterThan(0);
