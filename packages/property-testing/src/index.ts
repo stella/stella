@@ -184,7 +184,10 @@ export const propertyTestDefaultTimeout = (): number => {
 };
 
 const SELF = import.meta.filename;
-const FRAME = /\(?((?:file:\/\/)?(?:\/|[A-Za-z]:[\\/])[^()]*?):\d+:\d+\)?\s*$/u;
+// One stack frame, "at fn (/abs/x.test.ts:1:2)" or "at /abs/x.test.ts:1:2".
+// Anchored at both ends so matching stays linear in the line length.
+const FRAME =
+  /^\s*at (?:[^()]* \()?((?:file:\/\/)?(?:\/|[A-Za-z]:[\\/])[^()]*):\d+:\d+\)?\s*$/u;
 
 const callerFile = (): string => {
   const stack = new PropertyTestConfigError("property call site").stack ?? "";
