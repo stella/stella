@@ -1089,6 +1089,10 @@
     "greeting": "ما الذي تودّ العمل عليه؟",
     "greetingSubtitle": "ابدأ بملف قانوني أو مستند أو سؤال مباشر.",
     "hideThread": "إخفاء المحادثة",
+    "historyContext": {
+      "overflow": "+{count, number}",
+      "unnamed": "{count, plural, zero {ولا شيء آخر} one {وعنصر واحد آخر} two {وعنصران آخران} few {و# عناصر أخرى} many {و# عنصرًا آخر} other {و# عنصر آخر}}"
+    },
     "improvePrompt": "تحسين الطلب",
     "improvePromptDraftChanged": "تغيّرت المسودة، لذلك لم يُطبّق التحسين.",
     "improvePromptPlainTextOnly": "تحسين الطلب متاح للنص العادي فقط.",
@@ -1585,6 +1589,7 @@
     },
     "fact": "حقيقة",
     "failed": "فشل",
+    "files": "الملفات",
     "filter": "تصفية",
     "filters": "عوامل التصفية",
     "find": "بحث",
@@ -3249,7 +3254,6 @@
       "editSkill": "تعديل المهارة",
       "enableSkill": "تفعيل المهارة",
       "fileExists": "يوجد ملف بهذا المسار بالفعل",
-      "filesHeading": "الملفات",
       "howItRuns": "كيفية تشغيلها",
       "importFailureFetch": "تعذر تحميل مصدر المهارة.",
       "importFailureIntegrity": "تغير مصدر المهارة بعد اكتشافها. راجعه مرة أخرى.",

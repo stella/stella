@@ -1089,6 +1089,10 @@
     "greeting": "Prie ko norėtumėte dirbti?",
     "greetingSubtitle": "Pradėkite nuo bylos, dokumento arba paprasto klausimo.",
     "hideThread": "Slėpti pokalbį",
+    "historyContext": {
+      "overflow": "+{count, number}",
+      "unnamed": "{count, plural, one {ir dar #} few {ir dar #} many {ir dar #} other {ir dar #}}"
+    },
     "improvePrompt": "Patobulinti užklausą",
     "improvePromptDraftChanged": "Juodraštis pasikeitė, todėl patobulinimas nebuvo pritaikytas.",
     "improvePromptPlainTextOnly": "Užklausą galima tobulinti tik kaip paprastą tekstą.",
@@ -1585,6 +1589,7 @@
     },
     "fact": "Faktas",
     "failed": "Nepavyko",
+    "files": "Failai",
     "filter": "Filtras",
     "filters": "Filtrai",
     "find": "Ieškoti",
@@ -3249,7 +3254,6 @@
       "editSkill": "Redaguoti įgūdį",
       "enableSkill": "Įjungti įgūdį",
       "fileExists": "Failas šiuo keliu jau yra",
-      "filesHeading": "Failai",
       "howItRuns": "Kaip jis veikia",
       "importFailureFetch": "Nepavyko įkelti įgūdžio šaltinio.",
       "importFailureIntegrity": "Įgūdžio šaltinis po aptikimo pasikeitė. Peržiūrėkite jį dar kartą.",

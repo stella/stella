@@ -1089,6 +1089,10 @@
     "greeting": "Woran möchten Sie arbeiten?",
     "greetingSubtitle": "Beginnen Sie mit einer Akte, einem Dokument oder einer einfachen Frage.",
     "hideThread": "Konversation ausblenden",
+    "historyContext": {
+      "overflow": "+{count, number}",
+      "unnamed": "{count, plural, one {und # weiteres} other {und # weitere}}"
+    },
     "improvePrompt": "Prompt verbessern",
     "improvePromptDraftChanged": "Der Entwurf wurde geändert, daher wurde die Verbesserung nicht übernommen.",
     "improvePromptPlainTextOnly": "Prompts können nur als Klartext verbessert werden.",
@@ -1585,6 +1589,7 @@
     },
     "fact": "Tatsache",
     "failed": "Fehlgeschlagen",
+    "files": "Dateien",
     "filter": "Filtern",
     "filters": "Filter",
     "find": "Suchen",
@@ -3249,7 +3254,6 @@
       "editSkill": "Skill bearbeiten",
       "enableSkill": "Skill aktivieren",
       "fileExists": "Eine Datei mit diesem Pfad existiert bereits",
-      "filesHeading": "Dateien",
       "howItRuns": "Ausführung",
       "importFailureFetch": "Die Skill-Quelle konnte nicht geladen werden.",
       "importFailureIntegrity": "Die Skill-Quelle hat sich nach der Erkennung geändert. Prüfen Sie sie erneut.",

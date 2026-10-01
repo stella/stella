@@ -1089,6 +1089,10 @@
     "greeting": "No que você gostaria de trabalhar?",
     "greetingSubtitle": "Comece com um caso, documento ou pergunta simples.",
     "hideThread": "Ocultar conversa",
+    "historyContext": {
+      "overflow": "+{count, number}",
+      "unnamed": "{count, plural, one {e mais #} many {e mais #} other {e mais #}}"
+    },
     "improvePrompt": "Melhorar prompt",
     "improvePromptDraftChanged": "O rascunho mudou, então a melhoria não foi aplicada.",
     "improvePromptPlainTextOnly": "A melhoria de prompts está disponível apenas para texto simples.",
@@ -1585,6 +1589,7 @@
     },
     "fact": "Fato",
     "failed": "Falhou",
+    "files": "Arquivos",
     "filter": "Filtro",
     "filters": "Filtros",
     "find": "Localizar",
@@ -3249,7 +3254,6 @@
       "editSkill": "Editar habilidade",
       "enableSkill": "Ativar habilidade",
       "fileExists": "Já existe um arquivo com este caminho",
-      "filesHeading": "Arquivos",
       "howItRuns": "Como funciona",
       "importFailureFetch": "Não foi possível carregar a origem da habilidade.",
       "importFailureIntegrity": "A origem da habilidade mudou após a descoberta. Revise-a novamente.",

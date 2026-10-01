@@ -1089,6 +1089,10 @@
     "greeting": "Sur quoi souhaitez-vous travailler ?",
     "greetingSubtitle": "Commencez par un dossier, un document ou une question simple.",
     "hideThread": "Masquer la conversation",
+    "historyContext": {
+      "overflow": "+{count, number}",
+      "unnamed": "{count, plural, one {et # autre} many {et # autres} other {et # autres}}"
+    },
     "improvePrompt": "Améliorer le prompt",
     "improvePromptDraftChanged": "Le brouillon a changé, l'amélioration n'a donc pas été appliquée.",
     "improvePromptPlainTextOnly": "L'amélioration du prompt est disponible uniquement pour le texte brut.",
@@ -1585,6 +1589,7 @@
     },
     "fact": "Fait",
     "failed": "Échec",
+    "files": "Fichiers",
     "filter": "Filtrer",
     "filters": "Filtres",
     "find": "Rechercher",
@@ -3249,7 +3254,6 @@
       "editSkill": "Modifier la compétence",
       "enableSkill": "Activer la compétence",
       "fileExists": "Un fichier avec ce chemin existe déjà",
-      "filesHeading": "Fichiers",
       "howItRuns": "Mode d’exécution",
       "importFailureFetch": "La source de la compétence n’a pas pu être chargée.",
       "importFailureIntegrity": "La source de la compétence a changé après sa détection. Vérifiez-la à nouveau.",

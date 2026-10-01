@@ -1089,6 +1089,10 @@
     "greeting": "Na čom chcete pracovať?",
     "greetingSubtitle": "Začnite spisom, dokumentom alebo obyčajnou otázkou.",
     "hideThread": "Skryť konverzáciu",
+    "historyContext": {
+      "overflow": "+{count, number}",
+      "unnamed": "{count, plural, one {a # ďalší} few {a # ďalšie} other {a # ďalších}}"
+    },
     "improvePrompt": "Vylepšiť zadanie",
     "improvePromptDraftChanged": "Zadanie sa zmenilo, preto vylepšenie nebolo použité.",
     "improvePromptPlainTextOnly": "Vylepšenie zadania je dostupné iba pre obyčajný text.",
@@ -1585,6 +1589,7 @@
     },
     "fact": "Fakt",
     "failed": "Zlyhalo",
+    "files": "Súbory",
     "filter": "Filtrovať",
     "filters": "Filtre",
     "find": "Nájsť",
@@ -3249,7 +3254,6 @@
       "editSkill": "Upraviť zručnosť",
       "enableSkill": "Zapnúť zručnosť",
       "fileExists": "Súbor s touto cestou už existuje",
-      "filesHeading": "Súbory",
       "howItRuns": "Ako sa spúšťa",
       "importFailureFetch": "Zdroj zručnosti sa nepodarilo načítať.",
       "importFailureIntegrity": "Zdroj zručnosti sa po nájdení zmenil. Skontrolujte ho znova.",

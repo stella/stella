@@ -1092,6 +1092,10 @@ type Messages = {
     "greeting": "What would you like to work on?";
     "greetingSubtitle": "Start with a matter, document, or plain question.";
     "hideThread": "Hide conversation";
+    "historyContext": {
+      "overflow": "+{count, number}";
+      "unnamed": "{count, plural, one {and # more} other {and # more}}";
+    };
     "improvePrompt": "Improve prompt";
     "improvePromptDraftChanged": "Draft changed, so the improvement wasn't applied.";
     "improvePromptPlainTextOnly": "Prompt improvement is available for plain text only.";
@@ -1588,6 +1592,7 @@ type Messages = {
     };
     "fact": "Fact";
     "failed": "Failed";
+    "files": "Files";
     "filter": "Filter";
     "filters": "Filters";
     "find": "Find";
@@ -3252,7 +3257,6 @@ type Messages = {
       "editSkill": "Edit skill";
       "enableSkill": "Enable skill";
       "fileExists": "A file with this path already exists";
-      "filesHeading": "Files";
       "howItRuns": "How it runs";
       "importFailureFetch": "The skill source could not be loaded.";
       "importFailureIntegrity": "The skill source changed after discovery. Review it again.";

@@ -52,6 +52,8 @@ import { toAPIError } from "@/lib/errors/api";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
 
+import { ThreadContextLine } from "./thread-context-line";
+
 type ThreadsSheetProps = {
   icon?: ReactNode;
   label?: string | undefined;
@@ -430,15 +432,16 @@ const ThreadRow = ({
               <BidiText as="span" className="truncate text-sm font-medium">
                 {displayTitle}
               </BidiText>
-              <span className="text-muted-foreground text-xs">
+              {/* One line that never wraps: provenance, the matters and files
+                  the chat drew on (chips truncate, the rest fold into "+N"),
+                  then the date, which always stays visible. A matter chat's
+                  own matter leads the context, so it is not repeated. */}
+              <span className="text-muted-foreground flex min-w-0 items-center gap-1.5 text-xs whitespace-nowrap">
                 <ChatThreadOriginPrefix origin={thread.origin} />
-                {thread.scope === "workspace" ? (
-                  <>
-                    <BidiText as="span">{thread.workspaceName}</BidiText>
-                    {" · "}
-                  </>
-                ) : null}
-                {format.dateTime(new Date(thread.updatedAt).getTime())}
+                <ThreadContextLine context={thread.context} />
+                <span className="shrink-0 tabular-nums">
+                  {format.dateTime(new Date(thread.updatedAt).getTime())}
+                </span>
               </span>
             </Link>
             <ChatTitleSuggestButton

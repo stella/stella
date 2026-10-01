@@ -771,7 +771,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
       >
         <div className="mb-2 flex items-center gap-1 px-1">
           <p className="text-muted-foreground me-auto text-xs font-semibold tracking-wider uppercase">
-            {tSkills("filesHeading")}
+            {t("common.files")}
           </p>
           {allFolderIds.size > 0 && (
             <FolderExpandToggle
