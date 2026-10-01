@@ -147,14 +147,6 @@ export const envApiServerSchema = {
    */
   SMOKE_SESSION_SECRET: v.optional(v.pipe(v.string(), v.minLength(32))),
   /**
-   * Bearer token for the operator registrations endpoint
-   * (handlers/operator): lets an instance operator list recent
-   * account registrations over HTTP instead of opening a database
-   * shell. Unset disables the endpoint entirely (requests return
-   * 404), mirroring how other optional operational surfaces behave.
-   */
-  OPERATOR_METRICS_TOKEN: v.optional(v.pipe(v.string(), v.minLength(32))),
-  /**
    * Deployment-owned bearer credential for collaboration snapshot transport.
    * Unset disables the service-only load/store routes.
    */
@@ -339,6 +331,9 @@ export const envApiServerSchema = {
   FEATURE_TODOS: featureFlagSchema,
   FEATURE_MCP: featureFlagSchema,
   FEATURE_ACTION_ADMISSION: featureFlagSchema,
+  ACTION_LIMIT_CONTACT_URL: v.optional(
+    v.pipe(v.string(), v.url(), v.regex(/^https?:\/\//u)),
+  ),
   ACTION_ADMISSION_ORG_CONCURRENCY: v.optional(
     v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1)),
   ),

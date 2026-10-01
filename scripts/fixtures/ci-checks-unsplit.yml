@@ -1,4 +1,4 @@
-# Original ci-checks job before parallelization; retained for exact step coverage.
+# Unsplit ci-checks at main 3ab42b2730; retained for exact step coverage.
 ci-checks:
   needs: ci-plan
   if: >-
@@ -367,12 +367,12 @@ ci-checks:
         for workspace in apps/api apps/legal-atlas-runner apps/web; do
           DATABASE_URL=postgresql://invalid bun --no-env-file run knip --production --strict --no-progress --include unlisted,unresolved --workspace "$workspace"
         done
-    - name: Knip unused-dependency checks
+    - name: Knip workspace dependency checks
       if: needs.ci-plan.outputs.package_checks_required == 'true'
-      run: |
-        for workspace in apps/api apps/legal-atlas-runner apps/web; do
-          DATABASE_URL=postgresql://invalid bun --no-env-file run knip --no-progress --include dependencies --workspace "$workspace"
-        done
+      # Include test and tooling imports in every workspace. The production
+      # gate above also checks deployment boundaries for the server apps.
+      run: bun run dependencies:check
+
     - name: Knip dead-export check (packages/cli)
       if: needs.ci-plan.outputs.package_checks_required == 'true'
       run: |
@@ -410,7 +410,7 @@ ci-checks:
       run: bun test scripts/stage-web-runtime.test.ts
     - name: Test published export artifact guard
       if: needs.ci-plan.outputs.package_checks_required == 'true'
-      run: bun test scripts/published-export-guards.test.ts
+      run: bun test scripts/published-export-guards.test.ts scripts/check-published-exports.test.ts
     - name: Test publish manifest transformation
       if: needs.ci-plan.outputs.package_checks_required == 'true'
       run: bun test scripts/publish-manifest.test.ts

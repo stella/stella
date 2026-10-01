@@ -13,6 +13,7 @@ import { Loader } from "@stll/ui/loader";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
+import { ActionAdmissionOutcome } from "@/components/action-admission-outcome";
 import { FEEDBACK_CHANNELS } from "@/components/feedback-dialog.logic";
 import { MattersNavIcon } from "@/components/matter-icon";
 import {
@@ -32,6 +33,7 @@ import type { ErrorReference } from "@/lib/analytics/error-reference";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { useRouteErrorLifecycle } from "@/lib/analytics/route-error-lifecycle-context";
 import { detached } from "@/lib/detached";
+import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
 import { isMemberError, isUnauthorizedError } from "@/lib/errors/auth";
 
 // Lazy so the form stack is fetched only when someone reports the error.
@@ -173,6 +175,17 @@ export const DefaultErrorComponent = ({
   // on the next render cycle.
   if (isCancelledError) {
     return null;
+  }
+
+  if (actionAdmissionOutcome(error)) {
+    return (
+      <ActionAdmissionOutcome
+        className={className}
+        disabled={isPending}
+        error={error}
+        onRetry={retryErroredQueries}
+      />
+    );
   }
 
   if (showUnauthorizedError) {

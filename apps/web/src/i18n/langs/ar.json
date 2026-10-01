@@ -487,6 +487,17 @@
     "failedToStartTimer": "تعذّر بدء المؤقّت",
     "failedToStopTimer": "تعذّر إيقاف المؤقّت",
     "filterStatus": "التصفية حسب الحالة",
+    "globalTimer": {
+      "confirm": "تأكيد الوقت",
+      "discard": "إلغاء المؤقت",
+      "matterInaccessible": "اختر ملفًا قانونيًا يمكنك الوصول إليه.",
+      "narrativeRequired": "أضف وصفًا قبل تأكيد الوقت.",
+      "pause": "إيقاف مؤقت",
+      "periodLocked": "هذا الشهر مقفل. اطلب من مسؤول فتحه.",
+      "resume": "استئناف",
+      "timerUnavailable": "لم يعد هذا المؤقت متاحًا. حدّث القائمة.",
+      "title": "مؤقتات"
+    },
     "hourlyRateMustBeNonNegative": "لا يمكن أن يكون السعر بالساعة سالبًا",
     "hours": "الساعات",
     "invoiceNarrative": "بيان الفاتورة",
@@ -2135,6 +2146,13 @@
     "unnamedAttachment": "مرفق بلا اسم"
   },
   "errors": {
+    "actionAdmission": {
+      "admissionUnavailable": "هذا الإجراء متوقف مؤقتًا. يُرجى المحاولة مجددًا بعد قليل.",
+      "concurrencyBusy": "هناك أعمال أخرى قيد التنفيذ. يُرجى المحاولة مجددًا بعد قليل.",
+      "contact": "تواصل معنا",
+      "notEnabled": "هذا الإجراء غير مفعّل لمؤسستك.",
+      "periodExhausted": "هذا الإجراء متوقف لمؤسستك."
+    },
     "actionFailed": "فشل الإجراء",
     "api": {
       "badRequest": "تعذر إكمال الطلب.",
