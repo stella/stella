@@ -16,15 +16,18 @@
 
 import { Result } from "better-result";
 import { eq } from "drizzle-orm";
-import { t } from "elysia";
 
 import { reportExports } from "@/api/db/schema";
 import { isReportRowCountOverCap } from "@/api/handlers/reports/build-report-data";
 import { getBuiltinReportTemplate } from "@/api/handlers/reports/builtin-templates";
+import {
+  reportExportBodySchema,
+  reportExportConsumesServices,
+} from "@/api/handlers/reports/views/export-input";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { workspaceParams } from "@/api/lib/custom-schema";
 import { queryEntities } from "@/api/lib/entities/query-entities";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -33,35 +36,17 @@ import { enqueueReportExport } from "@/api/lib/report-export-enqueue";
 import { excludedEntityKindsForView } from "@/api/lib/views";
 import { parseStoredViewLayout } from "@/api/lib/views-schema";
 
-const templateRefSchema = t.Union([
-  t.Object({ type: t.Literal("builtin"), key: t.String({ minLength: 1 }) }),
-  t.Object({
-    type: t.Literal("stored"),
-    templateId: tSafeId("template"),
-  }),
-]);
-
 const config = {
   description:
     "Start an asynchronous DOCX or PDF export of a matter view using a selected report template. Returns an export ID to poll.",
   permissions: { workspace: ["read"], entity: ["create"] },
-  mcp: { type: "capability", reason: "reporting_export" },
+  mcp: {
+    type: "capability",
+    reason: "reporting_export",
+    consumesServices: reportExportConsumesServices,
+  },
   params: workspaceParams({}),
-  body: t.Object({
-    templateRef: templateRefSchema,
-    viewId: tSafeId("workspaceView"),
-    mode: t.Union([t.Literal("workspace"), t.Literal("download")]),
-    // Output format. The fill pipeline always builds a DOCX; `pdf` converts it
-    // via Gotenberg before delivery. Optional for back-compat; absent defaults
-    // to docx (also matches Elysia's optional-UnionEnum coercion to the first
-    // literal). The frontend always sends it explicitly.
-    format: t.Optional(t.Union([t.Literal("docx"), t.Literal("pdf")])),
-    // Include the template's AI-drafted narrative (executive + per-contract
-    // summaries). Optional for back-compat; absent defaults to on. When false
-    // the worker skips every model call and the template's {% if aiNarrative %}
-    // sections are removed, so the export is fast and deterministic.
-    aiNarrative: t.Optional(t.Boolean()),
-  }),
+  body: reportExportBodySchema,
 } satisfies WorkspaceHandlerConfig;
 
 const exportViewReport = createSafeHandler(

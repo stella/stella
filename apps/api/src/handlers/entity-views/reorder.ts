@@ -15,7 +15,11 @@ const config = {
   description:
     "Reorder every personal cross-matter view. Supply each of the user's view IDs exactly once.",
   permissions: { view: ["update"] },
-  mcp: { type: "capability", reason: "workspace_schema" },
+  mcp: {
+    type: "capability",
+    reason: "workspace_schema",
+    consumesServices: false,
+  },
   body: entityViewReorderBody,
 } satisfies HandlerConfig;
 

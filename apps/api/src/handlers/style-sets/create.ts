@@ -24,7 +24,11 @@ const config = {
     "style-sets.from-editor.create to build one from explicit settings " +
     "instead of a file.",
   permissions: { styleSet: ["create"] },
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  mcp: {
+    type: "capability",
+    reason: "template_authoring_ui",
+    consumesServices: false,
+  },
   transport: {
     type: "file-input",
     input: {

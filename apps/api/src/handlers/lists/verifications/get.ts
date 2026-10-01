@@ -15,7 +15,11 @@ const config = {
     "claim's current review (null while nobody has acted on it).",
   permissions: { workspace: ["read"] },
   access: "read",
-  mcp: { type: "capability", reason: "document_processing" },
+  mcp: {
+    type: "capability",
+    reason: "document_processing",
+    consumesServices: false,
+  },
   params: workspaceParams({ runId: tSafeId("legalListVerificationRun") }),
 } satisfies WorkspaceHandlerConfig;
 

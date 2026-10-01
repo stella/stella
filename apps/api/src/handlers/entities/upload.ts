@@ -1291,7 +1291,11 @@ const config = {
     "cannot send multipart: use uploads.create with purpose entity_create " +
     "and then uploads.update.",
   permissions: { entity: ["create"] },
-  mcp: { type: "capability", reason: "document_processing" },
+  mcp: {
+    type: "capability",
+    reason: "document_processing",
+    consumesServices: true,
+  },
   transport: {
     type: "file-input",
     input: { field: "file", required: true, mediaTypes: [] },

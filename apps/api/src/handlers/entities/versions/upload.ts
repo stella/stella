@@ -24,7 +24,11 @@ const config = {
     "you are all conflicts. An agent surface cannot send multipart: use " +
     "uploads.create with purpose entity_version and then uploads.update.",
   permissions: { entity: ["update"] },
-  mcp: { type: "capability", reason: "document_processing" },
+  mcp: {
+    type: "capability",
+    reason: "document_processing",
+    consumesServices: true,
+  },
   transport: {
     type: "file-input",
     input: { field: "file", required: true, mediaTypes: [] },

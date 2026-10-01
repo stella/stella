@@ -25,7 +25,11 @@ const config = {
     "behind it. Documents and templates already created from the style set are " +
     "unaffected, because they copied its styles at creation time.",
   permissions: { styleSet: ["delete"] },
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  mcp: {
+    type: "capability",
+    reason: "template_authoring_ui",
+    consumesServices: false,
+  },
   params: paramsSchema,
 } satisfies HandlerConfig;
 

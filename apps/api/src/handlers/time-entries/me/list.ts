@@ -142,7 +142,7 @@ const config = {
     "in the active organization. Client rows include an accessible matter; internal rows have no matter. " +
     "Follow the cursor for the next page.",
   permissions: { timeEntry: ["read"] },
-  mcp: { type: "capability", reason: "billing_admin" },
+  mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   access: "read",
   query: t.Object({
     date: t.String({

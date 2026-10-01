@@ -60,7 +60,11 @@ const config = {
     "a bundled skill is refused. A rename derives a new unique slug from the " +
     "name; a command already taken in the organization is a 409.",
   permissions: { agentSkill: ["update"] },
-  mcp: { type: "capability", reason: "agent_tool_authoring" },
+  mcp: {
+    type: "capability",
+    reason: "agent_tool_authoring",
+    consumesServices: false,
+  },
   params: updateSkillParamsSchema,
   body: updateSkillBodySchema,
 } satisfies HandlerConfig;

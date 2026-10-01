@@ -25,7 +25,11 @@ const bodySchema = t.Object({
 const config = {
   description: "Approve a shared mailbox address for filing correspondence.",
   permissions: { organizationSettings: ["update"] },
-  mcp: { type: "capability", reason: "correspondence" },
+  mcp: {
+    type: "capability",
+    reason: "correspondence",
+    consumesServices: false,
+  },
   body: bodySchema,
 } satisfies HandlerConfig;
 

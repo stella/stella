@@ -10,7 +10,11 @@ const config = {
   description:
     "List flow runs in a matter, including lifecycle state and pagination metadata.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "workflow_orchestration" },
+  mcp: {
+    type: "capability",
+    reason: "workflow_orchestration",
+    consumesServices: false,
+  },
   access: "read",
   params: flowRunsWorkspaceParamsSchema,
   query: listFlowRunsQuerySchema,

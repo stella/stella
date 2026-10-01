@@ -27,7 +27,11 @@ const config = {
     "item's review status becomes that decision and the decision is appended " +
     "to the item's review history; an unrecognized decision is refused.",
   permissions: { entity: ["update"] },
-  mcp: { type: "capability", reason: "workspace_schema" },
+  mcp: {
+    type: "capability",
+    reason: "workspace_schema",
+    consumesServices: false,
+  },
   body: bodySchema,
 } satisfies WorkspaceHandlerConfig;
 

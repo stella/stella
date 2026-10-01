@@ -45,7 +45,11 @@ const config = {
     "own status is returned alongside the page.",
   permissions: { workspace: ["read"] },
   access: "read",
-  mcp: { type: "capability", reason: "workflow_orchestration" },
+  mcp: {
+    type: "capability",
+    reason: "workflow_orchestration",
+    consumesServices: false,
+  },
   params: paramsSchema,
   query: querySchema,
 } satisfies WorkspaceHandlerConfig;

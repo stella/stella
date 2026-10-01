@@ -11,6 +11,7 @@ import { Button } from "@stll/ui/button";
 import {
   ChevronDownIcon,
   BrainIcon,
+  BanknoteIcon,
   ClockIcon,
   FlaskConicalIcon,
   GaugeIcon,
@@ -46,6 +47,7 @@ import { betaFeaturesAvailable } from "@/lib/beta-features";
 import { useKeyboardShortcutsDialogStore } from "@/lib/keyboard-shortcuts-dialog-store";
 import { managementRoles } from "@/lib/organization/consts";
 import { pageTitle } from "@/lib/page-title";
+import { isBillingSettingsAccessible } from "@/routes/_protected.settings/-components/organization/billing-settings.logic";
 
 export const Route = createFileRoute("/_protected/settings")({
   head: () => ({
@@ -62,6 +64,7 @@ type NavTo =
   | "/settings/account/beta"
   | "/settings/organization/members"
   | "/settings/organization/matter-numbering"
+  | "/settings/organization/billing"
   | "/settings/organization/time-policy"
   | "/settings/organization/document-types"
   | "/settings/organization/ai"
@@ -127,6 +130,11 @@ const ORGANIZATION_SECTION = {
       to: "/settings/organization/members",
       labelKey: "common.members",
       icon: UsersIcon,
+    },
+    {
+      to: "/settings/organization/billing",
+      labelKey: "billing.settingsTitle",
+      icon: BanknoteIcon,
     },
     {
       to: "/settings/organization/matter-numbering",
@@ -200,12 +208,17 @@ function SettingsLayout() {
       } as const)
     : ({ ...ACCOUNT_SECTION, items: accountItems } as const);
   const timeBillingPreviewEnabled = useTimeBillingPreviewEnabled();
+  const billingAccessible = isBillingSettingsAccessible({
+    previewEnabled: timeBillingPreviewEnabled,
+    role,
+  });
   const organizationSection = {
     ...ORGANIZATION_SECTION,
     items: ORGANIZATION_SECTION.items.filter(
       (item) =>
-        item.to !== "/settings/organization/time-policy" ||
-        timeBillingPreviewEnabled,
+        (item.to !== "/settings/organization/billing" || billingAccessible) &&
+        (item.to !== "/settings/organization/time-policy" ||
+          timeBillingPreviewEnabled),
     ),
   };
   const sections = showOrganization
