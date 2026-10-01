@@ -119,7 +119,7 @@ describe("document-stage observation windows", () => {
   test("post-response failures replace provisional success and preserve error identity", async () => {
     for (const scope of ["page", "document"] as const) {
       const observations: DocumentStageObservation[] = [];
-      const error = new SkDocumentNonPdfError({
+      const thrown = new SkDocumentNonPdfError({
         adapterKey: ADAPTER_KEYS.SK_COURTS,
         cursor: null,
         message: "private body",
@@ -134,7 +134,7 @@ describe("document-stage observation windows", () => {
           expectedContentType: "pdf",
         });
         expect(observations).toEqual([]);
-        throw error;
+        throw thrown;
       };
       const run =
         scope === "page"
@@ -158,7 +158,7 @@ describe("document-stage observation windows", () => {
         () => null,
         (error: unknown) => error,
       );
-      expect(rejection).toBe(error);
+      expect(rejection).toBe(thrown);
       expect(
         observations.filter(
           (event) => event.event === DOCUMENT_FETCH_EVENT.fetchOutcome,
@@ -360,11 +360,11 @@ describe("document-stage observation windows", () => {
 
   test("thrown page failures still report and preserve the original error", async () => {
     const observations: DocumentStageObservation[] = [];
-    const error = new DOMException("private", "TimeoutError");
+    const thrown = new DOMException("private", "TimeoutError");
     const run = withDocumentStageWindow({
       source: ADAPTER_KEYS.CZ_NSS,
       fetchPage: async () => {
-        throw error;
+        throw thrown;
       },
       observe: (event) => {
         observations.push(event);
@@ -377,7 +377,7 @@ describe("document-stage observation windows", () => {
       () => null,
       (error: unknown) => error,
     );
-    expect(rejection).toBe(error);
+    expect(rejection).toBe(thrown);
     expect(observations.at(0)).toEqual({
       event: DOCUMENT_FETCH_EVENT.fetchOutcome,
       source: ADAPTER_KEYS.CZ_NSS,

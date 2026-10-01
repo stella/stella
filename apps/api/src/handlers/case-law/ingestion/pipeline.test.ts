@@ -1048,7 +1048,9 @@ describe("runIngestionPipeline — document observer failures", () => {
             return await effect();
           },
         },
-        scopedDb: cursorOnlyDb((cursor) => cursorWrites.push(cursor)),
+        scopedDb: cursorOnlyDb((cursor) => {
+          cursorWrites.push(cursor);
+        }),
         maxPages: 1,
         ...(observe ? { onDocumentObservation: observe } : {}),
       }).finally(() => logs.restore());

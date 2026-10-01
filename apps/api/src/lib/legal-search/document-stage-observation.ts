@@ -106,7 +106,7 @@ export const withDocumentStageObserver = async <T>({
   }
   await flushFetchOutcomes(context);
   if (Result.isError(result)) {
-    return await Promise.reject(result.error);
+    throw result.error;
   }
   return result.value;
 };
@@ -227,7 +227,7 @@ export const observePublisherDocumentFetch = async ({
   });
   if (Result.isError(result)) {
     await emitFetchOutcome(documentFetchErrorOutcome(source, result.error));
-    return await Promise.reject(result.error);
+    throw result.error;
   }
   const response = result.value;
   const observation =
@@ -352,7 +352,7 @@ export const withDocumentStageWindow = async ({
   } as const;
   await flushFetchOutcomes(context, observation);
   if (Result.isError(fetched)) {
-    return await Promise.reject(fetched.error);
+    throw fetched.error;
   }
   return fetched.value;
 };
