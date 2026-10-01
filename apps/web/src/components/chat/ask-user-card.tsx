@@ -14,6 +14,7 @@ import {
 import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
+import { messageComponents } from "@/components/ai-elements/message-response-components";
 import { AnonymizedSpan } from "@/components/chat/anonymized-span";
 import type {
   AskUserInput,
@@ -173,6 +174,7 @@ export const AskUserCard = ({
   const analysisComponents = useMemo(
     () => ({
       a: createAnalysisAnchor(workspaceId),
+      img: messageComponents.img,
       "stll-anon": renderAnalysisAnonymizedSpan,
     }),
     [workspaceId],
