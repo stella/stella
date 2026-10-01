@@ -346,7 +346,7 @@ const testLanes = deriveTestLaneCount({
 // Concurrent children writing to the inherited terminal would interleave
 // line by line. With more than one lane each batch's output is collected and
 // printed as one block when the batch ends; a serial run streams live.
-const bufferBatchOutput = testLanes > 1;
+const bufferBatchOutput = testLanes > 1 && shard?.index !== 1;
 
 /** Collects one batch's output, or passes it straight through when serial. */
 type BatchLog = {
@@ -422,7 +422,7 @@ const runTests = async (
 ): Promise<number> => {
   const executionMode = isolate ? "isolated" : "shared-process";
   log.out(
-    `Running ${testFiles.length} ${executionMode} API test files (${label})`,
+    `Running ${testFiles.length} ${executionMode} API test files (${label}):\n  ${testFiles.join("\n  ")}`,
   );
 
   // Each batch loads many graph-heavy API modules. Prefer more frequent garbage

@@ -1730,7 +1730,11 @@ jobs:
           fi
           read -r -a shard_args <<<"$(bun scripts/test-shards.ts --filters "$SHARD")"
           export API_TEST_SHARD="$(bun scripts/test-shards.ts --api-shard "$SHARD")"
-          bun run test -- --concurrency=2 "${args[@]}" "${shard_args[@]}"
+          if [[ "$SHARD" == "api-1" ]]; then
+            bun --cwd apps/api run test
+          else
+            bun run test -- --concurrency=2 --log-order=stream --output-logs=full "${args[@]}" "${shard_args[@]}"
+          fi
 
   # The browser-backed suites. They share one Playwright install, so they stay
   # in a single job rather than one per suite.
