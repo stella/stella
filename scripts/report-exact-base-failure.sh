@@ -16,7 +16,8 @@ body=$(printf 'Job: `%s`\n\nRun: %s\n' "$title" "$RUN_URL")
 # List REST results rather than search-index results; recurring failures update
 # the same open issue. The workflow serializes this read/write transaction.
 issue=$(gh api "repos/$REPOSITORY/issues?state=open&labels=$label&per_page=100" \
-  --paginate --slurp --jq "[.[][] | select(.title == \"$title\" and .pull_request == null)] | min_by(.number) | .number // empty")
+  --paginate --slurp \
+  | jq -r "[.[][] | select(.title == \"$title\" and .pull_request == null)] | min_by(.number) | .number // empty")
 
 if [[ "$DRY_RUN" == true ]]; then
   printf 'Dry run: %s issue %s\n\n%s\n' "${issue:+update}" "${issue:-create}" "$body" \
@@ -31,7 +32,7 @@ if [[ -n "$issue" ]]; then
 fi
 
 has_label=$(gh api "repos/$REPOSITORY/labels?per_page=100" --paginate --slurp \
-  --jq "[.[][] | select(.name == \"$label\")] | length")
+  | jq "[.[][] | select(.name == \"$label\")] | length")
 if [[ "$has_label" == 0 ]]; then
   gh api --method POST "repos/$REPOSITORY/labels" -f name="$label" -f color=ededed --silent
 fi

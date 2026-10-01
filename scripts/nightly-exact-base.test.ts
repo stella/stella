@@ -137,6 +137,10 @@ test("nightly rehearsal checks main and reports failures with isolated write per
 
 const fakeGh = `#!/usr/bin/env bash
 set -euo pipefail
+if [[ "$*" == *--slurp* && ( "$*" == *--jq* || "$*" == *--template* ) ]]; then
+  printf '%s\\n' 'the --slurp option is not supported with --jq or --template' >&2
+  exit 1
+fi
 if [[ "$*" == *--method* ]]; then
   jq -cn --args '$ARGS.positional' -- "$@" >> "$FAKE_MUTATIONS"
   if [[ "$*" == *"--input -"* ]]; then cat > "$FAKE_PAYLOAD"; fi
@@ -144,10 +148,10 @@ if [[ "$*" == *--method* ]]; then
 fi
 if [[ "$*" == *"/issues?"* ]]; then
   [[ "\${FAIL_READ:-false}" == false ]] || exit 2
-  jq "\${@: -1}" "$FAKE_ISSUES"
+  cat "$FAKE_ISSUES"
   exit 0
 fi
-if [[ "$*" == *"/labels?"* ]]; then printf '0\\n'; exit 0; fi
+if [[ "$*" == *"/labels?"* ]]; then cat "$FAKE_LABELS"; exit 0; fi
 exit 3
 `;
 
@@ -164,9 +168,11 @@ test.each([
     const mutations = path.join(directory, "mutations");
     const payload = path.join(directory, "payload");
     const issues = path.join(directory, "issues.json");
+    const labels = path.join(directory, "labels.json");
     const runUrl = "https://github.com/stella/stella/actions/runs/12345";
     writeFileSync(path.join(directory, "gh"), fakeGh, { mode: 0o755 });
     writeFileSync(mutations, "");
+    writeFileSync(labels, JSON.stringify([[{ name: "other" }], []]));
     // Exercise pagination, title matching, PR exclusion, and deterministic
     // selection when historical duplicate issues already exist.
     writeFileSync(
@@ -200,6 +206,7 @@ test.each([
             FAKE_MUTATIONS: mutations,
             FAKE_PAYLOAD: payload,
             FAKE_ISSUES: issues,
+            FAKE_LABELS: labels,
             FAIL_READ: failRead,
           },
           stdout: "pipe",
