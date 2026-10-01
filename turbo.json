@@ -43,6 +43,8 @@
       ],
       "outputs": ["src/generated/api-routes.gen.ts"]
     },
+    // Compiler scripts prepare direct invocations, but skip that cache restore
+    // inside Turbo (TURBO_HASH): these dependencies already prepared the file.
     "@stll/web#typecheck": {
       "dependsOn": ["transit", "generate:api-types"],
       "inputs": [

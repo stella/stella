@@ -101,6 +101,23 @@ const createApiProgram = ({
   const getSourceFile = host.getSourceFile.bind(host);
   const fileExists = host.fileExists.bind(host);
   const readFile = host.readFile.bind(host);
+  const directoryExists = ts.sys.directoryExists;
+  const virtualDirectories = new Set<string>();
+  for (const fileName of virtualFiles.keys()) {
+    let directory = path.dirname(fileName);
+    while (!virtualDirectories.has(directory)) {
+      virtualDirectories.add(directory);
+      const parent = path.dirname(directory);
+      if (parent === directory) {
+        break;
+      }
+      directory = parent;
+    }
+  }
+  // Resolution probes parent directories before fileExists. A clean checkout
+  // has no generated directory, but identity checks serve that tree in memory.
+  host.directoryExists = (directory) =>
+    virtualDirectories.has(directory) || directoryExists(directory);
   host.fileExists = (fileName) =>
     virtualFiles.has(fileName) || fileExists(fileName);
   host.readFile = (fileName) =>

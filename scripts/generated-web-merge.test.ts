@@ -193,10 +193,22 @@ test("independent source routes merge cleanly and the generated API output remai
       // Ambient route modules must be reached from the contract's program.
       write({
         directory,
-        file: `apps/api/src/${route}.d.ts`,
+        file: `apps/api/src/include-${route}.d.ts`,
         source: `import "./${route}";\n`,
       });
+      rmSync(path.join(directory, "apps/web/src/generated"), {
+        recursive: true,
+        force: true,
+      });
+      expect(existsSync(path.join(directory, "apps/web/src/generated"))).toBe(
+        false,
+      );
       generate(directory);
+      for (const output of outputs) {
+        expect(readFileSync(path.join(directory, output), "utf-8")).toContain(
+          route,
+        );
+      }
       run(directory, ["git", "add", "."]);
       run(directory, [
         "git",
