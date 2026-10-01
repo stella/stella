@@ -1,6 +1,11 @@
 import { panic, Result } from "better-result";
 
-import { DECISION_TEXT_FIELD_KEYS } from "@stll/api-contract/case-law-text-field";
+import {
+  DECISION_TEXT_ABSENCE_METADATA_KEY,
+  DECISION_TEXT_FIELD_KEYS,
+  TEXT_FIELD_TYPE,
+  type TextField,
+} from "@stll/api-contract/case-law-text-field";
 import { classifyFailure } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
@@ -59,7 +64,6 @@ import {
   checkedDecisionMetadata,
   sourceTextField,
   splitStoredDecisionTextMetadata,
-  storeTextField,
 } from "@/api/lib/case-law/decision-text";
 import { addUtcDays } from "@/api/lib/dates";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
@@ -671,7 +675,7 @@ type CzNssSourceHashOptions = {
   sheetNumber: string | undefined;
   decisionDate: string | undefined;
   decisionType: string | undefined;
-  legalSentence: string | undefined;
+  legalSentence: TextField;
 };
 
 /**
@@ -693,9 +697,9 @@ type CzNssSourceHashOptions = {
  * why: the court writes it when it selects an already published decision for
  * its collection, and edits it afterwards. Left out, a row stored before that
  * would be skipped as unchanged for good. It is appended only where the court
- * states one, so a decision that has none hashes exactly as it did and is not
- * rewritten for this. The replay hashes the value off the row's own metadata,
- * which is where the crawl put it, so the two agree.
+ * states text or a typed absence other than not_published. A genuinely missing
+ * headnote keeps its existing hash; a placeholder changes it so refresh writes
+ * the distinction. Crawl and replay hash the same classified value.
  */
 const czNssSourceHash = ({
   caseNumber,
@@ -709,9 +713,19 @@ const czNssSourceHash = ({
   const sheet = sheetNumber ?? carried;
   const reference = sheet === undefined ? docket : `${docket}-${sheet}`;
   const base = `${reference}|${decisionDate ?? ""}|${decisionType ?? ""}`;
-  return hashContent(
-    legalSentence === undefined ? base : `${base}|${legalSentence}`,
-  );
+  switch (legalSentence.type) {
+    case TEXT_FIELD_TYPE.PRESENT:
+      return hashContent(JSON.stringify([base, legalSentence]));
+    case TEXT_FIELD_TYPE.ABSENT:
+      return hashContent(
+        legalSentence.reason === TEXT_ABSENCE_REASON.NOT_PUBLISHED
+          ? base
+          : JSON.stringify([base, legalSentence]),
+      );
+    default:
+      legalSentence satisfies never;
+      return panic(`Unhandled NSS sentence: ${String(legalSentence)}`);
+  }
 };
 
 /**
@@ -1567,7 +1581,7 @@ const rowToResult = ({
       sheetNumber,
       decisionDate,
       decisionType,
-      legalSentence: storeTextField(legalSentenceField),
+      legalSentence: legalSentenceField,
     }),
     parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NSS],
     documentAst: content.documentAst ?? EMPTY_AST,
@@ -1780,11 +1794,16 @@ const reparseStoredRaw = (
   const { sheetNumber } = splitCaseReference(publishedCaseNumber);
   const storedDecisionText = splitStoredDecisionTextMetadata(stored.metadata);
   const textFields = { ...storedDecisionText.textFields };
-  // Legacy metadata is untyped publisher input; classify every prose field
-  // before writing it back through the current text-field contract.
+  // Only legacy text without a sidecar, or text already read as present, can
+  // be reclassified. A sidecar's absence (including quarantine) stays closed.
   for (const key of DECISION_TEXT_FIELD_KEYS) {
     const storedText = stored.metadata[key];
-    if (typeof storedText === "string") {
+    const field = textFields[key];
+    if (
+      typeof storedText === "string" &&
+      (field.type === TEXT_FIELD_TYPE.PRESENT ||
+        stored.metadata[DECISION_TEXT_ABSENCE_METADATA_KEY] === undefined)
+    ) {
       textFields[key] = sourceTextField(ADAPTER_KEYS.CZ_NSS, storedText);
     }
   }
@@ -1793,7 +1812,6 @@ const reparseStoredRaw = (
     statedLegalSentence === undefined
       ? textFields.legalSentence
       : sourceTextField(ADAPTER_KEYS.CZ_NSS, statedLegalSentence);
-  const legalSentence = storeTextField(legalSentenceField);
 
   return {
     type: "parsed",
@@ -1843,7 +1861,7 @@ const reparseStoredRaw = (
         sheetNumber,
         decisionDate,
         decisionType,
-        legalSentence,
+        legalSentence: legalSentenceField,
       }),
       parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NSS],
       documentAst: rebuilt.documentAst,
