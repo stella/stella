@@ -314,7 +314,9 @@ const buildRegistry = <Context>(tools: readonly ToolDefinition<Context>[]) => {
   const byName = new Map<string, ToolDefinition<Context>>();
   const reserved = new Set<string>(Object.values(CAPABILITY_TOOL_NAMES));
   for (const tool of tools) {
-    if (tool.name.length === 0) {panic("Tool names must not be empty.");}
+    if (tool.name.length === 0) {
+      panic("Tool names must not be empty.");
+    }
     if (new TextEncoder().encode(tool.name).length > 128) {
       panic("Tool names must fit in 128 UTF-8 bytes.");
     }

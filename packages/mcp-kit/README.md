@@ -14,19 +14,25 @@ for invariant and failure handling.
 import { createToolSurface, success } from "@stll/mcp-kit";
 
 const surface = createToolSurface({
-  tools: [{
-    name: "items.list",
-    summary: "List items.",
-    access: "read",
-    domain: "items",
-    inputSchema: { type: "object", properties: {} },
-    run: async () => success({ items: [] }),
-  }],
+  tools: [
+    {
+      name: "items.list",
+      summary: "List items.",
+      access: "read",
+      domain: "items",
+      inputSchema: { type: "object", properties: {} },
+      run: async () => success({ items: [] }),
+    },
+  ],
 });
 
 surface.listTools();
 await surface.callTool("describe_capability", { capability: "items.list" }, {});
-await surface.callTool("invoke_capability", { capability: "items.list", input: {} }, {});
+await surface.callTool(
+  "invoke_capability",
+  { capability: "items.list", input: {} },
+  {},
+);
 ```
 
 `describe_capability` defaults to a compact description under 3 KB of UTF-8 JSON:
