@@ -14,6 +14,12 @@ import {
 
 export const TENANT_ACTION_DETAIL = "x-stella-tenant-action";
 
+declare module "elysia" {
+  type DocumentDecoration = {
+    [TENANT_ACTION_DETAIL]?: boolean;
+  }
+}
+
 type TenantActionClassifierOptions = {
   routes: readonly InternalRoute[];
   staticRoutes: Readonly<Record<string, Readonly<Record<string, number>>>>;
