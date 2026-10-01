@@ -16,6 +16,7 @@
       "GET /v1/skills",
       "GET /v1/time-timers",
       "GET /v1/workspaces/:id/members",
+      "GET /v1/workspaces/member-previews",
       "GET /v1/workspaces/navigation"
     ],
     "requestCounts": {
@@ -32,8 +33,9 @@
       "GET /v1/signals/count": 1,
       "GET /v1/skills": 1,
       "GET /v1/time-timers": 1,
-      "GET /v1/workspaces/navigation": 1,
-      "GET /v1/workspaces/:id/members": 1
+      "GET /v1/workspaces/:id/members": 1,
+      "GET /v1/workspaces/member-previews": 1,
+      "GET /v1/workspaces/navigation": 1
     },
     "dbQueries": {
       "GET /api/auth/get-session": 2,
@@ -49,8 +51,9 @@
       "GET /v1/signals/count": 4,
       "GET /v1/skills": 6,
       "GET /v1/time-timers": 4,
-      "GET /v1/workspaces/navigation": 6,
-      "GET /v1/workspaces/:id/members": 4
+      "GET /v1/workspaces/:id/members": 4,
+      "GET /v1/workspaces/member-previews": 5,
+      "GET /v1/workspaces/navigation": 6
     },
     "responseSizes": {
       "GET /api/auth/get-session": 1024,
@@ -65,8 +68,9 @@
       "GET /v1/signals/count": 1024,
       "GET /v1/skills": 4096,
       "GET /v1/time-timers": 1024,
-      "GET /v1/workspaces/navigation": 20480,
-      "GET /v1/workspaces/:id/members": 1024
+      "GET /v1/workspaces/:id/members": 1024,
+      "GET /v1/workspaces/member-previews": 1024,
+      "GET /v1/workspaces/navigation": 20480
     }
   },
   "/chat/$threadId": {
