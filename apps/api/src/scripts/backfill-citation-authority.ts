@@ -19,6 +19,8 @@
  *   bun apps/api/src/scripts/backfill-citation-authority.ts --as-of 2026-08-16T12:00:00.000Z --after <decision id>
  *   bun apps/api/src/scripts/backfill-citation-authority.ts --batch 2000
  */
+import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
+
 import { createScriptBackfillRuntime } from "@/api/db/backfill-runtime";
 import {
   loadCitationCourtWeightEntries,
@@ -53,34 +55,39 @@ const runtime = await plan.open((options) =>
   createScriptBackfillRuntime({ ...options, db: rootDb }),
 );
 try {
-  while (true) {
-    // db-await-in-loop: one gated keyset transaction including its durable cursor
-    const step = await runtime.step(async ({ tx, size, cursor }) => {
-      const batch = await recomputeCitationAuthorityBatch(tx, {
-        after: cursor ?? rawAfter ?? null,
-        limit: size,
-        now: { type: "pinned", at: asOf },
-        courtWeightEntries,
+  const pass = await runBackfillPass({
+    step: async () => {
+      const result = await runtime.step(async ({ tx, size, cursor }) => {
+        const batch = await recomputeCitationAuthorityBatch(tx, {
+          after: cursor ?? rawAfter ?? null,
+          limit: size,
+          now: { type: "pinned", at: asOf },
+          courtWeightEntries,
+        });
+        return {
+          cursor: batch.lastId ?? cursor,
+          done: batch.scanned < size,
+          value: batch,
+        };
       });
       return {
-        cursor: batch.lastId ?? cursor,
-        done: batch.scanned < size,
-        value: batch,
+        ...result,
+        value: { batch: result.value, cursor: result.cursor },
       };
-    });
-    const batch = step.value;
-
-    scanned += batch.scanned;
-    written += batch.written;
-    cited += batch.cited;
-    after = step.cursor ?? after;
-    console.log(
-      `  ${scanned} examined, ${written} rewritten, ${cited} cited; last ${after ?? "-"}`,
-    );
-    if (step.done) {
-      break;
-    }
-    await Bun.sleep(step.sleepMs);
+    },
+    onBatch: ({ value: { batch, cursor } }) => {
+      scanned += batch.scanned;
+      written += batch.written;
+      cited += batch.cited;
+      after = cursor ?? after;
+      console.log(
+        `  ${scanned} examined, ${written} rewritten, ${cited} cited; last ${after ?? "-"}`,
+      );
+    },
+    sleep: Bun.sleep,
+  });
+  if (pass.isErr()) {
+    throw pass.error;
   }
 } finally {
   await runtime.close();

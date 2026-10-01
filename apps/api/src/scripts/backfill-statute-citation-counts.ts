@@ -4,6 +4,8 @@
  * Decision locks and membership triggers keep completed ranges current while the
  * source writer continues to run.
  */
+import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
+
 import { createScriptBackfillRuntime } from "@/api/db/backfill-runtime";
 import { createStatuteCitationCountRepair } from "@/api/handlers/case-law/provisions/citation-count-repair";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
@@ -21,20 +23,26 @@ const runtime = await plan.open((options) =>
 let repairedDecisions = 0;
 
 try {
-  while (true) {
-    // db-await-in-loop: one gated repair transaction including its existing durable state
-    const step = await runtime.step(async ({ tx, size, cursor }) => {
-      const repairBatch = createStatuteCitationCountRepair({
-        transaction: async (work) => await work(tx),
-      });
-      const batch = await repairBatch(size);
-      return { cursor, done: batch.status === "ready", value: batch.decisions };
-    });
-    repairedDecisions += step.value;
-    if (step.done) {
-      break;
-    }
-    await Bun.sleep(step.sleepMs);
+  const pass = await runBackfillPass({
+    step: async () =>
+      await runtime.step(async ({ tx, size, cursor }) => {
+        const repairBatch = createStatuteCitationCountRepair({
+          transaction: async (work) => await work(tx),
+        });
+        const batch = await repairBatch(size);
+        return {
+          cursor,
+          done: batch.status === "ready",
+          value: batch.decisions,
+        };
+      }),
+    onBatch: ({ value }) => {
+      repairedDecisions += value;
+    },
+    sleep: Bun.sleep,
+  });
+  if (pass.isErr()) {
+    throw pass.error;
   }
 } finally {
   await runtime.close();

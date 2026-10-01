@@ -71,7 +71,7 @@ const fillFrom = async (
   );
   let filled = 0;
   try {
-    await runBackfillPass({
+    const pass = await runBackfillPass({
       sleep: Bun.sleep,
       step: () =>
         runtime.step(async ({ tx, size, cursor }) => {
@@ -115,6 +115,9 @@ const fillFrom = async (
         console.info(`${adapterKey}: ${filled.toLocaleString()} filled`);
       },
     });
+    if (pass.isErr()) {
+      throw pass.error;
+    }
     return filled;
   } finally {
     await runtime.close();

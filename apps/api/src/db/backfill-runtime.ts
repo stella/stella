@@ -1,6 +1,7 @@
-import { panic, Result, TaggedError } from "better-result";
+import { panic, Result } from "better-result";
 import { sql, type SQL } from "drizzle-orm";
 
+import { BackfillHeldError } from "@stll/db-load-gate/backfill-pass";
 import {
   combine,
   defaultConfig,
@@ -34,11 +35,7 @@ import type { IndicatorQuery } from "./indicator-query";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
 import type { Transaction } from "./root";
 
-export class BackfillHeldError extends TaggedError("BackfillHeldError")<{
-  message: string;
-  holdUntil: number | null;
-  heldSince: number | null;
-}> {}
+export { BackfillHeldError } from "@stll/db-load-gate/backfill-pass";
 
 type Query = IndicatorQuery;
 type RuntimeOptions = {
@@ -222,7 +219,7 @@ const createRuntime = <BatchTransaction>({
             JSON.stringify({ ...initialBatchState(config), size: initialSize }),
           ],
         );
-        return decodeCheckpoint(
+        const checkpoint = decodeCheckpoint(
           (
             await q(
               "SELECT cursor, batch FROM database_backfill_states WHERE name = $1 FOR UPDATE",
@@ -230,6 +227,32 @@ const createRuntime = <BatchTransaction>({
             )
           ).at(0),
         );
+        const size = Math.min(
+          config.maxSize,
+          Math.max(config.minSize, checkpoint.batch.size),
+        );
+        const sleepMs = Math.min(
+          config.maxSleepMs,
+          Math.max(config.minSleepMs, checkpoint.batch.sleepMs),
+        );
+        if (
+          size !== checkpoint.batch.size ||
+          sleepMs !== checkpoint.batch.sleepMs
+        ) {
+          log({
+            action: "checkpoint_clamped",
+            previous: {
+              size: checkpoint.batch.size,
+              sleepMs: checkpoint.batch.sleepMs,
+            },
+            size,
+            sleepMs,
+            config,
+          });
+          checkpoint.batch.size = size;
+          checkpoint.batch.sleepMs = sleepMs;
+        }
+        return checkpoint;
       },
       persistCheckpoint: async (tx, checkpoint) => {
         await transactionQuery(tx)(

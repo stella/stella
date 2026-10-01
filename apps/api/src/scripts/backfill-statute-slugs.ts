@@ -34,7 +34,7 @@ let written = 0;
 let skipped = 0;
 let failed = 0;
 try {
-  await runBackfillPass({
+  const pass = await runBackfillPass({
     sleep: Bun.sleep,
     step: () =>
       runtime.step(async ({ tx, size, cursor }) => {
@@ -58,6 +58,9 @@ try {
       failed += value.failed;
     },
   });
+  if (pass.isErr()) {
+    throw pass.error;
+  }
 } finally {
   await runtime.close();
 }

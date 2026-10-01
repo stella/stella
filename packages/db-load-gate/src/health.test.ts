@@ -598,6 +598,15 @@ test("invalid configuration fails before a decision can authorize work", () => {
       },
       reason: "Busy windows",
     },
+    ...["", "Europe/Invalid", "Invalid/Zone"].map((timeZone) => ({
+      patch: {
+        busyWindows: [
+          { start: "06:00", end: "08:00", timeZone: "UTC" },
+          { start: "08:00", end: "09:00", timeZone },
+        ],
+      },
+      reason: `Busy windows require a valid time zone: ${timeZone}`,
+    })),
   ];
   for (const { patch, reason } of cases) {
     const config = { ...defaultConfig, ...patch };
@@ -606,6 +615,7 @@ test("invalid configuration fails before a decision can authorize work", () => {
       reason,
     );
     expect(() => decideWhileRunning([], config)).toThrow(reason);
+    expect(() => isHeldTooLong({ heldSince: 0 }, 1000, config)).toThrow(reason);
     expect(() =>
       nextBatch({
         state: state(),
@@ -615,6 +625,31 @@ test("invalid configuration fails before a decision can authorize work", () => {
         config,
       }),
     ).toThrow(reason);
+  }
+});
+
+test("valid busy-window time zones authorize work and support held-budget decisions", () => {
+  for (const timeZone of [
+    "UTC",
+    "Europe/Prague",
+    "America/New_York",
+    "Asia/Kolkata",
+  ]) {
+    const config = {
+      ...defaultConfig,
+      busyWindows: [{ start: "00:00", end: "01:00", timeZone }],
+      maxHeldMs: 1000,
+    };
+    const decision = decideStart(verdict("normal"), "index_build", config);
+    expect(decision.decision).toBe("start");
+    expectLogged(decision);
+    expect(
+      isHeldTooLong(
+        { heldSince: Date.parse("2026-01-01T12:00:00Z") },
+        Date.parse("2026-01-01T12:00:01Z"),
+        config,
+      ),
+    ).toBe(true);
   }
 });
 

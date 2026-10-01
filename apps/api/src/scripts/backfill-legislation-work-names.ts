@@ -19,7 +19,7 @@
  *   bun run src/scripts/backfill-legislation-work-names.ts --apply [--limit 200000] [--page 1000] [--after <id>]
  */
 
-import { panic } from "better-result";
+import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
 
 import { createScriptBackfillRuntime } from "@/api/db/backfill-runtime";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -77,54 +77,62 @@ const runtime = apply
   : null;
 
 try {
-  while (scanned < limit) {
-    const remaining = limit - scanned;
-    const pageCursor = cursor;
-    // db-await-in-loop: keyset page per iteration; the page is the batch
-    const result =
-      runtime === null
-        ? null
-        : await runtime.step(async ({ tx, size, cursor: persistedCursor }) => {
-            const after =
-              persistedCursor === null
-                ? pageCursor
-                : brandPersistedLegislationDocumentId(persistedCursor);
-            const page = await backfillLegislationWorkNamesPage({
-              db: async (work) => await work(tx),
-              after,
-              pageSize: Math.min(size, remaining),
-              apply: true,
-            });
-            return {
-              cursor: page.cursor ?? persistedCursor,
-              done: page.cursor === null,
-              value: page,
-            };
+  const pass = await runBackfillPass({
+    step: async () => {
+      const remaining = limit - scanned;
+      if (runtime === null) {
+        const page = await backfillLegislationWorkNamesPage({
+          db,
+          after: cursor,
+          pageSize: Math.min(plan.initialSize, remaining),
+          apply: false,
+        });
+        return {
+          done: page.cursor === null || scanned + page.scanned >= limit,
+          sleepMs: 0,
+          value: page,
+        };
+      }
+      const result = await runtime.step(
+        async ({ tx, size, cursor: persistedCursor }) => {
+          const after =
+            persistedCursor === null
+              ? cursor
+              : brandPersistedLegislationDocumentId(persistedCursor);
+          const page = await backfillLegislationWorkNamesPage({
+            db: async (work) => await work(tx),
+            after,
+            pageSize: Math.min(size, remaining),
+            apply: true,
           });
-    const page =
-      result === null
-        ? await backfillLegislationWorkNamesPage({
-            db,
-            after: cursor,
-            pageSize: Math.min(plan.initialSize, limit - scanned),
-            apply,
-          })
-        : result.value;
-    if (page === undefined) {
-      panic("Legislation names batch returned no result");
-    }
-    if (page.cursor === null) {
-      reachedEnd = true;
-      break;
-    }
-    cursor = page.cursor;
-    scanned += page.scanned;
-    changedDocuments += page.changedDocuments;
-    insertedRows += page.insertedRows;
-    deletedRows += page.deletedRows;
-    if (result !== null && result.sleepMs > 0 && scanned < limit) {
-      await Bun.sleep(result.sleepMs);
-    }
+          return {
+            cursor: page.cursor ?? persistedCursor,
+            done: page.cursor === null,
+            value: page,
+          };
+        },
+      );
+      // The operator limit ends this pass without completing its durable checkpoint.
+      return {
+        ...result,
+        done: result.done || scanned + result.value.scanned >= limit,
+      };
+    },
+    onBatch: ({ value: page }) => {
+      if (page.cursor === null) {
+        reachedEnd = true;
+        return;
+      }
+      cursor = page.cursor;
+      scanned += page.scanned;
+      changedDocuments += page.changedDocuments;
+      insertedRows += page.insertedRows;
+      deletedRows += page.deletedRows;
+    },
+    sleep: Bun.sleep,
+  });
+  if (pass.isErr()) {
+    throw pass.error;
   }
 } finally {
   await runtime?.close();

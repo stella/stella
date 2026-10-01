@@ -1,3 +1,6 @@
+import { panic } from "better-result";
+import { sql } from "drizzle-orm";
+
 /**
  * Backfill legacy workspace "Document Type" classifiers into properties.role.
  *
@@ -7,8 +10,7 @@
  *
  *   bun run src/scripts/backfill-property-roles.ts
  */
-import { panic } from "better-result";
-import { sql } from "drizzle-orm";
+import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
 
 import { createScriptBackfillRuntime } from "@/api/db/backfill-runtime";
 import type { Transaction } from "@/api/db/root";
@@ -128,44 +130,41 @@ const runtime = await plan.open((options) =>
 );
 
 try {
-  while (true) {
-    // db-await-in-loop: keyset batch per iteration; each batch is one set-based update
-    const step = await runtime.step(async ({ tx, size, cursor }) => {
-      const value = await backfillBatch({
-        tx,
-        size,
-        cursorWorkspaceId: cursor,
-      });
-      return {
-        cursor: value.next_cursor ?? cursor,
-        done: value.scanned_workspaces === 0,
-        value,
-      };
-    });
-    const result = step.value;
+  const pass = await runBackfillPass({
+    step: async () =>
+      await runtime.step(async ({ tx, size, cursor }) => {
+        const value = await backfillBatch({
+          tx,
+          size,
+          cursorWorkspaceId: cursor,
+        });
+        return {
+          cursor: value.next_cursor ?? cursor,
+          done: value.scanned_workspaces === 0 || value.next_cursor === null,
+          value,
+        };
+      }),
+    onBatch: ({ value: result }) => {
+      if (result.scanned_workspaces === 0) {
+        return;
+      }
 
-    if (result.scanned_workspaces === 0) {
-      break;
-    }
+      totalScannedWorkspaces += result.scanned_workspaces;
+      totalUpdated += result.updated;
+      batchCount++;
 
-    totalScannedWorkspaces += result.scanned_workspaces;
-    totalUpdated += result.updated;
-    batchCount++;
-
-    console.log(
-      `[batch ${batchCount}] scanned_workspaces=${result.scanned_workspaces} ` +
-        `updated=${result.updated} ` +
-        `total_scanned_workspaces=${totalScannedWorkspaces} ` +
-        `total_updated=${totalUpdated} ` +
-        `cursor=${result.next_cursor ?? "<end>"}`,
-    );
-
-    if (!result.next_cursor) {
-      break;
-    }
-    if (step.sleepMs > 0) {
-      await Bun.sleep(step.sleepMs);
-    }
+      console.log(
+        `[batch ${batchCount}] scanned_workspaces=${result.scanned_workspaces} ` +
+          `updated=${result.updated} ` +
+          `total_scanned_workspaces=${totalScannedWorkspaces} ` +
+          `total_updated=${totalUpdated} ` +
+          `cursor=${result.next_cursor ?? "<end>"}`,
+      );
+    },
+    sleep: Bun.sleep,
+  });
+  if (pass.isErr()) {
+    throw pass.error;
   }
 } finally {
   await runtime.close();

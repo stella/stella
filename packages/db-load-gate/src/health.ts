@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
 export type VerdictKind = "normal" | "degraded" | "stop" | "unknown";
 export type HealthSignalKind = VerdictKind | "not_configured";
@@ -120,6 +120,12 @@ export const validateConfig = (config: HealthConfig) => {
       window.start === window.end
     ) {
       panic("Busy windows require distinct valid clock times");
+    }
+    const timeZone = Result.try(
+      () => new Intl.DateTimeFormat("en-GB", { timeZone: window.timeZone }),
+    );
+    if (Result.isError(timeZone)) {
+      panic(`Busy windows require a valid time zone: ${window.timeZone}`);
     }
   }
 };

@@ -1,7 +1,7 @@
 import { TaggedError } from "better-result";
 import { expect, test } from "bun:test";
 
-import { runBackfillPass } from "./backfill-pass";
+import { BackfillHeldError, runBackfillPass } from "./backfill-pass";
 
 class DeferredPassError extends TaggedError("DeferredPassError")<{
   message: string;
@@ -77,7 +77,11 @@ for (const failureAt of ["step", "observer", "sleep"] as const) {
         }
       },
     });
-    await expect(pass).rejects.toBe(failure);
+    const result = await pass;
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error).toBe(failure);
+    }
     expect(steps).toBe(1);
   });
 }
@@ -123,4 +127,119 @@ test("a pass without an observer still advances each committed batch", async () 
   });
   expect(steps).toBe(2);
   expect(paced).toBe(7);
+});
+
+for (const reason of ["hold", "retry"] as const) {
+  test(`${reason} waits with logged numbers then resumes the same checkpoint`, async () => {
+    let now = 100;
+    let attempts = 0;
+    let checkpoint = "saved-cursor";
+    const waits: number[] = [];
+    const records: unknown[] = [];
+    const result = await runBackfillPass({
+      clock: () => now,
+      sleep: async (milliseconds) => {
+        waits.push(milliseconds);
+        now += milliseconds;
+      },
+      log: (record) => records.push(record),
+      step: async () => {
+        attempts++;
+        if (attempts === 1) {
+          throw new BackfillHeldError({
+            message: "deferred",
+            holdUntil: reason === "hold" ? 5100 : null,
+            heldSince: reason === "hold" ? 100 : null,
+          });
+        }
+        expect(checkpoint).toBe("saved-cursor");
+        checkpoint = "finished";
+        return { done: true, sleepMs: 0, value: checkpoint };
+      },
+    });
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.status).toBe("complete");
+    }
+    expect(attempts).toBe(2);
+    expect(waits).toEqual([reason === "hold" ? 5000 : 1000]);
+    expect(records).toEqual([
+      expect.objectContaining({
+        action: "wait",
+        reason,
+        now: 100,
+        sleepMs: waits.at(0),
+        waitedMs: 0,
+        maxWaitMs: null,
+      }),
+    ]);
+    expect(checkpoint).toBe("finished");
+  });
+}
+
+test("a maximum wait exits cleanly with resume instructions and leaves the checkpoint intact", async () => {
+  let now = 0;
+  const checkpoint = { cursor: "saved", writes: 7 };
+  const records: { action: string; message: string }[] = [];
+  let attempts = 0;
+  const result = await runBackfillPass({
+    maxWaitMs: 1500,
+    clock: () => now,
+    sleep: async (milliseconds) => {
+      now += milliseconds;
+    },
+    log: (record) => records.push(record),
+    step: async () => {
+      attempts++;
+      throw new BackfillHeldError({
+        message: "retry",
+        holdUntil: null,
+        heldSince: null,
+      });
+    },
+  });
+  expect(result.isOk()).toBe(true);
+  if (result.isOk()) {
+    expect(result.value).toEqual({
+      status: "paused",
+      holdUntil: null,
+      waitedMs: 1000,
+    });
+  }
+  expect(attempts).toBe(2);
+  expect(checkpoint).toEqual({ cursor: "saved", writes: 7 });
+  expect(records.map(({ action }) => action)).toEqual(["wait", "paused"]);
+  expect(records.at(-1)?.message).toContain("rerun the same command to resume");
+});
+
+test("a hold beyond the caller's wait budget exits before sleeping or stepping again", async () => {
+  let sleeps = 0;
+  const records: unknown[] = [];
+  const result = await runBackfillPass({
+    maxWaitMs: 10,
+    clock: () => 0,
+    sleep: async () => {
+      sleeps++;
+    },
+    log: (record) => records.push(record),
+    step: async () => {
+      throw new BackfillHeldError({
+        message: "held",
+        holdUntil: 100,
+        heldSince: 0,
+      });
+    },
+  });
+  expect(result.isOk()).toBe(true);
+  if (result.isOk()) {
+    expect(result.value).toEqual({
+      status: "paused",
+      holdUntil: 100,
+      waitedMs: 0,
+    });
+  }
+  expect(sleeps).toBe(0);
+  expect(records).toEqual([
+    expect.objectContaining({ action: "paused", reason: "hold", sleepMs: 100 }),
+  ]);
 });
