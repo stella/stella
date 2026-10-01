@@ -9,6 +9,8 @@ import {
 import path from "node:path";
 
 import {
+  CODE_CHECK_LEGS,
+  ownsCodeCheckPath,
   ALL_WORKSPACE_CACHE_INPUTS,
   ALL_WORKSPACE_TYPECHECK_CACHE_INPUTS,
   DEPENDENCY_CACHE_INPUTS,
@@ -694,3 +696,70 @@ const workspaceManifests = (): WorkspaceManifest[] =>
         };
       }),
   );
+
+describe("parallel code-quality legs", () => {
+  test("partition the unsplit workspace tasks and root commands at every scope", () => {
+    const workspaces = new Set([...WORKSPACES, "packages/new-workspace"]);
+    const plans = [
+      plan(["bun.lock"], [...WORKSPACES]),
+      plan(["apps/web/src/new.ts"], ["apps/web", "packages/ui"]),
+      plan(["scripts/new.ts"], []),
+    ];
+    for (const planned of plans) {
+      if (planned.type !== "scoped") {
+        throw new TypeError("fixture must produce a scoped plan");
+      }
+      const expand = (commands: string[][]) =>
+        commands.flatMap((command) => {
+          if (command[2] !== "turbo" || command.includes("typecheck:repo")) {
+            return [command.join(" ")];
+          }
+          const tasks = command.filter(
+            (arg) => arg === "lint" || arg === "typecheck",
+          );
+          const included = command
+            .filter((arg) => arg.startsWith("--filter=./"))
+            .map((arg) => arg.slice("--filter=./".length));
+          const excluded = new Set(
+            command
+              .filter((arg) => arg.startsWith("--filter=!./"))
+              .map((arg) => arg.slice("--filter=!./".length)),
+          );
+          return [...workspaces]
+            .filter(
+              (workspace) =>
+                (included.length === 0 || included.includes(workspace)) &&
+                !excluded.has(workspace),
+            )
+            .flatMap((workspace) =>
+              tasks.map((task) => `${workspace}#${task}`),
+            );
+        });
+      const unsplit = expand(scopedCommands(planned));
+      const split = CODE_CHECK_LEGS.flatMap((leg) =>
+        expand(scopedCommands(planned, { leg, workspaces })),
+      );
+      expect(split.toSorted()).toEqual(unsplit.toSorted());
+      expect(new Set(split).size).toBe(split.length);
+    }
+    expect(
+      CODE_CHECK_LEGS.filter((leg) =>
+        ownsCodeCheckPath("packages/new-workspace", leg),
+      ),
+    ).toEqual(["rest"]);
+  });
+
+  test("partition exact result-boundary lint paths including root sources", () => {
+    const paths = [
+      "apps/api/src/new.ts",
+      "apps/web/src/new.ts",
+      "packages/new/src/new.ts",
+      "scripts/new.ts",
+    ];
+    for (const file of paths) {
+      expect(
+        CODE_CHECK_LEGS.filter((leg) => ownsCodeCheckPath(file, leg)),
+      ).toHaveLength(1);
+    }
+  });
+});

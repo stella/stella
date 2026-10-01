@@ -602,7 +602,7 @@ test("only a pull request or a manual run skips heavy suites or passes a superse
     expect(
       evaluateResult({
         event,
-        results: { "ci-tests": "cancelled", "code-quality": "failure" },
+        results: { "ci-tests": "cancelled", "code-quality-api": "failure" },
         suiteDepth: fast,
       }),
       event,
@@ -854,7 +854,7 @@ test("ci-checks gates each generated-output guard on its planned scope", () => {
         v.object({ name: v.optional(v.string()), if: v.optional(v.string()) }),
       ),
     }),
-    ciJobs["ci-checks"],
+    ciJobs["ci-checks-generated"],
   ).steps;
   for (const [name, scope] of [
     ["Web API types drift guard", "web_api_types_required"],
@@ -1075,5 +1075,33 @@ test("manual full-depth runs leave the merge-group-only exact-base job unplanned
     );
   } finally {
     rmSync(directory, { force: true, recursive: true });
+  }
+});
+
+test("every parallel quality and guard leg fails closed at full depth", () => {
+  for (const job of [
+    "code-quality-api",
+    "code-quality-web",
+    "code-quality-rest",
+    "ci-checks-generated",
+    "ci-checks-policy",
+    "ci-checks-rest",
+  ]) {
+    expect(resultJob.needs).toContain(job);
+    expect(jobScopes[job]).toBe(
+      job.startsWith("code-quality-") ? "package_checks_required" : null,
+    );
+    for (const event of FULL_DEPTH_EVENTS) {
+      for (const result of ["failure", "cancelled", "skipped", ""]) {
+        expect(
+          evaluateResult({
+            event,
+            suiteDepth: SUITE_DEPTH.full,
+            results: { [job]: result },
+          }),
+          `${event} ${job} ${result}`,
+        ).toBe(1);
+      }
+    }
   }
 });
