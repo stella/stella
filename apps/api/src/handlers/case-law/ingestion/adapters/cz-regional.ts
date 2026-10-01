@@ -1967,8 +1967,8 @@ const buildCzRegionalPageItems = async ({
       adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
 
       rawListing: JSON.stringify(item),
-      build: () =>
-        Promise.resolve(
+      build: async () =>
+        await Promise.resolve(
           assembleCzRegionalDecision({ item, document: null, chain: null }),
         ),
     });

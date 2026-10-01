@@ -1696,8 +1696,8 @@ const parseItemWithDetail = async (
           return panic("Unhandled PL courts ingestion item");
       }
     },
-    build: () =>
-      Promise.resolve(
+    build: async () =>
+      await Promise.resolve(
         buildPlItem({
           listingItem,
           detail: fetched.type === "detail" ? fetched.detail : null,

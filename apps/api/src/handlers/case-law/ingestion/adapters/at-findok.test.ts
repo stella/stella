@@ -71,7 +71,7 @@ describe("Austrian Findok adapter", () => {
           listingRead = true;
           return manifestResponse([poison, MANIFEST_ITEM]);
         }
-        documentRequests.push(String(url));
+        documentRequests.push(url);
         return new Response(detailBytes);
       },
       sleep: async () => {},
@@ -372,9 +372,7 @@ describe("Austrian Findok adapter", () => {
       );
       expect(quarantined?.sourceDocumentId).toStartWith("findok-quarantine:");
       expect(quarantined?.documentUrl).toBeUndefined();
-      expect(String(quarantined?.metadata["detailStatus"])).toBe(
-        "item_build_failed",
-      );
+      expect(quarantined?.metadata["detailStatus"]).toBe("item_build_failed");
       expect(quarantined?.sourceRaw).toBeDefined();
       const parts = decodeSourceRawEnvelope(quarantined?.sourceRaw ?? "");
       expect(JSON.parse(parts?.["listing"] ?? "null")).toEqual(rejected);

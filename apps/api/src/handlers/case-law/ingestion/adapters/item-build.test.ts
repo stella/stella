@@ -58,10 +58,10 @@ describe("plain-text item rejection", () => {
     expect(rejected.decision.caseNumberIsPlaceholder).toBe(true);
     expect(rejected.decision.isListingOnly).toBe(true);
     expect(rejected.decision.fulltext).toBeUndefined();
-    expect(String(rejected.decision.metadata["plainTextFailureReason"])).toBe(
+    expect(rejected.decision.metadata["plainTextFailureReason"]).toBe(
       "rtf-syntax",
     );
-    expect(String(rejected.decision.metadata["detailStatus"])).toBe(
+    expect(rejected.decision.metadata["detailStatus"]).toBe(
       "item_build_failed",
     );
     expect(rejected.decision.parserVersion).toBe(
@@ -153,7 +153,7 @@ describe("plain-text item rejection", () => {
         decisionOf: () => undefined,
       }).then(
         () => null,
-        (error: unknown) => error,
+        (caughtError: unknown) => caughtError,
       );
       expect(rejection).toBe(error);
     }
