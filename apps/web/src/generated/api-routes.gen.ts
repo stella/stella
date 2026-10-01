@@ -8913,13 +8913,13 @@ export type WebRoutes = {
                 expenses: Array<{
                   description: string;
                   id: T22259c97a4;
+                  category: Tcb19db2b80;
                   currency: string;
                   matterId: Tf742ada503;
                   billable: Tfddd645dc8;
                   invoiceDescription: Tbe0400fa4c;
                   dateIncurred: string;
                   amount: stll_money_CentsAmount;
-                  category: Tcb19db2b80;
                   markup: number;
                   matter: {
                     name: string;
@@ -9403,10 +9403,10 @@ export type WebRoutes = {
             status?: "approved" | "billed" | "draft" | "written_off";
             cursor?: string;
             limit?: number;
+            category?: "courier" | "expert_witness" | "filing_fee" | "other" | "printing" | "travel";
             userId?: string;
             matterId?: Tf742ada503;
             billable?: false | true;
-            category?: "courier" | "expert_witness" | "filing_fee" | "other" | "printing" | "travel";
             dateFrom?: string;
             dateTo?: string;
           };
@@ -9465,11 +9465,11 @@ export type WebRoutes = {
             invoiceDescription?: string | null;
             markup?: number;
             description: string;
+            category: Tcb19db2b80;
             currency: string;
             matterId: Tf742ada503;
             dateIncurred: string;
             amount: number;
-            category: Tcb19db2b80;
             timezoneId: string;
           };
           params: T3ba9545800;
@@ -9509,13 +9509,13 @@ export type WebRoutes = {
           body: {
             status?: "approved" | "draft";
             description?: string;
+            category?: "courier" | "expert_witness" | "filing_fee" | "other" | "printing" | "travel";
             currency?: string;
             matterId?: Tf742ada503;
             billable?: false | true;
             invoiceDescription?: string | null;
             dateIncurred?: string;
             amount?: number;
-            category?: "courier" | "expert_witness" | "filing_fee" | "other" | "printing" | "travel";
             markup?: number;
             id: T22259c97a4;
           };
@@ -21552,6 +21552,8 @@ export type WebRoutes = {
               cursor?: string;
               limit?: number;
               court?: string;
+              courts?: Array<string>;
+              category?: string;
               language?: string;
               sort?: "newest" | "relevance";
               decisionType?: string;
@@ -21559,6 +21561,7 @@ export type WebRoutes = {
               dateFrom?: string;
               dateTo?: string;
               excerpt?: "long" | "medium" | "short";
+              hasLegalSentence?: false | true;
               alternatives?: Array<{
                 term: string;
                 alternatives: Array<string>;
@@ -21575,8 +21578,8 @@ export type WebRoutes = {
                 facets: {
                   source: Array<T033348b898>;
                   court: Array<{
-                    tierLabel: Tc79049686d;
                     courts: Array<T033348b898>;
+                    tierLabel: Tc79049686d;
                   }>;
                   language: Array<T033348b898>;
                   decisionType: Array<T033348b898>;
@@ -28945,8 +28948,8 @@ export type WebRoutes = {
                 from?: string;
                 cursor?: string;
                 limit?: number;
-                action?: "add" | "all" | "cancel" | "create" | "delete" | "execute" | "remove" | "review" | "update";
                 category?: "all" | "automation" | "correspondence" | "court" | "documents" | "matter" | "tasks" | "team";
+                action?: "add" | "all" | "cancel" | "create" | "delete" | "execute" | "remove" | "review" | "update";
                 actorId?: string;
                 toExclusive?: string;
               };
@@ -29076,8 +29079,8 @@ export type WebRoutes = {
                 };
                 query: {
                   from?: string;
-                  action?: "add" | "all" | "cancel" | "create" | "delete" | "execute" | "remove" | "review" | "update";
                   category?: "all" | "automation" | "correspondence" | "court" | "documents" | "matter" | "tasks" | "team";
+                  action?: "add" | "all" | "cancel" | "create" | "delete" | "execute" | "remove" | "review" | "update";
                   actorId?: string;
                   toExclusive?: string;
                   format: ("csv" | "json");

@@ -1140,6 +1140,32 @@ describe("OpenAI-compatible MCP tools", () => {
           },
           FILTER_KIND,
         ),
+        courts: withKind(
+          {
+            type: "array",
+            items: { type: "string", minLength: 1, maxLength: 512 },
+            minItems: 1,
+            maxItems: 16,
+            description:
+              'Match any listed court. For Czech apex courts use ["NS", "NSS", "ÚS"]. Combined with court, both filters must match.',
+          },
+          { kind: AGENT_INPUT_NORMALIZATION_KIND.stringList },
+        ),
+        category: withKind(
+          {
+            type: "string",
+            minLength: 1,
+            maxLength: 128,
+            description:
+              'Exact publisher category from metadata.category, for example "A" or "B"; this does not imply Sbírka publication. Applied to live rows within the bounded candidate scan; corpus-index facets and total are unavailable.',
+          },
+          FILTER_KIND,
+        ),
+        has_legal_sentence: {
+          type: "boolean",
+          description:
+            "True requires a non-empty stored legal sentence (právní věta); false selects decisions without one. Applied to live rows within the bounded candidate scan; corpus-index facets and total are unavailable.",
+        },
         country: {
           type: "string",
           description: `Required corpus country. Admitted: ${PUBLIC_CASE_LAW_COUNTRIES.join(", ")}. ${COUNTRY_INPUT_GUIDANCE}`,
@@ -3886,6 +3912,28 @@ describe("OpenAI-compatible MCP tools", () => {
         warnings: [],
       });
     });
+
+    test.each([true, false])(
+      "maps an apex court list, category and legal sentence presence (%s)",
+      async (hasLegalSentence) => {
+        await handleMcpToolCall({
+          args: {
+            queries: ["promlčení náhrady škody"],
+            country: "CZE",
+            courts: ["NS", "NSS", "ÚS", "NS"],
+            category: "A",
+            has_legal_sentence: hasLegalSentence,
+          },
+          context: createContext(),
+          toolName: "search_case_law",
+        });
+        expect(searchedBody()).toMatchObject({
+          courts: ["Nejvyšší soud", "Nejvyšší správní soud", "Ústavní soud"],
+          category: "A",
+          hasLegalSentence,
+        });
+      },
+    );
 
     test("placeholder filters, a zero id and open bounds narrow nothing", async () => {
       const result = await handleMcpToolCall({
