@@ -315,18 +315,28 @@ export const resolveSignupRateLimitClientIp = (
 
 const IPV6_RATE_LIMIT_PREFIX_LENGTH = 64;
 
+// A valid IPv6 spelling may end in a dotted IPv4 address; rewrite it as the
+// two hex groups it stands for.
+const expandEmbeddedIPv4 = (address: string): string => {
+  const lastGroupStart = address.lastIndexOf(":") + 1;
+  const lastGroup = address.slice(lastGroupStart);
+  if (!lastGroup.includes(".")) {
+    return address;
+  }
+  const value = lastGroup
+    .split(".")
+    .reduce((n, octet) => n * 256 + Number(octet), 0);
+  return `${address.slice(0, lastGroupStart)}${Math.floor(value / 65_536).toString(16)}:${(value % 65_536).toString(16)}`;
+};
+
 export const normalizeRateLimitClientAddress = (identity: string): string => {
   if (isIPv4(identity) || !isIPv6(identity)) {
     return identity;
   }
-  const address = identity
-    .replace(/%.+$/u, "")
-    .replace(/\d+\.\d+\.\d+\.\d+$/u, (ipv4) => {
-      const value = ipv4
-        .split(".")
-        .reduce((n, octet) => n * 256 + Number(octet), 0);
-      return `${Math.floor(value / 65_536).toString(16)}:${(value % 65_536).toString(16)}`;
-    });
+  const zoneStart = identity.indexOf("%");
+  const address = expandEmbeddedIPv4(
+    zoneStart === -1 ? identity : identity.slice(0, zoneStart),
+  );
   const [left = "", right = ""] = address.split("::");
   const head = left === "" ? [] : left.split(":");
   const tail = right === "" ? [] : right.split(":");
