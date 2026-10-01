@@ -315,7 +315,7 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
               ),
             ).toHaveLength(0);
             expect(
-              await client.unsafe(
+              await client.unsafe<{ cursor: string | null }[]>(
                 "SELECT cursor FROM database_backfill_states WHERE name = 'statute-slugs'",
               ),
             ).toEqual([{ cursor: "019dd47d-f507-7c84-b827-000000000002" }]);
@@ -344,7 +344,7 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
               failed: 0,
             });
             expect(
-              await client.unsafe(
+              await client.unsafe<{ slug: string | null }[]>(
                 "SELECT slug FROM legislation_documents WHERE id = '019dd47d-f507-7c84-b827-000000000001'",
               ),
             ).toEqual([{ slug: "app-assigned" }]);

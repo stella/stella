@@ -24,6 +24,8 @@
 import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 
+import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
+
 import { createScriptBackfillRuntime } from "@/api/db/backfill-runtime";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
 import { executedRows } from "@/api/lib/db/executed-rows";
@@ -69,10 +71,11 @@ const fillFrom = async (
   );
   let filled = 0;
   try {
-    while (true) {
-      // db-await-in-loop: one gated keyset batch; data and checkpoint commit together
-      const batch = await runtime.step(async ({ tx, size, cursor }) => {
-        const result = await tx.execute(sql`
+    await runBackfillPass({
+      sleep: Bun.sleep,
+      step: () =>
+        runtime.step(async ({ tx, size, cursor }) => {
+          const result = await tx.execute(sql`
           WITH batch AS (
             SELECT d.id
             FROM case_law_decisions d
@@ -92,28 +95,27 @@ const fillFrom = async (
           WHERE d.id = batch.id AND d.source_document_id IS NULL
           RETURNING d.id
         `);
-        const rows = executedRows(result);
-        const ids = rows
-          .map((row) => {
-            if (!isRecord(row) || typeof row["id"] !== "string") {
-              return panic("Source identity batch returned an invalid row");
-            }
-            return row["id"];
-          })
-          .toSorted();
-        return {
-          cursor: ids.at(-1) ?? cursor,
-          done: rows.length < size,
-          value: rows.length,
-        };
-      });
-      filled += batch.value;
-      console.info(`${adapterKey}: ${filled.toLocaleString()} filled`);
-      if (batch.done) {
-        return filled;
-      }
-      await Bun.sleep(batch.sleepMs);
-    }
+          const rows = executedRows(result);
+          const ids = rows
+            .map((row) => {
+              if (!isRecord(row) || typeof row["id"] !== "string") {
+                return panic("Source identity batch returned an invalid row");
+              }
+              return row["id"];
+            })
+            .toSorted();
+          return {
+            cursor: ids.at(-1) ?? cursor,
+            done: rows.length < size,
+            value: rows.length,
+          };
+        }),
+      onBatch: ({ value }) => {
+        filled += value;
+        console.info(`${adapterKey}: ${filled.toLocaleString()} filled`);
+      },
+    });
+    return filled;
   } finally {
     await runtime.close();
   }

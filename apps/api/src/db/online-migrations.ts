@@ -481,9 +481,10 @@ const processOnlineRepairAt = async ({
 
   const completion = await repair.readCompletion(connection);
   if (operation === "repair" && completion.type !== "complete") {
-    const outcome = await Result.tryPromise(
-      async () => await repair.repair(connection),
-    );
+    const outcome = await Result.tryPromise({
+      try: async () => await repair.repair(connection),
+      catch: (cause: unknown) => cause,
+    });
     await connection.execute(ONLINE_MIGRATION_LOCK_TIMEOUT_SQL);
     if (
       Result.isError(outcome) &&

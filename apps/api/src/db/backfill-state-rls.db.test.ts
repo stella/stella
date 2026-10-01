@@ -80,7 +80,7 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
             ),
           ).toHaveLength(0);
           expect(
-            await client.unsafe(
+            await client.unsafe<{ name: string }[]>(
               "DELETE FROM database_backfill_states RETURNING name",
             ),
           ).toHaveLength(0);
@@ -93,12 +93,12 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
           await client.unsafe("ROLLBACK TO SAVEPOINT denied_insert");
           await client.unsafe(`SET LOCAL ROLE ${owner}`);
           expect(
-            await client.unsafe(
+            await client.unsafe<{ name: string; cursor: string }[]>(
               "SELECT name, cursor FROM database_backfill_states",
             ),
           ).toEqual([{ name: "repair", cursor: "20" }]);
           expect(
-            await client.unsafe(
+            await client.unsafe<{ name: string }[]>(
               "DELETE FROM database_backfill_states RETURNING name",
             ),
           ).toEqual([{ name: "repair" }]);

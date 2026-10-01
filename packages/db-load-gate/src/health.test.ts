@@ -14,11 +14,11 @@ import {
   nextBatch,
   type BatchState,
   type Signal,
-  type SignalKind,
+  type HealthSignalKind,
   validateConfig,
 } from "./health";
 
-const classifyReading = (value: number | null): SignalKind => {
+const classifyReading = (value: number | null): HealthSignalKind => {
   if (value === null) {
     return "unknown";
   }
@@ -32,7 +32,7 @@ const classifyReading = (value: number | null): SignalKind => {
 };
 const reading = (
   value: number | null,
-  kind: SignalKind = classifyReading(value),
+  kind: HealthSignalKind = classifyReading(value),
 ): Signal => ({
   indicator: "ebs_balance",
   kind,
@@ -47,8 +47,8 @@ const valueByKind = {
   stop: 10,
   unknown: null,
   not_configured: null,
-} as const satisfies Record<SignalKind, number | null>;
-const verdict = (kind: SignalKind) =>
+} as const satisfies Record<HealthSignalKind, number | null>;
+const verdict = (kind: HealthSignalKind) =>
   combine([reading(valueByKind[kind], kind)]);
 const state = (): BatchState => ({
   ...initialBatchState(),
@@ -56,7 +56,7 @@ const state = (): BatchState => ({
   sleepMs: 1000,
 });
 const clock = () => 100_000;
-const advance = (kind: SignalKind, duration: number | null = 1000) =>
+const advance = (kind: HealthSignalKind, duration: number | null = 1000) =>
   nextBatch({
     state: state(),
     verdict: verdict(kind),
@@ -110,7 +110,7 @@ describe("fail-closed start decisions", () => {
         const signals = sequence.map((kind) => reading(50, kind));
         const result = combine(signals);
         expect(result.kind).toBe(combine(signals.toReversed()).kind);
-        let expected: SignalKind = "normal";
+        let expected: HealthSignalKind = "normal";
         if (sequence.includes("degraded")) {
           expected = "degraded";
         }
@@ -133,7 +133,7 @@ describe("fail-closed start decisions", () => {
         (floor, values) => {
           const config = { ...defaultConfig, startFloor: floor, hardFloor: 0 };
           for (const value of values) {
-            let kind: SignalKind = "normal";
+            let kind: HealthSignalKind = "normal";
             if (value === null) {
               kind = "unknown";
             } else if (value < floor) {

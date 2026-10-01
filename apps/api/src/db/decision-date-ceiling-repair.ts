@@ -30,6 +30,7 @@
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
+import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
 import { defaultConfig, type Verdict } from "@stll/db-load-gate/health";
 
 import { CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT } from "../lib/decision-date-bounds-sql";
@@ -125,32 +126,28 @@ const repairUntilEmpty = async (
     log,
   });
   try {
-    let done = false;
-    while (!done) {
-      // db-await-in-loop: one bounded, committed batch before the next health check.
-      const result = await runtime.step(async ({ tx, size, cursor }) => {
-        await tx.execute(`SET LOCAL lock_timeout = '${BATCH_LOCK_TIMEOUT}'`);
-        await tx.execute(
-          `SET LOCAL statement_timeout = '${BATCH_STATEMENT_TIMEOUT}'`,
-        );
-        const batch = await repairDecisionDateBatch(bindTo(tx), size, {
-          reconcileProjection: null,
-        });
-        return {
-          cursor,
-          done: batch.cleared + batch.rederived + batch.skipped === 0,
-          value: batch,
-        };
-      });
-      if (result.value !== undefined) {
-        reportUnannounced(result.value.unannounced);
-        reportUnreconciled(result.value.unreconciled);
-      }
-      done = result.done;
-      if (!done) {
-        await sleep(result.sleepMs);
-      }
-    }
+    await runBackfillPass({
+      sleep,
+      step: () =>
+        runtime.step(async ({ tx, size, cursor }) => {
+          await tx.execute(`SET LOCAL lock_timeout = '${BATCH_LOCK_TIMEOUT}'`);
+          await tx.execute(
+            `SET LOCAL statement_timeout = '${BATCH_STATEMENT_TIMEOUT}'`,
+          );
+          const batch = await repairDecisionDateBatch(bindTo(tx), size, {
+            reconcileProjection: null,
+          });
+          return {
+            cursor,
+            done: batch.cleared + batch.rederived + batch.skipped === 0,
+            value: batch,
+          };
+        }),
+      onBatch: ({ value }) => {
+        reportUnannounced(value.unannounced);
+        reportUnreconciled(value.unreconciled);
+      },
+    });
   } finally {
     await runtime.close();
   }

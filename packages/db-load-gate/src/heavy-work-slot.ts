@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
 export type HeavyWorkKind = "index_repair" | "index_build" | "backfill_batch";
 
@@ -131,19 +131,24 @@ export const createHeavyWorkSlot = ({
     if (!held) {
       return false;
     }
-    try {
-      // Inspect shared intents without briefly taking an exclusive intent lock:
-      // that probe would prevent a higher-priority waiter from registering.
-      if (!(await query(READ_HIGHER_PRIORITY_SQL, priority))) {
-        await release();
-        return false;
-      }
-      return true;
-    } catch (error) {
+    const acquisition = await Result.tryPromise({
+      try: async () => {
+        // Inspect shared intents without briefly taking an exclusive intent lock:
+        // that probe would prevent a higher-priority waiter from registering.
+        if (!(await query(READ_HIGHER_PRIORITY_SQL, priority))) {
+          await release();
+          return false;
+        }
+        return true;
+      },
+      catch: (error: unknown) => error,
+    });
+    if (acquisition.isErr()) {
       // This resource boundary propagates the original error after cleanup.
       await release();
-      throw error;
+      throw acquisition.error;
     }
+    return acquisition.value;
   };
   const close = async () => {
     if (closed) {

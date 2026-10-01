@@ -240,7 +240,7 @@ test("a failed checkpoint rolls back membership repair and can be replayed", asy
     `);
     const outcome = await Result.tryPromise({
       try: repairBatch,
-      catch: (cause) => cause,
+      catch: (cause: unknown) => cause,
     });
     expect(outcome.isErr()).toBe(true);
     if (outcome.isErr()) {

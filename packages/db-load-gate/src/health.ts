@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 
 export type VerdictKind = "normal" | "degraded" | "stop" | "unknown";
-export type SignalKind = VerdictKind | "not_configured";
+export type HealthSignalKind = VerdictKind | "not_configured";
 export type WorkKind = "index_build" | "backfill_batch";
 export type Signal = {
   indicator:
@@ -9,7 +9,7 @@ export type Signal = {
     | "long_transaction"
     | "autovacuum_on_target"
     | "busy_window";
-  kind: SignalKind;
+  kind: HealthSignalKind;
   value: number | null;
   threshold: number | null;
   observedAt: string | null;
@@ -130,7 +130,7 @@ const severity = {
   degraded: 1,
   unknown: 2,
   stop: 3,
-} as const satisfies Record<SignalKind, number>;
+} as const satisfies Record<HealthSignalKind, number>;
 
 export const combine = (signals: Signal[]): Verdict => {
   let kind: VerdictKind = signals.length === 0 ? "unknown" : "normal";

@@ -9,8 +9,8 @@ import {
 import { createEbsBalanceReader } from "./ebs-balance-reader";
 
 type EbsEnvironment = {
-  DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER: string | undefined;
-  DB_LOAD_GATE_EBS_SIGNAL: "disabled" | undefined;
+  DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER?: string | undefined;
+  DB_LOAD_GATE_EBS_SIGNAL?: "disabled" | undefined;
 };
 export type EbsConfiguration =
   | { type: "enabled"; instanceIdentifier: string }

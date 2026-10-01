@@ -8,12 +8,14 @@
   "sideEffects": false,
   "exports": {
     "./health": "./src/health.ts",
+    "./backfill-pass": "./src/backfill-pass.ts",
     "./indicators": "./src/indicators.ts",
     "./slot": "./src/heavy-work-slot.ts"
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",
     "test": "bun test",
+    "test:property": "bun test --preload @stll/property-testing/preload $(rg -l -F 'fc.assert' src -g '*.test.ts')",
     "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/db-load-gate",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/db-load-gate",

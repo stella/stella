@@ -36,13 +36,17 @@ const METRICS = {
 const PERIOD_SECONDS = 300;
 
 const newestPoint = (result: MetricDataResult | undefined) => {
-  if (result === undefined || result.StatusCode !== "Complete") {
+  if (
+    result === undefined ||
+    result.StatusCode !== "Complete" ||
+    result.Timestamps === undefined
+  ) {
     throw new EbsBalanceReadError({
       message: "EBS metric response is incomplete",
     });
   }
   let newest: { value: number; timestamp: number } | undefined;
-  for (const [index, timestamp] of (result.Timestamps ?? []).entries()) {
+  for (const [index, timestamp] of result.Timestamps.entries()) {
     const value = result.Values?.at(index);
     const time = timestamp.getTime();
     if (

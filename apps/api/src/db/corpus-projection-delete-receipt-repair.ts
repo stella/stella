@@ -26,6 +26,7 @@
 
 import { panic } from "better-result";
 
+import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
 import { defaultConfig, type Verdict } from "@stll/db-load-gate/health";
 
 import { isRecord } from "../lib/type-guards";
@@ -125,28 +126,24 @@ const repairFrom = async (
     log,
   });
   try {
-    let done = false;
-    while (!done) {
-      // db-await-in-loop: each batch commits its range and cursor before the next gate check.
-      const result = await runtime.step(async ({ tx, cursor, size }) => {
-        await tx.execute(`SET LOCAL lock_timeout = '${BATCH_LOCK_TIMEOUT}'`);
-        await tx.execute(
-          `SET LOCAL statement_timeout = '${BATCH_STATEMENT_TIMEOUT}'`,
-        );
-        const floor = cursor ?? ID_FLOOR;
-        const boundary = await readBatchBoundary(tx, floor, size);
-        if (boundary === null) {
-          await tx.execute(REPAIR_TAIL_SQL, [floor]);
-          return { cursor: floor, done: true, value: null };
-        }
-        await tx.execute(REPAIR_RANGE_SQL, [floor, boundary]);
-        return { cursor: boundary, done: false, value: null };
-      });
-      done = result.done;
-      if (!done) {
-        await sleep(result.sleepMs);
-      }
-    }
+    await runBackfillPass({
+      sleep,
+      step: () =>
+        runtime.step(async ({ tx, cursor, size }) => {
+          await tx.execute(`SET LOCAL lock_timeout = '${BATCH_LOCK_TIMEOUT}'`);
+          await tx.execute(
+            `SET LOCAL statement_timeout = '${BATCH_STATEMENT_TIMEOUT}'`,
+          );
+          const floor = cursor ?? ID_FLOOR;
+          const boundary = await readBatchBoundary(tx, floor, size);
+          if (boundary === null) {
+            await tx.execute(REPAIR_TAIL_SQL, [floor]);
+            return { cursor: floor, done: true, value: null };
+          }
+          await tx.execute(REPAIR_RANGE_SQL, [floor, boundary]);
+          return { cursor: boundary, done: false, value: null };
+        }),
+    });
   } finally {
     await runtime.close();
   }

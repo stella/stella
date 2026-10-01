@@ -1,4 +1,4 @@
-import { panic, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { sql, type SQL } from "drizzle-orm";
 
 import {
@@ -45,10 +45,10 @@ type RuntimeOptions = {
   name: string;
   tableName: string;
   initialSize: number;
-  config?: HealthConfig;
-  clock?: () => number;
-  readVerdict?: () => Promise<Verdict>;
-  log?: (record: unknown) => void;
+  config?: HealthConfig | undefined;
+  clock?: (() => number) | undefined;
+  readVerdict?: (() => Promise<Verdict>) | undefined;
+  log?: ((record: unknown) => void) | undefined;
 };
 type BatchWork<BatchTransaction, Value> = (options: {
   tx: BatchTransaction;
@@ -57,9 +57,9 @@ type BatchWork<BatchTransaction, Value> = (options: {
 }) => Promise<{ cursor: string | null; done: boolean; value: Value }>;
 type DatabaseRuntimeOptions<BatchTransaction> = RuntimeOptions & {
   runInTransaction: IngestionTransactionRunner<BatchTransaction>;
-  transactionQuery: (tx: BatchTransaction) => Query;
+  transactionQuery: (tx: NoInfer<BatchTransaction>) => Query;
   slot: {
-    tryAcquire: (tx: BatchTransaction) => Promise<boolean>;
+    tryAcquire: (tx: NoInfer<BatchTransaction>) => Promise<boolean>;
     release: () => Promise<void>;
   };
   close: () => Promise<void>;
@@ -323,7 +323,7 @@ export const createScriptBackfillRuntime = async ({
         (options.config ?? defaultConfig).maxSize,
       ),
     },
-    runInTransaction: async (work) => await db.transaction(work),
+    runInTransaction: db.transaction.bind(db),
     slot,
     close: () => Promise.resolve(),
   });
@@ -345,6 +345,24 @@ export const createBackfillRuntime = (
         }),
     },
   });
+  const runInTransaction: IngestionTransactionRunner<
+    OnlineMigrationConnection
+  > = async (work) => {
+    await connection.execute("BEGIN");
+    const outcome = await Result.tryPromise({
+      try: async () => {
+        const result = await work(connection);
+        await connection.execute("COMMIT");
+        return result;
+      },
+      catch: (cause: unknown) => cause,
+    });
+    if (Result.isOk(outcome)) {
+      return outcome.value;
+    }
+    await connection.execute("ROLLBACK");
+    throw outcome.error;
+  };
   return createRuntime({
     ...options,
     slot,
@@ -360,17 +378,7 @@ export const createBackfillRuntime = (
         (options.config ?? defaultConfig).maxSize,
       ),
     },
-    runInTransaction: async (work) => {
-      await connection.execute("BEGIN");
-      try {
-        const result = await work(connection);
-        await connection.execute("COMMIT");
-        return result;
-      } catch (error) {
-        await connection.execute("ROLLBACK");
-        throw error;
-      }
-    },
+    runInTransaction,
     close: slot.close,
   });
 };

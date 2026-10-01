@@ -1,4 +1,4 @@
-import type { SQL } from "bun";
+import type { SQL, TransactionSQL } from "bun";
 import { describe, expect, test } from "bun:test";
 
 import { defaultConfig, initialBatchState } from "@stll/db-load-gate/health";
@@ -131,7 +131,7 @@ const withFixture = async (
         killHalfway = false,
       } = {}) => {
         const runInTransaction: IngestionTransactionRunner<
-          SQL.TransactionSQL
+          TransactionSQL
         > = async (transactionWork) => await client.begin(transactionWork);
         return await runAdaptiveBackfillBatch({
           config,

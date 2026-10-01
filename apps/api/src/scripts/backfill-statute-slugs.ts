@@ -9,6 +9,8 @@
  * Slug derivation reuses the helper the ingestion pipeline uses, so there is
  * a single source of truth for the algorithm.
  */
+import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
+
 import { createScriptBackfillRuntime } from "@/api/db/backfill-runtime";
 import { backfillStatuteSlugsPage } from "@/api/handlers/legislation/slug-backfill";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
@@ -32,28 +34,26 @@ let written = 0;
 let skipped = 0;
 let failed = 0;
 try {
-  while (true) {
-    // db-await-in-loop: one bounded SQL page and its checkpoint share a transaction
-    const step = await runtime.step(async ({ tx, size, cursor }) => {
-      const page = await backfillStatuteSlugsPage({
-        db: async (work) => await work(tx),
-        after:
-          cursor === null ? null : brandPersistedLegislationDocumentId(cursor),
-        size,
-      });
-      return { cursor: page.cursor, done: page.done, value: page };
-    });
-
-    written += step.value.written;
-    skipped += step.value.skipped;
-    failed += step.value.failed;
-    if (step.done) {
-      break;
-    }
-    if (step.sleepMs > 0) {
-      await Bun.sleep(step.sleepMs);
-    }
-  }
+  await runBackfillPass({
+    sleep: Bun.sleep,
+    step: () =>
+      runtime.step(async ({ tx, size, cursor }) => {
+        const page = await backfillStatuteSlugsPage({
+          db: async (work) => await work(tx),
+          after:
+            cursor === null
+              ? null
+              : brandPersistedLegislationDocumentId(cursor),
+          size,
+        });
+        return { cursor: page.cursor, done: page.done, value: page };
+      }),
+    onBatch: ({ value }) => {
+      written += value.written;
+      skipped += value.skipped;
+      failed += value.failed;
+    },
+  });
 } finally {
   await runtime.close();
 }
