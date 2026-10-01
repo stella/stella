@@ -1,3 +1,4 @@
+// parser-output-unchanged: observer wiring returns the adapter’s same normalized SyncPage.
 import { panic, Result, TaggedError } from "better-result";
 
 import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";

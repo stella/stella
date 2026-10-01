@@ -1,3 +1,4 @@
+// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 import { panic, Result, TaggedError } from "better-result";
 
 import { Temporal, parsePlainDate } from "@stll/time";

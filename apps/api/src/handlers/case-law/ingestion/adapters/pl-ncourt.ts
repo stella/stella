@@ -1,3 +1,4 @@
+// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 /**
  * Polish common courts from the Ministry of Justice's judgments API.
  *

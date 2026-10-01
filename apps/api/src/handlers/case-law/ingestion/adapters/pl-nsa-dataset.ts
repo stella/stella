@@ -1,3 +1,4 @@
+// parser-output-unchanged: stage labels route identical byte ranges through telemetry only.
 /**
  * The Hugging Face dataset `JuDDGES/pl-nsa`, pinned to one revision, and the
  * reader that walks it.

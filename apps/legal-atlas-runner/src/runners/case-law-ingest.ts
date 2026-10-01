@@ -22,7 +22,9 @@ import { panic, Result } from "better-result";
 import {
   DOCUMENT_FETCH_EVENT,
   documentFetchErrorOutcome,
+  type DocumentStageObservation,
 } from "@stll/legal-atlas/document-fetch-diagnostics";
+import { observeDocumentStageSafely } from "@stll/legal-atlas/document-stage-observer";
 import { Temporal } from "@stll/time";
 
 import { SOURCE_TOTAL_ORIGIN, caseLawIngestionEvents } from "@/api/db/schema";
@@ -68,18 +70,12 @@ import { errorTag } from "@/api/lib/errors/utils";
 import { backfillSearchIndex } from "@/api/lib/legal-search/case-law-search-index";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import {
-  logDocumentStageObservation,
-  withDocumentStageObserver,
-} from "@/api/lib/legal-search/document-stage-observation";
-import {
   DOCUMENT_FETCH_BUDGET_MS,
   fetchDecisionDocument,
+  hasPendingDeferredDocuments,
   scopedPendingDocumentTierLoaders,
 } from "@/api/lib/legal-search/sk-document-backfill";
-import {
-  createPendingDocumentQueue,
-  hasPendingDocuments,
-} from "@/api/lib/legal-search/sk-document-queue";
+import { createPendingDocumentQueue } from "@/api/lib/legal-search/sk-document-queue";
 import { logger } from "@/api/lib/observability/logger";
 import {
   isCorpusS3Stale,
@@ -147,6 +143,22 @@ const logError = (message: string, detail?: unknown): void => {
   const formattedDetail = formatLogDetail(detail);
   const line = formattedDetail ? `${message} ${formattedDetail}` : message;
   void Bun.write(Bun.stderr, `${line}\n`);
+};
+
+const logDocumentStageObservation = async (
+  observation: DocumentStageObservation,
+): Promise<void> => {
+  await observeDocumentStageSafely({
+    observation,
+    observer: "builtin",
+    observe: async ({ event, ...attributes }) => {
+      logger.info(event, attributes);
+    },
+    reportFailure: async ({ event, ...attributes }, signal) => {
+      signal.throwIfAborted();
+      logger.warn(event, attributes);
+    },
+  });
 };
 
 /** Set to true once daemon mode starts; single-adapter mode exits on all errors. */
@@ -1374,7 +1386,7 @@ export const runCaseLawIngest = async (
         },
         hasPending: async () => {
           const pending = await Result.tryPromise({
-            try: async () => await hasPendingDocuments(documentLoaders),
+            try: async () => await hasPendingDeferredDocuments(backfillDb),
             catch: (error) => error,
           });
           if (Result.isError(pending)) {
@@ -1396,22 +1408,18 @@ export const runCaseLawIngest = async (
       // same backstop the other loops carry, for a future await that slips
       // in unbounded and would otherwise park the walk forever.
       fetchDocument: async (decision, onDocumentObservation) =>
-        await withDocumentStageObserver({
-          source: ADAPTER_KEYS.SK_COURTS,
-          observe: onDocumentObservation ?? (() => undefined),
-          execute: async () =>
-            await runWithHardDeadline(
-              "sk-documents",
-              BACKFILL_HARD_DEADLINE_MS,
-              async () =>
-                await fetchDecisionDocument({
-                  decision,
-                  fetchDocument: skCourtsDocumentFetch,
-                  scopedDb: backfillDb,
-                  signal: AbortSignal.timeout(DOCUMENT_FETCH_BUDGET_MS),
-                }),
-            ),
-        }),
+        await runWithHardDeadline(
+          "sk-documents",
+          BACKFILL_HARD_DEADLINE_MS,
+          async () =>
+            await fetchDecisionDocument({
+              onDocumentObservation,
+              decision,
+              fetchDocument: skCourtsDocumentFetch,
+              scopedDb: backfillDb,
+              signal: AbortSignal.timeout(DOCUMENT_FETCH_BUDGET_MS),
+            }),
+        ),
       isDraining,
       now: () => Temporal.Now.instant().epochMilliseconds,
       report: (summary) => {

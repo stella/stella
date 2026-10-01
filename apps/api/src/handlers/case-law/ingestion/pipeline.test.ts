@@ -123,7 +123,7 @@ const cursorOnlyDb =
       execute: async () => await Promise.resolve([]),
       update: (table: unknown) => ({
         set: (values: { syncCursor?: string | null }) => {
-          if (table === caseLawSources) {
+          if (table === caseLawSources && "syncCursor" in values) {
             onCursor(values.syncCursor);
           }
 

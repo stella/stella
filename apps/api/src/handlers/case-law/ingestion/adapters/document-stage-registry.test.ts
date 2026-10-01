@@ -11,6 +11,7 @@ import {
   listAdapters,
   listDocumentStageAdapters,
 } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
+import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { observePublisherDocumentFetch } from "@/api/lib/legal-search/document-stage-observation";
 
 describe("registered document stages", () => {
@@ -30,7 +31,14 @@ describe("registered document stages", () => {
     for (const adapter of listAdapters()) {
       const observations: DocumentStageObservation[] = [];
       expect(typeof adapter.observeDocumentStage).toBe("function");
-      const page = Result.ok({ decisions: [], nextCursor: null });
+      const page = Result.err(
+        new AdapterFetchError({
+          adapterKey: adapter.key,
+          cursor: null,
+          message: "fixture",
+          httpStatus: 429,
+        }),
+      );
       expect(
         await adapter.observeDocumentStage({
           now: () => 0,

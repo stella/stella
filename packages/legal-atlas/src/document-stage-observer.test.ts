@@ -4,12 +4,11 @@ import {
   DOCUMENT_FETCH_EVENT,
   type DocumentStageObserver,
   type DocumentTelemetryObserverFailure,
-} from "@stll/legal-atlas/document-fetch-diagnostics";
-
+} from "./document-fetch-diagnostics.js";
 import {
   createSafeDocumentStageObserver,
   observeDocumentStageSafely,
-} from "./document-stage-observer";
+} from "./document-stage-observer.js";
 
 const observation = {
   event: DOCUMENT_FETCH_EVENT.window,

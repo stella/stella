@@ -10,6 +10,7 @@ import { skCourtsDocumentFetch } from "@/api/handlers/case-law/ingestion/adapter
 import { INGESTION_USER_AGENT } from "@/api/lib/case-law/ingestion-user-agent";
 import { withDocumentStageWindow } from "@/api/lib/legal-search/document-stage-observation";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import { SkDocumentNonPdfError } from "@/api/lib/legal-search/sk-document-fetch-diagnostics";
 
 afterEach(() => mock.restore());
 
@@ -31,7 +32,13 @@ test("the deferred Slovak fetch emits typed document outcomes through the shared
         ),
         { signal: new AbortController().signal },
       );
-      return Result.ok({ decisions: [], nextCursor: null });
+      return Result.err(
+        new SkDocumentNonPdfError({
+          adapterKey: ADAPTER_KEYS.SK_COURTS,
+          cursor: null,
+          message: "fixture",
+        }),
+      );
     },
   });
   expect(observations).toEqual([

@@ -1,3 +1,4 @@
+// parser-output-unchanged: listing-stage labels do not alter directory parsing.
 import { Result } from "better-result";
 
 import {

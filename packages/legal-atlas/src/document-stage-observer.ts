@@ -1,4 +1,7 @@
+// parser-output-unchanged: observer failure handling is isolated from parser results.
 import { Result, TaggedError } from "better-result";
+
+import { TimeoutError, withTimeout } from "@stll/concurrency/with-timeout";
 
 import {
   DOCUMENT_FETCH_EVENT,
@@ -6,10 +9,7 @@ import {
   type DocumentStageObservation,
   type DocumentStageObserver,
   type DocumentTelemetryObserverFailure,
-} from "@stll/legal-atlas/document-fetch-diagnostics";
-
-import { TimeoutError } from "@/api/lib/errors/tagged-errors";
-import { withTimeout } from "@/api/lib/with-timeout";
+} from "./document-fetch-diagnostics.js";
 
 class DocumentTelemetryObserverError extends TaggedError(
   "DocumentTelemetryObserverError",
@@ -30,13 +30,12 @@ type DocumentStageObserverOptions = {
   ) => void | Promise<void>;
 };
 
-const logObserverFailure = async (
+const reportObserverFailure = async (
   { event, ...attributes }: DocumentTelemetryObserverFailure,
   signal: AbortSignal,
 ): Promise<void> => {
-  const { logger } = await import("@/api/lib/observability/logger");
   signal.throwIfAborted();
-  logger.warn(event, attributes);
+  process.stderr.write(`${JSON.stringify({ event, ...attributes })}\n`);
 };
 
 /** Telemetry cannot change a page's result, checkpoint, or drain pacing outcome. */
@@ -45,7 +44,7 @@ export const observeDocumentStageSafely = async ({
   observe,
   observer,
   timeoutMs = DOCUMENT_OBSERVER_TIMEOUT_MS,
-  reportFailure = logObserverFailure,
+  reportFailure = reportObserverFailure,
 }: DocumentStageObserverOptions): Promise<void> => {
   // Callers may tighten this budget, but cannot disable or extend it.
   const budgetMs = Number.isFinite(timeoutMs)
@@ -120,6 +119,7 @@ const isSafeDocumentStageObserver = (
 /** Idempotent wrapping prevents nested deadlines from logging the same failure twice. */
 export const createSafeDocumentStageObserver = (
   observe: DocumentStageObserver,
+  reportFailure?: DocumentStageObserverOptions["reportFailure"],
 ): SafeDocumentStageObserver => {
   if (isSafeDocumentStageObserver(observe)) {
     return observe;
@@ -130,6 +130,7 @@ export const createSafeDocumentStageObserver = (
         observation,
         observe,
         observer: "callback",
+        ...(reportFailure !== undefined ? { reportFailure } : {}),
       });
     },
     { [SAFE_DOCUMENT_OBSERVER]: true } as const,

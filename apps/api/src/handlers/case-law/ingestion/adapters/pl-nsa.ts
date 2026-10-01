@@ -1,3 +1,4 @@
+// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 /**
  * Polish administrative courts, imported from the Hugging Face dataset
  * `JuDDGES/pl-nsa` (CC BY 4.0).

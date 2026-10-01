@@ -75,6 +75,7 @@ import {
   storedObservationIsListingOnly,
 } from "@/api/lib/legal-search/partial-observation-sql";
 import { documentFetchParked } from "@/api/lib/legal-search/sk-document-parking-sql";
+import { pendingDeferredDocumentSql } from "@/api/lib/legal-search/sk-document-pending-sql";
 
 import {
   caseLawAnalysisReaderPolicies,
@@ -912,6 +913,14 @@ export const caseLawDecisions = p.pgTable(
       .index("case_law_decisions_document_pending_date_idx")
       .on(t.sourceId, t.decisionDate.desc().nullsLast(), t.id)
       .where(sql`${t.fulltext} is null and ${t.documentUrl} is not null`),
+    // Presence probe for every unfilled deferred document, including rows
+    // cooling down or parked. Its exact predicate excludes corpus-served
+    // trimmed rows, so an empty probe ranges over this index rather than the
+    // full pending-date index or the decisions table.
+    p
+      .index("case_law_decisions_document_outstanding_idx")
+      .on(t.sourceId, t.id)
+      .where(pendingDeferredDocumentSql(t)),
     // Deferred-document queue, parked decisions: the pending rows that used
     // up their attempts. The pending index above holds every decision whose
     // text lives outside `fulltext`, so counting or requeueing parked rows

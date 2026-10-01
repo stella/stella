@@ -26,7 +26,9 @@ import {
   claimDocumentFetch,
   DOCUMENT_FETCH_FAILURE,
   fetchDecisionDocument,
+  hasPendingDeferredDocumentsForSource,
   loadPendingDocuments,
+  loadRequestedDocuments,
   loadRemainingDocuments,
   markDocumentUnavailable,
   MAX_DOCUMENT_FETCH_ATTEMPTS,
@@ -131,6 +133,7 @@ if (!databaseUrl || !runPostgresTests) {
 
     let sourceId: SafeId<"caseLawSource">;
     const created: SafeId<"caseLawDecision">[] = [];
+    const probeSources: SafeId<"caseLawSource">[] = [];
     const suffix = Bun.randomUUIDv7().slice(0, 8);
 
     const insertDecision = async (values: {
@@ -148,11 +151,12 @@ if (!databaseUrl || !runPostgresTests) {
         | typeof CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED;
       sourceObservationHash?: string;
       sourceObservationOrder?: bigint;
+      sourceId?: SafeId<"caseLawSource">;
     }) => {
       const [row] = await db
         .insert(caseLawDecisions)
         .values({
-          sourceId,
+          sourceId: values.sourceId ?? sourceId,
           caseNumber: values.caseNumber,
           court: "Okresný súd",
           country: "SVK",
@@ -219,6 +223,82 @@ if (!databaseUrl || !runPostgresTests) {
           .delete(caseLawDecisions)
           .where(inArray(caseLawDecisions.id, created));
       }
+      if (probeSources.length > 0) {
+        await db
+          .delete(caseLawSources)
+          .where(inArray(caseLawSources.id, probeSources));
+      }
+    });
+
+    test("backlog presence includes cooled-down and parked decisions", async () => {
+      const [probeSource] = await db
+        .insert(caseLawSources)
+        .values({
+          adapterKey: `sk-document-probe-${suffix}`,
+          name: "SK document backlog probe",
+          enabled: false,
+        })
+        .returning({ id: caseLawSources.id });
+      if (!probeSource) {
+        throw new Error("expected probe source row");
+      }
+      probeSources.push(probeSource.id);
+
+      await insertDecision({
+        sourceId: probeSource.id,
+        caseNumber: `filled-probe-${suffix}`,
+        fulltext: "already parsed",
+        documentUrl: "https://example.test/filled-probe.pdf",
+      });
+      await insertDecision({
+        sourceId: probeSource.id,
+        caseNumber: `url-less-probe-${suffix}`,
+        fulltext: null,
+        documentUrl: null,
+      });
+      expect(
+        await hasPendingDeferredDocumentsForSource({
+          scopedDb,
+          sourceId: probeSource.id,
+        }),
+      ).toBe(false);
+
+      await insertDecision({
+        sourceId: probeSource.id,
+        caseNumber: `cooled-backlog-${suffix}`,
+        fulltext: null,
+        documentUrl: "https://example.test/cooled-backlog.pdf",
+        documentFetchAttemptedAt: new Date(),
+        documentFetchAttempts: 1,
+      });
+      await insertDecision({
+        sourceId: probeSource.id,
+        caseNumber: `parked-backlog-${suffix}`,
+        fulltext: null,
+        documentUrl: "https://example.test/parked-backlog.pdf",
+        documentFetchAttempts: MAX_DOCUMENT_FETCH_ATTEMPTS,
+      });
+
+      expect(
+        await loadRequestedDocuments({
+          scopedDb,
+          sourceId: probeSource.id,
+          limit: 1,
+        }),
+      ).toEqual([]);
+      expect(
+        await loadRemainingDocuments({
+          scopedDb,
+          sourceId: probeSource.id,
+          limit: 1,
+        }),
+      ).toEqual([]);
+      expect(
+        await hasPendingDeferredDocumentsForSource({
+          scopedDb,
+          sourceId: probeSource.id,
+        }),
+      ).toBe(true);
     });
 
     test("queues only decisions that are still waiting on a document", async () => {
@@ -580,7 +660,7 @@ if (!databaseUrl || !runPostgresTests) {
         documentFetchAttempts: 1,
       });
       // Same decision date range, but attempted long enough ago.
-      const cooled = await insertDecision({
+      await insertDecision({
         caseNumber: `cooled-${suffix}`,
         fulltext: null,
         documentUrl: "https://example.test/cooled.pdf",

@@ -1,3 +1,4 @@
+// parser-output-unchanged: document-fetch routing metadata preserves parsed decision fields.
 import { panic, Result } from "better-result";
 
 import { skCourtSuccessionReferences } from "@stll/api-contract/sk-court-succession";

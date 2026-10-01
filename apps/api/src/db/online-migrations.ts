@@ -1,5 +1,7 @@
 import { panic } from "better-result";
 
+import { DOCUMENT_OUTSTANDING_INDEX } from "@/api/lib/legal-search/sk-document-outstanding-index";
+
 import {
   REWRITTEN_MIGRATION_INDEXES,
   type RequiredMigrationIndex,
@@ -111,6 +113,7 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     name: "case_law_decisions_provision_scope_cursor_idx",
     tableName: "case_law_decisions",
   },
+  DOCUMENT_OUTSTANDING_INDEX,
   {
     createSql:
       'CREATE UNIQUE INDEX CONCURRENTLY "account_provider_account_id_uidx" ON public."account" USING btree ("provider_id", "account_id")',

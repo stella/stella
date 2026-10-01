@@ -1,3 +1,4 @@
+// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 /**
  * Polish competition and consumer protection authority (Prezes UOKiK) adapter.
  *

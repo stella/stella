@@ -1,3 +1,4 @@
+// parser-output-unchanged: pure diagnostics classify fetch failures without changing parsed decisions.
 export const DOCUMENT_FETCH_ERROR_KIND = {
   rateLimited: "rate-limited",
   publisherRefused: "publisher-refused",

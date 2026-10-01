@@ -1,3 +1,4 @@
+// parser-output-unchanged: telemetry observation forwards the original page and publisher responses.
 import { Result } from "better-result";
 import { AsyncLocalStorage } from "node:async_hooks";
 
@@ -9,14 +10,15 @@ import {
   type DocumentFetchObservation,
   type DocumentStageObserver,
   type DocumentStageObservation,
+  type DocumentTelemetryObserverFailure,
 } from "@stll/legal-atlas/document-fetch-diagnostics";
+import {
+  createSafeDocumentStageObserver,
+  observeDocumentStageSafely,
+} from "@stll/legal-atlas/document-stage-observer";
 
 import { hasUsableAst } from "@/api/lib/case-law/document-ast";
 import type { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-import {
-  observeDocumentStageSafely,
-  createSafeDocumentStageObserver,
-} from "@/api/lib/legal-search/document-stage-observer";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 import type { SyncPage } from "@/api/lib/legal-search/ingestion-types";
 
@@ -25,14 +27,25 @@ type DocumentWindowContext = {
   observe: ReturnType<typeof createSafeDocumentStageObserver>;
   attempted: number;
   failed: number;
+  observations: DocumentFetchObservation[];
 };
 
 const documentWindow = new AsyncLocalStorage<DocumentWindowContext>();
 
+const reportDocumentStageObserverFailure = async (
+  { event, ...attributes }: DocumentTelemetryObserverFailure,
+  signal: AbortSignal,
+): Promise<void> => {
+  const { logger } = await import("@/api/lib/observability/logger");
+  signal.throwIfAborted();
+  logger.warn(event, attributes);
+};
+
 type DocumentStageObserverOptions<T> = {
   source: AdapterKey;
-  observe: DocumentStageObserver;
+  observe?: DocumentStageObserver | undefined;
   execute: () => Promise<T>;
+  outcome?: (value: T) => DocumentFetchObservation["outcome"];
 };
 
 /** Forward deferred fetch events without emitting a competing page window. */
@@ -40,16 +53,50 @@ export const withDocumentStageObserver = async <T>({
   source,
   observe,
   execute,
-}: DocumentStageObserverOptions<T>): Promise<T> =>
-  await documentWindow.run(
-    {
-      source,
-      observe: createSafeDocumentStageObserver(observe),
-      attempted: 0,
-      failed: 0,
-    },
-    execute,
+  outcome,
+}: DocumentStageObserverOptions<T>): Promise<T> => {
+  const parent = documentWindow.getStore();
+  const inheritedObserver =
+    parent?.source === source ? parent.observe : undefined;
+  const context: DocumentWindowContext = {
+    source,
+    observe: createSafeDocumentStageObserver(
+      observe ?? inheritedObserver ?? (() => undefined),
+      reportDocumentStageObserverFailure,
+    ),
+    attempted: 0,
+    failed: 0,
+    observations: [],
+  };
+  const result = await documentWindow.run(
+    context,
+    async () =>
+      await Result.tryPromise({ try: execute, catch: (error) => error }),
   );
+  if (Result.isError(result)) {
+    recordTerminalFailure(
+      context,
+      documentFetchErrorOutcome(source, result.error),
+    );
+  } else {
+    const terminalOutcome = outcome?.(result.value);
+    if (
+      terminalOutcome !== undefined &&
+      terminalOutcome !== DOCUMENT_FETCH_OUTCOME.ok
+    ) {
+      recordTerminalFailure(context, {
+        event: DOCUMENT_FETCH_EVENT.fetchOutcome,
+        source,
+        outcome: terminalOutcome,
+      });
+    }
+  }
+  await flushFetchOutcomes(context);
+  if (Result.isError(result)) {
+    return await Promise.reject(result.error);
+  }
+  return result.value;
+};
 
 /** Load the operational sink only when emitting, so pure ingestion utilities stay import-safe. */
 export const logDocumentStageObservation = async (
@@ -62,22 +109,72 @@ export const logDocumentStageObservation = async (
       const { logger } = await import("@/api/lib/observability/logger");
       logger.info(event, attributes);
     },
+    reportFailure: reportDocumentStageObserverFailure,
   });
 };
 
 const emitFetchOutcome = async (
   observation: DocumentFetchObservation,
 ): Promise<void> => {
-  await logDocumentStageObservation(observation);
   const context = documentWindow.getStore();
   if (context?.source !== observation.source) {
+    await logDocumentStageObservation(observation);
     return;
   }
   context.attempted += 1;
   if (observation.outcome !== DOCUMENT_FETCH_OUTCOME.ok) {
     context.failed += 1;
   }
-  await context.observe(observation);
+  // A successful response can still fail while reading or validating its body.
+  // Keep attempt order, but publish only after the document/page has settled.
+  context.observations.push(observation);
+};
+
+const recordTerminalFailure = (
+  context: DocumentWindowContext,
+  failure: DocumentFetchObservation,
+): void => {
+  const last = context.observations.at(-1);
+  if (last?.outcome === DOCUMENT_FETCH_OUTCOME.ok) {
+    const httpStatus = failure.http_status ?? last.http_status;
+    context.observations[context.observations.length - 1] = {
+      event: failure.event,
+      source: failure.source,
+      outcome: failure.outcome,
+      ...(httpStatus !== undefined ? { http_status: httpStatus } : {}),
+    };
+    context.failed += 1;
+    return;
+  }
+  if (context.failed > 0) {
+    return;
+  }
+  context.observations.push(failure);
+  context.attempted += 1;
+  context.failed += 1;
+};
+
+const flushFetchOutcomes = async (
+  context: DocumentWindowContext,
+): Promise<void> => {
+  for (const observation of context.observations) {
+    await logDocumentStageObservation(observation);
+    await context.observe(observation);
+  }
+};
+
+/** Retain the original structured body error even when the document unit returns a retry outcome. */
+export const recordDocumentStageError = async (
+  source: AdapterKey,
+  error: unknown,
+): Promise<void> => {
+  const observation = documentFetchErrorOutcome(source, error);
+  const context = documentWindow.getStore();
+  if (context?.source === source) {
+    recordTerminalFailure(context, observation);
+    return;
+  }
+  await logDocumentStageObservation(observation);
 };
 
 type ObserveDocumentFetchOptions = {
@@ -102,7 +199,7 @@ export const observePublisherDocumentFetch = async ({
   });
   if (Result.isError(result)) {
     await emitFetchOutcome(documentFetchErrorOutcome(source, result.error));
-    throw result.error;
+    return await Promise.reject(result.error);
   }
   const response = result.value;
   const observation =
@@ -144,11 +241,15 @@ export const withDocumentStageWindow = async ({
   observe = () => undefined,
   now = () => performance.now(),
 }: DocumentStagePageOptions): Promise<Result<SyncPage, AdapterFetchError>> => {
-  const context = {
+  const context: DocumentWindowContext = {
     source,
-    observe: createSafeDocumentStageObserver(observe),
+    observe: createSafeDocumentStageObserver(
+      observe,
+      reportDocumentStageObserverFailure,
+    ),
     attempted: 0,
     failed: 0,
+    observations: [],
   };
   const startedAt = now();
   const fetched = await documentWindow.run(
@@ -158,45 +259,56 @@ export const withDocumentStageWindow = async ({
   );
   let filled = 0;
   let unresolved = 0;
-  const reportUnaccountedFailure = async (error: unknown): Promise<void> => {
-    if (context.failed > 0) {
-      return;
-    }
-    const observation = documentFetchErrorOutcome(source, error);
-    context.attempted += 1;
-    context.failed += 1;
-    await logDocumentStageObservation(observation);
-    await context.observe(observation);
-  };
   if (Result.isError(fetched)) {
-    await reportUnaccountedFailure(fetched.error);
+    recordTerminalFailure(
+      context,
+      documentFetchErrorOutcome(source, fetched.error),
+    );
   } else if (Result.isError(fetched.value)) {
-    await reportUnaccountedFailure(fetched.value.error);
+    recordTerminalFailure(
+      context,
+      documentFetchErrorOutcome(source, fetched.value.error),
+    );
   } else {
     const page = fetched.value.value;
-    filled = page.decisions.filter(
-      (decision) =>
-        decision.documentDelivery !== "deferred" &&
-        (hasUsableAst(decision.documentAst) ||
-          Boolean(decision.fulltext?.trim())),
-    ).length;
-    filled +=
-      page.supplements?.filter(
-        ({ document }) =>
+    for (const decision of page.decisions) {
+      if (decision.documentDelivery === "deferred") {
+        continue;
+      }
+      if (
+        decision.isListingOnly === true ||
+        !(
+          hasUsableAst(decision.documentAst) ||
+          Boolean(decision.fulltext?.trim())
+        )
+      ) {
+        unresolved += 1;
+        continue;
+      }
+      filled += 1;
+    }
+    for (const { document } of page.supplements ?? []) {
+      if (
+        !(
           hasUsableAst(document.documentAst) ||
-          Boolean(document.fulltext?.trim()),
-      ).length ?? 0;
-    unresolved = page.decisions.filter(
-      (decision) =>
-        decision.documentDelivery !== "deferred" &&
-        decision.isListingOnly === true,
-    ).length;
+          Boolean(document.fulltext?.trim())
+        )
+      ) {
+        unresolved += 1;
+        continue;
+      }
+      filled += 1;
+    }
   }
+  await flushFetchOutcomes(context);
   const observation = {
     event: DOCUMENT_FETCH_EVENT.window,
     aggregation: "page",
     source,
-    backlog: context.failed > 0 || unresolved > 0 ? 1 : 0,
+    backlog:
+      Result.isError(fetched) || Result.isError(fetched.value) || unresolved > 0
+        ? 1
+        : 0,
     attempted: Math.max(context.attempted, filled + unresolved),
     filled,
     failed: Math.max(context.failed, unresolved),
@@ -205,7 +317,7 @@ export const withDocumentStageWindow = async ({
   await logDocumentStageObservation(observation);
   await context.observe(observation);
   if (Result.isError(fetched)) {
-    throw fetched.error;
+    return await Promise.reject(fetched.error);
   }
   return fetched.value;
 };

@@ -1,3 +1,4 @@
+// parser-output-unchanged: document-fetch observation preserves the response returned to the parser.
 import { panic, Result, TaggedError } from "better-result";
 
 import { fetchWithTimeout } from "@stll/fetch";

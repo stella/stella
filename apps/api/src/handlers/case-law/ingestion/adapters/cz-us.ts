@@ -1,3 +1,4 @@
+// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 import { Result, TaggedError, panic } from "better-result";
 import * as cheerio from "cheerio";
 

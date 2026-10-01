@@ -20,8 +20,10 @@ import {
 
 import {
   observePublisherDocumentFetch,
+  withDocumentStageObserver,
   withDocumentStageWindow,
 } from "./document-stage-observation";
+import { SkDocumentNonPdfError } from "./sk-document-fetch-diagnostics";
 
 const decision = (fulltext: string): IngestionResult => ({
   caseNumber: "fixture",
@@ -36,6 +38,174 @@ const decision = (fulltext: string): IngestionResult => ({
 });
 
 describe("document-stage observation windows", () => {
+  test("recovered attempts remain failed attempts but leave no terminal backlog", async () => {
+    for (const transientFailures of [1, 2, 3]) {
+      const observations: DocumentStageObservation[] = [];
+      const page = Result.ok({
+        decisions: [decision("recovered text")],
+        nextCursor: null,
+      });
+      expect(
+        await withDocumentStageWindow({
+          source: ADAPTER_KEYS.CZ_NSS,
+          now: () => 0,
+          observe: (event) => {
+            observations.push(event);
+          },
+          fetchPage: async () => {
+            for (let attempt = 0; attempt < transientFailures; attempt++) {
+              await observePublisherDocumentFetch({
+                source: ADAPTER_KEYS.CZ_NSS,
+                fetch: async () => new Response(null, { status: 503 }),
+              });
+            }
+            await observePublisherDocumentFetch({
+              source: ADAPTER_KEYS.CZ_NSS,
+              fetch: async () => new Response("recovered text"),
+            });
+            return page;
+          },
+        }),
+      ).toBe(page);
+      expect(observations.at(-1)).toEqual({
+        event: DOCUMENT_FETCH_EVENT.window,
+        aggregation: "page",
+        source: ADAPTER_KEYS.CZ_NSS,
+        backlog: 0,
+        attempted: transientFailures + 1,
+        filled: 1,
+        failed: transientFailures,
+        window_seconds: 0,
+      });
+      expect(
+        observations
+          .slice(0, -1)
+          .map((event) =>
+            event.event === DOCUMENT_FETCH_EVENT.fetchOutcome
+              ? event.outcome
+              : undefined,
+          ),
+      ).toEqual([
+        ...Array.from({ length: transientFailures }, () => "http_5xx"),
+        "ok",
+      ]);
+    }
+  });
+
+  test("an empty terminal page does not retain historical request failures as backlog", async () => {
+    const observations: DocumentStageObservation[] = [];
+    await withDocumentStageWindow({
+      source: ADAPTER_KEYS.CZ_NSS,
+      now: () => 0,
+      observe: (event) => {
+        observations.push(event);
+      },
+      fetchPage: async () => {
+        await observePublisherDocumentFetch({
+          source: ADAPTER_KEYS.CZ_NSS,
+          fetch: async () => new Response(null, { status: 503 }),
+        });
+        return Result.ok({ decisions: [], nextCursor: null });
+      },
+    });
+    expect(observations.at(-1)).toMatchObject({
+      backlog: 0,
+      filled: 0,
+      failed: 1,
+      attempted: 1,
+    });
+  });
+
+  test("post-response failures replace provisional success and preserve error identity", async () => {
+    for (const scope of ["page", "document"] as const) {
+      const observations: DocumentStageObservation[] = [];
+      const error = new SkDocumentNonPdfError({
+        adapterKey: ADAPTER_KEYS.SK_COURTS,
+        cursor: null,
+        message: "private body",
+      });
+      const execute = async () => {
+        await observePublisherDocumentFetch({
+          source: ADAPTER_KEYS.SK_COURTS,
+          fetch: async () =>
+            new Response("HTML labelled PDF", {
+              headers: { "content-type": "application/pdf" },
+            }),
+          expectedContentType: "pdf",
+        });
+        expect(observations).toEqual([]);
+        throw error;
+      };
+      const run =
+        scope === "page"
+          ? withDocumentStageWindow({
+              source: ADAPTER_KEYS.SK_COURTS,
+              fetchPage: execute,
+              now: () => 0,
+              observe: (event) => {
+                observations.push(event);
+              },
+            })
+          : withDocumentStageObserver({
+              source: ADAPTER_KEYS.SK_COURTS,
+              execute,
+              observe: (event) => {
+                observations.push(event);
+              },
+            });
+      await expect(run).rejects.toBe(error);
+      expect(
+        observations.filter(
+          (event) => event.event === DOCUMENT_FETCH_EVENT.fetchOutcome,
+        ),
+      ).toEqual([
+        {
+          event: DOCUMENT_FETCH_EVENT.fetchOutcome,
+          source: ADAPTER_KEYS.SK_COURTS,
+          outcome: "body_shape",
+          http_status: 200,
+        },
+      ]);
+      if (scope === "page") {
+        expect(observations.at(-1)).toMatchObject({
+          backlog: 1,
+          failed: 1,
+          attempted: 1,
+          filled: 0,
+        });
+      }
+    }
+  });
+
+  test("returned body failures cannot publish a provisional ok", async () => {
+    const observations: DocumentStageObservation[] = [];
+    const result = { status: "parked" } as const;
+    expect(
+      await withDocumentStageObserver({
+        source: ADAPTER_KEYS.SK_COURTS,
+        observe: (event) => {
+          observations.push(event);
+        },
+        outcome: () => "body_shape",
+        execute: async () => {
+          await observePublisherDocumentFetch({
+            source: ADAPTER_KEYS.SK_COURTS,
+            fetch: async () => new Response("broken PDF"),
+          });
+          return result;
+        },
+      }),
+    ).toBe(result);
+    expect(observations).toEqual([
+      {
+        event: DOCUMENT_FETCH_EVENT.fetchOutcome,
+        source: ADAPTER_KEYS.SK_COURTS,
+        outcome: "body_shape",
+        http_status: 200,
+      },
+    ]);
+  });
+
   test("successful documents, failed requests and listing-only results have distinct accounting", async () => {
     const observations: DocumentStageObservation[] = [];
     let clock = 0;
@@ -232,7 +402,9 @@ describe("document-stage observation windows", () => {
             });
             return Result.ok({
               decisions:
-                source === ADAPTER_KEYS.CZ_NSS ? [decision("text")] : [],
+                source === ADAPTER_KEYS.CZ_NSS
+                  ? [decision("text")]
+                  : [{ ...decision(""), isListingOnly: true }],
               nextCursor: null,
             });
           },

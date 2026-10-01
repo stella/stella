@@ -1,3 +1,4 @@
+// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 

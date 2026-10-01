@@ -25,12 +25,12 @@ import {
   documentFetchErrorOutcome,
   type DocumentStageObserver,
 } from "@stll/legal-atlas/document-fetch-diagnostics";
+import { createSafeDocumentStageObserver } from "@stll/legal-atlas/document-stage-observer";
 import {
   type SkDocumentFetchErrorDiagnostic,
   skDocumentErrorDiagnostics,
 } from "@stll/legal-atlas/sk-document-fetch-diagnostics";
 
-import { createSafeDocumentStageObserver } from "@/api/lib/legal-search/document-stage-observer";
 import type {
   DecisionDocumentOutcome,
   DocumentFetchFailure,

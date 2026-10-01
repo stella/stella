@@ -837,6 +837,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@stll/api-contract": "workspace:*",
+        "@stll/concurrency": "workspace:*",
         "@stll/legal-ast": "workspace:*",
         "better-result": "catalog:",
       },

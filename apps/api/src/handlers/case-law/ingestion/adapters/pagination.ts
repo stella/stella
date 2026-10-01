@@ -1,3 +1,4 @@
+// parser-output-unchanged: listing-stage labels preserve the fetched response and parsed page.
 /**
  * Shared pagination helpers for case-law adapters.
  *

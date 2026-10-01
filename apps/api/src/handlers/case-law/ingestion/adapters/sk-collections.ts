@@ -1,3 +1,4 @@
+// parser-output-unchanged: listing-stage labels do not alter collection parsing.
 import { panic, Result } from "better-result";
 
 import { readCappedBytes } from "@stll/skills/streaming";

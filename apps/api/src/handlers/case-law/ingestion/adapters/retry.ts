@@ -1,3 +1,4 @@
+// parser-output-unchanged: fetch-stage observation preserves publisher response and error identity.
 /**
  * The only way a case-law adapter reaches its publisher.
  *
