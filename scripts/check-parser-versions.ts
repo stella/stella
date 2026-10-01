@@ -63,6 +63,9 @@ class StaticTree {
       );
     } else if (specifier.startsWith("@stll/")) {
       const [name, ...subpath] = specifier.slice("@stll/".length).split("/");
+      if (name === undefined) {
+        return undefined;
+      }
       const root = `packages/${name}`;
       const manifestSource = this.files.get(`${root}/package.json`);
       if (manifestSource === undefined) {
@@ -123,7 +126,7 @@ class StaticTree {
             specifier.startsWith("@/api/") ||
             (specifier.startsWith("@stll/") &&
               this.files.has(
-                `packages/${specifier.slice("@stll/".length).split("/").at(0)}/package.json`,
+                `packages/${specifier.slice("@stll/".length).split("/").at(0) ?? ""}/package.json`,
               )))
         ) {
           this.importErrors.add(
