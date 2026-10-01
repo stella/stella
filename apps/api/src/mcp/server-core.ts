@@ -34,6 +34,7 @@ import {
   recordActionResponseOversize,
   withTenantActionSizePolicy,
 } from "@/api/lib/rate-limit/action-size-limits";
+import { chargeMcpReadBytes } from "@/api/lib/rate-limit/mcp-read-fence";
 import { isEventStreamResponse, withSseHeartbeat } from "@/api/lib/sse";
 import { mcpActionPeriodIdentity } from "@/api/mcp/action-admission-identity";
 import {
@@ -76,6 +77,7 @@ import {
 } from "@/api/mcp/metadata";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
 import { scopeHintToSurface } from "@/api/mcp/surface-tool-mentions";
+import { resolveMcpReadClass } from "@/api/mcp/tool-types";
 import type {
   McpToolDefinition,
   McpToolFeatureFlag,
@@ -157,6 +159,7 @@ const requiredScopesForTool = (
 
 type McpServerDependencies = {
   admitAction?: typeof withActionAdmission;
+  chargeReadBytes?: typeof chargeMcpReadBytes;
   actionSizePolicy?: typeof getActionSizePolicy;
   authenticateMcpRequest: (
     token: string,
@@ -640,6 +643,7 @@ const retryableToolErrorResult = (mode: McpMode): CallToolResult =>
 
 export const createMcpHttpRequestHandler = ({
   admitAction = withActionAdmission,
+  chargeReadBytes = chargeMcpReadBytes,
   actionSizePolicy = getActionSizePolicy,
   authenticateMcpRequest,
   captureError,
@@ -769,6 +773,12 @@ export const createMcpHttpRequestHandler = ({
       }
 
       const resultDisposition = toolResultDisposition(definition.annotations);
+      const readClass = env.FEATURE_MCP_READ_FENCE
+        ? await resolveMcpReadClass(
+            definition,
+            toolRequest.params.arguments ?? {},
+          )
+        : undefined;
       const run = async (signal?: AbortSignal) => {
         signal?.throwIfAborted();
         const result = await handleMcpToolCall({
@@ -779,15 +789,51 @@ export const createMcpHttpRequestHandler = ({
         });
         signal?.throwIfAborted();
         const policy = getTenantActionSizePolicy();
-        if (policy === undefined) {
+        const hasOutput =
+          result.content.some(
+            (block) => block.type !== "text" || block.text.length > 0,
+          ) ||
+          (result.structuredContent !== undefined &&
+            Object.keys(result.structuredContent).length > 0);
+        const fenced =
+          env.FEATURE_MCP_READ_FENCE &&
+          (readClass !== undefined || definition.access === "read") &&
+          result.isError !== true &&
+          hasOutput;
+        if (policy === undefined && !fenced) {
           return result;
         }
         const bytes = Buffer.byteLength(
           JSON.stringify({ jsonrpc: "2.0", id: mcpReq.id, result }),
           "utf-8",
         );
-        if (bytes <= policy.responseBytes) {
-          return result;
+        if (policy === undefined || bytes <= policy.responseBytes) {
+          if (!fenced) {
+            return result;
+          }
+          if (readClass === undefined) {
+            panic("Successful MCP read has no canonical source classification");
+          }
+          const charged = await chargeReadBytes({
+            organizationId: context.organizationId,
+            userId: context.userId,
+            readClass,
+            bytes,
+          });
+          if (Result.isOk(charged)) {
+            return result;
+          }
+          if (charged.error.reason === "unavailable") {
+            captureError(charged.error, { phase: "read-fence", source: "mcp" });
+          }
+          const refusal = actionAdmissionRefusal(charged.error);
+          return mcpStructuredErrorResult({
+            code: refusal.code,
+            message: refusal.message,
+            hint: refusal.hint,
+            contactUrl: refusal.contactUrl,
+            retryable: ACTION_ADMISSION_REFUSALS[refusal.code].retryable,
+          });
         }
         recordActionResponseOversize({
           transport: "mcp",

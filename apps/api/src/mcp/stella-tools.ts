@@ -912,6 +912,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       "overview instead: counts, recent entities, linked contacts, and members.",
     inputSchema: listMattersArgsSchema,
     access: "read",
+    readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
       textFields: [
@@ -935,6 +936,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       "asks to search outside a single matter or you do not yet know the right matter.",
     inputSchema: searchAcrossMattersArgsSchema,
     access: "read",
+    readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
       textFields: deriveTextFieldPaths(SEARCH_ACROSS_MATTERS_TEXT_FIELD_SPECS),
@@ -978,6 +980,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       decision_type: FILTER_NORMALIZATION,
     },
     access: "read",
+    readClass: "public",
     anonymized: { exposure: "passthrough" },
     // Backed by the public case-law corpus (caseLawPublicReadDb), the same
     // surface the public routes gate behind the same feature flag.
@@ -1015,6 +1018,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       }),
     },
     access: "read",
+    readClass: "public",
     anonymized: { exposure: "passthrough" },
     // Backed by the public case-law corpus (caseLawPublicReadDb), the same
     // surface the public routes gate behind the same feature flag.
@@ -1038,6 +1042,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       "windows; pass the returned nextCursor back as cursor to read more.",
     inputSchema: readContentAcrossMattersArgsSchema,
     access: "read",
+    readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
       textFields: deriveTextFieldPaths(
@@ -1068,6 +1073,7 @@ export const STELLA_TOOL_DEFINITIONS = [
     inputSchema: readCaseLawDecisionArgsSchema,
     inputNormalization: { include: { kind: "string-list" } },
     access: "read",
+    readClass: "public",
     anonymized: { exposure: "passthrough" },
     // Backed by the public case-law corpus (caseLawPublicReadDb), the same
     // surface the public routes gate behind the same feature flag.
@@ -1104,6 +1110,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       "'cited_by', limit: 20 }. Pass nextCursor back as cursor.",
     inputSchema: readCaseLawCitationsArgsSchema,
     access: "read",
+    readClass: "public",
     anonymized: { exposure: "passthrough" },
     // Backed by the public case-law corpus (caseLawPublicReadDb), the same
     // surface the public routes gate behind the same feature flag.
@@ -1124,6 +1131,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       "surfaces a contact the user wants to inspect more closely.",
     inputSchema: readContactArgsSchema,
     access: "read",
+    readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
       // Placeholder org id: derivation only ever reads `.path`, see

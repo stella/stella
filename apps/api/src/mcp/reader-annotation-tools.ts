@@ -660,6 +660,7 @@ const READER_ANNOTATION_TOOL_DEFINITIONS = [
       "anchor and quote, oldest first.",
     inputSchema: listArgsSchema,
     access: "read",
+    readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
       textFields: deriveTextFieldPaths(readerAnnotationTextFieldSpecs("")),

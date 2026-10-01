@@ -644,6 +644,7 @@ const PREVIEW_TEMPLATE_CONDITIONS_TOOL_DEFINITION = defineValibotMcpTool({
     openWorldHint: false,
   },
   access: "read",
+  readClass: "tenant",
   anonymized: {
     exposure: "anonymize",
     // Placeholder org id: derivation only ever reads `.path`, see the
@@ -732,6 +733,7 @@ const LIST_TEMPLATES_TOOL_DEFINITION = defineValibotMcpTool({
     "`arrays` marks {% for %} fields as arrays of objects, not dotted keys.",
   inputSchema: listTemplatesArgsSchema,
   access: "read",
+  readClass: "tenant",
   anonymized: {
     exposure: "anonymize",
     // Placeholder org id: derivation only ever reads `.path`, see the
