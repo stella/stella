@@ -382,7 +382,7 @@ describe("reasons published apart from their ruling", () => {
     const stored = await supplementRow(fixture.sourceId, "339001");
     expect(stored.decisionId).toBe(ruling.id);
     expect(stored.mergedSourceHash).toBe(stored.sourceHash);
-    expect(stored.metadata?.["documentRole"]).toBe(
+    expect(stored.metadata["documentRole"]).toBe(
       DECISION_DOCUMENT_ROLE.REASONS,
     );
   });
@@ -458,7 +458,7 @@ describe("reasons published apart from their ruling", () => {
     const standalone = await decisionBy(fixture.sourceId, "339001");
     const stored = await supplementRow(fixture.sourceId, "339001");
     expect(standalone.metadata?.["documentRole"]).toBeUndefined();
-    expect(stored.metadata?.["documentRole"]).toBeUndefined();
+    expect(stored.metadata["documentRole"]).toBeUndefined();
     expect(standalone.decisionType).toBe(
       PL_COURTS_STANDALONE_REASONS_DECISION_TYPE,
     );
@@ -467,15 +467,22 @@ describe("reasons published apart from their ruling", () => {
   test("a supplement kind cannot contradict a known publisher role", async () => {
     const fixture = await newSource();
     const reasons = supplementOf(REASONS);
-    await expect(
-      ingestSupplement(fixture, {
-        ...reasons,
-        document: {
-          ...reasons.document,
-          documentRole: DECISION_DOCUMENT_ROLE.RULING,
-        },
-      }),
-    ).rejects.toThrow(
+    const rejected = await Result.tryPromise({
+      try: async () =>
+        await ingestSupplement(fixture, {
+          ...reasons,
+          document: {
+            ...reasons.document,
+            documentRole: DECISION_DOCUMENT_ROLE.RULING,
+          },
+        }),
+      catch: (cause) => cause,
+    });
+    if (!Result.isError(rejected)) {
+      expect.unreachable("A contradictory publisher role must be rejected");
+    }
+    expect(rejected.error).toHaveProperty(
+      "message",
       "Supplement kind contradicts the publisher document role",
     );
     expect(await decisionRows(fixture.sourceId)).toEqual([]);
@@ -521,7 +528,7 @@ describe("reasons published apart from their ruling", () => {
       DECISION_DOCUMENT_ROLE.RULING,
     );
     expect(merged.rows.at(0)?.decisionType).toBe("wyrok");
-    expect(merged.supplement.metadata?.["documentRole"]).toBe(
+    expect(merged.supplement.metadata["documentRole"]).toBe(
       DECISION_DOCUMENT_ROLE.REASONS,
     );
 
