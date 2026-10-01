@@ -18,14 +18,18 @@ export const createChatStreamMock = () => {
     }
     runs.clear();
   });
-  return mock(({ run }: Parameters<typeof streamChat>[0]) => {
+  return mock(async ({ run }: Parameters<typeof streamChat>[0]) => {
     runs.add(run);
-    return Promise.resolve(
-      sseResponse(
-        new ReadableStream<Uint8Array>({
-          start: (controller) => controller.close(),
-        }),
-      ),
-    );
+    const source = new ReadableStream<Uint8Array>({
+      start: (controller) => controller.close(),
+    });
+    // Settle the source before handing reader ownership to the heartbeat.
+    const reader = source.getReader();
+    try {
+      await reader.closed;
+    } finally {
+      reader.releaseLock();
+    }
+    return sseResponse(source);
   });
 };
