@@ -5,7 +5,8 @@ set -euo pipefail
 scope=${1:-}
 shift || true
 case "$scope" in
-  codeql|migrations) ;;
+  codeql) shopt -s nocasematch ;;
+  migrations) ;;
   *) echo 'Unknown security workflow scope' >&2; exit 1 ;;
 esac
 
@@ -13,8 +14,12 @@ relevant() {
   local file=$1
   case "$scope" in
     codeql)
+      # Include embedded scripts and data formats in CodeQL's supported-language
+      # table; its pinned upstream document drives the coverage test.
       case "$file" in
-        *.ts|*.tsx|*.js|*.jsx|*.mjs|*.cjs|*.mts|*.cts|*.py|*.pyi|*.rs|\
+        *.ts|*.tsx|*.js|*.jsx|*.mjs|*.cjs|*.mts|*.cts|*.es|*.es6|*.xsjs|*.xsjslib|\
+        *.html|*.htm|*.xhtml|*.xhtm|*.vue|*.ejs|*.hbs|*.njk|*.html.erb|*.jsp|*.html.dot|\
+        *.json|*.yaml|*.yml|*.raml|*.xml|*.py|*.pyi|*.rs|\
         .github/workflows/*|.github/codeql/*|\
         package.json|*/package.json|bun.lock|*/bun.lock|bun.lockb|*/bun.lockb|\
         package-lock.json|*/package-lock.json|yarn.lock|*/yarn.lock|pnpm-lock.yaml|*/pnpm-lock.yaml|\

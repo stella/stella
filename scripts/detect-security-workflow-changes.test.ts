@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -35,14 +36,53 @@ const analyze = v.parse(
   }),
   codeql.jobs["analyze"],
 );
-const javascript = ["ts", "tsx", "js", "jsx", "mjs", "cjs", "mts", "cts"];
+// Byte-identical upstream supported-language table, kept offline for CI.
+// https://github.com/github/codeql/blob/47cc7d8176fc7370c99a3f897035bec0bb924efc/docs/codeql/reusables/supported-versions-compilers.rst
+const documentation = readFileSync(
+  path.join(
+    import.meta.dirname,
+    "fixtures/codeql-supported-versions-compilers.rst",
+  ),
+  "utf-8",
+);
+const documentedExtensions = (language: string) => {
+  const row = documentation.split("\n").find((line) => {
+    const trimmed = line.trimStart();
+    return (
+      trimmed.startsWith(`${language},`) || trimmed.startsWith(`${language} [`)
+    );
+  });
+  if (!row) {
+    panic(`Missing CodeQL documentation row: ${language}`);
+  }
+  const extensions = Array.from(
+    row.matchAll(/``([^`]+)``/gu),
+    (match) => match[1],
+  );
+  expect(extensions.length, language).toBeGreaterThan(0);
+  return extensions.map((extension) => {
+    if (!extension) {
+      panic(`Missing CodeQL extension: ${language}`);
+    }
+    if (extension.startsWith(".") && !extension.startsWith(".github/")) {
+      return `nested/source${extension}`;
+    }
+    return extension.includes("/")
+      ? extension.replaceAll("*", "sample")
+      : `nested/${extension}`;
+  });
+};
+// CodeQL's JavaScript extractor enables TypeScript by default.
+const javascript = documentedExtensions("JavaScript").concat(
+  documentedExtensions("TypeScript"),
+);
 const languageExtensions = new Map([
   ["javascript", javascript],
   ["typescript", javascript],
   ["javascript-typescript", javascript],
-  ["python", ["py", "pyi"]],
-  ["rust", ["rs"]],
-  ["actions", [".github/workflows/check.yml", ".github/workflows/check.yaml"]],
+  ["python", documentedExtensions("Python")],
+  ["rust", documentedExtensions("Rust")],
+  ["actions", documentedExtensions("GitHub Actions")],
 ]);
 const detect = (scope: string, files: string[], detector = script) => {
   const result = Bun.spawnSync(["bash", detector, scope, "--files", ...files]);
@@ -54,14 +94,18 @@ const expectLanguageCoverage = (language: string, detector = script) => {
   if (!extensions) {
     panic(`Unmapped CodeQL language: ${language}`);
   }
-  for (const extension of extensions) {
-    const file =
-      language === "actions" ? extension : `nested/source.${extension}`;
+  for (const file of extensions) {
     expect(detect("codeql", [file], detector), `${language}: ${file}`).toBe(
       "true",
     );
   }
 };
+
+test("the documented extension baseline is the unchanged pinned upstream table", () => {
+  expect(createHash("sha256").update(documentation).digest("hex")).toBe(
+    "6d76b52b5f1f1f571ec586326299d606f75a4b42cdc5a9d6ff1edca17e017fdc",
+  );
+});
 
 test("every language in the actual CodeQL matrix has complete detector coverage", () => {
   expect(analyze.strategy.matrix.language.length).toBeGreaterThan(0);
@@ -89,8 +133,33 @@ test("adding an unmapped CodeQL language or dropping an extension fails coverage
     expect(() => expectLanguageCoverage("javascript", detector)).toThrow(
       "nested/source.mts",
     );
+    const missingHtml = source.replace("*.html|", "");
+    expect(missingHtml).not.toBe(source);
+    writeFileSync(detector, missingHtml);
+    expect(() => expectLanguageCoverage("javascript", detector)).toThrow(
+      "nested/source.html",
+    );
   } finally {
     rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("an HTML-only PR runs CodeQL for embedded JavaScript", () => {
+  for (const file of [
+    "apps/desktop/src/mainview/takeover-dialog.html",
+    "apps/web/index.html",
+    "nested/page.htm",
+    "nested/PAGE.HTML",
+    "nested/page.vue",
+    "nested/page.ejs",
+    "nested/page.hbs",
+    "nested/page.html.erb",
+    "nested/page.jsp",
+    "nested/page.html.dot",
+    "nested/source.xsjs",
+    "nested/source.xsjslib",
+  ]) {
+    expect(detect("codeql", [file]), file).toBe("true");
   }
 });
 
@@ -98,6 +167,7 @@ test("CodeQL selects code, workflow configuration and dependency inputs", () => 
   for (const file of [
     "apps/web/src/view.tsx",
     "source.ts",
+    "tsconfig.json",
     "worker.py",
     "src/main.rs",
     "package.json",
@@ -121,7 +191,7 @@ test("CodeQL selects code, workflow configuration and dependency inputs", () => 
   for (const files of [
     [],
     ["README.md"],
-    ["docs/readme.md", "tsconfig.json", ".editorconfig"],
+    ["docs/readme.md", ".editorconfig"],
   ]) {
     expect(detect("codeql", files)).toBe("false");
   }
@@ -209,9 +279,15 @@ test("a complete Git diff selects changed code and deletion paths, including ren
     git(["add", "."]);
     git(["commit", "-qm", "docs"]);
     expect(selected(base)).toBe("false");
+    const docsHead = git(["rev-parse", "HEAD"]);
+    writeFileSync(path.join(cwd, "page.html"), "<script>alert(1)</script>\n");
+    git(["add", "."]);
+    git(["commit", "-qm", "html"]);
+    expect(selected(docsHead)).toBe("true");
+    const htmlHead = git(["rev-parse", "HEAD"]);
     git(["mv", "source.ts", "source.md"]);
     git(["commit", "-qm", "rename"]);
-    expect(selected(base)).toBe("true");
+    expect(selected(htmlHead)).toBe("true");
   } finally {
     rmSync(cwd, { recursive: true, force: true });
   }
