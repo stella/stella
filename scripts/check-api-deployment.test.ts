@@ -64,6 +64,7 @@ describe("API deployment health receipt", () => {
           steps: v.optional(
             v.array(
               v.object({
+                run: v.optional(v.string()),
                 env: v.optional(v.record(v.string(), v.unknown())),
               }),
             ),
@@ -71,8 +72,16 @@ describe("API deployment health receipt", () => {
         }),
       ),
     });
+    // Steps that reach staging through the viewer lock, found by what they
+    // run, so a step that drops its access entries is still checked.
+    const stagingTargets = [
+      "$STAGING_HEALTH_URL",
+      "test:e2e:staging",
+      "apps/api/src/scripts/post-deploy-smoke.ts",
+      "apps/api/src/scripts/post-deploy-response-policy.ts",
+    ];
     const workflowsDir = new URL("../.github/workflows/", import.meta.url);
-    const consumers: Record<string, unknown>[] = [];
+    const consumers: { run: string; env: Record<string, unknown> }[] = [];
     for await (const file of new Bun.Glob("*.yml").scan(
       workflowsDir.pathname,
     )) {
@@ -81,29 +90,28 @@ describe("API deployment health receipt", () => {
         Bun.YAML.parse(await Bun.file(new URL(file, workflowsDir)).text()),
       );
       for (const { steps } of Object.values(parsed.jobs)) {
-        for (const { env } of steps ?? []) {
+        for (const { run = "", env = {} } of steps ?? []) {
           if (
-            env &&
+            stagingTargets.some((target) => run.includes(target)) ||
             Object.keys(env).some((key) => key.endsWith("EDGE_HEADER_VALUE"))
           ) {
-            consumers.push(env);
+            consumers.push({ run, env });
           }
         }
       }
     }
 
+    // Every target is still found, so a renamed script cannot drop out.
+    for (const target of stagingTargets) {
+      expect(consumers.some(({ run }) => run.includes(target))).toBe(true);
+    }
     // One source for the staging access value, so rotating it is one change.
-    expect(consumers.length).toBeGreaterThan(0);
-    for (const env of consumers) {
-      for (const prefix of ["", "E2E_"]) {
-        if (!(`${prefix}EDGE_HEADER_VALUE` in env)) {
-          continue;
-        }
-        expect(env[`${prefix}EDGE_HEADER_NAME`]).toBe("x-stella-edge-token");
-        expect(env[`${prefix}EDGE_HEADER_VALUE`]).toBe(
-          `\${{ secrets.STAGING_VIEWER_ACCESS_TOKEN }}`,
-        );
-      }
+    for (const { run, env } of consumers) {
+      const prefix = run.includes("$STAGING_HEALTH_URL") ? "" : "E2E_";
+      expect(env[`${prefix}EDGE_HEADER_NAME`]).toBe("x-stella-edge-token");
+      expect(env[`${prefix}EDGE_HEADER_VALUE`]).toBe(
+        `\${{ secrets.STAGING_VIEWER_ACCESS_TOKEN }}`,
+      );
     }
   });
 
