@@ -345,6 +345,8 @@ export const envApiServerSchema = {
   ACTION_ADMISSION_USER_CONCURRENCY: v.optional(
     v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1)),
   ),
+  // Operators must set the lease above the admission store's failover window.
+  // Renewal errors retry inside that window; losing admission is not a user stop.
   ACTION_ADMISSION_LEASE_MS: v.optional(
     v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1)),
   ),
