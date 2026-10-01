@@ -142,7 +142,9 @@ const runInstall = ({
         SAFE_CHAIN_TEST_REQUESTS: requests,
       },
     });
-    if (result.error) {throw result.error;}
+    if (result.error) {
+      throw result.error;
+    }
     return {
       status: result.status,
       output: result.stdout + result.stderr,
