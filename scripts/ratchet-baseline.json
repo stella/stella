@@ -1,10 +1,8 @@
 {
   "as-casts": {
-    "count": 0,
     "files": {}
   },
   "package-as-casts": {
-    "count": 11,
     "files": {
       "packages/boe/src/query.ts": 2,
       "packages/business-registries/src/shared/canonical-id.ts": 1,
@@ -15,55 +13,42 @@
     }
   },
   "legacy-paint-transitions": {
-    "count": 0,
     "files": {}
   },
   "super-linear-regexes": {
-    "count": 0,
     "files": {}
   },
   "legacy-realtime-invalidation-producers": {
-    "count": 0,
     "files": {}
   },
   "nullish-array-fallback": {
-    "count": 0,
     "files": {}
   },
   "barrel-index-files": {
-    "count": 0,
     "files": {}
   },
   "direct-error-message-display": {
-    "count": 0,
     "files": {}
   },
   "module-level-mutable-collections": {
-    "count": 0,
     "files": {}
   },
   "entity-kind-glyph-adhoc": {
-    "count": 0,
     "files": {}
   },
   "raw-user-avatar-primitive": {
-    "count": 0,
     "files": {}
   },
   "shadowed-user-name-helpers": {
-    "count": 0,
     "files": {}
   },
   "ad-hoc-relative-time-formatting": {
-    "count": 0,
     "files": {}
   },
   "direct-audit-log-insert": {
-    "count": 0,
     "files": {}
   },
   "direct-root-connection-imports": {
-    "count": 56,
     "files": {
       "apps/api/scripts/apply-search-migration.ts": 1,
       "apps/api/src/agent-auth/id-jag.ts": 1,
@@ -121,7 +106,6 @@
     }
   },
   "root-connection-type-imports": {
-    "count": 31,
     "files": {
       "apps/api/src/lib/account-deletion-effect-store.ts": 1,
       "apps/api/src/lib/bilingual/run-queue.ts": 1,
@@ -157,7 +141,6 @@
     }
   },
   "implicit-root-connection-shapes": {
-    "count": 18,
     "files": {
       "apps/api/src/lib/agent-audit-principal.ts": 1,
       "apps/api/src/lib/business-registries/desktop/revocation.ts": 1,
@@ -178,7 +161,6 @@
     }
   },
   "audit-skip-directives": {
-    "count": 271,
     "files": {
       "apps/api/src/handlers/bilingual-translations/create-run.ts": 1,
       "apps/api/src/handlers/case-law/analysis/generate.ts": 2,
@@ -331,19 +313,15 @@
     }
   },
   "landing-inline-clipboard-writes": {
-    "count": 0,
     "files": {}
   },
   "inline-timestamp-cursor-sql": {
-    "count": 0,
     "files": {}
   },
   "repeated-timestamp-cursor-boundary": {
-    "count": 0,
     "files": {}
   },
   "throw-outside-boundary": {
-    "count": 896,
     "files": {
       "apps/api/src/handlers/case-law/decisions/latest.ts": 3,
       "apps/api/src/handlers/case-law/ingestion/adapters/at-courts.ts": 9,
@@ -656,7 +634,6 @@
     }
   },
   "try-catch-outside-boundary": {
-    "count": 359,
     "files": {
       "apps/api/src/handlers/ai-autocomplete/stream.ts": 1,
       "apps/api/src/handlers/case-law/analysis/generate.ts": 1,
@@ -883,98 +860,76 @@
     }
   },
   "no-body-ownership-ids-suppressions": {
-    "count": 0,
     "files": {}
   },
   "no-unbranded-ownership-id-param-suppressions": {
-    "count": 0,
     "files": {}
   },
   "require-search-scope-suppressions": {
-    "count": 1,
     "files": {
       "apps/api/src/lib/search/index-chat.ts": 1
     }
   },
   "require-safe-route-handlers-no-direct-handler-config-suppressions": {
-    "count": 0,
     "files": {}
   },
   "require-safe-route-handlers-suppressions": {
-    "count": 0,
     "files": {}
   },
   "security-guards-no-raw-filename-write-suppressions": {
-    "count": 0,
     "files": {}
   },
   "security-guards-no-unsanitized-href-suppressions": {
-    "count": 0,
     "files": {}
   },
   "security-guards-no-unscoped-user-query-suppressions": {
-    "count": 0,
     "files": {}
   },
   "security-guards-require-secure-document-response-suppressions": {
-    "count": 0,
     "files": {}
   },
   "mcp-security-no-direct-oauth-client-join-suppressions": {
-    "count": 0,
     "files": {}
   },
   "mcp-security-redact-oauth-registration-response-suppressions": {
-    "count": 0,
     "files": {}
   },
   "auth-lifecycle-after-remove-member-revokes-artifacts-suppressions": {
-    "count": 0,
     "files": {}
   },
   "auth-lifecycle-no-direct-auth-artifact-delete-suppressions": {
-    "count": 0,
     "files": {}
   },
   "no-unowned-file-version-write-suppressions": {
-    "count": 0,
     "files": {}
   },
   "no-direct-audit-log-insert-suppressions": {
-    "count": 0,
     "files": {}
   },
   "scanned-file-boundary-suppressions": {
-    "count": 0,
     "files": {}
   },
   "no-direct-buffer-cleanup-intent-delete-suppressions": {
-    "count": 0,
     "files": {}
   },
   "no-direct-ingestion-checkpoint-write-suppressions": {
-    "count": 0,
     "files": {}
   },
   "require-buffer-cleanup-intent-status-suppressions": {
-    "count": 0,
     "files": {}
   },
   "require-query-limit-suppressions": {
-    "count": 2,
     "files": {
       "apps/api/src/handlers/chat/history-window.ts": 2
     }
   },
   "no-raw-zip-load-suppressions": {
-    "count": 2,
     "files": {
       "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts": 1,
       "apps/api/src/handlers/chat/export/create-chat-export-docx.ts": 1
     }
   },
   "no-db-await-in-loop-suppressions": {
-    "count": 115,
     "files": {
       "apps/api/scripts/backfill-image-thumbnails.ts": 3,
       "apps/api/scripts/backfill-search-previews.ts": 2,
@@ -1048,7 +1003,6 @@
     }
   },
   "no-network-await-in-loop-suppressions": {
-    "count": 13,
     "files": {
       "apps/api/scripts/seed-firm-knowledge.ts": 1,
       "apps/api/src/handlers/external-preview/preview.ts": 1,
@@ -1062,51 +1016,39 @@
     }
   },
   "require-bounded-request-schema-suppressions": {
-    "count": 0,
     "files": {}
   },
   "no-unbounded-response-body-suppressions": {
-    "count": 0,
     "files": {}
   },
   "no-raw-use-effect-suppressions": {
-    "count": 0,
     "files": {}
   },
   "no-awaited-builder-union-suppressions": {
-    "count": 0,
     "files": {}
   },
   "no-swallowed-rejection-suppressions": {
-    "count": 0,
     "files": {}
   },
   "require-toast-error-capture-suppressions": {
-    "count": 0,
     "files": {}
   },
   "no-detached-void-suppressions": {
-    "count": 0,
     "files": {}
   },
   "require-detached-label-shape-suppressions": {
-    "count": 0,
     "files": {}
   },
   "require-exhaustive-panic-suppressions": {
-    "count": 0,
     "files": {}
   },
   "no-vacuous-throw-assertion-suppressions": {
-    "count": 0,
     "files": {}
   },
   "no-internal-module-mock-suppressions": {
-    "count": 0,
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 292,
     "files": {
       "apps/api/scripts/lib/compact-schema-defs.ts": 1,
       "apps/api/scripts/seed-case-law.ts": 1,
@@ -1305,35 +1247,27 @@
     }
   },
   "ts-suppression-directives": {
-    "count": 0,
     "files": {}
   },
   "detached-promise-review-sites": {
-    "count": 0,
     "files": {}
   },
   "cross-handler-imports": {
-    "count": 0,
     "files": {}
   },
   "ad-hoc-decision-subject-gates": {
-    "count": 0,
     "files": {}
   },
   "lib-to-handler-imports": {
-    "count": 0,
     "files": {}
   },
   "cross-route-private-imports": {
-    "count": 0,
     "files": {}
   },
   "capability-schemas-truncated": {
-    "count": 0,
     "files": {}
   },
   "capability-file-transport-suppressed": {
-    "count": 20,
     "files": {
       "packages/cli/capabilities/clauses.export.json": 1,
       "packages/cli/capabilities/clauses.import.json": 1,
@@ -1358,37 +1292,29 @@
     }
   },
   "read-capabilities-with-write-scope": {
-    "count": 0,
     "files": {}
   },
   "capability-domain-action-verbs": {
-    "count": 0,
     "files": {}
   },
   "cli-shadowed-namespaces": {
-    "count": 0,
     "files": {}
   },
   "cross-feature-imports": {
-    "count": 0,
     "files": {}
   },
   "workspace-only-rls-on-org-tables": {
-    "count": 0,
     "files": {}
   },
   "parser-validator-call-ledger-entries": {
-    "count": 42,
     "files": {
       "scripts/parser-validator-call-ledger.json": 42
     }
   },
   "internal-module-mock-ledger-entries": {
-    "count": 0,
     "files": {}
   },
   "direct-failure-sinks": {
-    "count": 539,
     "files": {
       "apps/api/src/handlers/bilingual-translations/create-run.ts": 1,
       "apps/api/src/handlers/bilingual-translations/prepare.ts": 2,
@@ -1589,7 +1515,6 @@
     }
   },
   "ai-analytics-callback-seams": {
-    "count": 47,
     "files": {
       "apps/api/src/handlers/case-law/analysis/generate.ts": 1,
       "apps/api/src/handlers/case-law/analysis/significance-run.ts": 1,
@@ -1634,19 +1559,15 @@
     }
   },
   "failure-sink-expectations": {
-    "count": 0,
     "files": {}
   },
   "failure-legacy-output-pins": {
-    "count": 0,
     "files": {}
   },
   "cross-app-lib-path-copies": {
-    "count": 0,
     "files": {}
   },
   "cross-workspace-duplicate-export-names": {
-    "count": 6,
     "files": {
       "apps/web/src/lib/detached.ts": 1,
       "apps/web/src/lib/safe-id.ts": 1,
@@ -1656,13 +1577,11 @@
     }
   },
   "duplicate-token-blocks": {
-    "count": 2,
     "files": {
       "apps/api/src/lib/legal-search/morphology/snowball/base-stemmer.ts": 2
     }
   },
   "slice-owned-web-components": {
-    "count": 36,
     "files": {
       "apps/web/src/components/ai-suggestions/scroll-editor-to-pos.ts": 1,
       "apps/web/src/components/auth/two-factor-panel.tsx": 1,
@@ -1703,7 +1622,6 @@
     }
   },
   "api-lib-top-level-entries": {
-    "count": 287,
     "files": {
       "apps/api/src/lib/account-deletion-cleanup-queue.ts": 1,
       "apps/api/src/lib/account-deletion-effect-store.ts": 1,
@@ -1995,7 +1913,6 @@
     }
   },
   "web-lib-top-level-entries": {
-    "count": 138,
     "files": {
       "apps/web/src/lib/account": 1,
       "apps/web/src/lib/analytics": 1,
@@ -2138,7 +2055,6 @@
     }
   },
   "direct-third-party-declarations": {
-    "count": 515,
     "files": {
       "apps/api/package.json": 84,
       "apps/collab/package.json": 10,
