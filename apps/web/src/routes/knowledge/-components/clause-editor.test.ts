@@ -1,9 +1,9 @@
+import { closeHistory, history, undo, undoDepth } from "@tiptap/pm/history";
+import { Schema } from "@tiptap/pm/model";
+import { EditorState } from "@tiptap/pm/state";
+import type { Command } from "@tiptap/pm/state";
 import type { JSONContent } from "@tiptap/react";
 import { describe, expect, test } from "bun:test";
-import { closeHistory, history, undo, undoDepth } from "prosemirror-history";
-import { Schema } from "prosemirror-model";
-import { EditorState } from "prosemirror-state";
-import type { Command } from "prosemirror-state";
 
 import {
   acceptAIEditRevision,

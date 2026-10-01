@@ -171,6 +171,7 @@ test("unreadable payloads are persisted as they are read, not once the batch dra
     client: {
       ingestCommittedBatch: unusedIngest,
       ingestQueuedBatch: unusedIngest,
+      aggregate: unusedIngest,
     },
     commitMode: CORPUS_PROJECTION_APPEND_COMMIT_MODE.published,
     family: TARGET.family,

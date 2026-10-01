@@ -240,13 +240,14 @@ export const usageEntitlements = p.pgTable(
     /**
      * Provider-reported occurrence time of the last applied lifecycle
      * event. Webhook deliveries can arrive out of order (independent
-     * retry backoff per event); dispatch skips events strictly older
-     * than this so a stale `active` retry cannot resurrect an
-     * entitlement that a newer `revoked` already terminated. Null when
+     * retry backoff per event); dispatch rejects older events and resolves
+     * equal versions by external generation and terminal state. Null when
      * the provider payload carries no timestamp (ordering then remains
      * delivery-order, as before).
      */
     hostedLastEventAt: timestamptz("hosted_last_event_at"),
+    /** Provider creation time identifies the current external generation. */
+    hostedEntitlementCreatedAt: timestamptz("hosted_entitlement_created_at"),
     /**
      * True when hosted access is scheduled to end but remains
      * usable until `current_period_end`. UI surfaces it as

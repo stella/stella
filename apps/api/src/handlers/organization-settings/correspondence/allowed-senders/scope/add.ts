@@ -21,7 +21,11 @@ const config = {
   description:
     "Allow an approved shared mailbox to file correspondence for one matter.",
   permissions: { organizationSettings: ["update"] },
-  mcp: { type: "capability", reason: "correspondence" },
+  mcp: {
+    type: "capability",
+    reason: "correspondence",
+    consumesServices: false,
+  },
   params: paramsSchema,
   body: bodySchema,
 } satisfies HandlerConfig;

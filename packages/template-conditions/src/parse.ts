@@ -14,9 +14,13 @@
  * Precedence (lowest to highest): `or` < `and` < `not` < comparison. `(...)`
  * groups explicitly. Malformed input degrades gracefully (an unmatched `(`
  * closes at end of input; trailing tokens are ignored) rather than throwing,
- * so a half-typed condition never breaks a fill.
+ * so a half-typed condition can still be evaluated. Expressions exceeding
+ * the nesting budget return `null`.
  */
 import type { CompareOp, ConditionNode, Operand } from "@stll/conditions";
+
+/** Maximum combined nesting of parentheses and unary negation. */
+export const MAX_CONDITION_NESTING = 256;
 
 const COMPARE_SYMBOL_TO_OP = {
   "==": "eq",
@@ -216,55 +220,82 @@ export const parseCondition = (expression: string): ConditionNode | null => {
   const peek = (): Token | undefined => tokens[pos];
 
   // or := and ( "or" and )*
-  const parseOr = (): ConditionNode => {
-    const first = parseAnd();
+  const parseOr = (depth: number): ConditionNode | null => {
+    const first = parseAnd(depth);
+    if (first === null) {
+      return null;
+    }
     if (peek()?.type !== "or") {
       return first;
     }
     const children = [first];
     while (peek()?.type === "or") {
       pos += 1;
-      children.push(parseAnd());
+      const child = parseAnd(depth);
+      if (child === null) {
+        return null;
+      }
+      children.push(child);
     }
     return { type: "group", combinator: "or", children };
   };
 
   // and := not ( "and" not )*
-  const parseAnd = (): ConditionNode => {
-    const first = parseNot();
+  const parseAnd = (depth: number): ConditionNode | null => {
+    const first = parseNot(depth);
+    if (first === null) {
+      return null;
+    }
     if (peek()?.type !== "and") {
       return first;
     }
     const children = [first];
     while (peek()?.type === "and") {
       pos += 1;
-      children.push(parseNot());
+      const child = parseNot(depth);
+      if (child === null) {
+        return null;
+      }
+      children.push(child);
     }
     return { type: "group", combinator: "and", children };
   };
 
   // not := "not" not | comparison
-  const parseNot = (): ConditionNode => {
+  const parseNot = (depth: number): ConditionNode | null => {
     if (peek()?.type === "not") {
+      if (depth >= MAX_CONDITION_NESTING) {
+        return null;
+      }
       pos += 1;
+      const child = parseNot(depth + 1);
+      if (child === null) {
+        return null;
+      }
       return {
         type: "group",
         combinator: "and",
         negated: true,
-        children: [parseNot()],
+        children: [child],
       };
     }
-    return parseComparison();
+    return parseComparison(depth);
   };
 
   // comparison := "(" or ")"
   //              | operand "is" [ "not" ] "defined"
   //              | literal "in" operand
   //              | operand ( compareOp operand )?
-  const parseComparison = (): ConditionNode => {
+  const parseComparison = (depth: number): ConditionNode | null => {
     if (peek()?.type === "lparen") {
+      if (depth >= MAX_CONDITION_NESTING) {
+        return null;
+      }
       pos += 1;
-      const inner = parseOr();
+      const inner = parseOr(depth + 1);
+      if (inner === null) {
+        return null;
+      }
       if (peek()?.type === "rparen") {
         pos += 1;
       }
@@ -346,5 +377,5 @@ export const parseCondition = (expression: string): ConditionNode | null => {
     };
   };
 
-  return parseOr();
+  return parseOr(0);
 };

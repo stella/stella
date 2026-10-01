@@ -27,7 +27,7 @@ const config = {
   description:
     "Update an active number series. Pattern and padding lock after first allocation.",
   permissions: { organizationSettings: ["update"] },
-  mcp: { type: "capability", reason: "billing_admin" },
+  mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   params: numberSeriesParams,
   body: updateNumberSeriesBody,
 } satisfies HandlerConfig;

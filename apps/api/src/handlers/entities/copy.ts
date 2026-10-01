@@ -674,7 +674,11 @@ const config = {
     "are dropped rather than remapped, so a move can lose column values; " +
     "read-only entities are refused.",
   permissions: { entity: ["create", "delete"] },
-  mcp: { type: "capability", reason: "document_processing" },
+  mcp: {
+    type: "capability",
+    reason: "document_processing",
+    consumesServices: true,
+  },
   body: copyToWorkspaceBodySchema,
 } satisfies WorkspaceHandlerConfig;
 

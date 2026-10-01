@@ -39,7 +39,11 @@ const config = {
     "rejecting leaves the skill untouched. Either way the decision is final. " +
     "Requires the rights to edit the skill itself.",
   permissions: { agentSkill: ["update"] },
-  mcp: { type: "capability", reason: "agent_tool_authoring" },
+  mcp: {
+    type: "capability",
+    reason: "agent_tool_authoring",
+    consumesServices: false,
+  },
   params: reviewSkillProposalParamsSchema,
   body: reviewSkillProposalBodySchema,
 } satisfies HandlerConfig;

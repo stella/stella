@@ -6,6 +6,7 @@
  * row as read and enriched.
  */
 
+import { panic, Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -14,8 +15,10 @@ import {
   expect,
   test,
 } from "bun:test";
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
+
+import { DAY_IN_MS } from "@stll/time";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -26,23 +29,61 @@ import {
   caseLawSources,
   relations,
 } from "@/api/db/schema";
+import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import type { SaosItem } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import { plCourtsAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
-import { runReconciliationWorkUnit } from "@/api/handlers/case-law/ingestion/reconciliation-engine";
+import {
+  RECONCILIATION_INGEST_BUDGET_MS,
+  runReconciliationWorkUnit,
+  textlessHeldRecheckSelection,
+} from "@/api/handlers/case-law/ingestion/reconciliation-engine";
 import { getCaseLawIngestionMetadata } from "@/api/handlers/case-law/metadata";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  TEXT_ABSENCE_REASON,
+  absentDecisionTextFields,
+} from "@/api/lib/case-law/decision-text";
 import { addUtcDays, toUtcDateString } from "@/api/lib/dates";
 import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
-import type { SourceReconciliation } from "@/api/lib/legal-search/ingestion-types";
+import type {
+  SourceReconciliation,
+  StoredRawResultReader,
+} from "@/api/lib/legal-search/ingestion-types";
+import {
+  PARTIAL_OBSERVATION_FIELD,
+  PARTIAL_OBSERVATION_KEY,
+} from "@/api/lib/legal-search/partial-observation-sql";
+import { planLines } from "@/api/tests/helpers/explain-plan";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
+let claimStatements = 0;
+let leaseRenewals = 0;
 const connect = (client: Awaited<ReturnType<typeof createTestPglite>>) =>
-  drizzle({ client, relations: { ...relations, ...authRelationsPart } });
+  drizzle({
+    client,
+    relations: { ...relations, ...authRelationsPart },
+    logger: {
+      logQuery(query) {
+        if (
+          query.startsWith('update "case_law_decisions"') &&
+          query.includes('"textless_detail_rechecked_at"')
+        ) {
+          claimStatements += 1;
+        }
+        if (
+          query.startsWith('update "case_law_sources"') &&
+          query.includes("> now()")
+        ) {
+          leaseRenewals += 1;
+        }
+      },
+    },
+  });
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof connect>;
@@ -65,6 +106,8 @@ afterAll(async () => {
 });
 
 beforeEach(() => {
+  claimStatements = 0;
+  leaseRenewals = 0;
   fake = startFakeS3();
 });
 
@@ -180,6 +223,7 @@ const storedRow = async (sourceId: SafeId<"caseLawSource">) => {
     .select({
       metadata: caseLawDecisions.metadata,
       fulltext: caseLawDecisions.fulltext,
+      textlessDetailRecheckedAt: caseLawDecisions.textlessDetailRecheckedAt,
     })
     .from(caseLawDecisions)
     .where(eq(caseLawDecisions.sourceId, sourceId));
@@ -188,6 +232,112 @@ const storedRow = async (sourceId: SafeId<"caseLawSource">) => {
   }
   return { ...row, metadata: row.metadata ?? {} };
 };
+
+const seedTextlessListing = async (
+  sourceId: SafeId<"caseLawSource">,
+  updatedAt: Date,
+): Promise<void> => {
+  serveSaos(() => new Response("temporarily unavailable", { status: 503 }));
+  const crawled = (await plCourtsAdapter.fetchPage(null, {})).unwrap()
+    .decisions[0];
+  if (crawled === undefined) {
+    throw new Error("expected the listing to build the judgment");
+  }
+  await processDecision({
+    input: {
+      ...crawled,
+      fulltext: undefined,
+      sections: undefined,
+      documentAst: EMPTY_AST,
+      textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      isListingOnly: true,
+      metadata: {
+        ...crawled.metadata,
+        detailReadState: "read",
+      },
+    },
+    sourceId,
+    scopedDb,
+    observedAt: updatedAt,
+    observationOrder: 1n,
+  });
+  await db
+    .update(caseLawDecisions)
+    .set({ updatedAt })
+    .where(eq(caseLawDecisions.sourceId, sourceId));
+};
+
+const seedSettledLedger = async (
+  sourceId: SafeId<"caseLawSource">,
+): Promise<void> => {
+  for (const slice of [day(0), day(-1), SLICE]) {
+    await db.insert(caseLawCoverageSlices).values({
+      id: createSafeId<"caseLawCoverageSlice">(),
+      sourceId,
+      slice,
+      reported: 0,
+      collected: 0,
+      checkedAt: NOW,
+    });
+  }
+};
+
+type SeedTextlessQueueOptions = {
+  sourceId: SafeId<"caseLawSource">;
+  count: number;
+  updatedAt: Date;
+};
+const seedTextlessQueue = async ({
+  sourceId,
+  count,
+  updatedAt,
+}: SeedTextlessQueueOptions) => {
+  await db.insert(caseLawDecisions).values(
+    Array.from({ length: count }, (_, index) => ({
+      id: createSafeId<"caseLawDecision">(),
+      sourceId,
+      caseNumber: `recheck-${index}`,
+      court: "Sąd Rejonowy w Białymstoku",
+      country: "PL",
+      language: "pl",
+      sourceDocumentId: `saos-recheck-${index}`,
+      sourceRawS3Key: "textless-recheck-fixture",
+      sourceRawContentType: "application/json",
+      updatedAt,
+      metadata: {
+        detailReadState: "read",
+        [PARTIAL_OBSERVATION_KEY]: {
+          [PARTIAL_OBSERVATION_FIELD.IS_LISTING_ONLY]: true,
+        },
+      },
+    })),
+  );
+};
+
+type RunUnitOptions = {
+  sourceId: SafeId<"caseLawSource">;
+  readStoredRaw?: StoredRawResultReader;
+  now?: () => Date;
+};
+const runUnit = async ({
+  sourceId,
+  readStoredRaw,
+  now = () => NOW,
+}: RunUnitOptions) =>
+  await runReconciliationWorkUnit({
+    adapterKey: "pl-courts",
+    sourceId,
+    reconciliation,
+    reparseStoredRaw: undefined,
+    scopedDb,
+    now,
+    fetchDelayMs: 0,
+    sleep: async () => {
+      await Promise.resolve();
+    },
+    sliceRetries: new Map(),
+    readStoredRaw,
+  });
 
 test("a judgment whose detail read failed is read again by the reconciliation and settles enriched", async () => {
   const sourceId = await seedSource();
@@ -247,4 +397,178 @@ test("a judgment whose detail read failed is read again by the reconciliation an
   );
   expect(JSON.stringify(after.metadata["judges"])).toContain(RAPPORTEUR);
   expect(after.fulltext).toContain("oddalić wniosek");
+});
+
+test("textless listing-only rows become due after seven days and publish recovered detail once", async () => {
+  const sourceId = await seedSource();
+  await seedTextlessListing(sourceId, new Date(NOW.getTime() - 8 * DAY_IN_MS));
+  await seedSettledLedger(sourceId);
+
+  let detailReads = 0;
+  serveSaos(() => {
+    detailReads += 1;
+    return Response.json({
+      data: { ...JUDGMENT, judges: [{ name: RAPPORTEUR }] },
+    });
+  });
+
+  const outcome = await runUnit({ sourceId });
+  expect(outcome).toMatchObject({
+    type: "worked",
+    summary: { unit: "textless-detail-rechecks", keyable: 1, written: 1 },
+  });
+  const restored = await storedRow(sourceId);
+  expect(restored.textlessDetailRecheckedAt).toEqual(NOW);
+  expect(restored.fulltext).toContain("oddalić wniosek");
+  expect(partialObservationFromMetadata(restored.metadata).isListingOnly).toBe(
+    false,
+  );
+  expect(getCaseLawIngestionMetadata(restored.metadata)?.sourceTier).toBe(
+    "detail",
+  );
+  expect(detailReads).toBe(1);
+
+  expect(await runUnit({ sourceId })).toEqual({ type: "idle" });
+  expect(detailReads).toBe(1);
+});
+
+test("textless listing-only rows younger than seven days remain untouched", async () => {
+  const sourceId = await seedSource();
+  await seedTextlessListing(sourceId, new Date(NOW.getTime() - 6 * DAY_IN_MS));
+  await seedSettledLedger(sourceId);
+  let detailReads = 0;
+  serveSaos(() => {
+    detailReads += 1;
+    return Response.json({ data: { ...JUDGMENT } });
+  });
+
+  expect(await runUnit({ sourceId })).toEqual({ type: "idle" });
+  const row = await storedRow(sourceId);
+  expect(row.textlessDetailRecheckedAt).toBeNull();
+  expect(row.fulltext).toBeNull();
+  expect(detailReads).toBe(0);
+});
+
+test("textless held rechecks claim each capped page in one statement before reading raw", async () => {
+  const sourceId = await seedSource();
+  const old = new Date(NOW.getTime() - 8 * DAY_IN_MS);
+  await seedTextlessQueue({ sourceId, count: 205, updatedAt: old });
+  await seedSettledLedger(sourceId);
+
+  // Published rows make the due queue a small fraction of the corpus,
+  // rather than requiring an index scan over a tiny all-eligible table.
+  const publishedSourceId = await seedSource();
+  await db.insert(caseLawDecisions).values(
+    Array.from({ length: 3000 }, (_, index) => ({
+      id: createSafeId<"caseLawDecision">(),
+      sourceId: publishedSourceId,
+      caseNumber: `published-${index}`,
+      court: "Synthetic court",
+      country: "PL",
+      language: "pl",
+      fulltext: "Published decision text.",
+    })),
+  );
+  const recheck = reconciliation.textlessHeldRecheck;
+  if (recheck === undefined) {
+    panic("expected the adapter's textless recheck capability");
+  }
+  await db.execute(sql`ANALYZE case_law_decisions`);
+  const explained = await scopedDb(
+    async (tx) =>
+      await tx.execute(sql`
+      EXPLAIN ${textlessHeldRecheckSelection({
+        tx,
+        sourceId,
+        before: new Date(NOW.getTime() - 7 * DAY_IN_MS),
+        recheck,
+        limit: 200,
+      })}
+    `),
+  );
+  const plan = planLines(explained).join("\n");
+  expect(plan).toContain("case_law_decisions_textless_detail_recheck_idx");
+  expect(plan).not.toContain("Seq Scan");
+
+  let rawReads = 0;
+  let claimsBeforeFirstRead: number | undefined;
+  const readMissingRaw: StoredRawResultReader = async () => {
+    if (rawReads === 0) {
+      claimsBeforeFirstRead = claimStatements;
+    }
+    rawReads += 1;
+    return Result.ok(null);
+  };
+  const outcome = await runUnit({ sourceId, readStoredRaw: readMissingRaw });
+  const attempts = await db
+    .select({ id: caseLawDecisions.id, updatedAt: caseLawDecisions.updatedAt })
+    .from(caseLawDecisions)
+    .where(eq(caseLawDecisions.sourceId, sourceId));
+  const claimed = await db
+    .select({ id: caseLawDecisions.id })
+    .from(caseLawDecisions)
+    .where(
+      and(
+        eq(caseLawDecisions.sourceId, sourceId),
+        eq(caseLawDecisions.textlessDetailRecheckedAt, NOW),
+      ),
+    );
+
+  expect(outcome).toMatchObject({
+    type: "worked",
+    summary: { unit: "textless-detail-rechecks", keyable: 200 },
+  });
+  expect(attempts).toHaveLength(205);
+  expect(
+    attempts.every(({ updatedAt }) => updatedAt.getTime() === old.getTime()),
+  ).toBe(true);
+  expect(claimed).toHaveLength(200);
+  expect(rawReads).toBe(200);
+  expect(claimStatements).toBe(1);
+  expect(claimsBeforeFirstRead).toBe(1);
+
+  const nextUnit = await runUnit({ sourceId, readStoredRaw: readMissingRaw });
+  expect(nextUnit).toMatchObject({
+    type: "worked",
+    summary: { unit: "textless-detail-rechecks", keyable: 5 },
+  });
+  expect(rawReads).toBe(205);
+  expect(claimStatements).toBe(2);
+});
+
+test("textless rechecks renew the lease on missing raw and stop at the ingest deadline", async () => {
+  const sourceId = await seedSource();
+  await seedTextlessQueue({
+    sourceId,
+    count: 3,
+    updatedAt: new Date(NOW.getTime() - 8 * DAY_IN_MS),
+  });
+  await seedSettledLedger(sourceId);
+  let clock = NOW;
+  let rawReads = 0;
+  let renewalsAtRead: number | undefined;
+  const outcome = await runUnit({
+    sourceId,
+    now: () => clock,
+    readStoredRaw: async () => {
+      rawReads += 1;
+      renewalsAtRead = leaseRenewals;
+      clock = new Date(NOW.getTime() + RECONCILIATION_INGEST_BUDGET_MS);
+      return Result.ok(null);
+    },
+  });
+  expect(outcome).toMatchObject({
+    type: "worked",
+    summary: { keyable: 3, failed: 1, deferred: 2 },
+  });
+  expect(rawReads).toBe(1);
+  expect(renewalsAtRead).toBe(2);
+  const rows = await db
+    .select({ attemptedAt: caseLawDecisions.textlessDetailRecheckedAt })
+    .from(caseLawDecisions)
+    .where(eq(caseLawDecisions.sourceId, sourceId));
+  expect(rows).toHaveLength(3);
+  expect(
+    rows.every(({ attemptedAt }) => attemptedAt?.getTime() === NOW.getTime()),
+  ).toBe(true);
 });

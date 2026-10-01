@@ -31,7 +31,11 @@ const config = {
     "the duplicate is detected, so replaying an existing entry is refused " +
     "there rather than reported as a no-op.",
   permissions: { workspace: ["update"] },
-  mcp: { type: "capability", reason: "anonymization_admin" },
+  mcp: {
+    type: "capability",
+    reason: "anonymization_admin",
+    consumesServices: false,
+  },
   body: t.Object({
     canonical: t.String({ minLength: 1, maxLength: 512 }),
     label: t.String({ minLength: 1, maxLength: 64 }),

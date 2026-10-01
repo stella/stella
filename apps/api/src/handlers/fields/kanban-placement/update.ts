@@ -31,7 +31,11 @@ const updateKanbanPlacement = createSafeHandler(
       "Move one entity across writable Kanban axes in one transaction. " +
       "The request may change a task status, up to two property values, or both.",
     permissions: { entity: ["create", "update"] },
-    mcp: { type: "capability", reason: "workspace_schema" },
+    mcp: {
+      type: "capability",
+      reason: "workspace_schema",
+      consumesServices: false,
+    },
     body: t.Object({
       entityId: tSafeId("entity"),
       status: t.Optional(t.String({ minLength: 1, maxLength: 32 })),

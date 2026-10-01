@@ -22,7 +22,11 @@ export default createSafeHandler(
       "file at all.",
     body: bodySchema,
     permissions: { entity: ["create"] },
-    mcp: { type: "capability", reason: "document_processing" },
+    mcp: {
+      type: "capability",
+      reason: "document_processing",
+      consumesServices: true,
+    },
   },
   async function* ({
     scopedDb,

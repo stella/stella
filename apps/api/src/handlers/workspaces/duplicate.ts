@@ -84,7 +84,11 @@ const config = {
     "name gains a numeric suffix when earlier copies exist. Refused once the " +
     "organization is at its matter limit.",
   permissions: { workspace: ["create"] },
-  mcp: { type: "capability", reason: "workflow_orchestration" },
+  mcp: {
+    type: "capability",
+    reason: "workflow_orchestration",
+    consumesServices: true,
+  },
   body: t.Object({
     includeContent: t.Boolean(),
   }),
