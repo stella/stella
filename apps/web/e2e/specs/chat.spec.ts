@@ -11,10 +11,13 @@ test("model picker keeps its help and workspace chrome aligned", async ({
 
   const inspectorRail = page.getByRole("navigation", { name: "Inspector" });
   // The shell first paints a placeholder rail under the same name while the
-  // inspector loads; only the real rail carries the pane toggle. Measuring
-  // across that swap reads a detached rail (a full-viewport gap).
+  // inspector loads; only the real rail carries the top toggle, named for its
+  // state (no tabs yet, minimized, open). Measuring across that swap reads a
+  // detached rail (a full-viewport gap).
   await expect(
-    inspectorRail.getByRole("button", { name: /^(Show|Hide) pane$/u }),
+    inspectorRail.getByRole("button", {
+      name: /^(Open chat|Show pane|Hide pane)$/u,
+    }),
   ).toBeVisible({ timeout: 30_000 });
   const inspectorInlineEndGap = async () =>
     inspectorRail.evaluate(
