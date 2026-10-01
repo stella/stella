@@ -111,6 +111,13 @@ export const GITHUB_FEEDBACK_URL =
 
 export const TECHNICAL_DOCS_URL = "https://stll.app/docs/" as const;
 
+/** The one source of setup steps for connecting an assistant or agent: the
+ *  copied agent instructions point here, and so do the manual guide links. */
+export const CONNECT_AI_ASSISTANT_DOCS_URL =
+  `${TECHNICAL_DOCS_URL}get-started/connect-ai-assistant/` as const;
+
+export const CLI_DOCS_URL = `${TECHNICAL_DOCS_URL}get-started/cli/` as const;
+
 /** General contact address. Used where someone wants to reach the team directly
  *  rather than ask the community: it opens a conversation, so surfaces linking
  *  it must not imply a committed response time. */

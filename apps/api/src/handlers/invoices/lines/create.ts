@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { and, eq, isNull, ne } from "drizzle-orm";
 import { type Static, t } from "elysia";
 
+import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import type { InvoiceTotals } from "@stll/invoicing";
 
 import type { SafeDbError } from "@/api/db/safe-db";
@@ -101,7 +102,11 @@ const createInvoiceLine = createSafeHandler(
       "entry and marks the entry billed. Every line carries a VAT rate in " +
       "basis points and a VAT treatment. Only draft invoices accept lines.",
     permissions: { invoice: ["update"] },
-    mcp: { type: "capability", reason: "billing_admin" },
+    mcp: {
+      type: "capability",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
     params: lineParamsSchema,
     body: createLineBodySchema,
   },
@@ -194,6 +199,7 @@ const createInvoiceLine = createSafeHandler(
               and(
                 eq(timeEntries.id, body.source.timeEntryId),
                 eq(timeEntries.workspaceId, workspaceId),
+                eq(timeEntries.activityGroup, TIME_ENTRY_ACTIVITY_GROUP.CLIENT),
                 eq(timeEntries.status, BILLING_STATUS.APPROVED),
                 eq(timeEntries.billable, true),
                 isNull(timeEntries.invoiceId),
@@ -260,6 +266,7 @@ const createInvoiceLine = createSafeHandler(
               and(
                 eq(timeEntries.id, draft.timeEntryId),
                 eq(timeEntries.workspaceId, workspaceId),
+                eq(timeEntries.activityGroup, TIME_ENTRY_ACTIVITY_GROUP.CLIENT),
               ),
             );
           events.push({
@@ -295,9 +302,7 @@ const createInvoiceLine = createSafeHandler(
           [draft],
           { recordAuditEvent },
         );
-        if (!line) {
-          return panic("Invoice line insert returned no row");
-        }
+        const lineId = line?.id ?? panic("Invoice line insert returned no row");
         const totals = await recalculateInvoiceTotals(
           tx,
           scope,
@@ -311,7 +316,7 @@ const createInvoiceLine = createSafeHandler(
 
         await recordAuditEvent(tx, events);
 
-        return Result.ok({ id: line.id, totals: totals.value });
+        return Result.ok({ id: lineId, totals: totals.value });
       },
     );
 

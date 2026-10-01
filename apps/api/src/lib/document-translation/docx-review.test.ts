@@ -229,6 +229,32 @@ describe("DOCX final-view and comment handling", () => {
     expect(inspected[2]?.commentsXml).not.toContain("Original comment");
   });
 
+  test("rejects a comment anchor moved into a different document story", async () => {
+    const source = okValue(
+      await resolveDocxToFinal(docxFile(await createReviewedDocx())),
+    );
+    const sourceReviewer = await FolioDocxReviewer.fromBuffer(source.bytes);
+    const document = sourceReviewer.toDocument();
+    const anchoredParagraphs = document.package.document.content.filter(
+      (block) => block.type === "paragraph",
+    );
+    const reference = endnote(document, anchoredParagraphs);
+    document.package.document.content = [paragraph([run("Body"), reference])];
+    const moved = docxFile(await createDocx(document));
+    const movedReviewer = await FolioDocxReviewer.fromBuffer(moved.bytes);
+    expect(sourceReviewer.getComments().at(0)?.story?.type).toBe("main");
+    expect(movedReviewer.getComments().at(0)?.story?.type).toBe("endnote");
+    const result = await applyDocxCommentPolicy({
+      source,
+      output: moved,
+      policy: "translated",
+      translations: new Map([[10, "Translated comment"]]),
+    });
+    expect(result.isErr() && result.error.message).toBe(
+      "The translated document changed comment metadata or threading",
+    );
+  });
+
   test("preserves threaded and resolved comment metadata for every policy", async () => {
     const { replyId, source } = await createThreadedReviewedDocx();
     const sourceArchive = await loadDocxArchive(source);

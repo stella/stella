@@ -13,7 +13,11 @@ const config = {
   description:
     "Delete one personal cross-matter view. This does not delete its records or proposals.",
   permissions: { view: ["delete"] },
-  mcp: { type: "capability", reason: "workspace_schema" },
+  mcp: {
+    type: "capability",
+    reason: "workspace_schema",
+    consumesServices: false,
+  },
   params: entityViewParams,
 } satisfies HandlerConfig;
 

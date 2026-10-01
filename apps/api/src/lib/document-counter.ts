@@ -13,6 +13,7 @@ import {
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toDocumentReference } from "@/api/lib/document-reference";
+import { logger } from "@/api/lib/observability/logger";
 
 export type EntityStamp = {
   docSequence: number;
@@ -29,17 +30,14 @@ type AllocateEntityStampsOptions = {
 /**
  * Allocate a run of document sequence numbers and their frozen stamps.
  *
- * The first allocation under a reference claims it in
- * `document_reference_counters`, recording this workspace as its owner. That
- * claim is the user-facing rule: the matter update refuses to move a claimed
- * reference to a different matter, so a printed stamp names one matter for
- * good.
+ * The ledger retains the reference's owner and high-water mark. An unissued
+ * reference or one whose owner was deleted can be claimed by the allocating
+ * matter; an existing live owner is preserved.
  *
- * The `GREATEST` floor below is the backstop, not the rule. A sequence number
- * never repeats inside a workspace because `document_counters` only moves
+ * A sequence number never repeats inside a workspace because
+ * `document_counters` only moves
  * forward; flooring it at the reference's own high-water mark means a stamp
- * string cannot repeat under one reference either, even if some future path
- * writes a reference the refusal never saw.
+ * string cannot repeat under one reference either.
  *
  * Lock order is always the reference ledger row first, then the workspace
  * counter row. Callers reach this function with the `workspaces` rows already
@@ -90,7 +88,7 @@ export const allocateEntityStamps = async ({
           documentReferenceCounters.reference,
         ],
         set: { workspaceId: sql`excluded.workspace_id` },
-        setWhere: eq(documentReferenceCounters.lastValue, 0),
+        setWhere: sql`${documentReferenceCounters.workspaceId} IS NULL OR ${documentReferenceCounters.lastValue} = 0`,
       });
 
     const ledgerRows = await tx
@@ -112,8 +110,16 @@ export const allocateEntityStamps = async ({
       // transaction; a missing row here would mean it was deleted under us.
       panic("Document reference ledger row disappeared during allocation");
     }
-    if (ledger.lastValue > 0 && ledger.workspaceId !== workspaceId) {
-      panic("Document stamp reference belongs to another workspace");
+    if (
+      ledger.lastValue > 0 &&
+      ledger.workspaceId !== null &&
+      ledger.workspaceId !== workspaceId
+    ) {
+      logger.warn("document_reference.shared_numbering", {
+        "organization.id": organizationId,
+        "workspace.id": workspaceId,
+        "workspace.owner_id": ledger.workspaceId,
+      });
     }
     referenceFloor = ledger.lastValue;
   }
@@ -232,20 +238,17 @@ export const recordEntityStamps = async ({
     }
     const key = JSON.stringify([organizationId, reference]);
     const existing = ledgerValues.get(key);
-    if (existing && existing.workspaceId !== workspaceId) {
-      panic("Document stamp reference belongs to another workspace");
-    }
     if (!existing || lastValue > existing.lastValue) {
       ledgerValues.set(key, {
         id: existing?.id ?? createSafeId<"documentReferenceCounter">(),
         organizationId,
         reference,
-        workspaceId,
+        workspaceId: existing?.workspaceId ?? workspaceId,
         lastValue,
       });
     }
   }
-  const rows = await tx
+  await tx
     .insert(documentReferenceCounters)
     .values(
       [...ledgerValues.values()].toSorted(
@@ -261,12 +264,7 @@ export const recordEntityStamps = async ({
       ],
       set: {
         lastValue: sql`GREATEST(${documentReferenceCounters.lastValue}, excluded.last_value)`,
-        workspaceId: sql`excluded.workspace_id`,
+        workspaceId: sql`COALESCE(${documentReferenceCounters.workspaceId}, excluded.workspace_id)`,
       },
-      setWhere: sql`${documentReferenceCounters.workspaceId} = excluded.workspace_id OR ${documentReferenceCounters.lastValue} = 0`,
-    })
-    .returning({ id: documentReferenceCounters.id });
-  if (rows.length !== ledgerValues.size) {
-    panic("Document stamp reference belongs to another workspace");
-  }
+    });
 };

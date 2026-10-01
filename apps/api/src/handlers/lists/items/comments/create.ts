@@ -27,7 +27,11 @@ const config = {
     "Add a comment to one list item. The comment is stored against the item " +
     "and shows up in its activity trail.",
   permissions: { entity: ["update"] },
-  mcp: { type: "capability", reason: "workspace_schema" },
+  mcp: {
+    type: "capability",
+    reason: "workspace_schema",
+    consumesServices: false,
+  },
   body: bodySchema,
 } satisfies WorkspaceHandlerConfig;
 

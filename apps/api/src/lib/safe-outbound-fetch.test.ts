@@ -6,6 +6,7 @@ import type { RequestListener } from "node:http";
 import {
   fetchStreamWithResolvedAddress,
   fetchWithResolvedAddress,
+  OUTBOUND_IPV6_POLICY,
   parseSafeOutboundUrl,
   validateOutboundFetchTarget,
 } from "@/api/lib/safe-outbound-fetch";
@@ -425,6 +426,62 @@ describe("parseSafeOutboundUrl", () => {
     expect(Result.isError(parseSafeOutboundUrl("https://[100::1]/v1"))).toBe(
       true,
     );
+  });
+
+  test("applies the IPv6 address policy", () => {
+    const policyForAddress = (address: bigint) =>
+      OUTBOUND_IPV6_POLICY.filter(
+        ({ prefix, length }) =>
+          address >= prefix && address < prefix + 2n ** BigInt(128 - length),
+      )
+        .toSorted((left, right) => right.length - left.length)
+        .at(0);
+    const urlForAddress = (address: bigint): string => {
+      const hexadecimal = address.toString(16).padStart(32, "0");
+      const host = Array.from({ length: 8 }, (_, index) =>
+        hexadecimal.slice(index * 4, index * 4 + 4),
+      ).join(":");
+      return `https://[${host}]/`;
+    };
+
+    for (const { prefix, length, verdict } of OUTBOUND_IPV6_POLICY) {
+      if (verdict !== "block" && verdict !== "allow") {
+        continue;
+      }
+      const size = 2n ** BigInt(128 - length);
+      const addresses = new Set([
+        prefix - 1n,
+        prefix,
+        prefix + 1n,
+        prefix + size - 1n,
+        prefix + size,
+      ]);
+      let checked = 0;
+      for (const address of addresses) {
+        if (address < 0n || address >= 2n ** 128n) {
+          continue;
+        }
+        const effective = policyForAddress(address);
+        if (
+          effective !== undefined &&
+          effective.verdict !== "block" &&
+          effective.verdict !== "allow"
+        ) {
+          continue;
+        }
+        expect(Result.isOk(parseSafeOutboundUrl(urlForAddress(address)))).toBe(
+          effective === undefined || effective.verdict === "allow",
+        );
+        checked += 1;
+      }
+      expect(checked).toBeGreaterThan(0);
+    }
+
+    for (const host of ["100:0:0:2::", "2001:200::", "3fff:1000::"]) {
+      expect(Result.isOk(parseSafeOutboundUrl(`https://[${host}]/`))).toBe(
+        true,
+      );
+    }
   });
 
   test("does not over-block IPv6 hextets shorter than four hex digits", () => {

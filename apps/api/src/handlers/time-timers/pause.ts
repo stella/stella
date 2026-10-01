@@ -9,7 +9,7 @@ const config = {
   description:
     "Pause your timer without creating a time entry. Pausing an already paused timer leaves its elapsed time unchanged.",
   permissions: { timeEntry: ["update"] },
-  mcp: { type: "capability", reason: "billing_admin" },
+  mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   params: timerParams,
 } satisfies HandlerConfig;
 

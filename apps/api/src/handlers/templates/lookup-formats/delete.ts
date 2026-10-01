@@ -12,7 +12,11 @@ const config = {
   description:
     "Delete a shared company specification format from the active organization.",
   permissions: { template: ["delete"] },
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  mcp: {
+    type: "capability",
+    reason: "template_authoring_ui",
+    consumesServices: false,
+  },
   params: t.Object({ formatId: tSafeId("templateLookupFormat") }),
 } satisfies HandlerConfig;
 

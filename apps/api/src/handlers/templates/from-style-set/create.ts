@@ -70,7 +70,11 @@ const config = {
     "no fields until a document is saved onto it.",
   permissions: { template: ["create"], styleSet: ["use"] },
   access: "write",
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  mcp: {
+    type: "capability",
+    reason: "template_authoring_ui",
+    consumesServices: false,
+  },
   body: bodySchema,
 } satisfies HandlerConfig;
 

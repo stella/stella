@@ -3,7 +3,6 @@ import { useCallback, useRef, useState } from "react";
 import Bold from "@tiptap/extension-bold";
 import Document from "@tiptap/extension-document";
 import Heading from "@tiptap/extension-heading";
-import History from "@tiptap/extension-history";
 import Italic from "@tiptap/extension-italic";
 import {
   BulletList,
@@ -12,12 +11,12 @@ import {
   OrderedList,
 } from "@tiptap/extension-list";
 import Paragraph from "@tiptap/extension-paragraph";
-import Placeholder from "@tiptap/extension-placeholder";
 import Text from "@tiptap/extension-text";
+import { Placeholder, UndoRedo } from "@tiptap/extensions";
+import type { Command as PMCommand } from "@tiptap/pm/state";
 import type { EditorProps } from "@tiptap/pm/view";
 import { EditorContent, useEditor } from "@tiptap/react";
 import type { Editor } from "@tiptap/react";
-import type { Command as PMCommand } from "prosemirror-state";
 import { useTranslations } from "use-intl";
 
 import {
@@ -216,7 +215,7 @@ export const ClauseEditor = ({
     ClauseDirectiveNode,
     InsertionMark,
     DeletionMark,
-    History,
+    UndoRedo,
     Placeholder.configure({
       placeholder: () => getPlaceholder(),
     }),

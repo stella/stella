@@ -8,7 +8,14 @@
  */
 
 import { panic, Result } from "better-result";
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import {
+  afterAll,
+  beforeAll,
+  describe,
+  expect,
+  expectTypeOf,
+  test,
+} from "bun:test";
 import { eq } from "drizzle-orm";
 import JSZip from "jszip";
 
@@ -64,7 +71,6 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 // bytes nor an object with the same public members satisfies it (the class
 // carries an ES private field), so the only way in is a scan or a stored read.
 
-type Assert<T extends true> = T;
 type AllTrue<T extends readonly boolean[]> = T[number] extends true
   ? true
   : false;
@@ -86,7 +92,7 @@ type RefusesRawBytes<Input> = [Buffer] extends [Input]
 
 type FirstInput<F extends (...args: never[]) => unknown> = Parameters<F>[0];
 
-export type TemplateParsersRefuseRawBytes = Assert<
+expectTypeOf<
   AllTrue<
     [
       RefusesRawBytes<FirstInput<typeof discoverTemplate>>,
@@ -104,7 +110,7 @@ export type TemplateParsersRefuseRawBytes = Assert<
       RefusesRawBytes<FillTemplateSource["file"]>,
     ]
   >
->;
+>().toEqualTypeOf<true>();
 
 // ── Runtime ──────────────────────────────────────────────
 
