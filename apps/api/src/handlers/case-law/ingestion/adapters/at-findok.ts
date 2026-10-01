@@ -34,6 +34,7 @@ import {
   fetchAtFindokWithRetry,
   FINDOK_REQUEST_INTERVAL_MS,
 } from "@/api/handlers/case-law/ingestion/adapters/at-findok-throttle";
+import { validatePublisherPage } from "@/api/handlers/case-law/ingestion/adapters/publisher-page";
 import type { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   adapterCatch,
@@ -401,10 +402,33 @@ const createManifestLoader = (
       MAX_MANIFEST_BYTES,
     );
     const bytes = await decompressGzipIfNeeded(responseBytes);
-    const manifest = parseFindokManifest(
-      collection,
-      new TextDecoder().decode(bytes),
-    );
+    const text = new TextDecoder().decode(bytes);
+    const pageHeaders = new Headers(response.headers);
+    // Compression describes the transport, not the decoded page contract.
+    const mime = pageHeaders
+      .get("content-type")
+      ?.split(";")
+      .at(0)
+      ?.trim()
+      .toLowerCase();
+    if (mime === "application/gzip" || mime === "application/x-gzip") {
+      pageHeaders.delete("content-type");
+    }
+    validatePublisherPage({
+      body: text,
+      headers: pageHeaders,
+      adapterKey: ADAPTER_KEYS.AT_FINDOK,
+      cursor: null,
+      expectation: {
+        kind: "json",
+        minBytes: 2,
+        shape: (value) =>
+          isRecord(value) &&
+          Array.isArray(value["data"]) &&
+          optionalString(value["generierungsdatum"]) !== undefined,
+      },
+    });
+    const manifest = parseFindokManifest(collection, text);
     cache.set(collection, {
       checkedAt: dependencies.now().getTime(),
       manifest,
@@ -695,6 +719,13 @@ const buildDecision = async ({
     });
   }
   const compressed = await readStreamBounded(response.body, MAX_ARCHIVE_BYTES);
+  validatePublisherPage({
+    body: compressed,
+    headers: response.headers,
+    adapterKey: ADAPTER_KEYS.AT_FINDOK,
+    cursor,
+    expectation: { kind: "zip", minBytes: 22 },
+  });
   const archive = await loadDocxArchive(compressed, {
     maxEntries: 20,
     maxEntryBytes: MAX_XML_BYTES,
@@ -709,6 +740,17 @@ const buildDecision = async ({
       cursor,
     });
   }
+  validatePublisherPage({
+    body: xml,
+    adapterKey: ADAPTER_KEYS.AT_FINDOK,
+    cursor,
+    expectation: {
+      kind: "xml",
+      minBytes: 3,
+      shape: (value) =>
+        typeof value === "string" && /<Segmente(?:\s|>)/u.test(value),
+    },
+  });
   // The same archive carries the decision's headnotes as a second entry. It
   // is already paid for by the request above, and its element names are not
   // the ones the decision text uses, which is why reading it is a step of its

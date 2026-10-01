@@ -11,6 +11,8 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/at-findok";
 import { loadDocxArchive } from "@/api/lib/docx-archive";
 
+import { PublisherPageError } from "./publisher-page";
+
 const DOCUMENT_ID = "b68202a0-55e4-4dea-9e93-971f0b71ae32";
 const MANIFEST_ITEM = {
   stammNr: 152_257,
@@ -54,6 +56,83 @@ const reconciliationOf = (adapter: ReturnType<typeof createAtFindokAdapter>) =>
   adapter.reconciliation;
 
 describe("Austrian Findok adapter", () => {
+  for (const fixture of [
+    { name: "HTML challenge", body: "<html><form><input></form></html>" },
+    { name: "empty JSON", body: "{}" },
+    { name: "missing timestamp", body: '{"data":[]}' },
+    { name: "truncated manifest", body: '{"data":[' },
+    { name: "empty manifest bytes", body: "" },
+  ]) {
+    it(`rejects a 200 ${fixture.name} before advancing the listing`, async () => {
+      const adapter = createAtFindokAdapter({
+        now: () => new Date("2026-08-12T00:00:00Z"),
+        request: async () => new Response(fixture.body),
+        sleep: async () => {},
+      });
+      const result = await adapter.fetchPage(null, {});
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error).toBeInstanceOf(PublisherPageError);
+      }
+    });
+  }
+  for (const fixture of [
+    { name: "HTML challenge", body: "<html><script></script></html>" },
+    { name: "empty JSON", body: "{}" },
+    { name: "missing archive field", body: '{"data":[]}' },
+    { name: "truncated ZIP", body: new Uint8Array([0x50, 0x4b, 3, 4]) },
+  ]) {
+    it(`rejects a 200 ${fixture.name} document before advancing the page`, async () => {
+      let requests = 0;
+      const adapter = createAtFindokAdapter({
+        now: () => new Date("2026-08-12T00:00:00Z"),
+        request: async () =>
+          ++requests === 1 ? manifestResponse() : new Response(fixture.body),
+        sleep: async () => {},
+      });
+      const result = await adapter.fetchPage(null, {});
+      expect(requests).toBe(2);
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error).toBeInstanceOf(PublisherPageError);
+      }
+    });
+  }
+  it("accepts a small manifest with its required envelope and no active rows", async () => {
+    const adapter = createAtFindokAdapter({
+      now: () => new Date("2026-08-12T00:00:00Z"),
+      request: async () => manifestResponse([]),
+      sleep: async () => {},
+    });
+    const page = (await adapter.fetchPage(null, {})).unwrap();
+    expect(page.decisions).toEqual([]);
+    expect(page.nextCursor).not.toBeNull();
+  });
+  for (const xml of [
+    "<html><form></form></html>",
+    "<root/>",
+    "<Segmente><Segment></Segmente>",
+    "<Segmente><Segment>",
+  ]) {
+    it(`rejects malformed or unexpected decision XML ${xml}`, async () => {
+      const zip = new JSZip();
+      zip.file("Gesamt/152257.Entscheidungstext.xml", xml);
+      const bytes = await zip.generateAsync({ type: "uint8array" });
+      let requests = 0;
+      const adapter = createAtFindokAdapter({
+        now: () => new Date("2026-08-12T00:00:00Z"),
+        request: async () =>
+          ++requests === 1 ? manifestResponse() : new Response(bytes),
+        sleep: async () => {},
+      });
+      const result = await adapter.fetchPage(null, {});
+      expect(requests).toBe(2);
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error).toBeInstanceOf(PublisherPageError);
+      }
+    });
+  }
   it("walks the UFS to BFG successor chain in lexical order", () => {
     expect(atFindokNextSlice("2012-ufs")).toBe("2013-ufs");
     expect(atFindokNextSlice("2013-ufs")).toBe("2014-bfg");

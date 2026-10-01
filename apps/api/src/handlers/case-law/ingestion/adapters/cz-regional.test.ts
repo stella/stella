@@ -45,6 +45,8 @@ import {
 } from "@/api/tests/helpers/recording-telemetry";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
+import { PublisherPageError } from "./publisher-page";
+
 const FIXTURES = new URL("__fixtures__/", import.meta.url);
 
 const readFixture = async (name: string): Promise<string> =>
@@ -605,6 +607,62 @@ describe("the crawl keeps a refused row as its listing", () => {
     mock.restore();
   });
 
+  for (const fixture of [
+    { name: "HTML challenge", body: "<html><form><input></form></html>" },
+    { name: "empty JSON", body: "{}" },
+    { name: "missing items field", body: '{"totalPages":0}' },
+    { name: "truncated JSON", body: '{"items":[' },
+    { name: "empty bytes", body: "" },
+  ]) {
+    test(`rejects a 200 ${fixture.name} listing with its typed page failure`, async () => {
+      globalThis.fetch = asFetchMock(async () => new Response(fixture.body));
+      const result = await czRegionalAdapter.fetchPage("2025-06-11:0", {});
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error).toBeInstanceOf(PublisherPageError);
+      }
+    });
+    test(`rejects a 200 ${fixture.name} document with its typed page failure`, async () => {
+      const item = await itemByDocket(LISTING, DISTRICT_DOCKET);
+      const listing = JSON.stringify({
+        items: [item],
+        totalPages: 1,
+        pageNumber: 0,
+      });
+      let requests = 0;
+      globalThis.fetch = asFetchMock(
+        async () => new Response(++requests === 1 ? listing : fixture.body),
+      );
+      const result = await czRegionalAdapter.fetchPage("2025-06-11:0", {});
+      expect(requests).toBe(2);
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error).toBeInstanceOf(PublisherPageError);
+      }
+    });
+  }
+  test("accepts a small valid empty listing", async () => {
+    globalThis.fetch = asFetchMock(async () => new Response('{"items":[]}'));
+    const result = await czRegionalAdapter.fetchPage("2025-06-11:0", {});
+    expect(result.unwrap().decisions).toEqual([]);
+  });
+  test("accepts a small valid document with its publisher identifier", async () => {
+    const item = await itemByDocket(LISTING, DISTRICT_DOCKET);
+    const listing = JSON.stringify({ items: [item], totalPages: 1 });
+    let requests = 0;
+    globalThis.fetch = asFetchMock(
+      async () =>
+        new Response(
+          ++requests === 1
+            ? listing
+            : JSON.stringify({ uuid: "499830de-0000-4000-8000-a32aab555555" }),
+        ),
+    );
+    const result = await czRegionalAdapter.fetchPage("2025-06-11:0", {});
+    expect(requests).toBe(2);
+    expect(result.unwrap().decisions).toHaveLength(1);
+  });
+
   /** Crawl one day page whose district document carries `districtMetadata`. */
   const crawlDay = async ({
     cursor,
@@ -651,6 +709,10 @@ describe("the crawl keeps a refused row as its listing", () => {
     });
 
     const decisions = page.unwrap().decisions;
+    expect(page.unwrap().itemBuildFailures).toEqual({
+      type: "item_build_failed",
+      count: 1,
+    });
     expect(
       decisions.map(({ caseNumber, isListingOnly }) => ({
         caseNumber,
