@@ -122,6 +122,42 @@ const ORIGINAL_REQUESTS = {
 >;
 
 describe("provider request policy", () => {
+  test("requires a configured Bedrock organization credential", () => {
+    const previousMock = env.USE_MOCK_AI;
+    const previousKey = env.BEDROCK_API_KEY;
+    env.BEDROCK_API_KEY = "test-instance-key";
+    try {
+      for (const mockMode of [false, true]) {
+        env.USE_MOCK_AI = mockMode;
+        for (const apiKey of ["", " ", "\t\n "]) {
+          for (const dataClass of ["customer", "public_corpus"] as const) {
+            const resolved = Result.try({
+              try: () =>
+                createTanStackTextAdapterFactory({
+                  provider: "bedrock",
+                  apiKey,
+                  dataClass,
+                }),
+              catch: (error) => error,
+            });
+            expect(Result.isError(resolved)).toBe(true);
+            if (Result.isError(resolved)) {
+              expect(HandlerError.is(resolved.error)).toBe(true);
+              expect(resolved.error).toMatchObject({
+                status: 403,
+                message:
+                  'BEDROCK_API_KEY is required for TanStack AI provider "bedrock".',
+              });
+            }
+          }
+        }
+      }
+    } finally {
+      env.USE_MOCK_AI = previousMock;
+      env.BEDROCK_API_KEY = previousKey;
+    }
+  });
+
   test("every provider declares its request policy", () => {
     expect(Object.keys(PROVIDER_DATA_POLICY.customer).toSorted()).toEqual(
       [

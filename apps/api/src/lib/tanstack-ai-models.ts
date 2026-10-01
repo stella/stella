@@ -790,6 +790,14 @@ const createExtendedBedrockAdapter = (
 export const createTanStackTextAdapterFactory = (
   options: TanStackModelFactoryOptions,
 ): TanStackTextAdapterFactory => {
+  if (
+    options.provider === "bedrock" &&
+    options.apiKey !== undefined &&
+    options.apiKey.trim().length === 0
+  ) {
+    throw missingProviderCredentialError(options.provider, "BEDROCK_API_KEY");
+  }
+
   const stopReasons = TANSTACK_AI_PROVIDERS.find(
     (provider) => provider === options.provider,
   );
