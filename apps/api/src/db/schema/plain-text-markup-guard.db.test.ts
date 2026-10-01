@@ -1,10 +1,10 @@
 import { panic, Result } from "better-result";
-import type { SQL } from "bun";
+import type { TransactionSQL } from "bun";
 import { describe, expect, test } from "bun:test";
 import { getTableColumns, getTableName } from "drizzle-orm";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
 
 import {
   caseLawCitations,
@@ -45,13 +45,28 @@ const tables = [
   legislationSearchDocuments,
 ];
 const bodyColumns = [
-  caseLawDecisions.fulltext,
-  caseLawDecisionSupplements.fulltext,
-  legislationDocuments.fulltext,
-  caseLawSearchDocuments.searchableText,
-  legislationSearchDocuments.searchableText,
-  caseLawSearchDocumentPreviewPassages.content,
-  caseLawProvisionCitations.sentenceText,
+  { table: caseLawDecisions, column: caseLawDecisions.fulltext },
+  {
+    table: caseLawDecisionSupplements,
+    column: caseLawDecisionSupplements.fulltext,
+  },
+  { table: legislationDocuments, column: legislationDocuments.fulltext },
+  {
+    table: caseLawSearchDocuments,
+    column: caseLawSearchDocuments.searchableText,
+  },
+  {
+    table: legislationSearchDocuments,
+    column: legislationSearchDocuments.searchableText,
+  },
+  {
+    table: caseLawSearchDocumentPreviewPassages,
+    column: caseLawSearchDocumentPreviewPassages.content,
+  },
+  {
+    table: caseLawProvisionCitations,
+    column: caseLawProvisionCitations.sentenceText,
+  },
 ];
 // Derive the test matrix from the migration's actual column-scoped triggers.
 // Bind every entry to the owning schema before constructing fixture tables.
@@ -119,9 +134,7 @@ const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 // A fresh schema per test contains production-named, schema-typed guarded
 // columns, without unrelated FKs/RLS. Install the unmodified shipped migration
 // after seeding legacy markup; all objects are removed before commit.
-const withFixture = async (
-  fn: (client: SQL.TransactionSQL) => Promise<void>,
-) => {
+const withFixture = async (fn: (client: TransactionSQL) => Promise<void>) => {
   if (!databaseUrl) {
     panic("DATABASE_URL required");
   }
@@ -145,8 +158,8 @@ const withFixture = async (
           `INSERT INTO "${tableName}" (fixture_id, ${columns.map(({ name }) => `"${name}"`).join(", ")}) VALUES (1, ${values.join(", ")})`,
         );
       }
-      for (const column of bodyColumns) {
-        const tableName = getTableName(column.table);
+      for (const { table, column } of bodyColumns) {
+        const tableName = getTableName(table);
         if (!guards.some((guard) => guard.tableName === tableName)) {
           await tx.unsafe(
             `CREATE TABLE "${tableName}" (fixture_id integer PRIMARY KEY)`,
@@ -172,7 +185,7 @@ const withFixture = async (
 // rather than a timeout or a broken fixture. Savepoints preserve the test's
 // transaction after each expected statement failure.
 type MarkupFailureOptions = {
-  client: SQL.TransactionSQL;
+  client: TransactionSQL;
   statement: string;
   column: string;
   value: string;
@@ -231,75 +244,83 @@ if (!runPostgresTests || !databaseUrl) {
       });
     });
 
-    test("blocks INSERT and changed-column UPDATE on every guarded text column", async () => {
-      await withFixture(async (client) => {
-        for (const { tableName, columns } of guards) {
-          for (const column of columns.filter(
-            ({ name }) => name !== "metadata",
-          )) {
-            const { name } = column;
-            const limit = Number(
-              column.getSQLType().match(/varchar\((\d+)\)/u)?.[1] ?? Infinity,
-            );
-            for (const value of BLOCK.filter(
-              (candidate) => candidate.length <= limit,
+    test(
+      "blocks INSERT and changed-column UPDATE on every guarded text column",
+      async () => {
+        await withFixture(async (client) => {
+          for (const { tableName, columns } of guards) {
+            for (const column of columns.filter(
+              ({ name }) => name !== "metadata",
             )) {
-              await expectMarkupFailure({
-                client,
-                statement: `INSERT INTO "${tableName}" (fixture_id, "${name}") VALUES (2, $1)`,
-                column: name,
-                value,
-              });
-              await expectMarkupFailure({
-                client,
-                statement: `UPDATE "${tableName}" SET "${name}" = $1 WHERE fixture_id = 1`,
-                column: name,
-                value: value === "<br/>" ? "<br>" : value,
-              });
+              const { name } = column;
+              const limit = Number(
+                column.getSQLType().match(/varchar\((\d+)\)/u)?.[1] ?? Infinity,
+              );
+              for (const value of BLOCK.filter(
+                (candidate) => candidate.length <= limit,
+              )) {
+                await expectMarkupFailure({
+                  client,
+                  statement: `INSERT INTO "${tableName}" (fixture_id, "${name}") VALUES (2, $1)`,
+                  column: name,
+                  value,
+                });
+                await expectMarkupFailure({
+                  client,
+                  statement: `UPDATE "${tableName}" SET "${name}" = $1 WHERE fixture_id = 1`,
+                  column: name,
+                  value: value === "<br/>" ? "<br>" : value,
+                });
+              }
             }
           }
-        }
-      });
-    }, 30_000);
+        });
+      },
+      propertyTestTimeout(30_000),
+    );
 
-    test("allows comparisons, nullable text, and multilingual values on insert and update", async () => {
-      await withFixture(async (client) => {
-        for (const { tableName, columns } of guards) {
-          // Repair legacy values first so updates may check only their target.
-          await client.unsafe(
-            `UPDATE "${tableName}" SET ${columns.map(({ name }) => `"${name}" = NULL`).join(", ")} WHERE fixture_id = 1`,
-          );
-          for (const column of columns.filter(
-            ({ name }) => name !== "metadata",
-          )) {
-            const { name } = column;
-            const limit = Number(
-              column.getSQLType().match(/varchar\((\d+)\)/u)?.[1] ?? Infinity,
+    test(
+      "allows comparisons, nullable text, and multilingual values on insert and update",
+      async () => {
+        await withFixture(async (client) => {
+          for (const { tableName, columns } of guards) {
+            // Repair legacy values first so updates may check only their target.
+            await client.unsafe(
+              `UPDATE "${tableName}" SET ${columns.map(({ name }) => `"${name}" = NULL`).join(", ")} WHERE fixture_id = 1`,
             );
-            for (const value of [
-              ...ALLOW.filter((candidate) => candidate.length <= limit),
-              null,
-            ]) {
-              await client.unsafe(
-                `INSERT INTO "${tableName}" (fixture_id, "${name}") VALUES (2, $1)`,
-                [value],
+            for (const column of columns.filter(
+              ({ name }) => name !== "metadata",
+            )) {
+              const { name } = column;
+              const limit = Number(
+                column.getSQLType().match(/varchar\((\d+)\)/u)?.[1] ?? Infinity,
               );
-              await client.unsafe(
-                `UPDATE "${tableName}" SET "${name}" = $1 WHERE fixture_id = 1`,
-                [value],
-              );
-              const rows = await client.unsafe(
-                `SELECT "${name}" AS value FROM "${tableName}" WHERE fixture_id = 1`,
-              );
-              expect(rows.at(0)?.value).toBe(value);
-              await client.unsafe(
-                `DELETE FROM "${tableName}" WHERE fixture_id = 2`,
-              );
+              for (const value of [
+                ...ALLOW.filter((candidate) => candidate.length <= limit),
+                null,
+              ]) {
+                await client.unsafe(
+                  `INSERT INTO "${tableName}" (fixture_id, "${name}") VALUES (2, $1)`,
+                  [value],
+                );
+                await client.unsafe(
+                  `UPDATE "${tableName}" SET "${name}" = $1 WHERE fixture_id = 1`,
+                  [value],
+                );
+                const rows = await client.unsafe(
+                  `SELECT "${name}" AS value FROM "${tableName}" WHERE fixture_id = 1`,
+                );
+                expect(rows.at(0)?.value).toBe(value);
+                await client.unsafe(
+                  `DELETE FROM "${tableName}" WHERE fixture_id = 2`,
+                );
+              }
             }
           }
-        }
-      });
-    }, 30_000);
+        });
+      },
+      propertyTestTimeout(30_000),
+    );
 
     test("permits unrelated and unchanged legacy updates, rejects new markup, and permits repair", async () => {
       await withFixture(async (client) => {
@@ -387,8 +408,8 @@ if (!runPostgresTests || !databaseUrl) {
 
     test("preserves literal angle-bracket prose in every body projection", async () => {
       await withFixture(async (client) => {
-        for (const column of bodyColumns) {
-          const tableName = getTableName(column.table);
+        for (const { table, column } of bodyColumns) {
+          const tableName = getTableName(table);
           expect(
             guards
               .find((guard) => guard.tableName === tableName)
@@ -415,77 +436,82 @@ if (!runPostgresTests || !databaseUrl) {
       });
     });
 
-    test("SQL predicate and sanitizer agree on generated text, HTML whitespace, and long legal text", async () => {
-      await withFixture(async (client) => {
-        const assertParity = async (values: string[]) => {
-          const rows =
-            await client`SELECT value, plain_text_has_markup(value) AS guarded, value ~ ${TAG_LIKE_MARKUP_SOURCE} AS contract FROM jsonb_array_elements_text(${JSON.stringify(values)}::text::jsonb) AS input(value)`;
-          expect(rows).toHaveLength(values.length);
-          for (const row of rows) {
-            expect(row.guarded).toBe(containsTagLikeMarkup(row.value));
-            expect(row.contract).toBe(row.guarded);
-          }
-        };
-        await assertParity([
-          ...BLOCK,
-          ...ALLOW,
-          `${"§ 5 právo. ".repeat(20_000)}<br/>`,
-          `${"§ 5 právo. ".repeat(20_000)}a < b`,
-        ]);
-        const whitespace = fc.constantFrom(
-          " ",
-          "\t",
-          "\n",
-          "\r",
-          "\f",
-          "\v",
-          "\u00a0",
-          "\ufeff",
-          "\u2003",
-        );
-        const text = fc.oneof(
-          fc.string().filter((value) => !value.includes("\0")),
-          fc
-            .tuple(
-              fc.constantFrom("<span", "</p", "<custom-tag"),
-              whitespace,
-              fc.constantFrom("class=x>", "/>", ">"),
-            )
-            .map(
-              ([prefix, separator, suffix]) => `${prefix}${separator}${suffix}`,
-            ),
-          fc
-            .array(
-              fc.constantFrom(
-                "<",
-                ">",
-                "/",
-                "!",
-                "?",
-                "[",
-                "]",
-                "a",
-                "Z",
-                "-",
-                ":",
-                " ",
-                "\n",
-                "č",
-                '"',
-                "'",
+    test(
+      "SQL predicate and sanitizer agree on generated text, HTML whitespace, and long legal text",
+      async () => {
+        await withFixture(async (client) => {
+          const assertParity = async (values: string[]) => {
+            const rows =
+              await client`SELECT value, plain_text_has_markup(value) AS guarded, value ~ ${TAG_LIKE_MARKUP_SOURCE} AS contract FROM jsonb_array_elements_text(${JSON.stringify(values)}::text::jsonb) AS input(value)`;
+            expect(rows).toHaveLength(values.length);
+            for (const row of rows) {
+              expect(row.guarded).toBe(containsTagLikeMarkup(row.value));
+              expect(row.contract).toBe(row.guarded);
+            }
+          };
+          await assertParity([
+            ...BLOCK,
+            ...ALLOW,
+            `${"§ 5 právo. ".repeat(20_000)}<br/>`,
+            `${"§ 5 právo. ".repeat(20_000)}a < b`,
+          ]);
+          const whitespace = fc.constantFrom(
+            " ",
+            "\t",
+            "\n",
+            "\r",
+            "\f",
+            "\v",
+            "\u00a0",
+            "\ufeff",
+            "\u2003",
+          );
+          const text = fc.oneof(
+            fc.string().filter((value) => !value.includes("\0")),
+            fc
+              .tuple(
+                fc.constantFrom("<span", "</p", "<custom-tag"),
+                whitespace,
+                fc.constantFrom("class=x>", "/>", ">"),
+              )
+              .map(
+                ([prefix, separator, suffix]) =>
+                  `${prefix}${separator}${suffix}`,
               ),
-              { maxLength: 150 },
-            )
-            .map((characters) => characters.join("")),
-        );
-        await fc.assert(
-          fc.asyncProperty(
-            fc.array(text, { minLength: 1, maxLength: 40 }),
-            assertParity,
-          ),
-          propertyConfig({ numRuns: 100, seed: 20_261_001 }),
-        );
-      });
-    }, 30_000);
+            fc
+              .array(
+                fc.constantFrom(
+                  "<",
+                  ">",
+                  "/",
+                  "!",
+                  "?",
+                  "[",
+                  "]",
+                  "a",
+                  "Z",
+                  "-",
+                  ":",
+                  " ",
+                  "\n",
+                  "č",
+                  '"',
+                  "'",
+                ),
+                { maxLength: 150 },
+              )
+              .map((characters) => characters.join("")),
+          );
+          await fc.assert(
+            fc.asyncProperty(
+              fc.array(text, { minLength: 1, maxLength: 40 }),
+              assertParity,
+            ),
+            propertyConfig({ numRuns: 100, seed: 20_261_001 }),
+          );
+        });
+      },
+      propertyTestTimeout(30_000),
+    );
   });
 }

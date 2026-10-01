@@ -1,9 +1,9 @@
-SET lock_timeout = '5s';
-SET statement_timeout = '30s';
 -- requires: 20261003120300_legislation_work_names
 -- requires: 20261002120400_case_law_decision_court_id
 -- requires: 20260926160000_case_law_provision_extraction_state
 -- requires: 20260924100000_case_law_decision_supplements
+SET lock_timeout = '5s';
+SET statement_timeout = '30s';
 
 -- New and changed plain-text values only: CHECK NOT VALID would also reject
 -- unrelated updates of legacy rows. No validation scan or table rewrite.
