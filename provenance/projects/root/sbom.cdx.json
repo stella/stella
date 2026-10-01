@@ -2121,6 +2121,12 @@
             "location": "apps/web/src/routes/_protected.settings/-components/organization/profile-card.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/seller-profile-form.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/seller-profiles-card.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/time-policy-card.tsx#1"
           },
           {
@@ -5904,6 +5910,12 @@
             "location": "apps/web/src/routes/_protected.settings/-components/organization/profile-card.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/seller-profile-form.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/seller-profiles-card.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/time-policy-card.tsx#1"
           },
           {
@@ -7929,6 +7941,66 @@
     {
       "authors": [
         {
+          "name": "Jake Teton-Landis (https://jake.tl)"
+        }
+      ],
+      "bom-ref": "pkg:npm/@jitl/quickjs-wasmfile-release-asyncify@0.32.0",
+      "description": "Variant of quickjs library: Variant with separate .WASM file. Supports browser ESM, NodeJS ESM, and NodeJS CommonJS.",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "apps/api/node_modules/@jitl/quickjs-wasmfile-release-asyncify/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "apps/api/node_modules/@jitl/quickjs-wasmfile-release-asyncify/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/api/src/lib/quickjs-runtime.ts#1"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/justjake/quickjs-emscripten"
+        }
+      ],
+      "group": "@jitl",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "quickjs-wasmfile-release-asyncify",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@jitl/quickjs-wasmfile-release-asyncify/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "apps/api/node_modules/@jitl/quickjs-wasmfile-release-asyncify/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40jitl/quickjs-wasmfile-release-asyncify@0.32.0",
+      "scope": "required",
+      "type": "library",
+      "version": "0.32.0"
+    },
+    {
+      "authors": [
+        {
           "name": "Lucas Smith"
         }
       ],
@@ -9160,6 +9232,9 @@
             "location": "apps/api/src/handlers/properties/preview.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/reports/views/export-input.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/case-law/research-answers.ts#1"
           },
           {
@@ -9175,7 +9250,7 @@
             "location": "apps/api/scripts/exact-mirror-guard.ts#34"
           },
           {
-            "location": "apps/api/scripts/export-capability-catalog.ts#37"
+            "location": "apps/api/scripts/export-capability-catalog.ts#1"
           },
           {
             "location": "apps/api/src/handlers/case-law/decisions/search-schema.ts#1"
@@ -10048,7 +10123,7 @@
             "location": "apps/web/src/features/chat/lib/build-chat-request-message.ts#1"
           },
           {
-            "location": "apps/web/src/generated/api-routes.gen.ts#12"
+            "location": "apps/web/src/generated/api-routes.gen.ts#13"
           },
           {
             "location": "apps/web/src/components/ai-elements/message.tsx#6"
@@ -10761,6 +10836,12 @@
             "location": "apps/api/src/dev/register-mock-ai.ts#9"
           },
           {
+            "location": "apps/api/src/handlers/chat/attempt-answer.ts#9"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/attempt-answer.ts#10"
+          },
+          {
             "location": "apps/api/src/handlers/chat/chat-message-parts.ts#1"
           },
           {
@@ -10998,7 +11079,7 @@
             "location": "apps/web/src/features/chat/chat-snapshot-history.ts#2"
           },
           {
-            "location": "apps/web/src/generated/api-routes.gen.ts#11"
+            "location": "apps/web/src/generated/api-routes.gen.ts#12"
           },
           {
             "location": "packages/agent-engine/scripts/canary-harness-protocol.ts#2"
@@ -11192,6 +11273,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/profile-card.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/seller-profile-form.tsx#3"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/time-policy-card.tsx#3"
@@ -11819,6 +11903,9 @@
           },
           {
             "location": "apps/web/src/lib/organization/queries.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/organization/seller-profiles.ts#1"
           },
           {
             "location": "apps/web/src/lib/pdf/hooks/use-pdf-document.ts#1"
@@ -12659,6 +12746,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/prompt-caching-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/seller-profiles-card.tsx#3"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/time-policy-card.tsx#4"
@@ -13585,6 +13675,9 @@
             "location": "apps/web/src/routes/_protected.settings/organization.audit-logs.tsx#4"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/organization.billing.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/organization.catalogue.tsx#1"
           },
           {
@@ -13609,7 +13702,7 @@
             "location": "apps/web/src/routes/_protected.settings/organization.usage.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/route.tsx#2"
+            "location": "apps/web/src/routes/_protected.settings/route.tsx#7"
           },
           {
             "location": "apps/web/src/routes/_protected.time.tsx#2"
@@ -13811,6 +13904,9 @@
           },
           {
             "location": "apps/web/src/routes/knowledge/templates_.catalogue.$packId.$templateId.tsx#2"
+          },
+          {
+            "location": "apps/web/src/routes/knowledge/templates_.catalogue.index.tsx#1"
           },
           {
             "location": "apps/web/src/routes/knowledge/templates_.catalogue.tsx#1"
@@ -16479,6 +16575,12 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/profile-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/seller-profile-form.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/seller-profiles-card.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/time-policy-card.tsx#1"
@@ -20248,6 +20350,12 @@
             "location": "apps/web/src/routes/_protected.settings/-components/organization/profile-card.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/seller-profile-form.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/seller-profiles-card.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/time-policy-card.tsx#1"
           },
           {
@@ -21982,7 +22090,7 @@
             "location": "apps/api/scripts/exact-mirror-guard.ts#35"
           },
           {
-            "location": "apps/api/scripts/export-capability-catalog.ts#38"
+            "location": "apps/api/scripts/export-capability-catalog.ts#37"
           },
           {
             "location": "apps/api/scripts/export-mcp-tool-registry.ts#18"
@@ -22147,6 +22255,9 @@
             "location": "apps/api/src/handlers/agent-auth/identity.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/agent-auth/read-manifest.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/agent-auth/token.ts#1"
           },
           {
@@ -22181,6 +22292,9 @@
           },
           {
             "location": "apps/api/src/handlers/auth/metadata.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/auth/read-authorization-server-metadata.ts#1"
           },
           {
             "location": "apps/api/src/handlers/bilingual-translations/create-run.ts#8"
@@ -22673,6 +22787,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/attachment-validation.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/attempt-answer.ts#11"
           },
           {
             "location": "apps/api/src/handlers/chat/chat-execution-admission.ts#1"
@@ -23644,6 +23761,9 @@
             "location": "apps/api/src/handlers/lists/verifications/list.ts#11"
           },
           {
+            "location": "apps/api/src/handlers/mcp/read-discovery-metadata.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/mcp-connectors/connect.ts#1"
           },
           {
@@ -23675,6 +23795,9 @@
           },
           {
             "location": "apps/api/src/handlers/mcp-connectors/probe.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/read-client-metadata.ts#1"
           },
           {
             "location": "apps/api/src/handlers/mcp-connectors/update-connection.ts#1"
@@ -23951,6 +24074,9 @@
           },
           {
             "location": "apps/api/src/handlers/reports/templates/list.ts#11"
+          },
+          {
+            "location": "apps/api/src/handlers/reports/views/export-input.ts#2"
           },
           {
             "location": "apps/api/src/handlers/reports/views/export.ts#17"
@@ -25927,6 +26053,9 @@
             "location": "apps/api/src/lib/search/extract-content.ts#12"
           },
           {
+            "location": "apps/api/src/lib/search/extraction-worker.ts#21"
+          },
+          {
             "location": "apps/api/src/lib/search/highlight.ts#1"
           },
           {
@@ -26479,7 +26608,7 @@
             "location": "apps/api/src/scripts/polarity-system-one-compare.ts#1"
           },
           {
-            "location": "apps/api/src/scripts/post-deploy-response-policy.ts#32"
+            "location": "apps/api/src/scripts/post-deploy-response-policy.ts#31"
           },
           {
             "location": "apps/api/src/scripts/post-deploy-smoke-chat.ts#23"
@@ -27136,6 +27265,9 @@
             "location": "apps/web/src/lib/knowledge/queries.ts#2"
           },
           {
+            "location": "apps/web/src/lib/organization/seller-profiles.ts#2"
+          },
+          {
             "location": "apps/web/src/lib/organization/utils.ts#1"
           },
           {
@@ -27659,6 +27791,9 @@
           },
           {
             "location": "packages/money/src/index.ts#22"
+          },
+          {
+            "location": "packages/redis-config/src/connection.ts#1"
           },
           {
             "location": "packages/runtime-mode/src/index.ts#1"
@@ -28423,6 +28558,9 @@
             "location": "apps/web/src/routes/_protected.settings/-components/organization/ai-config-card.tsx#5"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/seller-profiles-card.tsx#4"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/organization.audit-logs.tsx#5"
           },
           {
@@ -29046,10 +29184,10 @@
             "location": "apps/api/src/lib/markdown/html-to-markdown.ts#1"
           },
           {
-            "location": "apps/api/src/lib/search/extraction-worker.ts#21"
+            "location": "apps/api/src/lib/search/extraction-worker.ts#22"
           },
           {
-            "location": "apps/api/src/scripts/post-deploy-response-policy.ts#33"
+            "location": "apps/api/src/scripts/post-deploy-response-policy.ts#32"
           }
         ]
       },
@@ -30149,7 +30287,7 @@
             "location": "apps/api/src/handlers/case-law/ingestion/reconciliation-engine.ts#27"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/reconciliation-engine.ts#40"
+            "location": "apps/api/src/handlers/case-law/ingestion/reconciliation-engine.ts#41"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/replay.ts#11"
@@ -31707,6 +31845,12 @@
           },
           {
             "location": "apps/api/src/lib/case-law/decision-search-facets.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/case-law/decision-search-metadata-sql.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/case-law/decision-search-metadata-sql.ts#2"
           },
           {
             "location": "apps/api/src/lib/case-law/decision-search-order-sql.ts#2"
@@ -34193,6 +34337,9 @@
             "location": "apps/api/src/handlers/lists/verifications/list.ts#13"
           },
           {
+            "location": "apps/api/src/handlers/mcp/read-discovery-metadata.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/mcp/routes-core.ts#1"
           },
           {
@@ -34433,7 +34580,7 @@
             "location": "apps/api/src/handlers/reports/routes.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/reports/views/export.ts#19"
+            "location": "apps/api/src/handlers/reports/views/export-input.ts#3"
           },
           {
             "location": "apps/api/src/handlers/saved-searches/routes.ts#1"
@@ -35724,69 +35871,6 @@
       ],
       "type": "library",
       "version": "5.11.1"
-    },
-    {
-      "authors": [
-        {
-          "name": "Amit Gupta (https://solothought.com)"
-        }
-      ],
-      "bom-ref": "pkg:npm/fast-xml-validator@1.4.2",
-      "description": "Validate XML for Syntax and Business rules without C/C++ based libraries",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "node_modules/fast-xml-validator/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "node_modules/fast-xml-validator/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "packages/business-registries/src/entity-checks/soap.ts#3"
-          }
-        ]
-      },
-      "externalReferences": [
-        {
-          "type": "vcs",
-          "url": "git+https://github.com/NaturalIntelligence/fast-xml-validator.git"
-        }
-      ],
-      "group": "",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "url": "https://opensource.org/licenses/MIT"
-          }
-        }
-      ],
-      "name": "fast-xml-validator",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "packages/business-registries/node_modules/fast-xml-validator/package.json"
-        },
-        {
-          "name": "SrcFile",
-          "value": "node_modules/fast-xml-validator/package.json"
-        }
-      ],
-      "purl": "pkg:npm/fast-xml-validator@1.4.2",
-      "scope": "required",
-      "tags": [
-        "xml"
-      ],
-      "type": "library",
-      "version": "1.4.2"
     },
     {
       "authors": [
@@ -37341,6 +37425,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/tools/execute/sandbox/run-sandbox.ts#7"
+          },
+          {
+            "location": "apps/api/src/lib/quickjs-runtime.ts#5"
           }
         ]
       },
@@ -37371,65 +37458,6 @@
         }
       ],
       "purl": "pkg:npm/quickjs-emscripten-core@0.32.0",
-      "scope": "required",
-      "type": "library",
-      "version": "0.32.0"
-    },
-    {
-      "authors": [
-        {
-          "name": "Jake Teton-Landis (https://jake.tl)"
-        }
-      ],
-      "bom-ref": "pkg:npm/quickjs-emscripten@0.32.0",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "apps/api/node_modules/quickjs-emscripten/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "apps/api/node_modules/quickjs-emscripten/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "apps/api/src/lib/quickjs-runtime.ts#5"
-          }
-        ]
-      },
-      "externalReferences": [
-        {
-          "type": "vcs",
-          "url": "https://github.com/justjake/quickjs-emscripten"
-        }
-      ],
-      "group": "",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "url": "https://opensource.org/licenses/MIT"
-          }
-        }
-      ],
-      "name": "quickjs-emscripten",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/quickjs-emscripten/package.json"
-        },
-        {
-          "name": "SrcFile",
-          "value": "apps/api/node_modules/quickjs-emscripten/package.json"
-        }
-      ],
-      "purl": "pkg:npm/quickjs-emscripten@0.32.0",
       "scope": "required",
       "type": "library",
       "version": "0.32.0"
@@ -39851,6 +39879,12 @@
             "location": "apps/web/src/routes/_protected.settings/-components/organization/profile-card.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/seller-profile-form.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/seller-profiles-card.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/time-policy-card.tsx#1"
           },
           {
@@ -40765,6 +40799,9 @@
           }
         ],
         "occurrences": [
+          {
+            "location": "packages/business-registries/src/entity-checks/soap.ts#3"
+          },
           {
             "location": "packages/sanctions/src/xml.ts#2"
           }
@@ -43533,6 +43570,15 @@
             "location": "apps/web/src/routes/_protected.settings/-components/organization/prompt-caching-card.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/seller-profile-form.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/seller-profile-refusal.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/seller-profiles-card.tsx#5"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/time-policy-card.tsx#5"
           },
           {
@@ -43566,6 +43612,9 @@
             "location": "apps/web/src/routes/_protected.settings/organization.audit-logs.tsx#6"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/organization.billing.tsx#2"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/organization.document-types.tsx#2"
           },
           {
@@ -43581,7 +43630,7 @@
             "location": "apps/web/src/routes/_protected.settings/organization.usage.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/route.tsx#3"
+            "location": "apps/web/src/routes/_protected.settings/route.tsx#8"
           },
           {
             "location": "apps/web/src/routes/_protected.time.tsx#3"
@@ -44845,7 +44894,7 @@
             "location": "apps/api/src/scripts/mcp-canary.ts#26"
           },
           {
-            "location": "apps/api/src/scripts/post-deploy-response-policy.ts#34"
+            "location": "apps/api/src/scripts/post-deploy-response-policy.ts#33"
           },
           {
             "location": "apps/api/src/scripts/post-deploy-smoke-chat.ts#25"
@@ -44941,7 +44990,7 @@
             "location": "apps/web/src/features/statutes/statute-sitemap.ts#2"
           },
           {
-            "location": "apps/web/src/generated/api-routes.gen.ts#13"
+            "location": "apps/web/src/generated/api-routes.gen.ts#14"
           },
           {
             "location": "apps/web/src/lib/dev-otp.ts#2"
@@ -44990,6 +45039,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/-components/contact-metadata.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/seller-profile-form.logic.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/time-policy.logic.ts#2"
@@ -45092,6 +45144,9 @@
           },
           {
             "location": "packages/legal-ast/src/inline.ts#1"
+          },
+          {
+            "location": "packages/redis-config/src/connection.ts#2"
           },
           {
             "location": "packages/template-packs/scripts/generate-manifest.ts#16"
