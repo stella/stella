@@ -12380,7 +12380,7 @@ export type WebRoutes = {
             convert: {
               post: {
                 body: {
-                  targetType: T64f30e502a;
+                  targetType: (number | string);
                 };
                 params: {
                   workspaceId: T8d02a37b3f;
@@ -24083,7 +24083,7 @@ export type WebRoutes = {
               name: string;
               layout: Ta2bfcf8544;
               templateProperties: Array<T2eac278e7d>;
-              layoutType: T64f30e502a;
+              layoutType: ("avt" | "calendar" | "correspondence" | "filesystem" | "kanban" | "overview" | "table" | "timeline");
               createdAt: string;
               updatedAt: string;
             }>;
@@ -37492,8 +37492,6 @@ type T641b83000f = {
 type T64c3504dad = {
   skillName: string;
 };
-
-type T64f30e502a = "avt" | "calendar" | "correspondence" | "filesystem" | "kanban" | "overview" | "table" | "timeline";
 
 type T64f82fc86d = {
   bold: Tfddd645dc8;
