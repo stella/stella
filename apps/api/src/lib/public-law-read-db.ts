@@ -8,11 +8,9 @@ import { databaseRelations } from "@/api/db/database-relations";
 import { stellaPublicLawReader } from "@/api/db/rls";
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
+import { sharedPoolConnectionSettings } from "@/api/db/shared-pool-connection-settings";
 import { parsePostgresTimeoutMs } from "@/api/db/shared-pool-timeout-policy";
-import {
-  setSharedReadTransactionGuards,
-  sharedPoolConnectionSettings,
-} from "@/api/db/shared-pool-timeouts";
+import { setSharedReadTransactionGuards } from "@/api/db/shared-pool-timeouts";
 import { envBase } from "@/api/env-base";
 import { queryCountLogger } from "@/api/lib/db-query-counter";
 import {

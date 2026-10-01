@@ -7,37 +7,18 @@ import {
   parsePostgresTimeoutMs,
   resolveSharedPoolTimeoutPolicy,
 } from "@/api/db/shared-pool-timeout-policy";
-import { envBase } from "@/api/env-base";
+import { envDbTimeouts } from "@/api/env-db-timeouts";
 import { executedRows } from "@/api/lib/db/executed-rows";
-import { logger } from "@/api/lib/observability/logger";
 
 export const sharedPoolTimeoutPolicy = resolveSharedPoolTimeoutPolicy({
-  idleTimeoutSeconds: envBase.DATABASE_POOL_IDLE_TIMEOUT_S,
-  requestedStatementTimeoutMs: envBase.DATABASE_STATEMENT_TIMEOUT_MS,
+  idleTimeoutSeconds: envDbTimeouts.DATABASE_POOL_IDLE_TIMEOUT_S,
+  requestedStatementTimeoutMs: envDbTimeouts.DATABASE_STATEMENT_TIMEOUT_MS,
 });
 
 type TimeoutTransaction = { execute: (query: SQL) => Promise<unknown> };
-type SharedPoolName = "root" | "raw_rls" | "public_law";
 
 const effectiveTimeout = (requestedMs: number): number =>
   clampSharedPoolTimeout(requestedMs, sharedPoolTimeoutPolicy);
-
-export const sharedPoolConnectionSettings = (pool: SharedPoolName) => {
-  const policy = sharedPoolTimeoutPolicy;
-  logger.info("database.shared_pool_timeout_configured", {
-    pool,
-    idleTimeoutMs: policy.idleTimeoutMs,
-    requestedStatementTimeoutMs: policy.requestedStatementTimeoutMs,
-    effectiveStatementTimeoutMs:
-      policy.effectiveStatementTimeoutMs ?? "server_default",
-    capMs: policy.capMs ?? 0,
-    marginMs: policy.marginMs ?? 0,
-    clamped: policy.clamped,
-  });
-  return policy.effectiveStatementTimeoutMs === null
-    ? {}
-    : { connection: { statement_timeout: policy.effectiveStatementTimeoutMs } };
-};
 
 type SharedQueryTimeouts = {
   statementTimeoutMs: number;
