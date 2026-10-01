@@ -12,11 +12,17 @@ export const mountEditor = <T>(
   threadKey: string,
   handle: T,
 ): (() => void) => {
-  editors.set(threadKey, [...(editors.get(threadKey) ?? []), handle]);
+  const mounted = editors.get(threadKey);
+  editors.set(
+    threadKey,
+    mounted === undefined ? [handle] : [...mounted, handle],
+  );
   return () => {
-    const remaining = (editors.get(threadKey) ?? []).filter(
-      (registered) => registered !== handle,
-    );
+    const current = editors.get(threadKey);
+    if (current === undefined) {
+      return;
+    }
+    const remaining = current.filter((registered) => registered !== handle);
     if (remaining.length === 0) {
       editors.delete(threadKey);
     } else {

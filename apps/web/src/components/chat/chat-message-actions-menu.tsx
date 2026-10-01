@@ -75,10 +75,13 @@ const FORK_DESTINATION_ICONS = {
   main: GitBranchIcon,
 } as const satisfies Record<ForkDestination, unknown>;
 
+/** No matters beyond the thread's own: the fork keeps just that scope. */
+const NO_EXTRA_CONTEXT_MATTERS: readonly string[] = [];
+
 export const ChatMessageActionsMenu = ({
   canExport,
   canFork,
-  contextMatterIds,
+  contextMatterIds = NO_EXTRA_CONTEXT_MATTERS,
   exportArtifact,
   message,
   threadRef,
@@ -126,7 +129,7 @@ export const ChatMessageActionsMenu = ({
         sidePanelChat.open({
           contextMatterIds: resolveChatContextMatterIds(
             threadRef,
-            contextMatterIds ?? [],
+            contextMatterIds,
           ),
           threadId: toChatThreadId(threadId),
           workspaceId,
