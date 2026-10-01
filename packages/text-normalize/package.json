@@ -1,6 +1,6 @@
 {
   "name": "@stll/text-normalize",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Search match-key text normalization — Arabic orthographic variant folding (alef/hamza/teh-marbuta/yeh, tashkeel, tatweel, digits) with per-language fold tables",
   "keywords": [
     "arabic",

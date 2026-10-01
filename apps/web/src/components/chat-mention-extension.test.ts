@@ -1,5 +1,5 @@
+import { Schema } from "@tiptap/pm/model";
 import { describe, expect, test } from "bun:test";
-import { Schema } from "prosemirror-model";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 

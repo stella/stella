@@ -352,7 +352,7 @@ export type HandlerConfig = InputSchema &
     requestTimeoutMs?: number;
     requiresUsage?: UsageMeteringConfig;
     /** Finite synchronous work; streaming and queued execution need their own lifetimes. */
-    actionAdmission?: "handler";
+    actionAdmission?: { type: "handler"; actionKind: string };
     mcp: McpExposure;
   };
 
@@ -799,7 +799,7 @@ type FiniteHandlerGuard<TResult> = [Extract<TResult, Response>] extends [never]
   : never;
 
 type ConfiguredFiniteHandlerGuard<TConfig, TResult> = TConfig extends {
-  actionAdmission: "handler";
+  actionAdmission: { type: "handler"; actionKind: string };
 }
   ? NoInfer<FiniteHandlerGuard<TResult>>
   : unknown;
@@ -811,6 +811,7 @@ type FiniteActionContext = SafeHandlerLogContext & {
 };
 
 type FiniteActionOptions<TContext, TResult extends SafeHandlerPayload> = {
+  actionKind: string;
   ctx: TContext;
   handler: SafeHandlerFn<TContext, TResult>;
   admit?: typeof withActionAdmission;
@@ -822,17 +823,23 @@ const runAdmittedFiniteHandler = async function* <
 >({
   ctx,
   handler,
+  actionKind,
   admit = withActionAdmission,
 }: FiniteActionOptions<TContext, TResult>): SafeHandlerGenerator<TResult> {
   return yield* Result.await(
     admit({
       organizationId: ctx.session.activeOrganizationId,
       userId: ctx.user.id,
+      periodIdentity: {
+        actionKind,
+        // These finite endpoints have no client idempotency key.
+        logicalPhaseId:
+          getRequestContext(ctx.request)?.requestId ?? Bun.randomUUIDv7(),
+      },
       run: async (signal) => {
         ctx.actionSignal = AbortSignal.any([ctx.request.signal, signal]);
         ctx.actionSignal.throwIfAborted();
         const outcome = await Result.gen(() => handler(ctx));
-        ctx.actionSignal.throwIfAborted();
         if (Result.isOk(outcome) && outcome.value instanceof Response) {
           // Cancel the producer too: a rejected stream must not keep running after release.
           await outcome.value.body?.cancel();
@@ -858,7 +865,7 @@ const runAdmittedFiniteHandler = async function* <
               error.reason === "busy" ? "rate_limited" : "service_unavailable",
             message:
               error.reason === "busy"
-                ? "Concurrent action limit reached"
+                ? error.message
                 : "Action admission is unavailable",
             cause: error,
           });
@@ -887,6 +894,7 @@ export const admitFiniteAction = async function* <
   ctx,
   handler,
   admit,
+  actionKind,
 }: FiniteActionOptions<TContext, TResult> & {
   handler: SafeHandlerFn<TContext, TResult> &
     NoInfer<FiniteHandlerGuard<TResult>>;
@@ -895,6 +903,7 @@ export const admitFiniteAction = async function* <
     return yield* handler(ctx);
   }
   return yield* runAdmittedFiniteHandler({
+    actionKind,
     ctx,
     handler,
     ...(admit === undefined ? {} : { admit }),
@@ -958,12 +967,18 @@ const createSafeScopedHandler = <
       ctx.usageLane = preflight.lane;
     }
 
-    if (config.actionAdmission !== "handler" || !env.FEATURE_ACTION_ADMISSION) {
+    const admission = config.actionAdmission;
+    if (admission === undefined || !env.FEATURE_ACTION_ADMISSION) {
       return await runSafeHandler(ctx, handler);
     }
 
     return await runSafeHandler(ctx, (input) =>
-      runAdmittedFiniteHandler({ ctx: input, handler, admit }),
+      runAdmittedFiniteHandler({
+        ctx: input,
+        handler,
+        admit,
+        actionKind: admission.actionKind,
+      }),
     );
   },
 });

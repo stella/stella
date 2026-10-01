@@ -1238,7 +1238,8 @@ export type CommitCorpusProjectionAppendResult =
   | { status: "lease_lost" };
 
 /**
- * Finalize an accepted append and its authoritative state in one transaction.
+ * Finalize a published, presence-confirmed append and its authoritative state
+ * in one transaction. The executor confirms outside this transaction.
  * A desired-state race cannot publish: the exact new revision is redirected to
  * cleanup instead, behind the barrier that makes that cleanup exact.
  */

@@ -11,10 +11,10 @@ import type { RefObject } from "react";
 
 import { useHotkey } from "@tanstack/react-hotkeys";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { NodeType, Node as PMNode, ResolvedPos } from "prosemirror-model";
-import type { EditorState, Transaction } from "prosemirror-state";
-import { TextSelection } from "prosemirror-state";
-import type { EditorView } from "prosemirror-view";
+import type { NodeType, Node as PMNode, ResolvedPos } from "@tiptap/pm/model";
+import type { EditorState, Transaction } from "@tiptap/pm/state";
+import { TextSelection } from "@tiptap/pm/state";
+import type { EditorView } from "@tiptap/pm/view";
 import { useTranslations } from "use-intl";
 
 import type {

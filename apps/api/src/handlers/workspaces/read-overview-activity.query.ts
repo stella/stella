@@ -417,6 +417,11 @@ type ActivityTarget = {
   encrypted: boolean | null;
   entityId: string | null;
   fieldId: string | null;
+  /**
+   * The file has a generated preview image, served by the matter file
+   * thumbnail route for `fieldId`. The thumbnail's own id stays server-side.
+   */
+  hasThumbnail: boolean;
   id: string;
   kind:
     | EntityTargetKind
@@ -431,6 +436,8 @@ type ActivityTarget = {
   mimeType: string | null;
   name: string | null;
   pdfFileId: string | null;
+  /** ThumbHash `data:image/png;base64,...` blur shown before the thumbnail. */
+  placeholder: string | null;
   propertyId: string | null;
 };
 
@@ -753,7 +760,9 @@ export const readOverviewActivityPage = async ({
             'fileName', ${fields.content}->>'fileName',
             'mimeType', ${fields.content}->>'mimeType',
             'pdfFileId', ${fields.content}->>'pdfFileId',
-            'encrypted', ${fields.content}->'encrypted'
+            'encrypted', ${fields.content}->'encrypted',
+            'hasThumbnail', ${fields.content}->>'thumbnailFileId' is not null,
+            'placeholder', ${fields.content}->>'placeholder'
           )
           from ${fields}
           where ${fields.workspaceId} = ${entities.workspaceId}
@@ -939,9 +948,11 @@ type EntityRow = {
 type EntityFile = {
   encrypted: boolean;
   fileName: string;
+  hasThumbnail: boolean;
   id: string;
   mimeType: string;
   pdfFileId: string | null;
+  placeholder: string | null;
   propertyId: string;
 };
 
@@ -953,11 +964,13 @@ const toEntityTarget = (entity: EntityRow): EntityTarget => {
     encrypted: file?.encrypted ?? null,
     entityId: entity.id,
     fieldId: file?.id ?? null,
+    hasThumbnail: file?.hasThumbnail ?? false,
     id: entity.id,
     kind: entity.kind,
     mimeType: file?.mimeType ?? null,
     name: file?.fileName ?? entity.name,
     pdfFileId: file?.pdfFileId ?? null,
+    placeholder: file?.placeholder ?? null,
     propertyId: file?.propertyId ?? null,
   };
 };
@@ -1085,11 +1098,13 @@ const targetForRow = ({
         encrypted: document.encrypted,
         entityId: document.entityId,
         fieldId: document.fieldId,
+        hasThumbnail: document.hasThumbnail,
         id: resourceId,
         kind: "documentReviewRun",
         mimeType: document.mimeType,
         name: document.name,
         pdfFileId: document.pdfFileId,
+        placeholder: document.placeholder,
         propertyId: document.propertyId,
       };
     }
@@ -1152,11 +1167,13 @@ const deletedEntityTarget = ({
   encrypted: null,
   entityId: null,
   fieldId: null,
+  hasThumbnail: false,
   id,
   kind: deletedEntityKind(category, kindSnapshot),
   mimeType,
   name,
   pdfFileId: null,
+  placeholder: null,
   propertyId: null,
 });
 
@@ -1184,10 +1201,12 @@ const genericTarget = ({
   encrypted: null,
   entityId: null,
   fieldId: null,
+  hasThumbnail: false,
   id,
   kind,
   mimeType: null,
   name,
   pdfFileId: null,
+  placeholder: null,
   propertyId: null,
 });

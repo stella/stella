@@ -207,7 +207,7 @@ function SettingsLayout() {
     : [accountSection];
 
   return (
-    <div className="flex min-h-0 flex-1 overflow-hidden border-t">
+    <div className="flex min-h-0 flex-1 overflow-hidden">
       <nav
         aria-label={t("common.settings")}
         className="bg-muted/30 flex w-60 shrink-0 flex-col gap-4 overflow-y-auto border-e p-3"
@@ -247,7 +247,7 @@ function SettingsLayout() {
           </div>
         ))}
       </nav>
-      <main className="flex min-w-0 flex-1 flex-col overflow-y-auto">
+      <main className="scrollbar-stable flex min-w-0 flex-1 flex-col overflow-y-auto">
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 p-6">
           <Outlet />
         </div>

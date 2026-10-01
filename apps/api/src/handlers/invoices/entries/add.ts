@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { type Static, t } from "elysia";
 
+import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
+
 import type { SafeDb } from "@/api/db/safe-db";
 import { resultTx } from "@/api/db/safe-db";
 import {
@@ -175,6 +177,7 @@ const validateAttachmentInputs = async (
             .where(
               and(
                 eq(timeEntries.workspaceId, workspaceId),
+                eq(timeEntries.activityGroup, TIME_ENTRY_ACTIVITY_GROUP.CLIENT),
                 inArray(timeEntries.id, timeEntryIds),
               ),
             ),
@@ -380,6 +383,7 @@ const addEntries = createSafeHandler(
           .where(
             and(
               eq(timeEntries.workspaceId, workspaceId),
+              eq(timeEntries.activityGroup, TIME_ENTRY_ACTIVITY_GROUP.CLIENT),
               inArray(timeEntries.id, timeEntryIds),
               eq(timeEntries.status, BILLING_STATUS.APPROVED),
               eq(timeEntries.billable, true),

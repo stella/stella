@@ -2,15 +2,12 @@ import { panic, Result } from "better-result";
 import { and, count, eq, ilike, inArray, sql } from "drizzle-orm";
 import { t } from "elysia";
 
-import { renderMatterReference } from "@stll/api-contract";
-
 import { member } from "@/api/db/auth-schema";
 import { SETTING_WORKSPACE_IDS } from "@/api/db/rls";
-import { transactionAbortError } from "@/api/db/safe-db";
+import { resultTx } from "@/api/db/safe-db";
 import {
   type entities,
   type fields,
-  matterCounters,
   properties,
   propertyDependencies,
   workspaceContacts,
@@ -46,9 +43,9 @@ import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
 import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
 import {
+  allocateMatterReference,
   DEFAULT_MATTER_NUMBER_PADDING,
   DEFAULT_MATTER_NUMBER_PATTERN,
-  toScopeKey,
 } from "@/api/lib/matter-reference";
 import {
   assertPropertyDependencyReadWithinLimit,
@@ -587,7 +584,7 @@ export const createDuplicateWorkspace = (
       // transaction callback commits whatever it has already written, so a
       // rejection raised part-way through would persist half a matter and then
       // have the caller delete the objects those committed rows point at.
-      const txResult = await safeDb(async (tx) => {
+      const txResult = await resultTx(safeDb, async (tx) => {
         const [countResult, duplicatedNames, settings, orgMembers] =
           await Promise.all([
             tx
@@ -653,35 +650,18 @@ export const createDuplicateWorkspace = (
         const padding =
           settings?.matterNumberPadding ?? DEFAULT_MATTER_NUMBER_PADDING;
         const now = new Date();
-        const scopeKey = toScopeKey(pattern, now);
-        const counter = await tx
-          .insert(matterCounters)
-          .values({
-            id: createSafeId<"matterCounter">(),
-            organizationId,
-            scopeKey,
-            lastValue: 1,
-          })
-          .onConflictDoUpdate({
-            target: [matterCounters.organizationId, matterCounters.scopeKey],
-            set: { lastValue: sql`${matterCounters.lastValue} + 1` },
-          })
-          .returning({ lastValue: matterCounters.lastValue })
-          .then((rows) => rows.at(0));
-
-        if (!counter) {
-          throw new HandlerError({
-            status: 500,
-            message: "Failed to create matter counter",
-          });
-        }
-
-        const reference = renderMatterReference({
+        const referenceResult = await allocateMatterReference({
+          tx,
+          organizationId,
           pattern,
           now,
-          seq: counter.lastValue,
           padding,
         });
+
+        if (Result.isError(referenceResult)) {
+          return Result.err(referenceResult.error);
+        }
+        const reference = referenceResult.value;
 
         await tx.insert(workspaces).values({
           id: targetWorkspaceId,
@@ -973,11 +953,11 @@ export const createDuplicateWorkspace = (
           targetWorkspaceId,
         ]);
 
-        return {
+        return Result.ok({
           workspaceId: targetWorkspaceId,
           entityIds: duplicatedEntityIds,
           nativeExtractionRunIds,
-        };
+        });
       });
 
       // An aborted duplicate leaves no target matter, so every object copied
@@ -987,7 +967,7 @@ export const createDuplicateWorkspace = (
           copiedS3Keys,
           targetWorkspaceId,
         });
-        return Result.err(transactionAbortError(txResult.error));
+        return Result.err(txResult.error);
       }
 
       // These post-commit calls only accelerate work the transaction already

@@ -146,9 +146,7 @@ export const loadEmailAttachment = async function* ({
         ),
     ),
   );
-  const parsedResult = await Result.tryPromise(
-    async () => await parseEmail(sourceBuffer, emailMimeType),
-  );
+  const parsedResult = await parseEmail(sourceBuffer, emailMimeType);
   if (Result.isError(parsedResult)) {
     captureError(parsedResult.error, {
       fieldId,
