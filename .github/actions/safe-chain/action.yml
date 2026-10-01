@@ -54,7 +54,9 @@ runs:
         SAFE_CHAIN_SHA256: ${{ inputs.sha256 }}
         SAFE_CHAIN_PRIMARY_RELEASE_URL: https://github.com/AikidoSec/safe-chain/releases/download/${{ inputs.version }}
         SAFE_CHAIN_MIRROR_RELEASE_URL: https://github.com/stella/.github/releases/download/mirror-safe-chain-${{ inputs.version }}
-      run: bash "${{ github.action_path }}/install.sh"
+      # In container jobs `github.action_path` is the host path; the env var is
+      # the path as the step sees it.
+      run: bash "$GITHUB_ACTION_PATH/install.sh"
 
     - name: Verify shims are active
       shell: bash
