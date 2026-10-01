@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import type { SQL } from "drizzle-orm";
-import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
+import { and, arrayOverlaps, desc, eq, ilike, or, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import {
@@ -17,6 +17,11 @@ import {
   chatThreadListCursorCodec,
   encodeChatThreadListCursor,
 } from "@/api/handlers/chat/thread-list-pagination";
+import {
+  EMPTY_CHAT_THREAD_CONTEXT,
+  readChatThreadContexts,
+} from "@/api/handlers/chat/threads/list-context";
+import type { ChatThreadContext } from "@/api/handlers/chat/threads/list-context";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
@@ -24,13 +29,28 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
 
+/** Most matching matters a search widens to (pinned or embedded matters). */
+const CHAT_THREAD_SEARCH_MATTER_LIMIT = 50;
+
+type ChatThreadListItem = {
+  context: ChatThreadContext;
+  id: string;
+  origin: ChatThreadOrigin;
+  title: string;
+  createdAt: Date;
+  updatedAt: Date;
+  usedAnonymization: boolean;
+};
+
 const config = {
   description:
     "List your own chat threads, most recently active first, split into " +
     "global threads and groups per matter. Threads with no messages, and " +
     "threads belonging to a matter that is being deleted, are left out. " +
-    "search matches the thread title or the matter name; paginate with limit " +
-    "and cursor.",
+    "Each thread carries a bounded preview of its context: the matters and " +
+    "files it drew on, with their total counts. search matches the thread " +
+    "title, the matter it lives in, or a matter pinned to it; paginate with " +
+    "limit and cursor.",
   permissions: { chat: ["create"] },
   access: "read",
   mcp: {
@@ -77,16 +97,7 @@ const getThreads = createSafeRootHandler(
       )`,
     ];
     const search = query.search?.trim();
-    if (search) {
-      const pattern = `%${escapeLike(search)}%`;
-      const searchCondition = or(
-        ilike(chatThreads.title, pattern),
-        ilike(workspacesTable.name, pattern),
-      );
-      if (searchCondition) {
-        conditions.push(searchCondition);
-      }
-    }
+    const searchPattern = search ? `%${escapeLike(search)}%` : null;
     // Membership-mode RLS filters workspace-scoped threads and verifies every
     // data_workspace_ids entry on global threads without materializing an
     // application-side workspace allowlist. The joined status predicate keeps
@@ -102,9 +113,49 @@ const getThreads = createSafeRootHandler(
       }
     }
 
-    const rows = yield* Result.await(
-      safeDb((tx) =>
-        tx
+    const { contexts, rows } = yield* Result.await(
+      safeDb(async (tx) => {
+        const listConditions = [...conditions];
+        if (searchPattern !== null) {
+          // A matter pinned to a thread, or whose data it embedded, matches
+          // by name too. One lookup of the organization's matching matters
+          // (RLS keeps it to matters the user can open), not one per thread.
+          const matchingMatters = await tx
+            .select({ id: workspacesTable.id })
+            .from(workspacesTable)
+            .where(
+              and(
+                eq(
+                  workspacesTable.organizationId,
+                  session.activeOrganizationId,
+                ),
+                ilike(workspacesTable.name, searchPattern),
+              ),
+            )
+            .limit(CHAT_THREAD_SEARCH_MATTER_LIMIT);
+          const matchingMatterIds = matchingMatters.map((matter) => matter.id);
+          const searchCondition = or(
+            ilike(chatThreads.title, searchPattern),
+            ilike(workspacesTable.name, searchPattern),
+            ...(matchingMatterIds.length > 0
+              ? [
+                  arrayOverlaps(
+                    chatThreads.contextMatterIds,
+                    matchingMatterIds,
+                  ),
+                  arrayOverlaps(
+                    chatThreads.dataWorkspaceIds,
+                    matchingMatterIds,
+                  ),
+                ]
+              : []),
+          );
+          if (searchCondition) {
+            listConditions.push(searchCondition);
+          }
+        }
+
+        const listedRows = await tx
           .select({
             createdAt: chatThreads.createdAt,
             forkedFromMessageId: chatThreads.forkedFromMessageId,
@@ -122,10 +173,17 @@ const getThreads = createSafeRootHandler(
             workspacesTable,
             eq(workspacesTable.id, chatThreads.workspaceId),
           )
-          .where(and(...conditions))
+          .where(and(...listConditions))
           .orderBy(desc(chatThreads.updatedAt), desc(chatThreads.id))
-          .limit(limit + 1),
-      ),
+          .limit(limit + 1);
+
+        // One bounded read for the whole page's context, never one per row.
+        const threadContexts = await readChatThreadContexts({
+          threadIds: listedRows.slice(0, limit).map((row) => row.id),
+          tx,
+        });
+        return { contexts: threadContexts, rows: listedRows };
+      }),
     );
 
     const hasMore = rows.length > limit;
@@ -139,28 +197,14 @@ const getThreads = createSafeRootHandler(
           })
         : null;
 
-    const global: {
-      id: string;
-      origin: ChatThreadOrigin;
-      title: string;
-      createdAt: Date;
-      updatedAt: Date;
-      usedAnonymization: boolean;
-    }[] = [];
+    const global: ChatThreadListItem[] = [];
 
     const groupedWorkspaceThreads = new Map<
       string,
       {
         workspaceId: string;
         workspaceName: string;
-        threads: {
-          id: string;
-          origin: ChatThreadOrigin;
-          title: string;
-          createdAt: Date;
-          updatedAt: Date;
-          usedAnonymization: boolean;
-        }[];
+        threads: ChatThreadListItem[];
       }
     >();
 
@@ -169,8 +213,10 @@ const getThreads = createSafeRootHandler(
         thread.forkedFromMessageId === null
           ? CHAT_THREAD_ORIGIN.original
           : CHAT_THREAD_ORIGIN.fork;
+      const context = contexts.get(thread.id) ?? EMPTY_CHAT_THREAD_CONTEXT;
       if (thread.workspaceId === null) {
         global.push({
+          context,
           id: thread.id,
           origin,
           title: thread.title,
@@ -186,6 +232,7 @@ const getThreads = createSafeRootHandler(
       }
 
       const slice = {
+        context,
         id: thread.id,
         origin,
         title: thread.title,
