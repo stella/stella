@@ -68,9 +68,10 @@ export const loadProtectedContext = async ({
     isTimeBillingRouteEnabled()
   ) {
     detached(
-      context.queryClient.ensureQueryData(
-        organizationSettingsOptions(activeOrganizationId),
-      ),
+      context.queryClient.query({
+        ...organizationSettingsOptions(activeOrganizationId),
+        staleTime: "static",
+      }),
       "protected-layout.time-policy-prefetch",
     );
   }

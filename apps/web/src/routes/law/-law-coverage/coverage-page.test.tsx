@@ -8,8 +8,10 @@ import {
   createRouter,
   RouterContextProvider,
 } from "@tanstack/react-router";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, setSystemTime, test } from "bun:test";
 import { IntlProvider } from "use-intl";
+
+import { Temporal } from "@stll/time";
 
 import { FormattingProvider } from "@/i18n/formatting-context";
 import messages from "@/i18n/langs/en.json";
@@ -285,13 +287,20 @@ describe("the coverage page states what it counts", () => {
   });
 
   test("relative times follow the formatting locale, not the message language", () => {
-    const english = render(<CaseLawCoveragePage coverage={COVERAGE} />);
-    const czech = render(<CaseLawCoveragePage coverage={COVERAGE} />, "cs");
+    setSystemTime(
+      Temporal.Instant.from(OBSERVED_AT).add({ hours: 2 }).epochMilliseconds,
+    );
+    try {
+      const english = render(<CaseLawCoveragePage coverage={COVERAGE} />);
+      const czech = render(<CaseLawCoveragePage coverage={COVERAGE} />, "cs");
 
-    // The same sync instant, formatted twice: once per locale. Were the string
-    // read from the store instead of the context, both renders would agree.
-    expect(english).toContain("ago");
-    expect(czech).not.toContain("ago");
+      // Both renders use the same two-hour age: calendar labels such as
+      // "last month" must not change this locale assertion as the fixture ages.
+      expect(english).toContain("ago");
+      expect(czech).not.toContain("ago");
+    } finally {
+      setSystemTime();
+    }
   });
 
   test("figures the endpoint cannot state read as an empty page, not as zeros", () => {
