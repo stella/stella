@@ -504,14 +504,15 @@ export const corpusExcerpt = ({
   }
 
   const marked = markCorpusFragment({ text, tokens, language });
-  if (window === null || marked.includes("<mark>")) {
+  // A window always comes from an anchor; checking both narrows the type.
+  if (window === null || anchor === null || marked.includes("<mark>")) {
     return marked;
   }
 
   // The matcher found none of the query's words — the engine matched through
   // an expansion it does not reproduce. Its own marks are the answer.
   return markAtSnippet({
-    markRanges: anchor?.markRanges ?? [],
+    markRanges: anchor.markRanges,
     windowStart: window.start,
     text,
   });
