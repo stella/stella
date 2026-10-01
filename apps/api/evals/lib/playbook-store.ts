@@ -8,10 +8,11 @@
 
 import { panic } from "better-result";
 
-import { agentSkills, playbookDefinitions } from "@/api/db/schema";
+import { agentSkills, entities, playbookDefinitions } from "@/api/db/schema";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
+import type { ReadablePositionSource } from "@/api/lib/workflow/playbook-position-sources";
 import type {
   PlaybookPositions,
   PlaybookScope,
@@ -57,8 +58,14 @@ const playbookIdOf = (where: unknown): string | undefined => {
   return typeof id.eq === "string" ? id.eq : undefined;
 };
 
+/**
+ * `readableDocuments` are the documents the user's scoped connection would
+ * return: what the production source check of a save, and the source filter
+ * of a read, are answered with.
+ */
 export const createPlaybookStore = (
   seed: readonly StoredPlaybook[],
+  readableDocuments: readonly ReadablePositionSource[],
 ): PlaybookStore => {
   const rows = new Map(seed.map((row) => [row.id, structuredClone(row)]));
   // Strictly increasing, so two writes in one millisecond still differ.
@@ -96,9 +103,19 @@ export const createPlaybookStore = (
           // none, so the shipped playbook-builder skill is the one a run loads.
           return { where: () => ({ limit: () => [] }) };
         }
+        if (table === entities) {
+          // The scoped source lookup (`readablePositionSources`). This fake
+          // cannot read the id filter, so it answers every readable document;
+          // each caller matches the rows to the ids it asked for.
+          return {
+            innerJoin: () => ({
+              where: () => ({ limit: () => [...readableDocuments] }),
+            }),
+          };
+        }
         if (table !== playbookDefinitions) {
           return panic(
-            "the eval store answers selects on playbook definitions and agent skills only",
+            "the eval store answers selects on playbook definitions, agent skills, and entities only",
           );
         }
         return {

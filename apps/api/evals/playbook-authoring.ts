@@ -55,6 +55,8 @@ import {
 import type { ChatCodeModeReadRunner } from "@/api/handlers/chat/tools/execute/chat-code-mode";
 import { ASK_USER_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
 import { createOrgTools } from "@/api/handlers/chat/tools/org-tools";
+import { WRITE_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
+import { dehydrateRefs } from "@/api/handlers/chat/tools/registry-adapter/ref-mediation";
 import { runRegistryReadTool } from "@/api/handlers/chat/tools/registry-adapter/run-registry-tool";
 import { SPAWN_SUBAGENTS_TOOL_DEFINITION } from "@/api/handlers/chat/tools/spawn-subagents-tool";
 import { SPAWN_SUBAGENTS_TOOL_NAME } from "@/api/handlers/chat/tools/subagent-tool-shared";
@@ -113,6 +115,7 @@ import {
   DISCOVER_TOOLS,
   EXECUTE_TYPESCRIPT,
   MATTER_TOOL_NAMES,
+  READABLE_DOCUMENTS,
   SAVE_PLAYBOOK,
   answerMatterTool,
   isMatterToolName,
@@ -727,7 +730,8 @@ const runTask = async ({
   repeat: number;
   task: EvalTask;
 }): Promise<EvalRun> => {
-  const store = createPlaybookStore(task.seed);
+  // The contract tier has no matters, so no document a position could cite.
+  const store = createPlaybookStore(task.seed, []);
   const trace: ToolTrace[] = [];
   const saveCalls: SaveCallRecord[] = [];
   const turn = await runModelTurn({
@@ -1229,6 +1233,50 @@ const createBehaviorTools = ({
     requestWritten.push(value);
   };
 
+  const refused = (name: string, input: unknown, error: ChatToolError) => {
+    record({ name, input, error: `${error.kind}: ${error.message}` });
+    return { error: { code: error.kind, message: error.message } };
+  };
+
+  // The two playbook tools as chat mediates them. A position's `sources` are
+  // documents, which chat names by ref: the read mints a ref for each source
+  // through the production projection, and the save's declared input refs are
+  // dehydrated to ids before the handler, so the recorded input is the
+  // handler's view on both surfaces.
+  const callChatRegistry = async (
+    name: (typeof TOOL_NAMES)[number],
+    input: unknown,
+  ): Promise<unknown> => {
+    const args = isRecord(input) ? input : {};
+    written(input);
+    if (name === LIST_PLAYBOOKS) {
+      const read = await runRegistryReadTool({
+        toolName: name,
+        args,
+        context: store.context,
+        refRegistry: requestRefRegistry(),
+        handler:
+          getStaticMcpToolHandler(LIST_PLAYBOOKS) ??
+          panic(`The static tool registry has no ${LIST_PLAYBOOKS} handler`),
+      });
+      if (Result.isError(read)) {
+        return refused(name, input, read.error);
+      }
+      record({ name, input });
+      written(read.value);
+      return read.value;
+    }
+    const dehydrated = dehydrateRefs({
+      args,
+      inputRefs: WRITE_TOOL_REF_FIELD_MAP.save_playbook.inputRefs,
+      refRegistry: requestRefRegistry(),
+    });
+    if (Result.isError(dehydrated)) {
+      return refused(name, input, dehydrated.error);
+    }
+    return await callRegistry(name, dehydrated.value.args);
+  };
+
   const askUser = createOrgTools({
     accessibleWorkspaceIds: store.context.accessibleWorkspaceIds,
     organizationId: store.context.organizationId,
@@ -1259,7 +1307,13 @@ const createBehaviorTools = ({
 
   return [
     ...TOOL_NAMES.map((name) =>
-      productionTool(name, async (input) => await callRegistry(name, input)),
+      productionTool(
+        name,
+        async (input) =>
+          await (surface === "chat"
+            ? callChatRegistry(name, input)
+            : callRegistry(name, input)),
+      ),
     ),
     ...matterTools,
     listTemplatesStub({ surface, record }),
@@ -1298,7 +1352,7 @@ const runScenario = async ({
   scenario: BuilderScenario;
   surface: BuilderSurface;
 }): Promise<BehaviorRun> => {
-  const store = createPlaybookStore([]);
+  const store = createPlaybookStore([], READABLE_DOCUMENTS);
   const events: BuilderEvent[] = [];
   const skill = await resolveBehaviorSkill(store);
   const system = behaviorSystemPrompt({ skill, surface });
