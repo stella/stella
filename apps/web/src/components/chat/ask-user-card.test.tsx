@@ -97,6 +97,10 @@ describe("ask-user clarification card", () => {
         expect(html).toContain("Sample name");
         expect(html).not.toContain("<img");
         expect(html).not.toContain('as="image"');
+        expect(html).not.toMatch(
+          /<(?:iframe|object|embed|source|video|audio)\b/iu,
+        );
+        expect(html).not.toContain("https://example.test/diagram.png");
       });
     }
   }

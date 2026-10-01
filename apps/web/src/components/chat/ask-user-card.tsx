@@ -1,7 +1,7 @@
 import type { AnchorHTMLAttributes, ComponentProps, ReactNode } from "react";
 import { useCallback, useMemo, useState } from "react";
 
-import { Streamdown } from "streamdown";
+import { defaultRehypePlugins, Streamdown } from "streamdown";
 import type { PluggableList } from "unified";
 import { useTranslations } from "use-intl";
 
@@ -182,7 +182,10 @@ export const AskUserCard = ({
   // Stable rehype-plugins identity so Streamdown's internal memo
   // can short-circuit when nothing actually changed.
   const analysisRehypePlugins = useMemo<PluggableList | undefined>(
-    () => (pairs.length > 0 ? [[rehypeAnonSpans, pairs]] : undefined),
+    () =>
+      pairs.length > 0
+        ? [...Object.values(defaultRehypePlugins), [rehypeAnonSpans, pairs]]
+        : undefined,
     [pairs],
   );
   const answeredOutput = part.state === "complete" ? part.output : null;
