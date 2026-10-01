@@ -140,7 +140,7 @@ type ReadPublisherPageContentOptions = {
   body: string | Uint8Array;
   bytes: Uint8Array;
   text: string;
-  reject: (reason: PublisherPageReason) => never;
+  reject: (reason: PublisherPageReason) => Result<never, PublisherPageError>;
 };
 
 const readPublisherPageContent = ({
@@ -149,7 +149,7 @@ const readPublisherPageContent = ({
   bytes,
   text,
   reject,
-}: ReadPublisherPageContentOptions): unknown => {
+}: ReadPublisherPageContentOptions): Result<unknown, PublisherPageError> => {
   switch (kind) {
     case "json": {
       const parsed = Result.try({
@@ -157,9 +157,9 @@ const readPublisherPageContent = ({
         catch: () => null,
       });
       if (parsed.isErr()) {
-        reject("invalid-syntax");
+        return reject("invalid-syntax");
       }
-      return parsed.unwrap();
+      return Result.ok(parsed.value);
     }
     case "xml": {
       const parsed = Result.try({
@@ -167,25 +167,25 @@ const readPublisherPageContent = ({
         catch: () => null,
       });
       if (parsed.isErr()) {
-        reject("invalid-syntax");
+        return reject("invalid-syntax");
       }
-      return body;
+      return Result.ok(body);
     }
     case "pdf":
       if (!text.startsWith("%PDF-") || !text.trimEnd().endsWith("%%EOF")) {
-        reject("invalid-syntax");
+        return reject("invalid-syntax");
       }
-      return body;
+      return Result.ok(body);
     case "zip":
       if (!isCompleteZip(bytes)) {
-        reject("invalid-syntax");
+        return reject("invalid-syntax");
       }
-      return body;
+      return Result.ok(body);
     case "html":
       if (isHtmlInterstitial(text)) {
-        reject("interstitial");
+        return reject("interstitial");
       }
-      return body;
+      return Result.ok(body);
   }
 };
 
@@ -196,20 +196,19 @@ export const validatePublisherPage = ({
   adapterKey,
   cursor,
   headers,
-}: ValidatePublisherPageOptions): unknown => {
-  const reject = (reason: PublisherPageReason): never => {
-    throw new PublisherPageError({ adapterKey, cursor, reason });
-  };
+}: ValidatePublisherPageOptions): Result<unknown, PublisherPageError> => {
+  const reject = (reason: PublisherPageReason) =>
+    Result.err(new PublisherPageError({ adapterKey, cursor, reason }));
   const bytes =
     typeof body === "string" ? new TextEncoder().encode(body) : body;
   if (bytes.byteLength < (expectation.minBytes ?? 1)) {
-    reject("too-small");
+    return reject("too-small");
   }
   if (!matchesContentType(headers, expectation.kind)) {
-    reject("content-type");
+    return reject("content-type");
   }
   if (headers?.has("retry-after")) {
-    reject("interstitial");
+    return reject("interstitial");
   }
   const text =
     typeof body === "string"
@@ -223,24 +222,27 @@ export const validatePublisherPage = ({
       expectation.kind === "xml") &&
     text.trim() === ""
   ) {
-    reject("too-small");
+    return reject("too-small");
   }
   const looksHtml =
     /^\s*(?:<!doctype\s+html\b|<html\b|<head\b|<body\b|<form\b|<script\b)/iu.test(
       text,
     );
   if (looksHtml && expectation.kind !== "html") {
-    reject("content-type");
+    return reject("content-type");
   }
-  const value = readPublisherPageContent({
+  const content = readPublisherPageContent({
     kind: expectation.kind,
     body,
     bytes,
     text,
     reject,
   });
-  if (expectation.shape !== undefined && !expectation.shape(value)) {
-    reject("invalid-shape");
+  if (content.isErr()) {
+    return content;
   }
-  return value;
+  if (expectation.shape !== undefined && !expectation.shape(content.value)) {
+    return reject("invalid-shape");
+  }
+  return content;
 };

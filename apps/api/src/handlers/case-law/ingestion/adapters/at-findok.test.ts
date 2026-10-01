@@ -30,15 +30,13 @@ const MANIFEST_ITEM = {
   dokumentId: DOCUMENT_ID,
 } as const;
 
-type ManifestFixture = Record<string, unknown>;
-
 const xmlFixture = async (): Promise<string> =>
   await Bun.file(
     new URL("../parsers/__fixtures__/at-findok-bfg-2026.xml", import.meta.url),
   ).text();
 
 const manifestResponse = (
-  items: readonly ManifestFixture[] = [MANIFEST_ITEM],
+  items: readonly unknown[] = [MANIFEST_ITEM],
 ): Response =>
   new Response(
     Bun.gzipSync(
