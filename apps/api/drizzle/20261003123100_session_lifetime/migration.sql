@@ -7,6 +7,7 @@ ALTER TABLE "session"
   ADD COLUMN IF NOT EXISTS "prior_token_hash" text,
   ADD COLUMN IF NOT EXISTS "prior_token_expires_at" timestamptz;
 --> statement-breakpoint
+-- stella-migration-safety: reviewed drop-constraint - recreates the same CHECK in this transaction for replay; allowed values stay unchanged and retries repeat the replacement
 ALTER TABLE "session" DROP CONSTRAINT IF EXISTS "session_refreshMode_check";
 --> statement-breakpoint
 ALTER TABLE "session"
