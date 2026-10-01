@@ -1080,9 +1080,9 @@ test("manual full-depth runs leave the merge-group-only exact-base job unplanned
 
 test("spec-tree PRs plan production shards and their web build at fast depth", () => {
   for (const file of [
-    "apps/web/e2e/new.spec.ts",
-    "apps/web/e2e/helpers/auth.ts",
-    "apps/web/e2e/fixtures/new.json",
+    "apps/web/e2e/specs/new.spec.ts",
+    "apps/web/e2e/helpers/test.ts",
+    "apps/web/e2e/fixtures/simple.docx",
     "apps/web/e2e/playwright.config.ts",
   ]) {
     const planned = runSelector(
@@ -1129,6 +1129,8 @@ test("production shards keep full-depth core coverage and exclude unrelated fast
   }
   for (const file of [
     "README.md",
+    "apps/web/e2e/collab/room.spec.ts",
+    "apps/web/e2e/playwright.collab.config.ts",
     "apps/web/e2e/marketing/product.spec.ts",
     "apps/web/e2e/playwright.marketing.config.ts",
   ]) {
@@ -1136,7 +1138,7 @@ test("production shards keep full-depth core coverage and exclude unrelated fast
   }
   expect(
     runSelector(
-      ["apps/web/e2e/new.spec.ts"],
+      ["apps/web/e2e/specs/new.spec.ts"],
       ["e2e_production_required"],
       "fast",
       "false",

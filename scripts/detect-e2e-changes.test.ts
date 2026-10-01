@@ -1026,12 +1026,25 @@ describe("detect-e2e-changes", () => {
 });
 
 describe("PR production E2E scope", () => {
+  test("follows the production config's actual spec directory", () => {
+    const source = readFileSync(
+      path.join(import.meta.dirname, "../apps/web/e2e/playwright.config.ts"),
+      "utf-8",
+    );
+    const testDir = /\btestDir:\s*["']([^"']+)["']/u.exec(source)?.[1];
+    if (testDir === undefined) {
+      throw new TypeError("Production config must declare testDir");
+    }
+    const spec = path.posix.join("apps/web/e2e", testDir, "future.spec.ts");
+    expect(detects("pr-core", [spec])).toBe("true");
+  });
+
   test("runs for specs, helpers, fixtures and Playwright configuration", () => {
     for (const file of [
-      "apps/web/e2e/new.spec.ts",
       "apps/web/e2e/specs/new.spec.ts",
-      "apps/web/e2e/helpers/auth.ts",
-      "apps/web/e2e/fixtures/new.json",
+      "apps/web/e2e/specs/nested/new.spec.ts",
+      "apps/web/e2e/helpers/test.ts",
+      "apps/web/e2e/fixtures/simple.docx",
       "apps/web/e2e/playwright.config.ts",
     ]) {
       expect(detects("pr-core", [file]), file).toBe("true");
@@ -1054,6 +1067,10 @@ describe("PR production E2E scope", () => {
       "apps/web/src/routes/index.tsx",
       "packages/ui/src/button.tsx",
       "README.md",
+      "apps/web/e2e/new.spec.ts",
+      "apps/web/e2e/collab/room.spec.ts",
+      "apps/web/e2e/playwright.collab.config.ts",
+      "apps/web/e2e/fixtures/generate.ts",
       "bun.lock",
       ".github/workflows/ci.yml",
       "scripts/detect-e2e-changes.sh",
@@ -1066,7 +1083,7 @@ describe("PR production E2E scope", () => {
   test("marketing exclusions cannot hide a core spec in the same diff", () => {
     const files = [
       "apps/web/e2e/marketing/product.spec.ts",
-      "apps/web/e2e/new.spec.ts",
+      "apps/web/e2e/specs/new.spec.ts",
     ];
     expect(detects("pr-core", files)).toBe("true");
     expect(detects("pr-core", files.toReversed())).toBe("true");

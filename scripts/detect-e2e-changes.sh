@@ -9,21 +9,13 @@ if [[ "$scope" != "core" && "$scope" != "landing" && "$scope" != "marketing" && 
   exit 2
 fi
 
-for file in "$@"; do
-  # PR shards opt in only for their test tree; broad runtime coverage stays
-  # at full depth. Widen this positive pattern when PR runner capacity allows.
-  if [[ "$scope" == "pr-core" ]]; then
-    case "$file" in
-      apps/web/e2e/marketing/*|apps/web/e2e/playwright.marketing.config.ts)
-        ;;
-      apps/web/e2e/*)
-        echo true
-        exit 0
-        ;;
-    esac
-    continue
-  fi
+# The production config owns its spec tree and imported fixtures/helpers.
+# Other E2E configs belong to their existing full-depth jobs.
+if [[ "$scope" == "pr-core" ]]; then
+  exec node "$(dirname "$0")/production-e2e-inputs.mjs" "$@"
+fi
 
+for file in "$@"; do
   case "$file" in
     .github/actions/setup-e2e-stack/*|.github/actions/setup-production-e2e/*|.github/actions/build-e2e-web/*|.github/actions/setup-playwright/*|.github/actions/marketing-capture/*|.github/workflows/ci.yml|.github/workflows/marketing-screenshots.yml|scripts/detect-e2e-changes.sh|bun.lock|package.json|patches/*)
       echo true

@@ -1,0 +1,86 @@
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const CONFIG_PATH = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../apps/web/e2e/playwright.config.ts",
+);
+const SOURCE_EXTENSION = /\.[cm]?[jt]sx?$/u;
+
+// Read inputs without executing Playwright or installing dependencies: ci-plan
+// runs before installation. Runtime source outside E2E stays in full-depth CI.
+/** @param {string} configPath */
+export const productionE2eInputs = (configPath) => {
+  const root = path.dirname(configPath);
+  const config = readFileSync(configPath, "utf-8");
+  const testDir = /\btestDir:\s*["']([^"']+)["']/u.exec(config)?.[1];
+  if (testDir === undefined) {
+    throw new TypeError("Production E2E config must declare a literal testDir");
+  }
+  const testDirectory = path.resolve(root, testDir);
+  /** @type {Set<string>} */
+  const files = new Set();
+  const pending = [configPath];
+  const tsconfig = path.join(root, "tsconfig.json");
+  if (existsSync(tsconfig)) {
+    pending.push(tsconfig);
+  }
+  if (!testDirectory.startsWith(`${root}${path.sep}`)) {
+    throw new TypeError("Production E2E testDir must stay inside its E2E tree");
+  }
+  for (const file of readdirSync(testDirectory, { recursive: true })) {
+    if (SOURCE_EXTENSION.test(file)) {
+      pending.push(path.join(testDirectory, file));
+    }
+  }
+  for (const file of pending) {
+    if (files.has(file)) {
+      continue;
+    }
+    files.add(file);
+    if (!SOURCE_EXTENSION.test(file)) {
+      continue;
+    }
+    const source = readFileSync(file, "utf-8");
+    const imports = [...source.matchAll(/\b(?:from\s*|import\s*\(\s*|require\s*\(\s*|import\s*)["']([^"']+)["']/gu)]
+      .flatMap((match) => match[1] === undefined ? [] : [match[1]]);
+    // Assets and setup hooks are file references rather than module imports
+    // (globalTeardown, DOCX_PATH, the route network baseline).
+    const references = [...source.matchAll(/["'](\.{1,2}\/[^"'\n]+)["']/gu)]
+      .flatMap((match) => {
+        const reference = match[1];
+        return reference !== undefined && path.extname(reference) !== "" ? [reference] : [];
+      });
+    for (const reference of [...imports, ...references]) {
+      if (!reference.startsWith(".")) {
+        continue;
+      }
+      const resolved = path.resolve(path.dirname(file), reference);
+      if (!resolved.startsWith(`${root}${path.sep}`)) {
+        continue;
+      }
+      const candidates = [resolved, `${resolved}.ts`, `${resolved}.tsx`, path.join(resolved, "index.ts")];
+      const input = candidates.find((candidate) => existsSync(candidate) && statSync(candidate).isFile());
+      if (input === undefined) {
+        throw new TypeError(`Unresolved production E2E input: ${reference} in ${file}`);
+      }
+      pending.push(input);
+    }
+  }
+  return { testDirectory, files };
+};
+
+if (process.argv[1] !== undefined && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+  const changedFiles = process.argv.slice(2);
+  const root = path.dirname(CONFIG_PATH);
+  const absoluteFiles = changedFiles.map((file) => path.resolve(file));
+  if (!absoluteFiles.some((file) => file.startsWith(`${root}${path.sep}`))) {
+    console.log(false);
+  } else {
+    const { testDirectory, files } = productionE2eInputs(CONFIG_PATH);
+    console.log(absoluteFiles.some((file) =>
+      file.startsWith(`${testDirectory}${path.sep}`) || files.has(file),
+    ));
+  }
+}
