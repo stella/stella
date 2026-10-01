@@ -5,12 +5,7 @@ import type { NodeViewProps } from "@tiptap/react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import {
-  ClipboardPasteIcon,
-  CommandIcon,
-  XIcon,
-  SkillIcon,
-} from "@stll/ui/icons";
+import { ClipboardPasteIcon, CommandIcon, XIcon } from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
@@ -19,10 +14,11 @@ import type {
   PastedTextAttrs,
   PastedTextSource,
 } from "@/components/chat-pasted-text-extension";
+import { ReferenceChip } from "@/components/references/reference-chip";
 
 const CHIP_MAX_LABEL_WIDTH_CLASS = "max-w-48";
 
-// Shared chip shell so the interactive paste/prompt/skill trigger and the
+// Shared chip shell so the interactive paste trigger and the
 // static command chip stay visually identical.
 const CHIP_BASE_CLASS = cn(
   "inline-flex max-w-full items-center gap-1 align-middle",
@@ -30,13 +26,14 @@ const CHIP_BASE_CLASS = cn(
   "text-foreground text-xs font-medium",
 );
 
-const ChipIcon = ({ source }: { source: PastedTextSource }) => {
+// Skills and saved prompts render through `ReferenceChip`; this draws the
+// paste and command chips only.
+const ChipIcon = ({
+  source,
+}: {
+  source: Exclude<PastedTextSource, "prompt" | "skill">;
+}) => {
   const className = "text-muted-foreground size-3 shrink-0";
-  // Skills and saved prompts are one user-facing concept, so they share the
-  // skill glyph the menus and the sent-message chip draw.
-  if (source === "skill" || source === "prompt") {
-    return <SkillIcon className={className} />;
-  }
   if (source === "command") {
     return <CommandIcon className={className} />;
   }
@@ -128,22 +125,47 @@ export const ChatPastedTextNode = (props: NodeViewProps) => {
   return (
     <NodeViewWrapper className="inline" data-source={attrs.source}>
       <Popover>
-        <PopoverTrigger
-          aria-label={t("chat.pastedText.expand")}
-          className={cn(
-            CHIP_BASE_CLASS,
-            "hover:bg-muted",
-            "focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none",
-            "cursor-pointer select-none",
-          )}
-          contentEditable={false}
-          type="button"
-        >
-          <ChipIcon source={attrs.source} />
-          <span className={cn("truncate", CHIP_MAX_LABEL_WIDTH_CLASS)}>
-            {chipLabel}
-          </span>
-        </PopoverTrigger>
+        {attrs.source === "prompt" || attrs.source === "skill" ? (
+          // A skill (or saved prompt, the same concept to users) is a
+          // reference: it draws the very chip the sent message shows.
+          <PopoverTrigger
+            aria-label={t("chat.pastedText.expand")}
+            className={cn(
+              "inline-flex max-w-full rounded align-middle",
+              "focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none",
+              "cursor-pointer select-none",
+            )}
+            contentEditable={false}
+            type="button"
+          >
+            <ReferenceChip
+              interactive={false}
+              reference={{
+                type: "skill",
+                slug: attrs.source === "skill" ? attrs.text : "",
+                label: chipLabel,
+              }}
+              selected={props.selected}
+            />
+          </PopoverTrigger>
+        ) : (
+          <PopoverTrigger
+            aria-label={t("chat.pastedText.expand")}
+            className={cn(
+              CHIP_BASE_CLASS,
+              "hover:bg-muted",
+              "focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none",
+              "cursor-pointer select-none",
+            )}
+            contentEditable={false}
+            type="button"
+          >
+            <ChipIcon source={attrs.source} />
+            <span className={cn("truncate", CHIP_MAX_LABEL_WIDTH_CLASS)}>
+              {chipLabel}
+            </span>
+          </PopoverTrigger>
+        )}
         <PopoverPopup className="w-(--available-width) max-w-md" side="top">
           <div className="flex max-h-72 flex-col gap-2 text-xs">
             <div className="flex items-center justify-between gap-2">

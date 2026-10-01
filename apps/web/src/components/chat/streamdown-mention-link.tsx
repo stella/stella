@@ -1,19 +1,11 @@
 import type React from "react";
 import { Fragment, isValidElement, useState } from "react";
 
-import { type QueryClient, useQueryClient } from "@tanstack/react-query";
-import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import {
-  CHAT_DECISION_PASSAGE_HREF_PREFIX,
-  parseChatDecisionPassageHref,
   parseCanonicalChatSourceCitationHref,
-  parseChatResourceHref,
-  RESOURCE_TYPE,
-  SKILL_REF_HREF_PREFIX,
-  type ChatDecisionPassageTarget,
   type ChatSourceCitationTarget,
 } from "@stll/api-contract";
 import { isFolioBlockId } from "@stll/folio-react";
@@ -21,46 +13,37 @@ import {
   FileTextIcon,
   FileSpreadsheetIcon,
   GlobeIcon,
-  LandmarkIcon,
   MailIcon,
   PresentationIcon,
   ScrollTextIcon,
-  SkillIcon,
 } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import {
-  type CaseLawDecisionLocator,
-  openCaseLawDecision,
-} from "@/components/chat/case-law-open";
-import {
   classifyChatHttpLink,
   type StatuteLink,
 } from "@/components/chat/chat-app-link.logic";
 import {
-  parseStellaMentionHref,
-  resolveMentionWorkspaceId,
-} from "@/components/chat/chat-mention-href";
-import { useEntityIconSource } from "@/components/chat/entity-icon-source";
-import {
   openEmailCitationSource,
-  openEntityInInspector,
   openOfficeCitationSource,
   openSourceBoundEntityFile,
 } from "@/components/chat/entity-open";
 import { useExternalSourceStore } from "@/components/chat/external-source-store";
-import { skillRefDestination } from "@/components/chat/skill-ref-link";
 import { activateSourceCitation } from "@/components/chat/source-citation-navigation";
 import { useOpenStatuteLink } from "@/components/chat/statute-open";
 import { InlinePill } from "@/components/inline-pill";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
-import { MatterIcon } from "@/components/matter-icon";
-import { EntityIcon } from "@/components/workspaces/entity-kind-icon";
-import { PDF_MIME_TYPE } from "@/consts";
+import {
+  MarkdownReferenceChip,
+  ReferenceChip,
+} from "@/components/references/reference-chip";
+import {
+  isReferenceHref,
+  referenceFromDecisionRoute,
+} from "@/components/references/reference.logic";
 import { env } from "@/env";
-import { useOpenDecisionTab } from "@/features/case-law/open-decision-tab";
 import { useVerifiedEmailCitationTarget } from "@/hooks/use-verified-email-citation-target";
 import { useVerifiedOfficeCitationTarget } from "@/hooks/use-verified-office-citation-target";
 import { DOCX_MIME } from "@/lib/consts";
@@ -79,46 +62,15 @@ import {
   type FolioScrollEventDetail,
 } from "@/lib/folio-scroll-event";
 import { sanitizeHref } from "@/lib/sanitize-href";
-import { navigateToWorkspaceFolder } from "@/lib/workspaces/reveal-navigation";
 
-const ENTITY_REF_HASH_PREFIX = "#stella-entity-ref=";
-const WORKSPACE_REF_HASH_PREFIX = "#stella-workspace-ref=";
-/**
- * The server rewrites a citation whose ref was never minted this turn to
- * this href (see `CHAT_UNRESOLVED_REF_HREF` in the API's ref registry): a
- * fabricated or mangled mention must render as plain text, never as a
- * clickable pill that looks like a real document.
- */
-const UNRESOLVED_REF_HREF = "#stella-unresolved-ref";
-const UUID_SHAPE_REGEX =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 // Hash fragment, NOT a `folio:` scheme. Streamdown runs
 // rehype-sanitize over rendered links; only its protocol
 // whitelist (http/https/mailto/tel) survives. Custom schemes
 // get their href stripped, after which rehype-harden appends
 // " [blocked]". Hash-only hrefs are treated as relative and
-// pass through untouched, matching how `#stella-entity-ref=`
+// pass through untouched, matching how `#stella-entity=`
 // and friends already work.
 const FOLIO_BLOCK_PREFIX = "#folio:";
-
-const DOCUMENT_MIME_BY_EXTENSION: Record<string, string> = {
-  csv: "text/csv",
-  doc: "application/msword",
-  docx: DOCX_MIME,
-  gif: "image/gif",
-  jpeg: "image/jpeg",
-  jpg: "image/jpeg",
-  odt: "application/vnd.oasis.opendocument.text",
-  pdf: PDF_MIME_TYPE,
-  png: "image/png",
-  rtf: "application/rtf",
-  webp: "image/webp",
-  xls: "application/vnd.ms-excel",
-  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-};
-
-const ENTITY_EXTENSION_RE = /\.(?<ext>[A-Za-z0-9]{1,8})$/u;
-const SKILL_CHIP_ICON = <SkillIcon className="size-3 shrink-0" />;
 
 const isReactNodeArray = (
   node: React.ReactNode,
@@ -179,79 +131,6 @@ const getAppOrigins = (): ReadonlySet<string> =>
     ...(typeof window === "undefined" ? [] : [window.location.origin]),
   ]);
 
-const getDocumentMimeFromLabel = (label: string): string | null => {
-  const extension = ENTITY_EXTENSION_RE.exec(label.trim())?.groups?.["ext"];
-  if (!extension) {
-    return null;
-  }
-
-  return DOCUMENT_MIME_BY_EXTENSION[extension.toLowerCase()] ?? null;
-};
-
-const stripDocumentExtension = (label: string) => {
-  if (!getDocumentMimeFromLabel(label)) {
-    return label;
-  }
-
-  return label.trim().replace(ENTITY_EXTENSION_RE, "");
-};
-
-const getEntityDisplayLabel = (label: React.ReactNode): React.ReactNode => {
-  const text = getPlainText(label);
-  if (!text) {
-    return label;
-  }
-
-  return stripDocumentExtension(text);
-};
-
-const EntityChipIcon = ({
-  workspaceId,
-  entityId,
-}: {
-  workspaceId?: string | undefined;
-  entityId?: string | undefined;
-}) => {
-  const source = useEntityIconSource({ entityId, workspaceId });
-  return <EntityIcon className="size-3 shrink-0" source={source} />;
-};
-
-type MentionChipProps = {
-  label: React.ReactNode;
-  href: string;
-  interactive: boolean;
-  workspaceId?: string | undefined;
-};
-
-const DecisionChip = ({
-  locator,
-  label,
-  interactive,
-}: {
-  locator: CaseLawDecisionLocator;
-  label: React.ReactNode;
-  interactive: boolean;
-}) => {
-  const { open } = useOpenDecisionTab();
-  return (
-    <InlinePill
-      leadingIcon={<LandmarkIcon className="size-3 shrink-0" />}
-      onActivate={
-        interactive
-          ? () =>
-              detached(
-                openCaseLawDecision(locator, open),
-                "streamdown-mention-link.open-case-law-decision",
-              )
-          : undefined
-      }
-      truncate
-    >
-      {label}
-    </InlinePill>
-  );
-};
-
 /** A link to one of this app's statute pages: the act, opened in-app. */
 const StatuteChip = ({
   label,
@@ -274,372 +153,6 @@ const StatuteChip = ({
   );
 };
 
-/**
- * Click-to-open chip for an inline decision-passage citation, which the AI
- * emits in an answer about the decision the reader has open. The tab carries
- * the anchor as the block to land on, and the reader marks it — so a chat
- * docked beside the decision it cites scrolls in place, and one anywhere else
- * opens the decision at that passage.
- */
-const DecisionPassageChip = ({
-  children,
-  interactive,
-  target: { anchorId, decisionId },
-}: {
-  children: React.ReactNode;
-  interactive: boolean;
-  target: ChatDecisionPassageTarget;
-}) => {
-  const { open } = useOpenDecisionTab();
-  // A model occasionally emits a degenerate citation whose text is the bare
-  // href or is empty. The anchor is the decision's own paragraph marker, so it
-  // reads as a locator rather than as the internal scheme.
-  const text = collectChipText(children).trim();
-  const label =
-    text.length === 0 ||
-    text.toLowerCase().startsWith(CHAT_DECISION_PASSAGE_HREF_PREFIX)
-      ? anchorId
-      : children;
-  return (
-    <InlinePill
-      leadingIcon={<LandmarkIcon className="size-3 shrink-0" />}
-      onActivate={
-        interactive
-          ? () =>
-              detached(
-                openCaseLawDecision({ type: "ref", ref: decisionId }, open, {
-                  anchorId,
-                }),
-                "streamdown-mention-link.open-decision-passage",
-              )
-          : undefined
-      }
-      truncate
-    >
-      {label}
-    </InlinePill>
-  );
-};
-
-const EntityRefChip = ({
-  rawId,
-  label,
-  fallbackWorkspaceId,
-  interactive,
-}: {
-  rawId: string;
-  label: React.ReactNode;
-  fallbackWorkspaceId?: string | undefined;
-  interactive: boolean;
-}) => {
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const pathname = useRouterState({
-    select: (state) => state.location.pathname,
-  });
-
-  const separator = rawId.indexOf(":");
-  const refWorkspaceId =
-    separator !== -1 ? rawId.slice(0, separator) : fallbackWorkspaceId;
-  const refEntityId = separator !== -1 ? rawId.slice(separator + 1) : rawId;
-  const textLabel = typeof label === "string" ? label : "Reference";
-  // Legacy persisted text may carry an unresolved per-turn ref (`ent_99`)
-  // where a stable entity UUID belongs; before this guard it fell back to
-  // the current workspace and rendered as a real-looking, broken pill.
-  if (!UUID_SHAPE_REGEX.test(refEntityId)) {
-    return <span>{label}</span>;
-  }
-  const icon = (
-    <EntityChipIcon entityId={refEntityId} workspaceId={refWorkspaceId} />
-  );
-  const displayLabel = getEntityDisplayLabel(label);
-
-  if (!interactive || !refWorkspaceId) {
-    return (
-      <InlinePill leadingIcon={icon} truncate>
-        {displayLabel}
-      </InlinePill>
-    );
-  }
-
-  return (
-    <InlinePill
-      leadingIcon={icon}
-      onActivate={buildParsedEntityActivate({
-        navigate,
-        pathname,
-        queryClient,
-        id: refEntityId,
-        textLabel,
-        workspaceId: refWorkspaceId,
-      })}
-      truncate
-    >
-      {displayLabel}
-    </InlinePill>
-  );
-};
-
-const SkillRefChip = ({
-  slug,
-  label,
-  interactive,
-}: {
-  slug: string;
-  label: React.ReactNode;
-  interactive: boolean;
-}) => {
-  const navigate = useNavigate();
-  if (!interactive) {
-    return (
-      <InlinePill leadingIcon={SKILL_CHIP_ICON} truncate>
-        {label}
-      </InlinePill>
-    );
-  }
-  return (
-    <InlinePill
-      leadingIcon={SKILL_CHIP_ICON}
-      onActivate={() =>
-        detached(
-          navigate(skillRefDestination(slug)),
-          "streamdown-mention-link.navigate",
-        )
-      }
-      truncate
-    >
-      {label}
-    </InlinePill>
-  );
-};
-
-const WorkspaceRefChip = ({
-  workspaceId,
-  label,
-  interactive,
-}: {
-  workspaceId: string;
-  label: React.ReactNode;
-  interactive: boolean;
-}) => {
-  const navigate = useNavigate();
-  // Same guard as EntityRefChip: an unresolved `mat_99` in legacy persisted
-  // text must not render as a navigable matter pill.
-  if (!UUID_SHAPE_REGEX.test(workspaceId)) {
-    return <span>{label}</span>;
-  }
-  const icon = (
-    <MatterIcon
-      className="size-3 shrink-0"
-      matter={{ id: workspaceId, color: null }}
-    />
-  );
-  if (!interactive) {
-    return (
-      <InlinePill leadingIcon={icon} truncate>
-        {label}
-      </InlinePill>
-    );
-  }
-  return (
-    <InlinePill
-      leadingIcon={icon}
-      onActivate={() =>
-        detached(
-          navigate({
-            to: "/workspaces/$workspaceId",
-            params: { workspaceId },
-          }),
-          "streamdown-mention-link.navigate",
-        )
-      }
-      truncate
-    >
-      {label}
-    </InlinePill>
-  );
-};
-
-const buildParsedEntityActivate =
-  ({
-    navigate,
-    pathname,
-    queryClient,
-    id,
-    textLabel,
-    workspaceId,
-  }: {
-    navigate: ReturnType<typeof useNavigate>;
-    pathname: string;
-    queryClient: QueryClient;
-    id: string;
-    textLabel: string;
-    workspaceId: string;
-  }) =>
-  () => {
-    detached(
-      (async () => {
-        const result = await openEntityInInspector(id, textLabel, workspaceId);
-        if (result.type === "folder") {
-          await navigateToWorkspaceFolder({
-            folderId: result.entityId,
-            navigate,
-            pathname,
-            queryClient,
-            targetWorkspaceId: result.workspaceId,
-          });
-        }
-      })(),
-      "streamdown-mention-link.open-entity-in-inspector",
-    );
-  };
-
-const ParsedMentionChip = ({
-  parsed,
-  label,
-  interactive,
-  workspaceId,
-}: {
-  parsed: NonNullable<ReturnType<typeof parseStellaMentionHref>>;
-  label: React.ReactNode;
-  interactive: boolean;
-  workspaceId?: string | undefined;
-}) => {
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const pathname = useRouterState({
-    select: (state) => state.location.pathname,
-  });
-
-  const { category, target } = parsed;
-  const mentionWorkspaceId = resolveMentionWorkspaceId(target, workspaceId);
-  const id = target.resource.id;
-  const textLabel = typeof label === "string" ? label : "Reference";
-
-  if (category === "entity") {
-    const icon = (
-      <EntityChipIcon entityId={id} workspaceId={mentionWorkspaceId} />
-    );
-    const displayLabel = getEntityDisplayLabel(label);
-    if (!interactive || !mentionWorkspaceId) {
-      return (
-        <InlinePill leadingIcon={icon} truncate>
-          {displayLabel}
-        </InlinePill>
-      );
-    }
-    return (
-      <InlinePill
-        leadingIcon={icon}
-        onActivate={buildParsedEntityActivate({
-          navigate,
-          pathname,
-          queryClient,
-          id,
-          textLabel,
-          workspaceId: mentionWorkspaceId,
-        })}
-        truncate
-      >
-        {displayLabel}
-      </InlinePill>
-    );
-  }
-
-  const icon = <CategoryIcon id={id} />;
-  if (!interactive) {
-    return (
-      <InlinePill leadingIcon={icon} truncate>
-        {label}
-      </InlinePill>
-    );
-  }
-  return (
-    <InlinePill
-      leadingIcon={icon}
-      onActivate={() =>
-        detached(
-          navigate({
-            to: "/workspaces/$workspaceId",
-            params: { workspaceId: id },
-          }),
-          "streamdown-mention-link.navigate",
-        )
-      }
-      truncate
-    >
-      {label}
-    </InlinePill>
-  );
-};
-
-const CategoryIcon = ({ id }: { id: string }) => (
-  <MatterIcon className="size-3 shrink-0" matter={{ id, color: null }} />
-);
-
-const MentionChip = ({
-  label,
-  href,
-  interactive,
-  workspaceId,
-}: MentionChipProps) => {
-  const resourceTarget = parseChatResourceHref(href);
-  if (resourceTarget?.resource.type === RESOURCE_TYPE.CASE_LAW_DECISION) {
-    return (
-      <DecisionChip
-        interactive={interactive}
-        label={label}
-        locator={{ type: "ref", ref: resourceTarget.resource.id }}
-      />
-    );
-  }
-
-  if (href.startsWith(ENTITY_REF_HASH_PREFIX)) {
-    return (
-      <EntityRefChip
-        fallbackWorkspaceId={workspaceId}
-        interactive={interactive}
-        label={label}
-        rawId={href.slice(ENTITY_REF_HASH_PREFIX.length)}
-      />
-    );
-  }
-
-  if (href.startsWith(WORKSPACE_REF_HASH_PREFIX)) {
-    return (
-      <WorkspaceRefChip
-        interactive={interactive}
-        label={label}
-        workspaceId={href.slice(WORKSPACE_REF_HASH_PREFIX.length)}
-      />
-    );
-  }
-
-  if (href.startsWith(SKILL_REF_HREF_PREFIX)) {
-    return (
-      <SkillRefChip
-        interactive={interactive}
-        label={label}
-        slug={href.slice(SKILL_REF_HREF_PREFIX.length)}
-      />
-    );
-  }
-
-  const parsed = parseStellaMentionHref(href);
-  if (!parsed) {
-    return null;
-  }
-
-  return (
-    <ParsedMentionChip
-      interactive={interactive}
-      label={label}
-      parsed={parsed}
-      workspaceId={workspaceId}
-    />
-  );
-};
-
 type StreamdownMentionLinkProps =
   React.AnchorHTMLAttributes<HTMLAnchorElement> & {
     interactive: boolean;
@@ -656,19 +169,6 @@ export const StreamdownMentionLink = ({
   const emailCitation = useVerifiedEmailCitationTarget(href ?? "", workspaceId);
   if (!href) {
     return <span {...props}>{children}</span>;
-  }
-
-  if (href === UNRESOLVED_REF_HREF) {
-    return <span {...props}>{children}</span>;
-  }
-
-  const decisionPassage = parseChatDecisionPassageHref(href);
-  if (decisionPassage) {
-    return (
-      <DecisionPassageChip interactive={interactive} target={decisionPassage}>
-        {children}
-      </DecisionPassageChip>
-    );
   }
 
   const sourceCitation = parseCanonicalChatSourceCitationHref(href);
@@ -723,21 +223,17 @@ export const StreamdownMentionLink = ({
     );
   }
 
-  const mentionChip =
-    parseChatResourceHref(href) !== null ||
-    href.startsWith(ENTITY_REF_HASH_PREFIX) ||
-    href.startsWith(WORKSPACE_REF_HASH_PREFIX) ||
-    href.startsWith(SKILL_REF_HREF_PREFIX) ? (
-      <MentionChip
+  // Entities, matters, decisions, skills and people: the one reference chip.
+  if (isReferenceHref(href)) {
+    return (
+      <MarkdownReferenceChip
         href={href}
         interactive={interactive}
-        label={children}
         workspaceId={workspaceId}
-      />
-    ) : null;
-
-  if (mentionChip) {
-    return mentionChip;
+      >
+        {children}
+      </MarkdownReferenceChip>
+    );
   }
 
   if (!interactive) {
@@ -754,10 +250,13 @@ export const StreamdownMentionLink = ({
     switch (link.type) {
       case "decision":
         return (
-          <DecisionChip
+          <ReferenceChip
             interactive
-            label={children}
-            locator={{ type: "route", params: link.params }}
+            labelContent={children}
+            reference={referenceFromDecisionRoute(
+              link.params,
+              getPlainText(children) ?? "",
+            )}
           />
         );
       case "statute":

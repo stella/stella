@@ -498,9 +498,10 @@ const documentFieldContentProjection = v.variant("type", [
     v.strictObject({
       version: v.literal(1),
       type: v.literal("person"),
-      // The workspace member handle is machinery chat cannot act on; the name
-      // is what a model reads.
-      userId: strippedField(),
+      // The workspace member handle is the person's reference: the model
+      // links the name with it (`#stella-user=<userId>`, PEOPLE MENTIONS) the
+      // way it links an entity with its `ent_N`. Null for a non-member.
+      userId: v.nullable(passthroughId()),
       name: v.string(),
       image: strippedField(),
     }),
