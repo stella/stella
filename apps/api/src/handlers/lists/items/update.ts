@@ -25,7 +25,11 @@ const config = {
     "priority, and due date live on the task behind it, so change those with " +
     "tasks.update.",
   permissions: { entity: ["update"] },
-  mcp: { type: "capability", reason: "workspace_schema" },
+  mcp: {
+    type: "capability",
+    reason: "workspace_schema",
+    consumesServices: false,
+  },
   body: bodySchema,
 } satisfies WorkspaceHandlerConfig;
 

@@ -171,6 +171,7 @@
     "expo-modules-core": "57.0.18",
     "fast-uri": "3.1.8",
     "fast-xml-parser": "5.11.1",
+    "ioredis": "6.0.0",
     "ip-address": "10.7.2",
     "lucide-react": "1.41.0",
     "mailauth/joi": "18.2.9",

@@ -25,7 +25,11 @@ const searchContacts = createSafeRootHandler(
       "most 20 contacts ordered by display name with no cursor; use " +
       "contacts.list to page the whole address book.",
     permissions: { workspace: ["read"] },
-    mcp: { type: "capability", reason: "contact_directory" },
+    mcp: {
+      type: "capability",
+      reason: "contact_directory",
+      consumesServices: false,
+    },
     access: "read",
     query: searchContactsQuerySchema,
   },

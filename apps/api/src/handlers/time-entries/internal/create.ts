@@ -22,7 +22,11 @@ const createInternalTimeEntry = createSafeRootHandler(
       "Record internal work for yourself in the active organization without a matter. Requires work date (YYYY-MM-DD), IANA timezoneId, positive whole durationMinutes, and narrative. Internal work has no billable value; monthly locks, edit windows, and narrative policy still apply. Returns the entry id and activityGroup. Internal entries await administrator approval when no approver is assigned.",
     permissions: { timeEntry: ["create"] },
     access: "write",
-    mcp: { type: "capability", reason: "billing_admin" },
+    mcp: {
+      type: "capability",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
     body: t.Object(
       {
         dateWorked: t.String({ format: "date" }),

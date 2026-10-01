@@ -25,7 +25,11 @@ const createRateTable = createSafeHandler(
       "a fixed cap on how many rate tables they may hold. Add the rates " +
       "themselves with rates.entries.create.",
     permissions: { rate: ["create"] },
-    mcp: { type: "capability", reason: "billing_admin" },
+    mcp: {
+      type: "capability",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
     body: createRateTableBodySchema,
   },
   async function* ({ safeDb, session, workspaceId, body, recordAuditEvent }) {

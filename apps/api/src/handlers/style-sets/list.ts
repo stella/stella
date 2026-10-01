@@ -28,7 +28,11 @@ const config = {
     "reports the maximum number of style sets the organization may hold.",
   permissions: { styleSet: ["use"] },
   access: "read",
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  mcp: {
+    type: "capability",
+    reason: "template_authoring_ui",
+    consumesServices: false,
+  },
   query: querySchema,
 } satisfies HandlerConfig;
 

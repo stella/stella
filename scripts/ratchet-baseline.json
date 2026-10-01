@@ -179,7 +179,7 @@
     }
   },
   "audit-skip-directives": {
-    "count": 270,
+    "count": 271,
     "files": {
       "apps/api/src/handlers/bilingual-translations/create-run.ts": 1,
       "apps/api/src/handlers/case-law/analysis/generate.ts": 2,
@@ -199,6 +199,7 @@
       "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/pipeline/source-observation.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/pipeline/supplement-placement.ts": 4,
+      "apps/api/src/handlers/case-law/ingestion/replay.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/source-totals.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/supplement-absorption.ts": 4,
       "apps/api/src/handlers/case-law/ingestion/supplement-composition.ts": 3,
@@ -343,7 +344,7 @@
     "files": {}
   },
   "throw-outside-boundary": {
-    "count": 895,
+    "count": 896,
     "files": {
       "apps/api/src/handlers/case-law/decisions/latest.ts": 3,
       "apps/api/src/handlers/case-law/ingestion/adapters/at-courts.ts": 9,
@@ -418,7 +419,7 @@
       "apps/api/src/handlers/view-templates/create.ts": 2,
       "apps/api/src/handlers/views/create.ts": 4,
       "apps/api/src/handlers/views/update.ts": 1,
-      "apps/api/src/handlers/workspaces/duplicate.ts": 5,
+      "apps/api/src/handlers/workspaces/duplicate.ts": 6,
       "apps/api/src/handlers/workspaces/members/remove.ts": 6,
       "apps/api/src/lib/account-deletion-reassignment.ts": 4,
       "apps/api/src/lib/account-deletion-steps.ts": 4,
@@ -656,7 +657,7 @@
     }
   },
   "try-catch-outside-boundary": {
-    "count": 360,
+    "count": 359,
     "files": {
       "apps/api/src/handlers/ai-autocomplete/stream.ts": 1,
       "apps/api/src/handlers/case-law/analysis/generate.ts": 1,
@@ -745,7 +746,7 @@
       "apps/api/src/lib/scheduler/runner.ts": 2,
       "apps/api/src/lib/scheduler/tasks/desktop-edit-session-expiry-notifications.ts": 1,
       "apps/api/src/lib/scheduler/tasks/infosoud.ts": 1,
-      "apps/api/src/lib/search/extraction-worker.ts": 3,
+      "apps/api/src/lib/search/extraction-worker.ts": 2,
       "apps/api/src/lib/search/index-chat.ts": 1,
       "apps/api/src/lib/search/index-entity.ts": 1,
       "apps/api/src/lib/signals/scout.ts": 1,
@@ -974,7 +975,7 @@
     }
   },
   "no-db-await-in-loop-suppressions": {
-    "count": 114,
+    "count": 115,
     "files": {
       "apps/api/scripts/backfill-image-thumbnails.ts": 3,
       "apps/api/scripts/backfill-search-previews.ts": 2,
@@ -987,7 +988,7 @@
       "apps/api/src/handlers/case-law/ingestion/pipeline.ts": 3,
       "apps/api/src/handlers/case-law/ingestion/pipeline/batch.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/pipeline/decision-identity.ts": 1,
-      "apps/api/src/handlers/case-law/ingestion/reconciliation-engine.ts": 2,
+      "apps/api/src/handlers/case-law/ingestion/reconciliation-engine.ts": 3,
       "apps/api/src/handlers/case-law/ingestion/supplement-fold.ts": 2,
       "apps/api/src/handlers/case-law/provisions/previews-for-decision.ts": 1,
       "apps/api/src/handlers/chat/threads/delete.ts": 2,
@@ -1106,7 +1107,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 293,
+    "count": 294,
     "files": {
       "apps/api/scripts/lib/compact-schema-defs.ts": 1,
       "apps/api/scripts/seed-case-law.ts": 1,
@@ -1198,10 +1199,10 @@
       "apps/api/src/scripts/adapter-health.ts": 1,
       "apps/api/src/scripts/citation-probe.ts": 1,
       "apps/api/src/scripts/mcp-canary.ts": 3,
-      "apps/api/src/scripts/post-deploy-response-policy.ts": 1,
       "apps/api/src/scripts/post-deploy-smoke.ts": 1,
       "apps/api/src/scripts/redact-case-law-decision.ts": 1,
       "apps/collab/src/server.ts": 1,
+      "apps/landing/src/components/anonymize-demo-engine.ts": 2,
       "apps/landing/src/components/anonymize-demo-worker-client.ts": 2,
       "apps/landing/src/components/anonymize-demo-worker.ts": 2,
       "apps/landing/src/components/react/DocxEditorTool.tsx": 1,
@@ -2120,9 +2121,9 @@
     }
   },
   "direct-third-party-declarations": {
-    "count": 512,
+    "count": 515,
     "files": {
-      "apps/api/package.json": 85,
+      "apps/api/package.json": 84,
       "apps/collab/package.json": 10,
       "apps/desktop/package.json": 15,
       "apps/extension/package.json": 7,
@@ -2141,7 +2142,7 @@
       "packages/api-contract/package.json": 5,
       "packages/auth-model/package.json": 3,
       "packages/boe/package.json": 2,
-      "packages/business-registries/package.json": 6,
+      "packages/business-registries/package.json": 7,
       "packages/calculations/package.json": 4,
       "packages/catalogue/package.json": 3,
       "packages/chat-limits/package.json": 1,
@@ -2164,6 +2165,7 @@
       "packages/money/package.json": 3,
       "packages/permissions/package.json": 2,
       "packages/property-testing/package.json": 2,
+      "packages/redis-config/package.json": 3,
       "packages/runtime-mode/package.json": 2,
       "packages/sanctions/package.json": 6,
       "packages/scripts/package.json": 5,

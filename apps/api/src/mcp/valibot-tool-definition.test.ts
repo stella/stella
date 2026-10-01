@@ -301,6 +301,7 @@ describe("Valibot-backed MCP tool definitions", () => {
 
   test("binds identity output schemas to their named handler result", () => {
     const definition = defineValibotMcpTool({
+      consumesServices: false,
       access: "read",
       annotations: {
         title: "Read example",
@@ -358,6 +359,7 @@ describe("Valibot-backed MCP tool definitions", () => {
       }),
     );
     const definition = defineValibotMcpTool({
+      consumesServices: false,
       access: "read",
       annotations: {
         title: "Read example",
@@ -430,6 +432,7 @@ describe("Valibot-backed MCP tool definitions", () => {
     // `oneOf` and `const` are what the export emits; neither survives the chat
     // surface's provider-safe check, and both have exact equivalents.
     const definition = defineValibotMcpTool({
+      consumesServices: false,
       access: "write",
       annotations: {
         title: "Set example",
@@ -480,6 +483,7 @@ describe("Valibot-backed MCP tool definitions", () => {
 
   test("binds explicit normalization metadata to the projected field", () => {
     const definition = defineValibotMcpTool({
+      consumesServices: false,
       access: "write",
       annotations: {
         title: "Configure example",
@@ -529,6 +533,7 @@ describe("Valibot-backed MCP tool definitions", () => {
   test("rejects an explicit normalization path that does not exist", () => {
     expect(() =>
       defineValibotMcpTool({
+        consumesServices: false,
         access: "read",
         annotations: {
           title: "Read example",
@@ -549,6 +554,7 @@ describe("Valibot-backed MCP tool definitions", () => {
   test("rejects an unsupported action without an explicit projection waiver", () => {
     expect(() =>
       defineValibotMcpTool({
+        consumesServices: false,
         access: "read",
         annotations: {
           title: "Read example",
@@ -572,6 +578,7 @@ describe("Valibot-backed MCP tool definitions", () => {
   test("rejects an input schema that admits unknown root properties", () => {
     expect(() =>
       defineValibotMcpTool({
+        consumesServices: false,
         access: "read",
         annotations: {
           title: "Read example",

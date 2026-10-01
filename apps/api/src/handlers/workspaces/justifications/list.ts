@@ -73,7 +73,11 @@ const config = {
     "model gave, the bounding boxes on the source file, and the file fields " +
     "those boxes belong to.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "workflow_orchestration" },
+  mcp: {
+    type: "capability",
+    reason: "workflow_orchestration",
+    consumesServices: false,
+  },
   access: "read",
   body: t.Object({
     entityIds: t.Array(tSafeId("entity"), {
