@@ -243,7 +243,10 @@ const facetBuckets = (
     count: Number(row["count"]),
   }));
 
-type SearchDecisionsBody = Static<typeof searchDecisionsBodySchema>;
+type SearchDecisionsBody = Static<typeof searchDecisionsBodySchema> & {
+  /** Internal MCP excerpt policy; HTTP callers retain their chosen length. */
+  sentenceAlignedExcerpt?: boolean;
+};
 
 type PostgresSearchBody = Omit<
   SearchDecisionsBody,
@@ -684,7 +687,9 @@ const searchPostgresDecisions = async (
     body.limit ?? LIMITS.caseLawSearchPageSizeDefault,
   );
   const sort = body.sort ?? DEFAULT_SEARCH_SORT;
-  const excerpt = body.excerpt ?? DEFAULT_SEARCH_EXCERPT;
+  const excerpt = body.sentenceAlignedExcerpt
+    ? "long"
+    : (body.excerpt ?? DEFAULT_SEARCH_EXCERPT);
 
   // Validate cursor early so a tampered value fails visibly, and refuse one
   // that bounds a different order: its key is a position in that order.
@@ -2017,7 +2022,9 @@ export const searchCorpusIndexDecisions = async (
   // What a wider excerpt is cut with. Both are pure derivations of the request
   // the query was already built from, so reading them again here cannot
   // disagree with the query the engine answered.
-  const excerpt = body.excerpt ?? DEFAULT_SEARCH_EXCERPT;
+  const excerpt = body.sentenceAlignedExcerpt
+    ? "long"
+    : (body.excerpt ?? DEFAULT_SEARCH_EXCERPT);
   const excerptFields = caseLawCorpusQueryFields({
     generation,
     jurisdiction: body.country,
@@ -2043,6 +2050,7 @@ export const searchCorpusIndexDecisions = async (
       corpusExcerpt({
         engineSnippet: extractCorpusSnippet(snippet),
         excerpt,
+        sentenceAligned: body.sentenceAlignedExcerpt,
         language: excerptFields.stemming?.language ?? null,
         passage: hit["text"],
         tokens: excerptTokens,
