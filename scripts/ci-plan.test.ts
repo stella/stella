@@ -1077,3 +1077,109 @@ test("manual full-depth runs leave the merge-group-only exact-base job unplanned
     rmSync(directory, { force: true, recursive: true });
   }
 });
+
+test("folded service suites preserve both scopes and independent verdicts", () => {
+  const plan = v.parse(
+    v.object({ outputs: v.record(v.string(), v.string()) }),
+    ciJobs["ci-plan"],
+  );
+  expect(plan.outputs["service_suites_required"]).toBe(
+    `\${{ steps.changed-files.outputs.package_checks_required == 'true' || steps.changed-files.outputs.collab_redis_required == 'true' }}`,
+  );
+  expect(jobScopes["service-suites"]).toBe("service_suites_required");
+  expect(ciJobs).not.toHaveProperty("collab-redis");
+  const services = v.parse(
+    v.object({
+      services: v.record(v.string(), v.object({ ports: v.array(v.string()) })),
+      steps: v.array(
+        v.object({
+          name: v.string(),
+          if: v.optional(v.string()),
+          run: v.optional(v.string()),
+          env: v.optional(v.record(v.string(), v.string())),
+        }),
+      ),
+    }),
+    ciJobs["service-suites"],
+  );
+  const suites = services.steps.filter(
+    ({ run }) => run?.includes("test:") || run?.includes(" test "),
+  );
+  expect(suites.map(({ run }) => run)).toEqual([
+    "bun run test:postgres",
+    "bun run test:valkey",
+    "bun --filter @stll/collab test src/server.test.ts",
+  ]);
+  for (const suite of suites) {
+    const scope = suite.run?.includes("@stll/collab")
+      ? "collab_redis_required"
+      : "package_checks_required";
+    const predicate = `needs.ci-plan.outputs.${scope} == 'true'`;
+    expect(suite.if).toBe(
+      suite.run === "bun run test:postgres"
+        ? predicate
+        : `\${{ !cancelled() && ${predicate} }}`,
+    );
+  }
+  const collab = suites.find(({ run }) => run?.includes("@stll/collab"));
+  const valkey = suites.find(({ run }) => run === "bun run test:valkey");
+  expect(collab?.env?.["STELLA_COLLAB_TEST_REDIS_CONTAINER_ID"]).toBe(
+    `\${{ job.services.redis.id }}`,
+  );
+  const collabPort = new URL(
+    collab?.env?.["STELLA_COLLAB_TEST_REDIS_URL"] ?? "",
+  ).port;
+  const valkeyPort = new URL(valkey?.env?.["REDIS_URL"] ?? "").port;
+  expect(collabPort).not.toBe(valkeyPort);
+  expect(services.services["redis"]?.ports).toEqual([`${collabPort}:6379`]);
+  expect(services.services["valkey"]?.ports).toEqual([`${valkeyPort}:6379`]);
+  for (const event of FULL_DEPTH_EVENTS) {
+    for (const result of ["failure", "cancelled", "skipped"]) {
+      expect(
+        evaluateResult({ event, results: { "service-suites": result } }),
+      ).toBe(1);
+    }
+    expect(
+      evaluateResult({
+        event,
+        results: { "service-suites": "skipped" },
+        unplannedScopes: ["service_suites_required"],
+      }),
+    ).toBe(0);
+  }
+});
+
+test("Bun cache saves are main-only and queue Turbo caches remain readable", () => {
+  const configured = v.parse(
+    v.object({ env: v.record(v.string(), v.string()) }),
+    Bun.YAML.parse(workflow),
+  );
+  expect(configured.env["TURBO_CACHE"]).toBe(
+    `\${{ github.event_name == 'merge_group' && 'local:rw,remote:r' || 'local:rw,remote:rw' }}`,
+  );
+  const cacheSteps = Object.values(ciJobs)
+    .flatMap(
+      (job) =>
+        v.parse(
+          v.object({
+            steps: v.optional(
+              v.array(
+                v.object({
+                  uses: v.optional(v.string()),
+                  with: v.optional(v.record(v.string(), v.unknown())),
+                }),
+              ),
+              [],
+            ),
+          }),
+          job,
+        ).steps,
+    )
+    .filter(({ uses }) =>
+      uses?.startsWith("stella/.github/actions/setup-bun-cached@"),
+    );
+  expect(cacheSteps.length).toBeGreaterThan(0);
+  for (const step of cacheSteps) {
+    expect(step.with?.["save"]).toBe(`\${{ github.ref == 'refs/heads/main' }}`);
+  }
+});
