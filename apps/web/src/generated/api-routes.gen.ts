@@ -18860,6 +18860,7 @@ export type WebRoutes = {
     } & {
       post: {
         body: {
+          managedAIResidency?: never;
           matterNumberPattern?: string;
           matterNumberPadding?: number;
           promptCachingEnabled?: false | true;
@@ -18869,7 +18870,6 @@ export type WebRoutes = {
           timeEditWindowDays?: number;
           timeLockedThroughMonth?: string | null;
           timeNarrativeRequired?: false | true;
-          managedAIResidency?: never;
         };
         params: T5e3ac29766;
         query: Record<never, never>;
