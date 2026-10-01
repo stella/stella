@@ -708,15 +708,15 @@ const main = async () => {
         script: path.join(root, "packages/cli/src/codegen.ts"),
       });
       if (generated !== 0) {
-        process.exit(generated);
+        process.exitCode = generated;
+        return;
       }
-      return process.exit(
-        await passThrough({
-          args,
-          env,
-          script: path.join(root, "packages/cli/src/cli.ts"),
-        }),
-      );
+      process.exitCode = await passThrough({
+        args,
+        env,
+        script: path.join(root, "packages/cli/src/cli.ts"),
+      });
+      return;
     }
     case "reset": {
       await reset(root, args);

@@ -55,6 +55,18 @@ export const runGatedTests = async ({
     return 1;
   }
 
+  const generationProcess = Bun.spawn({
+    cmd: [process.execPath, "run", "codegen:runtime"],
+    cwd: path.resolve(apiRoot, "../../packages/cli"),
+    stdin: "inherit",
+    stdout: "inherit",
+    stderr: "inherit",
+  });
+  const generationStatus = await generationProcess.exited;
+  if (generationStatus !== 0) {
+    return generationStatus;
+  }
+
   console.log(`Running ${String(testFiles.length)} ${runner.gate} test files.`);
   const testProcess = Bun.spawn({
     cmd: buildApiTestCommand({
