@@ -172,7 +172,10 @@ import { createSchedulerTaskRegistry } from "@/api/lib/scheduler/registry";
 import { startSchedulerLoop } from "@/api/lib/scheduler/runner";
 import { createReapOwnerlessChatTurnsTask } from "@/api/lib/scheduler/tasks/chat-turn-reaper";
 import { securityCanaryInterceptor } from "@/api/lib/security-canary";
-import { setSecurityHeaders } from "@/api/lib/security-headers";
+import {
+  finalizeResponseCachePolicy,
+  setSecurityHeaders,
+} from "@/api/lib/security-headers";
 import { startSse, stopSse } from "@/api/lib/sse";
 import { clearByokAdapterCache } from "@/api/lib/tanstack-ai-models";
 import { isUploadRateLimitedPath } from "@/api/lib/upload-rate-limit";
@@ -256,13 +259,17 @@ if (isLocalDevOpen()) {
 const CORS_PREFLIGHT_MAX_AGE_SECONDS = 60 * 60;
 
 const api = new Elysia()
+  .mapResponse(({ responseValue, set }) =>
+    finalizeResponseCachePolicy({ response: responseValue, set }),
+  )
   // Body parsing is decided before any route runs, so the multipart parser has
   // to sit ahead of every route registration.
   .use(multipartFormParser)
+  .onRequest(({ set }) => {
+    setSecurityHeaders(set);
+  })
   .onRequest(async (context) => {
     const { request, set } = context;
-
-    setSecurityHeaders(set);
 
     const rawSessionId = request.headers.get(SESSION_ID_HEADER);
     const sessionId =

@@ -74,6 +74,19 @@ export type WebRoutes = {
         headers: unknown;
         response: {
           200: Response;
+          400: T9a51b7d2bc;
+          401: T9a51b7d2bc;
+          402: T9a51b7d2bc;
+          403: T9a51b7d2bc;
+          404: T9a51b7d2bc;
+          409: T9a51b7d2bc;
+          413: T9a51b7d2bc;
+          422: T9a51b7d2bc;
+          428: T9a51b7d2bc;
+          429: T9a51b7d2bc;
+          500: T9a51b7d2bc;
+          502: T9a51b7d2bc;
+          503: T9a51b7d2bc;
         };
       };
     };
@@ -104,6 +117,19 @@ export type WebRoutes = {
             headers: unknown;
             response: {
               200: Response;
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: T9a51b7d2bc;
+              404: T9a51b7d2bc;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: T9a51b7d2bc;
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
             };
           };
         };
@@ -130,6 +156,19 @@ export type WebRoutes = {
         headers: unknown;
         response: {
           200: Response;
+          400: T9a51b7d2bc;
+          401: T9a51b7d2bc;
+          402: T9a51b7d2bc;
+          403: T9a51b7d2bc;
+          404: T9a51b7d2bc;
+          409: T9a51b7d2bc;
+          413: T9a51b7d2bc;
+          422: T9a51b7d2bc;
+          428: T9a51b7d2bc;
+          429: T9a51b7d2bc;
+          500: T9a51b7d2bc;
+          502: T9a51b7d2bc;
+          503: T9a51b7d2bc;
         };
       };
     };
@@ -167,6 +206,19 @@ export type WebRoutes = {
         headers: unknown;
         response: {
           200: T244a503d33;
+          400: T9a51b7d2bc;
+          401: T9a51b7d2bc;
+          402: T9a51b7d2bc;
+          403: T9a51b7d2bc;
+          404: T9a51b7d2bc;
+          409: T9a51b7d2bc;
+          413: T9a51b7d2bc;
+          422: T9a51b7d2bc;
+          428: T9a51b7d2bc;
+          429: T9a51b7d2bc;
+          500: T9a51b7d2bc;
+          502: T9a51b7d2bc;
+          503: T9a51b7d2bc;
         };
       };
     };
@@ -194,6 +246,19 @@ export type WebRoutes = {
           headers: unknown;
           response: {
             200: T244a503d33;
+            400: T9a51b7d2bc;
+            401: T9a51b7d2bc;
+            402: T9a51b7d2bc;
+            403: T9a51b7d2bc;
+            404: T9a51b7d2bc;
+            409: T9a51b7d2bc;
+            413: T9a51b7d2bc;
+            422: T9a51b7d2bc;
+            428: T9a51b7d2bc;
+            429: T9a51b7d2bc;
+            500: T9a51b7d2bc;
+            502: T9a51b7d2bc;
+            503: T9a51b7d2bc;
           };
         };
       };
@@ -222,6 +287,19 @@ export type WebRoutes = {
           headers: unknown;
           response: {
             200: T244a503d33;
+            400: T9a51b7d2bc;
+            401: T9a51b7d2bc;
+            402: T9a51b7d2bc;
+            403: T9a51b7d2bc;
+            404: T9a51b7d2bc;
+            409: T9a51b7d2bc;
+            413: T9a51b7d2bc;
+            422: T9a51b7d2bc;
+            428: T9a51b7d2bc;
+            429: T9a51b7d2bc;
+            500: T9a51b7d2bc;
+            502: T9a51b7d2bc;
+            503: T9a51b7d2bc;
           };
         };
       };
@@ -250,6 +328,19 @@ export type WebRoutes = {
           headers: unknown;
           response: {
             200: T244a503d33;
+            400: T9a51b7d2bc;
+            401: T9a51b7d2bc;
+            402: T9a51b7d2bc;
+            403: T9a51b7d2bc;
+            404: T9a51b7d2bc;
+            409: T9a51b7d2bc;
+            413: T9a51b7d2bc;
+            422: T9a51b7d2bc;
+            428: T9a51b7d2bc;
+            429: T9a51b7d2bc;
+            500: T9a51b7d2bc;
+            502: T9a51b7d2bc;
+            503: T9a51b7d2bc;
           };
         };
       };
@@ -278,29 +369,43 @@ export type WebRoutes = {
           headers: unknown;
           response: {
             200: T244a503d33;
+            400: T9a51b7d2bc;
+            401: T9a51b7d2bc;
+            402: T9a51b7d2bc;
+            403: T9a51b7d2bc;
+            404: T9a51b7d2bc;
+            409: T9a51b7d2bc;
+            413: T9a51b7d2bc;
+            422: T9a51b7d2bc;
+            428: T9a51b7d2bc;
+            429: T9a51b7d2bc;
+            500: T9a51b7d2bc;
+            502: T9a51b7d2bc;
+            503: T9a51b7d2bc;
           };
         };
       };
     };
   };
-  "auth.md": {
-    options: {
-      body: unknown;
-      params: T5e3ac29766;
-      query: unknown;
-      headers: unknown;
-      response: {
-        200: string;
-      };
-    };
-  } & {
-    get: {
-      body: unknown;
-      params: T5e3ac29766;
-      query: unknown;
-      headers: unknown;
-      response: {
-        200: string;
+  public: {
+    feedback: {
+      post: {
+        body: string;
+        params: T5e3ac29766;
+        query: unknown;
+        headers: unknown;
+        response: {
+          200: Response;
+          422: {
+            type: "validation";
+            on: string;
+            summary?: string;
+            message?: string;
+            found?: unknown;
+            property?: string;
+            expected?: string;
+          };
+        };
       };
     };
   };
@@ -337,25 +442,37 @@ export type WebRoutes = {
       };
     };
   };
-  public: {
-    feedback: {
-      post: {
-        body: string;
-        params: T5e3ac29766;
-        query: unknown;
-        headers: unknown;
-        response: {
-          200: Response;
-          422: {
-            type: "validation";
-            on: string;
-            summary?: string;
-            message?: string;
-            found?: unknown;
-            property?: string;
-            expected?: string;
-          };
-        };
+  "auth.md": {
+    options: {
+      body: unknown;
+      params: T5e3ac29766;
+      query: unknown;
+      headers: unknown;
+      response: {
+        200: string;
+      };
+    };
+  } & {
+    get: {
+      body: unknown;
+      params: T5e3ac29766;
+      query: unknown;
+      headers: unknown;
+      response: {
+        200: string;
+        400: T9a51b7d2bc;
+        401: T9a51b7d2bc;
+        402: T9a51b7d2bc;
+        403: T9a51b7d2bc;
+        404: T9a51b7d2bc;
+        409: T9a51b7d2bc;
+        413: T9a51b7d2bc;
+        422: T9a51b7d2bc;
+        428: T9a51b7d2bc;
+        429: T9a51b7d2bc;
+        500: T9a51b7d2bc;
+        502: T9a51b7d2bc;
+        503: T9a51b7d2bc;
       };
     };
   };
@@ -811,6 +928,271 @@ export type WebRoutes = {
                 microsoft: Tfddd645dc8;
               };
               transactionalEmail: Tfddd645dc8;
+            };
+          };
+        };
+      };
+    };
+    public: {
+      knowledge: {
+        "template-packs": {
+          get: {
+            body: unknown;
+            params: T5e3ac29766;
+            query: unknown;
+            headers: unknown;
+            response: {
+              200: (T1791c676c5 | {
+                items: Array<{
+                  id: string;
+                  name: string;
+                  version: string;
+                  description: string;
+                  license: string;
+                  licenseUrl: Tbe0400fa4c;
+                  source: Tdc9ed49116;
+                  authors: ReadonlyArray<T8f22b22b9e>;
+                  jurisdictions: ReadonlyArray<T61d3076ac0>;
+                  languages: ReadonlyArray<string>;
+                  legalAreas: ReadonlyArray<string>;
+                  lastReviewedAt: Tbe0400fa4c;
+                  disclaimer: Tbe0400fa4c;
+                  templateCount: number;
+                }>;
+              });
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: T9a51b7d2bc;
+              404: T9a51b7d2bc;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: T9a51b7d2bc;
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    } & {
+      knowledge: {
+        "template-packs": {
+          ":packId": {
+            get: {
+              body: unknown;
+              params: {
+                packId: string;
+              };
+              query: unknown;
+              headers: unknown;
+              response: {
+                200: (T1791c676c5 | {
+                  templates: Array<Tfd0bde727d>;
+                  id: string;
+                  name: string;
+                  version: string;
+                  description: string;
+                  license: string;
+                  licenseUrl: Tbe0400fa4c;
+                  source: Tdc9ed49116;
+                  authors: ReadonlyArray<T8f22b22b9e>;
+                  jurisdictions: ReadonlyArray<T61d3076ac0>;
+                  languages: ReadonlyArray<string>;
+                  legalAreas: ReadonlyArray<string>;
+                  lastReviewedAt: Tbe0400fa4c;
+                  disclaimer: Tbe0400fa4c;
+                  templateCount: number;
+                });
+                400: T9a51b7d2bc;
+                401: T9a51b7d2bc;
+                402: T9a51b7d2bc;
+                403: T9a51b7d2bc;
+                404: T9a51b7d2bc;
+                409: T9a51b7d2bc;
+                413: T9a51b7d2bc;
+                422: (T9a51b7d2bc | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: T9a51b7d2bc;
+                429: T9a51b7d2bc;
+                500: T9a51b7d2bc;
+                502: T9a51b7d2bc;
+                503: T9a51b7d2bc;
+              };
+            };
+          };
+        };
+      };
+    } & {
+      knowledge: {
+        "template-packs": {
+          ":packId": {
+            templates: {
+              ":templateId": {
+                get: {
+                  body: unknown;
+                  params: T33b1882b1b;
+                  query: unknown;
+                  headers: unknown;
+                  response: {
+                    200: (T1791c676c5 | Tfd0bde727d);
+                    400: T9a51b7d2bc;
+                    401: T9a51b7d2bc;
+                    402: T9a51b7d2bc;
+                    403: T9a51b7d2bc;
+                    404: T9a51b7d2bc;
+                    409: T9a51b7d2bc;
+                    413: T9a51b7d2bc;
+                    422: (T9a51b7d2bc | {
+                      type: "validation";
+                      on: string;
+                      summary?: string;
+                      message?: string;
+                      found?: unknown;
+                      property?: string;
+                      expected?: string;
+                    });
+                    428: T9a51b7d2bc;
+                    429: T9a51b7d2bc;
+                    500: T9a51b7d2bc;
+                    502: T9a51b7d2bc;
+                    503: T9a51b7d2bc;
+                  };
+                };
+              };
+            };
+          };
+        };
+      };
+    } & {
+      knowledge: {
+        "template-packs": {
+          ":packId": {
+            templates: {
+              ":templateId": {
+                preview: {
+                  get: {
+                    body: unknown;
+                    params: T33b1882b1b;
+                    query: unknown;
+                    headers: unknown;
+                    response: {
+                      200: (Tb26a03bcf4 | T1791c676c5);
+                      400: T9a51b7d2bc;
+                      401: T9a51b7d2bc;
+                      402: T9a51b7d2bc;
+                      403: T9a51b7d2bc;
+                      404: T9a51b7d2bc;
+                      409: T9a51b7d2bc;
+                      413: T9a51b7d2bc;
+                      422: (T9a51b7d2bc | {
+                        type: "validation";
+                        on: string;
+                        summary?: string;
+                        message?: string;
+                        found?: unknown;
+                        property?: string;
+                        expected?: string;
+                      });
+                      428: T9a51b7d2bc;
+                      429: T9a51b7d2bc;
+                      500: T9a51b7d2bc;
+                      502: T9a51b7d2bc;
+                      503: T9a51b7d2bc;
+                    };
+                  };
+                };
+              };
+            };
+          };
+        };
+      };
+    } & {
+      knowledge: {
+        "playbook-starters": {
+          get: {
+            body: unknown;
+            params: T5e3ac29766;
+            query: unknown;
+            headers: unknown;
+            response: {
+              200: (T1791c676c5 | {
+                items: Array<{
+                  id: T15dbebb935;
+                  name: string;
+                  description: string;
+                  documentTypeKey: string;
+                  positionCount: number;
+                }>;
+              });
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: T9a51b7d2bc;
+              404: T9a51b7d2bc;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: T9a51b7d2bc;
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    } & {
+      knowledge: {
+        "playbook-starters": {
+          ":id": {
+            get: {
+              body: unknown;
+              params: {
+                id: string;
+              };
+              query: unknown;
+              headers: unknown;
+              response: {
+                200: (T1791c676c5 | {
+                  positions: Tc892bdfad5;
+                  id: T15dbebb935;
+                  name: string;
+                  description: string;
+                  documentTypeKey: string;
+                  positionCount: number;
+                });
+                400: T9a51b7d2bc;
+                401: T9a51b7d2bc;
+                402: T9a51b7d2bc;
+                403: T9a51b7d2bc;
+                404: T9a51b7d2bc;
+                409: T9a51b7d2bc;
+                413: T9a51b7d2bc;
+                422: (T9a51b7d2bc | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: T9a51b7d2bc;
+                429: T9a51b7d2bc;
+                500: T9a51b7d2bc;
+                502: T9a51b7d2bc;
+                503: T9a51b7d2bc;
+              };
             };
           };
         };
@@ -1334,8 +1716,8 @@ export type WebRoutes = {
         post: {
           body: {
             name: string;
-            format: string;
             registry: T347d72c6fa;
+            format: string;
           };
           params: T5e3ac29766;
           query: Record<never, never>;
@@ -1565,8 +1947,8 @@ export type WebRoutes = {
         post: {
           body: {
             number: string;
-            format: Tbe0400fa4c;
             registry: T347d72c6fa;
+            format: Tbe0400fa4c;
           };
           params: T5e3ac29766;
           query: Record<never, never>;
@@ -2349,7 +2731,6 @@ export type WebRoutes = {
           response: {
             200: {
               presignedUrl: string;
-              name: string;
               origin: {
                 type: "authored";
               } | {
@@ -2361,6 +2742,7 @@ export type WebRoutes = {
                 license: string;
                 authors: Array<T8f22b22b9e>;
               };
+              name: string;
               tags: T51e1843fb9;
               id: Td4824cf25d;
               createdAt: string;
@@ -4642,8 +5024,8 @@ export type WebRoutes = {
               purpose: "entity_version";
             } | {
               name: string;
-              scope: T7906e8b72f;
               mimeType: string;
+              scope: T7906e8b72f;
               size: number;
               sha256Hex: string;
               purpose: "agent_skill";
@@ -5755,8 +6137,8 @@ export type WebRoutes = {
               email: Tbe0400fa4c;
             }> | null;
             recurrence?: {
-              pattern: Tbe0400fa4c;
               range: Tbe0400fa4c;
+              pattern: Tbe0400fa4c;
             } | null;
             ownerUserId?: T56ed95d57c;
             workingTargetDate?: string | null;
@@ -5803,10 +6185,10 @@ export type WebRoutes = {
       ":workspaceId": {
         patch: {
           body: {
-            name?: string;
             status?: string;
             location?: string | null;
             priority?: string;
+            name?: string;
             listItemType?: string;
             dueDate?: string | null;
             startAt?: string | null;
@@ -5832,8 +6214,8 @@ export type WebRoutes = {
               email: Tbe0400fa4c;
             }> | null;
             recurrence?: {
-              pattern: Tbe0400fa4c;
               range: Tbe0400fa4c;
+              pattern: Tbe0400fa4c;
             } | null;
             workflowReason?: string;
             taskId: Tf742ada503;
@@ -5954,9 +6336,10 @@ export type WebRoutes = {
                 flowReview: {
                   runId: T2e29c5e55f;
                 } | null;
-                name: string;
                 status: Tbe0400fa4c;
                 location: Tbe0400fa4c;
+                priority: Tbe0400fa4c;
+                name: string;
                 kind: T334757ea46;
                 metadata: {
                   url: string;
@@ -5968,7 +6351,6 @@ export type WebRoutes = {
                 id: Tf742ada503;
                 workspaceId: T9e07a7d6cd;
                 createdAt: string;
-                priority: Tbe0400fa4c;
                 listItemType: Tcdfc93c4d1;
                 dueDate: Tbe0400fa4c;
                 updatedAt: Tdf2b0d1150;
@@ -6003,12 +6385,12 @@ export type WebRoutes = {
                 } | null;
                 readOnly: Tfddd645dc8;
                 children: Array<{
-                  name: string;
                   status: Tbe0400fa4c;
                   location: Tbe0400fa4c;
+                  priority: Tbe0400fa4c;
+                  name: string;
                   id: Tf742ada503;
                   createdAt: string;
-                  priority: Tbe0400fa4c;
                   listItemType: Tcdfc93c4d1;
                   dueDate: Tbe0400fa4c;
                   startAt: Tdf2b0d1150;
@@ -7358,18 +7740,18 @@ export type WebRoutes = {
     chat: {
       post: {
         body: {
-          context: Array<Te8eee0ded7>;
           data: Tafed4f08a4;
           state: Record<never, never>;
+          context: Array<Te8eee0ded7>;
           runId: string;
           threadId: Taf779979ed;
           messages: Array<T9281829eb5>;
           forwardedProps: Tafed4f08a4;
           tools: Array<Te8d0e5a977>;
         } | {
-          context: Array<Te8eee0ded7>;
           data: T9d6ede4452;
           state: Record<never, never>;
+          context: Array<Te8eee0ded7>;
           runId: string;
           threadId: Taf779979ed;
           messages: Array<T9281829eb5>;
@@ -10480,6 +10862,19 @@ export type WebRoutes = {
                 response_types: Array<string>;
                 token_endpoint_auth_method: "none";
               };
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: T9a51b7d2bc;
+              404: T9a51b7d2bc;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: T9a51b7d2bc;
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
             };
           };
         };
@@ -10958,271 +11353,6 @@ export type WebRoutes = {
               500: T9a51b7d2bc;
               502: T9a51b7d2bc;
               503: T9a51b7d2bc;
-            };
-          };
-        };
-      };
-    };
-    public: {
-      knowledge: {
-        "template-packs": {
-          get: {
-            body: unknown;
-            params: T5e3ac29766;
-            query: unknown;
-            headers: unknown;
-            response: {
-              200: (T1791c676c5 | {
-                items: Array<{
-                  id: string;
-                  name: string;
-                  version: string;
-                  description: string;
-                  license: string;
-                  licenseUrl: Tbe0400fa4c;
-                  source: Tdc9ed49116;
-                  authors: ReadonlyArray<T8f22b22b9e>;
-                  jurisdictions: ReadonlyArray<T61d3076ac0>;
-                  languages: ReadonlyArray<string>;
-                  legalAreas: ReadonlyArray<string>;
-                  lastReviewedAt: Tbe0400fa4c;
-                  disclaimer: Tbe0400fa4c;
-                  templateCount: number;
-                }>;
-              });
-              400: T9a51b7d2bc;
-              401: T9a51b7d2bc;
-              402: T9a51b7d2bc;
-              403: T9a51b7d2bc;
-              404: T9a51b7d2bc;
-              409: T9a51b7d2bc;
-              413: T9a51b7d2bc;
-              422: T9a51b7d2bc;
-              428: T9a51b7d2bc;
-              429: T9a51b7d2bc;
-              500: T9a51b7d2bc;
-              502: T9a51b7d2bc;
-              503: T9a51b7d2bc;
-            };
-          };
-        };
-      };
-    } & {
-      knowledge: {
-        "template-packs": {
-          ":packId": {
-            get: {
-              body: unknown;
-              params: {
-                packId: string;
-              };
-              query: unknown;
-              headers: unknown;
-              response: {
-                200: (T1791c676c5 | {
-                  templates: Array<Tfd0bde727d>;
-                  id: string;
-                  name: string;
-                  version: string;
-                  description: string;
-                  license: string;
-                  licenseUrl: Tbe0400fa4c;
-                  source: Tdc9ed49116;
-                  authors: ReadonlyArray<T8f22b22b9e>;
-                  jurisdictions: ReadonlyArray<T61d3076ac0>;
-                  languages: ReadonlyArray<string>;
-                  legalAreas: ReadonlyArray<string>;
-                  lastReviewedAt: Tbe0400fa4c;
-                  disclaimer: Tbe0400fa4c;
-                  templateCount: number;
-                });
-                400: T9a51b7d2bc;
-                401: T9a51b7d2bc;
-                402: T9a51b7d2bc;
-                403: T9a51b7d2bc;
-                404: T9a51b7d2bc;
-                409: T9a51b7d2bc;
-                413: T9a51b7d2bc;
-                422: (T9a51b7d2bc | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: T9a51b7d2bc;
-                429: T9a51b7d2bc;
-                500: T9a51b7d2bc;
-                502: T9a51b7d2bc;
-                503: T9a51b7d2bc;
-              };
-            };
-          };
-        };
-      };
-    } & {
-      knowledge: {
-        "template-packs": {
-          ":packId": {
-            templates: {
-              ":templateId": {
-                get: {
-                  body: unknown;
-                  params: T33b1882b1b;
-                  query: unknown;
-                  headers: unknown;
-                  response: {
-                    200: (T1791c676c5 | Tfd0bde727d);
-                    400: T9a51b7d2bc;
-                    401: T9a51b7d2bc;
-                    402: T9a51b7d2bc;
-                    403: T9a51b7d2bc;
-                    404: T9a51b7d2bc;
-                    409: T9a51b7d2bc;
-                    413: T9a51b7d2bc;
-                    422: (T9a51b7d2bc | {
-                      type: "validation";
-                      on: string;
-                      summary?: string;
-                      message?: string;
-                      found?: unknown;
-                      property?: string;
-                      expected?: string;
-                    });
-                    428: T9a51b7d2bc;
-                    429: T9a51b7d2bc;
-                    500: T9a51b7d2bc;
-                    502: T9a51b7d2bc;
-                    503: T9a51b7d2bc;
-                  };
-                };
-              };
-            };
-          };
-        };
-      };
-    } & {
-      knowledge: {
-        "template-packs": {
-          ":packId": {
-            templates: {
-              ":templateId": {
-                preview: {
-                  get: {
-                    body: unknown;
-                    params: T33b1882b1b;
-                    query: unknown;
-                    headers: unknown;
-                    response: {
-                      200: (Tb26a03bcf4 | T1791c676c5);
-                      400: T9a51b7d2bc;
-                      401: T9a51b7d2bc;
-                      402: T9a51b7d2bc;
-                      403: T9a51b7d2bc;
-                      404: T9a51b7d2bc;
-                      409: T9a51b7d2bc;
-                      413: T9a51b7d2bc;
-                      422: (T9a51b7d2bc | {
-                        type: "validation";
-                        on: string;
-                        summary?: string;
-                        message?: string;
-                        found?: unknown;
-                        property?: string;
-                        expected?: string;
-                      });
-                      428: T9a51b7d2bc;
-                      429: T9a51b7d2bc;
-                      500: T9a51b7d2bc;
-                      502: T9a51b7d2bc;
-                      503: T9a51b7d2bc;
-                    };
-                  };
-                };
-              };
-            };
-          };
-        };
-      };
-    } & {
-      knowledge: {
-        "playbook-starters": {
-          get: {
-            body: unknown;
-            params: T5e3ac29766;
-            query: unknown;
-            headers: unknown;
-            response: {
-              200: (T1791c676c5 | {
-                items: Array<{
-                  id: T15dbebb935;
-                  name: string;
-                  description: string;
-                  documentTypeKey: string;
-                  positionCount: number;
-                }>;
-              });
-              400: T9a51b7d2bc;
-              401: T9a51b7d2bc;
-              402: T9a51b7d2bc;
-              403: T9a51b7d2bc;
-              404: T9a51b7d2bc;
-              409: T9a51b7d2bc;
-              413: T9a51b7d2bc;
-              422: T9a51b7d2bc;
-              428: T9a51b7d2bc;
-              429: T9a51b7d2bc;
-              500: T9a51b7d2bc;
-              502: T9a51b7d2bc;
-              503: T9a51b7d2bc;
-            };
-          };
-        };
-      };
-    } & {
-      knowledge: {
-        "playbook-starters": {
-          ":id": {
-            get: {
-              body: unknown;
-              params: {
-                id: string;
-              };
-              query: unknown;
-              headers: unknown;
-              response: {
-                200: (T1791c676c5 | {
-                  positions: Tc892bdfad5;
-                  id: T15dbebb935;
-                  name: string;
-                  description: string;
-                  documentTypeKey: string;
-                  positionCount: number;
-                });
-                400: T9a51b7d2bc;
-                401: T9a51b7d2bc;
-                402: T9a51b7d2bc;
-                403: T9a51b7d2bc;
-                404: T9a51b7d2bc;
-                409: T9a51b7d2bc;
-                413: T9a51b7d2bc;
-                422: (T9a51b7d2bc | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: T9a51b7d2bc;
-                429: T9a51b7d2bc;
-                500: T9a51b7d2bc;
-                502: T9a51b7d2bc;
-                503: T9a51b7d2bc;
-              };
             };
           };
         };
@@ -13319,12 +13449,12 @@ export type WebRoutes = {
     } & {
       post: {
         body: {
+          description?: string;
           scope?: {
             perspective?: "buyer" | "neutral" | "seller";
             documentTypeKey?: string;
             trigger?: "manual" | "onClassified";
           };
-          description?: string;
           name: string;
           positions: {
             items: Array<{
@@ -13650,12 +13780,12 @@ export type WebRoutes = {
       ":playbookId": {
         put: {
           body: {
+            description?: string;
             scope?: {
               perspective?: "buyer" | "neutral" | "seller";
               documentTypeKey?: string;
               trigger?: "manual" | "onClassified";
             };
-            description?: string;
             expectedUpdatedAt?: string;
             name: string;
             positions: {
@@ -21419,6 +21549,7 @@ export type WebRoutes = {
         search: {
           post: {
             body: {
+              strict?: false | true;
               cursor?: string;
               limit?: number;
               court?: string;
@@ -21426,7 +21557,6 @@ export type WebRoutes = {
               category?: string;
               language?: string;
               sort?: "newest" | "relevance";
-              strict?: false | true;
               decisionType?: string;
               sourceId?: Tec26b7abb5;
               dateFrom?: string;
@@ -22713,10 +22843,10 @@ export type WebRoutes = {
       post: {
         body: {
           command?: string;
-          name: string;
           body: string;
-          scope: T7906e8b72f;
+          name: string;
           description: string;
+          scope: T7906e8b72f;
         };
         params: T5e3ac29766;
         query: Record<never, never>;
@@ -23030,8 +23160,8 @@ export type WebRoutes = {
       ":skillId": {
         patch: {
           body: {
-            name?: string;
             body?: string;
+            name?: string;
             description?: string;
             version?: string | null;
             enabled?: false | true;
@@ -24538,8 +24668,8 @@ export type WebRoutes = {
       ":workspaceId": {
         patch: {
           body: {
-            name?: string;
             status?: string;
+            name?: string;
             description?: string | null;
             id: T5ed75bc2cc;
           };
@@ -24715,8 +24845,8 @@ export type WebRoutes = {
             body: {
               candidates: Array<{
                 status?: string | null;
-                description?: string | null;
                 priority?: string | null;
+                description?: string | null;
                 dueDate?: string | null;
                 suggestedAssigneeUserIds?: Array<T56ed95d57c>;
                 name: string;
@@ -27207,8 +27337,8 @@ export type WebRoutes = {
                 };
                 timeZone: string;
                 labels: {
-                  location: string;
                   date: string;
+                  location: string;
                   reason: string;
                   signedBy: string;
                 };
@@ -27553,8 +27683,8 @@ export type WebRoutes = {
             body: {
               locale?: string;
               existingFolders?: Array<{
-                name: string;
                 path: string;
+                name: string;
                 entityId: Tf742ada503;
               }>;
               userInstructions?: string;
@@ -28816,11 +28946,11 @@ export type WebRoutes = {
                 workspaceId: T8d02a37b3f;
               };
               query: {
+                from?: string;
                 cursor?: string;
                 limit?: number;
                 category?: "all" | "automation" | "correspondence" | "court" | "documents" | "matter" | "tasks" | "team";
                 action?: "add" | "all" | "cancel" | "create" | "delete" | "execute" | "remove" | "review" | "update";
-                from?: string;
                 actorId?: string;
                 toExclusive?: string;
               };
@@ -28949,9 +29079,9 @@ export type WebRoutes = {
                   workspaceId: T8d02a37b3f;
                 };
                 query: {
+                  from?: string;
                   category?: "all" | "automation" | "correspondence" | "court" | "documents" | "matter" | "tasks" | "team";
                   action?: "add" | "all" | "cancel" | "create" | "delete" | "execute" | "remove" | "review" | "update";
-                  from?: string;
                   actorId?: string;
                   toExclusive?: string;
                   format: ("csv" | "json");
@@ -29553,8 +29683,8 @@ export type WebRoutes = {
           headers: Record<never, never>;
           response: {
             200: {
-              name: string;
               status: T453834ba82;
+              name: string;
               reference: string;
               id: T9e07a7d6cd;
               lastActivityAt: string;
@@ -34852,12 +34982,12 @@ type T0bdd08f6e7 = {
 };
 
 type T0c07d42a21 = {
+  from?: string;
   cursor?: string;
   workspaceId?: T9e07a7d6cd;
   limit?: number;
   userId?: string;
   action?: string;
-  from?: string;
   to?: string;
   resourceType?: string;
   resourceId?: string;
