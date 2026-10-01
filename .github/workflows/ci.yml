@@ -208,7 +208,23 @@ jobs:
           PR_TITLE: ${{ github.event.pull_request.title }}
           SUITE_DEPTH: ${{ steps.depth.outputs.suite_depth }}
         run: |
-          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+          changed_files=()
+          scope_unknown=false
+          if [[ "$EVENT_NAME" != "workflow_dispatch" ]]; then
+            base_ref="origin/$BASE_REF"
+            changed_paths=$(mktemp)
+            if git diff --name-only -z --no-renames "$base_ref"...HEAD > "$changed_paths"; then
+              while IFS= read -r -d '' file; do
+                changed_files+=("$file")
+              done < "$changed_paths"
+            else
+              scope_unknown=true
+            fi
+            rm -f "$changed_paths"
+          fi
+
+          # An unreadable diff must widen every scope rather than skip checks.
+          if [[ "$EVENT_NAME" == "workflow_dispatch" || "$scope_unknown" == "true" ]]; then
             # e2e-landing runs, and builds the landing site, at full depth only.
             landing_build_required=true
             if [[ "$SUITE_DEPTH" == "full" ]]; then
@@ -245,9 +261,6 @@ jobs:
             } >> "$GITHUB_OUTPUT"
             exit 0
           fi
-
-          base_ref="origin/$BASE_REF"
-          mapfile -t changed_files < <(git diff --name-only "$base_ref"...HEAD)
 
           if (( ${#changed_files[@]} == 0 )); then
             {

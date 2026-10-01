@@ -244,9 +244,16 @@ describe("detect-e2e-changes", () => {
       plan.indexOf("Check changed file scope"),
     );
     expect(plan).toContain("persist-credentials: false");
-    expect(
-      plan.match(/steps\.check\.outputs\.trusted == 'true'/gu),
-    ).toHaveLength(3);
+    for (const stepName of [
+      "Checkout",
+      "Resolve browser image",
+      "Setup Bun for dependency scope",
+      "Check changed file scope",
+    ]) {
+      expect(workflowStep(plan, stepName), stepName).toContain(
+        "steps.check.outputs.trusted == 'true'",
+      );
+    }
     expect(workflowStep(plan, "Resolve browser image")).toContain(
       "if: steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch'",
     );

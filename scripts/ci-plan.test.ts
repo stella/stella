@@ -1,6 +1,14 @@
 import { afterAll, expect, test } from "bun:test";
 import fc from "fast-check";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 import * as v from "valibot";
@@ -1335,8 +1343,8 @@ test("a failed API image run annotates the failing lines, escaped", () => {
 });
 
 test("manual full-depth runs leave the merge-group-only exact-base job unplanned", () => {
-  const step = jobSteps(ciJobs["ci-plan"]).find(({ run }) =>
-    run?.includes('if [[ "$EVENT_NAME" == "workflow_dispatch" ]]'),
+  const step = jobSteps(ciJobs["ci-plan"]).find(
+    ({ name }) => name === "Check changed file scope",
   );
   expect(step?.run).toBeDefined();
   const directory = mkdtempSync(nodePath.join(tmpdir(), "ci-plan-exact-base-"));
@@ -1545,6 +1553,167 @@ test("dependency inputs plan a malware scan and unrelated paths do not", () => {
         depth,
       ),
     ).toEqual(["false"]);
+  }
+});
+
+type RunChangedFilesOptions = {
+  baseRef?: string;
+  changedPath?: "bun.lock" | "package.json" | "e2e-spec" | "documentation";
+  gitShim?: string;
+};
+
+const runChangedFilesStep = ({
+  baseRef = "main",
+  changedPath,
+  gitShim,
+}: RunChangedFilesOptions) => {
+  const step = jobSteps(ciJobs["ci-plan"]).find(
+    ({ name }) => name === "Check changed file scope",
+  );
+  expect(step?.run).toBeDefined();
+  const directory = mkdtempSync(nodePath.join(tmpdir(), "ci-plan-diff-"));
+  const output = nodePath.join(directory, "output");
+  const repository = nodePath.join(directory, "repository");
+  mkdirSync(repository);
+  symlinkSync(
+    new URL("../scripts", import.meta.url),
+    nodePath.join(repository, "scripts"),
+  );
+  const git = (args: string[]) => {
+    const result = Bun.spawnSync(["git", "-C", repository, ...args], {
+      env: {
+        ...process.env,
+        GIT_CONFIG_NOSYSTEM: "1",
+        GIT_AUTHOR_NAME: "CI plan test",
+        GIT_AUTHOR_EMAIL: "ci-plan-test@example.invalid",
+        GIT_COMMITTER_NAME: "CI plan test",
+        GIT_COMMITTER_EMAIL: "ci-plan-test@example.invalid",
+      },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(
+      result.exitCode,
+      `${args.join(" ")}: ${new TextDecoder().decode(result.stderr)}`,
+    ).toBe(0);
+    return result.stdout.toString().trim();
+  };
+
+  try {
+    git(["init", "--quiet", "--initial-branch=main"]);
+    writeFileSync(nodePath.join(repository, "README.md"), "base\n");
+    git(["add", "README.md"]);
+    const commit = (message: string, parent?: string) => {
+      const tree = git(["write-tree"]);
+      const parents = parent === undefined ? [] : ["-p", parent];
+      const hash = git(["commit-tree", tree, ...parents, "-m", message]);
+      git(["update-ref", "HEAD", hash]);
+      return hash;
+    };
+    const baseCommit = commit("base");
+    git(["update-ref", "refs/remotes/origin/main", baseCommit]);
+
+    git(["switch", "--quiet", "-c", "feature"]);
+    const unusualDirectory = 'quote"back\\slash\ttab\nnewline';
+    const paths =
+      changedPath === undefined
+        ? []
+        : [
+            changedPath === "e2e-spec"
+              ? nodePath.join(
+                  "apps",
+                  "web",
+                  "e2e",
+                  `${unusualDirectory}.spec.ts`,
+                )
+              : nodePath.join("fixtures", unusualDirectory, changedPath),
+          ];
+    for (const [index, file] of paths.entries()) {
+      const absolute = nodePath.join(repository, file);
+      mkdirSync(nodePath.dirname(absolute), { recursive: true });
+      writeFileSync(absolute, `fixture ${index}\n`);
+    }
+    git(["add", "--", ...paths]);
+    commit("add unusual path", baseCommit);
+
+    const env = {
+      BASE_REF: baseRef,
+      EVENT_NAME: "pull_request",
+      GITHUB_OUTPUT: output,
+      PATH: gitShim
+        ? `${nodePath.dirname(gitShim)}:${process.env["PATH"] ?? ""}`
+        : (process.env["PATH"] ?? ""),
+      PR_TITLE: "",
+      SUITE_DEPTH: "fast",
+    };
+    const run = Bun.spawnSync(["bash", "-e", "-c", step?.run ?? "exit 1"], {
+      cwd: repository,
+      env,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(run.exitCode, new TextDecoder().decode(run.stderr)).toBe(0);
+    return new Map(
+      readFileSync(output, "utf-8")
+        .trim()
+        .split("\n")
+        .map((line) => {
+          const separator = line.indexOf("=");
+          return [line.slice(0, separator), line.slice(separator + 1)];
+        }),
+    );
+  } finally {
+    rmSync(directory, { force: true, recursive: true });
+  }
+};
+
+for (const changedPath of ["bun.lock", "package.json", "e2e-spec"] as const) {
+  test(`the production changed-file step preserves unusual ${changedPath} paths`, () => {
+    const outputs = runChangedFilesStep({ changedPath });
+    const scope =
+      changedPath === "e2e-spec"
+        ? "e2e_core_required"
+        : "dependency_malware_required";
+    expect(outputs.get(scope)).toBe("true");
+  });
+}
+
+test("the production changed-file step skips scans for unrelated or empty diffs", () => {
+  for (const options of [{}, { changedPath: "documentation" }] as const) {
+    const outputs = runChangedFilesStep(options);
+    expect(outputs.get("dependency_malware_required")).toBe("false");
+    expect(outputs.get("e2e_core_required")).toBe("false");
+  }
+});
+
+test("an unknown diff base plans malware and e2e scans", () => {
+  const outputs = runChangedFilesStep({ baseRef: "missing-base" });
+  expect(outputs.get("dependency_malware_required")).toBe("true");
+  expect(outputs.get("e2e_core_required")).toBe("true");
+});
+
+test("a changed-file diff failure plans malware and e2e scans", () => {
+  const directory = mkdtempSync(nodePath.join(tmpdir(), "ci-plan-git-"));
+  const shim = nodePath.join(directory, "git");
+  const systemGit = Bun.spawnSync(["which", "git"], {
+    stdout: "pipe",
+  })
+    .stdout.toString()
+    .trim();
+  writeFileSync(
+    shim,
+    `#!/bin/bash\nif [[ "$1" == diff ]]; then exit 1; fi\nexec ${systemGit} "$@"\n`,
+  );
+  chmodSync(shim, 0o755);
+  try {
+    const outputs = runChangedFilesStep({
+      changedPath: "bun.lock",
+      gitShim: shim,
+    });
+    expect(outputs.get("dependency_malware_required")).toBe("true");
+    expect(outputs.get("e2e_core_required")).toBe("true");
+  } finally {
+    rmSync(directory, { force: true, recursive: true });
   }
 });
 
