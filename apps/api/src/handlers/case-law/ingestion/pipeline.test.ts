@@ -56,6 +56,8 @@ import {
   storedCaseNumberOf,
 } from "@/api/lib/legal-search/ingestion-normalization";
 import type { ObservedDocket } from "@/api/lib/legal-search/ingestion-normalization";
+import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -72,16 +74,17 @@ const insertedValues = () =>
 
 const baseResult = (
   documentAst: IngestionResult["documentAst"],
-): IngestionResult => ({
-  caseNumber: "X/1/2026",
-  court: "Test Court",
-  country: "SK",
-  language: "sk",
-  metadata: {},
-  textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-  rawHash: "hash",
-  documentAst,
-});
+): IngestionResult =>
+  plainTextIngestionResult({
+    caseNumber: "X/1/2026",
+    court: "Test Court",
+    country: "SK",
+    language: "sk",
+    metadata: {},
+    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+    rawHash: "hash",
+    documentAst,
+  });
 
 const astMetadata = {
   caseNumber: "X/1/2026",
@@ -209,13 +212,14 @@ describe("sanitizeResult — decision identifiers", () => {
 });
 
 describe("sanitizeResult — docket grammar", () => {
-  const observed = (country: string, caseNumber: string): IngestionResult => ({
-    ...baseResult(EMPTY_AST),
-    country,
-    caseNumber,
-    sourceDocumentId: "publisher-document",
-    metadata: { caseNumber },
-  });
+  const observed = (country: string, caseNumber: string): IngestionResult =>
+    plainTextIngestionResult({
+      ...baseResult(EMPTY_AST),
+      country,
+      caseNumber,
+      sourceDocumentId: "publisher-document",
+      metadata: { caseNumber },
+    });
 
   test.each([
     ["CZE", "33 Cdo 1751/2023- II.", "33 Cdo 1751/2023"],
@@ -244,10 +248,10 @@ describe("sanitizeResult — docket grammar", () => {
   });
 
   test("a docket keyed row keeps its tail and is reported unkeyed", () => {
-    const input = {
+    const input = plainTextIngestionResult({
       ...observed("CZE", "33 Cdo 1751/2023- II."),
       sourceDocumentId: undefined,
-    };
+    });
     expect(observedDocketOf(input)).toEqual({
       type: "unkeyed",
       caseNumber: "33 Cdo 1751/2023",
@@ -269,18 +273,20 @@ describe("sanitizeResult — docket grammar", () => {
 
   test("a placeholder docket is never read against the grammar", () => {
     expect(
-      observedDocketOf({
-        ...observed("CZE", "NALUS record 7301"),
-        caseNumberIsPlaceholder: true,
-      }),
+      observedDocketOf(
+        plainTextIngestionResult({
+          ...observed("CZE", "NALUS record 7301"),
+          caseNumberIsPlaceholder: true,
+        }),
+      ),
     ).toEqual({ type: "kept" });
   });
 
   test("a primary reference other than a docket is never read against the grammar", () => {
-    const input = {
+    const input = plainTextIngestionResult({
       ...observed("USA", "347 U.S. 483."),
       caseNumberType: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
-    };
+    });
     expect(observedDocketOf(input)).toEqual({ type: "kept" });
     expect(sanitizeResult(input).caseNumber).toBe("347 U.S. 483.");
   });
@@ -818,7 +824,11 @@ describe("runIngestionPipeline — failure records", () => {
     czNsAdapter.fetchPage = async () =>
       Result.ok({
         decisions: [
-          { ...baseResult({}), caseNumber, language: "sk-SK-x-long" },
+          plainTextIngestionResult({
+            ...baseResult({}),
+            caseNumber,
+            language: "sk-SK-x-long",
+          }),
         ],
         itemBuildFailures: { type: "item_build_failed", count: 2 },
         nextCursor: "cursor-2",
@@ -1205,7 +1215,7 @@ describe("processDecision — corpus storage off", () => {
     };
 
     const outcome = await processDecision({
-      input: {
+      input: plainTextIngestionResult({
         caseNumber: "X/1/2026",
         court: "Test Court",
         country: "SVK",
@@ -1215,7 +1225,7 @@ describe("processDecision — corpus storage off", () => {
         textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
         rawHash: "new-hash",
         documentAst: EMPTY_AST,
-      },
+      }),
       observationOrder: 1n,
       sourceId,
       scopedDb,
@@ -1242,7 +1252,7 @@ describe("processDecision — the decision's judges", () => {
   };
 
   type RefreshOptions = {
-    judges?: IngestionResult["judges"];
+    judges?: RawIngestionResult["judges"];
   };
 
   const refreshWithJudges = async ({
@@ -1303,11 +1313,11 @@ describe("processDecision — the decision's judges", () => {
     };
 
     await processDecision({
-      input: {
+      input: plainTextIngestionResult({
         ...baseResult(EMPTY_AST),
         fulltext: "Ústavní soud rozhodl o návrhu.",
         ...(judges === undefined ? {} : { judges }),
-      },
+      }),
       judges: {
         replace: async (_tx, { decisionId, judges: written }) => {
           replaced.push({ decisionId, judges: written, inTransaction });
@@ -1352,7 +1362,7 @@ describe("processDecision — fields on an existing row", () => {
   type RefreshedDecisionOptions = {
     decisionDate?: string | undefined;
     storedMetadata?: Record<string, unknown> | undefined;
-    textFields?: IngestionResult["textFields"] | undefined;
+    textFields?: RawIngestionResult["textFields"] | undefined;
   };
 
   const refreshedDecision = async ({
@@ -1446,7 +1456,7 @@ describe("processDecision — fields on an existing row", () => {
     };
 
     await processDecision({
-      input: {
+      input: plainTextIngestionResult({
         caseNumber: "X/1/2026",
         court: "Test Court",
         country: "SVK",
@@ -1457,7 +1467,7 @@ describe("processDecision — fields on an existing row", () => {
         textFields,
         rawHash: "new-hash",
         documentAst: EMPTY_AST,
-      },
+      }),
       observationOrder: 1n,
       sourceId,
       scopedDb,
@@ -1564,7 +1574,7 @@ describe("processDecision — source raw upload failure", () => {
     };
 
     const outcome = await processDecision({
-      input: {
+      input: plainTextIngestionResult({
         caseNumber: "X/2/2026",
         court: "Test Court",
         country: "SVK",
@@ -1575,7 +1585,7 @@ describe("processDecision — source raw upload failure", () => {
         rawHash: "new-hash",
         documentAst: EMPTY_AST,
         sourceRaw,
-      },
+      }),
       observationOrder: 1n,
       sourceId,
       scopedDb,
@@ -1645,7 +1655,7 @@ describe("processDecision — source raw upload failure", () => {
     };
 
     await processDecision({
-      input: {
+      input: plainTextIngestionResult({
         caseNumber: "X/3/2026",
         court: "Test Court",
         country: "SVK",
@@ -1656,7 +1666,7 @@ describe("processDecision — source raw upload failure", () => {
         rawHash: "new-hash",
         documentAst: EMPTY_AST,
         sourceRaw: "<html></html>",
-      },
+      }),
       observationOrder: 1n,
       sourceId: createSafeId<"caseLawSource">(),
       scopedDb,

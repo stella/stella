@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 /**
  * Polish Constitutional Tribunal (Trybunał Konstytucyjny) adapter.
  *
@@ -39,8 +40,6 @@
  * are the keys a SAOS row and a row from this portal share when they describe
  * the same ruling, stored as `rulingKeys` on the rows of both.
  */
-
-import { panic, Result } from "better-result";
 import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
 
@@ -108,6 +107,7 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -957,7 +957,7 @@ export const assemblePlTkDecision = ({
   const sourceRaw = encodeSourceRawEnvelope(rawParts);
   const hasText = document !== null && deciding.type === "stated";
 
-  const decision: IngestionResult = {
+  const decision: IngestionResult = plainTextIngestionResult({
     caseNumber,
     ...(statedCaseNumber === undefined
       ? { caseNumberIsPlaceholder: true }
@@ -1010,7 +1010,7 @@ export const assemblePlTkDecision = ({
     documentAst,
     sourceRaw,
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+  });
   return hasText
     ? { type: "built", decision }
     : { type: "detail-unavailable", decision };

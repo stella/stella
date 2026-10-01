@@ -71,7 +71,11 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
-import type { DecisionJudgeInput } from "@/api/lib/legal-search/ingestion-types";
+import {
+  plainTextIngestionResult,
+  type RawIngestionResult,
+  type DecisionJudgeInput,
+} from "@/api/lib/legal-search/ingestion-types";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -1043,7 +1047,7 @@ const parseDecisionPage = ({
   // across parser changes. Matches NSS adapter pattern.
   const raw = `${sourceDocumentId}|${parsed.caseNumber}|${parsed.decisionDate ?? ""}`;
 
-  return {
+  return plainTextIngestionResult({
     caseNumber: parsed.caseNumber,
     sourceDocumentId,
     sourceDocumentIdAliases: nalusIdentities({
@@ -1102,7 +1106,7 @@ const parseDecisionPage = ({
     documentAst,
     sourceRaw: html,
     sourceRawContentType: "text/html",
-  };
+  });
 };
 
 type HistoricalCursor = {
@@ -2104,7 +2108,7 @@ export const buildCzUsDecision = ({
     recordCard.type === CZ_US_RECORD_CARD_STATE.READ
       ? recordCard.html
       : undefined;
-  const decision = parseDecisionPage({
+  const decision: RawIngestionResult | null = parseDecisionPage({
     html: textHtml,
     recordCard: parsedRecordCard(recordCard),
     sourceUrl: listed.sourceUrl,
@@ -2153,7 +2157,7 @@ export const buildCzUsDecision = ({
       abstractHtml,
     }),
   );
-  return decision;
+  return plainTextIngestionResult(decision);
 };
 
 /** A page beside the document that the court did not answer for. */
@@ -2348,7 +2352,7 @@ const listedOnlyDecision = (
     publisherCourt: CZ_US_PUBLISHER_COURT,
     sourceDocumentId: listed.sourceDocumentId,
   });
-  return {
+  return plainTextIngestionResult({
     caseNumber: listed.caseNumber,
     caseNumberIsPlaceholder: listed.listingDocketMissing === true,
     isListingOnly: true,
@@ -2400,7 +2404,7 @@ const listedOnlyDecision = (
       encodeSourceRawEnvelope({ listing: listed.listingHtml }),
     sourceRawContentType:
       rawSource?.sourceRawContentType ?? SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+  });
 };
 
 const fetchListedDecisions = async (
@@ -2682,7 +2686,7 @@ const reparseStoredRaw = (
   const nalusRecordId = stored.metadata["nalusRecordId"];
   const nalusSz = stored.metadata["nalusSz"];
   const detailHtml = parts?.["detail"];
-  const decision = parseDecisionPage({
+  const decision: RawIngestionResult | null = parseDecisionPage({
     html: documentHtml,
     recordCard: parsedRecordCard(
       detailHtml === undefined
@@ -2731,7 +2735,7 @@ const reparseStoredRaw = (
   }
   decision.sourceRaw = raw;
   decision.sourceRawContentType = stored.contentType ?? "text/html";
-  return { type: "parsed", result: decision };
+  return { type: "parsed", result: plainTextIngestionResult(decision) };
 };
 
 // ── Adapter ──────────────────────────────────────────────

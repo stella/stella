@@ -51,6 +51,7 @@ import {
 import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -89,36 +90,41 @@ const base = {
   textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
 } as const;
 
-const czechDecision = (rawHash: string): IngestionResult => ({
-  ...base,
-  caseNumber: "21 Cdo 1234/2020",
-  court: "Nejvyšší soud",
-  country: "CZE",
-  language: "cs",
-  metadata: { chamber: "21" },
-  rawHash,
-  sourceDocumentId: "cz-1",
-});
+const czechDecision = (rawHash: string): IngestionResult =>
+  plainTextIngestionResult({
+    ...base,
+    caseNumber: "21 Cdo 1234/2020",
+    court: "Nejvyšší soud",
+    country: "CZE",
+    language: "cs",
+    metadata: { chamber: "21" },
+    rawHash,
+    sourceDocumentId: "cz-1",
+  });
 
-const usDocketDecision = (sourceDocumentId: string): IngestionResult => ({
-  ...base,
-  caseNumber: DOCKET,
-  court: SCOTUS,
-  courtId: "scotus",
-  country: "USA",
-  language: "en",
-  metadata: {},
-  rawHash: `docket-${sourceDocumentId}`,
-  sourceDocumentId,
-});
+const usDocketDecision = (sourceDocumentId: string): IngestionResult =>
+  plainTextIngestionResult({
+    ...base,
+    caseNumber: DOCKET,
+    court: SCOTUS,
+    courtId: "scotus",
+    country: "USA",
+    language: "en",
+    metadata: {},
+    rawHash: `docket-${sourceDocumentId}`,
+    sourceDocumentId,
+  });
 
-const usReporterDecision = (sourceDocumentId: string): IngestionResult => ({
-  ...usDocketDecision(sourceDocumentId),
-  caseNumber: REPORTER,
-  caseNumberType: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
-  identifiers: [{ type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER, value: DOCKET }],
-  rawHash: `reporter-${sourceDocumentId}`,
-});
+const usReporterDecision = (sourceDocumentId: string): IngestionResult =>
+  plainTextIngestionResult({
+    ...usDocketDecision(sourceDocumentId),
+    caseNumber: REPORTER,
+    caseNumberType: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+    identifiers: [
+      { type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER, value: DOCKET },
+    ],
+    rawHash: `reporter-${sourceDocumentId}`,
+  });
 
 let order = 0n;
 const ingest = async (
@@ -387,10 +393,12 @@ test("a replay upgrading a docket primary to its reporter citation, the backfill
     const crawled = await storedDecision(sourceId, "cluster-3");
     expect(crawled.caseNumber).toBe(DOCKET);
     expect(crawled.citationKey).toBe(citationKeyOf(DOCKET));
-    const { replay, release } = await replayerFor(crawled, (stored) => ({
-      ...usReporterDecision(stored.sourceDocumentId ?? ""),
-      rawHash: "current-parser",
-    }));
+    const { replay, release } = await replayerFor(crawled, (stored) =>
+      plainTextIngestionResult({
+        ...usReporterDecision(stored.sourceDocumentId ?? ""),
+        rawHash: "current-parser",
+      }),
+    );
 
     const first = await replay();
     // The reference changed and the document did not: the same decision,
@@ -441,11 +449,11 @@ test("a replay upgrading a docket primary to its reporter citation, the backfill
 test("a correction of the reference type alone is written under an unchanged source hash", async () => {
   const sourceId = await newSource();
   // A reporter citation first stored as though it were a docket.
-  const mistyped = {
+  const mistyped = plainTextIngestionResult({
     ...usDocketDecision("cluster-4"),
     caseNumber: REPORTER,
     rawHash: "same-payload",
-  };
+  });
   await ingest(sourceId, mistyped);
   const before = await storedDecision(sourceId, "cluster-4");
   expect(before.caseNumberType).toBe(DECISION_IDENTIFIER_TYPES.CASE_NUMBER);
@@ -471,14 +479,20 @@ test("a correction of the reference type alone is written under an unchanged sou
 test("two spellings of one reporter citation become one identifier row", async () => {
   const sourceId = await newSource();
   // `A.` and `Atl.` name one reporter, so the two keys are one.
-  await ingest(sourceId, {
-    ...usDocketDecision("cluster-5"),
-    caseNumber: "10 A. 5",
-    caseNumberType: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
-    identifiers: [
-      { type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION, value: "10 Atl. 5" },
-    ],
-  });
+  await ingest(
+    sourceId,
+    plainTextIngestionResult({
+      ...usDocketDecision("cluster-5"),
+      caseNumber: "10 A. 5",
+      caseNumberType: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+      identifiers: [
+        {
+          type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+          value: "10 Atl. 5",
+        },
+      ],
+    }),
+  );
   const stored = await storedDecision(sourceId, "cluster-5");
 
   // The primary's spelling is the row; the other stays in the stored
@@ -502,11 +516,11 @@ test("a replay correcting only the reference type is applied", async () => {
   const fake = startFakeS3();
   try {
     const sourceId = await newSource();
-    const mistyped = {
+    const mistyped = plainTextIngestionResult({
       ...usDocketDecision("cluster-6"),
       caseNumber: REPORTER,
       rawHash: "same-payload",
-    };
+    });
     await ingest(sourceId, mistyped);
     const before = await storedDecision(sourceId, "cluster-6");
     const { replay, release } = await replayerFor(before, () => ({

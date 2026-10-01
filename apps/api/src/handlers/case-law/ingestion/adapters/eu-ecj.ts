@@ -89,6 +89,7 @@ import {
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -1439,7 +1440,7 @@ const ecjDecisionFromParts = ({
   const judges = facts === undefined ? [] : noticeJudges(facts);
   const converterVersion = ecjConverterVersion(html);
 
-  return {
+  return plainTextIngestionResult({
     caseNumber,
     sourceDocumentId: ecjSourceDocumentId(celex, language),
     // What every row this adapter wrote before it stated an id was stored
@@ -1498,7 +1499,7 @@ const ecjDecisionFromParts = ({
     // in the row would lead a replay back to.
     sourceRaw: encodeSourceRawEnvelope(parts),
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+  });
 };
 
 /**

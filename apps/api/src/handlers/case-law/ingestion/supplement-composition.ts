@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * How a decision's document takes in the supplements that belong to it.
  *
@@ -14,8 +15,6 @@
  * supplements, and its hash covers both, so an unchanged pair is a fixed
  * point and a changed supplement moves the hash the refresh check reads.
  */
-
-import { panic } from "better-result";
 import { and, eq, inArray, notInArray, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
@@ -35,6 +34,7 @@ import type {
 import type { SafeId } from "@/api/lib/branded-types";
 import { supplementAnchorPrefix } from "@/api/lib/case-law/decision-absorption";
 import type { DecisionSupplementKind } from "@/api/lib/legal-search/decision-supplement-kind";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { segmentDecision } from "@/api/lib/legal-search/segment-decision";
 
 /**
@@ -660,7 +660,7 @@ export const composeDecisionWithSupplements = (
               text,
             })),
         ];
-  return {
+  return plainTextIngestionResult({
     ...judgment,
     fulltext: fulltext.length > 0 ? fulltext : undefined,
     documentAst,
@@ -676,5 +676,5 @@ export const composeDecisionWithSupplements = (
         }),
       ),
     },
-  };
+  });
 };

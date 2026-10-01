@@ -80,6 +80,7 @@ import type { UnpersistableDecisionField } from "@/api/lib/errors/tagged-errors"
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { restrictCzRegionalFinaldocUrl } from "@/api/lib/legal-search/cz-regional-finaldoc-url";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -1020,7 +1021,7 @@ export const assembleCzRegionalDecision = ({
 
   return {
     type: "built",
-    decision: {
+    decision: plainTextIngestionResult({
       caseNumber,
       sheetNumber,
       ecli,
@@ -1087,7 +1088,7 @@ export const assembleCzRegionalDecision = ({
       documentAst: parsed?.documentAst ?? EMPTY_AST,
       sourceRaw,
       sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-    },
+    }),
   };
 };
 

@@ -40,6 +40,11 @@ import {
   type SourceRegistrationKey,
 } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { storeTextField } from "@/api/lib/case-law/decision-text";
+import {
+  PLAIN_TEXT_FIELD_DEBT,
+  PLAIN_TEXT_RESULT_FIELDS,
+  plainTextIngestionResult,
+} from "@/api/lib/legal-search/ingestion-types";
 import { readSourceRawField } from "@/api/lib/legal-search/source-raw-field";
 import {
   atFindokFixture,
@@ -124,6 +129,24 @@ const adapterFor = (key: SourceRegistrationKey) =>
   getSourceRegistration(key)?.source ??
   panic(`${key} is declared but not registered`);
 
+/** The registry and the fixture census must agree even after runtime widening. */
+const plainTextFixtureFor = (key: SourceRegistrationKey) => {
+  if (!Object.hasOwn(ADAPTER_INVENTORY_COVERAGE, key)) {
+    return panic(`Missing plain-text adapter census fixture: ${key}`);
+  }
+  return ADAPTER_INVENTORY_COVERAGE[key];
+};
+
+test("the plain-text census rejects an unaccounted adapter", () => {
+  expect(Object.keys(PLAIN_TEXT_FIELD_DEBT)).toEqual([]);
+  expect(() => {
+    // @ts-expect-error An adapter outside the registry cannot satisfy its census.
+    plainTextFixtureFor("fake-plain-text-adapter");
+  }).toThrow(
+    "Missing plain-text adapter census fixture: fake-plain-text-adapter",
+  );
+});
+
 // ── Reading a stored field back ──────────────────────────
 
 const isPresent = (value: unknown): boolean => {
@@ -206,12 +229,19 @@ const storedPartsOf = (
 
 describe("every adapter accounts for the fields its source states", () => {
   for (const key of DECLARED_ADAPTER_KEYS) {
-    const fixture = ADAPTER_INVENTORY_COVERAGE[key];
+    const fixture = plainTextFixtureFor(key);
 
     test(`${key}: every field its source states is stored or excluded`, async () => {
       const { sourceFields } = adapterFor(key);
       const evidence = fixture();
       const decision = await evidence.buildDecision();
+      // The branded contract covers every registered source with no field debt.
+      const normalized = plainTextIngestionResult(decision);
+      for (const field of Object.keys(PLAIN_TEXT_RESULT_FIELDS)) {
+        expect(Reflect.get(normalized, field), `${key}.${field}`).toEqual(
+          Reflect.get(decision, field),
+        );
+      }
       const parts = storedPartsOf(key, decision);
 
       const stated = await sourceFields.listSourceFields(parts);

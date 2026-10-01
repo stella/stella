@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 /**
  * pl-uodo against records the portal actually served.
  *
@@ -8,8 +9,6 @@
  * decisions. The crawl is driven against a model of the search built over the
  * captured records, honouring the same keyset, offset and order parameters.
  */
-
-import { panic, Result } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 
 import {
@@ -36,6 +35,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/pl-uodo";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import { readGzipJson } from "@/api/lib/gzip-json";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
@@ -451,18 +451,20 @@ describe("an authority decision", () => {
       buildFrom(await recordOf(DECISION_URN), await bodyBytes()),
     );
 
-    expect(decision).toMatchObject({
-      sourceDocumentId: DECISION_URN,
-      caseNumber: "DKN.5131.45.2022",
-      court: "Prezes Urzędu Ochrony Danych Osobowych",
-      country: "POL",
-      language: "pl",
-      decisionDate: "2023-03-14",
-      decisionType: "decyzja",
-      sourceUrl: `https://orzeczenia.uodo.gov.pl/document/${DECISION_URN}/content`,
-      documentUrl: `https://orzeczenia.uodo.gov.pl/api/documents/public/items/${DECISION_URN}:0/body.pdf`,
-      sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-    });
+    expect(decision).toMatchObject(
+      plainTextIngestionResult({
+        sourceDocumentId: DECISION_URN,
+        caseNumber: "DKN.5131.45.2022",
+        court: "Prezes Urzędu Ochrony Danych Osobowych",
+        country: "POL",
+        language: "pl",
+        decisionDate: "2023-03-14",
+        decisionType: "decyzja",
+        sourceUrl: `https://orzeczenia.uodo.gov.pl/document/${DECISION_URN}/content`,
+        documentUrl: `https://orzeczenia.uodo.gov.pl/api/documents/public/items/${DECISION_URN}:0/body.pdf`,
+        sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+      }),
+    );
     expect(decision.isListingOnly).toBeUndefined();
     expect(decision.fulltext).toContain(
       "W tym stanie faktycznym i prawnym Prezes Urzędu Ochrony Danych Osobowych rozstrzygnął, jak w sentencji.",

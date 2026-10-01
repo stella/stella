@@ -1,3 +1,4 @@
+import { Result, panic } from "better-result";
 /**
  * Hungarian courts (Bírósági Határozatok Gyűjteménye) adapter.
  *
@@ -47,8 +48,6 @@
  * reconciliation ledger's, and its slices are the same year × kollégium windows
  * (rule 16).
  */
-
-import { Result, panic } from "better-result";
 
 import type { Document as FolioDocument } from "@stll/docx-core/model";
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
@@ -114,6 +113,7 @@ import { errorTag } from "@/api/lib/errors/utils";
 import { parseScannedDocx } from "@/api/lib/file-scan/document-parsers";
 import { publisherDocument } from "@/api/lib/file-scan/publisher-document";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { readRtf, isRtf } from "@/api/lib/legal-search/parsers/rtf-reader";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
@@ -820,7 +820,7 @@ export const assembleHuBhgyDecision = async ({
   );
 
   const sourceRaw = encodeSourceRawEnvelope(rawParts);
-  const decision: IngestionResult = {
+  const decision: IngestionResult = plainTextIngestionResult({
     caseNumber,
     // The listed docket and the one the document prints are two spellings of
     // one number: `Gfv.30091/2025/4` drops the thousands dot and the panel
@@ -895,7 +895,7 @@ export const assembleHuBhgyDecision = async ({
     documentAst,
     sourceRaw,
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+  });
 
   return document === undefined
     ? { type: "detail-unavailable", decision }

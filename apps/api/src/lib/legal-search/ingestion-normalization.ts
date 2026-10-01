@@ -42,7 +42,9 @@ import {
 import {
   EMPTY_AST,
   isPersistableSourceDocumentId,
+  plainTextIngestionResult,
   type IngestionResult,
+  type RawIngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
 import {
   PARTIAL_OBSERVATION_FIELD,
@@ -142,7 +144,7 @@ export type ObservedDocket =
 
 export const observedDocketOf = (
   result: Pick<
-    IngestionResult,
+    RawIngestionResult,
     | "caseNumber"
     | "caseNumberIsPlaceholder"
     | "caseNumberType"
@@ -209,7 +211,7 @@ export const storedCaseNumberOf = (
  * same reason (`observedDocketOf`). The adapter's metadata keeps the docket
  * as the publisher wrote it.
  */
-export const sanitizeResult = (result: IngestionResult): IngestionResult => {
+export const sanitizeResult = (result: RawIngestionResult): IngestionResult => {
   const strip = (value: string | undefined): string | undefined =>
     value ? stripDangerousChars(value) : undefined;
 
@@ -344,7 +346,7 @@ export const sanitizeResult = (result: IngestionResult): IngestionResult => {
 
   assertDecisionLanguageIdentity({ country: result.country, sourceDocumentId });
 
-  return {
+  return plainTextIngestionResult({
     ...result,
     caseNumber: storedCaseNumberOf(result),
     caseNumberType: parsePrimaryReferenceType(result.caseNumberType),
@@ -383,5 +385,5 @@ export const sanitizeResult = (result: IngestionResult): IngestionResult => {
     })),
     documentAst,
     sourceRaw: strip(result.sourceRaw),
-  };
+  });
 };

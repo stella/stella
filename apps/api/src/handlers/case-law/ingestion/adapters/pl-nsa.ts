@@ -1,3 +1,4 @@
+import { Result, panic } from "better-result";
 /**
  * Polish administrative courts, imported from the Hugging Face dataset
  * `JuDDGES/pl-nsa` (CC BY 4.0).
@@ -14,8 +15,6 @@
  * next row to read; past the last shard it parks and asks for nothing. The
  * reconciliation slices are the shards themselves, listed by id alone.
  */
-
-import { Result, panic } from "better-result";
 import * as v from "valibot";
 
 import {
@@ -96,6 +95,7 @@ import {
 import type { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -956,7 +956,7 @@ const quarantined = ({
   const caseNumber =
     docket?.caseNumber ?? `orzeczenia.nsa.gov.pl/doc/${identity.id}`;
   const decisionDate = warsawDate(row.judgment_date);
-  return {
+  return plainTextIngestionResult({
     caseNumber,
     ...(docket === null ? { caseNumberIsPlaceholder: true } : {}),
     isListingOnly: true,
@@ -995,7 +995,7 @@ const quarantined = ({
     documentAst: EMPTY_AST,
     sourceRaw,
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+  });
 };
 
 const judgesOf = (row: PlNsaRow): DecisionJudgeInput[] | undefined => {
@@ -1123,7 +1123,7 @@ export const assemblePlNsaDecision = ({
     reference: row.full_text,
   });
 
-  const decision: IngestionResult = {
+  const decision: IngestionResult = plainTextIngestionResult({
     caseNumber,
     ...(docket === null ? { caseNumberIsPlaceholder: true } : {}),
     ...(rangeMembers.length === 0
@@ -1213,7 +1213,7 @@ export const assemblePlNsaDecision = ({
     sections: parsed.sections,
     sourceRaw,
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+  });
 
   return { type: "built", decision };
 };

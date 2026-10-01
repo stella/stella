@@ -1,3 +1,4 @@
+import { Result, panic } from "better-result";
 /**
  * Polish Supreme Court (Sąd Najwyższy) adapter.
  *
@@ -43,8 +44,6 @@
  * spaces; both store the ruling keys from `pl-sn-ruling-keys.ts`, which is
  * what relates a row here to its SAOS copy.
  */
-
-import { Result, panic } from "better-result";
 
 import { Temporal } from "@stll/time";
 
@@ -97,6 +96,7 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -793,7 +793,7 @@ export const assemblePlSnDecision = async ({
 
   const sourceRaw = encodeSourceRawEnvelope(rawParts);
 
-  const decision: IngestionResult = {
+  const decision: IngestionResult = plainTextIngestionResult({
     caseNumber,
     sourceDocumentId: id,
     court,
@@ -840,7 +840,7 @@ export const assemblePlSnDecision = async ({
     documentAst,
     sourceRaw,
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+  });
 
   return documentBytes === undefined
     ? { type: "detail-unavailable", decision }

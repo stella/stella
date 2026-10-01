@@ -10,6 +10,7 @@ import {
   parseFindokManifest,
 } from "@/api/handlers/case-law/ingestion/adapters/at-findok";
 import { loadDocxArchive } from "@/api/lib/docx-archive";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 
 import { PublisherPageError } from "./publisher-page";
 
@@ -219,15 +220,17 @@ describe("Austrian Findok adapter", () => {
     const first = await adapter.fetchPage(null, {});
     expect(first.isOk()).toBe(true);
     const page = first.unwrap();
-    expect(page.decisions.at(0)).toMatchObject({
-      sourceDocumentId: DOCUMENT_ID,
-      caseNumber: "RV/7500368/2026",
-      ecli: "ECLI:AT:BFG:2026:RV.7500368.2026",
-      court: "BFG",
-      country: "AUT",
-      language: "de",
-      decisionDate: "2026-07-14",
-    });
+    expect(page.decisions.at(0)).toMatchObject(
+      plainTextIngestionResult({
+        sourceDocumentId: DOCUMENT_ID,
+        caseNumber: "RV/7500368/2026",
+        ecli: "ECLI:AT:BFG:2026:RV.7500368.2026",
+        court: "BFG",
+        country: "AUT",
+        language: "de",
+        decisionDate: "2026-07-14",
+      }),
+    );
     expect(page.decisions.at(0)?.sourceRaw).toContain("<Segmente>");
     expect(urls).toEqual([
       "https://findok.bmf.gv.at/findok/iwg/bestandsliste-bfg.gz",

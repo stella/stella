@@ -1,5 +1,7 @@
 import { Result, panic } from "better-result";
 import * as v from "valibot";
+
+import { classifyFailure } from "@stll/errors";
 /**
  * Slovak Constitutional Court (Ústavný súd SR) adapter.
  *
@@ -33,8 +35,6 @@ import * as v from "valibot";
  * the crawl cursor ever reaching it. See `reconciliation`
  * at the bottom of this file.
  */
-
-import { classifyFailure } from "@stll/errors";
 import { decodeDeclared } from "@stll/mojibake/declared-charset";
 import { Temporal } from "@stll/time";
 
@@ -100,6 +100,10 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import {
+  plainTextIngestionResult,
+  type RawIngestionResult,
+} from "@/api/lib/legal-search/ingestion-types";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -882,7 +886,9 @@ const skUsRapporteurs = (doc: SearchDocument): string[] =>
  */
 const NO_LEGAL_SENTENCE = "- bez právnej vety -";
 
-const skUsTextFields = (doc: SearchDocument): IngestionResult["textFields"] => {
+const skUsTextFields = (
+  doc: SearchDocument,
+): RawIngestionResult["textFields"] => {
   const absent = absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED);
   const headnote = doc.mkClauseTitle?.trim();
   const legalSentence = doc.mkClauseText?.trim();
@@ -1078,7 +1084,7 @@ const skUsCollectionPublication = (
 const skUsCollectionTextFields = (
   doc: SearchDocument,
   collection: SkUsCollectionMatch,
-): IngestionResult["textFields"] => {
+): RawIngestionResult["textFields"] => {
   const stated = skUsTextFields(doc);
   switch (collection.status) {
     case "unresolved":
@@ -1326,7 +1332,7 @@ export const buildSkUsDecision = async (
   };
   const sourceRaw = encodeSourceRawEnvelope(parts);
 
-  const decision: IngestionResult = {
+  const decision: IngestionResult = plainTextIngestionResult({
     caseNumber,
     sourceDocumentId: documentId,
     // What every row this adapter wrote before it stated an id was stored
@@ -1374,7 +1380,7 @@ export const buildSkUsDecision = async (
           },
         }),
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+  });
 
   return pdfBytes === undefined
     ? { type: "detail-unavailable", decision }
@@ -2319,7 +2325,7 @@ const reparseStoredRaw = (
 
   return {
     type: "parsed",
-    result: {
+    result: plainTextIngestionResult({
       caseNumber: fields.caseNumber,
       sourceDocumentId: fields.documentId,
       ecli: listing.mkECLI ?? undefined,
@@ -2349,7 +2355,7 @@ const reparseStoredRaw = (
       documentAst: parsed === null ? EMPTY_AST : parsed.documentAst,
       sourceRaw: raw,
       sourceRawContentType: stored.contentType ?? "application/json",
-    },
+    }),
   };
 };
 

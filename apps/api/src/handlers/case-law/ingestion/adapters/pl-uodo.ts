@@ -1,3 +1,4 @@
+import { Result, panic } from "better-result";
 /**
  * Polish data-protection authority (Prezes UODO) adapter.
  *
@@ -36,8 +37,6 @@
  *
  * Reconciliation slices are decision years, which the search filters on.
  */
-
-import { Result, panic } from "better-result";
 
 import { polishAdministrativeDocketOf } from "@stll/api-contract/decision-docket-grammar";
 import { readCappedBytes } from "@stll/skills/streaming";
@@ -101,6 +100,7 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -1380,7 +1380,7 @@ const assembleAuthorityDecision = ({
   );
 
   const sourceRaw = encodeSourceRawEnvelope(rawParts);
-  const decision: IngestionResult = {
+  const decision: IngestionResult = plainTextIngestionResult({
     ...docket,
     sourceDocumentId: urn,
     ...repairAliasesOf(row),
@@ -1422,7 +1422,7 @@ const assembleAuthorityDecision = ({
     documentAst,
     sourceRaw,
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+  });
   return body === undefined
     ? { type: "detail-unavailable", decision }
     : { type: "built", decision };
@@ -1511,7 +1511,7 @@ const assembleCourtRuling = ({
   });
   const sourceRaw = encodeSourceRawEnvelope(rawParts);
 
-  const decision: IngestionResult = {
+  const decision: IngestionResult = plainTextIngestionResult({
     caseNumber,
     ...(docket.placeholder === true ? { caseNumberIsPlaceholder: true } : {}),
     sourceDocumentId: urn,
@@ -1550,7 +1550,7 @@ const assembleCourtRuling = ({
     documentAst: EMPTY_AST,
     sourceRaw,
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+  });
   return { type: "built", decision };
 };
 
@@ -1583,7 +1583,7 @@ const assembleQuarantined = ({
     sourceDocumentId: quarantineId,
   });
   const sourceRaw = encodeSourceRawEnvelope(rawParts);
-  const decision: IngestionResult = {
+  const decision: IngestionResult = plainTextIngestionResult({
     ...docket,
     sourceDocumentId: quarantineId,
     court,
@@ -1608,7 +1608,7 @@ const assembleQuarantined = ({
     documentAst: EMPTY_AST,
     sourceRaw,
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+  });
   return { type: "built", decision };
 };
 

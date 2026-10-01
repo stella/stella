@@ -33,6 +33,7 @@ import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
@@ -95,7 +96,7 @@ type ObserveOptions = {
 /** One observation of the same decision, as a crawl or a replay feeds it. */
 const observe = async ({ sourceId, listing, order }: ObserveOptions) =>
   await processDecision({
-    input: {
+    input: plainTextIngestionResult({
       caseNumber: "I. ÚS 1/2026",
       sourceDocumentId: "document-1",
       court: "Ústavný súd Slovenskej republiky",
@@ -111,7 +112,7 @@ const observe = async ({ sourceId, listing, order }: ObserveOptions) =>
         "document-file": { bytes: PDF, contentType: "application/pdf" },
       },
       sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-    },
+    }),
     sourceId,
     scopedDb,
     observedAt: new Date(),
@@ -128,7 +129,7 @@ test("a planning rejection schedules the new decision's uploaded raw for sweepin
   const failed = await Result.tryPromise({
     try: async () =>
       await processDecision({
-        input: {
+        input: plainTextIngestionResult({
           caseNumber: "raw-planning-rejection",
           sourceDocumentId: "raw-planning-rejection",
           court: "Ústavný súd Slovenskej republiky",
@@ -143,7 +144,7 @@ test("a planning rejection schedules the new decision's uploaded raw for sweepin
           documentAst: EMPTY_AST,
           citationScopes: [],
           sourceRaw: "publisher raw",
-        },
+        }),
         sourceId,
         scopedDb,
         observedAt: new Date(),

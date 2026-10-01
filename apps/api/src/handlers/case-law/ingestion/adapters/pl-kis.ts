@@ -1,3 +1,4 @@
+import { Result, panic } from "better-result";
 /**
  * Polish tax interpretations and rulings (EUREKA) adapter.
  *
@@ -44,8 +45,6 @@
  * months (`undated|<boundary id>|<page>`) and the ledger holds it as a slice
  * of its own, ahead of the first month.
  */
-
-import { Result, panic } from "better-result";
 
 import { readCappedBytes } from "@stll/skills/streaming";
 import { parsePlainDate, Temporal } from "@stll/time";
@@ -108,6 +107,7 @@ import type { TextField } from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -1253,7 +1253,7 @@ export const assemblePlKisDecision = async ({
   const sourceRaw = encodeSourceRawEnvelope(rawParts);
   const listingOnly = parsed === undefined;
 
-  const decision: IngestionResult = {
+  const decision: IngestionResult = plainTextIngestionResult({
     caseNumber,
     ...(signature === undefined
       ? { caseNumberIsPlaceholder: true }
@@ -1336,7 +1336,7 @@ export const assemblePlKisDecision = async ({
         }
       : {}),
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+  });
   return listingOnly
     ? { type: "detail-unavailable", decision }
     : { type: "built", decision };

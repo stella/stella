@@ -12,6 +12,7 @@ import {
 } from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { asTestRaw, readTestJson } from "@/api/tests/helpers/test-tool-set";
 
 import type { FirstPageNumber } from "./pagination";
@@ -35,7 +36,7 @@ const makeFixture = (items: TestItem[], total: number) =>
 
 const itemToDecision = (item: TestItem): IngestionItem => ({
   type: "decision",
-  decision: {
+  decision: plainTextIngestionResult({
     caseNumber: `CASE-${item.id}`,
     court: "Test Court",
     country: "TST",
@@ -44,7 +45,7 @@ const itemToDecision = (item: TestItem): IngestionItem => ({
     metadata: {},
     documentAst: {},
     rawHash: `hash-${item.id}`,
-  },
+  }),
 });
 
 const createTestFetch = (opts?: {

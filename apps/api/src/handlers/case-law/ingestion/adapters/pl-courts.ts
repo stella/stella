@@ -74,6 +74,7 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -1503,7 +1504,7 @@ export const buildPlDecision = ({
     .map((referenced) => referenced.caseNumber?.trim() ?? "")
     .filter((caseNo) => caseNo.length > 0);
 
-  return {
+  return plainTextIngestionResult({
     caseNumber,
     ...(firstPublisherIdentifier === undefined
       ? {}
@@ -1596,7 +1597,7 @@ export const buildPlDecision = ({
     documentAst,
     sourceRaw: encodeSourceRawEnvelope(rawParts),
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+  });
 };
 
 /**

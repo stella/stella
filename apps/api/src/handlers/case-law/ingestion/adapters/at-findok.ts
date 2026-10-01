@@ -63,6 +63,7 @@ import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 
 const itemBuildFailed = failureSink({
@@ -693,7 +694,7 @@ const buildListingOnly = (
   }
   const decisionDate = parseDate(item.appdat);
   const raw = storedRaw({ item, documentXml: rawXml });
-  return {
+  return plainTextIngestionResult({
     sourceDocumentId: item.dokumentId,
     sourceDocumentIdRepairAliases: item.sourceDocumentIdRepairAliases,
     caseNumber: item.gz,
@@ -724,7 +725,7 @@ const buildListingOnly = (
     documentAst: EMPTY_AST,
     parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.AT_FINDOK],
     ...raw,
-  };
+  });
 };
 
 type FindokTextFieldsOptions = {
@@ -891,7 +892,7 @@ export const assembleAtFindokDecision = (
   const headnotes =
     headnoteXml === undefined ? undefined : parseFindokHeadnoteXml(headnoteXml);
   const raw = storedRaw({ item, documentXml, headnoteXml });
-  return {
+  return plainTextIngestionResult({
     sourceDocumentId: item.dokumentId,
     sourceDocumentIdRepairAliases: item.sourceDocumentIdRepairAliases,
     caseNumber: item.gz,
@@ -938,7 +939,7 @@ export const assembleAtFindokDecision = (
     sections: sectionsFromAst(parsed.documentAst.blocks),
     parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.AT_FINDOK],
     ...raw,
-  };
+  });
 };
 
 const listReconciliationPage = async (

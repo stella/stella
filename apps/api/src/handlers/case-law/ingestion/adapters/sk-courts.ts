@@ -78,7 +78,10 @@ import {
 import { decisionTypeKey } from "@/api/lib/case-law/decision-type-key";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
-import { DOCUMENT_DELIVERY } from "@/api/lib/legal-search/ingestion-types";
+import {
+  plainTextIngestionResult,
+  DOCUMENT_DELIVERY,
+} from "@/api/lib/legal-search/ingestion-types";
 import { restrictSkCourtDocumentUrl } from "@/api/lib/legal-search/sk-court-document-url";
 import type { SkDocumentFetch } from "@/api/lib/legal-search/sk-document-backfill";
 import { logger } from "@/api/lib/observability/logger";
@@ -618,7 +621,7 @@ export const assembleSkCourtsDecision = ({
     return sourceUrl === undefined ? "rejected-url" : "published";
   })();
 
-  return {
+  return plainTextIngestionResult({
     caseNumber,
     ecli,
     court,
@@ -681,7 +684,7 @@ export const assembleSkCourtsDecision = ({
     documentAst: EMPTY_AST,
     documentDelivery: DOCUMENT_DELIVERY.DEFERRED,
     ...skCourtsSourceRaw({ item, detail, courtRegistry }),
-  };
+  });
 };
 
 /**

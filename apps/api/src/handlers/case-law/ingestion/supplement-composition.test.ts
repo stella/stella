@@ -23,6 +23,7 @@ import {
   absentDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 
 type Ruling = SupplementJudgmentCandidate & { id: string };
 
@@ -269,7 +270,7 @@ const paragraph = (index: number, text: string): ParagraphBlock => ({
   plainText: text,
 });
 
-const judgment: IngestionResult = {
+const judgment: IngestionResult = plainTextIngestionResult({
   caseNumber: "IV Ka 95/18",
   court: "Sąd Okręgowy we Wrocławiu",
   country: "POL",
@@ -293,7 +294,7 @@ const judgment: IngestionResult = {
     },
     paragraph(2, "Sąd utrzymuje w mocy zaskarżony wyrok."),
   ]),
-};
+});
 
 const reasons: StoredSupplement = {
   sourceDocumentId: "339001",

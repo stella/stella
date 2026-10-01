@@ -56,6 +56,7 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 
 const API_URL = "https://data.bka.gv.at/ris/api/v2.6/Judikatur";
@@ -1011,7 +1012,7 @@ const buildListingOnly = ({
   const caseNumber = data.caseNumber ?? `RIS ${sourceDocumentId}`;
   const court = data.court ?? `RIS ${source.application}`;
   const raw = storedRaw({ item, documentXml: rawDetail });
-  return {
+  return plainTextIngestionResult({
     sourceDocumentId,
     sourceDocumentIdRepairAliases,
     caseNumber,
@@ -1043,7 +1044,7 @@ const buildListingOnly = ({
     documentAst: EMPTY_AST,
     parserVersion: PARSER_VERSIONS[source.key],
     ...raw,
-  };
+  });
 };
 
 type BuildDecisionOptions = {
@@ -1211,7 +1212,7 @@ export const assembleAtRisDecision = (
   const parsed = parseResult.value;
 
   const raw = storedRaw({ item, documentXml, headnoteListing });
-  return {
+  return plainTextIngestionResult({
     sourceDocumentId,
     sourceDocumentIdRepairAliases,
     caseNumber: data.caseNumber,
@@ -1240,7 +1241,7 @@ export const assembleAtRisDecision = (
     sections: sectionsFromAst(parsed.documentAst.blocks),
     parserVersion: PARSER_VERSIONS[source.key],
     ...raw,
-  };
+  });
 };
 
 type FetchListingOptions = {

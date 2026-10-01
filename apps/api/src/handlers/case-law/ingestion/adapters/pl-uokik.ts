@@ -1,3 +1,4 @@
+import { Result, panic } from "better-result";
 /**
  * Polish competition and consumer protection authority (Prezes UOKiK) adapter.
  *
@@ -53,8 +54,6 @@
  * The shared fetch identifies itself as Stella's ingestion agent, and the
  * publisher gate spaces requests two seconds apart.
  */
-
-import { Result, panic } from "better-result";
 import * as cheerio from "cheerio";
 
 import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
@@ -129,6 +128,7 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -1460,7 +1460,7 @@ export const assemblePlUokikDecision = async ({
   // never published under no authority.
   const courtUnknown = detail !== undefined && court === undefined;
   const listingOnly = missing !== undefined || courtUnknown;
-  const decision: IngestionResult = {
+  const decision: IngestionResult = plainTextIngestionResult({
     caseNumber,
     ...(placeholder
       ? { caseNumberIsPlaceholder: true }
@@ -1520,7 +1520,7 @@ export const assemblePlUokikDecision = async ({
           ),
         }),
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+  });
   return listingOnly
     ? { type: "detail-unavailable", decision }
     : { type: "built", decision };
@@ -1639,7 +1639,7 @@ export const assemblePlUokikRuling = async ({
     [RULING_NAME_PART]: file.name,
   });
   const caseNumber = read?.caseNumber ?? id;
-  return {
+  return plainTextIngestionResult({
     caseNumber,
     ...(read === undefined ? { caseNumberIsPlaceholder: true } : {}),
     sourceDocumentId: id,
@@ -1690,7 +1690,7 @@ export const assemblePlUokikRuling = async ({
           },
         }),
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+  });
 };
 
 type BuildOptions = {

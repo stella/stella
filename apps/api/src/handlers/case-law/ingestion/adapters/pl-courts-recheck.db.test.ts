@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 /**
  * A SAOS judgment whose detail read failed, carried through the store and the
  * reconciliation engine: the crawl keeps the dump's text in public and states
@@ -5,8 +6,6 @@
  * that row although it is held, and a detail read that succeeds restates the
  * row as read and enriched.
  */
-
-import { panic, Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -48,6 +47,7 @@ import {
 } from "@/api/lib/case-law/decision-text";
 import { addUtcDays, toUtcDateString } from "@/api/lib/dates";
 import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import type {
   SourceReconciliation,
   StoredRawResultReader,
@@ -293,24 +293,26 @@ const seedTextlessQueue = async ({
   updatedAt,
 }: SeedTextlessQueueOptions) => {
   await db.insert(caseLawDecisions).values(
-    Array.from({ length: count }, (_, index) => ({
-      id: createSafeId<"caseLawDecision">(),
-      sourceId,
-      caseNumber: `recheck-${index}`,
-      court: "Sąd Rejonowy w Białymstoku",
-      country: "PL",
-      language: "pl",
-      sourceDocumentId: `saos-recheck-${index}`,
-      sourceRawS3Key: "textless-recheck-fixture",
-      sourceRawContentType: "application/json",
-      updatedAt,
-      metadata: {
-        detailReadState: "read",
-        [PARTIAL_OBSERVATION_KEY]: {
-          [PARTIAL_OBSERVATION_FIELD.IS_LISTING_ONLY]: true,
+    Array.from({ length: count }, (_, index) =>
+      plainTextIngestionResult({
+        id: createSafeId<"caseLawDecision">(),
+        sourceId,
+        caseNumber: `recheck-${index}`,
+        court: "Sąd Rejonowy w Białymstoku",
+        country: "PL",
+        language: "pl",
+        sourceDocumentId: `saos-recheck-${index}`,
+        sourceRawS3Key: "textless-recheck-fixture",
+        sourceRawContentType: "application/json",
+        updatedAt,
+        metadata: {
+          detailReadState: "read",
+          [PARTIAL_OBSERVATION_KEY]: {
+            [PARTIAL_OBSERVATION_FIELD.IS_LISTING_ONLY]: true,
+          },
         },
-      },
-    })),
+      }),
+    ),
   );
 };
 
@@ -459,15 +461,17 @@ test("textless held rechecks claim each capped page in one statement before read
   // rather than requiring an index scan over a tiny all-eligible table.
   const publishedSourceId = await seedSource();
   await db.insert(caseLawDecisions).values(
-    Array.from({ length: 3000 }, (_, index) => ({
-      id: createSafeId<"caseLawDecision">(),
-      sourceId: publishedSourceId,
-      caseNumber: `published-${index}`,
-      court: "Synthetic court",
-      country: "PL",
-      language: "pl",
-      fulltext: "Published decision text.",
-    })),
+    Array.from({ length: 3000 }, (_, index) =>
+      plainTextIngestionResult({
+        id: createSafeId<"caseLawDecision">(),
+        sourceId: publishedSourceId,
+        caseNumber: `published-${index}`,
+        court: "Synthetic court",
+        country: "PL",
+        language: "pl",
+        fulltext: "Published decision text.",
+      }),
+    ),
   );
   const recheck = reconciliation.textlessHeldRecheck;
   if (recheck === undefined) {

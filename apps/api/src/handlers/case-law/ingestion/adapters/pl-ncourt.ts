@@ -1,3 +1,4 @@
+import { Result, panic } from "better-result";
 /**
  * Polish common courts from the Ministry of Justice's judgments API.
  *
@@ -45,8 +46,6 @@
  * their own rows; {@link plCommonCourtRulingKeys} is the relationship between
  * them, and nothing here merges or deletes either side.
  */
-
-import { Result, panic } from "better-result";
 import * as cheerio from "cheerio";
 import { type AnyNode, type Element, isTag, isText } from "domhandler";
 
@@ -123,6 +122,7 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -1113,7 +1113,7 @@ export const assemblePlNcourtDecision = ({
     (alias) => alias !== undefined,
   );
 
-  const decision: IngestionResult = {
+  const decision: IngestionResult = plainTextIngestionResult({
     ...keyed,
     sourceDocumentId: id,
     ...(repairAliases.length === 0
@@ -1165,7 +1165,7 @@ export const assemblePlNcourtDecision = ({
     documentAst,
     sourceRaw,
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+  });
   return standaloneReasons
     ? {
         type: "supplement",
@@ -1314,7 +1314,7 @@ export const buildPlNcourtQuarantine = (
     [RAW_PART.QUARANTINE]: JSON.stringify(quarantine),
   });
   const court = UNSERVED_ROW_LABEL;
-  return {
+  return plainTextIngestionResult({
     sourceDocumentId: id,
     caseNumber: id,
     caseNumberIsPlaceholder: true,
@@ -1343,7 +1343,7 @@ export const buildPlNcourtQuarantine = (
     documentAst: EMPTY_AST,
     sourceRaw,
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+  });
 };
 
 /**
@@ -1374,7 +1374,7 @@ const buildUnkeyedRow = ({
     [RAW_PART.LISTING]: listingXml,
     ...(detailXml === undefined ? {} : { [RAW_PART.DETAIL]: detailXml }),
   });
-  return {
+  return plainTextIngestionResult({
     sourceDocumentId,
     caseNumber: signature ?? sourceDocumentId,
     ...(signature === undefined ? { caseNumberIsPlaceholder: true } : {}),
@@ -1398,7 +1398,7 @@ const buildUnkeyedRow = ({
     documentAst: EMPTY_AST,
     sourceRaw,
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+  });
 };
 
 const isGapped = (value: unknown): boolean =>

@@ -11,12 +11,15 @@ import {
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { IMPORT_SOURCE_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import {
+  plainTextIngestionResult,
+  STORED_RAW_REPARSE_REJECTION,
+} from "@/api/lib/legal-search/ingestion-types";
 import type {
   IngestionResult,
   StoredRawReparseInput,
   StoredRawReparseOutcome,
 } from "@/api/lib/legal-search/ingestion-types";
-import { STORED_RAW_REPARSE_REJECTION } from "@/api/lib/legal-search/ingestion-types";
 
 import { classifyCourtListenerDecision } from "./order-classification";
 import { planCourtListenerRecord } from "./plan";
@@ -30,7 +33,7 @@ import {
 import { hasVisibleText } from "./snapshot-columns";
 
 export const COURTLISTENER_IMPORT_KEY = IMPORT_SOURCE_KEYS.COURTLISTENER;
-export const COURTLISTENER_PARSER_VERSION = 1;
+export const COURTLISTENER_PARSER_VERSION = 2;
 
 const textField = (value: string) =>
   hasVisibleText(value)
@@ -90,59 +93,61 @@ export const mapCourtListenerRecord = (
     principal: composed.principal,
   });
   const { decisionType } = classification;
-  return Result.ok({
-    sourceDocumentId: plan.sourceDocumentId,
-    country: plan.country,
-    language: plan.language,
-    courtId: plan.courtId,
-    court: plan.court,
-    caseNumber: plan.caseNumber,
-    caseNumberType: plan.caseNumberType,
-    identifiers: plan.identifiers,
-    decisionDate: plan.decisionDate,
-    decisionType,
-    sourceUrl: plan.sourceUrl,
-    documentUrl: plan.documentUrl,
-    judges: plan.judges,
-    textFields: {
-      headnote: textField(composed.textFields.headnotes),
-      abstract: textField(composed.textFields.syllabus),
-      summary: textField(composed.textFields.summary),
-      legalSentence: absentTextField(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-    },
-    metadata: checkedDecisionMetadata({
-      ...plan.metadata,
-      classification,
-      textSelection: composed.opinions,
-      diagnostics: plan.diagnostics,
+  return Result.ok(
+    plainTextIngestionResult({
+      sourceDocumentId: plan.sourceDocumentId,
+      country: plan.country,
+      language: plan.language,
+      courtId: plan.courtId,
+      court: plan.court,
+      caseNumber: plan.caseNumber,
+      caseNumberType: plan.caseNumberType,
+      identifiers: plan.identifiers,
+      decisionDate: plan.decisionDate,
+      decisionType,
+      sourceUrl: plan.sourceUrl,
+      documentUrl: plan.documentUrl,
+      judges: plan.judges,
+      textFields: {
+        headnote: textField(composed.textFields.headnotes),
+        abstract: textField(composed.textFields.syllabus),
+        summary: textField(composed.textFields.summary),
+        legalSentence: absentTextField(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      },
+      metadata: checkedDecisionMetadata({
+        ...plan.metadata,
+        classification,
+        textSelection: composed.opinions,
+        diagnostics: plan.diagnostics,
+      }),
+      fulltext: composed.blocks.map(({ plainText }) => plainText).join("\n\n"),
+      documentAst: {
+        version: 1,
+        source: {
+          system: COURTLISTENER_IMPORT_KEY,
+          documentId: clusterId,
+          webUrl: plan.sourceUrl,
+          printUrl: plan.sourceUrl,
+        },
+        metadata: {
+          caseNumber: plan.caseNumber,
+          ecli: null,
+          court: plan.court,
+          decisionDate: plan.decisionDate ?? null,
+          decisionType,
+          keywords: [],
+          statutes: [],
+        },
+        blocks: [...composed.blocks],
+      },
+      sections: [...composed.sections],
+      citationScopes: composed.citationScopes,
+      rawHash: plan.rawHash,
+      sourceRaw: plan.sourceRaw,
+      sourceRawContentType: plan.sourceRawContentType,
+      parserVersion: COURTLISTENER_PARSER_VERSION,
     }),
-    fulltext: composed.blocks.map(({ plainText }) => plainText).join("\n\n"),
-    documentAst: {
-      version: 1,
-      source: {
-        system: COURTLISTENER_IMPORT_KEY,
-        documentId: clusterId,
-        webUrl: plan.sourceUrl,
-        printUrl: plan.sourceUrl,
-      },
-      metadata: {
-        caseNumber: plan.caseNumber,
-        ecli: null,
-        court: plan.court,
-        decisionDate: plan.decisionDate ?? null,
-        decisionType,
-        keywords: [],
-        statutes: [],
-      },
-      blocks: [...composed.blocks],
-    },
-    sections: [...composed.sections],
-    citationScopes: composed.citationScopes,
-    rawHash: plan.rawHash,
-    sourceRaw: plan.sourceRaw,
-    sourceRawContentType: plan.sourceRawContentType,
-    parserVersion: COURTLISTENER_PARSER_VERSION,
-  });
+  );
 };
 
 export const reparseStoredRaw = (

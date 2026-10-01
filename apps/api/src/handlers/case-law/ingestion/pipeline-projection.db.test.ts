@@ -26,6 +26,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { parseCorpusLocation } from "@/api/lib/legal-search/corpus-location";
 import type { EncodedPack } from "@/api/lib/legal-search/corpus-pack";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -49,19 +50,20 @@ const corpus = {
   },
 } satisfies CaseLawCorpusDependencies;
 
-const input = (court: string, rawHash: string): IngestionResult => ({
-  caseNumber: "4 As 3/2008",
-  court,
-  country: "CZE",
-  language: "cs",
-  decisionDate: "2008-12-18",
-  decisionType: "rozsudek",
-  fulltext: "Nejvyšší správní soud rozhodl v právní věci žalobkyně.",
-  metadata: {},
-  textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-  rawHash,
-  documentAst: {},
-});
+const input = (court: string, rawHash: string): IngestionResult =>
+  plainTextIngestionResult({
+    caseNumber: "4 As 3/2008",
+    court,
+    country: "CZE",
+    language: "cs",
+    decisionDate: "2008-12-18",
+    decisionType: "rozsudek",
+    fulltext: "Nejvyšší správní soud rozhodl v právní věci žalobkyně.",
+    metadata: {},
+    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+    rawHash,
+    documentAst: {},
+  });
 
 beforeAll(async () => {
   client = await createTestPglite();

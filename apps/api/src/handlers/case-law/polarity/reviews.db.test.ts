@@ -1,3 +1,4 @@
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 /**
  * A reviewed citation label against every writer of citation polarity: the
  * ingestion refresh, the recheck walk, the classifier's write, rule
@@ -7,8 +8,6 @@
  * so every fixture is asserted to carry a rule's verdict before a review or a
  * pass is applied to it.
  */
-
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { desc, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import * as v from "valibot";
@@ -44,6 +43,7 @@ import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import {
   reviewedCitationLabelsFileSchema,
   runReviewedCitationLabels,
@@ -106,7 +106,7 @@ const ingest = async ({
   const citing = departureFrom(cited);
   const paragraphs = leading === undefined ? [citing] : [leading, citing];
   const text = paragraphs.join("\n\n");
-  const input: IngestionResult = {
+  const input: IngestionResult = plainTextIngestionResult({
     caseNumber,
     court: "Nejvyšší soud",
     country: "CZE",
@@ -123,7 +123,7 @@ const ingest = async ({
       text: paragraph,
     })),
     documentAst: EMPTY_AST,
-  };
+  });
   const result = await processDecision({
     input,
     sourceId,

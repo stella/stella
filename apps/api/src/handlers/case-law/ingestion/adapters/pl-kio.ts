@@ -1,3 +1,4 @@
+import { Result, panic } from "better-result";
 /**
  * Polish public-procurement rulings from the UZP decision database.
  *
@@ -33,8 +34,6 @@
  * separate id spaces; {@link plProcurementRulingKeys} is the relationship
  * between their rows, and nothing here merges or deletes either side.
  */
-
-import { Result, panic } from "better-result";
 import * as cheerio from "cheerio";
 
 import {
@@ -96,6 +95,7 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -976,7 +976,7 @@ export const assemblePlKioDecision = ({
     decisionType,
   };
 
-  const decision: IngestionResult = {
+  const decision: IngestionResult = plainTextIngestionResult({
     ...keyed,
     ...(statedCaseNumber === undefined
       ? { caseNumberIsPlaceholder: true }
@@ -1029,7 +1029,7 @@ export const assemblePlKioDecision = ({
     documentAst,
     sourceRaw,
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+  });
 
   return listingOnly
     ? { type: "detail-unavailable", decision }

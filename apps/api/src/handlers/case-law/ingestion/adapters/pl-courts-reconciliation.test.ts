@@ -1,3 +1,4 @@
+import { afterEach, describe, expect, test } from "bun:test";
 /**
  * The pl-courts listing reconciliation capability.
  *
@@ -10,8 +11,6 @@
  * a decision built out of the listing alone: writing the latter would make the
  * identity held and take the document out of every later reconciliation.
  */
-
-import { afterEach, describe, expect, test } from "bun:test";
 
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
@@ -35,6 +34,7 @@ import {
 import { toUtcDateString } from "@/api/lib/dates";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import {
+  plainTextIngestionResult,
   listingIdentityKey,
   parseListingIdentityKey,
 } from "@/api/lib/legal-search/ingestion-types";
@@ -497,16 +497,18 @@ describe("pl-courts buildDecision", () => {
     if (built.type !== "built") {
       return;
     }
-    expect(built.decision).toMatchObject({
-      caseNumber: "II Co 433/15",
-      country: "POL",
-      language: PL_COURTS_LANGUAGE,
-      decisionDate: "2015-03-05",
-      decisionType: "postanowienie",
-      court: "Sąd Rejonowy w Białymstoku",
-      sourceDocumentId: "130600",
-      sourceUrl: "https://www.saos.org.pl/judgments/130600",
-    });
+    expect(built.decision).toMatchObject(
+      plainTextIngestionResult({
+        caseNumber: "II Co 433/15",
+        country: "POL",
+        language: PL_COURTS_LANGUAGE,
+        decisionDate: "2015-03-05",
+        decisionType: "postanowienie",
+        court: "Sąd Rejonowy w Białymstoku",
+        sourceDocumentId: "130600",
+        sourceUrl: "https://www.saos.org.pl/judgments/130600",
+      }),
+    );
     expect(built.decision.textFields).toEqual({
       ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
       summary: {

@@ -35,6 +35,7 @@ import { zstdDecompressToStringBounded } from "@/api/lib/compression";
 import { parseCorpusLocation } from "@/api/lib/legal-search/corpus-location";
 import type { EncodedPack } from "@/api/lib/legal-search/corpus-pack";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -106,21 +107,22 @@ const sourceAst = (documentId: string, body = sourceText): DocumentAst => ({
   ],
 });
 
-const input = (documentId: string, body = sourceText): IngestionResult => ({
-  caseNumber: `No. ${documentId}`,
-  sourceDocumentId: documentId,
-  court: "Supreme Court of the United States",
-  courtId: "scotus",
-  country: "USA",
-  language: "en",
-  decisionDate: "2024-03-01",
-  fulltext: body,
-  metadata: {},
-  textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-  rawHash: `raw-${documentId}`,
-  documentAst: sourceAst(documentId, body),
-  citationScopes: opinion,
-});
+const input = (documentId: string, body = sourceText): IngestionResult =>
+  plainTextIngestionResult({
+    caseNumber: `No. ${documentId}`,
+    sourceDocumentId: documentId,
+    court: "Supreme Court of the United States",
+    courtId: "scotus",
+    country: "USA",
+    language: "en",
+    decisionDate: "2024-03-01",
+    fulltext: body,
+    metadata: {},
+    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+    rawHash: `raw-${documentId}`,
+    documentAst: sourceAst(documentId, body),
+    citationScopes: opinion,
+  });
 
 test.each(["SVK", "CZE"])(
   "%s rejects invalid opinion scopes before storing their envelope",
@@ -129,7 +131,7 @@ test.each(["SVK", "CZE"])(
     const failed = await Result.tryPromise({
       try: async () =>
         await processDecision({
-          input: {
+          input: plainTextIngestionResult({
             ...input(documentId),
             country,
             courtId: undefined,
@@ -140,7 +142,7 @@ test.each(["SVK", "CZE"])(
                 boundaries: "proven",
               },
             ],
-          },
+          }),
           sourceId,
           scopedDb,
           observedAt: new Date("2026-09-27T12:00:00.000Z"),
@@ -461,10 +463,10 @@ test.each([
 test("a changed document and its replay retain annotations without graph rows", async () => {
   const documentId = createSafeId<"caseLawDecision">();
   const first = input(documentId);
-  const changed = {
+  const changed = plainTextIngestionResult({
     ...input(documentId, `${sourceText} See 347 U.S. 483.`),
     rawHash: `${first.rawHash}-changed`,
-  };
+  });
   for (const [order, observation] of [first, changed, changed].entries()) {
     const outcome = await processDecision({
       input: observation,

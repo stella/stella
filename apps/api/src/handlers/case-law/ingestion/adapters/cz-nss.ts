@@ -64,6 +64,7 @@ import { addUtcDays } from "@/api/lib/dates";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -1489,7 +1490,7 @@ const rowToResult = ({
     ...(detailHtml === null ? {} : { [CZ_NSS_RAW_PART.DETAIL]: detailHtml }),
   };
 
-  return {
+  return plainTextIngestionResult({
     caseNumber: row.caseNumber,
     sheetNumber,
     ...(reporterIdentifiers === undefined
@@ -1555,7 +1556,7 @@ const rowToResult = ({
           sourceRaw: encodeSourceRawEnvelope(rawParts),
           sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
         }),
-  };
+  });
 };
 
 /**
@@ -1761,7 +1762,7 @@ const reparseStoredRaw = (
 
   return {
     type: "parsed",
-    result: {
+    result: plainTextIngestionResult({
       caseNumber: stored.caseNumber,
       sheetNumber,
       ...(reporterIdentifiers === undefined
@@ -1815,7 +1816,7 @@ const reparseStoredRaw = (
       // a decision, it does not rewrite what the crawl fetched for it.
       sourceRaw: raw,
       sourceRawContentType: stored.contentType ?? "text/html",
-    },
+    }),
   };
 };
 
@@ -2122,11 +2123,12 @@ type BuildCzNssDecisionOptions = {
  * the one the same document hashes to once read, so the full row replaces it
  * when the document is read.
  */
-const listingOnlyDecision = (decision: IngestionResult): IngestionResult => ({
-  ...decision,
-  isListingOnly: true,
-  rawHash: hashContent(`${decision.rawHash}|listing-only`),
-});
+const listingOnlyDecision = (decision: IngestionResult): IngestionResult =>
+  plainTextIngestionResult({
+    ...decision,
+    isListingOnly: true,
+    rawHash: hashContent(`${decision.rawHash}|listing-only`),
+  });
 
 /** The listing-only row for a listed document nothing was read for. */
 const unreadRowDecision = (row: ParsedRow): IngestionResult =>

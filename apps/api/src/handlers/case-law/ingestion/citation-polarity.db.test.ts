@@ -1,3 +1,4 @@
+import { afterAll, beforeAll, expect, test } from "bun:test";
 /**
  * Polarity is written when the citation row is published, and a refresh
  * re-derives it.
@@ -12,8 +13,6 @@
  * The rules come from `SEED_RULES`, not from patterns invented here: the
  * assertion is about what the shipped rule set says about a Czech sentence.
  */
-
-import { afterAll, beforeAll, expect, test } from "bun:test";
 import { asc, desc, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
@@ -43,6 +42,7 @@ import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 /**
@@ -98,22 +98,28 @@ const corpus: CaseLawCorpusDependencies = {
   },
 };
 
-const decision = (rawHash: string): IngestionResult => ({
-  caseNumber: "30 Cdo 4444/2026",
-  court: "Nejvyšší soud",
-  country: "CZE",
-  language: "cs",
-  decisionType: "rozsudek",
-  metadata: {},
-  textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-  rawHash,
-  fulltext: `${PRECEDENT_SECTION}\n\n${PROCEDURAL_SECTION}`,
-  sections: [
-    { index: 0, type: "argumentation", title: null, text: PRECEDENT_SECTION },
-    { index: 1, type: "argumentation", title: null, text: PROCEDURAL_SECTION },
-  ],
-  documentAst: EMPTY_AST,
-});
+const decision = (rawHash: string): IngestionResult =>
+  plainTextIngestionResult({
+    caseNumber: "30 Cdo 4444/2026",
+    court: "Nejvyšší soud",
+    country: "CZE",
+    language: "cs",
+    decisionType: "rozsudek",
+    metadata: {},
+    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+    rawHash,
+    fulltext: `${PRECEDENT_SECTION}\n\n${PROCEDURAL_SECTION}`,
+    sections: [
+      { index: 0, type: "argumentation", title: null, text: PRECEDENT_SECTION },
+      {
+        index: 1,
+        type: "argumentation",
+        title: null,
+        text: PROCEDURAL_SECTION,
+      },
+    ],
+    documentAst: EMPTY_AST,
+  });
 
 const readCitations = async () =>
   await db
@@ -311,7 +317,7 @@ test("a case recited and then overruled in one section is published as mixed", a
     "Od závěrů rozsudku sp. zn. 23 Cdo 5068/2014 se velký senát odchyluje.";
   const section = `${recital}${" Další odůvodnění.".repeat(40)}${rejection}`;
   const ingested = await processDecision({
-    input: {
+    input: plainTextIngestionResult({
       caseNumber: "31 Cdo 5555/2026",
       court: "Nejvyšší soud",
       country: "CZE",
@@ -325,7 +331,7 @@ test("a case recited and then overruled in one section is published as mixed", a
         { index: 0, type: "argumentation", title: null, text: section },
       ],
       documentAst: EMPTY_AST,
-    },
+    }),
     sourceId,
     scopedDb,
     observedAt: new Date("2026-09-21T08:00:00.000Z"),
@@ -366,10 +372,10 @@ test("a verdict from a rule retired mid-cycle is not published", async () => {
   const retired = await readRule();
 
   await processDecision({
-    input: {
+    input: plainTextIngestionResult({
       ...decision("hash-ingested-during-the-reseed"),
       caseNumber: "30 Cdo 5555/2026",
-    },
+    }),
     sourceId,
     scopedDb,
     observedAt: new Date("2026-09-15T11:00:00.000Z"),

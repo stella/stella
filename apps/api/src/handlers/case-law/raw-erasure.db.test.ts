@@ -62,7 +62,10 @@ import {
   enqueueCaseLawRawSweepTx,
   reconcileCaseLawRawSweeps,
 } from "@/api/lib/legal-search/case-law-raw-sweeps";
-import { decodeSourceRawEnvelopeObjects } from "@/api/lib/legal-search/ingestion-types";
+import {
+  plainTextIngestionResult,
+  decodeSourceRawEnvelopeObjects,
+} from "@/api/lib/legal-search/ingestion-types";
 import {
   RAW_SOURCE_FAMILY,
   rawDocumentPrefix,
@@ -164,7 +167,7 @@ const observe = async ({
   order,
 }: ObserveOptions) =>
   await processDecision({
-    input: {
+    input: plainTextIngestionResult({
       caseNumber,
       ...(sourceDocumentId === undefined ? {} : { sourceDocumentId }),
       court: "Ústavný súd Slovenskej republiky",
@@ -187,7 +190,7 @@ const observe = async ({
             },
           }),
       sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-    },
+    }),
     sourceId,
     scopedDb,
     observedAt: new Date(),
@@ -972,7 +975,7 @@ describe("moving decisions out of the older layout", () => {
 
     // What a replay hands the pipeline: the stored envelope, no bytes.
     await processDecision({
-      input: {
+      input: plainTextIngestionResult({
         caseNumber: "VIII. ÚS 1/2026",
         sourceDocumentId: "replayed",
         court: "Ústavný súd Slovenskej republiky",
@@ -985,7 +988,7 @@ describe("moving decisions out of the older layout", () => {
         documentAst: EMPTY_AST,
         sourceRaw: envelope,
         sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-      },
+      }),
       sourceId,
       scopedDb,
       observedAt: new Date(),

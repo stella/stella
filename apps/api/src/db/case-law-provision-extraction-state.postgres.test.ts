@@ -1,3 +1,4 @@
+import type { SQL } from "bun";
 /**
  * The provision-citation state behaviour PGlite cannot show, on real
  * Postgres: a scope row another session is inserting, lock waits, and
@@ -7,8 +8,6 @@
  * Scope rows are never deleted by design, so each test uses a language
  * code of its own and leaves its scope rows behind.
  */
-
-import type { SQL } from "bun";
 import { describe, expect, test } from "bun:test";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -22,6 +21,10 @@ import {
   absentDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
 import { runProvisionStateBackfill } from "@/api/lib/case-law/provision-state-backfill/backfill";
+import {
+  plainTextIngestionResult,
+  type RawIngestionResult,
+} from "@/api/lib/legal-search/ingestion-types";
 import { withReservedSession } from "@/api/lib/scheduler/tasks/case-law-provision-state-backfill";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
@@ -223,7 +226,7 @@ if (!databaseUrl || !runPostgresTests) {
         const { db } = openClient();
         const scopedDb: ScopedDb = async (callback) =>
           await db.transaction(async (tx) => await callback(tx));
-        const input = {
+        const input = plainTextIngestionResult({
           caseNumber: `provision-state-${Bun.randomUUIDv7()}`,
           court: "Court",
           country: COUNTRY,
@@ -264,13 +267,13 @@ if (!databaseUrl || !runPostgresTests) {
               },
             ],
           } satisfies DocumentAst,
-        };
+        });
         const ingest = async (
           observationOrder: bigint,
-          overrides: Partial<typeof input>,
+          overrides: Partial<RawIngestionResult>,
         ) => {
           await processDecision({
-            input: { ...input, ...overrides },
+            input: plainTextIngestionResult({ ...input, ...overrides }),
             observationOrder,
             sourceId: fixture.sourceId,
             scopedDb,

@@ -5,7 +5,12 @@ import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
 import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 import type {
   DecisionTextFieldKey,
+  TextField,
   ReadDecisionTextFields,
+} from "@stll/api-contract/case-law-text-field";
+import {
+  DECISION_TEXT_FIELD,
+  TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
 import type {
   DecisionIdentifiers,
@@ -13,6 +18,13 @@ import type {
 } from "@stll/legal-ast/decision-identifier";
 
 import type { DocumentAst } from "@/api/lib/case-law/document-ast";
+import {
+  requirePlainText,
+  PlainTextError,
+  toPlainTextMetadata,
+  type PlainText,
+  type PlainTextMetadataValue,
+} from "@/api/lib/case-law/plain-text";
 import type { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { DecisionSupplementKind } from "@/api/lib/legal-search/decision-supplement-kind";
@@ -72,7 +84,7 @@ export type CitationOpinionScope = {
 };
 
 /** Result of parsing a single court decision from a source. */
-export type IngestionResult = {
+export type RawIngestionResult = {
   /**
    * The decision's primary citable reference: the docket, unless
    * `caseNumberType` says otherwise.
@@ -232,6 +244,140 @@ export type IngestionResult = {
     | undefined;
   /** MIME type of sourceRaw/sourceRawBytes for S3 storage. */
   sourceRawContentType?: string | undefined;
+};
+
+/** All publisher labels cross the shared structural text boundary before ingestion. */
+type PlainTextResultFields = {
+  caseNumber: PlainText;
+  sheetNumber?: PlainText | undefined;
+  ecli?: PlainText | undefined;
+  legacyEcli?: PlainText | undefined;
+  court: PlainText;
+  decisionType?: PlainText | undefined;
+  metadata: Record<string, PlainTextMetadataValue>;
+  judges?:
+    | readonly (Omit<DecisionJudgeInput, "nameAsPrinted"> & {
+        nameAsPrinted: PlainText;
+      })[]
+    | undefined;
+  textFields: Readonly<
+    Record<
+      DecisionTextFieldKey,
+      | Extract<TextField, { type: typeof TEXT_FIELD_TYPE.ABSENT }>
+      | {
+          readonly type: typeof TEXT_FIELD_TYPE.PRESENT;
+          readonly text: PlainText;
+        }
+    >
+  >;
+  publisherCitedCases?: readonly PlainText[] | undefined;
+  identifiers?:
+    | readonly [
+        Omit<DecisionIdentifiers[0], "value"> & { value: PlainText },
+        ...(Omit<DecisionIdentifiers[0], "value"> & { value: PlainText })[],
+      ]
+    | undefined;
+};
+
+export type IngestionResult = Omit<
+  RawIngestionResult,
+  keyof PlainTextResultFields
+> &
+  PlainTextResultFields;
+
+/** Total over the fields whose source text cannot reach ingestion unbranded. */
+export const PLAIN_TEXT_RESULT_FIELDS = {
+  caseNumber: true,
+  sheetNumber: true,
+  ecli: true,
+  legacyEcli: true,
+  court: true,
+  decisionType: true,
+  metadata: true,
+  judges: true,
+  textFields: true,
+  publisherCitedCases: true,
+  identifiers: true,
+} as const satisfies Record<keyof PlainTextResultFields, true>;
+
+/** All source registrations share the branded result contract; no field debt is allowed. */
+export const PLAIN_TEXT_FIELD_DEBT = {} as const satisfies Record<
+  string,
+  never
+>;
+
+const plainTextField = (
+  field: TextField,
+): IngestionResult["textFields"][DecisionTextFieldKey] => {
+  switch (field.type) {
+    case TEXT_FIELD_TYPE.ABSENT:
+      return field;
+    case TEXT_FIELD_TYPE.PRESENT: {
+      const text = requirePlainText(field.text);
+      if (text.length === 0) {
+        throw new PlainTextError({
+          message: "Published text contains no plain-text content",
+          reason: "empty-present-text",
+        });
+      }
+      return { type: field.type, text };
+    }
+    default:
+      field satisfies never;
+      return panic(`Unhandled decision text field: ${String(field)}`);
+  }
+};
+
+const optionalPlainText = (raw: string | undefined): PlainText | undefined =>
+  raw === undefined ? undefined : requirePlainText(raw);
+
+/** Source identifiers, URLs, sourceRaw and AST structure retain their separate contracts. */
+export const plainTextIngestionResult = <T extends RawIngestionResult>(
+  raw: T,
+): IngestionResult & Omit<T, keyof PlainTextResultFields> => {
+  const identifiers = raw.identifiers;
+  const plainIdentifiers =
+    identifiers === undefined
+      ? undefined
+      : ([
+          {
+            type: identifiers[0].type,
+            value: requirePlainText(identifiers[0].value),
+          },
+          ...identifiers.slice(1).map(({ type, value }) => ({
+            type,
+            value: requirePlainText(value),
+          })),
+        ] as const);
+  return {
+    ...raw,
+    caseNumber: requirePlainText(raw.caseNumber),
+    sheetNumber: optionalPlainText(raw.sheetNumber),
+    ecli: optionalPlainText(raw.ecli),
+    legacyEcli: optionalPlainText(raw.legacyEcli),
+    court: requirePlainText(raw.court),
+    decisionType: optionalPlainText(raw.decisionType),
+    metadata: Object.fromEntries(
+      Object.entries(raw.metadata).map(([key, value]) => [
+        key,
+        toPlainTextMetadata(value),
+      ]),
+    ),
+    judges: raw.judges?.map(({ role, nameAsPrinted }) => ({
+      role,
+      nameAsPrinted: requirePlainText(nameAsPrinted),
+    })),
+    textFields: {
+      [DECISION_TEXT_FIELD.ABSTRACT]: plainTextField(raw.textFields.abstract),
+      [DECISION_TEXT_FIELD.HEADNOTE]: plainTextField(raw.textFields.headnote),
+      [DECISION_TEXT_FIELD.LEGAL_SENTENCE]: plainTextField(
+        raw.textFields.legalSentence,
+      ),
+      [DECISION_TEXT_FIELD.SUMMARY]: plainTextField(raw.textFields.summary),
+    },
+    publisherCitedCases: raw.publisherCitedCases?.map(requirePlainText),
+    identifiers: plainIdentifiers,
+  };
 };
 
 /**

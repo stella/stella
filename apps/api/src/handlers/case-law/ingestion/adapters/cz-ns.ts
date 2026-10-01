@@ -64,6 +64,7 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -665,7 +666,7 @@ const buildCzNsDecisionFromPages = ({
   });
   const publishedSummary = summaryOfLabels(meta);
 
-  return {
+  return plainTextIngestionResult({
     caseNumber,
     ...(firstPublisherIdentifier === undefined
       ? {}
@@ -725,7 +726,7 @@ const buildCzNsDecisionFromPages = ({
       [CZ_NS_RAW_PART.PRINT]: printHtml,
     }),
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+  });
 };
 
 /**
