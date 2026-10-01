@@ -9,6 +9,7 @@ import type { SQLWrapper } from "drizzle-orm";
 import { open, readFile, rename } from "node:fs/promises";
 import * as v from "valibot";
 
+import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import { SOURCE_RAW_ENVELOPE_CONTENT_TYPE } from "@/api/handlers/case-law/ingestion/adapter";
 import { fetchSkUsListing } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
@@ -56,12 +57,13 @@ const limit = flagInteger({ name: "limit", fallback: 200, usage: USAGE });
 const pageSize = flagInteger({ name: "page", fallback: 200, usage: USAGE });
 const checkpointPath = requiredFlagValue({ name: "checkpoint", usage: USAGE });
 const mode = apply ? "apply" : "dry-run";
+const STATEMENT_TIMEOUT_MS = 15_000;
 const { rootDb, ingestionDb } = apply
   ? await enterCaseLawMaintenanceLane()
   : await openCaseLawReadOnlySession();
 const execute = async (statement: SQLWrapper) =>
   await rootDb.transaction(async (tx) => {
-    await tx.execute(sql`SET LOCAL statement_timeout = '15s'`);
+    await setSharedStatementTimeout(tx, STATEMENT_TIMEOUT_MS);
     await tx.execute(sql`SET LOCAL max_parallel_workers_per_gather = 0`);
     return await tx.execute(statement);
   });
@@ -216,7 +218,7 @@ const complete = async (
         return "retry_later";
       }
       const changed = await ingestionDb(async (tx) => {
-        await tx.execute(sql`SET LOCAL statement_timeout = '15s'`);
+        await setSharedStatementTimeout(tx, STATEMENT_TIMEOUT_MS);
         await tx.execute(sql`SET LOCAL max_parallel_workers_per_gather = 0`);
         return executedRows(
           await tx.execute(
