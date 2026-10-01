@@ -670,7 +670,7 @@ const passThrough = async ({ args, env, script }: PassThroughOptions) => {
     stdin: "inherit",
     stdout: "inherit",
   });
-  process.exit(await child.exited);
+  return child.exited;
 };
 
 const main = async () => {
@@ -701,12 +701,22 @@ const main = async () => {
       return;
     }
     case "cli": {
-      await passThrough({
-        args,
-        env: await requireAgentEnv(root),
-        script: path.join(root, "packages/cli/src/cli.ts"),
+      const env = await requireAgentEnv(root);
+      const generated = await passThrough({
+        args: ["--runtime-only"],
+        env: {},
+        script: path.join(root, "packages/cli/src/codegen.ts"),
       });
-      return;
+      if (generated !== 0) {
+        process.exit(generated);
+      }
+      return process.exit(
+        await passThrough({
+          args,
+          env,
+          script: path.join(root, "packages/cli/src/cli.ts"),
+        }),
+      );
     }
     case "reset": {
       await reset(root, args);

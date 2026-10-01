@@ -322,8 +322,21 @@
         "$TURBO_ROOT$/.github/workflows/scheduled-run-alerts.yml"
       ]
     },
+    "@stll/api#typecheck": {
+      "dependsOn": ["transit", "@stll/cli#codegen:runtime"]
+    },
+    "@stll/api#lint": {
+      "dependsOn": ["transit", "@stll/cli#codegen:runtime"]
+    },
+    "@stll/api#lint:fix": {
+      "dependsOn": ["transit", "@stll/cli#codegen:runtime"]
+    },
+    "@stll/api#test:property": {
+      "dependsOn": ["@stll/cli#codegen:runtime"],
+      "cache": false
+    },
     "@stll/api#test": {
-      "dependsOn": [],
+      "dependsOn": ["@stll/cli#codegen:runtime"],
       // How many test batches run at once; it never changes results, so it
       // passes through without entering the cache key.
       "passThroughEnv": ["API_TEST_LANES"],
