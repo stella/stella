@@ -19,7 +19,7 @@ const generate = () => {
   );
   if (result.error !== undefined || result.status !== 0) {
     panic(
-      `CLI runtime generation failed: ${result.error?.message ?? result.status}`,
+      `CLI runtime generation failed: ${String(result.error?.message ?? result.status)}`,
     );
   }
   return OUTPUTS.map((file) => readFileSync(path.join(REPO_ROOT, file)));
@@ -30,6 +30,8 @@ const second = generate();
 for (const [index, bytes] of first.entries()) {
   const regenerated = second.at(index);
   if (regenerated === undefined || !bytes.equals(regenerated)) {
-    panic(`CLI runtime generation is not deterministic: ${OUTPUTS.at(index)}`);
+    panic(
+      `CLI runtime generation is not deterministic: ${String(OUTPUTS.at(index))}`,
+    );
   }
 }

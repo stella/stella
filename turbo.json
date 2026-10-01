@@ -39,12 +39,12 @@
     // script runs. scripts/landing-deploy-scope.ts reads these inputs to decide
     // whether a push can change the site, so a new outside read belongs here.
     "@stll/landing#build": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["^build", "@stll/cli#codegen:runtime"],
       "inputs": [
         "$TURBO_DEFAULT$",
         ".env*",
         "$TURBO_ROOT$/docs/changelog/**",
-        "$TURBO_ROOT$/packages/cli/src/generated/**",
+        "$TURBO_ROOT$/packages/cli/**",
         "$TURBO_ROOT$/scripts/product-media.ts"
       ],
       "outputs": ["dist/**"]
@@ -109,7 +109,7 @@
     // Left unrecorded, a cache hit replays the logs and writes nothing, so the
     // lint would type-check a program without the generated declarations.
     "@stll/landing#typecheck": {
-      "dependsOn": ["transit"],
+      "dependsOn": ["transit", "@stll/cli#codegen:runtime"],
       // `astro check` generates the `astro:content` types.
       "inputs": [
         "$TURBO_DEFAULT$",
@@ -170,6 +170,14 @@
         "$TURBO_ROOT$/tsconfig.tooling.json",
         "$TURBO_ROOT$/types/**"
       ]
+    },
+    "@stll/landing#dev": {
+      "dependsOn": ["@stll/cli#codegen:runtime"],
+      "persistent": true,
+      "cache": false
+    },
+    "@stll/landing#lint:fix": {
+      "dependsOn": ["transit", "@stll/cli#codegen:runtime"]
     },
     "@stll/landing#lint": {
       // Astro check generates the content types consumed by type-aware Oxlint.

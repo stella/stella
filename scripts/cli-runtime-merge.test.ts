@@ -131,7 +131,7 @@ test.skipIf(!process.env["CI"])(
       ).toBe(0);
       return result.stdout.trim();
     };
-    const generate = (cwd: string) =>
+    const generate = async (cwd: string) =>
       succeed(
         [process.execPath, "--cwd", "packages/cli", "run", "codegen:runtime"],
         cwd,
