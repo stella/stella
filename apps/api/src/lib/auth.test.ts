@@ -1,5 +1,5 @@
 import type { HookEndpointContext } from "better-auth";
-import { panic, Result } from "better-result";
+import { Result } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -930,42 +930,16 @@ describe("organization lifecycle hook wiring", () => {
     if (!orgPlugin || !("options" in orgPlugin)) {
       throw new Error("organization plugin missing from auth config");
     }
-    const hooks =
-      orgPlugin.options.organizationHooks ??
-      panic("Organization lifecycle hooks missing from auth config");
+    const hooks = orgPlugin.options.organizationHooks;
     expect(hooks.afterCreateOrganization).toBeFunction();
-    const afterUpdateOrganization =
-      hooks.afterUpdateOrganization ??
-      panic("Organization update hook missing from auth config");
+    const afterUpdateOrganization = hooks.afterUpdateOrganization;
     expect(afterUpdateOrganization).toBeFunction();
 
     const identify = spyOn(getServerAnalytics(), "identifyOrganizationGroup");
     try {
       const organizationId = orgId();
-      const actorId = userId();
-      const createdAt = new Date();
       await afterUpdateOrganization({
-        organization: {
-          id: organizationId,
-          name: "Renamed Org",
-          slug: "renamed-org",
-          createdAt,
-        },
-        user: {
-          id: actorId,
-          name: "Fixture user",
-          email: "organization-hook@example.test",
-          emailVerified: true,
-          createdAt,
-          updatedAt: createdAt,
-        },
-        member: {
-          id: tid(),
-          organizationId,
-          userId: actorId,
-          role: "owner",
-          createdAt,
-        },
+        organization: { id: organizationId, name: "Renamed Org" },
       });
       expect(identify).toHaveBeenCalledWith({
         organizationId,
