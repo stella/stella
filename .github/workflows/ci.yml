@@ -1757,7 +1757,10 @@ jobs:
   # in a single job rather than one per suite.
   ci-browser:
     needs: ci-plan
-    if: ${{ false }}
+    if: >-
+      (needs.ci-plan.outputs.trusted == 'true'
+       || github.event_name == 'workflow_dispatch')
+      && needs.ci-plan.outputs.suite_depth == 'full'
     runs-on: ubuntu-latest
     timeout-minutes: 35
     container:
@@ -2462,7 +2465,10 @@ jobs:
   # failure is caught pre-merge.
   web-build:
     needs: ci-plan
-    if: ${{ false }}
+    if: >-
+      (needs.ci-plan.outputs.trusted == 'true'
+       || github.event_name == 'workflow_dispatch')
+      && needs.ci-plan.outputs.web_build_required == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -2647,7 +2653,10 @@ jobs:
   # e2e-landing runs the same build before its browser checks.
   landing-build:
     needs: ci-plan
-    if: ${{ false }}
+    if: >-
+      (needs.ci-plan.outputs.trusted == 'true'
+       || github.event_name == 'workflow_dispatch')
+      && needs.ci-plan.outputs.landing_build_required == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -2678,7 +2687,13 @@ jobs:
   # Marketing screenshots remain in the nightly test workflow.
   e2e-production-shard:
     needs: [ci-plan, web-build]
-    if: ${{ false }}
+    if: >-
+      always()
+      && (needs.ci-plan.outputs.trusted == 'true'
+          || github.event_name == 'workflow_dispatch')
+      && needs.ci-plan.outputs.e2e_core_required == 'true'
+      && needs.web-build.result == 'success'
+      && needs.ci-plan.outputs.suite_depth == 'full'
     runs-on: ubuntu-latest
     timeout-minutes: 12
     permissions:
@@ -2798,7 +2813,11 @@ jobs:
 
   stack-redaction-browsers:
     needs: ci-plan
-    if: ${{ false }}
+    if: >-
+      (needs.ci-plan.outputs.trusted == 'true'
+       || github.event_name == 'workflow_dispatch')
+      && needs.ci-plan.outputs.stack_redaction_browsers_required == 'true'
+      && needs.ci-plan.outputs.suite_depth == 'full'
     runs-on: ubuntu-latest
     timeout-minutes: 35
     permissions:
@@ -2827,7 +2846,11 @@ jobs:
 
   e2e-vite-canary:
     needs: ci-plan
-    if: ${{ false }}
+    if: >-
+      (needs.ci-plan.outputs.trusted == 'true'
+       || github.event_name == 'workflow_dispatch')
+      && needs.ci-plan.outputs.e2e_core_required == 'true'
+      && needs.ci-plan.outputs.suite_depth == 'full'
     runs-on: ubuntu-latest
     timeout-minutes: 35
     permissions:
@@ -3037,9 +3060,6 @@ jobs:
 
       - name: Install Playwright browsers
         uses: ./.github/actions/setup-playwright
-        with:
-          # Verify all engines offline in this one-job cache-mount probe.
-          browsers: chromium firefox webkit
 
       - name: Check landing islands
         run: E2E_LANDING_URL=http://localhost:4321 bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:landing
@@ -3074,7 +3094,14 @@ jobs:
     # A bounded poll can expire while web-build is still waiting for a runner;
     # declare the producer so artifact consumers start only after it succeeds.
     needs: [ci-plan, web-build]
-    if: ${{ false }}
+    if: >-
+      always()
+      && (needs.ci-plan.outputs.trusted == 'true'
+          || github.event_name == 'workflow_dispatch')
+      && needs.ci-plan.outputs.marketing_screenshots_required == 'true'
+      && (needs.ci-plan.outputs.web_build_required != 'true'
+          || needs.web-build.result == 'success')
+      && needs.ci-plan.outputs.suite_depth == 'full'
     uses: ./.github/workflows/marketing-screenshots.yml
     permissions:
       actions: read
@@ -3513,7 +3540,18 @@ jobs:
     name: ci-result
     if: always()
     # Scratch proof gate: keep every browser verdict and its build prerequisites.
-    needs: [ci-plan, e2e-landing]
+    needs:
+      [
+        ci-plan,
+        ci-browser,
+        web-build,
+        landing-build,
+        e2e-production-shard,
+        stack-redaction-browsers,
+        e2e-vite-canary,
+        e2e-landing,
+        marketing-screenshots,
+      ]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -3538,7 +3576,7 @@ jobs:
           # that always runs at full depth. scripts/ci-plan.test.ts binds each
           # entry to its job's `if:`, and a job missing here fails the run.
           JOB_SCOPES: >-
-            {"e2e-landing": "e2e_landing_required"}
+            {"ci-browser": null, "e2e-landing": "e2e_landing_required", "e2e-production-shard": "e2e_core_required", "e2e-vite-canary": "e2e_core_required", "landing-build": "landing_build_required", "marketing-screenshots": "marketing_screenshots_required", "stack-redaction-browsers": "stack_redaction_browsers_required", "web-build": "web_build_required"}
           # Jobs a fast-depth run must also see succeed once their scope is
           # planned; any other job may skip there.
           FAST_REQUIRED: >-
