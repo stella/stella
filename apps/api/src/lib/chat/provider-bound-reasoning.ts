@@ -1,0 +1,92 @@
+import type { ModelMessage } from "@tanstack/ai";
+import { Result } from "better-result";
+
+import type { TanStackAIProvider } from "@stll/ai-catalog";
+
+import { isRecord } from "@/api/lib/type-guards";
+
+// A model's signed reasoning is replayed to the provider that signed it and to
+// no other. The signature is an opaque value only its issuer can verify: a
+// thread that changes provider keeps the reasoning in its history, and an
+// adapter that sends back every signed thinking entry (Anthropic's) would
+// hand its provider a signature it never issued, which it refuses.
+//
+// A thinking entry carries no record of who wrote it, but an adapter that
+// returns signed reasoning in a format of its own marks the issuer: OpenAI's
+// Responses adapter packs the reasoning item's id and encrypted content as a
+// JSON object (`packResponsesReasoningSignature`). Anthropic's signature is
+// the opaque string its API streamed, recognizable only as not being one of
+// those. Gemini keeps its thought signatures on the tool call, where only its
+// own adapter reads them. The other adapters (Bedrock Converse included)
+// neither return signed reasoning nor send any back.
+
+/** A signature format that names the provider whose adapter wrote it. */
+type RecognizedSignatureFormat = "openai-responses";
+
+/**
+ * The recognized format each provider's adapter sends back, or `null` when it
+ * sends none. A provider added to the catalog fails typecheck here until its
+ * adapter's reasoning replay is decided.
+ */
+const REPLAYED_SIGNATURE_FORMAT = {
+  anthropic: null,
+  bedrock: null,
+  google: null,
+  mistral: null,
+  openai: "openai-responses",
+  openrouter: null,
+} as const satisfies Record<
+  TanStackAIProvider,
+  RecognizedSignatureFormat | null
+>;
+
+const recognizedFormatOf = (
+  signature: string,
+): RecognizedSignatureFormat | null => {
+  const parsed = Result.try((): unknown => JSON.parse(signature));
+  return Result.isOk(parsed) &&
+    isRecord(parsed.value) &&
+    (typeof parsed.value["id"] === "string" ||
+      typeof parsed.value["encrypted_content"] === "string")
+    ? "openai-responses"
+    : null;
+};
+
+/** Whether `signature` was written by another provider's adapter. */
+const isForeignSignature = (
+  signature: string | undefined,
+  accepted: RecognizedSignatureFormat | null,
+): boolean => {
+  if (signature === undefined || signature === "") {
+    return false;
+  }
+  const format = recognizedFormatOf(signature);
+  return format !== null && format !== accepted;
+};
+
+/**
+ * `messages` as `provider` may be sent them: a thinking entry signed in
+ * another provider's recognized format is left out. Every other entry stays
+ * for the adapter, which replays only a signature in its own form.
+ */
+export const withReasoningBoundToProvider = (
+  messages: readonly ModelMessage[],
+  provider: TanStackAIProvider,
+): ModelMessage[] => {
+  const accepted: RecognizedSignatureFormat | null =
+    REPLAYED_SIGNATURE_FORMAT[provider];
+  return messages.map((message) => {
+    const { thinking } = message;
+    if (thinking === undefined) {
+      return message;
+    }
+    const kept = thinking.filter(
+      ({ signature }) => !isForeignSignature(signature, accepted),
+    );
+    if (kept.length === thinking.length) {
+      return message;
+    }
+    const { thinking: _foreign, ...rest } = message;
+    return kept.length === 0 ? rest : { ...rest, thinking: kept };
+  });
+};

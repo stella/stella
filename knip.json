@@ -14,12 +14,8 @@
         "@typescript/native",
         "@tanstack/eslint-plugin-query",
         "@tanstack/eslint-plugin-router",
-        // peer of eslint-plugin-drizzle; removed with the local drizzle rule
-        "@typescript-eslint/utils",
         "eslint",
-        "eslint-plugin-drizzle",
         "oxlint-tsgolint",
-        "ultracite",
         "oxlint",
         "squawk-cli"
       ],

@@ -37,7 +37,7 @@ export const DOC_SOURCES = {
     url: "https://elysiajs.com/llms.txt",
   },
   Drizzle: {
-    dependencies: ["drizzle-orm", "drizzle-kit", "eslint-plugin-drizzle"],
+    dependencies: ["drizzle-orm", "drizzle-kit"],
     url: "https://orm.drizzle.team/llms.txt",
   },
   TanStack: {
@@ -257,10 +257,6 @@ export const DOC_SOURCES = {
     dependencies: ["tsdown"],
     url: "https://tsdown.dev/llms.txt",
   },
-  Ultracite: {
-    dependencies: ["ultracite"],
-    url: "https://www.ultracite.ai/llms.txt",
-  },
   WXT: {
     dependencies: ["wxt"],
     url: "https://wxt.dev/llms.txt",
@@ -324,7 +320,6 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "@types/chrome",
   "@types/hast",
   "@types/node",
-  "@typescript-eslint/utils",
   "@typescript/native",
   "@vscode/markdown-editor",
   "@vscode/observables",

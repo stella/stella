@@ -13,7 +13,7 @@ import {
   FilePlusIcon,
   FileTextIcon,
   FolderPlusIcon,
-  MessageSquarePlusIcon,
+  NewChatIcon,
   PencilIcon,
   PlusIcon,
   PowerIcon,
@@ -679,7 +679,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
                 size="icon-sm"
                 variant="ghost"
               >
-                <MessageSquarePlusIcon className="size-4" />
+                <NewChatIcon className="size-4" />
               </Button>
             )}
             {detail.data && (
