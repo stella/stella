@@ -108,7 +108,10 @@ type MutationLocation =
   | { type: "record"; record: Record<string, unknown>; key: string }
   | { type: "array"; array: unknown[]; index: number };
 
-const registryMutationLocations = (payload: unknown): MutationLocation[] => {
+const registryMutationLocations = (
+  payload: unknown,
+  mutation: RegistryFieldMutation,
+): MutationLocation[] => {
   const locations: MutationLocation[] = [];
   const visit = (value: unknown) => {
     if (Array.isArray(value)) {
@@ -127,7 +130,18 @@ const registryMutationLocations = (payload: unknown): MutationLocation[] => {
     }
   };
   visit(payload);
-  return locations;
+  return mutation === "null"
+    ? locations.filter((location) => {
+        switch (location.type) {
+          case "record":
+            return location.record[location.key] !== null;
+          case "array":
+            return location.array[location.index] !== null;
+          default:
+            return location satisfies never;
+        }
+      })
+    : locations;
 };
 
 const mistypedRegistryValue = (value: unknown): unknown =>
@@ -139,7 +153,7 @@ export const mutatedRegistryPayload = ({
   mutation,
 }: RegistryMutationOptions): unknown => {
   const copy: unknown = structuredClone(payload);
-  const locations = registryMutationLocations(copy);
+  const locations = registryMutationLocations(copy, mutation);
   expect(locations.length).toBeGreaterThan(0);
   const location = locations.at(selected % locations.length);
   expect(location).toBeDefined();
@@ -172,6 +186,7 @@ export const mutatedRegistryPayload = ({
     default:
       location satisfies never;
   }
+  expect(copy).not.toEqual(payload);
   return copy;
 };
 
@@ -179,10 +194,12 @@ export const forEachRegistryMutation = async (
   payload: unknown,
   check: (mutated: unknown) => Promise<void>,
 ): Promise<void> => {
-  const count = registryMutationLocations(payload).length;
-  expect(count).toBeGreaterThan(0);
-  for (let selected = 0; selected < count; selected += 1) {
-    for (const mutation of ["missing", "null", "wrong-type"] as const) {
+  for (const mutation of ["missing", "null", "wrong-type"] as const) {
+    const count = registryMutationLocations(payload, mutation).length;
+    if (mutation !== "null") {
+      expect(count).toBeGreaterThan(0);
+    }
+    for (let selected = 0; selected < count; selected += 1) {
       await check(mutatedRegistryPayload({ payload, selected, mutation }));
     }
   }
