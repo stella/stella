@@ -19,6 +19,7 @@ import {
   test,
 } from "bun:test";
 
+import { DECISION_TEXT_FIELD_KEYS } from "@stll/api-contract/case-law-text-field";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import type { StoredRawReparseInput } from "@/api/handlers/case-law/ingestion/adapter";
@@ -41,6 +42,8 @@ import {
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
   absentDecisionTextFields,
+  storeDecisionTextFields,
+  readDecisionTextMetadata,
 } from "@/api/lib/case-law/decision-text";
 import {
   decodeSourceRawEnvelope,
@@ -1535,6 +1538,84 @@ describe("cz-nss buildDecision", () => {
     });
     expect(decision.metadata).not.toHaveProperty("legalSentence");
   });
+
+  test.each(["-", "–", "—", "−", "  --  ", "", " \n\t ", "\u00a0"])(
+    "crawl and replay retain a publisher placeholder (%j) as typed absence",
+    async (placeholder) => {
+      const decision = await crawledWithHeadnote(placeholder);
+      const expected = {
+        type: TEXT_FIELD_TYPE.ABSENT,
+        reason: TEXT_ABSENCE_REASON.PUBLISHER_PLACEHOLDER,
+      };
+      expect(decision.textFields.legalSentence).toEqual(expected);
+      const storedMetadata = storeDecisionTextFields(decision);
+      expect(storedMetadata).not.toHaveProperty("legalSentence");
+      expect(
+        readDecisionTextMetadata(storedMetadata).textFields.legalSentence,
+      ).toEqual(expected);
+
+      const reparse = czNssAdapter.reparseStoredRaw;
+      if (reparse === undefined) {
+        throw new TypeError("Expected cz-nss to implement stored-raw replay");
+      }
+      const replay = await reparse({
+        raw: new TextEncoder().encode(decision.sourceRaw ?? ""),
+        contentType: decision.sourceRawContentType ?? null,
+        metadata: { ...decision.metadata, legalSentence: HEADNOTE },
+        caseNumber: decision.caseNumber,
+        sourceDocumentId: decision.sourceDocumentId ?? null,
+        language: decision.language,
+        court: decision.court,
+        ecli: decision.ecli ?? null,
+        decisionDate: decision.decisionDate ?? null,
+        decisionType: decision.decisionType ?? null,
+        sourceUrl: decision.sourceUrl ?? null,
+        documentUrl: decision.documentUrl ?? null,
+      });
+      expect(replay.type).toBe("parsed");
+      if (replay.type !== "parsed") {
+        throw new TypeError("Expected the placeholder fixture to replay");
+      }
+      expect(replay.result.textFields.legalSentence).toEqual(expected);
+      expect(replay.result.rawHash).toBe(decision.rawHash);
+    },
+  );
+
+  test.each(DECISION_TEXT_FIELD_KEYS)(
+    "legacy replay classifies placeholders in %s without changing real text",
+    async (field) => {
+      for (const placeholder of ["-", "–", "—", "−", "", " \n\t ", "\u00a0"]) {
+        const { outcome } = await replayStored({
+          caseNumber: "1 Az 4/2026",
+          metadata: { [field]: placeholder },
+        });
+        expect(outcome.type).toBe("parsed");
+        if (outcome.type !== "parsed") {
+          throw new TypeError("Expected the placeholder fixture to replay");
+        }
+        expect(outcome.result.textFields[field]).toEqual({
+          type: TEXT_FIELD_TYPE.ABSENT,
+          reason: TEXT_ABSENCE_REASON.PUBLISHER_PLACEHOLDER,
+        });
+        expect(storeDecisionTextFields(outcome.result)).not.toHaveProperty(
+          field,
+        );
+      }
+
+      const real = await replayStored({
+        caseNumber: "1 Az 4/2026",
+        metadata: { [field]: HEADNOTE },
+      });
+      expect(real.outcome.type).toBe("parsed");
+      if (real.outcome.type !== "parsed") {
+        throw new TypeError("Expected the real-text fixture to replay");
+      }
+      expect(real.outcome.result.textFields[field]).toEqual({
+        type: TEXT_FIELD_TYPE.PRESENT,
+        text: HEADNOTE,
+      });
+    },
+  );
 
   test("the ano/ne flag beside the headnote is not the headnote", async () => {
     const withHeadnote = await crawledWithHeadnote(HEADNOTE);

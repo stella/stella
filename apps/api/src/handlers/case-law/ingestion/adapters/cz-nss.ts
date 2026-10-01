@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
 
+import { DECISION_TEXT_FIELD_KEYS } from "@stll/api-contract/case-law-text-field";
 import { classifyFailure } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
@@ -1246,8 +1247,18 @@ export type CzNssDetailMetadata = {
   legalSentence: string | undefined;
 };
 
+type ExtractDivTextOptions = {
+  html: string;
+  divId: string;
+  emptyValue?: "preserve" | "omit";
+};
+
 /** Extract a div's value text by its ID, skipping the label span. */
-const extractDivText = (html: string, divId: string): string | undefined => {
+const extractDivText = ({
+  html,
+  divId,
+  emptyValue = "omit",
+}: ExtractDivTextOptions): string | undefined => {
   const pattern = new RegExp(`id="${divId}"[^>]*>([\\s\\S]*?)</div>`, "iu");
   const match = html.match(pattern);
   if (!match?.[1]) {
@@ -1260,7 +1271,9 @@ const extractDivText = (html: string, divId: string): string | undefined => {
     /class="det-textval[^"]*"[^>]*>(?<value>[\s\S]*?)<\/span>/giu;
   let valMatch: RegExpExecArray | null;
   const texts: string[] = [];
+  let statedValueCount = 0;
   while ((valMatch = valPattern.exec(match[1])) !== null) {
+    statedValueCount += 1;
     const text = stripHtml(valMatch.groups?.["value"] ?? "").trim();
     if (text) {
       texts.push(text);
@@ -1270,7 +1283,7 @@ const extractDivText = (html: string, divId: string): string | undefined => {
     return texts.join(", ");
   }
 
-  return undefined;
+  return emptyValue === "preserve" && statedValueCount > 0 ? "" : undefined;
 };
 
 /**
@@ -1283,24 +1296,34 @@ const extractDivText = (html: string, divId: string): string | undefined => {
 export const parseCzNssDetailMetadata = (
   html: string,
 ): CzNssDetailMetadata => ({
-  ecli: extractDivText(html, "ecli"),
-  judge: extractDivText(html, "soudcezpravodaj"),
-  senate: extractDivText(html, "soudsenat"),
-  legalArea: extractDivText(html, "oblastupravy"),
-  decisionType: extractDivText(html, "druhdokumentuavyrokrozhodnuti"),
-  decisionDate: extractDivText(html, "datumvydanirozhodnuti"),
-  outcome: extractDivText(html, "vyrokrozhodnuti"),
-  caseType: extractDivText(html, "typrizeni"),
-  parties: extractDivText(html, "ucastnicirizeniz"),
-  caseStatus: extractDivText(html, "stavrizeni"),
-  administrativeAuthority: extractDivText(html, "nazevspravnihoorganu"),
-  citation: extractDivText(html, "citace"),
+  ecli: extractDivText({ html, divId: "ecli" }),
+  judge: extractDivText({ html, divId: "soudcezpravodaj" }),
+  senate: extractDivText({ html, divId: "soudsenat" }),
+  legalArea: extractDivText({ html, divId: "oblastupravy" }),
+  decisionType: extractDivText({
+    html,
+    divId: "druhdokumentuavyrokrozhodnuti",
+  }),
+  decisionDate: extractDivText({ html, divId: "datumvydanirozhodnuti" }),
+  outcome: extractDivText({ html, divId: "vyrokrozhodnuti" }),
+  caseType: extractDivText({ html, divId: "typrizeni" }),
+  parties: extractDivText({ html, divId: "ucastnicirizeniz" }),
+  caseStatus: extractDivText({ html, divId: "stavrizeni" }),
+  administrativeAuthority: extractDivText({
+    html,
+    divId: "nazevspravnihoorganu",
+  }),
+  citation: extractDivText({ html, divId: "citace" }),
   // The headnote the court writes for a decision it selects into its
   // collection, under `pravnivetaupravena` ("Právní věta (text)"). The
   // neighbouring `pravnivetaanv` is the ano/ne flag, not the sentence,
   // and the field is on the detail page alone: neither document
   // endpoint carries it.
-  legalSentence: extractDivText(html, "pravnivetaupravena"),
+  legalSentence: extractDivText({
+    html,
+    divId: "pravnivetaupravena",
+    emptyValue: "preserve",
+  }),
 });
 
 /**
@@ -1464,6 +1487,10 @@ const rowToResult = ({
   row,
 }: RowToResultOptions): IngestionResult => {
   const sourceDocumentId = czNssSourceDocumentId(row);
+  const legalSentenceField = sourceTextField(
+    ADAPTER_KEYS.CZ_NSS,
+    detail.legalSentence,
+  );
   const court = czNssCourt(detail.ecli, sourceDocumentId);
   const decisionDate = (() => {
     if (detail.decisionDate) {
@@ -1520,7 +1547,7 @@ const rowToResult = ({
     documentUrl: row.documentUrl,
     textFields: {
       ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-      legalSentence: sourceTextField(ADAPTER_KEYS.CZ_NSS, detail.legalSentence),
+      legalSentence: legalSentenceField,
     },
     metadata: checkedDecisionMetadata({
       caseNumber: row.caseNumber,
@@ -1540,7 +1567,7 @@ const rowToResult = ({
       sheetNumber,
       decisionDate,
       decisionType,
-      legalSentence: detail.legalSentence,
+      legalSentence: storeTextField(legalSentenceField),
     }),
     parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NSS],
     documentAst: content.documentAst ?? EMPTY_AST,
@@ -1752,10 +1779,19 @@ const reparseStoredRaw = (
   const publishedCaseNumber = storedPublishedCaseNumber(stored);
   const { sheetNumber } = splitCaseReference(publishedCaseNumber);
   const storedDecisionText = splitStoredDecisionTextMetadata(stored.metadata);
-  const statedLegalSentence = nonEmptyString(storedDetail?.legalSentence);
+  const textFields = { ...storedDecisionText.textFields };
+  // Legacy metadata is untyped publisher input; classify every prose field
+  // before writing it back through the current text-field contract.
+  for (const key of DECISION_TEXT_FIELD_KEYS) {
+    const storedText = stored.metadata[key];
+    if (typeof storedText === "string") {
+      textFields[key] = sourceTextField(ADAPTER_KEYS.CZ_NSS, storedText);
+    }
+  }
+  const statedLegalSentence = storedDetail?.legalSentence;
   const legalSentenceField =
     statedLegalSentence === undefined
-      ? storedDecisionText.textFields.legalSentence
+      ? textFields.legalSentence
       : sourceTextField(ADAPTER_KEYS.CZ_NSS, statedLegalSentence);
   const legalSentence = storeTextField(legalSentenceField);
 
@@ -1781,7 +1817,7 @@ const reparseStoredRaw = (
       sourceUrl,
       documentUrl: stored.documentUrl ?? undefined,
       textFields: {
-        ...storedDecisionText.textFields,
+        ...textFields,
         legalSentence: legalSentenceField,
       },
       // Written back rather than passed through: a legacy row states the

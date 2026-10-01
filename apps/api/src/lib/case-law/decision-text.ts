@@ -117,15 +117,20 @@ export const sourceTextField = (
   adapter: AdapterKey,
   raw: string | null | undefined,
 ): TextField => {
-  const text = raw?.trim() ?? "";
+  if (raw === null || raw === undefined) {
+    return absentTextField(TEXT_ABSENCE_REASON.NOT_PUBLISHED);
+  }
+  const text = raw.trim();
+  const declaredPlaceholder =
+    COMPARISONS_BY_ADAPTER.get(adapter)?.has(absentTextComparison(text)) ===
+    true;
+  if (declaredPlaceholder) {
+    return absentTextField(TEXT_ABSENCE_REASON.PUBLISHER_PLACEHOLDER);
+  }
   if (text.length === 0) {
     return absentTextField(TEXT_ABSENCE_REASON.NOT_PUBLISHED);
   }
-  if (
-    isFillerText(text) ||
-    COMPARISONS_BY_ADAPTER.get(adapter)?.has(absentTextComparison(text)) ===
-      true
-  ) {
+  if (isFillerText(text)) {
     return absentTextField(TEXT_ABSENCE_REASON.PUBLISHER_PLACEHOLDER);
   }
   return presentTextField(text);

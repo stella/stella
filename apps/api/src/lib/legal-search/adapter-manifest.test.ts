@@ -7,6 +7,10 @@ import {
 import { Temporal, parsePlainDate } from "@stll/time";
 
 import {
+  sourceTextField,
+  TEXT_ABSENCE_REASON,
+} from "@/api/lib/case-law/decision-text";
+import {
   CZ_ECLI_COURTS,
   EU_ECLI_COURTS,
   SK_ECLI_COURTS,
@@ -65,7 +69,10 @@ describe("case-law adapter manifests", () => {
         ({ type, text }) => {
           expect(type).toBe("exact");
           expect(text.trim()).toBe(text);
-          expect(text.length).toBeGreaterThan(0);
+          expect(sourceTextField(manifest.key, text)).toEqual({
+            type: "absent",
+            reason: TEXT_ABSENCE_REASON.PUBLISHER_PLACEHOLDER,
+          });
           return text;
         },
       );
