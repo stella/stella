@@ -883,9 +883,9 @@ describe("embedded RTF text destinations", () => {
   });
 
   test("still reports recognized references left in RTF text", () => {
-    for (const [encoded, reference] of [
-      ["&amp;amp;", "&amp;"],
-      ["&amp;eacute;", "&eacute;"],
+    for (const { encoded, reference } of [
+      { encoded: "&amp;amp;", reference: "&amp;" },
+      { encoded: "&amp;eacute;", reference: "&eacute;" },
     ]) {
       const rtf = String.raw`{\rtf1 ${encoded}}`;
       const { fulltext } = parseUsDecisionHtml(

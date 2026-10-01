@@ -116,6 +116,7 @@ const MARKUP_RESIDUE_RULES: readonly MarkupResidueRule[] = [
     pattern: /&(?:[a-zA-Z]{2,12}|#\d{1,7});/gu,
     // The SQL pattern is intentionally a candidate superset; unknown
     // publisher literals have the same shape but are not character refs.
+    // parser-output-unchanged: only logged elsewhere; gating parsers (pl-nsa, pl-uodo, CourtListener) bump
     accept: (match) => decodeHTMLStrict(match) !== match,
     sqlPattern: "&([a-zA-Z]{2,12}|#[0-9]{1,7});",
   },
