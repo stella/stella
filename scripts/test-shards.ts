@@ -37,6 +37,15 @@ export const TEST_SHARD_IDS = [
 ] as const;
 export type TestShardId = (typeof TEST_SHARD_IDS)[number];
 
+// Rest and web keep separate verdicts while sharing one runner.
+export const TEST_JOB_SHARDS = {
+  "api-1": ["api-1"],
+  "api-2": ["api-2"],
+  "api-3": ["api-3"],
+  "api-4": ["api-4"],
+  "rest-web": ["rest", "web"],
+} as const satisfies Record<string, readonly TestShardId[]>;
+
 /**
  * The packages each shard owns. `null` marks the complement shard: it runs
  * every package no other shard names, so adding a package needs no edit here.

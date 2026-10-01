@@ -13,6 +13,7 @@ import {
   assertApiShardExecuted,
   shardFilters,
   shardPackages,
+  TEST_JOB_SHARDS,
   TEST_SHARD_IDS,
   TEST_SHARD_PACKAGES,
   workspacePackages,
@@ -85,27 +86,59 @@ test("a shard's filters exclude every package it does not own", () => {
 
 // The workflow matrix is the other half of the shard map: a shard the matrix
 // omits runs nowhere, and its packages would leave CI silently.
-test("the ci-tests matrix runs exactly the declared shards", () => {
+test("the ci-tests matrix runs exactly the declared jobs", () => {
   const declared = /\n {8}shard: \[(?<ids>[^\]]+)\]\n/u.exec(ciTestsJob())
     ?.groups?.["ids"];
   if (declared === undefined) {
     throw new Error("ci-tests declares no shard matrix");
   }
   expect(declared.split(",").map((id) => id.trim())).toEqual([
-    ...TEST_SHARD_IDS,
+    ...Object.keys(TEST_JOB_SHARDS),
   ]);
+});
+
+test("merged jobs run every suite exactly once and preserve the package partition", () => {
+  const suites = Object.values(TEST_JOB_SHARDS).flat();
+  expect(suites.toSorted()).toEqual([...TEST_SHARD_IDS].toSorted());
+  const merged = TEST_JOB_SHARDS["rest-web"].flatMap((shard) =>
+    shardPackages({ packageNames, shard }),
+  );
+  expect(new Set(merged).size).toBe(merged.length);
+  expect(merged.toSorted()).toEqual(
+    packageNames.filter((name) => name !== "@stll/api").toSorted(),
+  );
+});
+
+test("both suites in the merged leg report a verdict after an earlier failure", () => {
+  const job = ciTestsJob();
+  for (const name of ["Test API or rest", "Test web", "Test .claude/mcp"]) {
+    const step = job
+      .split(`      - name: ${name}\n`)
+      .at(1)
+      ?.split("      - name:")
+      .at(0);
+    expect(step).toBeDefined();
+    expect(step).toContain("!cancelled()");
+    expect(step).toContain(
+      "needs.ci-plan.outputs.package_checks_required == 'true'",
+    );
+  }
+  expect(job).toMatch(
+    /SHARD: \$\{\{ matrix\.shard == 'rest-web' && 'rest' \|\| matrix\.shard \}\}/u,
+  );
+  expect(job).toContain("SHARD: web");
 });
 
 test("exactly one shard runs the .claude/mcp suite", () => {
   const job = ciTestsJob();
   expect(job.match(/bun --cwd \.claude\/mcp test/gu)).toHaveLength(1);
-  const gate = /matrix\.shard == '(?<shard>[a-z]+)'/u.exec(job)?.groups?.[
+  const gate = /matrix\.shard == '(?<shard>[a-z-]+)'/u.exec(job)?.groups?.[
     "shard"
   ];
   if (gate === undefined) {
     throw new Error("the .claude/mcp step is not gated on a shard");
   }
-  const shardIds: readonly string[] = TEST_SHARD_IDS;
+  const shardIds = Object.keys(TEST_JOB_SHARDS);
   expect(shardIds).toContain(gate);
 });
 
