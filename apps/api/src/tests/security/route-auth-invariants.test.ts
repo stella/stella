@@ -66,7 +66,9 @@ describe("root route registrations", () => {
     const plugins = [...rootSource.matchAll(/\.use\(\s*(\w+)\s*\)/gu)].map(
       (match) => {
         const plugin = match.at(1);
-        if (plugin === undefined) {panic("Expected route plugin capture");}
+        if (plugin === undefined) {
+          panic("Expected route plugin capture");
+        }
         return plugin;
       },
     );
