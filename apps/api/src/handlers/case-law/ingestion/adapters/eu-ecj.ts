@@ -40,6 +40,8 @@ import type {
   StoredRawReparseInput,
   StoredRawReparseOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
+import { plainTextIngestionResult } from "@/api/handlers/case-law/ingestion/adapters/plain-text-assembly";
 import { publisherTarget } from "@/api/handlers/case-law/ingestion/adapters/publisher-target";
 import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
@@ -89,7 +91,6 @@ import {
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -2798,6 +2799,7 @@ export const euEcjAdapter = defineSourceAdapter({
         });
 
         const decisions: IngestionResult[] = [];
+        let failed = 0;
         const completedVariants = new Set<string>();
 
         // 2. Fetch and parse each language variant
@@ -2812,7 +2814,20 @@ export const euEcjAdapter = defineSourceAdapter({
             continue;
           }
 
-          const decision = await buildDecision(binding, abortSignal);
+          const attempted = await buildPlainTextItem({
+            decisionOf: (value) => value,
+            adapterKey: ADAPTER_KEYS.EU_ECJ,
+
+            rawListing: JSON.stringify(binding),
+            build: async () => await buildDecision(binding, abortSignal),
+          });
+          if (attempted.type === "item_build_failed") {
+            failed++;
+            decisions.push(attempted.decision);
+            completedVariants.add(variantKey);
+            continue;
+          }
+          const decision = attempted.value;
           if (!decision) {
             continue;
           }
@@ -2824,7 +2839,11 @@ export const euEcjAdapter = defineSourceAdapter({
         // If the page was aborted mid-iteration, retry
         // the same day on the next run instead of skipping it.
         if (abortSignal.aborted) {
-          return { decisions, nextCursor: dateFrom };
+          return {
+            decisions,
+            nextCursor: dateFrom,
+            itemBuildFailures: { type: "item_build_failed", count: failed },
+          };
         }
 
         // Advance cursor to next day; stop if
@@ -2836,7 +2855,11 @@ export const euEcjAdapter = defineSourceAdapter({
         // a full historical re-scan).
         const nextCursor = nextDate <= today ? nextDate : today;
 
-        return { decisions, nextCursor };
+        return {
+          decisions,
+          nextCursor,
+          itemBuildFailures: { type: "item_build_failed", count: failed },
+        };
       },
       catch: adapterCatch(ADAPTER_KEYS.EU_ECJ, cursor),
     });

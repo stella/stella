@@ -76,6 +76,8 @@ import type {
   StoredRawReparseInput,
   StoredRawReparseOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
+import { plainTextIngestionResult } from "@/api/handlers/case-law/ingestion/adapters/plain-text-assembly";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
@@ -100,10 +102,7 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
-import {
-  plainTextIngestionResult,
-  type RawIngestionResult,
-} from "@/api/lib/legal-search/ingestion-types";
+import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -2534,6 +2533,7 @@ export const skUsAdapter = defineSourceAdapter({
         }
 
         const decisions: IngestionResult[] = [];
+        let failed = 0;
         // One context for the page: the vocabularies are fetched once for
         // it, and a docket listed twice on it costs one facet query and one
         // docket-file read.
@@ -2541,10 +2541,34 @@ export const skUsAdapter = defineSourceAdapter({
 
         for (const doc of data.documents) {
           try {
-            const built = await buildSkUsDecision(doc, {
-              context,
-              ...(signal === undefined ? {} : { signal }),
+            const attempted = await buildPlainTextItem({
+              decisionOf: (value) => {
+                switch (value.type) {
+                  case "built":
+                  case "detail-unavailable":
+                    return value.decision;
+                  case "unkeyable":
+                    return undefined;
+                  default:
+                    value satisfies never;
+                    return panic("Unhandled source build outcome");
+                }
+              },
+              adapterKey: ADAPTER_KEYS.SK_US,
+
+              rawListing: JSON.stringify(doc),
+              build: async () =>
+                await buildSkUsDecision(doc, {
+                  context,
+                  ...(signal === undefined ? {} : { signal }),
+                }),
             });
+            if (attempted.type === "item_build_failed") {
+              failed++;
+              decisions.push(attempted.decision);
+              continue;
+            }
+            const built = attempted.value;
             switch (built.type) {
               case "unkeyable":
                 break;
@@ -2561,12 +2585,17 @@ export const skUsAdapter = defineSourceAdapter({
               }
             }
           } catch (error) {
-            if (error instanceof DOMException) {
+            if (
+              error instanceof DOMException ||
+              error instanceof AdapterFetchError ||
+              error instanceof FetchBoundaryError
+            ) {
               throw error;
             }
             // The cursor moves past this document and the reconciliation walk
             // is what recovers it; reported so a build failing on every row
             // is not read as a page with nothing on it.
+            failed++;
             logger.warn("case_law.ingestion.item_build_failed", {
               adapterKey: ADAPTER_KEYS.SK_US,
               ...(typeof doc.documentId === "string"
@@ -2585,6 +2614,7 @@ export const skUsAdapter = defineSourceAdapter({
         if (hasMore) {
           return {
             decisions,
+            itemBuildFailures: { type: "item_build_failed", count: failed },
             nextCursor: encodeCursor({ year, offset: nextOffset }),
           };
         }
@@ -2593,6 +2623,7 @@ export const skUsAdapter = defineSourceAdapter({
         if (year < currentYear) {
           return {
             decisions,
+            itemBuildFailures: { type: "item_build_failed", count: failed },
             nextCursor: encodeCursor({ year: year + 1, offset: 0 }),
           };
         }
@@ -2608,6 +2639,7 @@ export const skUsAdapter = defineSourceAdapter({
         // to find, not this cursor's.
         return {
           decisions,
+          itemBuildFailures: { type: "item_build_failed", count: failed },
           nextCursor: encodeCursor({
             year,
             offset: offset + data.documents.length,

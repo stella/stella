@@ -8,7 +8,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/sk-collection-parser";
 import { createSkCollectionConnector } from "@/api/handlers/case-law/ingestion/adapters/sk-collections";
 import { courtAbbreviation } from "@/api/lib/case-law/court-abbreviations";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import {
   SK_COLLECTION_SERIES,
   SK_COLLECTION_PARSER_VERSION,
@@ -117,14 +116,14 @@ describe("publisher collection enrichment", () => {
         issueUrl: NS_ISSUE.url,
       });
     }
-    const decision = plainTextIngestionResult({
+    const decision = {
       id: "ns",
       country: "SVK",
       court: "Najvyšší súd SR",
       caseNumber: "1 VCdo 5/2025",
       ecli: null,
       decisionDate: "2025-12-03",
-    });
+    };
     const before = JSON.stringify(decision);
     expect(
       joinSkCollectionRecords(parsed.records, [decision]).at(0)?.status,
@@ -187,14 +186,14 @@ describe("publisher collection enrichment", () => {
       });
     }
     const joined = joinSkCollectionRecords(parsed.records, [
-      plainTextIngestionResult({
+      {
         id: "nss",
         country: "SVK",
         court: "Najvyšší správny súd SR",
         caseNumber: "1Stk/22/2022",
         ecli: null,
         decisionDate: "2022-03-28",
-      }),
+      },
     ]).at(0);
     expect(joined?.status).toBe("matched");
     if (joined?.status !== "matched") {

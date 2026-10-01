@@ -226,10 +226,10 @@ describe("identity", () => {
 describe("building a judgment", () => {
   test("the captured pair carries court, signature, date, type, bench and statutes", async () => {
     const decision = await pairDecision();
-    expect(decision.court).toBe("Sąd Okręgowy w Świdnicy");
-    expect(decision.caseNumber).toBe("II Ca 236/18");
+    expect(decision.court === "Sąd Okręgowy w Świdnicy").toBe(true);
+    expect(decision.caseNumber === "II Ca 236/18").toBe(true);
     expect(decision.decisionDate).toBe("2018-03-22");
-    expect(decision.decisionType).toBe("postanowienie");
+    expect(decision.decisionType === "postanowienie").toBe(true);
     expect(decision.isListingOnly).toBeUndefined();
     const detail = readPlNcourtDetail(
       await fixture(`pl-ncourt-detail-${PAIR}.xml`),
@@ -238,17 +238,24 @@ describe("building a judgment", () => {
       detail?.type === "record" ? detail : panic("the record did not read");
     expect(
       decision.judges?.find((judge) => judge.role === "presiding")
-        ?.nameAsPrinted,
-    ).toBe(record.fields.get("chairman"));
+        ?.nameAsPrinted === record.fields.get("chairman"),
+    ).toBe(true);
     expect(
-      decision.judges?.map((judge) => judge.nameAsPrinted).toSorted(),
-    ).toEqual((record.lists.get("judges") ?? []).toSorted());
+      Bun.deepEquals(
+        decision.judges?.map((judge) => judge.nameAsPrinted).toSorted(),
+        (record.lists.get("judges") ?? []).toSorted(),
+      ),
+    ).toBe(true);
     expect(decision.judges).toHaveLength(3);
-    expect(decision.metadata["legalBases"]).toEqual(["art.410§1 kpc"]);
-    expect(decision.metadata["keywords"]).toEqual([
-      "Skarga o wznowienie postępowania",
-    ]);
-    expect(decision.metadata["departmentId"]).toBe("1003");
+    expect(
+      Bun.deepEquals(decision.metadata["legalBases"], ["art.410§1 kpc"]),
+    ).toBe(true);
+    expect(
+      Bun.deepEquals(decision.metadata["keywords"], [
+        "Skarga o wznowienie postępowania",
+      ]),
+    ).toBe(true);
+    expect(decision.metadata["departmentId"] === "1003").toBe(true);
     expect(decision.fulltext).toContain("odrzucić skargę");
     const references = decision.metadata["legalReferences"];
     expect(
@@ -308,12 +315,14 @@ describe("building a judgment", () => {
       latestDecisionDate: "2018-03-22",
     });
     expect(supplement.document.sourceDocumentId).toBe(REASONS);
-    expect(supplement.document.court).toBe(
-      PL_NCOURT_COURT_NAMES[row.courtId] ?? panic("court not indexed"),
-    );
-    expect(supplement.document.decisionType).toBe(
-      PL_COURTS_STANDALONE_REASONS_DECISION_TYPE,
-    );
+    expect(
+      supplement.document.court ===
+        (PL_NCOURT_COURT_NAMES[row.courtId] ?? panic("court not indexed")),
+    ).toBe(true);
+    expect(
+      supplement.document.decisionType ===
+        PL_COURTS_STANDALONE_REASONS_DECISION_TYPE,
+    ).toBe(true);
     expect(supplement.document.fulltext?.length ?? 0).toBeGreaterThan(1000);
 
     // The reconciliation hands it over as a supplement too.
@@ -419,10 +428,12 @@ describe("building a judgment", () => {
         contentXml: undefined,
       }),
     );
-    expect(decision.textFields.headnote).toEqual({
-      type: "present",
-      text: thesis,
-    });
+    expect(
+      Bun.deepEquals(decision.textFields.headnote, {
+        type: "present",
+        text: thesis,
+      }),
+    ).toBe(true);
   });
 
   test("an id the API answers not-found for keeps its listed row, unpublished, with the reason", async () => {
@@ -445,9 +456,11 @@ describe("building a judgment", () => {
       outcome.type === "built" ? outcome.decision : panic(outcome.type);
     expect(decision.sourceDocumentId).toBe(GONE);
     expect(decision.isListingOnly).toBe(true);
-    expect(decision.caseNumber).toBe("I C 24/15");
+    expect(decision.caseNumber === "I C 24/15").toBe(true);
     expect(decision.decisionDate).toBe("2018-03-22");
-    expect(decision.metadata["detailStatus"]).toBe("publisher-not-found");
+    expect(decision.metadata["detailStatus"] === "publisher-not-found").toBe(
+      true,
+    );
     const parts = decodeSourceRawEnvelope(decision.sourceRaw ?? "");
     expect(parts?.["listing"]).toBe(listingXml);
     expect(parts?.["detail"]).toBe(detailXml);
@@ -471,7 +484,7 @@ describe("building a judgment", () => {
     expect(decision.isListingOnly).toBeUndefined();
     expect(decision.judges).toHaveLength(3);
     expect(decision.fulltext).toBeUndefined();
-    expect(decision.metadata["documentStatus"]).toBe("publisher-404");
+    expect(decision.metadata["documentStatus"] === "publisher-404").toBe(true);
 
     // The status is kept in the envelope, so a replay states it too.
     const replayed = plNcourtAdapter.reparseStoredRaw?.({
@@ -489,10 +502,11 @@ describe("building a judgment", () => {
       metadata: decision.metadata,
     });
     expect(
-      replayed !== undefined && "type" in replayed && replayed.type === "parsed"
-        ? replayed.result.metadata["documentStatus"]
-        : undefined,
-    ).toBe("publisher-404");
+      replayed !== undefined &&
+        "type" in replayed &&
+        replayed.type === "parsed" &&
+        replayed.result.metadata["documentStatus"] === "publisher-404",
+    ).toBe(true);
   });
 
   test("a server error or a rate-limit refusal fails the page; it is never read as a gone record", async () => {
@@ -538,8 +552,8 @@ describe("building a judgment", () => {
         contentXml: undefined,
       }),
     );
-    expect(decision.court).toBe("Sąd Okręgowy w Świdnicy");
-    expect(decision.metadata["courtId"]).toBe("15502000");
+    expect(decision.court === "Sąd Okręgowy w Świdnicy").toBe(true);
+    expect(decision.metadata["courtId"] === "15502000").toBe(true);
   });
 
   test("a court id the index does not name is stored as the record states it", async () => {
@@ -554,7 +568,7 @@ describe("building a judgment", () => {
         contentXml: undefined,
       }),
     );
-    expect(decision.court).toBe("15999999");
+    expect(decision.court === "15999999").toBe(true);
     expect(decision.metadata["courtKnown"]).toBe(false);
   });
 });
@@ -612,7 +626,9 @@ describe("the SAOS copy of a judgment", () => {
       saos ?? panic("the SAOS fixture did not build"),
     );
     expect(saosKeys).toHaveLength(1);
-    expect(official.metadata["rulingKeys"]).toEqual(saosKeys);
+    expect(Bun.deepEquals(official.metadata["rulingKeys"], saosKeys)).toBe(
+      true,
+    );
   });
 
   test("a key needs the date and the type: a signature alone names no judgment", () => {
@@ -650,11 +666,13 @@ describe("fields the API adds later", () => {
         ),
       }),
     );
-    expect(decision.metadata["unmappedFields"]).toEqual({
-      rank: "1",
-      courtOfFirstInstance: "Sąd Rejonowy w Świdnicy",
-      "xPart@xSealed": "true",
-    });
+    expect(
+      Bun.deepEquals(decision.metadata["unmappedFields"], {
+        rank: "1",
+        courtOfFirstInstance: "Sąd Rejonowy w Świdnicy",
+        "xPart@xSealed": "true",
+      }),
+    ).toBe(true);
 
     const { fields, listSourceFields } = plNcourtAdapter.sourceFields;
     const stated = await listSourceFields(
@@ -1702,14 +1720,16 @@ describe("the walk", () => {
         decisions[165_992 - 165_990] ?? panic("no row at the broken offset");
       expect(kept.sourceDocumentId).toStartWith("ncourt-listed:");
       expect(kept.isListingOnly).toBe(true);
-      expect(kept.metadata["detailStatus"]).toBe("publisher-id-unavailable");
+      expect(kept.metadata["detailStatus"] === "publisher-id-unavailable").toBe(
+        true,
+      );
       expect(decodeSourceRawEnvelope(kept.sourceRaw ?? "")?.["listing"]).toBe(
         broken,
       );
       const signature =
         readPlNcourtListingRow(listed)?.["signature"] ??
         panic("the row states no signature");
-      expect(kept.caseNumber).toBe(signature);
+      expect(kept.caseNumber === signature).toBe(true);
     }
 
     installWalkStub({
@@ -1764,7 +1784,9 @@ describe("the walk", () => {
       (decision) => decision.sourceDocumentId === idOf(listed),
     );
     expect(kept?.isListingOnly).toBe(true);
-    expect(kept?.metadata["detailStatus"]).toBe("listing-metadata-incomplete");
+    expect(
+      kept?.metadata["detailStatus"] === "listing-metadata-incomplete",
+    ).toBe(true);
   });
 
   test("a window listing fewer rows than its count promises fails the page", async () => {

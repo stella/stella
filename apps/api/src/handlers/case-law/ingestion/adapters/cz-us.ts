@@ -30,6 +30,7 @@ import {
 import type {
   EmptyAst,
   IngestionResult,
+  SyncPage,
   ListingIdentity,
   ReconciliationBuildOutcome,
   ReconciliationSlicePage,
@@ -47,6 +48,8 @@ import {
   NalusRateLimitedError,
   type NalusRequestInit,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-us-throttle";
+import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
+import { plainTextIngestionResult } from "@/api/handlers/case-law/ingestion/adapters/plain-text-assembly";
 import {
   adapterCatch,
   hashContent,
@@ -71,10 +74,9 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
-import {
-  plainTextIngestionResult,
-  type RawIngestionResult,
-  type DecisionJudgeInput,
+import type {
+  RawIngestionResult,
+  DecisionJudgeInput,
 } from "@/api/lib/legal-search/ingestion-types";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
@@ -2407,30 +2409,49 @@ const listedOnlyDecision = (
   });
 };
 
+type CzUsPageItems = {
+  decisions: IngestionResult[];
+  itemBuildFailures: NonNullable<SyncPage["itemBuildFailures"]>;
+};
+
 const fetchListedDecisions = async (
   listed: readonly ListedDecision[],
   session: NalusSession,
   signal: AbortSignal | undefined,
-): Promise<IngestionResult[]> => {
+): Promise<CzUsPageItems> => {
   const decisions: IngestionResult[] = [];
+  let failed = 0;
   for (let start = 0; start < listed.length; start += DOCUMENT_CONCURRENCY) {
     const batch = listed.slice(start, start + DOCUMENT_CONCURRENCY);
-    decisions.push(
-      // The crawl keeps a listing-only row for a record NALUS serves no text
-      // for: its cursor moves past that record either way, so the observation
-      // is worth more than nothing. Only the reconciliation refuses it.
-      ...(await Promise.all(
-        batch.map(
-          async (item) =>
-            (await fetchListedDecision(item, session, signal)).decision,
-        ),
-      )),
+    const built = await Promise.all(
+      batch.map(
+        async (item) =>
+          await buildPlainTextItem({
+            decisionOf: (value) => value,
+            adapterKey: ADAPTER_KEYS.CZ_US,
+
+            rawListing: item.listingHtml,
+            build: async () =>
+              (await fetchListedDecision(item, session, signal)).decision,
+          }),
+      ),
     );
+    for (const item of built) {
+      if (item.type === "item_build_failed") {
+        failed++;
+        decisions.push(item.decision);
+        continue;
+      }
+      decisions.push(item.value);
+    }
     if (start + DOCUMENT_CONCURRENCY < listed.length) {
       await Bun.sleep(100);
     }
   }
-  return decisions;
+  return {
+    decisions,
+    itemBuildFailures: { type: "item_build_failed", count: failed },
+  };
 };
 
 // ── Reconciliation ───────────────────────────────────────
@@ -3017,7 +3038,7 @@ export const czUsAdapter = defineSourceAdapter({
           };
         }
 
-        const decisions = await fetchListedDecisions(
+        const { decisions, itemBuildFailures } = await fetchListedDecisions(
           page.listed,
           page.session,
           signal,
@@ -3025,6 +3046,7 @@ export const czUsAdapter = defineSourceAdapter({
         if (sliceComplete) {
           return {
             decisions,
+            itemBuildFailures,
             nextCursor: makeCursor({
               ...state,
               pass: CRAWL_PASS.VERIFY,
@@ -3037,6 +3059,7 @@ export const czUsAdapter = defineSourceAdapter({
         }
         return {
           decisions,
+          itemBuildFailures,
           nextCursor: makeCursor({
             ...state,
             page: state.page + 1,

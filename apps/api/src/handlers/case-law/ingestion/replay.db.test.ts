@@ -19,6 +19,7 @@ import type {
   SourceAdapter,
   StoredRawReader,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import { plainTextIngestionResult } from "@/api/handlers/case-law/ingestion/adapters/plain-text-assembly";
 import {
   CASE_LAW_REPLAY_SCOPE,
   countReplayability,
@@ -39,7 +40,6 @@ import {
   absentDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 // The walk's boundary is the thing under test. Postgres stores `timestamptz`

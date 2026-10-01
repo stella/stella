@@ -9,6 +9,7 @@ import {
 } from "@stll/legal-ast/decision-identifier";
 import { collapseSpacedLetters } from "@stll/text-normalize";
 
+import { plainTextIngestionResult } from "@/api/handlers/case-law/ingestion/adapters/plain-text-assembly";
 import {
   DECISION_TEXT_FIELD,
   TEXT_ABSENCE_REASON,
@@ -42,7 +43,6 @@ import {
 import {
   EMPTY_AST,
   isPersistableSourceDocumentId,
-  plainTextIngestionResult,
   type IngestionResult,
   type RawIngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";

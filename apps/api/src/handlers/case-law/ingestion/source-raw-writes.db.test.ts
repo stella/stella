@@ -24,6 +24,7 @@ import {
   encodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import { plainTextIngestionResult } from "@/api/handlers/case-law/ingestion/adapters/plain-text-assembly";
 import { CitationScopesRejectedError } from "@/api/handlers/case-law/ingestion/citation-scopes";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
@@ -33,7 +34,6 @@ import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { createTestPglite } from "@/api/tests/pglite-test-db";

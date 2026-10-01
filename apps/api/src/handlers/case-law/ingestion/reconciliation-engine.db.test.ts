@@ -24,6 +24,7 @@ import {
   relations,
 } from "@/api/db/schema";
 import { plUodoHeldWithoutDetail } from "@/api/handlers/case-law/ingestion/adapters/pl-uodo";
+import { plainTextIngestionResult } from "@/api/handlers/case-law/ingestion/adapters/plain-text-assembly";
 import type { SliceRetrySchedule } from "@/api/handlers/case-law/ingestion/reconciliation-engine";
 import {
   MAX_SLICE_INGEST_BUDGET,
@@ -47,7 +48,6 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import {
-  plainTextIngestionResult,
   EMPTY_AST,
   listingIdentityKey,
 } from "@/api/lib/legal-search/ingestion-types";

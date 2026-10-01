@@ -35,6 +35,8 @@ import {
   fetchAtFindokWithRetry,
   FINDOK_REQUEST_INTERVAL_MS,
 } from "@/api/handlers/case-law/ingestion/adapters/at-findok-throttle";
+import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
+import { plainTextIngestionResult } from "@/api/handlers/case-law/ingestion/adapters/plain-text-assembly";
 import {
   PublisherPageError,
   validatePublisherPage,
@@ -54,16 +56,17 @@ import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
   absentTextField,
+  presentTextField,
   sourceTextField,
 } from "@/api/lib/case-law/decision-text";
 import type { DecisionTextFields } from "@/api/lib/case-law/decision-text";
+import { toPlainText } from "@/api/lib/case-law/plain-text";
 import { DocxArchiveError, loadDocxArchive } from "@/api/lib/docx-archive";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 
 const itemBuildFailed = failureSink({
@@ -657,6 +660,18 @@ const storedRaw = ({
   sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 });
 
+const findokTitleField = (raw: string | undefined) => {
+  if (raw === undefined) {
+    return sourceTextField(ADAPTER_KEYS.AT_FINDOK, raw);
+  }
+  const plain = toPlainText(raw);
+  // A stated title that cannot yield text is an item rejection, not an absent title.
+  if (plain.isErr() || (raw.trim().length > 0 && plain.value.length === 0)) {
+    return presentTextField(raw);
+  }
+  return sourceTextField(ADAPTER_KEYS.AT_FINDOK, raw);
+};
+
 const buildListingOnly = (
   payload: FindokListingPayload,
   reason: string,
@@ -671,7 +686,7 @@ const buildListingOnly = (
     const court =
       (isRecord(item.raw) ? optionalString(item.raw["behoerde"]) : undefined) ??
       "";
-    return {
+    return plainTextIngestionResult({
       sourceDocumentId: item.dokumentId,
       caseNumber: caseNumber ?? item.dokumentId,
       caseNumberIsPlaceholder: caseNumber === undefined,
@@ -690,7 +705,7 @@ const buildListingOnly = (
       documentAst: EMPTY_AST,
       parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.AT_FINDOK],
       ...raw,
-    };
+    });
   }
   const decisionDate = parseDate(item.appdat);
   const raw = storedRaw({ item, documentXml: rawXml });
@@ -710,7 +725,7 @@ const buildListingOnly = (
     // archive never opened carries the publisher's own summary of it.
     textFields: {
       ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-      summary: sourceTextField(ADAPTER_KEYS.AT_FINDOK, item.titel),
+      summary: findokTitleField(item.titel),
     },
     metadata: {
       collection,
@@ -749,7 +764,7 @@ const decisionTextFields = ({
   legalSentence,
 }: FindokTextFieldsOptions): DecisionTextFields => ({
   ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-  summary: sourceTextField(ADAPTER_KEYS.AT_FINDOK, betreff),
+  summary: findokTitleField(betreff),
   legalSentence:
     headnoteEntryRead && legalSentence === undefined
       ? absentTextField(TEXT_ABSENCE_REASON.PARSE_FAILED)
@@ -1291,44 +1306,65 @@ const buildFindokPageItems = async ({
   let refused = 0;
   for (const item of pageItems) {
     const payload = { collection, item };
-    const attempt = await Result.tryPromise({
-      try: async () =>
-        await buildDecision({
-          cursor,
-          dependencies,
-          payload,
-          signal,
-        }),
-      catch: (cause) => cause,
+    const outcome = await buildPlainTextItem({
+      adapterKey: ADAPTER_KEYS.AT_FINDOK,
+
+      rawListing: JSON.stringify(item.raw ?? null),
+      decisionOf: ({ decision }) => decision,
+      build: async () => {
+        const attempt = await Result.tryPromise({
+          try: async () =>
+            await buildDecision({ cursor, dependencies, payload, signal }),
+          catch: (cause) => cause,
+        });
+        signal?.throwIfAborted();
+        if (attempt.isErr()) {
+          if (
+            !(attempt.error instanceof PublisherPageError) &&
+            !(attempt.error instanceof DocxArchiveError) &&
+            !(attempt.error instanceof FindokResponseError)
+          ) {
+            throw attempt.error;
+          }
+          observeFailure(
+            classifyFailure(attempt.error, "upstream_unavailable"),
+            {
+              sink: itemBuildFailed,
+              ctx: {
+                adapterKey: ADAPTER_KEYS.AT_FINDOK,
+                documentId: item.dokumentId,
+              },
+            },
+          );
+          return {
+            decision: buildListingOnly(payload, "item_build_failed"),
+            failed: true,
+          };
+        }
+        const decision = attempt.value;
+        return {
+          decision,
+          failed:
+            decision.metadata["detailStatus"] === "detail-xml-unparseable" ||
+            item.type === "quarantine",
+        };
+      },
     });
-    signal?.throwIfAborted();
-    if (attempt.isErr()) {
-      if (
-        !(attempt.error instanceof PublisherPageError) &&
-        !(attempt.error instanceof DocxArchiveError) &&
-        !(attempt.error instanceof FindokResponseError)
-      ) {
-        throw attempt.error;
-      }
-      refused += 1;
-      observeFailure(classifyFailure(attempt.error, "upstream_unavailable"), {
-        sink: itemBuildFailed,
-        ctx: {
-          adapterKey: ADAPTER_KEYS.AT_FINDOK,
-          documentId: item.dokumentId,
-        },
-      });
-      decisions.push(buildListingOnly(payload, "item_build_failed"));
-      continue;
+    switch (outcome.type) {
+      case "item_build_failed":
+        refused += 1;
+        decisions.push(outcome.decision);
+        break;
+      case "built":
+        if (outcome.value.failed) {
+          refused += 1;
+        }
+        decisions.push(outcome.value.decision);
+        break;
+      default:
+        outcome satisfies never;
+        panic(`Unhandled Findok item outcome: ${String(outcome)}`);
     }
-    const decision = attempt.value;
-    if (
-      decision.metadata["detailStatus"] === "detail-xml-unparseable" ||
-      item.type === "quarantine"
-    ) {
-      refused += 1;
-    }
-    decisions.push(decision);
   }
   const itemBuildFailures = {
     type: "item_build_failed",
@@ -1391,8 +1427,11 @@ export const createAtFindokAdapter = (
         if (status === "detail-http-404" || status === "detail-http-410") {
           return { type: "detail-unavailable" };
         }
+        if (typeof status !== "string") {
+          return panic("Findok listing-only decision has no detail status");
+        }
         throw new AdapterFetchError({
-          message: `Findok reconciliation could not build detail: ${String(status)}`,
+          message: `Findok reconciliation could not build detail: ${status}`,
           adapterKey: ADAPTER_KEYS.AT_FINDOK,
           cursor: null,
         });

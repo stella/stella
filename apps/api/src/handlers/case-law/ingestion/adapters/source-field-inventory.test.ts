@@ -39,11 +39,11 @@ import {
   listSourceRegistrations,
   type SourceRegistrationKey,
 } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
+import { plainTextIngestionResult } from "@/api/handlers/case-law/ingestion/adapters/plain-text-assembly";
 import { storeTextField } from "@/api/lib/case-law/decision-text";
 import {
   PLAIN_TEXT_FIELD_DEBT,
   PLAIN_TEXT_RESULT_FIELDS,
-  plainTextIngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
 import { readSourceRawField } from "@/api/lib/legal-search/source-raw-field";
 import {

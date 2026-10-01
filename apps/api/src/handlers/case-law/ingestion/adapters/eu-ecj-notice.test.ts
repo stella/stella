@@ -235,16 +235,21 @@ describe("what the notice adds to a stored row", () => {
   test("names the court outright instead of inferring it from the ECLI", async () => {
     const decision = await decisionFrom(noticeEn);
 
-    expect(decision.court).toBe("Court of Justice");
+    expect(decision.court === "Court of Justice").toBe(true);
   });
 
   test("emits the rapporteur and the Advocate General as the bench", async () => {
     const decision = await decisionFrom(noticeEn);
 
-    expect(decision.judges).toEqual([
-      { role: DECISION_JUDGE_ROLE.RAPPORTEUR, nameAsPrinted: "Safjan" },
-      { role: DECISION_JUDGE_ROLE.ADVOCATE_GENERAL, nameAsPrinted: "Emiliou" },
-    ]);
+    expect(
+      Bun.deepEquals(decision.judges, [
+        { role: DECISION_JUDGE_ROLE.RAPPORTEUR, nameAsPrinted: "Safjan" },
+        {
+          role: DECISION_JUDGE_ROLE.ADVOCATE_GENERAL,
+          nameAsPrinted: "Emiliou",
+        },
+      ]),
+    ).toBe(true);
   });
 
   test("keeps the publisher's own cited-works list", async () => {
@@ -252,7 +257,9 @@ describe("what the notice adds to a stored row", () => {
 
     // The ground truth citation extraction is measured against, which is why
     // it is carried beside the row rather than stored on it.
-    expect(decision.publisherCitedCases).toContain("62015CJ0601");
+    expect(
+      decision.publisherCitedCases?.some((value) => value === "62015CJ0601"),
+    ).toBe(true);
     expect(decision.publisherCitedCases?.length).toBeGreaterThan(40);
   });
 
@@ -264,15 +271,27 @@ describe("what the notice adds to a stored row", () => {
       dossier: ["case:C-128/22"],
       publishedInReports: [true],
     });
-    expect(decision.metadata["caseLawDirectory"]).toContainEqual({
-      code: "1.09.03.02",
-      label:
-        "Restrictions justified on grounds of public policy, public security or public health",
-    });
-    expect(decision.metadata["caseLawDirectoryNew"]).toContainEqual({
-      code: "4.06.01.02",
-      label: "Crossing of external borders",
-    });
+    const directory = decision.metadata["caseLawDirectory"];
+    expect(
+      Array.isArray(directory) &&
+        directory.some((value) =>
+          Bun.deepEquals(value, {
+            code: "1.09.03.02",
+            label:
+              "Restrictions justified on grounds of public policy, public security or public health",
+          }),
+        ),
+    ).toBe(true);
+    const directoryNew = decision.metadata["caseLawDirectoryNew"];
+    expect(
+      Array.isArray(directoryNew) &&
+        directoryNew.some((value) =>
+          Bun.deepEquals(value, {
+            code: "4.06.01.02",
+            label: "Crossing of external borders",
+          }),
+        ),
+    ).toBe(true);
     expect(decision.metadata["nationalJudgment"]).toContainEqual(
       expect.stringContaining(
         "Nederlandstalige rechtbank van eerste aanleg Brussel",

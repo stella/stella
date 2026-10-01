@@ -26,6 +26,7 @@ import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import { SOURCE_DOCUMENT_ID_MAX_LENGTH } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
+import { plainTextIngestionResult } from "@/api/handlers/case-law/ingestion/adapters/plain-text-assembly";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import {
   applyCaseLawIngestionBatch,
@@ -58,7 +59,6 @@ import {
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { CorpusPackError } from "@/api/lib/legal-search/corpus-pack";
 import type { EncodedPack } from "@/api/lib/legal-search/corpus-pack";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -898,24 +898,27 @@ describe("the batch bounds", () => {
     const parts = admitPageDecisions([record(1), oversized, record(3)]);
 
     expect(
-      parts.map(({ admission, decisions }) => ({
-        admission,
-        caseNumbers: decisions.map(({ caseNumber }) => caseNumber),
-      })),
-    ).toEqual([
-      {
-        admission: DECISION_ADMISSION.WITHIN_BOUNDS,
-        caseNumbers: ["4 As 1/2008"],
-      },
-      {
-        admission: DECISION_ADMISSION.OVERSIZED_RECORD,
-        caseNumbers: ["4 As 2/2008"],
-      },
-      {
-        admission: DECISION_ADMISSION.WITHIN_BOUNDS,
-        caseNumbers: ["4 As 3/2008"],
-      },
-    ]);
+      Bun.deepEquals(
+        parts.map(({ admission, decisions }) => ({
+          admission,
+          caseNumbers: decisions.map(({ caseNumber }) => caseNumber),
+        })),
+        [
+          {
+            admission: DECISION_ADMISSION.WITHIN_BOUNDS,
+            caseNumbers: ["4 As 1/2008"],
+          },
+          {
+            admission: DECISION_ADMISSION.OVERSIZED_RECORD,
+            caseNumbers: ["4 As 2/2008"],
+          },
+          {
+            admission: DECISION_ADMISSION.WITHIN_BOUNDS,
+            caseNumbers: ["4 As 3/2008"],
+          },
+        ],
+      ),
+    ).toBe(true);
     // The same contract refuses it for a prepared batch.
     const refused = prepareCaseLawIngestionBatch({ decisions: [oversized] });
     expect(Result.isError(refused) ? refused.error.reason : null).toBe(

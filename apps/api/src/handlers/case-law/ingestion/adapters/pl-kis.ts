@@ -1,4 +1,6 @@
 import { Result, panic } from "better-result";
+
+import { readCappedBytes } from "@stll/skills/streaming";
 /**
  * Polish tax interpretations and rulings (EUREKA) adapter.
  *
@@ -45,8 +47,6 @@ import { Result, panic } from "better-result";
  * months (`undated|<boundary id>|<page>`) and the ledger holds it as a slice
  * of its own, ahead of the first month.
  */
-
-import { readCappedBytes } from "@stll/skills/streaming";
 import { parsePlainDate, Temporal } from "@stll/time";
 
 import { ADAPTER_KEYS, PARSER_VERSIONS } from "@/api/handlers/case-law/consts";
@@ -82,6 +82,8 @@ import type {
   StoredRawReparseOutcome,
   SyncPage,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
+import { plainTextIngestionResult } from "@/api/handlers/case-law/ingestion/adapters/plain-text-assembly";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
@@ -107,7 +109,6 @@ import type { TextField } from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -1924,7 +1925,11 @@ const readBoundary = async (
     : Result.ok(newest);
 };
 
-type Collected = { decisions: IngestionResult[]; aborted: boolean };
+type Collected = {
+  decisions: IngestionResult[];
+  itemBuildFailures: number;
+  aborted: boolean;
+};
 
 const collectDecisions = async (
   rows: Record<string, unknown>[],
@@ -1932,18 +1937,32 @@ const collectDecisions = async (
   signal?: AbortSignal,
 ): Promise<Result<Collected, AdapterFetchError>> => {
   const decisions: IngestionResult[] = [];
+  let itemBuildFailures = 0;
   for (const row of rows) {
     if (signal?.aborted) {
-      return Result.ok({ decisions, aborted: true });
+      return Result.ok({ decisions, itemBuildFailures, aborted: true });
     }
-    const attempted = await buildPlKisDecision(row, cursor, signal);
+    const captured = await buildPlainTextItem({
+      adapterKey: ADAPTER_KEYS.PL_KIS,
+
+      rawListing: JSON.stringify(row),
+      decisionOf: (result) =>
+        result.isOk() ? result.value.decision : undefined,
+      build: async () => await buildPlKisDecision(row, cursor, signal),
+    });
+    if (captured.type === "item_build_failed") {
+      itemBuildFailures += 1;
+      decisions.push(captured.decision);
+      continue;
+    }
+    const attempted = captured.value;
     if (Result.isError(attempted)) {
       return attempted;
     }
     // The crawl keeps a listing-only row; only the reconciliation refuses it.
     decisions.push(attempted.value.decision);
   }
-  return Result.ok({ decisions, aborted: false });
+  return Result.ok({ decisions, itemBuildFailures, aborted: false });
 };
 
 const sweepPage = async (
@@ -2002,13 +2021,33 @@ const sweepPage = async (
       if (Result.isError(collected)) {
         return collected;
       }
-      const { aborted, decisions } = collected.value;
+      const { aborted, decisions, itemBuildFailures } = collected.value;
       if (aborted) {
-        return Result.ok({ decisions, sourceUrl: url, nextCursor: cursor });
+        return Result.ok({
+          decisions,
+          ...(itemBuildFailures === 0
+            ? {}
+            : {
+                itemBuildFailures: {
+                  type: "item_build_failed" as const,
+                  count: itemBuildFailures,
+                },
+              }),
+          sourceUrl: url,
+          nextCursor: cursor,
+        });
       }
       if ((page + 1) * CRAWL_PAGE_SIZE < totalHits) {
         return Result.ok({
           decisions,
+          ...(itemBuildFailures === 0
+            ? {}
+            : {
+                itemBuildFailures: {
+                  type: "item_build_failed" as const,
+                  count: itemBuildFailures,
+                },
+              }),
           sourceUrl: url,
           nextCursor: encodePlKisCursor({ ...start, month, page: page + 1 }),
         });
@@ -2016,6 +2055,14 @@ const sweepPage = async (
       const after = nextMonth();
       return Result.ok({
         decisions,
+        ...(itemBuildFailures === 0
+          ? {}
+          : {
+              itemBuildFailures: {
+                type: "item_build_failed" as const,
+                count: itemBuildFailures,
+              },
+            }),
         sourceUrl: url,
         nextCursor:
           after === null
@@ -2093,12 +2140,36 @@ const tipPage = async (
   if (Result.isError(collected)) {
     return collected;
   }
-  const { aborted, decisions } = collected.value;
+  const { aborted, decisions, itemBuildFailures } = collected.value;
   if (aborted) {
-    return Result.ok({ decisions, sourceUrl: url, nextCursor: cursor });
+    return Result.ok({
+      decisions,
+      ...(itemBuildFailures === 0
+        ? {}
+        : {
+            itemBuildFailures: {
+              type: "item_build_failed" as const,
+              count: itemBuildFailures,
+            },
+          }),
+      sourceUrl: url,
+      nextCursor: cursor,
+    });
   }
   if (reachedFrontier) {
-    return Result.ok({ decisions, sourceUrl: url, nextCursor: caughtUp() });
+    return Result.ok({
+      decisions,
+      ...(itemBuildFailures === 0
+        ? {}
+        : {
+            itemBuildFailures: {
+              type: "item_build_failed" as const,
+              count: itemBuildFailures,
+            },
+          }),
+      sourceUrl: url,
+      nextCursor: caughtUp(),
+    });
   }
   if ((page + 2) * CRAWL_PAGE_SIZE > PL_KIS_RESULT_WINDOW) {
     // The next page is past what the search serves. The rows between here and
@@ -2109,12 +2180,32 @@ const tipPage = async (
       frontier: start.frontier,
       pending,
     });
-    return Result.ok({ decisions, sourceUrl: url, nextCursor: caughtUp() });
+    return Result.ok({
+      decisions,
+      ...(itemBuildFailures === 0
+        ? {}
+        : {
+            itemBuildFailures: {
+              type: "item_build_failed" as const,
+              count: itemBuildFailures,
+            },
+          }),
+      sourceUrl: url,
+      nextCursor: caughtUp(),
+    });
   }
   // A descending listing grows only at its head, so the next page can re-read
   // a row but cannot step over one.
   return Result.ok({
     decisions,
+    ...(itemBuildFailures === 0
+      ? {}
+      : {
+          itemBuildFailures: {
+            type: "item_build_failed" as const,
+            count: itemBuildFailures,
+          },
+        }),
     sourceUrl: url,
     nextCursor: encodePlKisCursor({
       phase: "tip",
@@ -2160,12 +2251,32 @@ const undatedPage = async (
   if (Result.isError(collected)) {
     return collected;
   }
-  const { aborted, decisions } = collected.value;
+  const { aborted, decisions, itemBuildFailures } = collected.value;
   if (aborted) {
-    return Result.ok({ decisions, sourceUrl: url, nextCursor: cursor });
+    return Result.ok({
+      decisions,
+      ...(itemBuildFailures === 0
+        ? {}
+        : {
+            itemBuildFailures: {
+              type: "item_build_failed" as const,
+              count: itemBuildFailures,
+            },
+          }),
+      sourceUrl: url,
+      nextCursor: cursor,
+    });
   }
   return Result.ok({
     decisions,
+    ...(itemBuildFailures === 0
+      ? {}
+      : {
+          itemBuildFailures: {
+            type: "item_build_failed" as const,
+            count: itemBuildFailures,
+          },
+        }),
     sourceUrl: url,
     nextCursor: encodePlKisCursor(
       (start.page + 1) * CRAWL_PAGE_SIZE < undated

@@ -33,6 +33,7 @@ import type { CitationResolutionStatus } from "@/api/handlers/case-law/citation-
 import { resolveDecisionReference } from "@/api/handlers/case-law/citations/reference-resolution";
 import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
+import { plainTextIngestionResult } from "@/api/handlers/case-law/ingestion/adapters/plain-text-assembly";
 import {
   citationKeyOf,
   normalizeDecisionIdentifier,
@@ -46,7 +47,6 @@ import { POLARITY, RULE_SOURCE } from "@/api/handlers/case-law/polarity/consts";
 import { SEED_RULES } from "@/api/handlers/case-law/polarity/seed-rules";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 import {
   atRisFixture,

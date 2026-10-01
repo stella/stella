@@ -9,6 +9,7 @@ import type {
 } from "@/api/handlers/case-law/document-ast";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { PL_COURTS_RULING_DECISION_TYPES } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
+import { plainTextIngestionResult } from "@/api/handlers/case-law/ingestion/adapters/plain-text-assembly";
 import {
   composeDecisionWithSupplements,
   DOCUMENT_SUPPLEMENTS_METADATA_KEY,
@@ -23,7 +24,6 @@ import {
   absentDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 
 type Ruling = SupplementJudgmentCandidate & { id: string };
 
@@ -352,13 +352,15 @@ describe("a judgment composed with its reasons", () => {
         (block) => block.type === "heading" && block.role === "decision-title",
       ),
     ).toHaveLength(1);
-    expect(composed.metadata[DOCUMENT_SUPPLEMENTS_METADATA_KEY]).toEqual([
-      {
-        kind: DECISION_SUPPLEMENT_KIND.REASONS,
-        sourceDocumentId: "339001",
-        sourceUrl: "https://www.saos.org.pl/judgments/339001",
-      },
-    ]);
+    expect(
+      Bun.deepEquals(composed.metadata[DOCUMENT_SUPPLEMENTS_METADATA_KEY], [
+        {
+          kind: DECISION_SUPPLEMENT_KIND.REASONS,
+          sourceDocumentId: "339001",
+          sourceUrl: "https://www.saos.org.pl/judgments/339001",
+        },
+      ]),
+    ).toBe(true);
   });
 
   test("hashes the observation and every supplement version, and nothing else", () => {

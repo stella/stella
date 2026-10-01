@@ -12,6 +12,7 @@ import {
 import { createCaseLawDecisionSlugCandidate } from "@/api/handlers/case-law/decisions/slug";
 import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
+import { plainTextIngestionResult } from "@/api/handlers/case-law/ingestion/adapters/plain-text-assembly";
 import { bareCitationKey } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -22,7 +23,6 @@ import {
   absentTextField,
   presentTextField,
 } from "@/api/lib/case-law/decision-text";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   openGatedTestDatabase,
@@ -593,13 +593,13 @@ if (!databaseUrl || !runPostgresTests) {
       });
 
       await processDecision({
-        input: {
+        input: plainTextIngestionResult({
           ...legacy,
           sourceDocumentId: "contradictory-ecli-publisher-id",
           legacySourceUrls: [legacyUrl],
           ecli: "ECLI:TEST:INCOMING",
           rawHash: "hash-contradictory-ecli",
-        },
+        }),
         observationOrder: 2n,
         sourceId,
         scopedDb,
@@ -895,12 +895,12 @@ if (!databaseUrl || !runPostgresTests) {
 
       const recoveredCaseNumber = "III.ÚS 81/24";
       await processDecision({
-        input: {
+        input: plainTextIngestionResult({
           ...placeholder,
           caseNumber: recoveredCaseNumber,
           metadata: { ...placeholder.metadata, recoveredDetail: true },
           rawHash: "hash-recovered-docket",
-        },
+        }),
         observationOrder: 2n,
         sourceId,
         scopedDb,
@@ -908,7 +908,7 @@ if (!databaseUrl || !runPostgresTests) {
       });
 
       await processDecision({
-        input: {
+        input: plainTextIngestionResult({
           ...placeholder,
           caseNumber: "NALUS record 7301",
           caseNumberIsPlaceholder: true,
@@ -918,7 +918,7 @@ if (!databaseUrl || !runPostgresTests) {
             listingDocketMissing: true,
           },
           rawHash: "hash-withdrawn-detail-placeholder",
-        },
+        }),
         observationOrder: 3n,
         sourceId,
         scopedDb,
@@ -1295,13 +1295,13 @@ if (!databaseUrl || !runPostgresTests) {
 
       const recoveredCaseNumber = "II.ÚS 8801/24";
       await processDecision({
-        input: {
+        input: plainTextIngestionResult({
           ...partial,
           caseNumber: recoveredCaseNumber,
           caseNumberIsPlaceholder: undefined,
           metadata: { listedOnly: true, listingDocketMissing: false },
           rawHash: "hash-partial-with-docket",
-        },
+        }),
         observationOrder: 2n,
         sourceId,
         scopedDb,

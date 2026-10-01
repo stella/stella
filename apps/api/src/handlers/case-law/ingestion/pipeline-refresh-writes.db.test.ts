@@ -29,6 +29,7 @@ import {
 } from "@/api/db/schema";
 import { CITATION_RESOLUTION_STATUS } from "@/api/handlers/case-law/citation-resolution-status";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
+import { plainTextIngestionResult } from "@/api/handlers/case-law/ingestion/adapters/plain-text-assembly";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
@@ -40,7 +41,6 @@ import {
 } from "@/api/lib/case-law/decision-text";
 import type { EncodedPack } from "@/api/lib/legal-search/corpus-pack";
 import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
@@ -686,11 +686,11 @@ test("a directory jurisdiction's decision is written with its court id, and ever
   // defect; nothing is written for it.
   const { courtId: _courtId, ...unresolved } = usa("page-v3");
   const rejection: unknown = await processDecision({
-    input: {
+    input: plainTextIngestionResult({
       ...unresolved,
       caseNumber: "No. 20-1",
       sourceDocumentId: "scotus-20-1",
-    },
+    }),
     observationOrder: 1000n,
     sourceId,
     scopedDb,

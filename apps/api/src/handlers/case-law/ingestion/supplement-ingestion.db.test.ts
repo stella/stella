@@ -35,6 +35,7 @@ import {
   PL_COURTS_STANDALONE_REASONS_DECISION_TYPE,
   plCourtsAdapter,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
+import { plainTextIngestionResult } from "@/api/handlers/case-law/ingestion/adapters/plain-text-assembly";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import {
@@ -56,7 +57,6 @@ import {
 import { sweepCaseLawRawDecision } from "@/api/lib/legal-search/case-law-raw-sweeps";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import {
   RAW_SOURCE_FAMILY,
   rawDocumentPrefix,
@@ -537,14 +537,17 @@ describe("reasons published apart from their ruling", () => {
  */
 const ingestStandaloneReasons = async (fixture: Fixture) => {
   const { document } = supplementOf(REASONS);
-  return await ingestDecision(fixture, {
-    ...document,
-    decisionType: PL_COURTS_PRE_SUPPLEMENT_REASONS_DECISION_TYPE,
-    metadata: {
-      ...document.metadata,
+  return await ingestDecision(
+    fixture,
+    plainTextIngestionResult({
+      ...document,
       decisionType: PL_COURTS_PRE_SUPPLEMENT_REASONS_DECISION_TYPE,
-    },
-  });
+      metadata: {
+        ...document.metadata,
+        decisionType: PL_COURTS_PRE_SUPPLEMENT_REASONS_DECISION_TYPE,
+      },
+    }),
+  );
 };
 
 describe("the standalone row of reasons already stored", () => {

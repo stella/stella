@@ -101,8 +101,10 @@ import type {
   StoredRawReparseOutcome,
   SyncPage,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { plCommonCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt";
 import { plSupremeCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-sn-ruling-keys";
+import { plainTextIngestionResult } from "@/api/handlers/case-law/ingestion/adapters/plain-text-assembly";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
@@ -128,7 +130,6 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -1703,6 +1704,7 @@ type BuildOptions = {
 type PlUokikObservation = {
   built: PlUokikBuildResult;
   rulings: IngestionResult[];
+  itemBuildFailures: number;
 };
 
 /**
@@ -1723,9 +1725,11 @@ const buildPlUokikDecision = async ({
         rawParts: plUokikRawPartsOf(entry, undefined),
       }),
       rulings: [],
+      itemBuildFailures: 0,
     });
   }
-  const fetched = await fetchDetail({ cursor, unid: row.unid, signal });
+  const unid = row.unid;
+  const fetched = await fetchDetail({ cursor, unid, signal });
   if (Result.isError(fetched)) {
     return fetched;
   }
@@ -1737,6 +1741,7 @@ const buildPlUokikDecision = async ({
         detailStatus: fetched.value.status,
       }),
       rulings: [],
+      itemBuildFailures: 0,
     });
   }
   const { html } = fetched.value;
@@ -1759,7 +1764,7 @@ const buildPlUokikDecision = async ({
     files,
   });
   if (built.type !== "built") {
-    return Result.ok({ built, rulings: [] });
+    return Result.ok({ built, rulings: [], itemBuildFailures: 0 });
   }
   const decision: PlUokikDecisionLink = {
     sourceDocumentId: row.unid,
@@ -1767,24 +1772,36 @@ const buildPlUokikDecision = async ({
     decisionDate: built.decision.decisionDate,
   };
   const rulings: IngestionResult[] = [];
+  let itemBuildFailures = 0;
   for (const file of fieldFiles(detail ?? undefined, PL_UOKIK_LABEL.RULINGS)) {
     // One file at a time, behind the publisher's gate.
     const got = await fetchFile({ cursor, unid: row.unid, file, signal });
     if (Result.isError(got)) {
       return got;
     }
-    rulings.push(
-      await assemblePlUokikRuling({
-        entry,
-        detailHtml: html,
-        unid: row.unid,
-        file,
-        fetched: got.value,
-        decision,
-      }),
-    );
+    const captured = await buildPlainTextItem({
+      adapterKey: ADAPTER_KEYS.PL_UOKIK,
+
+      rawListing: JSON.stringify({ entry, file }),
+      decisionOf: (ruling) => ruling,
+      build: async () =>
+        await assemblePlUokikRuling({
+          entry,
+          detailHtml: html,
+          unid,
+          file,
+          fetched: got.value,
+          decision,
+        }),
+    });
+    if (captured.type === "item_build_failed") {
+      itemBuildFailures += 1;
+      rulings.push(captured.decision);
+      continue;
+    }
+    rulings.push(captured.value);
   }
-  return Result.ok({ built, rulings });
+  return Result.ok({ built, rulings, itemBuildFailures });
 };
 
 /**
@@ -2141,7 +2158,11 @@ const readPastAnchor = async (
   return Result.ok(null);
 };
 
-type Collected = { decisions: IngestionResult[]; aborted: boolean };
+type Collected = {
+  decisions: IngestionResult[];
+  itemBuildFailures: number;
+  aborted: boolean;
+};
 
 const collectDecisions = async (
   entries: readonly Record<string, unknown>[],
@@ -2149,20 +2170,54 @@ const collectDecisions = async (
   signal?: AbortSignal,
 ): Promise<Result<Collected, AdapterFetchError>> => {
   const decisions: IngestionResult[] = [];
+  let itemBuildFailures = 0;
   for (const entry of entries) {
     if (signal?.aborted) {
-      return Result.ok({ decisions, aborted: true });
+      return Result.ok({ decisions, itemBuildFailures, aborted: true });
     }
     // One decision at a time, behind the publisher's gate.
-    const attempted = await buildPlUokikDecision({
-      cursor,
-      entry,
-      signal,
+    const captured = await buildPlainTextItem({
+      adapterKey: ADAPTER_KEYS.PL_UOKIK,
+
+      rawListing: JSON.stringify(entry),
+      decisionOf: (result) => {
+        if (result.isErr()) {
+          return undefined;
+        }
+        const outcome = result.value.built;
+        switch (outcome.type) {
+          case "built":
+          case "detail-unavailable":
+            return outcome.decision;
+          case "unkeyable":
+            return undefined;
+          default:
+            outcome satisfies never;
+            return panic("Unhandled pl-uokik decision projection");
+        }
+      },
+      build: async () =>
+        await buildPlUokikDecision({
+          cursor,
+          entry,
+          signal,
+        }),
     });
+    const attempted = captured.value;
     if (Result.isError(attempted)) {
       return attempted;
     }
-    const { built, rulings } = attempted.value;
+    const {
+      built,
+      rulings,
+      itemBuildFailures: rulingFailures,
+    } = attempted.value;
+    itemBuildFailures += rulingFailures;
+    if (captured.type === "item_build_failed") {
+      itemBuildFailures += 1;
+      decisions.push(captured.decision, ...rulings);
+      continue;
+    }
     switch (built.type) {
       case "built":
       case "detail-unavailable":
@@ -2184,7 +2239,7 @@ const collectDecisions = async (
       }
     }
   }
-  return Result.ok({ decisions, aborted: false });
+  return Result.ok({ decisions, itemBuildFailures, aborted: false });
 };
 
 /**
@@ -2288,11 +2343,23 @@ const plUokikFetchPage = async (
   if (Result.isError(collected)) {
     return collected;
   }
-  const { aborted, decisions } = collected.value;
+  const { aborted, decisions, itemBuildFailures } = collected.value;
   if (aborted) {
     // The cycle stopped partway through, so it says nothing about the rows
     // it never reached; the page is read again next cycle.
-    return Result.ok({ decisions, sourceUrl: url, nextCursor: encoded });
+    return Result.ok({
+      decisions,
+      ...(itemBuildFailures === 0
+        ? {}
+        : {
+            itemBuildFailures: {
+              type: "item_build_failed" as const,
+              count: itemBuildFailures,
+            },
+          }),
+      sourceUrl: url,
+      nextCursor: encoded,
+    });
   }
   // A page of rows stating no UNID has nothing to anchor on; the cursor
   // still moves past them by position, or the walk would read them forever.
@@ -2310,6 +2377,14 @@ const plUokikFetchPage = async (
         };
   return Result.ok({
     decisions,
+    ...(itemBuildFailures === 0
+      ? {}
+      : {
+          itemBuildFailures: {
+            type: "item_build_failed" as const,
+            count: itemBuildFailures,
+          },
+        }),
     sourceUrl: url,
     nextCursor: encodePlUokikCursor(
       reachedTop

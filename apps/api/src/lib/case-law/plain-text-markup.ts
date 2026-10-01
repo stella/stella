@@ -8,6 +8,12 @@
  * A `<` that does not open such a shape is text: `a < b`, `§ 5 < 3`, `x<y`,
  * `1 <= 2`, `<-` all stay. Known ambiguity: `a<b and c>d` has the shape of a
  * tag with boolean attributes and is treated as markup, as `<b>` must be.
+ * Quoted attribute values may contain `<` or `>` (`title="a > b"`): the whole
+ * tag still matches, so a sanitizer never leaves half a tag behind.
+ *
+ * Scope: labels and metadata values only. Full decision text is out of
+ * scope: legal prose may legitimately contain tag-shaped text such as
+ * `<quoted>` and stays under its own parser contract.
  */
 
 /**
@@ -17,7 +23,7 @@
  * U+FEFF, which HTML does not treat as separators either.
  */
 export const TAG_LIKE_MARKUP_SOURCE =
-  "<!--|<!\\[CDATA\\[|<\\?[A-Za-z]|</?[A-Za-z][A-Za-z0-9:-]*([ \\t\\n\\f\\r][^<>]*)?/?>";
+  "<!--|<!\\[CDATA\\[|<\\?[A-Za-z]|</?[A-Za-z][A-Za-z0-9:-]*([ \\t\\n\\f\\r]([^<>\"']|\"[^\"]*\"|'[^']*')*)?/?>";
 
 const TAG_LIKE_MARKUP = new RegExp(TAG_LIKE_MARKUP_SOURCE, "u");
 

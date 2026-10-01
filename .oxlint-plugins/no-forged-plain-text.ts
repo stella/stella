@@ -97,6 +97,14 @@ export default eslintCompatPlugin({
             }
           },
           TSInterfaceDeclaration(node) {
+            if (isIdentifier(node.id)) {
+              const definitions = [
+                node.body,
+                node.extends,
+                aliases.get(node.id.name),
+              ];
+              aliases.set(node.id.name, definitions);
+            }
             if (!owner && isIdentifier(node.id, "PlainText")) {
               context.report({ node, messageId: "forged" });
             }

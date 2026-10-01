@@ -23,6 +23,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
+import { plainTextIngestionResult } from "@/api/handlers/case-law/ingestion/adapters/plain-text-assembly";
 import {
   bareCitationKey,
   decisionIdentifiersFromStoredMetadata,
@@ -57,7 +58,6 @@ import {
 } from "@/api/lib/legal-search/ingestion-normalization";
 import type { ObservedDocket } from "@/api/lib/legal-search/ingestion-normalization";
 import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -122,10 +122,13 @@ describe("sanitizeResult — decision text fields", () => {
       },
     });
 
-    expect(sanitized.metadata["summary"]).toBe("Published summary");
-    expect(sanitized.textFields.summary).toEqual(
-      presentTextField("Published summary"),
-    );
+    expect(sanitized.metadata["summary"] === "Published summary").toBe(true);
+    expect(
+      Bun.deepEquals(
+        sanitized.textFields.summary,
+        presentTextField("Published summary"),
+      ),
+    ).toBe(true);
   });
 
   test("keeps text keys nullable while retaining every declared absence", () => {
@@ -234,8 +237,8 @@ describe("sanitizeResult — docket grammar", () => {
       removed: raw.slice(raw.indexOf(caseNumber) + caseNumber.length),
     });
     const sanitized = sanitizeResult(input);
-    expect(sanitized.caseNumber).toBe(caseNumber);
-    expect(sanitized.metadata["caseNumber"]).toBe(raw);
+    expect(sanitized.caseNumber === caseNumber).toBe(true);
+    expect(sanitized.metadata["caseNumber"] === raw).toBe(true);
   });
 
   test.each([
@@ -257,7 +260,9 @@ describe("sanitizeResult — docket grammar", () => {
       caseNumber: "33 Cdo 1751/2023",
       removed: "- II.",
     });
-    expect(sanitizeResult(input).caseNumber).toBe("33 Cdo 1751/2023- II.");
+    expect(sanitizeResult(input).caseNumber === "33 Cdo 1751/2023- II.").toBe(
+      true,
+    );
   });
 
   test.each<[string, string, ObservedDocket["type"]]>([
@@ -268,7 +273,7 @@ describe("sanitizeResult — docket grammar", () => {
   ])("%s: %s is stored as written (%s)", (country, raw, type) => {
     const input = observed(country, raw);
     expect(observedDocketOf(input).type).toBe(type);
-    expect(sanitizeResult(input).caseNumber).toBe(raw);
+    expect(sanitizeResult(input).caseNumber === raw).toBe(true);
   });
 
   test("a placeholder docket is never read against the grammar", () => {
@@ -288,7 +293,7 @@ describe("sanitizeResult — docket grammar", () => {
       caseNumberType: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
     });
     expect(observedDocketOf(input)).toEqual({ type: "kept" });
-    expect(sanitizeResult(input).caseNumber).toBe("347 U.S. 483.");
+    expect(sanitizeResult(input).caseNumber === "347 U.S. 483.").toBe(true);
   });
 });
 

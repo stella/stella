@@ -93,11 +93,13 @@ import type {
   SyncPage,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
+import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import {
   PL_COURTS_RULING_DECISION_TYPES,
   PL_COURTS_STANDALONE_REASONS_DECISION_TYPE,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import { PL_NCOURT_COURT_NAMES } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt-courts";
+import { plainTextIngestionResult } from "@/api/handlers/case-law/ingestion/adapters/plain-text-assembly";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
@@ -122,7 +124,7 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -729,7 +731,7 @@ const normalizeSignature = (signature: string): string =>
 
 /** What a ruling key is read from: stored columns only. */
 type CommonCourtRulingKeyInput = Pick<
-  IngestionResult,
+  RawIngestionResult,
   "caseNumber" | "court" | "decisionDate" | "decisionType"
 >;
 
@@ -1956,6 +1958,7 @@ const positionAliasOf = (
 
 type Built = {
   decisions: IngestionResult[];
+  itemBuildFailures: number;
   supplements: DecisionSupplement[];
   read: number;
   aborted: boolean;
@@ -1969,17 +1972,52 @@ const buildRows = async (
   signal?: AbortSignal,
 ): Promise<Result<Built, AdapterFetchError>> => {
   const decisions: IngestionResult[] = [];
+  let itemBuildFailures = 0;
   const supplements: DecisionSupplement[] = [];
   for (const [index, row] of rows.entries()) {
     if (signal?.aborted) {
-      return Result.ok({ decisions, supplements, read: index, aborted: true });
+      return Result.ok({
+        decisions,
+        itemBuildFailures,
+        supplements,
+        read: index,
+        aborted: true,
+      });
     }
-    const attempted = await fetchPlNcourtDecision({
-      cursor,
-      listingXml: row.fragment,
-      positionAlias: row.positionAlias,
-      signal,
+    const captured = await buildPlainTextItem({
+      adapterKey: ADAPTER_KEYS.PL_NCOURT,
+
+      rawListing: row.fragment,
+      decisionOf: (result) => {
+        if (result.isErr()) {
+          return undefined;
+        }
+        const outcome = result.value;
+        switch (outcome.type) {
+          case "built":
+            return outcome.decision;
+          case "supplement":
+          case "unkeyable":
+            return undefined;
+          default:
+            outcome satisfies never;
+            return panic("Unhandled pl-ncourt decision projection");
+        }
+      },
+      build: async () =>
+        await fetchPlNcourtDecision({
+          cursor,
+          listingXml: row.fragment,
+          positionAlias: row.positionAlias,
+          signal,
+        }),
     });
+    if (captured.type === "item_build_failed") {
+      itemBuildFailures += 1;
+      decisions.push(captured.decision);
+      continue;
+    }
+    const attempted = captured.value;
     if (Result.isError(attempted)) {
       return attempted;
     }
@@ -2005,6 +2043,7 @@ const buildRows = async (
   }
   return Result.ok({
     decisions,
+    itemBuildFailures,
     supplements,
     read: rows.length,
     aborted: false,
@@ -2239,9 +2278,17 @@ const plNcourtFetchPage = async (
   if (Result.isError(built)) {
     return built;
   }
-  const { decisions, supplements, read } = built.value;
+  const { decisions, itemBuildFailures, supplements, read } = built.value;
   return Result.ok({
     decisions,
+    ...(itemBuildFailures === 0
+      ? {}
+      : {
+          itemBuildFailures: {
+            type: "item_build_failed" as const,
+            count: itemBuildFailures,
+          },
+        }),
     ...(supplements.length === 0 ? {} : { supplements }),
     sourceUrl: url,
     nextCursor: encodePlNcourtCursor(afterWindow({ cursor, listing, read })),

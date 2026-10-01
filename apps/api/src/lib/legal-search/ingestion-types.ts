@@ -1,4 +1,3 @@
-// parser-output-unchanged: SyncPage adds optional failure telemetry; decision parsing and stored output are unchanged.
 import { panic, Result, TaggedError } from "better-result";
 
 import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
@@ -19,7 +18,7 @@ import type {
 
 import type { DocumentAst } from "@/api/lib/case-law/document-ast";
 import {
-  requirePlainText,
+  toPlainText,
   PlainTextError,
   toPlainTextMetadata,
   type PlainText,
@@ -279,11 +278,15 @@ type PlainTextResultFields = {
     | undefined;
 };
 
+export type PlainTextOutcome =
+  | { type: "accepted" }
+  | { type: "item_build_failed"; error: PlainTextError };
+
 export type IngestionResult = Omit<
   RawIngestionResult,
   keyof PlainTextResultFields
 > &
-  PlainTextResultFields;
+  PlainTextResultFields & { plainTextOutcome: PlainTextOutcome };
 
 /** Total over the fields whose source text cannot reach ingestion unbranded. */
 export const PLAIN_TEXT_RESULT_FIELDS = {
@@ -308,77 +311,126 @@ export const PLAIN_TEXT_FIELD_DEBT = {} as const satisfies Record<
 
 const plainTextField = (
   field: TextField,
-): IngestionResult["textFields"][DecisionTextFieldKey] => {
+): Result<
+  IngestionResult["textFields"][DecisionTextFieldKey],
+  PlainTextError
+> => {
   switch (field.type) {
     case TEXT_FIELD_TYPE.ABSENT:
-      return field;
-    case TEXT_FIELD_TYPE.PRESENT: {
-      const text = requirePlainText(field.text);
-      if (text.length === 0) {
-        throw new PlainTextError({
-          message: "Published text contains no plain-text content",
-          reason: "empty-present-text",
-        });
-      }
-      return { type: field.type, text };
-    }
+      return Result.ok(field);
+    case TEXT_FIELD_TYPE.PRESENT:
+      return toPlainText(field.text).andThen((text) =>
+        text.length === 0
+          ? Result.err(
+              new PlainTextError({
+                message: "Published text contains no plain-text content",
+                reason: "empty-present-text",
+              }),
+            )
+          : Result.ok({ type: field.type, text }),
+      );
     default:
       field satisfies never;
       return panic(`Unhandled decision text field: ${String(field)}`);
   }
 };
 
-const optionalPlainText = (raw: string | undefined): PlainText | undefined =>
-  raw === undefined ? undefined : requirePlainText(raw);
+const requiredLabel = (raw: string) =>
+  toPlainText(raw).andThen((plain) =>
+    raw.trim().length > 0 && plain.length === 0
+      ? Result.err(
+          new PlainTextError({
+            message: "Published label contains no plain-text content",
+            reason: "empty-present-text",
+          }),
+        )
+      : Result.ok(plain),
+  );
+
+const optionalPlainText = (raw: string | undefined) =>
+  raw === undefined ? Result.ok(undefined) : toPlainText(raw);
 
 /** Source identifiers, URLs, sourceRaw and AST structure retain their separate contracts. */
-export const plainTextIngestionResult = <T extends RawIngestionResult>(
+export const toPlainTextIngestionResult = <T extends RawIngestionResult>(
   raw: T,
-): IngestionResult & Omit<T, keyof PlainTextResultFields> => {
-  const identifiers = raw.identifiers;
-  const plainIdentifiers =
-    identifiers === undefined
-      ? undefined
-      : ([
-          {
-            type: identifiers[0].type,
-            value: requirePlainText(identifiers[0].value),
-          },
-          ...identifiers.slice(1).map(({ type, value }) => ({
-            type,
-            value: requirePlainText(value),
-          })),
-        ] as const);
-  return {
-    ...raw,
-    caseNumber: requirePlainText(raw.caseNumber),
-    sheetNumber: optionalPlainText(raw.sheetNumber),
-    ecli: optionalPlainText(raw.ecli),
-    legacyEcli: optionalPlainText(raw.legacyEcli),
-    court: requirePlainText(raw.court),
-    decisionType: optionalPlainText(raw.decisionType),
-    metadata: Object.fromEntries(
-      Object.entries(raw.metadata).map(([key, value]) => [
-        key,
-        toPlainTextMetadata(value),
-      ]),
-    ),
-    judges: raw.judges?.map(({ role, nameAsPrinted }) => ({
-      role,
-      nameAsPrinted: requirePlainText(nameAsPrinted),
-    })),
-    textFields: {
-      [DECISION_TEXT_FIELD.ABSTRACT]: plainTextField(raw.textFields.abstract),
-      [DECISION_TEXT_FIELD.HEADNOTE]: plainTextField(raw.textFields.headnote),
-      [DECISION_TEXT_FIELD.LEGAL_SENTENCE]: plainTextField(
-        raw.textFields.legalSentence,
+): Result<
+  IngestionResult & Omit<T, keyof PlainTextResultFields | "plainTextOutcome">,
+  PlainTextError
+> =>
+  Result.gen(function* () {
+    if (
+      "plainTextOutcome" in raw &&
+      isRecord(raw.plainTextOutcome) &&
+      raw.plainTextOutcome["type"] === "item_build_failed" &&
+      raw.plainTextOutcome["error"] instanceof PlainTextError
+    ) {
+      return Result.err(raw.plainTextOutcome["error"]);
+    }
+    const identifiers = raw.identifiers;
+    const plainIdentifiers =
+      identifiers === undefined
+        ? undefined
+        : ([
+            {
+              type: identifiers[0].type,
+              value: yield* toPlainText(identifiers[0].value),
+            },
+            ...(yield* Result.all(
+              identifiers
+                .slice(1)
+                .map(({ type, value }) =>
+                  toPlainText(value).map((plain) => ({ type, value: plain })),
+                ),
+            )),
+          ] as const);
+    return Result.ok({
+      ...raw,
+      plainTextOutcome: { type: "accepted" as const },
+      caseNumber: yield* requiredLabel(raw.caseNumber),
+      sheetNumber: yield* optionalPlainText(raw.sheetNumber),
+      ecli: yield* optionalPlainText(raw.ecli),
+      legacyEcli: yield* optionalPlainText(raw.legacyEcli),
+      court: yield* requiredLabel(raw.court),
+      decisionType: yield* optionalPlainText(raw.decisionType),
+      metadata: Object.fromEntries(
+        yield* Result.all(
+          Object.entries(raw.metadata).map(([key, value]) =>
+            toPlainTextMetadata(value).map((plain) => [key, plain] as const),
+          ),
+        ),
       ),
-      [DECISION_TEXT_FIELD.SUMMARY]: plainTextField(raw.textFields.summary),
-    },
-    publisherCitedCases: raw.publisherCitedCases?.map(requirePlainText),
-    identifiers: plainIdentifiers,
-  };
-};
+      judges:
+        raw.judges === undefined
+          ? undefined
+          : yield* Result.all(
+              raw.judges.map(({ role, nameAsPrinted }) =>
+                toPlainText(nameAsPrinted).map((plain) => ({
+                  role,
+                  nameAsPrinted: plain,
+                })),
+              ),
+            ),
+      textFields: {
+        [DECISION_TEXT_FIELD.ABSTRACT]: yield* plainTextField(
+          raw.textFields.abstract,
+        ),
+        [DECISION_TEXT_FIELD.HEADNOTE]: yield* plainTextField(
+          raw.textFields.headnote,
+        ),
+        [DECISION_TEXT_FIELD.LEGAL_SENTENCE]: yield* plainTextField(
+          raw.textFields.legalSentence,
+        ),
+        [DECISION_TEXT_FIELD.SUMMARY]: yield* plainTextField(
+          raw.textFields.summary,
+        ),
+      },
+      publisherCitedCases:
+        raw.publisherCitedCases === undefined
+          ? undefined
+          : yield* Result.all(raw.publisherCitedCases.map(toPlainText)),
+      identifiers: plainIdentifiers,
+    });
+  });
 
 /**
  * Which decision a supplement belongs to, beyond the court, docket and

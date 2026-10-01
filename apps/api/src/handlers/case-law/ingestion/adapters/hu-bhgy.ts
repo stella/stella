@@ -1,4 +1,6 @@
 import { Result, panic } from "better-result";
+
+import type { Document as FolioDocument } from "@stll/docx-core/model";
 /**
  * Hungarian courts (Bírósági Határozatok Gyűjteménye) adapter.
  *
@@ -48,8 +50,6 @@ import { Result, panic } from "better-result";
  * reconciliation ledger's, and its slices are the same year × kollégium windows
  * (rule 16).
  */
-
-import type { Document as FolioDocument } from "@stll/docx-core/model";
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
 import { Temporal } from "@stll/time";
 
@@ -90,6 +90,8 @@ import type {
   StoredRawReparseOutcome,
   SyncPage,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
+import { plainTextIngestionResult } from "@/api/handlers/case-law/ingestion/adapters/plain-text-assembly";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
@@ -113,7 +115,6 @@ import { errorTag } from "@/api/lib/errors/utils";
 import { parseScannedDocx } from "@/api/lib/file-scan/document-parsers";
 import { publisherDocument } from "@/api/lib/file-scan/publisher-document";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { readRtf, isRtf } from "@/api/lib/legal-search/parsers/rtf-reader";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
@@ -1559,7 +1560,11 @@ type CollectOptions = {
   signal?: AbortSignal | undefined;
 };
 
-type Collected = { decisions: IngestionResult[]; aborted: boolean };
+type Collected = {
+  decisions: IngestionResult[];
+  itemBuildFailures: number;
+  aborted: boolean;
+};
 
 const collectDecisions = async ({
   cursor,
@@ -1567,11 +1572,39 @@ const collectDecisions = async ({
   signal,
 }: CollectOptions): Promise<Result<Collected, AdapterFetchError>> => {
   const decisions: IngestionResult[] = [];
+  let itemBuildFailures = 0;
   for (const row of rows) {
     if (signal?.aborted) {
-      return Result.ok({ decisions, aborted: true });
+      return Result.ok({ decisions, itemBuildFailures, aborted: true });
     }
-    const attempted = await buildHuBhgyDecision({ cursor, row, signal });
+    const captured = await buildPlainTextItem({
+      adapterKey: ADAPTER_KEYS.HU_BHGY,
+
+      rawListing: JSON.stringify(row),
+      decisionOf: (result) => {
+        if (result.isErr()) {
+          return undefined;
+        }
+        const outcome = result.value;
+        switch (outcome.type) {
+          case "built":
+          case "detail-unavailable":
+            return outcome.decision;
+          case "unkeyable":
+            return undefined;
+          default:
+            outcome satisfies never;
+            return panic("Unhandled hu-bhgy decision projection");
+        }
+      },
+      build: async () => await buildHuBhgyDecision({ cursor, row, signal }),
+    });
+    if (captured.type === "item_build_failed") {
+      itemBuildFailures += 1;
+      decisions.push(captured.decision);
+      continue;
+    }
+    const attempted = captured.value;
     if (Result.isError(attempted)) {
       return attempted;
     }
@@ -1592,7 +1625,7 @@ const collectDecisions = async ({
       }
     }
   }
-  return Result.ok({ decisions, aborted: false });
+  return Result.ok({ decisions, itemBuildFailures, aborted: false });
 };
 
 const sweepPage = async (
@@ -1634,17 +1667,37 @@ const sweepPage = async (
       if (Result.isError(collected)) {
         return collected;
       }
-      const { aborted, decisions } = collected.value;
+      const { aborted, decisions, itemBuildFailures } = collected.value;
       if (aborted) {
         // The cycle stopped partway through this page, so it says nothing about
         // the rows it never reached: parking at the page's own start replays it
         // rather than checkpointing past them.
-        return Result.ok({ decisions, sourceUrl: url, nextCursor: cursor });
+        return Result.ok({
+          decisions,
+          ...(itemBuildFailures === 0
+            ? {}
+            : {
+                itemBuildFailures: {
+                  type: "item_build_failed" as const,
+                  count: itemBuildFailures,
+                },
+              }),
+          sourceUrl: url,
+          nextCursor: cursor,
+        });
       }
       const nextOffset = offset + rows.length;
       if (nextOffset < count) {
         return Result.ok({
           decisions,
+          ...(itemBuildFailures === 0
+            ? {}
+            : {
+                itemBuildFailures: {
+                  type: "item_build_failed" as const,
+                  count: itemBuildFailures,
+                },
+              }),
           sourceUrl: url,
           nextCursor: encodeHuBhgyCursor({
             ...start,
@@ -1657,6 +1710,14 @@ const sweepPage = async (
       const after = nextWindow(year, slug);
       return Result.ok({
         decisions,
+        ...(itemBuildFailures === 0
+          ? {}
+          : {
+              itemBuildFailures: {
+                type: "item_build_failed" as const,
+                count: itemBuildFailures,
+              },
+            }),
         sourceUrl: url,
         nextCursor:
           after === null
@@ -1757,13 +1818,37 @@ const tipPage = async (
   if (Result.isError(collected)) {
     return collected;
   }
-  const { aborted, decisions } = collected.value;
+  const { aborted, decisions, itemBuildFailures } = collected.value;
   if (aborted) {
-    return Result.ok({ decisions, sourceUrl: url, nextCursor: cursor });
+    return Result.ok({
+      decisions,
+      ...(itemBuildFailures === 0
+        ? {}
+        : {
+            itemBuildFailures: {
+              type: "item_build_failed" as const,
+              count: itemBuildFailures,
+            },
+          }),
+      sourceUrl: url,
+      nextCursor: cursor,
+    });
   }
 
   if (reachedFrontier) {
-    return Result.ok({ decisions, sourceUrl: url, nextCursor: caughtUp() });
+    return Result.ok({
+      decisions,
+      ...(itemBuildFailures === 0
+        ? {}
+        : {
+            itemBuildFailures: {
+              type: "item_build_failed" as const,
+              count: itemBuildFailures,
+            },
+          }),
+      sourceUrl: url,
+      nextCursor: caughtUp(),
+    });
   }
 
   const nextOffset = offset + fresh.length;
@@ -1781,6 +1866,14 @@ const tipPage = async (
   // can re-read a row but cannot step over one.
   return Result.ok({
     decisions,
+    ...(itemBuildFailures === 0
+      ? {}
+      : {
+          itemBuildFailures: {
+            type: "item_build_failed" as const,
+            count: itemBuildFailures,
+          },
+        }),
     sourceUrl: url,
     nextCursor: encodeHuBhgyCursor({
       phase: "tip",

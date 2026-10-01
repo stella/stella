@@ -6,6 +6,7 @@ import { stableStringify } from "@stll/stable-stringify";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { mapCourtListenerRecord } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/map";
 import { recordedClusters } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/test-records";
+import { plainTextIngestionResult } from "@/api/handlers/case-law/ingestion/adapters/plain-text-assembly";
 import { extractDecisionCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import {
   CITATION_SCOPE_METADATA_KEY,
@@ -20,7 +21,6 @@ import {
 import type { DocumentAst } from "@/api/lib/case-law/document-ast";
 import { isDocumentAst, plainTextOf } from "@/api/lib/case-law/document-ast";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { sortDeep } from "@/api/lib/sort-deep";
 
 const text = "See 347 U.S. 483. Id. at 495.";

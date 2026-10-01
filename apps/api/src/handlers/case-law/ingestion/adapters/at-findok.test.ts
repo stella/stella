@@ -10,7 +10,6 @@ import {
   parseFindokManifest,
 } from "@/api/handlers/case-law/ingestion/adapters/at-findok";
 import { loadDocxArchive } from "@/api/lib/docx-archive";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 
 import { PublisherPageError } from "./publisher-page";
 
@@ -55,6 +54,44 @@ const reconciliationOf = (adapter: ReturnType<typeof createAtFindokAdapter>) =>
   adapter.reconciliation;
 
 describe("Austrian Findok adapter", () => {
+  it("quarantines a rejected title while storing later items and advancing the cursor", async () => {
+    const poisonId = "b68202a0-55e4-4dea-9e93-971f0b71ae33";
+    const poison = { ...MANIFEST_ITEM, dokumentId: poisonId, titel: "<br/>" };
+    const responses = [
+      manifestResponse([poison, MANIFEST_ITEM]),
+      new Response(null, { status: 404 }),
+      await detailResponse(),
+    ];
+    const adapter = createAtFindokAdapter({
+      now: () => new Date("2026-08-12T00:00:00Z"),
+      request: async () => {
+        const response = responses.shift();
+        if (response === undefined) {
+          throw new TypeError("Unexpected Findok request");
+        }
+        return response;
+      },
+      sleep: async () => {},
+    });
+    const page = (await adapter.fetchPage(null, {})).unwrap();
+    expect(page.itemBuildFailures).toEqual({
+      type: "item_build_failed",
+      count: 1,
+    });
+    expect(
+      page.decisions.filter(({ isListingOnly }) => !isListingOnly),
+    ).toHaveLength(1);
+    const quarantine = page.decisions.find(
+      ({ sourceDocumentId }) => sourceDocumentId === poisonId,
+    );
+    expect(quarantine?.isListingOnly).toBe(true);
+    expect(quarantine?.textFields.summary.type).toBe("absent");
+    expect(
+      decodeSourceRawEnvelope(quarantine?.sourceRaw ?? "")?.["listing"],
+    ).toContain('"titel":"<br/>"');
+    expect(page.nextCursor).not.toBeNull();
+    expect(page.nextCursor).toContain("verify");
+  });
   for (const fixture of [
     { name: "HTML challenge", body: "<html><form><input></form></html>" },
     { name: "empty JSON", body: "{}" },
@@ -220,17 +257,15 @@ describe("Austrian Findok adapter", () => {
     const first = await adapter.fetchPage(null, {});
     expect(first.isOk()).toBe(true);
     const page = first.unwrap();
-    expect(page.decisions.at(0)).toMatchObject(
-      plainTextIngestionResult({
-        sourceDocumentId: DOCUMENT_ID,
-        caseNumber: "RV/7500368/2026",
-        ecli: "ECLI:AT:BFG:2026:RV.7500368.2026",
-        court: "BFG",
-        country: "AUT",
-        language: "de",
-        decisionDate: "2026-07-14",
-      }),
-    );
+    expect(page.decisions.at(0)).toMatchObject({
+      sourceDocumentId: DOCUMENT_ID,
+      caseNumber: "RV/7500368/2026",
+      ecli: "ECLI:AT:BFG:2026:RV.7500368.2026",
+      court: "BFG",
+      country: "AUT",
+      language: "de",
+      decisionDate: "2026-07-14",
+    });
     expect(page.decisions.at(0)?.sourceRaw).toContain("<Segmente>");
     expect(urls).toEqual([
       "https://findok.bmf.gv.at/findok/iwg/bestandsliste-bfg.gz",
@@ -456,7 +491,9 @@ describe("Austrian Findok adapter", () => {
       type: "present",
     });
     expect(decision.textFields.summary).toMatchObject({ type: "present" });
-    expect(decision.metadata["headnoteNumbers"]).toEqual(["1"]);
+    expect(Bun.deepEquals(decision.metadata["headnoteNumbers"], ["1"])).toBe(
+      true,
+    );
     expect(decision.metadata["headnoteStatutes"]).not.toEqual([]);
     expect(decision.metadata["subjectCodes"]).not.toEqual([]);
     expect(decision.metadata["findokGid"]).toContain("_");

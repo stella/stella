@@ -101,8 +101,11 @@ describe("Slovak court backfill rejects unreadable publisher listings", () => {
         expect(page.isOk()).toBe(true);
         if (page.isOk()) {
           expect(
-            page.value.decisions.map(({ caseNumber }) => caseNumber),
-          ).toEqual(Array.from({ length: 99 }, () => good.spisovaZnacka));
+            Bun.deepEquals(
+              page.value.decisions.map(({ caseNumber }) => caseNumber),
+              Array.from({ length: 99 }, () => good.spisovaZnacka),
+            ),
+          ).toBe(true);
           expect(page.value.itemBuildFailures).toEqual({
             type: "item_build_failed",
             count: 1,
@@ -149,11 +152,14 @@ describe("Slovak court backfill rejects unreadable publisher listings", () => {
         expect(page.isOk()).toBe(true);
         if (page.isOk()) {
           expect(
-            page.value.decisions.map(({ caseNumber }) => caseNumber),
-          ).toEqual([
-            ...Array.from({ length: 99 }, () => good.spisovaZnacka),
-            bad.spisovaZnacka,
-          ]);
+            Bun.deepEquals(
+              page.value.decisions.map(({ caseNumber }) => caseNumber),
+              [
+                ...Array.from({ length: 99 }, () => good.spisovaZnacka),
+                bad.spisovaZnacka,
+              ],
+            ),
+          ).toBe(true);
           expect(page.value.itemBuildFailures).toEqual({
             type: "item_build_failed",
             count: 1,
@@ -381,14 +387,14 @@ describe("a stored record reaches the targets the inventory declares", () => {
     }
     const { metadata } = outcome.result;
 
-    expect(metadata["area"]).toEqual(["Občianske právo"]);
-    expect(metadata["originCourt"]).toBe("Mestský súd Bratislava I");
-    expect(metadata["originCourtRegistreGuid"]).toBe("sud_102");
+    expect(Bun.deepEquals(metadata["area"], ["Občianske právo"])).toBe(true);
+    expect(metadata["originCourt"] === "Mestský súd Bratislava I").toBe(true);
+    expect(metadata["originCourtRegistreGuid"] === "sud_102").toBe(true);
     // The docket the file was opened under, beside the prefixed one the
     // receiving court renumbered it to. A citation names the first, and
     // before this the row held neither the name nor the number.
-    expect(metadata["originCaseNumber"]).toBe("7C/221/1991");
-    expect(outcome.result.caseNumber).toBe(TRANSFERRED_FILE_DOCKET);
+    expect(metadata["originCaseNumber"] === "7C/221/1991").toBe(true);
+    expect(outcome.result.caseNumber === TRANSFERRED_FILE_DOCKET).toBe(true);
   });
 
   test("the record's other labelled fields keep their targets", async () => {
@@ -403,22 +409,26 @@ describe("a stored record reaches the targets the inventory declares", () => {
     }
     const { metadata } = outcome.result;
 
-    expect(outcome.result.ecli).toBe("ECLI:SK:OSBA1:1997:1191896318.4");
-    expect(outcome.result.court).toBe("Okresný súd Bratislava I");
+    expect(outcome.result.ecli === "ECLI:SK:OSBA1:1997:1191896318.4").toBe(
+      true,
+    );
+    expect(outcome.result.court === "Okresný súd Bratislava I").toBe(true);
     expect(outcome.result.decisionDate).toBe("1997-06-20");
-    expect(outcome.result.decisionType).toBe("Rozsudok");
-    expect(metadata["decisionTypeKey"]).toBe("rozsudok");
-    expect(metadata["identifikacneCislo"]).toBe("1191896318");
-    expect(metadata["subArea"]).toEqual(["Ostatné"]);
-    expect(metadata["decisionNature"]).toEqual(["Zmeňujúce"]);
-    expect(metadata["documentName"]).toBe("Rozsudok_7C-221-1991.pdf");
-    expect(metadata["documentExtension"]).toBe("PDF");
+    expect(outcome.result.decisionType === "Rozsudok").toBe(true);
+    expect(metadata["decisionTypeKey"] === "rozsudok").toBe(true);
+    expect(metadata["identifikacneCislo"] === "1191896318").toBe(true);
+    expect(Bun.deepEquals(metadata["subArea"], ["Ostatné"])).toBe(true);
+    expect(Bun.deepEquals(metadata["decisionNature"], ["Zmeňujúce"])).toBe(
+      true,
+    );
+    expect(metadata["documentName"] === "Rozsudok_7C-221-1991.pdf").toBe(true);
+    expect(metadata["documentExtension"] === "PDF").toBe(true);
     expect(metadata["documentSize"]).toBe(95_553);
-    expect(metadata["updateDate"]).toBe("26.09.2023");
-    expect(metadata["updateDateIso"]).toBe("2023-09-26");
+    expect(metadata["updateDate"] === "26.09.2023").toBe(true);
+    expect(metadata["updateDateIso"] === "2023-09-26").toBe(true);
     // The name is the judge's or a senior court officer's and the record says
     // which nowhere, so it stays a stated name rather than a bench role.
-    expect(metadata["judge"]).toBe("JUDr. Anton Mihalovits");
+    expect(metadata["judge"] === "JUDr. Anton Mihalovits").toBe(true);
     expect(outcome.result.judges).toBeUndefined();
   });
 
@@ -521,9 +531,9 @@ describe("derived general-court metadata", () => {
   test("absent documents have no public API link and absent text is not published", () => {
     const decision = assembleSkCourtsDecision({ item, detail: null });
     expect(decision?.sourceUrl).toBeUndefined();
-    expect(decision?.metadata["sourceUrlStatus"]).toBe(
-      "not-published-by-source",
-    );
+    expect(
+      decision?.metadata["sourceUrlStatus"] === "not-published-by-source",
+    ).toBe(true);
     expect(decision?.textFields.headnote).toEqual({
       type: "absent",
       reason: "not_published",
@@ -541,7 +551,7 @@ describe("derived general-court metadata", () => {
       detail: { dokument: { url } },
     });
     expect(decision?.sourceUrl).toBe(url);
-    expect(decision?.metadata["sourceUrlStatus"]).toBe("published");
+    expect(decision?.metadata["sourceUrlStatus"] === "published").toBe(true);
   });
 
   test("calendar-invalid dates remain stated and carry a derived defect", () => {
@@ -550,24 +560,26 @@ describe("derived general-court metadata", () => {
         item,
         detail: { updateDate },
       });
-      expect(decision?.metadata["updateDate"]).toBe(updateDate);
+      expect(decision?.metadata["updateDate"] === updateDate).toBe(true);
       expect(decision?.metadata["updateDateIso"]).toBeUndefined();
-      expect(decision?.metadata["updateDateDefect"]).toEqual({
-        type: "invalid-publisher-date",
-        value: updateDate,
-      });
+      expect(
+        Bun.deepEquals(decision?.metadata["updateDateDefect"], {
+          type: "invalid-publisher-date",
+          value: updateDate,
+        }),
+      ).toBe(true);
     }
   });
 });
 
-test("rejected source links preserve the publisher-stated URL", () => {
+test("rejected source links retain a plain publisher-stated URL", () => {
   for (const url of ["data:text/plain,blocked", "not a URL", "", "   "]) {
     const decision = assembleSkCourtsDecision({
       item: { spisovaZnacka: "1C/1/2024", sud: { nazov: "Okresný súd" } },
       detail: { dokument: { url } },
     });
     expect(decision?.sourceUrl).toBeUndefined();
-    expect(decision?.metadata["sourceUrlStatus"]).toBe("rejected-url");
-    expect(decision?.metadata["statedSourceUrl"]).toBe(url);
+    expect(decision?.metadata["sourceUrlStatus"] === "rejected-url").toBe(true);
+    expect(decision?.metadata["statedSourceUrl"] === url.trim()).toBe(true);
   }
 });

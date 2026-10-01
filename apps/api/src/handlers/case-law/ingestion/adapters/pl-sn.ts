@@ -1,4 +1,6 @@
 import { Result, panic } from "better-result";
+
+import { Temporal } from "@stll/time";
 /**
  * Polish Supreme Court (Sąd Najwyższy) adapter.
  *
@@ -45,8 +47,6 @@ import { Result, panic } from "better-result";
  * what relates a row here to its SAOS copy.
  */
 
-import { Temporal } from "@stll/time";
-
 import {
   ADAPTER_KEYS,
   ADAPTER_TIMEOUT,
@@ -80,7 +80,9 @@ import type {
   SyncPage,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
+import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { plSupremeCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-sn-ruling-keys";
+import { plainTextIngestionResult } from "@/api/handlers/case-law/ingestion/adapters/plain-text-assembly";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
@@ -96,7 +98,6 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -1365,6 +1366,7 @@ const plSnFetchPage = async (
     });
   }
   const decisions: IngestionResult[] = [];
+  let itemBuildFailures = 0;
   let aborted = false;
 
   for (const row of window.rows) {
@@ -1372,12 +1374,40 @@ const plSnFetchPage = async (
       aborted = true;
       break;
     }
-    const attempted = await buildPlSnDecision({
-      cursor: encodePlSnCursor(window),
-      item: normalizePlSnListingItem(row),
-      listingRaw: JSON.stringify(row),
-      signal,
+    const captured = await buildPlainTextItem({
+      adapterKey: ADAPTER_KEYS.PL_SN,
+
+      rawListing: JSON.stringify(row),
+      decisionOf: (result) => {
+        if (result.isErr()) {
+          return undefined;
+        }
+        const outcome = result.value;
+        switch (outcome.type) {
+          case "built":
+          case "detail-unavailable":
+            return outcome.decision;
+          case "unkeyable":
+            return undefined;
+          default:
+            outcome satisfies never;
+            return panic("Unhandled pl-sn decision projection");
+        }
+      },
+      build: async () =>
+        await buildPlSnDecision({
+          cursor: encodePlSnCursor(window),
+          item: normalizePlSnListingItem(row),
+          listingRaw: JSON.stringify(row),
+          signal,
+        }),
     });
+    if (captured.type === "item_build_failed") {
+      itemBuildFailures += 1;
+      decisions.push(captured.decision);
+      continue;
+    }
+    const attempted = captured.value;
     if (Result.isError(attempted)) {
       return attempted;
     }
@@ -1406,6 +1436,14 @@ const plSnFetchPage = async (
     // re-stored under the same hash, and skipping them would be permanent.
     return Result.ok({
       decisions,
+      ...(itemBuildFailures === 0
+        ? {}
+        : {
+            itemBuildFailures: {
+              type: "item_build_failed" as const,
+              count: itemBuildFailures,
+            },
+          }),
       sourceUrl: window.url,
       nextCursor: encodePlSnCursor(window),
     });
@@ -1417,6 +1455,14 @@ const plSnFetchPage = async (
   if (window.full) {
     return Result.ok({
       decisions,
+      ...(itemBuildFailures === 0
+        ? {}
+        : {
+            itemBuildFailures: {
+              type: "item_build_failed" as const,
+              count: itemBuildFailures,
+            },
+          }),
       sourceUrl: window.url,
       nextCursor: encodePlSnCursor({
         month: window.month,
@@ -1428,6 +1474,14 @@ const plSnFetchPage = async (
   const next = monthAfter(window.month);
   return Result.ok({
     decisions,
+    ...(itemBuildFailures === 0
+      ? {}
+      : {
+          itemBuildFailures: {
+            type: "item_build_failed" as const,
+            count: itemBuildFailures,
+          },
+        }),
     sourceUrl: window.url,
     nextCursor:
       next === null

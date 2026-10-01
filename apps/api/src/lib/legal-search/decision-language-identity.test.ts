@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
 
+import { plainTextIngestionResult } from "@/api/handlers/case-law/ingestion/adapters/plain-text-assembly";
 import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
@@ -16,7 +17,6 @@ import {
   decisionLanguageIdentityOf,
 } from "@/api/lib/legal-search/decision-language-identity";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 
 /** The key every decision was grouped by before the policy existed. */
 const historicalKey = ({

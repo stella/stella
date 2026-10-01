@@ -76,10 +76,12 @@ import type {
   StoredRawReparseOutcome,
   SyncPage,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import {
   PL_TK_RULING_FAMILY,
   plConstitutionalTribunalRulingKeys,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-tk-ruling-keys";
+import { plainTextIngestionResult } from "@/api/handlers/case-law/ingestion/adapters/plain-text-assembly";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
@@ -107,7 +109,6 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -1409,6 +1410,7 @@ const plTkFetchPage = async (
     return listed;
   }
   const decisions: IngestionResult[] = [];
+  let itemBuildFailures = 0;
   const pageCache = new Map<string, string>();
   let consumed = 0;
   for (let offset = window.from; offset >= window.to; offset -= 1) {
@@ -1424,13 +1426,42 @@ const plTkFetchPage = async (
         ),
       );
     }
-    const built = await buildPlTkDecision({
-      cursor: label,
-      pageCache,
-      row,
-      session: listing.value.session,
-      signal,
+    const captured = await buildPlainTextItem({
+      adapterKey: ADAPTER_KEYS.PL_TK,
+
+      rawListing: JSON.stringify(row),
+      decisionOf: (result) => {
+        if (result.isErr()) {
+          return undefined;
+        }
+        const outcome = result.value;
+        switch (outcome.type) {
+          case "built":
+          case "detail-unavailable":
+            return outcome.decision;
+          case "unkeyable":
+            return undefined;
+          default:
+            outcome satisfies never;
+            return panic("Unhandled pl-tk decision projection");
+        }
+      },
+      build: async () =>
+        await buildPlTkDecision({
+          cursor: label,
+          pageCache,
+          row,
+          session: listing.value.session,
+          signal,
+        }),
     });
+    if (captured.type === "item_build_failed") {
+      itemBuildFailures += 1;
+      decisions.push(captured.decision);
+      consumed += 1;
+      continue;
+    }
+    const built = captured.value;
     if (Result.isError(built)) {
       return built;
     }
@@ -1456,6 +1487,14 @@ const plTkFetchPage = async (
 
   return Result.ok({
     decisions,
+    ...(itemBuildFailures === 0
+      ? {}
+      : {
+          itemBuildFailures: {
+            type: "item_build_failed" as const,
+            count: itemBuildFailures,
+          },
+        }),
     sourceUrl: listed.value.url,
     nextCursor: encodePlTkCursor({
       stage,

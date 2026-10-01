@@ -1,4 +1,6 @@
 import { Result, panic } from "better-result";
+
+import { polishAdministrativeDocketOf } from "@stll/api-contract/decision-docket-grammar";
 /**
  * Polish data-protection authority (Prezes UODO) adapter.
  *
@@ -37,8 +39,6 @@ import { Result, panic } from "better-result";
  *
  * Reconciliation slices are decision years, which the search filters on.
  */
-
-import { polishAdministrativeDocketOf } from "@stll/api-contract/decision-docket-grammar";
 import { readCappedBytes } from "@stll/skills/streaming";
 import { parsePlainDate, Temporal } from "@stll/time";
 
@@ -80,9 +80,11 @@ import type {
   StoredRawReparseOutcome,
   SyncPage,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { plAdministrativeCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-administrative-ruling-keys";
 import { plCommonCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt";
 import { plSupremeCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-sn-ruling-keys";
+import { plainTextIngestionResult } from "@/api/handlers/case-law/ingestion/adapters/plain-text-assembly";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
@@ -100,7 +102,6 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -2400,18 +2401,60 @@ const plUodoFetchPage = async (
   reportSkips(`crawl ${encoded}`, tallyPlUodoSkips(rows));
 
   const decisions: IngestionResult[] = [];
+  let itemBuildFailures = 0;
   for (const payload of listing) {
     if (signal?.aborted) {
       // The cycle stopped partway through the page, so it says nothing about
       // the records it never reached; the page is read again next cycle, and
       // what was stored is stored again under the same hash.
-      return Result.ok({ decisions, sourceUrl: url, nextCursor: encoded });
+      return Result.ok({
+        decisions,
+        ...(itemBuildFailures === 0
+          ? {}
+          : {
+              itemBuildFailures: {
+                type: "item_build_failed" as const,
+                count: itemBuildFailures,
+              },
+            }),
+        sourceUrl: url,
+        nextCursor: encoded,
+      });
     }
-    const attempted = await buildPlUodoDecision({
-      cursor: encoded,
-      listing: payload,
-      signal,
+    const captured = await buildPlainTextItem({
+      adapterKey: ADAPTER_KEYS.PL_UODO,
+
+      rawListing: JSON.stringify(payload),
+      decisionOf: (result) => {
+        if (result.isErr()) {
+          return undefined;
+        }
+        const outcome = result.value;
+        switch (outcome.type) {
+          case "built":
+          case "detail-unavailable":
+            return outcome.decision;
+          case "skipped":
+          case "unkeyable":
+            return undefined;
+          default:
+            outcome satisfies never;
+            return panic("Unhandled pl-uodo decision projection");
+        }
+      },
+      build: async () =>
+        await buildPlUodoDecision({
+          cursor: encoded,
+          listing: payload,
+          signal,
+        }),
     });
+    if (captured.type === "item_build_failed") {
+      itemBuildFailures += 1;
+      decisions.push(captured.decision);
+      continue;
+    }
+    const attempted = captured.value;
     if (Result.isError(attempted)) {
       return attempted;
     }
@@ -2446,6 +2489,14 @@ const plUodoFetchPage = async (
   const reachedTip = listing.length < CRAWL_PAGE_SIZE;
   return Result.ok({
     decisions,
+    ...(itemBuildFailures === 0
+      ? {}
+      : {
+          itemBuildFailures: {
+            type: "item_build_failed" as const,
+            count: itemBuildFailures,
+          },
+        }),
     sourceUrl: url,
     nextCursor: encodePlUodoCursor(
       reachedTip ? { ...next, parkedOn: todayUtc() } : next,

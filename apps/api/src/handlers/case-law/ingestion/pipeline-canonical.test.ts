@@ -13,6 +13,7 @@ import {
 } from "@/api/db/schema";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
+import { plainTextIngestionResult } from "@/api/handlers/case-law/ingestion/adapters/plain-text-assembly";
 import { runIngestionPipeline as runIngestionPipelineWithDependencies } from "@/api/handlers/case-law/ingestion/pipeline";
 import { caseLawCanonicalPayload } from "@/api/handlers/case-law/ingestion/pipeline/corpus-mirror";
 import { processDecision as processDecisionWithDependencies } from "@/api/handlers/case-law/ingestion/pipeline/decision";
@@ -36,7 +37,6 @@ import {
   sanitizeResult,
   partialObservationFromMetadata,
 } from "@/api/lib/legal-search/ingestion-normalization";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";

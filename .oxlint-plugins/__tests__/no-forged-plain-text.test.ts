@@ -66,6 +66,39 @@ describe.serial("PlainText construction belongs to the sanitizer", () => {
     ).toEqual([3]);
   });
 
+  test.each([
+    "interface Box { value: PlainText }",
+    "interface Box extends Base {}; interface Base { value: PlainText }",
+    "type Box = Extended; interface Extended extends Base {}; type Base = { value: PlainText }",
+    "interface Box extends Base {}; type Base = Nested; interface Nested { value: PlainText }",
+    "interface Box { count: number }; interface Box { value: PlainText }",
+    "interface Box { value: PlainText }; interface Box { count: number }",
+    "interface Box extends Cycle {}; interface Cycle extends Box { value: PlainText }",
+  ])("follows interface proof through %s", async (declarations) => {
+    expect(
+      await lint(
+        [
+          "export const forged = raw as Box;",
+          "export const isBox = (raw: unknown): raw is Box => true;",
+          declarations,
+        ].join("\n"),
+      ),
+    ).toEqual([1, 2]);
+  });
+
+  test("accepts interface assertions without sanitizer proof", async () => {
+    expect(
+      await lint(
+        [
+          "interface Box extends Cycle { count: number }",
+          "interface Cycle extends Box { label: string }",
+          "type Alias = Box;",
+          "export const count = raw as Alias;",
+        ].join("\n"),
+      ),
+    ).toEqual([]);
+  });
+
   test("rejects predicates and renamed exports that invent proof", async () => {
     expect(
       await lint(

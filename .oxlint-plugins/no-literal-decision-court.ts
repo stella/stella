@@ -9,7 +9,8 @@
 // names a target, not where the value came from.
 //
 // The rule proves one local property, and only it: the value written at a
-// `court` property is not a literal standing there. Whether the resolver was
+// `court` property is not a literal attribution. An empty value on an explicitly
+// quarantined listing identity states absence. Whether the resolver was
 // given the right field, and whether the record's own court field was
 // preferred over the publisher's, stay review and test responsibilities.
 //
@@ -30,10 +31,16 @@
 //   const court = czDecisionCourt({ adapterKey, ecli, publisherCourt, … });
 //   return { caseNumber, court, country: "CZE" };
 //   return { caseNumber, court: item.sud?.nazov, country: "SVK" };
+//   return { court: "", isListingOnly: true, caseNumberIsPlaceholder: true };
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
-import { getPropertyName, isAstNode, unwrapExpression } from "./utils.ts";
+import {
+  getPropertyName,
+  isAstNode,
+  unwrapExpression,
+  type AstNode,
+} from "./utils.ts";
 
 // `court` is the only court-valued key of `IngestionResult`
 // (apps/api/src/lib/legal-search/ingestion-types.ts); the row's court and the
@@ -49,6 +56,47 @@ const isLiteralCourtValue = (value: unknown): boolean => {
     (expression.type === "Literal" && typeof expression.value === "string") ||
     expression.type === "TemplateLiteral"
   );
+};
+
+/** A quarantined identity deliberately makes no claim about its deciding court. */
+const isAbsentQuarantineCourt = (node: AstNode): boolean => {
+  const value = unwrapExpression(node.value);
+  const parent = node.parent;
+  if (
+    !isAstNode(value) ||
+    value.type !== "Literal" ||
+    value.value !== "" ||
+    !isAstNode(parent) ||
+    parent.type !== "ObjectExpression" ||
+    !Array.isArray(parent.properties)
+  ) {
+    return false;
+  }
+  const remaining = new Set(["isListingOnly", "caseNumberIsPlaceholder"]);
+  for (const property of parent.properties) {
+    if (
+      !isAstNode(property) ||
+      property.type !== "Property" ||
+      property.computed === true
+    ) {
+      return false;
+    }
+    const key = getPropertyName(property.key);
+    if (key !== "isListingOnly" && key !== "caseNumberIsPlaceholder") {
+      continue;
+    }
+    const flag = unwrapExpression(property.value);
+    if (
+      !remaining.has(key) ||
+      !isAstNode(flag) ||
+      flag.type !== "Literal" ||
+      flag.value !== true
+    ) {
+      return false;
+    }
+    remaining.delete(key);
+  }
+  return remaining.size === 0;
 };
 
 export default eslintCompatPlugin({
@@ -70,6 +118,9 @@ export default eslintCompatPlugin({
               return;
             }
             if (!isLiteralCourtValue(node.value)) {
+              return;
+            }
+            if (isAbsentQuarantineCourt(node)) {
               return;
             }
             context.report({ node, messageId: "literalCourt" });

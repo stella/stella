@@ -54,6 +54,7 @@ import type {
   StoredRawReparseOutcome,
   SyncPage,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { plAdministrativeCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-administrative-ruling-keys";
 import {
   huggingFaceShardSource,
@@ -69,6 +70,7 @@ import type {
   PlNsaShardSource,
   PlNsaSnapshot,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
+import { plainTextIngestionResult } from "@/api/handlers/case-law/ingestion/adapters/plain-text-assembly";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import {
   adapterCatch,
@@ -95,7 +97,6 @@ import {
 import type { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -1558,15 +1559,46 @@ export const createPlNsaCrawler = ({
     if (taken.length === 0) {
       return panic(`${target.path} holds no row ${at.row}`);
     }
-    const decisions = taken.map((rowSource, offset) =>
-      build(rowSource, { shard: target, row: at.row + offset }),
-    );
+    const decisions: IngestionResult[] = [];
+    let itemBuildFailures = 0;
+    for (const [offset, rowSource] of taken.entries()) {
+      const captured = await buildPlainTextItem({
+        adapterKey: ADAPTER_KEYS.PL_NSA,
+
+        rawListing: JSON.stringify(rowSource),
+        decisionOf: (decision) => decision,
+        build: async () =>
+          await Promise.resolve(
+            build(rowSource, { shard: target, row: at.row + offset }),
+          ),
+      });
+      switch (captured.type) {
+        case "built":
+          decisions.push(captured.value);
+          break;
+        case "item_build_failed":
+          itemBuildFailures += 1;
+          decisions.push(captured.decision);
+          break;
+        default:
+          captured satisfies never;
+          panic(`Unhandled pl-nsa item build: ${JSON.stringify(captured)}`);
+      }
+    }
     const next = settle(
       { shard: at.shard, row: at.row + taken.length },
       snapshot,
     );
     return Result.ok({
       decisions,
+      ...(itemBuildFailures === 0
+        ? {}
+        : {
+            itemBuildFailures: {
+              type: "item_build_failed" as const,
+              count: itemBuildFailures,
+            },
+          }),
       sourceUrl: plNsaShardUrl(snapshot, target),
       nextCursor: encodePlNsaCursor(next, snapshot),
     });

@@ -12,7 +12,7 @@ import {
 } from "@/api/lib/case-law/decision-text";
 import { IMPORT_SOURCE_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import {
-  plainTextIngestionResult,
+  toPlainTextIngestionResult,
   STORED_RAW_REPARSE_REJECTION,
 } from "@/api/lib/legal-search/ingestion-types";
 import type {
@@ -93,59 +93,65 @@ export const mapCourtListenerRecord = (
     principal: composed.principal,
   });
   const { decisionType } = classification;
-  return Result.ok(
-    plainTextIngestionResult({
-      sourceDocumentId: plan.sourceDocumentId,
-      country: plan.country,
-      language: plan.language,
-      courtId: plan.courtId,
-      court: plan.court,
-      caseNumber: plan.caseNumber,
-      caseNumberType: plan.caseNumberType,
-      identifiers: plan.identifiers,
-      decisionDate: plan.decisionDate,
-      decisionType,
-      sourceUrl: plan.sourceUrl,
-      documentUrl: plan.documentUrl,
-      judges: plan.judges,
-      textFields: {
-        headnote: textField(composed.textFields.headnotes),
-        abstract: textField(composed.textFields.syllabus),
-        summary: textField(composed.textFields.summary),
-        legalSentence: absentTextField(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+  return toPlainTextIngestionResult({
+    sourceDocumentId: plan.sourceDocumentId,
+    country: plan.country,
+    language: plan.language,
+    courtId: plan.courtId,
+    court: plan.court,
+    caseNumber: plan.caseNumber,
+    caseNumberType: plan.caseNumberType,
+    identifiers: plan.identifiers,
+    decisionDate: plan.decisionDate,
+    decisionType,
+    sourceUrl: plan.sourceUrl,
+    documentUrl: plan.documentUrl,
+    judges: plan.judges,
+    textFields: {
+      headnote: textField(composed.textFields.headnotes),
+      abstract: textField(composed.textFields.syllabus),
+      summary: textField(composed.textFields.summary),
+      legalSentence: absentTextField(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+    },
+    metadata: checkedDecisionMetadata({
+      ...plan.metadata,
+      classification,
+      textSelection: composed.opinions,
+      diagnostics: plan.diagnostics,
+    }),
+    fulltext: composed.blocks.map(({ plainText }) => plainText).join("\n\n"),
+    documentAst: {
+      version: 1,
+      source: {
+        system: COURTLISTENER_IMPORT_KEY,
+        documentId: clusterId,
+        webUrl: plan.sourceUrl,
+        printUrl: plan.sourceUrl,
       },
-      metadata: checkedDecisionMetadata({
-        ...plan.metadata,
-        classification,
-        textSelection: composed.opinions,
-        diagnostics: plan.diagnostics,
-      }),
-      fulltext: composed.blocks.map(({ plainText }) => plainText).join("\n\n"),
-      documentAst: {
-        version: 1,
-        source: {
-          system: COURTLISTENER_IMPORT_KEY,
-          documentId: clusterId,
-          webUrl: plan.sourceUrl,
-          printUrl: plan.sourceUrl,
-        },
-        metadata: {
-          caseNumber: plan.caseNumber,
-          ecli: null,
-          court: plan.court,
-          decisionDate: plan.decisionDate ?? null,
-          decisionType,
-          keywords: [],
-          statutes: [],
-        },
-        blocks: [...composed.blocks],
+      metadata: {
+        caseNumber: plan.caseNumber,
+        ecli: null,
+        court: plan.court,
+        decisionDate: plan.decisionDate ?? null,
+        decisionType,
+        keywords: [],
+        statutes: [],
       },
-      sections: [...composed.sections],
-      citationScopes: composed.citationScopes,
-      rawHash: plan.rawHash,
-      sourceRaw: plan.sourceRaw,
-      sourceRawContentType: plan.sourceRawContentType,
-      parserVersion: COURTLISTENER_PARSER_VERSION,
+      blocks: [...composed.blocks],
+    },
+    sections: [...composed.sections],
+    citationScopes: composed.citationScopes,
+    rawHash: plan.rawHash,
+    sourceRaw: plan.sourceRaw,
+    sourceRawContentType: plan.sourceRawContentType,
+    parserVersion: COURTLISTENER_PARSER_VERSION,
+  }).mapError((error) =>
+    rejectCourtListenerRecord({
+      reason: COURTLISTENER_REJECTION_REASON.PLAIN_TEXT_REJECTED,
+      sourceRecordKey,
+      clusterId,
+      opinionIds: opinions.map(({ row }) => row.id),
+      diagnostics: [{ path: "labels-or-metadata", detail: error.reason }],
     }),
   );
 };

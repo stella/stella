@@ -44,7 +44,9 @@ import type {
   SyncPage,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
+import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { createPagePaginatedFetch } from "@/api/handlers/case-law/ingestion/adapters/pagination";
+import { plainTextIngestionResult } from "@/api/handlers/case-law/ingestion/adapters/plain-text-assembly";
 import { validatePublisherPage } from "@/api/handlers/case-law/ingestion/adapters/publisher-page";
 import { publisherTarget } from "@/api/handlers/case-law/ingestion/adapters/publisher-target";
 import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
@@ -78,10 +80,7 @@ import {
 import { decisionTypeKey } from "@/api/lib/case-law/decision-type-key";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
-import {
-  plainTextIngestionResult,
-  DOCUMENT_DELIVERY,
-} from "@/api/lib/legal-search/ingestion-types";
+import { DOCUMENT_DELIVERY } from "@/api/lib/legal-search/ingestion-types";
 import { restrictSkCourtDocumentUrl } from "@/api/lib/legal-search/sk-court-document-url";
 import type { SkDocumentFetch } from "@/api/lib/legal-search/sk-document-backfill";
 import { logger } from "@/api/lib/observability/logger";
@@ -768,7 +767,28 @@ const parseItemWithDetail = async (
     });
     return { type: "item_build_failed", decision: null };
   }
-  const built = await buildSkCourtsDecision(raw, options);
+  const attempted = await buildPlainTextItem({
+    decisionOf: (value) => {
+      switch (value.type) {
+        case "built":
+        case "detail-unavailable":
+          return value.decision;
+        case "unkeyable":
+          return undefined;
+        default:
+          value satisfies never;
+          return panic("Unhandled source build outcome");
+      }
+    },
+    adapterKey: ADAPTER_KEYS.SK_COURTS,
+
+    rawListing: JSON.stringify(raw),
+    build: async () => await buildSkCourtsDecision(raw, options),
+  });
+  if (attempted.type === "item_build_failed") {
+    return attempted;
+  }
+  const built = attempted.value;
   switch (built.type) {
     case "unkeyable":
       return { type: "item_build_failed", decision: null };

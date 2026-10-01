@@ -29,7 +29,6 @@ import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliatio
 import { toUtcDateString } from "@/api/lib/dates";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import {
-  plainTextIngestionResult,
   listingIdentityKey,
   parseListingIdentityKey,
 } from "@/api/lib/legal-search/ingestion-types";
@@ -439,21 +438,19 @@ describe("sk-courts buildDecision", () => {
     if (built.type !== "built") {
       return;
     }
-    expect(built.decision).toMatchObject(
-      plainTextIngestionResult({
-        caseNumber: "32Ps/10/2026",
-        court: "Okresný súd Galanta",
-        country: "SVK",
-        language: SK_COURTS_LANGUAGE,
-        decisionDate: "2026-06-10",
-        decisionType: "Uznesenie bez odôvodnenia",
-        ecli: "ECLI:SK:OSGA:2026:2326201348.1",
-        sourceDocumentId: GALANTA_ITEM.guid,
-        // Only the per-decision record states this, and the document walk
-        // selects the rows it still owes text by exactly this column.
-        documentUrl: GALANTA_DETAIL.dokument.url,
-      }),
-    );
+    expect(built.decision).toMatchObject({
+      caseNumber: "32Ps/10/2026",
+      court: "Okresný súd Galanta",
+      country: "SVK",
+      language: SK_COURTS_LANGUAGE,
+      decisionDate: "2026-06-10",
+      decisionType: "Uznesenie bez odôvodnenia",
+      ecli: "ECLI:SK:OSGA:2026:2326201348.1",
+      sourceDocumentId: GALANTA_ITEM.guid,
+      // Only the per-decision record states this, and the document walk
+      // selects the rows it still owes text by exactly this column.
+      documentUrl: GALANTA_DETAIL.dokument.url,
+    });
     // The one identity rule: what the walk keyed this item on is what the
     // decision it builds actually stores.
     expect(listingIdentityKey(skCourtsListingIdentity(GALANTA_ITEM))).toBe(

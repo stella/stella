@@ -1,13 +1,17 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
+import * as v from "valibot";
+
+import { propertyConfig } from "@stll/property-testing";
 
 import {
   PlainTextError,
-  requirePlainText,
+  type PlainText,
   toPlainText,
   toPlainTextMetadata,
 } from "@/api/lib/case-law/plain-text";
 import { containsTagLikeMarkup } from "@/api/lib/case-law/plain-text-markup";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 describe("plain text preserves publisher wording without presentation syntax", () => {
   test.each([
@@ -22,6 +26,8 @@ describe("plain text preserves publisher wording without presentation syntax", (
       "Nejvyšší soud Česká republika",
     ],
     ["<p>Najvyšší súd</p><!-- poznámka -->", "Najvyšší súd"],
+    ['<span title="30 days > deadline">Court</span>', "Court"],
+    ["<span title='claim < limit'>Court</span>", "Court"],
     ["<![CDATA[Sąd Najwyższy]]>", "Sąd Najwyższy"],
     ["&amp;lt;p&amp;gt;Kúria&amp;lt;/p&amp;gt;", "Kúria"],
     ["&quot;Supreme Court&quot; &#x26; &#38;", '"Supreme Court" & &'],
@@ -29,31 +35,74 @@ describe("plain text preserves publisher wording without presentation syntax", (
     ["one\r\n\r\n\r\n two\t words", "one\n\ntwo words"],
     ["<sp<span>an>hidden</span>", "hidden"],
   ])("normalizes %s", (raw, expected) => {
-    expect(requirePlainText(raw)).toBe(expected);
+    expect(toPlainText(raw).unwrap() === expected).toBe(true);
   });
 
   test.each(["{\\rtf1\\ansi court}", "court \\'e8", "\\par court"])(
     "rejects undecodable syntax %s",
     (raw) => {
-      expect(() => requirePlainText(raw)).toThrow(PlainTextError);
+      const result = toPlainText(raw);
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error).toBeInstanceOf(PlainTextError);
+        expect(result.error.reason).toBe("rtf-syntax");
+      }
     },
   );
 
+  test("malformed runtime input returns a typed decoding failure", () => {
+    const result = toPlainText(asTestRaw<string>(null));
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error).toBeInstanceOf(PlainTextError);
+      expect(result.error.reason).toBe("entity-decode-failed");
+    }
+  });
+
+  test("a public brand name cannot construct the private plain-text proof", () => {
+    const publicBrand = v.parse(
+      v.pipe(v.string(), v.brand("PlainText")),
+      "Court",
+    );
+    // @ts-expect-error Only the private sanitizer brand satisfies PlainText.
+    const forged: PlainText = publicBrand;
+    expect(forged.toString()).toBe("Court");
+  });
+
   test("normalizes every nested metadata string while preserving JSON scalars", () => {
     expect(
-      toPlainTextMetadata({
-        labels: ["<b>Soud</b>", { label: "&amp;lt;br/&amp;gt;Court" }],
-        count: 5,
-        enabled: false,
-        missing: null,
-      }),
-    ).toEqual({
-      labels: ["Soud", { label: "Court" }],
-      count: 5,
-      enabled: false,
-      missing: null,
+      Bun.deepEquals(
+        toPlainTextMetadata({
+          labels: ["<b>Soud</b>", { label: "&amp;lt;br/&amp;gt;Court" }],
+          count: 5,
+          enabled: false,
+          missing: null,
+        }).unwrap(),
+        {
+          labels: ["Soud", { label: "Court" }],
+          count: 5,
+          enabled: false,
+          missing: null,
+        },
+      ),
+    ).toBe(true);
+    const rejected = toPlainTextMetadata(new Date());
+    expect(rejected.isErr()).toBe(true);
+    if (rejected.isErr()) {
+      expect(rejected.error.reason).toBe("unsupported-metadata");
+    }
+    const nested = toPlainTextMetadata({ nested: ["court", new Date()] });
+    expect(nested.isErr()).toBe(true);
+    if (nested.isErr()) {
+      expect(nested.error.reason).toBe("unsupported-metadata");
+    }
+    const encodedSyntax = toPlainTextMetadata({
+      nested: ["court", "\\par broken"],
     });
-    expect(() => toPlainTextMetadata(new Date())).toThrow(PlainTextError);
+    expect(encodedSyntax.isErr()).toBe(true);
+    if (encodedSyntax.isErr()) {
+      expect(encodedSyntax.error.reason).toBe("rtf-syntax");
+    }
   });
 
   test("successful output is a markup-free fixed point over arbitrary input", () => {
@@ -66,9 +115,9 @@ describe("plain text preserves publisher wording without presentation syntax", (
         }
         const output = result.value;
         expect(containsTagLikeMarkup(output)).toBe(false);
-        expect(requirePlainText(output)).toBe(output);
+        expect(toPlainText(output).unwrap()).toBe(output);
       }),
-      { numRuns: 300 },
+      propertyConfig({ numRuns: 300 }),
     );
   });
 
@@ -84,12 +133,12 @@ describe("plain text preserves publisher wording without presentation syntax", (
         (letters) => {
           const raw = letters.join("");
           const encoded = letters
-            .map((character) => `&#${character.codePointAt(0)};`)
+            .map((character) => `&#${String(character.codePointAt(0))};`)
             .join("");
-          expect(requirePlainText(encoded)).toBe(requirePlainText(raw));
+          expect(toPlainText(encoded).unwrap()).toBe(toPlainText(raw).unwrap());
         },
       ),
-      { numRuns: 200 },
+      propertyConfig({ numRuns: 200 }),
     );
   });
 
@@ -114,12 +163,12 @@ describe("plain text preserves publisher wording without presentation syntax", (
               .replaceAll("<", "&lt;")
               .replaceAll(">", "&gt;");
           }
-          const output = requirePlainText(raw);
+          const output = toPlainText(raw).unwrap();
           expect(containsTagLikeMarkup(output)).toBe(false);
-          expect(requirePlainText(output)).toBe(output);
+          expect(toPlainText(output).unwrap()).toBe(output);
         },
       ),
-      { numRuns: 200 },
+      propertyConfig({ numRuns: 200 }),
     );
   });
 });
