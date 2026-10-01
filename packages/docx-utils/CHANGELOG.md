@@ -1,5 +1,11 @@
 # @stll/docx-utils
 
+## 0.1.4
+
+### Patch Changes
+
+- [#4231](https://github.com/stella/stella/pull/4231) [`42355cb`](https://github.com/stella/stella/commit/42355cb30b440c58ef5f62e305b1b4b87da67a96) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Ship jszip 3.10.2 from the catalog.
+
 ## 0.1.3
 
 ### Patch Changes

@@ -1,3 +1,5 @@
+import { isActionAdmissionCode } from "@stll/api-contract/action-admission";
+
 import {
   APIError,
   isDisplayableAPIError,
@@ -12,10 +14,13 @@ export const userErrorMessage = (
   error: ToAPIErrorProps,
   fallback: string,
 ): string => {
+  const apiError = toAPIError(error);
+  if (isActionAdmissionCode(apiError.code)) {
+    return apiError.message;
+  }
   if (error.status >= SERVER_ERROR_THRESHOLD) {
     return fallback;
   }
-  const apiError = toAPIError(error);
   return isDisplayableAPIError(apiError) ? apiError.message : fallback;
 };
 
@@ -27,6 +32,9 @@ export const userErrorFromThrown = (
     return error.message;
   }
   if (APIError.is(error)) {
+    if (isActionAdmissionCode(error.code)) {
+      return error.message;
+    }
     if (error.status >= SERVER_ERROR_THRESHOLD) {
       return fallback;
     }

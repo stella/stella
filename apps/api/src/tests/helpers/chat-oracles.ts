@@ -128,6 +128,10 @@ export const CHAT_ORACLE = {
    *  protocol headers, and the body with its key order, minus the prompt
    *  text. */
   providerWireRequestShape: "chat.provider-wire.request-shape",
+  /** Every request an adapter sends holds to the request schema its
+   *  provider publishes and to the provider's documented rules the schema
+   *  leaves out (`provider-request-schema.ts`). */
+  providerWireRequestRules: "chat.provider-wire.request-rules",
 } as const;
 
 export type ChatOracleId = (typeof CHAT_ORACLE)[keyof typeof CHAT_ORACLE];

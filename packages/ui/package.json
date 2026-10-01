@@ -1,6 +1,6 @@
 {
   "name": "@stll/ui",
-  "version": "0.37.1",
+  "version": "0.38.0",
   "description": "Stella's design system: bidi-aware React primitives built on Base UI, the dockable inspector pane, and the Tailwind v4 theme they are styled with.",
   "keywords": [
     "base-ui",
@@ -207,8 +207,6 @@
     "@atlaskit/pragmatic-drag-and-drop": "^3.1.0",
     "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.2.0",
     "@base-ui/react": "catalog:",
-    "@dnd-kit/core": "^6.3.1",
-    "@dnd-kit/sortable": "^10.0.0",
     "@playwright/test": "^1.63.0",
     "@stll/typescript-config": "workspace:*",
     "@tailwindcss/vite": "catalog:",
@@ -226,8 +224,6 @@
     "@atlaskit/pragmatic-drag-and-drop": "^3.1.0",
     "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.2.0",
     "@base-ui/react": "^1.7.0",
-    "@dnd-kit/core": "^6.3.1",
-    "@dnd-kit/sortable": "^10.0.0",
     "@tanstack/react-virtual": "^3.14.13",
     "react": ">=19",
     "react-dom": ">=19",
