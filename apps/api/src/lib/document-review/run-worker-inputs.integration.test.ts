@@ -117,6 +117,7 @@ const actor = {
 
 const preparationSpy = spyOn(preparation, "fetchAndPrepareReviewFiles");
 const modelSpy = spyOn(modelTransport, "generateTanStackTextForRole");
+const fetchPreconnect = globalThis.fetch.preconnect;
 const fetchSpy = spyOn(globalThis, "fetch");
 const analytics = installRecordingAnalytics();
 
@@ -124,8 +125,10 @@ beforeEach(async () => {
   preparationSpy.mockClear();
   modelSpy.mockClear();
   fetchSpy.mockClear();
-  fetchSpy.mockImplementation(async () =>
-    panic("Unexpected review transport call"),
+  fetchSpy.mockImplementation(
+    Object.assign(async () => panic("Unexpected review transport call"), {
+      preconnect: fetchPreconnect,
+    }),
   );
   analytics.events.length = 0;
   await testDb
@@ -194,9 +197,13 @@ describe("document review input readiness", () => {
       .delete(workspaceMembers)
       .where(eq(workspaceMembers.id, ids.memberA1wsA2));
     await processDocumentReviewRun(actor);
-    const run = await testDb.query.documentReviewRuns.findFirst({
-      where: { id: { eq: runId } },
-    });
+    const run = (
+      await testDb
+        .select()
+        .from(documentReviewRuns)
+        .where(eq(documentReviewRuns.id, runId))
+        .limit(1)
+    ).at(0);
     expect(run).toMatchObject({
       status: "failed",
       errorCode: "pin_unresolved",
@@ -223,9 +230,13 @@ describe("document review input readiness", () => {
         asTestRaw<RlsDatabase<Transaction>>(failingDatabase),
       ),
     });
-    const run = await testDb.query.documentReviewRuns.findFirst({
-      where: { id: { eq: runId } },
-    });
+    const run = (
+      await testDb
+        .select()
+        .from(documentReviewRuns)
+        .where(eq(documentReviewRuns.id, runId))
+        .limit(1)
+    ).at(0);
     expect(run).toMatchObject({ status: "failed", errorCode: "internal" });
     expect(run?.finishedAt).not.toBeNull();
     expect(analytics.exceptions()).toHaveLength(1);

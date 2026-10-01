@@ -13,8 +13,7 @@ import { WORK_OBLIGATION_STATUS } from "@stll/api-contract/workflow-status";
 import type { WorkObligationStatus } from "@stll/api-contract/workflow-status";
 import { DAY_IN_MS } from "@stll/time";
 
-import type { rootDb } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { rootDb, Transaction } from "@/api/db/root";
 import {
   entities,
   scoutRuns,
@@ -23,9 +22,10 @@ import {
   workObligationEvents,
   workObligations,
 } from "@/api/db/schema";
-import { createScopedDb } from "@/api/db/scoped";
+import type { RlsDatabase } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 import { runWorkAttentionScout } from "@/api/lib/scouts/work-attention";
 import type { WorkAttentionScoutDependencies } from "@/api/lib/scouts/work-attention";
@@ -185,10 +185,8 @@ const seedWork = async (work: SeedWork) => {
 
 const dependencies = (): WorkAttentionScoutDependencies => ({
   db: asTestRaw<typeof rootDb>(testDb),
-  createScopedDb: ({ organizationId, userId, workspaceIds }) =>
-    asTestRaw<ScopedDb>(
-      createScopedDb(testDb, workspaceIds, organizationId, userId),
-    ),
+  createScopedDb: (options) =>
+    createRootScopedDb(options, asTestRaw<RlsDatabase<Transaction>>(testDb)),
 });
 
 /**
