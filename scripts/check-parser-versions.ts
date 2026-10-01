@@ -567,6 +567,15 @@ export const comparisonBase = ({
   if (event === "pull_request" && base === "") {
     return { type: "failed", detail: "pull_request requires its base SHA" };
   }
+  // A pull request is tested on its merge commit, whose first parent is the
+  // base it merged onto; the event's base SHA can lag behind that, which would
+  // attribute later base commits to the pull request.
+  if (
+    event === "pull_request" &&
+    runGit(["rev-parse", "--verify", "--quiet", `${head}^2`]).type === "ok"
+  ) {
+    return runGit(["rev-parse", "--verify", `${head}^1^{commit}`]);
+  }
   return runGit(["merge-base", base === "" ? "origin/main" : base, head]);
 };
 

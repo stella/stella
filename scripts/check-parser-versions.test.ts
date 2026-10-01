@@ -168,7 +168,7 @@ test("adapter case-law helpers are owned without unrelated dependency fan-out", 
   for (const file of [helper, nestedHelper]) {
     const edited = new Map(head);
     const editedBumped = new Map(bumped);
-    const source = `${base.get(file)}\nexport const output = 'changed';`;
+    const source = `${base.get(file) ?? ""}\nexport const output = 'changed';`;
     edited.set(file, source);
     editedBumped.set(file, source);
     expect(changed(base, edited)).toEqual([
@@ -287,7 +287,7 @@ test("adapter-local output changes require a bump", () => {
   const adapter = `${ADAPTERS}adapter-a.ts`;
   head.set(
     adapter,
-    `${head.get(adapter)}\nexport const assemble = () => 'changed output';\n`,
+    `${head.get(adapter) ?? ""}\nexport const assemble = () => 'changed output';\n`,
   );
   expect(changed(base, head)).toEqual(
     expect.arrayContaining([
@@ -364,6 +364,10 @@ test("the queue compares against its exact base while pull requests use the merg
   const commands: string[][] = [];
   const runGit = (args: string[]) => {
     commands.push(args);
+    // Only "pr-merge" is a merge commit.
+    if (args.includes("pr-head^2")) {
+      return { type: "failed", detail: "not a merge" } as const;
+    }
     return {
       type: "ok",
       output: new TextEncoder().encode(
@@ -383,12 +387,23 @@ test("the queue compares against its exact base while pull requests use the merg
     head: "pr-head",
     runGit,
   });
+  // A stale event base must not pull later base commits into the comparison.
+  const mergedPullRequest = comparisonBase({
+    event: "pull_request",
+    base: "stale-main",
+    head: "pr-merge",
+    runGit,
+  });
   expect(commands).toEqual([
     ["rev-parse", "--verify", "queue-base^{commit}"],
+    ["rev-parse", "--verify", "--quiet", "pr-head^2"],
     ["merge-base", "main-head", "pr-head"],
+    ["rev-parse", "--verify", "--quiet", "pr-merge^2"],
+    ["rev-parse", "--verify", "pr-merge^1^{commit}"],
   ]);
   expect(queue.type).toBe("ok");
   expect(pullRequest.type).toBe("ok");
+  expect(mergedPullRequest.type).toBe("ok");
   // Both PRs pass at their fork point; the second fails after the first bump
   // becomes the queue base, so it cannot publish another change at version 2.
   const second = fixture({
@@ -409,7 +424,7 @@ test("the queue compares against its exact base while pull requests use the merg
       runGit,
     }).type,
   ).toBe("failed");
-  expect(commands).toHaveLength(2);
+  expect(commands).toHaveLength(5);
 });
 
 test("published packages are external while unresolved workspace exports fail closed", () => {
