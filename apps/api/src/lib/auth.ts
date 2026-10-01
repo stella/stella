@@ -13,7 +13,6 @@ import {
   getAuthoritativeSessionFromCtx,
 } from "better-auth/api";
 import {
-  bearer,
   emailOTP,
   jwt,
   lastLoginMethod,
@@ -120,6 +119,7 @@ import {
   isSelfhostLocalPasswordAuthEnabled,
   shouldHandleSelfhostBootstrapPath,
 } from "@/api/lib/selfhost-auth";
+import { createSessionBearer } from "@/api/lib/session-bearer";
 import {
   evaluateNewAccountOtpPolicy,
   isDisposableEmailAddress,
@@ -1090,7 +1090,7 @@ const createAuth = () => {
         : {}),
     },
     plugins: [
-      bearer(),
+      createSessionBearer(),
       // The after-hook on /get-session signs a `set-auth-jwt` response
       // header on every session resolution by reading the jwks table.
       // Nothing in the repo consumes that header: JWT issuance already

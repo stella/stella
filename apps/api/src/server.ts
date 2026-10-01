@@ -351,7 +351,6 @@ const api = new Elysia()
         TANSTACK_RUN_ID_HEADER,
       ],
       exposeHeaders: [
-        "set-auth-token",
         "Content-Disposition",
         "X-Ai-Field-Errors",
         REQUEST_ID_HEADER,
