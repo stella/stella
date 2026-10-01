@@ -7,8 +7,13 @@ import { UserIdentityAvatar } from "@/components/user-avatar";
 import { getDisplayName } from "@/lib/get-display-name";
 import type { Workspace } from "@/lib/workspaces/types";
 
+type TeamAvatarMember = Pick<
+  Workspace["members"][number],
+  "userEmail" | "userId" | "userImage" | "userName"
+>;
+
 type TeamAvatarsProps = {
-  members: Workspace["members"];
+  members: readonly TeamAvatarMember[];
   leadUserId: string | null;
   /** Size in tailwind units, e.g. "size-6". */
   size?: string;
@@ -37,7 +42,7 @@ export const TeamAvatars = ({
   const overflow = members.length - visible.length;
 
   return (
-    <div className="flex items-center -space-x-1.5">
+    <div className="flex items-center -space-x-1">
       {visible.map((m) => {
         const isLead = leadUserId === m.userId;
         const displayName =

@@ -19,7 +19,6 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import {
   HistoryIcon,
-  MessageSquareIcon,
   Minimize2Icon,
   PinIcon,
   PlusIcon,
@@ -36,6 +35,7 @@ import {
   LandingSection,
 } from "@stll/ui/landing";
 import { stellaToast } from "@stll/ui/toast";
+import { cn } from "@stll/ui/utils";
 
 import {
   ChatSubmitPreservedError,
@@ -101,7 +101,9 @@ import { runReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
+import { workspaceMembersOptions } from "@/lib/workspaces/queries/workspace-members";
 import { ThreadsSheet } from "@/routes/_protected.chat/-components/threads-sheet";
+import { TeamAvatars } from "@/routes/_protected.workspaces/-components/team-avatars";
 
 export const Route = createFileRoute("/_protected/chat/")({
   loader: ({ context }) => {
@@ -138,6 +140,38 @@ export const Route = createFileRoute("/_protected/chat/")({
 });
 
 const protectedRouteApi = getRouteApi("/_protected");
+
+/** Who else works on a matter, as a compact avatar stack on its row. */
+const MatterColleagues = ({
+  currentUserId,
+  matterId,
+}: {
+  currentUserId: string;
+  matterId: string;
+}) => {
+  const { data: members } = useQuery(workspaceMembersOptions(matterId));
+  const colleagues = (members ?? []).flatMap(({ user, userId }) =>
+    user === null || userId === currentUserId
+      ? []
+      : [
+          {
+            userEmail: user.email,
+            userId,
+            userImage: user.image,
+            userName: user.name,
+          },
+        ],
+  );
+
+  return (
+    <TeamAvatars
+      emptyFallback={null}
+      leadUserId={null}
+      members={colleagues}
+      size="size-6"
+    />
+  );
+};
 
 function ChatIndex() {
   const t = useTranslations();
@@ -612,21 +646,24 @@ function ChatIndex() {
               }}
             >
               <Link
-                className={LANDING_ROW_CLASS}
+                className={cn(LANDING_ROW_CLASS, "flex items-center gap-3")}
                 params={{ workspaceId: matter.id }}
                 to="/workspaces/$workspaceId"
               >
-                <LandingItemText
-                  icon={
-                    <MatterIcon
-                      className="size-4"
-                      matter={{ id: matter.id, color: matter.color }}
-                    />
-                  }
-                  iconTone="matter"
-                  meta={formatRelativeTime(matter.lastActivityAt)}
-                  title={matter.name}
-                />
+                <span className="min-w-0 flex-1">
+                  <LandingItemText
+                    icon={
+                      <MatterIcon
+                        className="size-4"
+                        matter={{ id: matter.id, color: matter.color }}
+                      />
+                    }
+                    iconTone="matter"
+                    meta={formatRelativeTime(matter.lastActivityAt)}
+                    title={matter.name}
+                  />
+                </span>
+                <MatterColleagues currentUserId={userId} matterId={matter.id} />
               </Link>
             </MatterContextMenu>
           ))
@@ -663,7 +700,6 @@ function ChatIndex() {
         {suggestedSkills.length > 0 ? (
           suggestedSkills.map((prompt) => (
             <LandingButton
-              icon={<SkillIcon className="size-4" />}
               key={prompt.id}
               meta={prompt.body}
               onClick={() => selectPrompt(prompt)}
@@ -696,7 +732,6 @@ function ChatIndex() {
                 to="/chat/workspaces/$workspaceId/$threadId"
               >
                 <LandingItemText
-                  icon={<MessageSquareIcon className="size-4" />}
                   meta={
                     <>
                       <ChatThreadOriginPrefix origin={chat.origin} />
@@ -720,7 +755,6 @@ function ChatIndex() {
                 to="/chat/$threadId"
               >
                 <LandingItemText
-                  icon={<MessageSquareIcon className="size-4" />}
                   meta={
                     <>
                       <ChatThreadOriginPrefix origin={chat.origin} />
