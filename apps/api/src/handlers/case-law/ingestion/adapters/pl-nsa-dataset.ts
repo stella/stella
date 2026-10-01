@@ -27,6 +27,7 @@ import { appendFile, mkdir, readdir, rename, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 
+import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 import { readCappedBytes } from "@stll/skills/streaming";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
@@ -490,12 +491,26 @@ const checkedMetadata = async (
 };
 
 type ReadColumnsOptions = {
+  fetchStage: DocumentFetchStage;
   file: AsyncBuffer;
   metadata: FileMetaData;
   columns: string[];
   rowStart: number;
   rowEnd: number;
 };
+
+type StageAwareAsyncBuffer = AsyncBuffer & {
+  sliceWithStage: (options: StageAwareSliceOptions) => Promise<ArrayBuffer>;
+};
+
+type StageAwareSliceOptions = {
+  start: number;
+  end?: number | undefined;
+  fetchStage: DocumentFetchStage;
+};
+
+const hasStageAwareSlice = (file: AsyncBuffer): file is StageAwareAsyncBuffer =>
+  "sliceWithStage" in file;
 
 /**
  * Rows of some columns, failing closed when the reader answers fewer or more
@@ -504,14 +519,28 @@ type ReadColumnsOptions = {
  */
 const readColumns = async ({
   columns,
+  fetchStage,
   file,
   metadata,
   rowEnd,
   rowStart,
 }: ReadColumnsOptions): Promise<DatasetResult<Record<string, unknown>[]>> => {
+  const stagedFile: AsyncBuffer = hasStageAwareSlice(file)
+    ? {
+        byteLength: file.byteLength,
+        slice: async (start, end) =>
+          await file.sliceWithStage({ start, end, fetchStage }),
+      }
+    : file;
   const read = await Result.tryPromise({
     try: async () =>
-      await parquetReadObjects({ file, metadata, columns, rowStart, rowEnd }),
+      await parquetReadObjects({
+        file: stagedFile,
+        metadata,
+        columns,
+        rowStart,
+        rowEnd,
+      }),
     catch: readerFailure,
   });
   if (Result.isError(read)) {
@@ -563,6 +592,7 @@ export const readPlNsaRows = async ({
   );
   for (const group of groups) {
     const read = await readColumns({
+      fetchStage: "document",
       file,
       metadata,
       columns: group,
@@ -618,6 +648,7 @@ export const readPlNsaListing = async ({
     return Result.ok([]);
   }
   const read = await readColumns({
+    fetchStage: "listing",
     file,
     metadata,
     columns: ["judgment_id"],
@@ -636,6 +667,7 @@ export const readPlNsaListing = async ({
     );
   }
   const fingerprints = await readColumns({
+    fetchStage: "listing",
     file,
     metadata,
     columns: [...PL_NSA_FINGERPRINT_COLUMNS],
@@ -736,6 +768,7 @@ const requestFailure =
     );
 
 type RangeRequest = {
+  fetchStage: DocumentFetchStage;
   rawUrl: string;
   start: number;
   /** Inclusive, as the Range header states it. */
@@ -752,6 +785,7 @@ type RangeRequest = {
  */
 const readRepositoryRange = async ({
   end,
+  fetchStage,
   path,
   rawUrl,
   signal,
@@ -771,6 +805,7 @@ const readRepositoryRange = async ({
         target.toString(),
         { headers: { Range: `bytes=${start}-${end}` }, redirect: "error" },
         {
+          fetchStage,
           adapterKey: ADAPTER_KEYS.PL_NSA,
           signal,
           timeoutMs: DOWNLOAD_CHUNK_TIMEOUT_MS,
@@ -830,6 +865,7 @@ const locateShard = async (
         `${HUGGING_FACE_ORIGIN}/datasets/${snapshot.repository}/resolve/${snapshot.revision}/${target.path}`,
         { method: "HEAD", redirect: "manual" },
         {
+          fetchStage: "listing",
           adapterKey: ADAPTER_KEYS.PL_NSA,
           signal,
           timeoutMs: LOCATE_TIMEOUT_MS,
@@ -888,7 +924,20 @@ const sizeOf = async (path: string): Promise<number | null> => {
 const EXPIRED_SIGNATURE_STATUSES = new Set([401, 403]);
 
 type ShardReader = {
-  read: (start: number, end: number) => Promise<DatasetResult<Uint8Array>>;
+  read: (options: ShardReaderReadOptions) => Promise<DatasetResult<Uint8Array>>;
+};
+
+type ShardReaderReadOptions = {
+  start: number;
+  end: number;
+  fetchStage: DocumentFetchStage;
+};
+
+type ReadFromOptions = {
+  rawUrl: string;
+  start: number;
+  end: number;
+  fetchStage: DocumentFetchStage;
 };
 
 /**
@@ -914,12 +963,14 @@ const shardReader = (
     return located;
   };
 
-  const readFrom = async (
-    rawUrl: string,
-    start: number,
-    end: number,
-  ): Promise<DatasetResult<Uint8Array>> =>
+  const readFrom = async ({
+    fetchStage,
+    rawUrl,
+    start,
+    end,
+  }: ReadFromOptions): Promise<DatasetResult<Uint8Array>> =>
     await readRepositoryRange({
+      fetchStage,
       rawUrl,
       start,
       end,
@@ -928,13 +979,18 @@ const shardReader = (
     });
 
   return {
-    read: async (start, end) => {
+    read: async ({ start, end, fetchStage }) => {
       const known = location;
       const first = known === null ? await locate() : Result.ok(known);
       if (Result.isError(first)) {
         return first;
       }
-      const read = await readFrom(first.value, start, end);
+      const read = await readFrom({
+        rawUrl: first.value,
+        start,
+        end,
+        fetchStage,
+      });
       const refused =
         Result.isError(read) &&
         read.error.httpStatus !== undefined &&
@@ -945,7 +1001,12 @@ const shardReader = (
       const fresh = await locate();
       return Result.isError(fresh)
         ? fresh
-        : await readFrom(fresh.value, start, end);
+        : await readFrom({
+            rawUrl: fresh.value,
+            start,
+            end,
+            fetchStage,
+          });
     },
   };
 };
@@ -987,7 +1048,11 @@ const downloadShard = async ({
   const reader = shardReader(snapshot, target, signal);
   for (let start = have; start < target.bytes; start += DOWNLOAD_CHUNK_BYTES) {
     const end = Math.min(start + DOWNLOAD_CHUNK_BYTES, target.bytes) - 1;
-    const bytes = await reader.read(start, end);
+    const bytes = await reader.read({
+      start,
+      end,
+      fetchStage: "document",
+    });
     if (Result.isError(bytes)) {
       return bytes;
     }
@@ -1138,13 +1203,27 @@ export const huggingFaceShardSource = ({
     remote: async (target, signal) =>
       await remembering(target, async () => {
         const reader = shardReader(snapshot, target, signal);
-        const buffer: AsyncBuffer = {
+        const buffer: StageAwareAsyncBuffer = {
           byteLength: target.bytes,
           // The parquet reader only knows a buffer that resolves or rejects,
           // so a failed read is handed back as the rejection it asks for,
           // carrying the classified error the page reports.
           slice: async (start, end = target.bytes) => {
-            const read = await reader.read(start, end - 1);
+            const read = await reader.read({
+              start,
+              end: end - 1,
+              fetchStage: "listing",
+            });
+            return Result.isOk(read)
+              ? read.value.slice().buffer
+              : await Promise.reject(read.error);
+          },
+          sliceWithStage: async ({ start, end = target.bytes, fetchStage }) => {
+            const read = await reader.read({
+              start,
+              end: end - 1,
+              fetchStage,
+            });
             return Result.isOk(read)
               ? read.value.slice().buffer
               : await Promise.reject(read.error);

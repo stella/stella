@@ -495,6 +495,7 @@ const fetchFinaldoc = async (
       {
         maxRetries: 1,
         signal,
+        fetchStage: "document",
         adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
       },
     );
@@ -559,6 +560,7 @@ export const fetchCzRegionalAffectingDocs = async (
   const response = await fetchPublisher(
     `${BASE_URL}/finalDocChain/affectingDocs/${encodeURIComponent(sourceDocumentId)}`,
     {
+      fetchStage: "document",
       adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
       ...(signal === undefined ? {} : { signal }),
       headers: {
@@ -1173,6 +1175,7 @@ const fetchListPage = async ({ cursor, signal, state }: FetchListPageOptions) =>
           .map(Number);
         const url = `${BASE_URL}/opendata/${year}/${month}/${day}?page=${state.page}`;
         const response = await fetchPublisher(url, {
+          fetchStage: "listing",
           adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
           signal: attemptSignal,
           headers: {
@@ -1816,6 +1819,7 @@ const CZ_REGIONAL_SOURCE_SURFACES = {
 } as const satisfies SourceSurfaceCensus;
 
 export const czRegionalAdapter = defineSourceAdapter({
+  documentStage: "inline",
   key: ADAPTER_KEYS.CZ_REGIONAL,
   sourceSurfaces: CZ_REGIONAL_SOURCE_SURFACES,
   sourceFields: {
@@ -1851,6 +1855,7 @@ export const czRegionalAdapter = defineSourceAdapter({
           const response = await fetchPublisher(
             `${BASE_URL}/opendata/${year}`,
             {
+              fetchStage: "listing",
               adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
               signal,
               timeoutMs: ADAPTER_TIMEOUT.REQUEST,

@@ -15,6 +15,7 @@ import type { PendingDocumentTierLoaders } from "@/api/lib/legal-search/sk-docum
 import {
   DOCUMENT_TIER,
   createPendingDocumentQueue,
+  hasPendingDocuments,
 } from "@/api/lib/legal-search/sk-document-queue";
 
 const PAGE_SIZE = 5;
@@ -62,6 +63,60 @@ const fakeTiers = () => {
 
   return { loaders, queries, rows, serve };
 };
+
+describe("bounded document backlog presence", () => {
+  test("every tier combination probes at most one row without consuming the queue", async () => {
+    for (const requestedCount of [0, 1, 3]) {
+      for (const remainingCount of [0, 1, 3]) {
+        const requested = Array.from({ length: requestedCount }, () =>
+          pending("requested"),
+        );
+        const remaining = Array.from({ length: remainingCount }, () =>
+          pending("remaining"),
+        );
+        const calls: string[] = [];
+        const loaders = {
+          loadRequested: async (limit: number) => {
+            expect(limit).toBe(1);
+            calls.push("requested");
+            return requested.slice(0, limit);
+          },
+          loadRemaining: async (limit: number) => {
+            expect(limit).toBe(1);
+            calls.push("remaining");
+            return remaining.slice(0, limit);
+          },
+        };
+        expect(await hasPendingDocuments(loaders)).toBe(
+          requestedCount > 0 || remainingCount > 0,
+        );
+        expect(calls).toEqual(
+          requestedCount > 0 ? ["requested"] : ["requested", "remaining"],
+        );
+        expect(requested.length).toBe(requestedCount);
+        expect(remaining.length).toBe(remainingCount);
+      }
+    }
+  });
+
+  test("a failed tier probe propagates instead of reporting an empty backlog", async () => {
+    for (const failedTier of ["requested", "remaining"]) {
+      const error = new Error("probe failed");
+      const result = hasPendingDocuments({
+        loadRequested: async () => {
+          if (failedTier === "requested") {
+            throw error;
+          }
+          return [];
+        },
+        loadRemaining: async () => {
+          throw error;
+        },
+      });
+      await expect(result).rejects.toBe(error);
+    }
+  });
+});
 
 describe("pending document queue", () => {
   test("a request that arrives mid-walk is served before the rest of the bulk page", async () => {

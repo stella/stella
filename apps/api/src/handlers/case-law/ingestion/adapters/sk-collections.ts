@@ -81,6 +81,7 @@ const requestIssue = async ({
     return panic("Collection URL is outside the selected publisher");
   }
   return await fetchPublisher(target, {
+    fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.SK_COURTS,
     publisherGate: publisher.gate,
     headers,

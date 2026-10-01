@@ -10,6 +10,7 @@
 import { panic } from "better-result";
 
 import { fetchWithTimeout, type FetchWithTimeoutInit } from "@stll/fetch";
+import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 
 import { ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
 import {
@@ -17,6 +18,7 @@ import {
   reservePublisherGateSlot,
   type PublisherGateId,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
+import { observePublisherDocumentFetch } from "@/api/lib/legal-search/document-stage-observation";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 import { logger } from "@/api/lib/observability/logger";
 
@@ -25,8 +27,10 @@ import { INGESTION_USER_AGENT, isTimeoutError } from "./utils";
 export type PublisherFetchInit = FetchWithTimeoutInit & {
   /** Whose publisher budget this request spends. */
   adapterKey: AdapterKey;
+  fetchStage: DocumentFetchStage;
   /** A supplementary publisher, distinct from the decision listing's host. */
   publisherGate?: PublisherGateId | undefined;
+  expectedContentType?: "pdf" | undefined;
 };
 
 /**
@@ -37,15 +41,30 @@ export type PublisherFetchInit = FetchWithTimeoutInit & {
  */
 export const fetchPublisher = async (
   url: string | URL,
-  { adapterKey, publisherGate, ...init }: PublisherFetchInit,
+  {
+    adapterKey,
+    publisherGate,
+    fetchStage,
+    expectedContentType,
+    ...init
+  }: PublisherFetchInit,
 ): Promise<Response> => {
   if (publisherGate === undefined) {
     await reservePublisherSlot(adapterKey, init.signal);
   } else {
     await reservePublisherGateSlot(publisherGate, init.signal);
   }
-  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- the publisher fetch boundary: the lint rule checks each target where fetchPublisher or fetchWithRetry is called
-  return await fetchWithTimeout(url, init);
+  const request = async () =>
+    // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- the publisher fetch boundary: the lint rule checks each target where fetchPublisher or fetchWithRetry is called
+    await fetchWithTimeout(url, init);
+  if (fetchStage === "listing") {
+    return await request();
+  }
+  return await observePublisherDocumentFetch({
+    source: adapterKey,
+    fetch: request,
+    expectedContentType,
+  });
 };
 
 /**
@@ -69,6 +88,7 @@ type FetchWithRetryOptions = {
    * request the budget never saw.
    */
   adapterKey: AdapterKey;
+  fetchStage: DocumentFetchStage;
   /** Maximum retry attempts (default: 2). */
   maxRetries?: number;
   /** Per-request timeout in ms (default: ADAPTER_TIMEOUT.REQUEST). */
@@ -124,6 +144,7 @@ export const fetchWithRetry = async (
     maxDelayMs = 30_000,
     signal,
     adapterKey,
+    fetchStage,
   } = opts;
 
   const headers = new Headers(init?.headers);
@@ -139,6 +160,7 @@ export const fetchWithRetry = async (
       const response = await fetchPublisher(url, {
         ...init,
         adapterKey,
+        fetchStage,
         headers,
         timeoutMs,
         signal,

@@ -45,6 +45,17 @@ export type PendingDocumentTierLoaders = {
   loadRemaining: (limit: number) => Promise<PendingDocument[]>;
 };
 
+/** Presence only: the existing indexed loaders never count the whole backlog. */
+export const hasPendingDocuments = async ({
+  loadRequested,
+  loadRemaining,
+}: PendingDocumentTierLoaders): Promise<boolean> => {
+  if ((await loadRequested(1)).length > 0) {
+    return true;
+  }
+  return (await loadRemaining(1)).length > 0;
+};
+
 export type PendingDocumentQueue = {
   /** The next decision to fetch, or nothing while the queue is empty. */
   next: () => Promise<QueuedDocument | undefined>;

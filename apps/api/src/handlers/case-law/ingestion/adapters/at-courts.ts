@@ -931,6 +931,7 @@ const fetchHeadnoteListing = async ({
     headnoteListingQuery(source, caseNumber, decisionDate),
     { headers: { Accept: "application/json" }, redirect: "error" },
     {
+      fetchStage: "listing",
       adapterKey: source.key,
       baseDelayMs: REQUEST_INTERVAL_MS,
       signal,
@@ -1100,6 +1101,7 @@ const buildDecision = async ({
     xmlUrl,
     { headers: { Accept: "application/xml" }, redirect: "error" },
     {
+      fetchStage: "document",
       adapterKey: source.key,
       baseDelayMs: REQUEST_INTERVAL_MS,
       signal,
@@ -1270,6 +1272,7 @@ const fetchListing = async ({
     url,
     { headers: { Accept: "application/json" }, redirect: "error" },
     {
+      fetchStage: "listing",
       adapterKey: source.key,
       baseDelayMs: REQUEST_INTERVAL_MS,
       signal,
@@ -1423,6 +1426,7 @@ const createAdapter = <const TKey extends AtRisAdapterKey>(
   dependencies: AtRisDependencies,
 ): AtRisSourceAdapter<TKey> =>
   defineSourceAdapter({
+    documentStage: "inline",
     key: source.key,
     sourceSurfaces: atRisSourceSurfaces(source.key),
     sourceFields: atRisFieldInventory(profileOf(source)),

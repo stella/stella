@@ -398,6 +398,7 @@ const search = async ({
       redirect: "error",
     },
     {
+      fetchStage: "listing",
       adapterKey: ADAPTER_KEYS.HU_BHGY,
       signal,
       timeoutMs: ADAPTER_TIMEOUT.LIST,
@@ -495,6 +496,7 @@ const fetchDocument = async (
     target.toString(),
     { redirect: "error" },
     {
+      fetchStage: "document",
       adapterKey: ADAPTER_KEYS.HU_BHGY,
       signal,
       timeoutMs: ADAPTER_TIMEOUT.PAGE,
@@ -1879,6 +1881,7 @@ const huBhgyTotalCount = async (
 // ── Adapter ──────────────────────────────────────────────
 
 export const huBhgyAdapter = defineSourceAdapter({
+  documentStage: "inline",
   key: ADAPTER_KEYS.HU_BHGY,
   language: HU_BHGY_LANGUAGE,
   minRequestIntervalMs: MIN_REQUEST_INTERVAL_MS,

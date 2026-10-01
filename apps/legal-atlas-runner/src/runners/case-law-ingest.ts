@@ -17,8 +17,12 @@
  * With an adapter key, runs only that source once and exits.
  */
 
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
+import {
+  DOCUMENT_FETCH_EVENT,
+  documentFetchErrorOutcome,
+} from "@stll/legal-atlas/document-fetch-diagnostics";
 import { Temporal } from "@stll/time";
 
 import { SOURCE_TOTAL_ORIGIN, caseLawIngestionEvents } from "@/api/db/schema";
@@ -64,11 +68,18 @@ import { errorTag } from "@/api/lib/errors/utils";
 import { backfillSearchIndex } from "@/api/lib/legal-search/case-law-search-index";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import {
+  logDocumentStageObservation,
+  withDocumentStageObserver,
+} from "@/api/lib/legal-search/document-stage-observation";
+import {
   DOCUMENT_FETCH_BUDGET_MS,
   fetchDecisionDocument,
   scopedPendingDocumentTierLoaders,
 } from "@/api/lib/legal-search/sk-document-backfill";
-import { createPendingDocumentQueue } from "@/api/lib/legal-search/sk-document-queue";
+import {
+  createPendingDocumentQueue,
+  hasPendingDocuments,
+} from "@/api/lib/legal-search/sk-document-queue";
 import { logger } from "@/api/lib/observability/logger";
 import {
   isCorpusS3Stale,
@@ -1352,9 +1363,31 @@ export const runCaseLawIngest = async (
     }
     const fetchDelayMs = LEGAL_ATLAS_RUNNER_ENV.skDocumentFetchDelayMs;
     logInfo(`[sk-documents] Enabled (one fetch per ${fetchDelayMs}ms)`);
+    const documentLoaders = scopedPendingDocumentTierLoaders(backfillDb);
     await runSkDocumentDrain({
+      documentObservations: {
+        source: ADAPTER_KEYS.SK_COURTS,
+        observe: async (observation) => {
+          if (observation.event === DOCUMENT_FETCH_EVENT.window) {
+            await logDocumentStageObservation(observation);
+          }
+        },
+        hasPending: async () => {
+          const pending = await Result.tryPromise({
+            try: async () => await hasPendingDocuments(documentLoaders),
+            catch: (error) => error,
+          });
+          if (Result.isError(pending)) {
+            await logDocumentStageObservation(
+              documentFetchErrorOutcome(ADAPTER_KEYS.SK_COURTS, pending.error),
+            );
+            throw pending.error;
+          }
+          return pending.value;
+        },
+      },
       queue: createPendingDocumentQueue({
-        loaders: scopedPendingDocumentTierLoaders(backfillDb),
+        loaders: documentLoaders,
         pageSize: SK_DOCUMENT_PAGE_SIZE,
         requestedPollIntervalMs: SK_DOCUMENT_REQUESTED_POLL_INTERVAL_MS,
       }),
@@ -1362,18 +1395,23 @@ export const runCaseLawIngest = async (
       // the transaction handle bounds its writes; the hard deadline is the
       // same backstop the other loops carry, for a future await that slips
       // in unbounded and would otherwise park the walk forever.
-      fetchDocument: async (decision) =>
-        await runWithHardDeadline(
-          "sk-documents",
-          BACKFILL_HARD_DEADLINE_MS,
-          async () =>
-            await fetchDecisionDocument({
-              decision,
-              fetchDocument: skCourtsDocumentFetch,
-              scopedDb: backfillDb,
-              signal: AbortSignal.timeout(DOCUMENT_FETCH_BUDGET_MS),
-            }),
-        ),
+      fetchDocument: async (decision, onDocumentObservation) =>
+        await withDocumentStageObserver({
+          source: ADAPTER_KEYS.SK_COURTS,
+          observe: onDocumentObservation ?? (() => undefined),
+          execute: async () =>
+            await runWithHardDeadline(
+              "sk-documents",
+              BACKFILL_HARD_DEADLINE_MS,
+              async () =>
+                await fetchDecisionDocument({
+                  decision,
+                  fetchDocument: skCourtsDocumentFetch,
+                  scopedDb: backfillDb,
+                  signal: AbortSignal.timeout(DOCUMENT_FETCH_BUDGET_MS),
+                }),
+            ),
+        }),
       isDraining,
       now: () => Temporal.Now.instant().epochMilliseconds,
       report: (summary) => {

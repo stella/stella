@@ -789,6 +789,7 @@ export const createPagePaginatedFetch = <TResponse>(
         try {
           // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- page URLs come from the adapter's own buildRequest over its fixed publisher base
           response = await fetchWithRetry(url, init, {
+            fetchStage: "listing",
             maxRetries: SERVER_ERROR_RETRIES,
             timeoutMs: listTimeout,
             signal,
@@ -885,6 +886,7 @@ export const createPagePaginatedFetch = <TResponse>(
             });
             // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- retries the page URL from the adapter's own buildRequest over its fixed publisher base
             const retryResponse = await fetchWithRetry(url, init, {
+              fetchStage: "listing",
               maxRetries: 1,
               timeoutMs: listTimeout,
               signal,

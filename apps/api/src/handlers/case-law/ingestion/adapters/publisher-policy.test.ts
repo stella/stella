@@ -169,6 +169,7 @@ describe("a publisher's rate-limit refusal", () => {
       "https://ris.bka.gv.at/x",
       undefined,
       {
+        fetchStage: "listing",
         adapterKey: ADAPTER_KEYS.AT_COURTS,
         maxRetries: 2,
       },
@@ -194,6 +195,7 @@ describe("a publisher's rate-limit refusal", () => {
       "https://ris.bka.gv.at/x",
       undefined,
       {
+        fetchStage: "listing",
         adapterKey: ADAPTER_KEYS.AT_COURTS,
         maxRetries: 2,
       },

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { TEXT_ABSENCE_REASONS } from "@stll/api-contract/case-law-text-field";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
+import type { DocumentStageObserver } from "@stll/legal-atlas/document-fetch-diagnostics";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -22,6 +23,7 @@ import {
   SOURCE_DOCUMENT_ID_MAX_LENGTH,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
+import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import {
   bareCitationKey,
@@ -56,6 +58,7 @@ import {
   storedCaseNumberOf,
 } from "@/api/lib/legal-search/ingestion-normalization";
 import type { ObservedDocket } from "@/api/lib/legal-search/ingestion-normalization";
+import { defineSourceAdapter } from "@/api/lib/legal-search/ingestion-types";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -104,6 +107,42 @@ const testSourceLease = (
   release: async () => undefined,
   source,
 });
+
+const cursorOnlyDb =
+  (onCursor: (cursor: string | null | undefined) => void): ScopedDb =>
+  async (callback) => {
+    const tx = {
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            for: () => ({ limit: async () => await Promise.resolve([]) }),
+            limit: async () => await Promise.resolve([]),
+          }),
+        }),
+      }),
+      execute: async () => await Promise.resolve([]),
+      update: (table: unknown) => ({
+        set: (values: { syncCursor?: string | null }) => {
+          if (table === caseLawSources) {
+            onCursor(values.syncCursor);
+          }
+
+          return {
+            where: () => ({
+              returning: async () => [
+                { cursor: values.syncCursor ?? null, order: 1n },
+              ],
+            }),
+          };
+        },
+      }),
+    };
+
+    // SAFETY: these cases exercise only the case_law_sources cursor update;
+    // the fake implements that chain.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    return await callback(tx as unknown as Transaction);
+  };
 
 afterEach(() => {
   czNsAdapter.fetchPage = originalCzNsFetchPage;
@@ -973,47 +1012,67 @@ describe("runIngestionPipeline — empty-page cursor progress", () => {
   });
 });
 
+describe("runIngestionPipeline — document observer failures", () => {
+  test("observer failures preserve the result and cursor-write trace", async () => {
+    const source = caseLawSourceRow({ name: "Document observer source" });
+    const run = async ({ observe }: { observe?: DocumentStageObserver }) => {
+      const cursorWrites: (string | null | undefined)[] = [];
+
+      const wrappedAdapter = defineSourceAdapter({
+        ...czNsAdapter,
+        fetchPage: async () =>
+          Result.ok({ decisions: [], nextCursor: "cursor-2" }),
+      });
+      czNsAdapter.fetchPage = wrappedAdapter.fetchPage;
+      expect(getAdapter(source.adapterKey)).toBe(czNsAdapter);
+
+      const result = await runIngestionPipeline({
+        source,
+        sourceLease: testSourceLease(source),
+        scopedDb: cursorOnlyDb((cursor) => cursorWrites.push(cursor)),
+        maxPages: 1,
+        ...(observe ? { onDocumentObservation: observe } : {}),
+      });
+
+      return { cursorWrites, finalCursor: cursorWrites.at(-1), result };
+    };
+
+    const baseline = await run({});
+    expect(baseline.cursorWrites).toEqual(["cursor-2"]);
+    expect(baseline.result.nextCursor).toBe("cursor-2");
+    const failures: { name: string; observe: DocumentStageObserver }[] = [
+      {
+        name: "throw",
+        observe: () => {
+          throw new Error("observer threw");
+        },
+      },
+      {
+        name: "reject",
+        observe: async () => {
+          throw new Error("observer rejected");
+        },
+      },
+      {
+        name: "never resolve",
+        observe: () => new Promise<void>(() => {}),
+      },
+    ];
+
+    for (const { name, observe } of failures) {
+      const actual = await run({ observe });
+      expect(actual.result, name).toEqual(baseline.result);
+      expect(actual.cursorWrites, name).toEqual(baseline.cursorWrites);
+      expect(actual.finalCursor, name).toBe(baseline.finalCursor);
+    }
+  });
+});
+
 describe("runIngestionPipeline — cycle deadline", () => {
   /**
    * The cursor advance is the only database work these cases reach: neither
    * starts a page that returns decisions.
    */
-  const cursorOnlyDb =
-    (onCursor: (cursor: string | null | undefined) => void): ScopedDb =>
-    async (callback) => {
-      const tx = {
-        select: () => ({
-          from: () => ({
-            where: () => ({
-              for: () => ({ limit: async () => await Promise.resolve([]) }),
-              limit: async () => await Promise.resolve([]),
-            }),
-          }),
-        }),
-        execute: async () => await Promise.resolve([]),
-        update: (table: unknown) => ({
-          set: (values: { syncCursor?: string | null }) => {
-            if (table === caseLawSources) {
-              onCursor(values.syncCursor);
-            }
-
-            return {
-              where: () => ({
-                returning: async () => [
-                  { cursor: values.syncCursor ?? null, order: 1n },
-                ],
-              }),
-            };
-          },
-        }),
-      };
-
-      // SAFETY: these cases exercise only the case_law_sources cursor update;
-      // the fake implements that chain.
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      return await callback(tx as unknown as Transaction);
-    };
-
   test("stops before a page the remaining budget cannot cover", async () => {
     const source = caseLawSourceRow({ name: "Short-budget source" });
 

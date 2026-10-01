@@ -60,6 +60,7 @@ import * as cheerio from "cheerio";
 import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
+import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 import { readCappedBytes } from "@stll/skills/streaming";
 import { parsePlainDate, Temporal } from "@stll/time";
 
@@ -260,6 +261,7 @@ const isRefusedRedirect = (error: unknown): boolean =>
   error.code === "UnexpectedRedirect";
 
 type RequestOptions = {
+  fetchStage: DocumentFetchStage;
   cursor: string;
   url: string;
   accept: string;
@@ -283,6 +285,7 @@ type Answer =
 const request = async ({
   accept,
   cursor,
+  fetchStage,
   maxBytes,
   signal,
   timeoutMs,
@@ -301,7 +304,7 @@ const request = async ({
       await fetchWithRetry(
         address,
         { headers: { Accept: accept }, redirect: "error" },
-        { adapterKey: ADAPTER_KEYS.PL_UOKIK, signal, timeoutMs },
+        { fetchStage, adapterKey: ADAPTER_KEYS.PL_UOKIK, signal, timeoutMs },
       ),
     catch: (error: unknown) => error,
   });
@@ -547,6 +550,7 @@ const readView = async ({
 }: ReadViewOptions): Promise<Result<ViewRead, AdapterFetchError>> => {
   const answered = await request({
     cursor,
+    fetchStage: "listing",
     url: viewUrl(start, count, reverse),
     accept: "application/json",
     maxBytes: VIEW_MAX_BYTES,
@@ -875,6 +879,7 @@ const fetchDetail = async ({
 }: FetchDetailOptions): Promise<Result<FetchedDetail, AdapterFetchError>> => {
   const answered = await request({
     cursor,
+    fetchStage: "document",
     url: plUokikDetailUrl(unid),
     accept: "text/html",
     maxBytes: DETAIL_MAX_BYTES,
@@ -955,6 +960,7 @@ const fetchFile = async ({
   }
   const answered = await request({
     cursor,
+    fetchStage: "document",
     url,
     accept: "application/pdf",
     maxBytes: FILE_MAX_BYTES,
@@ -2571,6 +2577,7 @@ const countPlUokikDecisions = async (
 // ── Adapter ──────────────────────────────────────────────
 
 export const plUokikAdapter = defineSourceAdapter({
+  documentStage: "inline",
   key: ADAPTER_KEYS.PL_UOKIK,
   language: PL_UOKIK_LANGUAGE,
   minRequestIntervalMs: MIN_REQUEST_INTERVAL_MS,
