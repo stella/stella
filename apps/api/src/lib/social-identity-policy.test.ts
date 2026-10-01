@@ -1,0 +1,183 @@
+import { memoryAdapter } from "@better-auth/memory-adapter";
+import { betterAuth } from "better-auth";
+import { describe, expect, test } from "bun:test";
+
+import {
+  createSocialIdentityValidation,
+  isVerifiedMicrosoftIdentity,
+  SOCIAL_ACCOUNT_LINKING_OPTIONS,
+} from "@/api/lib/social-identity-policy";
+
+const tenantId = "00000000-0000-4000-8000-000000000001";
+const email = "account@example.test";
+const profile = {
+  tid: tenantId,
+  iss: `https://login.microsoftonline.com/${tenantId}/v2.0`,
+  email,
+};
+
+describe("social identity policy", () => {
+  test("requires a configured tenant and verified email", () => {
+    for (const verified of [true, false, undefined, "true", 1]) {
+      expect(
+        isVerifiedMicrosoftIdentity({
+          profile: { ...profile, xms_edov: verified },
+          email,
+          tenantId,
+        }),
+      ).toBe(verified === true);
+    }
+    expect(
+      isVerifiedMicrosoftIdentity({
+        profile: { ...profile, email_verified: true },
+        email,
+        tenantId,
+      }),
+    ).toBe(true);
+    expect(
+      isVerifiedMicrosoftIdentity({
+        profile: { ...profile, verified_primary_email: [email] },
+        email,
+        tenantId,
+      }),
+    ).toBe(true);
+    expect(
+      isVerifiedMicrosoftIdentity({
+        profile: { ...profile, xms_edov: true, email_verified: false },
+        email,
+        tenantId,
+      }),
+    ).toBe(false);
+    expect(
+      isVerifiedMicrosoftIdentity({
+        profile: { ...profile, xms_edov: true },
+        email,
+        tenantId: undefined,
+      }),
+    ).toBe(false);
+    expect(
+      isVerifiedMicrosoftIdentity({ profile: undefined, email, tenantId }),
+    ).toBe(false);
+    expect(
+      isVerifiedMicrosoftIdentity({
+        profile: { ...profile, xms_edov: true, iss: undefined },
+        email,
+        tenantId,
+      }),
+    ).toBe(false);
+    expect(
+      isVerifiedMicrosoftIdentity({
+        profile: { ...profile, xms_edov: true },
+        email,
+        tenantId: "00000000-0000-4000-8000-000000000002",
+      }),
+    ).toBe(false);
+    expect(
+      isVerifiedMicrosoftIdentity({
+        profile: { ...profile, xms_edov: true },
+        email: "other@example.test",
+        tenantId,
+      }),
+    ).toBe(false);
+  });
+
+  test("respects each configured Microsoft account class", () => {
+    const consumer = "9188040d-6c67-4c5b-b112-36a304b66dad";
+    for (const tenant of [tenantId, consumer]) {
+      for (const configured of [
+        "common",
+        "organizations",
+        "consumers",
+        tenantId,
+      ]) {
+        expect(
+          isVerifiedMicrosoftIdentity({
+            profile: {
+              ...profile,
+              tid: tenant,
+              iss: `https://login.microsoftonline.com/${tenant}/v2.0`,
+              xms_edov: true,
+            },
+            email,
+            tenantId: configured,
+          }),
+        ).toBe(
+          configured === "common" ||
+            (configured === "organizations" && tenant !== consumer) ||
+            (configured === "consumers" && tenant === consumer) ||
+            configured === tenant,
+        );
+      }
+    }
+  });
+
+  test.each([
+    { existing: false, localEmailVerified: false },
+    { existing: true, localEmailVerified: false },
+    { existing: true, localEmailVerified: true },
+  ])(
+    "applies the identity policy to each account state: %j",
+    async ({ existing, localEmailVerified }) => {
+      for (const emailVerified of [false, true]) {
+        const auth = betterAuth({
+          baseURL: "http://localhost:3001",
+          secret: "test-secret-that-is-long-enough-for-better-auth",
+          database: memoryAdapter({
+            user: [],
+            session: [],
+            account: [],
+            verification: [],
+          }),
+          emailAndPassword: { enabled: true },
+          user: { validateUserInfo: createSocialIdentityValidation(tenantId) },
+          account: { accountLinking: SOCIAL_ACCOUNT_LINKING_OPTIONS },
+          socialProviders: {
+            google: {
+              clientId: "test-client",
+              clientSecret: "test-secret",
+              verifyIdToken: async () => true,
+              getUserInfo: async () => ({
+                user: {
+                  id: "provider-account",
+                  name: "Account",
+                  email,
+                  emailVerified,
+                },
+                data: {
+                  sub: "provider-account",
+                  email,
+                  email_verified: emailVerified,
+                },
+              }),
+            },
+          },
+        });
+        if (existing) {
+          const local = await auth.api.signUpEmail({
+            body: {
+              email,
+              name: "Account",
+              password: "A secure password 123!",
+            },
+          });
+          const context = await auth.$context;
+          await context.internalAdapter.updateUser(local.user.id, {
+            emailVerified: localEmailVerified,
+          });
+        }
+        const response = await auth.api.signInSocial({
+          body: { provider: "google", idToken: { token: "test-credential" } },
+          asResponse: true,
+        });
+        const allowed = emailVerified && (!existing || localEmailVerified);
+        expect(response.ok).toBe(allowed);
+        const context = await auth.$context;
+        const account = await context.internalAdapter.findAccountByKey({
+          accountId: "provider-account",
+          providerId: "google",
+        });
+        expect(Boolean(account)).toBe(allowed);
+      }
+    },
+  );
+});

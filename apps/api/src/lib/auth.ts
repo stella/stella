@@ -124,6 +124,11 @@ import {
   evaluateNewAccountOtpPolicy,
   isDisposableEmailAddress,
 } from "@/api/lib/signup-abuse";
+import {
+  createSocialIdentityValidation,
+  isVerifiedMicrosoftIdentity,
+  SOCIAL_ACCOUNT_LINKING_OPTIONS,
+} from "@/api/lib/social-identity-policy";
 import { revokeUserSseAccess } from "@/api/lib/sse";
 import { closeRemovedMemberActiveTimer } from "@/api/lib/time-entry-offboarding";
 import { includes, isRecord } from "@/api/lib/type-guards";
@@ -939,7 +944,11 @@ const createAuth = () => {
     ],
     user: {
       additionalFields: AUTH_USER_ADDITIONAL_FIELDS,
+      validateUserInfo: createSocialIdentityValidation(
+        env.MICROSOFT_AUTH_TENANT_ID,
+      ),
     },
+    account: { accountLinking: SOCIAL_ACCOUNT_LINKING_OPTIONS },
     session: {
       expiresIn: SESSION_LIFETIME_SECONDS,
       updateAge: SESSION_UPDATE_AGE_SECONDS,
@@ -1085,6 +1094,13 @@ const createAuth = () => {
               clientId: env.MICROSOFT_AUTH_CLIENT_ID,
               clientSecret: env.MICROSOFT_AUTH_CLIENT_SECRET,
               tenantId: env.MICROSOFT_AUTH_TENANT_ID,
+              mapProfileToUser: (profile) => ({
+                emailVerified: isVerifiedMicrosoftIdentity({
+                  profile,
+                  email: profile.email,
+                  tenantId: env.MICROSOFT_AUTH_TENANT_ID,
+                }),
+              }),
             },
           }
         : {}),
