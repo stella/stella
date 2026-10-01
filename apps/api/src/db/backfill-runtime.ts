@@ -310,7 +310,7 @@ const drizzleQuery =
     return executedRows(await tx.execute(sql.join(parts, sql``)));
   };
 
-export const createScriptBackfillRuntime = async ({
+export const createScriptBackfillRuntime = ({
   db,
   ...options
 }: RuntimeOptions & {
@@ -348,7 +348,7 @@ export const createScriptBackfillRuntime = async ({
     },
     runInTransaction: db.transaction.bind(db),
     slot,
-    close: () => Promise.resolve(),
+    close: async () => await Promise.resolve(),
   });
 };
 

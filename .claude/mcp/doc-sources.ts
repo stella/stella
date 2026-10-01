@@ -172,6 +172,7 @@ export const DOC_SOURCES = {
   AWSSDK: {
     dependencies: [
       "@aws-sdk/client-bedrock-runtime",
+      "@aws-sdk/client-cloudwatch",
       "@aws-sdk/client-s3",
       "@aws-sdk/client-sesv2",
       "@aws-sdk/client-sts",
