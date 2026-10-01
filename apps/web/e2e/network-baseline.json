@@ -34,7 +34,7 @@
       "GET /v1/workspaces/navigation": 1
     },
     "dbQueries": {
-      "GET /api/auth/get-session": 2,
+      "GET /api/auth/get-session": 4,
       "GET /api/auth/organization/get-active-member-role": 4,
       "GET /api/auth/organization/list": 6,
       "GET /health": 1,
@@ -106,7 +106,7 @@
       "GET /v1/workspaces/navigation": 1
     },
     "dbQueries": {
-      "GET /api/auth/get-session": 2,
+      "GET /api/auth/get-session": 4,
       "GET /api/auth/organization/get-active-member-role": 4,
       "GET /api/auth/organization/list": 6,
       "GET /health": 1,
@@ -182,7 +182,7 @@
       "GET /v1/workspaces/navigation": 1
     },
     "dbQueries": {
-      "GET /api/auth/get-session": 2,
+      "GET /api/auth/get-session": 4,
       "GET /api/auth/organization/get-active-member-role": 4,
       "GET /api/auth/organization/list": 6,
       "GET /health": 0,
@@ -262,7 +262,7 @@
       "GET /v1/workspaces/navigation": 1
     },
     "dbQueries": {
-      "GET /api/auth/get-session": 2,
+      "GET /api/auth/get-session": 4,
       "GET /api/auth/organization/get-active-member-role": 4,
       "GET /api/auth/organization/list": 6,
       "GET /health": 1,
@@ -346,7 +346,7 @@
       "GET /v1/workspaces/navigation": 1
     },
     "dbQueries": {
-      "GET /api/auth/get-session": 2,
+      "GET /api/auth/get-session": 4,
       "GET /api/auth/organization/get-active-member-role": 4,
       "GET /api/auth/organization/list": 6,
       "GET /health": 0,
@@ -418,7 +418,7 @@
       "GET /v1/workspaces/navigation": 1
     },
     "dbQueries": {
-      "GET /api/auth/get-session": 2,
+      "GET /api/auth/get-session": 4,
       "GET /api/auth/organization/get-active-member-role": 4,
       "GET /api/auth/organization/list": 6,
       "GET /health": 1,
@@ -480,7 +480,7 @@
       "GET /v1/workspaces/navigation": 1
     },
     "dbQueries": {
-      "GET /api/auth/get-session": 2,
+      "GET /api/auth/get-session": 4,
       "GET /api/auth/organization/get-active-member-role": 4,
       "GET /api/auth/organization/get-full-organization": 7,
       "GET /api/auth/organization/list": 6,
@@ -558,7 +558,7 @@
       "GET /v1/workspaces/navigation": 1
     },
     "dbQueries": {
-      "GET /api/auth/get-session": 2,
+      "GET /api/auth/get-session": 4,
       "GET /api/auth/organization/get-active-member-role": 4,
       "GET /api/auth/organization/list": 6,
       "GET /health": 1,
@@ -636,7 +636,7 @@
       "GET /v1/workspaces/navigation": 1
     },
     "dbQueries": {
-      "GET /api/auth/get-session": 2,
+      "GET /api/auth/get-session": 4,
       "GET /api/auth/organization/get-active-member-role": 4,
       "GET /api/auth/organization/list": 6,
       "GET /health": 1,
@@ -704,7 +704,7 @@
       "POST /v1/entity-views/query-window": 1
     },
     "dbQueries": {
-      "GET /api/auth/get-session": 2,
+      "GET /api/auth/get-session": 4,
       "GET /api/auth/organization/get-active-member-role": 4,
       "GET /api/auth/organization/get-full-organization": 7,
       "GET /api/auth/organization/list": 6,
@@ -766,7 +766,7 @@
       "GET /v1/workspaces/navigation": 1
     },
     "dbQueries": {
-      "GET /api/auth/get-session": 2,
+      "GET /api/auth/get-session": 4,
       "GET /api/auth/organization/get-active-member-role": 4,
       "GET /api/auth/organization/list": 6,
       "GET /health": 0,
@@ -824,7 +824,7 @@
       "GET /v1/workspaces/navigation": 1
     },
     "dbQueries": {
-      "GET /api/auth/get-session": 2,
+      "GET /api/auth/get-session": 4,
       "GET /api/auth/organization/get-active-member-role": 4,
       "GET /api/auth/organization/list": 6,
       "GET /health": 1,
@@ -888,7 +888,7 @@
       "GET /v1/workspaces/navigation": 1
     },
     "dbQueries": {
-      "GET /api/auth/get-session": 2,
+      "GET /api/auth/get-session": 4,
       "GET /api/auth/organization/get-active-member-role": 4,
       "GET /api/auth/organization/list": 6,
       "GET /health": 0,
@@ -950,7 +950,7 @@
       "GET /v1/workspaces/navigation": 1
     },
     "dbQueries": {
-      "GET /api/auth/get-session": 2,
+      "GET /api/auth/get-session": 4,
       "GET /api/auth/organization/get-active-member-role": 4,
       "GET /api/auth/organization/list": 4,
       "GET /health": 1,
@@ -1010,7 +1010,7 @@
       "GET /v1/workspaces/navigation": 1
     },
     "dbQueries": {
-      "GET /api/auth/get-session": 2,
+      "GET /api/auth/get-session": 4,
       "GET /api/auth/organization/get-active-member-role": 4,
       "GET /api/auth/organization/list": 6,
       "GET /health": 1,
@@ -1074,7 +1074,7 @@
       "GET /v1/workspaces/navigation": 1
     },
     "dbQueries": {
-      "GET /api/auth/get-session": 2,
+      "GET /api/auth/get-session": 4,
       "GET /api/auth/organization/get-active-member-role": 4,
       "GET /api/auth/organization/list": 6,
       "GET /health": 1,
@@ -1136,7 +1136,7 @@
       "GET /v1/workspaces/navigation": 1
     },
     "dbQueries": {
-      "GET /api/auth/get-session": 2,
+      "GET /api/auth/get-session": 4,
       "GET /api/auth/organization/get-active-member-role": 4,
       "GET /api/auth/organization/list": 6,
       "GET /health": 0,
@@ -1194,7 +1194,7 @@
       "GET /v1/workspaces/navigation": 1
     },
     "dbQueries": {
-      "GET /api/auth/get-session": 2,
+      "GET /api/auth/get-session": 4,
       "GET /api/auth/list-sessions": 3,
       "GET /api/auth/organization/get-active-member-role": 4,
       "GET /api/auth/organization/list": 6,
@@ -1252,7 +1252,7 @@
       "GET /v1/workspaces/navigation": 1
     },
     "dbQueries": {
-      "GET /api/auth/get-session": 2,
+      "GET /api/auth/get-session": 4,
       "GET /api/auth/list-sessions": 3,
       "GET /api/auth/organization/get-active-member-role": 4,
       "GET /api/auth/organization/list": 6,
@@ -1314,7 +1314,7 @@
       "GET /v1/workspaces/navigation": 1
     },
     "dbQueries": {
-      "GET /api/auth/get-session": 2,
+      "GET /api/auth/get-session": 4,
       "GET /api/auth/organization/get-active-member-role": 4,
       "GET /api/auth/organization/list": 6,
       "GET /health": 0,
@@ -1374,7 +1374,7 @@
       "GET /v1/workspaces/navigation": 1
     },
     "dbQueries": {
-      "GET /api/auth/get-session": 2,
+      "GET /api/auth/get-session": 4,
       "GET /api/auth/organization/get-active-member-role": 4,
       "GET /api/auth/organization/list": 6,
       "GET /health": 1,
@@ -1430,7 +1430,7 @@
       "GET /v1/workspaces/navigation": 1
     },
     "dbQueries": {
-      "GET /api/auth/get-session": 2,
+      "GET /api/auth/get-session": 4,
       "GET /api/auth/list-sessions": 3,
       "GET /api/auth/organization/get-active-member-role": 4,
       "GET /api/auth/organization/list": 6,
@@ -1488,7 +1488,7 @@
       "GET /v1/workspaces/navigation": 1
     },
     "dbQueries": {
-      "GET /api/auth/get-session": 2,
+      "GET /api/auth/get-session": 4,
       "GET /api/auth/list-sessions": 3,
       "GET /api/auth/organization/get-active-member-role": 4,
       "GET /api/auth/organization/list": 6,
@@ -1548,7 +1548,7 @@
       "GET /v1/workspaces/navigation": 1
     },
     "dbQueries": {
-      "GET /api/auth/get-session": 2,
+      "GET /api/auth/get-session": 4,
       "GET /api/auth/organization/get-active-member-role": 4,
       "GET /api/auth/organization/get-full-organization": 7,
       "GET /api/auth/organization/list": 6,
@@ -1614,7 +1614,7 @@
       "GET /v1/workspaces/navigation": 1
     },
     "dbQueries": {
-      "GET /api/auth/get-session": 2,
+      "GET /api/auth/get-session": 4,
       "GET /api/auth/organization/get-active-member-role": 4,
       "GET /api/auth/organization/list": 6,
       "GET /health": 1,
@@ -1678,7 +1678,7 @@
       "GET /v1/workspaces/navigation": 1
     },
     "dbQueries": {
-      "GET /api/auth/get-session": 2,
+      "GET /api/auth/get-session": 4,
       "GET /api/auth/organization/get-active-member-role": 4,
       "GET /api/auth/organization/list": 6,
       "GET /health": 0,
@@ -1736,7 +1736,7 @@
       "GET /v1/workspaces/navigation": 1
     },
     "dbQueries": {
-      "GET /api/auth/get-session": 2,
+      "GET /api/auth/get-session": 4,
       "GET /api/auth/organization/get-active-member-role": 4,
       "GET /api/auth/organization/list": 6,
       "GET /health": 1,
@@ -1792,7 +1792,7 @@
       "GET /v1/workspaces/navigation": 1
     },
     "dbQueries": {
-      "GET /api/auth/get-session": 0,
+      "GET /api/auth/get-session": 4,
       "GET /api/auth/organization/get-active-member-role": 2,
       "GET /health": 0,
       "GET /v1/chat/threads": 4,
@@ -1851,7 +1851,7 @@
       "GET /v1/workspaces/navigation": 1
     },
     "dbQueries": {
-      "GET /api/auth/get-session": 2,
+      "GET /api/auth/get-session": 4,
       "GET /api/auth/organization/get-active-member-role": 4,
       "GET /api/auth/organization/list": 6,
       "GET /health": 1,
@@ -1913,7 +1913,7 @@
       "GET /v1/workspaces/navigation": 1
     },
     "dbQueries": {
-      "GET /api/auth/get-session": 2,
+      "GET /api/auth/get-session": 4,
       "GET /api/auth/organization/get-active-member-role": 4,
       "GET /api/auth/organization/list": 6,
       "GET /health": 0,
@@ -1973,7 +1973,7 @@
       "POST /v1/organization-settings/preview": 1
     },
     "dbQueries": {
-      "GET /api/auth/get-session": 2,
+      "GET /api/auth/get-session": 4,
       "GET /api/auth/organization/get-active-member-role": 4,
       "GET /api/auth/organization/list": 6,
       "GET /health": 1,
@@ -2035,7 +2035,7 @@
       "GET /v1/workspaces/navigation": 1
     },
     "dbQueries": {
-      "GET /api/auth/get-session": 2,
+      "GET /api/auth/get-session": 4,
       "GET /api/auth/organization/get-active-member-role": 4,
       "GET /api/auth/organization/get-full-organization": 7,
       "GET /api/auth/organization/list": 6,
@@ -2107,7 +2107,7 @@
       "GET /v1/workspaces/navigation": 1
     },
     "dbQueries": {
-      "GET /api/auth/get-session": 0,
+      "GET /api/auth/get-session": 4,
       "GET /api/auth/organization/get-active-member-role": 2,
       "GET /health": 0,
       "GET /v1/chat/threads": 4,
@@ -2176,7 +2176,7 @@
       "GET /v1/workspaces/navigation": 1
     },
     "dbQueries": {
-      "GET /api/auth/get-session": 2,
+      "GET /api/auth/get-session": 4,
       "GET /api/auth/organization/get-active-member-role": 4,
       "GET /api/auth/organization/list": 6,
       "GET /health": 0,
@@ -2246,7 +2246,7 @@
       "GET /v1/workspaces/navigation": 1
     },
     "dbQueries": {
-      "GET /api/auth/get-session": 2,
+      "GET /api/auth/get-session": 4,
       "GET /api/auth/organization/get-active-member-role": 2,
       "GET /health": 0,
       "GET /v1/chat/threads": 4,
@@ -2334,7 +2334,7 @@
       "GET /v1/workspaces/navigation": 1
     },
     "dbQueries": {
-      "GET /api/auth/get-session": 2,
+      "GET /api/auth/get-session": 4,
       "GET /api/auth/organization/get-active-member-role": 2,
       "GET /health": 0,
       "GET /v1/chat/threads": 6,
@@ -2407,7 +2407,7 @@
       "GET /v1/workspaces/navigation": 1
     },
     "dbQueries": {
-      "GET /api/auth/get-session": 2,
+      "GET /api/auth/get-session": 4,
       "GET /api/auth/organization/get-active-member-role": 4,
       "GET /api/auth/organization/list": 6,
       "GET /health": 1,
@@ -2493,7 +2493,7 @@
       "POST /v1/workspaces/:id/active": 1
     },
     "dbQueries": {
-      "GET /api/auth/get-session": 2,
+      "GET /api/auth/get-session": 4,
       "GET /api/auth/organization/get-active-member-role": 4,
       "GET /api/auth/organization/get-full-organization": 7,
       "GET /api/auth/organization/list": 6,
@@ -2604,7 +2604,7 @@
       "POST /v1/workspaces/:id/active": 1
     },
     "dbQueries": {
-      "GET /api/auth/get-session": 2,
+      "GET /api/auth/get-session": 4,
       "GET /api/auth/organization/get-active-member-role": 4,
       "GET /api/auth/organization/get-full-organization": 7,
       "GET /api/auth/organization/list": 6,
@@ -2729,7 +2729,7 @@
       "POST /v1/workspaces/:id/justifications/query": 1
     },
     "dbQueries": {
-      "GET /api/auth/get-session": 2,
+      "GET /api/auth/get-session": 4,
       "GET /api/auth/organization/get-active-member-role": 4,
       "GET /api/auth/organization/list": 6,
       "GET /health": 1,
@@ -2858,7 +2858,7 @@
       "GET /v1/workspaces/navigation": 1
     },
     "dbQueries": {
-      "GET /api/auth/get-session": 0,
+      "GET /api/auth/get-session": 4,
       "GET /api/auth/organization/get-active-member-role": 2,
       "GET /health": 0,
       "GET /v1/chat/threads": 4,
@@ -2975,7 +2975,7 @@
       "GET /v1/workspaces/navigation": 1
     },
     "dbQueries": {
-      "GET /api/auth/get-session": 2,
+      "GET /api/auth/get-session": 4,
       "GET /api/auth/organization/get-active-member-role": 2,
       "GET /health": 0,
       "GET /v1/chat/threads": 4,
@@ -3080,7 +3080,7 @@
       "POST /v1/workspaces/:id/active": 1
     },
     "dbQueries": {
-      "GET /api/auth/get-session": 2,
+      "GET /api/auth/get-session": 4,
       "GET /api/auth/organization/get-active-member-role": 4,
       "GET /api/auth/organization/list": 6,
       "GET /health": 0,
@@ -3174,7 +3174,7 @@
       "POST /v1/workspaces/:id/active": 1
     },
     "dbQueries": {
-      "GET /api/auth/get-session": 2,
+      "GET /api/auth/get-session": 4,
       "GET /api/auth/organization/get-active-member-role": 4,
       "GET /api/auth/organization/list": 6,
       "GET /health": 1,
@@ -3276,7 +3276,7 @@
       "POST /v1/workspaces/:id/active": 1
     },
     "dbQueries": {
-      "GET /api/auth/get-session": 2,
+      "GET /api/auth/get-session": 4,
       "GET /api/auth/organization/get-active-member-role": 4,
       "GET /api/auth/organization/get-full-organization": 7,
       "GET /api/auth/organization/list": 6,
@@ -3387,7 +3387,7 @@
       "POST /v1/workspaces/:id/active": 1
     },
     "dbQueries": {
-      "GET /api/auth/get-session": 2,
+      "GET /api/auth/get-session": 4,
       "GET /api/auth/organization/get-active-member-role": 4,
       "GET /api/auth/organization/get-full-organization": 7,
       "GET /api/auth/organization/list": 6,
@@ -3493,7 +3493,7 @@
       "POST /v1/workspaces/:id/active": 1
     },
     "dbQueries": {
-      "GET /api/auth/get-session": 2,
+      "GET /api/auth/get-session": 4,
       "GET /api/auth/organization/get-active-member-role": 4,
       "GET /api/auth/organization/list": 6,
       "GET /health": 0,

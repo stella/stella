@@ -1,6 +1,18 @@
+import { Result } from "better-result";
+
 import { Temporal } from "@stll/time";
 
 export const SESSION_ACTIVITY_INTERVAL_MS = 15 * 60 * 1000;
+
+export const isSessionActivityCancelled = (
+  error: unknown,
+  signal: AbortSignal,
+) =>
+  signal.aborted ||
+  (typeof error === "object" &&
+    error !== null &&
+    "name" in error &&
+    error.name === "AbortError");
 
 type SessionActivityOptions = {
   page: Pick<Document, "visibilityState" | "hasFocus">;
@@ -29,9 +41,17 @@ export const createSessionActivity = ({
       }
       lastObservationAt = now();
       inFlight = true;
-      await observe(controller.signal).finally(() => {
-        inFlight = false;
+      const observed = await Result.tryPromise({
+        try: async () => await observe(controller.signal),
+        catch: (cause) => cause,
       });
+      inFlight = false;
+      if (
+        Result.isError(observed) &&
+        !isSessionActivityCancelled(observed.error, controller.signal)
+      ) {
+        await Promise.reject(observed.error);
+      }
     },
     dispose: () => controller.abort(),
   };

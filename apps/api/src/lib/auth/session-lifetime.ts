@@ -20,6 +20,7 @@ import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 export const SESSION_ABSOLUTE_AGE_MS = 90 * DAY_IN_MS;
 export const SESSION_IDLE_AGE_MS = 60 * 60 * 1000;
 export const SESSION_PRIOR_TOKEN_GRACE_MS = 60 * 1000;
+const cookieCacheVersion = "session-lifetime-v2";
 
 export const SESSION_LIFETIME_FIELDS = {
   refreshMode: {
@@ -127,6 +128,10 @@ export const createSessionLifetime = ({
     adapter.findSession = async (token) => {
       let current = await observe(token);
       if (!current) {
+        const expired = await findSession(token);
+        if (expired && expired.session.expiresAt <= now()) {
+          await deleteSession(expired.session.token);
+        }
         return null;
       }
       let resolved = await findSession(current.token);
@@ -275,8 +280,6 @@ export const createSessionLifetime = ({
       ],
     },
   } satisfies BetterAuthPlugin;
-
-  const cookieCacheVersion = "session-lifetime-v2";
 
   return { plugin, cookieCacheVersion, prepare: decorate };
 };

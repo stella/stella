@@ -95,6 +95,7 @@ import {
 import { shouldForceSidebarCollapsed } from "@/routes/-inspector-pane-width";
 import {
   createSessionActivity,
+  isSessionActivityCancelled,
   SESSION_ACTIVITY_INTERVAL_MS,
 } from "@/routes/-session-activity";
 
@@ -180,8 +181,8 @@ export const ProtectedAppFrame = ({
           query: { disableCookieCache: true },
           fetchOptions: { signal },
         });
-        if (result.error) {
-          return await Promise.reject(toAuthClientError(result.error));
+        if (result.error && !isSessionActivityCancelled(result.error, signal)) {
+          await Promise.reject(toAuthClientError(result.error));
         }
       },
     });

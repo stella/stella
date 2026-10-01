@@ -1857,6 +1857,7 @@ const isReplaySafeBeforeSplit = (
  * timestamp, which makes the boundary a plain string comparison.
  */
 const REPLAY_SAFE_SPLIT_FROM = "20260919";
+const ROW_SCAN_SPLIT_FROM = "20261003123100";
 
 const collectUnreplayableSplitPrefixes = async (): Promise<string[]> => {
   const violations: string[] = [];
@@ -1888,6 +1889,37 @@ const collectUnreplayableSplitPrefixes = async (): Promise<string[]> => {
 };
 
 describe("split-transaction migrations", () => {
+  test("releases schema locks before scanning rows in new split migrations", async () => {
+    const violations: string[] = [];
+    for await (const relativePath of new Bun.Glob("20*/migration.sql").scan({
+      cwd: MIGRATIONS_DIR,
+    })) {
+      if (relativePath < ROW_SCAN_SPLIT_FROM) {
+        continue;
+      }
+      const statements = splitSqlStatements(
+        await Bun.file(nodePath.join(MIGRATIONS_DIR, relativePath)).text(),
+      );
+      const split = statements.findIndex((statement) =>
+        /^COMMIT$/iu.test(statement),
+      );
+      if (split === -1) {
+        continue;
+      }
+      for (const statement of statements.slice(0, split)) {
+        if (
+          /^UPDATE\b/iu.test(statement) ||
+          /\bVALIDATE\s+CONSTRAINT\b/iu.test(statement) ||
+          (/\bCHECK\s*\(/iu.test(statement) &&
+            !/\bNOT\s+VALID\b/iu.test(statement))
+        ) {
+          violations.push(`${relativePath}: row scan before transaction split`);
+        }
+      }
+    }
+    expect(violations).toEqual([]);
+  });
+
   test("every statement before the split survives a replay", async () => {
     expect(await collectUnreplayableSplitPrefixes()).toEqual([]);
   });

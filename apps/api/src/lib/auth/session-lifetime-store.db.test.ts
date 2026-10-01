@@ -5,6 +5,7 @@ import {
   getAuthoritativeSessionFromCtx,
 } from "better-auth/api";
 import { getCookieCache } from "better-auth/cookies";
+import { emailOTP } from "better-auth/plugins";
 import { panic } from "better-result";
 import {
   afterAll,
@@ -656,7 +657,6 @@ const createHttpSession = async (cacheEnabled: boolean) => {
       provider: "pg",
       schema: { account, session, user, verification },
     }),
-    emailAndPassword: { enabled: true },
     session: {
       additionalFields: SESSION_LIFETIME_FIELDS,
       expiresIn: 30 * 24 * 60 * 60,
@@ -667,7 +667,13 @@ const createHttpSession = async (cacheEnabled: boolean) => {
         version: lifetime.cookieCacheVersion,
       },
     },
-    plugins: [lifetime.plugin],
+    plugins: [
+      emailOTP({
+        generateOTP: () => "123456",
+        sendVerificationOTP: async () => undefined,
+      }),
+      lifetime.plugin,
+    ],
     hooks: {
       after: createAuthMiddleware(async (ctx) => {
         if (ctx.path === "/get-session") {
@@ -684,9 +690,10 @@ const createHttpSession = async (cacheEnabled: boolean) => {
       }),
     },
   });
-  const email = `${mintAuthProviderIdValue()}@http-session.test`;
-  const signup = await auth.handler(
-    new Request("http://localhost:3001/api/auth/sign-up/email", {
+  const email = `${mintAuthProviderIdValue()}@http-session.test`.toLowerCase();
+  await auth.api.sendVerificationOTP({ body: { email, type: "sign-in" } });
+  const signIn = await auth.handler(
+    new Request("http://localhost:3001/api/auth/sign-in/email-otp", {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -695,23 +702,23 @@ const createHttpSession = async (cacheEnabled: boolean) => {
       body: JSON.stringify({
         email,
         name: "Session fixture",
-        password: "Fixture password 123!",
+        otp: "123456",
       }),
     }),
   );
-  expect(signup.status).toBe(200);
+  expect(signIn.status).toBe(200);
   const accountUser = await testDb.query.user.findFirst({
     where: { email: { eq: email } },
   });
   const userId =
-    accountUser?.id ?? panic("Sign-up did not create the fixture user");
+    accountUser?.id ?? panic("Sign-in did not create the fixture user");
   fixtureUsers.push(userId);
   const created = await testDb.query.session.findFirst({
     where: { userId: { eq: userId } },
   });
   const original =
-    created ?? panic("Sign-up did not create the fixture session");
-  const cookie = responseCookies(signup);
+    created ?? panic("Sign-in did not create the fixture session");
+  const cookie = responseCookies(signIn);
   expect(cookie).toContain("session_token=");
   if (cacheEnabled) {
     expect(cookie).toContain("session_data=");
@@ -749,6 +756,29 @@ const createHttpSession = async (cacheEnabled: boolean) => {
 };
 
 describe("native authentication session responses", () => {
+  test.each([false, true])(
+    "removes an expired current session through native resolution with cookie cache %s",
+    async (cacheEnabled) => {
+      const fixture = await createHttpSession(cacheEnabled);
+      await testDb
+        .update(session)
+        .set({
+          expiresAt: new Date(fixture.clock.getTime() - 1),
+        })
+        .where(eq(session.id, fixture.original.id));
+      const response = await fixture.requestSession({
+        disableCookieCache: true,
+      });
+      expect(response.status).toBe(200);
+      expect(await response.json()).toBeNull();
+      expect(
+        await testDb.query.session.findFirst({
+          where: { id: { eq: fixture.original.id } },
+        }),
+      ).toBeUndefined();
+    },
+  );
+
   test("cached and recent session reads avoid activity writes", async () => {
     const fixture = await createHttpSession(true);
     await testDb
@@ -803,11 +833,16 @@ describe("native authentication session responses", () => {
           .getSetCookie()
           .some((cookie) => cookie.includes("Max-Age=0")),
       ).toBe(true);
+      expect(
+        await testDb.query.session.findFirst({
+          where: { id: { eq: fixture.original.id } },
+        }),
+      ).toBeUndefined();
     },
   );
 
   test.each([false, true])(
-    "ordinary refetch keeps an old idle session active with cookie cache %s",
+    "uncached activity keeps an old idle session active with cookie cache %s",
     async (cacheEnabled) => {
       const fixture = await createHttpSession(cacheEnabled);
       await testDb
@@ -817,7 +852,9 @@ describe("native authentication session responses", () => {
           lastSeenAt: new Date(fixture.clock.getTime() - HOUR_MS),
         })
         .where(eq(session.id, fixture.original.id));
-      const response = await fixture.requestSession();
+      const response = await fixture.requestSession({
+        disableCookieCache: true,
+      });
       expect(response.status).toBe(200);
       expect(await response.json()).toMatchObject({
         session: { id: fixture.original.id },
@@ -872,14 +909,21 @@ describe("native authentication session responses", () => {
       expect(cached).not.toHaveProperty(`session.${field}`);
     }
     fixture.advance(59_999);
-    const inFlight = await fixture.requestSession();
+    const cachedInFlight = await fixture.requestSession();
+    expect(await cachedInFlight.json()).toMatchObject({
+      session: { token: fixture.original.token },
+    });
+    const inFlight = await fixture.requestSession({ disableCookieCache: true });
     expect(await inFlight.json()).toMatchObject({
       session: { token: current.token },
     });
     expect(responseCookies(inFlight)).toContain("session_token=");
     fixture.advance(1);
-    const stale = await fixture.requestSession();
+    const stale = await fixture.requestSession({ disableCookieCache: true });
     expect(await stale.json()).toBeNull();
+    fixture.advance(1);
+    const staleCached = await fixture.requestSession();
+    expect(await staleCached.json()).toBeNull();
     const active = await fixture.requestSession({
       requestCookie: refreshedCookie,
     });
