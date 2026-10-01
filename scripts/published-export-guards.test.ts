@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
 import {
   isExpectedPublishedExportResolution,
@@ -122,5 +125,58 @@ describe("Node load failure attribution", () => {
           "ERR_MODULE_NOT_FOUND: Cannot find package 'bun' imported from /repo/packages/example/dist/runtime.js",
       }),
     ).toBe(false);
+  });
+});
+
+describe("published export guard without workspace consumers", () => {
+  test("resolves root, subpath, and alias exports through package self-reference", async () => {
+    const packageDir = mkdtempSync(path.join(tmpdir(), "published-exports-"));
+    const manifest = JSON.stringify({
+      name: "@stll/export-guard-fixture",
+      version: "0.1.0",
+      type: "module",
+      exports: {
+        ".": "./src/index.ts",
+        "./feature": "./src/feature.ts",
+        "./legacy/feature": "./src/feature.ts",
+      },
+      files: ["dist", "src", "README.md"],
+      scripts: { build: "bun build.ts" },
+    });
+    try {
+      await Bun.write(path.join(packageDir, "package.json"), manifest);
+      await Bun.write(
+        path.join(packageDir, "build.ts"),
+        `
+        for (const name of ["index", "feature"]) {
+          await Bun.write("dist/" + name + ".js", "export const value = 1;");
+          await Bun.write("dist/" + name + ".d.ts", "export declare const value = 1;");
+        }
+      `,
+      );
+      const proc = Bun.spawn({
+        cmd: [
+          process.execPath,
+          path.join(import.meta.dir, "check-published-exports.ts"),
+          packageDir,
+        ],
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const [stdout, stderr, exitCode] = await Promise.all([
+        new Response(proc.stdout).text(),
+        new Response(proc.stderr).text(),
+        proc.exited,
+      ]);
+      expect({ exitCode, stderr }).toMatchObject({ exitCode: 0 });
+      expect(stdout).toContain(
+        "3 exports resolve and ship; modules load from dist in Node",
+      );
+      expect(await Bun.file(path.join(packageDir, "package.json")).text()).toBe(
+        manifest,
+      );
+    } finally {
+      rmSync(packageDir, { recursive: true, force: true });
+    }
   });
 });

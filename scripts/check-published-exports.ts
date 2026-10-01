@@ -207,10 +207,11 @@ try {
 
       // Resolve through the package name, so this exercises the export map a
       // consumer's resolver reads rather than the paths this script computed.
+      // Self-reference works without a root link or an in-repo consumer.
       const specifier = `${published.name}${subpath.replace(/^\./u, "")}`;
       let resolved: string;
       try {
-        resolved = Bun.resolveSync(specifier, repoRoot);
+        resolved = Bun.resolveSync(specifier, pkgDir);
       } catch {
         failures.push(`${subpath}: "${specifier}" does not resolve`);
         return;
