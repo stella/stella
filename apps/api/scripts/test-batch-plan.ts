@@ -21,9 +21,11 @@ export const dbTestBatchSize = (propertyOnly: boolean) =>
  * neighbours. Each runs in a process of its own, whatever its class (see
  * `splitSoloTests`).
  */
-export const SOLO_TEST_PATHS: ReadonlySet<string> = new Set(
-  Object.values(RECORDED_CONVERSATION_SUITES),
-);
+export const SOLO_TEST_PATHS: ReadonlySet<string> = new Set([
+  ...Object.values(RECORDED_CONVERSATION_SUITES),
+  // Keep this suite's retained database graph in its own process.
+  "src/handlers/chat/thread-durable-refs.integration.test.ts",
+]);
 
 /**
  * Move each solo file out of its composed batch into a batch of its own. The

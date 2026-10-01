@@ -1,5 +1,5 @@
-import { useRef, useState } from "react";
-import type { ReactNode, RefObject } from "react";
+import { useCallback, useRef, useState } from "react";
+import type { ReactNode } from "react";
 
 import {
   useMutation,
@@ -13,14 +13,13 @@ import { useTranslations } from "use-intl";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { Button, buttonVariants } from "@stll/ui/button";
-import { Minimize2Icon, PlusIcon } from "@stll/ui/icons";
+import { Minimize2Icon, NewChatIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import {
   Conversation,
   ConversationContent,
-  ConversationScrollButton,
   ConversationScrollProvider,
 } from "@/components/ai-elements/conversation";
 import {
@@ -95,6 +94,10 @@ import { ChatForkedFromBanner } from "@/routes/_protected.chat/-components/chat-
 import { ChatThreadRecap } from "@/routes/_protected.chat/-components/chat-thread-recap";
 import { ChatTurnNavigator } from "@/routes/_protected.chat/-components/chat-turn-navigator";
 import { ThreadsSheet } from "@/routes/_protected.chat/-components/threads-sheet";
+
+// The composer block publishes its live height on this element, the
+// transcript's nearest shared ancestor (see `observeComposerBlock`).
+const COMPOSER_HOST_ATTRIBUTE = "data-composer-host";
 
 type ChatThreadPageProps = {
   threadRef: ChatThreadRef;
@@ -268,7 +271,6 @@ export const ChatThreadPage = ({
     threadRef,
     turnAbandoned,
   });
-  const hasSuggestedFollowups = suggestedFollowupPrompts.length > 0;
 
   // Seed brand-new (empty) threads from the persisted web-search
   // preference so the user doesn't have to flip the toggle every time
@@ -409,21 +411,22 @@ export const ChatThreadPage = ({
   // keep the scroll-to-bottom button clear of it in every state. Publish
   // the block's live height as a CSS variable on the page container. The
   // transcript bottom padding inherits it, keeping the final content above
-  // the block at any height.
-  const pageContainerRef = useRef<HTMLDivElement>(null);
-  const composerBlockRef = useRef<HTMLDivElement>(null);
-  useExternalSyncEffect(() => {
-    const container = pageContainerRef.current;
-    const block = composerBlockRef.current;
-    if (container === null || block === null) {
+  // the block at any height. A ref callback, not a mount effect: it follows
+  // whichever block element is mounted, so a remounted block can never
+  // leave the padding measured from a stale one.
+  const observeComposerBlock = useCallback((block: HTMLDivElement | null) => {
+    const host = block?.closest<HTMLElement>(`[${COMPOSER_HOST_ATTRIBUTE}]`);
+    if (!block || !host) {
       return undefined;
     }
-    const observer = new ResizeObserver(() => {
-      container.style.setProperty(
+    const publish = () => {
+      host.style.setProperty(
         "--composer-block-h",
         `${String(block.offsetHeight)}px`,
       );
-    });
+    };
+    publish();
+    const observer = new ResizeObserver(publish);
     observer.observe(block);
     return () => {
       observer.disconnect();
@@ -603,7 +606,7 @@ export const ChatThreadPage = ({
             none of them can leak up and overlay the fade or the composer.
           */}
             <ChatForkedFromBanner forkProvenance={data.forkProvenance} />
-            <ChatThreadScrollSurface containerRef={pageContainerRef}>
+            <ChatThreadScrollSurface>
               {/* Keyed per thread so the viewport remounts and lands pinned
                 to the bottom on every thread switch (a fork lands here from
                 a scrolled-up source thread). The scroll provider above stays
@@ -682,18 +685,6 @@ export const ChatThreadPage = ({
                   className="from-background pointer-events-none absolute inset-x-0 bottom-0 mx-auto h-48 w-full max-w-5xl bg-linear-to-t to-transparent"
                 />
               )}
-              {/* Centred above the composer block, whose live height it
-                clears. A sibling of the fade rather than a child of the
-                isolated <Conversation>, so its z-10 wins against the fade
-                instead of being dimmed by it. Hidden while follow-up chips
-                show: the chip row then carries the scroll action at its
-                trailing end. */}
-              <ConversationScrollButton
-                className={cn(
-                  "bottom-[calc(var(--composer-block-h,7rem)+0.5rem)]",
-                  hasSuggestedFollowups && "hidden",
-                )}
-              />
               {/* Top of the page stacking order: must stack above the sticky
                 transcript headers and the fade gradient. `z-20` beats the
                 isolated <Conversation> context (which caps its sticky
@@ -709,7 +700,7 @@ export const ChatThreadPage = ({
                 offset track the change automatically. */}
               <div
                 className="absolute inset-x-0 bottom-0 z-20 mx-auto w-full max-w-5xl px-4"
-                ref={composerBlockRef}
+                ref={observeComposerBlock}
               >
                 {/* `px-2` mirrors the tray's `p-2` so the first chip starts on
                   the composer box's leading edge; `pb-0` because the tray
@@ -819,17 +810,12 @@ export const ChatThreadPage = ({
   );
 };
 
-type ChatThreadScrollSurfaceProps = {
-  children: ReactNode;
-  containerRef: RefObject<HTMLDivElement | null>;
-};
-
-const ChatThreadScrollSurface = ({
-  children,
-  containerRef,
-}: ChatThreadScrollSurfaceProps) => (
+const ChatThreadScrollSurface = ({ children }: { children: ReactNode }) => (
   <ConversationScrollProvider>
-    <div className="relative flex min-h-0 flex-1 flex-col" ref={containerRef}>
+    <div
+      className="relative flex min-h-0 flex-1 flex-col"
+      data-composer-host=""
+    >
       {children}
     </div>
   </ConversationScrollProvider>
@@ -902,7 +888,7 @@ const NewChatButton = ({
   if (!hasMessages) {
     return (
       <Button disabled size="sm" variant="ghost">
-        <PlusIcon />
+        <NewChatIcon />
         {t("chat.newChat")}
       </Button>
     );
@@ -914,7 +900,7 @@ const NewChatButton = ({
         params={{ workspaceId: threadRef.workspaceId }}
         to="/chat/workspaces/$workspaceId/new"
       >
-        <PlusIcon />
+        <NewChatIcon />
         {t("chat.newChat")}
       </Link>
     );
@@ -924,7 +910,7 @@ const NewChatButton = ({
       className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
       to="/chat/new"
     >
-      <PlusIcon />
+      <NewChatIcon />
       {t("chat.newChat")}
     </Link>
   );

@@ -754,6 +754,7 @@ const jobSteps = (job: unknown) =>
         v.object({
           name: v.optional(v.string()),
           run: v.optional(v.string()),
+          if: v.optional(v.string()),
         }),
       ),
     }),
@@ -1183,5 +1184,20 @@ test("Bun cache saves are main-only and queue Turbo caches remain readable", () 
   expect(cacheSteps.length).toBeGreaterThan(0);
   for (const step of cacheSteps) {
     expect(step.with?.["save"]).toBe(`\${{ github.ref == 'refs/heads/main' }}`);
+  }
+});
+
+test("property-testing guards run only when dependencies are installed", () => {
+  const steps = jobSteps(ciJobs["ci-checks"]);
+  const installCondition = steps.find(
+    ({ name }) => name === "Install dependencies",
+  )?.if;
+  expect(installCondition).toBeDefined();
+  const guards = steps.filter(({ run }) =>
+    run?.includes("bun test packages/property-testing/"),
+  );
+  expect(guards.length).toBeGreaterThan(0);
+  for (const guard of guards) {
+    expect(guard.if, guard.name).toBe(installCondition);
   }
 });

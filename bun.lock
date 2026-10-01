@@ -568,6 +568,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@stll/anonymize-chat": "workspace:*",
+        "@stll/legal-ast": "workspace:*",
         "@stll/template-conditions": "workspace:*",
         "@stll/text-normalize": "workspace:*",
         "@stll/time": "workspace:*",
@@ -840,8 +841,10 @@
         "better-result": "catalog:",
       },
       "devDependencies": {
+        "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
+        "fast-check": "catalog:",
       },
     },
     "packages/locales": {
