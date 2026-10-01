@@ -49,6 +49,9 @@
     "apps/api": {
       "entry": [
         "src/server.ts!",
+        // Ignored runtime aggregates import every committed capability shard.
+        "src/mcp/generated/capability-dispatch.ts!",
+        "src/mcp/generated/capability-catalog.ts!",
         // Read by scripts/generate-web-api-types.ts through the compiler.
         "src/eden-contract.ts",
         // Callable receiver boundary for authenticated mail transport hosts.

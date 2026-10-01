@@ -151,11 +151,11 @@ export const parseCapabilityCatalog = (
  * codegen time and from `dist` in the published package). Returns `null` on
  * missing/corrupt shards so runtime can fall back to the baked-in route tree.
  */
-export const loadBakedCapabilityCatalog = async (): Promise<
-  CapabilityCatalogEntry[] | null
-> => {
-  const parsed = await Result.tryPromise({
-    try: async () => readCapabilityCatalog(),
+export const loadBakedCapabilityCatalog = ():
+  | CapabilityCatalogEntry[]
+  | null => {
+  const parsed = Result.try({
+    try: () => readCapabilityCatalog(),
     catch: (cause) => cause,
   });
   if (Result.isError(parsed)) {

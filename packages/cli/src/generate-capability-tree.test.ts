@@ -685,16 +685,17 @@ describe("insertCapabilities: against the real curated tree + catalog", () => {
     expect(offenders).toEqual([]);
   });
 
-  test("every committed entry declares a transport", async () => {
+  test("every committed entry declares a transport", () => {
     // `transport` is total on the wire. A snapshot entry without it would be
     // read as a plain JSON capability by anything less strict than
     // `parseCapabilityCatalog`, which is exactly the silent default this
     // field replaced.
-    const catalog = parseCapabilityCatalog(readCapabilityCatalog());
-    if (catalog === null) {
-      throw new TypeError("Invalid capability catalog");
+    const catalog = readCapabilityCatalog();
+    expect(catalog.length).toBeGreaterThan(0);
+    expect(parseCapabilityCatalog(catalog)).not.toBeNull();
+    for (const capability of catalog) {
+      expect(capability).toHaveProperty("transport");
     }
-    expect(catalog.filter((e) => e.transport === undefined)).toEqual([]);
   });
 });
 

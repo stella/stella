@@ -196,10 +196,10 @@ describe("null-tolerance premise", () => {
       }
       for (const part of ["body", "params", "query"] as const) {
         const partSchema = schema[part];
-        if (!isRecord(partSchema) || !isRecord(partSchema.properties)) {
+        if (!isRecord(partSchema) || !isRecord(partSchema["properties"])) {
           continue;
         }
-        for (const prop of Object.values(partSchema.properties)) {
+        for (const prop of Object.values(partSchema["properties"])) {
           const json = JSON.stringify(prop);
           if (json.includes('"type":"null"')) {
             nullableFields += 1;

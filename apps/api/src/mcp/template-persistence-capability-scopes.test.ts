@@ -19,13 +19,13 @@ describe("template persistence capability scope parity", () => {
       ({ id }) => id === "templates.fills.create",
     );
 
-    expect(fillToWorkspace?.scope).toBe("stella:documents_write");
-    expect(fillToWorkspace?.additionalScopes).toEqual(["stella:templates"]);
-    expect(fillToWorkspace?.mcp).toEqual({
+    expect(fillToWorkspace?.["scope"]).toBe("stella:documents_write");
+    expect(fillToWorkspace?.["additionalScopes"]).toEqual(["stella:templates"]);
+    expect(fillToWorkspace?.["mcp"]).toEqual({
       type: "covered",
       by: "save_filled_template",
     });
-    expect(fillToWorkspace?.permissions).toEqual({
+    expect(fillToWorkspace?.["permissions"]).toEqual({
       template: ["use"],
       entity: ["create"],
     });

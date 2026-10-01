@@ -2460,7 +2460,9 @@ jobs:
       - name: Generate types
         # The guard calls tsc directly (no turbo), so the generated inputs
         # that turbo's typecheck pipeline would produce must exist first.
-        run: bun run typegen
+        run: |
+          bun --filter @stll/api generate:capability-runtime
+          bun run typegen
 
       - name: Measure merge base
         run: |
@@ -2470,6 +2472,10 @@ jobs:
           (
             cd "$base_dir"
             bash scripts/retry.sh bun ci --ignore-scripts
+            # Older merge bases still commit the runtime aggregates.
+            if [[ -f apps/api/scripts/generate-capability-runtime.ts ]]; then
+              bun --filter @stll/api generate:capability-runtime
+            fi
             bun run typegen
           )
           bun scripts/typecheck-baseline.ts --measure "$base_dir" "$RUNNER_TEMP/typecheck-base.json"
