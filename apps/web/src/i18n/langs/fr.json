@@ -1094,6 +1094,7 @@
     "focusSuggestion": "Cibler la suggestion : {topic}",
     "folioCitationFallback": "p. {n}",
     "forkFromHere": "Créer une nouvelle conversation à partir d’ici",
+    "forkInSidePanel": "Créer une nouvelle conversation à partir d’ici dans le panneau latéral",
     "forkedFrom": "Créée à partir de <bdi>{title}</bdi>",
     "forkedFromUnavailable": "Créée à partir d’une conversation qui n’est plus disponible",
     "forkedThread": "Issue d’une autre conversation",
@@ -1153,6 +1154,7 @@
       "viaProvider": "par {provider}"
     },
     "newChat": "Nouvelle conversation",
+    "newChatInSidePanel": "La nouvelle conversation est disponible dans le panneau latéral",
     "noPromptPresetOnly": "Aucun message, préréglage uniquement",
     "noThreads": "Aucune conversation",
     "officeCitationUnavailable": "Cette citation n’est plus disponible.",
@@ -1200,6 +1202,12 @@
     "richContentLoading": "Chargement du contenu interactif…",
     "richContentTitle": "Contenu interactif",
     "richContentUnavailable": "Ce contenu ne peut pas être affiché en toute sécurité.",
+    "selection": {
+      "askInNewChat": "Demander dans une nouvelle conversation",
+      "quoteInReply": "Citer dans la réponse",
+      "quotedText": "« {quote} »",
+      "toolbarLabel": "Texte sélectionné"
+    },
     "sendError": "Un problème est survenu lors de l’envoi de votre message. Contactez le support si l’erreur persiste.",
     "sendErrorAnonymizationBlocked": "stella n’a pas pu anonymiser une pièce jointe, donc rien n’a été envoyé. Retirez le fichier ou envoyez ce message sans anonymisation.",
     "sendErrorEmptyCompletion": "L’IA a renvoyé une réponse vide. Réessayez ou reformulez votre message.",
@@ -5987,7 +5995,8 @@
         "openReport": "Ouvrir le rapport",
         "submit": "Exporter le rapport",
         "templateLabel": "Modèle de rapport",
-        "title": "Exporter le rapport"
+        "title": "Exporter le rapport",
+        "withoutAiSummaries": "Exporter sans résumés générés par IA"
       },
       "saveAsTemplate": "Enregistrer comme préréglage…",
       "selectProperty": "Sélectionner une propriété",

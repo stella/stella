@@ -91,6 +91,7 @@ import { findTranscriptViolations } from "@/api/tests/helpers/provider-request-t
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+import { rootPoolConnectionCount } from "@/api/tests/test-database-environment";
 
 // A real chat round trip: the production `send-message` handler and
 // `streamChat` pipeline, with a scripted model behind the adapter seam, one
@@ -279,6 +280,9 @@ export const createApprovalHarness = ({
   testDb: TestDatabase;
 }) => {
   const userId = user?.id ?? ids.userA1;
+  // Every database access of a turn goes to the test database; one that
+  // reaches the shared pools escaped it, and fails the test at `close`.
+  const rootPoolConnectionsAtStart = rootPoolConnectionCount();
   const provider = model ?? installScriptedProvider();
   const executions: string[] = [];
   const approvalTool = toolDefinition({
@@ -1415,6 +1419,12 @@ export const createApprovalHarness = ({
       } finally {
         globalThis.fetch = originalFetch;
         provider.restore();
+      }
+      const rootPoolConnections = rootPoolConnectionCount();
+      if (rootPoolConnections !== rootPoolConnectionsAtStart) {
+        panic(
+          "A chat turn connected to the shared database pools instead of the test database; inject that side path (as `indexThread` is) so it uses the test's database",
+        );
       }
     },
     /** Drops the connection of `threadId`'s response still streaming. */

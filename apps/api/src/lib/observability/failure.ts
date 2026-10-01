@@ -18,6 +18,7 @@ import { Panic, panic } from "better-result";
 import type { FailureGrade, FailureReason } from "@stll/errors";
 import { failureGradeOf } from "@stll/errors";
 
+import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import {
   MAX_TRANSPORT_WRAPPER_DEPTH,
   TRANSPORT_WRAPPERS,
@@ -408,6 +409,19 @@ const failureNodeIndex = (nodes: readonly EvidenceNode[]): number => {
 const resolvedHandlerNode = (
   nodes: readonly EvidenceNode[],
 ): { node: EvidenceNode; index: number } | undefined => {
+  // Admission failures retain their response contract through domain wrappers too.
+  for (let index = 0; index <= MAX_TRANSPORT_WRAPPER_DEPTH; index++) {
+    const node = nodes[index];
+    if (node === undefined || !isErrorNode(node)) {
+      break;
+    }
+    if (node.prototypes.includes(ActionAdmissionError.prototype)) {
+      return { node, index };
+    }
+    if (node.handler !== undefined && node.handler.status !== 500) {
+      break;
+    }
+  }
   for (let index = 0; index <= MAX_TRANSPORT_WRAPPER_DEPTH; index++) {
     const node = nodes[index];
     if (node === undefined) {

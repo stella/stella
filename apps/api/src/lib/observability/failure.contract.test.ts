@@ -29,6 +29,7 @@ import {
   providerStatusFields,
 } from "@/api/lib/ai-error";
 import { captureError } from "@/api/lib/analytics/capture";
+import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { elysiaFailureReason } from "@/api/lib/errors/elysia-error";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
 import {
@@ -642,6 +643,45 @@ describe("failure grading", () => {
     expect(Object.keys(PROVIDER_REASONS).toSorted()).toEqual(
       PROVIDER_FAILURE_CASES.map(({ name }) => name).toSorted(),
     );
+  });
+
+  test("raw admission outcomes and domain wrappers grade as their canonical response", () => {
+    for (const reason of [
+      "busy",
+      "period_exhausted",
+      "not_enabled",
+      "unavailable",
+    ] as const) {
+      const refusal = new ActionAdmissionError({
+        reason,
+        message: "Private coordination detail",
+      });
+      const mapped = resolveHandlerError(refusal);
+      expect(mapped).not.toBeNull();
+      const expected = gradeFailure(readEvidence(mapped), SINK);
+      for (const error of [
+        refusal,
+        new Error("Domain wrapper", { cause: refusal }),
+        new HandlerError({
+          status: 500,
+          message: "Request failed",
+          cause: refusal,
+        }),
+        new UnhandledException({ cause: refusal }),
+        new Panic({ message: "request", cause: refusal }),
+      ]) {
+        const actual = gradeFailure(readEvidence(error), SINK);
+        expect({
+          grade: actual.grade,
+          reason: actual.reason,
+          rule: actual.rule,
+        }).toEqual({
+          grade: expected.grade,
+          reason: expected.reason,
+          rule: expected.rule,
+        });
+      }
+    }
   });
 
   test("the request pipeline and the grader resolve the same HandlerError", () => {

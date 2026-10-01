@@ -26,6 +26,10 @@ concurrency:
 
 permissions: {}
 
+env:
+  # Queue-ref cache entries cannot be reused by other refs.
+  TURBO_CACHE: ${{ github.event_name == 'merge_group' && 'local:rw,remote:r' || 'local:rw,remote:rw' }}
+
 jobs:
   ci-plan:
     # Decide trust before checkout, then compute every changed-file scope in
@@ -44,6 +48,7 @@ jobs:
       actions: read
     outputs:
       trusted: ${{ steps.check.outputs.trusted }}
+      playwright_image: ${{ steps.browser-image.outputs.image }}
       # `fast` runs guards, lint, typecheck, unit tests, builds, and the
       # path-scoped image smokes. `full` adds the heavy suites (browsers,
       # services, other platforms). Every heavy job gates on
@@ -68,6 +73,7 @@ jobs:
       mobile_build_required: ${{ steps.changed-files.outputs.mobile_build_required }}
       model_catalog_drift_required: ${{ steps.changed-files.outputs.model_catalog_drift_required }}
       package_checks_required: ${{ steps.changed-files.outputs.package_checks_required }}
+      service_suites_required: ${{ steps.changed-files.outputs.package_checks_required == 'true' || steps.changed-files.outputs.collab_redis_required == 'true' }}
       published_exports_required: ${{ steps.changed-files.outputs.published_exports_required }}
       release_typecheck_required: ${{ steps.changed-files.outputs.release_typecheck_required }}
       route_tree_required: ${{ steps.changed-files.outputs.route_tree_required }}
@@ -178,6 +184,11 @@ jobs:
           fetch-depth: 0
           filter: blob:none
           persist-credentials: false
+
+      - name: Resolve browser image
+        id: browser-image
+        if: steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch'
+        run: echo "image=$(cat .github/actions/setup-playwright/image.txt)" >> "$GITHUB_OUTPUT"
 
       - name: Check changed file scope
         if: >-
@@ -653,7 +664,327 @@ jobs:
   # are ci-tests and ci-browser, which run as separate jobs so they overlap
   # instead of queueing behind one another. The three share nothing but the
   # checkout and the install.
-  ci-checks:
+  ci-checks-generated:
+    needs: ci-plan
+    if: >-
+      needs.ci-plan.outputs.trusted == 'true'
+      || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    # 25m, matching code-quality.
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      # Release PR state for the release CLI changeset hold.
+      pull-requests: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+          submodules: true
+
+      # Deliberately do not restore the global Bun install cache here. Safe
+      # Chain's Bun integration scans registry downloads through a proxy, so
+      # cached tarballs would bypass this job's full dependency scan.
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      # Must follow Setup Bun so the shims land ahead of the real binary. This
+      # job installs the whole workspace from the lockfile, so a malicious
+      # package anywhere in the graph is caught here and blocks the PR.
+      - name: Install Safe Chain
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        uses: ./.github/actions/safe-chain
+
+      - name: Turbo remote cache
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+
+      - name: Install dependencies
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          # .npmrc references NPM_TOKEN, but PR installs must not expose
+          # the real npm token to dependency lifecycle scripts.
+          NPM_TOKEN: ""
+
+      - name: Prepare environment
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # `cp`, not `mv`: renaming the tracked .env.example dirties the
+        # working tree in apps/api and apps/web, and `turbo --affected`
+        # counts working-tree changes — so every PR (even web-only ones)
+        # ran the api AND web test suites concurrently and could OOM the
+        # runner (exit 137). The copy leaves the tree clean; .env is
+        # gitignored and invisible to affected-detection.
+        run: |
+          cd ./apps/api
+          cp .env.example .env
+          cd ../web
+          cp .env.example .env
+
+      - name: CLI registry snapshot guard
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # The CLI and shared chat-policy projections must match the live MCP
+        # registry: regenerate all of them and fail on any diff so a registry
+        # change cannot silently ship stale CLI, web approval, or skill behavior.
+        # Regenerate: `bun run codegen` in packages/cli.
+        run: |
+          (cd packages/cli && bun run codegen)
+          git diff --exit-code -- \
+            chatgpt-app-submission.json \
+            packages/api-contract/src/mcp-chat-tool-policy.gen.ts \
+            packages/cli/src/generated \
+            packages/cli/skills
+
+      - name: MCP App bundle guard
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # The API serves the committed single-file bundle, not the TypeScript
+        # source. Regenerate it and fail on any diff so source tests and the
+        # production resource cannot silently exercise different app code.
+        run: |
+          (cd apps/api && bun run build:mcp-apps)
+          git diff --exit-code -- "apps/api/src/mcp/apps/*/generated/app.html.txt"
+
+      - name: Capability catalog drift guard
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # The committed capability catalog (every `tool`/`covered` safe handler,
+        # projected to id + input schema + permissions + scope + access +
+        # destructive) must match the live handler graph. `--check` regenerates
+        # it in-memory and byte-compares against the committed JSON, so a handler
+        # or mapping-table change cannot silently ship a stale catalog.
+        # Regenerate: `bun --env-file=apps/api/.env
+        # apps/api/scripts/export-capability-catalog.ts`.
+        run: |
+          bun apps/api/scripts/export-capability-catalog.ts --check
+
+      - name: Web API types drift guard
+        if: >-
+          needs.ci-plan.outputs.package_checks_required == 'true'
+          && needs.ci-plan.outputs.web_api_types_required == 'true'
+        # apps/web type-checks against API types printed from the API's own
+        # inference instead of compiling the API. `--check` fails when the
+        # committed file is stale and asserts each printed type is identical
+        # to the inferred one. Regenerate: `bun --filter @stll/api
+        # gen:web-api-types`.
+        run: bun --filter @stll/api gen:web-api-types --check
+
+      - name: Route tree drift guard
+        if: >-
+          needs.ci-plan.outputs.package_checks_required == 'true'
+          && needs.ci-plan.outputs.route_tree_required == 'true'
+        run: bun --filter @stll/web generate:route-tree --check
+
+      # Nothing in ordinary development resolves a package the way an install
+      # does: in-repo consumers read `exports` pointing at ./src. This runs the
+      # real publish path for each source-exported package — build,
+      # prepare-publish, pack — then resolves and imports every declared
+      # subpath from the built dist, so a missing build entry or an unshipped
+      # file fails here rather than after publication.
+      - name: Published export map guard
+        if: >-
+          needs.ci-plan.outputs.package_checks_required == 'true'
+          && needs.ci-plan.outputs.published_exports_required == 'true'
+        run: |
+          bun scripts/check-published-exports.ts packages/auth-model
+          bun scripts/check-published-exports.ts packages/ai-catalog
+          bun scripts/check-published-exports.ts packages/anonymize-chat
+          bun scripts/check-published-exports.ts packages/chat
+          bun scripts/check-published-exports.ts packages/ssr-kit
+          bun scripts/check-published-exports.ts packages/ssr-testkit
+          bun scripts/check-published-exports.ts packages/start-runtime
+          bun scripts/check-published-exports.ts packages/ui
+          bun scripts/check-published-exports.ts packages/money
+          bun scripts/check-published-exports.ts packages/calculations
+          bun scripts/check-published-exports.ts packages/workspace-model
+          bun scripts/check-published-exports.ts packages/workspace-ui
+          bun scripts/check-published-exports.ts packages/stable-stringify
+          bun scripts/check-published-exports.ts packages/time
+          bun scripts/check-published-exports.ts packages/text-normalize
+          bun scripts/check-published-exports.ts packages/agent-input
+
+  ci-checks-policy:
+    needs: ci-plan
+    if: >-
+      needs.ci-plan.outputs.trusted == 'true'
+      || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    # 25m, matching code-quality.
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      # Release PR state for the release CLI changeset hold.
+      pull-requests: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+          submodules: true
+
+      # Deliberately do not restore the global Bun install cache here. Safe
+      # Chain's Bun integration scans registry downloads through a proxy, so
+      # cached tarballs would bypass this job's full dependency scan.
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      # Must follow Setup Bun so the shims land ahead of the real binary. This
+      # job installs the whole workspace from the lockfile, so a malicious
+      # package anywhere in the graph is caught here and blocks the PR.
+      - name: Install Safe Chain
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        uses: ./.github/actions/safe-chain
+
+      - name: Turbo remote cache
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+
+      - name: Install dependencies
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          # .npmrc references NPM_TOKEN, but PR installs must not expose
+          # the real npm token to dependency lifecycle scripts.
+          NPM_TOKEN: ""
+
+      - name: Prepare environment
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # `cp`, not `mv`: renaming the tracked .env.example dirties the
+        # working tree in apps/api and apps/web, and `turbo --affected`
+        # counts working-tree changes — so every PR (even web-only ones)
+        # ran the api AND web test suites concurrently and could OOM the
+        # runner (exit 137). The copy leaves the tree clean; .env is
+        # gitignored and invisible to affected-detection.
+        run: |
+          cd ./apps/api
+          cp .env.example .env
+          cd ../web
+          cp .env.example .env
+
+      - name: Compute affected flag
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        id: affected
+        # The flag scopes the format run and, empty, marks the workflow_dispatch
+        # full run for every step that reads it. The test run scopes itself
+        # through scripts/test-scope.ts, which has to widen the affected set.
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            echo "flag=" >> "$GITHUB_OUTPUT"
+          else
+            echo "flag=--affected" >> "$GITHUB_OUTPUT"
+            echo "TURBO_SCM_BASE=origin/$BASE_REF" >> "$GITHUB_ENV"
+          fi
+
+      - name: Format
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # Call turbo directly: the `format:check` script already
+        # contains `-- --check`, so appending `--affected` via
+        # `bun run` would land it after turbo's `--` and forward it
+        # to oxfmt instead of filtering packages.
+        env:
+          AFFECTED_FLAG: ${{ steps.affected.outputs.flag }}
+        run: |
+          bun run format:guard
+          args=()
+          [[ -z "$AFFECTED_FLAG" ]] || args+=("$AFFECTED_FLAG")
+          bun --bun turbo run format "${args[@]}" -- --check
+
+      - name: Ratchet guard
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # Whole-repo convention metrics (see RATCHET_METRICS in
+        # scripts/ratchet.ts) that may only ever
+        # decrease. Each metric's current count is compared to a committed
+        # baseline; a rise fails CI (a new violation), a fall just prompts a
+        # `--write` to lock in the improvement. Line-based counters, no AST —
+        # fast. The --self-test run first proves each counter counts what it
+        # claims and that a rise regresses, so a broken guard cannot pass
+        # silently. Regenerate: `bun scripts/ratchet.ts --write`.
+        run: |
+          bun test scripts/ratchet-improvements.test.ts scripts/autofix-ratchet-boundary.test.ts scripts/ratchet-derived-totals.test.ts
+          bun scripts/ratchet.ts --self-test
+          bun scripts/ratchet.ts --check
+
+      - name: Documentation source policy rule
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # Every direct dependency must have an exact llms.txt source or a
+        # time-bounded, explained quarantine.
+        run: |
+          bun test ./.oxlint-plugins/__tests__
+          bun run check:docs-sources
+
+      - name: Instruction references
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # AGENTS.md and .claude/skills/*/SKILL.md name repository
+        # paths, package scripts, module exports and oxlint rule ids that
+        # nothing compiles, so a rename leaves the instruction quietly wrong and
+        # every agent reading it is misled. This guard resolves each named
+        # reference against the tree. Intentional examples live in
+        # scripts/instruction-references-allowlist.json, and an entry that
+        # suppresses nothing fails as stale. The --self-test run first proves
+        # each matcher still fires, so a broken guard cannot pass silently.
+        run: |
+          bun scripts/check-instruction-references.ts --self-test
+          bun run check:instruction-references
+
+      - name: Knip production dependency checks
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # Static gate paired with the image boot smokes (api-image-smoke,
+        # api-image-deps): knip --strict verifies production code imports
+        # only `dependencies` (never a devDependency) and flags transitively
+        # resolved (phantom) packages a `turbo prune` would drop. Scoped to
+        # the apps that ship a pruned runtime; each declares its real
+        # production entry (a `!` entry, a start script, or the SSR server
+        # entry). New runtimes are enrolled here deliberately, alongside a
+        # boot/compile smoke.
+        run: |
+          for workspace in apps/api apps/legal-atlas-runner apps/web; do
+            DATABASE_URL=postgresql://invalid bun --no-env-file run knip --production --strict --no-progress --include unlisted,unresolved --workspace "$workspace"
+          done
+
+      - name: Knip workspace dependency checks
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # Include test and tooling imports in every workspace. The production
+        # gate above also checks deployment boundaries for the server apps.
+        run: bun run dependencies:check
+
+      - name: Knip dead-export check (packages/cli)
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # The CLI is small enough to enforce the `exports`/`types` issue
+        # types today (the apps above are not; see the note in the step
+        # before). An exported helper that no runtime or test path calls is
+        # how "login never persists the default server" shipped: the
+        # persistence function existed, unused. Test files are entries in
+        # knip.json so test-only exports count as used; anything else that
+        # is exported but unreferenced fails here.
+        run: |
+          DATABASE_URL=postgresql://invalid bun --no-env-file run knip --no-progress --include exports,types,nsExports --workspace packages/cli
+
+      - name: Knip dead-export budget (all workspaces)
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # What the packages/cli step enforces at zero, every other workspace
+        # carries as a decrease-only budget: one knip run for the whole repo,
+        # counted per workspace against scripts/knip-exports-baseline.json. A
+        # rise fails here and names the offending symbols; a fall only prompts
+        # `bun scripts/knip-exports-ratchet.ts --write` so the improvement can
+        # never regress. The parser tests run first, so a broken summary cannot
+        # pass silently.
+        run: |
+          bun test scripts/knip-exports-ratchet.test.ts
+          bun run check:knip-exports
+
+  ci-checks-rest:
     needs: ci-plan
     if: >-
       needs.ci-plan.outputs.trusted == 'true'
@@ -867,23 +1198,6 @@ jobs:
           cd ../web
           cp .env.example .env
 
-      - name: Compute affected flag
-        if: needs.ci-plan.outputs.package_checks_required == 'true'
-        id: affected
-        # The flag scopes the format run and, empty, marks the workflow_dispatch
-        # full run for every step that reads it. The test run scopes itself
-        # through scripts/test-scope.ts, which has to widen the affected set.
-        env:
-          BASE_REF: ${{ github.base_ref || 'main' }}
-          EVENT_NAME: ${{ github.event_name }}
-        run: |
-          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
-            echo "flag=" >> "$GITHUB_OUTPUT"
-          else
-            echo "flag=--affected" >> "$GITHUB_OUTPUT"
-            echo "TURBO_SCM_BASE=origin/$BASE_REF" >> "$GITHUB_ENV"
-          fi
-
       - name: Check i18n sync
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: bun run i18n:check
@@ -975,20 +1289,6 @@ jobs:
             echo "::warning::Stale marketing recordings for this release (see step log). Re-record with \`bun run marketing:reshoot\`."
           fi
 
-      - name: Format
-        if: needs.ci-plan.outputs.package_checks_required == 'true'
-        # Call turbo directly: the `format:check` script already
-        # contains `-- --check`, so appending `--affected` via
-        # `bun run` would land it after turbo's `--` and forward it
-        # to oxfmt instead of filtering packages.
-        env:
-          AFFECTED_FLAG: ${{ steps.affected.outputs.flag }}
-        run: |
-          bun run format:guard
-          args=()
-          [[ -z "$AFFECTED_FLAG" ]] || args+=("$AFFECTED_FLAG")
-          bun --bun turbo run format "${args[@]}" -- --check
-
       - name: Rust format
         if: needs.ci-plan.outputs.desktop_rust_checks_required == 'true'
         run: cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml -- --check
@@ -1048,21 +1348,6 @@ jobs:
         # Every built-in rule of an enabled plugin is named in the config, on
         # or off, so an oxlint upgrade cannot add rules nobody decided on.
         run: bun scripts/check-oxlint-rule-decisions.ts
-
-      - name: Ratchet guard
-        if: needs.ci-plan.outputs.package_checks_required == 'true'
-        # Whole-repo convention metrics (see RATCHET_METRICS in
-        # scripts/ratchet.ts) that may only ever
-        # decrease. Each metric's current count is compared to a committed
-        # baseline; a rise fails CI (a new violation), a fall just prompts a
-        # `--write` to lock in the improvement. Line-based counters, no AST —
-        # fast. The --self-test run first proves each counter counts what it
-        # claims and that a rise regresses, so a broken guard cannot pass
-        # silently. Regenerate: `bun scripts/ratchet.ts --write`.
-        run: |
-          bun test scripts/ratchet-improvements.test.ts scripts/autofix-ratchet-boundary.test.ts
-          bun scripts/ratchet.ts --self-test
-          bun scripts/ratchet.ts --check
 
       - name: Result boundary enrolment
         if: needs.ci-plan.outputs.package_checks_required == 'true'
@@ -1194,80 +1479,6 @@ jobs:
           bun scripts/chat-fixture-guard.ts --self-test
           bun scripts/chat-fixture-guard.ts
 
-      - name: CLI registry snapshot guard
-        if: needs.ci-plan.outputs.package_checks_required == 'true'
-        # The CLI and shared chat-policy projections must match the live MCP
-        # registry: regenerate all of them and fail on any diff so a registry
-        # change cannot silently ship stale CLI, web approval, or skill behavior.
-        # Regenerate: `bun run codegen` in packages/cli.
-        run: |
-          (cd packages/cli && bun run codegen)
-          git diff --exit-code -- \
-            chatgpt-app-submission.json \
-            packages/api-contract/src/mcp-chat-tool-policy.gen.ts \
-            packages/cli/src/generated \
-            packages/cli/skills
-
-      - name: MCP App bundle guard
-        if: needs.ci-plan.outputs.package_checks_required == 'true'
-        # The API serves the committed single-file bundle, not the TypeScript
-        # source. Regenerate it and fail on any diff so source tests and the
-        # production resource cannot silently exercise different app code.
-        run: |
-          (cd apps/api && bun run build:mcp-apps)
-          git diff --exit-code -- "apps/api/src/mcp/apps/*/generated/app.html.txt"
-
-      - name: Documentation source policy rule
-        if: needs.ci-plan.outputs.package_checks_required == 'true'
-        # Every direct dependency must have an exact llms.txt source or a
-        # time-bounded, explained quarantine.
-        run: |
-          bun test ./.oxlint-plugins/__tests__
-          bun run check:docs-sources
-
-      - name: Instruction references
-        if: needs.ci-plan.outputs.package_checks_required == 'true'
-        # AGENTS.md and .claude/skills/*/SKILL.md name repository
-        # paths, package scripts, module exports and oxlint rule ids that
-        # nothing compiles, so a rename leaves the instruction quietly wrong and
-        # every agent reading it is misled. This guard resolves each named
-        # reference against the tree. Intentional examples live in
-        # scripts/instruction-references-allowlist.json, and an entry that
-        # suppresses nothing fails as stale. The --self-test run first proves
-        # each matcher still fires, so a broken guard cannot pass silently.
-        run: |
-          bun scripts/check-instruction-references.ts --self-test
-          bun run check:instruction-references
-
-      - name: Capability catalog drift guard
-        if: needs.ci-plan.outputs.package_checks_required == 'true'
-        # The committed capability catalog (every `tool`/`covered` safe handler,
-        # projected to id + input schema + permissions + scope + access +
-        # destructive) must match the live handler graph. `--check` regenerates
-        # it in-memory and byte-compares against the committed JSON, so a handler
-        # or mapping-table change cannot silently ship a stale catalog.
-        # Regenerate: `bun --env-file=apps/api/.env
-        # apps/api/scripts/export-capability-catalog.ts`.
-        run: |
-          bun apps/api/scripts/export-capability-catalog.ts --check
-
-      - name: Web API types drift guard
-        if: >-
-          needs.ci-plan.outputs.package_checks_required == 'true'
-          && needs.ci-plan.outputs.web_api_types_required == 'true'
-        # apps/web type-checks against API types printed from the API's own
-        # inference instead of compiling the API. `--check` fails when the
-        # committed file is stale and asserts each printed type is identical
-        # to the inferred one. Regenerate: `bun --filter @stll/api
-        # gen:web-api-types`.
-        run: bun --filter @stll/api gen:web-api-types --check
-
-      - name: Route tree drift guard
-        if: >-
-          needs.ci-plan.outputs.package_checks_required == 'true'
-          && needs.ci-plan.outputs.route_tree_required == 'true'
-        run: bun --filter @stll/web generate:route-tree --check
-
       - name: Model catalog snapshot drift guard
         if: needs.ci-plan.outputs.model_catalog_drift_required == 'true'
         # These fetch models.dev and OpenRouter and byte-compare the
@@ -1330,52 +1541,6 @@ jobs:
         # missing audience, so a broken guard cannot pass silently.
         run: bun apps/api/scripts/mcp-surface-baseline.ts --self-test
 
-      - name: Knip production dependency checks
-        if: needs.ci-plan.outputs.package_checks_required == 'true'
-        # Static gate paired with the image boot smokes (api-image-smoke,
-        # api-image-deps): knip --strict verifies production code imports
-        # only `dependencies` (never a devDependency) and flags transitively
-        # resolved (phantom) packages a `turbo prune` would drop. Scoped to
-        # the apps that ship a pruned runtime; each declares its real
-        # production entry (a `!` entry, a start script, or the SSR server
-        # entry). New runtimes are enrolled here deliberately, alongside a
-        # boot/compile smoke.
-        run: |
-          for workspace in apps/api apps/legal-atlas-runner apps/web; do
-            DATABASE_URL=postgresql://invalid bun --no-env-file run knip --production --strict --no-progress --include unlisted,unresolved --workspace "$workspace"
-          done
-
-      - name: Knip workspace dependency checks
-        if: needs.ci-plan.outputs.package_checks_required == 'true'
-        # Include test and tooling imports in every workspace. The production
-        # gate above also checks deployment boundaries for the server apps.
-        run: bun run dependencies:check
-
-      - name: Knip dead-export check (packages/cli)
-        if: needs.ci-plan.outputs.package_checks_required == 'true'
-        # The CLI is small enough to enforce the `exports`/`types` issue
-        # types today (the apps above are not; see the note in the step
-        # before). An exported helper that no runtime or test path calls is
-        # how "login never persists the default server" shipped: the
-        # persistence function existed, unused. Test files are entries in
-        # knip.json so test-only exports count as used; anything else that
-        # is exported but unreferenced fails here.
-        run: |
-          DATABASE_URL=postgresql://invalid bun --no-env-file run knip --no-progress --include exports,types,nsExports --workspace packages/cli
-
-      - name: Knip dead-export budget (all workspaces)
-        if: needs.ci-plan.outputs.package_checks_required == 'true'
-        # What the packages/cli step enforces at zero, every other workspace
-        # carries as a decrease-only budget: one knip run for the whole repo,
-        # counted per workspace against scripts/knip-exports-baseline.json. A
-        # rise fails here and names the offending symbols; a fall only prompts
-        # `bun scripts/knip-exports-ratchet.ts --write` so the improvement can
-        # never regress. The parser tests run first, so a broken summary cannot
-        # pass silently.
-        run: |
-          bun test scripts/knip-exports-ratchet.test.ts
-          bun run check:knip-exports
-
       - name: Catalogue pinned-content check
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         timeout-minutes: 5
@@ -1391,6 +1556,7 @@ jobs:
         run: bun run --filter @stll/catalogue check-pinned
 
       - name: Property-test convention guard
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: |
           bun test packages/property-testing/src/convention.test.ts
           bun test packages/property-testing/src/ci-gate-coverage.test.ts
@@ -1449,34 +1615,6 @@ jobs:
         # install above; a workflow-only PR skips both.
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: bun test scripts/publish-manifest.test.ts
-
-      # Nothing in ordinary development resolves a package the way an install
-      # does: in-repo consumers read `exports` pointing at ./src. This runs the
-      # real publish path for each source-exported package — build,
-      # prepare-publish, pack — then resolves and imports every declared
-      # subpath from the built dist, so a missing build entry or an unshipped
-      # file fails here rather than after publication.
-      - name: Published export map guard
-        if: >-
-          needs.ci-plan.outputs.package_checks_required == 'true'
-          && needs.ci-plan.outputs.published_exports_required == 'true'
-        run: |
-          bun scripts/check-published-exports.ts packages/auth-model
-          bun scripts/check-published-exports.ts packages/ai-catalog
-          bun scripts/check-published-exports.ts packages/anonymize-chat
-          bun scripts/check-published-exports.ts packages/chat
-          bun scripts/check-published-exports.ts packages/ssr-kit
-          bun scripts/check-published-exports.ts packages/ssr-testkit
-          bun scripts/check-published-exports.ts packages/start-runtime
-          bun scripts/check-published-exports.ts packages/ui
-          bun scripts/check-published-exports.ts packages/money
-          bun scripts/check-published-exports.ts packages/calculations
-          bun scripts/check-published-exports.ts packages/workspace-model
-          bun scripts/check-published-exports.ts packages/workspace-ui
-          bun scripts/check-published-exports.ts packages/stable-stringify
-          bun scripts/check-published-exports.ts packages/time
-          bun scripts/check-published-exports.ts packages/text-normalize
-          bun scripts/check-published-exports.ts packages/agent-input
 
       # Release ordering is a safety property. This test has no workspace
       # dependencies, so it remains runnable when a PR changes only workflows
@@ -1649,7 +1787,7 @@ jobs:
       # another.
       fail-fast: false
       matrix:
-        shard: [api, rest, web]
+        shard: [api-1, api-2, api-3, api-4, rest-web]
 
     steps:
       - name: Checkout
@@ -1719,8 +1857,9 @@ jobs:
         # Outside the workspace, so no shard filter selects it: one shard owns
         # it outright.
         if: >-
-          needs.ci-plan.outputs.package_checks_required == 'true'
-          && matrix.shard == 'rest'
+          !cancelled()
+          && needs.ci-plan.outputs.package_checks_required == 'true'
+          && matrix.shard == 'rest-web'
         run: bun --cwd .claude/mcp test
 
       # The API test runner sizes its parallel lanes from the runner's cores
@@ -1729,12 +1868,14 @@ jobs:
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: nproc; free -g
 
-      - name: Test
-        if: needs.ci-plan.outputs.package_checks_required == 'true'
+      - name: Test API or rest
+        if: >-
+          !cancelled()
+          && needs.ci-plan.outputs.package_checks_required == 'true'
         env:
           AFFECTED_FLAG: ${{ steps.affected.outputs.flag }}
           BASE_REF: ${{ github.base_ref || 'main' }}
-          SHARD: ${{ matrix.shard }}
+          SHARD: ${{ matrix.shard == 'rest-web' && 'rest' || matrix.shard }}
         # Not --affected: a suite that reads files outside its own package also
         # needs the packages its turbo.json test inputs name, and
         # `--affected --filter=X` intersects instead of widening.
@@ -1751,7 +1892,37 @@ jobs:
             read -r -a args <<<"$scope"
           fi
           read -r -a shard_args <<<"$(bun scripts/test-shards.ts --filters "$SHARD")"
-          bun run test -- --concurrency=2 "${args[@]}" "${shard_args[@]}"
+          export API_TEST_SHARD="$(bun scripts/test-shards.ts --api-shard "$SHARD")"
+          set -o pipefail
+          plan="$RUNNER_TEMP/test-plan-$SHARD.json"
+          output="$RUNNER_TEMP/test-output-$SHARD.log"
+          bun run test -- --concurrency=2 "${args[@]}" "${shard_args[@]}" --dry=json > "$plan"
+          bun run test -- --concurrency=2 --output-logs=full "${args[@]}" "${shard_args[@]}" | tee "$output"
+          bun scripts/test-shards.ts --verify-output "$SHARD" "$plan" "$output"
+
+      - name: Test web
+        if: >-
+          !cancelled()
+          && needs.ci-plan.outputs.package_checks_required == 'true'
+          && matrix.shard == 'rest-web'
+        env:
+          AFFECTED_FLAG: ${{ steps.affected.outputs.flag }}
+          BASE_REF: ${{ github.base_ref || 'main' }}
+          SHARD: web
+        run: |
+          args=()
+          if [[ -n "$AFFECTED_FLAG" ]]; then
+            scope=$(bun scripts/test-scope.ts --base "origin/$BASE_REF")
+            read -r -a args <<<"$scope"
+          fi
+          read -r -a shard_args <<<"$(bun scripts/test-shards.ts --filters "$SHARD")"
+          export API_TEST_SHARD="$(bun scripts/test-shards.ts --api-shard "$SHARD")"
+          set -o pipefail
+          plan="$RUNNER_TEMP/test-plan-$SHARD.json"
+          output="$RUNNER_TEMP/test-output-$SHARD.log"
+          bun run test -- --concurrency=2 "${args[@]}" "${shard_args[@]}" --dry=json > "$plan"
+          bun run test -- --concurrency=2 --output-logs=full "${args[@]}" "${shard_args[@]}" | tee "$output"
+          bun scripts/test-shards.ts --verify-output "$SHARD" "$plan" "$output"
 
   # The browser-backed suites. They share one Playwright install, so they stay
   # in a single job rather than one per suite.
@@ -1763,8 +1934,12 @@ jobs:
       && needs.ci-plan.outputs.suite_depth == 'full'
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [desktop, ui]
     container:
-      image: mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
+      image: ${{ needs.ci-plan.outputs.playwright_image }}
       options: --init --ipc=host
     defaults:
       run:
@@ -1895,17 +2070,17 @@ jobs:
           dependency-mode: preinstalled
 
       - name: Test UI browser interactions
-        if: steps.ui-browser-tests.outputs.required == 'true'
+        if: matrix.suite == 'ui' && steps.ui-browser-tests.outputs.required == 'true'
         run: bun --filter @stll/ui test:browser
 
       - name: Test desktop browser interactions
-        if: steps.ui-browser-tests.outputs.required == 'true'
+        if: matrix.suite == 'desktop' && steps.ui-browser-tests.outputs.required == 'true'
         run: |
           cd apps/desktop
           bun run test:browser
 
       - name: Upload desktop browser failures
-        if: failure() && steps.ui-browser-tests.outputs.required == 'true'
+        if: matrix.suite == 'desktop' && failure() && steps.ui-browser-tests.outputs.required == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: desktop-browser-failures
@@ -1914,14 +2089,14 @@ jobs:
           if-no-files-found: ignore
 
       - name: Test UI playground visuals
-        if: steps.ui-browser-tests.outputs.required == 'true'
+        if: matrix.suite == 'ui' && steps.ui-browser-tests.outputs.required == 'true'
         run: bun --filter @stll/web test:e2e:ui-playground
 
       - name: Test extension browser boundary
-        if: steps.extension-browser-tests.outputs.required == 'true'
+        if: matrix.suite == 'ui' && steps.extension-browser-tests.outputs.required == 'true'
         run: bun --filter @stll/extension test:e2e
 
-  code-quality:
+  code-quality-api:
     needs: ci-plan
     if: >-
       needs.ci-plan.outputs.package_checks_required == 'true'
@@ -1942,7 +2117,143 @@ jobs:
           submodules: true
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@aff5017c264acce5a2bcdf15876da08835e6de70
+        uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Turbo remote cache
+        # code-quality runs cacheable workspace and root checks. Restore the
+        # same artifact store as ci-checks instead of rebuilding on every
+        # ephemeral runner; the job is restricted to trusted code above.
+        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+
+      - name: Install dependencies
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          # .npmrc references NPM_TOKEN, but PR installs must not expose
+          # the real npm token to dependency lifecycle scripts.
+          NPM_TOKEN: ""
+
+      - name: Prepare environment
+        run: |
+          cd ./apps/api
+          cp .env.example .env
+          cd ../web
+          cp .env.example .env
+
+      - name: Code quality
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            bun run code-check -- --leg api
+            exit 0
+          fi
+          bun run code-check:affected -- --leg api --base "origin/$BASE_REF"
+
+      - name: Result consumption
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            bun run check:result-consumption -- --all --leg api
+          else
+            bun run check:result-consumption -- --base "origin/$BASE_REF" --leg api
+          fi
+
+  code-quality-web:
+    needs: ci-plan
+    if: >-
+      needs.ci-plan.outputs.package_checks_required == 'true'
+      && (needs.ci-plan.outputs.trusted == 'true'
+          || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+          submodules: true
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Turbo remote cache
+        # code-quality runs cacheable workspace and root checks. Restore the
+        # same artifact store as ci-checks instead of rebuilding on every
+        # ephemeral runner; the job is restricted to trusted code above.
+        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+
+      - name: Install dependencies
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          # .npmrc references NPM_TOKEN, but PR installs must not expose
+          # the real npm token to dependency lifecycle scripts.
+          NPM_TOKEN: ""
+
+      - name: Prepare environment
+        run: |
+          cd ./apps/api
+          cp .env.example .env
+          cd ../web
+          cp .env.example .env
+
+      - name: Code quality
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            bun run code-check -- --leg web
+            exit 0
+          fi
+          bun run code-check:affected -- --leg web --base "origin/$BASE_REF"
+
+      - name: Result consumption
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            bun run check:result-consumption -- --all --leg web
+          else
+            bun run check:result-consumption -- --base "origin/$BASE_REF" --leg web
+          fi
+
+  code-quality-rest:
+    needs: ci-plan
+    if: >-
+      needs.ci-plan.outputs.package_checks_required == 'true'
+      && (needs.ci-plan.outputs.trusted == 'true'
+          || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+          submodules: true
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Turbo remote cache
         # code-quality runs cacheable workspace and root checks. Restore the
@@ -1987,10 +2298,10 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
         run: |
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
-            bun run code-check
+            bun run code-check -- --leg rest
             exit 0
           fi
-          bun run code-check:affected -- --base "origin/$BASE_REF"
+          bun run code-check:affected -- --leg rest --base "origin/$BASE_REF"
 
       - name: Query cache types
         if: needs.ci-plan.outputs.package_checks_required == 'true'
@@ -2001,17 +2312,6 @@ jobs:
 
       - name: Projection totality
         run: bun run check:projection-totality
-
-      - name: Result consumption
-        env:
-          BASE_REF: ${{ github.base_ref || 'main' }}
-          EVENT_NAME: ${{ github.event_name }}
-        run: |
-          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
-            bun run check:result-consumption -- --all
-          else
-            bun run check:result-consumption -- --base "origin/$BASE_REF"
-          fi
 
       - name: Database awaits in loops
         # Type-aware N+1 guard over the API source and scripts: an awaited
@@ -2033,60 +2333,28 @@ jobs:
           bun test scripts/check-api-timeout-mutations.test.ts
           bun run check:api-timeout-mutations
 
-  collab-redis:
-    needs: ci-plan
-    if: >-
-      needs.ci-plan.outputs.collab_redis_required == 'true'
-      && (needs.ci-plan.outputs.trusted == 'true'
-          || github.event_name == 'workflow_dispatch')
-      && needs.ci-plan.outputs.suite_depth == 'full'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-
-    services:
-      redis:
-        image: redis:8@sha256:298e5b3bc566bade82f46ad5511777a4a07a294097ce16ada2f6a42be5239df5
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 2s
-          --health-timeout 2s
-          --health-retries 10
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@aff5017c264acce5a2bcdf15876da08835e6de70
-
-      - name: Install dependencies
-        run: bash scripts/retry.sh bun ci --ignore-scripts
+      - name: Result consumption
         env:
-          NPM_TOKEN: ""
-
-      - name: Run cross-replica collaboration suite
-        env:
-          STELLA_COLLAB_TEST_REDIS_CONTAINER_ID: ${{ job.services.redis.id }}
-          STELLA_COLLAB_TEST_REDIS_URL: redis://127.0.0.1:6379
-        run: bun --filter @stll/collab test src/server.test.ts
+          BASE_REF: ${{ github.base_ref || 'main' }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            bun run check:result-consumption -- --all --leg rest
+          else
+            bun run check:result-consumption -- --base "origin/$BASE_REF" --leg rest
+          fi
 
   # API suites that need real services, at full depth only. The Postgres
   # suites use behavior PGlite cannot reproduce (partial indexes, advisory
   # locks, roles, and policies); the Valkey suites drive real BullMQ queues and
   # workers. Each runner derives its file set from the gate the suites declare,
   # so PR and nightly coverage share one source of truth instead of mirrored
-  # YAML manifests. Both services start with the job and one install serves
-  # both runners.
+  # YAML manifests. One install serves API and collaboration suites; the
+  # latter use a separate Redis container that recovery tests stop.
   service-suites:
     needs: ci-plan
     if: >-
-      needs.ci-plan.outputs.package_checks_required == 'true'
+      needs.ci-plan.outputs.service_suites_required == 'true'
       && (needs.ci-plan.outputs.trusted == 'true'
           || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.suite_depth == 'full'
@@ -2096,6 +2364,16 @@ jobs:
       contents: read
 
     services:
+      redis:
+        image: redis:8@sha256:298e5b3bc566bade82f46ad5511777a4a07a294097ce16ada2f6a42be5239df5
+        ports:
+          - 6380:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 10
+
       postgres:
         image: postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280
         env:
@@ -2126,7 +2404,9 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@aff5017c264acce5a2bcdf15876da08835e6de70
+        uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install dependencies
         run: bash scripts/retry.sh bun ci --ignore-scripts
@@ -2134,25 +2414,62 @@ jobs:
           NPM_TOKEN: ""
 
       - name: Apply migrations to service Postgres
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
         working-directory: apps/api
         env:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
         run: bun run src/db/migrate.ts
 
       - name: Run Postgres-gated API suites
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
         working-directory: apps/api
         env:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
         run: bun run test:postgres
 
+      - name: Start corpus engine
+        if: ${{ !cancelled() && needs.ci-plan.outputs.package_checks_required == 'true' }}
+        run: |
+          docker run -d --name corpus-engine \
+            -p 127.0.0.1:7290:7280 -p 127.0.0.1:7291:7280 \
+            quickwit/quickwit:0.9.0@sha256:1e6169bf4e98a489fca397105f1698c1d80a0f9779f3cf652973bac8a0c3b2bd run
+          curl --fail --silent --show-error --retry 30 --retry-connrefused \
+            --retry-all-errors --retry-delay 1 --retry-max-time 60 --max-time 2 \
+            http://127.0.0.1:7290/health/readyz
+
+      - name: Run corpus engine suites
+        if: ${{ !cancelled() && needs.ci-plan.outputs.package_checks_required == 'true' }}
+        working-directory: apps/api
+        env:
+          DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
+          STELLA_RUN_CORPUS_ENGINE_TESTS: "true"
+        run: |
+          mapfile -t engine_tests < <(grep -rl --include='*.test.ts' STELLA_RUN_CORPUS_ENGINE_TESTS src | sort)
+          test "${#engine_tests[@]}" -gt 0
+          bun test --preload ./src/tests/setup-env.ts --reporter=junit --reporter-outfile=engine-tests.xml "${engine_tests[@]}"
+          python3 -c 'import xml.etree.ElementTree as E; r=E.parse("engine-tests.xml").getroot(); n=len(list(r.iter("testcase"))); assert n > 0 and not any(list(r.iter(t)) for t in ("skipped", "failure", "error")) and not any(int(e.get(k, "0")) for e in r.iter() for k in ("skipped", "disabled", "failures", "errors")), "Engine tests must execute without skips or failures"; print(f"Executed {n} engine tests")'
+
+      - name: Corpus engine diagnostics and cleanup
+        if: always()
+        run: |
+          docker logs corpus-engine || true
+          docker rm -f corpus-engine || true
+
       # Independent of the Postgres verdict: a failure there should not hide
       # this runner's result.
       - name: Run Valkey-gated API suites
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && needs.ci-plan.outputs.package_checks_required == 'true' }}
         working-directory: apps/api
         env:
           REDIS_URL: redis://127.0.0.1:6379
         run: bun run test:valkey
+
+      - name: Run cross-replica collaboration suite
+        if: ${{ !cancelled() && needs.ci-plan.outputs.collab_redis_required == 'true' }}
+        env:
+          STELLA_COLLAB_TEST_REDIS_CONTAINER_ID: ${{ job.services.redis.id }}
+          STELLA_COLLAB_TEST_REDIS_URL: redis://127.0.0.1:6380
+        run: bun --filter @stll/collab test src/server.test.ts
 
   # A VERSION change is the last review boundary before tag creation. Pay the
   # cost of the compiler's complete, uncached project graph there while keeping
@@ -2197,7 +2514,9 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@aff5017c264acce5a2bcdf15876da08835e6de70
+        uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install dependencies
         run: bash scripts/retry.sh bun ci --ignore-scripts
@@ -2292,7 +2611,9 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@aff5017c264acce5a2bcdf15876da08835e6de70
+        uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install candidate dependencies
         run: bash scripts/retry.sh bun ci --ignore-scripts
@@ -2343,7 +2664,9 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@aff5017c264acce5a2bcdf15876da08835e6de70
+        uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install dependencies
         run: bash scripts/retry.sh bun ci --ignore-scripts
@@ -2385,7 +2708,9 @@ jobs:
           submodules: true
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@aff5017c264acce5a2bcdf15876da08835e6de70
+        uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install dependencies
         run: bash scripts/retry.sh bun ci --ignore-scripts
@@ -2442,7 +2767,9 @@ jobs:
           submodules: true
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@aff5017c264acce5a2bcdf15876da08835e6de70
+        uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install dependencies
         run: bash scripts/retry.sh bun ci --ignore-scripts
@@ -2502,7 +2829,9 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@aff5017c264acce5a2bcdf15876da08835e6de70
+        uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install dependencies
         run: bash scripts/retry.sh bun ci --ignore-scripts
@@ -2658,7 +2987,9 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@aff5017c264acce5a2bcdf15876da08835e6de70
+        uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install dependencies
         run: bash scripts/retry.sh bun ci --ignore-scripts
@@ -2695,7 +3026,9 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@aff5017c264acce5a2bcdf15876da08835e6de70
+        uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install dependencies
         run: bash scripts/retry.sh bun ci --ignore-scripts
@@ -2737,7 +3070,9 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@aff5017c264acce5a2bcdf15876da08835e6de70
+        uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install dependencies
         run: bash scripts/retry.sh bun ci --ignore-scripts
@@ -2763,7 +3098,7 @@ jobs:
           E2E_EXECUTION_PROFILE: network-baseline
           E2E_EXPECT_DEV_ROUTES: "false"
           PLAYWRIGHT_BLOB_OUTPUT_NAME: report-network-baseline.zip
-        run: bun --filter @stll/web test:e2e -- route-smoke.spec.ts
+        run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e -- route-smoke.spec.ts
 
       # Playwright clears its report directory at the next invocation.
       - name: Upload network baseline blob report
@@ -2785,7 +3120,7 @@ jobs:
           E2E_EXECUTION_PROFILE: ci-production-parallel
           E2E_EXPECT_DEV_ROUTES: "false"
         run: >-
-          bun --filter @stll/web test:e2e --
+          bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e --
           --grep-invert='route-smoke'
           --shard=${{ matrix.shard }}/2
 
@@ -2800,7 +3135,7 @@ jobs:
           E2E_EXPECT_DEV_ROUTES: "false"
           E2E_OUTPUT_DIR: test-results/route-smoke-${{ matrix.shard }}
         run: >-
-          bun --filter @stll/web test:e2e --
+          bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e --
           --project=route-smoke
           --shard=${{ matrix.shard }}/2
           --grep-invert="route-smoke.spec.ts"
@@ -2845,8 +3180,6 @@ jobs:
       && needs.ci-plan.outputs.stack_redaction_browsers_required == 'true'
       && needs.ci-plan.outputs.suite_depth == 'full'
     runs-on: ubuntu-latest
-    # The Playwright system dependencies come from the runner's apt mirror,
-    # whose throughput varies widely between runs.
     timeout-minutes: 35
     permissions:
       contents: read
@@ -2857,28 +3190,22 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@aff5017c264acce5a2bcdf15876da08835e6de70
+        uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install dependencies
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
 
-      # Playwright installs pinned browsers; the runner's Chrome channel is unrelated.
-      - name: Disable runner Chrome apt source
-        run: |
-          chrome_apt_source=/etc/apt/sources.list.d/google-chrome.list
-          if [[ -f "$chrome_apt_source" ]]; then
-            sudo mv "$chrome_apt_source" "$chrome_apt_source.disabled"
-          fi
-
-      - name: Install Firefox and WebKit
-        run: |
-          bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/install-deps.sh" firefox webkit
-          bunx playwright install firefox webkit
+      - name: Verify Firefox and WebKit in the pinned image
+        uses: ./.github/actions/setup-playwright
+        with:
+          browsers: firefox webkit
 
       - name: Test browser stack redaction
-        run: bun --filter @stll/web test:e2e:stack-redaction
+        run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:stack-redaction
 
   e2e-vite-canary:
     needs: ci-plan
@@ -2898,7 +3225,9 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@aff5017c264acce5a2bcdf15876da08835e6de70
+        uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install dependencies
         run: bash scripts/retry.sh bun ci --ignore-scripts
@@ -2979,13 +3308,13 @@ jobs:
           E2E_EXPECT_DEV_ROUTES: "true"
           PLAYWRIGHT_BLOB_OUTPUT_NAME: report-vite-canary.zip
         run: >-
-          bun --filter @stll/web test:e2e --
+          bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e --
           e2e/specs/vite-dependency-canary.spec.ts
           --project chromium
 
       - name: Test anonymized PDF export
         if: steps.e2e-stack.outputs.status == 'ready'
-        run: bun --filter @stll/web test:e2e:anonymized-export
+        run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:anonymized-export
 
       # Own output dir, not uploaded: the blob reporter clears its directory
       # per invocation, so sharing it would drop the canary blob, and a collab
@@ -2996,7 +3325,7 @@ jobs:
         env:
           E2E_EXPECT_DEV_ROUTES: "true"
           E2E_OUTPUT_DIR: test-results-collab
-        run: bun --filter @stll/web test:e2e:collab -- --project chromium
+        run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:collab -- --project chromium
 
       - name: Show API errors after a Vite canary failure
         if: failure() && steps.e2e-stack.outputs.status == 'ready'
@@ -3063,7 +3392,9 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@aff5017c264acce5a2bcdf15876da08835e6de70
+        uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install dependencies
         run: bash scripts/retry.sh bun ci --ignore-scripts
@@ -3098,7 +3429,7 @@ jobs:
         uses: ./.github/actions/setup-playwright
 
       - name: Check landing islands
-        run: E2E_LANDING_URL=http://localhost:4321 bun --filter @stll/web test:e2e:landing
+        run: E2E_LANDING_URL=http://localhost:4321 bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:landing
 
       - name: Stop landing preview server
         if: always()
@@ -3173,7 +3504,9 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@aff5017c264acce5a2bcdf15876da08835e6de70
+        uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install dependencies
         run: bash scripts/retry.sh bun ci --ignore-scripts
@@ -3319,7 +3652,9 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@aff5017c264acce5a2bcdf15876da08835e6de70
+        uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install turbo
         # Turbo is only used for pruned source overlays.
@@ -3432,7 +3767,9 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@aff5017c264acce5a2bcdf15876da08835e6de70
+        uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install scripts workspace dependencies
         run: bun install --frozen-lockfile --ignore-scripts --filter @stll/scripts
@@ -3597,11 +3934,14 @@ jobs:
         ci-plan,
         agent-sandbox-docker,
         parser-version-guard,
-        ci-checks,
+        ci-checks-generated,
+        ci-checks-policy,
+        ci-checks-rest,
         ci-browser,
         ci-tests,
-        collab-redis,
-        code-quality,
+        code-quality-api,
+        code-quality-web,
+        code-quality-rest,
         service-suites,
         release-typecheck,
         fix-tests-on-base,
@@ -3625,6 +3965,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      actions: read
+      checks: read
       # A skipped plan passes only while the pull request is still a draft.
       pull-requests: read
     steps:
@@ -3651,10 +3993,13 @@ jobs:
             "api-image-deps": "api_image_deps_required",
             "api-image-smoke": "api_image_smoke_required",
             "ci-browser": null,
-            "ci-checks": null,
+            "ci-checks-generated": null,
+            "ci-checks-policy": null,
+            "ci-checks-rest": null,
             "ci-tests": null,
-            "code-quality": "package_checks_required",
-            "collab-redis": "collab_redis_required",
+            "code-quality-api": "package_checks_required",
+            "code-quality-web": "package_checks_required",
+            "code-quality-rest": "package_checks_required",
             "desktop-clippy": "desktop_rust_checks_required",
             "e2e-landing": "e2e_landing_required",
             "e2e-production-shard": "e2e_core_required",
@@ -3667,7 +4012,7 @@ jobs:
             "mobile-build": "mobile_build_required",
             "parser-version-guard": null,
             "release-typecheck": "release_typecheck_required",
-            "service-suites": "package_checks_required",
+            "service-suites": "service_suites_required",
             "stack-redaction-browsers": "stack_redaction_browsers_required",
             "typecheck-baseline": "package_checks_required",
             "web-build": "web_build_required",
@@ -3679,6 +4024,41 @@ jobs:
           FAST_REQUIRED: >-
             ["api-image-smoke", "parser-version-guard", "web-image-smoke"]
         run: |
+          # Queued jobs may have no concurrency annotation. A newer run in
+          # the same workflow/group proves supersession, unless any cancelled
+          # job timed out. Every API lookup fails closed.
+          cancelled_dependencies_were_superseded() {
+            local current workflow created runs jobs urls url annotations
+            current=$(gh api "repos/$REPO/actions/runs/$GITHUB_RUN_ID") || return 1
+            workflow=$(jq -er '.workflow_id | select(type == "number")' <<< "$current") || return 1
+            created=$(jq -er '.created_at | select(type == "string" and length > 0) | @uri' <<< "$current") || return 1
+            runs=$(gh api --paginate --slurp "repos/$REPO/actions/workflows/$workflow/runs?event=$EVENT&created=%3E%3D$created&per_page=100") || return 1
+            jq -e --argjson current "$current" --arg event "$EVENT" --arg pr "$PR_NUMBER" '
+              any(.[].workflow_runs[];
+                .workflow_id == $current.workflow_id and .name == $current.name and .event == $event
+                and .id > $current.id and .run_number > $current.run_number
+                and .created_at >= $current.created_at
+                and (if $event == "workflow_dispatch" then .head_branch == $current.head_branch
+                  elif $event == "pull_request" then any(.pull_requests[]; (.number | tostring) == $pr)
+                  else false end))
+              ' <<< "$runs" > /dev/null || return 1
+            jobs=$(gh api --paginate --slurp "repos/$REPO/actions/runs/$GITHUB_RUN_ID/jobs?filter=latest&per_page=100") || return 1
+            urls=$(jq -er '
+              [.[].jobs[] | select(.conclusion == "cancelled")]
+              | if length == 0 then error("Cancelled run has no cancelled jobs")
+                else [.[] | .check_run_url | select(. != null)] | join("\n") end
+              ' <<< "$jobs") || return 1
+            while IFS= read -r url; do
+              [[ -n "$url" ]] || continue
+              [[ "$url" == "https://api.github.com/repos/$REPO/check-runs/"* ]] || return 1
+              annotations=$(gh api --paginate --slurp "$url/annotations?per_page=100") || return 1
+              jq -e '
+                flatten
+                | any(.[]; (.message // "") | contains("has exceeded the maximum execution time")) | not
+                ' <<< "$annotations" > /dev/null || return 1
+            done <<< "$urls"
+          }
+
           # The plan skips a draft pull request, and every job with it. The
           # event's draft flag can be stale: a push to a draft followed by
           # marking it ready queues the draft run after the ready one, which
@@ -3700,8 +4080,12 @@ jobs:
           # Only a pull request or a manual run is ever superseded by a newer
           # run; a cancelled merge group certifies nothing.
           if [[ "$PLAN_RESULT" == "cancelled" && "$EVENT" != "merge_group" ]]; then
-            echo "CI run was superseded by a newer run (cancel-in-progress). Passing."
-            exit 0
+            if jq -e 'all(.[]; .result == "success" or .result == "skipped" or .result == "cancelled")' <<< "$NEEDS" > /dev/null && cancelled_dependencies_were_superseded; then
+              echo "CI run was superseded by a newer run (cancel-in-progress). Passing."
+              exit 0
+            fi
+            echo "::error::CI planning was cancelled without verified supersession."
+            exit 1
           fi
 
           if [[ "$PLAN_RESULT" != "success" ]]; then
@@ -3734,8 +4118,8 @@ jobs:
               ;;
             fast)
               # Only an unlabelled pull request or a manual run plans `fast`:
-              # its heavy suites skip by design, and a cancelled job means a
-              # newer run replaced this one.
+              # its heavy suites skip by design. A cancelled dependency can
+              # also mean a timeout; verify a newer run and reject timeout annotations.
               if [[ "$EVENT" == "merge_group" ]]; then
                 echo "::error::$EVENT run planned suite depth 'fast'; the heavy suites must run."
                 exit 1
@@ -3759,6 +4143,10 @@ jobs:
               fi
               cancelled=$(jq -r '[to_entries[] | select(.value.result == "cancelled") | .key] | join(", ")' <<< "$NEEDS")
               if [[ -n "$cancelled" ]]; then
+                if ! cancelled_dependencies_were_superseded; then
+                  echo "::error::CI jobs were cancelled without verified supersession: $cancelled"
+                  exit 1
+                fi
                 echo "CI run was superseded by a newer run (cancel-in-progress): $cancelled. Passing."
               fi
               ;;
