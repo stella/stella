@@ -10,15 +10,23 @@ test("model picker keeps its help and workspace chrome aligned", async ({
   });
 
   const inspectorRail = page.getByRole("navigation", { name: "Inspector" });
-  await expect(inspectorRail).toBeVisible({ timeout: 30_000 });
+  // The shell first paints a placeholder rail under the same name while the
+  // inspector loads; only the real rail carries the pane toggle. Measuring
+  // across that swap reads a detached rail (a full-viewport gap).
+  await expect(
+    inspectorRail.getByRole("button", { name: /^(Show|Hide) pane$/u }),
+  ).toBeVisible({ timeout: 30_000 });
   const inspectorInlineEndGap = async () =>
     inspectorRail.evaluate(
       (rail) => window.innerWidth - rail.getBoundingClientRect().right,
     );
+  let closedInspectorInlineEndGap = Number.NaN;
   await expect
-    .poll(async () => Math.abs(await inspectorInlineEndGap()))
+    .poll(async () => {
+      closedInspectorInlineEndGap = await inspectorInlineEndGap();
+      return Math.abs(closedInspectorInlineEndGap);
+    })
     .toBeLessThanOrEqual(1);
-  const closedInspectorInlineEndGap = await inspectorInlineEndGap();
 
   const modelPicker = page.getByRole("button", { name: "Auto", exact: true });
   await expect(modelPicker).toBeVisible({ timeout: 30_000 });
@@ -31,9 +39,11 @@ test("model picker keeps its help and workspace chrome aligned", async ({
     overflowY: getComputedStyle(document.documentElement).overflowY,
   }));
   expect(documentScrollState).toEqual({ gutter: "auto", overflowY: "hidden" });
-  expect(
-    Math.abs((await inspectorInlineEndGap()) - closedInspectorInlineEndGap),
-  ).toBeLessThanOrEqual(1);
+  await expect
+    .poll(async () =>
+      Math.abs((await inspectorInlineEndGap()) - closedInspectorInlineEndGap),
+    )
+    .toBeLessThanOrEqual(1);
 
   const helpTrigger = page
     .getByRole("button", { name: "About reasoning effort" })
