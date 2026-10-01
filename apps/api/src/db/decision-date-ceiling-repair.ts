@@ -30,9 +30,12 @@
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
+import { defaultConfig, type Verdict } from "@stll/db-load-gate/health";
+
 import { CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT } from "../lib/decision-date-bounds-sql";
 import type { CorruptDecisionDateRow } from "../scripts/repair-decision-dates-plan";
 import { repairDecisionDateBatch } from "../scripts/repair-decision-dates-plan";
+import { createBackfillRuntime } from "./backfill-runtime";
 import { readConstraintCompletion } from "./online-constraint-completion";
 import { onlineMigrationParams } from "./online-migration-connection";
 import type {
@@ -102,50 +105,53 @@ const reportUnreconciled = (rows: number): void => {
   );
 };
 
-/** One batch in its own transaction; the number of rows it claimed. */
-const repairOneBatch = async (
-  connection: OnlineMigrationConnection,
-): Promise<number> => {
-  await connection.execute("BEGIN");
-  // Transaction boundary on a raw connection: a failed batch is rolled back so
-  // the session stays usable for the lock release, then rethrown to fail the
-  // migrate task, whose retry resumes from the rows still selected.
-  try {
-    await connection.execute(
-      `SET LOCAL lock_timeout = '${BATCH_LOCK_TIMEOUT}'`,
-    );
-    await connection.execute(
-      `SET LOCAL statement_timeout = '${BATCH_STATEMENT_TIMEOUT}'`,
-    );
-    const batch = await repairDecisionDateBatch(bindTo(connection), BATCH, {
-      // This runs on the reserved migrate connection, which has no query layer
-      // to reach the projection's desired-state writer. The rows are reported
-      // so a reconcile sweep is known to be owed for them.
-      reconcileProjection: null,
-    });
-    await connection.execute("COMMIT");
-    reportUnannounced(batch.unannounced);
-    reportUnreconciled(batch.unreconciled);
-    return batch.cleared + batch.rederived + batch.skipped;
-  } catch (error: unknown) {
-    await connection.execute("ROLLBACK");
-    throw error;
-  }
-};
-
-/**
- * Repair batches until the selection is empty. Recursive rather than a loop
- * with an awaited body: each batch depends on the previous one having
- * committed, so the sequencing is structural.
- */
+/** The runtime owns the transaction, checkpoint, health read and per-batch slot. */
 const repairUntilEmpty = async (
   connection: OnlineMigrationConnection,
+  { readVerdict, sleep = Bun.sleep }: RepairRuntimeOptions,
 ): Promise<void> => {
-  const claimed = await repairOneBatch(connection);
-  if (claimed === 0) {
-    return;
+  const runtime = createBackfillRuntime({
+    name: REPAIR_NAME,
+    tableName: TABLE_NAME,
+    initialSize: BATCH,
+    config: {
+      ...defaultConfig,
+      batchLockTimeoutMs: 30_000,
+      batchStatementTimeoutMs: 300_000,
+    },
+    connection,
+    readVerdict,
+  });
+  try {
+    let done = false;
+    while (!done) {
+      // db-await-in-loop: one bounded, committed batch before the next health check.
+      const result = await runtime.step(async ({ tx, size, cursor }) => {
+        await tx.execute(`SET LOCAL lock_timeout = '${BATCH_LOCK_TIMEOUT}'`);
+        await tx.execute(
+          `SET LOCAL statement_timeout = '${BATCH_STATEMENT_TIMEOUT}'`,
+        );
+        const batch = await repairDecisionDateBatch(bindTo(tx), size, {
+          reconcileProjection: null,
+        });
+        return {
+          cursor,
+          done: batch.cleared + batch.rederived + batch.skipped === 0,
+          value: batch,
+        };
+      });
+      if (result.value !== undefined) {
+        reportUnannounced(result.value.unannounced);
+        reportUnreconciled(result.value.unreconciled);
+      }
+      done = result.done;
+      if (!done) {
+        await sleep(result.sleepMs);
+      }
+    }
+  } finally {
+    await runtime.close();
   }
-  await repairUntilEmpty(connection);
 };
 
 const validateConstraint = async (
@@ -159,7 +165,14 @@ const validateConstraint = async (
   );
 };
 
-export const DECISION_DATE_CEILING_REPAIR: OnlineRepair = {
+type RepairRuntimeOptions = {
+  readVerdict?: () => Promise<Verdict>;
+  sleep?: (milliseconds: number) => Promise<void>;
+};
+
+export const createDecisionDateCeilingRepair = (
+  options: RepairRuntimeOptions = {},
+): OnlineRepair => ({
   name: REPAIR_NAME,
   readCompletion: async (connection) =>
     await readConstraintCompletion({
@@ -169,7 +182,17 @@ export const DECISION_DATE_CEILING_REPAIR: OnlineRepair = {
       tableName: TABLE_NAME,
     }),
   repair: async (connection) => {
-    await repairUntilEmpty(connection);
+    // Empty fresh databases have no heavy data work and no metric source yet.
+    if (
+      (await connection.query(`SELECT 1 FROM public."${TABLE_NAME}" LIMIT 1`))
+        .length === 0
+    ) {
+      await validateConstraint(connection);
+      return;
+    }
+    await repairUntilEmpty(connection, options);
     await validateConstraint(connection);
   },
-};
+});
+
+export const DECISION_DATE_CEILING_REPAIR = createDecisionDateCeilingRepair();

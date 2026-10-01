@@ -9,16 +9,52 @@
  * Slug derivation reuses the helper the ingestion pipeline uses, so there is
  * a single source of truth for the algorithm.
  */
-import { backfillStatuteSlugs } from "@/api/handlers/legislation/slug-backfill";
+import { createScriptBackfillRuntime } from "@/api/db/backfill-runtime";
+import { backfillStatuteSlugsPage } from "@/api/handlers/legislation/slug-backfill";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
+import { brandPersistedLegislationDocumentId } from "@/api/lib/safe-id-boundaries";
 
 // Hold the maintenance lane before the first statement: operator passes over
 // the corpus tables serialize here instead of deadlocking on row locks.
-const { ingestionDb } = await enterCaseLawMaintenanceLane();
+const { rootDb } = await enterCaseLawMaintenanceLane();
 
 console.log("=== BACKFILL STATUTE SLUGS ===");
 
-const { written, skipped, failed } = await backfillStatuteSlugs(ingestionDb);
+const runtime = await createScriptBackfillRuntime({
+  db: rootDb,
+  name: "statute-slugs",
+  tableName: "legislation_documents",
+  initialSize: 200,
+});
+let written = 0;
+let skipped = 0;
+let failed = 0;
+try {
+  while (true) {
+    // db-await-in-loop: one bounded SQL page and its checkpoint share a transaction
+    const step = await runtime.step(async ({ tx, size, cursor }) => {
+      const page = await backfillStatuteSlugsPage({
+        db: async (work) => await work(tx),
+        after:
+          cursor === null ? null : brandPersistedLegislationDocumentId(cursor),
+        size,
+      });
+      return { cursor: page.cursor, done: page.done, value: page };
+    });
+
+    written += step.value.written;
+    skipped += step.value.skipped;
+    failed += step.value.failed;
+    if (step.done) {
+      break;
+    }
+    if (step.sleepMs > 0) {
+      await Bun.sleep(step.sleepMs);
+    }
+  }
+} finally {
+  await runtime.close();
+}
 
 console.log(
   `Done. Wrote ${written} slugs, skipped ${skipped} (no citation in the ELI), ${failed} failed.`,

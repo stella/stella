@@ -29,10 +29,17 @@ export type StatuteSlugBackfillResult = {
   failed: number;
 };
 
-const readPage = async (
-  db: ScopedDb,
-  after: SafeId<"legislationDocument"> | null,
-): Promise<BackfillRow[]> => {
+type StatuteSlugBackfillPageOptions = {
+  db: ScopedDb;
+  after: SafeId<"legislationDocument"> | null;
+  size: number;
+};
+
+const readPage = async ({
+  db,
+  after,
+  size,
+}: StatuteSlugBackfillPageOptions): Promise<BackfillRow[]> => {
   const where: SQL | undefined =
     after === null
       ? isNull(legislationDocuments.slug)
@@ -51,7 +58,7 @@ const readPage = async (
       .from(legislationDocuments)
       .where(where)
       .orderBy(asc(legislationDocuments.id))
-      .limit(BATCH_SIZE),
+      .limit(size),
   );
 };
 
@@ -84,21 +91,9 @@ type BackfillProgress = StatuteSlugBackfillResult & {
   after: SafeId<"legislationDocument"> | null;
 };
 
-const backfillFrom = async (
-  db: ScopedDb,
-  progress: BackfillProgress,
-): Promise<StatuteSlugBackfillResult> => {
-  const rows = await readPage(db, progress.after);
-  if (rows.length === 0) {
-    return {
-      written: progress.written,
-      skipped: progress.skipped,
-      failed: progress.failed,
-    };
-  }
-
+const planPage = (rows: readonly BackfillRow[]) => {
   const assignments: SlugAssignment[] = [];
-  let skipped = progress.skipped;
+  let skipped = 0;
   for (const row of rows) {
     const slug = createStatuteSlug({ eli: row.eli, title: row.title });
     if (slug === null) {
@@ -107,6 +102,44 @@ const backfillFrom = async (
     }
     assignments.push({ id: row.id, slug });
   }
+  return { assignments, skipped };
+};
+
+/**
+ * One bounded page; a tx-bound db callback keeps writes and the caller's
+ * checkpoint atomic. Failures propagate so that neither can commit alone.
+ */
+export const backfillStatuteSlugsPage = async (
+  options: StatuteSlugBackfillPageOptions,
+) => {
+  const rows = await readPage(options);
+  const { assignments, skipped } = planPage(rows);
+  if (assignments.length > 0) {
+    await writePage(options.db, assignments);
+  }
+  return {
+    cursor: rows.at(-1)?.id ?? options.after,
+    done: rows.length === 0,
+    written: assignments.length,
+    skipped,
+    failed: 0,
+  };
+};
+
+const backfillFrom = async (
+  db: ScopedDb,
+  progress: BackfillProgress,
+): Promise<StatuteSlugBackfillResult> => {
+  const rows = await readPage({ db, after: progress.after, size: BATCH_SIZE });
+  if (rows.length === 0) {
+    return {
+      written: progress.written,
+      skipped: progress.skipped,
+      failed: progress.failed,
+    };
+  }
+
+  const { assignments, skipped } = planPage(rows);
 
   const write =
     assignments.length === 0
@@ -131,7 +164,7 @@ const backfillFrom = async (
     after: rows.at(-1)?.id ?? progress.after,
     written:
       progress.written + (Result.isError(write) ? 0 : assignments.length),
-    skipped,
+    skipped: progress.skipped + skipped,
     failed: progress.failed + (Result.isError(write) ? assignments.length : 0),
   });
 };

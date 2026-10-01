@@ -26,7 +26,10 @@
 
 import { panic } from "better-result";
 
+import { defaultConfig, type Verdict } from "@stll/db-load-gate/health";
+
 import { isRecord } from "../lib/type-guards";
+import { createBackfillRuntime } from "./backfill-runtime";
 import { readConstraintCompletion } from "./online-constraint-completion";
 import type {
   OnlineMigrationConnection,
@@ -62,7 +65,7 @@ const READ_BATCH_BOUNDARY_SQL = `
   FROM public."${TABLE_NAME}"
   WHERE id > $1
   ORDER BY id
-  OFFSET ${BATCH - 1}
+  OFFSET $2
   LIMIT 1
 `;
 
@@ -86,8 +89,11 @@ const REPAIR_TAIL_SQL = `
 const readBatchBoundary = async (
   connection: OnlineMigrationConnection,
   cursor: string,
+  size: number,
 ): Promise<string | null> => {
-  const row = (await connection.query(READ_BATCH_BOUNDARY_SQL, [cursor])).at(0);
+  const row = (
+    await connection.query(READ_BATCH_BOUNDARY_SQL, [cursor, size - 1])
+  ).at(0);
   if (row === undefined) {
     return null;
   }
@@ -99,54 +105,49 @@ const readBatchBoundary = async (
   return row["id"];
 };
 
-/**
- * One batch in its own transaction; the primary key the next batch starts
- * after, or null once the walk has repaired the tail of the table.
- */
-const repairOneBatch = async (
-  connection: OnlineMigrationConnection,
-  cursor: string,
-): Promise<string | null> => {
-  await connection.execute("BEGIN");
-  // Transaction boundary on a raw connection: a failed batch is rolled back so
-  // the session stays usable for the lock release, then rethrown to fail the
-  // migrate task, whose retry resumes from the rows still selected.
-  try {
-    await connection.execute(
-      `SET LOCAL lock_timeout = '${BATCH_LOCK_TIMEOUT}'`,
-    );
-    await connection.execute(
-      `SET LOCAL statement_timeout = '${BATCH_STATEMENT_TIMEOUT}'`,
-    );
-    const boundary = await readBatchBoundary(connection, cursor);
-    if (boundary === null) {
-      await connection.execute(REPAIR_TAIL_SQL, [cursor]);
-      await connection.execute("COMMIT");
-      return null;
-    }
-    await connection.execute(REPAIR_RANGE_SQL, [cursor, boundary]);
-    await connection.execute("COMMIT");
-    return boundary;
-  } catch (error: unknown) {
-    await connection.execute("ROLLBACK");
-    throw error;
-  }
-};
-
-/**
- * Walk the table in batches. Recursive rather than a loop with an awaited
- * body: each batch depends on the previous one having committed, so the
- * sequencing is structural.
- */
+/** A keyset cursor advances atomically with the idempotent range UPDATE. */
 const repairFrom = async (
   connection: OnlineMigrationConnection,
-  cursor: string,
+  { readVerdict, sleep = Bun.sleep }: RepairRuntimeOptions,
 ): Promise<void> => {
-  const next = await repairOneBatch(connection, cursor);
-  if (next === null) {
-    return;
+  const runtime = createBackfillRuntime({
+    name: REPAIR_NAME,
+    tableName: TABLE_NAME,
+    initialSize: BATCH,
+    config: {
+      ...defaultConfig,
+      batchLockTimeoutMs: 30_000,
+      batchStatementTimeoutMs: 60_000,
+    },
+    connection,
+    readVerdict,
+  });
+  try {
+    let done = false;
+    while (!done) {
+      // db-await-in-loop: each batch commits its range and cursor before the next gate check.
+      const result = await runtime.step(async ({ tx, cursor, size }) => {
+        await tx.execute(`SET LOCAL lock_timeout = '${BATCH_LOCK_TIMEOUT}'`);
+        await tx.execute(
+          `SET LOCAL statement_timeout = '${BATCH_STATEMENT_TIMEOUT}'`,
+        );
+        const floor = cursor ?? ID_FLOOR;
+        const boundary = await readBatchBoundary(tx, floor, size);
+        if (boundary === null) {
+          await tx.execute(REPAIR_TAIL_SQL, [floor]);
+          return { cursor: floor, done: true, value: null };
+        }
+        await tx.execute(REPAIR_RANGE_SQL, [floor, boundary]);
+        return { cursor: boundary, done: false, value: null };
+      });
+      done = result.done;
+      if (!done) {
+        await sleep(result.sleepMs);
+      }
+    }
+  } finally {
+    await runtime.close();
   }
-  await repairFrom(connection, next);
 };
 
 const validateConstraint = async (
@@ -160,7 +161,14 @@ const validateConstraint = async (
   );
 };
 
-export const CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR: OnlineRepair = {
+type RepairRuntimeOptions = {
+  readVerdict?: () => Promise<Verdict>;
+  sleep?: (milliseconds: number) => Promise<void>;
+};
+
+export const createCorpusProjectionDeleteReceiptRepair = (
+  options: RepairRuntimeOptions = {},
+): OnlineRepair => ({
   name: REPAIR_NAME,
   readCompletion: async (connection) =>
     await readConstraintCompletion({
@@ -170,7 +178,18 @@ export const CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR: OnlineRepair = {
       tableName: TABLE_NAME,
     }),
   repair: async (connection) => {
-    await repairFrom(connection, ID_FLOOR);
+    // Empty fresh databases have no heavy data work and no metric source yet.
+    if (
+      (await connection.query(`SELECT 1 FROM public."${TABLE_NAME}" LIMIT 1`))
+        .length === 0
+    ) {
+      await validateConstraint(connection);
+      return;
+    }
+    await repairFrom(connection, options);
     await validateConstraint(connection);
   },
-};
+});
+
+export const CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR =
+  createCorpusProjectionDeleteReceiptRepair();

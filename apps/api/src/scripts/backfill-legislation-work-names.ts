@@ -19,6 +19,9 @@
  *   bun run src/scripts/backfill-legislation-work-names.ts --apply [--limit 200000] [--page 1000] [--after <id>]
  */
 
+import { panic } from "better-result";
+
+import { createScriptBackfillRuntime } from "@/api/db/backfill-runtime";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { backfillLegislationWorkNamesPage } from "@/api/handlers/legislation/work-name-backfill";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -77,24 +80,67 @@ let changedDocuments = 0;
 let insertedRows = 0;
 let deletedRows = 0;
 let reachedEnd = false;
+const runtime = apply
+  ? await createScriptBackfillRuntime({
+      db: rootDb,
+      name: `legislation-work-names:${afterFlag ?? "start"}`,
+      tableName: "legislation_documents",
+      initialSize: pageSize,
+    })
+  : null;
 
-while (scanned < limit) {
-  // db-await-in-loop: keyset page per iteration; the page is the batch
-  const page = await backfillLegislationWorkNamesPage({
-    db,
-    after: cursor,
-    pageSize: Math.min(pageSize, limit - scanned),
-    apply,
-  });
-  if (page.cursor === null) {
-    reachedEnd = true;
-    break;
+try {
+  while (scanned < limit) {
+    const remaining = limit - scanned;
+    const pageCursor = cursor;
+    // db-await-in-loop: keyset page per iteration; the page is the batch
+    const result =
+      runtime === null
+        ? null
+        : await runtime.step(async ({ tx, size, cursor: persistedCursor }) => {
+            const after =
+              persistedCursor === null
+                ? pageCursor
+                : brandPersistedLegislationDocumentId(persistedCursor);
+            const page = await backfillLegislationWorkNamesPage({
+              db: async (work) => await work(tx),
+              after,
+              pageSize: Math.min(size, remaining),
+              apply: true,
+            });
+            return {
+              cursor: page.cursor ?? persistedCursor,
+              done: page.cursor === null,
+              value: page,
+            };
+          });
+    const page =
+      result === null
+        ? await backfillLegislationWorkNamesPage({
+            db,
+            after: cursor,
+            pageSize: Math.min(pageSize, limit - scanned),
+            apply,
+          })
+        : result.value;
+    if (page === undefined) {
+      panic("Legislation names batch returned no result");
+    }
+    if (page.cursor === null) {
+      reachedEnd = true;
+      break;
+    }
+    cursor = page.cursor;
+    scanned += page.scanned;
+    changedDocuments += page.changedDocuments;
+    insertedRows += page.insertedRows;
+    deletedRows += page.deletedRows;
+    if (result !== null && result.sleepMs > 0 && scanned < limit) {
+      await Bun.sleep(result.sleepMs);
+    }
   }
-  cursor = page.cursor;
-  scanned += page.scanned;
-  changedDocuments += page.changedDocuments;
-  insertedRows += page.insertedRows;
-  deletedRows += page.deletedRows;
+} finally {
+  await runtime?.close();
 }
 
 console.info(

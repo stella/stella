@@ -1,0 +1,362 @@
+import { panic, TaggedError } from "better-result";
+import { sql, type SQL } from "drizzle-orm";
+
+import {
+  combine,
+  defaultConfig,
+  initialBatchState,
+} from "@stll/db-load-gate/health";
+import type { HealthConfig, Verdict } from "@stll/db-load-gate/health";
+import {
+  AUTOVACUUM_SQL,
+  LONG_TRANSACTION_SQL,
+  autovacuumOnTarget,
+  busyWindow,
+  ebsBalance,
+  longTransaction,
+} from "@stll/db-load-gate/indicators";
+import {
+  createHeavyWorkSlot,
+  tryAcquireBackfillTransactionSlot,
+} from "@stll/db-load-gate/slot";
+import { Temporal } from "@stll/time";
+
+import { createEbsBalanceReader } from "../lib/db/ebs-balance-reader";
+import { executedRows } from "../lib/db/executed-rows";
+import { isPgError, PG_ERROR } from "../lib/pg-error";
+import type { IngestionTransactionRunner } from "../lib/replay-safe-ingestion";
+import { isRecord } from "../lib/type-guards";
+import { runAdaptiveBackfillBatch } from "./adaptive-backfill";
+import type { OnlineMigrationConnection } from "./online-migration-connection";
+import type { Transaction } from "./root";
+
+export class BackfillHeldError extends TaggedError("BackfillHeldError")<{
+  message: string;
+  holdUntil: number | null;
+  heldSince: number | null;
+}> {}
+
+type Query = (
+  statement: string,
+  parameters?: readonly (string | number | null)[],
+) => Promise<readonly unknown[]>;
+type RuntimeOptions = {
+  name: string;
+  tableName: string;
+  initialSize: number;
+  config?: HealthConfig;
+  clock?: () => number;
+  readVerdict?: () => Promise<Verdict>;
+  log?: (record: unknown) => void;
+};
+type BatchWork<BatchTransaction, Value> = (options: {
+  tx: BatchTransaction;
+  size: number;
+  cursor: string | null;
+}) => Promise<{ cursor: string | null; done: boolean; value: Value }>;
+type DatabaseRuntimeOptions<BatchTransaction> = RuntimeOptions & {
+  runInTransaction: IngestionTransactionRunner<BatchTransaction>;
+  query: Query;
+  transactionQuery: (tx: BatchTransaction) => Query;
+  slot: {
+    tryAcquire: (tx: BatchTransaction) => Promise<boolean>;
+    release: () => Promise<void>;
+  };
+  close: () => Promise<void>;
+};
+
+const decodeCheckpoint = (row: unknown) => {
+  if (!isRecord(row) || !isRecord(row["batch"])) {
+    return panic("Invalid backfill checkpoint");
+  }
+  const b = row["batch"];
+  const cursor = row["cursor"];
+  if (
+    !(cursor === null || typeof cursor === "string") ||
+    typeof b["size"] !== "number" ||
+    typeof b["sleepMs"] !== "number" ||
+    typeof b["stableBatches"] !== "number" ||
+    typeof b["holdCount"] !== "number" ||
+    !(
+      b["smoothedDurationMs"] === null ||
+      typeof b["smoothedDurationMs"] === "number"
+    ) ||
+    !(b["heldSince"] === null || typeof b["heldSince"] === "number") ||
+    !(b["holdUntil"] === null || typeof b["holdUntil"] === "number")
+  ) {
+    return panic("Invalid backfill batch state");
+  }
+  return {
+    cursor,
+    batch: {
+      size: b["size"],
+      sleepMs: b["sleepMs"],
+      stableBatches: b["stableBatches"],
+      holdCount: b["holdCount"],
+      smoothedDurationMs: b["smoothedDurationMs"],
+      heldSince: b["heldSince"],
+      holdUntil: b["holdUntil"],
+    },
+  };
+};
+
+const createVerdictReader = ({
+  query,
+  tableName,
+  clock,
+  config,
+}: {
+  query: Query;
+  tableName: string;
+  clock: () => number;
+  config: HealthConfig;
+}) => {
+  const initializeReader = async () => {
+    const { envDbLoadGate } = await import("../env-db-load-gate");
+    const identifier = envDbLoadGate.DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER;
+    return identifier
+      ? createEbsBalanceReader({
+          instanceIdentifier: identifier,
+          clock,
+          timeoutMs: config.readTimeoutMs,
+        })
+      : async () => null;
+  };
+  let initialized: ReturnType<typeof initializeReader> | undefined;
+  const read = async () => {
+    initialized ??= initializeReader();
+    return await (
+      await initialized
+    )();
+  };
+  return async () =>
+    combine(
+      await Promise.all([
+        ebsBalance({ read, now: clock, config }),
+        longTransaction({
+          read: async () => {
+            const row = (
+              await query(LONG_TRANSACTION_SQL, ["table", tableName])
+            ).at(0);
+            return isRecord(row) &&
+              typeof row["ageMs"] === "number" &&
+              typeof row["observedAt"] === "string"
+              ? { ageMs: row["ageMs"], observedAt: row["observedAt"] }
+              : null;
+          },
+          now: clock,
+          config,
+        }),
+        autovacuumOnTarget({
+          read: async () => {
+            const row = (await query(AUTOVACUUM_SQL, [tableName])).at(0);
+            return isRecord(row) &&
+              typeof row["active"] === "boolean" &&
+              typeof row["observedAt"] === "string"
+              ? { active: row["active"], observedAt: row["observedAt"] }
+              : null;
+          },
+          now: clock,
+          config,
+          kind: "backfill_batch",
+        }),
+        Promise.resolve(busyWindow({ now: clock, config })),
+      ]),
+    );
+};
+
+const createRuntime = <BatchTransaction>({
+  name,
+  tableName,
+  initialSize,
+  runInTransaction,
+  query,
+  transactionQuery,
+  slot,
+  close,
+  config = defaultConfig,
+  clock = () => Temporal.Now.instant().epochMilliseconds,
+  readVerdict = createVerdictReader({ query, tableName, clock, config }),
+  log = (record) =>
+    process.stderr.write(
+      `${JSON.stringify({ event: "database_backfill_decision", name, record })}\n`,
+    ),
+}: DatabaseRuntimeOptions<BatchTransaction>) => {
+  const step = async <Value>(work: BatchWork<BatchTransaction, Value>) => {
+    const completion: { result?: { value: Value } } = {};
+    const result = await runAdaptiveBackfillBatch({
+      runInTransaction,
+      config,
+      clock,
+      log,
+      readVerdict,
+      slot,
+      readCheckpoint: async (tx) => {
+        const q = transactionQuery(tx);
+        await q("SELECT set_config('statement_timeout', $1, true)", [
+          `${config.batchStatementTimeoutMs}ms`,
+        ]);
+        await q("SELECT set_config('lock_timeout', $1, true)", [
+          `${config.batchLockTimeoutMs}ms`,
+        ]);
+        await q(
+          "INSERT INTO database_backfill_states (name, batch) VALUES ($1, $2::text::jsonb) ON CONFLICT (name) DO NOTHING",
+          [
+            name,
+            JSON.stringify({ ...initialBatchState(config), size: initialSize }),
+          ],
+        );
+        return decodeCheckpoint(
+          (
+            await q(
+              "SELECT cursor, batch FROM database_backfill_states WHERE name = $1 FOR UPDATE",
+              [name],
+            )
+          ).at(0),
+        );
+      },
+      persistCheckpoint: async (tx, checkpoint) => {
+        await transactionQuery(tx)(
+          "UPDATE database_backfill_states SET cursor = $2, batch = $3::text::jsonb, updated_at = now() WHERE name = $1",
+          [name, checkpoint.cursor, JSON.stringify(checkpoint.batch)],
+        );
+      },
+      // Work is already a bounded, idempotent SQL batch. It executes in the
+      // checkpoint transaction; external I/O must be performed beforehand.
+      selectPage: async (tx, cursor, size) => {
+        const batch = await work({ tx, cursor, size });
+        completion.result = { value: batch.value };
+        // A completed pass resets its cursor so later rule changes or source
+        // updates can rescan lower keys; each write still needs its predicate.
+        return {
+          items: [],
+          cursor: batch.done ? null : batch.cursor,
+          done: batch.done,
+        };
+      },
+      needsWork: () => false,
+      persistItems: () => Promise.resolve(),
+      isStatementTimeout: (cause) => isPgError(cause, PG_ERROR.QUERY_CANCELED),
+    });
+    if (result.status === "held" || result.status === "retry") {
+      throw new BackfillHeldError({
+        message: `Backfill ${name} deferred (${result.status})`,
+        holdUntil: result.checkpoint.batch.holdUntil,
+        heldSince: result.checkpoint.batch.heldSince,
+      });
+    }
+    if (completion.result === undefined) {
+      return panic("Backfill batch completed without a result");
+    }
+    return {
+      done: result.status === "done",
+      cursor: result.checkpoint.cursor,
+      sleepMs: result.checkpoint.batch.sleepMs,
+      value: completion.result.value,
+    };
+  };
+  return { step, close };
+};
+
+const drizzleQuery =
+  (tx: { execute: (statement: SQL) => PromiseLike<unknown> }): Query =>
+  async (statement, parameters = []) => {
+    // PgDialect emits the same numbered scalar parameters as the raw repair connections.
+    const fragments = statement.split(/\$(\d+)/u);
+    const parts = fragments.map((fragment, index) =>
+      index % 2 === 0
+        ? sql.raw(fragment)
+        : sql`${parameters[Number(fragment) - 1]}`,
+    );
+    return executedRows(await tx.execute(sql.join(parts, sql``)));
+  };
+
+export const createScriptBackfillRuntime = async ({
+  db,
+  ...options
+}: RuntimeOptions & {
+  db: {
+    transaction: IngestionTransactionRunner<Transaction>;
+    execute: (statement: SQL) => PromiseLike<unknown>;
+  };
+}) => {
+  const slot = {
+    tryAcquire: async (tx: Transaction) =>
+      await tryAcquireBackfillTransactionSlot({
+        query: async (statement, parameters) =>
+          (await drizzleQuery(tx)(statement, parameters)).map((row) => {
+            if (!isRecord(row) || typeof row["acquired"] !== "boolean") {
+              return panic("Invalid advisory lock response");
+            }
+            return { acquired: row["acquired"] };
+          }),
+      }),
+    release: () => Promise.resolve(),
+  };
+  return createRuntime({
+    ...options,
+    query: drizzleQuery(db),
+    transactionQuery: drizzleQuery,
+    config: {
+      ...(options.config ?? defaultConfig),
+      minSize: Math.min(
+        options.initialSize,
+        (options.config ?? defaultConfig).minSize,
+      ),
+      maxSize: Math.max(
+        options.initialSize,
+        (options.config ?? defaultConfig).maxSize,
+      ),
+    },
+    runInTransaction: async (work) => await db.transaction(work),
+    slot,
+    close: () => Promise.resolve(),
+  });
+};
+
+export const createBackfillRuntime = (
+  options: RuntimeOptions & { connection: OnlineMigrationConnection },
+) => {
+  const { connection } = options;
+  const slot = createHeavyWorkSlot({
+    kind: "backfill_batch",
+    session: {
+      query: async (statement, parameters) =>
+        (await connection.query(statement, parameters)).map((row) => {
+          if (!isRecord(row) || typeof row["acquired"] !== "boolean") {
+            return panic("Invalid advisory lock response");
+          }
+          return { acquired: row["acquired"] };
+        }),
+    },
+  });
+  return createRuntime({
+    ...options,
+    slot,
+    query: connection.query,
+    transactionQuery: (tx) => tx.query,
+    config: {
+      ...(options.config ?? defaultConfig),
+      minSize: Math.min(
+        options.initialSize,
+        (options.config ?? defaultConfig).minSize,
+      ),
+      maxSize: Math.max(
+        options.initialSize,
+        (options.config ?? defaultConfig).maxSize,
+      ),
+    },
+    runInTransaction: async (work) => {
+      await connection.execute("BEGIN");
+      try {
+        const result = await work(connection);
+        await connection.execute("COMMIT");
+        return result;
+      } catch (error) {
+        await connection.execute("ROLLBACK");
+        throw error;
+      }
+    },
+    close: slot.close,
+  });
+};

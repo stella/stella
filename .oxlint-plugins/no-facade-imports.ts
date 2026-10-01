@@ -9,6 +9,7 @@ const MANAGED_NAMESPACES = ["@/api/db", "@/api/lib/analytics", "@/lib/errors"];
 const ALLOWED_LEAF_IMPORTS = new Set([
   "@/api/db/agent-auth-schema",
   "@/api/db/auth-schema",
+  "@/api/db/backfill-runtime",
   "@/api/db/billing-validators",
   "@/api/db/columns",
   "@/api/db/corpus-schema-lane",

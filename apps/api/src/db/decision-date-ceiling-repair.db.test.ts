@@ -14,8 +14,25 @@ import { CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT } from "@/api/lib/decision-dat
 import { isRecord } from "@/api/lib/type-guards";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
-import { DECISION_DATE_CEILING_REPAIR } from "./decision-date-ceiling-repair";
+import { createDecisionDateCeilingRepair } from "./decision-date-ceiling-repair";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
+
+const DECISION_DATE_CEILING_REPAIR = createDecisionDateCeilingRepair({
+  sleep: async () => {},
+  readVerdict: async () => ({
+    kind: "normal",
+    signals: [
+      {
+        indicator: "ebs_balance",
+        kind: "normal",
+        value: 90,
+        threshold: 70,
+        observedAt: "2026-10-01T12:00:00.000Z",
+        reason: "Injected health for repair semantics",
+      },
+    ],
+  }),
+});
 
 /**
  * The ceiling migration and its online repair against a table still carrying

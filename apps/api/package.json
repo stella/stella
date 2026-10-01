@@ -68,6 +68,7 @@
     "dev:errors": "tail -F .dev-logs/errors.jsonl"
   },
   "dependencies": {
+    "@aws-sdk/client-cloudwatch": "^3.1138.0",
     "@aws-sdk/client-s3": "^3.1138.0",
     "@aws-sdk/client-sesv2": "^3.1138.0",
     "@aws-sdk/client-sts": "^3.1138.0",
@@ -111,6 +112,7 @@
     "@stll/concurrency": "workspace:*",
     "@stll/conditions": "workspace:*",
     "@stll/country-codes": "workspace:*",
+    "@stll/db-load-gate": "workspace:*",
     "@stll/docx-core": "catalog:",
     "@stll/docx-utils": "workspace:*",
     "@stll/errors": "workspace:*",

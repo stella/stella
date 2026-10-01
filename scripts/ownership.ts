@@ -907,6 +907,20 @@ export const OWNERSHIP = [
     enforcement: { kind: "none" },
   },
   {
+    id: "database-load-gate",
+    capability: "Gating and sizing heavy database maintenance",
+    owner: [
+      "packages/db-load-gate/",
+      "apps/api/src/lib/db/ebs-balance-reader.ts",
+    ],
+    summary:
+      "One transport-free package combines health signals, records decisions, " +
+      "sizes batches and arbitrates a database-wide priority slot. The API " +
+      "adapter alone reads both RDS EBS balances through CloudWatch; index " +
+      "runners and backfills use the same source and freshness rules.",
+    enforcement: { kind: "none" },
+  },
+  {
     id: "bounded-concurrency",
     capability:
       "Running an async operation over a list with a bounded number in flight",

@@ -21,6 +21,7 @@
  */
 import { panic } from "better-result";
 
+import { createScriptBackfillRuntime } from "@/api/db/backfill-runtime";
 import {
   loadCitationCourtWeightEntries,
   recomputeCitationAuthorityBatch,
@@ -89,28 +90,44 @@ let scanned = 0;
 let written = 0;
 let cited = 0;
 
-while (true) {
-  const position = after;
-  // db-await-in-loop: bounded keyset batch per iteration; the next batch starts where this one stopped
-  const batch = await rootDb.transaction(
-    async (tx) =>
-      await recomputeCitationAuthorityBatch(tx, {
-        after: position,
-        limit: BATCH,
+const runtime = await createScriptBackfillRuntime({
+  name: `citation-authority:${asOf.toISOString()}:${rawAfter ?? "start"}`,
+  tableName: "case_law_decisions",
+  initialSize: BATCH,
+  db: rootDb,
+});
+try {
+  while (true) {
+    // db-await-in-loop: one gated keyset transaction including its durable cursor
+    const step = await runtime.step(async ({ tx, size, cursor }) => {
+      const batch = await recomputeCitationAuthorityBatch(tx, {
+        after: cursor ?? rawAfter ?? null,
+        limit: size,
         now: { type: "pinned", at: asOf },
         courtWeightEntries,
-      }),
-  );
-  scanned += batch.scanned;
-  written += batch.written;
-  cited += batch.cited;
-  after = batch.lastId ?? after;
-  console.log(
-    `  ${scanned} examined, ${written} rewritten, ${cited} cited; last ${after ?? "-"}`,
-  );
-  if (batch.scanned < BATCH) {
-    break;
+      });
+      return {
+        cursor: batch.lastId ?? cursor,
+        done: batch.scanned < size,
+        value: batch,
+      };
+    });
+    const batch = step.value;
+
+    scanned += batch.scanned;
+    written += batch.written;
+    cited += batch.cited;
+    after = step.cursor ?? after;
+    console.log(
+      `  ${scanned} examined, ${written} rewritten, ${cited} cited; last ${after ?? "-"}`,
+    );
+    if (step.done) {
+      break;
+    }
+    await Bun.sleep(step.sleepMs);
   }
+} finally {
+  await runtime.close();
 }
 
 console.log(
