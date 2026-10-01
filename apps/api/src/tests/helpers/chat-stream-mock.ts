@@ -18,12 +18,14 @@ export const createChatStreamMock = () => {
     }
     runs.clear();
   });
-  return mock(async ({ run }: Parameters<typeof streamChat>[0]) => {
+  return mock(({ run }: Parameters<typeof streamChat>[0]) => {
     runs.add(run);
-    return sseResponse(
-      new ReadableStream<Uint8Array>({
-        start: (controller) => controller.close(),
-      }),
+    return Promise.resolve(
+      sseResponse(
+        new ReadableStream<Uint8Array>({
+          start: (controller) => controller.close(),
+        }),
+      ),
     );
   });
 };
