@@ -17,6 +17,10 @@ on:
         type: choice
         options: [fast, full]
         default: fast
+      proof_successor:
+        description: Scratch cancellation proof successor
+        type: boolean
+        default: false
 
 # PR runs supersede their predecessors. Manual runs supersede only older
 # manual runs on the same branch; merge-group runs remain isolated.
@@ -1640,9 +1644,10 @@ jobs:
     # with the Test step still in progress — legitimate multi-package work
     # outgrowing the budget, not a hang. Sharding is what actually splits that
     # work up; the headroom stays until the shards prove they need less.
-    timeout-minutes: 25
+    timeout-minutes: ${{ matrix.shard == 'api-1' && 2 || 25 }}
     permissions:
       contents: read
+      actions: write
     strategy:
       # Every shard's verdict, not just the first failure's: a cancelled shard
       # reports no result of its own, and one failing suite should not hide
@@ -1652,6 +1657,20 @@ jobs:
         shard: [api-1, api-2, api-3, api-4, rest, web]
 
     steps:
+      - name: Scratch cancellation proof
+        if: matrix.shard == 'api-1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROOF_SUCCESSOR: ${{ inputs.proof_successor }}
+        run: |
+          if [[ "$PROOF_SUCCESSOR" != "true" ]]; then
+            echo "Dispatching the single superseding run after ci-plan succeeded."
+            gh workflow run ci.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME" -f depth=fast -f proof_successor=true
+          else
+            echo "Non-superseded successor: api-1 deliberately exceeds its two-minute job timeout."
+            sleep 180
+          fi
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -3686,6 +3705,8 @@ jobs:
           FAST_REQUIRED: >-
             ["api-image-smoke", "parser-version-guard", "web-image-smoke"]
         run: |
+          echo "PROOF_RUN_CANCELLED=$RUN_CANCELLED"
+          echo "PROOF_RUN_ID=$GITHUB_RUN_ID"
           # The plan skips a draft pull request, and every job with it. The
           # event's draft flag can be stale: a push to a draft followed by
           # marking it ready queues the draft run after the ready one, which
