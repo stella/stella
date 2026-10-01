@@ -68,8 +68,8 @@ const createDatabase = async () => {
     ),
     "utf-8",
   );
-  const indexStatement = indexMigration
-    .match(/CREATE INDEX CONCURRENTLY[\s\S]*?;/u)
+  const indexStatement = /CREATE INDEX CONCURRENTLY[\s\S]*?;/u
+    .exec(indexMigration)
     ?.at(0);
   if (indexStatement === undefined) {
     throw new TypeError("Missing event index statement");

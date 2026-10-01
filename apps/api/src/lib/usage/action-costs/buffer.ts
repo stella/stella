@@ -33,7 +33,8 @@ export const createObservationBuffer = <T>({
     }
     if (active !== undefined) {
       await active;
-      return await flush();
+      await flush();
+      return;
     }
     active = (async () => {
       while (pending.length > 0) {

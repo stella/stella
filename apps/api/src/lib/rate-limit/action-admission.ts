@@ -579,9 +579,10 @@ export const withActionAdmission = async <T>({
   };
   try {
     outcome = await Result.tryPromise({
-      try: () =>
-        admissionScope.run(executionScope, () =>
-          observedRun(controller.signal),
+      try: async () =>
+        await admissionScope.run(
+          executionScope,
+          async () => await observedRun(controller.signal),
         ),
       catch: (error: unknown) => error,
     });

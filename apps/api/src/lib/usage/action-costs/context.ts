@@ -20,7 +20,7 @@ export type ActionCostRecord = ActionCostIdentity & {
   estimatedMicroUnits: number | null;
 };
 
-export type ActionCostCall = ActionCostIdentity & {
+type ActionCostCall = ActionCostIdentity & {
   callId: string;
   kind: string;
   occurredAt: Date;

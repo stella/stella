@@ -208,7 +208,9 @@ describe("finite HTTP action admission", () => {
               await withActionAdmission({
                 ...options,
                 costRecorder: {
-                  enqueue: (row) => rows.push(row),
+                  enqueue: (row) => {
+                    rows.push(row);
+                  },
                   estimate: () => null,
                   callRate: () => null,
                 },
