@@ -1,5 +1,11 @@
 # @stll/agent-input
 
+## 0.1.1
+
+### Patch Changes
+
+- [#4254](https://github.com/stella/stella/pull/4254) [`dbea0b5`](https://github.com/stella/stella/commit/dbea0b56de08fe4a0932f19e52cd711920aceee4) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Tighten input handling.
+
 ## 0.1.0
 
 ### Minor Changes
