@@ -602,13 +602,18 @@ export const ROLE_GRANT_STATEMENTS = [
   `
     GRANT USAGE ON SCHEMA public TO stella_public_law_reader
   `,
-  ...Object.entries(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION).map(
-    ([relation, columns]) => `
+  // Alias reader grants land only after the release declaring them optional.
+  ...Object.entries(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION)
+    .filter(
+      ([relation]) => relation !== getTableName(schema.caseLawDecisionAliases),
+    )
+    .map(
+      ([relation, columns]) => `
       GRANT SELECT (${Object.keys(columns).map(quoteSqlIdentifier).join(", ")})
         ON TABLE ${quoteSqlIdentifier(relation)}
         TO stella_public_law_reader
     `,
-  ),
+    ),
   // Operator role for pre-computed decision analyses: a narrow read plus the
   // single writable column.
   `

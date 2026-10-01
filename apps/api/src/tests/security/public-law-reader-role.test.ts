@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { eq, sql, TransactionRollbackError } from "drizzle-orm";
+import { eq, getTableName, sql, TransactionRollbackError } from "drizzle-orm";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
 
@@ -13,6 +13,7 @@ import {
   stellaPublicLawReader,
 } from "@/api/db/rls";
 import {
+  caseLawDecisionAliases,
   caseLawDecisions,
   caseLawSources,
   corpusIndexGenerations,
@@ -65,6 +66,7 @@ import type {
   LegislationReadTransaction,
 } from "@/api/lib/legislation-public-read-db";
 import {
+  assertPublicLawDatabaseRolePermissions,
   publicLawDatabaseRolePermissionsSql,
   type PublicLawDatabaseRolePermissions,
 } from "@/api/lib/public-law-read-db";
@@ -138,11 +140,33 @@ const forbiddenColumnRead = async (
     `SELECT ${quoted(column)} FROM ${quoted(relation)}`,
   );
 
-const expectedQualifiedColumns = publicLawColumnPairs(
+const declaredColumnPairs = publicLawColumnPairs(
   PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
-)
+);
+const expectedQualifiedColumns = declaredColumnPairs
   .map(({ relation, column }) => `${relation}.${column}`)
   .toSorted();
+const requiredQualifiedColumns = declaredColumnPairs
+  .filter(({ grant }) => grant === "required")
+  .map(({ relation, column }) => `${relation}.${column}`);
+
+const readableColumnPairs = async () => {
+  const result = await testDb.execute<{ relation: string; column: string }>(sql`
+    SELECT tables.relname AS relation, columns.attname AS column
+    FROM pg_attribute AS columns
+    INNER JOIN pg_class AS tables ON tables.oid = columns.attrelid
+    INNER JOIN pg_namespace AS schemas ON schemas.oid = tables.relnamespace
+    WHERE schemas.nspname = 'public'
+      AND tables.relkind IN ('r', 'p', 'v', 'm', 'f')
+      AND columns.attnum > 0
+      AND NOT columns.attisdropped
+      AND has_column_privilege(
+        ${READER_ROLE}, columns.attrelid, columns.attnum, 'SELECT'
+      )
+    ORDER BY relation, column
+  `);
+  return result.rows;
+};
 
 let testDb: TestDatabase;
 
@@ -280,28 +304,16 @@ afterAll(async () => {
 });
 
 describe("public-law reader role", () => {
-  test("can read exactly the allowlisted columns", async () => {
-    const result = await testDb.execute<{ qualified: string }>(sql`
-      SELECT tables.relname || '.' || columns.attname AS qualified
-      FROM pg_attribute AS columns
-      INNER JOIN pg_class AS tables ON tables.oid = columns.attrelid
-      INNER JOIN pg_namespace AS schemas ON schemas.oid = tables.relnamespace
-      WHERE schemas.nspname = 'public'
-        AND tables.relkind IN ('r', 'p', 'v', 'm', 'f')
-        AND columns.attnum > 0
-        AND NOT columns.attisdropped
-        AND has_column_privilege(
-          ${READER_ROLE},
-          columns.attrelid,
-          columns.attnum,
-          'SELECT'
-        )
-      ORDER BY qualified
-    `);
-
-    expect(result.rows.map(({ qualified }) => qualified)).toEqual(
-      expectedQualifiedColumns,
+  test("readable columns contain every required column and only declared columns", async () => {
+    const readable = (await readableColumnPairs()).map(
+      ({ relation, column }) => `${relation}.${column}`,
     );
+    expect(
+      requiredQualifiedColumns.filter((column) => !readable.includes(column)),
+    ).toEqual([]);
+    expect(
+      readable.filter((column) => !expectedQualifiedColumns.includes(column)),
+    ).toEqual([]);
   });
 
   test("has no table-level SELECT and cannot write or create", async () => {
@@ -436,16 +448,22 @@ describe("public-law reader role", () => {
   // over-privilege.
   test("startup attestation under an older map refuses a later release's grants", async () => {
     const accepted: string[] = [];
-    for (const relation of Object.keys(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION)) {
+    for (const [relation, declaredColumns] of Object.entries(
+      PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
+    )) {
       const olderMap = Object.fromEntries(
         Object.entries(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION).filter(
           ([name]) => name !== relation,
         ),
       );
-      const permissions = await rolePermissionsAfter(
-        withoutExtraGrants,
-        olderMap,
-      );
+      const permissions = await rolePermissionsAfter(async (tx) => {
+        const columns = Object.keys(declaredColumns);
+        await tx.execute(
+          sql.raw(
+            `GRANT SELECT (${columns.map(quoted).join(", ")}) ON TABLE ${quoted(relation)} TO ${quoted(READER_ROLE)}`,
+          ),
+        );
+      }, olderMap);
       if (permissions?.canReadOtherData !== true) {
         accepted.push(relation);
       }
@@ -457,6 +475,65 @@ describe("public-law reader role", () => {
       canReadPublicLaw: true,
       canReadOtherData: false,
     });
+  });
+
+  test("alias grants require an optional declaration in the preceding release", async () => {
+    const aliasRelation = getTableName(caseLawDecisionAliases);
+    const aliasColumns = Object.keys(
+      PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION.case_law_decision_aliases,
+    );
+    const expansionDeclarations = {
+      ...PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
+      [aliasRelation]: Object.fromEntries(
+        aliasColumns.map((column): [string, PublicLawColumnGrant] => [
+          column,
+          "permitted",
+        ]),
+      ),
+    };
+    const withoutAliasDeclaration = Object.fromEntries(
+      Object.entries(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION).filter(
+        ([relation]) => relation !== aliasRelation,
+      ),
+    );
+    const grantAliases = async (tx: TestDatabaseTransaction) => {
+      await tx.execute(
+        sql.raw(
+          `GRANT SELECT (${aliasColumns.map(quoted).join(", ")}) ON TABLE ${quoted(aliasRelation)} TO ${quoted(READER_ROLE)}`,
+        ),
+      );
+    };
+    const absent = await rolePermissionsAfter(async (tx) => {
+      await tx.execute(
+        sql.raw(
+          `REVOKE SELECT (${aliasColumns.map(quoted).join(", ")}) ON TABLE ${quoted(aliasRelation)} FROM ${quoted(READER_ROLE)}`,
+        ),
+      );
+    }, expansionDeclarations);
+    expect(absent).toMatchObject({
+      canReadPublicLaw: true,
+      canReadOtherData: false,
+    });
+    expect(
+      await rolePermissionsAfter(grantAliases, expansionDeclarations),
+    ).toMatchObject({
+      canReadPublicLaw: true,
+      canReadOtherData: false,
+    });
+    const olderRelease = await rolePermissionsAfter(
+      grantAliases,
+      withoutAliasDeclaration,
+    );
+    expect(olderRelease).toMatchObject({
+      canReadPublicLaw: true,
+      canReadOtherData: true,
+    });
+    if (olderRelease === undefined) {
+      panic("Expected the older release's role permissions.");
+    }
+    expect(() => assertPublicLawDatabaseRolePermissions(olderRelease)).toThrow(
+      "PUBLIC_LAW_DATABASE_URL must use a role that can only read the public-law corpus",
+    );
   });
 
   test("startup attestation holds when the map requires nothing", async () => {
@@ -615,15 +692,24 @@ describe("public-law reader role", () => {
     });
   });
 
-  test("SET ROLE can SELECT every surface and rejects an operational column", async () => {
+  test("SET ROLE can SELECT every granted column and rejects an operational column", async () => {
+    const readable = await readableColumnPairs();
+    expect(readable.length).toBeGreaterThan(0);
+    const columnsByRelation = new Map<string, string[]>();
+    for (const { relation, column } of readable) {
+      const columns = columnsByRelation.get(relation);
+      if (columns === undefined) {
+        columnsByRelation.set(relation, [column]);
+      } else {
+        columns.push(column);
+      }
+    }
     await testDb.transaction(async (tx) => {
       await tx.execute(sql.raw(`SET LOCAL ROLE ${quoted(READER_ROLE)}`));
-      for (const [relation, columns] of Object.entries(
-        PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
-      )) {
+      for (const [relation, columns] of columnsByRelation) {
         await tx.execute(
           sql.raw(
-            `SELECT ${Object.keys(columns).map(quoted).join(", ")} FROM ${quoted(relation)} LIMIT 0`,
+            `SELECT ${columns.map(quoted).join(", ")} FROM ${quoted(relation)} LIMIT 0`,
           ),
         );
       }
@@ -1050,7 +1136,7 @@ describe("public-law reader role", () => {
     );
   });
 
-  test("has a SELECT policy on every allowlisted relation and no other", async () => {
+  test("has SELECT policies for required relations and only declared relations", async () => {
     const result = await testDb.execute<{ tablename: string }>(sql`
       SELECT tablename
       FROM pg_policies
@@ -1060,9 +1146,17 @@ describe("public-law reader role", () => {
       ORDER BY tablename
     `);
 
-    expect(result.rows.map(({ tablename }) => tablename)).toEqual(
-      Object.keys(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION).toSorted(),
-    );
+    const policies = result.rows.map(({ tablename }) => tablename);
+    const requiredRelations = declaredColumnPairs
+      .filter(({ grant }) => grant === "required")
+      .map(({ relation }) => relation);
+    const declaredRelations = Object.keys(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION);
+    expect(
+      requiredRelations.filter((relation) => !policies.includes(relation)),
+    ).toEqual([]);
+    expect(
+      policies.filter((relation) => !declaredRelations.includes(relation)),
+    ).toEqual([]);
   });
 
   test("keeps the previous reader policies during rollout", async () => {

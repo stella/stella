@@ -23,7 +23,10 @@ import {
   presentTextField,
 } from "@/api/lib/case-law/decision-text";
 import { isRecord } from "@/api/lib/type-guards";
-import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
+import {
+  openGatedTestDatabase,
+  withGatedTestClients,
+} from "@/api/tests/gated-test-database";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -220,6 +223,110 @@ if (!databaseUrl || !runPostgresTests) {
       // The durable publisher receipt may retain the old UUID; replay resolves it.
       expect(claims).toEqual([{ decisionId: retiredId }]);
     });
+
+    test("retirement serializes with a stale insert of the retired UUID", async () => {
+      const retiredId = createSafeId<"caseLawDecision">();
+      const survivorId = createSafeId<"caseLawDecision">();
+      await db.insert(caseLawDecisions).values(
+        [retiredId, survivorId].map((id) => ({
+          id,
+          sourceId,
+          country: "SVK",
+          court: "Concurrent retirement court",
+          language: "sk",
+          caseNumber: id,
+        })),
+      );
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const retirementClient = openClient({
+          connection: { statement_timeout: 5000 },
+        }).sql;
+        const staleClient = openClient({
+          connection: { statement_timeout: 5000 },
+        }).sql;
+        const [writer] = await staleClient`SELECT pg_backend_pid() AS pid`;
+        const writerPid: unknown = writer?.pid;
+        if (typeof writerPid !== "number") {
+          throw new TypeError("Expected PostgreSQL backend PID");
+        }
+        const retirementReady = Promise.withResolvers<undefined>();
+        const staleInsertStarted = Promise.withResolvers<undefined>();
+        const lockObserved = Promise.withResolvers<undefined>();
+        const releaseRetirement = Promise.withResolvers<undefined>();
+        const retirement = retirementClient.begin(async (session) => {
+          await session`INSERT INTO case_law_decision_aliases
+            (retired_decision_id, canonical_decision_id)
+            VALUES (${retiredId}::uuid, ${survivorId}::uuid)`;
+          await session`DELETE FROM case_law_decisions WHERE id = ${retiredId}::uuid`;
+          retirementReady.resolve(undefined);
+          await staleInsertStarted.promise;
+          // The alias is still uncommitted. The insert must wait on the
+          // graph lock before checking it, rather than pass the guard and
+          // wait on the deleted row's unique-index transaction lock.
+          const deadline = Date.now() + 3000;
+          let waitingLock: unknown;
+          while (waitingLock === undefined && Date.now() < deadline) {
+            const locks =
+              await session`SELECT locktype, classid::int AS classid, objid::int AS objid
+              FROM pg_locks WHERE pid = ${writerPid} AND NOT granted`;
+            waitingLock = locks.at(0);
+            if (waitingLock === undefined) {
+              await Bun.sleep(10);
+            }
+          }
+          expect(waitingLock).toMatchObject({
+            locktype: "advisory",
+            classid: 732_104,
+            objid: 1,
+          });
+          lockObserved.resolve(undefined);
+          await releaseRetirement.promise;
+        });
+        let staleInsert: Promise<unknown> | undefined;
+        try {
+          await Promise.race([retirementReady.promise, retirement]);
+          staleInsert = staleClient.begin(async (session) => {
+            staleInsertStarted.resolve(undefined);
+            await session`INSERT INTO case_law_decisions
+              (id, source_id, country, court, language, case_number)
+              VALUES (${retiredId}::uuid, ${sourceId}::uuid, 'SVK',
+                'Concurrent retirement court', 'sk', ${retiredId})`;
+          });
+          const staleOutcome = staleInsert.then(
+            () => ({ status: "fulfilled" as const }),
+            (error: unknown) => ({ status: "rejected" as const, error }),
+          );
+          await Promise.race([lockObserved.promise, retirement]);
+          releaseRetirement.resolve(undefined);
+          await retirement;
+          expect(await staleOutcome).toMatchObject({
+            status: "rejected",
+            error: {
+              message: expect.stringContaining("Decision UUID is retired"),
+            },
+          });
+        } finally {
+          staleInsertStarted.resolve(undefined);
+          releaseRetirement.resolve(undefined);
+          await Promise.allSettled([
+            retirement,
+            ...(staleInsert === undefined ? [] : [staleInsert]),
+          ]);
+        }
+      });
+      const decisions = await db
+        .select({ id: caseLawDecisions.id })
+        .from(caseLawDecisions)
+        .where(inArray(caseLawDecisions.id, [retiredId, survivorId]));
+      expect(decisions).toEqual([{ id: survivorId }]);
+      const aliases = await db
+        .select({
+          canonicalDecisionId: caseLawDecisionAliases.canonicalDecisionId,
+        })
+        .from(caseLawDecisionAliases)
+        .where(eq(caseLawDecisionAliases.retiredDecisionId, retiredId));
+      expect(aliases).toEqual([{ canonicalDecisionId: survivorId }]);
+    }, 15_000);
 
     test("treats the same publisher id as the same decision on replay", async () => {
       const before = await storedCourts();
@@ -1890,24 +1997,29 @@ if (!databaseUrl || !runPostgresTests) {
       await expect(
         db
           .insert(caseLawDecisionAliases)
-          .values({ retiredDecisionId: middle, canonicalDecisionId: first }),
+          .values({ retiredDecisionId: middle, canonicalDecisionId: first })
+          .execute(),
       ).rejects.toMatchObject({
         cause: { message: expect.stringContaining("Decision alias cycle") },
       });
       await expect(
         db
           .insert(caseLawDecisionAliases)
-          .values({ retiredDecisionId: later, canonicalDecisionId: missing }),
+          .values({ retiredDecisionId: later, canonicalDecisionId: missing })
+          .execute(),
       ).rejects.toMatchObject({
         cause: {
           message: expect.stringContaining("Decision alias target is not live"),
         },
       });
       await expect(
-        db.insert(caseLawDecisionAliases).values({
-          retiredDecisionId: missing,
-          canonicalDecisionId: terminal,
-        }),
+        db
+          .insert(caseLawDecisionAliases)
+          .values({
+            retiredDecisionId: missing,
+            canonicalDecisionId: terminal,
+          })
+          .execute(),
       ).rejects.toMatchObject({
         cause: {
           message: expect.stringContaining(
@@ -1924,7 +2036,8 @@ if (!databaseUrl || !runPostgresTests) {
           db
             .update(caseLawDecisionAliases)
             .set(patch)
-            .where(eq(caseLawDecisionAliases.retiredDecisionId, first)),
+            .where(eq(caseLawDecisionAliases.retiredDecisionId, first))
+            .execute(),
         ).rejects.toMatchObject({
           cause: {
             message: expect.stringContaining(
@@ -1936,7 +2049,10 @@ if (!databaseUrl || !runPostgresTests) {
         });
       }
       await expect(
-        db.delete(caseLawDecisions).where(eq(caseLawDecisions.id, middle)),
+        db
+          .delete(caseLawDecisions)
+          .where(eq(caseLawDecisions.id, middle))
+          .execute(),
       ).rejects.toMatchObject({ cause: { code: "23503" } });
       await db.insert(caseLawDecisionAliases).values({
         retiredDecisionId: middle,
@@ -1974,17 +2090,23 @@ if (!databaseUrl || !runPostgresTests) {
         expect(rows).toContainEqual({ retired, target: terminal });
       }
       await expect(
-        db.delete(caseLawDecisions).where(eq(caseLawDecisions.id, terminal)),
+        db
+          .delete(caseLawDecisions)
+          .where(eq(caseLawDecisions.id, terminal))
+          .execute(),
       ).rejects.toMatchObject({ cause: { code: "23503" } });
       await expect(
-        db.insert(caseLawDecisions).values({
-          id: first,
-          sourceId,
-          country: "SVK",
-          court: "Alias lifecycle court",
-          language: "sk",
-          caseNumber: first,
-        }),
+        db
+          .insert(caseLawDecisions)
+          .values({
+            id: first,
+            sourceId,
+            country: "SVK",
+            court: "Alias lifecycle court",
+            language: "sk",
+            caseNumber: first,
+          })
+          .execute(),
       ).rejects.toMatchObject({
         cause: { message: expect.stringContaining("Decision UUID is retired") },
       });
@@ -1992,7 +2114,8 @@ if (!databaseUrl || !runPostgresTests) {
         db
           .update(caseLawDecisions)
           .set({ id: first })
-          .where(eq(caseLawDecisions.id, later)),
+          .where(eq(caseLawDecisions.id, later))
+          .execute(),
       ).rejects.toMatchObject({
         cause: { message: expect.stringContaining("Decision UUID is retired") },
       });

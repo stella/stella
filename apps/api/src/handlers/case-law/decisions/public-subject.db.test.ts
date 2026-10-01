@@ -578,99 +578,6 @@ test(
 );
 
 test(
-  "retired UUID links survive deletion and leave direct Czech reads unchanged",
-  async () => {
-    const db = drizzle({ client });
-    const retiredId = createSafeId<"caseLawDecision">();
-    const survivorId = createSafeId<"caseLawDecision">();
-    const beforeCz = await (await get(`/d/${openId}`)).json();
-    await db.insert(caseLawDecisions).values([
-      {
-        id: retiredId,
-        sourceId: openSourceId,
-        country: "CZE",
-        court: "Nejvyšší soud",
-        language: "cs",
-        caseNumber: "1Cdo/1/2026",
-      },
-      {
-        id: survivorId,
-        sourceId: openSourceId,
-        country: "CZE",
-        court: "Nejvyšší soud",
-        language: "cs",
-        caseNumber: "1Cdo/1/2026",
-      },
-    ]);
-    await db.insert(caseLawDecisionAliases).values({
-      retiredDecisionId: retiredId,
-      canonicalDecisionId: survivorId,
-    });
-    await db.delete(caseLawDecisions).where(eq(caseLawDecisions.id, retiredId));
-    const response = await get(`/d/${retiredId}`);
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({
-      reached: survivorId,
-      readOnHandle: 0,
-      resolution: { type: DECISION_READ_RESOLUTION.DIRECT },
-    });
-    const decision = await withRedistributableSubject(
-      caseLawDb,
-      { kind: "id", id: retiredId },
-      async (subject) =>
-        await readDecisionHandler({
-          subject,
-          readCourtWeights: async () => await Promise.resolve(new Map()),
-        }),
-    );
-    expect(decision).toMatchObject({ id: survivorId, country: "CZE" });
-    expect(await (await get(`/d/${survivorId}`)).json()).toEqual({
-      reached: survivorId,
-      readOnHandle: 0,
-      resolution: { type: DECISION_READ_RESOLUTION.DIRECT },
-    });
-    const absorbedId = await insertAbsorbedRow({
-      slug: "absorbed-into-retired-uuid",
-      sourceDocumentId: "syn-retired-target",
-      judgmentId: retiredId,
-    });
-    for (const path of [
-      `/d/${absorbedId}`,
-      "/s/absorbed-into-retired-uuid?country=CZE",
-    ]) {
-      const absorbedResponse = await get(path);
-      expect(absorbedResponse.status).toBe(200);
-      expect(await absorbedResponse.json()).toEqual({
-        reached: survivorId,
-        readOnHandle: 0,
-        resolution: {
-          type: DECISION_READ_RESOLUTION.ABSORBED_SUPPLEMENT,
-          absorbedDecisionId: absorbedId,
-          anchorPrefix: supplementAnchorPrefix({
-            kind: DECISION_SUPPLEMENT_KIND.REASONS,
-            sourceDocumentId: "syn-retired-target",
-          }),
-        },
-      });
-    }
-    expect(await (await get(`/d/${openId}`)).json()).toEqual(beforeCz);
-    await expect(
-      db.insert(caseLawDecisions).values({
-        id: retiredId,
-        sourceId: openSourceId,
-        country: "CZE",
-        court: "Nejvyšší soud",
-        language: "cs",
-        caseNumber: "recreated",
-      }),
-    ).rejects.toMatchObject({
-      cause: { message: expect.stringContaining("Decision UUID is retired") },
-    });
-  },
-  DB_TEST_TIMEOUT_MS,
-);
-
-test(
   "alias writes flatten chains, preserve retries, and refuse cycles, conflicts and stale targets",
   async () => {
     const db = drizzle({ client });
@@ -716,7 +623,8 @@ test(
         db
           .update(caseLawDecisionAliases)
           .set(patch)
-          .where(eq(caseLawDecisionAliases.retiredDecisionId, first)),
+          .where(eq(caseLawDecisionAliases.retiredDecisionId, first))
+          .execute(),
       ).rejects.toMatchObject({
         cause: {
           message: expect.stringContaining(
@@ -729,7 +637,8 @@ test(
       db
         .update(caseLawDecisionAliases)
         .set({ canonicalDecisionId: final })
-        .where(eq(caseLawDecisionAliases.retiredDecisionId, first)),
+        .where(eq(caseLawDecisionAliases.retiredDecisionId, first))
+        .execute(),
     ).rejects.toMatchObject({
       cause: {
         message: expect.stringContaining("Conflicting decision alias target"),
@@ -738,21 +647,26 @@ test(
     await expect(
       db
         .insert(caseLawDecisionAliases)
-        .values({ retiredDecisionId: middle, canonicalDecisionId: first }),
+        .values({ retiredDecisionId: middle, canonicalDecisionId: first })
+        .execute(),
     ).rejects.toMatchObject({
       cause: { message: expect.stringContaining("Decision alias cycle") },
     });
     await expect(
       db
         .insert(caseLawDecisionAliases)
-        .values({ retiredDecisionId: middle, canonicalDecisionId: missingId }),
+        .values({ retiredDecisionId: middle, canonicalDecisionId: missingId })
+        .execute(),
     ).rejects.toMatchObject({
       cause: {
         message: expect.stringContaining("Decision alias target is not live"),
       },
     });
     await expect(
-      db.delete(caseLawDecisions).where(eq(caseLawDecisions.id, middle)),
+      db
+        .delete(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, middle))
+        .execute(),
     ).rejects.toMatchObject({ cause: { code: "23503" } });
     await db
       .insert(caseLawDecisionAliases)
@@ -780,79 +694,22 @@ test(
         .where(eq(caseLawDecisionAliases.retiredDecisionId, later)),
     ).toEqual([{ target: final }]);
     await expect(
-      db.delete(caseLawDecisions).where(eq(caseLawDecisions.id, final)),
+      db
+        .delete(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, final))
+        .execute(),
     ).rejects.toMatchObject({ cause: { code: "23503" } });
     const rows = await db
       .select({ target: caseLawDecisionAliases.canonicalDecisionId })
       .from(caseLawDecisionAliases)
       .where(eq(caseLawDecisionAliases.retiredDecisionId, first));
     expect(rows).toEqual([{ target: final }]);
-    expect(await (await get(`/d/${first}`)).json()).toMatchObject({
-      reached: final,
-    });
   },
   DB_TEST_TIMEOUT_MS,
 );
 
 test(
-  "retired UUIDs cannot expose unpublished, redacted, restricted or unavailable-country survivors",
-  async () => {
-    const db = drizzle({ client });
-    const unpublished = createSafeId<"caseLawDecision">();
-    const redacted = createSafeId<"caseLawDecision">();
-    await db.insert(caseLawDecisions).values([
-      {
-        id: unpublished,
-        sourceId: openSourceId,
-        country: "CZE",
-        court: "Court",
-        language: "cs",
-        caseNumber: "alias-unpublished",
-        metadata: metadataMarkedListingOnly(sql`'{}'::jsonb`),
-      },
-      {
-        id: redacted,
-        sourceId: openSourceId,
-        country: "CZE",
-        court: "Court",
-        language: "cs",
-        caseNumber: "alias-redacted",
-        redactedAt: new Date("2026-01-01T00:00:00Z"),
-      },
-    ]);
-    // Redaction retains the established direct response while aliases stay hidden.
-    expect((await get(`/d/${redacted}`)).status).toBe(200);
-    for (const { target, sourceId } of [
-      { target: unpublished, sourceId: openSourceId },
-      { target: redacted, sourceId: openSourceId },
-      { target: closedId, sourceId: closedSourceId },
-      { target: unavailableCountryId, sourceId: openSourceId },
-    ]) {
-      const retiredId = createSafeId<"caseLawDecision">();
-      await db.insert(caseLawDecisions).values({
-        id: retiredId,
-        sourceId,
-        country: "CZE",
-        court: "Court",
-        language: "cs",
-        caseNumber: retiredId,
-      });
-      await db
-        .insert(caseLawDecisionAliases)
-        .values({ retiredDecisionId: retiredId, canonicalDecisionId: target });
-      await db
-        .delete(caseLawDecisions)
-        .where(eq(caseLawDecisions.id, retiredId));
-      const response = await get(`/d/${retiredId}`);
-      expect(response.status).toBe(404);
-      expect(await response.json()).toEqual({ message: "Decision not found" });
-    }
-  },
-  DB_TEST_TIMEOUT_MS,
-);
-
-test(
-  "only ingestion can register aliases; the public reader can resolve but cannot mutate",
+  "only ingestion can register aliases; request and public-reader roles cannot access them",
   async () => {
     const db = drizzle({ client });
     const retiredId = createSafeId<"caseLawDecision">();
@@ -870,6 +727,18 @@ test(
         .insert(caseLawDecisionAliases)
         .values({ retiredDecisionId: retiredId, canonicalDecisionId: openId });
     });
+    for (const role of ["stella", "stella_public_law_reader"]) {
+      await expect(
+        db.transaction(async (tx) => {
+          await tx.execute(sql.raw(`SET LOCAL ROLE ${role}`));
+          await tx
+            .select({ id: caseLawDecisionAliases.retiredDecisionId })
+            .from(caseLawDecisionAliases);
+        }),
+      ).rejects.toMatchObject({
+        cause: { message: expect.stringContaining("permission denied") },
+      });
+    }
     await expect(
       db.transaction(async (tx) => {
         await tx.execute(sql`SET LOCAL ROLE stella_public_law_reader`);
@@ -910,10 +779,13 @@ test(
       },
     ]) {
       await expect(
-        db.insert(caseLawDecisionAliases).values({
-          retiredDecisionId,
-          canonicalDecisionId: openId,
-        }),
+        db
+          .insert(caseLawDecisionAliases)
+          .values({
+            retiredDecisionId,
+            canonicalDecisionId: openId,
+          })
+          .execute(),
       ).rejects.toMatchObject({
         cause: { message: expect.stringContaining(message) },
       });

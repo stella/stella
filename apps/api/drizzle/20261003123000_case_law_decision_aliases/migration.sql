@@ -1,5 +1,4 @@
 -- requires: 20260516000000_case_law_ingestion_role
--- requires: 20260823190000_public_law_reader_role
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 
@@ -16,15 +15,11 @@ ALTER TABLE "case_law_decision_aliases" ENABLE ROW LEVEL SECURITY;--> statement-
 ALTER TABLE "case_law_decision_aliases" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE POLICY "case_law_ingestion_access" ON "case_law_decision_aliases"
   FOR ALL TO stella_ingestion USING (true) WITH CHECK (true);--> statement-breakpoint
-CREATE POLICY "public_law_reader_access" ON "case_law_decision_aliases"
-  FOR SELECT TO stella_public_law_reader USING (true);--> statement-breakpoint
 REVOKE ALL ON TABLE "case_law_decision_aliases" FROM PUBLIC, stella;--> statement-breakpoint
-GRANT SELECT (retired_decision_id, canonical_decision_id)
-  ON TABLE "case_law_decision_aliases" TO stella_public_law_reader;--> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE ON TABLE "case_law_decision_aliases" TO stella_ingestion;--> statement-breakpoint
 
--- Serialize graph changes before row locks. Only alias writes take this lock,
--- so ordinary decision ingestion and public reads do not serialize.
+-- Serialize alias changes and UUID creation before row locks so a stale
+-- insert cannot recreate a UUID while its retirement is uncommitted.
 CREATE FUNCTION public.case_law_decision_alias_lock() RETURNS trigger
 LANGUAGE plpgsql SET search_path = pg_catalog, public AS $$
 BEGIN
@@ -101,6 +96,7 @@ CREATE TRIGGER case_law_decision_alias_flatten
 CREATE FUNCTION public.case_law_decision_reject_retired_uuid() RETURNS trigger
 LANGUAGE plpgsql SET search_path = pg_catalog, public AS $$
 BEGIN
+  PERFORM pg_advisory_xact_lock(732104, 1);
   IF EXISTS (SELECT 1 FROM public.case_law_decision_aliases WHERE retired_decision_id = NEW.id) THEN
     RAISE EXCEPTION 'Decision UUID is retired' USING ERRCODE = '23514';
   END IF;

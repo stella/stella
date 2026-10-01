@@ -148,9 +148,10 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     tier_label: "required",
     weight: "required",
   },
+  // Accept the future reader grant before a later release grants and reads it.
   case_law_decision_aliases: {
-    retired_decision_id: "required",
-    canonical_decision_id: "required",
+    retired_decision_id: "permitted",
+    canonical_decision_id: "permitted",
   },
   case_law_decision_identifiers: {
     decision_id: "required",
