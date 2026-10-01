@@ -1,0 +1,28 @@
+{
+  "name": "@stll/redis-config",
+  "version": "0.0.0",
+  "private": true,
+  "description": "shared Redis connection policy",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/connection.ts"
+  },
+  "scripts": {
+    "clean": "git clean -xdf .cache .turbo node_modules",
+    "test": "bun test src",
+    "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/redis-config",
+    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/redis-config",
+    "format": "bun ../../scripts/run-oxfmt.ts ."
+  },
+  "dependencies": {
+    "better-result": "catalog:",
+    "valibot": "catalog:"
+  },
+  "devDependencies": {
+    "@stll/typescript-config": "workspace:*",
+    "bun-types": "catalog:"
+  }
+}

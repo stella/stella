@@ -1,3 +1,5 @@
+import { expectTypeOf } from "bun:test";
+
 import type { PermissionInput, statements } from "./index";
 
 type PermissionMap = {
@@ -10,27 +12,16 @@ type LegacyRequireAtLeastOne<T> = {
 
 type LegacyPermissionInput = LegacyRequireAtLeastOne<Partial<PermissionMap>>;
 
-type Assert<T extends true> = T;
-type Extends<T, U> = [T] extends [U] ? true : false;
+// The current input accepts exactly what the legacy one accepted, both ways.
+expectTypeOf<LegacyPermissionInput>().toExtend<PermissionInput>();
+expectTypeOf<PermissionInput>().toExtend<LegacyPermissionInput>();
 
-export type PermissionInputAcceptsEverythingLegacyAccepted = Assert<
-  Extends<LegacyPermissionInput, PermissionInput>
->;
+// An empty input and an unknown action stay rejected.
+expectTypeOf<Record<never, never>>().not.toExtend<PermissionInput>();
+expectTypeOf<{ workspace: ["invalid"] }>().not.toExtend<PermissionInput>();
 
-export type LegacyPermissionInputAcceptsEverythingCurrentAccepts = Assert<
-  Extends<PermissionInput, LegacyPermissionInput>
->;
-
-export type EmptyPermissionInputRemainsRejected = Assert<
-  Extends<Record<never, never>, PermissionInput> extends false ? true : false
->;
-
-export type InvalidPermissionActionRemainsRejected = Assert<
-  Extends<{ workspace: ["invalid"] }, PermissionInput> extends false
-    ? true
-    : false
->;
-
-export type MultiResourcePermissionInputRemainsAccepted = Assert<
-  Extends<{ member: ["create"]; workspace: ["read"] }, PermissionInput>
->;
+// An input naming several resources stays accepted.
+expectTypeOf<{
+  member: ["create"];
+  workspace: ["read"];
+}>().toExtend<PermissionInput>();

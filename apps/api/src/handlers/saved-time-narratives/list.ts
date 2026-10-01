@@ -47,7 +47,7 @@ const config = {
   description:
     "List the signed-in user's saved time narratives in the active organization, ordered by name with cursor pagination.",
   permissions: { timeEntry: ["read"] },
-  mcp: { type: "capability", reason: "billing_admin" },
+  mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   access: "read",
   query: t.Object({
     limit: t.Optional(tPaginationLimit(100)),

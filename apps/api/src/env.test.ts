@@ -71,6 +71,18 @@ const readDerivedDatabaseUrl = (env: Record<string, string | undefined>) => {
 };
 
 describe("API environment", () => {
+  test("preserves structured stdout when loading the environment", () => {
+    const result = spawnApiEnvironment(
+      baseEnv,
+      `import { env } from ${JSON.stringify(envModuleUrl)}; process.stdout.write(JSON.stringify({ redisUrl: env.REDIS_URL }));`,
+    );
+
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+    expect(result.stdout.toString()).toBe(
+      JSON.stringify({ redisUrl: baseEnv.REDIS_URL }),
+    );
+  });
+
   test("infers SMTP provider from complete SMTP settings", () => {
     expect(
       readEnvProvider({

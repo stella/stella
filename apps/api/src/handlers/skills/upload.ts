@@ -30,7 +30,11 @@ const config = {
     "media type. It is stored with an upload origin and stays editable. Team " +
     "scope requires admin or owner.",
   permissions: { agentSkill: ["create"] },
-  mcp: { type: "capability", reason: "agent_tool_authoring" },
+  mcp: {
+    type: "capability",
+    reason: "agent_tool_authoring",
+    consumesServices: false,
+  },
   transport: {
     type: "file-input",
     // Any declared type: the package parser sniffs the bytes (zip pack or a

@@ -70,7 +70,11 @@ const config = {
     "the run's own source versions. The run moves from running to review; " +
     "candidates stay proposals until they are accepted or rejected.",
   permissions: { entity: ["create"] },
-  mcp: { type: "capability", reason: "workflow_orchestration" },
+  mcp: {
+    type: "capability",
+    reason: "workflow_orchestration",
+    consumesServices: false,
+  },
   body: bodySchema,
 } satisfies WorkspaceHandlerConfig;
 

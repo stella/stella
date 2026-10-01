@@ -14,7 +14,7 @@ const config = {
   description:
     "Create a VAT rate validity period in the active organization. validFrom is inclusive; validTo is exclusive.",
   permissions: { organizationSettings: ["update"] },
-  mcp: { type: "capability", reason: "billing_admin" },
+  mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   body: createVatRateBody,
 } satisfies HandlerConfig;
 export default createSafeRootHandler(

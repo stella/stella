@@ -570,6 +570,7 @@ const buildPreviewConditionsTextFieldSpecs = (
 ];
 
 export const CREATE_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
+  consumesServices: false,
   _meta: {
     "openai/fileParams": ["file"],
   },
@@ -626,6 +627,7 @@ const previewTemplateConditionsArgsSchema = nullAsAbsent(
 );
 
 const PREVIEW_TEMPLATE_CONDITIONS_TOOL_DEFINITION = defineValibotMcpTool({
+  consumesServices: true,
   description:
     "Ask what current values decide without filling. Returns every AI " +
     'condition with `path`, `label`, and either `state: "decided"`, its ' +
@@ -653,6 +655,7 @@ const PREVIEW_TEMPLATE_CONDITIONS_TOOL_DEFINITION = defineValibotMcpTool({
 });
 
 export const CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION = defineValibotMcpTool({
+  consumesServices: false,
   description:
     "Configure an existing template's fields: who fills each one, its input " +
     "control, options and validation. The configuration lives in the " +
@@ -708,6 +711,7 @@ const listTemplatesArgsSchema = nullAsAbsent(
 );
 
 const LIST_TEMPLATES_TOOL_DEFINITION = defineValibotMcpTool({
+  consumesServices: false,
   annotations: {
     title: "List templates",
     destructiveHint: false,
@@ -770,6 +774,7 @@ const fillTemplateArgsSchema = nullAsAbsent(
 );
 
 const FILL_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
+  consumesServices: true,
   description:
     "Fill a template and return the rendered text; pass output_mode='docx' " +
     "for base64 bytes. Call list_templates first, then pass its field paths " +
@@ -843,6 +848,7 @@ const saveFilledTemplateArgsSchema = nullAsAbsent(
 );
 
 const SAVE_FILLED_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
+  consumesServices: true,
   description:
     "Fill a registered template and persist its DOCX in a matter. Use " +
     "create_document (optionally with parent_id) or create_version with " +

@@ -49,7 +49,11 @@ const config = {
     "pass the result to skills.create and the resource endpoints to keep it. " +
     "Consumes AI usage.",
   permissions: { agentSkill: ["create"] },
-  mcp: { type: "capability", reason: "agent_tool_authoring" },
+  mcp: {
+    type: "capability",
+    reason: "agent_tool_authoring",
+    consumesServices: true,
+  },
   body: generateDraftBodySchema,
   // Queued / "flex" tier — the draft generator is asynchronous from
   // the user's perspective and tolerates higher latency, so we

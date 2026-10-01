@@ -16,7 +16,11 @@ const config = {
     "label, to one clause. Refused when the clause does not exist in this " +
     "organization or already holds its maximum number of variants.",
   permissions: { clause: ["create"] },
-  mcp: { type: "capability", reason: "knowledge_library_admin" },
+  mcp: {
+    type: "capability",
+    reason: "knowledge_library_admin",
+    consumesServices: false,
+  },
   params: createVariantParamsSchema,
   body: createVariantBodySchema,
 } satisfies HandlerConfig;

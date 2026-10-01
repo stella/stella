@@ -27,7 +27,7 @@ const config = {
     "code stops it " +
     "being offered without rewriting entries already recorded under it.",
   permissions: { billingCode: ["update"] },
-  mcp: { type: "capability", reason: "billing_admin" },
+  mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   body: updateBillingCodeBodySchema,
 } satisfies WorkspaceHandlerConfig;
 

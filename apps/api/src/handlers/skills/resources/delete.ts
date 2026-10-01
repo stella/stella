@@ -29,7 +29,11 @@ const config = {
     "skill and its other resources are untouched. Bundled skills are read-only " +
     "and are refused.",
   permissions: { agentSkill: ["update"] },
-  mcp: { type: "capability", reason: "agent_tool_authoring" },
+  mcp: {
+    type: "capability",
+    reason: "agent_tool_authoring",
+    consumesServices: false,
+  },
   params: deleteSkillResourceParamsSchema,
   body: deleteSkillResourceBodySchema,
 } satisfies HandlerConfig;

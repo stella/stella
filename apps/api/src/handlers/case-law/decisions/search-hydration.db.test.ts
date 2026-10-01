@@ -1,5 +1,6 @@
 import type { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
+import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import {
@@ -11,6 +12,9 @@ import {
 } from "@/api/db/schema";
 import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
 import {
+  candidateDecisionRowsQuery,
+  caseLawSearchRowFilters,
+  pageDecisionRowsQuery,
   readCaseLawPageDecisionRows,
   rehydrateCaseLawCandidates,
 } from "@/api/handlers/case-law/decisions/search";
@@ -175,7 +179,7 @@ beforeAll(
         decisionType: "nález",
         citationAuthority: 2,
         citationCount: 7,
-        metadata: { legalSentence: "Právní věta." },
+        metadata: { category: "A", legalSentence: "Právní věta." },
       },
       {
         id: slovakId,
@@ -186,6 +190,7 @@ beforeAll(
         language: "sk",
         languageGroupKey: "hydration-group",
         contentHash: "hash-svk",
+        metadata: { category: "B" },
         decisionType: "Nález",
         citationAuthority: 1,
         citationCount: 3,
@@ -481,6 +486,68 @@ test("both reads reapply the request filters and the redistribution boundary", a
   });
   expect([...rows.keys()]).toEqual([czechId]);
 });
+
+test.each([
+  { category: "A", hasLegalSentence: true, expectedIds: [czechId] },
+  { category: "B", hasLegalSentence: false, expectedIds: [slovakId] },
+  { category: "A", hasLegalSentence: false, expectedIds: [] },
+  { category: "B", hasLegalSentence: true, expectedIds: [] },
+])(
+  "both indexed reads apply category $category and sentence presence $hasLegalSentence",
+  async ({ category, hasLegalSentence, expectedIds }) => {
+    const body = { ...SEARCH_BODY, category, hasLegalSentence };
+    const ranking = await rehydrateCaseLawCandidates({
+      body,
+      candidates: candidatesOf(czechId, slovakId),
+      caseLawDb,
+      courtWeights,
+      generation: GENERATION,
+    });
+    expect(ranking.ranked.map(({ id }) => id)).toEqual([...expectedIds]);
+    const rows = await readCaseLawPageDecisionRows({
+      body,
+      caseLawDb,
+      generation: GENERATION,
+      ids: [czechId, slovakId],
+    });
+    expect([...rows.keys()]).toEqual([...expectedIds]);
+  },
+);
+
+test.each([true, false])(
+  "metadata filters keep the decision-id access path (%s)",
+  async (hasLegalSentence) => {
+    await caseLawDb(async (tx) => {
+      await tx.execute(sql`SET LOCAL enable_seqscan = off`);
+      const options = {
+        filters: caseLawSearchRowFilters(
+          {
+            ...SEARCH_BODY,
+            category: "A",
+            hasLegalSentence,
+          },
+          GENERATION,
+        ),
+        generation: GENERATION,
+        ids: [czechId, slovakId],
+      };
+      for (const query of [
+        candidateDecisionRowsQuery(tx, options),
+        pageDecisionRowsQuery(tx, options),
+      ]) {
+        const plan = JSON.stringify(
+          await tx.execute(sql`EXPLAIN (COSTS OFF) ${query.getSQL()}`),
+        );
+        expect(plan).toMatch(
+          /(?:Index(?: Only)? Scan using|Bitmap Index Scan on) case_law_decisions_(?:pkey|search_candidate_idx)/u,
+        );
+        expect(plan).toContain("Index Cond:");
+        expect(plan).toContain("id = ANY");
+        expect(plan).not.toContain("Seq Scan on case_law_decisions");
+      }
+    });
+  },
+);
 
 test("corpus hydration and page reads apply the same case-insensitive type filter", async () => {
   for (const country of ["CZE", "SVK"]) {

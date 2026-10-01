@@ -56,6 +56,7 @@ export const ROUTE_CACHE_CLASSES = {
   "/verify/$code": "private-no-store",
   "/auth/accept-invitation/$invitationId": "private-no-store",
   "/knowledge/templates/catalogue": "public-indexable",
+  "/knowledge/templates/catalogue/": "public-indexable",
   "/knowledge/tools/$entry": "public-indexable",
   "/knowledge/tools/contribute": "public-indexable",
   "/sitemaps/law-statutes/{$country}.xml": "public-anonymous",
