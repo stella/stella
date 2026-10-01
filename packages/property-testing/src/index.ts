@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { failureFingerprint } from "./failure-fingerprint";
 import {
   PROPERTY_SEEDS_FILE,
+  REPLAY_PATH_PATTERN,
   REPO_ROOT,
   readPinnedSeeds,
 } from "./pinned-seeds";
@@ -75,14 +76,20 @@ export const propertyConfig = <Ts>(
   const baseNumRuns = params.numRuns ?? FAST_CHECK_DEFAULT_NUM_RUNS;
   const envPath = process.env["PROPERTY_TEST_PATH"];
   const envSeed = process.env[PROPERTY_TEST_SEED_ENV];
-  const replayPath =
+  const envReplayPath =
     envSeed !== undefined &&
     envSeed !== "" &&
     seed === Number(envSeed) &&
     envPath !== undefined &&
     envPath !== ""
       ? envPath
-      : params.path;
+      : undefined;
+  if (envReplayPath !== undefined && !REPLAY_PATH_PATTERN.test(envReplayPath)) {
+    throw new PropertyTestConfigError(
+      "PROPERTY_TEST_PATH must be colon-separated non-negative integers",
+    );
+  }
+  const replayPath = envReplayPath ?? params.path;
   const rawLimit = process.env["PROPERTY_TEST_TIME_LIMIT_MS"];
   const timeLimit = rawLimit === undefined ? undefined : Number(rawLimit);
   if (

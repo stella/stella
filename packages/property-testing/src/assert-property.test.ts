@@ -121,6 +121,20 @@ test("honors an environment replay path only for its matching explicit seed", ()
   expect(propertyConfig({ seed: 123 }).path).toBeUndefined();
 });
 
+test("rejects a malformed replay path only when it would be replayed", () => {
+  neutralEnv();
+  process.env["PROPERTY_TEST_SEED"] = "123";
+  for (const malformed of ["-1", "Infinity", "1:x", "1:", " 1", "1.5"]) {
+    process.env["PROPERTY_TEST_PATH"] = malformed;
+    expect(() => propertyConfig({ seed: 123 })).toThrow(
+      "PROPERTY_TEST_PATH must be colon-separated non-negative integers",
+    );
+    expect(propertyConfig({ seed: 456 }).path).toBeUndefined();
+  }
+  process.env["PROPERTY_TEST_PATH"] = "0:12:3";
+  expect(propertyConfig({ seed: 123 }).path).toBe("0:12:3");
+});
+
 test("time boxes only exploratory generation and leaves interruption non-failing", async () => {
   neutralEnv();
   process.env["PROPERTY_TEST_TIME_LIMIT_MS"] = "50";

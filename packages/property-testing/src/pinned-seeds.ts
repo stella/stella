@@ -7,7 +7,7 @@ import { PropertyTestConfigError } from "./property-test-config-error";
 export const REPO_ROOT = path.resolve(import.meta.dir, "../../..");
 export const PROPERTY_SEEDS_FILE =
   "packages/property-testing/property-seeds.json";
-const REPLAY_PATH_PATTERN = /^\d+(:\d+)*$/u;
+export const REPLAY_PATH_PATTERN = /^\d+(:\d+)*$/u;
 
 export type PinnedSeed = {
   seed: number;
