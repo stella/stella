@@ -846,7 +846,7 @@ describe("detect-e2e-changes", () => {
       ),
       "utf-8",
     );
-    const aptConfig = installer.match(/<<'APT'\n([\s\S]*?)\nAPT/u)?.at(1);
+    const aptConfig = /<<'APT'\n([\s\S]*?)\nAPT/u.exec(installer)?.at(1);
     expect(aptConfig).toContain('DPkg::Lock::Timeout "300";');
     const deadlines = [
       ...installer.matchAll(
