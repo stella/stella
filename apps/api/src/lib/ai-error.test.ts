@@ -18,6 +18,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   classifyAIError,
+  classifyAIBoundaryFailure,
   isAnticipatedAIFailure,
   isUnanticipatedAIFailure,
   providerStatusCode,
@@ -34,6 +35,8 @@ import type {
   ChatTerminalError,
   HandlerErrorStatusCode,
 } from "@/api/lib/errors/tagged-errors";
+import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
+import { readEvidence } from "@/api/lib/observability/failure-evidence";
 import {
   MANAGED_PROVIDER_UNAVAILABLE_CODE,
   managedProviderUnavailable,
@@ -84,8 +87,15 @@ describe("classifyAIError", () => {
       { code: MANAGED_PROVIDER_UNAVAILABLE_CODE },
       new Error(error.message, { cause: error }),
     ]) {
-      expect(classifyAIError(input)).toBe("provider_unavailable");
+      expect(classifyAIError(input)).toBe("model_unavailable");
       expect(isAnticipatedAIFailure(input)).toBe(true);
+      expect(classifyAIBoundaryFailure(input)).toBe("model_unavailable");
+      expect(
+        gradeFailure(
+          readEvidence(input),
+          failureSink({ event: "background-generation", expected: [] }),
+        ).grade,
+      ).toBe("anticipated");
     }
   });
 

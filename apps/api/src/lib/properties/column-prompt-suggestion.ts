@@ -5,6 +5,7 @@ import type { CaseLawResearchAnswerType } from "@stll/api-contract";
 import type { SafeDb } from "@/api/db/safe-db";
 import { resolveCaching } from "@/api/lib/ai-config";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
+import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -311,6 +312,7 @@ type SuggestColumnPromptOptions = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   promptCachingEnabled: boolean;
   safeDb: SafeDb;
   abortSignal: AbortSignal;
@@ -325,6 +327,7 @@ export const suggestColumnPrompt = async ({
   context,
   draft,
   orgAIConfig,
+  managedAIResidency,
   organizationId,
   promptCachingEnabled,
   safeDb,
@@ -343,6 +346,7 @@ export const suggestColumnPrompt = async ({
 
   const scope = suggestionScope(context);
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+    dataClass: "customer",
     usageMetering: {
       actionType: "chat",
       organizationId,
@@ -365,10 +369,12 @@ export const suggestColumnPrompt = async ({
   const generateResult = await Result.tryPromise({
     try: async () =>
       await generateTanStackTextForRole({
+        dataClass: "customer",
         finishPolicy: "require-complete",
         role: "fast",
         serviceTier: "standard",
         orgAIConfig,
+        managedAIResidency,
         organizationId,
         tenantWorkspaceIds: scope.tenantWorkspaceIds,
         analytics: aiAnalytics,

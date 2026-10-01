@@ -83,6 +83,7 @@ import {
 import { createWorkspaceTools } from "@/api/handlers/chat/tools/workspace-tools";
 import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
+import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -330,6 +331,7 @@ export type GetChatToolsProps = {
   // platform provider. A missing value silently falls back and fails there, so
   // every caller must thread it through explicitly.
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   /**
    * The request's scope workspace (or `null` for global chat), for
    * subagent usage metering. Distinct from `toolWorkspaceIds`, which
@@ -645,6 +647,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     organizationId,
     memberRole,
     orgAIConfig,
+    managedAIResidency,
     requestWorkspaceId,
     threadId,
     workspaceId,
@@ -697,6 +700,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
           createAbortSignal: createAIAbortSignal,
           organizationId,
           orgAIConfig,
+          managedAIResidency,
           promptCachingEnabled,
           refRegistry,
           safeDb,
@@ -969,6 +973,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
         organizationId,
         userId,
         orgAIConfig,
+        managedAIResidency,
         recordAuditEvent,
         thirdPartyBoundary,
       })
@@ -984,6 +989,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
         organizationId,
         userId,
         orgAIConfig,
+        managedAIResidency,
         thirdPartyBoundary,
       })
     : {};
@@ -1083,6 +1089,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
           }),
         organizationId,
         orgAIConfig,
+        managedAIResidency,
         safeDb,
         thirdPartyBoundary,
         userId,

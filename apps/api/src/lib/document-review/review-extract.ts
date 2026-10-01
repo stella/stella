@@ -6,6 +6,7 @@ import type {
   FieldContent,
 } from "@/api/db/schema-validators";
 import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
+import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
@@ -92,6 +93,7 @@ export type ExtractAskContentsArgs = {
   workspaceId: SafeId<"workspace">;
   entityVersionId: SafeId<"entityVersion">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   promptCachingEnabled: boolean;
   serviceTier: AIRequestServiceTier;
   usageMetering?: AIUsageMetering | undefined;
@@ -214,6 +216,7 @@ export const extractAskContents = async ({
   workspaceId,
   entityVersionId,
   orgAIConfig,
+  managedAIResidency,
   promptCachingEnabled,
   serviceTier,
   usageMetering,
@@ -283,6 +286,7 @@ export const extractAskContents = async ({
         workspaceId,
         entityVersionId,
         orgAIConfig,
+        managedAIResidency,
         promptCachingEnabled,
         serviceTier,
         usageMetering,

@@ -21,6 +21,7 @@ import {
   memberAssignmentRequiredError,
   orgAIConfigStatusError,
 } from "@/api/lib/ai-config-response";
+import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import { captureObservedError } from "@/api/lib/analytics/capture";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
@@ -449,6 +450,7 @@ type BaseHandlerContext<TConfig extends HandlerConfig = HandlerConfig> =
      * `false` regardless of what call sites set.
      */
     promptCachingEnabled: boolean;
+    managedAIResidency: ManagedAIResidency;
     /**
      * Records an audit row in the supplied transaction. Identity
      * fields (org/user/IP/UA) are bound from the request context;

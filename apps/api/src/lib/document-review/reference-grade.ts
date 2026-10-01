@@ -1,3 +1,4 @@
+import type { ModelMessage } from "@tanstack/ai";
 /**
  * Grading a position whose standard is a reference document.
  *
@@ -15,13 +16,12 @@
  * the drafter acts for — the impact itself is arithmetic
  * (`deriveParameterImpact`).
  */
-
-import type { ModelMessage } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
 import { resolveCaching } from "@/api/lib/ai-config";
+import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import {
   createTanStackAIAnalyticsCallbacks,
   type AIUsageMetering,
@@ -712,6 +712,7 @@ export type GradeReferencePositionsArgs = {
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   promptCachingEnabled: boolean;
   serviceTier: AIRequestServiceTier;
   usageMetering: AIUsageMetering;
@@ -733,6 +734,7 @@ export const gradeReferencePositions = async ({
   organizationId,
   workspaceId,
   orgAIConfig,
+  managedAIResidency,
   promptCachingEnabled,
   serviceTier,
   usageMetering,
@@ -750,6 +752,7 @@ export const gradeReferencePositions = async ({
     ),
   });
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+    dataClass: "customer",
     feature: "document-review.references",
     modelRole: REFERENCE_GRADE_ROLE,
     orgAIConfig,
@@ -774,8 +777,10 @@ export const gradeReferencePositions = async ({
   };
   const generate = async (messages: ModelMessage[]) =>
     await generateObjectForRole({
+      dataClass: "customer",
       role: REFERENCE_GRADE_ROLE,
       orgAIConfig,
+      managedAIResidency,
       organizationId,
       analytics: aiAnalytics,
       caching,

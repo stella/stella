@@ -78,6 +78,7 @@ describe("createSafeHandler workspace audit binding", () => {
       pinServerValidatedWorkspaceId: () => false,
       orgAIConfig: null,
       orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+      managedAIResidency: "eu" as const,
       promptCachingEnabled: false,
       recordAuditEvent: noopAuditRecorder,
       createAuditRecorder: (options?: {
@@ -313,6 +314,7 @@ describe("createSafeRootHandler member AI access", () => {
         createContext(endpoint, unreadableLedger, {
           orgAIConfig: createOrgAIConfig(),
           orgAIConfigStatus: ORG_AI_CONFIG_STATUS.memberAssignmentRequired,
+          managedAIResidency: "eu" as const,
         }),
       );
 
@@ -343,6 +345,7 @@ describe("createSafeRootHandler member AI access", () => {
     const result = await endpoint.handler(
       createContext(endpoint, unreadableLedger, {
         orgAIConfigStatus: ORG_AI_CONFIG_STATUS.memberAssignmentRequired,
+        managedAIResidency: "eu" as const,
       }),
     );
 

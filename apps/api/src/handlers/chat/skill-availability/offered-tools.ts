@@ -25,6 +25,7 @@ import {
   SKILL_TOOL_AVAILABILITY_STATUS,
 } from "@/api/lib/agent-skills/required-tools";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
+import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
@@ -43,6 +44,7 @@ export type ChatSkillAvailabilityContext = {
   memberRole: { role: keyof typeof roles };
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   safeDb: SafeDb;
   scopedDb: ScopedDb;
   userId: SafeId<"user">;
@@ -197,6 +199,7 @@ const chatContextToolNames = (
     memberRole: context.memberRole.role,
     organizationId: context.organizationId,
     orgAIConfig: context.orgAIConfig,
+    managedAIResidency: context.managedAIResidency,
     pastChatScope: resolvePastChatScope({
       contextMatterIds: chatContext.contextMatterIds,
       threadWorkspaceId: chatContext.workspaceId,

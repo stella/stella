@@ -32,6 +32,7 @@ import { isAiExtractablePropertyContent } from "@/api/db/schema-validators";
 import type { FieldContent } from "@/api/db/schema-validators";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
+import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -645,6 +646,7 @@ type PassDeps = {
   abortSignal: AbortSignal;
   entityVersionId: SafeId<"entityVersion">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   organizationId: SafeId<"organization">;
   promptCachingEnabled: boolean;
   serviceTier: typeof SERVICE_TIER;
@@ -712,15 +714,17 @@ const executeRun = async (
       if (Result.isError(settings)) {
         return Result.err(settings.error);
       }
-      const { orgAIConfig, promptCachingEnabled } = settings.value;
+      const { orgAIConfig, managedAIResidency, promptCachingEnabled } =
+        settings.value;
       return Result.ok({
         orgAIConfig,
+        managedAIResidency,
         // Resolved here, where a role without a provider is already an
         // `ai_unavailable` run rather than a failure mid-grading.
         graderModel: getTanStackTextModelInfoForRole(
           REFERENCE_GRADE_ROLE,
           orgAIConfig,
-          { organizationId: actor.organizationId },
+          { dataClass: "customer", organizationId: actor.organizationId },
         ),
         promptCachingEnabled,
       });
@@ -750,6 +754,7 @@ const executeRun = async (
     abortSignal: AbortSignal.timeout(REVIEW_TIMEOUT_MS),
     entityVersionId: run.entityVersionId,
     orgAIConfig: config.value.orgAIConfig,
+    managedAIResidency: config.value.managedAIResidency,
     organizationId: actor.organizationId,
     promptCachingEnabled: config.value.promptCachingEnabled,
     serviceTier: SERVICE_TIER,

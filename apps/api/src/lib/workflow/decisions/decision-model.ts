@@ -16,6 +16,7 @@ import type {
   OrgAIConfig,
   OrgDecisionModelConfig,
 } from "@/api/lib/ai-config";
+import type { AIDataClass } from "@/api/lib/ai-data-policy";
 import { isManagedProviderAvailable } from "@/api/lib/provider-data-policy";
 import {
   createSystemOneClient,
@@ -42,19 +43,23 @@ export type DecisionModel = SystemOneClient & {
 };
 
 /** Whether the instance itself carries a decision model an org may fall back on. */
-export const hasInstanceDecisionModel = (): boolean =>
+export const hasInstanceDecisionModel = (dataClass: AIDataClass): boolean =>
   !env.REQUIRE_PERSONAL_AI_KEY &&
   env.TYPESAFE_API_KEY !== undefined &&
-  isManagedProviderAvailable("typesafe");
+  isManagedProviderAvailable("typesafe", dataClass);
 
 export const resolveDecisionModel = (
   orgAIConfig: OrgAIConfig | null | undefined,
+  dataClass: AIDataClass,
 ): DecisionModel | null => {
   const decision = orgAIConfig?.decision ?? null;
   if (decision !== null) {
     return { ...orgClient(decision), keySource: "byok" };
   }
-  const client = env.REQUIRE_PERSONAL_AI_KEY ? null : getSystemOneClient();
+  if (!hasInstanceDecisionModel(dataClass)) {
+    return null;
+  }
+  const client = getSystemOneClient();
   return client === null ? null : { ...client, keySource: "instance" };
 };
 

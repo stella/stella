@@ -13,6 +13,7 @@ import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-bou
 import { prepareTextForThirdParty } from "@/api/handlers/chat/third-party-boundary";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
+import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import type { TanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -434,6 +435,7 @@ type CompactChatMessagesForModelOptions = PlanChatCompactionOptions & {
   onSummaryError?: ((error: HandlerError<500>) => void) | undefined;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   reasoningEffort?: ReasoningEffort | undefined;
   /** Tenant set for the model-ingress guard on the summarizer request. */
   tenantWorkspaceIds: readonly SafeId<"workspace">[];
@@ -447,6 +449,7 @@ type CompactModelMessagesForModelOptions = {
   onSummaryError?: ((error: HandlerError<500>) => void) | undefined;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   preserveTokens?: number | undefined;
   role: ModelRole;
   summarizeWithModel?: ((transcript: string) => Promise<string>) | undefined;
@@ -464,6 +467,7 @@ export const compactChatMessagesForModel = async ({
   onSummaryError,
   organizationId,
   orgAIConfig,
+  managedAIResidency,
   reasoningEffort,
   preserveTokens,
   tenantWorkspaceIds,
@@ -482,6 +486,7 @@ export const compactChatMessagesForModel = async ({
       const result = await Result.tryPromise({
         try: async () =>
           await generateTanStackTextForRole({
+            dataClass: "customer",
             abortSignal,
             analytics: aiAnalytics,
             caching: resolveCaching({
@@ -493,6 +498,7 @@ export const compactChatMessagesForModel = async ({
             modelId,
             organizationId,
             orgAIConfig,
+            managedAIResidency,
             reasoningEffort,
             prompt: [
               "Compact the earlier conversation transcript below.",
@@ -528,6 +534,7 @@ export const compactModelMessagesForModel = async ({
   onSummaryError,
   organizationId,
   orgAIConfig,
+  managedAIResidency,
   preserveTokens,
   role,
   summarizeWithModel,
@@ -548,6 +555,7 @@ export const compactModelMessagesForModel = async ({
       const result = await Result.tryPromise({
         try: async () =>
           await generateTanStackTextForRole({
+            dataClass: "customer",
             abortSignal,
             analytics: aiAnalytics,
             caching: resolveCaching({
@@ -559,6 +567,7 @@ export const compactModelMessagesForModel = async ({
             modelId,
             organizationId,
             orgAIConfig,
+            managedAIResidency,
             prompt: [
               "Compact the earlier model-step transcript below.",
               "Return only the checkpoint summary.",

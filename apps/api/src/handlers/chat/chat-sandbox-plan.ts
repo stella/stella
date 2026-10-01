@@ -1,6 +1,7 @@
 import type { StellaSandboxRunInput } from "@stll/agent-engine";
 
 import { env } from "@/api/env";
+import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { logger } from "@/api/lib/observability/logger";
@@ -13,6 +14,8 @@ const SANDBOX_INSTRUCTIONS =
   "You are running as a stella agent. Use the stella MCP server (registered in this workspace) for all workspace actions — reading and writing matters, documents, and knowledge. Do not attempt network access outside those tools.";
 
 type ChatSandboxContext = {
+  dataClass: "customer";
+  managedAIResidency: ManagedAIResidency;
   userId: SafeId<"user">;
   organizationId: SafeId<"organization">;
   runId: string;
@@ -38,7 +41,7 @@ export const resolveChatSandboxPlan = async (
     });
   }
 
-  assertManagedProviderAvailable("agent_sandbox");
+  assertManagedProviderAvailable("agent_sandbox", context.dataClass);
 
   const image = env.AGENT_SANDBOX_IMAGE;
   const harnessModel = env.AGENT_SANDBOX_HARNESS_MODEL;

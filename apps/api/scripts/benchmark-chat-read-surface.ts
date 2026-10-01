@@ -298,19 +298,21 @@ const getBenchModel = async (): Promise<BenchModel | null> => {
     getTanStackTextModelById,
     getTanStackTextModelForRole,
     getTanStackTextModelInfoForRole,
-    hasTanStackInstanceProvider,
+    hasConfiguredTanStackInstanceProvider,
   } = await import("@/api/lib/tanstack-ai-models");
 
-  if (!hasTanStackInstanceProvider()) {
+  if (!hasConfiguredTanStackInstanceProvider()) {
     return null;
   }
 
   const overrideModel = process.env["AI_BENCH_MODEL"];
   if (overrideModel) {
     const info = getTanStackTextModelInfoForRole("fast", null, {
+      dataClass: "public_corpus",
       organizationId: null,
     });
     const model = getTanStackTextModelById(overrideModel, null, {
+      dataClass: "public_corpus",
       role: "fast",
       organizationId: null,
     });
@@ -322,9 +324,11 @@ const getBenchModel = async (): Promise<BenchModel | null> => {
   }
 
   const info = getTanStackTextModelInfoForRole("fast", null, {
+    dataClass: "public_corpus",
     organizationId: null,
   });
   const model = getTanStackTextModelForRole("fast", null, {
+    dataClass: "public_corpus",
     organizationId: null,
   });
   return {

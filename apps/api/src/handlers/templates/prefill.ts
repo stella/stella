@@ -14,6 +14,7 @@ import type {
   PrefillTarget,
 } from "@/api/handlers/templates/prefill-fields";
 import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
+import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -125,6 +126,7 @@ const extractFieldValues = async ({
   targets,
   sources,
   orgAIConfig,
+  managedAIResidency,
   organizationId,
   aiAnalytics,
   timezone,
@@ -132,13 +134,16 @@ const extractFieldValues = async ({
   targets: readonly PrefillTarget[];
   sources: readonly PrefillSource[];
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   organizationId: SafeId<"organization">;
   aiAnalytics: ReturnType<typeof createTanStackAIAnalyticsCallbacks>;
   timezone: string;
 }): Promise<PrefillSuggestion[]> => {
   const { fields } = await generateTanStackObjectForRole({
+    dataClass: "customer",
     role: "fast",
     orgAIConfig,
+    managedAIResidency,
     organizationId,
     // Root-scoped handler: sources may span multiple accessible workspaces,
     // no single workspace id to scope to.
@@ -215,12 +220,14 @@ const prefillTemplate = createSafeRootHandler(
     params,
     body,
     orgAIConfig,
+    managedAIResidency,
     orgAIConfigStatus,
     user,
   }) {
     const organizationId = session.activeOrganizationId;
 
     yield* requireTanStackAIAvailableForRole({
+      dataClass: "customer",
       configStatus: orgAIConfigStatus,
       orgConfig: orgAIConfig,
       role: "fast",
@@ -409,6 +416,7 @@ const prefillTemplate = createSafeRootHandler(
     }
 
     const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+      dataClass: "customer",
       usageMetering: {
         actionType: "chat",
         organizationId,
@@ -431,6 +439,7 @@ const prefillTemplate = createSafeRootHandler(
             targets,
             sources: boundedSources,
             orgAIConfig,
+            managedAIResidency,
             organizationId,
             aiAnalytics,
             timezone: body.timezone ?? "UTC",

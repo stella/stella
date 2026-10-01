@@ -165,6 +165,7 @@ describe("computeVerdictBatch — pre-v2 verdict row without tiers", () => {
       verdictProperties: [preV2VerdictProperty],
       inputPropertyIds: [askPropertyId],
       orgAIConfig: null,
+      managedAIResidency: "eu" as const,
       promptCachingEnabled: false,
       serviceTier: "standard",
     });
@@ -208,6 +209,7 @@ describe("gradeTierMatches — batch grading", () => {
       workspaceId: toSafeId<"workspace">("ws_1"),
       entityVersionId: toSafeId<"entityVersion">("ev_1"),
       orgAIConfig: null,
+      managedAIResidency: "eu" as const,
       promptCachingEnabled: false,
       serviceTier: "standard",
     });
@@ -234,6 +236,7 @@ describe("gradeTierMatch — empty-tier lifted row", () => {
       entityVersionId: toSafeId<"entityVersion">("ev_1"),
       propertyId: toSafeId<"property">("prop_1"),
       orgAIConfig: null,
+      managedAIResidency: "eu" as const,
       promptCachingEnabled: false,
       serviceTier: "standard",
     });

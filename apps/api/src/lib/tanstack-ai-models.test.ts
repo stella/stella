@@ -348,6 +348,8 @@ describe("TanStack text model resolution", () => {
 
       expect(() =>
         getTanStackTextModelForRole("chat", null, {
+          dataClass: "customer",
+          managedAIResidency: "eu",
           organizationId: orgId,
         }),
       ).toThrow("Managed AI is not available");
@@ -395,6 +397,8 @@ describe("TanStack text model resolution", () => {
 
       expect(() =>
         getTanStackTextModelForRole("chat", null, {
+          dataClass: "customer",
+          managedAIResidency: "eu",
           organizationId: orgId,
         }),
       ).toThrow('Managed AI is not available for provider "mistral"');
@@ -411,6 +415,8 @@ describe("TanStack text model resolution", () => {
       orgConfigForProvider("openai"),
       {
         role: "reasoning",
+        dataClass: "customer",
+        managedAIResidency: "eu",
         organizationId: orgId,
       },
     );
@@ -431,6 +437,7 @@ describe("TanStack text model resolution", () => {
     expect(() =>
       getTanStackTextModelById("openai::gpt-unrated-experiment", null, {
         role: "chat",
+        dataClass: "public_corpus",
         organizationId: orgId,
       }),
     ).toThrow(
@@ -442,7 +449,12 @@ describe("TanStack text model resolution", () => {
     const model = getTanStackTextModelById(
       "openrouter::google/gemini-3.5-flash",
       null,
-      { role: "chat", organizationId: null },
+      {
+        role: "chat",
+        dataClass: "customer",
+        managedAIResidency: "eu",
+        organizationId: null,
+      },
     );
 
     expect(model).toMatchObject({
@@ -464,6 +476,8 @@ describe("TanStack text model resolution", () => {
         orgConfigForProvider("google"),
         {
           role: "chat",
+          dataClass: "customer",
+          managedAIResidency: "eu",
           organizationId: null,
         },
       );
@@ -478,6 +492,8 @@ describe("TanStack text model resolution", () => {
     const orgConfig = orgConfigForProvider("mistral");
 
     const model = getTanStackTextModelForRole("chat", orgConfig, {
+      dataClass: "customer",
+      managedAIResidency: "eu",
       organizationId: orgId,
     });
 
@@ -495,6 +511,8 @@ describe("TanStack text model resolution", () => {
     let handlerError: unknown;
     try {
       getTanStackTextModelForRole("pdf", orgConfigForProvider("mistral"), {
+        dataClass: "customer",
+        managedAIResidency: "eu",
         organizationId: orgId,
       });
     } catch (error) {
@@ -517,6 +535,7 @@ describe("TanStack text model resolution", () => {
 
     const unavailable = requireTanStackAIAvailableForRole({
       configStatus: ORG_AI_CONFIG_STATUS.ok,
+      dataClass: "customer",
       orgConfig,
       role: "pdf",
     });
@@ -530,6 +549,8 @@ describe("TanStack text model resolution", () => {
     let handlerError: unknown;
     try {
       getTanStackTextModelForRole("pdf", orgConfig, {
+        dataClass: "customer",
+        managedAIResidency: "eu",
         organizationId: orgId,
       });
     } catch (error) {
@@ -551,6 +572,7 @@ describe("TanStack text model resolution", () => {
 
       const unavailable = requireTanStackAIAvailableForRole({
         configStatus: ORG_AI_CONFIG_STATUS.ok,
+        dataClass: "customer",
         orgConfig: null,
         role: "pdf",
       });
@@ -573,6 +595,8 @@ describe("TanStack text model resolution", () => {
     };
 
     const model = getTanStackTextModelForRole("chat", orgConfig, {
+      dataClass: "customer",
+      managedAIResidency: "eu",
       organizationId: orgId,
     });
 
@@ -584,6 +608,8 @@ describe("TanStack text model resolution", () => {
     const orgConfig = orgConfigForProvider("bedrock");
 
     const model = getTanStackTextModelForRole("chat", orgConfig, {
+      dataClass: "customer",
+      managedAIResidency: "eu",
       organizationId: orgId,
     });
 
@@ -601,7 +627,11 @@ describe("TanStack text model resolution", () => {
     const model = getTanStackTextModelForRole(
       "chat",
       orgConfigForProvider("bedrock"),
-      { organizationId: orgId },
+      {
+        dataClass: "customer",
+        managedAIResidency: "eu",
+        organizationId: orgId,
+      },
     );
     const png = new Uint8Array([
       0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
@@ -679,6 +709,8 @@ describe("TanStack text model resolution", () => {
     const orgConfig = orgConfigForProvider("google", "eu");
 
     const model = getTanStackTextModelForRole("chat", orgConfig, {
+      dataClass: "customer",
+      managedAIResidency: "eu",
       organizationId: orgId,
     });
 
@@ -694,6 +726,7 @@ describe("TanStack text model resolution", () => {
     expect(
       requireTanStackAIAvailableForRole({
         configStatus: ORG_AI_CONFIG_STATUS.ok,
+        dataClass: "customer",
         orgConfig: orgConfigForProvider("openai"),
         role: "chat",
       }).isOk(),
@@ -701,6 +734,7 @@ describe("TanStack text model resolution", () => {
 
     const unavailable = requireTanStackAIAvailableForRole({
       configStatus: ORG_AI_CONFIG_STATUS.ok,
+      dataClass: "customer",
       orgConfig: orgConfigForProvider("openai_compatible"),
       role: "chat",
     });
@@ -713,6 +747,7 @@ describe("TanStack text model resolution", () => {
 
     const unsupportedRole = requireTanStackAIAvailableForRole({
       configStatus: ORG_AI_CONFIG_STATUS.ok,
+      dataClass: "customer",
       orgConfig: orgConfigForProvider("mistral"),
       role: "pdf",
     });
@@ -743,6 +778,7 @@ describe("TanStack text model resolution", () => {
       }
       const refused = requireTanStackAIAvailableForRole({
         configStatus,
+        dataClass: "customer",
         orgConfig: null,
         role: "chat",
       });
@@ -757,6 +793,7 @@ describe("TanStack text model resolution", () => {
   test("refuses a member without a seat assignment on the organization's own key", () => {
     const refused = requireTanStackAIAvailableForRole({
       configStatus: ORG_AI_CONFIG_STATUS.memberAssignmentRequired,
+      dataClass: "customer",
       orgConfig: orgConfigForProvider("openrouter"),
       role: "chat",
     });
@@ -772,7 +809,7 @@ describe("TanStack text model resolution", () => {
     const modelInfo = getTanStackTextModelInfoForRole(
       "chat",
       orgConfigForProvider("openrouter"),
-      { organizationId: orgId },
+      { dataClass: "customer", organizationId: orgId },
     );
 
     expect(modelInfo).toEqual({
@@ -1108,6 +1145,8 @@ describe("who answers while the local mock is on", () => {
     clearByokAdapterCache();
     try {
       const model = getTanStackTextModelForRole("chat", orgConfig, {
+        dataClass: "customer",
+        managedAIResidency: "eu",
         organizationId: orgId,
       });
       return {
@@ -1156,7 +1195,11 @@ describe("who answers while the local mock is on", () => {
     try {
       expect(mockAnswersForOrganization(null)).toBe(false);
       expect(() =>
-        getTanStackTextModelForRole("chat", null, { organizationId: orgId }),
+        getTanStackTextModelForRole("chat", null, {
+          dataClass: "customer",
+          managedAIResidency: "eu",
+          organizationId: orgId,
+        }),
       ).toThrow(HandlerError);
     } finally {
       env.REQUIRE_PERSONAL_AI_KEY = requirePersonalKey;

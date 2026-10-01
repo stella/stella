@@ -4,6 +4,7 @@ import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { loadOrgSettingsForAuth } from "@/api/lib/ai-config-loader";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
+import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
@@ -48,6 +49,7 @@ export type SynthesizedCapabilityContext = {
   orgAIConfig: OrgAIConfig | null;
   orgAIConfigStatus: OrgAIConfigStatus;
   promptCachingEnabled: boolean;
+  managedAIResidency: ManagedAIResidency;
   recordAuditEvent: AuditRecorder;
   createAuditRecorder: (opts?: {
     workspaceId?: SafeId<"workspace"> | null;
@@ -108,11 +110,15 @@ export const synthesizeCapabilityContext = async ({
     organizationId: context.organizationId,
     userId: context.userId,
   };
-  const { orgAIConfig, orgAIConfigStatus, promptCachingEnabled } =
-    await (context.testDependencies?.loadOrgSettingsForAuth?.(reader) ??
-      operationDatabaseScope.scopedDb(
-        async (tx) => await loadOrgSettingsForAuth(tx, reader),
-      ));
+  const {
+    orgAIConfig,
+    orgAIConfigStatus,
+    promptCachingEnabled,
+    managedAIResidency,
+  } = await (context.testDependencies?.loadOrgSettingsForAuth?.(reader) ??
+    operationDatabaseScope.scopedDb(
+      async (tx) => await loadOrgSettingsForAuth(tx, reader),
+    ));
 
   return {
     body: input.body,
@@ -148,6 +154,7 @@ export const synthesizeCapabilityContext = async ({
     orgAIConfig,
     orgAIConfigStatus,
     promptCachingEnabled,
+    managedAIResidency,
     recordAuditEvent,
     createAuditRecorder: (opts) =>
       createAuditRecorder({

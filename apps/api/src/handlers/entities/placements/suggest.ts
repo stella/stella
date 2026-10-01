@@ -15,6 +15,7 @@ import {
 import { resolveCaching } from "@/api/lib/ai-config";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
+import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
@@ -106,6 +107,7 @@ type OrganizeSuggestionsHandlerProps = {
   workspaceId: SafeId<"workspace">;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   orgAIConfigStatus: OrgAIConfigStatus;
   promptCachingEnabled: boolean;
   body: OrganizeSuggestionsBody;
@@ -174,12 +176,14 @@ const organizeSuggestionsHandler = async function* ({
   workspaceId,
   organizationId,
   orgAIConfig,
+  managedAIResidency,
   orgAIConfigStatus,
   promptCachingEnabled,
   body,
   userId,
 }: OrganizeSuggestionsHandlerProps) {
   yield* requireTanStackAIAvailableForRole({
+    dataClass: "customer",
     configStatus: orgAIConfigStatus,
     orgConfig: orgAIConfig,
     role: "fast",
@@ -211,6 +215,7 @@ const organizeSuggestionsHandler = async function* ({
       organizationId,
       workspaceId,
       orgAIConfig,
+      managedAIResidency,
       promptCachingEnabled,
       safeDb,
       userId,
@@ -250,6 +255,7 @@ const organizeSuggestionsHandler = async function* ({
   }
 
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+    dataClass: "customer",
     usageMetering: {
       actionType: "chat",
       organizationId,
@@ -275,9 +281,11 @@ const organizeSuggestionsHandler = async function* ({
   const result = await Result.tryPromise({
     try: async () =>
       await generateTanStackObjectForRole({
+        dataClass: "customer",
         role: "fast",
         serviceTier: "flex",
         orgAIConfig,
+        managedAIResidency,
         organizationId,
         tenantWorkspaceIds: [workspaceId],
         analytics: aiAnalytics,
@@ -703,6 +711,7 @@ type GenerateMissingSummariesOptions = {
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   promptCachingEnabled: boolean;
   safeDb: SafeDb;
   userId: SafeId<"user">;
@@ -713,6 +722,7 @@ const generateMissingSummaries = async ({
   organizationId,
   workspaceId,
   orgAIConfig,
+  managedAIResidency,
   promptCachingEnabled,
   safeDb,
   userId,
@@ -720,6 +730,7 @@ const generateMissingSummaries = async ({
   Result<GeneratedSummary[], HandlerError>
 > => {
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+    dataClass: "customer",
     usageMetering: {
       actionType: "chat",
       organizationId,
@@ -742,9 +753,11 @@ const generateMissingSummaries = async ({
   const result = await Result.tryPromise({
     try: async () =>
       await generateTanStackObjectForRole({
+        dataClass: "customer",
         role: "fast",
         serviceTier: "flex",
         orgAIConfig,
+        managedAIResidency,
         organizationId,
         tenantWorkspaceIds: [workspaceId],
         analytics: aiAnalytics,
@@ -990,6 +1003,7 @@ const persistGeneratedSummaries = async ({
   contexts,
 }: PersistGeneratedSummariesOptions) => {
   const modelInfo = getTanStackTextModelInfoForRole("fast", orgAIConfig, {
+    dataClass: "customer",
     organizationId,
   });
   const values = contexts.flatMap((context) => {
@@ -1098,6 +1112,7 @@ const organizeSuggestions = createSafeHandler(
     workspaceId,
     session,
     orgAIConfig,
+    managedAIResidency,
     orgAIConfigStatus,
     promptCachingEnabled,
     body,
@@ -1108,6 +1123,7 @@ const organizeSuggestions = createSafeHandler(
       workspaceId,
       organizationId: session.activeOrganizationId,
       orgAIConfig,
+      managedAIResidency,
       orgAIConfigStatus,
       promptCachingEnabled,
       body,

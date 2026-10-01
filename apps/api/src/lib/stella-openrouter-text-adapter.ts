@@ -7,6 +7,7 @@ import type {
 } from "@tanstack/ai-openrouter";
 import { Result } from "better-result";
 
+import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import { withOptionalsNullable } from "@/api/lib/json-schema/null-optionals";
 import { readProviderStatus } from "@/api/lib/observability/failure-evidence";
 import {
@@ -104,7 +105,19 @@ const OPENROUTER_RETRY: NonNullable<OpenRouterConfig["retryConfig"]> = {
 
 const isManagedRoutingRefusal = (error: unknown): boolean => {
   const status = readProviderStatus(error)?.status;
-  return status === 403 || status === 404;
+  if (status !== 404 || typeof error !== "object" || error === null) {
+    return false;
+  }
+  const body =
+    "error" in error && typeof error.error === "object" && error.error !== null
+      ? error.error
+      : error;
+  if (!("message" in body) || typeof body.message !== "string") {
+    return false;
+  }
+  return /^No endpoints found (?:supporting your data region|matching your data policy)\.(?:\s|$)/iu.test(
+    body.message,
+  );
 };
 
 const withManagedRoutingErrors = async function* (
@@ -154,26 +167,50 @@ class ManagedOpenRouterTextAdapter extends StellaOpenRouterTextAdapter {
   }
 
   protected override mapOptionsToRequest(options: OpenRouterTextOptions) {
-    const request = super.mapOptionsToRequest(options);
+    const {
+      plugins: _plugins,
+      variant: _variant,
+      ...modelOptions
+    } = options.modelOptions ?? {};
+    const request = super.mapOptionsToRequest({
+      ...options,
+      model: options.model.replace(/:[^/]*$/u, ""),
+      modelOptions,
+    });
     return {
       ...request,
+      ...(request.models === undefined
+        ? {}
+        : {
+            models: request.models.map((model) =>
+              model.replace(/:[^/]*$/u, ""),
+            ),
+          }),
       provider: {
         ...request.provider,
-        ...PROVIDER_DATA_POLICY.instance.openrouter.provider,
+        ...PROVIDER_DATA_POLICY.customer.openrouter.provider,
       },
     };
   }
 }
 
-export const createManagedOpenRouterText = (
-  model: OpenRouterModel,
-  apiKey: string,
-): StellaOpenRouterTextAdapter =>
+type ManagedOpenRouterTextOptions = {
+  model: OpenRouterModel;
+  apiKey: string;
+  managedAIResidency: ManagedAIResidency;
+};
+
+export const createManagedOpenRouterText = ({
+  model,
+  apiKey,
+  managedAIResidency,
+}: ManagedOpenRouterTextOptions): StellaOpenRouterTextAdapter =>
   new ManagedOpenRouterTextAdapter(
     {
       apiKey,
       retryConfig: OPENROUTER_RETRY,
-      serverURL: PROVIDER_DATA_POLICY.instance.openrouter.serverURL,
+      serverURL:
+        PROVIDER_DATA_POLICY.customer.openrouter.serverURLs[managedAIResidency],
     },
     model,
   );

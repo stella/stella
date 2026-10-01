@@ -3,6 +3,7 @@ import { panic, Result } from "better-result";
 import type { VerdictMatchedRef } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
+import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -109,6 +110,7 @@ type AiGradingDeps = {
   workspaceId: SafeId<"workspace">;
   entityVersionId: SafeId<"entityVersion">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   promptCachingEnabled: boolean;
   serviceTier: AIRequestServiceTier;
   usageMetering: AIUsageMetering;
@@ -310,6 +312,7 @@ const gradeTierMatchPositions = async ({
       workspaceId: deps.workspaceId,
       entityVersionId: deps.entityVersionId,
       orgAIConfig: deps.orgAIConfig,
+      managedAIResidency: deps.managedAIResidency,
       promptCachingEnabled: deps.promptCachingEnabled,
       serviceTier: deps.serviceTier,
       usageMetering: deps.usageMetering,
@@ -458,6 +461,7 @@ const gradeReferenceStandards = async ({
         organizationId: deps.organizationId,
         workspaceId: deps.workspaceId,
         orgAIConfig: deps.orgAIConfig,
+        managedAIResidency: deps.managedAIResidency,
         promptCachingEnabled: deps.promptCachingEnabled,
         serviceTier: deps.serviceTier,
         usageMetering: deps.usageMetering,

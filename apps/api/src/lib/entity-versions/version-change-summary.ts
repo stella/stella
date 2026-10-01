@@ -3,6 +3,7 @@ import { Result } from "better-result";
 import type { SafeDb } from "@/api/db/safe-db";
 import { summarizeVersionDiff } from "@/api/lib/ai-change-summary";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
+import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -14,6 +15,7 @@ type SummarizeVersionChangeOptions = {
   /** Analytics feature the model call is reported under. */
   feature: string;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   organizationId: SafeId<"organization">;
   safeDb: SafeDb;
   userId: SafeId<"user">;
@@ -29,6 +31,7 @@ export const summarizeVersionChange = async ({
   currentText,
   feature,
   orgAIConfig,
+  managedAIResidency,
   organizationId,
   safeDb,
   userId,
@@ -42,6 +45,7 @@ export const summarizeVersionChange = async ({
   }
 
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+    dataClass: "customer",
     usageMetering: {
       actionType: "chat",
       organizationId,
@@ -62,6 +66,7 @@ export const summarizeVersionChange = async ({
       await summarizeVersionDiff({
         diffText: diffSegmentsToText(segments),
         orgAIConfig,
+        managedAIResidency,
         organizationId,
         aiAnalytics,
       }),

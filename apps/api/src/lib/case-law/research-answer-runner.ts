@@ -13,6 +13,7 @@ import {
 import type { FieldContent } from "@/api/db/schema-validators";
 import { resolveCaching } from "@/api/lib/ai-config";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
+import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
@@ -93,6 +94,7 @@ export type RunResearchAnswersInput = {
    */
   claim: ResearchAnswerClaim;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   promptCachingEnabled: boolean;
 };
 
@@ -326,6 +328,7 @@ const answerDecision = async (
   }
 
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+    dataClass: "customer",
     feature: "case-law.research-answers",
     modelRole: "fast",
     organizationId: input.organizationId,
@@ -353,12 +356,18 @@ const answerDecision = async (
       const { modelId } = getTanStackTextModelForRole(
         "fast",
         input.orgAIConfig,
-        { organizationId: input.organizationId },
+        {
+          dataClass: "customer",
+          managedAIResidency: input.managedAIResidency,
+          organizationId: input.organizationId,
+        },
       );
       const output = await generateTanStackObjectForRole({
+        dataClass: "customer",
         role: "fast",
         serviceTier: "standard",
         orgAIConfig: input.orgAIConfig,
+        managedAIResidency: input.managedAIResidency,
         organizationId: input.organizationId,
         // The corpus is global; answers are tenant rows written separately.
         tenantWorkspaceIds: [],
@@ -728,6 +737,7 @@ const answerWithSystemOne = async ({
     return untouched;
   }
   const { decisions, model } = await decideMany({
+    dataClass: "customer",
     id: "case-law.research-answers",
     orgAIConfig,
     state: plan.state,

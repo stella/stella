@@ -225,6 +225,7 @@ describe("buildAiFieldGenerator skill-tool wiring", () => {
   test("does not advertise skill tools for a ref to no available skill", async () => {
     const generate = buildTestAiFieldGenerator({
       orgAIConfig,
+      managedAIResidency: "eu" as const,
       organizationId,
       skillContext,
       tenantWorkspaceIds: [],
@@ -248,6 +249,7 @@ describe("buildAiFieldGenerator skill-tool wiring", () => {
     async (_name, builtIn) => {
       const generate = buildTestAiFieldGenerator({
         orgAIConfig,
+        managedAIResidency: "eu" as const,
         organizationId,
         skillContext,
         tenantWorkspaceIds: [],
@@ -269,6 +271,7 @@ describe("buildAiFieldGenerator skill-tool wiring", () => {
   test("passes no tools when the prompt has no skill reference", async () => {
     const generate = buildTestAiFieldGenerator({
       orgAIConfig,
+      managedAIResidency: "eu" as const,
       organizationId,
       skillContext,
       tenantWorkspaceIds: [],
@@ -281,6 +284,7 @@ describe("buildAiFieldGenerator skill-tool wiring", () => {
   test("passes no tools without a skill context, even with a ref", async () => {
     const generate = buildTestAiFieldGenerator({
       orgAIConfig,
+      managedAIResidency: "eu" as const,
       organizationId,
       tenantWorkspaceIds: [],
     });
@@ -298,6 +302,7 @@ describe("buildAiFieldGenerator document-text injection", () => {
   test("injects a Document section when documentText is supplied", async () => {
     const generate = buildTestAiFieldGenerator({
       orgAIConfig,
+      managedAIResidency: "eu" as const,
       organizationId,
       tenantWorkspaceIds: [],
     });
@@ -316,6 +321,7 @@ describe("buildAiFieldGenerator document-text injection", () => {
   test("omits the Document section when no documentText is supplied", async () => {
     const generate = buildTestAiFieldGenerator({
       orgAIConfig,
+      managedAIResidency: "eu" as const,
       organizationId,
       tenantWorkspaceIds: [],
     });
@@ -327,6 +333,7 @@ describe("buildAiFieldGenerator document-text injection", () => {
   test("omits the Document section for blank documentText", async () => {
     const generate = buildTestAiFieldGenerator({
       orgAIConfig,
+      managedAIResidency: "eu" as const,
       organizationId,
       tenantWorkspaceIds: [],
     });
@@ -347,6 +354,7 @@ describe("buildAiOccurrenceAdapter skill-tool wiring", () => {
   test("does not advertise skill tools for a ref to no available skill", async () => {
     const adapt = buildTestAiOccurrenceAdapter({
       orgAIConfig,
+      managedAIResidency: "eu" as const,
       organizationId,
       skillContext,
       tenantWorkspaceIds: [],
@@ -366,6 +374,7 @@ describe("buildAiOccurrenceAdapter skill-tool wiring", () => {
   test("passes no tools when the instruction has no skill reference", async () => {
     const adapt = buildTestAiOccurrenceAdapter({
       orgAIConfig,
+      managedAIResidency: "eu" as const,
       organizationId,
       skillContext,
       tenantWorkspaceIds: [],
@@ -389,6 +398,7 @@ describe("buildAiFieldGenerator truncated output", () => {
   ) => {
     const generate = buildTestAiFieldGenerator({
       orgAIConfig,
+      managedAIResidency: "eu" as const,
       organizationId,
       resolveTextModel: resolveModel,
       tenantWorkspaceIds: [],
@@ -461,6 +471,7 @@ describe("output budgets are sized from the work asked for", () => {
   test("a field's ceiling covers its declared maximum value length", async () => {
     const generate = buildTestAiFieldGenerator({
       orgAIConfig,
+      managedAIResidency: "eu" as const,
       organizationId,
       tenantWorkspaceIds: [],
     });
@@ -491,6 +502,7 @@ describe("output budgets are sized from the work asked for", () => {
   test("an adaptation's ceiling scales with the number of occurrences", async () => {
     const adapt = buildTestAiOccurrenceAdapter({
       orgAIConfig,
+      managedAIResidency: "eu" as const,
       organizationId,
       tenantWorkspaceIds: [],
     });
@@ -543,6 +555,7 @@ describe("buildAiConditionDecider decision tier", () => {
     const decideCondition = buildAiConditionDecider({
       decisionModel: decisionModel(0.94),
       orgAIConfig,
+      managedAIResidency: "eu" as const,
       organizationId,
       resolveTextModel,
       tenantWorkspaceIds: [],
@@ -560,6 +573,7 @@ describe("buildAiConditionDecider decision tier", () => {
     const decideCondition = buildAiConditionDecider({
       decisionModel: decisionModel(0.04),
       orgAIConfig,
+      managedAIResidency: "eu" as const,
       organizationId,
       resolveTextModel,
       tenantWorkspaceIds: [],
@@ -578,6 +592,7 @@ describe("buildAiConditionDecider decision tier", () => {
     const decideCondition = buildAiConditionDecider({
       decisionModel: decisionModel(0.55),
       orgAIConfig,
+      managedAIResidency: "eu" as const,
       organizationId,
       resolveTextModel,
       tenantWorkspaceIds: [],
@@ -594,6 +609,7 @@ describe("buildAiConditionDecider decision tier", () => {
     const decideCondition = buildAiConditionDecider({
       decisionModel: null,
       orgAIConfig,
+      managedAIResidency: "eu" as const,
       organizationId,
       resolveTextModel,
       tenantWorkspaceIds: [],
@@ -614,6 +630,7 @@ describe("buildAiConditionDecider decision tier", () => {
       const decideCondition = buildAiConditionDecider({
         decisionModel: decisionModel(0.94),
         orgAIConfig: null,
+        managedAIResidency: "eu" as const,
         organizationId,
         resolveTextModel,
         tenantWorkspaceIds: [],

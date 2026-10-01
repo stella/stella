@@ -3,13 +3,12 @@ import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 
 import { env } from "@/api/env";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { decideMany } from "@/api/lib/workflow/decisions/decide";
 import {
   hasInstanceDecisionModel,
   resolveDecisionModel,
 } from "@/api/lib/workflow/decisions/decision-model";
-import { noul, SystemOneError } from "@/api/lib/workflow/decisions/system-one";
+import { noul } from "@/api/lib/workflow/decisions/system-one";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
@@ -70,45 +69,56 @@ afterEach(() => {
 });
 
 describe("decision model request policy", () => {
-  test("reports unavailable instance capability with a configured model", () => {
-    expect(hasInstanceDecisionModel()).toBe(false);
-    expect(resolveDecisionModel(null)?.keySource).toBe("instance");
+  test("reports capability according to the required data class", () => {
+    expect(hasInstanceDecisionModel("customer")).toBe(false);
+    expect(resolveDecisionModel(null, "customer")).toBeNull();
+    expect(hasInstanceDecisionModel("public_corpus")).toBe(true);
+    expect(resolveDecisionModel(null, "public_corpus")?.keySource).toBe(
+      "instance",
+    );
   });
 
-  test("returns a typed failure for an unavailable managed model", async () => {
-    const client = resolveDecisionModel(null);
-    if (client === null) {
-      panic("Expected a configured decision model");
-    }
-    const asked = await client.ask({ state: "eligible", questions });
-    expect(Result.isError(asked)).toBe(true);
-    if (Result.isError(asked)) {
-      expect(asked.error).toBeInstanceOf(SystemOneError);
-      expect(asked.error).toMatchObject({
-        kind: "invalid_request",
-        status: 503,
-      });
-      expect(asked.error.message).toContain("Managed AI is not available");
-      expect(asked.error.cause).toBeInstanceOf(HandlerError);
-    }
-    expect(runtime.fetch).not.toHaveBeenCalled();
-  });
-
-  test("records configured request failures as failed decisions", async () => {
+  test("keeps unavailable decisions empty without telemetry", async () => {
     const result = await decideMany({
       id: "test.request-policy",
       orgAIConfig: null,
+      dataClass: "customer",
       state: "eligible",
       questions,
     });
     expect(result).toEqual({
       decisions: {
-        eligible: { state: "undecided", reason: "failed", confidence: null },
+        eligible: {
+          state: "undecided",
+          reason: "no-backend",
+          confidence: null,
+        },
       },
       model: null,
     });
-    expect(runtime.analytics.exceptions()).toHaveLength(1);
+    expect(runtime.analytics.exceptions()).toHaveLength(0);
+    expect(runtime.logger.records).toHaveLength(0);
     expect(runtime.fetch).not.toHaveBeenCalled();
+  });
+
+  test("keeps public-corpus instance requests unchanged", async () => {
+    const client = resolveDecisionModel(null, "public_corpus");
+    if (client === null) {
+      panic("Expected a configured decision model");
+    }
+    const asked = await client.ask({ state: "eligible", questions });
+    expect(Result.isOk(asked)).toBe(true);
+    expect(runtime.fetch).toHaveBeenCalledTimes(1);
+    const call = runtime.fetch.mock.calls.at(0);
+    expect(call?.at(0)).toBe("https://api.typesafe.ai/v1/systemone");
+    expect(call?.at(1)).toMatchObject({
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: "Bearer test-instance-key",
+      },
+      body: JSON.stringify({ state: "eligible", model: "jev-test", questions }),
+    });
   });
 
   test.each(["unconfigured", "personal-key-required"] as const)(
@@ -119,30 +129,39 @@ describe("decision model request policy", () => {
       } else {
         env.REQUIRE_PERSONAL_AI_KEY = true;
       }
-      expect(hasInstanceDecisionModel()).toBe(false);
-      expect(resolveDecisionModel(null)).toBeNull();
+      for (const dataClass of ["customer", "public_corpus"] as const) {
+        expect(hasInstanceDecisionModel(dataClass)).toBe(false);
+        expect(resolveDecisionModel(null, dataClass)).toBeNull();
+      }
     },
   );
 
-  test("keeps organization decision requests unchanged", async () => {
-    env.REQUIRE_PERSONAL_AI_KEY = true;
-    const client = resolveDecisionModel(organization);
-    if (client === null) {
-      panic("Expected an organization decision model");
-    }
-    expect(client.keySource).toBe("byok");
-    const asked = await client.ask({ state: "eligible", questions });
-    expect(Result.isOk(asked)).toBe(true);
-    expect(runtime.fetch).toHaveBeenCalledTimes(1);
-    const call = runtime.fetch.mock.calls.at(0);
-    expect(call?.at(0)).toBe("https://api.typesafe.ai/v1/systemone");
-    expect(call?.at(1)).toMatchObject({
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: "Bearer test-organization-key",
-      },
-      body: JSON.stringify({ state: "eligible", model: "jev-test", questions }),
-    });
-  });
+  test.each(["customer", "public_corpus"] as const)(
+    "keeps %s organization requests unchanged",
+    async (dataClass) => {
+      env.REQUIRE_PERSONAL_AI_KEY = true;
+      const client = resolveDecisionModel(organization, dataClass);
+      if (client === null) {
+        panic("Expected an organization decision model");
+      }
+      expect(client.keySource).toBe("byok");
+      const asked = await client.ask({ state: "eligible", questions });
+      expect(Result.isOk(asked)).toBe(true);
+      expect(runtime.fetch).toHaveBeenCalledTimes(1);
+      const call = runtime.fetch.mock.calls.at(0);
+      expect(call?.at(0)).toBe("https://api.typesafe.ai/v1/systemone");
+      expect(call?.at(1)).toMatchObject({
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: "Bearer test-organization-key",
+        },
+        body: JSON.stringify({
+          state: "eligible",
+          model: "jev-test",
+          questions,
+        }),
+      });
+    },
+  );
 });

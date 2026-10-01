@@ -1,6 +1,11 @@
 import { BUSINESS_REGISTRY_CREDENTIAL_SLUGS } from "@stll/api-contract";
 
 import {
+  DEFAULT_MANAGED_AI_RESIDENCY,
+  MANAGED_AI_RESIDENCIES,
+} from "@/api/lib/ai-data-policy";
+
+import {
   bytea,
   jsonb,
   orgPolicies,
@@ -244,6 +249,10 @@ export const organizationSettings = p.pgTable(
     urlFetchApiKeyEncrypted: bytea("url_fetch_api_key_encrypted"),
     /** AES-GCM initialization vector for urlFetchApiKeyEncrypted. */
     urlFetchApiKeyIv: bytea("url_fetch_api_key_iv"),
+    managedAIResidency: p
+      .text("managed_ai_residency", { enum: MANAGED_AI_RESIDENCIES })
+      .notNull()
+      .default(DEFAULT_MANAGED_AI_RESIDENCY),
     /**
      * Whether stella may annotate AI requests with prompt-cache
      * markers (Anthropic `cacheControl`, OpenAI `promptCacheKey`).
@@ -294,6 +303,13 @@ export const organizationSettings = p.pgTable(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
+    p.check(
+      "organization_settings_managed_ai_residency_check",
+      sql`${table.managedAIResidency} IN (${sql.join(
+        MANAGED_AI_RESIDENCIES.map((region) => sql.raw(`'${region}'`)),
+        sql`, `,
+      )})`,
+    ),
     p.check(
       "organization_settings_time_minimum_unit_check",
       sql`${table.timeMinimumUnitMinutes} > 0 AND 60 % ${table.timeMinimumUnitMinutes} = 0`,

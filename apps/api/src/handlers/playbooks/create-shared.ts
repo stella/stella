@@ -7,6 +7,7 @@ import { assertPlaybookDocumentType } from "@/api/handlers/playbooks/assert-docu
 import { deriveAutoAsks } from "@/api/handlers/playbooks/derive-ask";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
+import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import type { SafeHandlerGenerator } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -47,6 +48,7 @@ type CreatePlaybookDefinitionArgs = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   orgAIConfigStatus: OrgAIConfigStatus;
   promptCachingEnabled: boolean;
   recordAuditEvent: AuditRecorder;
@@ -58,6 +60,7 @@ export const createPlaybookDefinitionHandler = async function* ({
   safeDb,
   organizationId,
   orgAIConfig,
+  managedAIResidency,
   orgAIConfigStatus,
   promptCachingEnabled,
   recordAuditEvent,
@@ -95,6 +98,7 @@ export const createPlaybookDefinitionHandler = async function* ({
   const positions = await deriveAutoAsks(body.positions, {
     organizationId,
     orgAIConfig,
+    managedAIResidency,
     orgAIConfigStatus,
     promptCachingEnabled,
   });

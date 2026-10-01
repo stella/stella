@@ -191,6 +191,7 @@ describe("resolveSystemOneOutcomes", () => {
       questions: asked,
     });
     const { decisions, model } = await decideMany({
+      dataClass: "customer",
       id: "case-law.research-answers",
       orgAIConfig: null,
       state: plan.state,

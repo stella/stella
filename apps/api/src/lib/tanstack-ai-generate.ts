@@ -27,6 +27,7 @@ import type {
   CachingDecision,
   OrgAIConfig,
 } from "@/api/lib/ai-config";
+import type { AIRequestPolicy } from "@/api/lib/ai-data-policy";
 import {
   classifyAIError,
   providerErrorBody,
@@ -122,7 +123,7 @@ type GenerateTanStackBaseOptions = {
    */
   tenantWorkspaceIds: readonly SafeId<"workspace">[];
   temperature?: number | undefined;
-};
+} & AIRequestPolicy;
 
 type TanStackTextForRoleOptions = GenerateTanStackBaseOptions &
   GenerateTanStackInputOptions;
@@ -175,7 +176,8 @@ export type TanStackStructuredOutputEvent<TOutput> =
 type ResolveTextModelOptions = Pick<
   GenerateTanStackBaseOptions,
   "modelId" | "organizationId" | "orgAIConfig" | "reasoningEffort" | "role"
->;
+> &
+  AIRequestPolicy;
 
 const CANCELLED_GENERATION_MESSAGE = "AI generation was cancelled";
 
@@ -556,12 +558,15 @@ const throwIfTanStackRunError = (chunk: PublicStreamChunk): void => {
 // be named a transient transport outage.
 const tanStackRunError = (chunk: RunErrorEvent): HandlerError => {
   const cause: unknown = chunk.rawEvent ?? providerErrorBody(chunk.message);
-  return new HandlerError({
+  const error = new HandlerError({
     status: chunk.code === MANAGED_PROVIDER_UNAVAILABLE_CODE ? 503 : 502,
     message: chunk.message,
     ...(chunk.code ? { code: chunk.code } : {}),
     ...(cause === undefined ? {} : { cause }),
   });
+  return chunk.code === MANAGED_PROVIDER_UNAVAILABLE_CODE
+    ? classifyFailure(error, "model_unavailable")
+    : error;
 };
 
 /**
@@ -586,12 +591,15 @@ const withRecoveredProviderStatus = (error: unknown): unknown => {
     return error;
   }
   if (hasManagedProviderUnavailableCode(error)) {
-    return new HandlerError({
-      status: 503,
-      code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
-      message: error.message,
-      cause: error,
-    });
+    return classifyFailure(
+      new HandlerError({
+        status: 503,
+        code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
+        message: error.message,
+        cause: error,
+      }),
+      "model_unavailable",
+    );
   }
   if (classifyAIError(error) !== "unknown") {
     return error;
@@ -993,6 +1001,7 @@ export const resolveTanStackTextModel = ({
   orgAIConfig,
   reasoningEffort,
   role,
+  ...policy
 }: ResolveTextModelOptions): ResolvedTanStackTextModel => {
   // Every inference path (chat, subagents, field generators, workflow
   // batches) resolves its model here, so this is the one seam where a
@@ -1006,8 +1015,12 @@ export const resolveTanStackTextModel = ({
         role,
         organizationId,
         reasoningEffort,
+        ...policy,
       })
-    : getTanStackTextModelForRole(role, orgAIConfig, { organizationId });
+    : getTanStackTextModelForRole(role, orgAIConfig, {
+        organizationId,
+        ...policy,
+      });
 };
 
 const messagesFromInput = (

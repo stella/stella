@@ -13,6 +13,7 @@ import {
 } from "@/api/handlers/chat/thread-title-prompt";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
+import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import { isUnanticipatedAIFailure } from "@/api/lib/ai-error";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
@@ -45,6 +46,7 @@ type GenerateThreadTitleProps = {
   messages: [ChatMessage, ChatMessage]; // [userMessage, AIMessage]
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   promptCachingEnabled: boolean;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
@@ -59,6 +61,7 @@ const generateAdmittedThreadTitle = async ({
   messages,
   organizationId,
   orgAIConfig,
+  managedAIResidency,
   promptCachingEnabled,
   recordAuditEvent,
   safeDb,
@@ -69,6 +72,7 @@ const generateAdmittedThreadTitle = async ({
   admissionSignal?: AbortSignal | undefined;
 }): Promise<void> => {
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+    dataClass: "customer",
     usageMetering: {
       actionType: "background",
       organizationId,
@@ -99,6 +103,7 @@ const generateAdmittedThreadTitle = async ({
 
   try {
     const text = await generateTanStackTextForRole({
+      dataClass: "customer",
       abortSignal:
         admissionSignal === undefined
           ? AbortSignal.timeout(TITLE_GENERATION_TIMEOUT_MS)
@@ -111,6 +116,7 @@ const generateAdmittedThreadTitle = async ({
       role: "fast",
       serviceTier: "batch",
       orgAIConfig,
+      managedAIResidency,
       organizationId,
       analytics: aiAnalytics,
       caching: resolveCaching({

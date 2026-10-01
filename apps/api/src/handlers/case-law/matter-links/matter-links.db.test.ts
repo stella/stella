@@ -52,6 +52,7 @@ const workspaceContext = () => ({
   memberRole: { role: "owner" },
   orgAIConfig: null,
   orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+  managedAIResidency: "eu" as const,
   promptCachingEnabled: false,
   recordAuditEvent: noopAuditRecorder,
   request: new Request("https://example.test/case/matter-links"),

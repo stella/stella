@@ -593,6 +593,7 @@ const converse = async (
           abortSignal: AbortSignal.timeout(CONVERSATION_TIMEOUT_MS),
           dataWorkspaceIds: [],
           orgAIConfig: orgConfigOf(origin),
+          managedAIResidency: "eu",
           organizationId: ids.orgA,
           preserveTokens: 1,
           safeDb,

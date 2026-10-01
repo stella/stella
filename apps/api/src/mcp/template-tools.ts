@@ -1307,8 +1307,10 @@ const handleFillTemplateTool: McpToolHandler<
     const orgAIConfig = await readConfigPastPreflight(readOrgAIConfig);
     const shared = {
       orgAIConfig,
+      managedAIResidency: context.managedAIResidency,
       organizationId: context.organizationId,
       aiAnalytics: createTanStackAIAnalyticsCallbacks({
+        dataClass: "customer",
         usageMetering: {
           actionType: "chat",
           organizationId: context.organizationId,
@@ -1750,6 +1752,7 @@ const handleSaveFilledTemplateTool: McpToolHandler<
     const orgAIConfig = await readConfigPastPreflight(readOrgAIConfig);
     const shared = {
       orgAIConfig,
+      managedAIResidency: context.managedAIResidency,
       organizationId: context.organizationId,
       skillContext: {
         organizationId: context.organizationId,
@@ -1757,6 +1760,7 @@ const handleSaveFilledTemplateTool: McpToolHandler<
         userId: context.userId,
       },
       aiAnalytics: createTanStackAIAnalyticsCallbacks({
+        dataClass: "customer",
         usageMetering: {
           actionType: "chat",
           organizationId: context.organizationId,

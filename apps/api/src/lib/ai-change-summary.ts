@@ -1,3 +1,4 @@
+import * as v from "valibot";
 /**
  * AI summary of the changes between two document versions. Shared by
  * the template Studio history and the entity (.docx file) version
@@ -6,10 +7,9 @@
  * as `suggest-template-fields` (generateTanStackObjectForRole).
  */
 
-import * as v from "valibot";
-
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { resolveCaching } from "@/api/lib/ai-config";
+import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import type { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
@@ -30,6 +30,7 @@ const SYSTEM_PROMPT =
 type SummarizeVersionDiffOptions = {
   diffText: string;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   organizationId: SafeId<"organization">;
   aiAnalytics: ReturnType<typeof createTanStackAIAnalyticsCallbacks>;
 };
@@ -38,12 +39,15 @@ type SummarizeVersionDiffOptions = {
 export const summarizeVersionDiff = async ({
   diffText,
   orgAIConfig,
+  managedAIResidency,
   organizationId,
   aiAnalytics,
 }: SummarizeVersionDiffOptions): Promise<string> => {
   const { summary } = await generateTanStackObjectForRole({
+    dataClass: "customer",
     role: "fast",
     orgAIConfig,
+    managedAIResidency,
     organizationId,
     // Shared by root-scoped and workspace-scoped callers; no workspace id is
     // threaded through this helper's options.

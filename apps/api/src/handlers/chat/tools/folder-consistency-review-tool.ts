@@ -11,6 +11,7 @@ import type { AuthorizedToolWorkspaceIds } from "@/api/handlers/chat/tools/autho
 import type { RawModeOnlyChatToolName } from "@/api/handlers/chat/tools/raw-mode-only-tools";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
+import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import {
@@ -380,6 +381,7 @@ type CreateFolderConsistencyReviewToolsProps = {
   extractAskContentsFn?: typeof extractAskContents | undefined;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   promptCachingEnabled: boolean;
   refRegistry: ChatRefRegistry;
   safeDb: SafeDb;
@@ -393,6 +395,7 @@ export const createFolderConsistencyReviewTools = ({
   extractAskContentsFn = extractAskContents,
   organizationId,
   orgAIConfig,
+  managedAIResidency,
   promptCachingEnabled,
   refRegistry,
   safeDb,
@@ -496,6 +499,7 @@ export const createFolderConsistencyReviewTools = ({
           snapshot.reviewDocuments.at(0)?.entityVersionId ??
           panic("review document list unexpectedly became empty"),
         orgAIConfig,
+        managedAIResidency,
         promptCachingEnabled,
         serviceTier: "standard",
         usageMetering: {

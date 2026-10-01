@@ -185,7 +185,7 @@ const classifyAIErrorInternal = (
   }
 
   if (isRecord(error) && error["code"] === MANAGED_PROVIDER_UNAVAILABLE_CODE) {
-    return "provider_unavailable";
+    return "model_unavailable";
   }
 
   if (ChatLoopDetectedError.is(error)) {

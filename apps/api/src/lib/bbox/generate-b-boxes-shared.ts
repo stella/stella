@@ -9,6 +9,7 @@ import type {
 } from "@/api/db/schema";
 import type { BoundingBox, FieldContent } from "@/api/db/schema-validators";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
+import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import type { BBoxItem } from "@/api/lib/bbox/ai-prompts";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
@@ -21,6 +22,7 @@ export type GenerateBBoxesProps = {
   justificationId: SafeId<"justification">;
   organizationId: SafeId<"organization">;
   orgAIConfig?: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   promptCachingEnabled: boolean;
   workspaceId: SafeId<"workspace">;
   data: {

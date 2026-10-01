@@ -57,6 +57,7 @@ export type BaseTestHandlerContext = {
   orgAIConfig: OrgAIConfig | null;
   orgAIConfigStatus: OrgAIConfigStatus;
   promptCachingEnabled: boolean;
+  managedAIResidency: ManagedAIResidency;
   request: Request;
   route: string;
 };
@@ -112,6 +113,7 @@ const createBaseContext = (): BaseTestHandlerContext => ({
   orgAIConfig: null,
   orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
   promptCachingEnabled: false,
+  managedAIResidency: "eu",
   request: new Request("https://example.test/handler-context"),
   route: "/tests/handler-context",
 });

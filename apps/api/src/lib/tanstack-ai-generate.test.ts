@@ -396,14 +396,14 @@ describe("TanStack AI structured output generation", () => {
     "object-stream",
   ] as const) {
     test(`preserves configured provider availability on ${path}`, async () => {
-      const error = managedProviderUnavailable("openrouter");
+      const refusal = managedProviderUnavailable("openrouter");
       const objectPath = path === "object" || path === "object-stream";
       queueRun(
         objectPath
-          ? throwingRun(error)
+          ? throwingRun(refusal)
           : runErrorRun({
               code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
-              message: error.message,
+              message: refusal.message,
             }),
       );
       queueRun(
@@ -412,6 +412,8 @@ describe("TanStack AI structured output generation", () => {
       const options = {
         caching: noCaching,
         organizationId: null,
+        dataClass: "customer" as const,
+        managedAIResidency: "eu" as const,
         orgAIConfig: null,
         prompt: "Reply with the answer.",
         role: "chat" as const,
@@ -451,9 +453,9 @@ describe("TanStack AI structured output generation", () => {
       expect(caught).toMatchObject({
         status: 503,
         code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
-        message: error.message,
+        message: refusal.message,
       });
-      expect(classifyAIError(caught)).toBe("provider_unavailable");
+      expect(classifyAIError(caught)).toBe("model_unavailable");
       expect(providerRequests).toHaveLength(1);
     });
   }
@@ -540,6 +542,8 @@ describe("TanStack AI structured output generation", () => {
     const result = await generateObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      dataClass: "customer",
+      managedAIResidency: "eu",
       orgAIConfig: null,
       outputSchema: rawSchema,
       prompt: "Extract the answer.",
@@ -566,6 +570,8 @@ describe("TanStack AI structured output generation", () => {
     for await (const event of streamObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      dataClass: "customer",
+      managedAIResidency: "eu",
       orgAIConfig: null,
       outputSchema: rawSchema,
       prompt: "Extract the answer.",
@@ -618,6 +624,8 @@ describe("TanStack AI structured output generation", () => {
     const failure = await generateObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      dataClass: "customer",
+      managedAIResidency: "eu",
       orgAIConfig: null,
       outputSchema: overBudgetSchema(),
       prompt: "Extract the answer.",
@@ -640,6 +648,8 @@ describe("TanStack AI structured output generation", () => {
       for await (const event of streamObjectForTestModel({
         caching: noCaching,
         organizationId: null,
+        dataClass: "customer",
+        managedAIResidency: "eu",
         orgAIConfig: null,
         outputSchema: overBudgetSchema(),
         prompt: "Extract the answer.",
@@ -668,6 +678,8 @@ describe("TanStack AI structured output generation", () => {
     const validationFailure = await generateObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      dataClass: "customer",
+      managedAIResidency: "eu",
       orgAIConfig: null,
       outputSchema: v.strictObject({ answer: v.string() }),
       prompt: "Extract the answer.",
@@ -976,6 +988,8 @@ describe("TanStack AI structured output generation", () => {
     const result = await generateObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      dataClass: "customer",
+      managedAIResidency: "eu",
       orgAIConfig: null,
       outputSchema: v.strictObject({ answer: v.string() }),
       prompt: "Extract the answer.",
@@ -1004,6 +1018,8 @@ describe("TanStack AI structured output generation", () => {
     const caught = await generateObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      dataClass: "customer",
+      managedAIResidency: "eu",
       orgAIConfig: null,
       outputSchema: v.strictObject({ answer: v.string() }),
       prompt: "Extract the answer.",
@@ -1045,6 +1061,8 @@ describe("TanStack AI structured output generation", () => {
     const caught = await generateObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      dataClass: "customer",
+      managedAIResidency: "eu",
       orgAIConfig: null,
       outputSchema: v.strictObject({ answer: v.string() }),
       prompt: "Extract the answer.",
@@ -1068,6 +1086,8 @@ describe("TanStack AI structured output generation", () => {
     const caught = await generateObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      dataClass: "customer",
+      managedAIResidency: "eu",
       orgAIConfig: null,
       outputSchema: v.strictObject({ answer: v.string() }),
       prompt: "Extract the answer.",
@@ -1110,6 +1130,8 @@ describe("TanStack AI structured output generation", () => {
       const caught = await generateObjectForTestModel({
         caching: noCaching,
         organizationId: null,
+        dataClass: "customer",
+        managedAIResidency: "eu",
         orgAIConfig: null,
         outputSchema: v.strictObject({ answer: v.string() }),
         prompt: "Extract the answer.",
@@ -1149,6 +1171,8 @@ describe("TanStack AI structured output generation", () => {
     for await (const event of streamObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      dataClass: "customer",
+      managedAIResidency: "eu",
       orgAIConfig: null,
       outputSchema: v.strictObject({ answer: v.string() }),
       prompt: "Extract the answer.",
@@ -1199,6 +1223,8 @@ describe("TanStack AI model-ingress guard", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      dataClass: "customer",
+      managedAIResidency: "eu",
       orgAIConfig: null,
       prompt: `Summarize https://my.stll.app/workspaces/${tenantWorkspaceId}/matters and decision ${publicDecisionId}`,
       role: "chat",
@@ -1230,6 +1256,8 @@ describe("TanStack AI model-ingress guard", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      dataClass: "customer",
+      managedAIResidency: "eu",
       orgAIConfig: null,
       prompt: `Summarize decision ${publicDecisionId}`,
       role: "chat",
@@ -1255,6 +1283,8 @@ describe("TanStack AI model-ingress guard", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      dataClass: "customer",
+      managedAIResidency: "eu",
       orgAIConfig: null,
       prompt: "Draft it.",
       role: "chat",
@@ -1286,6 +1316,8 @@ describe("TanStack AI model-ingress guard", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      dataClass: "customer",
+      managedAIResidency: "eu",
       orgAIConfig: null,
       prompt: "Draft it.",
       role: "chat",
@@ -1323,6 +1355,8 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "require-complete",
       organizationId: null,
+      dataClass: "customer",
+      managedAIResidency: "eu",
       orgAIConfig: null,
       prompt: "Rewrite it.",
       role: "chat",
@@ -1354,6 +1388,8 @@ describe("TanStack AI text generation", () => {
         caching: noCaching,
         finishPolicy: "allow-incomplete",
         organizationId: null,
+        dataClass: "customer",
+        managedAIResidency: "eu",
         orgAIConfig: null,
         prompt: "Recap it.",
         role: "chat",
@@ -1377,6 +1413,8 @@ describe("TanStack AI text generation", () => {
         caching: noCaching,
         finishPolicy: "allow-output-ceiling",
         organizationId: null,
+        dataClass: "customer",
+        managedAIResidency: "eu",
         orgAIConfig: null,
         prompt: "Recap it.",
         role: "chat",
@@ -1401,6 +1439,8 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "require-complete",
       organizationId: null,
+      dataClass: "customer",
+      managedAIResidency: "eu",
       orgAIConfig: null,
       prompt: "Recap it.",
       role: "chat",
@@ -1426,6 +1466,8 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      dataClass: "customer",
+      managedAIResidency: "eu",
       orgAIConfig: null,
       prompt: "Rewrite it.",
       role: "chat",
@@ -1462,6 +1504,8 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      dataClass: "customer",
+      managedAIResidency: "eu",
       orgAIConfig: null,
       prompt: "Rewrite it.",
       role: "chat",
@@ -1485,6 +1529,8 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      dataClass: "customer",
+      managedAIResidency: "eu",
       orgAIConfig: null,
       prompt: "Rewrite it.",
       role: "chat",
@@ -1504,6 +1550,8 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      dataClass: "customer",
+      managedAIResidency: "eu",
       orgAIConfig: null,
       prompt: "Rewrite it.",
       role: "chat",
@@ -1521,6 +1569,8 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      dataClass: "customer",
+      managedAIResidency: "eu",
       orgAIConfig: null,
       prompt: "Say hello.",
       role: "chat",
@@ -1546,6 +1596,8 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      dataClass: "customer",
+      managedAIResidency: "eu",
       orgAIConfig: null,
       prompt: "Say hello.",
       role: "chat",
@@ -1572,6 +1624,8 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      dataClass: "customer",
+      managedAIResidency: "eu",
       orgAIConfig: null,
       prompt: "Say hello.",
       role: "chat",
@@ -1608,6 +1662,8 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      dataClass: "customer",
+      managedAIResidency: "eu",
       orgAIConfig: null,
       prompt: "Say hello.",
       role: "chat",
@@ -1629,6 +1685,8 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      dataClass: "customer",
+      managedAIResidency: "eu",
       orgAIConfig: null,
       prompt: "Say hello.",
       role: "chat",
@@ -1655,6 +1713,8 @@ describe("TanStack AI text generation", () => {
       for await (const _delta of streamTextForTestModel({
         caching: noCaching,
         organizationId: null,
+        dataClass: "customer",
+        managedAIResidency: "eu",
         orgAIConfig: null,
         prompt: "Say hello.",
         role: "chat",

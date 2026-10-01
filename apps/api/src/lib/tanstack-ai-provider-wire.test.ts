@@ -500,6 +500,7 @@ describe("a cancelled run rejects cleanly", () => {
 test("a cancelled structured Bedrock request never reaches the provider", async () => {
   const model = wireChatModel("bedrock");
   const adapter = createTanStackTextAdapterFactory({
+    dataClass: "public_corpus",
     apiKey: "cassette-replay-no-credentials",
     provider: "bedrock",
   })(model);

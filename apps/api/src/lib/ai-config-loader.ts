@@ -27,6 +27,8 @@ import {
   memberAssignmentRequiredError,
   ownAIKeyRequiredError,
 } from "@/api/lib/ai-config-response";
+import { DEFAULT_MANAGED_AI_RESIDENCY } from "@/api/lib/ai-data-policy";
+import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { memberMayUseAI } from "@/api/lib/usage/member-capacity";
@@ -55,6 +57,7 @@ const selectAISettingsRow = async (
       >`${organizationSettings.aiConfigEncrypted}::text`,
       aiConfigIv: sql<string | null>`${organizationSettings.aiConfigIv}::text`,
       promptCachingEnabled: organizationSettings.promptCachingEnabled,
+      managedAIResidency: organizationSettings.managedAIResidency,
     })
     .from(organizationSettings)
     .where(eq(organizationSettings.organizationId, organizationId))
@@ -114,9 +117,22 @@ export const loadOrgAIConfig = async (
   return await requireAIAccessAllowed(db, reader, orgAIConfig);
 };
 
+export const loadManagedAIResidency = async (
+  db: OrgSettingsReader,
+  organizationId: SafeId<"organization">,
+): Promise<ManagedAIResidency> => {
+  const rows = await db
+    .select({ managedAIResidency: organizationSettings.managedAIResidency })
+    .from(organizationSettings)
+    .where(eq(organizationSettings.organizationId, organizationId))
+    .limit(1);
+  return rows.at(0)?.managedAIResidency ?? DEFAULT_MANAGED_AI_RESIDENCY;
+};
+
 export type OrgAISettings = {
   orgAIConfig: OrgAIConfig | null;
   promptCachingEnabled: boolean;
+  managedAIResidency: ManagedAIResidency;
 };
 
 /**
@@ -140,6 +156,7 @@ export const loadOrgAISettings = async (
   return allowed.map((config) => ({
     orgAIConfig: config,
     promptCachingEnabled: resolvePromptCachingPreference(row),
+    managedAIResidency: row?.managedAIResidency ?? DEFAULT_MANAGED_AI_RESIDENCY,
   }));
 };
 
@@ -147,6 +164,7 @@ export type OrgSettingsForAuth = {
   orgAIConfig: OrgAIConfig | null;
   orgAIConfigStatus: OrgAIConfigStatus;
   promptCachingEnabled: boolean;
+  managedAIResidency: ManagedAIResidency;
 };
 
 /**
@@ -177,11 +195,14 @@ export const loadOrgSettingsForAuth = async (
     row,
   });
   const promptCachingEnabled = resolvePromptCachingPreference(row);
+  const managedAIResidency =
+    row?.managedAIResidency ?? DEFAULT_MANAGED_AI_RESIDENCY;
   if (decryptResult.status === "corrupt") {
     return {
       orgAIConfig: null,
       orgAIConfigStatus: ORG_AI_CONFIG_STATUS.unreadable,
       promptCachingEnabled,
+      managedAIResidency,
     };
   }
 
@@ -191,11 +212,17 @@ export const loadOrgSettingsForAuth = async (
       orgAIConfig,
       orgAIConfigStatus: ORG_AI_CONFIG_STATUS.memberAssignmentRequired,
       promptCachingEnabled,
+      managedAIResidency,
     };
   }
   const orgAIConfigStatus =
     orgAIConfig === null && !(await mayUseInstanceModels(db, organizationId))
       ? ORG_AI_CONFIG_STATUS.ownKeyRequired
       : ORG_AI_CONFIG_STATUS.ok;
-  return { orgAIConfig, orgAIConfigStatus, promptCachingEnabled };
+  return {
+    orgAIConfig,
+    orgAIConfigStatus,
+    promptCachingEnabled,
+    managedAIResidency,
+  };
 };

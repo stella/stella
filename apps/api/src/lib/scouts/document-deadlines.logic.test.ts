@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
+import { managedProviderUnavailable } from "@/api/lib/provider-data-policy";
 import {
+  DEADLINE_SCOUT_MAX_ATTEMPTS,
+  deadlineScoutFailureStatus,
   deadlineDedupeKey,
   deadlineSeverity,
   filterDeadlines,
@@ -100,4 +103,20 @@ describe("deadlineDedupeKey", () => {
       a,
     );
   });
+});
+
+test("settles permanent generation failures without another attempt", () => {
+  for (let attempt = 1; attempt <= DEADLINE_SCOUT_MAX_ATTEMPTS; attempt++) {
+    const error = managedProviderUnavailable("openrouter");
+    expect(deadlineScoutFailureStatus(attempt, error)).toBe("failed");
+    expect(
+      deadlineScoutFailureStatus(
+        attempt,
+        new Error("Request unavailable", { cause: error }),
+      ),
+    ).toBe("failed");
+    expect(deadlineScoutFailureStatus(attempt, { status: 503 })).toBe(
+      attempt >= DEADLINE_SCOUT_MAX_ATTEMPTS ? "failed" : "pending",
+    );
+  }
 });

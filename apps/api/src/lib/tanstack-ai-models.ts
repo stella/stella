@@ -50,6 +50,7 @@ import {
 } from "@/api/lib/ai-config";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { orgAIConfigStatusError } from "@/api/lib/ai-config-response";
+import type { AIDataClass, AIRequestPolicy } from "@/api/lib/ai-data-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withProviderStreamContract } from "@/api/lib/chat/provider-stream-contract";
 import { validateDataUrl } from "@/api/lib/data-url";
@@ -320,9 +321,11 @@ type ModelOverride = {
 
 type TanStackModelFactoryOptions = {
   provider: AIProvider;
-  apiKey?: string | undefined;
   region?: DataRegion | undefined;
-};
+} & (
+  | { apiKey: string; dataClass: AIDataClass }
+  | ({ apiKey?: undefined } & AIRequestPolicy)
+);
 
 type BedrockTextAdapterConfig = {
   apiKey?: string;
@@ -569,21 +572,32 @@ const createExtendedOpenAIAdapter = (
   return openai(modelId, apiKey);
 };
 
-type OpenRouterAdapterOptions = {
-  modelId: string;
-  apiKey: string;
-  keySource: "byok" | "instance";
-};
+type OpenRouterAdapterOptions = { modelId: string; apiKey: string } & (
+  | { keySource: "byok" }
+  | { keySource: "public_corpus" }
+  | ({ keySource: "instance" } & Extract<
+      AIRequestPolicy,
+      { dataClass: "customer" }
+    >)
+);
 
 const createExtendedOpenRouterAdapter = ({
   modelId,
   apiKey,
-  keySource,
+  ...policy
 }: OpenRouterAdapterOptions): AnyTextAdapter => {
   const openrouter = extendAdapter(
-    keySource === "byok"
-      ? createStellaOpenRouterText
-      : createManagedOpenRouterText,
+    policy.keySource === "instance"
+      ? (
+          model: Parameters<typeof createStellaOpenRouterText>[0],
+          key: string,
+        ) =>
+          createManagedOpenRouterText({
+            model,
+            apiKey: key,
+            managedAIResidency: policy.managedAIResidency,
+          })
+      : createStellaOpenRouterText,
     [
       createModel(modelId, {
         input: ["text", "image", "document"] as const,
@@ -799,17 +813,16 @@ export const createTanStackTextAdapterFactory = (
     };
   }
   if (options.apiKey === undefined) {
-    assertManagedProviderAvailable(options.provider);
+    assertManagedProviderAvailable(options.provider, options.dataClass);
   }
   const factory = createProviderTextAdapterFactory(options);
   return (modelId) => withProviderStreamContract(factory(modelId), stopReasons);
 };
 
-const createProviderTextAdapterFactory = ({
-  provider,
-  apiKey,
-  region,
-}: TanStackModelFactoryOptions): TanStackTextAdapterFactory => {
+const createProviderTextAdapterFactory = (
+  options: TanStackModelFactoryOptions,
+): TanStackTextAdapterFactory => {
+  const { provider, apiKey, region } = options;
   const supportedProvider = resolveTanStackTextProvider({ provider, region });
 
   switch (supportedProvider) {
@@ -847,11 +860,24 @@ const createProviderTextAdapterFactory = ({
         apiKey ?? env.OPENROUTER_API_KEY,
         "OPENROUTER_API_KEY",
       );
+      if (
+        options.apiKey !== undefined ||
+        options.dataClass === "public_corpus"
+      ) {
+        return (modelId) =>
+          createExtendedOpenRouterAdapter({
+            modelId,
+            apiKey: key,
+            keySource: options.apiKey !== undefined ? "byok" : "public_corpus",
+          });
+      }
       return (modelId) =>
         createExtendedOpenRouterAdapter({
           modelId,
           apiKey: key,
-          keySource: apiKey === undefined ? "instance" : "byok",
+          keySource: "instance",
+          dataClass: options.dataClass,
+          managedAIResidency: options.managedAIResidency,
         });
     }
     case "mistral": {
@@ -944,7 +970,8 @@ const hasConfiguredTanStackInstanceProvider = (): boolean => {
 
 export const hasTanStackInstanceProvider = (): boolean =>
   hasConfiguredTanStackInstanceProvider() &&
-  (isMockTextAdapterActive() || isManagedProviderAvailable(resolveProvider()));
+  (isMockTextAdapterActive() ||
+    isManagedProviderAvailable(resolveProvider(), "customer"));
 
 const providerRegion = (
   config: OrgAIProviderConfig,
@@ -1082,7 +1109,9 @@ export const requireTanStackAIAvailableForRole = ({
   configStatus,
   orgConfig,
   role,
+  dataClass,
 }: {
+  dataClass: AIDataClass;
   configStatus: OrgAIConfigStatus;
   orgConfig: OrgAIConfig | null;
   role: ModelRole;
@@ -1100,18 +1129,19 @@ export const requireTanStackAIAvailableForRole = ({
       return Result.err(byokRoleNotConfiguredError(role));
     }
 
-    const provider = resolveTanStackTextProvider({
-      provider: getActiveProvider(),
-    });
+    const activeProvider = getActiveProvider();
+    if (
+      !isMockTextAdapterActive() &&
+      !isManagedProviderAvailable(activeProvider, dataClass)
+    ) {
+      return Result.err(managedProviderUnavailable(activeProvider));
+    }
+    const provider = resolveTanStackTextProvider({ provider: activeProvider });
     if (!supportsTanStackProviderRole(provider, role)) {
       if (isBYOKProvider(provider)) {
         return Result.err(byokProviderRoleUnsupportedError(provider, role));
       }
       return panic("Unsupported TanStack AI role provider.");
-    }
-
-    if (!isMockTextAdapterActive() && !isManagedProviderAvailable(provider)) {
-      return Result.err(managedProviderUnavailable(provider));
     }
 
     return Result.ok(undefined);
@@ -1327,6 +1357,7 @@ const getCachedFactory = (
   const factory = createTanStackTextAdapterFactory({
     provider: config.provider,
     apiKey: config.apiKey,
+    dataClass: "customer",
     ...factoryExtras(config),
   });
   byokCache.set(key, factory);
@@ -1342,9 +1373,12 @@ const getCachedFactory = (
  */
 export const getActiveProvider = (): AIProvider => resolveProvider();
 
-const getInstanceFactory = (): TanStackTextAdapterFactory =>
+const getInstanceFactory = (
+  policy: AIRequestPolicy,
+): TanStackTextAdapterFactory =>
   createTanStackTextAdapterFactory({
     provider: getActiveProvider(),
+    ...policy,
   });
 
 const MODEL_OVERRIDES = {
@@ -1857,6 +1891,7 @@ const resolveInstanceTextModel = ({
   organizationId,
   reasoningEffort,
   useRoleReasoningDefault,
+  ...policy
 }: {
   role: ModelRole;
   modelId: string;
@@ -1864,13 +1899,16 @@ const resolveInstanceTextModel = ({
   organizationId: SafeId<"organization"> | null;
   reasoningEffort?: ReasoningEffort | undefined;
   useRoleReasoningDefault?: boolean | undefined;
-}): ResolvedTanStackTextModel => {
+} & AIRequestPolicy): ResolvedTanStackTextModel => {
+  if (!isMockTextAdapterActive()) {
+    assertManagedProviderAvailable(provider, policy.dataClass);
+  }
   const supportedProvider = resolveTanStackTextProvider({ provider });
   assertTanStackProviderRoleSupport(supportedProvider, role);
   assertInstanceModelRated(modelId);
 
   return buildResolvedTextModel({
-    adapter: getInstanceFactory()(modelId),
+    adapter: getInstanceFactory(policy)(modelId),
     keySource: "instance",
     provider: supportedProvider,
     modelId,
@@ -1886,7 +1924,7 @@ export const getTanStackTextModelForRole = (
   orgConfig: OrgAIConfig | null | undefined,
   options: {
     organizationId: SafeId<"organization"> | null;
-  },
+  } & AIRequestPolicy,
 ): ResolvedTanStackTextModel => {
   if (orgConfig) {
     const selection = orgConfig.overrideModels[role];
@@ -1898,24 +1936,28 @@ export const getTanStackTextModelForRole = (
     });
   }
 
-  if (!hasTanStackInstanceProvider()) {
+  if (!hasConfiguredTanStackInstanceProvider()) {
     throw byokRoleNotConfiguredError(role);
   }
 
   const provider = getActiveProvider();
+  if (!isMockTextAdapterActive()) {
+    assertManagedProviderAvailable(provider, options.dataClass);
+  }
   const modelId = MODEL_OVERRIDES[role] ?? DEFAULT_MODELS[provider][role];
   return resolveInstanceTextModel({
     role,
     modelId,
     provider,
-    organizationId: options.organizationId,
+    ...options,
   });
 };
 
 export const getTanStackTextModelInfoForRole = (
   role: ModelRole,
   orgConfig: OrgAIConfig | null | undefined,
-  _options: {
+  options: {
+    dataClass: AIDataClass;
     organizationId: SafeId<"organization"> | null;
   },
 ): ResolvedTanStackTextModelInfo => {
@@ -1942,11 +1984,14 @@ export const getTanStackTextModelInfoForRole = (
     };
   }
 
-  if (!hasTanStackInstanceProvider()) {
+  if (!hasConfiguredTanStackInstanceProvider()) {
     throw byokRoleNotConfiguredError(role);
   }
 
   const provider = getActiveProvider();
+  if (!isMockTextAdapterActive()) {
+    assertManagedProviderAvailable(provider, options.dataClass);
+  }
   const supportedProvider = resolveTanStackTextProvider({ provider });
   assertTanStackProviderRoleSupport(supportedProvider, role);
   const modelId = MODEL_OVERRIDES[role] ?? DEFAULT_MODELS[provider][role];
@@ -1990,6 +2035,7 @@ export const getTanStackTextModelInfoById = (
   modelId: string,
   orgConfig: OrgAIConfig | null | undefined,
   role: ModelRole,
+  dataClass: AIDataClass,
 ): ResolvedTanStackTextModelInfo => {
   const override = decodeModelOverride(modelId);
 
@@ -2010,11 +2056,14 @@ export const getTanStackTextModelInfoById = (
     };
   }
 
-  if (!hasTanStackInstanceProvider() && !override.provider) {
+  if (!hasConfiguredTanStackInstanceProvider() && !override.provider) {
     throw byokRoleNotConfiguredError(role);
   }
 
   const provider = override.provider ?? getActiveProvider();
+  if (!isMockTextAdapterActive()) {
+    assertManagedProviderAvailable(provider, dataClass);
+  }
   return {
     keySource: "instance",
     modelId: override.modelId,
@@ -2029,7 +2078,7 @@ export const getTanStackTextModelById = (
     role: ModelRole;
     organizationId: SafeId<"organization"> | null;
     reasoningEffort?: ReasoningEffort | undefined;
-  },
+  } & AIRequestPolicy,
 ): ResolvedTanStackTextModel => {
   const override = decodeModelOverride(modelId);
 
@@ -2047,16 +2096,20 @@ export const getTanStackTextModelById = (
     });
   }
 
-  if (!hasTanStackInstanceProvider() && !override.provider) {
+  if (!hasConfiguredTanStackInstanceProvider() && !override.provider) {
     throw byokRoleNotConfiguredError(options.role);
   }
 
   const provider = override.provider ?? getActiveProvider();
+  if (!isMockTextAdapterActive()) {
+    assertManagedProviderAvailable(provider, options.dataClass);
+  }
   const supportedProvider = resolveTanStackTextProvider({ provider });
   const resolvedModelId = override.modelId;
   if (override.provider) {
     assertInstanceModelRated(resolvedModelId);
     const factory = createTanStackTextAdapterFactory({
+      ...options,
       provider: supportedProvider,
     });
     return buildResolvedTextModel({
@@ -2072,11 +2125,9 @@ export const getTanStackTextModelById = (
   }
 
   return resolveInstanceTextModel({
-    role: options.role,
+    ...options,
     modelId: resolvedModelId,
     provider: supportedProvider,
-    organizationId: options.organizationId,
-    reasoningEffort: options.reasoningEffort,
     useRoleReasoningDefault: false,
   });
 };

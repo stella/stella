@@ -44,6 +44,7 @@ const versionSummarize = createSafeHandler(
     session,
     user,
     orgAIConfig,
+    managedAIResidency,
   }) {
     const organizationId = session.activeOrganizationId;
 
@@ -64,6 +65,7 @@ const versionSummarize = createSafeHandler(
     let summary: string | null = null;
     if (segments.length > 0) {
       const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+        dataClass: "customer",
         usageMetering: {
           actionType: "chat",
           organizationId,
@@ -85,6 +87,7 @@ const versionSummarize = createSafeHandler(
             await summarizeVersionDiff({
               diffText: diffSegmentsToText(segments),
               orgAIConfig,
+              managedAIResidency,
               organizationId,
               aiAnalytics,
             }),

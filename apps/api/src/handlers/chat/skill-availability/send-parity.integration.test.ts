@@ -322,6 +322,7 @@ const sendAccepts = async (chat: Chat): Promise<ReadonlySet<string>> => {
       },
       createAuditRecorder: () => async () => undefined,
       orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+      managedAIResidency: "eu" as const,
       pinServerValidatedWorkspaceId: () => false,
       promptCachingEnabled: false,
       recordAuditEvent: async () => undefined,

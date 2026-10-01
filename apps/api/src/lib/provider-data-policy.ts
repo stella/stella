@@ -4,8 +4,10 @@ import type {
 } from "@tanstack/ai-openrouter";
 
 import type { AIProvider } from "@stll/ai-catalog";
+import { classifyFailure } from "@stll/errors";
 
 import type { DecisionModelProvider } from "@/api/lib/ai-config";
+import type { AIDataClass, ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 type ManagedProvider = AIProvider | DecisionModelProvider | "agent_sandbox";
@@ -14,17 +16,24 @@ type ProviderDataPolicy =
   | { status: "unsupported" }
   | {
       status: "supported";
-      serverURL: NonNullable<OpenRouterConfig["serverURL"]>;
+      serverURLs: Record<
+        ManagedAIResidency,
+        NonNullable<OpenRouterConfig["serverURL"]>
+      >;
       provider: NonNullable<OpenRouterTextModelOptions["provider"]>;
     };
 
 export const PROVIDER_DATA_POLICY = {
   byok: { status: "unchanged" },
-  instance: {
+  public_corpus: { status: "unchanged" },
+  customer: {
     google: { status: "unsupported" },
     openrouter: {
       status: "supported",
-      serverURL: "https://eu.openrouter.ai/api/v1",
+      serverURLs: {
+        eu: "https://eu.openrouter.ai/api/v1",
+        us: "https://us.openrouter.ai/api/v1",
+      },
       provider: { dataCollection: "deny", zdr: true },
     },
     openai: { status: "unsupported" },
@@ -39,7 +48,8 @@ export const PROVIDER_DATA_POLICY = {
   },
 } as const satisfies {
   byok: { status: "unchanged" };
-  instance: Record<ManagedProvider, ProviderDataPolicy>;
+  public_corpus: { status: "unchanged" };
+  customer: Record<ManagedProvider, ProviderDataPolicy>;
 };
 
 export const MANAGED_PROVIDER_UNAVAILABLE_CODE = "managed-provider-unavailable";
@@ -47,20 +57,27 @@ export const MANAGED_PROVIDER_UNAVAILABLE_CODE = "managed-provider-unavailable";
 export const managedProviderUnavailable = (
   provider: string,
 ): HandlerError<503> =>
-  new HandlerError({
-    status: 503,
-    code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
-    message: `Managed AI is not available for provider "${provider}" with the configured request policy. Configure an organization AI key or contact your administrator.`,
-  });
+  classifyFailure(
+    new HandlerError({
+      status: 503,
+      code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
+      message: `Managed AI is not available for provider "${provider}" with the configured request policy. Configure an organization AI key or contact your administrator.`,
+    }),
+    "model_unavailable",
+  );
 
 export const isManagedProviderAvailable = (
   provider: ManagedProvider,
-): boolean => PROVIDER_DATA_POLICY.instance[provider].status === "supported";
+  dataClass: AIDataClass,
+): boolean =>
+  dataClass === "public_corpus" ||
+  PROVIDER_DATA_POLICY.customer[provider].status === "supported";
 
 export const assertManagedProviderAvailable = (
   provider: ManagedProvider,
+  dataClass: AIDataClass,
 ): void => {
-  if (isManagedProviderAvailable(provider)) {
+  if (isManagedProviderAvailable(provider, dataClass)) {
     return;
   }
   throw managedProviderUnavailable(provider);

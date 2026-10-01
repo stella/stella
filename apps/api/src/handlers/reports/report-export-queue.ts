@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 /**
  * Background queue for view→report exports.
  *
@@ -12,8 +13,6 @@
  * onto the `report_exports` row (`status: "failed"` + `error`) so the job is
  * never silently stuck and the status endpoint can surface it.
  */
-
-import { panic, Result } from "better-result";
 import { Worker } from "bullmq";
 import { and, eq, inArray } from "drizzle-orm";
 
@@ -32,7 +31,8 @@ import {
   renderReportSpec,
 } from "@/api/handlers/reports/spec/render-report-spec";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
-import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
+import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
+import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { assertUsageAvailableForHandler } from "@/api/lib/api-handlers";
@@ -384,18 +384,21 @@ const runExport = async ({
   // Deterministic export: skip loading the org AI config entirely; fillReport
   // builds no generators and runs no usage preflight when aiNarrative is off.
   const orgAIConfigResult = aiNarrative
-    ? await actor.scopedDb(async (tx) => await loadOrgAIConfig(tx, actor))
+    ? await actor.scopedDb(async (tx) => await loadOrgAISettings(tx, actor))
     : Result.ok(null);
   if (Result.isError(orgAIConfigResult)) {
     await markExportFailedRow(actor, orgAIConfigResult.error.message);
     return;
   }
-  const orgAIConfig = orgAIConfigResult.value;
+  const generators =
+    orgAIConfigResult.value === null
+      ? {}
+      : buildReportAiGenerators({ actor, ...orgAIConfigResult.value });
   const filled = await fillReport({
     actor,
     templateRef: row.templateRef,
     report: dataResult.value,
-    orgAIConfig,
+    generators,
     aiNarrative,
     linkBase:
       row.viewId === null
@@ -519,14 +522,14 @@ const fillReport = async ({
   actor,
   templateRef,
   report,
-  orgAIConfig,
+  generators,
   aiNarrative,
   linkBase,
 }: {
   actor: ExportActor;
   templateRef: ReportTemplateRef;
   report: AssembledReport;
-  orgAIConfig: OrgAIConfig | null;
+  generators: ReportAiGenerators;
   aiNarrative: boolean;
   linkBase: ReportLinkBase | undefined;
 }): Promise<FillReportResult> => {
@@ -534,9 +537,6 @@ const fillReport = async ({
   // generator) and no usage preflight. The template's {% if aiNarrative %}
   // sections are removed at fill time, so the unfilled AI-field placeholders
   // never survive into the output.
-  const generators = aiNarrative
-    ? buildReportAiGenerators({ actor, orgAIConfig })
-    : {};
 
   if (templateRef.type === "builtin") {
     const builtin = getBuiltinReportTemplate(templateRef.key);
@@ -621,11 +621,14 @@ type ReportAiGenerators = {
 const buildReportAiGenerators = ({
   actor,
   orgAIConfig,
+  managedAIResidency,
 }: {
   actor: ExportActor;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
 }): ReportAiGenerators => {
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+    dataClass: "customer",
     usageMetering: {
       actionType: "chat",
       organizationId: actor.organizationId,
@@ -656,6 +659,7 @@ const buildReportAiGenerators = ({
 
   const shared = {
     orgAIConfig,
+    managedAIResidency,
     organizationId: actor.organizationId,
     skillContext: {
       organizationId: actor.organizationId,

@@ -229,6 +229,7 @@ export const getDefaultChatModelValue = ({
   }
 
   const info = getTanStackTextModelInfoForRole(CHAT_MODEL_ROLE, orgAIConfig, {
+    dataClass: "customer",
     organizationId,
   });
   return encodeChatModelSelection({

@@ -170,6 +170,7 @@ const buildTool = (
     buildSubagentToolset,
     organizationId,
     orgAIConfig: null,
+    managedAIResidency: "eu" as const,
     safeDb: passthroughSafeDb,
     userId,
     workspaceId: null,

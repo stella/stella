@@ -24,6 +24,7 @@ import { resolveSelectedWorkspaceIds } from "@/api/handlers/search/search";
 import { resolveCaching } from "@/api/lib/ai-config";
 import type { CachingDecision, OrgAIConfig } from "@/api/lib/ai-config";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
+import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import { aiErrorStatusBody } from "@/api/lib/ai-error";
 import { captureError } from "@/api/lib/analytics/capture";
 import {
@@ -200,6 +201,7 @@ type SearchSummaryChatBody = Static<typeof searchSummaryChatBodySchema>;
 type SearchAIContext = {
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   orgAIConfigStatus: OrgAIConfigStatus;
   promptCachingEnabled: boolean;
   safeDb: SafeDb;
@@ -299,6 +301,7 @@ type GenerateRefinedSearchQueryOptions = {
   lastValidationError: string | null;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
 };
 
 const validateSearchQueryWithPostgres = async ({
@@ -325,13 +328,16 @@ const generateRefinedSearchQuery = async ({
   lastValidationError,
   organizationId,
   orgAIConfig,
+  managedAIResidency,
 }: GenerateRefinedSearchQueryOptions) =>
   await Result.tryPromise({
     try: async () =>
       await generateTanStackObjectForRole({
+        dataClass: "customer",
         role: "fast",
         serviceTier: "standard",
         orgAIConfig,
+        managedAIResidency,
         organizationId,
         // No workspace id is threaded through SearchAIContext at this call site.
         tenantWorkspaceIds: [],
@@ -355,6 +361,7 @@ export const refineSearchQuery = async ({
   body,
   organizationId,
   orgAIConfig,
+  managedAIResidency,
   orgAIConfigStatus,
   promptCachingEnabled,
   safeDb,
@@ -364,6 +371,7 @@ export const refineSearchQuery = async ({
   body: RefineSearchBody;
 }) => {
   const gate = requireTanStackAIAvailableForRole({
+    dataClass: "customer",
     configStatus: orgAIConfigStatus,
     orgConfig: orgAIConfig,
     role: "fast",
@@ -373,6 +381,7 @@ export const refineSearchQuery = async ({
   }
 
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+    dataClass: "customer",
     usageMetering: {
       actionType: "chat",
       organizationId,
@@ -397,6 +406,7 @@ export const refineSearchQuery = async ({
       lastValidationError,
       organizationId,
       orgAIConfig,
+      managedAIResidency,
       analytics: aiAnalytics,
       caching: resolveCaching({
         promptCachingEnabled,
@@ -448,6 +458,7 @@ export const summarizeSearchResults = async ({
   userId,
   accessibleWorkspaceIds,
   orgAIConfig,
+  managedAIResidency,
   orgAIConfigStatus,
   promptCachingEnabled,
   safeDb,
@@ -456,6 +467,7 @@ export const summarizeSearchResults = async ({
   body: SummarizeSearchBody;
 }) => {
   const gate = requireTanStackAIAvailableForRole({
+    dataClass: "customer",
     configStatus: orgAIConfigStatus,
     orgConfig: orgAIConfig,
     role: "fast",
@@ -492,6 +504,7 @@ export const summarizeSearchResults = async ({
   }
 
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+    dataClass: "customer",
     usageMetering: {
       actionType: "chat",
       organizationId,
@@ -513,9 +526,11 @@ export const summarizeSearchResults = async ({
   const result = await Result.tryPromise({
     try: async () =>
       await generateTanStackObjectForRole({
+        dataClass: "customer",
         role: "fast",
         serviceTier: "standard",
         orgAIConfig,
+        managedAIResidency,
         organizationId,
         tenantWorkspaceIds: resolved.ids,
         analytics: aiAnalytics,

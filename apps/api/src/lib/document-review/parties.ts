@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 /**
  * Detecting a target document's parties on their own, ahead of any position
  * proposal. The review launcher shows "We act for" on its first screen, before
@@ -9,12 +10,11 @@
  * kept in this shared module so both call sites can converge on it later
  * without either editing the other while both are in flight.
  */
-
-import { Result } from "better-result";
 import * as v from "valibot";
 
 import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
 import { resolveCaching } from "@/api/lib/ai-config";
+import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import {
   createTanStackAIAnalyticsCallbacks,
   type AIUsageMetering,
@@ -88,6 +88,7 @@ export type DetectReviewPartiesArgs = {
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   promptCachingEnabled: boolean;
   serviceTier: AIRequestServiceTier;
   usageMetering: AIUsageMetering;
@@ -102,6 +103,7 @@ export const detectReviewParties = async ({
   organizationId,
   workspaceId,
   orgAIConfig,
+  managedAIResidency,
   promptCachingEnabled,
   serviceTier,
   usageMetering,
@@ -115,6 +117,7 @@ export const detectReviewParties = async ({
     scopeKey: reviewDocumentsScopeKey(targetEntityVersionId, []),
   });
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+    dataClass: "customer",
     feature: "document-review.parties",
     modelRole: ROLE,
     orgAIConfig,
@@ -130,8 +133,10 @@ export const detectReviewParties = async ({
   return await Result.tryPromise({
     try: async () => {
       const output = await generateTanStackObjectForRole({
+        dataClass: "customer",
         role: ROLE,
         orgAIConfig,
+        managedAIResidency,
         organizationId,
         analytics: aiAnalytics,
         caching,

@@ -92,6 +92,7 @@ const createDocumentReviewRun = createSafeHandler(
     body,
     memberRole,
     orgAIConfig,
+    managedAIResidency,
     orgAIConfigStatus,
     recordAuditEvent,
     safeDb,
@@ -295,6 +296,7 @@ const createDocumentReviewRun = createSafeHandler(
     // through the review model's rate, one output budget per planned
     // finding. Large runs need the client to restate the estimate.
     const reviewModel = getTanStackTextModelInfoForRole("pdf", orgAIConfig, {
+      dataClass: "customer",
       organizationId,
     });
     const inputBytes =
@@ -315,6 +317,7 @@ const createDocumentReviewRun = createSafeHandler(
       confirmedUnits: body.confirmedUnits,
       organizationId,
       orgAIConfig,
+      managedAIResidency,
       workspaceId,
       userId: user.id,
       safeDb,

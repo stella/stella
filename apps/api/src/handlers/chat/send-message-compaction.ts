@@ -15,6 +15,7 @@ import {
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
+import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -27,6 +28,7 @@ type ChatCompactionModelProps = {
   chatModelOverride: string | undefined;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   /** Effective reasoning override paired with the selected thread model. */
   reasoningEffort: ReasoningEffort | undefined;
 };
@@ -90,6 +92,7 @@ export const compactMessagesForContext = async ({
   messages,
   organizationId,
   orgAIConfig,
+  managedAIResidency,
   reasoningEffort,
   safeDb,
   tenantWorkspaceIds,
@@ -101,6 +104,7 @@ export const compactMessagesForContext = async ({
   Result<ChatMessage[], HandlerError>
 > => {
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+    dataClass: "customer",
     usageMetering: {
       actionType: "chat",
       // Pre-stream compaction is part of the same interactive turn,
@@ -144,13 +148,17 @@ export const compactMessagesForContext = async ({
     },
     organizationId,
     orgAIConfig,
+    managedAIResidency,
     reasoningEffort,
     preserveTokens,
     triggerTokens,
   });
 };
 
-type MarkChatCompactionDueProps = ChatCompactionModelProps & {
+type MarkChatCompactionDueProps = Omit<
+  ChatCompactionModelProps,
+  "managedAIResidency"
+> & {
   messages: ChatMessage[];
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;

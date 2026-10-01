@@ -1,3 +1,4 @@
+import type { ModelMessage } from "@tanstack/ai";
 /**
  * Turning a reference document into positions.
  *
@@ -26,8 +27,6 @@
  * the streaming path is what stops the reviewer watching a spinner for all of
  * them.
  */
-
-import type { ModelMessage } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 
 import {
@@ -47,6 +46,7 @@ import type {
 } from "@/api/handlers/document-reviews/reference-position-normalizer";
 import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
 import { resolveCaching } from "@/api/lib/ai-config";
+import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import {
   createTanStackAIAnalyticsCallbacks,
   type AIUsageMetering,
@@ -137,6 +137,7 @@ type ProposalRequestArgs = {
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   promptCachingEnabled: boolean;
   serviceTier: AIRequestServiceTier;
   usageMetering: AIUsageMetering;
@@ -156,6 +157,7 @@ const buildProposalRequest = ({
   organizationId,
   workspaceId,
   orgAIConfig,
+  managedAIResidency,
   promptCachingEnabled,
   serviceTier,
   usageMetering,
@@ -171,6 +173,7 @@ const buildProposalRequest = ({
     ),
   });
   const analytics = createTanStackAIAnalyticsCallbacks({
+    dataClass: "customer",
     feature: "document-review.positions",
     modelRole: ROLE,
     orgAIConfig,
@@ -211,8 +214,10 @@ const buildProposalRequest = ({
   return {
     analytics,
     options: {
+      dataClass: "customer" as const,
       role: ROLE,
       orgAIConfig,
+      managedAIResidency,
       organizationId,
       analytics,
       caching,

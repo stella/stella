@@ -16,6 +16,10 @@ import {
   documentProcessingRuns,
   organizationSettings,
 } from "@/api/db/schema";
+import {
+  DEFAULT_MANAGED_AI_RESIDENCY,
+  MANAGED_AI_RESIDENCIES,
+} from "@/api/lib/ai-data-policy";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -37,6 +41,9 @@ const updateOrganizationSettingsBodySchema = t.Object({
   matterNumberPattern: t.Optional(t.String({ minLength: 1, maxLength: 128 })),
   matterNumberPadding: t.Optional(t.Integer({ minimum: 1, maximum: 6 })),
   promptCachingEnabled: t.Optional(t.Boolean()),
+  managedAIResidency: t.Optional(
+    t.Union(MANAGED_AI_RESIDENCIES.map((region) => t.Literal(region))),
+  ),
   memoryExtractionEnabled: t.Optional(t.Boolean()),
   timeMinimumUnitMinutes: t.Optional(t.Integer({ minimum: 1, maximum: 60 })),
   timeEditWindowDays: t.Optional(t.Integer({ minimum: 0 })),
@@ -216,6 +223,8 @@ export const updateOrganizationSettingsHandler = async function* ({
     safeDb(async (tx) => {
       // Only touch optional settings when the body carries them; omission
       // keeps a concurrent toggle request from being clobbered by a stale read.
+      const wantsManagedAIResidencyUpdate =
+        body.managedAIResidency !== undefined;
       const wantsPromptCachingUpdate = body.promptCachingEnabled !== undefined;
       const wantsDocumentProcessingUpdate =
         body.documentProcessingMode !== undefined;
@@ -223,6 +232,7 @@ export const updateOrganizationSettingsHandler = async function* ({
         body.memoryExtractionEnabled !== undefined;
       const wantsTimePolicyUpdate = Object.keys(timePolicyUpdate).length > 0;
       const needsSerializedSettingsRead =
+        wantsManagedAIResidencyUpdate ||
         wantsPromptCachingUpdate ||
         wantsDocumentProcessingUpdate ||
         wantsMemoryExtractionUpdate ||
@@ -259,6 +269,7 @@ export const updateOrganizationSettingsHandler = async function* ({
               memoryExtractionEnabled:
                 organizationSettings.memoryExtractionEnabled,
               promptCachingEnabled: organizationSettings.promptCachingEnabled,
+              managedAIResidency: organizationSettings.managedAIResidency,
               timeMinimumUnitMinutes:
                 organizationSettings.timeMinimumUnitMinutes,
               timeEditWindowDays: organizationSettings.timeEditWindowDays,
@@ -316,6 +327,9 @@ export const updateOrganizationSettingsHandler = async function* ({
                 matterNumberPadding: body.matterNumberPadding,
               }
             : {}),
+          ...(wantsManagedAIResidencyUpdate
+            ? { managedAIResidency: body.managedAIResidency }
+            : {}),
           ...(wantsPromptCachingUpdate
             ? { promptCachingEnabled: body.promptCachingEnabled }
             : {}),
@@ -340,6 +354,9 @@ export const updateOrganizationSettingsHandler = async function* ({
                   matterNumberPattern: body.matterNumberPattern,
                   matterNumberPadding: body.matterNumberPadding,
                 }
+              : {}),
+            ...(wantsManagedAIResidencyUpdate
+              ? { managedAIResidency: body.managedAIResidency }
               : {}),
             ...(wantsPromptCachingUpdate
               ? { promptCachingEnabled: body.promptCachingEnabled }
@@ -374,6 +391,18 @@ export const updateOrganizationSettingsHandler = async function* ({
                 matterNumberPadding: {
                   old: null,
                   new: body.matterNumberPadding,
+                },
+              }
+            : {}),
+          ...(wantsManagedAIResidencyUpdate &&
+          body.managedAIResidency !==
+            (existing?.managedAIResidency ?? DEFAULT_MANAGED_AI_RESIDENCY)
+            ? {
+                managedAIResidency: {
+                  old:
+                    existing?.managedAIResidency ??
+                    DEFAULT_MANAGED_AI_RESIDENCY,
+                  new: body.managedAIResidency,
                 },
               }
             : {}),
@@ -431,6 +460,9 @@ export const updateOrganizationSettingsHandler = async function* ({
       : {}),
     ...(body.matterNumberPadding !== undefined
       ? { matterNumberPadding: body.matterNumberPadding }
+      : {}),
+    ...(body.managedAIResidency !== undefined
+      ? { managedAIResidency: body.managedAIResidency }
       : {}),
     ...(body.promptCachingEnabled !== undefined
       ? { promptCachingEnabled: body.promptCachingEnabled }

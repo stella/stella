@@ -17,11 +17,13 @@ import { createMembershipScopedDb } from "@/api/db/scoped";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { encryptAIConfig } from "@/api/lib/ai-config-crypto";
 import {
+  loadManagedAIResidency,
   loadOrgAIConfig,
   loadOrgAISettings,
   loadOrgSettingsForAuth,
 } from "@/api/lib/ai-config-loader";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import type { ManagedAIResidency } from "@/api/lib/ai-data-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { encryptContent } from "@/api/lib/content-encryption";
 import {
@@ -88,12 +90,14 @@ const storeSettings = async ({
   fetchKey,
   organizationId,
   promptCachingEnabled,
+  managedAIResidency,
   searchKey,
 }: {
   config: OrgAIConfig;
   fetchKey: string;
   organizationId: SafeId<"organization">;
   promptCachingEnabled: boolean;
+  managedAIResidency: ManagedAIResidency;
   searchKey: string;
 }) => {
   const encryptedConfig = await encryptAIConfig(organizationId, config);
@@ -105,6 +109,7 @@ const storeSettings = async ({
       aiConfigEncrypted: encryptedConfig.ciphertext,
       aiConfigIv: encryptedConfig.iv,
       promptCachingEnabled,
+      managedAIResidency,
       webSearchApiKeyEncrypted: search.ciphertext,
       webSearchApiKeyIv: search.iv,
       urlFetchApiKeyEncrypted: fetch.ciphertext,
@@ -123,6 +128,7 @@ beforeAll(async () => {
     fetchKey: "fetch-a",
     organizationId: ids.orgA,
     promptCachingEnabled: false,
+    managedAIResidency: "us",
     searchKey: "search-a",
   });
   await storeSettings({
@@ -130,6 +136,7 @@ beforeAll(async () => {
     fetchKey: "fetch-b",
     organizationId: ids.orgB,
     promptCachingEnabled: true,
+    managedAIResidency: "eu",
     searchKey: "search-b",
   });
 
@@ -235,6 +242,7 @@ describe("organization settings under the request scope", () => {
     ).unwrap();
     expect(providerKeys(own.orgAIConfig)).toEqual(["model-b-key"]);
     expect(own.promptCachingEnabled).toBe(true);
+    expect(own.managedAIResidency).toBe("eu");
     expect(
       (
         await scope(
@@ -245,7 +253,24 @@ describe("organization settings under the request scope", () => {
             }),
         )
       ).unwrap(),
-    ).toEqual({ orgAIConfig: null, promptCachingEnabled: true });
+    ).toEqual({
+      orgAIConfig: null,
+      promptCachingEnabled: true,
+      managedAIResidency: "eu",
+    });
+  });
+
+  test("reads the configured residency and defaults absent settings", async () => {
+    const configured = await requestScope(
+      ids.orgA,
+      ids.userA1,
+    )(async (tx) => await loadManagedAIResidency(tx, ids.orgA));
+    const unset = await requestScope(
+      unsetOrgId,
+      ids.userA1,
+    )(async (tx) => await loadManagedAIResidency(tx, unsetOrgId));
+    expect(configured).toBe("us");
+    expect(unset).toBe("eu");
   });
 
   test("loadOrgAISettings reads both values in one select", async () => {
@@ -262,6 +287,7 @@ describe("organization settings under the request scope", () => {
     ).unwrap();
     expect(providerKeys(own.orgAIConfig)).toEqual(["model-a-key"]);
     expect(own.promptCachingEnabled).toBe(false);
+    expect(own.managedAIResidency).toBe("us");
     expect(
       (
         await scope(
@@ -272,7 +298,11 @@ describe("organization settings under the request scope", () => {
             }),
         )
       ).unwrap(),
-    ).toEqual({ orgAIConfig: null, promptCachingEnabled: true });
+    ).toEqual({
+      orgAIConfig: null,
+      promptCachingEnabled: true,
+      managedAIResidency: "eu",
+    });
   });
 
   test("loadOrgSettingsForAuth reads its own organization and not another's", async () => {
@@ -288,6 +318,7 @@ describe("organization settings under the request scope", () => {
     expect(providerKeys(own.orgAIConfig)).toEqual(["model-a-key"]);
     expect(own.orgAIConfigStatus).toBe(ORG_AI_CONFIG_STATUS.ok);
     expect(own.promptCachingEnabled).toBe(false);
+    expect(own.managedAIResidency).toBe("us");
     expect(
       await scope(
         async (tx) =>
@@ -299,6 +330,7 @@ describe("organization settings under the request scope", () => {
     ).toEqual({
       orgAIConfig: null,
       orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+      managedAIResidency: "eu",
       promptCachingEnabled: true,
     });
   });
@@ -355,6 +387,7 @@ describe("absent and unreadable settings", () => {
     ).toEqual({
       orgAIConfig: null,
       orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+      managedAIResidency: "eu",
       promptCachingEnabled: true,
     });
     expect(
@@ -367,7 +400,11 @@ describe("absent and unreadable settings", () => {
             }),
         )
       ).unwrap(),
-    ).toEqual({ orgAIConfig: null, promptCachingEnabled: true });
+    ).toEqual({
+      orgAIConfig: null,
+      promptCachingEnabled: true,
+      managedAIResidency: "eu",
+    });
     expect(
       await scope(async (tx) => await loadWebSearchKeys(tx, unsetOrgId)),
     ).toEqual({ searchApiKey: null, fetchApiKey: null });
@@ -387,6 +424,7 @@ describe("absent and unreadable settings", () => {
     ).toEqual({
       orgAIConfig: null,
       orgAIConfigStatus: ORG_AI_CONFIG_STATUS.unreadable,
+      managedAIResidency: "eu",
       promptCachingEnabled: false,
     });
   });

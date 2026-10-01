@@ -15,6 +15,7 @@ import type {
   UsageServiceTier,
 } from "@/api/db/schema";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
+import type { AIDataClass } from "@/api/lib/ai-data-policy";
 import {
   classifyAIBoundaryFailure,
   isAnticipatedAIFailure,
@@ -96,6 +97,7 @@ export type TanStackAIUsageMetering = {
 export type AIUsageMetering = TanStackAIUsageMetering;
 
 type TanStackAIAnalyticsProps = {
+  dataClass: AIDataClass;
   feature: string;
   traceId: string;
   sessionId?: string;
@@ -397,8 +399,10 @@ export const createTanStackAIAnalyticsCallbacks = ({
                 selectedModelId,
                 config.orgAIConfig,
                 modelRole,
+                config.dataClass,
               )
             : getTanStackTextModelInfoForRole(modelRole, config.orgAIConfig, {
+                dataClass: config.dataClass,
                 organizationId: analyticsOrganizationId,
               }),
         catch: (error) => error,

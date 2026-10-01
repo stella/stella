@@ -1,3 +1,4 @@
+import { Value } from "@sinclair/typebox/value";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
@@ -5,15 +6,103 @@ import { PgDialect } from "drizzle-orm/pg-core";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
+import { MANAGED_AI_RESIDENCIES } from "@/api/lib/ai-data-policy";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
+import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
-import { updateOrganizationSettingsHandler } from "./update";
+import updateOrganizationSettings, {
+  updateOrganizationSettingsHandler,
+} from "./update";
 
 const organizationId = toSafeId<"organization">("org_test");
 
 describe("updateOrganizationSettingsHandler", () => {
+  test("accepts the supported residency settings for organization administrators", () => {
+    for (const managedAIResidency of MANAGED_AI_RESIDENCIES) {
+      expect(
+        Value.Check(updateOrganizationSettings.config.body, {
+          managedAIResidency,
+        }),
+      ).toBe(true);
+    }
+    expect(
+      Value.Check(updateOrganizationSettings.config.body, {
+        managedAIResidency: "other",
+      }),
+    ).toBe(false);
+    for (const role of ["owner", "admin"] as const) {
+      expect(
+        hasMemberPermission(
+          { role },
+          updateOrganizationSettings.config.permissions,
+        ),
+      ).toBe(true);
+    }
+    for (const role of ["member", "intern", "external"] as const) {
+      expect(
+        hasMemberPermission(
+          { role },
+          updateOrganizationSettings.config.permissions,
+        ),
+      ).toBe(false);
+    }
+  });
+
+  test("persists the residency setting with the prior value in its audit event", async () => {
+    let insertCount = 0;
+    let updateSet: Record<string, unknown> | undefined;
+    let auditEvent: Parameters<AuditRecorder>[1] | undefined;
+    const tx = asTestRaw<Transaction>({
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            limit: () => ({
+              for: async () => [{ managedAIResidency: "eu" }],
+            }),
+          }),
+        }),
+      }),
+      insert: () => ({
+        values: () => {
+          insertCount += 1;
+          return insertCount === 1
+            ? { onConflictDoNothing: async () => {} }
+            : {
+                onConflictDoUpdate: async ({
+                  set,
+                }: {
+                  set: Record<string, unknown>;
+                }) => {
+                  updateSet = set;
+                },
+              };
+        },
+      }),
+    });
+    const safeDb: SafeDb = async (operation) => Result.ok(await operation(tx));
+    const recordAuditEvent: AuditRecorder = async (auditTx, event) => {
+      expect(auditTx).toBe(tx);
+      auditEvent = event;
+    };
+    const result = await Result.gen(() =>
+      updateOrganizationSettingsHandler({
+        body: { managedAIResidency: "us" },
+        organizationId,
+        recordAuditEvent,
+        safeDb,
+      }),
+    );
+    expect(result).toEqual(Result.ok({ managedAIResidency: "us" }));
+    expect(updateSet).toMatchObject({ managedAIResidency: "us" });
+    expect(updateSet).not.toHaveProperty("promptCachingEnabled");
+    expect(auditEvent).toMatchObject({
+      resourceId: organizationId,
+      changes: { managedAIResidency: { old: "eu", new: "us" } },
+    });
+  });
+
   test("rejects increments that do not divide an hour", async () => {
     const result = await Result.gen(() =>
       updateOrganizationSettingsHandler({
