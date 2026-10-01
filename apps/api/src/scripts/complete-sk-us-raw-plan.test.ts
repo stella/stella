@@ -8,6 +8,7 @@ import {
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   StoredRawReadError,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import type { StoredRawReparseInput } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   fetchSkUsListing,
   skUsAdapter,
@@ -48,6 +49,63 @@ const cursor = {
   id: createSafeId<"caseLawDecision">(),
   createdAt: "2026-03-01T00:00:00.000001Z",
 };
+
+test("listing fetching preserves stored replay results for complete and legacy fixtures", async () => {
+  const reparse = skUsAdapter.reparseStoredRaw;
+  if (reparse === undefined) {
+    expect.unreachable("SK ÚS must support stored replay");
+  }
+  const fixtures = [
+    {
+      raw: encoder.encode(
+        encodeSourceRawEnvelope({
+          listing: listingJson,
+          document: "<html><body><span>Rozhodnutie.</span></body></html>",
+        }),
+      ),
+      contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+      expectedType: "parsed",
+    },
+    { raw: PDF, contentType: "application/pdf", expectedType: "rejected" },
+    {
+      raw: encoder.encode(listingJson),
+      contentType: "application/json",
+      expectedType: "parsed",
+    },
+    {
+      raw: encoder.encode(
+        encodeSourceRawEnvelope({ document: "existing text" }),
+      ),
+      contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+      expectedType: "rejected",
+    },
+  ];
+  for (const { raw, contentType, expectedType } of fixtures) {
+    const input = {
+      raw,
+      contentType,
+      caseNumber: identity.caseNumber,
+      sourceDocumentId: identity.documentId,
+      court: "Ústavný súd Slovenskej republiky",
+      language: "sk",
+      ecli: null,
+      decisionDate: null,
+      decisionType: null,
+      sourceUrl: null,
+      documentUrl: null,
+      metadata: {},
+    } as const satisfies StoredRawReparseInput;
+    const before = await reparse(input);
+    const fetched = await fetchSkUsListing({
+      ...identity,
+      request: async () => Response.json({ documents: [listing], numFound: 1 }),
+    });
+    expect(fetched.type).toBe("listing");
+    const after = await reparse(input);
+    expect(after).toEqual(before);
+    expect(after.type).toBe(expectedType);
+  }
+});
 
 test("publisher rows must match the stored document identity and docket", async () => {
   for (const document of [

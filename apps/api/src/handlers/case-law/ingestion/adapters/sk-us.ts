@@ -833,6 +833,7 @@ type FetchSkUsListingOptions = {
 };
 
 /** Refetch only the publisher row, using the crawl's gated HTTP boundary. */
+// parser-output-unchanged: listing fetch only; stored replay and parser inputs are unchanged.
 export const fetchSkUsListing = async ({
   documentId,
   caseNumber,

@@ -162,7 +162,7 @@ const complete = async (
     ),
   );
   const row = rows.at(0);
-  if (row === undefined || row.source_raw_s3_key === null) {
+  if (row?.source_raw_s3_key === undefined || row.source_raw_s3_key === null) {
     return "raw_unavailable";
   }
   const oldKey = row.source_raw_s3_key;
@@ -215,7 +215,6 @@ const complete = async (
       if (Result.isError(written)) {
         return "retry_later";
       }
-      // audit: skip — operator completion of stored publisher raw; no metadata change
       const changed = await ingestionDb(async (tx) => {
         await tx.execute(sql`SET LOCAL statement_timeout = '15s'`);
         await tx.execute(sql`SET LOCAL max_parallel_workers_per_gather = 0`);
