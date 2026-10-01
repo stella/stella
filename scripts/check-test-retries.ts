@@ -266,8 +266,11 @@ const processCommand = (
 ): string | undefined => {
   const expression = call.expression;
   let name: string | undefined;
-  if (ts.isPropertyAccessExpression(expression)) {name = expression.name.text;}
-  else if (ts.isIdentifier(expression)) {name = expression.text;}
+  if (ts.isPropertyAccessExpression(expression)) {
+    name = expression.name.text;
+  } else if (ts.isIdentifier(expression)) {
+    name = expression.text;
+  }
   if (name === undefined || !PROCESS_CALL_NAMES.has(name)) {
     return undefined;
   }
