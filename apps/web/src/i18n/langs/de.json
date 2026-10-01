@@ -487,6 +487,17 @@
     "failedToStartTimer": "Timer konnte nicht gestartet werden",
     "failedToStopTimer": "Timer konnte nicht gestoppt werden",
     "filterStatus": "Nach Status filtern",
+    "globalTimer": {
+      "confirm": "Zeit bestätigen",
+      "discard": "Timer verwerfen",
+      "matterInaccessible": "Wählen Sie eine Akte, auf die Sie zugreifen können.",
+      "narrativeRequired": "Fügen Sie eine Beschreibung hinzu, bevor Sie die Zeit bestätigen.",
+      "pause": "Pausieren",
+      "periodLocked": "Dieser Monat ist gesperrt. Bitten Sie einen Administrator, ihn zu entsperren.",
+      "resume": "Fortsetzen",
+      "timerUnavailable": "Dieser Timer ist nicht mehr verfügbar. Aktualisieren Sie die Liste.",
+      "title": "Timer"
+    },
     "hourlyRateMustBeNonNegative": "Der Stundensatz darf nicht negativ sein",
     "hours": "Stunden",
     "invoiceNarrative": "Rechnungstext",

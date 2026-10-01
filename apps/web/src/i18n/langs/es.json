@@ -487,6 +487,17 @@
     "failedToStartTimer": "No se pudo iniciar el temporizador",
     "failedToStopTimer": "No se pudo detener el temporizador",
     "filterStatus": "Filtrar por estado",
+    "globalTimer": {
+      "confirm": "Confirmar tiempo",
+      "discard": "Descartar temporizador",
+      "matterInaccessible": "Elige un asunto al que tengas acceso.",
+      "narrativeRequired": "Añade una descripción antes de confirmar el tiempo.",
+      "pause": "Pausar",
+      "periodLocked": "Este mes está bloqueado. Pide a un administrador que lo desbloquee.",
+      "resume": "Reanudar",
+      "timerUnavailable": "Este temporizador ya no está disponible. Actualiza la lista.",
+      "title": "Temporizadores"
+    },
     "hourlyRateMustBeNonNegative": "La tarifa por hora no puede ser negativa",
     "hours": "Horas",
     "invoiceNarrative": "Descripción de factura",

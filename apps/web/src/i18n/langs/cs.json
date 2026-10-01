@@ -487,6 +487,17 @@
     "failedToStartTimer": "Nepodařilo se spustit časovač",
     "failedToStopTimer": "Nepodařilo se zastavit časovač",
     "filterStatus": "Filtrovat podle stavu",
+    "globalTimer": {
+      "confirm": "Potvrdit čas",
+      "discard": "Zahodit časovač",
+      "matterInaccessible": "Vyberte spis, ke kterému máte přístup.",
+      "narrativeRequired": "Před potvrzením času přidejte popis.",
+      "pause": "Pozastavit",
+      "periodLocked": "Tento měsíc je uzamčený. Požádejte správce o jeho odemčení.",
+      "resume": "Pokračovat",
+      "timerUnavailable": "Tento časovač již není dostupný. Obnovte seznam.",
+      "title": "Časovače"
+    },
     "hourlyRateMustBeNonNegative": "Hodinová sazba nesmí být záporná",
     "hours": "Hodiny",
     "invoiceNarrative": "Popis faktury",

@@ -487,6 +487,17 @@
     "failedToStartTimer": "Nem sikerült elindítani az időmérőt",
     "failedToStopTimer": "Nem sikerült leállítani az időmérőt",
     "filterStatus": "Szűrés státusz szerint",
+    "globalTimer": {
+      "confirm": "Idő megerősítése",
+      "discard": "Időmérő elvetése",
+      "matterInaccessible": "Válasszon egy ügyet, amelyhez van hozzáférése.",
+      "narrativeRequired": "Az idő megerősítése előtt adjon meg egy leírást.",
+      "pause": "Szüneteltetés",
+      "periodLocked": "Ez a hónap zárolva van. Kérje meg a rendszergazdát a feloldására.",
+      "resume": "Folytatás",
+      "timerUnavailable": "Ez az időmérő már nem érhető el. Frissítse a listát.",
+      "title": "Időmérők"
+    },
     "hourlyRateMustBeNonNegative": "Az óradíj nem lehet negatív",
     "hours": "Órák",
     "invoiceNarrative": "Számla szövege",
