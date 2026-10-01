@@ -2190,8 +2190,8 @@ describe("OpenAI-compatible MCP tools", () => {
       createLookupRow(DECISION_ID, "Nejvyšší soud"),
     ]);
 
-    // The sheet number names a page of the court file, not the decision, so
-    // the reference resolves with or without it.
+    // The file holds one decision here and nothing contradicts the sheet,
+    // so the reference resolves with it as without it.
     const payload = await lookup([`${CZ_DOCKET}-28`]);
 
     expect(payload.items).toEqual([
@@ -2208,13 +2208,71 @@ describe("OpenAI-compatible MCP tools", () => {
       },
     ]);
     // The docket reaches the identity read canonicalised, as a locator rather
-    // than as a query, and the ranked search is not consulted at all.
+    // than as a query: the case file to read and, apart from it, the sheet
+    // the reference printed. The ranked search is not consulted at all.
     expect(lookupDecisionsByIdentityMock).toHaveBeenCalledWith({
       caseLawDb: caseLawPublicReadDb,
       country: "CZE",
-      locator: { kind: "docket", value: CZ_DOCKET },
+      locator: {
+        kind: "docket",
+        value: `${CZ_DOCKET}-28`,
+        family: CZ_DOCKET,
+        selector: { kind: "sheet", value: "28" },
+      },
     });
     expect(searchDecisionsHandlerMock).not.toHaveBeenCalled();
+  });
+
+  test("lookup_case_law picks a sibling of one file only by the sheet it prints", async () => {
+    // Two decisions of one file issued the same day: the docket names both,
+    // and only the sheet, the last segment of each ECLI, tells them apart.
+    const SIBLING_ID = "00000000-0000-4000-8000-0000000d0043";
+    lookupDecisionsByIdentityMock.mockResolvedValue([
+      {
+        ...createLookupRow(DECISION_ID, "Nejvyšší soud"),
+        ecli: "ECLI:CZ:NS:2020:22.CDO.1000.2020.2",
+      },
+      {
+        ...createLookupRow(SIBLING_ID, "Nejvyšší soud"),
+        ecli: "ECLI:CZ:NS:2020:22.CDO.1000.2020.4",
+      },
+    ]);
+
+    const payload = await lookup([
+      CZ_DOCKET,
+      `č. j. ${CZ_DOCKET} – 4`,
+      `${CZ_DOCKET}-3`,
+    ]);
+
+    const [bare, bySheet, unknownSheet] = payload.items;
+    expect(bare?.status).toBe("ambiguous");
+    expect(bare?.candidates).toHaveLength(2);
+    expect(bySheet?.status).toBe("found");
+    expect(bySheet?.decisionId).toBe(SIBLING_ID);
+    // A sheet neither carries: the file comes back, never one of it.
+    expect(unknownSheet?.status).toBe("ambiguous");
+    expect(unknownSheet?.candidates).toHaveLength(2);
+    expect(unknownSheet?.decisionId).toBeUndefined();
+    expect(unknownSheet?.message).toContain("sheet or part");
+  });
+
+  test("lookup_case_law does not stand a decision of another sheet in for the one named", async () => {
+    // The only decision of the file the corpus holds carries sheet 86; the
+    // reference names sheet 98, which is another decision of that file.
+    lookupDecisionsByIdentityMock.mockResolvedValue([
+      {
+        ...createLookupRow(DECISION_ID, "Nejvyšší správní soud"),
+        ecli: "ECLI:CZ:NSS:2020:22.CDO.1000.2020.86",
+      },
+    ]);
+
+    const payload = await lookup([`${CZ_DOCKET} - 98`]);
+
+    const entry = payload.items.at(0) ?? panic("Missing lookup entry");
+    expect(entry.status).toBe("ambiguous");
+    expect(entry.decisionId).toBeUndefined();
+    expect(entry.candidates).toHaveLength(1);
+    expect(entry.message).toContain("1 decision of its file is listed");
   });
 
   test("lookup_case_law names the kind of a primary reference that is not a docket", async () => {
@@ -2377,11 +2435,15 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(
       lookupDecisionsByIdentityMock.mock.calls.map(
         (call) =>
-          asTestRaw<{ locator: { kind: string; value: string } }>(call.at(0))
-            .locator,
+          asTestRaw<{ locator: Record<string, unknown> }>(call.at(0)).locator,
       ),
     ).toEqual([
-      { kind: "docket", value: CZ_DOCKET },
+      {
+        kind: "docket",
+        value: CZ_DOCKET,
+        family: CZ_DOCKET,
+        selector: { kind: "none" },
+      },
       { kind: "ecli", value: CZ_ECLI },
     ]);
   });

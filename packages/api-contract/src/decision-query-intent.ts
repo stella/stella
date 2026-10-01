@@ -2,31 +2,47 @@ import { panic } from "better-result";
 
 import {
   canonicalDecisionIdentifierKey,
-  canonicalDecisionDocket,
   DECISION_DOCKET_GRAMMARS,
   foldDecisionIdentifierInput,
-  formatDecisionDocket,
-  parseDecisionDocket,
+  formatDecisionDocketReference,
+  readDecisionDocketReference,
+  trimDecisionReferenceEdges,
 } from "./decision-docket-grammar";
 import type {
   DecisionDocketGrammar,
   DecisionDocketJurisdiction,
+  DecisionDocketReference,
+  DecisionDocketSelector,
 } from "./decision-docket-grammar";
+
+/**
+ * Where an identifier sat in the entry. Absent when the entry was the
+ * reference alone (a citation prefix and surrounding punctuation included);
+ * otherwise the entry as typed, whose other words still describe a text
+ * search should the reference name nothing.
+ */
+type EmbeddedIn = { embeddedIn?: string };
 
 /**
  * A decision named by its identifier. A docket carries the jurisdiction whose
  * grammar read it, because only that grammar keys its spellings alike: the
  * Czech and Slovak grammars both read `II. ÚS 55/98` and key it differently,
  * and only the Slovak one reads `II.ÚS55/98`.
+ *
+ * A docket names a case file (`family`), which can hold several decisions,
+ * and the `selector` is what the reference printed to single one of them
+ * out. `value` spells both and reads back as the same intent.
  */
 export type DecisionIdentifierIntent =
-  | {
+  | ({
       type: "identifier";
       kind: "docket";
       jurisdiction: DecisionDocketJurisdiction;
       value: string;
-    }
-  | { type: "identifier"; kind: "ecli"; value: string }
+      family: string;
+      selector: DecisionDocketSelector;
+    } & EmbeddedIn)
+  | ({ type: "identifier"; kind: "ecli"; value: string } & EmbeddedIn)
   | { type: "identifier"; kind: "reporter" | "neutral"; value: string };
 
 /**
@@ -72,6 +88,185 @@ type ParseDecisionQueryOptions = {
   readonly reporters?: DecisionReporterGrammar | null | undefined;
 };
 
+const docketIntentOf = (
+  reference: DecisionDocketReference,
+): Extract<DecisionIdentifierIntent, { kind: "docket" }> => ({
+  type: "identifier",
+  kind: "docket",
+  jurisdiction: reference.family.jurisdiction,
+  value: formatDecisionDocketReference(reference),
+  family: reference.family.formatted,
+  selector: reference.selector,
+});
+
+const ecliIntentOf = (
+  text: string,
+): Extract<DecisionIdentifierIntent, { kind: "ecli" }> | null => {
+  // A sentence's full stop is not part of an ECLI, which never ends on one.
+  const folded = trimDecisionReferenceEdges(
+    foldDecisionIdentifierInput(text),
+    ".",
+  );
+  return ECLI_RE.test(folded)
+    ? { type: "identifier", kind: "ecli", value: folded }
+    : null;
+};
+
+/**
+ * Words an entry may carry around one reference and still be read for it.
+ * Past that the entry is prose, whatever docket it quotes.
+ */
+const EMBEDDED_ENTRY_MAX_TOKENS = 32;
+
+/**
+ * The longest reference a window of words is read as: a two-word prefix, a
+ * docket spaced into five words, and a spaced tail.
+ */
+const EMBEDDED_WINDOW_MAX_TOKENS = 12;
+
+type WindowIntent = Extract<
+  DecisionIdentifierIntent,
+  { kind: "docket" | "ecli" }
+>;
+
+type WindowReading = {
+  readonly start: number;
+  readonly end: number;
+  /** What two readings share when they name the same case file or ECLI. */
+  readonly familyKey: string;
+  readonly selector: DecisionDocketSelector;
+  readonly intent: WindowIntent;
+};
+
+const readingOfWindow = (
+  window: string,
+  start: number,
+  end: number,
+  grammar: DecisionDocketGrammar | null | undefined,
+): WindowReading | null => {
+  const ecli = end - start === 1 ? ecliIntentOf(window) : null;
+  if (ecli !== null) {
+    return {
+      start,
+      end,
+      familyKey: JSON.stringify(["ecli", ecli.value.toUpperCase()]),
+      selector: { kind: "none" },
+      intent: ecli,
+    };
+  }
+  const docket = readDecisionDocketReference(window, { grammar });
+  return docket === null
+    ? null
+    : {
+        start,
+        end,
+        familyKey: JSON.stringify([
+          "docket",
+          docket.family.jurisdiction,
+          docket.family.canonical,
+        ]),
+        selector: docket.selector,
+        intent: docketIntentOf(docket),
+      };
+};
+
+/**
+ * What a run of overlapping readings says: they are one stretch of the entry
+ * read several ways, so they must name one file, and at most one selector
+ * (`sp. zn. 6 Tdo 1/2021 - II` is read with and without its part, depending
+ * on where a window stops). Null when they disagree.
+ */
+const readingOfRun = (run: readonly WindowReading[]): WindowReading | null => {
+  const [first] = run;
+  if (
+    first === undefined ||
+    run.some((reading) => reading.familyKey !== first.familyKey)
+  ) {
+    return null;
+  }
+  const selected = run.filter((reading) => reading.selector.kind !== "none");
+  const selectors = new Set(
+    selected.map((reading) => JSON.stringify(reading.selector)),
+  );
+  if (selectors.size > 1) {
+    return null;
+  }
+  return selected.at(0) ?? first;
+};
+
+/**
+ * The one reference an entry carries among other words, or null when it
+ * carries none or several. Every window of consecutive words is read as a
+ * whole entry. A reading inside a longer one is the longer one's own part (a
+ * registry mark and number inside a senate's docket); readings that overlap
+ * are one stretch of the entry, which names one reference only if they agree;
+ * and the entry names a decision only when every stretch names the same one.
+ * Choosing among two would search one of them silently.
+ */
+const identifierWithin = (
+  text: string,
+  grammar: DecisionDocketGrammar | null | undefined,
+): WindowIntent | null => {
+  const tokens = foldDecisionIdentifierInput(text).split(" ");
+  if (tokens.length < 2 || tokens.length > EMBEDDED_ENTRY_MAX_TOKENS) {
+    return null;
+  }
+  const readings: WindowReading[] = [];
+  for (let start = 0; start < tokens.length; start += 1) {
+    const longest = Math.min(tokens.length, start + EMBEDDED_WINDOW_MAX_TOKENS);
+    for (let end = start + 1; end <= longest; end += 1) {
+      const window = tokens.slice(start, end).join(" ");
+      // Every docket grammar the entry can reach writes a slash; an ECLI is a
+      // single word. Anything else is not worth a grammar's time.
+      if (!window.includes("/") && !/ecli:/iu.test(window)) {
+        continue;
+      }
+      const reading = readingOfWindow(window, start, end, grammar);
+      if (reading !== null) {
+        readings.push(reading);
+      }
+    }
+  }
+  const outermost = readings
+    .filter(
+      (reading) =>
+        !readings.some(
+          (other) =>
+            other !== reading &&
+            other.start <= reading.start &&
+            other.end >= reading.end &&
+            other.end - other.start > reading.end - reading.start,
+        ),
+    )
+    .toSorted((a, b) => a.start - b.start || a.end - b.end);
+  const runs: WindowReading[][] = [];
+  let runEnd = 0;
+  for (const reading of outermost) {
+    const run = runs.at(-1);
+    if (run !== undefined && reading.start < runEnd) {
+      run.push(reading);
+    } else {
+      runs.push([reading]);
+    }
+    runEnd = Math.max(runEnd, reading.end);
+  }
+  const stretches: WindowReading[] = [];
+  for (const run of runs) {
+    const stretch = readingOfRun(run);
+    if (stretch === null) {
+      return null;
+    }
+    stretches.push(stretch);
+  }
+  const distinct = new Set(
+    stretches.map(({ familyKey, selector }) =>
+      JSON.stringify([familyKey, selector]),
+    ),
+  );
+  const [only] = stretches;
+  return distinct.size === 1 && only !== undefined ? only.intent : null;
+};
+
 export const parseDecisionQuery = (
   raw: string,
   { grammar, reporters }: ParseDecisionQueryOptions = {},
@@ -80,43 +275,90 @@ export const parseDecisionQuery = (
   if (text.length === 0) {
     return { type: "empty" };
   }
-  const folded = foldDecisionIdentifierInput(text);
-  if (ECLI_RE.test(folded)) {
-    return { type: "identifier", kind: "ecli", value: folded };
+  const ecli = ecliIntentOf(text);
+  if (ecli !== null) {
+    return ecli;
   }
   // Before the docket fallback: only a whole entry the reporter grammar
   // settles on one reporter is claimed.
-  const reporter = reporters?.canonicalCitation(folded) ?? null;
+  const reporter =
+    reporters?.canonicalCitation(foldDecisionIdentifierInput(text)) ?? null;
   if (reporter !== null) {
     return { type: "identifier", kind: "reporter", value: reporter };
   }
-  const docket = parseDecisionDocket(folded, { grammar });
+  const docket = readDecisionDocketReference(text, { grammar });
   if (docket !== null) {
-    return {
-      type: "identifier",
-      kind: "docket",
-      jurisdiction: docket.jurisdiction,
-      value: formatDecisionDocket(docket),
-    };
+    return docketIntentOf(docket);
+  }
+  const embedded = identifierWithin(text, grammar);
+  if (embedded !== null) {
+    return { ...embedded, embeddedIn: text };
   }
   return { type: "text", text };
 };
 
 /**
- * The identity of a docket or ECLI as publishers vary it: case, spacing and
- * dash style are theirs, not the docket's, and the sheet number names a page
- * of the file rather than the decision. A docket is read by the grammar that
- * read the entry, so the entry and every stored spelling of it key alike.
+ * Whether the entry was a reference and nothing else, so it is matched as
+ * written. An identifier found among other words leaves those words a text
+ * search, read like any other.
+ */
+export const isWholeEntryIdentifier = (
+  intent: DecisionQueryIntent,
+): boolean => {
+  if (intent.type !== "identifier") {
+    return false;
+  }
+  switch (intent.kind) {
+    case "docket":
+    case "ecli":
+      return intent.embeddedIn === undefined;
+    case "neutral":
+    case "reporter":
+      return true;
+    default: {
+      intent satisfies never;
+      return panic(`Unhandled decision identifier: ${String(intent)}`);
+    }
+  }
+};
+
+/**
+ * The text a search sends for an entry: the reference in its canonical
+ * spelling when the entry was one, otherwise the entry as typed, so words
+ * around an embedded reference still reach the text search.
+ */
+export const searchTextOfDecisionQuery = (
+  intent: DecisionQueryIntent,
+): string | undefined => {
+  switch (intent.type) {
+    case "empty":
+      return undefined;
+    case "text":
+      return intent.text;
+    case "identifier":
+      return (
+        ("embeddedIn" in intent ? intent.embeddedIn : undefined) ?? intent.value
+      );
+    default: {
+      intent satisfies never;
+      return panic(`Unhandled decision query intent: ${String(intent)}`);
+    }
+  }
+};
+
+/**
+ * The case file a docket or ECLI spelling names, as publishers vary it: case,
+ * spacing and dash style are theirs, not the docket's, and neither a sheet
+ * number nor a part numeral changes the file. A docket is read by the grammar
+ * that read the entry, so the entry and every stored spelling of it key
+ * alike.
  */
 const decisionIdentifierComparisonKey = (
   value: string,
   grammar: DecisionDocketGrammar | undefined,
-): string => {
-  const docket = parseDecisionDocket(value, { grammar });
-  return docket === null
-    ? canonicalDecisionIdentifierKey(value)
-    : canonicalDecisionDocket(docket);
-};
+): string =>
+  readDecisionDocketReference(value, { grammar })?.family.canonical ??
+  canonicalDecisionIdentifierKey(value);
 
 /**
  * The identity of a structured citation: case, spacing and punctuation are
@@ -177,12 +419,15 @@ type DecisionHitIdentity = {
 };
 
 /**
- * The hits that are the decision the entry named, not merely ones that
- * mention it. A docket or an ECLI matches by case number, ECLI, or any other
+ * The hits that answer to the reference: for a docket, every decision of its
+ * case file (siblings, sheets and parts alike); for an ECLI, the decision
+ * carrying it. A docket or an ECLI matches by case number, ECLI, or any other
  * identifier the publisher supplied (a second docket, a reporter citation). A
  * reporter or neutral citation matches only an identifier of its own type.
- * Several are the same reference at several courts, which the reader must
- * choose between; the caller never picks one for them.
+ *
+ * Membership, not identity: several hits are a file's siblings or the same
+ * reference at several courts, which `resolveDecisionIdentity` tells apart
+ * from one decision. The caller never picks one of them.
  */
 export const exactDecisionMatches = <THit extends DecisionHitIdentity>(
   identifier: DecisionIdentifierIntent,
@@ -229,6 +474,216 @@ export const exactDecisionMatches = <THit extends DecisionHitIdentity>(
       return panic(
         `Unhandled decision identifier: ${JSON.stringify(identifier)}`,
       );
+    }
+  }
+};
+
+/**
+ * What a reference resolves to among the hits that answer to it.
+ *
+ * - `unique`: one decision is the one named. `basis` says by what: an
+ *   identifier that names a decision outright (an ECLI, a reporter
+ *   citation), the sheet or part the reference printed, or a docket whose
+ *   file holds one decision here.
+ * - `ambiguous`: the reference cannot tell its candidates apart. `several`
+ *   is siblings in one file, or one number at several courts;
+ *   `selector_unmatched` is a sheet or part that no candidate is known to
+ *   carry, while some carry another, so the file's decisions come back
+ *   rather than one of them.
+ * - `none`: nothing answers to it.
+ *
+ * A docket, a court and a date together are still not a decision: two
+ * decisions of one file can be issued on one day, so nothing here ever
+ * prefers a candidate by its date or its court.
+ */
+export type DecisionIdentityResolution<THit> =
+  | { readonly status: "none" }
+  | {
+      readonly status: "unique";
+      readonly decision: THit;
+      readonly basis: "identifier" | "selector" | "docket";
+    }
+  | {
+      readonly status: "ambiguous";
+      readonly candidates: readonly THit[];
+      readonly reason: "several" | "selector_unmatched";
+    };
+
+/** A digit run as a number would read it, so `05` and `5` compare equal. */
+const numeral = (digits: string): string => digits.replace(/^0+(?=\d)/u, "");
+
+/**
+ * The sheet an ECLI names after the file's own numbers, or null. A Czech or
+ * Slovak ECLI spells the docket's numbers in order and appends the sheet
+ * (`…:3.AFS.41.2008.98` for sheet 98 of `3 Afs 41/2008`), so the sheet is
+ * read only where the ordinal's numbers end in the file's numbers followed by
+ * exactly one more. An ECLI whose last number is the docket's own year
+ * (`…:1.US.123.20`) carries no sheet, and one of another file carries none
+ * of this one.
+ */
+export const ecliSheetOf = (
+  ecli: string,
+  familyCanonical: string,
+): string | null => {
+  const ordinal = ecli.split(":").slice(4).join(":");
+  const segments = ordinal.split(".");
+  const last = segments.at(-1);
+  if (last === undefined || !/^\d+$/u.test(last)) {
+    return null;
+  }
+  const familyNumbers = (familyCanonical.match(/\d+/gu) ?? []).map(numeral);
+  const leadingNumbers = segments
+    .slice(0, -1)
+    .filter((segment) => /^\d+$/u.test(segment))
+    .map(numeral);
+  if (
+    familyNumbers.length === 0 ||
+    leadingNumbers.length < familyNumbers.length
+  ) {
+    return null;
+  }
+  const offset = leadingNumbers.length - familyNumbers.length;
+  return familyNumbers.every(
+    (number, index) => leadingNumbers[offset + index] === number,
+  )
+    ? numeral(last)
+    : null;
+};
+
+const CASE_NUMBER_IDENTIFIER = "case-number";
+const ECLI_IDENTIFIER = "ecli";
+
+type CarriedSelectors = { sheets: Set<string>; parts: Set<string> };
+
+/**
+ * Every selector a hit is known to carry within the file: from each docket
+ * spelling of the file it stores (its own, and a full file number a publisher
+ * supplied beside it) and from each ECLI it carries, the two places a court's
+ * sheet is published.
+ */
+const selectorsOfHit = (
+  hit: DecisionHitIdentity,
+  familyCanonical: string,
+  grammar: DecisionDocketGrammar,
+): CarriedSelectors => {
+  const sheets = new Set<string>();
+  const parts = new Set<string>();
+  const dockets = [
+    hit.caseNumber,
+    ...(hit.identifiers ?? [])
+      .filter(({ type }) => type === CASE_NUMBER_IDENTIFIER)
+      .map(({ value }) => value),
+  ];
+  for (const docket of dockets) {
+    const reference = readDecisionDocketReference(docket, { grammar });
+    if (reference === null || reference.family.canonical !== familyCanonical) {
+      continue;
+    }
+    if (reference.selector.kind === "sheet") {
+      sheets.add(reference.selector.value);
+    } else if (reference.selector.kind === "part") {
+      parts.add(reference.selector.value);
+    }
+  }
+  const eclis = [
+    ...(hit.ecli === null ? [] : [hit.ecli]),
+    ...(hit.identifiers ?? [])
+      .filter(({ type }) => type === ECLI_IDENTIFIER)
+      .map(({ value }) => value),
+  ];
+  for (const ecli of eclis) {
+    const sheet = ecliSheetOf(ecli, familyCanonical);
+    if (sheet !== null) {
+      sheets.add(sheet);
+    }
+  }
+  return { sheets, parts };
+};
+
+const resolvedAmong = <THit>(
+  matches: readonly THit[],
+  basis: "identifier" | "selector" | "docket",
+): DecisionIdentityResolution<THit> => {
+  const [only, ...rest] = matches;
+  if (only === undefined) {
+    return { status: "none" };
+  }
+  return rest.length === 0
+    ? { status: "unique", decision: only, basis }
+    : { status: "ambiguous", candidates: matches, reason: "several" };
+};
+
+/**
+ * Resolve a reference to the decision it names among the hits, or to the
+ * candidates the reader has to choose between. A bare docket names its whole
+ * file; a sheet or part narrows it to the decision known to carry that
+ * selector, and to nothing arbitrary when none is.
+ */
+export const resolveDecisionIdentity = <THit extends DecisionHitIdentity>(
+  identifier: DecisionIdentifierIntent,
+  hits: readonly THit[],
+  options: ExactDecisionMatchesOptions = {},
+): DecisionIdentityResolution<THit> => {
+  const family = exactDecisionMatches(identifier, hits, options);
+  if (identifier.kind !== "docket") {
+    return resolvedAmong(family, "identifier");
+  }
+  const { selector } = identifier;
+  if (selector.kind === "none" || family.length === 0) {
+    return resolvedAmong(family, "docket");
+  }
+  const grammar = DECISION_DOCKET_GRAMMARS[identifier.jurisdiction];
+  const familyCanonical = decisionIdentifierComparisonKey(
+    identifier.family,
+    grammar,
+  );
+  const known = family.map((hit) => {
+    const { parts, sheets } = selectorsOfHit(hit, familyCanonical, grammar);
+    return { hit, carried: selector.kind === "sheet" ? sheets : parts };
+  });
+  const selected = known
+    .filter(({ carried }) => carried.has(selector.value))
+    .map(({ hit }) => hit);
+  if (selected.length > 0) {
+    return resolvedAmong(selected, "selector");
+  }
+  // One decision in the file, carrying no selector of this kind: nothing
+  // contradicts the reference, and there is no sibling to confuse it with.
+  const [only, ...rest] = known;
+  if (only !== undefined && rest.length === 0 && only.carried.size === 0) {
+    return { status: "unique", decision: only.hit, basis: "docket" };
+  }
+  return {
+    status: "ambiguous",
+    candidates: family,
+    reason: "selector_unmatched",
+  };
+};
+
+/**
+ * The hits an entry names, for a list that shows them first: the decision it
+ * resolves to, or every candidate it leaves open. Nothing for an entry that
+ * is not an identifier.
+ */
+export const namedDecisionsOf = <THit extends DecisionHitIdentity>(
+  intent: DecisionQueryIntent,
+  hits: readonly THit[],
+  options: ExactDecisionMatchesOptions = {},
+): readonly THit[] => {
+  if (intent.type !== "identifier") {
+    return [];
+  }
+  const resolution = resolveDecisionIdentity(intent, hits, options);
+  switch (resolution.status) {
+    case "none":
+      return [];
+    case "unique":
+      return [resolution.decision];
+    case "ambiguous":
+      return resolution.candidates;
+    default: {
+      resolution satisfies never;
+      return panic(`Unhandled identity resolution: ${String(resolution)}`);
     }
   }
 };

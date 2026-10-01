@@ -29,6 +29,11 @@ import { and, eq, inArray } from "drizzle-orm";
 import { unionAll } from "drizzle-orm/pg-core";
 
 import {
+  decisionDocketTailSpellings,
+  type DecisionDocketSelector,
+} from "@stll/api-contract/decision-docket-grammar";
+import type { DecisionIdentifierIntent } from "@stll/api-contract/decision-query-intent";
+import {
   DECISION_IDENTIFIER_TYPES,
   type DecisionIdentifierType,
   type DecisionPrimaryReferenceType,
@@ -58,12 +63,81 @@ import { LIMITS } from "@/api/lib/limits";
  * What a lookup names its subject by: a docket, an ECLI, a reporter citation,
  * or a neutral citation. The kind is the caller's; a neutral citation arrives
  * only typed as one, since no free-text grammar claims it.
+ *
+ * A docket is read by its case file (`family`): the read returns every
+ * decision filed under it, and the `selector` the reference printed is what
+ * the caller's resolution narrows them by. The file is never narrowed here,
+ * because a stored row does not always carry what tells siblings apart.
  */
 export type DecisionIdentityLocator =
-  | { kind: "docket"; value: string }
+  | {
+      kind: "docket";
+      value: string;
+      family: string;
+      selector: DecisionDocketSelector;
+    }
   | { kind: "ecli"; value: string }
   | { kind: "reporter"; value: string }
   | { kind: "neutral"; value: string };
+
+/** The locator an entry's identifier is read by. */
+export const decisionIdentityLocatorOf = (
+  identifier: DecisionIdentifierIntent,
+): DecisionIdentityLocator => {
+  switch (identifier.kind) {
+    case "docket":
+      return {
+        kind: identifier.kind,
+        value: identifier.value,
+        family: identifier.family,
+        selector: identifier.selector,
+      };
+    case "ecli":
+    case "neutral":
+    case "reporter":
+      return { kind: identifier.kind, value: identifier.value };
+    default: {
+      identifier satisfies never;
+      return panic(`Unhandled decision identifier: ${String(identifier)}`);
+    }
+  }
+};
+
+/**
+ * Every spelling a member of the docket's file can be stored under: the
+ * docket itself, the docket with a part numeral or a stray separator a
+ * publisher left on it (stored where its document carries no key of its own),
+ * and, when the reference printed a sheet, the full file number a legacy row
+ * or a parallel identifier still holds. Each is keyed as the stored column is.
+ */
+const docketSpellingsOf = ({
+  family,
+  selector,
+}: Pick<
+  Extract<DecisionIdentityLocator, { kind: "docket" }>,
+  "family" | "selector"
+>): string[] => [
+  family,
+  ...decisionDocketTailSpellings(family),
+  ...(selector.kind === "sheet" ? [`${family}-${selector.value}`] : []),
+];
+
+/**
+ * The `citation_key` values a docket's file is read under: each stored
+ * spelling of a member, keyed by the function that writes the column.
+ */
+export const docketFamilyCitationKeys = (
+  locator: Pick<
+    Extract<DecisionIdentityLocator, { kind: "docket" }>,
+    "family" | "selector"
+  >,
+): string[] => [
+  ...new Set(
+    docketSpellingsOf(locator)
+      .map(bareCitationKey)
+      .filter((key) => key.length > 0),
+  ),
+];
 
 /** The identifier rows each kind of reference is stored under. */
 const IDENTIFIER_TYPE_OF_LOCATOR_KIND = {
@@ -118,8 +192,8 @@ type IdentifierRowMatchOptions = {
   jurisdiction: string | undefined;
   tx: CaseLawPublicReadTransaction;
   type: DecisionIdentifierType;
-  /** As the reference spells it; normalized here for the column. */
-  value: string;
+  /** As the reference spells them; normalized here for the column. */
+  values: readonly string[];
 };
 
 /**
@@ -133,20 +207,28 @@ const identifierRowDecisionIds = ({
   jurisdiction,
   tx,
   type,
-  value,
-}: IdentifierRowMatchOptions) =>
-  tx
+  values,
+}: IdentifierRowMatchOptions) => {
+  const keys = [
+    ...new Set(
+      values.map((value) =>
+        normalizeDecisionIdentifierValueIn(jurisdiction, type, value),
+      ),
+    ),
+  ];
+  const [onlyKey] = keys;
+  return tx
     .select({ id: caseLawDecisionIdentifiers.decisionId })
     .from(caseLawDecisionIdentifiers)
     .where(
       and(
         eq(caseLawDecisionIdentifiers.type, type),
-        eq(
-          caseLawDecisionIdentifiers.normalizedValue,
-          normalizeDecisionIdentifierValueIn(jurisdiction, type, value),
-        ),
+        keys.length === 1 && onlyKey !== undefined
+          ? eq(caseLawDecisionIdentifiers.normalizedValue, onlyKey)
+          : inArray(caseLawDecisionIdentifiers.normalizedValue, keys),
       ),
     );
+};
 
 /**
  * The decision's own column a kind of reference is also held in, or null for
@@ -158,7 +240,10 @@ const identifierRowDecisionIds = ({
 const ownColumnCondition = (locator: DecisionIdentityLocator) => {
   switch (locator.kind) {
     case "docket":
-      return eq(caseLawDecisions.citationKey, bareCitationKey(locator.value));
+      return inArray(
+        caseLawDecisions.citationKey,
+        docketFamilyCitationKeys(locator),
+      );
     case "ecli":
       return inArray(caseLawDecisions.ecli, [
         locator.value,
@@ -197,7 +282,8 @@ export const decisionIdsNamedBy = ({
     jurisdiction: country,
     tx,
     type: IDENTIFIER_TYPE_OF_LOCATOR_KIND[locator.kind],
-    value: locator.value,
+    values:
+      locator.kind === "docket" ? docketSpellingsOf(locator) : [locator.value],
   });
   const ownCondition = ownColumnCondition(locator);
   if (ownCondition === null) {
@@ -208,6 +294,88 @@ export const decisionIdsNamedBy = ({
     .from(caseLawDecisions)
     .where(ownCondition);
   return unionAll(own, published);
+};
+
+/**
+ * The parallel references of exactly the decisions named, keyed by id; a
+ * decision with none maps to an empty list.
+ */
+const readIdentifiersByDecision = async (
+  tx: CaseLawPublicReadTransaction,
+  decisionIds: readonly SafeId<"caseLawDecision">[],
+): Promise<Map<string, { type: DecisionIdentifierType; value: string }[]>> => {
+  const identifiersByDecision = new Map<
+    string,
+    { type: DecisionIdentifierType; value: string }[]
+  >(decisionIds.map((id) => [String(id), []]));
+  if (decisionIds.length === 0) {
+    return identifiersByDecision;
+  }
+  const identifierRows = await tx
+    .select({
+      decisionId: caseLawDecisionIdentifiers.decisionId,
+      type: caseLawDecisionIdentifiers.type,
+      value: caseLawDecisionIdentifiers.value,
+    })
+    .from(caseLawDecisionIdentifiers)
+    .where(inArray(caseLawDecisionIdentifiers.decisionId, [...decisionIds]));
+  for (const row of identifierRows) {
+    // Keyed off the decisions named, so a row for anything else is a join
+    // this statement cannot produce.
+    const values =
+      identifiersByDecision.get(String(row.decisionId)) ??
+      panic("Read an identifier for a decision this lookup did not name");
+    values.push({ type: row.type, value: row.value });
+  }
+  return identifiersByDecision;
+};
+
+/** What a decision answers to, enough to resolve a reference among several. */
+export type DecisionIdentityHit = {
+  caseNumber: string;
+  ecli: string | null;
+  id: SafeId<"caseLawDecision">;
+  identifiers: readonly { type: DecisionIdentifierType; value: string }[];
+};
+
+/**
+ * The identity columns of decisions an identity read already named, by
+ * primary key: the docket, the ECLI and the parallel references, which are
+ * what tell a file's siblings apart. In the read's own order.
+ */
+export const readDecisionIdentityHits = async (
+  tx: CaseLawPublicReadTransaction,
+  decisionIds: readonly SafeId<"caseLawDecision">[],
+): Promise<DecisionIdentityHit[]> => {
+  if (decisionIds.length === 0) {
+    return [];
+  }
+  const rows = await tx
+    .select({
+      caseNumber: caseLawDecisions.caseNumber,
+      ecli: caseLawDecisions.ecli,
+      id: caseLawDecisions.id,
+    })
+    .from(caseLawDecisions)
+    .where(inArray(caseLawDecisions.id, [...decisionIds]));
+  const byId = new Map(rows.map((row) => [String(row.id), row]));
+  const identifiersByDecision = await readIdentifiersByDecision(
+    tx,
+    decisionIds,
+  );
+  return decisionIds.flatMap((id) => {
+    const row = byId.get(String(id));
+    return row === undefined
+      ? []
+      : [
+          {
+            ...row,
+            identifiers:
+              identifiersByDecision.get(String(id)) ??
+              panic("Lost a decision's identifier list"),
+          },
+        ];
+  });
 };
 
 export const lookupDecisionsByIdentity = async ({
@@ -259,35 +427,10 @@ export const lookupDecisionsByIdentity = async ({
       return [];
     }
 
-    // The parallel references, read for exactly the decisions that answered.
-    const identifierRows = await tx
-      .select({
-        decisionId: caseLawDecisionIdentifiers.decisionId,
-        type: caseLawDecisionIdentifiers.type,
-        value: caseLawDecisionIdentifiers.value,
-      })
-      .from(caseLawDecisionIdentifiers)
-      .where(
-        inArray(
-          caseLawDecisionIdentifiers.decisionId,
-          decisions.map((decision) => decision.id),
-        ),
-      );
-    const identifiersByDecision = new Map<
-      string,
-      { type: DecisionIdentifierType; value: string }[]
-    >();
-    for (const decision of decisions) {
-      identifiersByDecision.set(String(decision.id), []);
-    }
-    for (const row of identifierRows) {
-      // Keyed off the decisions just read, so a row for anything else is a
-      // join this statement cannot produce.
-      const values =
-        identifiersByDecision.get(String(row.decisionId)) ??
-        panic("Read an identifier for a decision this lookup did not name");
-      values.push({ type: row.type, value: row.value });
-    }
+    const identifiersByDecision = await readIdentifiersByDecision(
+      tx,
+      decisions.map((decision) => decision.id),
+    );
 
     const alternates = await readPublicDecisionLanguageAlternatesInTx(
       tx,

@@ -6,7 +6,10 @@ import {
   PUBLIC_CASE_LAW_COUNTRIES,
   publicCaseLawCountry,
 } from "@stll/api-contract/case-law-launch-readiness";
-import { parseDecisionQuery } from "@stll/api-contract/decision-query-intent";
+import {
+  isWholeEntryIdentifier,
+  parseDecisionQuery,
+} from "@stll/api-contract/decision-query-intent";
 import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/us-reporter-citation";
 import { Temporal } from "@stll/time";
 
@@ -188,12 +191,13 @@ const expandCaseLawSearch = createSafeRootHandler(
       return Result.ok(NO_ALTERNATIVES);
     }
 
-    // An identifier is matched as written, so there is nothing to expand.
+    // An entry that is an identifier is matched as written, so there is
+    // nothing to expand; words around an embedded one are still text.
     const intent = parseDecisionQuery(body.query, {
       grammar: decisionDocketGrammarForCountry(country),
       reporters: decisionReporterGrammarForJurisdiction(country),
     });
-    if (intent.type === "identifier") {
+    if (isWholeEntryIdentifier(intent)) {
       return Result.ok(NO_ALTERNATIVES);
     }
 
