@@ -4,7 +4,10 @@ import {
   DECISION_IDENTIFIER_TYPES,
   normalizeStructuredDecisionIdentifier,
 } from "@stll/legal-ast/decision-identifier";
-import type { DecisionIdentifier } from "@stll/legal-ast/decision-identifier";
+import type {
+  DecisionIdentifier,
+  DecisionPrimaryReferenceType,
+} from "@stll/legal-ast/decision-identifier";
 
 export const RULING_IDENTITY_VERSION = 1 as const;
 
@@ -15,6 +18,8 @@ export type RulingIdentityInput = {
   /** Caller-validated ISO calendar date; derivation does not rewrite it. */
   readonly decisionDate?: string | null | undefined;
   readonly caseNumber?: string | null | undefined;
+  /** Absent means a docket, matching the ingestion contract. */
+  readonly caseNumberType?: DecisionPrimaryReferenceType | undefined;
   readonly identifiers?: readonly DecisionIdentifier[] | undefined;
   readonly ecli?: string | null | undefined;
   readonly decisionType?: string | null | undefined;
@@ -118,6 +123,7 @@ export const rulingKeysOf = ({
   courtId,
   decisionDate,
   caseNumber,
+  caseNumberType,
   identifiers,
   ecli,
   decisionType,
@@ -139,7 +145,10 @@ export const rulingKeysOf = ({
   if (date.kind === "absent") {
     defects.push("date_absent");
   }
-  const statedDockets = caseNumber ? [caseNumber] : [];
+  const primaryIsDocket =
+    caseNumberType === undefined ||
+    caseNumberType === DECISION_IDENTIFIER_TYPES.CASE_NUMBER;
+  const statedDockets = caseNumber && primaryIsDocket ? [caseNumber] : [];
   for (const identifier of identifiers ?? []) {
     if (identifier.type === DECISION_IDENTIFIER_TYPES.CASE_NUMBER) {
       statedDockets.push(identifier.value);
@@ -186,7 +195,11 @@ export const rulingKeysOf = ({
   };
 };
 
-/** Decision kind is a discriminator alongside the group, never inside it. */
+/**
+ * Candidate groups, not proof of ruling identity: generic letter separators
+ * intentionally collapse. Exact docket matching belongs to jurisdiction grammars.
+ * Decision kind is a discriminator alongside the group, never inside it.
+ */
 export const rulingGroupKeys = ({
   country,
   court,

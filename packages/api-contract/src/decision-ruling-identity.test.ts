@@ -96,6 +96,39 @@ describe("derived ruling identity", () => {
     ]);
   });
 
+  test("primary citations are not dockets and cannot satisfy docket presence", () => {
+    for (const caseNumberType of [
+      DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+      DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION,
+    ]) {
+      const citation = {
+        ...decision,
+        caseNumber: "502 U.S. 959",
+        caseNumberType,
+      };
+      const withoutDocket = rulingKeysOf(citation);
+      expect(withoutDocket.dockets).toEqual([]);
+      expect(withoutDocket.defects).toContain("docket_absent");
+      expect(rulingGroupKeys(withoutDocket)).toEqual([]);
+      const withDocket = rulingKeysOf({
+        ...citation,
+        identifiers: [
+          { type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER, value: "90-7570" },
+        ],
+      });
+      expect(withDocket.dockets).toEqual([
+        { stated: "90-7570", key: "90/7570" },
+      ]);
+      expect(rulingGroupKeys(withDocket)).toHaveLength(1);
+    }
+    expect(
+      rulingKeysOf({
+        ...decision,
+        caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+      }).dockets,
+    ).toEqual(rulingKeysOf(decision).dockets);
+  });
+
   test("reports missing prerequisites and groups only digit-bearing dockets", () => {
     const absent = rulingKeysOf({ country: "CZ" });
     expect(absent.defects.toSorted()).toEqual([
