@@ -612,7 +612,9 @@ export const withActionAdmission = async <T>({
           identity: periodIdentity,
           policy: periodPolicy,
         });
-  if (Result.isError(resolvedBudget)) {return resolvedBudget;}
+  if (Result.isError(resolvedBudget)) {
+    return resolvedBudget;
+  }
   const budget = resolvedBudget.value;
 
   const inherited = admissionScope.getStore();
