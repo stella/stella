@@ -1723,6 +1723,10 @@ jobs:
         # The shard filters are exclusions, which subtract from that union, so
         # sharding narrows the scoped set instead of widening it.
         run: |
+          if [[ "$SHARD" == "api-1" ]]; then
+            echo "::error::Deliberate API shard failure proof"
+            exit 1
+          fi
           args=()
           if [[ -n "$AFFECTED_FLAG" ]]; then
             scope=$(bun scripts/test-scope.ts --base "origin/$BASE_REF")
