@@ -93,9 +93,12 @@ import {
 } from "@/api/handlers/chat/chat-turn-persistence";
 import type { ChatTurnExecution } from "@/api/handlers/chat/chat-turn-persistence";
 import {
+  CHAT_TURN_BOUNDARY_MODE,
   ChatTurnRun,
+  countChatTurnSettlement,
   processChatTurnOwnership,
 } from "@/api/handlers/chat/chat-turn-run";
+import type { ChatTurnObservation } from "@/api/handlers/chat/chat-turn-run";
 import {
   CUT_SHORT_OUTCOME,
   settleHistoryForRun,
@@ -448,6 +451,8 @@ type ChatSendLifecycleOptions = {
   startAdmission?: typeof startChatExecutionAdmission;
   indexThread: typeof upsertChatThreadSearchDocument;
   externalMcpToolsLoader: LazyExternalMcpToolsLoader;
+  /** The boundary mode the turn's settlement is counted under. */
+  mode: ChatTurnObservation["mode"];
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
@@ -499,6 +504,25 @@ export class ChatSendLifecycle {
 
   constructor(options: ChatSendLifecycleOptions) {
     this.options = options;
+  }
+
+  /**
+   * Count a turn settled before its run started. No model is resolved yet,
+   * and a turn another owner settled first is not this send's to count.
+   */
+  private countPreflightSettlement(
+    outcome: "cancelled" | "failed" | "interrupted",
+    failureCode: ChatTurnFailureCode | null,
+    settlement: Result<unknown, { cause?: unknown }>,
+  ): void {
+    if (Result.isError(settlement) && isChatTurnNotOwned(settlement.error)) {
+      return;
+    }
+    countChatTurnSettlement(
+      { mode: this.options.mode, provider: "none" },
+      outcome,
+      failureCode,
+    );
   }
 
   adoptThread(threadState: ChatThreadState): void {
@@ -626,6 +650,7 @@ export class ChatSendLifecycle {
       checkpoint: this.checkpoint,
       connectors,
       deadlineMs: CHAT_METERED_PROVIDER_TIMEOUT_MS,
+      mode: this.options.mode,
       owner: {
         indexThread: this.options.indexThread,
         execution: this.claimedTurn.execution,
@@ -664,6 +689,7 @@ export class ChatSendLifecycle {
       userId: this.options.userId,
       workspaceId: this.options.workspaceId,
     });
+    this.countPreflightSettlement("failed", code, failureResult);
     if (Result.isError(failureResult)) {
       captureError(failureResult.error, { threadId: this.options.threadId });
       return;
@@ -686,6 +712,7 @@ export class ChatSendLifecycle {
       workspaceId: this.options.workspaceId,
     });
     if (Result.isOk(settlementResult)) {
+      this.countPreflightSettlement("cancelled", null, settlementResult);
       this.claimedTurn = { status: "unclaimed" };
     }
     return settlementResult;
@@ -708,6 +735,7 @@ export class ChatSendLifecycle {
       workspaceId: this.options.workspaceId,
     });
     if (Result.isOk(settlementResult)) {
+      this.countPreflightSettlement("interrupted", null, settlementResult);
       this.claimedTurn = { status: "unclaimed" };
     }
     return settlementResult;
@@ -730,6 +758,7 @@ export class ChatSendLifecycle {
           userId: this.options.userId,
           workspaceId: this.options.workspaceId,
         });
+        this.countPreflightSettlement("failed", "internal", failureResult);
         if (Result.isError(failureResult)) {
           captureError(failureResult.error, {
             source: "send-message-claimed-turn-preflight-cleanup",
@@ -2066,6 +2095,7 @@ export const createSendMessage = (
       const lifecycle = new ChatSendLifecycle({
         indexThread: dependencies.indexThread,
         externalMcpToolsLoader,
+        mode: CHAT_TURN_BOUNDARY_MODE[body.sendMode],
         recordAuditEvent,
         safeDb,
         threadId: body.threadId,

@@ -175,6 +175,7 @@ const produceUntilCut = ({
   const run = new ChatTurnRun({
     connectors: undefined,
     deadlineMs: 60_000,
+    mode: "raw",
     heartbeat,
     ownership,
     owner: {
@@ -196,6 +197,7 @@ const produceUntilCut = ({
       });
     }
     await run.settle(
+      cutShortOutcome(signal.reason),
       persist ??
         (async () => {
           stored.settlement = unwrap(
@@ -286,6 +288,7 @@ describe("a producing run", () => {
     const run = new ChatTurnRun({
       connectors: undefined,
       deadlineMs: 60_000,
+      mode: "raw",
       heartbeat: { intervalMs: 1, renewEvery: 1 },
       owner: {
         execution,
@@ -298,22 +301,28 @@ describe("a producing run", () => {
       },
     });
     const output = async function* (): AsyncGenerator<StreamChunk> {
-      await run.settle(async () => {
-        unwrap(
-          await safeDb(
-            async (tx) =>
-              await settleChatTurnOnTx({
-                assistantMessageId: null,
-                execution,
-                outcome: { reason: "client-disconnected", type: "interrupted" },
-                tx,
-              }),
-          ),
-        );
-        // The turn is no longer running while the settlement finishes: a
-        // beat now would read it as lost.
-        await Bun.sleep(30);
-      });
+      await run.settle(
+        { reason: "client-disconnected", type: "interrupted" },
+        async () => {
+          unwrap(
+            await safeDb(
+              async (tx) =>
+                await settleChatTurnOnTx({
+                  assistantMessageId: null,
+                  execution,
+                  outcome: {
+                    reason: "client-disconnected",
+                    type: "interrupted",
+                  },
+                  tx,
+                }),
+            ),
+          );
+          // The turn is no longer running while the settlement finishes: a
+          // beat now would read it as lost.
+          await Bun.sleep(30);
+        },
+      );
       yield* [];
     };
     const response = run.produce(output());
@@ -436,6 +445,7 @@ describe("a producing run", () => {
     const run = new ChatTurnRun({
       connectors: undefined,
       deadlineMs: 60_000,
+      mode: "raw",
       heartbeat: { intervalMs: 1, renewEvery: 1000 },
       ownership,
       owner: {
@@ -451,19 +461,25 @@ describe("a producing run", () => {
     // The run settles on its own while a beat is still reading its turn.
     const output = async function* (): AsyncGenerator<StreamChunk> {
       await beatStarted.promise;
-      await run.settle(async () => {
-        unwrap(
-          await safeDb(
-            async (tx) =>
-              await settleChatTurnOnTx({
-                assistantMessageId: null,
-                execution,
-                outcome: { reason: "client-disconnected", type: "interrupted" },
-                tx,
-              }),
-          ),
-        );
-      });
+      await run.settle(
+        { reason: "client-disconnected", type: "interrupted" },
+        async () => {
+          unwrap(
+            await safeDb(
+              async (tx) =>
+                await settleChatTurnOnTx({
+                  assistantMessageId: null,
+                  execution,
+                  outcome: {
+                    reason: "client-disconnected",
+                    type: "interrupted",
+                  },
+                  tx,
+                }),
+            ),
+          );
+        },
+      );
       yield* [];
     };
     await run.produce(output()).text();

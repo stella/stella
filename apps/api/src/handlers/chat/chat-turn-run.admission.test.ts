@@ -40,6 +40,7 @@ describe("chat run admission follows owned settlement", () => {
         },
         connectors: undefined,
         deadlineMs: 60_000,
+        mode: "raw",
         heartbeat: { intervalMs: 60_000, renewEvery: 1000 },
         ownership: new ChatTurnOwnership(),
         owner: {
@@ -111,7 +112,7 @@ describe("chat run admission follows owned settlement", () => {
             type: "text",
             content: "Partial answer",
           });
-          await run.settle(async () => {
+          await run.settle({ type: "completed" }, async () => {
             persisted += 1;
             await Promise.resolve();
           });
@@ -158,6 +159,7 @@ describe("chat run admission follows owned settlement", () => {
       },
       connectors: undefined,
       deadlineMs: 60_000,
+      mode: "raw",
       heartbeat: { intervalMs: 1, renewEvery: 1000 },
       ownership: new ChatTurnOwnership(),
       owner: {
@@ -177,7 +179,7 @@ describe("chat run admission follows owned settlement", () => {
     });
     const output = async function* (): AsyncIterable<StreamChunk> {
       await providerMayFinish.promise;
-      await run.settle(async () => {
+      await run.settle({ type: "completed" }, async () => {
         persistenceStarted.resolve(undefined);
         await persistenceMayFinish.promise;
         persisted += 1;
@@ -237,6 +239,7 @@ describe("chat run admission follows owned settlement", () => {
       },
       connectors: undefined,
       deadlineMs: 60_000,
+      mode: "raw",
       heartbeat: { intervalMs: 60_000, renewEvery: 1000 },
       ownership: new ChatTurnOwnership(),
       owner: {
@@ -283,7 +286,7 @@ describe("chat run admission follows owned settlement", () => {
           followUpStarted = true;
           await Promise.resolve();
         });
-        await run.settle(async () => {
+        await run.settle({ type: "completed" }, async () => {
           persisted += 1;
           persistenceFinished.resolve(undefined);
         });
@@ -357,6 +360,7 @@ describe("chat run admission follows owned settlement", () => {
         checkpoint,
         connectors: undefined,
         deadlineMs: 60_000,
+        mode: "raw",
         ownership: new ChatTurnOwnership(),
         owner: {
           execution: {
@@ -468,6 +472,7 @@ describe("chat run admission follows owned settlement", () => {
         checkpoint,
         connectors: undefined,
         deadlineMs: 60_000,
+        mode: "raw",
         heartbeat: { intervalMs: 60_000, renewEvery: 1000 },
         ownership: new ChatTurnOwnership(),
         owner: {
@@ -513,7 +518,7 @@ describe("chat run admission follows owned settlement", () => {
           onFinish: async ({ outcome, responseMessage }) => {
             expect(outcome.type).toBe("awaiting-user");
             expect(responseMessage.parts).toEqual(checkpoint.parts);
-            await run.settle(async () => {
+            await run.settle({ type: "completed" }, async () => {
               discardedPersistence += 1;
               await Promise.resolve();
             });
@@ -621,6 +626,7 @@ describe("chat run admission follows owned settlement", () => {
       admission,
       connectors: undefined,
       deadlineMs,
+      mode: "raw",
       heartbeat: { intervalMs: 60_000, renewEvery: 1000 },
       ownership: new ChatTurnOwnership(),
       waitForUpstream: async <T>(
@@ -662,7 +668,7 @@ describe("chat run admission follows owned settlement", () => {
     });
     const output = async function* (): AsyncIterable<StreamChunk> {
       try {
-        await run.settle(async () => {
+        await run.settle({ type: "completed" }, async () => {
           persisted += 1;
           await Promise.resolve();
         });

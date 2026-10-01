@@ -2,6 +2,8 @@ import { RUN_CANCEL_REASON, toServerSentEventsResponse } from "@tanstack/ai";
 import type { StreamChunk } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 
+import type { AIProvider } from "@stll/ai-catalog";
+import type { ChatSendMode } from "@stll/anonymize-chat";
 import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -13,19 +15,25 @@ import {
 } from "@/api/handlers/chat/chat-message-persistence";
 import type { PersistMessageProps } from "@/api/handlers/chat/chat-message-persistence";
 import {
+  AI_ERROR_FAILURE_CODE,
   isChatTurnNotOwned,
   readChatTurnExecutionStanding,
   renewChatTurnExecutionLease,
 } from "@/api/handlers/chat/chat-turn-persistence";
 import type { ChatTurnExecution } from "@/api/handlers/chat/chat-turn-persistence";
 import type { ChatTurnFailureCode } from "@/api/handlers/chat/chat-turn-state";
-import type { PersistableChatMessage } from "@/api/handlers/chat/types";
+import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
+import type {
+  ChatTurnOutcome,
+  PersistableChatMessage,
+} from "@/api/handlers/chat/types";
 import { detached } from "@/api/lib/analytics/capture";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { emitChatTurnSettlementMetric } from "@/api/lib/observability/request-metrics";
 import { withSseHeartbeat } from "@/api/lib/sse";
 import { abortControllerFromSignal } from "@/api/lib/tanstack-ai-generate";
 import { withTimeout } from "@/api/lib/with-timeout";
@@ -77,6 +85,36 @@ const CONNECTOR_CLOSE_FAILED_SINK = failureSink({
   expected: [],
 });
 
+/** The boundary a turn's provider input crosses, by the mode it was sent in. */
+export const CHAT_TURN_BOUNDARY_MODE = {
+  anonymized: "anonymized",
+  rawOverride: "raw",
+} as const satisfies Record<ChatSendMode, ChatThirdPartyBoundary["type"]>;
+
+/** What a turn's settlement is counted under. */
+export type ChatTurnObservation = {
+  mode: ChatThirdPartyBoundary["type"];
+  /** `none` until the turn's model is resolved. */
+  provider: AIProvider | "none";
+};
+
+/**
+ * Count one turn this process settled, by outcome, boundary mode and
+ * provider. A turn another owner or the reaper settled is never counted here.
+ */
+export const countChatTurnSettlement = (
+  observation: ChatTurnObservation,
+  outcome: ChatTurnOutcome["type"],
+  failureCode: ChatTurnFailureCode | null,
+): void => {
+  emitChatTurnSettlementMetric({
+    failureCode,
+    mode: observation.mode,
+    outcome,
+    provider: observation.provider,
+  });
+};
+
 /** The turn a run produces for, and what storing its failure needs. */
 type ChatTurnRunOwner = {
   indexThread?: PersistMessageProps["indexThread"];
@@ -117,6 +155,8 @@ type ChatTurnRunOptions = {
   /** Same cleanup deadline in production; injectable clock for settlement tests. */
   waitForUpstream?: typeof withTimeout | undefined;
   heartbeat?: ChatTurnRunHeartbeat | undefined;
+  /** The boundary mode the run's settlement is counted under. */
+  mode: ChatTurnObservation["mode"];
   owner: ChatTurnRunOwner;
   /** Who tracks the run; the process by default. */
   ownership?: ChatTurnOwnership | undefined;
@@ -287,6 +327,7 @@ export class ChatTurnRun {
     | { status: "closed" } = { status: "not-started" };
   /** A cut requested before the run produced; applied once it does. */
   private pendingAbort: string | undefined;
+  private provider: ChatTurnObservation["provider"] = "none";
 
   constructor(options: ChatTurnRunOptions) {
     this.options = options;
@@ -314,6 +355,22 @@ export class ChatTurnRun {
 
   get execution(): ChatTurnExecution {
     return this.options.owner.execution;
+  }
+
+  /** Name the provider the run's model resolved to, for its settlement count. */
+  attributeProvider(provider: AIProvider): void {
+    this.provider = provider;
+  }
+
+  private countSettlement(
+    outcome: ChatTurnOutcome["type"],
+    failureCode: ChatTurnFailureCode | null,
+  ): void {
+    countChatTurnSettlement(
+      { mode: this.options.mode, provider: this.provider },
+      outcome,
+      failureCode,
+    );
   }
 
   /** Resolves once the run is over, saying whether it stored an outcome. */
@@ -414,8 +471,15 @@ export class ChatTurnRun {
     return response;
   }
 
-  /** Store the run's outcome through `persist`. A run settles once. */
-  async settle(persist: () => Promise<void>): Promise<void> {
+  /**
+   * Store the run's `outcome` through `persist`. A run settles once. A
+   * `persist` that cannot store fails the run itself before it throws, and
+   * that failure is what is counted.
+   */
+  async settle(
+    outcome: ChatTurnOutcome,
+    persist: () => Promise<void>,
+  ): Promise<void> {
     if (this.state.status !== "producing") {
       return panic(`A chat turn run cannot settle once ${this.state.status}`);
     }
@@ -427,6 +491,12 @@ export class ChatTurnRun {
       if (checkpoint === undefined) {
         await persist();
         this.stored = true;
+        this.countSettlement(
+          outcome.type,
+          outcome.type === "failed"
+            ? AI_ERROR_FAILURE_CODE[outcome.error]
+            : null,
+        );
       } else {
         const restored = await this.restoreCheckpoint(checkpoint);
         this.stored =
@@ -486,7 +556,14 @@ export class ChatTurnRun {
             workspaceId: owner.workspaceId,
           })
         : await this.restoreCheckpoint(checkpoint);
-    if (Result.isOk(failure) || isChatTurnNotOwned(failure.error)) {
+    const settledElsewhere =
+      Result.isError(failure) && isChatTurnNotOwned(failure.error);
+    if (checkpoint === undefined && !settledElsewhere) {
+      // Counted even when the failure cannot be stored: the turn still
+      // failed for the user, and its lease ends it later.
+      this.countSettlement("failed", code);
+    }
+    if (Result.isOk(failure) || settledElsewhere) {
       // A turn another execution or the reaper settled first keeps that
       // outcome: the fence refused this run, and nothing is left to store.
       this.stored = true;

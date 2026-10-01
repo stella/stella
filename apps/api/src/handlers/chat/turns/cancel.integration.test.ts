@@ -326,6 +326,7 @@ const produceUntilCut = ({
   const run = new ChatTurnRun({
     connectors: undefined,
     deadlineMs: 60_000,
+    mode: "raw",
     heartbeat,
     owner: {
       execution,
@@ -344,18 +345,21 @@ const produceUntilCut = ({
         signal.addEventListener("abort", resolve, { once: true });
       });
     }
-    await run.settle(async () => {
-      unwrap(
-        await persistInterruptedChatTurn({
-          execution,
-          recordAuditEvent: noAudit,
-          safeDb,
-          threadId,
-          userId: ids.userA1,
-          workspaceId: ids.wsA1,
-        }),
-      );
-    });
+    await run.settle(
+      { reason: "client-disconnected", type: "interrupted" },
+      async () => {
+        unwrap(
+          await persistInterruptedChatTurn({
+            execution,
+            recordAuditEvent: noAudit,
+            safeDb,
+            threadId,
+            userId: ids.userA1,
+            workspaceId: ids.wsA1,
+          }),
+        );
+      },
+    );
   };
   const response = run.produce(output());
   return { response, run };

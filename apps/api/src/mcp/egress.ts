@@ -2,6 +2,7 @@ import { panic } from "better-result";
 
 import { loadAnonymizationAllowlistCanonicalsByWorkspace } from "@/api/lib/anonymization-allowlist";
 import { loadAnonymizationGazetteerEntriesByWorkspace } from "@/api/lib/anonymization-blacklist";
+import { emitAnonymizationRefusalMetric } from "@/api/lib/observability/request-metrics";
 import { anonymizeTextFields } from "@/api/mcp/anonymization";
 import type { McpMode } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -87,7 +88,11 @@ export async function finalizeToolEgress(
     return response;
   }
 
-  const anonymizer = { anonymize, loadAllowlist, loadGazetteer };
+  const anonymizer = {
+    anonymize: countingRefusals(anonymize),
+    loadAllowlist,
+    loadGazetteer,
+  };
 
   if (response.egress === "compatSearch") {
     return await finalizeCompatSearch({
@@ -114,6 +119,27 @@ export async function finalizeToolEgress(
     plan: response,
   });
 }
+
+/**
+ * The anonymizer every egress variant calls, counting each call that fails:
+ * the caller then gets a generic tool error, so without this an anonymized
+ * tool that can no longer anonymize is indistinguishable from any other
+ * failing tool. Wrapped once at the entry, so no variant reaches the
+ * anonymizer uncounted.
+ */
+const countingRefusals =
+  (anonymize: typeof anonymizeTextFields): typeof anonymizeTextFields =>
+  async (input) => {
+    try {
+      return await anonymize(input);
+    } catch (error) {
+      emitAnonymizationRefusalMetric({
+        reason: "pipeline_error",
+        site: "mcp_egress",
+      });
+      throw error;
+    }
+  };
 
 type EgressAnonymizer = {
   anonymize: typeof anonymizeTextFields;

@@ -1,7 +1,19 @@
 import type { CallToolResult } from "@modelcontextprotocol/server";
-import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  test,
+} from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import {
+  resetMetricLineSinkForTesting,
+  setMetricLineSinkForTesting,
+} from "@/api/lib/observability/request-metrics";
 import type { anonymizeTextFields } from "@/api/mcp/anonymization";
 import type { AnonymizeTextFieldsInput } from "@/api/mcp/anonymization-core";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -621,4 +633,92 @@ describe("finalizeMcpEgress", () => {
     expect(result.charCount).toBe("John Smith signed here".length);
     expect(anonymizeTextFieldsMock).not.toHaveBeenCalled();
   });
+});
+
+describe("an anonymizer failure at egress", () => {
+  beforeEach(() => {
+    anonymizeTextFieldsMock.mockReset();
+    anonymizeTextFieldsMock.mockRejectedValue(
+      new Error("anonymizer unavailable"),
+    );
+    loadGazetteerByWorkspaceMock.mockReset();
+    loadGazetteerByWorkspaceMock.mockImplementation(emptyCatalogsByWorkspace);
+    loadAllowlistByWorkspaceMock.mockReset();
+    loadAllowlistByWorkspaceMock.mockImplementation(emptyCatalogsByWorkspace);
+  });
+
+  afterEach(() => {
+    resetMetricLineSinkForTesting();
+  });
+
+  /** One anonymized plan per egress variant, each carrying tenant text. */
+  const ANONYMIZED_PLANS = {
+    compatFetch: () => ({
+      cursor: undefined,
+      egress: "compatFetch",
+      id: "entity_1",
+      maxChars: 100,
+      subject: { kind: "document", workspaceId: "ws_1" },
+      text: "John Smith signed here",
+      title: "John Smith SPA",
+      url: "https://example.test/doc",
+    }),
+    compatSearch: () => ({
+      egress: "compatSearch",
+      nextCursor: null,
+      results: [
+        {
+          id: "entity_1",
+          kind: "matter",
+          title: "John Smith SPA",
+          url: "https://example.test/1",
+          workspaceId: "ws_1",
+        },
+      ],
+    }),
+    structured: () => {
+      const payload = { name: "John Smith Ltd" };
+      return {
+        egress: "structured",
+        payload,
+        textFields: [
+          {
+            apply: (value: string) => {
+              payload.name = value;
+            },
+            value: payload.name,
+            workspaceId: "ws_1",
+          },
+        ],
+      };
+    },
+  } as const satisfies Record<McpEgressPlan["egress"], () => McpEgressPlan>;
+
+  for (const [egress, plan] of Object.entries(ANONYMIZED_PLANS)) {
+    test(`${egress} fails the call and counts one refusal`, async () => {
+      const lines: string[] = [];
+      setMetricLineSinkForTesting((line) => {
+        lines.push(line);
+      });
+
+      // bun-types declares `.rejects.toThrow` as void; capture the rejection.
+      const failure = await finalizeMcpEgress({
+        context: createContext(),
+        mode: "anonymized",
+        response: plan(),
+      }).then(
+        () => null,
+        (error: unknown) => error,
+      );
+      expect(failure).toEqual(new Error("anonymizer unavailable"));
+      expect(anonymizeTextFieldsMock).toHaveBeenCalledTimes(1);
+      expect(lines.map((line): unknown => JSON.parse(line))).toEqual([
+        expect.objectContaining({
+          AnonymizationRefusals: 1,
+          reason: "pipeline_error",
+          site: "mcp_egress",
+        }),
+      ]);
+    });
+  }
 });

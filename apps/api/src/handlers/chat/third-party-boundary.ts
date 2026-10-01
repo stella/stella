@@ -3,13 +3,11 @@ import { panic, Result } from "better-result";
 
 import { createPipelineContext, deanonymise } from "@stll/anonymize";
 import type { PipelineContext } from "@stll/anonymize";
-import {
-  CHAT_SEND_MODE,
-  CHAT_TRANSPORT_ERROR_CODE,
-} from "@stll/anonymize-chat";
+import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 
 import type { ScopedDb } from "@/api/db/safe-db";
+import { refuseAnonymizedCrossing } from "@/api/handlers/chat/anonymization-refusal";
 import {
   CHAT_MAX_FILE_BYTES,
   TEXT_PLAIN_MIME_TYPE,
@@ -40,7 +38,7 @@ import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 import { parseDataUrl, toDataUrl } from "@/api/lib/data-url";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { anonymizeTextFields } from "@/api/mcp/anonymization";
 
 export type ChatThirdPartyBoundary =
@@ -873,10 +871,13 @@ const prepareTextBatchForThirdParty = async ({
         workspaceId: boundary.anonymizationScopeId,
       }),
     catch: (cause) =>
-      new HandlerError({
-        status: 500,
-        message: "Failed to anonymize content before sending it to the AI.",
+      refuseAnonymizedCrossing({
         cause,
+        message: "Failed to anonymize content before sending it to the AI.",
+        offerRawRetry: false,
+        reason: "pipeline_error",
+        site: "text_batch",
+        status: 500,
       }),
   });
 
@@ -901,10 +902,12 @@ const prepareTextBatchForThirdParty = async ({
       ) !== replacement.text
     ) {
       return Result.err(
-        new HandlerError({
-          code: CHAT_TRANSPORT_ERROR_CODE.thirdPartyBoundaryRefusal,
-          status: 422,
+        refuseAnonymizedCrossing({
           message: replacement.message,
+          offerRawRetry: true,
+          reason: "field_boundary",
+          site: "text_batch",
+          status: 422,
         }),
       );
     }
@@ -975,11 +978,13 @@ const anonymizePlainTextFile = ({
 }): Result<ChatMessage["parts"][number], BoundaryRefusal> => {
   if (getChatAttachmentMimeType(part) !== TEXT_PLAIN_MIME_TYPE) {
     return Result.err(
-      new HandlerError({
-        code: CHAT_TRANSPORT_ERROR_CODE.thirdPartyBoundaryRefusal,
-        status: 422,
+      refuseAnonymizedCrossing({
         message:
           "Cannot send this attachment to the AI in anonymized mode because stella cannot extract and anonymize it safely.",
+        offerRawRetry: true,
+        reason: "unsupported_content",
+        site: "attachment",
+        status: 422,
       }),
     );
   }
@@ -992,12 +997,14 @@ const anonymizePlainTextFile = ({
 
   if (Result.isError(parsed)) {
     return Result.err(
-      new HandlerError({
-        code: CHAT_TRANSPORT_ERROR_CODE.thirdPartyBoundaryRefusal,
-        status: 422,
+      refuseAnonymizedCrossing({
+        cause: parsed.error,
         message:
           "Cannot send this attachment to the AI in anonymized mode because stella cannot read it as text.",
-        cause: parsed.error,
+        offerRawRetry: true,
+        reason: "unsupported_content",
+        site: "attachment",
+        status: 422,
       }),
     );
   }
@@ -1087,10 +1094,12 @@ const refuseUnpreparedPart = (
   partType: string,
 ): Result<never, BoundaryRefusal> =>
   Result.err(
-    new HandlerError({
-      code: CHAT_TRANSPORT_ERROR_CODE.thirdPartyBoundaryRefusal,
-      status: 422,
+    refuseAnonymizedCrossing({
       message: `Cannot send a stored ${partType} part to the AI in anonymized mode.`,
+      offerRawRetry: true,
+      reason: "unsupported_content",
+      site: "stored_part",
+      status: 422,
     }),
   );
 
@@ -1634,10 +1643,13 @@ const anonymizeToolResultContent = ({
     content.some((part) => part.type !== "text" && part.source.type === "data")
   ) {
     return Result.err(
-      new HandlerError({
-        status: 422,
+      refuseAnonymizedCrossing({
         message:
           "Inline rich-media data cannot cross an anonymized third-party boundary.",
+        offerRawRetry: false,
+        reason: "unsupported_content",
+        site: "rich_media",
+        status: 422,
       }),
     );
   }
@@ -1819,10 +1831,13 @@ export const prepareToolsForThirdParty = ({
           if (policy.requiresAnonymization) {
             // The tool runtime reports a failed call by the error its execute
             // function throws.
-            throw new HandlerError({
-              status: 422,
+            throw refuseAnonymizedCrossing({
               message:
                 "External chat tools require anonymized mode before stella can call them.",
+              offerRawRetry: false,
+              reason: "mode_policy",
+              site: "external_tool",
+              status: 422,
             });
           }
           const outputValue: unknown = await execute(input, context);

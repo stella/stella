@@ -19,7 +19,6 @@ import {
 import type { ModelRole, ReasoningEffort } from "@stll/ai-catalog";
 import {
   CHAT_SEND_MODE,
-  CHAT_TRANSPORT_ERROR_CODE,
   createThirdPartyBoundaryRefusalPayload,
 } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
@@ -30,6 +29,7 @@ import { userFiles } from "@/api/db/schema";
 import type { UsageEventLane } from "@/api/db/schema";
 import { setSharedLockTimeout } from "@/api/db/shared-pool-timeouts";
 import { env } from "@/api/env";
+import { refuseAnonymizedCrossing } from "@/api/handlers/chat/anonymization-refusal";
 import { modelAcceptsDocumentAttachment } from "@/api/handlers/chat/attachment-modality";
 import { chunkCarriesAnswer } from "@/api/handlers/chat/attempt-answer";
 import {
@@ -172,9 +172,11 @@ import { ToolCallIdLedger } from "@/api/lib/chat/unique-tool-call-ids";
 import {
   ChatEmptyCompletionError,
   ChatLoopDetectedError,
+} from "@/api/lib/errors/tagged-errors";
+import type {
+  ChatTerminalError,
   HandlerError,
 } from "@/api/lib/errors/tagged-errors";
-import type { ChatTerminalError } from "@/api/lib/errors/tagged-errors";
 import { errorFingerprint } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { providerSafeJsonSchemaOptionsForTanStackProvider } from "@/api/lib/provider-safe-json-schema";
@@ -460,6 +462,7 @@ export const streamChat = async ({
     reasoningEffort,
     role: "chat",
   });
+  run.attributeProvider(primaryModel.provider);
 
   // Tool schemas are mostly server-built but may include org-configured
   // external MCP tool descriptions, so a hit here is telemetry, not a
@@ -642,7 +645,7 @@ export const streamChat = async ({
     initialMessages: preparedMessageList,
     onFinish: async (event) => {
       await shadow.flush();
-      await run.settle(async () => {
+      await run.settle(event.outcome, async () => {
         await onFinish(event);
       });
     },
@@ -690,11 +693,13 @@ export const resolveAgentRunBoundaryError = ({
     return null;
   }
 
-  return new HandlerError({
-    code: CHAT_TRANSPORT_ERROR_CODE.thirdPartyBoundaryRefusal,
-    status: 422,
+  return refuseAnonymizedCrossing({
     message:
       "Agent sandbox access is not available in anonymized mode because its MCP tools can return raw workspace data.",
+    offerRawRetry: true,
+    reason: "mode_policy",
+    site: "agent_run",
+    status: 422,
   });
 };
 
@@ -3777,10 +3782,12 @@ export const hydrateMessages = async ({
           hydratedPart.type !== "anonymizable"
         ) {
           return Result.err(
-            new HandlerError({
-              code: CHAT_TRANSPORT_ERROR_CODE.thirdPartyBoundaryRefusal,
-              status: 422,
+            refuseAnonymizedCrossing({
               message: THIRD_PARTY_BOUNDARY_REFUSAL_MESSAGE,
+              offerRawRetry: true,
+              reason: "unsupported_content",
+              site: "file_hydration",
+              status: 422,
             }),
           );
         }
