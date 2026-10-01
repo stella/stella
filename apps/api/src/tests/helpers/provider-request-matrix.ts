@@ -293,11 +293,6 @@ const PREDICATES: Readonly<Record<string, Predicate>> = {
     }),
 };
 
-export type ExcludedCombination = {
-  combination: ChatCombination;
-  predicate: string;
-};
-
 /** Every assignment of one value to each dimension of `dimensions`. */
 const product = <Dimensions extends Record<string, readonly unknown[]>>(
   dimensions: Dimensions,
@@ -335,14 +330,22 @@ export const enumerateEndpoints = (
         modelOf(cassettes, { ...endpoint, slot: "recorded" }),
   );
 
-/** Every combination of the dimensions, split by what the product can
- *  produce. */
+/**
+ * Every combination of the dimensions, split by what the product can
+ * produce: the producible ones, and how many each predicate excludes (counted
+ * rather than kept, as there are millions).
+ */
 export const enumerateChatCombinations = (
   cassettes: readonly ProviderWireCassette[],
-): { excluded: ExcludedCombination[]; included: ChatCombination[] } => {
+): {
+  excluded: ReadonlyMap<string, number>;
+  included: ChatCombination[];
+  total: number;
+} => {
   const endpoints = enumerateEndpoints(cassettes);
   const included: ChatCombination[] = [];
-  const excluded: ExcludedCombination[] = [];
+  const excluded = new Map<string, number>();
+  let total = 0;
   for (const origin of endpoints) {
     for (const target of endpoints) {
       const rest = product({
@@ -359,6 +362,7 @@ export const enumerateChatCombinations = (
         tools: TOOL_SURFACES,
       });
       for (const values of rest) {
+        total += 1;
         const combination: ChatCombination = { ...values, origin, target };
         const refused = Object.entries(PREDICATES).find(
           ([, allows]) => !allows(combination, cassettes),
@@ -366,12 +370,12 @@ export const enumerateChatCombinations = (
         if (refused === undefined) {
           included.push(combination);
         } else {
-          excluded.push({ combination, predicate: refused });
+          excluded.set(refused, (excluded.get(refused) ?? 0) + 1);
         }
       }
     }
   }
-  return { excluded, included };
+  return { excluded, included, total };
 };
 
 /** The values one combination takes on each dimension. */
@@ -406,15 +410,17 @@ const coveringArray = <Combination>(
   valuesOf: (combination: Combination) => readonly string[],
   strength: number,
 ): Combination[] => {
-  const encoded = combinations.map(valuesOf);
-  const width = encoded[0]?.length ?? 0;
+  const first = combinations[0];
+  const width = first === undefined ? 0 : valuesOf(first).length;
   // Each dimension's values, by index.
   const indexes = Array.from(
     { length: width },
     () => new Map<string, number>(),
   );
-  const vectors = encoded.map((values) =>
-    values.map((value, dimension) => {
+  // Each combination as the index of its value on each dimension, packed
+  // small: there can be hundreds of thousands.
+  const vectors = combinations.map((combination) =>
+    Uint8Array.from(valuesOf(combination), (value, dimension) => {
       const index = indexes[dimension] ?? panic("A dimension has values");
       let id = index.get(value);
       if (id === undefined) {
@@ -442,7 +448,7 @@ const coveringArray = <Combination>(
     }
   };
   choose(0, []);
-  const tuplesOf = (vector: readonly number[]): number[] =>
+  const tuplesOf = (vector: Uint8Array): number[] =>
     groups.map(({ dimensions, offset }) => {
       let id = 0;
       for (const dimension of dimensions) {
@@ -501,7 +507,7 @@ const coveringArray = <Combination>(
       const position =
         vectors.length <= COVERING_SAMPLES ? sample : nextIndex();
       let gain = 0;
-      for (const tuple of tuplesOf(vectors[position] ?? [])) {
+      for (const tuple of tuplesOf(vectors[position] ?? new Uint8Array())) {
         gain += uncovered[tuple] ?? 0;
       }
       if (gain > bestGain) {
