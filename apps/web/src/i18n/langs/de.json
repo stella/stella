@@ -3424,6 +3424,7 @@
         "approvedOn": "Genehmigt am {date}",
         "approvedToast": "Playbook genehmigt",
         "saveBeforeApprove": "Speichern Sie die Änderungen, bevor Sie dieses Playbook genehmigen.",
+        "sourcesNotice": "Prüfen Sie vor der Genehmigung, dass kein Standpunkt ein Dokument, eine Akte oder eine Gegenpartei nennt: Die gesamte Organisation kann dieses Playbook lesen.",
         "statusApproved": "Genehmigt",
         "statusDraft": "Entwurf"
       },
@@ -3522,6 +3523,7 @@
       "referenceStandard": "Aus der Referenz",
       "removeCheck": "Prüfung entfernen",
       "removeIdeal": "Ideale Formulierung entfernen",
+      "removeSource": "Quelle {documentName} entfernen",
       "reorderPosition": "Standpunkt neu anordnen",
       "review": {
         "changePlaybook": "Anderes Playbook wählen",

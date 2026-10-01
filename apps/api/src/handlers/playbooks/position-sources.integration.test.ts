@@ -16,6 +16,7 @@ import { eq, inArray } from "drizzle-orm";
 import { entities, playbookDefinitions } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import createPlaybookDefinition from "@/api/handlers/playbooks/create";
+import getPlaybookDefinition from "@/api/handlers/playbooks/get";
 import updatePlaybookDefinition from "@/api/handlers/playbooks/update";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -272,5 +273,41 @@ describe("playbook position sources: the save rule", () => {
 
     expect(statusOf(result)).toBeNull();
     expect(await storedSources(playbookId)).toEqual([source]);
+  });
+});
+
+describe("playbook position sources: what each reader is answered", () => {
+  const read = async (
+    actor: Actor,
+    playbookId: SafeId<"playbookDefinition">,
+  ): Promise<Record<string, unknown>> => {
+    const result: unknown = await getPlaybookDefinition.handler(
+      asTestRaw<Parameters<typeof getPlaybookDefinition.handler>[0]>({
+        ...contextFor(actor),
+        params: { playbookId },
+      }),
+    );
+    if (!isRecord(result) || statusOf(result) !== null) {
+      throw new TypeError("expected the playbook to be read");
+    }
+    return result;
+  };
+
+  test("the overlay names a source only for a reader who can open its matter", async () => {
+    const source = { workspaceId: ids.wsA1, entityId: ids.entityA1 };
+    const playbookId = await createdBy("a1", positionsCiting([source]));
+
+    const forAuthor = await read("a1", playbookId);
+    expect(forAuthor["positionSources"]).toEqual([
+      { ...source, name: "entityA1", workspaceName: "WS A1" },
+    ]);
+
+    const forColleague = await read("a2", playbookId);
+    expect(forColleague["positionSources"]).toEqual([]);
+    // Nothing the colleague is answered carries the document's or the
+    // matter's name; the positions themselves are the same for both readers.
+    expect(JSON.stringify(forColleague)).not.toContain("entityA1");
+    expect(JSON.stringify(forColleague)).not.toContain("WS A1");
+    expect(forColleague["positions"]).toEqual(forAuthor["positions"]);
   });
 });

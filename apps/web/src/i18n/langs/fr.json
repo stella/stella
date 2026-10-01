@@ -3424,6 +3424,7 @@
         "approvedOn": "Approuvé le {date}",
         "approvedToast": "Playbook approuvé",
         "saveBeforeApprove": "Enregistrez les modifications avant d’approuver ce playbook.",
+        "sourcesNotice": "Avant d’approuver, vérifiez qu’aucun critère ne nomme un document, un dossier ou une contrepartie : toute l’organisation peut lire ce playbook.",
         "statusApproved": "Approuvé",
         "statusDraft": "Brouillon"
       },
@@ -3522,6 +3523,7 @@
       "referenceStandard": "De la référence",
       "removeCheck": "Supprimer la vérification",
       "removeIdeal": "Supprimer la formulation idéale",
+      "removeSource": "Retirer la source {documentName}",
       "reorderPosition": "Réorganiser le critère",
       "review": {
         "changePlaybook": "Choisir un autre playbook",

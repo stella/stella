@@ -3427,6 +3427,7 @@ type Messages = {
         "approvedOn": "Approved {date}";
         "approvedToast": "Playbook approved";
         "saveBeforeApprove": "Save changes before approving this playbook.";
+        "sourcesNotice": "Before approving, check that no position names a document, a matter, or a counterparty: the whole organization can read this playbook.";
         "statusApproved": "Approved";
         "statusDraft": "Draft";
       };
@@ -3525,6 +3526,7 @@ type Messages = {
       "referenceStandard": "From the reference";
       "removeCheck": "Remove check";
       "removeIdeal": "Remove ideal language";
+      "removeSource": "Remove source {documentName}";
       "reorderPosition": "Reorder position";
       "review": {
         "changePlaybook": "Choose another playbook";

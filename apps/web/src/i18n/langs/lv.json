@@ -3424,6 +3424,7 @@
         "approvedOn": "Apstiprināts {date}",
         "approvedToast": "Pārbaudes ceļvedis apstiprināts",
         "saveBeforeApprove": "Pirms šī pārbaudes ceļveža apstiprināšanas saglabājiet izmaiņas.",
+        "sourcesNotice": "Pirms apstiprināšanas pārbaudiet, vai nevienā pozīcijā nav nosaukts dokuments, lieta vai pretpuse: šo pārbaudes ceļvedi var lasīt visa organizācija.",
         "statusApproved": "Apstiprināts",
         "statusDraft": "Melnraksts"
       },
@@ -3522,6 +3523,7 @@
       "referenceStandard": "No atsauces",
       "removeCheck": "Noņemt pārbaudi",
       "removeIdeal": "Noņemt ideālo formulējumu",
+      "removeSource": "Noņemt avotu {documentName}",
       "reorderPosition": "Pārkārtot pozīciju",
       "review": {
         "changePlaybook": "Izvēlēties citu pārbaudes ceļvedi",

@@ -83,12 +83,18 @@ import {
 } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
 import { LeaveConfirmDialog } from "@/routes/knowledge/-components/leave-confirm-dialog";
-import type { PlaybookDraft } from "@/routes/knowledge/-components/playbook-editor.logic";
+import type {
+  PlaybookDraft,
+  PositionSourceLookup,
+} from "@/routes/knowledge/-components/playbook-editor.logic";
 import {
   buildPlaybookSavePayload,
   createPlaybookBaseline,
   hasPlaybookDraftChanges,
+  hasResolvedPositionSources,
   resolvePlaybookScrollTop,
+  resolvePositionSources,
+  toPositionSourceLookup,
 } from "@/routes/knowledge/-components/playbook-editor.logic";
 import { PlaybookVersionHistorySheet } from "@/routes/knowledge/-components/playbook-version-history-sheet";
 import { PositionEditor } from "@/routes/knowledge/-components/position-editor";
@@ -212,6 +218,8 @@ const PlaybookEditorLoader = ({
       // Derived from the org's findings on every read, so it tracks the cache
       // rather than freezing at mount like the `initial*` seeds.
       positionDecisions={readPositionDecisions(detail.positionDecisions)}
+      // Resolved for this reader on every read, like the decisions above.
+      positionSources={toPositionSourceLookup(detail.positionSources)}
       onReload={() => setReloadKey((current) => current + 1)}
       onSaved={onSaved}
       organizationId={organizationId}
@@ -241,6 +249,9 @@ type PlaybookEditorFormProps = {
   /** What the org's reviewers did with each position, by `sourceId`; empty
    *  for a playbook that has never been run. */
   positionDecisions?: ReadonlyMap<string, PositionDecisionSummary> | undefined;
+  /** The source documents this reader can open; absent for a new playbook,
+   *  which has none. */
+  positionSources?: PositionSourceLookup | undefined;
   /** Concurrency token the seeds were read with; null for a new playbook. */
   initialUpdatedAt: string | null;
   onBack: () => void;
@@ -263,6 +274,7 @@ const PlaybookEditorForm = ({
   initialStatus,
   initialApprovedAt,
   positionDecisions,
+  positionSources,
   initialUpdatedAt,
   onBack,
   onSaved,
@@ -883,6 +895,16 @@ const PlaybookEditorForm = ({
             </div>
           </div>
 
+          {isEdit &&
+            canApprove &&
+            status === "draft" &&
+            positionSources !== undefined &&
+            hasResolvedPositionSources(positions, positionSources) && (
+              <p className="text-muted-foreground text-end text-xs text-pretty">
+                {t("knowledge.playbooks.approval.sourcesNotice")}
+              </p>
+            )}
+
           <div
             className="space-y-6"
             {...guideAnchor(GUIDE_ANCHORS.playbooksBasics)}
@@ -984,6 +1006,11 @@ const PlaybookEditorForm = ({
                     passageTexts={passageTexts}
                     position={position}
                     showErrors={attemptedSave}
+                    sources={
+                      positionSources === undefined
+                        ? []
+                        : resolvePositionSources(position, positionSources)
+                    }
                     total={positions.length}
                   />
                 ))}

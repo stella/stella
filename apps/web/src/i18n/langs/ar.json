@@ -3424,6 +3424,7 @@
         "approvedOn": "تمت الموافقة في {date}",
         "approvedToast": "تمت الموافقة على دليل المراجعة",
         "saveBeforeApprove": "احفظ التغييرات قبل اعتماد دليل المراجعة هذا.",
+        "sourcesNotice": "قبل الاعتماد، تأكد من أن أي موقف لا يذكر اسم مستند أو ملف قانوني أو طرف مقابل: يمكن للمؤسسة كلها قراءة دليل المراجعة هذا.",
         "statusApproved": "معتمد",
         "statusDraft": "مسودة"
       },
@@ -3522,6 +3523,7 @@
       "referenceStandard": "من المرجع",
       "removeCheck": "إزالة الفحص",
       "removeIdeal": "إزالة الصياغة المثالية",
+      "removeSource": "إزالة المصدر {documentName}",
       "reorderPosition": "إعادة ترتيب الموقف",
       "review": {
         "changePlaybook": "اختر دليل مراجعة آخر",

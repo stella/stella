@@ -3424,6 +3424,7 @@
         "approvedOn": "Schválené {date}",
         "approvedToast": "Playbook schválený",
         "saveBeforeApprove": "Pred schválením playbooku uložte zmeny.",
+        "sourcesNotice": "Pred schválením skontrolujte, že žiadna pozícia nemenuje dokument, spis ani protistranu: tento playbook môže čítať celá organizácia.",
         "statusApproved": "Schválené",
         "statusDraft": "Koncept"
       },
@@ -3522,6 +3523,7 @@
       "referenceStandard": "Z referencie",
       "removeCheck": "Odstrániť kontrolu",
       "removeIdeal": "Odstrániť ideálne znenie",
+      "removeSource": "Odstrániť zdroj {documentName}",
       "reorderPosition": "Zmeniť poradie pozície",
       "review": {
         "changePlaybook": "Vybrať iný playbook",

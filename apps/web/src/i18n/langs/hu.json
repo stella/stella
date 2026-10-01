@@ -3424,6 +3424,7 @@
         "approvedOn": "Jóváhagyva: {date}",
         "approvedToast": "Playbook jóváhagyva",
         "saveBeforeApprove": "A playbook jóváhagyása előtt mentse a módosításokat.",
+        "sourcesNotice": "Jóváhagyás előtt ellenőrizze, hogy egyik álláspont sem nevez meg dokumentumot, ügyet vagy ellenfelet: ezt a playbookot az egész szervezet olvashatja.",
         "statusApproved": "Jóváhagyva",
         "statusDraft": "Piszkozat"
       },
@@ -3522,6 +3523,7 @@
       "referenceStandard": "A referenciából",
       "removeCheck": "Ellenőrzés eltávolítása",
       "removeIdeal": "Ideális megfogalmazás eltávolítása",
+      "removeSource": "{documentName} forrás eltávolítása",
       "reorderPosition": "Álláspont átrendezése",
       "review": {
         "changePlaybook": "Másik playbook választása",

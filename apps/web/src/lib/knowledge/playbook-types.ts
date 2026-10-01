@@ -1,4 +1,5 @@
 import type { api } from "@/lib/api";
+import { optionalArray } from "@/lib/arrays";
 import type {
   AskManual,
   DeterministicCheck,
@@ -49,6 +50,11 @@ export type PlaybookPositionsValue = PlaybookDetailData["positions"];
 // What the org's reviewers have done with each position, computed from their
 // findings on every read. Keyed by `position.sourceId`.
 export type PlaybookPositionDecisions = PlaybookDetailData["positionDecisions"];
+
+// The source documents this reader can open, with their names. A stored
+// source absent from here is one the reader cannot resolve; it stays in the
+// position and is never shown.
+export type PlaybookPositionSources = PlaybookDetailData["positionSources"];
 
 export type PlaybookPerspective = NonNullable<PlaybookScope["perspective"]>;
 
@@ -211,6 +217,7 @@ export const gradedToExtract = (position: GradedPosition): ExtractPosition => {
     issue: position.issue,
     ask,
     ...(position.guidance !== undefined ? { guidance: position.guidance } : {}),
+    ...(position.sources !== undefined ? { sources: position.sources } : {}),
     enabled: position.enabled,
   };
 };
@@ -230,8 +237,23 @@ export const extractToGraded = (position: ExtractPosition): GradedPosition => ({
     content: position.ask.content,
   },
   ...(position.guidance !== undefined ? { guidance: position.guidance } : {}),
+  ...(position.sources !== undefined ? { sources: position.sources } : {}),
   enabled: position.enabled,
 });
+
+// ── Sources ───────────────────────────────────────────
+// The editor removes a source the reader can see; it never adds one. An empty
+// list is not stored, so the key goes with the last source.
+export const withoutPositionSource = (
+  position: Position,
+  entityId: string,
+): Position => {
+  const { sources, ...rest } = position;
+  const remaining = optionalArray(sources).filter(
+    (source) => source.entityId !== entityId,
+  );
+  return remaining.length === 0 ? rest : { ...rest, sources: remaining };
+};
 
 // ── Deep duplicate ────────────────────────────────────
 // A duplicated position needs a fresh sourceId and fresh rule/entry ids so it is

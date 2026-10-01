@@ -3424,6 +3424,7 @@
         "approvedOn": "Zatwierdzono {date}",
         "approvedToast": "Playbook zatwierdzony",
         "saveBeforeApprove": "Zapisz zmiany przed zatwierdzeniem tego playbooka.",
+        "sourcesNotice": "Przed zatwierdzeniem sprawdź, czy żadne stanowisko nie wymienia dokumentu, sprawy ani kontrahenta: ten playbook może czytać cała organizacja.",
         "statusApproved": "Zatwierdzony",
         "statusDraft": "Wersja robocza"
       },
@@ -3522,6 +3523,7 @@
       "referenceStandard": "Z referencji",
       "removeCheck": "Usuń kontrolę",
       "removeIdeal": "Usuń idealne brzmienie",
+      "removeSource": "Usuń źródło {documentName}",
       "reorderPosition": "Zmień kolejność stanowiska",
       "review": {
         "changePlaybook": "Wybierz inny playbook",

@@ -16,6 +16,7 @@ import {
   pruneIncomplete,
   type ConditionNode,
 } from "@stll/conditions";
+import { UserText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import {
   Combobox,
@@ -69,6 +70,7 @@ import {
   type ReferenceNameLookup,
   SeverityChip,
 } from "@/components/ai-suggestions/review-position-row";
+import { openEntityInInspector } from "@/components/chat/entity-open";
 import { ConditionBuilder } from "@/components/conditions/condition-builder";
 import type { FieldOption } from "@/components/conditions/condition-builder-logic";
 import {
@@ -80,6 +82,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import type { TranslationKey } from "@/i18n/types";
 import { optionalArray } from "@/lib/arrays";
+import { detached } from "@/lib/detached";
 import {
   type DeterministicCheck,
   type FallbackEntry,
@@ -98,6 +101,7 @@ import {
   type ReferencePassage,
   referencePassagesText,
   type TierRule,
+  withoutPositionSource,
 } from "@/lib/knowledge/playbook-types";
 import {
   adoptableIdealText,
@@ -105,6 +109,7 @@ import {
   type PositionDecisionSummary,
 } from "@/lib/knowledge/position-decisions";
 import { clauseDetailOptions, clausesOptions } from "@/lib/knowledge/queries";
+import type { ResolvedPositionSource } from "@/routes/knowledge/-components/playbook-editor.logic";
 
 // Drag payload shared by the position cards; the parent list interprets a drop
 // as "move dragged sourceId to target sourceId's index".
@@ -207,6 +212,9 @@ type PositionEditorProps = {
   /** The words behind every reference passage the playbook quotes, read once
    *  for the whole position list. */
   passageTexts: ReferencePassageTexts;
+  /** The position's source documents this reader can open; the ones they
+   *  cannot are simply not here. */
+  sources: readonly ResolvedPositionSource[];
   onOpenChange: (open: boolean) => void;
   onChange: (position: Position) => void;
   onRemove: () => void;
@@ -228,6 +236,7 @@ export const PositionEditor = ({
   decision,
   referenceNames,
   passageTexts,
+  sources,
   onOpenChange,
   onChange,
   onRemove,
@@ -447,6 +456,12 @@ export const PositionEditor = ({
               position={position}
             />
           )}
+          <PositionSourcesRow
+            onRemove={(entityId) =>
+              onChange(withoutPositionSource(position, entityId))
+            }
+            sources={sources}
+          />
         </div>
       )}
       {/* index/total drive keyboard reorder guards below the header */}
@@ -457,6 +472,74 @@ export const PositionEditor = ({
         })}
       </span>
     </li>
+  );
+};
+
+// ── Sources: the documents a position was taken from ──
+// Names live here and nowhere in the position's text. Only the sources this
+// reader can open are listed, so the row draws nothing (no placeholder, no
+// count) when none resolve. A listed source can be removed; adding one is the
+// playbook builder's job.
+
+const PositionSourcesRow = ({
+  sources,
+  onRemove,
+}: {
+  sources: readonly ResolvedPositionSource[];
+  onRemove: (entityId: string) => void;
+}) => {
+  const t = useTranslations();
+  if (sources.length === 0) {
+    return null;
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+      <span className={REVIEW_SECTION_LABEL_CLASS}>
+        {t("chat.webSearch.sources")}
+      </span>
+      <ul className="flex min-w-0 flex-wrap items-center gap-1">
+        {sources.map((source) => (
+          <li
+            className="bg-muted/50 flex max-w-full min-w-0 items-center rounded-md text-xs"
+            key={source.entityId}
+          >
+            <button
+              className="hover:text-foreground flex min-w-0 items-baseline gap-1.5 py-1 ps-2 text-start"
+              onClick={() =>
+                detached(
+                  openEntityInInspector(
+                    source.entityId,
+                    source.name,
+                    source.workspaceId,
+                  ),
+                  "position-editor.open-source",
+                )
+              }
+              type="button"
+            >
+              <UserText className="truncate font-medium">
+                {source.name}
+              </UserText>
+              <UserText className="text-muted-foreground truncate">
+                {source.workspaceName}
+              </UserText>
+            </button>
+            <Button
+              aria-label={t("knowledge.playbooks.removeSource", {
+                documentName: source.name,
+              })}
+              className="shrink-0"
+              onClick={() => onRemove(source.entityId)}
+              size="icon-xs"
+              type="button"
+              variant="ghost"
+            >
+              <XIcon />
+            </Button>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 };
 

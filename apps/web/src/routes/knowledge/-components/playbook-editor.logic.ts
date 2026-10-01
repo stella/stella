@@ -1,8 +1,10 @@
 import { stableStringify } from "@stll/stable-stringify";
 
+import { optionalArray } from "@/lib/arrays";
 import {
   normalizePosition,
   type PlaybookPerspective,
+  type PlaybookPositionSources,
   type PlaybookPositionsValue,
   type PlaybookTrigger,
   type Position,
@@ -135,3 +137,52 @@ export const hasPlaybookDraftChanges = ({
   }
   return playbookDraftFingerprint(current) !== baseline.fingerprint;
 };
+
+// ── Position sources ──────────────────────────────────
+
+export type ResolvedPositionSource = PlaybookPositionSources[number];
+
+export type PositionSourceLookup = ReadonlyMap<string, ResolvedPositionSource>;
+
+// One stored source: ids only. Names come from the per-reader overlay.
+type PositionSource = NonNullable<Position["sources"]>[number];
+
+const positionSourceKey = ({ workspaceId, entityId }: PositionSource) =>
+  `${workspaceId}:${entityId}`;
+
+export const toPositionSourceLookup = (
+  resolved: PlaybookPositionSources,
+): PositionSourceLookup =>
+  new Map(resolved.map((source) => [positionSourceKey(source), source]));
+
+/**
+ * The sources of one position this reader can open, in stored order. A source
+ * the reader cannot resolve is left out with no placeholder and no count:
+ * that a position has one is not theirs to learn from the page.
+ */
+export const resolvePositionSources = (
+  position: Position,
+  lookup: PositionSourceLookup,
+): ResolvedPositionSource[] => {
+  const resolved: ResolvedPositionSource[] = [];
+  for (const source of optionalArray(position.sources)) {
+    const match = lookup.get(positionSourceKey(source));
+    if (match !== undefined) {
+      resolved.push(match);
+    }
+  }
+  return resolved;
+};
+
+/**
+ * Whether any position has a source this reader can open. A source they
+ * cannot resolve does not count: a notice that appeared for it would tell
+ * them it exists.
+ */
+export const hasResolvedPositionSources = (
+  positions: readonly Position[],
+  lookup: PositionSourceLookup,
+): boolean =>
+  positions.some(
+    (position) => resolvePositionSources(position, lookup).length > 0,
+  );

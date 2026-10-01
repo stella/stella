@@ -3,6 +3,11 @@ import { Result } from "better-result";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { readPositionDecisionOverlay } from "@/api/lib/document-review/position-decisions";
+import {
+  positionSourceEntityIds,
+  positionSources,
+  readablePositionSources,
+} from "@/api/lib/workflow/playbook-position-sources";
 
 import { getPlaybookDefinitionHandler } from "./read";
 import { playbookDefinitionParamsSchema } from "./schema";
@@ -11,7 +16,9 @@ const config = {
   description:
     "Read one playbook definition in full: its name, description, " +
     "document-type scope, positions, status, approval metadata, and how the " +
-    "organization has decided each position across past reviews. Use " +
+    "organization has decided each position across past reviews. " +
+    "positionSources names the source documents of its positions that the " +
+    "caller can open. Use " +
     "playbooks.list for the paginated overview.",
   permissions: { workspace: ["read"] },
   mcp: { type: "covered", by: "list_playbooks" },
@@ -51,7 +58,23 @@ const getPlaybookDefinition = createSafeRootHandler(
       ),
     );
 
-    return Result.ok({ ...playbook, positionDecisions });
+    // The documents this reader can open among the positions' sources, with
+    // the names the stored positions deliberately omit. The positions keep
+    // every source pair, so the editor's full-replace save round-trips the
+    // ones this reader cannot resolve; the shared read stays unfiltered
+    // because `save_playbook` merges against the stored truth.
+    const readableSources = yield* Result.await(
+      readablePositionSources(
+        safeDb,
+        positionSourceEntityIds(positionSources(playbook.positions.items)),
+      ),
+    );
+
+    return Result.ok({
+      ...playbook,
+      positionDecisions,
+      positionSources: readableSources,
+    });
   },
 );
 
