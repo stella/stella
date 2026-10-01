@@ -12,6 +12,7 @@ type RedemptionServices = NonNullable<
 >;
 type RedemptionScenario =
   | "credential"
+  | "invalid-credential"
   | "connected"
   | "other-user"
   | "other-organization"
@@ -49,6 +50,14 @@ const createRedemptionFixture = (scenario: RedemptionScenario) => {
       expect(request.headers.get("authorization")).toBe(
         "Bearer stella_dr_existing",
       );
+      if (scenario === "invalid-credential") {
+        return Result.err(
+          new HandlerError({
+            status: 401,
+            message: "Desktop account is unavailable",
+          }),
+        );
+      }
       const linkedIdentity = brandActorSessionIdentity({
         userId: scenario === "other-user" ? "user-2" : identity.userId,
         organizationId:
@@ -116,9 +125,12 @@ const createRedemptionFixture = (scenario: RedemptionScenario) => {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      ...(["connected", "other-user", "other-organization"].includes(
-        scenario,
-      ) && { authorization: "Bearer stella_dr_existing" }),
+      ...([
+        "connected",
+        "other-user",
+        "other-organization",
+        "invalid-credential",
+      ].includes(scenario) && { authorization: "Bearer stella_dr_existing" }),
     },
     body: JSON.stringify(body),
   });
@@ -189,6 +201,17 @@ describe("desktop link redemption over HTTP", () => {
       expect(fixture.auditKeyIds).toEqual([]);
       expect(fixture.revocations).toEqual([]);
     }
+  });
+
+  test("an unavailable linked credential leaves the connection request unclaimed", async () => {
+    const fixture = createRedemptionFixture("invalid-credential");
+    const response = await fixture.app.handle(fixture.request);
+    expect(response.status).toBe(401);
+    expect(response.headers.get("cache-control")).toBe(PRIVATE_CACHE_CONTROL);
+    expect(fixture.grantBodies).toEqual([]);
+    expect(fixture.mintIdentities).toEqual([]);
+    expect(fixture.auditKeyIds).toEqual([]);
+    expect(fixture.revocations).toEqual([]);
   });
 
   test("an audit failure revokes the issued key before returning a credential-free failure", async () => {

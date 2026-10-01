@@ -166,11 +166,11 @@ export const createDesktopLinkRedeemHandler = (
       set,
     }): SafeHandlerGenerator<DesktopLinkResponse> {
       set.headers[CACHE_CONTROL_HEADER] = PRIVATE_CACHE_CONTROL;
+      const linked = request.headers.has("authorization")
+        ? yield* Result.await(services.authorizeLinkedAccount(request))
+        : null;
       const identity = yield* Result.await(services.authorizeGrant(body));
-      if (request.headers.has("authorization")) {
-        const linked = yield* Result.await(
-          services.authorizeLinkedAccount(request),
-        );
+      if (linked) {
         if (
           linked.userId !== identity.userId ||
           linked.organizationId !== identity.organizationId
