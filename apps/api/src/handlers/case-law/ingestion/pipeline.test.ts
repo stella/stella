@@ -5,7 +5,10 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { TEXT_ABSENCE_REASONS } from "@stll/api-contract/case-law-text-field";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
-import type { DocumentStageObserver } from "@stll/legal-atlas/document-fetch-diagnostics";
+import {
+  DOCUMENT_FETCH_EVENT,
+  type DocumentStageObserver,
+} from "@stll/legal-atlas/document-fetch-diagnostics";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -51,6 +54,7 @@ import {
   UnpersistableDecisionFieldError,
 } from "@/api/lib/errors/tagged-errors";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
+import { observePublisherDocumentFetch } from "@/api/lib/legal-search/document-stage-observation";
 import {
   observedDocketOf,
   sanitizeResult,
@@ -1020,21 +1024,47 @@ describe("runIngestionPipeline — document observer failures", () => {
 
       const wrappedAdapter = defineSourceAdapter({
         ...czNsAdapter,
-        fetchPage: async () =>
-          Result.ok({ decisions: [], nextCursor: "cursor-2" }),
+        fetchPage: async () => {
+          for (let fetch = 0; fetch < 100; fetch++) {
+            await observePublisherDocumentFetch({
+              source: source.adapterKey,
+              fetch: async () => new Response("document"),
+            });
+          }
+          return Result.ok({ decisions: [], nextCursor: "cursor-2" });
+        },
       });
       czNsAdapter.fetchPage = wrappedAdapter.fetchPage;
       expect(getAdapter(source.adapterKey)).toBe(czNsAdapter);
 
+      const logs = installRecordingLogger();
+      const leaseEffects: string[] = [];
       const result = await runIngestionPipeline({
         source,
-        sourceLease: testSourceLease(source),
+        sourceLease: {
+          ...testSourceLease(source),
+          beforeRemoteEffect: async (effect) => {
+            leaseEffects.push("remote");
+            return await effect();
+          },
+        },
         scopedDb: cursorOnlyDb((cursor) => cursorWrites.push(cursor)),
         maxPages: 1,
         ...(observe ? { onDocumentObservation: observe } : {}),
-      });
+      }).finally(() => logs.restore());
 
-      return { cursorWrites, finalCursor: cursorWrites.at(-1), result };
+      return {
+        cursorWrites,
+        finalCursor: cursorWrites.at(-1),
+        result,
+        leaseEffects,
+        failures: logs.records.filter(
+          ({ message }) => message === DOCUMENT_FETCH_EVENT.observerFailed,
+        ),
+        fetchEvents: logs.records.filter(
+          ({ message }) => message === DOCUMENT_FETCH_EVENT.fetchOutcome,
+        ).length,
+      };
     };
 
     const baseline = await run({});
@@ -1055,15 +1085,23 @@ describe("runIngestionPipeline — document observer failures", () => {
       },
       {
         name: "never resolve",
-        observe: () => new Promise<void>(() => {}),
+        observe: async () => await new Promise<void>(() => {}),
       },
     ];
 
     for (const { name, observe } of failures) {
+      const startedAt = performance.now();
       const actual = await run({ observe });
+      expect(performance.now() - startedAt, name).toBeLessThan(2500);
       expect(actual.result, name).toEqual(baseline.result);
       expect(actual.cursorWrites, name).toEqual(baseline.cursorWrites);
       expect(actual.finalCursor, name).toBe(baseline.finalCursor);
+      expect(actual.leaseEffects, name).toEqual(baseline.leaseEffects);
+      expect(actual.fetchEvents, name).toBe(100);
+      expect(actual.failures, name).toHaveLength(1);
+      expect(actual.failures.at(0)?.attributes?.["reason"], name).toBe(
+        "circuit_open",
+      );
     }
   });
 });

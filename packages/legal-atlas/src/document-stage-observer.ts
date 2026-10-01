@@ -24,6 +24,7 @@ type DocumentStageObserverOptions = {
   observe: DocumentStageObserver;
   observer: DocumentTelemetryObserverFailure["observer"];
   timeoutMs?: number;
+  failureReason?: DocumentTelemetryObserverFailure["reason"];
   reportFailure?: (
     failure: DocumentTelemetryObserverFailure,
     signal: AbortSignal,
@@ -45,24 +46,37 @@ export const observeDocumentStageSafely = async ({
   observer,
   timeoutMs = DOCUMENT_OBSERVER_TIMEOUT_MS,
   reportFailure = reportObserverFailure,
-}: DocumentStageObserverOptions): Promise<void> => {
+  failureReason,
+}: DocumentStageObserverOptions): Promise<
+  DocumentTelemetryObserverFailure["reason"] | undefined
+> => {
+  const startedAt = performance.now();
   // Callers may tighten this budget, but cannot disable or extend it.
   const budgetMs = Number.isFinite(timeoutMs)
-    ? Math.min(DOCUMENT_OBSERVER_TIMEOUT_MS, Math.max(1, timeoutMs))
+    ? Math.min(DOCUMENT_OBSERVER_TIMEOUT_MS, Math.max(0, timeoutMs))
     : DOCUMENT_OBSERVER_TIMEOUT_MS;
-  const delivered = await Result.tryPromise({
-    try: async () =>
-      await withTimeout(async () => await observe(observation), {
-        label: DOCUMENT_FETCH_EVENT.observerFailed,
-        timeoutMs: budgetMs,
-      }),
-    catch: (cause) =>
-      new DocumentTelemetryObserverError({
-        message: "Document telemetry observer failed",
-        reason: cause instanceof TimeoutError ? "timeout" : "exception",
-        cause,
-      }),
-  });
+  const delivered =
+    budgetMs === 0
+      ? Result.err(
+          new DocumentTelemetryObserverError({
+            message: "Document telemetry budget exhausted",
+            reason: "timeout",
+            cause: undefined,
+          }),
+        )
+      : await Result.tryPromise({
+          try: async () =>
+            await withTimeout(async () => await observe(observation), {
+              label: DOCUMENT_FETCH_EVENT.observerFailed,
+              timeoutMs: budgetMs,
+            }),
+          catch: (cause) =>
+            new DocumentTelemetryObserverError({
+              message: "Document telemetry observer failed",
+              reason: cause instanceof TimeoutError ? "timeout" : "exception",
+              cause,
+            }),
+        });
   if (Result.isOk(delivered)) {
     return;
   }
@@ -70,17 +84,19 @@ export const observeDocumentStageSafely = async ({
     event: DOCUMENT_FETCH_EVENT.observerFailed,
     source: observation.source,
     observer,
-    reason: delivered.error.reason,
+    reason: failureReason ?? delivered.error.reason,
   } as const satisfies DocumentTelemetryObserverFailure;
+  const remainingMs = budgetMs - (performance.now() - startedAt);
   const reported = await Result.tryPromise({
-    try: async () =>
+    try: async () => {
       await withTimeout(
         async (signal) => await reportFailure(failure, signal),
         {
           label: DOCUMENT_FETCH_EVENT.observerFailed,
-          timeoutMs: budgetMs,
+          timeoutMs: Math.max(1, remainingMs),
         },
-      ),
+      );
+    },
     catch: (cause) =>
       new DocumentTelemetryObserverError({
         message: "Document telemetry failure reporter failed",
@@ -89,7 +105,7 @@ export const observeDocumentStageSafely = async ({
       }),
   });
   if (Result.isOk(reported)) {
-    return;
+    return delivered.error.reason;
   }
   // The final fallback contains only the typed event, never the thrown payload.
   // If both operational sinks fail, ingestion must still remain independent.
@@ -102,37 +118,71 @@ export const observeDocumentStageSafely = async ({
         cause,
       }),
   });
+  return delivered.error.reason;
+};
+
+type DocumentObserverBudget = { remainingMs: number };
+
+/** Nested document units reuse their observer budget instead of extending the page deadline. */
+export const createDocumentObserverBudget = (
+  observe?: DocumentStageObserver,
+): DocumentObserverBudget =>
+  observe !== undefined && isSafeDocumentStageObserver(observe)
+    ? observe[SAFE_DOCUMENT_OBSERVER]
+    : { remainingMs: DOCUMENT_OBSERVER_TIMEOUT_MS };
+
+type SafeDocumentStageObserverOptions = {
+  reportFailure?: DocumentStageObserverOptions["reportFailure"];
+  budget?: ReturnType<typeof createDocumentObserverBudget>;
+  observer?: DocumentTelemetryObserverFailure["observer"];
 };
 
 const SAFE_DOCUMENT_OBSERVER = Symbol("safe-document-stage-observer");
 type SafeDocumentStageObserver = ((
   observation: DocumentStageObservation,
 ) => Promise<void>) & {
-  readonly [SAFE_DOCUMENT_OBSERVER]: true;
+  readonly [SAFE_DOCUMENT_OBSERVER]: DocumentObserverBudget;
 };
 
 const isSafeDocumentStageObserver = (
   observe: DocumentStageObserver,
-): observe is SafeDocumentStageObserver =>
-  SAFE_DOCUMENT_OBSERVER in observe && observe[SAFE_DOCUMENT_OBSERVER] === true;
+): observe is SafeDocumentStageObserver => SAFE_DOCUMENT_OBSERVER in observe;
 
 /** Idempotent wrapping prevents nested deadlines from logging the same failure twice. */
 export const createSafeDocumentStageObserver = (
   observe: DocumentStageObserver,
-  reportFailure?: DocumentStageObserverOptions["reportFailure"],
+  {
+    reportFailure,
+    budget = createDocumentObserverBudget(),
+    observer = "callback",
+  }: SafeDocumentStageObserverOptions = {},
 ): SafeDocumentStageObserver => {
   if (isSafeDocumentStageObserver(observe)) {
     return observe;
   }
+  let circuit: "closed" | "open" = "closed";
   return Object.assign(
     async (observation: DocumentStageObservation) => {
-      await observeDocumentStageSafely({
+      if (circuit === "open") {
+        return;
+      }
+      const startedAt = performance.now();
+      const failure = await observeDocumentStageSafely({
         observation,
         observe,
-        observer: "callback",
+        observer,
+        timeoutMs: budget.remainingMs,
+        failureReason: "circuit_open",
         ...(reportFailure !== undefined ? { reportFailure } : {}),
       });
+      budget.remainingMs = Math.max(
+        0,
+        budget.remainingMs - (performance.now() - startedAt),
+      );
+      if (failure !== undefined) {
+        circuit = "open";
+      }
     },
-    { [SAFE_DOCUMENT_OBSERVER]: true } as const,
+    { [SAFE_DOCUMENT_OBSERVER]: budget } as const,
   );
 };

@@ -173,7 +173,7 @@ export type DocumentTelemetryObserverFailure = {
   readonly event: typeof DOCUMENT_FETCH_EVENT.observerFailed;
   readonly source: string;
   readonly observer: "callback" | "builtin";
-  readonly reason: "exception" | "timeout";
+  readonly reason: "exception" | "timeout" | "circuit_open";
 };
 
 export type DocumentFetchObservation = {

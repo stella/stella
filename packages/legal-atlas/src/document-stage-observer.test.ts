@@ -6,6 +6,7 @@ import {
   type DocumentTelemetryObserverFailure,
 } from "./document-fetch-diagnostics.js";
 import {
+  createDocumentObserverBudget,
   createSafeDocumentStageObserver,
   observeDocumentStageSafely,
 } from "./document-stage-observer.js";
@@ -85,6 +86,72 @@ describe("document telemetry containment", () => {
       },
     });
     expect(delivered).toEqual(["delivered"]);
+  });
+
+  test("one shared budget bounds slow successful calls and stops a hanging callback", async () => {
+    for (const delayMs of [1, 100]) {
+      const budget = createDocumentObserverBudget();
+      budget.remainingMs = 20;
+      const reported: DocumentTelemetryObserverFailure[] = [];
+      let calls = 0;
+      const safe = createSafeDocumentStageObserver(
+        async () => {
+          calls += 1;
+          await Bun.sleep(delayMs);
+        },
+        {
+          budget,
+          reportFailure: (failure) => {
+            reported.push(failure);
+          },
+        },
+      );
+      const startedAt = performance.now();
+      for (let fetch = 0; fetch < 100; fetch++) {
+        await safe(observation);
+      }
+      expect(performance.now() - startedAt).toBeLessThan(100);
+      expect(calls).toBeLessThan(100);
+      expect(reported).toEqual([
+        {
+          event: DOCUMENT_FETCH_EVENT.observerFailed,
+          source: observation.source,
+          observer: "callback",
+          reason: "circuit_open",
+        },
+      ]);
+    }
+  });
+
+  test("a hanging callback opens its circuit once across a hundred observations", async () => {
+    const budget = createDocumentObserverBudget();
+    budget.remainingMs = 20;
+    const reported: DocumentTelemetryObserverFailure[] = [];
+    let calls = 0;
+    const safe = createSafeDocumentStageObserver(
+      async () => {
+        calls += 1;
+        await new Promise<void>(() => {});
+      },
+      {
+        budget,
+        reportFailure: (failure) => {
+          reported.push(failure);
+        },
+      },
+    );
+    for (let fetch = 0; fetch < 100; fetch++) {
+      await safe(observation);
+    }
+    expect(calls).toBe(1);
+    expect(reported).toEqual([
+      {
+        event: DOCUMENT_FETCH_EVENT.observerFailed,
+        source: observation.source,
+        observer: "callback",
+        reason: "circuit_open",
+      },
+    ]);
   });
 
   test("safe observer wrapping is idempotent", () => {

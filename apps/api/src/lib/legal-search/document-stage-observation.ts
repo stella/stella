@@ -13,6 +13,7 @@ import {
   type DocumentTelemetryObserverFailure,
 } from "@stll/legal-atlas/document-fetch-diagnostics";
 import {
+  createDocumentObserverBudget,
   createSafeDocumentStageObserver,
   observeDocumentStageSafely,
 } from "@stll/legal-atlas/document-stage-observer";
@@ -25,6 +26,8 @@ import type { SyncPage } from "@/api/lib/legal-search/ingestion-types";
 type DocumentWindowContext = {
   source: AdapterKey;
   observe: ReturnType<typeof createSafeDocumentStageObserver>;
+  budget: ReturnType<typeof createDocumentObserverBudget>;
+  log: ReturnType<typeof createSafeDocumentStageObserver>;
   attempted: number;
   failed: number;
   observations: DocumentFetchObservation[];
@@ -58,12 +61,22 @@ export const withDocumentStageObserver = async <T>({
   const parent = documentWindow.getStore();
   const inheritedObserver =
     parent?.source === source ? parent.observe : undefined;
+  const budget =
+    parent?.source === source
+      ? parent.budget
+      : createDocumentObserverBudget(observe);
   const context: DocumentWindowContext = {
     source,
+    budget,
     observe: createSafeDocumentStageObserver(
       observe ?? inheritedObserver ?? (() => undefined),
-      reportDocumentStageObserverFailure,
+      { budget, reportFailure: reportDocumentStageObserverFailure },
     ),
+    log: createSafeDocumentStageObserver(writeDocumentStageObservation, {
+      budget,
+      observer: "builtin",
+      reportFailure: reportDocumentStageObserverFailure,
+    }),
     attempted: 0,
     failed: 0,
     observations: [],
@@ -98,6 +111,14 @@ export const withDocumentStageObserver = async <T>({
   return result.value;
 };
 
+const writeDocumentStageObservation = async ({
+  event,
+  ...attributes
+}: DocumentStageObservation): Promise<void> => {
+  const { logger } = await import("@/api/lib/observability/logger");
+  logger.info(event, attributes);
+};
+
 /** Load the operational sink only when emitting, so pure ingestion utilities stay import-safe. */
 export const logDocumentStageObservation = async (
   observation: DocumentStageObservation,
@@ -105,10 +126,7 @@ export const logDocumentStageObservation = async (
   await observeDocumentStageSafely({
     observation,
     observer: "builtin",
-    observe: async ({ event, ...attributes }) => {
-      const { logger } = await import("@/api/lib/observability/logger");
-      logger.info(event, attributes);
-    },
+    observe: writeDocumentStageObservation,
     reportFailure: reportDocumentStageObserverFailure,
   });
 };
@@ -156,10 +174,20 @@ const recordTerminalFailure = (
 
 const flushFetchOutcomes = async (
   context: DocumentWindowContext,
+  window?: DocumentStageObservation,
 ): Promise<void> => {
+  // Deliver built-in events before callbacks can consume the shared page budget.
   for (const observation of context.observations) {
-    await logDocumentStageObservation(observation);
+    await context.log(observation);
+  }
+  if (window !== undefined) {
+    await context.log(window);
+  }
+  for (const observation of context.observations) {
     await context.observe(observation);
+  }
+  if (window !== undefined) {
+    await context.observe(window);
   }
 };
 
@@ -241,12 +269,19 @@ export const withDocumentStageWindow = async ({
   observe = () => undefined,
   now = () => performance.now(),
 }: DocumentStagePageOptions): Promise<Result<SyncPage, AdapterFetchError>> => {
+  const budget = createDocumentObserverBudget(observe);
   const context: DocumentWindowContext = {
     source,
-    observe: createSafeDocumentStageObserver(
-      observe,
-      reportDocumentStageObserverFailure,
-    ),
+    budget,
+    observe: createSafeDocumentStageObserver(observe, {
+      budget,
+      reportFailure: reportDocumentStageObserverFailure,
+    }),
+    log: createSafeDocumentStageObserver(writeDocumentStageObservation, {
+      budget,
+      observer: "builtin",
+      reportFailure: reportDocumentStageObserverFailure,
+    }),
     attempted: 0,
     failed: 0,
     observations: [],
@@ -302,7 +337,6 @@ export const withDocumentStageWindow = async ({
       }
     }
   }
-  await flushFetchOutcomes(context);
   const observation = {
     event: DOCUMENT_FETCH_EVENT.window,
     aggregation: "page",
@@ -316,8 +350,7 @@ export const withDocumentStageWindow = async ({
     failed: Math.max(context.failed, unresolved),
     window_seconds: Math.max(0, now() - startedAt) / 1000,
   } as const;
-  await logDocumentStageObservation(observation);
-  await context.observe(observation);
+  await flushFetchOutcomes(context, observation);
   if (Result.isError(fetched)) {
     return await Promise.reject(fetched.error);
   }
