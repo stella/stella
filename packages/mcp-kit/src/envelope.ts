@@ -5,7 +5,10 @@
  * as their own text block, so the payload stays the tool's contract.
  */
 
+import { panic, Result } from "better-result";
+
 import type {
+  McpJsonValue,
   ToolCallResult,
   ToolError,
   ToolInputIssue,
@@ -19,6 +22,63 @@ export const KIT_ERROR_CODES = {
   notFound: "not_found",
   internal: "internal_error",
 } as const;
+
+/** Stable caller-facing message; hosts can observe the original failure separately. */
+export const KIT_INTERNAL_MESSAGE = "The tool could not complete the request.";
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/** Shared references are allowed; ancestor cycles and lossy JSON conversions are not. */
+const isMcpJsonValue = (
+  value: unknown,
+  ancestors = new Set<unknown>(),
+): value is McpJsonValue => {
+  if (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "boolean"
+  ) {
+    return true;
+  }
+  if (typeof value === "number") {
+    return Number.isFinite(value);
+  }
+  if (!Array.isArray(value) && !isRecord(value)) {
+    return false;
+  }
+  if (ancestors.has(value)) {
+    return false;
+  }
+  if (Object.getOwnPropertySymbols(value).length > 0) {
+    return false;
+  }
+  const descriptors = Object.getOwnPropertyDescriptors(value);
+  if (
+    Object.values(descriptors).some(
+      (descriptor) =>
+        descriptor.get !== undefined || descriptor.set !== undefined,
+    )
+  ) {
+    return false;
+  }
+  if (typeof descriptors["toJSON"]?.value === "function") {
+    return false;
+  }
+  if (
+    !Array.isArray(value) &&
+    Object.getPrototypeOf(value) !== Object.prototype &&
+    Object.getPrototypeOf(value) !== null
+  ) {
+    return false;
+  }
+  ancestors.add(value);
+  const valid = Array.isArray(value)
+    ? Array.from(value).every((entry) => isMcpJsonValue(entry, ancestors))
+    : Object.values(value).every((entry) => isMcpJsonValue(entry, ancestors));
+  ancestors.delete(value);
+  return valid;
+};
 
 /** Construct a structured error, defaulting retryability to false. */
 export const toolError = (error: {
@@ -47,7 +107,28 @@ export const failure = (
 });
 
 /** Construct a successful handler outcome containing a JSON payload. */
-export const success = (value: unknown): ToolOutcome => ({ ok: true, value });
+export const success = (value: McpJsonValue): ToolOutcome => ({
+  ok: true,
+  value,
+});
+
+/** Internal boundary for discovery DTOs whose schema fields are typed unknown. */
+export const jsonSuccess = (value: unknown): ToolOutcome => {
+  const checked = Result.try(() =>
+    isMcpJsonValue(value)
+      ? success(value)
+      : failure({
+          code: KIT_ERROR_CODES.internal,
+          message: KIT_INTERNAL_MESSAGE,
+        }),
+  );
+  return checked.isOk()
+    ? checked.value
+    : failure({
+        code: KIT_ERROR_CODES.internal,
+        message: KIT_INTERNAL_MESSAGE,
+      });
+};
 
 /** Construct a retryable validation failure with input issues and recovery guidance. */
 export const validationError = (
@@ -63,27 +144,51 @@ export const validationError = (
     retryable: true,
   });
 
-/** Encode an outcome as a `tools/call` result, with the input notes after a success. */
+/** Encode an outcome, reporting serialization failures to the host without exposing their cause. */
 export const toCallResult = (
   outcome: ToolOutcome,
   notes: readonly string[] = [],
+  onSerializationError?: (cause: unknown) => undefined,
 ): ToolCallResult => {
-  if (!outcome.ok) {
+  const serialized = Result.try(() => {
+    const value = outcome.ok ? outcome.value : { error: outcome.error };
+    if (!isMcpJsonValue(value)) {
+      panic("Tool result is not a JSON value.");
+    }
+    const text = JSON.stringify(value);
+    if (text === undefined) {
+      panic("Tool result serialization produced no text.");
+    }
+    return text;
+  });
+  if (serialized.isErr()) {
+    if (onSerializationError !== undefined) {
+      Result.try(() => onSerializationError(serialized.error));
+    }
     return {
       content: [
-        { type: "text", text: JSON.stringify({ error: outcome.error }) },
+        {
+          type: "text",
+          text: JSON.stringify({
+            error: {
+              code: KIT_ERROR_CODES.internal,
+              message: KIT_INTERNAL_MESSAGE,
+              retryable: false,
+            },
+          }),
+        },
       ],
       isError: true,
     };
   }
   const content: ToolCallResult["content"] = [
-    { type: "text", text: JSON.stringify(outcome.value ?? null) },
+    { type: "text", text: serialized.value },
   ];
   const distinct = [...new Set(notes)];
-  if (distinct.length > 0) {
+  if (outcome.ok && distinct.length > 0) {
     content.push({ type: "text", text: `Input read: ${distinct.join(" ")}` });
   }
-  return { content, isError: false };
+  return { content, isError: !outcome.ok };
 };
 
 const editDistance = (a: string, b: string): number => {

@@ -5,8 +5,17 @@
  * JSON payload or one error shape.
  */
 
+/** A JSON payload: finite numbers and acyclic JSON data are checked at serialization. */
+export type McpJsonValue =
+  | null
+  | boolean
+  | number
+  | string
+  | readonly McpJsonValue[]
+  | { readonly [key: string]: McpJsonValue };
+
 /** A JSON Schema object, as plain JSON. */
-export type JsonSchema = Readonly<Record<string, unknown>>;
+export type McpJsonSchema = Readonly<Record<string, unknown>>;
 
 /** Whether a call only reads or may change state. */
 export type ToolAccess = "read" | "write";
@@ -33,7 +42,7 @@ export type ToolError = {
 
 /** The success payload or structured failure returned by a tool handler. */
 export type ToolOutcome =
-  | { readonly ok: true; readonly value: unknown }
+  | { readonly ok: true; readonly value: McpJsonValue }
   | { readonly ok: false; readonly error: ToolError };
 
 /** A tool registry entry, independent of transport and schema library. */
@@ -49,19 +58,19 @@ export type ToolDefinition<Context> = {
   /** Groups lazy tools for `list_capabilities`' `domain` filter. */
   readonly domain?: string;
   /** Every argument the tool accepts: what calls are checked against. */
-  readonly inputSchema: JsonSchema;
+  readonly inputSchema: McpJsonSchema;
   /** A representative invocation input; compact discovery falls back to an empty skeleton if it exceeds the budget. */
   readonly exampleInput?: Readonly<Record<string, unknown>>;
   /**
    * Optional schema used for the compact parameter outline. Full discovery
    * always returns `inputSchema`.
    */
-  readonly describedSchema?: JsonSchema;
+  readonly describedSchema?: McpJsonSchema;
   /**
    * Present for a tool listed on every turn, with the compact schema it is
    * listed with. A tool without it is reached through the capability tools.
    */
-  readonly direct?: { readonly inputSchema: JsonSchema };
+  readonly direct?: { readonly inputSchema: McpJsonSchema };
   /**
    * Properties read exactly as sent, never leniently: switches that widen
    * what a call may do (overwrite, repack) must be JSON `true` to count.

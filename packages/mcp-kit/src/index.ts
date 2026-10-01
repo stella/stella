@@ -26,11 +26,14 @@ export {
 export {
   CAPABILITY_TOOL_NAMES,
   createToolSurface,
+  type ToolFailureEvent,
+  type ToolFailureObserver,
   type ToolSurface,
   type ToolSurfaceOptions,
 } from "./surface";
 export type {
-  JsonSchema,
+  McpJsonSchema,
+  McpJsonValue,
   ListedTool,
   ToolAccess,
   ToolCallResult,

@@ -7,12 +7,14 @@
  * dropped.
  */
 
+import { panic } from "better-result";
+
 import {
   normalizeAgentInput,
   type AgentInputPlaceholderPolicy,
 } from "@stll/agent-input";
 
-import type { JsonSchema, ToolAccess, ToolInputIssue } from "./types";
+import type { McpJsonSchema, ToolAccess, ToolInputIssue } from "./types";
 
 /** Normalized arguments and notes, or actionable input issues. */
 export type ReadInput =
@@ -27,10 +29,74 @@ export type ReadInput =
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-const propertiesOf = (schema: JsonSchema): Record<string, unknown> =>
+const UNSUPPORTED_ROOT_KEYWORDS = [
+  "$ref",
+  "$dynamicRef",
+  "$recursiveRef",
+  "allOf",
+  "anyOf",
+  "oneOf",
+  "not",
+  "if",
+  "then",
+  "else",
+  "dependencies",
+  "dependentSchemas",
+  "patternProperties",
+  "unevaluatedProperties",
+] as const;
+
+/**
+ * Argument names must be declared directly on an object root. Composition and
+ * references are supported within properties, but cannot supply root arguments.
+ * A root without properties declares a zero-argument tool.
+ */
+export const assertToolInputSchema = (schema: McpJsonSchema): void => {
+  if (schema["type"] !== "object") {
+    panic("Tool input schema must have type object at its root.");
+  }
+  for (const keyword of UNSUPPORTED_ROOT_KEYWORDS) {
+    if (Object.hasOwn(schema, keyword)) {
+      panic(
+        `Tool input schema does not support root ${keyword}; declare arguments in root properties.`,
+      );
+    }
+  }
+  const properties = schema["properties"];
+  if (properties !== undefined && !isRecord(properties)) {
+    panic("Tool input schema properties must be an object.");
+  }
+  const additionalProperties = schema["additionalProperties"];
+  if (additionalProperties !== undefined && additionalProperties !== false) {
+    panic(
+      "Tool input schema cannot accept undeclared root arguments; additionalProperties must be false or omitted.",
+    );
+  }
+  const required = schema["required"];
+  if (required === undefined) {
+    return;
+  }
+  if (
+    !Array.isArray(required) ||
+    !required.every((name) => typeof name === "string")
+  ) {
+    panic("Tool input schema required must be an array of argument names.");
+  }
+  if (
+    required.some(
+      (name) => !isRecord(properties) || !Object.hasOwn(properties, name),
+    )
+  ) {
+    panic(
+      "Tool input schema required arguments must be declared in root properties.",
+    );
+  }
+};
+
+const propertiesOf = (schema: McpJsonSchema): Record<string, unknown> =>
   isRecord(schema["properties"]) ? schema["properties"] : {};
 
-const requiredOf = (schema: JsonSchema): string[] =>
+const requiredOf = (schema: McpJsonSchema): string[] =>
   Array.isArray(schema["required"])
     ? schema["required"].filter((key): key is string => typeof key === "string")
     : [];
@@ -46,7 +112,7 @@ const PLACEHOLDER_POLICY = {
 } as const satisfies Record<ToolAccess, AgentInputPlaceholderPolicy>;
 
 type ReadInputOptions = {
-  schema: JsonSchema;
+  schema: McpJsonSchema;
   value: unknown;
   access: ToolAccess;
   /** Properties passed through exactly as sent. */
@@ -71,6 +137,7 @@ export const readToolInput = ({
   access,
   exactProperties = [],
 }: ReadInputOptions): ReadInput => {
+  assertToolInputSchema(schema);
   if (value !== undefined && !isRecord(value)) {
     return refusal(
       "Arguments must be a JSON object.",

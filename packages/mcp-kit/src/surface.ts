@@ -20,14 +20,16 @@ import {
   didYouMean,
   failure,
   KIT_ERROR_CODES,
+  KIT_INTERNAL_MESSAGE,
+  jsonSuccess,
   success,
   toCallResult,
   validationError,
 } from "./envelope";
-import { readToolInput } from "./input";
+import { assertToolInputSchema, readToolInput } from "./input";
 import { compactSchema } from "./schema";
 import type {
-  JsonSchema,
+  McpJsonSchema,
   ListedTool,
   ToolCallResult,
   ToolDefinition,
@@ -81,9 +83,22 @@ const READ_ONLY = {
   openWorldHint: false,
 };
 
+/** Host-only metadata for rejected handlers and failed wire serialization. */
+export type ToolFailureEvent = {
+  readonly tool: string;
+  readonly phase: "handler" | "serialization";
+};
+
+/** Synchronous host telemetry; causes are never included in tool responses. */
+export type ToolFailureObserver = (
+  cause: unknown,
+  event: ToolFailureEvent,
+) => undefined;
+
 /** Registry used to construct a transport-independent tool surface. */
 export type ToolSurfaceOptions<Context> = {
   readonly tools: readonly ToolDefinition<Context>[];
+  readonly onError?: ToolFailureObserver;
 };
 
 /** MCP listing and call handlers bound to a registry. */
@@ -103,7 +118,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const destructiveOf = <Context>(tool: ToolDefinition<Context>): boolean =>
   tool.destructive ?? tool.access === "write";
 
-const listedSchema = (schema: JsonSchema): ListedTool["inputSchema"] => ({
+const listedSchema = (schema: McpJsonSchema): ListedTool["inputSchema"] => ({
   ...compactSchema(schema),
   type: "object",
 });
@@ -167,7 +182,7 @@ const encodeCursor = (id: string): string => {
   return btoa(binary)
     .replaceAll("+", "-")
     .replaceAll("/", "_")
-    .replace(/=+$/u, "");
+    .replaceAll("=", "");
 };
 
 const decodeCursor = (cursor: string): string | null => {
@@ -257,12 +272,28 @@ const readMetaArgs = (
     : { ok: true, args };
 };
 
+type ObserveFailureOptions = {
+  onError: ToolFailureObserver | undefined;
+  cause: unknown;
+  event: ToolFailureEvent;
+};
+
+const observeFailure = ({
+  onError,
+  cause,
+  event,
+}: ObserveFailureOptions): undefined => {
+  // A failing telemetry callback must not expose its own exception on the wire.
+  Result.try(() => onError?.(cause, event));
+};
+
 type RunToolOptions<Context> = {
   tool: ToolDefinition<Context>;
   value: unknown;
   context: Context;
   invocation?: "direct" | "capability";
   validateOnly?: boolean;
+  onError: ToolFailureObserver | undefined;
 };
 
 const runTool = async <Context>({
@@ -271,12 +302,13 @@ const runTool = async <Context>({
   context,
   invocation = "direct",
   validateOnly = false,
+  onError,
 }: RunToolOptions<Context>): Promise<ToolCallResult> => {
   const read = readToolInput({
     schema: tool.inputSchema,
     value,
     access: tool.access,
-    exactProperties: tool.exactProperties,
+    exactProperties: tool.exactProperties ?? [],
   });
   if (!read.ok) {
     return toCallResult(validationError(read.message, read.issues, read.hint));
@@ -285,9 +317,8 @@ const runTool = async <Context>({
     return toCallResult(
       success({
         result: {
-          valid: true,
+          status: "arguments_read",
           capability: tool.name,
-          validation: "argument_reading",
         },
       }),
       read.notes,
@@ -295,11 +326,17 @@ const runTool = async <Context>({
   }
   const execution = await Result.tryPromise({
     try: () => tool.run(read.value, context),
-    catch: (error) =>
-      failure({
+    catch: (cause) => {
+      observeFailure({
+        onError,
+        cause,
+        event: { tool: tool.name, phase: "handler" },
+      });
+      return failure({
         code: KIT_ERROR_CODES.internal,
-        message: error instanceof Error ? error.message : String(error),
-      }),
+        message: KIT_INTERNAL_MESSAGE,
+      });
+    },
   });
   const outcome = execution.isOk() ? execution.value : execution.error;
   return toCallResult(
@@ -307,6 +344,12 @@ const runTool = async <Context>({
       ? success({ result: outcome.value })
       : outcome,
     read.notes,
+    (cause) =>
+      observeFailure({
+        onError,
+        cause,
+        event: { tool: tool.name, phase: "serialization" },
+      }),
   );
 };
 
@@ -314,6 +357,18 @@ const buildRegistry = <Context>(tools: readonly ToolDefinition<Context>[]) => {
   const byName = new Map<string, ToolDefinition<Context>>();
   const reserved = new Set<string>(Object.values(CAPABILITY_TOOL_NAMES));
   for (const tool of tools) {
+    for (const metadata of [
+      tool.inputSchema,
+      tool.describedSchema ?? null,
+      tool.exampleInput ?? null,
+    ]) {
+      if (!jsonSuccess(metadata).ok) {
+        panic(
+          "Tool schema and example metadata must contain acyclic JSON data.",
+        );
+      }
+    }
+    assertToolInputSchema(tool.inputSchema);
     if (tool.name.length === 0) {
       panic("Tool names must not be empty.");
     }
@@ -331,6 +386,7 @@ const buildRegistry = <Context>(tools: readonly ToolDefinition<Context>[]) => {
 /** Build a surface over `tools`. Names must be unique and not a capability tool's. */
 export const createToolSurface = <Context>({
   tools,
+  onError,
 }: ToolSurfaceOptions<Context>): ToolSurface<Context> => {
   const byName = buildRegistry(tools);
   const lazy = tools
@@ -381,7 +437,7 @@ export const createToolSurface = <Context>({
     );
     const page = matching.slice(0, limit);
     const last = page.at(-1);
-    return success({
+    return jsonSuccess({
       limit,
       items: page.map((tool) => ({
         id: tool.name,
@@ -412,9 +468,9 @@ export const createToolSurface = <Context>({
       return unknownCapability(id);
     }
     if (read.args["detail"] !== "full") {
-      return success(describeCompact(tool));
+      return jsonSuccess(describeCompact(tool));
     }
-    return success({
+    return jsonSuccess({
       id: tool.name,
       description:
         tool.guide === undefined
@@ -449,6 +505,7 @@ export const createToolSurface = <Context>({
       value: read.args["input"] ?? {},
       context,
       invocation: "capability",
+      onError,
       validateOnly: read.args["validate_only"] === true,
     });
   };
@@ -517,7 +574,7 @@ export const createToolSurface = <Context>({
       default: {
         const tool = byName.get(name);
         if (tool !== undefined) {
-          return await runTool({ tool, value: args, context });
+          return await runTool({ tool, value: args, context, onError });
         }
         return toCallResult(
           failure({

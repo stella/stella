@@ -53,12 +53,23 @@ portable base64url cursors. Discovery descriptions do not grow with the registry
 `compactSchema` strips annotations while preserving validation keywords and
 `hoistRepeatedSchemas` shares repeated shapes through `$defs`.
 
+Input schemas declare argument names directly in an object root. Root references,
+composition, conditional or dynamic property declarations, and open
+`additionalProperties` are rejected at registry construction. Nested schema
+composition and references remain available for normalization and handler validation.
+
 Argument reading normalizes supported spellings through `@stll/agent-input`,
 rejects missing/unknown parameters, and appends normalization notes to successes.
 `exactProperties` bypasses normalization for explicit switches. Handlers own strict
 schema validation, including exact switches and cross-field constraints;
 `validate_only` checks argument reading without executing the handler and labels
-its result with `validation: "argument_reading"`.
+its result with `status: "arguments_read"`; it makes no full-schema validity claim.
+
+Schema and example metadata must contain acyclic JSON data; invalid definitions
+are rejected during registry construction. Successful handler payloads use the `McpJsonValue` type. Serialization failures and
+rejected handlers return a generic `internal_error`; `onError(cause, event)` can
+record the original cause in host telemetry. The observer runs synchronously;
+its own failures cannot expose exception messages on the wire.
 
 ## What does not
 

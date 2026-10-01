@@ -1,16 +1,21 @@
 import { describe, expect, test } from "bun:test";
 
-import { failure, success } from "./envelope";
+import {
+  failure,
+  jsonSuccess,
+  KIT_INTERNAL_MESSAGE,
+  success,
+} from "./envelope";
 import { advertisedBytes, compactSchema, hoistRepeatedSchemas } from "./schema";
 import { CAPABILITY_TOOL_NAMES, createToolSurface } from "./surface";
-import type { ToolCallResult, ToolDefinition } from "./types";
+import type { McpJsonValue, ToolCallResult, ToolDefinition } from "./types";
 
 type Context = { calls: { name: string; args: Record<string, unknown> }[] };
 
 const record =
   (name: string) => (args: Record<string, unknown>, context: Context) => {
     context.calls.push({ name, args });
-    return Promise.resolve(success({ tool: name, args }));
+    return Promise.resolve(jsonSuccess({ tool: name, args }));
   };
 
 const SEARCH: ToolDefinition<Context> = {
@@ -88,7 +93,7 @@ const payload = (result: ToolCallResult): Record<string, unknown> => {
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     throw new Error("Expected an object payload");
   }
-  return parsed;
+  return Object.fromEntries(Object.entries(parsed));
 };
 
 const call = async (name: string, args: unknown) => {
@@ -144,6 +149,27 @@ describe("listing", () => {
     for (const name of ["", "é".repeat(65)]) {
       expect(() => createToolSurface({ tools: [{ ...STATS, name }] })).toThrow(
         "Tool names must",
+      );
+    }
+  });
+
+  test("rejects metadata that would fail before wire serialization", () => {
+    const cyclic: { next: McpJsonValue } = { next: null };
+    cyclic.next = cyclic;
+    for (const tool of [
+      { ...ARCHIVE, exampleInput: { id: 1n } },
+      { ...ARCHIVE, exampleInput: cyclic },
+      {
+        ...ARCHIVE,
+        inputSchema: { type: "object", properties: {}, examples: [cyclic] },
+      },
+      {
+        ...ARCHIVE,
+        describedSchema: { type: "object", properties: {}, examples: [cyclic] },
+      },
+    ]) {
+      expect(() => createToolSurface({ tools: [tool] })).toThrow(
+        "acyclic JSON data",
       );
     }
   });
@@ -342,7 +368,9 @@ describe("capability tools", () => {
     expect(unknown.body).toMatchObject({
       error: { code: "not_found", retryable: false },
     });
-    expect(JSON.stringify(unknown.body["error"])).toContain('"archive_item"');
+    expect(unknown.body).toMatchObject({
+      error: { hint: expect.stringContaining('"archive_item"') },
+    });
   });
 
   test("describes a large schema compactly by default and preserves the full schema on request", async () => {
@@ -507,9 +535,8 @@ describe("capability tools", () => {
     );
     expect(checked.body).toEqual({
       result: {
-        valid: true,
+        status: "arguments_read",
         capability: "archive_item",
-        validation: "argument_reading",
       },
     });
     expect(ran.body).toEqual({
@@ -601,15 +628,148 @@ describe("calling a tool", () => {
       error: { code: "stale", message: "Out of date.", retryable: true },
     });
     expect(thrown.body).toEqual({
-      error: { code: "internal_error", message: "boom", retryable: false },
+      error: {
+        code: "internal_error",
+        message: KIT_INTERNAL_MESSAGE,
+        retryable: false,
+      },
     });
     expect(thrown.result.isError).toBe(true);
+  });
+
+  test("redacts every handler rejection and preserves its cause for host telemetry", async () => {
+    for (const cause of [
+      new Error("private SQL /path/to/file"),
+      { privateMatter: "content" },
+      "private provider response",
+    ]) {
+      const observations: { cause: unknown; event: unknown }[] = [];
+      const rejected = createToolSurface({
+        tools: [{ ...THROWS, run: () => Promise.reject(cause) }],
+        onError: (error, event) => {
+          observations.push({ cause: error, event });
+        },
+      });
+      for (const name of [THROWS.name, CAPABILITY_TOOL_NAMES.invoke]) {
+        const result = await rejected.callTool(
+          name,
+          name === THROWS.name ? {} : { capability: THROWS.name },
+          { calls: [] },
+        );
+        expect(payload(result)).toEqual({
+          error: {
+            code: "internal_error",
+            message: KIT_INTERNAL_MESSAGE,
+            retryable: false,
+          },
+        });
+        expect(result.isError).toBe(true);
+      }
+      expect(observations).toEqual([
+        { cause, event: { tool: THROWS.name, phase: "handler" } },
+        { cause, event: { tool: THROWS.name, phase: "handler" } },
+      ]);
+    }
+  });
+
+  test("reports serialization failures to host telemetry for both invocation paths", async () => {
+    const cyclic: { next: McpJsonValue } = { next: null };
+    cyclic.next = cyclic;
+    const observations: unknown[] = [];
+    const broken = createToolSurface({
+      tools: [{ ...THROWS, run: () => Promise.resolve(success(cyclic)) }],
+      onError: (cause, event) => {
+        observations.push({ cause, event });
+      },
+    });
+    for (const name of [THROWS.name, CAPABILITY_TOOL_NAMES.invoke]) {
+      const result = await broken.callTool(
+        name,
+        name === THROWS.name ? {} : { capability: THROWS.name },
+        { calls: [] },
+      );
+      expect(payload(result)).toEqual({
+        error: {
+          code: "internal_error",
+          message: KIT_INTERNAL_MESSAGE,
+          retryable: false,
+        },
+      });
+    }
+    expect(observations).toMatchObject([
+      {
+        cause: expect.any(Error),
+        event: { tool: THROWS.name, phase: "serialization" },
+      },
+      {
+        cause: expect.any(Error),
+        event: { tool: THROWS.name, phase: "serialization" },
+      },
+    ]);
+  });
+
+  test("rejects composed argument roots during registration", () => {
+    for (const keyword of ["$ref", "allOf", "anyOf", "oneOf"]) {
+      expect(() =>
+        createToolSurface({
+          tools: [{ ...STATS, inputSchema: { type: "object", [keyword]: [] } }],
+        }),
+      ).toThrow(`root ${keyword}`);
+    }
+  });
+
+  test("dry runs describe argument reading without claiming schema validity", async () => {
+    const constrained = createToolSurface({
+      tools: [
+        {
+          ...SEARCH,
+          inputSchema: {
+            type: "object",
+            properties: { query: { type: "string", pattern: "^[a-z]{10}$" } },
+            required: ["query"],
+          },
+        },
+      ],
+    });
+    const context: Context = { calls: [] };
+    const result = payload(
+      await constrained.callTool(
+        CAPABILITY_TOOL_NAMES.invoke,
+        { capability: SEARCH.name, input: { query: "x" }, validate_only: true },
+        context,
+      ),
+    );
+    expect(result).toEqual({
+      result: { capability: SEARCH.name, status: "arguments_read" },
+    });
+    expect(context.calls).toEqual([]);
+  });
+
+  test("keeps unbounded guides out of paged discovery", async () => {
+    const guide = "Detailed guidance. ".repeat(5000);
+    const guided = createToolSurface({ tools: [{ ...ARCHIVE, guide }] });
+    const listed = await guided.callTool(
+      CAPABILITY_TOOL_NAMES.list,
+      {},
+      { calls: [] },
+    );
+    const described = await guided.callTool(
+      CAPABILITY_TOOL_NAMES.describe,
+      { capability: ARCHIVE.name, detail: "full" },
+      { calls: [] },
+    );
+    expect(JSON.stringify(payload(listed))).not.toContain(guide);
+    expect(payload(described)).toMatchObject({
+      description: `${ARCHIVE.summary}\n${guide}`,
+    });
   });
 
   test("an unknown tool suggests the close names", async () => {
     const { body } = await call("serach", {});
 
     expect(body).toMatchObject({ error: { code: "unknown_tool" } });
-    expect(JSON.stringify(body["error"])).toContain('"search"');
+    expect(body).toMatchObject({
+      error: { hint: expect.stringContaining('"search"') },
+    });
   });
 });

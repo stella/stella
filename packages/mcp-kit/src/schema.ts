@@ -4,7 +4,7 @@
  * titles, no examples. Guidance lives in `describe_capability`.
  */
 
-import type { JsonSchema, ListedTool } from "./types";
+import type { McpJsonSchema, ListedTool } from "./types";
 
 const ANNOTATION_KEYWORDS: ReadonlySet<string> = new Set([
   "$comment",
@@ -114,9 +114,9 @@ export type CompactSchemaOptions = {
 
 /** The schema without annotation keywords, descriptions kept only as deep as asked. */
 export const compactSchema = (
-  schema: JsonSchema,
+  schema: McpJsonSchema,
   { describedDepth = 0 }: CompactSchemaOptions = {},
-): JsonSchema => {
+): McpJsonSchema => {
   const compacted = compactNode(schema, { depth: 0, describedDepth });
   return isRecord(compacted) ? compacted : {};
 };
@@ -159,9 +159,9 @@ const hasReferenceScope = (node: unknown): boolean => {
  * keywords remain unchanged because moving them could alter reference resolution.
  */
 export const hoistRepeatedSchemas = (
-  schema: JsonSchema,
+  schema: McpJsonSchema,
   { minBytes = 200 }: { minBytes?: number } = {},
-): JsonSchema => {
+): McpJsonSchema => {
   if (hasReferenceScope(schema)) {
     return schema;
   }
@@ -182,7 +182,7 @@ export const hoistRepeatedSchemas = (
   };
   mapSchemaChildren(schema, (child, info) => countSubschemas(child, info.name));
   const refs = new Map<string, string>();
-  const existingDefs = isRecord(schema.$defs) ? schema.$defs : {};
+  const existingDefs = isRecord(schema["$defs"]) ? schema["$defs"] : {};
   const defs = new Map(Object.entries(existingDefs));
   const repeated = [...seen.entries()]
     .filter(([, { count, bytes }]) => count > 1 && bytes >= minBytes)
@@ -216,7 +216,7 @@ export const hoistRepeatedSchemas = (
     }
   }
   const root = mapSchemaChildren(schema, replace);
-  const replacedDefs = isRecord(root.$defs) ? root.$defs : {};
+  const replacedDefs = isRecord(root["$defs"]) ? root["$defs"] : {};
   for (const [name, definition] of Object.entries(replacedDefs)) {
     defs.set(name, definition);
   }
