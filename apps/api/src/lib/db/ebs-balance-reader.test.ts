@@ -246,8 +246,9 @@ describe("the shared RDS EBS reader", () => {
       });
       const outcome = await readResult();
       expect(outcome.isErr()).toBe(true);
-      if (outcome.isErr())
-        {expect(outcome.error).toBeInstanceOf(EbsBalanceReadError);}
+      if (outcome.isErr()) {
+        expect(outcome.error).toBeInstanceOf(EbsBalanceReadError);
+      }
       const read = async () => (await readResult()).unwrapOr(null);
       expect(
         (await ebsBalance({ read, now: () => NOW, config: defaultConfig }))
@@ -289,10 +290,11 @@ describe("the shared RDS EBS reader", () => {
     });
     const outcome = await readResult();
     expect(outcome.isErr()).toBe(true);
-    if (outcome.isErr())
-      {expect(outcome.error.cause).toMatchObject({
+    if (outcome.isErr()) {
+      expect(outcome.error.cause).toMatchObject({
         message: "injected provider failure",
-      });}
+      });
+    }
     expect(calls).toBe(1);
     const read = async () => outcome.unwrapOr(null);
     expect(
@@ -315,7 +317,8 @@ test("a missing instance returns Err before contacting the provider", async () =
   });
   const outcome = await read();
   expect(outcome.isErr()).toBe(true);
-  if (outcome.isErr())
-    {expect(outcome.error.message).toContain("instance identifier");}
+  if (outcome.isErr()) {
+    expect(outcome.error.message).toContain("instance identifier");
+  }
   expect(calls).toBe(0);
 });

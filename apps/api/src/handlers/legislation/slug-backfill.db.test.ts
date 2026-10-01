@@ -140,7 +140,9 @@ describe.skipIf(!enabled)("slug backfill poison-page recovery", () => {
             if (outcome === "rollback" && fail) {
               await tx.execute(sql`SELECT 1 / 0`);
             }
-            if (pageResult.isErr()) {throw pageResult.error.cause;}
+            if (pageResult.isErr()) {
+              throw pageResult.error.cause;
+            }
             const page = pageResult.value;
             return { cursor: page.cursor, done: page.done, value: page };
           });
@@ -298,7 +300,9 @@ describe.skipIf(!enabled)("slug backfill poison-page recovery", () => {
                 captured.push(error);
               },
             });
-            if (pageResult.isErr()) {throw pageResult.error.cause;}
+            if (pageResult.isErr()) {
+              throw pageResult.error.cause;
+            }
             const page = pageResult.value;
             return { cursor: page.cursor, done: page.done, value: page };
           });

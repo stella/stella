@@ -368,7 +368,9 @@ export const createBackfillRuntime = (
     slot: {
       tryAcquire: async () => {
         const acquisition = await slot.tryAcquire();
-        if (acquisition.isErr()) {throw acquisition.error.cause;}
+        if (acquisition.isErr()) {
+          throw acquisition.error.cause;
+        }
         return acquisition.value;
       },
       release: slot.release,

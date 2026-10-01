@@ -46,7 +46,9 @@ try {
               : brandPersistedLegislationDocumentId(cursor),
           size,
         });
-        if (outcome.isErr()) {throw outcome.error.cause;}
+        if (outcome.isErr()) {
+          throw outcome.error.cause;
+        }
         const page = outcome.value;
         return { cursor: page.cursor, done: page.done, value: page };
       }),

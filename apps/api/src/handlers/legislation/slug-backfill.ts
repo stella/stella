@@ -179,7 +179,9 @@ const backfillFrom = async (
     after: progress.after,
     size: BATCH_SIZE,
   });
-  if (outcome.isErr()) {return outcome;}
+  if (outcome.isErr()) {
+    return outcome;
+  }
   const page = outcome.value;
   if (page.done) {
     return Result.ok({

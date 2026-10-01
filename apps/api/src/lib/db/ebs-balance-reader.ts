@@ -134,16 +134,22 @@ export const createEbsBalanceReader = ({
           cause,
         }),
     });
-    if (request.isErr()) {return request;}
+    if (request.isErr()) {
+      return request;
+    }
     const response = request.value;
     const byte = newestPoint(
       response.MetricDataResults?.find(({ Id }) => Id === "byte_balance"),
     );
-    if (byte.isErr()) {return byte;}
+    if (byte.isErr()) {
+      return byte;
+    }
     const io = newestPoint(
       response.MetricDataResults?.find(({ Id }) => Id === "io_balance"),
     );
-    if (io.isErr()) {return io;}
+    if (io.isErr()) {
+      return io;
+    }
     return Result.ok({
       byteBalancePct: byte.value.value,
       ioBalancePct: io.value.value,
