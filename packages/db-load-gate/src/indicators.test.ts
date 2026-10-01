@@ -45,7 +45,7 @@ for (const [name, read] of [
 
 test("a reader that never settles times out without sleeping", async () => {
   const timeout = () => ({ expired: Promise.resolve(), cancel: () => {} });
-  const read = () => new Promise<never>(() => {});
+  const read = async () => await new Promise<never>(() => {});
   expect((await ebsBalance({ ...options, read, timeout })).kind).toBe(
     "unknown",
   );

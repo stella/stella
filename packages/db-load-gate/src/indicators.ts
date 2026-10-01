@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import { Temporal } from "@stll/time";
 
@@ -197,8 +197,12 @@ export const busyWindow = ({ now, config }: BusyWindowOptions): Signal => {
         minute: "2-digit",
         hourCycle: "h23",
       }).formatToParts(instant);
-      const hour = parts.find(({ type }) => type === "hour")?.value;
-      const minute = parts.find(({ type }) => type === "minute")?.value;
+      const hour =
+        parts.find(({ type }) => type === "hour")?.value ??
+        panic("Busy-window formatter omitted the hour");
+      const minute =
+        parts.find(({ type }) => type === "minute")?.value ??
+        panic("Busy-window formatter omitted the minute");
       const local = `${hour}:${minute}`;
       return start <= end
         ? local >= start && local < end

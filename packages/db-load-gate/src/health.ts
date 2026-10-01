@@ -369,8 +369,12 @@ export const isHeldTooLong = (
     const minuteEnd = Math.min(now, (Math.floor(cursor / 60_000) + 1) * 60_000);
     const busy = windows.some(({ start, end, formatter }) => {
       const parts = formatter.formatToParts(cursor);
-      const hour = parts.find(({ type }) => type === "hour")?.value;
-      const minute = parts.find(({ type }) => type === "minute")?.value;
+      const hour =
+        parts.find(({ type }) => type === "hour")?.value ??
+        panic("Busy-window formatter omitted the hour");
+      const minute =
+        parts.find(({ type }) => type === "minute")?.value ??
+        panic("Busy-window formatter omitted the minute");
       const local = `${hour}:${minute}`;
       return start < end
         ? local >= start && local < end

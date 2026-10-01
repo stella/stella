@@ -91,7 +91,7 @@ export const runBackfillPass = async <Value>({
       }
       log({ ...record, action: "wait" });
       const waited = await Result.tryPromise({
-        try: () => sleep(sleepMs),
+        try: async () => await sleep(sleepMs),
         catch: (cause: unknown) => cause,
       });
       if (waited.isErr()) {
@@ -113,7 +113,7 @@ export const runBackfillPass = async <Value>({
     }
     if (batch.sleepMs > 0) {
       const paced = await Result.tryPromise({
-        try: () => sleep(batch.sleepMs),
+        try: async () => await sleep(batch.sleepMs),
         catch: (cause: unknown) => cause,
       });
       if (paced.isErr()) {

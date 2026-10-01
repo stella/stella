@@ -142,7 +142,9 @@ for (const reason of ["hold", "retry"] as const) {
         waits.push(milliseconds);
         now += milliseconds;
       },
-      log: (record) => records.push(record),
+      log: (record) => {
+        records.push(record);
+      },
       step: async () => {
         attempts++;
         if (attempts === 1) {
@@ -188,7 +190,9 @@ test("a maximum wait exits cleanly with resume instructions and leaves the check
     sleep: async (milliseconds) => {
       now += milliseconds;
     },
-    log: (record) => records.push(record),
+    log: (record) => {
+      records.push(record);
+    },
     step: async () => {
       attempts++;
       throw new BackfillHeldError({
@@ -221,7 +225,9 @@ test("a hold beyond the caller's wait budget exits before sleeping or stepping a
     sleep: async () => {
       sleeps++;
     },
-    log: (record) => records.push(record),
+    log: (record) => {
+      records.push(record);
+    },
     step: async () => {
       throw new BackfillHeldError({
         message: "held",
