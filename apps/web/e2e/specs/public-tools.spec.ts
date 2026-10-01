@@ -1,3 +1,6 @@
+import { panic } from "better-result";
+import * as v from "valibot";
+
 import { assertSsrDocument } from "@stll/ssr-testkit";
 
 import { E2E_API_ORIGIN } from "../helpers/api";
@@ -5,6 +8,19 @@ import { findChromeDividerProblems } from "../helpers/chrome-divider";
 import { expect, test } from "../helpers/test";
 
 const PUBLIC_SSR_TIMEOUT_MS = 45_000;
+const identityValue = v.pipe(v.string(), v.nonEmpty());
+const sessionSchema = v.object({
+  user: v.object({
+    id: identityValue,
+    name: identityValue,
+    email: identityValue,
+  }),
+  session: v.object({ activeOrganizationId: identityValue }),
+});
+const organizationSchema = v.object({
+  id: identityValue,
+  name: identityValue,
+});
 
 test("public tools render the same document content for both session states", async ({
   context,
@@ -14,21 +30,51 @@ test("public tools render the same document content for both session states", as
     `${E2E_API_ORIGIN}/api/auth/get-session`,
   );
   expect(session.ok()).toBe(true);
-  expect(await session.json()).toMatchObject({
-    user: { id: expect.any(String) },
-  });
+  const { user, session: activeSession } = v.parse(
+    sessionSchema,
+    await session.json(),
+  );
+  const organizationResponse = await context.request.get(
+    `${E2E_API_ORIGIN}/api/auth/organization/get-full-organization`,
+    { params: { organizationId: activeSession.activeOrganizationId } },
+  );
+  expect(organizationResponse.ok()).toBe(true);
+  const organization = v.parse(
+    organizationSchema,
+    await organizationResponse.json(),
+  );
+  expect(organization.id).toBe(activeSession.activeOrganizationId);
+  const identity = {
+    userId: user.id,
+    userName: user.name,
+    userEmail: user.email,
+    organizationId: organization.id,
+    organizationName: organization.name,
+  };
 
   for (const path of ["/tools", "/tools/contract-review"]) {
-    const signedIn = await context.request.get(path, {
+    const signedIn = await page.goto(path, {
       timeout: PUBLIC_SSR_TIMEOUT_MS,
+      waitUntil: "load",
     });
+    expect(signedIn).not.toBeNull();
+    if (!signedIn) {
+      panic("Expected document response");
+    }
     const signedInHtml = await signedIn.text();
+    for (const [field, value] of Object.entries(identity)) {
+      expect(signedInHtml, `${path}: ${field}`).not.toContain(value);
+    }
     assertSsrDocument({
       contentType: signedIn.headers()["content-type"] ?? null,
       html: signedInHtml,
       requiredContent: ["<main", "Contract Review"],
       status: signedIn.status(),
     });
+    const main = page.getByRole("main");
+    await expect(main.getByRole("heading", { level: 1 })).toBeVisible();
+    const signedInContent = await main.textContent();
+    expect(signedInContent.length).toBeGreaterThan(0);
     const cookies = await context.cookies();
     expect(cookies.length).toBeGreaterThan(0);
     await context.clearCookies();
@@ -37,9 +83,14 @@ test("public tools render the same document content for both session states", as
     );
     expect(anonymousSession.ok()).toBe(true);
     expect(await anonymousSession.json()).toBeNull();
-    const anonymous = await context.request.get(path, {
+    const anonymous = await page.goto(path, {
       timeout: PUBLIC_SSR_TIMEOUT_MS,
+      waitUntil: "load",
     });
+    expect(anonymous).not.toBeNull();
+    if (!anonymous) {
+      panic("Expected document response");
+    }
     const anonymousHtml = await anonymous.text();
     assertSsrDocument({
       contentType: anonymous.headers()["content-type"] ?? null,
@@ -47,19 +98,8 @@ test("public tools render the same document content for both session states", as
       requiredContent: ["<main", "Contract Review"],
       status: anonymous.status(),
     });
-    const documents = await page.evaluate(
-      (htmlDocuments) =>
-        htmlDocuments.map((html) => {
-          const document = new DOMParser().parseFromString(html, "text/html");
-          // Streaming scripts contain per-request router timing data.
-          for (const script of document.querySelectorAll("script")) {
-            script.remove();
-          }
-          return document.documentElement.outerHTML;
-        }),
-      [signedInHtml, anonymousHtml],
-    );
-    expect(documents.at(0)).toBe(documents.at(1));
+    await expect(main.getByRole("heading", { level: 1 })).toBeVisible();
+    await expect(main).toHaveText(signedInContent, { useInnerText: true });
     expect(signedIn.headers()["cache-control"]).toBe("private, no-store");
     expect(anonymous.headers()["cache-control"]).toBe("private, no-store");
     expect(signedIn.headers()["x-robots-tag"]).toBe(
