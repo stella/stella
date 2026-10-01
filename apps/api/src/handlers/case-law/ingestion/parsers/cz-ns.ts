@@ -10,7 +10,7 @@
  */
 
 import * as cheerio from "cheerio";
-import { type AnyNode, isTag, isText } from "domhandler";
+import { type AnyNode, Element, isTag, isText, Text } from "domhandler";
 
 import {
   CZ_CLOSING_RE as CLOSING_RE,
@@ -210,6 +210,30 @@ type MetadataResult = {
 };
 
 export const extractNsMetadata = ($: cheerio.CheerioAPI): MetadataResult => {
+  const metaTable = $("#box-table-a");
+  // Domino also escapes value separators, including inside complaint cells.
+  // Restore only breaks; parsing the whole decoded value would eat quoted text.
+  metaTable
+    .find("*")
+    .contents()
+    .each((_, node) => {
+      if (!isText(node)) {
+        return;
+      }
+      const parts = node.data.split(/<br\s*\/?>/iu);
+      if (parts.length === 1) {
+        return;
+      }
+      const nodes: AnyNode[] = [];
+      for (const [index, part] of parts.entries()) {
+        if (index > 0) {
+          nodes.push(new Element("br", {}));
+        }
+        nodes.push(new Text(part));
+      }
+      $(node).replaceWith(nodes);
+    });
+
   const canonical: DocumentAstMetadata = {
     caseNumber: null,
     ecli: null,
@@ -228,7 +252,6 @@ export const extractNsMetadata = ($: cheerio.CheerioAPI): MetadataResult => {
       return trimmed ? [trimmed] : [];
     });
 
-  const metaTable = $("#box-table-a");
   const metadataTable: SourceMetadataTable = {
     captions: metaTable
       .children("caption")
@@ -311,7 +334,10 @@ export const extractNsMetadata = ($: cheerio.CheerioAPI): MetadataResult => {
       canonical.decisionDate = parseDominoDate(valueText) ?? valueText;
       return;
     }
-    if (labelText.includes("Spisová značka")) {
+    if (
+      labelText.includes("Spisová značka") ||
+      labelText.includes("Senátní značka")
+    ) {
       canonical.caseNumber = valueText;
       return;
     }

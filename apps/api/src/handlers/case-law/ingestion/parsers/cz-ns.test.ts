@@ -9,6 +9,7 @@ import {
   parseNsDecisionHtml,
 } from "@/api/handlers/case-law/ingestion/parsers/cz-ns";
 import type { ParseNsDecisionInput } from "@/api/handlers/case-law/ingestion/parsers/cz-ns";
+import { markupResidueIn } from "@/api/lib/legal-search/parsers/markup-residue";
 
 // ── Helpers ─────────────────────────────────────────────────
 
@@ -586,6 +587,46 @@ describe("parseNsDecisionHtml", () => {
 });
 
 describe("source table text retention", () => {
+  test("escaped metadata breaks retain ordered values like HTML breaks", () => {
+    const values = [
+      "odmítnuto pro zjevnou neopodstatněnost",
+      "odmítnuto pro neoprávněnost navrhovatele",
+      "odmítnuto pro nepříslušnost",
+    ];
+    const fixture = (separator: string) => `<html><body>
+      <table id="box-table-a">
+        <tr><td>Senátní značka:</td><td>29 ICdo 37/2013</td></tr>
+        <tr><td>Heslo:</td><td>${separator}${values.join(separator)}</td></tr>
+        <tr><td colspan="2">Podána ústavní stížnost
+          <table><tr><td>Výsledek</td></tr>
+            <tr><td><font>${separator}${values.join(separator)}</font></td></tr>
+          </table>
+        </td></tr>
+      </table>
+      <p>Text rozhodnutí zůstává zachován.</p>
+    </body></html>`;
+    const expected = parseNsDecisionHtml(baseInput(fixture("<br/>")));
+    for (const separator of ["&lt;br&gt;", "&lt;br/&gt;", "&lt;BR /&gt;"]) {
+      const result = parseNsDecisionHtml(baseInput(fixture(separator)));
+      expect(JSON.stringify(result)).toBe(JSON.stringify(expected));
+      expect(result.metadata.caseNumber).toBe("29 ICdo 37/2013");
+      expect(result.metadata.keywords).toEqual(values);
+      expect(
+        result.sourceMetadata.ustavniStiznost?.at(0)?.["výsledek"],
+      ).toMatchObject({
+        type: "text",
+        value: values.join("\n"),
+      });
+      expect(
+        result.documentAst.blocks.every(
+          (block) => markupResidueIn(block.plainText) === undefined,
+        ),
+      ).toBe(true);
+      expect(result.fulltext).toContain(values.join("\n"));
+      expect(result.fulltext).toContain("Text rozhodnutí zůstává zachován.");
+    }
+  });
+
   test("keeps every metadata cell and caption without inferring labels", () => {
     const { source } = extractNsMetadata(
       cheerio.load(`<table id="box-table-a">
