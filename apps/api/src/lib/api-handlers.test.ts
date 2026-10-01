@@ -569,6 +569,29 @@ describe("a mapped status survives the transport wrapper", () => {
     }
   });
 
+  test("unavailable wrapper causes still produce the sanitized boundary response", async () => {
+    const error = Object.defineProperty(new Error("Request failed"), "cause", {
+      get: () => {
+        throw new Error("Cause unavailable");
+      },
+    });
+    for (const mode of ["return", "throw"] as const) {
+      const response = await runEndpoint(async function* () {
+        if (mode === "throw") {
+          throw error;
+        }
+        return Result.err(new UnhandledException({ cause: error }));
+      });
+      expect(response).toMatchObject({
+        code: 500,
+        response: {
+          code: "internal_server_error",
+          message: "Internal server error",
+        },
+      });
+    }
+  });
+
   const upstreamRefusal = () =>
     new HandlerError({
       status: 503,

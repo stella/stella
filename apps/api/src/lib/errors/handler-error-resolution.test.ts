@@ -117,3 +117,12 @@ test("all admission refusals preserve the canonical contract through bounded wra
     Object.keys(ACTION_ADMISSION_REFUSALS).toSorted(),
   );
 });
+
+test("unavailable wrapper causes leave the generic boundary outcome intact", () => {
+  const error = Object.defineProperty(new Error("Request failed"), "cause", {
+    get: () => {
+      throw new Error("Cause unavailable");
+    },
+  });
+  expect(resolveHandlerError(error)).toBeNull();
+});

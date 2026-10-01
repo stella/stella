@@ -1,4 +1,4 @@
-import { Panic, UnhandledException } from "better-result";
+import { Panic, Result, UnhandledException } from "better-result";
 
 import { DocxArchiveError } from "@stll/docx-utils";
 
@@ -66,7 +66,12 @@ const admissionHandlerError = (
     if (!(candidate instanceof Error)) {
       return null;
     }
-    candidate = candidate.cause;
+    const wrapper = candidate;
+    const cause = Result.try(() => wrapper.cause);
+    if (Result.isError(cause)) {
+      return null;
+    }
+    candidate = cause.value;
   }
   return null;
 };
