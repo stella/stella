@@ -52,6 +52,7 @@ import type {
 
 const config = {
   mcp: { type: "internal", reason: "health_infra" },
+  cache: { kind: "none" },
 } satisfies PublicHandlerConfig;
 
 const pgFailover = (): Error =>

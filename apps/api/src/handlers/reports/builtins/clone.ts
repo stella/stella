@@ -39,7 +39,11 @@ const config = {
     "so it fills identically, and its name gains a (copy) suffix when a " +
     "template of that name already exists.",
   permissions: { workspace: ["read"], template: ["create"] },
-  mcp: { type: "capability", reason: "reporting_export" },
+  mcp: {
+    type: "capability",
+    reason: "reporting_export",
+    consumesServices: false,
+  },
   params: workspaceParams({}),
   body: t.Object({ key: t.String({ minLength: 1 }) }),
 } satisfies WorkspaceHandlerConfig;

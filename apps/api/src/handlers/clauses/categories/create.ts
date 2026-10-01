@@ -10,7 +10,11 @@ const config = {
     "its maximum number of categories, or when the named parent does not " +
     "exist.",
   permissions: { clause: ["create"] },
-  mcp: { type: "capability", reason: "knowledge_library_admin" },
+  mcp: {
+    type: "capability",
+    reason: "knowledge_library_admin",
+    consumesServices: false,
+  },
   body: createCategoryBodySchema,
 } satisfies HandlerConfig;
 

@@ -21,6 +21,7 @@ import {
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
 import { createSafePublicHandler } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { PRAGMA_NO_CACHE } from "@/api/lib/security-headers";
 
 /**
  * Profile-specific token exchange hosting two grants better-auth's closed
@@ -40,6 +41,7 @@ const config = {
     }),
   ]),
   mcp: { type: "internal", reason: "auth_plumbing" },
+  cache: { kind: "none" },
 } satisfies PublicHandlerConfig;
 
 const ERROR_STATUS_BY_CODE: Record<AgentTokenErrorCode, 400 | 403> = {
@@ -112,10 +114,7 @@ const exchangeJwtBearer = async (
 const agentTokenHandler = createSafePublicHandler(
   config,
   async function* ({ body, set }) {
-    // OAuth 2.0 §5.1: token responses carry bearer credentials and must not be
-    // cached by browsers or intermediaries.
-    set.headers["cache-control"] = "no-store";
-    set.headers.pragma = "no-cache";
+    set.headers.pragma = PRAGMA_NO_CACHE;
 
     const result =
       body.grant_type === AGENT_AUTH_JWT_BEARER_GRANT_TYPE

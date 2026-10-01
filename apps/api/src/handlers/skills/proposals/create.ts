@@ -37,7 +37,11 @@ const config = {
     "proposal; bundled skills are refused.",
   permissions: { agentSkill: ["propose"] },
   access: "write",
-  mcp: { type: "capability", reason: "agent_tool_authoring" },
+  mcp: {
+    type: "capability",
+    reason: "agent_tool_authoring",
+    consumesServices: false,
+  },
   params: createSkillProposalParamsSchema,
   body: createSkillProposalBodySchema,
 } satisfies HandlerConfig;

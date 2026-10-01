@@ -417,6 +417,7 @@ const collectParagraphs = (
           ),
         );
       case "blockSdt":
+      case "blockCustomXml":
         return collectParagraphs(block.content, tableHeader);
       // Hold no paragraph: opaque preserved markup and bookmark markers carry
       // no runs, so this scorer has nothing to read in them.

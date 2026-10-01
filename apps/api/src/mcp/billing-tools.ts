@@ -512,6 +512,7 @@ const listTimeEntriesArgsSchema = nullAsAbsent(
 /** Columns list_time_entries surfaces, shared by the list and detail branches. */
 const timeEntryColumns = {
   id: timeEntries.id,
+  activityGroup: timeEntries.activityGroup,
   entityId: timeEntries.workItemId,
   userId: timeEntries.userId,
   dateWorked: timeEntries.dateWorked,
@@ -1493,6 +1494,7 @@ const handleGetUsageTool: TypedMcpToolHandler<
 
 export const BILLING_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
+    consumesServices: false,
     annotations: {
       title: "List time entries",
       destructiveHint: false,
@@ -1530,6 +1532,7 @@ export const BILLING_TOOL_DEFINITIONS = [
     scope: "stella:read",
   }),
   defineValibotMcpTool({
+    consumesServices: false,
     description:
       "Create or update a time entry. Omit time_entry_id to create (matter_id, " +
       "date_worked, timezone_id, duration_minutes, and narrative required; " +
@@ -1562,6 +1565,7 @@ export const BILLING_TOOL_DEFINITIONS = [
     scope: "stella:billing_write",
   }),
   defineValibotMcpTool({
+    consumesServices: false,
     annotations: {
       title: "Delete time entry",
       destructiveHint: true,
@@ -1585,6 +1589,7 @@ export const BILLING_TOOL_DEFINITIONS = [
     scope: "stella:billing_write",
   }),
   defineValibotMcpTool({
+    consumesServices: false,
     annotations: {
       title: "Resolve billing rate",
       destructiveHint: false,
@@ -1607,6 +1612,7 @@ export const BILLING_TOOL_DEFINITIONS = [
     scope: "stella:read",
   }),
   defineValibotMcpTool({
+    consumesServices: false,
     annotations: {
       title: "List invoices",
       destructiveHint: false,
@@ -1642,6 +1648,7 @@ export const BILLING_TOOL_DEFINITIONS = [
     scope: "stella:read",
   }),
   defineValibotMcpTool({
+    consumesServices: false,
     annotations: {
       title: "Get usage",
       destructiveHint: false,

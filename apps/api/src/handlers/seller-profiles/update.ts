@@ -20,7 +20,7 @@ const config = {
     "Update an active issuer profile in the active organization. Omitted " +
     "fields stay unchanged; null clears an optional field.",
   permissions: { organizationSettings: ["update"] },
-  mcp: { type: "capability", reason: "billing_admin" },
+  mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   params: sellerProfileParams,
   body: updateSellerProfileBody,
 } satisfies HandlerConfig;

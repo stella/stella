@@ -268,6 +268,14 @@ type EnsureAssistantMessageStartProps = {
   source: AsyncIterable<PublicStreamChunk>;
 };
 
+/** The chunk that tells the client which message the turn writes. */
+export const assistantMessageStartChunk = (messageId: string): StreamChunk => ({
+  type: EventType.TEXT_MESSAGE_START,
+  messageId,
+  role: "assistant",
+  timestamp: Temporal.Now.instant().epochMilliseconds,
+});
+
 export const ensureAssistantMessageStart = async function* ({
   getOrCreateMessageId,
   source,
@@ -288,12 +296,7 @@ export const ensureAssistantMessageStart = async function* ({
       });
       if (messageId !== null) {
         hasAssistantMessageStart = true;
-        yield {
-          type: EventType.TEXT_MESSAGE_START,
-          messageId,
-          role: "assistant",
-          timestamp: Temporal.Now.instant().epochMilliseconds,
-        };
+        yield assistantMessageStartChunk(messageId);
       }
     }
 

@@ -63,7 +63,11 @@ const config = {
     "The path, duplicate, file-count, and editability rules match " +
     "skills.resources.create, which takes the text directly as JSON.",
   permissions: { agentSkill: ["update"] },
-  mcp: { type: "capability", reason: "agent_tool_authoring" },
+  mcp: {
+    type: "capability",
+    reason: "agent_tool_authoring",
+    consumesServices: true,
+  },
   transport: {
     type: "file-input",
     input: {

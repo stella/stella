@@ -36,6 +36,23 @@ describe("WorkspaceShell", () => {
     expect(markup).toContain('data-slot="workspace-shell-content"');
   });
 
+  test("leaves the chrome divider to the top bar, not the page under it", () => {
+    const markup = renderToStaticMarkup(
+      <WorkspaceShell
+        navigation={{ content: <nav>Navigation</nav>, mode: "responsive" }}
+        topBar={() => <header className="border-b">Header</header>}
+      >
+        <div className="border-t">Page</div>
+      </WorkspaceShell>,
+    );
+
+    // A page root's own top border would sit on the header's border-b and
+    // read as one 2px line; the content slot takes it off its first child.
+    expect(markup).toMatch(
+      /<div class="[^"]*\[&amp;&gt;\*:first-child\]:border-t-0[^"]*" data-slot="workspace-shell-content"><div class="border-t">Page<\/div>/u,
+    );
+  });
+
   test("owns a controlled compact navigation without mounting its portal on desktop", () => {
     const markup = renderToStaticMarkup(
       <WorkspaceShell
