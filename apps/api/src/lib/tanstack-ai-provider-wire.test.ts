@@ -331,7 +331,7 @@ describe("provider wire corpus", () => {
         hints.push(response.headers.get("retry-after-ms"));
         expect(response.status).toBe(exchange.response.status);
         expect(new Uint8Array(await response.arrayBuffer())).toEqual(
-          bodyBytesOf(exchange.response.body),
+          new Uint8Array(bodyBytesOf(exchange.response.body)),
         );
         for (const [name, value] of Object.entries(exchange.response.headers)) {
           expect(response.headers.get(name)).toBe(value);
