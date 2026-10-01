@@ -348,7 +348,6 @@ run_step "Format" run_format
 run_step "Rust format" run_rust_format
 run_step "Generate web sources" bun run generate
 run_step "Web API types determinism guard" bun --filter @stll/api gen:web-api-types --check
-run_step "Route tree determinism guard" bun --filter @stll/web generate:route-tree --check
 run_step "Typecheck coverage" run_typecheck_coverage
 run_step "Code quality" run_code_check
 run_step "Query cache types" bun run check:query-cache-types

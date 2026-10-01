@@ -270,6 +270,7 @@ describe("changed-file autofix boundary", () => {
         "mcp-surface",
         "module-ownership",
         "design-tokens",
+        "route-tree",
       ].toSorted(),
     );
     for (const generator of ordered) {

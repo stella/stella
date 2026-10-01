@@ -198,6 +198,23 @@ export const GENERATORS = [
     after: [],
   },
   {
+    id: "route-tree",
+    outputs: ["apps/web/src/routeTree.gen.ts"],
+    inputs: [
+      "apps/web/src/routes/**",
+      "apps/web/vite.config.ts",
+      "apps/web/route-tree.config.ts",
+      "apps/web/scripts/generate-route-tree.ts",
+      "apps/web/package.json",
+      "bun.lock",
+    ],
+    write: ["bun", "--filter", "@stll/web", "generate:route-tree"],
+    check: null,
+    checkedBy: "Route tree drift guard",
+    autofix: true,
+    after: [],
+  },
+  {
     id: "model-rates",
     outputs: ["packages/ai-catalog/src/model-rates.gen.ts"],
     inputs: MODEL_CATALOG_INPUTS,

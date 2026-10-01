@@ -216,7 +216,7 @@ test("the generated-output guards skip unrelated pull requests but never full de
   }
 });
 
-test("route tree determinism follows route inputs and full-depth runs", () => {
+test("route tree freshness follows route inputs and full-depth runs", () => {
   for (const file of [
     "apps/web/src/routes/index.tsx",
     "apps/web/src/routes/law/route.tsx",
@@ -860,7 +860,7 @@ test("ci-checks gates each generated-output guard on its planned scope", () => {
   ).steps;
   for (const [name, scope] of [
     ["Web API types determinism guard", "web_api_types_required"],
-    ["Route tree determinism guard", "route_tree_required"],
+    ["Route tree drift guard", "route_tree_required"],
     ["Published export map guard", "published_exports_required"],
   ] as const) {
     const condition = steps.find((step) => step.name === name)?.if ?? "";

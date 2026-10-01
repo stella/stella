@@ -362,10 +362,10 @@ jobs:
                 web_build_required=true
                 ;;
             esac
-            # The route-tree generator's Turbo input contract also governs
-            # its uncached determinism check.
+            # The route-tree generator reads the web package script and config
+            # as well as the route sources; all must trigger its drift guard.
             case "$file" in
-              apps/web/src/routes/*|apps/web/vite.config.ts|apps/web/route-tree.config.ts|apps/web/tsr.config.json|apps/web/scripts/generate-route-tree.ts|apps/web/package.json|apps/web/src/routeTree.gen.ts|bun.lock|bunfig.toml|package.json|.npmrc|turbo.json|.github/workflows/ci.yml)
+              apps/web/src/routes/*|apps/web/vite.config.ts|apps/web/route-tree.config.ts|apps/web/scripts/generate-route-tree.ts|apps/web/package.json|apps/web/src/routeTree.gen.ts|bun.lock)
                 route_tree_required=true
                 ;;
             esac
@@ -1259,7 +1259,7 @@ jobs:
         # compiler identity assertion against the inferred API contract.
         run: bun --filter @stll/api gen:web-api-types --check
 
-      - name: Route tree determinism guard
+      - name: Route tree drift guard
         if: >-
           needs.ci-plan.outputs.package_checks_required == 'true'
           && needs.ci-plan.outputs.route_tree_required == 'true'
@@ -2468,7 +2468,6 @@ jobs:
             bash scripts/retry.sh bun ci --ignore-scripts
             # The merge base can predate the root generate script.
             bun --filter @stll/api gen:web-api-types
-            bun --filter @stll/web generate:route-tree
             bun run typegen
           )
           bun scripts/typecheck-baseline.ts --measure "$base_dir" "$RUNNER_TEMP/typecheck-base.json"

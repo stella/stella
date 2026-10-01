@@ -64,11 +64,9 @@ test("Guard A rejects an unregistered generated source and ignores ordinary comm
   ]) {
     expect(isGeneratedCandidate(unknown, header)).toBe(false);
   }
-  expect(isRegisteredGeneratedFile("apps/web/src/routeTree.gen.ts")).toBe(
-    false,
-  );
+  expect(isRegisteredGeneratedFile("apps/web/src/routeTree.gen.ts")).toBe(true);
   expect(isUnregisteredGeneratedFile("apps/web/src/routeTree.gen.ts", "")).toBe(
-    true,
+    false,
   );
   expect(isRegisteredGeneratedFile("apps/desktop/src-tauri/Cargo.lock")).toBe(
     true,
@@ -169,7 +167,7 @@ test("autofix selects only owners of changed inputs and preserves dependencies",
     generatorsForFiles(["apps/web/src/routes/law/index.tsx"]).map(
       ({ id }) => id,
     ),
-  ).toEqual(["ratchet-improvements", "module-ownership"]);
+  ).toEqual(["ratchet-improvements", "module-ownership", "route-tree"]);
   expect(generatorsForFiles(["docs/unrelated.md"]).map(({ id }) => id)).toEqual(
     ["ratchet-improvements"],
   );
@@ -355,7 +353,7 @@ test("autofix refuses an empty selected-generator handoff", () => {
 });
 
 test("lint selection derives committed generated outputs from the manifest", () => {
-  expect(isChangedLintPath("apps/web/src/routeTree.gen.ts")).toBe(true);
+  expect(isChangedLintPath("apps/web/src/routeTree.gen.ts")).toBe(false);
   expect(isChangedLintPath("packages/skills/src/blueprints.gen.ts")).toBe(
     false,
   );
@@ -379,6 +377,18 @@ const casePatternsAfter = (marker: string) => {
   expect(match, marker).not.toBeNull();
   return (match?.[1] ?? "").split("|");
 };
+
+test("route-tree CI scope covers every manifest input and output", () => {
+  const routeTree = generator("route-tree");
+  const paths = [...routeTree.inputs, ...routeTree.outputs].map((glob) =>
+    glob.replace(/\/\*\*$/u, "/*"),
+  );
+  expect(
+    casePatternsAfter(
+      "# The route-tree generator reads the web package script",
+    ).toSorted(),
+  ).toEqual(paths.toSorted());
+});
 
 test("CI rate snapshot scope stays pinned to the manifest", () => {
   const inputs = generator("model-rates").inputs.map((glob) =>
@@ -418,7 +428,6 @@ const generationInputs = (name: string) => {
 test("CI determinism selectors cover the cached generators' input contracts", () => {
   for (const [name, marker] of [
     ["generate:api-types", "# The web API types"],
-    ["generate:route-tree", "# The route-tree generator"],
   ] as const) {
     const selectors = casePatternsAfter(marker);
     for (const glob of generationInputs(name)) {

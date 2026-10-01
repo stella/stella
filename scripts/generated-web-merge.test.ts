@@ -14,15 +14,8 @@ import path from "node:path";
 import ts from "typescript";
 
 const repository = path.resolve(import.meta.dir, "..");
-const generators = [
-  "apps/api/scripts/generate-web-api-types.ts",
-  "apps/web/scripts/generate-route-tree.ts",
-];
-const revisionGenerator = "scripts/generate-revision-route-tree.ts";
-const outputs = [
-  "apps/web/src/generated/api-routes.gen.ts",
-  "apps/web/src/routeTree.gen.ts",
-];
+const generators = ["apps/api/scripts/generate-web-api-types.ts"];
+const outputs = ["apps/web/src/generated/api-routes.gen.ts"];
 
 type WriteOptions = { directory: string; file: string; source: string };
 
@@ -109,7 +102,7 @@ const generate = (directory: string, check = false) => {
 const fixture = () => {
   const directory = mkdtempSync(path.join(tmpdir(), "stella-generated-merge-"));
   try {
-    for (const generator of [...generators, revisionGenerator]) {
+    for (const generator of generators) {
       copyGenerator({ directory, file: generator, copied: new Set() });
     }
     write({
@@ -149,12 +142,6 @@ const fixture = () => {
       source:
         "export interface Routes { base: { get: { response: { 200: string } } } }\n",
     });
-    write({
-      directory,
-      file: "apps/web/src/routes/__root.tsx",
-      source:
-        'import { createRootRoute } from "@tanstack/react-router";\nexport const Route = createRootRoute();\n',
-    });
     run(directory, ["git", "init", "-q"]);
     run(directory, ["git", "add", "."]);
     run(directory, [
@@ -191,7 +178,7 @@ const fixture = () => {
   }
 };
 
-test("independent source routes merge cleanly and both generated outputs remain reproducible and untracked", () => {
+test("independent source routes merge cleanly and the generated API output remains reproducible and untracked", () => {
   const { directory, temporaryRoot } = fixture();
   try {
     const base = run(directory, ["git", "rev-parse", "HEAD"]);
@@ -202,11 +189,6 @@ test("independent source routes merge cleanly and both generated outputs remain 
         directory,
         file: `apps/api/src/${route}.ts`,
         source: `import "./routes";\ndeclare module "./routes" { interface Routes { ${route}: { get: { response: { 200: "${route}" } } } } }\n`,
-      });
-      write({
-        directory,
-        file: `apps/web/src/routes/${route}.tsx`,
-        source: `import { createFileRoute } from "@tanstack/react-router";\nexport const Route = createFileRoute("/${route}")({});\n`,
       });
       // Ambient route modules must be reached from the contract's program.
       write({
@@ -288,110 +270,6 @@ test("API determinism check rejects output that changes between generation passe
     expect(result.stderr.toString()).toMatch(
       /not deterministic|non.deterministic|not reproducible/iu,
     );
-  } finally {
-    rmSync(temporaryRoot, { recursive: true, force: true });
-  }
-}, 30_000);
-
-test("route tree determinism check rejects output that changes between generation passes", () => {
-  const { directory, temporaryRoot } = fixture();
-  try {
-    const generator = generators.at(1);
-    if (generator === undefined) {
-      panic("Route tree generator fixture is missing");
-    }
-    const file = path.join(directory, generator);
-    const source = readFileSync(file, "utf-8");
-    const boundary = "await new Generator({ config, root: webRoot }).run();";
-    expect(source.split(boundary)).toHaveLength(3);
-    writeFileSync(
-      file,
-      source.replaceAll(
-        boundary,
-        () => `${boundary}
-    await writeFile(generatedRouteTree, (await readFile(generatedRouteTree, "utf8")) + "// Mutation: " + performance.now() + "\\n");`,
-      ),
-    );
-    const result = Bun.spawnSync([process.execPath, generator, "--check"], {
-      cwd: directory,
-    });
-    expect(result.exitCode).not.toBe(0);
-    expect(result.stderr.toString()).toMatch(
-      /not deterministic|non.deterministic|not reproducible/iu,
-    );
-  } finally {
-    rmSync(temporaryRoot, { recursive: true, force: true });
-  }
-}, 30_000);
-
-test("revision route generation accepts physical sources and rejects executable virtual modules and symlinks before execution", () => {
-  const { directory, temporaryRoot } = fixture();
-  try {
-    write({
-      directory,
-      file: "apps/web/src/routes/base.tsx",
-      source:
-        'import { createFileRoute } from "@tanstack/react-router";\nexport const Route = createFileRoute("/base")({});\n',
-    });
-    run(directory, ["git", "add", "."]);
-    run(directory, [
-      "git",
-      "-c",
-      "commit.gpgsign=false",
-      "commit",
-      "-qm",
-      "physical route",
-    ]);
-    const base = run(directory, ["git", "rev-parse", "HEAD"]);
-    const output = path.join(temporaryRoot, "revision-tree.ts");
-    run(directory, [process.execPath, revisionGenerator, base, output]);
-    const tree = readFileSync(output, "utf-8");
-    expect(tree).toContain("export const routeTree");
-    expect(tree).toContain("/base");
-    expect(tree).toContain("./routes/__root");
-    const marker = path.join(temporaryRoot, "executed-marker");
-    const executableSource = `import { writeFileSync } from "node:fs";\nwriteFileSync(${JSON.stringify(marker)}, "executed");\nthrow new Error("Revision route source executed");\n`;
-    for (const route of ["__virtual.js", "prefix__virtual.js", "linked.js"]) {
-      run(directory, ["git", "checkout", "-q", "--detach", base]);
-      const routeFile = `apps/web/src/routes/${route}`;
-      if (route === "linked.js") {
-        write({
-          directory,
-          file: "executable-route.js",
-          source: executableSource,
-        });
-        symlinkSync(
-          "../../../../executable-route.js",
-          path.join(directory, routeFile),
-        );
-      } else {
-        write({ directory, file: routeFile, source: executableSource });
-      }
-      run(directory, ["git", "add", "."]);
-      run(directory, [
-        "git",
-        "-c",
-        "commit.gpgsign=false",
-        "commit",
-        "-qm",
-        "unsafe route",
-      ]);
-      const entry = run(directory, ["git", "ls-tree", "HEAD", "--", routeFile]);
-      expect(entry).toMatch(
-        route === "linked.js" ? /^120000 blob /u : /^100644 blob /u,
-      );
-      rmSync(output, { force: true });
-      const result = Bun.spawnSync(
-        [process.execPath, revisionGenerator, "HEAD", output],
-        { cwd: directory },
-      );
-      expect(result.exitCode).not.toBe(0);
-      expect(result.stderr.toString()).toContain(
-        "Revision route generation requires regular physical route files",
-      );
-      expect(existsSync(marker)).toBe(false);
-      expect(existsSync(output)).toBe(false);
-    }
   } finally {
     rmSync(temporaryRoot, { recursive: true, force: true });
   }
