@@ -286,3 +286,46 @@ test("API determinism check rejects output that changes between generation passe
     rmSync(temporaryRoot, { recursive: true, force: true });
   }
 }, 30_000);
+
+test("consumer generation prints once while the dedicated check validates identity once", () => {
+  const { directory, temporaryRoot } = fixture();
+  try {
+    const generator = generators.at(0);
+    if (generator === undefined) {
+      panic("API generator fixture is missing");
+    }
+    const printed = run(directory, [process.execPath, generator]);
+    expect(printed.match(/printed in/gu)).toHaveLength(1);
+    expect(printed).not.toContain("identity verified");
+    const checked = run(directory, [process.execPath, generator, "--check"]);
+    expect(checked.match(/printed in/gu)).toHaveLength(2);
+    expect(checked.match(/identity verified/gu)).toHaveLength(1);
+    expect(checked).toContain("verified deterministic");
+
+    const file = path.join(directory, generator);
+    const source = readFileSync(file, "utf-8");
+    const boundary = "layout(text)";
+    expect(source.split(boundary)).toHaveLength(3);
+    writeFileSync(
+      file,
+      source.replaceAll(
+        boundary,
+        'layout(text).replaceAll("string", "number")',
+      ),
+    );
+    run(directory, [process.execPath, generator]);
+    const output = outputs.at(0) ?? panic("API generator output is missing");
+    expect(readFileSync(path.join(directory, output), "utf-8")).toContain(
+      "number",
+    );
+    const result = Bun.spawnSync([process.execPath, generator, "--check"], {
+      cwd: directory,
+    });
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr.toString()).toContain(
+      "not identical to the inferred API types",
+    );
+  } finally {
+    rmSync(temporaryRoot, { recursive: true, force: true });
+  }
+}, 30_000);

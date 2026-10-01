@@ -36,9 +36,15 @@
         "!$TURBO_ROOT$/apps/**/node_modules/**",
         "!$TURBO_ROOT$/apps/**/.cache/**",
         "!$TURBO_ROOT$/apps/**/dist/**",
+        "!$TURBO_ROOT$/apps/**/.env*",
+        "!$TURBO_ROOT$/apps/**/.turbo/**",
+        "!$TURBO_ROOT$/apps/**/*.tsbuildinfo",
         "!$TURBO_ROOT$/packages/**/node_modules/**",
         "!$TURBO_ROOT$/packages/**/.cache/**",
         "!$TURBO_ROOT$/packages/**/dist/**",
+        "!$TURBO_ROOT$/packages/**/.env*",
+        "!$TURBO_ROOT$/packages/**/.turbo/**",
+        "!$TURBO_ROOT$/packages/**/*.tsbuildinfo",
         "!src/generated/api-routes.gen.ts"
       ],
       "outputs": ["src/generated/api-routes.gen.ts"]

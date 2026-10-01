@@ -2478,6 +2478,9 @@ jobs:
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@aff5017c264acce5a2bcdf15876da08835e6de70
 
+      - name: Turbo remote cache
+        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+
       - name: Install dependencies
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
@@ -2500,8 +2503,15 @@ jobs:
           (
             cd "$base_dir"
             bash scripts/retry.sh bun ci --ignore-scripts
-            # The merge base can predate the root generate script.
-            bun --filter @stll/api gen:web-api-types
+            # Older bases commit the snapshot. Generate only when the base
+            # owns an untracked output, using its cached producer if present.
+            if [[ ! -f apps/web/src/generated/api-routes.gen.ts ]]; then
+              if bun -e 'process.exit("generate" in require("./package.json").scripts ? 0 : 1)'; then
+                bun run generate
+              else
+                bun --filter @stll/api gen:web-api-types
+              fi
+            fi
             bun run typegen
           )
           bun scripts/typecheck-baseline.ts --measure "$base_dir" "$RUNNER_TEMP/typecheck-base.json"

@@ -1,7 +1,7 @@
 // Prints the API types apps/web consumes (`WebApiContract` in
 // src/eden-contract.ts) into apps/web/src/generated/api-routes.gen.ts. apps/web
 // type-checks against that snapshot instead of re-inferring the whole API
-// graph. The API implementation stays the source of truth: every run asserts,
+// graph. The API implementation stays the source of truth: --check asserts,
 // through the compiler's identity relation, that each printed type is
 // identical to the inferred one. `--check` generates twice and fails if the
 // bytes differ; the output is local build input rather than committed state.
@@ -1214,7 +1214,9 @@ const verifyIdentity = ({
 
 // --- CLI --------------------------------------------------------------------------
 
-const generate = () => {
+type GenerateOptions = { validation: "identity" | "print" };
+
+const generate = ({ validation }: GenerateOptions) => {
   const started = performance.now();
   const program = createApiProgram({ virtualFiles: new Map() });
   const contractSource =
@@ -1228,14 +1230,6 @@ const generate = () => {
     responseDates: RESPONSE_DATES.wire,
   });
   const output = renderOutput(result);
-  const declaredOutput = renderOutput(
-    printContract({
-      program,
-      contractSource,
-      webDependencies,
-      responseDates: RESPONSE_DATES.declared,
-    }),
-  );
 
   for (const [reason, occurrences] of result.fallbacks) {
     console.error(
@@ -1250,6 +1244,24 @@ const generate = () => {
   );
 
   const printed = performance.now();
+
+  // Consumer tasks only need the printout. The dedicated CI --check owns
+  // identity validation and determinism, without charging each compiler job.
+  if (validation === "print") {
+    console.log(
+      `generate-web-api-types: printed in ${Math.round(printed - started)} ms`,
+    );
+    return output;
+  }
+
+  const declaredOutput = renderOutput(
+    printContract({
+      program,
+      contractSource,
+      webDependencies,
+      responseDates: RESPONSE_DATES.declared,
+    }),
+  );
 
   const diagnostics = verifyIdentity({
     names: result.declarations.map(({ name }) => name),
@@ -1279,8 +1291,8 @@ const main = () => {
     panic(`generate-web-api-types: unknown arguments ${args.join(" ")}`);
   }
   const started = performance.now();
-  const output = generate();
-  if (check && generate() !== output) {
+  const output = generate({ validation: check ? "identity" : "print" });
+  if (check && generate({ validation: "print" }) !== output) {
     panic(
       "generate-web-api-types: output is not deterministic across two generations",
     );

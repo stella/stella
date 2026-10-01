@@ -14,7 +14,7 @@ const root = path.resolve(import.meta.dir, "../../..");
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-test("ignored API types restore from Turbo cache and API source edits invalidate it", () => {
+test("API types generate once across compiler tasks and restore until source inputs change", () => {
   const parsed: unknown = Bun.JSONC.parse(
     readFileSync(path.join(root, "turbo.json"), "utf-8"),
   );
@@ -22,6 +22,18 @@ test("ignored API types restore from Turbo cache and API source edits invalidate
     panic("Turbo configuration has no tasks");
   }
   const tasks = parsed["tasks"];
+  const consumers = ["lint", "typecheck", "test"];
+  const consumerTasks: Record<string, unknown> = {};
+  for (const consumer of consumers) {
+    const task = tasks[`@stll/web#${consumer}`];
+    if (!isRecord(task) || !Array.isArray(task["dependsOn"])) {
+      panic(`Missing web compiler task: ${consumer}`);
+    }
+    expect(task["dependsOn"]).toContain("generate:api-types");
+    consumerTasks[`@stll/web#${consumer}`] = {
+      dependsOn: task["dependsOn"],
+    };
+  }
   const directory = mkdtempSync(
     path.join(tmpdir(), "stella-web-generation-cache-"),
   );
@@ -55,6 +67,12 @@ test("ignored API types restore from Turbo cache and API source edits invalidate
         name: "@stll/web",
         scripts: {
           "generate:api-types": "bun ../api/scripts/generate-web-api-types.ts",
+          ...Object.fromEntries(
+            consumers.map((consumer) => [
+              consumer,
+              `bun -e 'if (!require("node:fs").existsSync("src/generated/api-routes.gen.ts")) process.exit(1)'`,
+            ]),
+          ),
         },
       }),
     );
@@ -81,6 +99,8 @@ test("ignored API types restore from Turbo cache and API source edits invalidate
       JSON.stringify({
         tasks: {
           "@stll/web#generate:api-types": tasks["@stll/web#generate:api-types"],
+          transit: {},
+          ...consumerTasks,
         },
       }),
     );
@@ -108,8 +128,9 @@ test("ignored API types restore from Turbo cache and API source edits invalidate
       "--cache-dir",
       path.join(directory, ".turbo/cache"),
     ];
-    run(command);
+    run([...command.slice(0, 2), ...consumers, ...command.slice(3)]);
     const executions = readFileSync(path.join(directory, "runs.log"), "utf-8");
+    expect(executions.trim().split("\n")).toHaveLength(1);
     expect(readFileSync(path.join(directory, "task-hash"), "utf-8")).toMatch(
       /^[a-f0-9]+$/u,
     );
@@ -119,6 +140,18 @@ test("ignored API types restore from Turbo cache and API source edits invalidate
     );
     run(["git", "check-ignore", "apps/web/src/generated/api-routes.gen.ts"]);
     rmSync(output);
+    // Environment setup and compiler outputs must not change producer inputs.
+    for (const file of [
+      "apps/api/.env",
+      "apps/api/.env.local",
+      "apps/api/.turbo/turbo-typecheck.log",
+      "apps/api/tsconfig.tsbuildinfo",
+      "packages/scripts/.turbo/turbo-lint.log",
+      "packages/scripts/.cache/tsbuildinfo.json",
+      "packages/scripts/tsconfig.tsbuildinfo",
+    ]) {
+      write(file, "transient output\n");
+    }
     run(command);
     expect(readFileSync(path.join(directory, "runs.log"), "utf-8")).toBe(
       executions,
