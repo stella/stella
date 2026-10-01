@@ -104,6 +104,7 @@ describe("computeRawUsageMicroUnits", () => {
     "gpt-6-astra": [272_000, 277_000, 551_502],
     "gpt-6-sol": [272_000, 55_400, 110_301],
     "gpt-6-luna": [272_000, 2770, 5516],
+    "gpt-6.1-sol": [272_000, 55_400, 110_301],
   } as const;
 
   test("the tier boundary table covers exactly the tiered rate schedules", () => {

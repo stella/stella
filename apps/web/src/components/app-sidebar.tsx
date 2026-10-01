@@ -1676,6 +1676,15 @@ const MatterActivityList = ({
                 kind={item.entityKind}
                 mimeType={item.mimeType}
                 status={item.status}
+                thumbnail={
+                  item.fieldId
+                    ? {
+                        fieldId: item.fieldId,
+                        hasThumbnail: item.hasThumbnail,
+                        workspaceId,
+                      }
+                    : null
+                }
               />
             )}
             <BidiText as="span" className="min-w-0 flex-1 truncate text-start">

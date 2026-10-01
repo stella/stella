@@ -317,6 +317,7 @@ const transformTable = (
           case "table":
             return transformTable(block, context);
           case "blockSdt":
+          case "blockCustomXml":
             return {
               ...block,
               content: block.content.map((child) =>
@@ -350,6 +351,7 @@ const transformBlock = (
     case "table":
       return transformTable(block, context);
     case "blockSdt":
+    case "blockCustomXml":
       return {
         ...block,
         content: block.content.map((child) => transformBlock(child, context)),
@@ -482,6 +484,7 @@ export const styleDocumentCitationsWithCounts = (
           }
           return;
         case "blockSdt":
+        case "blockCustomXml":
           for (const child of block.content) {
             countInlineCitations(child);
           }
