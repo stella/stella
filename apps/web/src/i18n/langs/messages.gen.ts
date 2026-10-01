@@ -5978,6 +5978,7 @@ type Messages = {
         "submit": "Export report";
         "templateLabel": "Report template";
         "title": "Export report";
+        "withoutAiSummaries": "Export without AI summaries";
       };
       "saveAsTemplate": "Save as preset…";
       "selectProperty": "Select property";

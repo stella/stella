@@ -5974,7 +5974,8 @@
         "openReport": "Atverti ataskaitą",
         "submit": "Eksportuoti ataskaitą",
         "templateLabel": "Ataskaitos šablonas",
-        "title": "Eksportuoti ataskaitą"
+        "title": "Eksportuoti ataskaitą",
+        "withoutAiSummaries": "Eksportuoti be DI santraukų"
       },
       "saveAsTemplate": "Išsaugoti kaip išankstinį nustatymą…",
       "selectProperty": "Pasirinkti savybę",

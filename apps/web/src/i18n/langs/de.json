@@ -5974,7 +5974,8 @@
         "openReport": "Bericht öffnen",
         "submit": "Bericht exportieren",
         "templateLabel": "Berichtsvorlage",
-        "title": "Bericht exportieren"
+        "title": "Bericht exportieren",
+        "withoutAiSummaries": "Ohne KI-Zusammenfassungen exportieren"
       },
       "saveAsTemplate": "Als Voreinstellung speichern…",
       "selectProperty": "Eigenschaft auswählen",

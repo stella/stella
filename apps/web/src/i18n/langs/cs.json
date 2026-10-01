@@ -5974,7 +5974,8 @@
         "openReport": "Otevřít zprávu",
         "submit": "Uložit zprávu",
         "templateLabel": "Vzor zprávy",
-        "title": "Uložit zprávu"
+        "title": "Uložit zprávu",
+        "withoutAiSummaries": "Uložit bez shrnutí od AI"
       },
       "saveAsTemplate": "Uložit jako předvolbu…",
       "selectProperty": "Vybrat vlastnost",

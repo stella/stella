@@ -5974,7 +5974,8 @@
         "openReport": "Ouvrir le rapport",
         "submit": "Exporter le rapport",
         "templateLabel": "Modèle de rapport",
-        "title": "Exporter le rapport"
+        "title": "Exporter le rapport",
+        "withoutAiSummaries": "Exporter sans résumés générés par IA"
       },
       "saveAsTemplate": "Enregistrer comme préréglage…",
       "selectProperty": "Sélectionner une propriété",

@@ -5974,7 +5974,8 @@
         "openReport": "Abrir informe",
         "submit": "Exportar informe",
         "templateLabel": "Plantilla de informe",
-        "title": "Exportar informe"
+        "title": "Exportar informe",
+        "withoutAiSummaries": "Exportar sin resúmenes de IA"
       },
       "saveAsTemplate": "Guardar como preajuste…",
       "selectProperty": "Seleccionar propiedad",

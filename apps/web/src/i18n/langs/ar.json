@@ -5974,7 +5974,8 @@
         "openReport": "فتح التقرير",
         "submit": "تصدير التقرير",
         "templateLabel": "قالب التقرير",
-        "title": "تصدير التقرير"
+        "title": "تصدير التقرير",
+        "withoutAiSummaries": "تصدير بدون ملخصات الذكاء الاصطناعي"
       },
       "saveAsTemplate": "الحفظ كإعداد مسبق…",
       "selectProperty": "اختر الخاصية",
