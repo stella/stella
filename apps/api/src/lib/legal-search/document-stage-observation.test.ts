@@ -17,6 +17,7 @@ import {
   type IngestionResult,
   type SyncPage,
 } from "@/api/lib/legal-search/ingestion-types";
+import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 
 import {
   observePublisherDocumentFetch,
@@ -419,6 +420,41 @@ describe("document-stage observation windows", () => {
       filled: 0,
       attempted: 1,
     });
+  });
+
+  test("a callback that hangs in a nested unit cannot starve the page's built-in log", async () => {
+    const logs = installRecordingLogger();
+    let callbacks = 0;
+    const page = Result.ok({
+      decisions: [],
+      nextCursor: null,
+    } satisfies SyncPage);
+    const result = await withDocumentStageWindow({
+      source: ADAPTER_KEYS.CZ_NSS,
+      observe: async () => {
+        callbacks += 1;
+        await new Promise<never>(() => {
+          // Never settles: the callback hangs until its budget runs out.
+        });
+      },
+      now: () => 0,
+      fetchPage: async () => {
+        await withDocumentStageObserver({
+          source: ADAPTER_KEYS.CZ_NSS,
+          execute: async () =>
+            await observePublisherDocumentFetch({
+              source: ADAPTER_KEYS.CZ_NSS,
+              fetch: async () => new Response(null, { status: 503 }),
+            }),
+        });
+        return page;
+      },
+    }).finally(() => logs.restore());
+    expect(result).toBe(page);
+    expect(callbacks).toBeGreaterThan(0);
+    const logged = logs.records.map(({ message }) => message);
+    expect(logged).toContain(DOCUMENT_FETCH_EVENT.fetchOutcome);
+    expect(logged).toContain(DOCUMENT_FETCH_EVENT.window);
   });
 
   test("concurrent sources retain their own callbacks and counters", async () => {

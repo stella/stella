@@ -27,6 +27,8 @@ type DocumentWindowContext = {
   source: AdapterKey;
   observe: ReturnType<typeof createSafeDocumentStageObserver>;
   budget: ReturnType<typeof createDocumentObserverBudget>;
+  /** Separate from `budget`, so a slow callback cannot starve the built-in log. */
+  logBudget: ReturnType<typeof createDocumentObserverBudget>;
   log: ReturnType<typeof createSafeDocumentStageObserver>;
   attempted: number;
   failed: number;
@@ -78,15 +80,20 @@ export const withDocumentStageObserver = async <T>({
     parent?.source === source
       ? parent.budget
       : createDocumentObserverBudget(observe);
+  const logBudget =
+    parent?.source === source
+      ? parent.logBudget
+      : createDocumentObserverBudget();
   const context: DocumentWindowContext = {
     source,
     budget,
+    logBudget,
     observe: createSafeDocumentStageObserver(
       observe ?? inheritedObserver ?? (() => undefined),
       { budget, reportFailure: reportDocumentStageObserverFailure },
     ),
     log: createSafeDocumentStageObserver(writeDocumentStageObservation, {
-      budget,
+      budget: logBudget,
       observer: "builtin",
       reportFailure: reportDocumentStageObserverFailure,
     }),
@@ -279,15 +286,17 @@ export const withDocumentStageWindow = async ({
   now = () => performance.now(),
 }: DocumentStagePageOptions): Promise<Result<SyncPage, AdapterFetchError>> => {
   const budget = createDocumentObserverBudget(observe);
+  const logBudget = createDocumentObserverBudget();
   const context: DocumentWindowContext = {
     source,
     budget,
+    logBudget,
     observe: createSafeDocumentStageObserver(observe, {
       budget,
       reportFailure: reportDocumentStageObserverFailure,
     }),
     log: createSafeDocumentStageObserver(writeDocumentStageObservation, {
-      budget,
+      budget: logBudget,
       observer: "builtin",
       reportFailure: reportDocumentStageObserverFailure,
     }),
