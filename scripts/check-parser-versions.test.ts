@@ -120,6 +120,66 @@ test("missing and equal bumps fail, catching merge-group version collisions", ()
   ]);
 });
 
+test("registered versions cannot decrease, including unchanged and exempted output", () => {
+  const base = fixture({ versions: { A: 2 } });
+  for (const parserSource of [
+    "export const parseA = () => helper();\n",
+    "export const parseA = () => 'changed';\n",
+    "// parser-output-unchanged: refactor only\nexport const parseA = () => helper();\n",
+  ]) {
+    const head = fixture({
+      versions: { A: 1 },
+      parserSources: { A: parserSource },
+    });
+    expect(changed(base, head)).toEqual([
+      "test-a: parser version 1 must not be lower than base 2",
+    ]);
+  }
+});
+
+test("adapter case-law helpers are owned without unrelated dependency fan-out", () => {
+  const helper = "apps/api/src/lib/case-law/court.ts";
+  const nestedHelper = "apps/api/src/lib/case-law/court-name.ts";
+  const logger = "apps/api/src/lib/logger.ts";
+  const base = fixture();
+  const head = fixture();
+  const bumped = fixture({ versions: { A: 2 } });
+  for (const tree of [base, head, bumped]) {
+    const adapter = `${ADAPTERS}adapter-a.ts`;
+    tree.set(
+      adapter,
+      [
+        'import { court } from "@/api/lib/case-law/court";',
+        tree.get(adapter),
+        "export const assemble = () => court();",
+      ].join("\n"),
+    );
+    tree.set(
+      helper,
+      [
+        'import { courtName } from "./court-name";',
+        'import { log } from "../logger";',
+        "export const court = () => { log(); return courtName(); };",
+      ].join("\n"),
+    );
+    tree.set(nestedHelper, "export const courtName = () => 'base';");
+    tree.set(logger, "export const log = () => {};");
+  }
+  for (const file of [helper, nestedHelper]) {
+    const edited = new Map(head);
+    const editedBumped = new Map(bumped);
+    const source = `${base.get(file)}\nexport const output = 'changed';`;
+    edited.set(file, source);
+    editedBumped.set(file, source);
+    expect(changed(base, edited)).toEqual([
+      expect.stringContaining("test-a: parser version 1 must exceed base 1"),
+    ]);
+    expect(changed(base, editedBumped)).toEqual([]);
+  }
+  head.set(logger, "export const log = () => 'changed';");
+  expect(changed(base, head)).toEqual([]);
+});
+
 test("a shared helper change fans out to every importing adapter", () => {
   const base = fixture();
   const oneVersionBumped = fixture({
@@ -173,8 +233,10 @@ test("a marker in another changed file does not exempt an unmarked parser change
     helperSource: "export const helper = () => 'changed';\n",
   });
 
-  expect(changed(base, head)).toContain(
-    expect.stringContaining("test-a: parser version 1 must exceed base 1"),
+  expect(changed(base, head)).toEqual(
+    expect.arrayContaining([
+      expect.stringContaining("test-a: parser version 1 must exceed base 1"),
+    ]),
   );
 });
 
@@ -193,14 +255,18 @@ test("registry additions are discovered automatically and still require versions
   });
 
   expect(changed(withoutC, addedC)).toEqual([]);
-  expect(changed(base, changedC)).toContain(
-    expect.stringContaining("test-c: parser version 1 must exceed base 1"),
+  expect(changed(base, changedC)).toEqual(
+    expect.arrayContaining([
+      expect.stringContaining("test-c: parser version 1 must exceed base 1"),
+    ]),
   );
   expect(changed(base, bumpedC)).toEqual([]);
-  expect(changed(base, fixture({ missingVersion: "A" }))).toContain(
-    expect.stringContaining(
-      "Registry entry ADAPTER_KEYS.A has no resolvable adapter or parser version",
-    ),
+  expect(changed(base, fixture({ missingVersion: "A" }))).toEqual(
+    expect.arrayContaining([
+      expect.stringContaining(
+        "Registry entry ADAPTER_KEYS.A has no resolvable adapter or parser version",
+      ),
+    ]),
   );
 });
 
@@ -223,8 +289,10 @@ test("adapter-local output changes require a bump", () => {
     adapter,
     `${head.get(adapter)}\nexport const assemble = () => 'changed output';\n`,
   );
-  expect(changed(base, head)).toContain(
-    expect.stringContaining("test-a: parser version 1 must exceed base 1"),
+  expect(changed(base, head)).toEqual(
+    expect.arrayContaining([
+      expect.stringContaining("test-a: parser version 1 must exceed base 1"),
+    ]),
   );
 });
 
@@ -235,8 +303,10 @@ test("unresolved repository dependencies fail closed", () => {
     `${PARSERS}parser-a.ts`,
     'import { missing } from "./missing-parser"; export const parseA = () => missing();',
   );
-  expect(changed(base, head)).toContain(
-    expect.stringContaining("Unresolved repository import ./missing-parser"),
+  expect(changed(base, head)).toEqual(
+    expect.arrayContaining([
+      expect.stringContaining("Unresolved repository import ./missing-parser"),
+    ]),
   );
 });
 
@@ -326,8 +396,10 @@ test("the queue compares against its exact base while pull requests use the merg
     parserSources: { A: "export const parseA = () => 'second fix';" },
   });
   expect(changed(fixture(), second)).toEqual([]);
-  expect(changed(fixture({ versions: { A: 2 } }), second)).toContain(
-    expect.stringContaining("test-a: parser version 2 must exceed base 2"),
+  expect(changed(fixture({ versions: { A: 2 } }), second)).toEqual(
+    expect.arrayContaining([
+      expect.stringContaining("test-a: parser version 2 must exceed base 2"),
+    ]),
   );
   expect(
     comparisonBase({
@@ -354,9 +426,11 @@ test("published packages are external while unresolved workspace exports fail cl
     "packages/docx-core/package.json",
     JSON.stringify({ exports: { "./other": "./src/other.ts" } }),
   );
-  expect(changed(base, head)).toContain(
-    expect.stringContaining(
-      "Unresolved repository import @stll/docx-core/model",
-    ),
+  expect(changed(base, head)).toEqual(
+    expect.arrayContaining([
+      expect.stringContaining(
+        "Unresolved repository import @stll/docx-core/model",
+      ),
+    ]),
   );
 });

@@ -3,6 +3,7 @@ import path from "node:path";
 const REGISTRY_PATH =
   "apps/api/src/handlers/case-law/ingestion/adapters/adapter-registry.ts";
 const ADAPTER_DIRECTORY = "apps/api/src/handlers/case-law/ingestion/adapters/";
+const CASE_LAW_DIRECTORY = "apps/api/src/lib/case-law/";
 const PARSER_DIRECTORIES = [
   "apps/api/src/handlers/case-law/ingestion/parsers/",
   "apps/api/src/lib/legal-search/parsers/",
@@ -164,7 +165,8 @@ class StaticTree {
         continue;
       }
       for (const binding of bindings.split(",")) {
-        const [name, alias] = binding.trim().split(/\s+as\s+/u);
+        // The transpiler normalizes whitespace around import aliases.
+        const [name, alias] = binding.trim().split(" as ");
         if ((alias ?? name) !== local || name === undefined) {
           continue;
         }
@@ -376,9 +378,12 @@ class StaticTree {
         }
         const parsers = new Set<string>();
         for (const file of this.closure(imported.module)) {
-          // Adapter-local assemblers and stored-raw decoders also determine
-          // parser output, even when no dedicated parser module exists.
-          if (file.startsWith(ADAPTER_DIRECTORY)) {
+          // Adapter-local assemblers, stored-raw decoders and case-law helpers
+          // determine output even when no dedicated parser module exists.
+          if (
+            file.startsWith(ADAPTER_DIRECTORY) ||
+            file.startsWith(CASE_LAW_DIRECTORY)
+          ) {
             parsers.add(file);
           }
           if (
@@ -411,6 +416,12 @@ export const checkParserVersions = ({
   for (const [key, current] of after.owners) {
     const previous = before.owners.get(key);
     if (previous === undefined) {
+      continue;
+    }
+    if (current.version < previous.version) {
+      errors.push(
+        `${key}: parser version ${current.version} must not be lower than base ${previous.version}`,
+      );
       continue;
     }
     const changed = [
