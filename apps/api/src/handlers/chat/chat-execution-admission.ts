@@ -7,6 +7,7 @@ import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   ActionAdmissionError,
+  actionAdmissionRefusal,
   withActionAdmission,
 } from "@/api/lib/rate-limit/action-admission";
 import type {
@@ -29,11 +30,13 @@ export type ChatExecutionAdmission = {
 };
 
 const chatAdmissionError = (error: unknown) => {
-  const busy = ActionAdmissionError.is(error) && error.reason === "busy";
+  if (ActionAdmissionError.is(error)) {
+    return new HandlerError({ ...actionAdmissionRefusal(error), cause: error });
+  }
   return new HandlerError({
-    status: busy ? 429 : 503,
-    code: busy ? "rate_limited" : "service_unavailable",
-    message: busy ? error.message : "Action admission is unavailable",
+    status: 503,
+    code: "service_unavailable",
+    message: "Action admission is unavailable",
     cause: error,
   });
 };

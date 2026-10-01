@@ -12,6 +12,7 @@ import {
   resourceRef,
   RESOURCE_TYPE,
 } from "@stll/api-contract";
+import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
 import type { SkillMetadata } from "@stll/skills";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
@@ -703,7 +704,10 @@ export class ChatSendLifecycle {
       outcome: {
         type: "failed",
         error:
-          error.status === 429 ? "quota_exhausted" : "provider_unavailable",
+          error.code === ACTION_ADMISSION_CODES.periodExhausted ||
+          error.status === 429
+            ? "quota_exhausted"
+            : "provider_unavailable",
       },
       owningAssistantMessage: this.claimedTurn.owningAssistantMessage,
       recordAuditEvent: this.options.recordAuditEvent,

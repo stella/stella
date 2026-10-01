@@ -1,9 +1,18 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import {
+  ACTION_ADMISSION_CODES,
+  ACTION_ADMISSION_REFUSALS,
+} from "@stll/api-contract/action-admission";
+
+import { env } from "@/api/env";
 import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
+import {
+  ActionAdmissionError,
+  withActionAdmission,
+} from "@/api/lib/rate-limit/action-admission";
 import type { AdmittedActionIdentity } from "@/api/lib/rate-limit/action-kinds";
 import type { ActionPeriodPolicy } from "@/api/lib/rate-limit/action-period-budget";
 
@@ -126,6 +135,51 @@ const executionOf = async (
 };
 
 describe("chat execution admission owns settlement independently of transport readiness", () => {
+  test("every admission reason keeps its canonical refusal at the chat boundary", async () => {
+    const reasons = {
+      busy: "busy",
+      period_exhausted: "period_exhausted",
+      not_enabled: "not_enabled",
+      unavailable: "unavailable",
+    } as const satisfies { [Reason in ActionAdmissionError["reason"]]: Reason };
+    const previousContactUrl = env.ACTION_LIMIT_CONTACT_URL;
+    try {
+      for (const contactUrl of [undefined, "https://example.test/help"]) {
+        env.ACTION_LIMIT_CONTACT_URL = contactUrl;
+        for (const reason of Object.values(reasons)) {
+          const error = new ActionAdmissionError({
+            reason,
+            message: "Admission refused",
+          });
+          const acquired = await startChatExecutionAdmission({
+            ...action,
+            enabled: true,
+            organizationId,
+            userId,
+            admit: async () => Result.err(error),
+          });
+          expect(Result.isError(acquired)).toBe(true);
+          if (Result.isError(acquired)) {
+            const refusal = ACTION_ADMISSION_REFUSALS[error.code];
+            expect(acquired.error).toMatchObject({
+              status: refusal.status,
+              code: error.code,
+              message: refusal.message,
+              retryable: refusal.retryable,
+              contactUrl:
+                reason === "period_exhausted" || reason === "not_enabled"
+                  ? contactUrl
+                  : undefined,
+              cause: error,
+            });
+          }
+        }
+      }
+    } finally {
+      env.ACTION_LIMIT_CONTACT_URL = previousContactUrl;
+    }
+  });
+
   test("claimed phases reserve once on the existing slot and fresh turns count an old run id anew", async () => {
     const store = coordination({
       periodPolicy: { periodMs: 86_400_000, limit: 2 },
@@ -155,7 +209,11 @@ describe("chat execution admission owns settlement independently of transport re
         } else {
           expect(Result.isError(first)).toBe(true);
           if (Result.isError(first)) {
-            expect(first.error.code).toBe("rate_limited");
+            expect(first.error).toMatchObject({
+              status: 403,
+              code: ACTION_ADMISSION_CODES.periodExhausted,
+              retryable: false,
+            });
           }
         }
         expect(store.periodCount()).toBe(Math.min(index + 1, 2));
@@ -218,9 +276,11 @@ describe("chat execution admission owns settlement independently of transport re
     });
     expect(Result.isError(refused)).toBe(true);
     if (Result.isError(refused)) {
-      expect(refused.error.status).toBe(429);
-      expect(refused.error.code).toBe("rate_limited");
-      expect(refused.error.message).toBe("Action period limit reached");
+      expect(refused.error).toMatchObject({
+        status: 403,
+        code: ACTION_ADMISSION_CODES.periodExhausted,
+        retryable: false,
+      });
     }
     expect(store.periodCount()).toBe(3);
     expect(store.counts().active).toBe(0);
@@ -301,15 +361,17 @@ describe("chat execution admission owns settlement independently of transport re
       });
       expect(Result.isError(acquired)).toBe(true);
       if (Result.isError(acquired)) {
-        expect(acquired.error.status).toBe(mode === "busy" ? 429 : 503);
-        expect(acquired.error.code).toBe(
-          mode === "busy" ? "rate_limited" : "service_unavailable",
-        );
-        expect(acquired.error.message).toBe(
+        const code =
           mode === "busy"
-            ? "Concurrent action limit reached"
-            : "Action admission is unavailable",
-        );
+            ? ACTION_ADMISSION_CODES.concurrencyBusy
+            : ACTION_ADMISSION_CODES.admissionUnavailable;
+        const refusal = ACTION_ADMISSION_REFUSALS[code];
+        expect(acquired.error).toMatchObject({
+          code,
+          status: refusal.status,
+          message: refusal.message,
+          retryable: refusal.retryable,
+        });
       }
       expect(store.counts()).toEqual({
         acquisitions: 1,

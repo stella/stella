@@ -32,6 +32,10 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { CHAT_THREAD_NAME_KIND } from "@/api/lib/chat/thread-name-kinds";
 import { HandlerError, DatabaseError } from "@/api/lib/errors/tagged-errors";
+import {
+  ActionAdmissionError,
+  actionAdmissionRefusal,
+} from "@/api/lib/rate-limit/action-admission";
 import type { AdmittedActionIdentity } from "@/api/lib/rate-limit/action-kinds";
 import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
 import { testFileKey } from "@/api/tests/helpers/file-key";
@@ -1232,6 +1236,12 @@ describe("send message disconnect handling", () => {
   });
 
   test("a refused bound phase persists its outcome before any provider work", async () => {
+    const refusal = actionAdmissionRefusal(
+      new ActionAdmissionError({
+        reason: "period_exhausted",
+        message: "Admission refused",
+      }),
+    );
     const turnUpdates: unknown[] = [];
     const selectWithThreadLock = () => ({
       from: () => ({
@@ -1305,9 +1315,7 @@ describe("send message disconnect handling", () => {
             });
             return Result.err(
               new HandlerError({
-                status: 429,
-                code: "rate_limited",
-                message: "Action period limit reached",
+                ...refusal,
               }),
             );
           },
@@ -1363,10 +1371,15 @@ describe("send message disconnect handling", () => {
     );
 
     expect(result).toEqual({
-      code: 429,
+      code: refusal.status,
       response: {
-        message: "Action period limit reached",
-        code: "rate_limited",
+        message: refusal.message,
+        code: refusal.code,
+        retryable: refusal.retryable,
+        hint: refusal.hint,
+        ...(refusal.contactUrl === undefined
+          ? {}
+          : { contactUrl: refusal.contactUrl }),
       },
     });
     expect(acquisitions).toBe(1);

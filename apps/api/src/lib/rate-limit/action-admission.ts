@@ -214,7 +214,7 @@ type ActionAdmissionOptions<T = unknown> = {
   createId?: () => string;
   timing?: AdmissionTiming;
   costRecorder?: ActionCostRecorder | null;
-};
+} & ActionAdmissionReservation;
 
 type ActionAdmissionControl = {
   reservePeriod: (
@@ -412,7 +412,10 @@ const createObservedAdmissionRun = <T>({
     costRecorder === null
       ? undefined
       : (costRecorder ?? getActionCostRecorder());
-  return async (signal: AbortSignal, control: ActionAdmissionControl): Promise<T> => {
+  return async (
+    signal: AbortSignal,
+    control: ActionAdmissionControl,
+  ): Promise<T> => {
     const executeRun = async () => {
       signal.throwIfAborted();
       return await run(signal, control);
@@ -469,31 +472,31 @@ const resolveAdmissionPeriod = ({
     : Result.ok(resolved.value);
 };
 
-type PeriodReservationControlOptions = AdmissionExecutorOptions & {
+type PeriodReservationScopeOptions = AdmissionExecutorOptions & {
+  userId: SafeId<"user">;
   signal: AbortSignal;
-  isActive: () => boolean;
   periodPolicy: ActionPeriodPolicy | undefined;
   limits: ActionAdmissionPolicy;
   leaseId: string;
 };
 
-const createPeriodReservationControl = ({
+const createPeriodReservationScope = ({
   keys,
   budget,
   organizationId,
+  userId,
   periodIdentity,
   redis,
   redisReady,
   signal,
-  isActive,
   periodPolicy,
   limits,
   leaseId,
-}: PeriodReservationControlOptions): ActionAdmissionControl => {
+}: PeriodReservationScopeOptions): AdmissionScope => {
   const reservePhase = async (
     identity: AdmittedActionIdentity,
   ): Promise<Result<void, ActionAdmissionError>> => {
-    if (signal.aborted || !isActive()) {
+    if (signal.aborted || executionScope.status !== "active") {
       return Result.err(
         new ActionAdmissionError({
           message: "Action admission is unavailable",
@@ -552,7 +555,7 @@ const createPeriodReservationControl = ({
           result: Promise.resolve(Result.ok(undefined)),
         }
       : undefined;
-  return {
+  const control: ActionAdmissionControl = {
     reservePeriod: async (identity) => {
       if (reservation !== undefined) {
         if (
@@ -572,6 +575,14 @@ const createPeriodReservationControl = ({
       return await result;
     },
   };
+  const executionScope: AdmissionScope = {
+    organizationId,
+    userId,
+    signal,
+    control,
+    status: "active",
+  };
+  return executionScope;
 };
 
 export const withActionAdmission = async <T>({
@@ -589,7 +600,7 @@ export const withActionAdmission = async <T>({
   createId = () => Bun.randomUUIDv7(),
   timing = defaultTiming,
   costRecorder,
-}: ActionAdmissionOptions<T> & ActionAdmissionReservation): Promise<Result<T, unknown>> => {
+}: ActionAdmissionOptions<T>): Promise<Result<T, unknown>> => {
   const observedRun = createObservedAdmissionRun({
     organizationId,
     userId,
@@ -599,7 +610,8 @@ export const withActionAdmission = async <T>({
   });
   if (!enabled) {
     return await Result.tryPromise({
-      try: async () => await observedRun(new AbortController().signal, disabledControl),
+      try: async () =>
+        await observedRun(new AbortController().signal, disabledControl),
       catch: (error: unknown) => error,
     });
   }
@@ -739,33 +751,27 @@ export const withActionAdmission = async <T>({
   }
 
   let outcome: Result<T, unknown>;
-  const control = createPeriodReservationControl({
+  const executionScope = createPeriodReservationScope({
     keys,
     budget,
     organizationId,
+    userId,
     periodIdentity,
     redis,
     redisReady,
     signal: controller.signal,
-    isActive: () => executionScope.status === "active",
     periodPolicy,
     limits,
     leaseId,
   });
-  const executionScope: AdmissionScope = {
-    organizationId,
-    userId,
-    signal: controller.signal,
-    control,
-    status: "active",
-  };
   try {
     outcome = await Result.tryPromise({
       try: async () =>
-        await admissionScope.run(executionScope, async () => {
-          controller.signal.throwIfAborted();
-          return await observedRun(controller.signal, control);
-        }),
+        await admissionScope.run(
+          executionScope,
+          async () =>
+            await observedRun(controller.signal, executionScope.control),
+        ),
       catch: (error: unknown) => error,
     });
   } finally {

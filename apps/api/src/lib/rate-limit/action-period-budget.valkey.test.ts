@@ -1,6 +1,8 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
+
 import { startChatExecutionAdmission } from "@/api/handlers/chat/chat-execution-admission";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { AdmittedActionIdentity } from "@/api/lib/rate-limit/action-kinds";
@@ -87,7 +89,11 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
             });
             expect(Result.isOk(reserved)).toBe(index < 3);
             if (Result.isError(reserved)) {
-              expect(reserved.error.code).toBe("rate_limited");
+              expect(reserved.error).toMatchObject({
+                status: 403,
+                code: ACTION_ADMISSION_CODES.periodExhausted,
+                retryable: false,
+              });
             }
             if (!budgetKey) {
               panic("Missing period key");
