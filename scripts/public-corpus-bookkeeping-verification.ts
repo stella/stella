@@ -155,6 +155,7 @@ export type PublicCorpusCatalogPosture = {
   forced: boolean;
   appPrivileges: boolean;
   userTriggers: boolean;
+  cascadingDependents: boolean;
   policies: readonly {
     command: string;
     publicOnly: boolean;
@@ -184,6 +185,9 @@ export const verifyPublicCorpusCatalog = (
   }
   if (posture.userTriggers) {
     errors.push("user trigger could perform an unclassified write");
+  }
+  if (posture.cascadingDependents) {
+    errors.push("migrated foreign key can mutate dependent rows");
   }
   if (
     posture.policies.length !== 1 ||

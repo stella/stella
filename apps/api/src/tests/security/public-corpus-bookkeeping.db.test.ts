@@ -27,6 +27,12 @@ describe.skipIf(!enabled)("public corpus category migrated privileges", () => {
             SELECT 1 FROM pg_catalog.pg_trigger trigger
             WHERE trigger.tgrelid = relation.oid AND NOT trigger.tgisinternal
           ) AS "userTriggers",
+          EXISTS (
+            SELECT 1 FROM pg_catalog.pg_constraint dependent
+            WHERE dependent.contype = 'f' AND dependent.confrelid = relation.oid
+              AND (dependent.confdeltype IN ('c', 'n', 'd')
+                OR dependent.confupdtype IN ('c', 'n', 'd'))
+          ) AS "cascadingDependents",
           COALESCE((SELECT json_agg(json_build_object(
             'command', policy.polcmd::text,
             'publicOnly', policy.polroles = ARRAY[0::oid],

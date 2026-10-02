@@ -42,6 +42,7 @@ const posture = {
   forced: true,
   appPrivileges: false,
   userTriggers: false,
+  cascadingDependents: false,
   policies: [ownerPolicy],
 } satisfies PublicCorpusCatalogPosture;
 
@@ -172,6 +173,7 @@ describe("public corpus bookkeeping admission", () => {
     { ...posture, kind: "v" },
     { ...posture, kind: "p" },
     { ...posture, userTriggers: true },
+    { ...posture, cascadingDependents: true },
     {
       ...posture,
       policies: [{ ...ownerPolicy, using: "true", check: "true" }],
