@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { createHash } from "node:crypto";
 
@@ -666,6 +666,75 @@ test(
     await commit(evidenceOnly);
     expect(await eventsFor(contact.id)).toEqual(evidenceHistory);
     expect(await matchFor(contact.id)).toEqual(after);
+  },
+  TIMEOUT,
+);
+
+test(
+  "batch bounds and source mismatches reject work without writes",
+  async () => {
+    await activate("2");
+    const contact = await addContact();
+    const work = await prepare(contact);
+    await commit(work);
+    const initial = await stateFor(contact.id);
+    const options = {
+      db: scopedDb,
+      organizationId: orgId,
+      source: "eu",
+      now,
+    } as const;
+    await expectFailure(
+      async () =>
+        await commitSanctionsMonitoringBatch({
+          ...options,
+          results: [work, work],
+        }),
+      "Sanctions monitoring batch contains duplicate contacts",
+    );
+    expect(await stateFor(contact.id)).toEqual(initial);
+    const contactRows = await db
+      .insert(contacts)
+      .values(
+        Array.from({ length: 101 }, () => ({
+          organizationId: orgId,
+          type: "person" as const,
+          displayName: "Bound Contact",
+        })),
+      )
+      .returning();
+    await expectFailure(
+      async () =>
+        await commitSanctionsMonitoringBatch({
+          ...options,
+          results: contactRows.map(({ id }) => ({ ...work, contactId: id })),
+        }),
+      "Sanctions monitoring batch exceeds its bound",
+    );
+    expect(await stateFor(contact.id)).toEqual(initial);
+    const ids = contactRows.map(({ id }) => id);
+    expect(
+      await db
+        .select()
+        .from(sanctionsScreeningEvents)
+        .where(inArray(sanctionsScreeningEvents.contactId, ids)),
+    ).toEqual([]);
+    expect(
+      await db
+        .select()
+        .from(sanctionsContactMatches)
+        .where(inArray(sanctionsContactMatches.contactId, ids)),
+    ).toEqual([]);
+    expect(
+      await db
+        .select()
+        .from(sanctionsContactScreenings)
+        .where(inArray(sanctionsContactScreenings.contactId, ids)),
+    ).toEqual([]);
+    expect(
+      await commit({ ...work, outcome: { ...work.outcome, source: "un" } }),
+    ).toEqual([]);
+    expect(await stateFor(contact.id)).toEqual(initial);
   },
   TIMEOUT,
 );
