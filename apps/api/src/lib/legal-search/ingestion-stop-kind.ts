@@ -4,6 +4,7 @@ export const INGESTION_STOP_KIND = {
   PUBLISHER_REFUSAL: "publisher_refusal",
   ADAPTER_ERROR: "adapter_error",
   DEADLINE: "deadline",
+  INTERNAL_ERROR: "internal_error",
 } as const;
 
 export type IngestionStopKind =

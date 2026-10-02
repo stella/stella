@@ -34,6 +34,7 @@ describe("ingestion health record", () => {
       publisherRefusalCount: 1,
       adapterStuckCount: 1,
       deadlineCount: 0,
+      internalErrorCount: 0,
     });
   });
 
@@ -53,6 +54,7 @@ describe("ingestion health record", () => {
       publisherRefusalCount: 0,
       adapterStuckCount: 0,
       deadlineCount: 0,
+      internalErrorCount: 0,
     });
   });
 });

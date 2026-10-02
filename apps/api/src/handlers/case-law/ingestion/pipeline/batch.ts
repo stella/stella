@@ -33,6 +33,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   ConcurrentModificationError,
+  ingestionStopKindOf,
   TimeoutError,
 } from "@/api/lib/errors/tagged-errors";
 import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
@@ -42,6 +43,10 @@ import type {
   CorpusPackBatch,
   CorpusPackBatchOutcomes,
 } from "@/api/lib/legal-search/corpus-pack-batch";
+import {
+  INGESTION_STOP_KIND,
+  type IngestionStopKind,
+} from "@/api/lib/legal-search/ingestion-stop-kind";
 import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
 import { logger } from "@/api/lib/observability/logger";
@@ -219,7 +224,12 @@ export type DecisionBatchHalt =
   | { type: "retryable"; reason: ProcessRetryReason }
   | { type: "timeout"; error: TimeoutError }
   | { type: "insert-limit" }
-  | { type: "failure-streak"; tag: string; message: string }
+  | {
+      type: "failure-streak";
+      tag: string;
+      message: string;
+      stopKind: IngestionStopKind;
+    }
   | { type: "aborted" };
 
 /**
@@ -381,7 +391,12 @@ const rejectDecision = ({
   });
 
   return tally.failureStreak >= MAX_CONSECUTIVE_FAILURES
-    ? { type: "failure-streak", tag, message }
+    ? {
+        type: "failure-streak",
+        tag,
+        message,
+        stopKind: ingestionStopKindOf(error),
+      }
     : null;
 };
 
@@ -416,7 +431,12 @@ const rejectSourceRecord = ({
     reason: CASE_LAW_BATCH_FAILURE.RECORD_REJECTED,
   });
   return tally.failureStreak >= MAX_CONSECUTIVE_FAILURES
-    ? { type: "failure-streak", tag: record.reason, message: record.message }
+    ? {
+        type: "failure-streak",
+        tag: record.reason,
+        message: record.message,
+        stopKind: INGESTION_STOP_KIND.ADAPTER_ERROR,
+      }
     : null;
 };
 

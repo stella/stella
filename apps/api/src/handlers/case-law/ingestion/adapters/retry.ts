@@ -1,4 +1,4 @@
-// parser-output-unchanged: publisher refusals and connection failures become typed stops; successful responses are unchanged.
+// parser-output-unchanged: refusal stops are opt-in; existing response and retry semantics are unchanged.
 /**
  * The only way a case-law adapter reaches its publisher.
  *
@@ -36,8 +36,8 @@ export type PublisherFetchInit = FetchWithTimeoutInit & {
   /** A supplementary publisher, distinct from the decision listing's host. */
   publisherGate?: PublisherGateId | undefined;
   retryPolicy?: "publisher-backoff";
-  /** A document workflow may refresh an expired address or record a refusal. */
-  refusalMode?: "return-response";
+  /** Existing workflows receive refusals; session adapters can stop explicitly. */
+  refusalMode?: "return-response" | "stop-refusal" | undefined;
   /** Publisher-defined redirect target; use manual redirects to inspect it. */
   isRateLimitRedirect?: (response: Response) => boolean;
 };
@@ -56,10 +56,15 @@ export const fetchPublisher = async (
     return await retryPublisherRequest(url, init);
   }
   const response = await fetchPublisherRequest(url, init);
-  if (response.status === 429) {
+  if (
+    init.refusalMode === "stop-refusal" &&
+    (response.status === 401 ||
+      response.status === 403 ||
+      response.status === 429)
+  ) {
     await response.body?.cancel();
     throw new AdapterFetchError({
-      message: "Publisher rate limit refused: 429",
+      message: `Publisher request refused: ${response.status}`,
       adapterKey: init.adapterKey,
       cursor: null,
       httpStatus: response.status,
@@ -75,7 +80,7 @@ const fetchPublisherRequest = async (
   const {
     adapterKey,
     publisherGate,
-    refusalMode,
+    refusalMode: _refusalMode,
     isRateLimitRedirect: _isRateLimitRedirect,
     ...requestInit
   } = init;
@@ -85,20 +90,7 @@ const fetchPublisherRequest = async (
     await reservePublisherGateSlot(publisherGate, requestInit.signal);
   }
   // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- the publisher fetch boundary: the lint rule checks each target where fetchPublisher or fetchWithRetry is called
-  const response = await fetchWithTimeout(url, requestInit);
-  if (
-    refusalMode !== "return-response" &&
-    (response.status === 401 || response.status === 403)
-  ) {
-    await response.body?.cancel();
-    throw new AdapterFetchError({
-      message: `Publisher request refused: ${response.status}`,
-      adapterKey,
-      cursor: null,
-      httpStatus: response.status,
-    });
-  }
-  return response;
+  return await fetchWithTimeout(url, requestInit);
 };
 
 /**
@@ -122,7 +114,7 @@ type FetchWithRetryOptions = {
    * request the budget never saw.
    */
   adapterKey: AdapterKey;
-  refusalMode?: "return-response";
+  refusalMode?: "return-response" | "stop-refusal" | undefined;
   /** Maximum retry attempts (default: 2). */
   maxRetries?: number;
   /** Per-request timeout in ms (default: ADAPTER_TIMEOUT.REQUEST). */
@@ -143,7 +135,7 @@ type FetchWithRetryOptions = {
  *
  * A 5xx is the publisher failing to answer; a 429 is the publisher answering
  * that the budget is spent. Retrying the refusal spends the budget the halt
- * protects, so it stops the caller after exactly one request.
+ * protects, so the caller receives the refusal after exactly one request.
  */
 const isRetryableStatus = (status: number): boolean => status >= 500;
 
@@ -159,9 +151,8 @@ const isRetryableStatus = (status: number): boolean => status >= 500;
  * - HTTP 4xx, the publisher's rate-limit refusal included (rule 19a)
  * - Network errors (DNS, connection refused)
  *
- * Throws a typed stop on 401/403/429 by default. Document workflows opting
- * into return-response retain 401/403 for their own terminal outcomes or
- * address refresh; 429 always stops.
+ * Returns HTTP refusals by default. Session workflows may opt into a typed
+ * stop on 401/403/429; that choice does not affect existing adapters.
  * Returns the response even for retryable statuses after
  * exhausting retries, so the caller can decide what to do
  * (skip page, treat as miss, etc.).
@@ -379,7 +370,7 @@ export const retryPublisherRequest = async (
     init.signal?.throwIfAborted();
     if (
       Result.isOk(fetched) &&
-      init.refusalMode !== "return-response" &&
+      init.refusalMode === "stop-refusal" &&
       (fetched.value.status === 401 || fetched.value.status === 403)
     ) {
       await fetched.value.body?.cancel();

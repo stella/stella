@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { FetchBoundaryError } from "@stll/errors";
 import { propertyConfig } from "@stll/property-testing";
 
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
@@ -18,17 +17,25 @@ const URL = "https://publications.europa.eu/test";
 const INIT = { adapterKey: ADAPTER_KEYS.EU_ECJ, timeoutMs: 1000 };
 
 describe("publisher throttling and transient failures", () => {
-  test("nested fetch-boundary connection failures retain their kind through adapter wrappers", async () => {
-    for (const message of ["TLS handshake failed", "Unable to connect"]) {
+  test("raw runtime connection failures retain their kind through adapter wrappers", async () => {
+    for (const code of [
+      "ConnectionRefused",
+      "FailedToOpenSocket",
+      "ConnectionClosed",
+      "ENOTFOUND",
+      "ECONNRESET",
+      "ERR_TLS_CERT_ALTNAME_INVALID",
+    ]) {
+      // Runtime error shape with the message elided: classification must use the code.
+      const failure = Object.assign(
+        new TypeError("Runtime transport failure"),
+        { code },
+      );
       let requests = 0;
       const pending = retryPublisherRequest(URL, INIT, {
         request: async () => {
           requests++;
-          throw new FetchBoundaryError({
-            message,
-            url: URL,
-            failureKind: "source_unreachable",
-          });
+          throw failure;
         },
         defer: async () => NOW,
         sleep: async () => undefined,
@@ -152,6 +159,7 @@ describe("publisher throttling and transient failures", () => {
           URL,
           {
             ...INIT,
+            refusalMode: "return-response",
             redirect: "manual",
             isRateLimitRedirect: (response) =>
               response.status === 302 &&
@@ -275,28 +283,24 @@ describe("publisher throttling and transient failures", () => {
     test(`${status} is returned without spending a retry`, async () => {
       let requests = 0;
       const waits: number[] = [];
-      const response = await retryPublisherRequest(
-        URL,
-        { ...INIT, refusalMode: "return-response" },
-        {
-          request: async () => {
-            requests += 1;
-            return new Response(null, {
-              status,
-              headers: { "Retry-After": "30" },
-            });
-          },
-          defer: async (durationMs) => {
-            waits.push(durationMs);
-            return NOW + durationMs;
-          },
-          sleep: async (durationMs) => {
-            waits.push(durationMs);
-          },
-          now: () => NOW,
-          random: () => 0.5,
+      const response = await retryPublisherRequest(URL, INIT, {
+        request: async () => {
+          requests += 1;
+          return new Response(null, {
+            status,
+            headers: { "Retry-After": "30" },
+          });
         },
-      );
+        defer: async (durationMs) => {
+          waits.push(durationMs);
+          return NOW + durationMs;
+        },
+        sleep: async (durationMs) => {
+          waits.push(durationMs);
+        },
+        now: () => NOW,
+        random: () => 0.5,
+      });
       expect(response.status).toBe(status);
       expect(requests).toBe(1);
       expect(waits).toEqual([]);
@@ -306,6 +310,7 @@ describe("publisher throttling and transient failures", () => {
   for (const timeout of [
     new DOMException("Request timed out", "TimeoutError"),
     Object.assign(new Error("Socket timed out"), { code: "ETIMEDOUT" }),
+    Object.assign(new Error("Socket timed out"), { code: "ESOCKETTIMEDOUT" }),
   ]) {
     test(`${timeout.name} request timeout recovers with backoff`, async () => {
       let requests = 0;
@@ -327,6 +332,33 @@ describe("publisher throttling and transient failures", () => {
       expect(response.status).toBe(200);
       expect(requests).toBe(2);
       expect(waits).toEqual([1000]);
+    });
+    test(`${timeout.name} preserves its cause through all six exhausted attempts`, async () => {
+      let requests = 0;
+      const waits: number[] = [];
+      const cause = await retryPublisherRequest(URL, INIT, {
+        request: async () => {
+          requests++;
+          throw timeout;
+        },
+        defer: async () => NOW,
+        sleep: async (durationMs) => {
+          waits.push(durationMs);
+        },
+        now: () => NOW,
+        random: () => 0.5,
+      }).then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+      expect(cause).toBeInstanceOf(AdapterFetchError);
+      expect(cause).toMatchObject({
+        cause: timeout,
+        stopKind:
+          timeout instanceof DOMException ? "deadline" : "source_unreachable",
+      });
+      expect(requests).toBe(6);
+      expect(waits).toEqual([1000, 2000, 4000, 8000, 16_000]);
     });
   }
 

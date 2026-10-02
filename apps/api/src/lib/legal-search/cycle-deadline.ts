@@ -46,3 +46,6 @@ export const canStartCyclePage = (
   pageBudgetMs: number,
 ): boolean =>
   !deadline.signal.aborted && remainingCycleMs(deadline) >= pageBudgetMs;
+export const CYCLE_HALT_REASON = {
+  TIMEOUT: "Cycle timeout exceeded",
+} as const;

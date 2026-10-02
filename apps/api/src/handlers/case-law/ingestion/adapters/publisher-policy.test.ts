@@ -8,7 +8,10 @@ import {
   PUBLISHER_GATES,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { connectedGateClient } from "@/api/handlers/case-law/ingestion/adapters/publisher-request-gate";
-import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
+import {
+  fetchPublisher,
+  fetchWithRetry,
+} from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { rejectionOf } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
@@ -171,6 +174,7 @@ describe("a publisher's rate-limit refusal", () => {
         fetchWithRetry("https://ris.bka.gv.at/x", undefined, {
           adapterKey: ADAPTER_KEYS.AT_COURTS,
           maxRetries: 2,
+          refusalMode: "stop-refusal",
         }),
       );
 
@@ -184,8 +188,8 @@ describe("a publisher's rate-limit refusal", () => {
     },
   );
 
-  test.each([401, 403])(
-    "an explicit document workflow can read %s without retries",
+  test.each([401, 403, 429])(
+    "an existing document workflow receives %s without retries",
     async (status) => {
       let requests = 0;
       globalThis.fetch = asFetchMock(
@@ -199,7 +203,6 @@ describe("a publisher's rate-limit refusal", () => {
         undefined,
         {
           adapterKey: ADAPTER_KEYS.AT_COURTS,
-          refusalMode: "return-response",
         },
       );
       expect(response.status).toBe(status);
@@ -207,6 +210,58 @@ describe("a publisher's rate-limit refusal", () => {
       expect(requests).toBe(1);
     },
   );
+
+  for (const refusalMode of [
+    undefined,
+    "return-response",
+    "stop-refusal",
+  ] as const) {
+    test.each([401, 403])(
+      `the real publisher-backoff path preserves status in mode ${refusalMode}`,
+      async (status) => {
+        let requests = 0;
+        globalThis.fetch = asFetchMock(
+          mock(async () => {
+            requests++;
+            return new Response("refused document", { status });
+          }),
+        );
+        const pending = fetchPublisher("https://ris.bka.gv.at/x", {
+          adapterKey: ADAPTER_KEYS.AT_COURTS,
+          retryPolicy: "publisher-backoff",
+          timeoutMs: 1000,
+          refusalMode,
+        });
+        if (refusalMode === "stop-refusal") {
+          expect(await rejectionOf(pending)).toMatchObject({
+            httpStatus: status,
+            stopKind: "publisher_refusal",
+          });
+        } else {
+          const response = await pending;
+          expect(response.status).toBe(status);
+          expect(await response.text()).toBe("refused document");
+        }
+        expect(requests).toBe(1);
+      },
+    );
+  }
+
+  test("legacy fetch timeouts keep their original identity", async () => {
+    const failure = new DOMException("Request timed out", "TimeoutError");
+    globalThis.fetch = asFetchMock(
+      mock(async () => {
+        throw failure;
+      }),
+    );
+    const caught = await rejectionOf(
+      fetchWithRetry("https://ris.bka.gv.at/x", undefined, {
+        adapterKey: ADAPTER_KEYS.AT_COURTS,
+        maxRetries: 0,
+      }),
+    );
+    expect(caught).toBe(failure);
+  });
 
   test("still retries a 5xx, which is the publisher failing to answer", async () => {
     let requests = 0;

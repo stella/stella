@@ -42,13 +42,39 @@ const CYCLES = OUTCOMES.flatMap((outcome) =>
   INSERTED.flatMap((inserted) =>
     SKIPPED.flatMap((skipped) =>
       PAGES.flatMap((pagesProcessed) =>
-        CURSOR_ADVANCED.map((cursorAdvanced) => ({
-          outcome,
-          inserted,
-          skipped,
-          pagesProcessed,
-          cursorAdvanced,
-        })),
+        CURSOR_ADVANCED.map((cursorAdvanced): CycleResult => {
+          switch (outcome) {
+            case CYCLE_OUTCOME.COMPLETED:
+              return {
+                inserted,
+                skipped,
+                pagesProcessed,
+                cursorAdvanced,
+                outcome,
+              };
+            case CYCLE_OUTCOME.FAILED:
+              return {
+                inserted,
+                skipped,
+                pagesProcessed,
+                cursorAdvanced,
+                outcome,
+                stopKind: INGESTION_STOP_KIND.ADAPTER_ERROR,
+              };
+            case CYCLE_OUTCOME.TIMEOUT:
+              return {
+                inserted,
+                skipped,
+                pagesProcessed,
+                cursorAdvanced,
+                outcome,
+                stopKind: INGESTION_STOP_KIND.DEADLINE,
+              };
+            default:
+              outcome satisfies never;
+              throw new Error(`Unhandled cycle outcome: ${String(outcome)}`);
+          }
+        }),
       ),
     ),
   ),
@@ -61,6 +87,7 @@ const CYCLES = OUTCOMES.flatMap((outcome) =>
  */
 const RESCAN_CYCLE = {
   outcome: CYCLE_OUTCOME.TIMEOUT,
+  stopKind: INGESTION_STOP_KIND.DEADLINE,
   inserted: 0,
   skipped: 550,
   pagesProcessed: 12,
@@ -73,6 +100,7 @@ const RESCAN_CYCLE = {
 /** The same adapter while it is genuinely writing rows, still too slow to finish. */
 const SLOW_PRODUCTIVE_CYCLE = {
   outcome: CYCLE_OUTCOME.TIMEOUT,
+  stopKind: INGESTION_STOP_KIND.DEADLINE,
   inserted: 40,
   skipped: 510,
   pagesProcessed: 12,
@@ -105,6 +133,7 @@ const ENUMERATION_CYCLE = {
 
 const INCONCLUSIVE_CYCLE = {
   outcome: CYCLE_OUTCOME.TIMEOUT,
+  stopKind: INGESTION_STOP_KIND.DEADLINE,
   inserted: 0,
   skipped: 0,
   pagesProcessed: 0,
@@ -162,6 +191,7 @@ describe("cycleMadeProgress", () => {
     expect(
       cycleMadeProgress({
         outcome: CYCLE_OUTCOME.FAILED,
+        stopKind: INGESTION_STOP_KIND.ADAPTER_ERROR,
         inserted: 0,
         skipped: 0,
         pagesProcessed: 0,
@@ -542,10 +572,11 @@ describe("stalled-source causes", () => {
 
   test("every typed cause reaches only its heartbeat count", () => {
     const expectedCounts = {
-      source_unreachable: [1, 0, 0, 0],
-      publisher_refusal: [0, 1, 0, 0],
-      adapter_error: [0, 0, 1, 0],
-      deadline: [0, 0, 0, 1],
+      source_unreachable: [1, 0, 0, 0, 0],
+      publisher_refusal: [0, 1, 0, 0, 0],
+      adapter_error: [0, 0, 1, 0, 0],
+      deadline: [0, 0, 0, 1, 0],
+      internal_error: [0, 0, 0, 0, 1],
     } as const satisfies Record<IngestionStopKind, readonly number[]>;
     for (const stopKind of Object.values(INGESTION_STOP_KIND)) {
       const steps = runHealthCycles(repeat(stoppedCycle(stopKind), THRESHOLD));
@@ -557,6 +588,7 @@ describe("stalled-source causes", () => {
         health?.publisherRefusalCount,
         health?.adapterStuckCount,
         health?.deadlineCount,
+        health?.internalErrorCount,
       ]).toEqual(expectedCounts[stopKind]);
     }
   });
@@ -600,7 +632,11 @@ describe("stalled-source causes", () => {
       INGESTION_STOP_KIND.DEADLINE,
     );
     expect(
-      cycleStopKind({ ...INCONCLUSIVE_CYCLE, outcome: CYCLE_OUTCOME.FAILED }),
+      cycleStopKind({
+        ...INCONCLUSIVE_CYCLE,
+        outcome: CYCLE_OUTCOME.FAILED,
+        stopKind: INGESTION_STOP_KIND.ADAPTER_ERROR,
+      }),
     ).toBe(INGESTION_STOP_KIND.ADAPTER_ERROR);
   });
 });

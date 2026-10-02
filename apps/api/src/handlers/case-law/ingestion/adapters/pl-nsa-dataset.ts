@@ -774,8 +774,6 @@ const readRepositoryRange = async ({
           adapterKey: ADAPTER_KEYS.PL_NSA,
           signal,
           timeoutMs: DOWNLOAD_CHUNK_TIMEOUT_MS,
-          // A refused signed address is refreshed once by shardReader.
-          refusalMode: "return-response",
         },
       );
       if (response.status !== 206 || response.body === null) {
@@ -1156,4 +1154,3 @@ export const huggingFaceShardSource = ({
       }),
   };
 };
-// parser-output-unchanged: signed address refusal handling retains the existing refresh outcome.

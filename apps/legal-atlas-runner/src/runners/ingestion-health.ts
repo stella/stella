@@ -17,6 +17,7 @@ const STOP_KIND_COUNT_FIELD = {
   [INGESTION_STOP_KIND.PUBLISHER_REFUSAL]: "publisherRefusalCount",
   [INGESTION_STOP_KIND.ADAPTER_ERROR]: "adapterStuckCount",
   [INGESTION_STOP_KIND.DEADLINE]: "deadlineCount",
+  [INGESTION_STOP_KIND.INTERNAL_ERROR]: "internalErrorCount",
 } as const satisfies Record<IngestionStopKind, string>;
 
 /**
@@ -35,6 +36,7 @@ export const ingestionHealthRecord = ({
     publisherRefusalCount: 0,
     adapterStuckCount: 0,
     deadlineCount: 0,
+    internalErrorCount: 0,
   } satisfies Record<(typeof STOP_KIND_COUNT_FIELD)[IngestionStopKind], number>;
   for (const stopKind of stalledAdapters.values()) {
     counts[STOP_KIND_COUNT_FIELD[stopKind]]++;

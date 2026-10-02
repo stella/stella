@@ -249,6 +249,7 @@ const requestTk = async ({
         },
         {
           adapterKey: ADAPTER_KEYS.PL_TK,
+          refusalMode: "stop-refusal",
           signal,
           timeoutMs: REQUEST_TIMEOUT_MS,
         },

@@ -43,13 +43,16 @@ import {
   INGESTION_CHECKPOINT_STATUS,
 } from "@/api/lib/corpus-ingestion-checkpoint";
 import {
+  AdapterFetchError,
   ConcurrentModificationError,
+  ingestionStopKindOf,
   TimeoutError,
 } from "@/api/lib/errors/tagged-errors";
 import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import {
   canStartCyclePage,
+  CYCLE_HALT_REASON,
   remainingCycleMs,
   startCycleDeadline,
 } from "@/api/lib/legal-search/cycle-deadline";
@@ -117,9 +120,7 @@ type PipelineResult = {
  * one to separate a cycle that ran out of budget from one that failed, so the
  * text is a shared constant rather than a literal on both sides.
  */
-export const CYCLE_HALT_REASON = {
-  TIMEOUT: "Cycle timeout exceeded",
-} as const;
+export { CYCLE_HALT_REASON } from "@/api/lib/legal-search/cycle-deadline";
 
 const databaseTimeoutHaltReason = (error: TimeoutError): string =>
   `Database timeout; cursor held for retry: ${error.message.slice(0, 200)}`;
@@ -176,6 +177,25 @@ const batchHaltReason = (
         `${MAX_CONSECUTIVE_FAILURES} consecutive failures; ` +
         `last: [${stop.tag}] ${stop.message.slice(0, 200)}`
       );
+    case "aborted":
+      return panic("A crawl batch carries no abort signal");
+    default:
+      stop satisfies never;
+      return panic(`Unhandled batch stop: ${String(stop)}`);
+  }
+};
+
+const batchStopKind = (
+  stop: DecisionBatchHalt,
+): IngestionStopKind | undefined => {
+  switch (stop.type) {
+    case "retryable":
+    case "timeout":
+      return INGESTION_STOP_KIND.INTERNAL_ERROR;
+    case "insert-limit":
+      return undefined;
+    case "failure-streak":
+      return stop.stopKind;
     case "aborted":
       return panic("A crawl batch carries no abort signal");
     default:
@@ -265,11 +285,28 @@ export const runIngestionPipeline = async ({
           if (deadline && !canStartCyclePage(deadline, pageTimeout)) {
             return { type: "budget-exhausted" } as const;
           }
-          const pageResult = await adapter.fetchPage(
-            fetchCursor,
-            source.config ?? {},
-            pageSignal,
-          );
+          const fetched = await Result.tryPromise({
+            try: async () =>
+              await adapter.fetchPage(
+                fetchCursor,
+                source.config ?? {},
+                pageSignal,
+              ),
+            catch: (cause) =>
+              new AdapterFetchError({
+                message: cause instanceof Error ? cause.message : String(cause),
+                adapterKey: adapter.key,
+                cursor: fetchCursor,
+                cause,
+                stopKind: pageSignal.aborted
+                  ? INGESTION_STOP_KIND.DEADLINE
+                  : ingestionStopKindOf(cause, "adapter"),
+              }),
+          });
+          if (Result.isError(fetched)) {
+            throw fetched.error;
+          }
+          const pageResult = fetched.value;
           if (Result.isError(pageResult)) {
             return { error: pageResult.error, type: "fetch-error" } as const;
           }
@@ -322,7 +359,7 @@ export const runIngestionPipeline = async ({
         return {
           type: "halt",
           reason: databaseTimeoutHaltReason(observedPageResult.error),
-          stopKind: INGESTION_STOP_KIND.ADAPTER_ERROR,
+          stopKind: INGESTION_STOP_KIND.INTERNAL_ERROR,
         } as const;
       }
       if (observedPageResult.error instanceof Error) {
@@ -339,9 +376,10 @@ export const runIngestionPipeline = async ({
       // Expected operational failure: record one halt in the event/log path;
       // the runner, rather than every attempt, captures sustained stalls.
       const reason = `Page fetch failed: ${observedPageResult.value.error.message}`;
-      const pageStopKind = deadline?.signal.aborted
-        ? INGESTION_STOP_KIND.DEADLINE
-        : observedPageResult.value.error.stopKind;
+      const pageStopKind =
+        deadline?.signal.aborted || pageSignal.aborted
+          ? INGESTION_STOP_KIND.DEADLINE
+          : observedPageResult.value.error.stopKind;
       logger.error("case_law.ingestion.adapter_halted", {
         adapterKey: adapter.key,
         cursor: cursor ?? "",
@@ -466,6 +504,10 @@ export const runIngestionPipeline = async ({
           : batchHaltReason(applied.halt, maxDecisions)) ??
         failureLedgerHaltReason(applied.failureLedger);
       if (batchHalt !== null) {
+        stopKind =
+          applied.halt === null
+            ? INGESTION_STOP_KIND.INTERNAL_ERROR
+            : batchStopKind(applied.halt);
         return batchHalt;
       }
     }
@@ -631,7 +673,7 @@ export const runIngestionPipeline = async ({
       });
 
       if (haltReason) {
-        stopKind = INGESTION_STOP_KIND.ADAPTER_ERROR;
+        stopKind ??= INGESTION_STOP_KIND.INTERNAL_ERROR;
         logger.error("case_law.ingestion.adapter_halted", {
           adapterKey: adapter.key,
           cursor: cursor ?? "",

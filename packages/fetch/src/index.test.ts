@@ -1,7 +1,5 @@
 import { describe, expect, test } from "bun:test";
 
-import { FetchBoundaryError } from "@stll/errors";
-
 import { createFetchWithTimeout } from "./index";
 
 const waitForAbort = async (signal: AbortSignal): Promise<void> => {
@@ -14,24 +12,26 @@ const waitForAbort = async (signal: AbortSignal): Promise<void> => {
 };
 
 describe("createFetchWithTimeout", () => {
-  for (const message of [
-    "Unable to connect",
-    "TLS handshake failed",
-    "DNS lookup failed",
+  for (const code of [
+    "ConnectionRefused",
+    "FailedToOpenSocket",
+    "ConnectionClosed",
+    "ENOTFOUND",
+    "ETIMEDOUT",
   ]) {
-    test(`classifies ${message} at the shared boundary`, async () => {
-      const cause = new TypeError(message);
+    test(`preserves raw transport error identity for ${code}`, async () => {
+      const cause = Object.assign(new TypeError("Recorded transport failure"), {
+        code,
+      });
       const request = createFetchWithTimeout(async () => {
         throw cause;
       });
-      const error = await request("https://example.com", {
-        timeoutMs: 1000,
-      }).then(
-        () => undefined,
-        (error: unknown) => error,
-      );
-      expect(error).toBeInstanceOf(FetchBoundaryError);
-      expect(error).toMatchObject({ failureKind: "source_unreachable", cause });
+      expect(
+        await request("https://example.com", { timeoutMs: 1000 }).then(
+          () => undefined,
+          (error: unknown) => error,
+        ),
+      ).toBe(cause);
     });
   }
 
