@@ -27,7 +27,7 @@ const bunTestTargets = (
     }
     let previousFlag = false;
     for (const token of command.slice("bun test ".length).split(/\s+/u)) {
-      if (/^scripts\/[\w./-]+\.test\.tsx?$/u.test(token)) {
+      if (/^(?:apps|packages|scripts)\/[\w./-]+\.test\.tsx?$/u.test(token)) {
         entries.push(token);
         previousFlag = false;
       } else if (/^--?[a-z][\w-]*(?:=\S+)?$/u.test(token)) {
@@ -672,32 +672,62 @@ describe("API deployment health receipt", () => {
     expect(
       bunTestTargets(
         [
-          "bun test apps/web/src/x.test.ts",
+          "bun test ../outside/x.test.ts",
           "bun test 'scripts/quoted.test.ts'",
           "env X=1 bun test scripts/f.test.ts",
         ].join("\n"),
       ).unclassified,
     ).toEqual([
-      "apps/web/src/x.test.ts",
+      "../outside/x.test.ts",
       "'scripts/quoted.test.ts'",
       "env X=1 bun test scripts/f.test.ts",
     ]);
   });
 
-  test("release policy tests run without the dependency install", async () => {
+  test("tests that CI runs without the dependency install import only built-ins", async () => {
     const workflow = await Bun.file(
       new URL("../.github/workflows/ci.yml", import.meta.url),
     ).text();
-    const step = workflowSteps(Bun.YAML.parse(workflow), "ci.yml").find(
-      ({ run }) =>
-        run.includes("bun test scripts/check-api-deployment.test.ts"),
-    );
-    expect(step).toBeDefined();
-    const { entries, unclassified } = bunTestTargets(step?.run ?? "");
+    // Every step that can run before or without the dependency install: its
+    // job has no earlier install step, or that install is gated by a
+    // condition the step itself does not share (a workflow-only PR skips it).
+    const installFree: string[] = [];
+    const parsed: unknown = Bun.YAML.parse(workflow);
+    const jobs =
+      isRecord(parsed) && isRecord(parsed["jobs"]) ? parsed["jobs"] : {};
+    for (const job of Object.values(jobs)) {
+      const steps =
+        isRecord(job) && Array.isArray(job["steps"]) ? job["steps"] : [];
+      let installCondition: string | null | undefined;
+      for (const step of steps) {
+        if (!isRecord(step)) {
+          continue;
+        }
+        const condition = typeof step["if"] === "string" ? step["if"] : null;
+        const installs =
+          step["name"] === "Install dependencies" ||
+          (typeof step["run"] === "string" &&
+            /\bbun (?:install|ci)\b/u.test(step["run"]));
+        if (installs) {
+          installCondition = condition;
+          continue;
+        }
+        const installed =
+          installCondition === null ||
+          (typeof installCondition === "string" &&
+            condition !== null &&
+            condition.includes(installCondition));
+        if (!installed && typeof step["run"] === "string") {
+          installFree.push(step["run"]);
+        }
+      }
+    }
+    const { entries, unclassified } = bunTestTargets(installFree.join("\n"));
     // Every token of every `bun test` command is a known target or flag, so a
     // consolidated or flagged command cannot hide a test from this check.
     expect(unclassified).toEqual([]);
     expect(entries).toContain("scripts/check-api-deployment.test.ts");
+    expect(entries).toContain("scripts/detect-e2e-changes.test.ts");
     const root = new URL("../", import.meta.url).pathname;
     const transpiler = new Bun.Transpiler({ loader: "ts" });
     const pending = [...entries];
