@@ -1,0 +1,130 @@
+name: Main health
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_run:
+    workflows: [Main heavy suites, CI Checks]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: "Full commit SHA on main to re-evaluate"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: write
+  statuses: read
+  checks: write
+  issues: write
+  pull-requests: read
+
+concurrency:
+  group: main-health
+  cancel-in-progress: false
+
+jobs:
+  detect:
+    if: github.event_name == 'workflow_run' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      pull_number: ${{ steps.health.outputs.pull_number }}
+      head: ${{ steps.health.outputs.head }}
+    steps:
+      - name: Checkout trusted main code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+
+      - name: Mint recovery App token
+        if: vars.MAIN_AUTO_REVERT == 'on'
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.PROVENANCE_APP_ID }}
+          private-key: ${{ secrets.PROVENANCE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Evaluate main health
+        id: health
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MAIN_HEALTH_WRITE_TOKEN: ${{ steps.app-token.outputs.token }}
+          MAIN_AUTO_REVERT: ${{ vars.MAIN_AUTO_REVERT }}
+        run: bun --no-install scripts/main-health.ts
+
+  jump:
+    needs: detect
+    if: needs.detect.outputs.pull_number != '' && vars.MAIN_AUTO_REVERT == 'on'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+      statuses: read
+      checks: read
+      issues: read
+      pull-requests: read
+    steps:
+      - name: Checkout trusted main code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+
+      - name: Standalone lockfile guard
+        run: bun --no-install scripts/check-standalone-lockfiles.ts
+
+      - name: Lockfile release-age guard
+        run: bun --no-install scripts/check-lockfile-release-ages.ts --base HEAD^
+
+      - name: Install merge bar dependencies
+        env:
+          NPM_TOKEN: ""
+        run: bun ci --ignore-scripts
+
+      - name: Mint queue App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.PROVENANCE_APP_ID }}
+          private-key: ${{ secrets.PROVENANCE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Verify pinned revert and live kill switch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MAIN_HEALTH_WRITE_TOKEN: ${{ steps.app-token.outputs.token }}
+          MAIN_AUTO_REVERT: ${{ vars.MAIN_AUTO_REVERT }}
+          PULL_NUMBER: ${{ needs.detect.outputs.pull_number }}
+          VERIFIED_HEAD: ${{ needs.detect.outputs.head }}
+        run: bun --no-install scripts/main-health.ts --verify-revert "$PULL_NUMBER" "$VERIFIED_HEAD"
+
+      - name: Jump only through live merge bar gates
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_READ_TOKEN: ${{ github.token }}
+          PULL_NUMBER: ${{ needs.detect.outputs.pull_number }}
+          VERIFIED_HEAD: ${{ needs.detect.outputs.head }}
+        run: bun scripts/merge-bar.ts "$PULL_NUMBER" --repo "$GITHUB_REPOSITORY" --jump --expected-head "$VERIFIED_HEAD"

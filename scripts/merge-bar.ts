@@ -1584,6 +1584,7 @@ type MergeBarOptions = {
   dryRun: boolean;
   // Enqueue at the front of the queue only when explicitly requested.
   jump: boolean;
+  expectedHead: string | undefined;
 };
 
 const parseOptions = (argv: readonly string[]): MergeBarOptions => {
@@ -1591,12 +1592,21 @@ const parseOptions = (argv: readonly string[]): MergeBarOptions => {
   let repo = DEFAULT_REPO;
   let dryRun = false;
   let jump = false;
+  let expectedHead: string | undefined;
 
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
     if (argument === "--repo") {
       index += 1;
       repo = argv[index] ?? panic("--repo requires a value");
+      continue;
+    }
+    if (argument === "--expected-head") {
+      index += 1;
+      expectedHead = argv[index];
+      if (!expectedHead || !/^[0-9a-f]{40}$/u.test(expectedHead)) {
+        panic("--expected-head requires a full 40-character SHA");
+      }
       continue;
     }
     if (argument === "--dry-run") {
@@ -1632,7 +1642,7 @@ const parseOptions = (argv: readonly string[]): MergeBarOptions => {
     panic(`PR number must be a positive integer, got: ${rawNumber}`);
   }
 
-  return { pullNumber, repo, dryRun, jump };
+  return { pullNumber, repo, dryRun, jump, expectedHead };
 };
 
 const formatVerdict = (verdict: MergeBarVerdict): string =>
@@ -1693,6 +1703,15 @@ if (import.meta.main) {
   }
 
   const pullRequest = readSettledPullRequest(gateway);
+  if (
+    options.expectedHead !== undefined &&
+    pullRequest.headSha !== options.expectedHead
+  ) {
+    console.error(
+      "REVERT_HEAD_CHANGED: the pull request head differs from the verified head",
+    );
+    process.exit(1);
+  }
   const policy = readLiveRepositoryPolicy(
     options.repo,
     pullRequest.baseRefName,

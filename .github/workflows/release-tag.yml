@@ -9,7 +9,9 @@ on:
         type: string
 
 permissions:
+  actions: read
   contents: read
+  issues: read
   statuses: read
 
 concurrency:
@@ -30,6 +32,11 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
       - name: Select and validate the release commit
         id: candidate
         env:
@@ -41,11 +48,6 @@ jobs:
         env:
           RELEASE_SHA: ${{ steps.candidate.outputs.sha }}
         run: git checkout --detach "$RELEASE_SHA"
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version-file: "package.json"
 
       - name: Require release changelog file
         env:
