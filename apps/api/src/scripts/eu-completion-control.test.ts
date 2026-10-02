@@ -70,8 +70,9 @@ describe("explicit EU completion operator commands", () => {
         record !== null &&
         "message" in record &&
         typeof record.message === "string"
-      )
-        {messages.push(record.message);}
+      ) {
+        messages.push(record.message);
+      }
     };
     for (const counts of [
       ["0", "0", "0"],
