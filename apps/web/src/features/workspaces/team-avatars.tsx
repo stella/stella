@@ -7,14 +7,20 @@ import { UserIdentityAvatar } from "@/components/user-avatar";
 import { getDisplayName } from "@/lib/get-display-name";
 import type { Workspace } from "@/lib/workspaces/types";
 
+type TeamAvatarMember = Pick<
+  Workspace["members"][number],
+  "userEmail" | "userId" | "userImage" | "userName"
+>;
+
 type TeamAvatarsProps = {
-  members: Workspace["members"];
+  members: readonly TeamAvatarMember[];
   leadUserId: string | null;
   /** Size in tailwind units, e.g. "size-6". */
   size?: string;
   /** Inner text size class, e.g. "text-3xs". */
   textSize?: string;
   maxVisible?: number;
+  totalCount?: number;
   emptyFallback?: React.ReactNode;
 };
 
@@ -24,20 +30,25 @@ export const TeamAvatars = ({
   size = "size-6",
   textSize = "text-3xs",
   maxVisible = 3,
+  totalCount = members.length,
   emptyFallback,
   // Explicit ReactNode: `emptyFallback` widens the inferred return to a type
   // containing React 19's Promise<AwaitedReactNode> member, which
   // promise-function-async would otherwise flag on this sync component.
 }: TeamAvatarsProps): React.ReactNode => {
   const t = useTranslations();
-  if (members.length === 0) {
-    return emptyFallback ?? <span className="text-muted-foreground">—</span>;
+  if (totalCount === 0) {
+    return emptyFallback === undefined ? (
+      <span className="text-muted-foreground">—</span>
+    ) : (
+      emptyFallback
+    );
   }
   const visible = members.slice(0, maxVisible);
-  const overflow = members.length - visible.length;
+  const overflow = totalCount - visible.length;
 
   return (
-    <div className="flex items-center -space-x-1.5">
+    <div className="flex items-center -space-x-1">
       {visible.map((m) => {
         const isLead = leadUserId === m.userId;
         const displayName =

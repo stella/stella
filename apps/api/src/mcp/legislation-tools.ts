@@ -11,6 +11,7 @@ import {
   PUBLIC_LEGISLATION_COUNTRIES,
   publicLegislationCountry,
 } from "@stll/api-contract/legislation-publication";
+import { publicCountryUnavailable } from "@stll/api-contract/public-country-capability";
 import { mapWithConcurrency } from "@stll/concurrency";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
@@ -542,6 +543,10 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
     parsed.output.limit ?? DEFAULT_SEARCH_LIMIT,
   );
 
+  const unavailable = publicCountryUnavailable(country);
+  if (unavailable !== null) {
+    return toolDataResult(unavailable);
+  }
   const jurisdiction = publicLegislationCountry(country);
   if (jurisdiction === null) {
     return notFoundResult(

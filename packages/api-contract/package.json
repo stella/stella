@@ -45,6 +45,7 @@
     "./notifications": "./src/notifications.ts",
     "./provision-link-status": "./src/provision-link-status.ts",
     "./safe-id": "./src/safe-id.ts",
+    "./public-country-capability": "./src/public-country-capability.ts",
     "./search": "./src/search.ts",
     "./time-entry-types": "./src/time-entry-types.ts",
     "./us-court-abbreviations": "./src/us-court-abbreviations.ts",

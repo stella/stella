@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
+import { sql } from "drizzle-orm";
 
 import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
 import {
@@ -18,13 +19,12 @@ import {
   lookupDecisionsByIdentity,
 } from "@/api/handlers/case-law/decisions/lookup-by-identity";
 import { findDecisionIdsByIdentity } from "@/api/handlers/case-law/decisions/search";
-import {
-  decisionCitationKeyOf,
-  normalizeDecisionIdentifierValueIn,
-} from "@/api/handlers/case-law/ingestion/citation-extractor";
+import { normalizeDecisionIdentifierValueIn } from "@/api/handlers/case-law/ingestion/citation-extractor";
+import { decisionDocketColumns } from "@/api/handlers/case-law/ingestion/pipeline/decision-docket-columns";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import { LIMITS } from "@/api/lib/limits";
 
 /**
  * Decisions that share a case file, as ingestion stores them, and what the
@@ -38,6 +38,19 @@ import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
  * shared database reads only its own rows.
  */
 export type DocketFamilyScenario = ReturnType<typeof docketFamilyScenario>;
+
+/** A file with more decisions than one identity read keeps. */
+const LARGE_FILE_SIZE = LIMITS.caseLawSearchPageSizeMax + 20;
+
+/**
+ * The public reader's grant on the case-file key. It ships a release after
+ * the column, so the suites set it as that release will, and take it away to
+ * read as a reader that does not hold it yet.
+ */
+export const docketFamilyKeyGrantSql = (mode: "grant" | "revoke") =>
+  mode === "grant"
+    ? sql`GRANT SELECT (docket_family_key) ON TABLE case_law_decisions TO stella_public_law_reader`
+    : sql`REVOKE SELECT (docket_family_key) ON TABLE case_law_decisions FROM stella_public_law_reader`;
 
 export const docketFamilyScenario = (number: number) => {
   const n = String(number);
@@ -60,6 +73,9 @@ export const docketFamilyScenario = (number: number) => {
     legacySibling: createSafeId<"caseLawDecision">(),
     /** A file of which the corpus holds one decision. */
     lone: createSafeId<"caseLawDecision">(),
+    /** A file whose rows no write has keyed yet, one stored with its sheet. */
+    unkeyedBare: createSafeId<"caseLawDecision">(),
+    unkeyedSheet: createSafeId<"caseLawDecision">(),
     /** The same number at a regional court: another court's file. */
     regional: createSafeId<"caseLawDecision">(),
   };
@@ -69,7 +85,13 @@ export const docketFamilyScenario = (number: number) => {
     dated: `5 Cdo ${n}/2015`,
     legacy: `4 As ${n}/2012`,
     lone: `12 Cdo ${n}/2021`,
+    unkeyed: `9 As ${n}/2013`,
+    large: `7 As ${n}/2014`,
   };
+  /** Each decision of the large file, stored with its sheet, latest last. */
+  const largeFile = Array.from({ length: LARGE_FILE_SIZE }, () =>
+    createSafeId<"caseLawDecision">(),
+  );
   const decision = (
     id: SafeId<"caseLawDecision">,
     caseNumber: string,
@@ -77,7 +99,8 @@ export const docketFamilyScenario = (number: number) => {
     decisionDate: string,
     ecli: string | null = null,
     metadata: Record<string, string> = {},
-  ) => ({ id, caseNumber, court, decisionDate, ecli, metadata });
+    keyed = true,
+  ) => ({ id, caseNumber, court, decisionDate, ecli, metadata, keyed });
   const supreme = "Nejvyšší soud";
   const administrative = "Nejvyšší správní soud";
   const decisions = [
@@ -145,25 +168,56 @@ export const docketFamilyScenario = (number: number) => {
       "2022-01-11",
       `ECLI:CZ:NS:2022:12.CDO.${n}.2021.1`,
     ),
+    // Stored before the case-file key existed and not backfilled yet.
+    decision(
+      ids.unkeyedBare,
+      dockets.unkeyed,
+      administrative,
+      "2013-03-04",
+      null,
+      {},
+      false,
+    ),
+    decision(
+      ids.unkeyedSheet,
+      `${dockets.unkeyed} - 12`,
+      administrative,
+      "2013-06-10",
+      null,
+      {},
+      false,
+    ),
+    ...largeFile.map((id, index) =>
+      decision(
+        id,
+        `${dockets.large}-${String(index + 1)}`,
+        administrative,
+        new Date(Date.UTC(2014, 0, 1 + index)).toISOString().slice(0, 10),
+      ),
+    ),
   ];
-  return { ids, dockets, decisions, number };
+  return { ids, dockets, decisions, largeFile, number };
 };
 
-/** The decision rows as ingestion writes them, keyed from the stored docket. */
+/**
+ * The decision rows as ingestion writes them, keyed from the stored docket by
+ * the row writer's own columns; an unkeyed row is one stored before the
+ * case-file key existed.
+ */
 export const docketFamilyDecisionRows = (
   scenario: DocketFamilyScenario,
   sourceId: SafeId<"caseLawSource">,
 ): (typeof caseLawDecisions.$inferInsert)[] =>
   scenario.decisions.map(
-    ({ caseNumber, court, decisionDate, ecli, id, metadata }) => ({
+    ({ caseNumber, court, decisionDate, ecli, id, keyed, metadata }) => ({
       id,
       sourceId,
-      caseNumber,
-      // The decision row writer's own key for its docket.
-      citationKey: decisionCitationKeyOf({
+      ...decisionDocketColumns({
         caseNumber,
         caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+        country: "CZE",
       }),
+      ...(keyed ? {} : { docketFamilyKey: null }),
       court,
       country: "CZE",
       decisionDate,
@@ -217,6 +271,8 @@ export const describeDocketFamilyIdentity = (
   context: () => {
     caseLawDb: CaseLawPublicReadDb;
     scenario: DocketFamilyScenario;
+    /** Sets the reader's grant on the case-file key, as its owner. */
+    setFamilyKeyGrant: (mode: "grant" | "revoke") => Promise<void>;
   },
 ): void => {
   /** What the public search's identity branch answers an entry with. */
@@ -274,15 +330,56 @@ export const describeDocketFamilyIdentity = (
       });
     });
 
-    test("a lone decision found by a bare docket is listed, never claimed", async () => {
-      // A sibling stored under its sheet keys apart from the file, so a read
-      // by the docket cannot prove the file holds one decision.
+    test("a sibling stored with its sheet comes back by its case-file key", async () => {
+      // Its docket keys apart from the file's, but its case-file key does not.
       const { dockets, ids } = context().scenario;
-      expect(await searched(dockets.legacy)).toEqual(sorted(ids.legacySibling));
-      expect(await lookedUp(dockets.legacy)).toMatchObject({
+      for (const entry of [dockets.legacy, `sp. zn. ${dockets.legacy}`]) {
+        expect(await searched(entry), entry).toEqual(
+          sorted(ids.legacySheet, ids.legacySibling),
+        );
+        expect(await lookedUp(entry), entry).toMatchObject({
+          status: "ambiguous",
+          reason: "several",
+        });
+      }
+    });
+
+    test("a reader without the case-file key's grant reads the file by its spellings", async () => {
+      // The release before the grant: no error, and no claim the file is whole.
+      const { dockets, ids } = context().scenario;
+      await context().setFamilyKeyGrant("revoke");
+      try {
+        expect(await searched(dockets.legacy)).toEqual(
+          sorted(ids.legacySibling),
+        );
+        expect(await lookedUp(dockets.legacy)).toMatchObject({
+          status: "ambiguous",
+          reason: "file_incomplete",
+        });
+      } finally {
+        await context().setFamilyKeyGrant("grant");
+      }
+    });
+
+    test("a row not keyed yet is still found by its docket spelling", async () => {
+      // The sibling stored with its sheet is reachable only by its key, which
+      // its row does not hold yet: the read cannot prove the file whole.
+      const { dockets, ids } = context().scenario;
+      expect(await searched(dockets.unkeyed)).toEqual(sorted(ids.unkeyedBare));
+      expect(await lookedUp(dockets.unkeyed)).toMatchObject({
         status: "ambiguous",
         reason: "file_incomplete",
       });
+      expect(await searched(`${dockets.unkeyed} - 12`)).toEqual(
+        sorted(ids.unkeyedSheet),
+      );
+    });
+
+    test("a lone decision found by a bare docket is listed, never claimed", async () => {
+      // Rows stored before the case-file key existed may hold a sibling the
+      // key cannot reach yet, so a read by the docket cannot prove the file
+      // holds one decision.
+      const { dockets, ids } = context().scenario;
       for (const entry of [
         dockets.lone,
         `sp. zn. ${dockets.lone}`,
@@ -354,6 +451,20 @@ export const describeDocketFamilyIdentity = (
           basis: "selector",
         });
       }
+    });
+
+    test("a sheet names its decision in a file larger than a read keeps", async () => {
+      // The whole file would outgrow the candidates before the sheet is
+      // applied; a sheet reads its decision's own spellings instead.
+      const { dockets, largeFile } = context().scenario;
+      const named =
+        largeFile.at(-1) ?? panic("The large file holds no decision");
+      const entry = `${dockets.large}-${String(largeFile.length)}`;
+      expect(await searched(entry)).toEqual(sorted(named));
+      expect(await lookedUp(entry)).toMatchObject({
+        status: "unique",
+        basis: "selector",
+      });
     });
 
     test("a sheet the corpus does not hold returns the file, never a sibling", async () => {

@@ -19,11 +19,11 @@ import { DocumentIcon } from "@/components/document-icon";
 import { InlineEdit } from "@/components/inline-edit";
 import Tooltip from "@/components/tooltip";
 import { MatterContextMenu } from "@/components/workspaces/matter-context-menu";
+import { TeamAvatars } from "@/features/workspaces/team-avatars";
 import { getMatterColor } from "@/lib/matter-colors";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import { overviewOptions } from "@/lib/workspaces/queries";
 import type { Workspace } from "@/lib/workspaces/types";
-import { TeamAvatars } from "@/routes/_protected.workspaces/-components/team-avatars";
 
 type OverviewData = NonNullable<
   Awaited<
