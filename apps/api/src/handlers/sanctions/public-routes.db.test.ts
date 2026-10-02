@@ -1,3 +1,4 @@
+import { Value } from "@sinclair/typebox/value";
 import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, getTableName, sql } from "drizzle-orm";
@@ -16,7 +17,10 @@ import {
   sanctionsSources,
 } from "@/api/db/schema";
 import { markRlsDatabase } from "@/api/db/scoped";
-import { createPublicSanctionsRoute } from "@/api/handlers/sanctions/public-routes";
+import {
+  createPublicSanctionsRoute,
+  publicSanctionsResponseSchema,
+} from "@/api/handlers/sanctions/public-routes";
 import { toSafeId } from "@/api/lib/branded-types";
 import { runEntityCheckShared } from "@/api/lib/business-registries/entity-checks";
 import type { CounterpartyCheckSubject } from "@/api/lib/business-registries/entity-checks";
@@ -37,6 +41,10 @@ import {
   InMemoryRateLimitContext,
   scopedGenerator,
 } from "@/api/lib/rate-limit/rate-limit";
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -263,6 +271,8 @@ const assertParity = async ({
   const { kind, subject: checkedSubject, ...screening } = inProduct;
   expect(kind).toBe("sanctions");
   expect(checkedSubject.type).toBe(subject.type);
+  const analytics = installRecordingAnalytics();
+  const logger = installRecordingLogger();
   const context = new InMemoryRateLimitContext();
   const route = createPublicSanctionsRoute({
     db: publicDb,
@@ -300,7 +310,18 @@ const assertParity = async ({
       }),
     );
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({
+    const body = await response.json();
+    expect([...Value.Errors(publicSanctionsResponseSchema, body)]).toEqual([]);
+    expect(JSON.stringify(body)).not.toContain("UnmatchedPrivateIdentityQxzv");
+    expect(JSON.stringify(analytics.events)).not.toContain(
+      "UnmatchedPrivateIdentityQxzv",
+    );
+    expect(JSON.stringify(logger.records)).not.toContain(
+      "UnmatchedPrivateIdentityQxzv",
+    );
+    expect(JSON.stringify(analytics.events)).not.toContain("Ivan Sidorov");
+    expect(JSON.stringify(logger.records)).not.toContain("Ivan Sidorov");
+    expect(body).toEqual({
       ...screening,
       lists: inProduct.lists.map((list) => ({
         ...list,
@@ -316,6 +337,8 @@ const assertParity = async ({
     return inProduct;
   } finally {
     context.kill();
+    analytics.restore();
+    logger.restore();
     if (caches === undefined) {
       await publicPool.close();
       pools.delete(publicPool);
@@ -325,11 +348,36 @@ const assertParity = async ({
 
 const clearSubject = {
   type: "organization",
-  name: "Blue Meadow Bakery",
+  name: "UnmatchedPrivateIdentityQxzv",
   companyId: null,
 } as const satisfies NameSubject;
 
 describe("public sanctions search parity", () => {
+  test(
+    "public success outcomes contain only the public response contract",
+    async () => {
+      expect((await assertParity({ subject: clearSubject })).status).toBe(
+        "clear",
+      );
+      const matched = await assertParity({
+        subject: {
+          type: "person",
+          firstName: "Ivan",
+          lastName: "Sidorov",
+          dateOfBirth: null,
+          nationalityCodes: [],
+        },
+      });
+      expect(matched.status).toBe("possible-match");
+      expect(
+        matched.lists
+          .find(({ source }) => source === "eu")
+          ?.possibleMatches.at(0)?.name,
+      ).toBe("Ivan Petrovich Sidorov");
+    },
+    DB_TEST_TIMEOUT_MS,
+  );
+
   test(
     "runs under a read-only role with no privileges outside the sanctions corpus",
     async () => {
