@@ -47,7 +47,7 @@ export type CreatePlaybookDefinitionOrigin =
 type CreatePlaybookDefinitionArgs = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
-  /** The matters the saver may use now; a new source must sit in one. */
+  /** Matters the caller can access; a newly added source must be in one. */
   accessibleWorkspaceIds: readonly SafeId<"workspace">[];
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;

@@ -153,13 +153,17 @@ export const hasPlaybookDraftChanges = ({
 type CachedDetailState = Pick<QueryState, "isInvalidated" | "dataUpdatedAt">;
 
 /**
- * What the form may seed from, decided when the editor mounts or reloads.
- * `awaiting` holds back the snapshot fetched at `supersededAt`: a write (this
- * editor's save or approve, a chat save, a restore, a rejected stale save)
- * invalidated it, and the form seeds once and saves a full replace, so seeding
- * from pre-write content would put back whatever the write changed. `stale`
- * is `awaiting` after the refetch could not be had: the form was seeded from
- * that snapshot and stays on it until the user reloads.
+ * Whether the form may take its initial values from the cached detail,
+ * decided when the editor mounts or reloads.
+ *
+ * - `open`: the cached detail is current, so use it.
+ * - `awaiting`: a write (this editor's save or approve, a chat save, a
+ *   restore, a rejected stale save) invalidated the cached detail, which was
+ *   fetched at `supersededAt`. Wait for the refetch: the form fills in once
+ *   and saves the whole playbook, so starting from the outdated copy would
+ *   undo whatever that write changed.
+ * - `stale`: the refetch did not complete, so the form was filled from the
+ *   outdated copy anyway and keeps it until the user reloads.
  */
 export type DetailSeedGate =
   | { type: "open" }
@@ -173,7 +177,7 @@ export const detailSeedGate = (
     ? { type: "awaiting", supersededAt: state.dataUpdatedAt }
     : { type: "open" };
 
-/** Whether a detail newer than a stale-seeded form's snapshot is in hand. */
+/** Whether a newer detail has been fetched for a form showing an old copy. */
 export type FresherDetail = "unavailable" | "loading" | "loaded";
 
 export type DetailSeed =
@@ -188,10 +192,10 @@ type ResolveDetailSeedArgs = {
 };
 
 /**
- * What the editor shows for the detail now in hand. A superseded snapshot is
- * held back only while its refetch is in flight; once that refetch has paused
- * (offline) or failed, the snapshot is all there is, and it is shown as stale
- * rather than hidden behind a spinner.
+ * Decides what the editor shows for the detail it currently has. An outdated
+ * copy is withheld only while its refetch is running. If the refetch pauses
+ * (offline) or fails, the outdated copy is shown, marked as stale, instead of
+ * a spinner that never ends.
  */
 export const resolveDetailSeed = ({
   gate,
@@ -227,9 +231,10 @@ export const resolveDetailSeed = ({
 };
 
 /**
- * The gate once a form has been seeded from the superseded snapshot; null
- * while there is nothing to latch. Latched so a later refetch cannot put the
- * editor back into waiting and unmount a form the user is typing in.
+ * Returns the `stale` gate to store once the form has been filled from an
+ * outdated copy, or null if there is nothing to change. Storing it means a
+ * later refetch cannot return the editor to the waiting state and unmount a
+ * form the user is typing in.
  */
 export const latchedSeedGate = (
   gate: DetailSeedGate,
@@ -240,10 +245,10 @@ export const latchedSeedGate = (
     : null;
 
 /**
- * Supersede the cached detail and refetch it. The cache is marked before the
- * request starts, so a reload issued while it is in flight waits for it
- * instead of seeding from the superseded snapshot. Resolves to the fresh
- * detail, or null when the refetch did not land.
+ * Marks the cached detail as outdated and refetches it. The cache is marked
+ * before the request starts, so a reload during the request waits for the
+ * new copy instead of using the old one. Resolves to the fresh detail, or
+ * null if the refetch did not complete.
  */
 export const refetchSupersededDetail = async <TData>(
   queryClient: QueryClient,
@@ -263,7 +268,8 @@ export type ResolvedPositionSource = PlaybookPositionSources[number];
 
 export type PositionSourceLookup = ReadonlyMap<string, ResolvedPositionSource>;
 
-// One stored source: ids only. Names come from the per-reader overlay.
+// One stored source. It holds ids only; the names come from the detail's
+// `positionSources`, which is looked up for each reader.
 type PositionSource = NonNullable<Position["sources"]>[number];
 
 const positionSourceKey = ({ workspaceId, entityId }: PositionSource) =>
@@ -275,9 +281,9 @@ export const toPositionSourceLookup = (
   new Map(resolved.map((source) => [positionSourceKey(source), source]));
 
 /**
- * The sources of one position this reader can open, in stored order. A source
- * the reader cannot resolve is left out with no placeholder and no count:
- * that a position has one is not theirs to learn from the page.
+ * The sources of one position that this reader can open, in stored order.
+ * A source the reader cannot open is left out entirely, with no placeholder
+ * or count, so the page does not reveal that it exists.
  */
 export const resolvePositionSources = (
   position: Position,
@@ -294,9 +300,9 @@ export const resolvePositionSources = (
 };
 
 /**
- * Whether any position has a source this reader can open. A source they
- * cannot resolve does not count: a notice that appeared for it would tell
- * them it exists.
+ * Whether any position has a source this reader can open. Sources the reader
+ * cannot open do not count: showing a notice because of one would reveal
+ * that it exists.
  */
 export const hasResolvedPositionSources = (
   positions: readonly Position[],

@@ -99,16 +99,17 @@ export const dehydrateRefs = ({
 
   let nextArgs = args;
   for (const { kind, param } of inputRefs) {
-    // The first unknown ref fails the call; the walk has no early exit, so
-    // the leaves after it are left as they are.
+    // The first ref that fails to resolve fails the whole call.
+    // `mapInputRefLeaves` cannot stop early, so the remaining values are
+    // still visited but returned unchanged.
     let failure: ChatToolError | undefined;
     nextArgs = mapInputRefLeaves({
       input: nextArgs,
       path: param,
       mapLeaf: (raw, location) => {
         if (failure !== undefined || typeof raw !== "string") {
-          // The param is optional and absent (or already a non-ref value);
-          // nothing to resolve.
+          // Nothing to resolve: an earlier ref already failed, or this
+          // value is not a string and so is not a ref.
           return raw;
         }
         const resolved = resolveLeaf({ kind, raw, location });

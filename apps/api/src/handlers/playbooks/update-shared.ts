@@ -37,7 +37,7 @@ type UpdatePlaybookDefinitionBody = {
 type UpdatePlaybookDefinitionArgs = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
-  /** The matters the saver may use now; a new source must sit in one. */
+  /** Matters the caller can access; a newly added source must be in one. */
   accessibleWorkspaceIds: readonly SafeId<"workspace">[];
   playbookId: SafeId<"playbookDefinition">;
   orgAIConfig: OrgAIConfig | null;
@@ -60,11 +60,12 @@ export const updatePlaybookDefinitionHandler = async function* ({
   recordAuditEvent,
   body,
 }: UpdatePlaybookDefinitionArgs): SafeHandlerGenerator<{ updatedAt: string }> {
-  // The stored positions decide which sources this save carries rather than
-  // introduces. Read before the row lock below: both writers send
-  // `expectedUpdatedAt`, so a definition changed in between fails the save
-  // instead of being validated against a stale list. A caller that omits the
-  // token can at worst carry a source the playbook stored a moment ago.
+  // Read the stored positions to tell which sources this save adds and which
+  // the playbook already had; only added sources need an access check. This
+  // read happens before the row lock below. That is safe because both callers
+  // send `expectedUpdatedAt`: if the playbook changes in between, the save
+  // fails instead of being checked against an outdated list. A caller that
+  // omits the token can at worst keep a source that was stored a moment ago.
   const stored = yield* Result.await(
     safeDb((tx) =>
       tx.query.playbookDefinitions.findFirst({

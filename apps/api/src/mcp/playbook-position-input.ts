@@ -237,10 +237,11 @@ export type MergePlaybookPositionsArgs = {
   positions: readonly PlaybookPositionInput[];
   removeSourceIds: readonly string[];
   /**
-   * The documents the caller can read, by document id, each with the matter
-   * it truly belongs to. Resolved by the caller in one scoped lookup over
-   * every document id the call names and every stored source, which keeps the
-   * merge pure: an id absent here is one the caller cannot read.
+   * The documents the user can read, keyed by document id, each with the
+   * matter it actually belongs to. The code calling the merge looks these up
+   * in one query covering every document id in the call and every stored
+   * source, so the merge itself needs no database access. An id missing from
+   * this map is a document the user cannot read.
    */
   readableSources: ReadonlyMap<string, PositionSource>;
   /** Injected so the merge is a pure function of its arguments in tests. */
@@ -301,10 +302,11 @@ type ResolvedSources =
   | { type: "too-many" };
 
 /**
- * The sources a written position stores. Omitted keeps the stored list. A
- * given list replaces the sources the caller can read; a stored source they
- * cannot read is not theirs to see or remove, so it is carried. An id the
- * caller cannot read is refused, never stored.
+ * Works out the sources to store on a position being written. If the input
+ * omits `sources`, the stored list is kept. If it gives a list, that list
+ * replaces the stored sources the caller can read. Stored sources the caller
+ * cannot read are kept, since the caller cannot see or remove them. An input
+ * id the caller cannot read is rejected.
  */
 const resolveSources = ({
   input,
@@ -345,8 +347,8 @@ const resolveSources = ({
   if (sources.length === 0) {
     return { type: "resolved", sources: undefined };
   }
-  // A resend of the same sources keeps the stored order, so a call that
-  // changes nothing still compares equal to the stored position.
+  // If the set of sources is unchanged, reuse the stored list so the order
+  // stays the same and the position still compares equal to the stored one.
   const keys = new Set(sources.map(positionSourceKey));
   const unchanged =
     stored !== undefined &&

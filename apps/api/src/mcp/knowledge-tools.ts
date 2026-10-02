@@ -1376,9 +1376,9 @@ const readPlaybookDetail = async ({
   if (Result.isError(result)) {
     return internalFailureResult(result.error);
   }
-  // Sources are narrowed to the caller's own before anything else sees the
-  // payload: chat mints a ref per source, and a ref puts the source's matter
-  // in the thread's observed scope.
+  // Remove the sources the caller cannot read before the payload is used
+  // anywhere else. Chat creates a ref for each source, and a ref adds the
+  // source's matter to the thread's observed scope.
   const readableSources = await readablePositionSources({
     safeDb: context.safeDb,
     entityIds: positionSourceEntityIds(
@@ -1717,9 +1717,9 @@ const savePlaybookFailureResult = (error: unknown) => {
 };
 
 /**
- * Every document a save's merge needs resolved, in one scoped lookup: the ids
- * the call names and the sources already stored. Keyed by document id; an id
- * the caller cannot read is absent.
+ * Looks up, in one query, every document the merge for a save needs: the
+ * document ids in the call and the sources already stored. Returns a map
+ * keyed by document id; ids the caller cannot read are not in it.
  */
 const readSavePlaybookSources = async ({
   context,

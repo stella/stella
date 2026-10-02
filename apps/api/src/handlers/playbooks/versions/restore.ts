@@ -38,10 +38,10 @@ const config = {
  * name/description/scope/positions back onto the definition. A restore is
  * itself an edit, so it always lands as a new `draft` (mirrors
  * `update-by-id.ts` reverting approval on any change) — it never re-approves
- * or reuses the source version's number. Being an edit, it is held to the
- * update path's validation: a source the snapshot holds and the current
- * definition does not is introduced by this caller, who must be able to read
- * it. An unreadable one refuses the restore, as it refuses an update.
+ * or reuses the source version's number. Because it is an edit, it gets the
+ * same validation as an update: a source document that is in the snapshot but
+ * not in the current definition counts as added by this caller, so the caller
+ * must be able to read it. Otherwise the restore is refused.
  */
 const restorePlaybookVersion = createSafeRootHandler(
   config,

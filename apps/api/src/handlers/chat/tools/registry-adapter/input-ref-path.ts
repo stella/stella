@@ -1,14 +1,14 @@
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
 /**
- * The path grammar of an `InputRefParam`, shared by the three directions that
- * read it (dehydration, persistence, replay) so they cannot disagree on where
- * a tool's input refs sit.
+ * The path syntax of an `InputRefParam`. Dehydration, persistence, and replay
+ * all read paths through this module, so they cannot disagree on where a
+ * tool's input refs are.
  *
- * A path is dot-separated keys; a key suffixed `[]` addresses every element of
- * the array it holds. `matter_id` is one top-level value;
- * `positions[].sources[]` is every string in every position's `sources`. This
- * is the grammar the output projection reports its ref paths in.
+ * A path is a list of keys separated by dots. A key ending in `[]` means
+ * "every element of this array". So `matter_id` is one top-level value, and
+ * `positions[].sources[]` is every item in every position's `sources`. The
+ * output projection reports its ref paths in the same syntax.
  */
 
 type PathSegment = { key: string; each: boolean };
@@ -25,9 +25,9 @@ const parseInputRefPath = (path: string): PathSegment[] =>
     );
 
 /**
- * `location` names one concrete leaf (`positions[0].sources[1]`), which is
- * what tells two leaves of one path apart. For a top-level path it is the
- * path itself.
+ * `location` is the path of one concrete value, with array indexes filled in
+ * (`positions[0].sources[1]`), so two values matched by the same path can be
+ * told apart. For a top-level path it equals the path.
  */
 type MapInputRefLeaf = (value: unknown, location: string) => unknown;
 
@@ -86,10 +86,11 @@ type MapInputRefLeavesArgs = {
 };
 
 /**
- * A copy of `input` with every leaf the path addresses replaced by
- * `mapLeaf`'s answer. A leaf is visited whatever its type, and only when its
- * key is present; an absent key, or a container of the wrong shape on the
- * way, addresses nothing. Nothing off the path is touched.
+ * Returns a copy of `input` in which every value the path points to is
+ * replaced by the result of `mapLeaf`. `mapLeaf` is called for a value of any
+ * type, but only when its key is present. If a key is missing, or a value
+ * along the path is not the object or array the path expects, nothing is
+ * mapped. Values outside the path are left unchanged.
  */
 export const mapInputRefLeaves = ({
   input,

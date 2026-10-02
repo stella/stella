@@ -1035,9 +1035,9 @@ const playbookAskManualProjection = v.strictObject({
 
 /**
  * A position's sources (`positionSourceSchema`): the documents it was taken
- * or revised from, already narrowed to the ones this reader can open
- * (`withReadableSources`), so a ref is only ever minted for a readable
- * document. `entityId` is the id `save_playbook` takes back in `sources`.
+ * or revised from. `withReadableSources` has already removed the ones this
+ * reader cannot open, so a chat ref is only created for a document they can
+ * read. `entityId` is the id `save_playbook` accepts in `sources`.
  */
 const playbookPositionSourcesProjection = v.optional(
   v.array(

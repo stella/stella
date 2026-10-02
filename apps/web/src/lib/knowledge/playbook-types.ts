@@ -52,8 +52,8 @@ export type PlaybookPositionsValue = PlaybookDetailData["positions"];
 export type PlaybookPositionDecisions = PlaybookDetailData["positionDecisions"];
 
 // The source documents this reader can open, with their names. A stored
-// source absent from here is one the reader cannot resolve; it stays in the
-// position and is never shown.
+// source missing from this list is one the reader cannot open: it stays in
+// the position's data but is never shown.
 export type PlaybookPositionSources = PlaybookDetailData["positionSources"];
 
 export type PlaybookPerspective = NonNullable<PlaybookScope["perspective"]>;
@@ -242,8 +242,8 @@ export const extractToGraded = (position: ExtractPosition): GradedPosition => ({
 });
 
 // ── Sources ───────────────────────────────────────────
-// The editor removes a source the reader can see; it never adds one. An empty
-// list is not stored, so the key goes with the last source.
+// The editor can remove a source the reader can see, but never adds one. An
+// empty list is never stored, so removing the last source drops the field.
 export const withoutPositionSource = (
   position: Position,
   entityId: string,

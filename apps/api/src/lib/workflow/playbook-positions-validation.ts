@@ -99,8 +99,8 @@ const collectClauseRefIds = (
   return [...ids].map((id) => brandPersistedClauseId(id));
 };
 
-// A position lists each source document once: the list is a set of
-// provenance references, and readers key it by document.
+// A position may list each source document only once. The list records where
+// the position came from, and readers look sources up by document id.
 export const hasDuplicatePositionSource = (position: Position): boolean => {
   const entityIds = arrayOrEmpty(position.sources).map(
     ({ entityId }) => entityId,
@@ -111,7 +111,7 @@ export const hasDuplicatePositionSource = (position: Position): boolean => {
 type AssertPositionsValidArgs = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
-  /** The matters the saver may use now; a new source must sit in one. */
+  /** Matters the caller can access; a newly added source must be in one. */
   accessibleWorkspaceIds: readonly SafeId<"workspace">[];
   positions: PlaybookPositions;
   /** The playbook's positions as stored before this save; null on create. */
@@ -123,8 +123,8 @@ type AssertPositionsValidArgs = {
  * distinct `sourceId` (re-runs map a position back to its materialized
  * column/finding by that id), and every clause-backed standard must reference a
  * clause that exists in the same organization (no cross-org clause leakage).
- * Reference passages and position sources must be readable by the saver; a
- * source the playbook already stores is carried without that check.
+ * The caller must be able to read every reference passage and every source
+ * they add. A source the playbook already stores is kept without that check.
  */
 export const assertPositionsValid = async ({
   safeDb,
@@ -232,13 +232,14 @@ export const assertPositionsValid = async ({
     );
   }
 
-  // A save may introduce a source only when the saver's own transaction
-  // returns that document in that matter, so nobody attaches a document they
-  // cannot open and the matter is never taken on the client's word. A pair the
-  // playbook already stores was checked when it was first attached and is
-  // carried: a whole-list check would refuse every edit by a colleague who
-  // cannot open the source matter. Carry is per playbook, not per position,
-  // so duplicating a position or converting its mode keeps its sources.
+  // A save can add a source only if the caller's own query finds that
+  // document in that matter. This stops anyone attaching a document they
+  // cannot open, and means the matter id sent by the client is never trusted.
+  // A source the playbook already stores was checked when it was first added
+  // and is not checked again; otherwise a colleague without access to the
+  // source's matter could not edit the playbook at all. "Already stores"
+  // means anywhere in the playbook, not only in the same position, so
+  // duplicating a position or converting its mode keeps its sources.
   const storedKeys = new Set(
     positionSources(arrayOrEmpty(storedPositions?.items)).map(
       positionSourceKey,

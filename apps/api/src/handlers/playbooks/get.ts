@@ -58,12 +58,13 @@ const getPlaybookDefinition = createSafeRootHandler(
       ),
     );
 
-    // The documents this reader can open among the positions' sources, with
-    // the names the stored positions deliberately omit. The positions keep
-    // every source pair, so the editor's full-replace save round-trips the
-    // ones this reader cannot resolve; the shared read stays unfiltered
-    // because `save_playbook` merges against the stored truth. The usable
-    // matters are resolved only for a playbook that cites a source.
+    // Look up the names of the source documents this caller can open; stored
+    // positions hold ids only. The returned positions still include every
+    // source id, even for documents this caller cannot open, because the
+    // editor saves the whole position list and would otherwise delete them.
+    // The shared read above is not filtered either: `save_playbook` merges
+    // against the full stored list. The caller's matters are fetched only
+    // when the playbook has at least one source.
     const sourceEntityIds = positionSourceEntityIds(
       positionSources(playbook.positions.items),
     );

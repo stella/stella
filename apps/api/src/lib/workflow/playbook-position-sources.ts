@@ -2,13 +2,12 @@
  * Position sources: the documents a playbook position was taken or revised
  * from.
  *
- * A position stores `{ workspaceId, entityId }` pairs and nothing else about
- * its sources. Names are resolved here, through the caller's scoped
- * connection and within the matters the caller may use, so a saver can
- * introduce only a document they can open, and a reader is answered only the
- * sources they can open. A document in a matter the caller cannot open, a
- * document in a matter outside the caller's usable set, and a deleted document
- * are all simply absent from the answer.
+ * A position stores only `{ workspaceId, entityId }` pairs for its sources.
+ * Document names are looked up here, on the caller's own access-scoped
+ * database connection and limited to the matters the caller can access. As a
+ * result, a caller can add only a document they can open, and a read returns
+ * only the sources the caller can open. A deleted document, or one in a
+ * matter the caller cannot access, is left out of the result.
  */
 
 import { Result } from "better-result";
@@ -27,7 +26,7 @@ import type {
 export const positionSourceKey = ({ workspaceId, entityId }: PositionSource) =>
   `${workspaceId}:${entityId}`;
 
-/** Every source a position list cites, deduplicated, in list order. */
+/** Each distinct source in the positions, in order of first appearance. */
 export const positionSources = (
   positions: readonly Position[],
 ): PositionSource[] => {
@@ -57,18 +56,19 @@ type ReadablePositionSourcesArgs = {
   safeDb: SafeDb;
   entityIds: readonly SafeId<"entity">[];
   /**
-   * The matters the caller may use now. Row security alone is not the scope:
-   * it still returns a matter being deleted, and a chat thread or an
-   * attenuated token is narrower than the user's membership.
+   * The matters the caller can access right now. Row-level security is not
+   * enough on its own: it still returns a matter that is being deleted, and a
+   * chat thread or a restricted token may allow fewer matters than the
+   * user's membership does.
    */
   accessibleWorkspaceIds: readonly SafeId<"workspace">[];
 };
 
 /**
- * The documents among `entityIds` the caller can read, each with the matter it
- * truly belongs to. One query for the whole list, through the caller's scoped
- * connection: this is both the readability proof a save needs and the
- * per-reader resolution a read needs.
+ * Returns the documents among `entityIds` that the caller can read, each with
+ * the matter it actually belongs to. It runs one query for the whole list on
+ * the caller's access-scoped connection. A save uses it to check that the
+ * caller can read a source; a read uses it to pick the sources to show.
  */
 export const readablePositionSources = async ({
   safeDb,
@@ -102,11 +102,12 @@ export const readablePositionSources = async ({
 };
 
 /**
- * The positions with each source list narrowed to what the reader can open,
- * ids taken from the rows the reader's own connection returned. For a surface
- * that turns a source into a handle the reader can act on (a chat ref adds
- * the source's matter to the thread's observed scope), so an unreadable
- * source must not reach it at all.
+ * Returns the positions with every source the reader cannot open removed.
+ * The ids come from the rows the reader's own query returned, not from the
+ * stored position. Use this wherever a source becomes something the reader
+ * can act on. In chat, each source becomes a ref, and a ref adds the source's
+ * matter to the thread's observed scope, so an unreadable source must never
+ * get that far.
  */
 export const withReadableSources = (
   positions: readonly Position[],

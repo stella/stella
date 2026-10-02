@@ -211,13 +211,14 @@ export const askConfigSchema = t.Union([
 export type AskConfig = Static<typeof askConfigSchema>;
 
 // ── Source: one document a position was taken or revised from ──
-// Provenance only, ids only. A playbook is visible to the whole organization
-// and its text feeds reviews in other matters, so a document's name (and the
-// matter's) never enters the stored position: a reader resolves these ids
-// through their own scoped transaction and sees a source exactly when they
-// can open it. The pair, like `referencePassageSchema`'s, because every
-// consumer needs the matter to address the document. Closed, so no writer can
-// store a name beside the ids.
+// Stores ids only, and only to record where the position came from. A
+// playbook is visible to the whole organization and its text is used in
+// reviews of other matters, so the document's name and the matter's name are
+// never stored. Each reader looks the ids up with their own access and sees
+// a source only if they can open it. The matter id is stored with the
+// document id (as in `referencePassageSchema`) because every consumer needs
+// the matter to locate the document. Extra properties are rejected, so no
+// writer can store a name next to the ids.
 export const positionSourceSchema = t.Object(
   {
     workspaceId: t.String({ format: "uuid" }),
@@ -227,7 +228,7 @@ export const positionSourceSchema = t.Object(
 );
 export type PositionSource = Static<typeof positionSourceSchema>;
 
-// Absent means none; an empty list is not stored.
+// A position with no sources omits the field; an empty list is never stored.
 const positionSourcesSchema = t.Optional(
   t.Array(positionSourceSchema, {
     minItems: 1,

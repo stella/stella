@@ -68,12 +68,12 @@ const buildInputRefsByTool = (): ReadonlyMap<
 const INPUT_REFS_BY_TOOL = buildInputRefsByTool();
 
 /**
- * The workspace an entity param's ref key needs. Chat's write tools that take
- * an entity id usually take the matter it lives in (`save_task`'s `task_id`
- * beside its `matter_id`), so the sibling matter param is the reliable source.
- * A tool without one (`save_playbook`, whose sources span matters) recovers
- * each entity's workspace from the context recorded when the call was
- * persisted.
+ * Finding the workspace needed to build an entity ref's key. Most chat write
+ * tools that take an entity id also take the id of its matter (`save_task`
+ * takes `task_id` and `matter_id`), and that matter param is used when
+ * present. A tool without one (`save_playbook`, whose sources span matters)
+ * instead looks up each entity's workspace in the context saved with the
+ * tool call.
  */
 const findMatterWorkspaceId = ({
   input,

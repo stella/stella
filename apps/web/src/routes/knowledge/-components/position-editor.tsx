@@ -212,8 +212,8 @@ type PositionEditorProps = {
   /** The words behind every reference passage the playbook quotes, read once
    *  for the whole position list. */
   passageTexts: ReferencePassageTexts;
-  /** The position's source documents this reader can open; the ones they
-   *  cannot are simply not here. */
+  /** The position's source documents that this reader can open; the ones
+   *  they cannot open are not included. */
   sources: readonly ResolvedPositionSource[];
   onOpenChange: (open: boolean) => void;
   onChange: (position: Position) => void;
@@ -476,10 +476,10 @@ export const PositionEditor = ({
 };
 
 // ── Sources: the documents a position was taken from ──
-// Names live here and nowhere in the position's text. Only the sources this
-// reader can open are listed, so the row draws nothing (no placeholder, no
-// count) when none resolve. A listed source can be removed; adding one is the
-// playbook builder's job.
+// Document names are shown here and never written into the position's text.
+// Only sources this reader can open are listed; when there are none, the row
+// renders nothing (no placeholder, no count). A listed source can be removed.
+// Sources are added only by the playbook builder.
 
 const PositionSourcesRow = ({
   sources,
