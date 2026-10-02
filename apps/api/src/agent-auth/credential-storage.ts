@@ -122,7 +122,7 @@ export const readStoredAgentClientCredential = async (
       }
       const current = await readAgentClientCredential({
         storedCredential: loaded.value.clientSecretSink,
-        upgrade: () => Promise.resolve(Result.ok(undefined)),
+        upgrade: async () => await Promise.resolve(Result.ok(undefined)),
       });
       if (Result.isError(current)) {
         return Result.err(current.error);
